@@ -3317,7 +3317,8 @@ on this figure, and conftest's tier tables are re-measured from the same list.
   jobs at once, each on its own runner (free on a public repository; a run holds five
   of the account's twenty concurrent jobs): `lint and types` (ruff, then the ratchet's
   one real pyright run, `test_no_new_complaint_in_the_app`, which the shards deselect)
-  and `fast tier 0` to `3`. `tools/ci_shard.py files <i> 4` splits the test files four
+  and `fast tier 0` to `3`; then `tests`, the name a ruleset on `main` can require (the
+  single job had it), green only when all five are. `tools/ci_shard.py files <i> 4` splits the test files four
   ways by the seconds CI took on each (`tests/ci_durations.json`), so the shards end
   together; a file the timings don't name counts as their median. Before its run, a
   shard collects its files in four processes (`ci_shard.py prewarm`): on a fresh

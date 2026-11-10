@@ -5,8 +5,10 @@
 #
 # Fanned out for the time between merges (row 870): lint and the type ratchet
 # on one runner, the fast tier split by CI time over four more
-# (tools/ci_shard.py), all at once. Public repository: each runner costs
-# nothing; a run holds five of the account's twenty concurrent jobs. The
+# (tools/ci_shard.py), all at once, then `tests`, the name a ruleset on main
+# can require, green only when they all are. Public repository: each runner
+# costs nothing; a run holds up to five of the account's twenty concurrent
+# jobs. The
 # sweep tier is not here: sweeps.yml runs it on its own runner, when a PR
 # touches what it walks.
 #
@@ -92,3 +94,18 @@ jobs:
           name: junit-${{ matrix.shard }}
           path: junit-${{ matrix.shard }}.xml
           retention-days: 30
+
+  tests:
+    # The check a ruleset on main can require, by this name (the single job
+    # was called `tests`): green only when every job above is, so the split
+    # stays free to change under it.
+    name: tests
+    if: always()
+    needs: [static, fast]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed
+        run: |
+          echo "lint and types: ${{ needs.static.result }}, fast tier: ${{ needs.fast.result }}"
+          test "${{ needs.static.result }}" = success && test "${{ needs.fast.result }}" = success

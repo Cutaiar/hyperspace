@@ -80,6 +80,19 @@ def test_tests_yml_runs_every_shard_and_the_ratchet_once():
     assert f"pytest -q -n0 -p no:cacheprovider {RATCHET}" in text, "nothing would run the ratchet"
 
 
+def test_the_required_check_tests_waits_for_every_job_and_passes_only_with_them():
+    """A ruleset on main can require a check named `tests`: the one job that keeps that name
+    must need every other job, run even when one fails, and fail unless all passed."""
+    text = (WORKFLOWS / "tests.yml").read_text()
+    jobs = re.findall(r"^  (\w+):$", text.split("\njobs:\n", 1)[1], re.MULTILINE)
+    gate = text.split("\n  tests:\n", 1)[1]
+    assert "    name: tests\n" in gate and "    if: always()\n" in gate
+    assert re.search(r"needs: \[(.*)\]", gate)[1].split(", ") == [j for j in jobs if j != "tests"]
+    for job in jobs:
+        if job != "tests":
+            assert f'test "${{{{ needs.{job}.result }}}}" = success' in gate, job
+
+
 def _sweep_keys() -> set[str]:
     return set(conftest._SWEEP_TESTS)
 
