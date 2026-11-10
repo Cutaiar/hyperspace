@@ -6,6 +6,7 @@ plugged in for these.
 
 from __future__ import annotations
 
+from itertools import pairwise
 from types import SimpleNamespace
 
 import numpy as np
@@ -14,7 +15,7 @@ from test_meta_controller import _pointed
 from test_node_mode_pad import StandIn, a_node, params_for, view_of
 from test_undo import boot
 
-from hyperspace import devices, graphview, node_desk, ui_graph, undo
+from hyperspace import devices, graphview, node_desk, routing, ui_graph, undo
 from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.routing import Binding
 
@@ -137,27 +138,37 @@ def a_roll(p):
     return p.one.reg[pids[AXES.index("right.roll")]]
 
 
+def glide(p, **at):
+    """Long enough at `at` for a fader's glide to land."""
+    for _ in range(int(routing.FADER_GLIDE_S / DT) + 2):
+        step(p, lanes(**at))
+
+
 def test_a_base_at_90_percent_is_reached_and_passed_the_whole_throw(rig):
     """The owner, 2026-11-10: a push from a base at 90 % explores only the last 10 %."""
     q = a_roll(rig)
     q.set_norm(0.9)
-    sweep(rig, "right_roll", 0.5, 1.0)         # up through the base: caught
-    sweep(rig, "right_roll", 1.0, 0.0, 60)     # the whole way down
+    glide(rig, right_roll=0.0)
     assert q.norm == pytest.approx(0.0, abs=0.01)
-    sweep(rig, "right_roll", 0.0, 0.4)
-    assert q.norm == pytest.approx(0.4, abs=0.01)
+    sweep(rig, "right_roll", 0.0, 1.0)
+    assert q.norm == pytest.approx(1.0, abs=0.01)
 
 
-def test_nothing_jumps_until_the_hand_reaches_the_base(rig):
+def test_the_hand_takes_the_base_at_once_gliding_from_where_it_was(rig):
+    """The owner, 2026-11-10: no pickup at an extreme of the box; a glide to the hand."""
     q = a_roll(rig)
     q.set_norm(0.9)
-    for _ in range(5):
-        step(rig)                               # a level hand reads 0.5
-    sweep(rig, "right_roll", 0.5, 0.2)          # away from the base: still not caught
-    assert q.norm == pytest.approx(0.9, abs=1e-3)
+    seen = []
+    for _ in range(int(routing.FADER_GLIDE_S / DT) + 2):
+        step(rig)                                # a level hand reads 0.5
+        seen.append(q.norm)
+    assert 0.5 < seen[0] < 0.9                   # moving from the first frame...
+    assert all(a >= b for a, b in pairwise(seen))   # ...without a jump back
+    assert seen[0] > 0.85                        # ...and no jump to the hand
+    assert seen[-1] == pytest.approx(0.5, abs=0.01)
 
 
-def test_what_the_hand_left_stays_when_it_drops(rig):
+def test_what_the_hand_left_stays_while_it_is_away(rig):
     q = a_roll(rig)
     q.set_norm(0.5)
     sweep(rig, "right_roll", 0.5, 0.8)
@@ -167,31 +178,30 @@ def test_what_the_hand_left_stays_when_it_drops(rig):
     for _ in range(60):
         step(rig, gone)
     assert q.norm == pytest.approx(0.8, abs=0.01)
-    # back in view level (0.5): no jump, it picks the base up again
-    for _ in range(5):
-        step(rig)
-    assert q.norm == pytest.approx(0.8, abs=0.01)
+    step(rig, lanes(right_roll=0.2))             # back in view far off: a glide, not a jump
+    assert q.norm > 0.7
 
 
-def test_a_short_dropout_keeps_the_catch(rig):
+def test_a_short_dropout_keeps_following(rig):
     q = a_roll(rig)
     q.set_norm(0.5)
     sweep(rig, "right_roll", 0.5, 0.8)
+    glide(rig, right_roll=0.8)
     gone = lanes(right_roll=0.8)
     gone[AXES.index("right.roll")] = float("nan")
-    for _ in range(5):                          # well under FADER_GRACE_S
+    for _ in range(5):                           # well under FADER_GRACE_S
         step(rig, gone)
     step(rig, lanes(right_roll=0.6))
     assert q.norm == pytest.approx(0.6, abs=0.01)
 
 
-def test_a_base_moved_by_anything_else_lets_go(rig):
+def test_a_base_moved_by_anything_else_is_glided_from(rig):
     q = a_roll(rig)
     q.set_norm(0.5)
-    sweep(rig, "right_roll", 0.5, 0.6)
-    q.set_norm(0.1)                             # a desk, an undo, a load
-    step(rig, lanes(right_roll=0.65))
-    assert q.norm == pytest.approx(0.1, abs=0.01)
+    glide(rig, right_roll=0.6)
+    q.set_norm(0.1)                              # a desk, an undo
+    step(rig, lanes(right_roll=0.6))
+    assert 0.1 < q.norm < 0.3
 
 
 def test_a_still_hand_writes_nothing(rig):
@@ -247,3 +257,64 @@ def test_a_cable_for_every_row(rig):
     cables = [c for c in view.cables if c.kind == graphview.NODE_MODE]
     assert len(cables) == 3
     assert all(c.ref[0] == ROLE and c.addr.startswith("hand:") for c in cables), [(c.ref[0], c.addr) for c in cables]
+
+
+# ---------------------------------------------------------------- leaving puts the bases back
+
+
+def entered(p, *pids):
+    """The hands entered through the panel's verb, on a node holding `pids`."""
+    pids = list(pids) or params_for(p.one)
+    p.one.loaded_patch.node_params = lambda _n: pids
+    node = a_node(p.one)
+    assert p.nd1.enter(ROLE, node) is None
+    return node, pids
+
+
+def test_leaving_puts_back_every_base_the_hands_moved(rig):
+    entered(rig)
+    filled = [b.target for b in rows(rig)]
+    was = {pid: rig.one.reg[pid].norm for pid in filled}
+    for _ in range(30):
+        step(rig, [0.95 if i < len(AXES) else v for i, v in enumerate(lanes())])
+    assert any(abs(rig.one.reg[pid].norm - was[pid]) > 0.1 for pid in filled)
+    rig.nd1.leave(ROLE)
+    assert {pid: rig.one.reg[pid].norm for pid in filled} == pytest.approx(was, abs=1e-6)
+
+
+def test_switching_nodes_puts_back_the_first_nodes_bases(rig):
+    pids = params_for(rig.one)
+    q = rig.one.reg[pids[AXES.index("right.roll")]]
+    q.set_norm(0.3)
+    node, _ = entered(rig, *pids)
+    glide(rig, right_roll=0.9)
+    assert q.norm == pytest.approx(0.9, abs=0.01)
+    other = sorted(rig.one.loaded_patch._pointable())
+    other = next(n for n in other if n != node)
+    assert rig.nd1.enter(ROLE, other) is None
+    assert q.norm == pytest.approx(0.3, abs=1e-6)
+
+
+def test_one_undo_of_the_leave_brings_the_hands_edits_back(rig):
+    r = rig.one.undo
+    undo.install(r)
+    r.tick(rig.r.t)
+    rig.r.t += 2
+    entered(rig)
+    q = rig.one.reg[rows(rig)[AXES.index("right.roll")].target]
+    was = q.norm
+    r.tick(rig.r.t)
+    rig.r.t += 2
+    glide(rig, right_roll=0.95 if was < 0.5 else 0.05)
+    moved = q.norm
+    r.tick(rig.r.t)
+    rig.r.t += 2
+    r.tick(rig.r.t)
+    rig.nd1.leave(ROLE)
+    assert q.norm == pytest.approx(was, abs=1e-6)
+    r.tick(rig.r.t)
+    rig.r.t += 2
+    r.tick(rig.r.t)
+    assert r.undo()
+    assert q.norm == pytest.approx(moved, abs=1e-6)
+    assert rig.one.loaded_patch.node_mode.of(1, "hands") is not None

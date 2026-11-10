@@ -366,11 +366,13 @@ MOD_OPS = ("push", "position", TURN_OP)        # the performer ops: the Router's
 # opening and closing a fist takes longer than this
 TURN_GRACE_S = 0.15
 # a lane row with the knob's op, `abs` (node mode's hand rows, never saved): the lane is a
-# fader on the param's base, with the desk's soft pickup. It catches within this of the base,
-# or on crossing it; it writes only a move of at least FADER_STEP (a still hand's jitter is
-# no edit, so a gesture's undo step closes); and it lets go of its catch once its lane has
-# been out of view this long (a tracker's dropout is not letting go)
-FADER_PICKUP_TOL = 0.02
+# fader on the param's base. It takes the base at once, gliding from where the base was to
+# where the hand is over FADER_GLIDE_S (the owner, 2026-11-10: a pickup at an extreme of the
+# box reads as broken), then follows; it writes only a move of at least FADER_STEP once it
+# follows (a still hand's jitter is no edit, so a gesture's undo step closes); and once its
+# lane has been out of view FADER_GRACE_S it glides again on return (a tracker's dropout is
+# not letting go)
+FADER_GLIDE_S = 0.25
 FADER_STEP = 1 / 1024
 FADER_GRACE_S = 0.3
 
@@ -4430,7 +4432,7 @@ class Router:
                 p = reg.get(b.target)
                 if b.op == "abs":
                     if p is not None:
-                        self._fader(b, p, u)
+                        self._fader(b, p, u, dt)
                     continue
                 if p is None or not p.modulatable:
                     continue         # (no lane may drive it: dormant, on any deck, row 775)
@@ -4482,36 +4484,40 @@ class Router:
 
     # ---- the faders: a lane on a param's base (node mode's hands) ----
 
-    def _fader(self, b: Binding, p: Param, u: float) -> None:
-        """An `abs` lane row acting this frame: its reading is the param's base, once it has
-        caught it (`midi`'s soft pickup: within FADER_PICKUP_TOL, or crossing it). A base
-        moved by anything else (a desk, an undo, a load) since its last write lets go."""
+    def _fader(self, b: Binding, p: Param, u: float, dt: float) -> None:
+        """An `abs` lane row acting this frame: its reading becomes the param's base. From
+        a standing start (the mode going up, a hand back in view, a base moved by anything
+        else since its last write) it glides there over FADER_GLIDE_S, linearly from where
+        the base was toward where the hand is now, so nothing jumps and nothing waits."""
         if p.kind is not Kind.CONTINUOUS:
             return
         d = self.__dict__
         key = (b.source, b.target)
-        idle = d.setdefault("_fader_idle", {})
-        idle[key] = 0.0
+        d.setdefault("_fader_idle", {})[key] = 0.0
         d.setdefault("_faded", set()).add(key)
         wrote = d.setdefault("_fader_wrote", {})
+        glides = d.setdefault("_fader_glide", {})
         u = min(1.0, max(0.0, u))
         cur = p.norm
-        if b.caught and abs(cur - wrote.get(key, cur)) > FADER_STEP:
-            b.caught = False
-        if not b.caught:
-            crossed = b.last_hw is not None and (b.last_hw - cur) * (u - cur) <= 0
-            b.last_hw = u
-            if not (abs(u - cur) <= FADER_PICKUP_TOL or crossed):
-                return
-            b.caught = True
-        b.last_hw = u
-        if abs(u - cur) >= FADER_STEP:
+        if key not in wrote or abs(cur - wrote[key]) > FADER_STEP:
+            glides[key] = (cur, 0.0)            # (where the base was, how long it has glided)
+        glide = glides.get(key)
+        if glide is not None:
+            start, t = glide
+            t += dt
+            a = min(1.0, t / FADER_GLIDE_S) if FADER_GLIDE_S > 0 else 1.0
+            if a >= 1.0:
+                del glides[key]
+            else:
+                glides[key] = (start, t)
+            p.set_norm(start + (u - start) * a)
+        elif abs(u - cur) >= FADER_STEP:
             p.set_norm(u)
         wrote[key] = p.norm
 
     def _end_faders(self, dt: float) -> None:
-        """The pass's end: a fader whose lane has been out of view FADER_GRACE_S lets go of
-        its catch, so a hand coming back picks the base up again rather than jumping it."""
+        """The pass's end: a fader whose lane has been out of view FADER_GRACE_S forgets
+        it wrote, so a hand coming back glides to the base again rather than jumping it."""
         d = self.__dict__
         idle = d.get("_fader_idle")
         if not idle:
@@ -4523,10 +4529,9 @@ class Router:
                 idle[key] += dt
             b = rows.get(key)
             if b is None or idle[key] >= FADER_GRACE_S:
-                if b is not None:
-                    b.caught, b.last_hw = False, None
                 del idle[key]
                 d.get("_fader_wrote", {}).pop(key, None)
+                d.get("_fader_glide", {}).pop(key, None)
         faded.clear()
 
     # ---- the turn rows (plan 51 O2): a performer that writes the base ----

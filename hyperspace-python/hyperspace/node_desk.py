@@ -58,10 +58,14 @@ the last model it read (`DeviceRegistry.pad_model`).
 
 **The hands** fill the hand axes (`[hands] dofs`, left then right: `hand_freedoms`), and `Router`
 runs their rows while the hands are on this `Deck`, as a pad's. But a hand row is a desk's knob,
-not a push: op `abs`, its axis's whole throw on the param's whole range, written to the base, with
-the desk's soft pickup (`Router._fader`). So a base at 90 % is reached, and passed, by the hand, not
-pushed into its last 10 %; nothing jumps when the mode goes up or a hand comes back; and what the
-hand left stays when it drops, an edit of the patch as a knob's is. An axis an enabled row reads or
+not a push: op `abs`, its axis's whole throw on the param's whole range, written to the base
+(`Router._fader`), gliding there from where the base was so nothing jumps. So a base at 90 % is
+reached, and passed, by the hand, not pushed into its last 10 %.
+
+**And they put it back** (the owner, 2026-11-10). The bases they fill are kept as they were when
+the hands took them (`_bases`, never saved), and leaving, or switching the hands to another node,
+writes them back in the same undo step: one undo brings the hand's edits back. Pointing that goes
+another way (a load, an undo of the entering) forgets them. An axis an enabled row reads or
 gates on, or a modifier reads, is no freedom; the pinches, grabs and dance lanes fill nothing. They
 fill after the desks and the pads, so pointing them changes no map of those.
 """
@@ -79,6 +83,7 @@ KIND = "midi"                  # what a saved entry's `controller` says of a des
 PAD_KIND = "gamepad"           # ...and of a pad (`PadDevice.kind`)
 HANDS_KIND = "hands"           # ...and of the hands (`HandsDevice.kind`)
 ROUTED_KINDS = (PAD_KIND, HANDS_KIND)   # whose rows are routes, run by `Router`
+REVERTS = (HANDS_KIND,)        # whose rows write bases, put back on leaving (`NodeDesk._bases`)
 # a pad row's depth: a stick's whole throw is half the param's range either way, a trigger's
 # all of it. Not `learn.PUSH_DEPTH`, a route's start for a depth knob to take up: these have no
 # knob, so the stick must reach the param (row 820)
@@ -223,6 +228,8 @@ class NodeDesk:
         self.devices = devices      # `DeviceRegistry`
         self.meta = meta            # `MetaController`: who holds what, and where it is
         self._now: dict[str, _Now] = {}
+        # role → (its node, param → its base before the controller took it): what leaving puts back
+        self._bases: dict[str, tuple[str, dict[str, float]]] = {}
         self._asked: tuple[tuple, dict] = ((), {})    # `_cached`
 
     # ---- who ----
@@ -472,7 +479,34 @@ class NodeDesk:
         if [(b.source, b.target) for b in rows] != [(b.source, b.target) for b in now.rows]:
             now.serial += 1
         now.fit, now.rows = fit, rows
+        if kind in REVERTS:
+            self._remember(role, node, rows)
         return now
+
+    def _remember(self, role: str, node: str | None, rows: list[Binding]) -> None:
+        """The bases `rows` are about to write, as they stand before the first write: rows are
+        derived (here) before `Router` runs them. A node the verbs did not move to is a new
+        start: what was kept for another is forgotten, not put back."""
+        if node is None:
+            self._bases.pop(role, None)
+            return
+        kept = self._bases.get(role)
+        if kept is None or kept[0] != node:
+            kept = self._bases[role] = (node, {})
+        reg = self.deck.reg
+        for b in rows:
+            p = reg.get(b.target)
+            if p is not None and b.target not in kept[1]:
+                kept[1][b.target] = p.norm
+
+    def _revert(self, role: str) -> None:
+        """Put back the bases `role`'s rows took (`_remember`)."""
+        _, kept = self._bases.pop(role, (None, {}))
+        reg = self.deck.reg
+        for pid, norm in kept.items():
+            p = reg.get(pid)
+            if p is not None:
+                p.set(p._value_of_norm(norm))
 
     def _rows_of(self, role: str, fit: nodemode.Fit, had: list[Binding]) -> list[Binding]:
         """The rows of `fit`, keeping each one that says the same (its catch, its ring)."""
@@ -584,12 +618,15 @@ class NodeDesk:
         if why is None:
             why = self.deck.loaded_patch.point_node_mode(self.player_of(role), self.kind_of(role), node)
         if why is None:
+            if self._bases.get(role, (node,))[0] != node:
+                self._revert(role)          # (in the step the pointing opened)
             self.meta.point(role, self.deck)
         return why
 
     def leave(self, role: str) -> None:
         """Controller `role` off its node here, an edit too. It stays on this `Deck`."""
         self.deck.loaded_patch.leave_node_mode(self.player_of(role), self.kind_of(role))
+        self._revert(role)                  # (in the step the leave opened)
 
     def control_word(self, role: str, b: Binding) -> str:
         """What a person calls row `b`'s control: "K3", "L2", "↑/↓"."""
