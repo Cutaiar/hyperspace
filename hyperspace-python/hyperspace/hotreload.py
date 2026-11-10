@@ -75,7 +75,9 @@ MODULES = (
 # (plan 39 T2: `masks` sits after `glsl`, whose QUAD_VS it binds, and before
 # `render`, which binds its MaskPasses. Plan 39 T4: `segment` is left out —
 # cold, as `app` is: a worker module whose threads outlive any reload, so a
-# re-executed copy would be a second module beside the live workers.)
+# re-executed copy would be a second module beside the live workers.
+# `projector` (the projector's battery over ADB) is left out for the same
+# reason: its `Watch` thread outlives a reload.)
 
 
 def _enums(mod) -> dict[str, type[Enum]]:

@@ -282,6 +282,31 @@ The hands send to a DAW on their own port, a virtual one called
 "Hyperspace Hands" unless `[hands] out` (or `out` on the hands entry)
 names another; on the SYSTEM page it is the `hands-daw` line.
 
+## The projector's battery
+
+The party projector (an XGIMI Halo+, Android TV) reports its battery over
+the network through ADB (`hyperspace/projector.py`). Once, on the projector:
+
+1. **Settings → Device Preferences → About**, select **Build** seven times
+   until the toast says developer mode is on.
+2. **Device Preferences → Developer options**: turn **USB debugging** on,
+   and **Network debugging** too where the build has it.
+3. **Settings → Network & Internet**: note the projector's IPv4 address.
+
+On the Mac, with both on the same network:
+
+```bash
+brew install android-platform-tools                  # adb
+adb connect <HALO_IP>:5555                            # the projector asks "Allow USB debugging?": tick Always allow, accept
+uv run python tools/projector_probe.py <HALO_IP>      # projector 85 % · charging
+```
+
+"unauthorised" means the prompt on the projector wasn't accepted;
+"unreachable" that it's off, asleep or on another network. Give the
+projector a fixed address in the router so the IP doesn't move between
+parties. Some Android TV builds report a battery of 100 % that isn't
+there; the probe says "no battery reported" when the projector does.
+
 ## A second screen (or more)
 
 One `[[output.screens]]` table per render output, up to four; the first
