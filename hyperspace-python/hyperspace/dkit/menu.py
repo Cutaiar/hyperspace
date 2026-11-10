@@ -501,7 +501,7 @@ def _keys(ui, key: str, items, rows, role: str) -> None:
 
 
 def _begin_keys(ui, key: str, items, x, y, w, role: str,
-                frozen: bool = False):
+                frozen: bool = False, off: float = 0.0):
     """Resolve the open, let the pointer and the keys move the highlight,
     and hand back which row holds it. Runs BEFORE the rows are drawn.
 
@@ -514,6 +514,12 @@ def _begin_keys(ui, key: str, items, x, y, w, role: str,
     with one press. The pointer is frozen with them, so a mouse sitting
     over the trigger cannot drag the parent's highlight away while the
     submenu is being driven by the keyboard.
+
+    `off` is where the rows START, scrolled (`scrolled`). Without it a
+    capped panel hit-tests the pointer against the UNSCROLLED rows: on a
+    32-row submenu scrolled 266px, a pointer 20px into the panel is over
+    row 11 and this said row 1 — so Enter took a row nobody was pointing
+    at, and `_scroll` then dragged the list back to show it.
     """
     from imgui_bundle import imgui
     st = _kb(ui, key)
@@ -546,7 +552,7 @@ def _begin_keys(ui, key: str, items, x, y, w, role: str,
     # highlight the keys chose is the one THIS frame paints.
     io = imgui.get_io()
     if rows and not frozen and (io.mouse_delta.x or io.mouse_delta.y):
-        iy = y
+        iy = y - off
         for i, it in enumerate(items):
             if i in rows and imgui.is_mouse_hovering_rect(
                     imgui.ImVec2(x, iy), imgui.ImVec2(x + w, iy + ITEM_H)):
@@ -926,7 +932,8 @@ def sub_popup(ui, key: str, items, trig, a: float = 1.0, *,
         frozen = _subs(ui, key)["open"] is not None
         hi = highlighted_item(
             items, _begin_keys(ui, key, items, x + inset, y + inset, cw,
-                               "menu", frozen))
+                               "menu", frozen,
+                               scrolled(ui, key) if scrolls else 0.0))
         off = 0.0
         if scrolls:
             off = _scroll(ui, key, items, hi, at.h - 2 * inset, ch)
@@ -1170,6 +1177,18 @@ def _row(ui, it, x, y, w, key, alpha, *, chrome_only: bool = False,
     return bool(st and st.clicked)
 
 
+def scrolled(ui, key: str) -> float:
+    """How far `key`'s rows were scrolled when they were last DRAWN.
+
+    `_scroll` cannot answer before the highlight is known and the highlight
+    cannot be read before the rows the pointer is over are known, which is
+    a circle. Last frame's offset breaks it, and it is the right answer
+    rather than a convenient one: the rows under the pointer now are the
+    rows that were painted last frame, at last frame's offset.
+    """
+    return ui.anim.store.get("menu_scroll", {}).get(key, 0.0)
+
+
 def _scroll(ui, key: str, items, at, view: float, content: float) -> float:
     """The scroll of a capped menu (`popup`'s `max_h`), kept with the
     menu's state: moved by the wheel over the panel, and — when the
@@ -1290,7 +1309,7 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
         if keyboard:
             at = highlighted_item(
                 items, _begin_keys(ui, key, items, x + PAD, y + PAD, cw, role,
-                                   frozen))
+                                   frozen, scrolled(ui, key) if scrolls else 0.0))
 
         off = 0.0
         if scrolls:

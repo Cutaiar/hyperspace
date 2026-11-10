@@ -394,6 +394,43 @@ def test_a_submenu_too_tall_for_the_window_scrolls_to_its_last_row(DB):
         f"the last row of a scrolled submenu did not land: {got!r}"
 
 
+def test_the_pointer_lands_on_the_row_it_is_over_in_a_scrolled_submenu(DB):
+    """Wheel a tall submenu, move the pointer, press Enter: the row under
+    the pointer is the row that is taken.
+
+    The rows of a capped panel are drawn at `y + inset - off`, and the
+    pointer used to be hit-tested against them UNSCROLLED — so the
+    highlight landed on a row nobody was pointing at, Enter took it, and
+    `_scroll` dragged the list back to show it. `scrolled` is last frame's
+    offset, which is where the rows the pointer is over were painted.
+    """
+    h = 640
+    script, _at = _open(DB, h)
+    DB.render("dark", W, h, script=script, keep="last")
+    tx, ty = _trigger_xy(index=3)                   # `Look-back frames`
+    opened = script + [(tx, ty)] * DWELL
+    DB.render("dark", W, h, script=opened, keep="last")
+    sx, sy, sw, sh = M.LAST_RECT[f"{CKEY}>frames"]
+
+    wx, wy = sx + sw / 2, sy + sh / 2
+    wheel = opened + [(wx, wy)] * 4 + [(wx, wy, False, -3.0)] * 60 + [(wx, wy)] * 6
+    DB.render("dark", W, h, script=wheel, keep="last")
+    # scrolled to the end, so the FIRST row in view is no longer echo.1:
+    # the pointer just inside the top of the panel is over a late row
+    top_y = sy + M.SUB_BORDER + M.PAD + M.ITEM_H / 2
+    moved = wheel + [(wx, top_y)] * 8
+    at = len(moved) + 2
+    DB.render("dark", W, h, script=moved + [(wx, top_y)] * DWELL,
+              keys=[(at, imgui.Key.enter)], keep="last")
+    got = DB.render.last_state["ctx"]
+    # which row that is depends on how far the wheel went; what matters is
+    # that it is NOT the first row of the list, which is what the
+    # unscrolled hit test would have taken
+    assert got.startswith("frames."), f"Enter took nothing: {got!r}"
+    assert not got.startswith("frames.1 "), \
+        f"Enter took the list's first row, not the one under the pointer: {got!r}"
+
+
 def test_a_dismissed_submenu_forgets_its_own_descendants(DB):
     """Close a submenu by moving to another row, and its GRANDCHILD has to
     go with it.
