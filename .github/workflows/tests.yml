@@ -1,13 +1,21 @@
-# The Python app's lint and fast test tier on every pull request and every
-# push to main (hyperspace-python/docs/ENGINEERING.md §16, "CI"). The job is
-# named `tests` so a ruleset on main can require it by that name.
+# The Python app's merge gate, on every pull request and every push to main
+# (hyperspace-python/docs/ENGINEERING.md §16, "CI"). tools/wait_green.py waits
+# for this workflow by its name, `tests`, and a run is green only when every
+# job in it is.
+#
+# Fanned out for the time between merges (row 870): lint and the type ratchet
+# on one runner, the fast tier split by CI time over four more
+# (tools/ci_shard.py), all at once. Public repository: each runner costs
+# nothing; a run holds five of the account's twenty concurrent jobs. The
+# sweep tier is not here: sweeps.yml runs it on its own runner, when a PR
+# touches what it walks.
 #
 # Linux only. A macOS job was tried: its GL is Apple's software renderer
 # (no GPU in the VM either), and about fifty tests hung there to the
 # timeout, 30+ minutes against Linux's 2.5. GL draws through Mesa's
 # software rasteriser under Xvfb; what only the Mac can judge (golden
 # frames on "Apple M3 Max", frame-rate floors, hands) is `pytest --all` on
-# the Mac. Public repository: the runner costs nothing.
+# the Mac.
 name: tests
 
 on:
@@ -20,43 +28,49 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # no Ultraleap SDK to build leapc-cffi against, and Linux torch wheels
+  # pull gigabytes of CUDA no fast-tier test imports (pyproject's groups)
+  UV_NO_GROUP: hands dream
+  SHARDS: 4
+
 jobs:
-  tests:
-    name: tests
+  static:
+    name: lint and types
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: hyperspace-python
-    env:
-      # no Ultraleap SDK to build leapc-cffi against, and Linux torch wheels
-      # pull gigabytes of CUDA no fast-tier test imports (pyproject's groups)
-      UV_NO_GROUP: hands dream
     steps:
       - uses: actions/checkout@v5
-
-      - name: System libraries
-        # ALSA headers to build python-rtmidi; PortAudio for sounddevice's
-        # import; Mesa + Xvfb for GL and GLFW; libgl-dev for the unversioned
-        # libGL.so moderngl's loader opens; glslang, the reference compiler
-        # test_patterns holds the face shaders to. The panel's fonts ship in
-        # the package (hyperspace/fonts/)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libasound2-dev libportaudio2 libgl-dev libgl1-mesa-dri libglx-mesa0 \
-            libegl1 xvfb xauth glslang-tools
-
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-          cache-dependency-glob: hyperspace-python/uv.lock
-
-      - name: Sync
-        run: uv sync --locked
+      - uses: ./.github/actions/setup
 
       - name: Lint
         run: uv run ruff check .
+
+      - name: Types
+        # the ratchet's one real pyright run (row 788), here rather than on a
+        # fast-tier worker, where it was the longest test (22-55 s)
+        run: uv run pytest -q -n0 -p no:cacheprovider tests/test_type_ratchet.py::test_no_new_complaint_in_the_app
+
+  fast:
+    name: fast tier ${{ matrix.shard }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]       # 0..SHARDS-1
+    defaults:
+      run:
+        working-directory: hyperspace-python
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+
+      - name: Warm the assert cache
+        run: uv run python tools/ci_shard.py prewarm ${{ matrix.shard }} $SHARDS
 
       - name: Fast tier
         # --timeout: a hung test fails and names itself; under --dist load a
@@ -64,5 +78,17 @@ jobs:
         # the run ends (row 605; the same values as pyproject's addopts)
         run: >
           xvfb-run -a -s "-screen 0 1920x1080x24"
-          uv run pytest -q -rs --dist load --timeout 120 --max-worker-restart=4 --durations=20
+          uv run pytest -q -rs --dist load --timeout 120 --max-worker-restart=4 --durations=10
+          --deselect tests/test_type_ratchet.py::test_no_new_complaint_in_the_app
+          --junitxml=../junit-${{ matrix.shard }}.xml
+          $(python3 tools/ci_shard.py files ${{ matrix.shard }} $SHARDS)
 
+      - name: Timings
+        # main's reports refresh tests/ci_durations.json when a shard runs
+        # long: `python3 tools/ci_shard.py durations junit-*.xml`
+        if: github.event_name == 'push' && !cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.shard }}
+          path: junit-${{ matrix.shard }}.xml
+          retention-days: 30

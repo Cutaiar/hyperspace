@@ -1,0 +1,30 @@
+# What every job of tests.yml and sweeps.yml needs before it runs anything:
+# the system libraries, uv and the locked environment. The job sets
+# UV_NO_GROUP and runs this after actions/checkout.
+name: Set up the Python app
+description: System libraries (cached), uv (cached) and `uv sync --locked`
+runs:
+  using: composite
+  steps:
+    - name: System libraries
+      # ALSA headers to build python-rtmidi; PortAudio for sounddevice's
+      # import; Mesa + Xvfb for GL and GLFW; libgl-dev for the unversioned
+      # libGL.so moderngl's loader opens; glslang, the reference compiler
+      # test_patterns holds the face shaders to. The panel's fonts ship in
+      # the package (hyperspace/fonts/). Cached by the list (row 870): an
+      # apt-get update and install was 11-16 s of every run. Bump `version`
+      # to refetch the same list.
+      uses: awalsh128/cache-apt-pkgs-action@v1
+      with:
+        packages: libasound2-dev libportaudio2 libgl-dev libgl1-mesa-dri libglx-mesa0 libegl1 xvfb xauth glslang-tools
+        version: 1
+
+    - uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: hyperspace-python/uv.lock
+
+    - name: Sync
+      shell: bash
+      working-directory: hyperspace-python
+      run: uv sync --locked

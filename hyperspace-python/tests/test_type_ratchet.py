@@ -1,8 +1,9 @@
 """The type ratchet (tools/type_ratchet.py, row 788) and the import walls' glob (tests/walls.py).
 
 A new pyright complaint fails, an old one doesn't, and no rule's total rises unless someone
-says `--raise-baseline`. The one test that runs pyright runs it for real, here in the fast tier, so CI
-holds the rule without a step of its own: see ENGINEERING §16, CI, for what it costs.
+says `--raise-baseline`. The one test that runs pyright runs it for real. In the fast tier on a Mac; on
+CI in tests.yml's `lint and types` job, beside the fast tier's shards rather than on one of their workers,
+where it was the longest test (row 870; ENGINEERING §16, CI).
 """
 
 from __future__ import annotations
