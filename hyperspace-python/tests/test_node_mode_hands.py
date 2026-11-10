@@ -102,12 +102,12 @@ def test_the_hands_are_a_controller_a_patch_can_point(rig):
     assert rig.one.loaded_patch.node_mode.of(1, "hands") == node
 
 
-def test_the_hand_axes_fill_in_lane_order_as_pushes(rig):
+def test_the_hand_axes_fill_in_lane_order_as_knobs_on_the_base(rig):
     pids = point(rig)
     got = rows(rig)
     assert [b.source for b in got] == [f"hand:{a}" for a in AXES]
     assert [b.target for b in got] == pids[:len(AXES)]
-    assert all(b.op == "push" and b.value == node_desk.HAND_DEPTH for b in got)
+    assert all(b.op == node_desk.HAND_OP == "abs" and b.value == 1.0 for b in got)
 
 
 def test_too_many_is_listed_not_paged(rig):
@@ -126,23 +126,85 @@ def test_an_axis_a_row_reads_is_no_freedom(rig):
     assert len(got) == len(AXES) - 1
 
 
-def test_a_hand_at_rest_moves_nothing_and_a_roll_pushes(rig):
-    pids = point(rig)
-    roll = AXES.index("right.roll")
-    q = rig.one.reg[pids[roll]]
+def sweep(p, axis, start, end, n=30):
+    """The hand's `axis` moved from `start` to `end` over `n` frames."""
+    for k in range(n + 1):
+        step(p, lanes(**{axis: start + (end - start) * k / n}))
+
+
+def a_roll(p):
+    pids = point(p)
+    return p.one.reg[pids[AXES.index("right.roll")]]
+
+
+def test_a_base_at_90_percent_is_reached_and_passed_the_whole_throw(rig):
+    """The owner, 2026-11-10: a push from a base at 90 % explores only the last 10 %."""
+    q = a_roll(rig)
+    q.set_norm(0.9)
+    sweep(rig, "right_roll", 0.5, 1.0)         # up through the base: caught
+    sweep(rig, "right_roll", 1.0, 0.0, 60)     # the whole way down
+    assert q.norm == pytest.approx(0.0, abs=0.01)
+    sweep(rig, "right_roll", 0.0, 0.4)
+    assert q.norm == pytest.approx(0.4, abs=0.01)
+
+
+def test_nothing_jumps_until_the_hand_reaches_the_base(rig):
+    q = a_roll(rig)
+    q.set_norm(0.9)
+    for _ in range(5):
+        step(rig)                               # a level hand reads 0.5
+    sweep(rig, "right_roll", 0.5, 0.2)          # away from the base: still not caught
+    assert q.norm == pytest.approx(0.9, abs=1e-3)
+
+
+def test_what_the_hand_left_stays_when_it_drops(rig):
+    q = a_roll(rig)
     q.set_norm(0.5)
-    for _ in range(3):
+    sweep(rig, "right_roll", 0.5, 0.8)
+    assert q.norm == pytest.approx(0.8, abs=0.01)
+    gone = lanes()
+    gone[AXES.index("right.roll")] = float("nan")       # out of view
+    for _ in range(60):
+        step(rig, gone)
+    assert q.norm == pytest.approx(0.8, abs=0.01)
+    # back in view level (0.5): no jump, it picks the base up again
+    for _ in range(5):
         step(rig)
-    assert q.eff_norm == pytest.approx(0.5, abs=1e-6)
-    for _ in range(120):
-        step(rig, lanes(right_roll=1.0))
-    assert q.eff_norm > 0.9
-    for _ in range(120):
-        step(rig)
-    assert q.eff_norm == pytest.approx(0.5, abs=1e-3)
+    assert q.norm == pytest.approx(0.8, abs=0.01)
 
 
-def test_the_rows_are_routes_run_here_and_in_no_file(rig):
+def test_a_short_dropout_keeps_the_catch(rig):
+    q = a_roll(rig)
+    q.set_norm(0.5)
+    sweep(rig, "right_roll", 0.5, 0.8)
+    gone = lanes(right_roll=0.8)
+    gone[AXES.index("right.roll")] = float("nan")
+    for _ in range(5):                          # well under FADER_GRACE_S
+        step(rig, gone)
+    step(rig, lanes(right_roll=0.6))
+    assert q.norm == pytest.approx(0.6, abs=0.01)
+
+
+def test_a_base_moved_by_anything_else_lets_go(rig):
+    q = a_roll(rig)
+    q.set_norm(0.5)
+    sweep(rig, "right_roll", 0.5, 0.6)
+    q.set_norm(0.1)                             # a desk, an undo, a load
+    step(rig, lanes(right_roll=0.65))
+    assert q.norm == pytest.approx(0.1, abs=0.01)
+
+
+def test_a_still_hand_writes_nothing(rig):
+    q = a_roll(rig)
+    q.set_norm(0.5)
+    step(rig)
+    before = q.norm
+    for k in range(20):                          # jitter well under FADER_STEP
+        step(rig, lanes(right_roll=0.5 + (k % 2) * 1e-4))
+    assert q.norm == before
+
+
+def test_the_rows_are_run_here_and_in_no_file(rig):
     point(rig)
     assert rig.one.table.node_routes() == rows(rig)
     assert not any(b.source.startswith("hand:") and b in rig.one.table.bindings for b in rows(rig))

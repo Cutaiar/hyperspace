@@ -365,6 +365,14 @@ MOD_OPS = ("push", "position", TURN_OP)        # the performer ops: the Router's
 # grab's debounce coming back (GRAB_HOLD_S) are the same closure, and a person
 # opening and closing a fist takes longer than this
 TURN_GRACE_S = 0.15
+# a lane row with the knob's op, `abs` (node mode's hand rows, never saved): the lane is a
+# fader on the param's base, with the desk's soft pickup. It catches within this of the base,
+# or on crossing it; it writes only a move of at least FADER_STEP (a still hand's jitter is
+# no edit, so a gesture's undo step closes); and it lets go of its catch once its lane has
+# been out of view this long (a tracker's dropout is not letting go)
+FADER_PICKUP_TOL = 0.02
+FADER_STEP = 1 / 1024
+FADER_GRACE_S = 0.3
 
 
 def whole_circle(source: str) -> bool:
@@ -4420,6 +4428,10 @@ class Router:
                 if b.when is not None and not self.gated(b, feeds):
                     continue         # gate open: apply() writes the base back
                 p = reg.get(b.target)
+                if b.op == "abs":
+                    if p is not None:
+                        self._fader(b, p, u)
+                    continue
                 if p is None or not p.modulatable:
                     continue         # (no lane may drive it: dormant, on any deck, row 775)
                 depth = b.value
@@ -4466,6 +4478,56 @@ class Router:
         for key in [k for k in movers if k not in moved]:
             del movers[key]
         self._end_turns(dt)
+        self._end_faders(dt)
+
+    # ---- the faders: a lane on a param's base (node mode's hands) ----
+
+    def _fader(self, b: Binding, p: Param, u: float) -> None:
+        """An `abs` lane row acting this frame: its reading is the param's base, once it has
+        caught it (`midi`'s soft pickup: within FADER_PICKUP_TOL, or crossing it). A base
+        moved by anything else (a desk, an undo, a load) since its last write lets go."""
+        if p.kind is not Kind.CONTINUOUS:
+            return
+        d = self.__dict__
+        key = (b.source, b.target)
+        idle = d.setdefault("_fader_idle", {})
+        idle[key] = 0.0
+        d.setdefault("_faded", set()).add(key)
+        wrote = d.setdefault("_fader_wrote", {})
+        u = min(1.0, max(0.0, u))
+        cur = p.norm
+        if b.caught and abs(cur - wrote.get(key, cur)) > FADER_STEP:
+            b.caught = False
+        if not b.caught:
+            crossed = b.last_hw is not None and (b.last_hw - cur) * (u - cur) <= 0
+            b.last_hw = u
+            if not (abs(u - cur) <= FADER_PICKUP_TOL or crossed):
+                return
+            b.caught = True
+        b.last_hw = u
+        if abs(u - cur) >= FADER_STEP:
+            p.set_norm(u)
+        wrote[key] = p.norm
+
+    def _end_faders(self, dt: float) -> None:
+        """The pass's end: a fader whose lane has been out of view FADER_GRACE_S lets go of
+        its catch, so a hand coming back picks the base up again rather than jumping it."""
+        d = self.__dict__
+        idle = d.get("_fader_idle")
+        if not idle:
+            return
+        faded = d.setdefault("_faded", set())
+        rows = {(b.source, b.target): b for b in self.performers() if b.op == "abs"}
+        for key in list(idle):
+            if key not in faded:
+                idle[key] += dt
+            b = rows.get(key)
+            if b is None or idle[key] >= FADER_GRACE_S:
+                if b is not None:
+                    b.caught, b.last_hw = False, None
+                del idle[key]
+                d.get("_fader_wrote", {}).pop(key, None)
+        faded.clear()
 
     # ---- the turn rows (plan 51 O2): a performer that writes the base ----
 

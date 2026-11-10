@@ -56,12 +56,14 @@ never changes a desk's map. **Whose pad:** the player's first that is connected,
 listed (`is_first`), as the pad window picks. **A nap changes no map:** a pad asleep is filled as
 the last model it read (`DeviceRegistry.pad_model`).
 
-**The hands** are the pad's road again: their entry says "hands", their rows are pushes about the
-base at `HAND_DEPTH` from the hand axes (`[hands] dofs`, left then right: `hand_freedoms`), and
-`Router` runs them while the hands are on this `Deck`. A level hand, or a height at its rest, adds
-nothing, so the look comes back when the hand drops. An axis an enabled row reads or gates on, or a
-modifier reads, is no freedom; the pinches, grabs and dance lanes fill nothing. They fill after the
-desks and the pads, so pointing them changes no map of those.
+**The hands** fill the hand axes (`[hands] dofs`, left then right: `hand_freedoms`), and `Router`
+runs their rows while the hands are on this `Deck`, as a pad's. But a hand row is a desk's knob,
+not a push: op `abs`, its axis's whole throw on the param's whole range, written to the base, with
+the desk's soft pickup (`Router._fader`). So a base at 90 % is reached, and passed, by the hand, not
+pushed into its last 10 %; nothing jumps when the mode goes up or a hand comes back; and what the
+hand left stays when it drops, an edit of the patch as a knob's is. An axis an enabled row reads or
+gates on, or a modifier reads, is no freedom; the pinches, grabs and dance lanes fill nothing. They
+fill after the desks and the pads, so pointing them changes no map of those.
 """
 
 from __future__ import annotations
@@ -82,9 +84,7 @@ ROUTED_KINDS = (PAD_KIND, HANDS_KIND)   # whose rows are routes, run by `Router`
 # knob, so the stick must reach the param (row 820)
 PAD_DEPTH = 1.0
 PAD_SCHEMES = ("axis", "pad", "hat", PAIR_SCHEME)   # what can hold a freedom of a pad's
-# a hand row's depth: a centred axis's whole throw (a full roll) is half the param's range either
-# way, a one-sided one's (a height) all of it, as a pad's stick and trigger
-HAND_DEPTH = PAD_DEPTH
+HAND_OP = "abs"                # a hand row is a knob on the base, with pickup (`Router._fader`)
 
 NOT_FIRST = "{role} is player {player}'s second desk: a patch points at a player's first"
 NOT_FIRST_PAD = ("{role} is not player {player}'s pad in hand: a patch points at a player's "
@@ -397,19 +397,26 @@ class NodeDesk:
 
     def _pad_rows(self, pad, fit: nodemode.Fit, had: list[Binding]) -> list[Binding]:
         """The rows of `fit` on a pad: pushes, each kept while it says the same."""
-        return self._pushes([_pad_source(s.sources, pad.qualifier) for s in fit.slots],
-                            fit, had, PAD_DEPTH)
-
-    def _pushes(self, sources: list[str], fit: nodemode.Fit, had: list[Binding],
-                depth: float) -> list[Binding]:
-        """A routed controller's rows: a push from each source onto its slot's param, each
-        kept while it says the same."""
         reg = self.deck.reg
         keep = {(b.source, b.target): b for b in had}
         out: list[Binding] = []
-        for source, slot in zip(sources, fit.slots, strict=True):
+        for slot in fit.slots:
+            source = _pad_source(slot.sources, pad.qualifier)
             b = keep.get((source, slot.param))
-            out.append(b if b is not None else Row(source, slot.param, "push", depth,
+            out.append(b if b is not None else Row(source, slot.param, "push", PAD_DEPTH,
+                                                   words=reg[slot.param].label or slot.param))
+        return out
+
+    def _hand_rows(self, fit: nodemode.Fit, had: list[Binding]) -> list[Binding]:
+        """The rows of `fit` on the hands: each axis a knob on its param's base, kept while it
+        says the same (its catch)."""
+        reg = self.deck.reg
+        keep = {(b.source, b.target): b for b in had}
+        out: list[Binding] = []
+        for slot in fit.slots:
+            source = slot.sources[0]
+            b = keep.get((source, slot.param))
+            out.append(b if b is not None else Row(source, slot.param, HAND_OP, 1.0,
                                                    words=reg[slot.param].label or slot.param))
         return out
 
@@ -445,11 +452,11 @@ class NodeDesk:
         now.key, now.node, now.player = key, node, player
         fit, rows = nodemode.Fit(), []
         if node is not None and hands:
-            params = nodemode.fillable(deck.reg, self.params_of(node), routed=True)
+            params = nodemode.fillable(deck.reg, self.params_of(node))
             wanted = set(params)
             fit = nodemode.fill(params, self._hand_free(dev),
                                 [*self._kept(wanted), *(("", p) for p in before)])
-            rows = self._pushes([s.sources[0] for s in fit.slots], fit, now.rows, HAND_DEPTH)
+            rows = self._hand_rows(fit, now.rows)
         elif node is not None and pad:
             params = nodemode.fillable(deck.reg, self.params_of(node), routed=True)
             wanted = set(params)
@@ -568,7 +575,7 @@ class NodeDesk:
         if kind == HANDS_KIND and not self.devices.get(role).axis_names():
             return NO_HAND_AXES.format(role=role)
         return nodemode.enter_refusal(self.deck.reg, node, self.params_of(node) if node else (),
-                                      routed=kind in ROUTED_KINDS)
+                                      routed=kind == PAD_KIND)
 
     def enter(self, role: str, node: str | None) -> str | None:
         """Controller `role` on `node` of this deck's patch: one undo step of it, the dot
