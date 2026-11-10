@@ -2454,10 +2454,10 @@ class Library:
         With `loose` — a **read** only: a load, a pad, the startup loadable patch,
         what a show still names — a loadable patch name whose folder is not on
         disk also tries its `slug` among the top-level files, an old show's
-        ``Ac/Dc`` for the top-level ``ac-dc.json`` (plan 48 review); and a
-        name nothing answers to finds the one patch with that leaf in any
-        other folder — a file moved by hand in Finder, while the app was
-        shut or before `poll` saw it (`_hand_moves`). A
+        ``Ac/Dc`` for the top-level ``ac-dc.json`` (plan 48 review); and, its
+        folder gone (renamed or removed in Finder while the app was shut),
+        the one patch with that leaf in any other folder. A patch moved while
+        the app runs is followed by `poll` (`_hand_moves`). A
         writer (`save_as`, `delete`, `rename`) never takes that road:
         ``party/TRIP`` typed with no ``party/`` is a new file in a new
         folder, never the top-level ``party-trip.json``. None for none, and
@@ -2529,7 +2529,9 @@ class Library:
         # a file moved to another folder by hand (Finder), which no install
         # was told of: the one patch anywhere with that leaf — by its listed
         # name or its file's stem. Two of them: neither, and `say` which
-        if not elsewhere:
+        # (review of #444: a folder still on disk means the file was deleted or moved
+        # out of it, and a leaf alone cannot tell which — so no guess)
+        if not elsewhere or not folder or fold_folder(folder) in folders:
             return None
         want = slug(leaf)
         found = sorted({p for n, p in idx.items() if slug(split_name(n)[1]) == want}
@@ -3844,8 +3846,9 @@ class Library:
         another (two candidates: the one whose mtime did not move, as a
         Finder move leaves it; else none — the loose read still finds a
         patch with a name of its own, `_resolve`). Returns where the moved
-        files are now: the same bytes, so `poll` re-applies none of them."""
-        base = self.home / LOADABLE
+        files are now whose mtime did not move: `poll` re-applies none of
+        those, and does re-apply one edited as well as moved."""
+        base = loadable_dir(self.home)       # `loadable/`, or `presets/` before the migration
         gone = [p for p in was if p not in seen and p.is_relative_to(base)]
         if not gone:
             return set()
@@ -3896,7 +3899,9 @@ class Library:
                               "moved in the folder:", what)
         except (LibraryError, OSError) as e:        # an install that would not write
             self.say(warning=f"moved in the folder: {what}; installs not updated ({e})")
-        return {pairs[old] for old in moves}
+        # only the ones whose bytes are as they were: a file edited and then moved
+        # before this scan is re-applied by `poll`, under its new name (review of #444)
+        return {pairs[old] for old in moves if seen[pairs[old]] == was[old]}
 
     def poll(self, now: float | None = None) -> bool:
         """Re-apply whatever is loaded from a file that changed on disk, and
