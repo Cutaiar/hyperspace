@@ -256,7 +256,7 @@ class Faces(dict):
     its own faces needs its own, or its text renders at the wrong size.
 
     `geist` says whether these are the kit's own Geist faces, built with a
-    one-em line box and measured into fonts/metrics.json (RETRO 64). A
+    one-em line box and measured into fonts/metrics.json (RETRO 77). A
     host's faces are neither: they keep ImGui's own metrics and the span
     multiplier, the path the kit had before."""
     span_em: dict = FONT_SPAN_EM
@@ -614,7 +614,7 @@ def fit_text(s, faces, variant, size, max_w, tabular=False) -> str:
 # a 24-character string is 5-8 runs and no glyph lands more than ~0.7px
 # from Chromium's position (half of that is the run's start rounding to a
 # whole pixel, which `add_text` does). One quad per glyph is exact, and was
-# ~10x the cost - 3ms of a dashboard frame. See RETRO row 70.
+# ~10x the cost - 3ms of a dashboard frame. See RETRO row 83.
 DRIFT_PX = 0.25
 
 _RUNS: dict = {}
@@ -659,7 +659,7 @@ def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
     sit up to ~0.7px from where Chromium puts it, for a tenth of the cost of
     placing each one. A single glyph - a Kbd key - is one quad at its exact
     fractional x, which costs no more than a run and is what keeps a
-    centred "K" or "W" on Chromium's centre (RETRO row 64)."""
+    centred "K" or "W" on Chromium's centre (RETRO row 77)."""
     if not is_geist(faces):
         return _label_host(dl, x, y, s, faces, variant, size, col, align=align,
                            box_w=box_w, baseline_box=baseline_box, max_w=max_w,
@@ -759,7 +759,7 @@ def text_w(s, faces, variant, size, tabular=False) -> float:
 def _label_host(dl, x, y, s, faces, variant, size, col, *, align="left",
                 box_w=0.0, baseline_box=0.0, max_w=0.0, tabular=False):
     """`label` for a host's faces (`host_faces`): ImGui's own metrics and
-    centring, as the kit drew all text before RETRO 64 - the Geist tables
+    centring, as the kit drew all text before RETRO 77 - the Geist tables
     and baseline rule were measured for Geist and say nothing about another
     font."""
     if max_w:

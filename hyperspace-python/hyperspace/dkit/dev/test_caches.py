@@ -1,4 +1,4 @@
-"""The per-frame caches from the CPU pass (RETRO row 71), and what each must
+"""The per-frame caches from the CPU pass (RETRO row 84), and what each must
 NOT go on returning once its inputs change.
 
 Every cache here was added under one rule: a frame drawn from it is byte
@@ -254,7 +254,7 @@ def test_a_closed_menu_is_still_measured():
     """Not an accident to tidy away. Measuring "⌘C" bakes DejaVu's
     command key into the font atlas, and WHEN that first happens decides
     where later glyphs are packed: skipping the measure for closed menus
-    moved 30 contact-sheet pixels by up to 107 levels (RETRO row 71). The
+    moved 30 contact-sheet pixels by up to 107 levels (RETRO row 84). The
     memo makes the repeats free; the first measure has to stay."""
     from hyperspace.dkit.dev.test_interaction import _gl_or_skip, one_widget
     _gl_or_skip()

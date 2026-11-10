@@ -638,7 +638,7 @@ def measure(ui, items, min_w: float = MIN_W) -> tuple[float, float]:
     the contact sheet by up to 107 levels when closed menus stopped
     measuring. So every menu is still measured, on the frame it first
     appears in a session, exactly as before; only the repeats are skipped.
-    See RETRO row 71."""
+    See RETRO row 84."""
     sig = (min_w, tuple((it.kind, it.label, it.icon, it.shortcut, it.checked)
                         for it in items))
     memo = ui.anim.store.setdefault("menu.measure", {})

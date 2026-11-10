@@ -8,9 +8,9 @@ over the frames after five warm-up ones, and how many labels and characters
 a frame draws. Run it twice: it is noisy at the 0.3ms level on a shared
 machine, and a change smaller than that is not shown by one run.
 
-Figures (Mesa, 1440x1100, RETRO row 70): 4.8ms before the font-loader fix,
+Figures (Mesa, 1440x1100, RETRO row 83): 4.8ms before the font-loader fix,
 7.8ms with a quad per glyph, 5.2ms with `add_text` runs (paired runs, same machine: 4.6 pre-fix).
-The CPU pass (RETRO rows 71-72), on a slower box: 6.53 -> 3.33ms paired,
+The CPU pass (RETRO rows 84-85), on a slower box: 6.53 -> 3.33ms paired,
 pixel-identical. Use 300 frames and the median of several runs' medians.
 """
 

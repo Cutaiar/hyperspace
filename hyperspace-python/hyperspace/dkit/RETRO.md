@@ -170,7 +170,7 @@ second of two similar components is how the first one's bugs surface (row
 
 | # | Issue | Fix | What would have caught it |
 |---|---|---|---|
-| 61 | **The kit's text is not Chromium's text, by measurement.** Glyph advances come out of the baked font as WHOLE pixels ("Ctrl" 22 against 21.192, "Save Changes" 82 against 78.541, `medium` and `regular` identical where Chromium's differ), and 12px text sits ~0.93px LOWER than Chromium's while 14px agrees to ~0.1 | Not fixed - it is the font loader, kit-wide. The Kbd cells pin their width as Button's do; the width LAW is tested against Chromium's own text widths; the 12px height is a STRICT xfail in `test_kbd.py` | Found because the Kbd is the first component whose box size comes from its text AND whose cells were drawn at intrinsic width - the diff failed two cells on the right edge. Every earlier text-sized component pinned its width in the spec, which is exactly why this had never been measured. **A pinned dimension is a dimension nobody is checking.** |
+| 61 | **(FIXED - rows 77-82, ported onto the package in rows 86-89.)** **The kit's text is not Chromium's text, by measurement.** Glyph advances come out of the baked font as WHOLE pixels ("Ctrl" 22 against 21.192, "Save Changes" 82 against 78.541, `medium` and `regular` identical where Chromium's differ), and 12px text sits ~0.93px LOWER than Chromium's while 14px agrees to ~0.1 | Not fixed - it is the font loader, kit-wide. The Kbd cells pin their width as Button's do; the width LAW is tested against Chromium's own text widths; the 12px height is a STRICT xfail in `test_kbd.py` | Found because the Kbd is the first component whose box size comes from its text AND whose cells were drawn at intrinsic width - the diff failed two cells on the right edge. Every earlier text-sized component pinned its width in the spec, which is exactly why this had never been measured. **A pinned dimension is a dimension nobody is checking.** |
 | 62 | `kbd.word` failed the dark diff at 6 levels: a 29.203 wide box drawn at its fraction | `draw.snap`, as `draw.switch` already did | The README's finding - Chromium lays out on fractions and SNAPS what it paints - applied to every fractional box, and draw.kbd was written without it. Caught in the first diff, which is the point of a diff; the habit is to reach for `snap` whenever a size is not a whole number. |
 | 63 | I inferred the KbdGroup "+" was 9.61 wide by SUBTRACTION and assumed it was Geist at the parent's 16px (8.93) | Measured the span: **monospace**. KbdGroup renders a <kbd>, the UA gives <kbd> `font-family: monospace`, and the group never resets it | A number derived by subtraction carries every assumption of the subtraction. **Measure the element, not the gap between two others.** The 0.68px discrepancy was the clue and would have been easy to call rounding. |
 
@@ -213,3 +213,93 @@ that assumes nobody reads "the last item" (68), a behaviour the host added
 after the port was written (69). The kit is now tested by the panel's own
 7912 tests running with it switched on, which is a stronger check on that
 seam than anything in `hyperspace/dkit`.
+
+## Mine, from fixing the font loader (row 61)
+
+| # | Issue | Fix | What would have caught it |
+|---|---|---|---|
+| 77 | **Row 61, root-caused: four separate faults, none in a component.** (a) The loader is **FreeType**, not stb_truetype as README, FINDINGS and the code comments all said, and it HINTS by default - a hinted advance is a whole pixel. (b) **ImGui 1.92 rounds every font size** to a whole pixel, so `css x FONT_SPAN_EM` - 15.6 at 12px - became 16: 12px text 2.6% large, 14px (18.2 -> 18) 1.1% small. (c) Its baked ascent is CEIL'd (13 at 16) where Blink ROUNDS ascent and descent separately (12 + 4): that is the whole 0.93px. (d) ImGui applies no `kern` and no `liga`; Chromium applies both, and Geist's `tt`/`ff` ligatures are 0.05em narrower than their letters | `NoHinting`; a one-em line box built into the TTFs so the size pushed IS the CSS px; kerning, ligatures, advances and Geist's real metrics frozen to `fonts/metrics.json`; `draw.baseline_y`; glyphs drawn one quad each at the fractional pen. Widths now within 0.016px of `measureText` on 156 strings, the Kbd glyph within 0.04px vertically | **`io.fonts.font_loader_name` was one attribute away the whole time.** Three documents reasoned about stb_truetype's algorithm without checking that stb_truetype was running. Before explaining a library's behaviour by its algorithm, read which implementation is loaded. And (b) only shows when the multiplied size is fractional - 14px x 1.30 is 18.2, which rounds to nearly itself, which is why 14px "agreed". |
+| 78 | My first baseline rule floored the half-leading, from memory of Blink's `CalculateLeadingSpace`; the measurement (252 cells) said the line box's offset in a flex box rounds half UP, and only the leading INSIDE a line box floors | `baseline_y` composes both; `test_text.py` keeps a sample of the 252 | Remembered source is a hypothesis. It was half right, which is the dangerous amount: a 1-in-2 rule passes the cases you happen to think of. The probe took two minutes and settled it. |
+| 79 | I widened every glyph quad by the atlas padding, reasoning that ink sliding past a quad's edge would otherwise be lost at a fractional pen. It made the Kbd "W" centroid WORSE (0.18 vs 0.08 off) and, in a full atlas, sampled a neighbour's texels - a 13-level speck outside the `text.mixed` cell | Removed; each quad is its bitmap | Caught only because the diff's summary line moved, **8 -> 13 levels, while every cell still said ok**, and I asked which pixel. A summary figure that moves is a pixel to find, not a number to note. And a fix argued from first principles is still a change to measure - this one had no measurement behind it at all. |
+| 80 | `test_the_caret_lands_where_the_field_was_clicked` went red: its click was 4.0px into an "X" that hinting made 8 wide - EXACTLY its midpoint, a tie the old rounding sent to caret 1. The real "X" is 8.484, so 4.0 is before the middle and caret 0 is what Chromium does too | The click moves to +16, 6px in | A driven click on a glyph's midpoint measures the rounding, not the caret. Pick probe points well inside the region they claim to test. |
+| 81 | Reverting `stock_text_y` turned nothing red: the TTFs' 800 / -200 split was chosen so ImGui's own centring lands on Blink's baseline at 14px in an even box - the only size the kit's Inputs use - so the guard was guarding a coincidence | `test_a_stock_input_puts_its_glyphs_on_the_labels_baseline`, at 11px/20 and 16px/36 where the two disagree; the revert fails both | Habit 3 again, and why it is a habit: the revert check is what found that the existing test could not tell. **A revert that stays green at the tested parameters means the parameters are the coincidence**, not that the code is redundant. |
+| 82 | The KbdGroup test fed "B" as 7.9 wide, labelled as Chromium's `measureText`. Chromium says 8.256 | Corrected; harmless, since B's Kbd is min-w 20 either way | A constant labelled "measured" is a claim like any other. This one was never re-run, and nothing depended on it enough to fail. |
+
+### What this batch says
+
+The fix was in the font LOADER, and every component's text moved with it -
+yet the pixel diff changed in only the six text cells and one speck,
+because every text-sized chrome cell had its width pinned. Unpinning them
+(the Kbd cells, and four Button sizes on both sides with `"intrinsic":
+true`) is what turns the diff into a standing check on the text measure:
+rendered with the OLD loader, those five cells FAIL at 26 levels / 2-3px;
+with the new one they pass at 0-1. Row 61's lesson, applied: a pinned
+dimension is a dimension nobody is checking.
+
+## Mine, from making the text fast
+
+| # | Issue | Fix | What would have caught it |
+|---|---|---|---|
+| 83 | **The exact text path cost 3ms of a 4.8ms dashboard frame.** One quad per glyph is a dozen Python-to-C calls a glyph, ~1us each, and the dashboard draws 2,119 characters a frame. I had measured it - 22us a string - but only in isolation, and reported it as a follow-up instead of weighing it against the frame | `label` draws `add_text` RUNS, restarted at the kerned pen when ImGui's unkerned one drifts `DRIFT_PX` (0.25); a single glyph keeps the exact quad. `text_w` is pure arithmetic, and the width and the shaping are cached per string. Frame: **7.8ms -> 5.2ms** (pre-fix 4.6, paired runs). Layout stays exact; glyphs within ~0.7px of Chromium's, and the gallery text centroids came out CLOSER than with the quads (worst 0.44px, was 0.69) | **Measure a change's cost where it is paid - one frame of the real page - before calling it done**, not per call. `bench_paint.py` is that number now. Also: "Geist kerns densely" was the fact that killed the obvious split (a run per kerned pair is 16 runs in 24 glyphs); the drift threshold came from measuring how far the unkerned pen actually wanders. The threshold itself turned out not to matter to the frame (0.25 and 0.5 were within noise), so it is set for looks. |
+
+## Mine, from the per-frame CPU pass
+
+The brief: make `dashboard.paint()` as cheap as possible **without changing a
+single rendered pixel**. Measured with `bench_paint.py` (300 frames, the
+median of five runs' medians, idle 4-core cloud box, Mesa, 1440x1100) - this
+machine runs the old code at ~6.1ms where the brief's figure was 5.2, so
+compare the columns, not the absolutes to older rows. Each stage is the one
+above plus one change, rebuilt from the base commit and benched in one sweep:
+
+| Stage | Change | median | min |
+|---|---|---|---|
+| 0 | base (`79d3f02`) | 6.11 | 5.87 |
+| 1 | `sparkline`: points cached on (rect, range, values); the quads reuse the cached ImVec2s | 5.37 | 4.92 |
+| 2 | `menu.popup`: a CLOSED menu skips placement, the style push and `begin_popup`; `menu.measure` memoised per session | 4.52 | 4.37 |
+| 3 | `tokens.rgba` memoised on the RESOLVED colour + alpha | 4.81* | 4.29 |
+| 4 | `dashboard._laid_out`: paint's `lay_out` memoised on (w, h, scroll) | 4.16 | 4.11 |
+| 5 | `label`: each call's placement (fit, width, baseline, run origins) memoised on every argument | 3.64 | 3.41 |
+| 6 | `icon`: each icon's scaled path cached as ImVec2s | 3.44 | 3.24 |
+
+\* within noise in this sweep; in a direct pair it was 4.35 -> 4.10. Paired
+end to end (base, final, base, final): **6.53 -> 3.33ms**, -49%. 634 frames
+across 20 scenarios (static, resized, hover, scroll + kebab menu + its items,
+tabs, the contact sheet and back, each theme) plus the ImGui gallery in both
+themes are **byte-identical** to the base, in both run orders
+(`capture_frames.py`, new, is that check - use it for any change that must
+not move a pixel).
+
+| # | Issue | Fix | What would have caught it |
+|---|---|---|---|
+| 84 | **Skipping the work for closed menus changed 30 pixels, by up to 107 levels**, in the contact sheet - nowhere near a menu. A closed `menu.popup` used to `measure` every frame, and measuring "⌘C" makes ImGui BAKE DejaVu's command key into the dynamic font atlas. When that first happens decides where later glyphs are packed, and the contact sheet's glyphs sampled differently from a differently packed atlas | `measure` still runs for a closed menu, memoised in `ui.anim.store` (per session, so per atlas), so the first one still bakes on frame one and the repeats are free. `test_a_closed_menu_is_still_measured` holds it, with the reason in its docstring | **The byte comparison, and only the byte comparison.** It was a "pure" change by every argument I had - `begin_popup` provably throws the work away - and the argument was right about ImGui's state and wrong about the ATLAS, which is state too. A measure that touches a font is not pure. The same sensitivity is pre-existing: 14 contact-sheet pixels differ depending on whether ANY earlier `render()` ran in the process (so `capture_frames.py`, which hashes every frame, compares captures taken in the SAME order) |
+| 85 | Tried: draw a label with `add_text(font, size, ...)` instead of pushing the face, since the plain overload forwards to it. It changed every dashboard frame (1,283 px, up to 136 levels - glyph edges, invisible by eye) and saved nothing measurable | Reverted | Reading the C++ said "same call"; the pixels said otherwise and I did not chase why, because there was no speed to buy. A plausible equivalence is a hypothesis until the capture agrees - row 78's lesson, at a lower level |
+
+### What this pass says
+
+**Most of the frame was Python rebuilding things that had not changed.**
+Every cache here is keyed on everything its output depends on and nothing
+else - the RESOLVED colour rather than the theme dict, the values rather
+than the list, the label's every argument plus a live check of the baked
+font's density - and everything that can change frame to frame without its
+inputs changing stays live: the colour (`_u32` reads ImGui's style alpha,
+which `begin_disabled` halves), the font push and every draw call (an ImGui
+draw list is rebuilt each frame; only the arithmetic feeding it is reused).
+`test_caches.py` has one test per way a cache could go stale, and each was
+checked by making the cache stale on purpose and watching it fail (all eight
+did).
+
+What is left, by self time: the `add_text` calls themselves (a label is ~1us
+of Python and ~1us a run of C++, and runs are the geometry), `uictx.hit`'s
+ImGui calls (72 a frame), the sparkline's thickness-1.5 polyline (45us each,
+all in ImGui's AA tessellation - 6 a frame), and widget code spread thinly.
+Nothing left is a single big win; the next one would be fewer draw calls,
+which is a pixel change and a different brief.
+
+## Mine, from porting rows 77-85 onto the package
+
+| # | Issue | Fix | What would have caught it |
+|---|---|---|---|
+| 86 | **The kit merged into main (#446) without the text fix or the CPU pass.** Both were on `claude/elegant-lovelace-3v4owe`, branched from `magical-ritchie` at the Kbd; the merge came from a branch that forked before them and moved the kit to `hyperspace/dkit`. Seven commits sat on a branch nothing would ever merge | Cherry-picked onto main with directory-rename detection (`merge.directoryRenames`): the moves resolved themselves, `draw.py` conflicted five times, the docs were rewritten once at the end. The new files took package imports | **Before a move, list the open branches that touch the moved paths** (`git log --all --since=... -- <path>`). A move is the one change that turns every parallel branch into a port. Nothing flagged it: both branches were green on their own. |
+| 87 | Main had added `host_faces`: a host can hand the kit ITS OWN font. My fix's kerning, ligature and advance tables are Geist's, and its one-em line box is built into Geist's files - applied to a host's face they would be wrong, silently | `Faces.geist`: `load_faces` is Geist and takes the measured path; `host_faces` keeps the path the kit had before (ImGui's metrics, the span multiplier). The panel loads Geist, so it gets the fix | Read what changed on the target branch around the code being ported, not only the conflicts. `host_faces` merged cleanly - it was a new function - and was the one thing that made the port semantically wrong. |
+| 88 | Six dashboard tests failed under xdist and passed alone; main's own run had THREE such failures, which I first filed as load flakes because they passed alone. Reproducing the worker's exact order found it: `additions_sheet.shot` created an ImGui context per shot and never destroyed it, and a dashboard test after `test_the_lean_chip_paints_what_the_button_paints` could not open its context menu - on main too | `shot` destroys its context, as `dashboard.render` and `one_widget` already did | **"Passes alone" is not "flaky".** It is "depends on what ran before it", and the worker's order (`-v` prints `[gwN]`) reproduces it in one process. RETRO row 19 was this same leak, in the gallery. |
+| 89 | **The CPU pass's numbers did not transfer to the real panel.** The demo dashboard draws ~200 labels a frame; the panel draws ~7. On the panel the whole-frame CPU cost is unchanged within noise (median 6.41 ms main, 6.35 ms ported; the kit is ~1.9 ms of it either way, measured with `HYPERSPACE_KIT=0` at 4.48), and kit text is 0.06 ms of it | Nothing to fix; recorded. The panel's kit time is `comp_button.chip_chrome` (~34 chips a frame), sliders and buttons - the next pass's target | **Benchmark the workload you ship.** The demo was the only page available when the CPU pass ran; once the panel drew on the kit, the demo stopped being representative. `bench_paint.py` measures the demo; the panel needs its own (HANDOFF). |

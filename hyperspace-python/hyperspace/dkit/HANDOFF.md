@@ -73,13 +73,18 @@ A reasonable opening message for a new session:
 ## Where it stands
 
 ```
-864 passed, 61 skipped, 2 xfailed (854 with test_gallery.py deselected
-under xdist, plus its 10 run -n0; the xfails are test_kbd's strict
-text-height pair).   chrome diff: 71 cells, flat 0-2 levels, worst
-corner 0.776 px, "all cells within the bar" in BOTH themes.
+dkit/dev: 901 passed, 65 skipped, 0 xfailed under xdist, plus
+test_gallery.py's 10 run -n0.   The fast tier (`uv run pytest`, CI's):
+8087 passed, 5 skipped.   chrome diff: 71 cells, worst flat 2 levels,
+worst corner 0.776 px, "all cells within the bar" in BOTH themes - with
+the Kbd cells and four Button sizes at INTRINSIC width.
 ```
 
-Measured after the Kbd. Adding the Checkbox and then the Kbd each changed
+Measured after the text fix and the CPU pass were ported onto the package
+(RETRO 77-89). The four new skips are `test_text.py`'s and
+`test_caches.py`'s no-from-imports cases in `test_module_surface`.
+
+Before that, measured after the Kbd. Adding the Checkbox and then the Kbd each changed
 ZERO ImGui gallery pixels outside their own cells, in both themes, each
 checked against the capture taken before it.
 
@@ -463,15 +468,50 @@ Measured and worth knowing:
   not DejaVu as the kit's; on a Mac it will be Apple's. Symbol keys are not
   in the diff for that reason.
 
-**And the finding that reaches past it - the kit's text metrics.** Glyph
-advances are whole pixels, so every text-derived width runs a few percent
-wide of Chromium's ("Ctrl" 22 vs 21.192, "Save Changes" 82 vs 78.541), and
-`medium` measures identical to `regular`. Separately, 12px text sits ~0.93px
-LOW in `draw.label` while 14px agrees to ~0.1. Every earlier text-sized cell
-pins its width in the spec, which is why it was never seen; RETRO row 61.
-Pinned in `test_kbd.py` as a STRICT xfail, so fixing it turns it red. Look at
-`draw.load_faces` (rasterizer density, `pixel_snap_h`, the 1.92 baked-font
-path) before anything else - it is the most leveraged fix left in the kit.
+**The text-metric finding (RETRO 61) is FIXED** - rows 77-82 for what it
+was, 83-85 for making it cheap, 86-89 for the port onto the package. In
+short: the loader is FreeType (not stb_truetype) and hinted; ImGui 1.92
+rounds font sizes, so `css x 1.30` drew 12px at 16; its ascent is ceil'd
+where Blink rounds; and ImGui applies no `kern`/`liga`. Read `draw.py`'s
+"faces and metrics" and `dev/build_fonts.py`'s docstring before touching
+text. Measured:
+
+| | before | after |
+|---|---|---|
+| text widths vs canvas `measureText`, 156 strings (3 weights, 12-16px, kerned and ligated words) | "Ctrl" 22 vs 21.192, "Save Changes" 82 vs 78.541 | worst **0.016px** |
+| Kbd glyph ink, vertical (12px, `test_kbd`) | 0.93px low | **0.04px** |
+| baseline rule, 252 measured cells | - | **252 / 252** (`draw.baseline_y`) |
+| gallery text cells, ink extent vs the oracle | -6 to +6 px | 0 to +-2 |
+| the PANEL's 12px segmented labels / "Restart process", offset from their box's centre | +1.26 / +1.46 px | +0.37 / +0.53 px |
+
+What changed for callers: `push_css_font` pushes the CSS px itself for
+Geist (ImGui's `get_font_size()` is the CSS px, not x1.30); `label` and
+`text_w` shape with Geist's tables and draw in `add_text` runs; `label(line_h=)`
+for a line-height that is not `normal`; a STOCK InputText is placed with
+`draw.stock_text_y`. **A host's faces (`host_faces`) keep the old path** -
+the tables are Geist's - which `Faces.geist` decides (RETRO 87).
+
+**Cost, measured where it is paid.** On the demo dashboard (`dev/bench_paint.py`,
+~200 labels a frame) the text path and the CPU pass take `paint()` from
+4.44 ms on main to 3.11 ms (medians of three paired runs, this rig). On the real PANEL they change nothing measurable: the
+panel draws ~7 kit labels a frame, kit text is 0.06 ms of it, and the
+whole-frame CPU median is 6.41 ms on main against 6.35 ms ported (8 paired
+runs; 4.48 with `HYPERSPACE_KIT=0`). The panel's kit time is chrome -
+`comp_button.chip_chrome` (~34 a frame), sliders, buttons - which is 5c's
+finding too; `tools/profile_kit.py` is the panel's benchmark.
+
+Left, each written down rather than done:
+
+* **Retina.** At density 2 the baked ascent can be a half pixel and
+  `add_text` truncates a text origin to a whole one, so text drawn in runs
+  or by a stock InputText can sit one device pixel off `baseline_y` there.
+  Not measurable on this rig (Mesa, density 1).
+* **`label` assumes `line-height: normal`** unless told otherwise; the
+  rule needs the real line-height when the leading inside the line box is
+  odd. Every current caller is even.
+* **Horizontal ink** of whole strings differs from Chromium's by up to
+  ~0.4px while extents match: run placement (glyphs within ~0.7px of
+  Chromium's pen, `DRIFT_PX`) and the rasterizer's stroke weight.
 
 **Checkbox is DONE** (commits ending `dkit: Checkbox`):
 

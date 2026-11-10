@@ -1,6 +1,6 @@
 """Hash every frame of a set of dashboard scenarios, and the ImGui gallery.
 
-The check for a change that must not move a pixel (RETRO rows 71-72):
+The check for a change that must not move a pixel (RETRO rows 84-85):
 
     xvfb-run -a uv run python -m hyperspace.dkit.dev.capture_frames before.json ld
     ... change ...
@@ -15,7 +15,7 @@ glReadPixels, so a frame that differs in one byte is named. The order is
 so module-level caches carry across theme switches and resizes, which is
 what a cache bug needs. Compare captures taken in the SAME order: 14
 contact-sheet pixels depend on whether any render() ran before it in the
-process (the font atlas's packing order; RETRO row 71). The first two
+process (the font atlas's packing order; RETRO row 84). The first two
 scenarios' last frames are saved as PNGs beside OUT.json.
 """
 import hashlib

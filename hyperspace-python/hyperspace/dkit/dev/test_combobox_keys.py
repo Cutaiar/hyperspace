@@ -375,7 +375,7 @@ def test_the_caret_lands_where_the_field_was_clicked(DB):
     # "X" 8.484 wide at 14px - past its middle, so the caret goes after it.
     # This was +14, 4px in: past the middle of a HINTED "X", which was 8
     # (a tie at 4 that went to 1), and before the middle of the real one -
-    # where Chromium would put the caret at 0 too. RETRO row 67.
+    # where Chromium would put the caret at 0 too. RETRO row 80.
     assert _query_after(DB, 16, "Q") == val[0] + "Q" + val[1:], \
         "the caret did not land between the glyphs"
     assert _query_after(DB, 40, "Q") == val + "Q", \
