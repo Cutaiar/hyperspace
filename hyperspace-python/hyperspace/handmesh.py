@@ -42,6 +42,9 @@ HERE = Path(__file__).resolve().parent / "handmodels"
 
 PALM = "palm"            # a joint that moves with the palm
 MAX_BONES = 32           # the skinning shader's array
+WRIST_MM = 25.0          # how far a model may reach behind the palm's base
+                         # (`shorten_wrist`): a cuff, not the forearm the rigs
+                         # ship, none of which the tracker drives
 
 # glTF component types → numpy
 _COMPONENT = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16,
@@ -170,6 +173,32 @@ def load(path: Path, slots: dict, side: str, scale: float = 1000.0) -> HandModel
     return m
 
 
+def shorten_wrist(m: HandModel, limit: float) -> HandModel:
+    """`m` with everything behind the palm's base squeezed along the hand's
+    own forward axis until it reaches back no further than `limit` mm.
+
+    The models carry what their rigs were built with — Ultraleap's generic
+    hand a whole forearm to the elbow (100 mm behind the palm), the others
+    a 50 mm cuff — and none of it is tracked: it hangs off the wrist at
+    whatever angle the palm sits, and its cut end faces the room. Squeezing
+    rather than cutting keeps the mesh closed (a trim would leave a ragged
+    rim and a hole), and the palm itself, everything forward of the base,
+    is untouched.
+    """
+    R = rest_joints(m)
+    o, f, _ = hand_axes(R)
+    f = _unit(f)
+    d = (m.positions - o) @ f
+    back = d < 0.0
+    depth = float(-d.min()) if back.any() else 0.0
+    if depth <= limit or limit < 0.0:
+        return m
+    pos = m.positions.copy()
+    pos[back] += np.outer(d[back] * (limit / depth - 1.0), f)
+    return HandModel(pos, m.normals, m.indices, m.joints, m.weights, m.names, m.rest,
+                     m.side, m.slots)
+
+
 def _vertex_normals(p: np.ndarray, idx: np.ndarray) -> np.ndarray:
     t = idx.reshape(-1, 3)
     fn = np.cross(p[t[:, 1]] - p[t[:, 0]], p[t[:, 2]] - p[t[:, 0]])
@@ -210,6 +239,7 @@ class Spec:
     files: tuple[tuple[str, str], ...]     # (side, path under handmodels/)
     slots: dict
     scale: float = 1000.0
+    wrist: float = WRIST_MM               # how far it may reach behind the palm
 
 
 MODELS: dict[str, Spec] = {
@@ -238,7 +268,8 @@ def models(name: str) -> dict[str, HandModel] | None:
             out = {}
             for side, rel in spec.files:
                 slots = {k.replace("{s}", side[0].upper()): v for k, v in spec.slots.items()}
-                out[side] = load(HERE / rel, slots, side, spec.scale)
+                out[side] = shorten_wrist(load(HERE / rel, slots, side, spec.scale),
+                                          spec.wrist)
             for side, other in (("left", "right"), ("right", "left")):
                 if side not in out and other in out:
                     out[side] = out[other].mirrored()

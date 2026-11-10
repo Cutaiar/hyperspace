@@ -27,3 +27,17 @@ binary, with no change to the mesh, the rig or the weights:
   Blender as above). The colour texture is not carried.
 
 Ultraleap's names and marks are theirs; nothing here is endorsed by Ultraleap.
+
+## At load
+
+The files themselves are as described above. Two things happen to them in
+`hyperspace/handmesh.py`, to the data only, never to the files:
+
+- **The wrist is shortened** (`shorten_wrist`, `WRIST_MM`). Each rig was
+  built with more arm than the tracker drives — Ultraleap's generic hand a
+  forearm to the elbow, 100 mm behind the palm, the others a 50 mm cuff —
+  and none of it follows the performer. Everything behind the palm's base
+  is squeezed along the hand's forward axis until it reaches back no more
+  than 25 mm. The palm and the fingers are untouched.
+- **A one-sided model is mirrored** for the other hand
+  (`HandModel.mirrored`), as noted above.
