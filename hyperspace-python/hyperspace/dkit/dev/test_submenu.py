@@ -806,6 +806,33 @@ def test_arrow_right_opens_it_and_arrow_left_closes_it(DB):
     assert M.LAST_RECT.get(CKEY), "ArrowLeft closed the parent as well"
 
 
+def test_a_parked_mouse_cannot_take_back_a_keyboard_opened_submenu(DB):
+    """ArrowRight with the mouse resting on ANOTHER row.
+
+    `over` is pure geometry and answers the same every frame a mouse rests,
+    so hanging the hover rules on it let a parked mouse act: the panel the
+    keyboard had just opened was closed on the very next frame by a row
+    nobody was touching. A row is the pointer's only by MOTION, exactly as
+    the highlight is.
+    """
+    script, _at = _open(DB)
+    DB.render("dark", W, H, script=script, keep="last")
+    # park the mouse on `Pin to scene`, which has no submenu of its own —
+    # so nothing is open, the keys still belong to this panel, and the
+    # row the mouse rests on is not the one they will open
+    px, py = _trigger_xy(index=2)
+    parked = script + [(px, py)] * 4
+    at = len(parked) + 2
+    # one ArrowDown moves the highlight from it to `Look-back frames`, the
+    # next row and a SubTrigger; ArrowRight opens that. The mouse never
+    # moves again.
+    keys = [(at, imgui.Key.down_arrow), (at + 6, imgui.Key.right_arrow)]
+    DB.render("dark", W, H, script=parked + [(px, py)] * DWELL, keys=keys,
+              keep="last")
+    assert M.LAST_RECT.get(f"{CKEY}>frames"), \
+        "the parked mouse closed the submenu the keyboard opened"
+
+
 def test_escape_in_a_submenu_closes_the_whole_menu(DB):
     """Measured: Escape inside a SubContent took the parent panel with it.
     ImGui's own Escape closes only the topmost popup, so this is a rule the

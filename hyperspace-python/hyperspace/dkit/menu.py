@@ -922,6 +922,9 @@ def _forget(ui, key: str) -> None:
         ui.anim.to(f"{shown}:open", 0.0)
     st["open"], st["shown"], st["hot"], st["age"] = None, None, None, 0.0
     st["side"] = None           # the next open decides it afresh
+    # and the pointer's claim on a row, or a panel dismissed with the
+    # pointer inside it would dwell its child open again on the way back
+    st["pointer_row"] = None
 
 
 def _keep(ui, st: dict) -> bool:
@@ -986,6 +989,17 @@ def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
     st, kb = _subs(ui, key), _kb(ui, key)
     # already worked out this frame, before the keys ran (`popup`)
     aim = st.get("keep", False)
+    # A row is the POINTER'S only by motion, exactly as the highlight is
+    # (`_begin_keys`). `over` is pure geometry and answers the same every
+    # frame a mouse rests, so hanging the hover rules on it let a parked
+    # mouse act: ArrowRight opened a submenu and the row the mouse happened
+    # to be resting on closed it again on the very next frame, with nobody
+    # touching the mouse. The dwell still runs while the pointer rests —
+    # that is what a dwell is — but on the row it last MOVED onto.
+    io = imgui.get_io()
+    if io.mouse_delta.x or io.mouse_delta.y:
+        st["pointer_row"] = over
+    on = st.get("pointer_row")
     # `by_key` is the row a KEY asked to open — ArrowRight, Enter or Space.
     # It is not the same as "a panel opened this frame", and conflating the
     # two armed a HOVER-opened panel on its first row: measured, a hover
@@ -994,12 +1008,19 @@ def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
     by_key = kb.pop("open_sub", None)
     if by_key is not None and by_key in rects:
         st["open"], st["hot"], st["age"] = by_key, by_key, 0.0
+        # The keyboard has taken the panel, so the pointer's claim is
+        # DROPPED rather than moved onto this row: a mouse resting
+        # elsewhere must not close what the keys just opened, and a row
+        # the keys opened must not read as hovered either — that would
+        # re-open it the moment ArrowLeft closed it. The next real
+        # movement gives the pointer a row again.
+        st["pointer_row"] = None
     elif aim:
         # in the open panel, or on its way into it: the rows it crosses do
         # nothing, and neither their dwell nor the open one's closing may
         # start (`_keep`)
         pass
-    elif over is not None and over != st["open"]:
+    elif on is not None and on != st["open"]:
         # The pointer is on ANOTHER row, so the open panel goes at once —
         # whether that row has a submenu of its own or not. Closing is
         # immediate and only OPENING is on Radix's 100 ms timer, and the
@@ -1010,11 +1031,11 @@ def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
         st["open"] = None
         # the dwell is per ROW: moving along them must not pour one row's
         # wait into the next
-        if st["hot"] != over:
-            st["hot"], st["age"] = over, 0.0
+        if st["hot"] != on:
+            st["hot"], st["age"] = on, 0.0
         st["age"] += ui._dt
-        if over in rects and st["age"] >= SUB_OPEN_S:
-            st["open"] = over
+        if on in rects and st["age"] >= SUB_OPEN_S:
+            st["open"] = on
 
     at = st["open"]
     subkey = ""
@@ -1027,8 +1048,11 @@ def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
         if _subs(ui, subkey)["open"] is None:
             if imgui.is_key_pressed(imgui.Key.left_arrow, False):
                 # measured: the highlight is left on the trigger, where it
-                # already is, so there is nothing to restore
+                # already is, so there is nothing to restore. The pointer's
+                # claim goes with it, or the row it was resting on would
+                # dwell the panel straight back open.
                 at = st["open"] = None
+                st["pointer_row"] = None
             elif imgui.is_key_pressed(imgui.Key.escape, False):
                 # measured: Escape in a submenu closes the WHOLE menu.
                 # ImGui's own Escape closes only the topmost popup, so each
