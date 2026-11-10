@@ -997,7 +997,8 @@ void main() {
         float f = pow(1.0 - max(dot(n, v), 0.0), 2.2);
         vec3 tint = mix(v_col.rgb, vec3(0.55, 0.85, 1.0), 0.5);
         rgb = tint * (0.15 + 0.35 * diff) + 1.15 * f * vec3(1.0);
-        a = v_col.a * clamp(0.10 + 1.25 * f, 0.0, 1.0);
+        a = v_col.a * clamp(1.30 * f - 0.04, 0.0, 1.0);
+        if (a <= 0.0) discard;          // no colour, no depth: the scene shows
     } else if (u_mat == 3) {                // EMBER: cool at the middle, hot at the rim
         float heat = clamp(0.25 + 0.75 * rim, 0.0, 1.0);
         vec3 hot = mix(vec3(0.35, 0.02, 0.0), vec3(1.0, 0.75, 0.25), heat);
@@ -1896,16 +1897,23 @@ class Ghost:
         # the guide — the guide reads the same in every style
         over = parts is not hands_parts or lines
         mat = int(getattr(self.state, "material", 0))
+        draw = self.geometry.draw          # bound once: `geometry` is Optional
+        shown = any(g[0] or g[1] for g in guides)
         if lines:                       # the parts' edges; the guide solid, after
-            self.geometry.draw(poses, view_proj, eye, parts, None, lines=True, material=mat)
+            draw(poses, view_proj, eye, parts, None, lines=True, material=mat)
         else:
-            self.geometry.draw(poses, view_proj, eye, parts,
-                               None if split or over else guides, material=mat)
-        if over and not split and any(g[0] or g[1] for g in guides):
+            # the guide rides with the hands only while they are PLAIN; under a
+            # material it is drawn after them instead, in the same depth pass,
+            # so its colours are its own (review of #449)
+            with_hands = not (split or over or mat)
+            draw(poses, view_proj, eye, parts, guides if with_hands else None, material=mat)
+            if mat and not split and not over and shown:
+                draw(poses, view_proj, eye, None, guides)
+        if over and not split and shown:
             _clear_depth(ctx, draw_fbo)
             ctx.viewport = (0, 0, *self.size)
             # the guide is a readout, never a material: PLAIN by the default
-            self.geometry.draw(poses, view_proj, eye, None, guides)
+            draw(poses, view_proj, eye, None, guides)
         ctx.disable(moderngl.DEPTH_TEST)
         if not split and any(p.tethers for p in poses):
             self._draw_tethers(poses, view_proj)

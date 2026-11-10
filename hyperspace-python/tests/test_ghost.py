@@ -1135,3 +1135,43 @@ def test_the_guide_on_the_hand_reads_the_same_in_every_style_but_hands(ctx):
     # HANDS: the palm still hides part of its gauge
     _, hands_ro = layer(0, 2, True)
     assert (hands_ro[..., 3] == 255).sum() < (first[..., 3] == 255).sum()
+
+
+@pytest.mark.parametrize("style", ["HANDS", "BONES"])
+def test_the_guide_is_drawn_plain_under_every_material(ctx, style):
+    """The guide is a readout of what the hands are sending, not part of
+    the look. HANDS draws it in the same pass as the hands, so the one
+    `u_mat` shaded the readout too — a GLASS x-axis marker went
+    translucent instead of red (review of #449). Whatever the style, the
+    rows carrying the guide draw PLAIN while the hands take the material.
+    """
+    io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
+                 out=NS(send=print))
+    for st in io.state:
+        st.follow.y = 0.7
+    src = NS(skeleton={"right": skeleton(hand("right", "open", (90.0, 200.0, 10.0)))},
+             cfg={"mode": "desktop"}, axes=io.axes, state=io.state, gates=io.gates)
+    for mat in range(len(G.MATERIALS)):
+        gh = Renderer(ctx).ghost
+        gh.state.on, gh.state.alpha, gh.state.guide = True, 1.0, 2
+        gh.state.style, gh.state.material = G.STYLES.index(style), mat
+        gh.source = src
+        assert gh.layer((320, 200), 1.0)          # builds the geometry
+        calls: list[tuple[bool, bool, int]] = []
+        real = gh.geometry.draw
+
+        def spy(poses, vp, eye, parts=G.hands_parts, extra=None, lines=False, material=0,
+                _real=real, _calls=calls):
+            _calls.append((parts is not None, extra is not None, int(material)))
+            return _real(poses, vp, eye, parts, extra, lines, material)
+
+        gh.geometry.draw = spy
+        for k in range(3):
+            assert gh.layer((320, 200), 1.1 + k / 30)
+        assert any(c[1] for c in calls), (style, calls)       # the guide drew
+        for _parts, is_guide, used in calls:
+            if is_guide:
+                assert used == 0, (style, G.MATERIALS[mat], calls)
+        if mat:
+            assert any(c[0] and c[2] == mat for c in calls), (style, calls)
+            assert all(not c[0] for c in calls if c[1]), (style, calls)
