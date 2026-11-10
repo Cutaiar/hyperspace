@@ -1,7 +1,10 @@
 # Plan 60: the hand rig — coupling, precession, the skater effect
 
-**Status: planned (2026-11-10).** Needs plan 59 merged: it adds joints and
-inertia to plan 59's world. Plans 61 and 62 are not needed.
+**Status: built (2026-11-10).** `hyperspace/rig.py` (the params, the clutches),
+the joint and the rigid body in `hyperspace/world.py`, the HANDS page's rig
+section, the turned depth of row 856 (`geometry.turned_depth`); tests
+`tests/test_rig.py`; register rows 857–866, hand checks 661–667. Built on plan
+59 as merged (#442), with the amendments in §10. Plans 61 and 62 are not needed.
 
 The owner, 2026-11-10: *a slider that controls the momentum damping of the
 geometry the hands are rigged to. At maximum damping, the geometry is fixed
@@ -131,3 +134,47 @@ Next free numbers and group in `11-hand-checks.md`. On the real sensor: the feel
 of the coupling's range, whether a throw reads, whether precession is visible
 on the shapes, whether the skater effect is playable, and which gates suit the
 tracker best (plan 51's check 518 asked the same of the clutch).
+
+## 10. Amendments, from plan 59 as it merged (2026-11-10)
+
+Read against `world.py` and register rows 851–856 after #442 merged. Each is
+built and has a register row.
+
+1. **The joint works in the offset's terms** (row 858). The shape is drawn as
+   home ∘ offset (row 853), the home being `camera.pan` and `camera.zoom` with
+   no turn; the hands are in the world. The joint captures hand → the pose
+   drawn, and pulls the offset to home⁻¹ ∘ hand ∘ rel. The springs are
+   mass-normalized (a frequency and a damping ratio), so the zoom changes
+   nothing of how they feel.
+2. **Yaw and pitch stay outside the pose** (row 864). `camera.yaw` / `.pitch`
+   turn the points on the CPU before the offset, so a `turn` row turns the
+   shape about its own axes on top of the rig's turn, and the locked inertia
+   lives in the offset's frame.
+3. **Fit and the 3D lattices take no offset** (row 851 stands; row 864): the
+   rig moves nothing there. A flat field with Fit off moves as one figure.
+4. **Row 856, the depth of a turned shape, is built** (row 863): while the
+   offset is not the identity, a 3D shape's depth cue and painter sort read
+   its depth after the offset's turn. A 4D shape keeps its w. The identity
+   offset is unchanged, so are the goldens.
+5. **`world.py` imports nothing**, so the gates and the box arrive from the
+   host: `rig.apply` takes a `closed(address)` that `app._step_world` reads
+   from the on-air router's lanes (the debounced grab, plan 51), and the
+   renderer sets `World.box` from the scene drawn (`poi.box_for`, row 862).
+   The box holds the shape's drawn centre, in the world, grown to take its
+   home in.
+6. **The step is rebuilt, not extended** (rows 860, 865). A body with a joint
+   or an uneven inertia steps as a rigid body, its angular momentum carried
+   (so a free body keeps L exactly); the joint's clutch, the inertia shaping
+   and the skater run once a frame before the steps; a plan 59 free body steps
+   as before. `World.joints` holds a `Joint` keyed by the shape, naming its
+   hand. `world.reset` also lets go and evens the inertia.
+7. **The hand is blended across the steps** (row 859): read once a frame, it
+   moves from last frame's pose to this one's across the frame's 960 Hz steps.
+8. **The params are a shared meta group, not per deck** (row 857). The review
+   of plan 59 offered per deck, read from the deck on air; but a per-deck meta
+   param never persists (row 746), so it could have no preset strip, which
+   §4 asks for. One rig on one world: `rig.*` is shared meta, saved in the
+   show. A meta param takes no route (row 775), so "a knob learned onto it"
+   is a desk row that sets it.
+9. **§7 is dropped** (row 866): moving the poi changes what a save holds.
+

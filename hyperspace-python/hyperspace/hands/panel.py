@@ -186,6 +186,47 @@ def page(panel, dt: float) -> None:
             if f"{GROUP}.{pid}" in panel.reg:    # a setting newer than a hot-reloaded registry
                 panel._row(f"{GROUP}.{pid}")
         _calibrate(io, settings, k)
+    if "rig.on" in panel.reg:
+        imgui.spacing()
+        rig(panel)
+
+
+RIG_ROWS = ("rig.coupling", "rig.drag")
+RIG_SHAPE_ROWS = ("rig.shape",)
+# (param, label, the RigState property naming its default gate): the state is
+# read duck-typed off the registry (`reg.rig`), the panel importing no rig
+RIG_GATES = (("rig.clutch", "Clutch", "default_clutch"),
+             ("rig.shape_clutch", "Shape clutch", "default_shape_clutch"))
+
+
+def rig(panel) -> None:
+    """The hand rig (plan 60, rig.py): its section and preset strip, the
+    switch, then — while on — the hand, the coupling and drag, the inertia
+    and the two clutches as lane addresses (empty: the grabs)."""
+    reg = panel.reg
+    panel._section("rig", "rig")
+    panel._check("rig.on")
+    if not bool(reg["rig.on"].value):
+        return
+    panel._row("rig.hand")
+    for pid in RIG_ROWS:
+        panel._row(pid)
+    panel._check("rig.inertia")
+    if bool(reg["rig.inertia"].value):
+        ui.beside(ui.chip_w("Skater") + 24)
+        panel._check("rig.skater")
+        for pid in RIG_SHAPE_ROWS:
+            panel._row(pid)
+    state = getattr(reg, "rig", None) or getattr(getattr(reg, "meta_reg", None), "rig", None)
+    for pid, label, key in RIG_GATES:
+        p = reg[pid]
+        default = str(getattr(state, key, "") or "")
+        panel._label_cell(label)
+        imgui.set_next_item_width(-1)
+        changed, text = imgui.input_text_with_hint(f"##{pid}", default, str(p.base or ""))
+        panel._tip(p)
+        if changed:
+            p.set(text)
 
 
 GHOST_MORE = "more ▸"          # the chip that opens the ghost's popup
