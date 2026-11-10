@@ -339,8 +339,8 @@
  "pose": {
   "rot.phase.XY": 0.0,
   "rot.phase.XZ": 0.0,
-  "rot.phase.YZ": 0.089041,
-  "rot.phase.XW": 0.287229,
+  "rot.phase.YZ": 0.09,
+  "rot.phase.XW": 0.29,
   "rot.phase.YW": 0.0,
   "rot.phase.ZW": 0.0
  },
