@@ -303,11 +303,12 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     # twice — and the eight media channels, their bins empty (plan 32 T10:
     # the channels' params on their own nodes); plan 35 G: the backdrop's
     # group node too (no backdrop in the section: it idles like any group);
-    # plan 36 T4: one more, the frame drawing no look-back (its params' node idles)
-    assert sum(n.idle for n in view.nodes) == 26
+    # plan 36 T4: one more, the frame drawing no look-back (its params' node idles);
+    # plan 60: the grip's group node, the grip off
+    assert sum(n.idle for n in view.nodes) == 27
     k = len({n.area for n in view.nodes if not n.idle})
-    assert st["said"] == (f"laid out {len(view.nodes) - 26} nodes in {k} areas, every one "
-                          "collapsed · 26 idle off the canvas")
+    assert st["said"] == (f"laid out {len(view.nodes) - 27} nodes in {k} areas, every one "
+                          "collapsed · 27 idle off the canvas")
     assert st["idle_open"] == set() and st["open"] == set() and rig.lib.loaded_patch.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)

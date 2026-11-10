@@ -335,14 +335,14 @@ def band_row(panel) -> None:
     imgui.end_disabled()
     imgui.same_line(0, 10)
     imgui.begin_disabled(c.selb == 0)
-    if imgui.arrow_button("##movel", imgui.Dir.left):
+    if ui.arrow_button("##movel", imgui.Dir.left):
         c.move_band(c.selb, c.selb - 1)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
         ui.tooltip("Move the band one strip earlier (lanes follow the strip order)")
     imgui.same_line(0, 2)
     imgui.begin_disabled(c.selb >= chain.n - 1)
-    if imgui.arrow_button("##mover", imgui.Dir.right):
+    if ui.arrow_button("##mover", imgui.Dir.right):
         c.move_band(c.selb, c.selb + 1)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):

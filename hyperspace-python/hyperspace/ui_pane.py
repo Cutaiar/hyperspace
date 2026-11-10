@@ -24,8 +24,8 @@ node B to node A selects A again and centres it (`ui.go_view`).
 
 **Every view has a mouse route** (Dillon, 2026-11-07: nothing
 stranded). Over the body, a row of chips (`_bar`) wrapping at the pane's
-edge: **selection** and the six sections no canvas node leads to (`TABS`:
-patches, audio, routing, playlist, players, system), then a **sections**
+edge: **selection** and the five sections no canvas node leads to (`TABS`:
+patches, audio, routing, players, system), then a **sections**
 chip whose menu holds the other eleven (`MENU`, each also a node's
 **open on …**). The lit chip is the view; the menu's chip names the view
 while it is one of the eleven. A section opened from the selected node's
@@ -77,7 +77,7 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 
-from . import library, ui, ui_fx, ui_loadable, ui_players, ui_playlist, undo
+from . import library, ui, ui_fx, ui_kit, ui_loadable, ui_players, undo
 
 UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
@@ -128,7 +128,6 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("audio", "audio", ("master",), _paged("audio")),
     ("camera", "camera", ("camera",), _paged("camera")),
     ("output", "output", ("output",), _paged("output")),
-    ("playlist", "playlist", (), _paged("playlist")),
     ("system", "system", (), _wrapped("system")),
     ("players", "players", (), _paged("players")),
 )
@@ -136,7 +135,7 @@ KEYS = tuple(k for k, *_ in SECTIONS)
 SELECTION = "selection"
 # the views with a chip of their own: the selection, and the sections no canvas
 # node's "open on …" leads to (`ui_graph.home_page`), so the mouse reaches them
-TABS = (SELECTION, "loadable", "audio", "routing", "playlist", "players", "system")
+TABS = (SELECTION, "loadable", "audio", "routing", "players", "system")
 MENU = tuple(k for k in KEYS if k not in TABS)  # the sections chip's menu: the rest, in order
 CHIP_DOT_R = 3.0         # px: the dirty dot in a chip's corner (`_corner_dot`)
 ROUTING = "routing"      # the section a picked desk control never dims (`_body`)
@@ -264,7 +263,11 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
     # the SYSTEM section asks mid-draw (the tests read this frame's)
     st["pane_last"] = st.get("pane_drawn") or []
     drawn = st["pane_drawn"] = []
-    _bar(panel, key, said)
+    if ui_kit.ready():
+        from . import ui_switcher  # (late: it imports this module)
+        ui_switcher.bar(panel, key, said)      # on the kit (hyperspace/dkit)
+    else:
+        _bar(panel, key, said)
     if home is not None and key == home and key != SELECTION and said:
         most = min(CHIP_MAX, imgui.get_content_region_avail().x - 2 * ui.CHIP_PAD.x)
         if ui.chip(ui.fit_text(f"←  {said}", most) + "##pane.back"):
@@ -372,12 +375,10 @@ def timing_line(panel) -> str:
 
 def _live(panel, key: str, said: str) -> str:
     """What a chip's tooltip says first, live (Dillon, 2026-11-09: the chips
-    say their names alone): what is selected, where the playlist is, who is
-    on and off air; "" for the rest."""
+    say their names alone): what is selected, who is on and off air; "" for
+    the rest. (The playlist is the meta controller's: GRAPH's deck row.)"""
     if key == SELECTION:
         return f"selected: {said}" if said else "nothing selected"
-    if key == "playlist" and getattr(panel, "playing", None) is not None:
-        return ui_playlist.where(panel.playing)
     if key == "players":
         return ui_players.summary(panel)
     return ""

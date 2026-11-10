@@ -147,6 +147,8 @@ hyperspace = "hyperspace.app:main"
 # the packages CI lacks. Moving any of this moves every count, so
 # tests/test_type_ratchet.py pins the whole table.
 include = ["hyperspace"]
+# dkit's workbench (its tests, gallery, oracles): tooling beside the kit, as tests/ is
+exclude = ["hyperspace/dkit/dev"]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
 pythonPlatform = "Darwin"

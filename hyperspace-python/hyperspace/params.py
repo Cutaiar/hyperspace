@@ -173,9 +173,12 @@ F_KEYS = 8
 # is about the hardware, and stays the meta controller's
 PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
                       "backdrop", "switch", "resize", "matte", "cut", "segment", "ghost",
-                      "cloud", "lfo", "env", "seq", "macro", "pad", "mod")
+                      "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "mod")
+# `grip` (plan 60, the hand rig): a patch's own, each deck's — the owner, 2026-11-10,
+# testing it: "this really should be per preset". The on-air deck's acts on the one world
+# `world` (plan 59): `world.reset`, over the one `world.World` both decks draw from
 SHARED_META_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui", "desk", "playlist")
+                  "overlay", "ui", "desk", "playlist", "world")
 # plan 44 D3 (row 612): the shared meta params inside a patch group, by
 # group → the last segment of their ids — `ghost.mirror`. They keep their group
 # (the HANDS page lists the group; an id is a saved format) and are the meta

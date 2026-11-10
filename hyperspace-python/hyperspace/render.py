@@ -105,7 +105,7 @@ import math
 import time
 from dataclasses import replace
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 import moderngl
 import numpy as np
@@ -134,6 +134,7 @@ from .geometry import (
     geom,
     model_matrix,
     shape_world,
+    turned_depth,
 )
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
@@ -1246,6 +1247,10 @@ class Renderer:
         # the analyzer's lanes, normalized, set by the app each frame (app._bands):
         # render input for the patterns that draw the bands (u_levels)
         self.bands: tuple[float, ...] = ()
+        # the world objects (world.World, plan 59), set by the app: the
+        # shape's offset composes into its model matrix. Read only; None (a
+        # renderer of a test, a host with no world): no offset
+        self.world: Any = None
         self._ptime = 0.0                  # the patterns' clock (_pattern_clock) …
         self._ptime_at: float | None = None   # … and the wall time it was last moved to
         self._ptile: tuple | None = None   # the tiles' program, vao, and the mtimes it read
@@ -1273,6 +1278,7 @@ class Renderer:
         preview, deck 2's (plan 44 D4). This context must be current."""
         r = Renderer(self.ctx, dream=dream, fx=fx, ghost=ghost)
         r._t0 = self._t0
+        r.world = getattr(self, "world", None)     # one world: its shape is either deck's
         return r
 
     def take_running(self, src: Renderer) -> None:
@@ -3270,7 +3276,23 @@ class Renderer:
         zoom = max(s.zoom, 1e-3)
         legacy = not getattr(s, "inst_fit", False) and (
             int(s.instances) <= 1 or not is_3d_layout(int(getattr(s, "inst_layout", 0))))
-        model = model_matrix(zoom, s.pan) if legacy else model_matrix(1.0, (0.0, 0.0))
+        # plan 59: the world's offset on the shape object (home ∘ offset, the
+        # home being zoom and pan), None while it is the identity — the matrix
+        # of before, built exactly as before. Fit and the 3D lattices carry the
+        # camera in each copy's row and take no offset (register row 851)
+        world = getattr(self, "world", None)
+        off = world.offset_matrix("shape") if world is not None and legacy else None
+        model = model_matrix(zoom, s.pan, off) if legacy else model_matrix(1.0, (0.0, 0.0))
+        if world is not None and hasattr(world, "box"):
+            # plan 60: the box the rig holds the shape to, what the eye sees at
+            # depth 0 — set from the scene drawn, as the poi's (`poi.box_for`)
+            world.box = tuple(poi.box_for(w, h, getattr(s, "eye_fov", EYE_FOV),
+                                          getattr(s, "eye_distance", EYE_DISTANCE)))
+        if off is not None:
+            # plan 60 (register row 856): a turned offset turns a 3D shape before
+            # the painter sort and the depth cue read its depth, so it sorts and
+            # shades by where it is now; a 4D shape's cue stays its w
+            pd = turned_depth(s.shape, P, pd, off)
         vp = eye_matrix(w, h, getattr(s, "eye_fov", EYE_FOV),
                         getattr(s, "eye_distance", EYE_DISTANCE))
         mats = (np.asarray(vp, dtype="f4").T.tobytes(),
@@ -3378,7 +3400,7 @@ class Renderer:
             return
         # the copies: where each goes, how big, how bright — far to near,
         # those wholly off screen dropped (`_copies_of`)
-        inst = self._copies_of(s, w, h, P, vp, dpr, legacy)
+        inst = self._copies_of(s, w, h, P, vp, dpr, legacy, model if off is not None else None)
         if not len(inst):
             return                     # every copy is off screen: the ground alone
         self._ibuf.orphan(inst.nbytes)
@@ -3600,7 +3622,8 @@ class Renderer:
         return inst
 
     def _copies_of(self, s: ViewState, w: int, h: int, P: np.ndarray,
-                   vp: np.ndarray, dpr: float, legacy: bool = False) -> np.ndarray:
+                   vp: np.ndarray, dpr: float, legacy: bool = False,
+                   model: np.ndarray | None = None) -> np.ndarray:
         """The instance rows for the scene pass, (m, 4) float32: each copy's
         centre in the world (x, y on the plane through the origin, y up),
         its scale and its alpha. A copy wholly off screen through the eye
@@ -3612,7 +3635,11 @@ class Renderer:
         world transform (the camera's zoom and pan, `model_matrix`).
         Otherwise `_field`'s px through the default eye (SCALE·min(w, h)
         px a unit), so the field keeps its world spacing whatever the eye;
-        the camera is in the rows and the world transform is the identity."""
+        the camera is in the rows and the world transform is the identity.
+
+        `model` (plan 59, legacy only): the world transform when the world's
+        offset is on it (turned, moved in z). Each copy's box then goes
+        through the whole matrix for the cull; None, the cull of before."""
         if legacy:
             inst = self._legacy_field(s)
             if not len(inst):
@@ -3644,7 +3671,13 @@ class Renderer:
             box = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1])
                             for z in (lo[2], hi[2])])
             k = seen[:, 2]
-            q = k[:, None, None] * box[None] + np.c_[seen[:, :2], np.zeros(len(seen))][:, None]
+            if model is None:
+                q = k[:, None, None] * box[None] + np.c_[seen[:, :2], np.zeros(len(seen))][:, None]
+            else:      # the box at each copy, through the world transform with its offset
+                m = np.asarray(model, dtype=np.float64)
+                local = (inst[:, 2, None, None] * box[None]
+                         + np.c_[inst[:, :2], np.zeros(len(inst))][:, None])
+                q = local @ m[:3, :3].T + m[:3, 3]
             c = q @ np.asarray(vp)[:3, :3].T + np.asarray(vp)[:, 3][:3]
             cw = q @ np.asarray(vp)[3, :3] + np.asarray(vp)[3, 3]
             front = (cw > EYE_NEAR).all(axis=1)

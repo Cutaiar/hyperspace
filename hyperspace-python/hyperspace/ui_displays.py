@@ -104,7 +104,7 @@ def _row(panel, run: Running, k: int, tag: str, connected: list[str]) -> None:
                                           ("flip_x", "flip X", TIP_FLIP), ("flip_y", "flip Y", TIP_FLIP))):
         if i:
             ui.beside(ui.check_w(text))
-        hit, on = imgui.checkbox(f"{text}##display.{k}.{key}", _shown(run, tag, key, row, row["target"]))
+        hit, on = ui.checkbox(f"{text}##display.{k}.{key}", _shown(run, tag, key, row, row["target"]))
         if imgui.is_item_hovered():
             ui.tooltip(tip)
         if hit:

@@ -807,7 +807,7 @@ here; overturn → the change, then the same.
 | 775 | Honest flags (LY2): every meta param now says `modulatable` False, by one line in `Param.__post_init__` on its part or id, not by flipping 102 declarations. Each door that reads the flag was walked: none changes what it does or says, because the rule comes first at every one. Meta desk rows, keys and pad buttons never ask the flag. The one change: a performer row left in a live table sits dormant on the on-air deck too. | 603 | (rec) — pending the owner |
 | 776 | LY2's saved half waits for the migration: `tempo.nudge` stays saved, `output.bg` and `.alpha` stay where they are, and nothing in a file or a golden changes here. Reading is not writing: a `scale` on `master.gain` and an analyzer lane on `band.*` are untouched. | 603 | (rec) — pending the owner |
 | 778 | "Session" leaves every string a person reads: each says "the meta controller's" or "the meta controller". A saved key, a param id, a file name and a config key's name don't change. "Preset" stays until the migration renames the folder | 605; rows 703, 756 | owner — 2026-11-06: "Session and rig need to go away." |
-| 779 | "Rig" leaves every string a person reads, each as what it means: the bus cable, the meta controller's, "this cloud's wire", and three the owner's examples don't cover or don't fit: "not set up on this Mac", "no bank on this deck", "the sequencer is the look's one" (rec) | 606; row 778 | owner — 2026-11-06, the same line; the two extra words, the owner, 2026-11-07: "We should keep the [not set up] on this Mac thing" |
+| 779 | "Rig" left every string a person reads, each as what it means: the bus cable, the meta controller's, "this cloud's wire", and three the owner's examples don't cover or don't fit: "not set up on this Mac", "no bank on this deck", "the sequencer is the look's one" (rec) | 606; row 778 | owner — 2026-11-06, the same line; the two extra words, the owner, 2026-11-07: "We should keep the [not set up] on this Mac thing"; off the guard's list again, the owner, 2026-11-10: "we're going to be bringing in more complicated meshes and geometry soon … the classical computer graphics and animation version of the word rigging" |
 | 780 | A test keeps both words out: `tests/test_person_words.py` scans every string literal in `hyperspace/`, and the README, with a counted list of what stays and why: saved keys and an attribute's name. Programmer errors changed too, as the cheapest way to keep that list short; "this session" in the bank's refusal means this run, and says what truly frees an id | 778, 779 | (rec) — pending the owner |
 | 770 | Plan 58 H2: `tools/wait_green.py` ports `wait-green.sh` with its exit codes and only waits; a builder's last check may be CI; the orchestrator's `--all` records its durations in the merge or PR body, and a dated line in `ENGINEERING.md` §16 follows in the next docs commit; §16's counts and times are measured | — | (rec) — pending the owner |
 | 771 | A screen in the config may be a name: `[output] monitor`, `control_monitor` and `[[output.screens]] monitor`. **Exact whole name, case and all, plus an ordinal among screens of that name** ("MStar #2"), not #223's first case-blind substring. An index keeps working. A name is an index from the launch on: `Output.monitor` and `Slot.monitor` stay indices until SC3b. A later output whose name isn't connected isn't opened, with a note, as with an index (fork F9) | 600 | plan 58 SC1, §9 |
@@ -850,6 +850,25 @@ here; overturn → the change, then the same.
 | 843 | `Library()` on a `config.toml` that won't parse opens the library this Mac last knew (`sharedfile.library_root`), never the home in its place; knowing none, it opens nothing and every save is refused in words | 653 | the orchestrator's brief |
 | 844 | The library's scan reads the Drive on the main thread (`Library.poll` → `_scan`, every `period`, every folder's `*.json`). Not done here: it needs the scan on a `sharedfile.Worker`, `poll` taking the last result, and the tests that call `poll(now)` expecting a synchronous answer given a way to wait. An item for the cleanup | — | (rec) — an item, not built |
 | 850 | The panel says install where it meant the show: the show line (INSTALL: PADS, META CONTROLLER) and its tips, the footer's "install: saved …", the undo steps ("install <name>", "new install"), the library's lines ("N installs updated", "in the install list", Home's "this install names no startup patch"). "The show" meaning the night stays ("tuned before the show"), as do the migration tool's words about the old `*.hyp.json` show files, and ids (`show.line`, `ui_loadable.PROJECT`'s listing key) | — | owner — 2026-11-07: "yes, show becomes install" |
+| 851 | Plan 59: the world's offset composes into the shape's model matrix on the one-copy path and a flat field with Fit off (`legacy`), never on Fit or the 3D lattices, whose rows carry the camera with a world transform of identity. A field with Fit off turns as one figure about the shape's origin; a culled copy is judged by its box through the whole matrix | 659 | (rec) — plan 59 §2.4 leaves it to the builder |
+| 852 | Plan 59: one `world.World` on the host, held by every renderer (`Renderer.world`, a sibling's too), so both decks' shapes take the one shape object's offset; `world.reset` is a shared meta trigger (group `world`), its button under Reset view in the camera section. The world is runtime state: never saved, never undone | 660 | (rec) |
+| 853 | Plan 59: the pose drawn is home ∘ offset, the offset in the home's frame: it turns the shape about its own centre, and its x, y, z are scaled by `camera.zoom` (at zoom 1 an offset's x and y are a pan's, y the other way up). The shape's home has position and scale but no turn: `camera.yaw` / `.pitch` stay the CPU's turntable, before the world | 659 | (rec) — plan 59 §2.1, §2.4 |
+| 854 | Plan 59: a palm into the world (`app.palms_in_world`) lives in `app.py`, not `ghost.py`: `ghost` is the render stack's and `hands` the meta controller's, and the wall (`tests/test_layer_boundary.py`) lets no patch module reach it. It reads the ghost's own fit (`Ghost.calibrated`, cached) whether or not the ghost hands are shown | — | (rec) |
+| 855 | Plan 59: a puppet sets its object's home and keeps its frame-to-frame velocity and spin on itself (`Palm.velocity`, `.spin`, zero the frame a hand arrives); it feeds no body. A hand not seen stays registered, `present` False, its home where it was last seen | 659 | (rec) |
+| 856 | Plan 59, a limit: a turned offset turns the shape after the painter sort and the depth cue, which read the depth before it, so a 3D shape turned by the offset can sort and shade by its old depth. Nothing moves the offset in plan 59; plan 60, which does, decides — built, row 865 | — | (rec) — an item, not built |
+| 857 | Choosing a patch to load is the meta controller's: **load…** on GRAPH's deck row opens the library's folders in ImFileDialog and a pick lands on the deck off air by the pads' road (`DeckInstall.load_named`). The side pane lists no patch to load (plan 48's tree and the strip's ◀ ▶ are gone). A patch moved or a folder renamed in Finder is followed live (`Library._hand_moves`) | — | owner — 2026-11-10: "selecting a patch to load is really a meta controller operation"; "Dialog only, no pane list" |
+| 858 | The playlist is the meta controller's: it leaves the side pane, and a **playlist** chip on GRAPH's deck row (lit while one plays, its hover saying where it has got to) opens its controls in a popup under it. `PAGE_KEYS` keeps the `playlist` slot for saved bindings; it shows the selection | — | owner — 2026-11-10: "A playlist is a property of the meta controller, so it should come out of that side pane" |
+| 859 | Plan 60: the hand rig's params are a patch group, `grip` (not `rig`: that word left every string a person reads, row 779): each deck its own, saved in each loadable patch, its preset strip the HANDS page's grip section, the continuous ones routable like any patch param. A patch that names no `grip.*` — every look from before — loads with the grip off. A save writes `grip.*` only when one differs from its default, so a look that never used the grip saves byte for byte as before (`loadable._grip_unless_used`); GRAPH shows the grip's group node, idle while it is off. The on-air deck's grip acts on the one world (row 852). Replaces the first build's shared meta group. A build from before reads a patch with `grip.*` as ids it lacks, and drops them; no schema bump, both Macs running one build | 661, 667 | owner — 2026-11-10, testing it: "This is a thing that really should be per preset. This is an absurd level of power to be able to command on any preset, so this needs to just go and not be a shared parameter across both decks" |
+| 860 | Plan 60: the joint works in the offset's terms — target = home⁻¹ ∘ hand ∘ rel, `rel` captured as the clutch closes from the pose drawn — with a mass-normalized spring (ωn and ζ from `world.spring_of`), so the zoom changes nothing of its feel. Welded (coupling 1) the target is taken whole and the body's velocities are the hand's: its own, plus its turn carrying the shape round it (ω × r), so a throw at the end of a swing flies along the swing. The damper pulls toward the hand's velocity, as the plan's torque does toward its spin | 661, 662 | (rec) — plan 60 §1 |
+| 861 | Plan 60: the hand is read once a frame and the physics steps at 960 Hz, so a held body's target is the hand blended from last frame's pose to this one's across the frame's fixed steps (straight, and the short way round), not a step a frame | 661 | (rec) |
+| 862 | Plan 60: a rigid body steps its angular momentum L in the world, ω = (R I_body Rᵀ)⁻¹ L, so a free body keeps L exactly and precesses and nutates as its fixed inertia turns with it; the rotation spring's torque is at a unit inertia. A body with no joint and an even inertia steps as plan 59's free body, unchanged | 663 | (rec) — plan 60 §2 |
+| 863 | Plan 60: the inertia — the vector from the holding palm to the other, its length over the box's width (`SPAN` 4 with no box), 𝟙 + k m n nᵀ with its ratio clamped to 0.25–4; held fixed in the room while the shaping clutch is closed (taken into the body each frame), locked in the body as it opens. A change goes at most `INERTIA_RATE` (6 a second, in its log), so a jump of the hands is spread over frames. Angular speed held under six turns a second | 663, 664 | (rec) — plan 60 §2, §5 |
+| 864 | Plan 60: the rig's box is `World.box`, set from each scene drawn (`poi.box_for`, the poi's rule: the last scene drawn sets it) inset across the screen by the shape's radius (its circumradius × the zoom) so a parked shape stays whole, and grown to take the shape's home in, so a pan outside it is not pulled in. A boxed body's physics runs on past the edge in `Body.place`; taking hold there captures what is drawn and brings the physics back to it | 662 | (rec) — plan 60 §1 |
+| 865 | Plan 60 builds row 856: while the shape's offset is not the identity, a 3D shape's depth cue and painter sort read its z after the offset's turn (`geometry.turned_depth`); a 4D shape's stay its w, the 4D look. The identity offset takes no new path: every golden unchanged | 666 | (rec) — row 856 left it to plan 60 |
+| 866 | Plan 60: row 851 stands — Fit and the 3D lattices take no offset, so the rig moves nothing there; a flat field with Fit off moves as one figure. `camera.yaw` / `.pitch` stay the CPU's turntable inside the offset: a `turn` row turns the shape about its own axes on top of the rig's turn, and the inertia's body frame is the offset's | 667 | (rec) — plan 59 rows 851, 853 |
+| 867 | Plan 60: the grip is off by default. A new look — any write of `grip.on`, which every load makes, or a deck switch — sends a shape away from home back there, critically damped at `world.HOME_HZ` (2.5 Hz, about 0.3 s), before the grip acts, so a throw never leaks into the next look; a hand closing on the way takes it there. Off, once home, its body and joint leave the registries. A change of hand lets go. `world.reset` also lets every joint go and evens every inertia (a clutch still closed takes hold again from home). A non-finite value anywhere puts the body home and still, said once (`World.note`, stderr) | 667 | (rec) — plan 60 §4, §5 |
+| 868 | Plan 60's optional §7 (the poi onto the world) is not built: the poi writes `camera.pan` / `camera.zoom` as a scene-setter with undo and the dirty dot, and moving it onto an offset changes what a save holds — its own change, not a commit inside this one | — | (rec) — plan 60 §7 "drop it if it grows" |
+| 869 | Plan 60: the grip publishes its own lanes, scheme `grip`: `grip:held` (1 while the clutch has the shape) and `grip:flying` (1 while a let-go shape still moves over 0.05 a second), both offered as gates and 0, not NaN, while the grip is on; `grip:speed` and `grip:spin`, the shape's own world speed over 4 units/s and angular speed over the 6 turns/s cap, 0–1, rest 0, reading on after a throw. Off: no feed, dormant. Published after the world's step, so a route reads the frame before's | 668 | (rec) — asked for by the kinetic-presets session: a comet's tail on the knot's own speed, not the hand's |
 
 "—": no hand check shows it; tests only.
 
@@ -14450,6 +14469,7 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 
 ### 779. "Rig" leaves what a person reads
 
+- **Reversed for the guard, the owner, 2026-11-10.** "Remove the word rig from the list of banned words. It was banned so we could get rid of it from the codebase, but we're going to be bringing in more complicated meshes and geometry soon. It's highly likely that we're actually going to be using the classical computer graphics and animation version of the word rigging." `tests/test_person_words.py` scans for "session" alone. The strings below stay as they were said; the word may return where it means a rig.
 - **By what each one means.** A cable from All outputs into a window is the bus cable. A window, a device and the bus left out of a patch are "the meta controller's", as are a setting and a change in ⌘Z's tip. `--laptop`'s help says "this Mac's remembered window spots". "which this rig has not open" is "which is not open on this Mac".
 - **Where the owner's own example didn't fit; the owner, 2026-11-07: "We should keep the [not set up] on this Mac thing."** The prompt says "not in this rig" is "not on this Mac". But `devices.MISSING` means no `[[devices]]` entry lists the role, so a pad plugged in and unlisted reads the same, and "not on this Mac" gives the wrong cause and the wrong remedy. It says **"not set up on this Mac"**, and a placeholder node's status adds "[[devices]] in config.toml lists it". Listed but unseen hardware already says "lost". So in these strings "not on this Mac" stands nowhere; it stands in the media words, where a file truly isn't there.
 - **Words the first build got wrong, in review.**
@@ -14462,7 +14482,7 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 ### 780. The guard, the strings nobody reads, and the narrow pane
 
 - **`tests/test_person_words.py`.** Every string literal under `hyperspace/`, docstrings excluded, bare words included, and the README. `LEFT` counts each string by file and says why it stays, so a new use beside a listed key fails, and a removed one fails until the count falls.
-- **What stays:** `"session"` and `"rig"` as show-file keys in `library.py` and `headless.py`; `"session"` as `Project`'s attribute name in `loadable.py`. Keys never saved left the list instead: `ui_routing`'s section key and `graphview.META_SECTION` are "meta", `patches.CONTROL` is "control", a cloud cable's id prefix is "cloud:".
+- **What stays:** `"session"` (and, until 2026-11-10, `"rig"`, row 779) as show-file keys in `library.py` and `headless.py`; `"session"` as `Project`'s attribute name in `loadable.py`. Keys never saved left the list instead: `ui_routing`'s section key and `graphview.META_SECTION` are "meta", `patches.CONTROL` is "control", a cloud cable's id prefix is "cloud:".
 - **Programmer errors, (rec).** `params.py`'s three `ValueError`s changed anyway: "one meta registry", "this meta registry", "never the meta controller's". Listing them would have cost more words than fixing them.
 - **`modbank.py`.** A person can read this one, on a bank's tooltip. "this session" meant this run. A restart alone frees nothing while the top id is in use (`next_id` is `max(width, high) + 1`), so it says a removed id is not reused while the app runs, and after a restart ids count on from the highest still in use. A test walks all three.
 - **The narrow pane.** REVIEW.md: widgets fit their narrowest width. `SHOW_LINE` is short and goes through `ui.fit_micro`: whole at the pane's first width (320 px), "SHOW: PADS, META CONT…" at its narrowest (240 px), with the whole sentence on hover. ROUTING's two headings go through `ui_routing._heading`: the note beside the title where both fit, else under it, wrapped. A node's status in the side pane wraps too.
@@ -14914,3 +14934,134 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **What.** The panel says install where it meant the show: the show line (INSTALL: PADS, META CONTROLLER) and its tips, the footer's "install: saved …", the undo steps ("install <name>", "new install"), the library's lines ("N installs updated", "in the install list", Home's "this install names no startup patch"). "The show" meaning the night stays ("tuned before the show"), as do the migration tool's words about the old `*.hyp.json` show files, and ids (`show.line`, `ui_loadable.PROJECT`'s listing key).
 - **Answer.** owner — 2026-11-07: "yes, show becomes install".
 - **Judge it.** No hand check.
+
+### 851. Fit and the 3D lattices take no offset
+
+- **What.** Plan 59: the world's offset composes into the shape's model matrix on the one-copy path and a flat field with Fit off (`legacy`), never on Fit or the 3D lattices, whose rows carry the camera with a world transform of identity. A field with Fit off turns as one figure about the shape's origin; a culled copy is judged by its box through the whole matrix.
+- **Answer.** plan 59 §2.4: "the builder decides whether the offset composes there too, and records it in the register". (rec): Fit and the lattices place each copy with the camera inside its row and draw with an identity world transform; composing the offset there would turn the whole field about the world's origin, not the shape's, and change a path the goldens pin for no consumer yet.
+- **Built.** `render.Renderer.draw_scene` (`off`), `_copies_of(model=)`; `tests/test_world.py::test_fit_and_the_3d_lattices_take_no_offset`, `::test_an_offset_turn_and_z_reach_the_frame_and_the_cull`.
+- **Judge it.** 659.
+
+### 852. One world, every deck's
+
+- **What.** Plan 59: one `world.World` on the host, held by every renderer (`Renderer.world`, a sibling's too), so both decks' shapes take the one shape object's offset; `world.reset` is a shared meta trigger (group `world`), its button under Reset view in the camera section. The world is runtime state: never saved, never undone.
+- **Answer.** (rec). One world because the hands are one pair whichever deck is on air; the shape object follows the on-air deck's `camera.*` (`_step_world` reads `h.view`). Shared meta, so `world.reset` is one object on every deck (`Registry.add`).
+- **Built.** `app.main` (`worlds.World.default()`, `worlds.register(meta_reg, world)`), `Renderer.sibling`, `ui.Panel._page_camera`. Restart, not hot reload: `Host.world` and `Renderer.world` are new fields on live objects.
+- **Judge it.** 660.
+
+### 853. Home ∘ offset
+
+- **What.** Plan 59: the pose drawn is home ∘ offset, the offset in the home's frame: it turns the shape about its own centre, and its x, y, z are scaled by `camera.zoom` (at zoom 1 an offset's x and y are a pan's, y the other way up). The shape's home has position and scale but no turn: `camera.yaw` / `.pitch` stay the CPU's turntable, before the world.
+- **Answer.** plan 59 §2.1 and §2.4 ("the pose drawn is home ∘ offset"; "yaw and pitch stay where they are"). (rec) for reading the offset in the home's frame: a turn about the shape's own centre is the turn a hand rig wants.
+- **Built.** `geometry.model_matrix(zoom, pan, offset)`, `world.shape_home`; `tests/test_world.py::test_the_pose_drawn_is_home_then_offset`, `::test_an_offset_moved_in_x_and_y_is_a_pan`.
+- **Judge it.** 659.
+
+### 854. The palm glue is the host's
+
+- **What.** Plan 59: a palm into the world (`app.palms_in_world`) lives in `app.py`, not `ghost.py`: `ghost` is the render stack's and `hands` the meta controller's, and the wall (`tests/test_layer_boundary.py`) lets no patch module reach it. It reads the ghost's own fit (`Ghost.calibrated`, cached) whether or not the ghost hands are shown.
+- **Answer.** (rec), from the layer wall: `ghost` is a patch module and may not import `hands.room`.
+- **Built.** `app.palm_in_world`, `app.palms_in_world`; `tests/test_world.py::test_a_tape_puts_each_hand_object_where_the_ghost_puts_its_palm` (mirror on and off).
+- **Judge it.** No hand check.
+
+### 855. A puppet sets the home
+
+- **What.** Plan 59: a puppet sets its object's home and keeps its frame-to-frame velocity and spin on itself (`Palm.velocity`, `.spin`, zero the frame a hand arrives); it feeds no body. A hand not seen stays registered, `present` False, its home where it was last seen.
+- **Answer.** (rec): the puppet is the hand's source, as the params are the shape's; a body moves the offset. Feeding the palm's velocity into a body would move the hand twice.
+- **Built.** `world.Palm`, `World.step_puppets`; `tests/test_world.py::test_a_lost_hand_stays_registered_where_it_was_and_writes_nothing`, `::test_a_puppet_reads_its_spin_from_frame_to_frame`.
+- **Judge it.** 659.
+
+### 856. The painter sort and a turned offset: an item
+
+- **What.** Plan 59, a limit: a turned offset turns the shape after the painter sort and the depth cue, which read the depth before it, so a 3D shape turned by the offset can sort and shade by its old depth. Nothing moves the offset in plan 59; plan 60, which does, decides.
+- **Answer.** (rec) — an item for plan 60; built there (row 865). Sorting by the offset's depth means the offset on the CPU before the sort, which moves work the GPU does now.
+- **What it would take.** Medium: `shape_world`'s depth through the offset's turn before `edepth` and `pd`, only while the offset is not the identity.
+- **Judge it.** No hand check.
+
+### 857. Choosing a patch to load is the meta controller's: load… on the deck row
+
+- **What.** The side pane lists no patch to load. Plan 48's tree (folders, folds, move to ▸, drag onto a header, new folder, the folder menus) and the patch strip's ◀ ▶ are gone; the strip keeps the loaded name, its dot, new, save and as…, and the trash line stays under it. GRAPH's deck row gains **load…** (deck · load… · copy on air to off air · fade): it opens the library's `loadable/` folder in imgui-bundle's ImFileDialog, on the folder of the off-air deck's patch, and a pick loads onto the deck off air by the pads' road (`DeckInstall.load_named`: refused while the crossfader is between its ends). The dialog lists files by file name; folders are made, renamed and deleted there or in Finder (its delete is for good, not the app's trash), and a file moved or a folder renamed there or in Finder is followed live (`Library._hand_moves`: the loaded patch's name and every install's slots). A slot whose folder is gone (renamed or removed in Finder while the app was shut) finds the one patch with that leaf in another folder (a loose read only); with its folder still there, a missing patch is never guessed at. A file edited as well as moved is followed and applied again. ImFileDialog needs `ui_browse._setup` (the bundle's texture-loader symbol) and `ui_browse.scrub` (drops draw commands whose icon texture it deleted mid-frame); where the setup fails the native dialog stands in.
+- **Answer.** owner — 2026-11-10: "selecting a patch to load is really a meta controller operation … it should have no pane component"; the dialog over a list in the pane: "Dialog only, no pane list".
+- **Judge it.** On the Mac: load… opens the dialog; double-click into a folder and back up; pick a patch: it lands off air and the room keeps what it sees; fade. Mid-fade, a pick is refused and said. Move a patch file between folders in Finder with the app open: its pad still loads it.
+
+### 858. The playlist is the meta controller's: a chip on the deck row
+
+- **What.** The playlist leaves the side pane: no **playlist** chip among the pane's tabs, no section. GRAPH's deck row gains a **playlist** chip (deck · load… · playlist · copy on air to off air · fade), reading "playlist: <name>" once one is chosen, lit while it plays, its hover saying where it has got to. A click opens the same controls in a popup under it, 340 px wide: choose or make a list, play and stop, back and on, start at launch, where it has got to, the entries with their dwells and ×, add a look. The fade's seconds are the row's own slider beside **fade**, so the popup no longer repeats it. ⌘Z over the popup takes nothing back, as over the old section (row 709). `PAGE_KEYS` keeps its `playlist` slot so saved bindings keep their indices; that slot now shows the selection.
+- **Answer.** owner — 2026-11-10: "A playlist is a property of the meta controller, so it should come out of that side pane … a very similar UI treatment in that top area".
+- **Judge it.** On the Mac: the chip opens the popup under it; choose a list, play: the chip lights and its hover counts down; ⌘Z with the mouse over the popup says nothing to undo; the pane's chips have no playlist.
+
+### 859. The grip is a patch's own
+
+- **What.** Plan 60: the hand rig's params are a patch group, `grip` (not `rig`: that word left every string a person reads, row 779): each deck its own (`Deck.build` registers it, `headless.make_app` too), saved in each loadable patch, its preset strip the HANDS page's grip section, `grip.coupling` / `.drag` / `.shape` routable like any patch param. A patch that names no `grip.*` loads with the grip off; a save writes `grip.*` only when one differs from its default (`loadable._grip_unless_used`), so every look from before saves byte for byte as it did. The on-air deck's `reg.grip` is what `app._step_world` sets onto the one world.
+- **Answer.** owner — 2026-11-10, testing the first build (a shared meta group, one grip for every look): "This is a thing that really should be per preset. This is an absurd level of power to be able to command on any preset, so this needs to just go and not be a shared parameter across both decks." Worked out with the kinetic-presets session (Leap visual-effect presets): Clay keeps its own fist-and-turn rows with the grip off by omission; Comet turns the grip on in its own file.
+- **Built.** `params.PATCH_GROUPS`, `Deck.build`, `headless.make_app`, `grip.register`, `app._step_world`; `tests/test_grip.py::test_the_grip_params_are_a_patchs_own_saved_with_it`, `::test_each_deck_has_its_own_grip_and_a_patch_without_one_loads_it_off`, `::test_headless_make_app_has_the_grip`.
+- **Judge it.** 661, 667.
+
+### 860. The joint in the offset's terms
+
+- **What.** Plan 60: the joint works in the offset's terms — target = home⁻¹ ∘ hand ∘ rel, `rel` captured as the clutch closes from the pose drawn — with a mass-normalized spring (ωn and ζ from `world.spring_of`), so the zoom changes nothing of its feel. Welded (coupling 1) the target is taken whole and the body's velocities are the hand's: its own, plus its turn carrying the shape round it (ω × r), so a throw at the end of a swing flies along the swing. The damper pulls toward the hand's velocity, as the plan's torque does toward its spin.
+- **Answer.** (rec) — plan 60 §1.
+- **Built.** `World._target`, `World._rigid`, `world.spring_of`; `tests/test_grip.py::test_welded_the_shape_is_the_hands_pose_times_the_captured_one_every_frame`, `::test_a_turning_hand_swings_the_shape_round_it`, `::test_a_step_of_the_hand_settles_as_the_springs_frequency_and_damping_say`.
+- **Judge it.** 661, 662.
+
+### 861. The hand blended across the steps
+
+- **What.** Plan 60: the hand is read once a frame and the physics steps at 960 Hz, so a held body's target is the hand blended from last frame's pose to this one's across the frame's fixed steps (straight, and the short way round), not a step a frame.
+- **Answer.** (rec).
+- **Built.** `World._target` (`f`); `tests/test_grip.py::test_a_step_of_the_hand_settles_as_the_springs_frequency_and_damping_say` (a frame a step).
+- **Judge it.** 661.
+
+### 862. A rigid body steps its momentum
+
+- **What.** Plan 60: a rigid body steps its angular momentum L in the world, ω = (R I_body Rᵀ)⁻¹ L, so a free body keeps L exactly and precesses and nutates as its fixed inertia turns with it; the rotation spring's torque is at a unit inertia. A body with no joint and an even inertia steps as plan 59's free body, unchanged.
+- **Answer.** (rec) — plan 60 §2.
+- **Built.** `World._rigid`, `world._spin_of`; `tests/test_grip.py::test_a_symmetric_body_precesses_at_the_analytic_rate`, `::test_the_angular_momentum_of_a_free_uneven_body_is_kept`, `::test_an_even_inertia_gives_no_gyroscopic_term`.
+- **Judge it.** 663.
+
+### 863. The shaped inertia, its limits
+
+- **What.** Plan 60: the inertia — the vector from the holding palm to the other, its length over the box's width (`SPAN` 4 with no box), 𝟙 + k m n nᵀ with its ratio clamped to 0.25–4; held fixed in the room while the shaping clutch is closed (taken into the body each frame), locked in the body as it opens. A change goes at most `INERTIA_RATE` (6 a second, in its log), so a jump of the hands is spread over frames. Angular speed held under six turns a second.
+- **Answer.** (rec) — plan 60 §2, §5.
+- **Built.** `world.shaped_inertia`, `World._shape`; `tests/test_grip.py::test_the_inertia_shaped_in_the_room_locks_into_the_body_when_its_clutch_opens`, `::test_a_large_inertia_change_is_spread_over_several_frames`, `::test_the_angular_speed_is_held_under_its_ceiling`.
+- **Judge it.** 663, 664.
+
+### 864. The rig's box
+
+- **What.** Plan 60: the rig's box is `World.box`, set from each scene drawn (`poi.box_for`, the poi's rule: the last scene drawn sets it), inset across the screen by the shape's radius (its circumradius × the zoom) so a parked shape stays whole — the kinetic-presets session's finding: a thrown shape parked half off screen — and grown to take the shape's home in, so a pan outside it is not pulled in. A boxed body's physics runs on past the edge in `Body.place`; taking hold there captures what is drawn and brings the physics back to it.
+- **Answer.** (rec) — plan 60 §1.
+- **Built.** `World._boxed`, `Body.place`, `Renderer.draw_scene`; `tests/test_grip.py::test_a_thrown_shape_is_held_to_the_box_while_its_physics_runs_on`, `::test_a_home_outside_the_box_is_not_pulled_in`.
+- **Judge it.** 662.
+
+### 865. The depth of a turned 3D shape (row 856, built)
+
+- **What.** Plan 60 builds row 856: while the shape's offset is not the identity, a 3D shape's depth cue and painter sort read its z after the offset's turn (`geometry.turned_depth`); a 4D shape's stay its w, the 4D look. The identity offset takes no new path: every golden unchanged.
+- **Answer.** (rec) — row 856 left it to plan 60.
+- **Built.** `geometry.turned_depth`, `Renderer.draw_scene`; `tests/test_grip.py::test_a_turned_offset_turns_a_3d_shapes_depth_cue_and_leaves_a_4d_shapes_w`; the goldens.
+- **Judge it.** 666.
+
+### 866. Fit, the lattices and the turntable
+
+- **What.** Plan 60: row 851 stands — Fit and the 3D lattices take no offset, so the rig moves nothing there; a flat field with Fit off moves as one figure. `camera.yaw` / `.pitch` stay the CPU's turntable inside the offset: a `turn` row turns the shape about its own axes on top of the rig's turn, and the inertia's body frame is the offset's.
+- **Answer.** (rec) — plan 59 rows 851, 853.
+- **Built.** Nothing new: `Renderer.draw_scene`'s `legacy`.
+- **Judge it.** 667.
+
+### 867. Off, reset, a hand changed, a NaN
+
+- **What.** Plan 60: the grip is off by default. A new look — any write of `grip.on`, which every load makes, or a deck switch (another deck's `GripState`) — sends a shape away from home back there, critically damped at `world.HOME_HZ` (2.5 Hz, about 0.3 s), before the grip acts, so a throw never leaks into the next look; a hand closing on the way takes it there. Off, once home, its body and joint leave the registries (the first build left the offset where it was; per preset, that would carry a throw into the next look). A change of hand lets go. `world.reset` also lets every joint go and evens every inertia (a clutch still closed takes hold again from home). A non-finite value anywhere puts the body home and still, said once (`World.note`, stderr).
+- **Answer.** (rec) — plan 60 §4, §5.
+- **Built.** `grip.apply`, `World.reset`, `World._nan`; `tests/test_grip.py::test_off_the_grip_springs_the_shape_home_then_leaves_the_registries`, `::test_a_new_look_with_the_grip_on_starts_with_the_shape_at_home`, `::test_a_deck_switch_is_a_new_look_too`, `::test_changing_hands_lets_go`, `::test_world_reset_lets_go_and_evens_the_inertia`, `::test_a_nan_puts_the_body_home_and_says_so_once`.
+- **Judge it.** 667.
+
+### 868. The poi stays where it is
+
+- **What.** Plan 60's optional §7 (the poi onto the world) is not built: the poi writes `camera.pan` / `camera.zoom` as a scene-setter with undo and the dirty dot, and moving it onto an offset changes what a save holds — its own change, not a commit inside this one.
+- **Answer.** (rec) — plan 60 §7 "drop it if it grows".
+- **Built.** Nothing: `poi.py` as it was; `tests/test_poi*.py` unchanged.
+- **Judge it.** No hand check.
+
+### 869. The grip's lanes
+
+- **What.** Plan 60: the grip publishes its own lanes, scheme `grip`: `grip:held` (1 while the clutch has the shape) and `grip:flying` (1 while a let-go shape still moves over 0.05 a second), both offered as gates and 0, not NaN, while the grip is on; `grip:speed` and `grip:spin`, the shape's own world speed over 4 units/s and angular speed over the 6 turns/s cap, 0–1, rest 0, reading on after a throw. Off: no feed, dormant.
+- **Answer.** (rec) — the kinetic-presets session asked for them in this order: a gate for "in hand" vs "thrown", and the shape's own speed for a tail and a glow, since `hand:right.energy` is the hand's and stops at the throw.
+- **Built.** `grip.lanes`, `grip.publish`, `app._step_world` (after `World.frame`); `tests/test_grip.py::test_the_grip_lanes_say_held_flying_and_the_shapes_own_speed`, `::test_the_grip_lanes_reach_a_router_by_name_and_gate_a_row`.
+- **Judge it.** 668.

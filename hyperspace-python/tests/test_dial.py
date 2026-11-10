@@ -500,19 +500,34 @@ def test_a_pad_on_the_other_deck_moves_no_face_here(tmp_path, monkeypatch):
         assert faces[-1][0] == [0.0] * gp.DIAL and faces[-2][0] == [0.0] * gp.DIAL
 
 
-def test_picking_a_reading_on_the_pad_node_sets_it(tmp_path, monkeypatch):
-    """The readings are enums: the pad node offers their choices, and picking one sets
-    it (an enum row is a combo, never a slider, whose write an enum refuses)."""
+def _fake_pick(monkeypatch, pick: dict[str, int]) -> None:
+    """Every enum in `pick` (param id → index) is chosen the frame it is drawn:
+    through imgui's combo, or, on the kit (`ui_fields.select`), its Select."""
     from imgui_bundle import imgui
-    from test_ui_shell import build_rig
 
-    pick = {"pad.dial.left": 1, "pad.dial.right": 0}
+    from hyperspace import ui_kit
 
     def chosen(label, cur, *a, **kw):
         pid = label.rpartition("##")[2]
         return (pid in pick, pick.get(pid, cur))
-
     monkeypatch.setattr(imgui, "combo", chosen)
+    if ui_kit.ready() or ui_kit.enabled():
+        I = ui_kit.mod("interact")
+        real = I.select
+
+        def select(ui, key, *a, **kw):
+            out = real(ui, key, *a, **kw)
+            return (str(pick[key]), out[1]) if key in pick else out
+        monkeypatch.setattr(I, "select", select)
+
+
+
+def test_picking_a_reading_on_the_pad_node_sets_it(tmp_path, monkeypatch):
+    """The readings are enums: the pad node offers their choices, and picking one sets
+    it (an enum row is a combo, never a slider, whose write an enum refuses)."""
+    from test_ui_shell import build_rig
+
+    _fake_pick(monkeypatch, {"pad.dial.left": 1, "pad.dial.right": 0})
     with build_rig(tmp_path) as r:
         pad = ScriptedPad()
         r.panel.pad = pad
@@ -522,11 +537,9 @@ def test_picking_a_reading_on_the_pad_node_sets_it(tmp_path, monkeypatch):
 
 def test_the_stick_feel_is_picked_on_system(tmp_path, monkeypatch):
     """The stick feel stays the meta controller's, on SYSTEM: an enum, so a combo."""
-    from imgui_bundle import imgui
     from test_ui_shell import build_rig, frame
 
-    monkeypatch.setattr(imgui, "combo", lambda label, cur, *a, **kw: (
-        label.endswith("##desk.pad.feel"), 2 if label.endswith("##desk.pad.feel") else cur))
+    _fake_pick(monkeypatch, {"desk.pad.feel": 2})
     with build_rig(tmp_path) as r:
         r.panel.pad = ScriptedPad()
         frame(r.panel, "system")

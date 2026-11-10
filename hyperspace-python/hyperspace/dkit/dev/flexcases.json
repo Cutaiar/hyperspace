@@ -1,0 +1,35 @@
+{
+  "_comment": "Flex conformance cases. flex_oracle.js lays each one out in Chromium and dumps the children's rects; test_flex.py computes the same with box.flex and asserts they agree. The browser is the spec.",
+  "cases": [
+    { "id": "row.basic", "box": [300, 60], "dir": "row", "gap": 0, "justify": "flex-start", "align": "stretch", "pad": [0,0,0,0], "items": [[40,20],[80,20],[24,20]] },
+    { "id": "row.gap", "box": [300, 60], "dir": "row", "gap": 8, "justify": "flex-start", "align": "center", "pad": [0,0,0,0], "items": [[40,20],[80,20],[24,20]] },
+    { "id": "row.pad", "box": [300, 60], "dir": "row", "gap": 6, "justify": "flex-start", "align": "center", "pad": [8,12,8,12], "items": [[40,20],[80,20],[24,20]] },
+
+    { "id": "just.center", "box": [300, 40], "dir": "row", "gap": 4, "justify": "center", "align": "center", "pad": [0,0,0,0], "items": [[40,20],[60,20]] },
+    { "id": "just.end", "box": [300, 40], "dir": "row", "gap": 4, "justify": "flex-end", "align": "center", "pad": [0,0,0,0], "items": [[40,20],[60,20]] },
+    { "id": "just.between", "box": [300, 40], "dir": "row", "gap": 0, "justify": "space-between", "align": "center", "pad": [0,0,0,0], "items": [[40,20],[60,20],[30,20]] },
+    { "id": "just.around", "box": [300, 40], "dir": "row", "gap": 0, "justify": "space-around", "align": "center", "pad": [0,0,0,0], "items": [[40,20],[60,20],[30,20]] },
+    { "id": "just.evenly", "box": [300, 40], "dir": "row", "gap": 0, "justify": "space-evenly", "align": "center", "pad": [0,0,0,0], "items": [[40,20],[60,20],[30,20]] },
+    { "id": "just.between.one", "box": [300, 40], "dir": "row", "gap": 0, "justify": "space-between", "align": "center", "pad": [0,0,0,0], "items": [[40,20]] },
+
+    { "id": "align.start", "box": [300, 60], "dir": "row", "gap": 4, "justify": "flex-start", "align": "flex-start", "pad": [0,0,0,0], "items": [[40,20],[60,30]] },
+    { "id": "align.end", "box": [300, 60], "dir": "row", "gap": 4, "justify": "flex-start", "align": "flex-end", "pad": [0,0,0,0], "items": [[40,20],[60,30]] },
+    { "id": "align.stretch", "box": [300, 60], "dir": "row", "gap": 4, "justify": "flex-start", "align": "stretch", "pad": [0,0,0,0], "items": [[40,null],[60,null]] },
+
+    { "id": "grow.one", "box": [300, 40], "dir": "row", "gap": 8, "justify": "flex-start", "align": "center", "pad": [0,0,0,0], "items": [[40,20],[60,20,1],[30,20]] },
+    { "id": "grow.two", "box": [300, 40], "dir": "row", "gap": 8, "justify": "flex-start", "align": "center", "pad": [0,0,0,0], "items": [[40,20,1],[60,20,2],[30,20]] },
+    { "id": "grow.all", "box": [300, 40], "dir": "row", "gap": 0, "justify": "flex-start", "align": "center", "pad": [0,0,0,0], "items": [[10,20,1],[10,20,1],[10,20,1]] },
+
+    { "id": "shrink.even", "box": [100, 40], "dir": "row", "gap": 0, "justify": "flex-start", "align": "center", "pad": [0,0,0,0], "items": [[60,20],[60,20]] },
+    { "id": "shrink.weighted", "box": [120, 40], "dir": "row", "gap": 0, "justify": "flex-start", "align": "center", "pad": [0,0,0,0], "items": [[80,20,0,1],[80,20,0,3]] },
+    { "id": "shrink.none", "box": [100, 40], "dir": "row", "gap": 0, "justify": "flex-start", "align": "center", "pad": [0,0,0,0], "items": [[60,20,0,0],[60,20,0,0]] },
+
+    { "id": "col.basic", "box": [80, 300], "dir": "column", "gap": 6, "justify": "flex-start", "align": "flex-start", "pad": [0,0,0,0], "items": [[40,20],[60,30],[30,20]] },
+    { "id": "col.grow", "box": [80, 300], "dir": "column", "gap": 6, "justify": "flex-start", "align": "stretch", "pad": [4,4,4,4], "items": [[null,20],[null,20,1],[null,20]] },
+    { "id": "col.center", "box": [80, 300], "dir": "column", "gap": 6, "justify": "center", "align": "center", "pad": [0,0,0,0], "items": [[40,20],[60,30]] },
+
+    { "id": "real.badge", "box": [86, 20], "dir": "row", "gap": 4, "justify": "flex-start", "align": "center", "pad": [0,8,0,6], "items": [[12,12],[40,15]] },
+    { "id": "real.statrow", "box": [1152, 34], "dir": "row", "gap": 0, "justify": "flex-start", "align": "center", "pad": [0,12,0,12], "items": [[253,20],[322,20],[149,20],[69,20],[92,20],[230,20]] },
+    { "id": "real.toolbar", "box": [400, 32], "dir": "row", "gap": 6, "justify": "flex-start", "align": "center", "pad": [0,8,0,8], "items": [[60,24],[60,24],[0,24,1],[80,24]] }
+  ]
+}

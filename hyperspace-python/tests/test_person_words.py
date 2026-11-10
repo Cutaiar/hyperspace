@@ -1,7 +1,11 @@
 """The owner, 2026-11-06: "Session and rig need to go away." (register rows 778-780.) And
 "Presets need to go away": with the one migration, the panel says patches (plan 57, row 840).
 
-Neither word may return in a string a person reads. Every string literal in `hyperspace/`
+"Rig" is off the list again (the owner, 2026-11-10, row 779): the cleanup is done, and
+with real meshes coming the word will mean rigging, as in computer graphics and animation.
+The strings it was taken out of stay as they were said.
+
+"Session" may not return in a string a person reads. Every string literal in `hyperspace/`
 is scanned, docstrings excluded: an f-string's pieces are read one by one, and comments
 are not read at all. The README is read whole. `LEFT` is what stays and why: each is a
 saved key or an attribute's name, so no person ever sees it. Add to it only for a string no
@@ -28,7 +32,7 @@ from hyperspace import graphview, learn, ui, ui_graph, ui_loadable, ui_routing
 from hyperspace.modbank import MAX_ID, Bank
 
 ROOT = Path(hyperspace.__file__).parent
-WORDS = re.compile(r"\b(sessions?|rigs?)\b", re.IGNORECASE)
+WORDS = re.compile(r"\bsessions?\b", re.IGNORECASE)
 
 SAVED_SHOW_KEY = "a key of a saved show file; goes with the one migration"
 # (file, the whole string): how many times it stands in that file, and why it stays. A
@@ -36,7 +40,6 @@ SAVED_SHOW_KEY = "a key of a saved show file; goes with the one migration"
 LEFT: dict[tuple[str, str], tuple[int, str]] = {
     ("headless.py", "session"): (1, SAVED_SHOW_KEY),
     ("library.py", "session"): (11, SAVED_SHOW_KEY),
-    ("library.py", "rig"): (1, SAVED_SHOW_KEY),
 }
 
 
@@ -67,7 +70,7 @@ def _found() -> Counter:
     )
 
 
-def test_session_and_rig_leave_every_string_a_person_reads():
+def test_session_leaves_every_string_a_person_reads():
     want = Counter({key: n for key, (n, _why) in LEFT.items()})
     back = sorted((_found() - want).items())
     assert not back, (
@@ -91,19 +94,19 @@ def test_the_readme_says_neither():
 def test_the_scan_finds_the_word_in_every_shape_it_could_come_back_in():
     source = '''
 """A session's docstring is not read."""
-# a rig's comment is not read
-TIP = "the rig's cable"
+# a session's comment is not read
+TIP = "the session's cable"
 LABEL = "Session"
 MICRO = "session"
 SPLIT = ("not in this "
-         "rig")
+         "session")
 def f(x):
-    """A rig's docstring is not read."""
+    """A session's docstring is not read."""
     return f"{x} is the session's"
 '''
     said = [text for text in said_by(source) if WORDS.search(text)]
     assert sorted(said) == sorted(
-        ["the rig's cable", "Session", "session", "not in this rig", " is the session's"]
+        ["the session's cable", "Session", "session", "not in this session", " is the session's"]
     )
 
 
@@ -115,8 +118,9 @@ def test_a_bare_word_restored_beside_a_listed_key_is_caught():
     assert (more - want)[key] == 1
 
 
-def test_right_rigid_and_origin_are_no_rig():
-    assert not WORDS.search("the right rigid origin, a trigger's rigging")
+def test_rig_is_a_word_again():
+    """Row 779, the owner, 2026-11-10: a hand rig, a mesh's rig, rigging."""
+    assert not WORDS.search("the hand rig, a mesh's rigs, rigging")
 
 
 # ---------------------------------------------------------------- the words are true
@@ -224,7 +228,6 @@ PRESET = re.compile(r"(?<![._/#\w])presets?(?![/_\w]|\.\w)", re.IGNORECASE)
 # names, which FQ4 left as they are. Anything else that stays is listed, and why
 ID = re.compile(r"[a-z_.0-9{}]*")
 PRESET_LEFT: dict[tuple[str, str], tuple[int, str]] = {
-    ("ui_loadable.py", "PRESET"): (1, "an imgui drag payload's type: never drawn"),
 }
 
 

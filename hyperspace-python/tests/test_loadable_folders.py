@@ -551,3 +551,138 @@ def test_two_files_of_one_spelling_are_never_picked_by_sort_order(lib_dirs):
     assert r.lib.path_of(LOADABLE, "Trip! 2", loose=True) is None
     assert "two patches answer to that name" in r.lib.warning
     assert "trip-2.json" in r.lib.warning and "trip_2.json" in r.lib.warning
+
+
+# ------------------------------------------- a file moved by hand (in Finder)
+
+def test_a_slot_whose_folder_went_while_the_app_was_shut_finds_its_patch(lib_dirs):
+    """A folder renamed in Finder with the app shut: no install was told. A slot
+    naming ``party/deep/C`` finds the one patch with that leaf, its folder gone."""
+    p = lib_dirs.loaded_patch
+    (p / "party" / "deep").rename(p / "party" / "deeper")
+    r = make(lib_dirs)
+    assert r.lib.path_of(LOADABLE, "party/deep/C", loose=True) == p / "party" / "deeper" / "c.json"
+    assert r.lib.path_of(LOADABLE, "party/deep/C") is None   # a writer never follows it
+
+
+def test_a_missing_patch_whose_folder_is_still_there_is_not_guessed(lib_dirs):
+    """Review of #444: with its folder still on disk, a file gone from it was
+    deleted or moved out, and a leaf alone cannot tell which — a slot naming it
+    loads nothing, never another folder's patch of the same name. A bare name
+    (the top level is always there) the same."""
+    p = lib_dirs.loaded_patch
+    _put(p / "night" / "b.json", "B")
+    (p / "party" / "b.json").unlink()
+    (p / "party" / "b (Dan's conflicted copy).json").unlink()
+    (p / "night" / "a.json").write_bytes((p / "a.json").read_bytes())
+    (p / "a.json").unlink()
+    r = make(lib_dirs)
+    assert r.lib.path_of(LOADABLE, "party/B", loose=True) is None
+    assert r.lib.path_of(LOADABLE, "A", loose=True) is None
+
+
+def test_two_loadables_of_one_name_are_not_guessed_between(lib_dirs):
+    p = lib_dirs.loaded_patch
+    _put(p / "night" / "c.json", "C")
+    (p / "party" / "deep").rename(p / "day")
+    r = make(lib_dirs)
+    assert r.lib.path_of(LOADABLE, "party/deep/C", loose=True) is None
+    assert "two patches have that name" in r.lib.warning
+
+
+def test_a_patch_edited_and_then_moved_is_followed_and_applied_again(lib_dirs):
+    """Review of #444: the edit is not lost. The move is followed (the name, the
+    slots) and, its mtime having moved, the file is applied again."""
+    r = make(lib_dirs)
+    p = lib_dirs.loaded_patch
+    r.loaded_patch.load("A")
+    doc = json.loads((p / "a.json").read_text())
+    doc["note"] = "edited in an editor"
+    (p / "night").mkdir()
+    (p / "night" / "a.json").write_text(json.dumps(doc))
+    os.utime(p / "night" / "a.json", (5, 5))
+    (p / "a.json").unlink()
+    assert r.lib.poll(now=10.0)
+    assert r.lib.current(LOADABLE) == "night/A" and r.lib.install.bank[0] == "night/A"
+    assert "night/A" in r.lib.status                         # applied again: the poll's line
+
+
+def test_a_library_before_the_migration_follows_a_move_too(tmp_path):
+    """Review of #444: a library whose patches are still in `presets/`. Its folders
+    are no part of a name there (`_prefix` reads under `loadable/`), so the moved
+    file keeps its name, and a load and a save find it where it now is — no second
+    file."""
+    root, machine = tmp_path / "L", tmp_path / "M"
+    machine.mkdir()
+    _put(root / library.OLD_LOADABLE / "a.json", "A")
+    d = SimpleNamespace(root=root, machine=machine)
+    r = make(d)
+    old = library.loadable_dir(root)
+    assert old.name == library.OLD_LOADABLE
+    r.loaded_patch.load("A")
+    (old / "night").mkdir()
+    (old / "a.json").rename(old / "night" / "a.json")
+    r.lib.poll(now=10.0)
+    assert r.lib.current(LOADABLE) == "A"
+    assert r.lib.path_of(LOADABLE, "A") == old / "night" / "a.json"
+    r.lib.overwrite(LOADABLE)
+    assert sorted(q.relative_to(old).as_posix() for q in old.rglob("*.json")) == ["night/a.json"]
+
+
+def test_the_running_app_follows_a_move_made_by_hand(lib_dirs):
+    """`poll` sees a file gone from one folder and new in another: the
+    loaded patch's name and the installs' slots follow, as `move`'s do, and
+    nothing is re-applied (the bytes are the same: an edit stays)."""
+    r = make(lib_dirs)
+    p = lib_dirs.loaded_patch
+    pr = r.lib.install
+    r.loaded_patch.load("A")
+    r.reg["camera.zoom"].set_value(1.7)
+    assert r.lib.is_dirty(LOADABLE)
+    (p / "night").mkdir()
+    (p / "a.json").rename(p / "night" / "a.json")
+    assert r.lib.poll(now=10.0)
+    assert r.lib.current(LOADABLE) == "night/A"
+    assert pr.bank[0] == "night/A" and pr.startup == "night/A" and pr.bank[1] == "party/B"
+    shown = json.loads((lib_dirs.root / "installs" / "night.json").read_text())
+    assert shown["bank"][0] == "night/A" and shown["startup"] == "night/A"
+    assert "moved in the folder" in r.lib.status and "A → night/A" in r.lib.status
+    assert r.reg["camera.zoom"].get() == pytest.approx(1.7) and r.lib.is_dirty(LOADABLE)
+    # a save lands on the file where it now is, and makes no second one
+    r.lib.overwrite(LOADABLE)
+    assert not (p / "a.json").exists()
+    assert json.loads((p / "night" / "a.json").read_text())["name"] == "A"
+
+
+def test_the_running_app_follows_a_folder_renamed_by_hand(lib_dirs):
+    r = make(lib_dirs)
+    p = lib_dirs.loaded_patch
+    pr = r.lib.install
+    pr.put_slot(2, "party/deep/C")
+    r.loaded_patch.load("party/B")
+    (p / "party").rename(p / "late")
+    assert r.lib.poll(now=10.0)
+    assert r.lib.current(LOADABLE) == "late/B"
+    assert pr.bank[1] == "late/B" and pr.bank[2] == "late/deep/C" and pr.bank[0] == "A"
+    assert "3 patches" in r.lib.status
+    assert r.lib.folders() == ["late", "late/deep"]
+
+
+def test_a_copy_made_by_hand_is_no_move(lib_dirs):
+    import shutil
+    r = make(lib_dirs)
+    p = lib_dirs.loaded_patch
+    pr = r.lib.install
+    (p / "night").mkdir()
+    shutil.copy2(p / "a.json", p / "night" / "a.json")
+    r.lib.poll(now=10.0)
+    assert pr.bank[0] == "A" and {"A", "night/A"} <= set(r.lib.list(LOADABLE))
+
+
+def test_name_at_is_the_listed_name_of_a_picked_file(lib_dirs):
+    r = make(lib_dirs)
+    p = lib_dirs.loaded_patch
+    assert r.lib.name_at(p / "party" / "deep" / "c.json") == "party/deep/C"
+    assert r.lib.name_at(p / "a.json") == "A"
+    assert r.lib.name_at(lib_dirs.root / "installs" / "night.json") is None
+    assert r.lib.name_at(p / "nope.json") is None

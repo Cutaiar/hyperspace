@@ -490,14 +490,16 @@ META_MODULES = _mods(
     "deck", "playlist", "players", "pointer", "app", "devices", "devicelist", "sharedfile", "displays", "hotplug", "control", "config", "placement",
     "hotreload", "watchdog", "midiports", "midi", "apc40", "generic", "gamepad", "pads", "hands", "bridge",
     "osc", "totem", "poi", "poi_guide", "overlay", "audio", "analysis", "analyzer", "bands",
-    "tempo", "seq_page", "node_desk", "replay", "pinch", "pacing")
+    "tempo", "seq_page", "node_desk", "replay", "pinch", "pacing", "world", "grip")
 # one module holding both layers' classes, which an import cannot tell apart. The list is the
 # finding, not a licence: splitting them is the structure audit's (draft #273), and until then
 # `META_NAMES` below stands guard over what a patch module takes from them
 BOTH_LAYERS = _mods("params", "routing", "routing_sources", "library", "undo", "learn",
                     "outputs", "groupwords", "hot_slots")
 # above both: the panel and the headless tools, which may read either
-ABOVE = _mods("ui", "graphview", "headless", "offline")
+# (`dkit`: the panel's component kit, imported by the panel alone, importing nothing of
+# the package's)
+ABOVE = _mods("ui", "graphview", "headless", "offline", "dkit")
 
 # The named surface: every way a patch module reaches a module of the meta controller's today,
 # (module, what it imports, the names) and why. A new crossing fails the wall until it is named

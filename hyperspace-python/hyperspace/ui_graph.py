@@ -230,10 +230,13 @@ from . import (
     patches,
     pinch,
     ui,
+    ui_browse,
     ui_fx,
+    ui_kit,
     ui_pad,
     ui_pane,
     ui_players,
+    ui_playlist,
     ui_routing,
     undo,
 )
@@ -1282,26 +1285,25 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if _patches_chip(panel):                # plan 40 T3: the browser
         imgui.same_line()
     any_open = bool(st["open"])
-    if ui.chip("collapse all##graph" if any_open else "expand all##graph"):
+    # the canvas's two verbs, quiet (on the kit a ghost Button: no box until
+    # the pointer is on it), then its two filters as one joined pair
+    if ui.chip("collapse all##graph" if any_open else "expand all##graph", variant="ghost"):
         expand_all(st, view, not any_open)
     if imgui.is_item_hovered():
         ui.tooltip(ALL_TIP)
     imgui.same_line()
-    if ui.lit_chip("patched only##graph", st["patched_only"]):
-        st["patched_only"] = not st["patched_only"]
-        st["flip"].clear()
-    if imgui.is_item_hovered():
-        ui.tooltip(PATCHED_TIP)
-    imgui.same_line()
-    if ui.chip("tidy##graph"):
+    if ui.chip("tidy##graph", variant="ghost"):
         st["tidy"] = True
     if imgui.is_item_hovered():
         ui.tooltip(TIDY_TIP)
     imgui.same_line()
-    if ui.lit_chip("patch only##graph", st["patch_only"]):
+    hit = ui.chip_group(["patched only##graph", "patch only##graph"],
+                        [st["patched_only"], st["patch_only"]], [PATCHED_TIP, PATCH_ONLY_TIP])
+    if hit == 0:
+        st["patched_only"] = not st["patched_only"]
+        st["flip"].clear()
+    elif hit == 1:
         st["patch_only"] = not st["patch_only"]
-    if imgui.is_item_hovered():
-        ui.tooltip(PATCH_ONLY_TIP)
     imgui.same_line()
     _backdrop_chips(panel, st)
     label = beside_chip(selected, width, st["beside"])
@@ -1398,18 +1400,28 @@ def _wrap_for(width: float) -> None:
 
 def _deck_row(panel, st: dict) -> None:
     """The head's first line (plan 44 D5d): which `Deck` the panel is on, the same
-    words as the window's title, red off air, a click for the other; then the two
-    verbs, "copy on air to off air" and the crossfade, by hand and timed. Nothing with
+    words as the window's title, red off air, a click for the other; then **load…**
+    (a patch from the library onto the deck off air, ui_browse), **playlist** (its
+    controls in a popup, ui_playlist) and the two verbs,
+    "copy on air to off air" and the crossfade, by hand and timed. Nothing with
     no meta controller (a panel from a test). A click moves the panel at the page's end
     (`_arrive`): this frame's view and selection are of the deck it is on."""
     meta = getattr(panel, "meta", None)
-    if meta is None:
+    if meta is None:                    # (a test's panel: the playlist's chip alone)
+        ui_playlist.chip(panel, st)
         return
     words = meta.words(meta.panel)
     if ui.lit_chip(f"{words}##graph.deck", panel_off_air(panel)):
         st["panel_to"] = meta.decks[1] if meta.panel is meta.decks[0] else meta.decks[0]
     if imgui.is_item_hovered():
         ui.tooltip(DECK_TIP)
+    # choosing a patch to load is the meta controller's: onto the deck off air
+    _wrap_for(ui.chip_w(ui_browse.LABEL))
+    ui_browse.chip(panel)
+    # and so is the playlist: its controls in a popup under its chip
+    if getattr(panel, "playing", None) is not None:
+        _wrap_for(ui.chip_w(ui_playlist.label(panel.playing)))
+        ui_playlist.chip(panel, st)
     _wrap_for(ui.chip_w(COPY_LABEL))
     if ui.chip(f"{COPY_LABEL}##graph.copy"):
         copy_on_air(panel)
@@ -1615,6 +1627,20 @@ def _area_chips(st: dict) -> None:
     MODULATION · MEDIA · SCENE · LOOK-BACK · EFFECTS · OUTPUTS (plan 35 G),
     wrapped to the page; a click frames
     the canvas on that area (`frame_area`, next frame)."""
+    if ui_kit.ready():
+        # on the kit one segmented bar — the areas joined, a line of them at a
+        # time where the page wraps them — rather than eight loose buttons
+        areas, labels = list(graphview.AREAS), [f"{graphview.TITLES[a]}##area" for a in graphview.AREAS]
+        while areas:
+            room, n = imgui.get_content_region_avail().x, 0
+            while n < len(areas) and ui.chip_w(*labels[:n + 1]) - imgui.get_style().item_spacing.x * n <= room:
+                n += 1
+            n = max(n, 1)
+            hit = ui.chip_group(labels[:n], None, [AREA_TIP] * n)
+            if hit is not None:
+                st["frame_area"] = areas[hit]
+            areas, labels = areas[n:], labels[n:]
+        return
     for i, a in enumerate(graphview.AREAS):
         label = f"{graphview.TITLES[a]}##area"
         if i:
@@ -1965,7 +1991,7 @@ def _idle_line(st: dict, view: graphview.View, area: str, ids) -> None:
     opened = area in st["idle_open"]
     imgui.text_disabled(ui.fit_text(idle_line(view, ids), NODE_W - 30))
     imgui.same_line(NODE_W - 30 - PIN)
-    if imgui.small_button("-" if opened else "+"):
+    if ui.small_button("-" if opened else "+"):
         toggle_idle(st, area)
     if imgui.is_item_hovered():
         ed.suspend()
@@ -2220,7 +2246,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     imgui.text(ui.fit_text(n.label, NODE_W - 40 - 2 * PIN))
     imgui.pop_style_color()
     imgui.same_line(NODE_W - 30 - PIN)          # the + clear of the out stub
-    if imgui.small_button("+" if shut else "-"):
+    if ui.small_button("+" if shut else "-"):
         toggle_open(st, n.id)
     if imgui.is_item_hovered():
         ed.suspend()
@@ -2240,7 +2266,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
         ed.end_node()
         return
     every = full(st, n.id)
-    if imgui.small_button("patched only" if every else "all ports"):
+    if ui.small_button("patched only" if every else "all ports"):
         st["flip"] ^= {n.id}
     ports = shown(st, n)
     group = None
@@ -2251,7 +2277,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
             folded = (n.id, group) in st["folds"]
             count = sum(1 for p in n.ports if p.group == group)
             sign = "+" if folded else "-"
-            if imgui.small_button(f"{sign} {group_title(group) or 'misc'} ({count})"
+            if ui.small_button(f"{sign} {group_title(group) or 'misc'} ({count})"
                                   f"##{group}"):
                 st["folds"] ^= {(n.id, group)}
         if port not in ports:
@@ -2568,7 +2594,7 @@ def _region_title(panel, st: dict, g) -> None:
         ui.tooltip(REGION_TIP)
         ed.resume()
     imgui.same_line(max(width - 24, 40))
-    if imgui.small_button("-"):
+    if ui.small_button("-"):
         set_open(panel, g.id, False)
     if imgui.is_item_hovered():
         ed.suspend()
@@ -2595,7 +2621,7 @@ def _group_node(panel, st: dict, view: graphview.View, g, drawn: set[str]) -> No
     imgui.same_line()
     imgui.text(ui.fit_text(g.name, NODE_W - 40 - 2 * PIN))
     imgui.same_line(NODE_W - 30 - PIN)
-    if imgui.small_button("+"):
+    if ui.small_button("+"):
         set_open(panel, g.id, True)
     if imgui.is_item_hovered():
         ed.suspend()
@@ -2631,7 +2657,7 @@ def _group_side(panel, st: dict, view: graphview.View, g) -> None:
     if names.get(g.id, (None, None))[0] != g.name:
         names[g.id] = (g.name, g.name)
     imgui.set_next_item_width(imgui.get_content_region_avail().x)
-    entered, text = imgui.input_text("##graph.group.name", names[g.id][1],
+    entered, text = ui.input_text("##graph.group.name", names[g.id][1],
                                      imgui.InputTextFlags_.enter_returns_true)
     names[g.id] = (g.name, text)
     if entered:
@@ -3022,9 +3048,9 @@ def _patch_form(panel, g, form: list) -> None:
     ui._micro("save as patch")
     w = imgui.get_content_region_avail().x
     imgui.set_next_item_width(w)
-    _, form[1] = imgui.input_text_with_hint("##graph.patch.name", "name", form[1])
+    _, form[1] = ui.input_text_with_hint("##graph.patch.name", "name", form[1])
     imgui.set_next_item_width(w)
-    _, form[2] = imgui.input_text_with_hint("##graph.patch.note", "note", form[2])
+    _, form[2] = ui.input_text_with_hint("##graph.patch.note", "note", form[2])
     if ui.chip("Save##graph.patch"):
         save_patch(panel, g.id, form[1], form[2])
     if imgui.is_item_hovered():

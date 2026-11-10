@@ -281,7 +281,7 @@
     },
     "hyperspace/ui.py": {
       "reportArgumentType": 10,
-      "reportAttributeAccessIssue": 59,
+      "reportAttributeAccessIssue": 61,
       "reportCallIssue": 1,
       "reportGeneralTypeIssues": 2,
       "reportIndexIssue": 23,

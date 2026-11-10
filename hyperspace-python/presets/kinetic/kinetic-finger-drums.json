@@ -1,0 +1,221 @@
+{
+ "schema": "hyperspace.loadable/11",
+ "name": "kinetic-finger-drums",
+ "note": "Play it with your fingertips. Each thumb-to-finger pinch on the right hand is a drum: index bursts, middle splits the colours, ring doubles the picture, pinky floods it magenta and green. Hold the pinch and it sustains; let go and it rings out. A left pinch punches the camera in, a flick of the left hand flashes, and its height sets the spin.",
+ "graph": {
+  "frame": "wired",
+  "nodes": [
+   {
+    "kind": "hands",
+    "laid": "over"
+   }
+  ],
+  "wires": [
+   {
+    "from": "shape",
+    "to": "scene.geometry"
+   },
+   {
+    "from": "pattern",
+    "to": "shape.faces"
+   },
+   {
+    "from": "scene",
+    "to": "doublevision.image"
+   },
+   {
+    "from": "doublevision",
+    "to": "deconverge.image"
+   },
+   {
+    "from": "deconverge",
+    "to": "tripcolour.image"
+   },
+   {
+    "from": "tripcolour",
+    "to": "zoomblur.image"
+   },
+   {
+    "from": "zoomblur",
+    "to": "output.all.image"
+   },
+   {
+    "from": "hands",
+    "to": "hands.layer.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.guide"
+   }
+  ]
+ },
+ "values": {
+  "ghost.on": true,
+  "ghost.alpha": 0.35,
+  "view.shape": 10,
+  "view.points": false,
+  "view.speed": 0.2,
+  "camera.zoom": 1.05,
+  "view.bright": 1.3,
+  "fx.zoomblur.on": true,
+  "fx.zoomblur.amount": 0.0,
+  "fx.deconverge.on": true,
+  "fx.deconverge.amount": 0.0,
+  "fx.doublevision.on": true,
+  "fx.doublevision.amount": 0.0,
+  "fx.doublevision.copies": 3,
+  "fx.tripcolour.on": true,
+  "fx.tripcolour.amount": 0.0,
+  "env.1.mode": 0,
+  "env.1.attack": 0.01,
+  "env.1.decay": 0.15,
+  "env.1.sustain": 0.85,
+  "env.1.release": 0.5,
+  "env.2.mode": 0,
+  "env.2.attack": 0.01,
+  "env.2.decay": 0.15,
+  "env.2.sustain": 0.85,
+  "env.2.release": 0.5,
+  "env.3.mode": 0,
+  "env.3.attack": 0.01,
+  "env.3.decay": 0.15,
+  "env.3.sustain": 0.85,
+  "env.3.release": 0.5,
+  "env.4.mode": 0,
+  "env.4.attack": 0.01,
+  "env.4.decay": 0.15,
+  "env.4.sustain": 0.85,
+  "env.4.release": 0.5,
+  "env.5.mode": 0,
+  "env.5.attack": 0.01,
+  "env.5.decay": 0.15,
+  "env.5.sustain": 0.85,
+  "env.5.release": 0.5,
+  "view.faces": true,
+  "view.pattern": 9,
+  "view.pattern_mix": 1.0
+ },
+ "routes": [
+  {
+   "source": "hand:right.pinch.index",
+   "target": "env.1.gate",
+   "op": "position"
+  },
+  {
+   "source": "hand:right.pinch.middle",
+   "target": "env.2.gate",
+   "op": "position"
+  },
+  {
+   "source": "hand:right.pinch.ring",
+   "target": "env.3.gate",
+   "op": "position"
+  },
+  {
+   "source": "hand:right.pinch.pinky",
+   "target": "env.4.gate",
+   "op": "position"
+  },
+  {
+   "source": "hand:left.pinch.index",
+   "target": "env.5.gate",
+   "op": "position"
+  },
+  {
+   "source": "env:0",
+   "target": "fx.zoomblur.amount",
+   "op": "position",
+   "value": 1.0
+  },
+  {
+   "source": "env:1",
+   "target": "fx.deconverge.amount",
+   "op": "position",
+   "value": 1.0
+  },
+  {
+   "source": "env:2",
+   "target": "fx.doublevision.amount",
+   "op": "position",
+   "value": 1.0
+  },
+  {
+   "source": "env:3",
+   "target": "fx.tripcolour.amount",
+   "op": "position",
+   "value": 1.0
+  },
+  {
+   "source": "env:4",
+   "target": "camera.zoom",
+   "op": "push",
+   "value": 0.06
+  },
+  {
+   "source": "hand:left.flick",
+   "target": "view.bright",
+   "op": "push",
+   "value": 0.5
+  },
+  {
+   "source": "hand:left.y",
+   "target": "view.speed",
+   "op": "push",
+   "value": 0.5
+  },
+  {
+   "source": "lane:0",
+   "target": "rot.rate.ZW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:1",
+   "target": "rot.rate.XW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:2",
+   "target": "rot.rate.YW",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:3",
+   "target": "rot.rate.XY",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:4",
+   "target": "rot.rate.XZ",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:5",
+   "target": "rot.rate.YZ",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  }
+ ],
+ "macros": {},
+ "units": {
+  "camera.pan": "world",
+  "fx.depth": "taper"
+ },
+ "media": {
+  "channels": {}
+ }
+}
