@@ -56,7 +56,7 @@ MAX_INSTANCES = 4096   # the instance count's top (params.T_INSTANCES)
 (LAYOUT_GRID, LAYOUT_HEX, LAYOUT_RING,
  LAYOUT_CUBIC, LAYOUT_BCC, LAYOUT_FCC, LAYOUT_HCP, LAYOUT_HEXPRISM, LAYOUT_DIAMOND) = range(9)
 # params.INST_LAYOUT's names, in this order
-NAMES = ["GRID", "HEX", "RING", "CUBIC", "BCC", "FCC", "HCP", "HEX PRISM", "DIAMOND"]
+NAMES = ["grid", "hex", "ring", "cubic", "bcc", "fcc", "hcp", "hex prism", "diamond"]
 LAYOUTS_3D = frozenset(range(LAYOUT_CUBIC, LAYOUT_DIAMOND + 1))
 SNAPS = frozenset((LAYOUT_GRID, LAYOUT_HEX))   # fitted layouts whose zoom snaps to cells
 

@@ -140,6 +140,11 @@ MENU = tuple(k for k in KEYS if k not in TABS)  # the sections chip's menu: the 
 CHIP_DOT_R = 3.0         # px: the dirty dot in a chip's corner (`_corner_dot`)
 ROUTING = "routing"      # the section a picked desk control never dims (`_body`)
 CHIP_MAX = 220.0         # px: the most a chip's words take
+# The sections chip's own word, and the Select's placeholder on the kit
+# (`ui_switcher`): a view's chip says the view's name, and this says what
+# the menu holds when the view is not one of them. Lower case with the
+# rest of the interface (2026-11-10).
+SECTIONS_WORD = "sections"
 WRITE_AFTER_S = 0.5      # a setting in ui.json is written this long after the last change
 COST_KEEP = 0.9          # a body's running mean: this much the last mean, the rest the newest
 NOTHING = "nothing selected — click a node, a cable or a group on the canvas"
@@ -287,19 +292,19 @@ def _bar(panel, key: str, said: str = "") -> None:
     groups = {k: g for k, _, g, _ in SECTIONS}
     for i, k in enumerate(TABS):
         live = _live(panel, k, said)
-        if _chip(f"pane.{k}", titles[k].upper(), k == key, _dirty(panel, groups[k]),
+        if _chip(f"pane.{k}", titles[k], k == key, _dirty(panel, groups[k]),
                  first=i == 0, tip=f"{live}\n{VIEW_TIP}" if live else VIEW_TIP):
             show(panel, k)
-    words = f"{titles[key].upper()}  ▾" if key in MENU else "SECTIONS  ▾"
-    widest = max((f"{titles[k].upper()}  ▾" for k in MENU), key=len)
+    words = f"{titles[key]}  ▾" if key in MENU else f"{SECTIONS_WORD}  ▾"
+    widest = max((f"{titles[k]}  ▾" for k in MENU), key=len)
     if _chip("pane.sections", words, key in MENU, any(_dirty(panel, groups[k]) for k in MENU),
-             first=False, tip=MENU_TIP, wide=("SECTIONS  ▾", widest)):
+             first=False, tip=MENU_TIP, wide=(f"{SECTIONS_WORD}  ▾", widest)):
         imgui.open_popup("##pane.menu")
     if imgui.begin_popup("##pane.menu"):
         imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
         try:
             for k in MENU:
-                hit, _ = imgui.selectable(f"{titles[k].upper()}##pane.{k}", k == key)
+                hit, _ = imgui.selectable(f"{titles[k]}##pane.{k}", k == key)
                 if _dirty(panel, groups[k]):
                     _dot()
                 if hit:

@@ -24,7 +24,7 @@ TIP_FULLSCREEN = ("Borderless, covering this display. No video-mode switch. It c
 TIP_FLIP = ("Mirrors the whole picture on this display, for a glass that reflects it. Each display "
             "of an output has its own.")
 TIP_TAKE = "What the other Mac chose for a display here. It waits for you, as it would move a window."
-NO_RENDER = "No display shows an output: the picture is only on GRAPH."
+NO_RENDER = "No display shows an output: the picture is only on graph."
 
 
 def choices(slots: list) -> list[tuple[str, str]]:

@@ -543,7 +543,7 @@ def test_the_show_line_names_the_show_and_its_dot(rig, monkeypatch):  # noqa: F8
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     texts, _ = _drawn(monkeypatch)
     st = _page(panel)
-    assert ui_loadable.SHOW_LINE.upper() in texts and "party" in texts
+    assert ui_loadable.SHOW_LINE in texts and "party" in texts
     assert "●" not in texts and "show.dot" not in st["rects"]
     assert not lib.install.is_dirty()
     reg["master.gain"].set(reg["master.gain"].value + 1.0)      # a meta controller move

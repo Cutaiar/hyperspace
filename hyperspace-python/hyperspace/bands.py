@@ -44,13 +44,20 @@ class Band:
     dir: int
 
 
+# A band's id is its name on screen and nothing else — a band is addressed
+# by INDEX everywhere (`lane:{i}`, `band.{i}.*`, a scene's rows), so these
+# words are read by people and by nothing else. Lower case with the rest of
+# the interface (2026-11-10). A layout saved before that holds the old
+# capitals; `BandSpec.label` lowercases an all-caps stored name so an old
+# file reads as the rest of the panel does, and the file itself is left
+# exactly as it was.
 BANDS = [
-    Band("SUB", 5, "ZW", 20, 60, 1),
-    Band("BASS", 3, "XW", 60, 160, 1),
-    Band("MIDB", 4, "YW", 160, 400, -1),
-    Band("MID", 0, "XY", 400, 1200, -1),
-    Band("UPR", 1, "XZ", 1200, 4000, 1),
-    Band("AIR", 2, "YZ", 4000, 14000, -1),
+    Band("sub", 5, "ZW", 20, 60, 1),
+    Band("bass", 3, "XW", 60, 160, 1),
+    Band("midb", 4, "YW", 160, 400, -1),
+    Band("mid", 0, "XY", 400, 1200, -1),
+    Band("upr", 1, "XZ", 1200, 4000, 1),
+    Band("air", 2, "YZ", 4000, 14000, -1),
 ]
 
 # -------------------------------------------------------------- constants
@@ -162,20 +169,20 @@ class Shaper:
 
 
 SHAPERS = [
-    Shaper("LIN", "Linear — Y = X", _sh_lin),
-    Shaper("SQRT", "Sqrt — Y = √X, lifts quiet", _sh_sqrt),
-    Shaper("SQ", "Squared — Y = X², punchier", _sh_sq),
-    Shaper("CUBE", "Cubed — Y = X³, peaks only", _sh_cube),
-    Shaper("CURV", "S-curve — soft knee both ends", _sh_curv),
-    Shaper("GATE", "Gate — hard on above threshold", _sh_gate),
-    Shaper("INV", "Invert — loud stops, silence spins", _sh_inv),
-    Shaper("HOLD", "Peak hold — instant rise, slow fall", _sh_hold),
-    Shaper("STAC", "Staccato — 4 ms attack, 75 ms decay", _sh_stac),
-    Shaper("CHOP", "Chop — square gate at 5 Hz", _sh_chop),
-    Shaper("TREM", "Tremolo — 6 Hz sine, 70% depth", _sh_trem),
-    Shaper("S&H", "Sample & hold — re-samples every 180 ms", _sh_snh),
-    Shaper("SLEW", "Slew — 800 ms smoothing, glacial drift", _sh_slew),
-    Shaper("SPRG", "Spring — 3 Hz, ζ 0.35: overshoots and rings", _sh_sprg),
+    Shaper("lin", "Linear — Y = X", _sh_lin),
+    Shaper("sqrt", "Sqrt — Y = √X, lifts quiet", _sh_sqrt),
+    Shaper("sq", "Squared — Y = X², punchier", _sh_sq),
+    Shaper("cube", "Cubed — Y = X³, peaks only", _sh_cube),
+    Shaper("curv", "S-curve — soft knee both ends", _sh_curv),
+    Shaper("gate", "Gate — hard on above threshold", _sh_gate),
+    Shaper("inv", "Invert — loud stops, silence spins", _sh_inv),
+    Shaper("hold", "Peak hold — instant rise, slow fall", _sh_hold),
+    Shaper("stac", "Staccato — 4 ms attack, 75 ms decay", _sh_stac),
+    Shaper("chop", "Chop — square gate at 5 Hz", _sh_chop),
+    Shaper("trem", "Tremolo — 6 Hz sine, 70% depth", _sh_trem),
+    Shaper("s&h", "Sample & hold — re-samples every 180 ms", _sh_snh),
+    Shaper("slew", "Slew — 800 ms smoothing, glacial drift", _sh_slew),
+    Shaper("sprg", "Spring — 3 Hz, ζ 0.35: overshoots and rings", _sh_sprg),
 ]
 
 # ----------------------------------------------------- per-band parameters
@@ -194,19 +201,19 @@ class Params:
     norm: int = 0    # NORMS index: 0 auto (the reference's adaptive window), 1 manual
 
 
-# per-band normalisation (plan 11, audit A10): AUTO is the reference chain
-# bit for bit; MANUAL bypasses the adaptive window and trim is a plain gain
-NORMS = ["AUTO", "MANUAL"]
+# per-band normalisation (plan 11, audit A10): auto is the reference chain
+# bit for bit; manual bypasses the adaptive window and trim is a plain gain
+NORMS = ["auto", "manual"]
 
 
 def default_params() -> list[Params]:
     return [
-        Params(1, 0, 1, 1, 0.250, 0.850, 0.075, 0.55, 0.10),   # SUB  sqrt
-        Params(7, 0, 1, 1, 0.015, 0.130, 0.075, 0.90, 0.30),   # BASS hold
-        Params(8, 0, 1, 1, 0.006, 0.070, 0.075, 0.95, 0.38),   # MIDB staccato
-        Params(4, 0, 1, 1, 0.050, 0.300, 0.075, 0.80, 0.22),   # MID  s-curve
-        Params(0, 0, 1, 1, 0.090, 0.500, 0.075, 0.85, 0.28),   # UPR  linear
-        Params(12, 0, 1, 1, 0.180, 0.900, 0.075, 0.85, 0.32),  # AIR  slew
+        Params(1, 0, 1, 1, 0.250, 0.850, 0.075, 0.55, 0.10),   # sub  sqrt
+        Params(7, 0, 1, 1, 0.015, 0.130, 0.075, 0.90, 0.30),   # bass hold
+        Params(8, 0, 1, 1, 0.006, 0.070, 0.075, 0.95, 0.38),   # midb staccato
+        Params(4, 0, 1, 1, 0.050, 0.300, 0.075, 0.80, 0.22),   # mid  s-curve
+        Params(0, 0, 1, 1, 0.090, 0.500, 0.075, 0.85, 0.28),   # upr  linear
+        Params(12, 0, 1, 1, 0.180, 0.900, 0.075, 0.85, 0.32),  # air  slew
     ]
 
 

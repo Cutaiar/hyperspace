@@ -647,8 +647,8 @@ def test_inst_layout_is_declared(tmp_path):
     from hyperspace import field
 
     p = reg["view.inst_layout"]
-    assert INST_LAYOUT == ["GRID", "HEX", "RING", "CUBIC", "BCC", "FCC", "HCP", "HEX PRISM",
-                           "DIAMOND"] == field.NAMES
+    assert INST_LAYOUT == ["grid", "hex", "ring", "cubic", "bcc", "fcc", "hcp", "hex prism",
+                           "diamond"] == field.NAMES
     assert p.kind is Kind.ENUM and p.names == INST_LAYOUT and p.label == "Layout"
     assert p.base == 0 and view.inst_layout == 0 and ViewState().inst_layout == 0
     assert p.group == "view" and p.persist and p.modulatable

@@ -291,7 +291,7 @@ def _fit_note(title: str, text: str) -> str:
     """A section note cut to what its title leaves it on the line."""
     room = imgui.get_content_region_avail().x - ui._micro_width(title) - 24
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
-    out = ui.fit_text(text.upper(), room)
+    out = ui.fit_text(text, room)
     imgui.pop_font()
     return out
 
@@ -340,7 +340,7 @@ def _row(panel, st: dict, it: Item) -> None:
         imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
         bad = it.status not in (FETCHING, OFF_PAGE)     # expected words, not faults
         dl.add_text(imgui.ImVec2(b.x - ww - 6, a.y + (ROW_H - 4 - ui.FONT_MICRO) / 2),
-                    ui.u32(ui.WARN if bad else ui.FAINT), word.upper())
+                    ui.u32(ui.WARN if bad else ui.FAINT), word)
         imgui.pop_font()
 
 
@@ -349,7 +349,7 @@ def hint(status: str) -> str:
     `off page` (`panel:graph` while the panel is hidden, the only time GRAPH
     is not drawn: plan 49 stage 3) says why the preview is dark."""
     if status == OFF_PAGE:
-        return ("\nthe GRAPH canvas is drawn only while the panel is up (it was hidden): "
+        return ("\nthe graph canvas is drawn only while the panel is up (it was hidden): "
                 f"a channel on it holds the last picture {HOLD_S:g} s, then shows black")
     return ""
 
@@ -367,7 +367,7 @@ def _thumb(panel, st: dict, it: Item, dl, p0, p1) -> None:
     if tex is None:
         dl.add_rect_filled(p0, p1, ui.u32(DEAD), 4.0)
         imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
-        word = {"live": "LIVE", "video": "CLIP"}.get(it.kind, "")
+        word = {"live": "live", "video": "clip"}.get(it.kind, "")
         if word:
             tw = imgui.calc_text_size(word).x
             dl.add_text(imgui.ImVec2((p0.x + p1.x - tw) / 2, (p0.y + p1.y - ui.FONT_MICRO) / 2),
@@ -754,7 +754,7 @@ def _mmss(s: float) -> str:
 # ---- the backdrop and the faces ----
 
 def _pickers(panel, st: dict) -> None:
-    panel._section("backdrop · faces", note="which picture each draws · wired on GRAPH")
+    panel._section("backdrop · faces", note="which picture each draws · wired on graph")
     if imgui.begin_table("##media.pickers", 2, imgui.TableFlags_.sizing_stretch_same):
         # plan 33 T7: the channel is the graph's wire, said here (GRAPH wires it)
         for port, label in (("backdrop.image", "backdrop"), ("pattern.media", "faces")):
@@ -763,7 +763,7 @@ def _pickers(panel, st: dict) -> None:
             imgui.align_text_to_frame_padding()
             imgui.text_colored(ui.TEXT, feed_words(panel, port))
             if imgui.is_item_hovered():
-                ui.tooltip(f"what the graph wires into {port}: rewire it on GRAPH")
+                ui.tooltip(f"what the graph wires into {port}: rewire it on graph")
         for pid in ("backdrop.alpha", "view.media_alpha"):
             imgui.table_next_column()
             if pid in panel.reg:

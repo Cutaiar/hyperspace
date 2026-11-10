@@ -138,11 +138,12 @@ DOT_R = 6.0
 HEADER_DOT_R = 5.0
 
 # ---- font atlas (ENGINEERING.md, control-surface conventions) ----
-# Four roles. UI for words (buttons, combos, names), MICRO for the
-# uppercase field labels (tracking baked in via glyph_extra_advance_x —
-# imgui has no letter-spacing), NUM for value readouts (monospaced, so a
-# moving number does not jitter), BIG for the signature cell-count
-# readout. With the 1.92 dynamic atlas each face renders at every size.
+# Four roles. UI for words (buttons, combos, names), MICRO for the small
+# field labels (tracking baked in via glyph_extra_advance_x — imgui has no
+# letter-spacing; it was chosen when those labels were drawn in capitals
+# and is kept, so every measured label width still holds), NUM for value
+# readouts (monospaced, so a moving number does not jitter), BIG for the
+# signature cell-count readout. With the 1.92 dynamic atlas each face renders at every size.
 #
 # The faces ship in hyperspace/fonts/ (its README: sources, licences), so
 # the panel draws, and the tests measure, the same on every machine.
@@ -246,7 +247,7 @@ TIP_CH = 65   # a tooltip wraps at this many characters: a readable line (the ow
 # mouse moves the grab; once ⇧ has been held in a drag, the rest of that
 # drag is relative, so letting ⇧ go goes back to coarse without a jump.
 FINE = 0.1
-FINE_TIP = "FINE  ·  ⇧ held: a drag moves a tenth as far"
+FINE_TIP = "fine  ·  ⇧ held: a drag moves a tenth as far"
 
 
 def tooltip(text: str) -> None:
@@ -261,21 +262,28 @@ def tooltip(text: str) -> None:
 
 
 def _micro(text: str, color: imgui.ImVec4 | None = None) -> None:
-    """An uppercase field label in the tracked label face."""
+    """A field label in the tracked label face.
+
+    It was upper case until 2026-11-10 (the owner: "remove all caps from
+    the interface"). The face is the same — small, tracked, dim — and it is
+    the face that says "label", not the capitals; the words are now the
+    words the param carries, so a label reads as the rest of the panel
+    reads and an id like `fx.hue` is not shouted back.
+    """
     imgui.push_font(_FONTS["micro"], FONT_MICRO)
-    imgui.text_colored(DIM if color is None else color, text.upper())
+    imgui.text_colored(DIM if color is None else color, text)
     imgui.pop_font()
 
 
 def fit_micro(text: str, width: float, least: float = 12.0) -> str:
-    """`text` as `_micro` draws it (upper case, the micro face), cut to
-    `width` with an ellipsis; "" where the room is under `least` (plan 49
-    stage 2: a note, a strip's head, a node's ports in the side pane)."""
+    """`text` as `_micro` draws it (the micro face), cut to `width` with an
+    ellipsis; "" where the room is under `least` (plan 49 stage 2: a note, a
+    strip's head, a node's ports in the side pane)."""
     if width < least:
         return ""
     imgui.push_font(_FONTS["micro"], FONT_MICRO)
     try:
-        return fit_text(text.upper(), width)
+        return fit_text(text, width)
     finally:
         imgui.pop_font()
 
@@ -283,7 +291,7 @@ def fit_micro(text: str, width: float, least: float = 12.0) -> str:
 def _micro_width(text: str) -> float:
     """What _micro(text) will take, for right-aligning things beside it."""
     imgui.push_font(_FONTS["micro"], FONT_MICRO)
-    w = imgui.calc_text_size(text.upper()).x
+    w = imgui.calc_text_size(text).x
     imgui.pop_font()
     return w
 
@@ -465,7 +473,7 @@ def fit_text(text: str, width: float) -> str:
 
 GROUND_WORDS = "nothing — its ground"
 THROUGH_WORDS = "hands through the effects"     # OUTPUT's checkbox (plan 35 O)
-OPEN_ON_GRAPH = "open on GRAPH"                 # a window's block: its node selected there
+OPEN_ON_GRAPH = "open on graph"                 # a window's block: its node selected there
 NAME_ROOM = 64.0     # px: an OUTPUT block name needs this beside its ticks, or they go under it
 
 
@@ -1073,7 +1081,7 @@ class Panel:
                  lambda on: setattr(self, "desk", bool(on)), group="ui",
                  persist=False, modulatable=False,
                  tip="The APC40 drawn left of the panel: the controls the layer that is "
-                     "up maps lit, each with the glyph the ROUTING rows print. Hide the "
+                     "up maps lit, each with the glyph the routing rows print. Hide the "
                      "panel (H, or the desk's big chip) and it fills the window, every lit "
                      "control named.")
         r.toggle("ui.pad_diagram", "Pad diagram",
@@ -1089,7 +1097,7 @@ class Panel:
                group="ui", persist=False, modulatable=False, tip=ui_pad_views.VIEW_TIP)
         r.enum("ui.page", "Side pane view", lambda: self.page, lambda i: Panel.go_page(self, i),
                list(PAGE_KEYS), group="ui", persist=False, modulatable=False,
-               tip="What GRAPH's side pane shows, at its full height: a section, or graph "
+               tip="What the graph's side pane shows, at its full height: a section, or graph "
                    "for what is selected on the canvas. ⌘[ / ⌘] step back and forward.")
 
     def in_meta_section(self) -> bool | str | None:
@@ -1919,10 +1927,10 @@ class Panel:
         — the control beside it never lands back over the line's start."""
         pos = imgui.get_cursor_screen_pos()
         fh = FONT_NUM + 2 * imgui.get_style().frame_padding.y
-        words = text.upper()
+        words = text
         if ui_kit.ready():
             # cut to its column: the stock slider's opaque frame hid a label's
-            # overflow, the kit's thin track does not ("KNOB SMOOTHING" ran
+            # overflow, the kit's thin track does not ("knob smoothing" ran
             # into its fill). The whole label is the cell's tooltip.
             words = fit_micro(text, width - LABEL_GAP, 0.0) or words[:1]
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
@@ -1931,7 +1939,7 @@ class Panel:
             u32(DIM if color is None else color), words)
         imgui.pop_font()
         imgui.dummy(imgui.ImVec2(width - LABEL_GAP, fh))
-        if words != text.upper() and imgui.is_item_hovered():
+        if words != text and imgui.is_item_hovered():
             tooltip(text)
         imgui.same_line(0, LABEL_GAP)
 
@@ -2658,7 +2666,7 @@ class Panel:
             sw = sl.switches
             why = []
             if sw.hands and ghost is not None and not ghost.value:
-                why.append("hands: ghost hands are off (HANDS section)")
+                why.append("hands: ghost hands are off (hands section)")
             elif sw.hands and getattr(self, "hands", None) is None:
                 why.append("hands: no tracker")
             if through_layer(wiring, sl.n, bus_cuts) is not None and not fx_on:
@@ -2809,7 +2817,7 @@ class Panel:
         imgui.begin_group()
         _micro("cells", FAINT)
         imgui.push_font(_FONTS["micro"], FONT_BASE + 4)
-        imgui.text(sh.name.upper())
+        imgui.text(sh.name)
         imgui.pop_font()
         _micro(sh.alias, RED)
         _micro(f"{sh.dims}D  ·  {g['n']}V {g['m']}E  ·  {sh.sym}")
@@ -3002,7 +3010,7 @@ class Panel:
                     imgui.text_colored(WARN, f"video sound silent — {mx.state}")
                 elif not getattr(mx, "playing", 0):
                     imgui.push_text_wrap_pos(0.0)   # (longer than the pane's narrow widths)
-                    imgui.text_disabled("silent until an on-air channel's sound is on (MEDIA)")
+                    imgui.text_disabled("silent until an on-air channel's sound is on (media)")
                     imgui.pop_text_wrap_pos()
         else:
             imgui.text_disabled("no source — the shape spins on its own")
@@ -3041,7 +3049,7 @@ class Panel:
         take = button_w("Reset all") + imgui.get_style().item_spacing.x
         roomy = imgui.get_content_region_avail().x - LABEL_W - take >= SCENE_COMBO_MIN
         self._label_cell("scene", width=LABEL_W if roomy
-                         else imgui.calc_text_size("SCENE").x + LABEL_GAP + 4)
+                         else imgui.calc_text_size("scene").x + LABEL_GAP + 4)
         self._combo("scene.select", -take if roomy else -1)
         if roomy:
             imgui.same_line()
@@ -3094,7 +3102,7 @@ class Panel:
         machine = getattr(lib, "machine", root)
         missing = getattr(lib, "missing", None)
         if missing is not None:
-            lines = [((f"library: {missing} — NOT FOUND, saves are off "
+            lines = [((f"library: {missing} — not found, saves are off "
                       "(restart once it is there)"), True)]
         else:
             lines = [(f"library: {root}", False)]
@@ -3378,7 +3386,7 @@ class Panel:
             dl.add_circle_filled(imgui.ImVec2(c.x + x * r, c.y + y * r), 4.0, u32(TEXT))
         # the legend: the title, then a line per sector, clockwise from N
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
-        dl.add_text(imgui.ImVec2(lx, y0), u32(DIM), title.upper())
+        dl.add_text(imgui.ImVec2(lx, y0), u32(DIM), title)
         imgui.pop_font()
         first = y0 + row if wide else c.y + r + 8      # the N line
         for k in range(n):

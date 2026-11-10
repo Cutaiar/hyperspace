@@ -1,5 +1,5 @@
 """The side pane's view switcher on dkit (`ui_kit`): what replaces the bar of
-uppercase chips (`ui_pane._bar`) where the kit is there.
+chips (`ui_pane._bar`) where the kit is there.
 
 Two rows, whatever the pane's width:
 
@@ -11,7 +11,7 @@ Two rows, whatever the pane's width:
   its group moved off its patch, as on the chip;
 - **the other eleven** (`ui_pane.MENU`, each also a node's **open on …**)
   as one Select, which names the view while it is one of them and says
-  "Sections" otherwise; a row's dot is the same dirty dot, as the menu's.
+  "sections" otherwise; a row's dot is the same dirty dot, as the menu's.
 
 Every tab is ``##pane.<key>``, the Select ``##pane.sections`` and each of
 its rows ``##pane.<key>``, so the panel driver and the tests that walk the
@@ -79,7 +79,7 @@ def _tabs(panel, k, key: str, said: str, x: float, y: float, w: float) -> None:
             live = ui_pane._live(panel, kk, said)
             # what it would say live first, as the chip's tooltip does; then
             # the name the icon stands for
-            ui.tooltip("\n".join(t for t in (live, titles[kk].upper(), ui_pane.VIEW_TIP) if t))
+            ui.tooltip("\n".join(t for t in (live, titles[kk], ui_pane.VIEW_TIP) if t))
     if hit is not None and tabs[hit] != key:
         ui_pane.show(panel, tabs[hit])
 
@@ -92,12 +92,12 @@ def _sections(panel, k, key: str, x: float, y: float, w: float) -> None:
     # each frame for a menu nobody sees was the switcher's largest cost
     # (tools/profile_kit.py; a group's dirt is a snapshot compare)
     up = imgui.is_popup_open("##sel.pane.sections")
-    items = [M.Item(id=kk, label=titles[kk].upper(), checked=kk == key,
+    items = [M.Item(id=kk, label=titles[kk], checked=kk == key,
                     shortcut=DIRTY if up and ui_pane._dirty(panel, groups[kk]) else "")
              for kk in ui_pane.MENU]
-    label = titles[key].upper() if key in ui_pane.MENU else ""
+    label = titles[key] if key in ui_pane.MENU else ""
     chosen, _open = I.select(k, "pane.sections", x, y, w, label, items,
-                             size=ui_fields.SELECT_SIZE, placeholder="Sections",
+                             size=ui_fields.SELECT_SIZE, placeholder=ui_pane.SECTIONS_WORD,
                              row_id=lambda it, i: f"pane.{it.id}")
     if imgui.is_item_hovered() and not _open:
         ui.tooltip(ui_pane.MENU_TIP)

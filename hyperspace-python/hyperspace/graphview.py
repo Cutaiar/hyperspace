@@ -2155,13 +2155,17 @@ AREA: dict[str, str] = {
     # alone (`media_made`, by `area_of`)
     "MediaNode": MEDIA, "PatternNode": MEDIA, "SwitchNode": MEDIA, "Delay": MEDIA,
 }
-TITLES = {CONTROLLERS: "CONTROLLERS", AUDIO: "AUDIO", OTHER: "OTHER",
-          MODULATION: "MODULATION", MEDIA: "MEDIA", SCENE_AREA: "SCENE",
-          LOOKBACK_AREA: "LOOK-BACK", EFFECTS_AREA: "EFFECTS", OUTPUTS_AREA: "OUTPUTS"}
+# An area's title over its column. Lower case with the rest of the
+# interface (2026-11-10, the owner: "remove all caps from the interface");
+# the words themselves are unchanged, and nothing stores one — an area is
+# keyed by its constant, never by its title.
+TITLES = {CONTROLLERS: "controllers", AUDIO: "audio", OTHER: "other",
+          MODULATION: "modulation", MEDIA: "media", SCENE_AREA: "scene",
+          LOOKBACK_AREA: "look-back", EFFECTS_AREA: "effects", OUTPUTS_AREA: "outputs"}
 # a title too long for its room at the floor size (review round 1)
-SHORT_TITLES = {CONTROLLERS: "CTRL", AUDIO: "AUD", OTHER: "OTH", MODULATION: "MOD",
-                MEDIA: "MED", SCENE_AREA: "SCN", LOOKBACK_AREA: "LKB", EFFECTS_AREA: "FX",
-                OUTPUTS_AREA: "OUT"}
+SHORT_TITLES = {CONTROLLERS: "ctrl", AUDIO: "aud", OTHER: "oth", MODULATION: "mod",
+                MEDIA: "med", SCENE_AREA: "scn", LOOKBACK_AREA: "lkb", EFFECTS_AREA: "fx",
+                OUTPUTS_AREA: "out"}
 # 2026-10-26 (the laptop's own screen): the canvas's text, boxes, pins and
 # spacing all a quarter bigger than the panel's — one factor, so the
 # layout's units still hold what the page draws in them; each unit whole

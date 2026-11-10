@@ -30,7 +30,7 @@ def test_the_map_matches_every_loadable_and_fixture_as_loaded():
 def test_the_usage_reads_the_drawn_faces_wire():
     uses = {u.slug: u for u in fs.usage()}
     assert set(uses) >= {p.stem for p in fs.CORPUS.glob("*.json")}
-    assert uses["party-faces"].state == "on screen" and uses["party-faces"].name == "HEX"
+    assert uses["party-faces"].state == "on screen" and uses["party-faces"].name == "hex"
     assert uses["party-faces"].path == ("pattern", "shape.faces")
     assert uses["legacy6"].state == "faces off"           # wired, view.faces off
     assert uses["delay-faces"].state == "unwired"         # the faces read a delay
@@ -46,14 +46,14 @@ def test_every_mode_has_a_line_and_a_ranked_list_of_other_modes():
 
 
 def test_nearest_kept_answers_for_any_subset():
-    assert fs.nearest_kept("HEX", ["HEX", "RINGS"]) == "HEX"          # kept stays
-    assert fs.nearest_kept("HEX", ["CELLS", "PLASMA"]) == "CELLS"     # first in its list
-    assert fs.nearest_kept("HEX", ["TRUCHET", "CELLS"]) == "CELLS"    # rank, not order given
-    assert fs.nearest_kept("HEX", ["PLASMA"]) == "PLASMA"             # none listed: first kept
-    assert fs.nearest_kept("HEX", ["FLAT", "PLASMA"]) == "PLASMA"     # FLAT only as last resort
-    assert fs.nearest_kept("HEX", ["FLAT"]) == "FLAT"
+    assert fs.nearest_kept("hex", ["hex", "rings"]) == "hex"          # kept stays
+    assert fs.nearest_kept("hex", ["cells", "plasma"]) == "cells"     # first in its list
+    assert fs.nearest_kept("hex", ["truchet", "cells"]) == "cells"    # rank, not order given
+    assert fs.nearest_kept("hex", ["plasma"]) == "plasma"             # none listed: first kept
+    assert fs.nearest_kept("hex", ["flat", "plasma"]) == "plasma"     # FLAT only as last resort
+    assert fs.nearest_kept("hex", ["flat"]) == "flat"
     for n in NAMES:
-        for keep in (["PLASMA"], ["RINGS", "EMBER"], NAMES[5:9]):
+        for keep in (["plasma"], ["rings", "ember"], NAMES[5:9]):
             assert fs.nearest_kept(n, keep) in keep
     with pytest.raises(ValueError):
-        fs.nearest_kept("HEX", [])
+        fs.nearest_kept("hex", [])

@@ -120,7 +120,7 @@ from .view import (
 
 PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
 # field.py's layouts, in its order: three flat, then the six 3D lattices
-INST_LAYOUT = ["GRID", "HEX", "RING", "CUBIC", "BCC", "FCC", "HCP", "HEX PRISM", "DIAMOND"]
+INST_LAYOUT = ["grid", "hex", "ring", "cubic", "bcc", "fcc", "hcp", "hex prism", "diamond"]
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
 MEDIA_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]   # the faces' media path (view.media_mode)
 BMP_ALPHA = "view.bmp_alpha"   # the one bitmap id kept: an alias of view.media_alpha
@@ -2214,7 +2214,7 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
         r.enum(f"{prefix}.curve", label_of("Curve"),
                lambda: chain().spec[idx()].curve,
                lambda c: chain().set_band(idx(), curve=c), curve_tags, group=g, alias=alias,
-               tip="How the FFT bins between the edges are weighted: RECT is every "
+               tip="How the FFT bins between the edges are weighted: rect is every "
                    "bin equally (the reference), the others taper toward the edges.")
         r.enum(f"{prefix}.fn", label_of("Transfer"),
                lambda: chain().params[idx()].fn,
@@ -2223,9 +2223,9 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
                lambda: chain().params[idx()].norm,
                lambda v: setattr(chain().params[idx()], "norm", int(v)), NORMS,
                group=g, alias=alias, modulatable=False,
-               tip="AUTO: the reference's adaptive window — it undoes a limiter, and "
+               tip="auto: the reference's adaptive window — it undoes a limiter, and "
                    "cancels most of a trim (a 6–12 dB cut can even drive harder). "
-                   "MANUAL: no window; the trim is a plain gain and the band follows "
+                   "manual: no window; the trim is a plain gain and the band follows "
                    "its level, 1.0 at nominal.")
         for knob in tapers.KNOBS:
             r.continuous(
@@ -2252,7 +2252,11 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
         r.trigger("band.reset", "Reset analyzer band", control.reset_band, group=g,
                   tip="Puts this band's whole strip back to the selected scene.")
         for i, name in enumerate(chain().band_names):
-            band_params(f"band.{i}", (lambda i=i: i), lambda lb, b=name: f"{b} {lb}")
+            # the band's own name, then the knob's: the name is lower case now,
+            # so the knob's word follows it rather than standing up mid-label
+            # ("air transfer", not "air Transfer")
+            band_params(f"band.{i}", (lambda i=i: i),
+                        lambda lb, b=name: f"{b} {lb.lower()}")
             r.trigger(f"band.{i}.reset", f"{name} reset",
                       lambda i=i: control.reset_band(i), group=g)
         # the selected band's strip: views onto band.{selb}.*, never saved or driven

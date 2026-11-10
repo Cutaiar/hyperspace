@@ -1339,7 +1339,7 @@ BROWSED_GROUPS = [
     ("→ blend aux", ["acid.3"]),
     ("reaches nothing", ["wobble.2"]),
 ]
-EMPTY_GRAPH = "no effects in the graph — add one on GRAPH (right-click the canvas)"
+EMPTY_GRAPH = "no effects in the graph — add one on graph (right-click the canvas)"
 
 
 def test_groups_follow_the_wires():
@@ -1448,7 +1448,7 @@ def test_show_on_graph_selects_the_node(tmp_path, monkeypatch):
 
 def ui_fx_show() -> str:
     from hyperspace.ui_fx import SHOW
-    assert SHOW == "Show on GRAPH"
+    assert SHOW == "Show on graph"
     return SHOW
 
 

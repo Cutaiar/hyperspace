@@ -441,9 +441,9 @@ def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
     frame(panel, "routing")
     frame(panel)
     assert ui_routing.POINTER in texts
-    assert "ROUTES" not in texts and "MODIFIERS" not in texts and not rows and not strips
-    assert {"DESK  ·  PATCH LAYER", "MACROS", "META CONTROLLER", "SINKS"} <= set(texts)
-    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PATCH LAYER")
+    assert "routes" not in texts and "modifiers" not in texts and not rows and not strips
+    assert {"desk  ·  patch layer", "macros", "meta controller", "sinks"} <= set(texts)
+    assert texts.index(ui_routing.POINTER) < texts.index("desk  ·  patch layer")
     # the functions stay
     assert ui_routing._sources(panel, router) and ui_routing._targets(panel)
     b = ui_routing.add_route(panel, "fx.acid.mix", source=m.address, depth=0.4)
@@ -1002,7 +1002,7 @@ def test_home_page_maps_each_node_kind(rig):
 
 
 def test_open_on_page_switches_page_and_selects(rig, monkeypatch):
-    """The side panel's "open on MEDIA" chip: the panel turns to MEDIA with
+    """The side panel's "open on media" chip: the panel turns to media with
     the node's channel selected there."""
     from hyperspace import ui_media
     st = party(rig)
@@ -1010,10 +1010,10 @@ def test_open_on_page_switches_page_and_selects(rig, monkeypatch):
     chips = []
     chip = ui.chip
     monkeypatch.setattr(ui, "chip", lambda label, *a, **k: chips.append(label)
-                        or label.startswith("open on MEDIA") or chip(label, *a, **k))
+                        or label.startswith("open on media") or chip(label, *a, **k))
     frame(rig.panel, "graph")
     monkeypatch.setattr(ui, "chip", chip)
-    assert any(c.startswith("open on MEDIA") for c in chips)
+    assert any(c.startswith("open on media") for c in chips)
     assert rig.panel.page == ui.PAGE_KEYS.index("media")
     assert ui_media._state(rig.panel)["sel"] == "c"
     frame(rig.panel)

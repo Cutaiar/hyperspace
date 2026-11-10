@@ -111,37 +111,37 @@ def passage_inputs(out=MEDIUM, depth: float = PATTERN_DEPTH) -> list[float]:
 
 # one line per mode: what it draws on a face (patterns.glsl's design())
 DRAWS: dict[str, str] = {
-    "FLAT": "No pattern: a plain white fill, tinted by the shape's own colour; reads no input.",
-    "RINGS": "Concentric rings from the face centre, beaten by a second ring set into "
+    "flat": "No pattern: a plain white fill, tinted by the shape's own colour; reads no input.",
+    "rings": "Concentric rings from the face centre, beaten by a second ring set into "
              "travelling bands; the hue cycles along the ring phase.",
-    "PLAID": "Two crossing straight-stripe wave systems, warm red on one axis and cool "
+    "plaid": "Two crossing straight-stripe wave systems, warm red on one axis and cool "
              "blue on the other, adding where they agree and going dark where they cancel.",
-    "MOIRE": "Two near-equal straight stripe fields at a slight angle, beating into broad "
+    "moire": "Two near-equal straight stripe fields at a slight angle, beating into broad "
              "moiré bands; a teal–magenta duotone.",
-    "BLOOM": "A single ring of seven petals round the centre, turning, the hue round the "
+    "bloom": "A single ring of seven petals round the centre, turning, the hue round the "
              "wheel; the middle and the corners dark.",
-    "CAUSTIC": "Deep water: dark-blue troughs and bright cyan-white filaments where three "
+    "caustic": "Deep water: dark-blue troughs and bright cyan-white filaments where three "
                "sine swells cross.",
-    "HEX": "A honeycomb of round cells, each flashing on its own phase in its own hue.",
-    "SPIRAL": "Five galaxy arms winding out of a hot white core, the colour running out "
+    "hex": "A honeycomb of round cells, each flashing on its own phase in its own hue.",
+    "spiral": "Five galaxy arms winding out of a hot white core, the colour running out "
               "along the arms.",
-    "CELLS": "Voronoi cells: drifting nuclei, each cell a flat hue, bright white "
+    "cells": "Voronoi cells: drifting nuclei, each cell a flat hue, bright white "
              "membranes between them.",
-    "PLASMA": "The classic folded sine field: soft rainbow contour bands flowing over "
+    "plasma": "The classic folded sine field: soft rainbow contour bands flowing over "
               "the whole face.",
-    "WEAVE": "Orange warp and blue weft ribbons interlaced over and under on a checker, "
+    "weave": "Orange warp and blue weft ribbons interlaced over and under on a checker, "
              "breathing.",
-    "EMBER": "Rising fractal noise: dark coals under ash, glowing orange, white-hot "
+    "ember": "Rising fractal noise: dark coals under ash, glowing orange, white-hot "
              "where it peaks.",
-    "METER": "The bands themselves: a radial LED equaliser, a spectrum-coloured wedge "
+    "meter": "The bands themselves: a radial LED equaliser, a spectrum-coloured wedge "
              "per band lit out from the hub as far as it reads (dark tracks in silence).",
-    "PULSE": "The beat as shapes: a magenta kick disc throwing a ring, yellow snare "
+    "pulse": "The beat as shapes: a magenta kick disc throwing a ring, yellow snare "
              "rays, cyan hat sparkle; an idle heartbeat in silence.",
-    "MARBLE": "Domain-warped noise folded through itself: lapis ink, teal currents and "
+    "marble": "Domain-warped noise folded through itself: lapis ink, teal currents and "
               "fine gold veins, flowing.",
-    "TRUCHET": "A maze of quarter-circle arcs on a navy checker, tiles flipping, a "
+    "truchet": "A maze of quarter-circle arcs on a navy checker, tiles flipping, a "
                "neon cyan-to-magenta current running along the paths.",
-    "KALEIDO": "Six mirrored wedges of flat pop colour — magenta, yellow, cyan, black "
+    "kaleido": "Six mirrored wedges of flat pop colour — magenta, yellow, cyan, black "
                "bands and dots — turning, hard-edged.",
 }
 
@@ -155,57 +155,57 @@ DRAWS: dict[str, str] = {
 # whichever subset is kept, the first kept name in the list is the answer
 # (and `nearest_kept` falls back to the first kept mode in NAMES order).
 NEAREST: dict[str, tuple[tuple[str, str], ...]] = {
-    "FLAT": (("PLASMA", "a full, soft fill of the face, the least 'pattern' of the rest"),
-             ("CAUSTIC", "a full fill of one cool hue family"),
-             ("EMBER", "a full fill, dark to bright, no hard lines")),
-    "RINGS": (("BLOOM", "radial about the face centre, the hue riding round it"),
-              ("SPIRAL", "radial, lines leaving the centre, the colour running outward"),
-              ("MOIRE", "beating line fields into travelling bands")),
-    "PLAID": (("WEAVE", "a straight warm/cool lattice crossing at right angles"),
-              ("MOIRE", "straight stripe fields interfering into dark and bright"),
-              ("TRUCHET", "a square tile lattice of lines on a dark ground")),
-    "MOIRE": (("PLAID", "straight stripe fields interfering"),
-              ("RINGS", "two line systems beating into bands"),
-              ("CAUSTIC", "interfering sine fields, a two-tone cool palette")),
-    "BLOOM": (("KALEIDO", "radial symmetry about the centre, turning, round the wheel"),
-              ("SPIRAL", "radial arms about a centre, turning"),
-              ("RINGS", "radial about the centre, hue round the phase")),
-    "CAUSTIC": (("MARBLE", "flowing liquid lines on deep blue, bright filaments"),
-                ("PLASMA", "summed sine fields flowing over the whole face"),
-                ("MOIRE", "interfering sine stripes, a cool duotone")),
-    "HEX": (("CELLS", "a lattice of cells each in its own hue"),
-            ("TRUCHET", "a regular tile lattice that flips and flows"),
-            ("METER", "discrete segments each lit on its own")),
-    "SPIRAL": (("BLOOM", "radial about a centre, turning, hue round the wheel"),
-               ("RINGS", "radial lines out from the centre"),
-               ("KALEIDO", "radial symmetry, turning")),
-    "CELLS": (("HEX", "a lattice of cells each in its own hue"),
-              ("MARBLE", "organic, drifting, bright veins between darker regions"),
-              ("TRUCHET", "a tiling with bright paths along its edges")),
-    "PLASMA": (("MARBLE", "a flowing noise/sine field over the whole face"),
-               ("CAUSTIC", "summed sine fields flowing"),
-               ("EMBER", "a soft flowing field, no hard edges")),
-    "WEAVE": (("PLAID", "a straight warm/cool lattice crossing at right angles"),
-              ("TRUCHET", "a square tile lattice of ribbons and paths"),
-              ("HEX", "a regular lattice of discrete elements")),
-    "EMBER": (("MARBLE", "fractal noise flowing, bright veins out of dark"),
-              ("PLASMA", "a soft flowing field over the whole face"),
-              ("CAUSTIC", "bright where it peaks out of a dark ground")),
-    "METER": (("PULSE", "the other mode that draws the bands themselves"),
-              ("BLOOM", "radial wedges round the centre, hue round the wheel"),
-              ("KALEIDO", "radial wedges of flat colour, turning")),
-    "PULSE": (("METER", "the other mode that draws the bands themselves"),
-              ("RINGS", "rings thrown out from the centre"),
-              ("BLOOM", "a radial shape about the centre, on black")),
-    "MARBLE": (("CAUSTIC", "flowing liquid lines on deep blue"),
-               ("EMBER", "fractal noise flowing, bright veins out of dark"),
-               ("PLASMA", "a flowing field over the whole face")),
-    "TRUCHET": (("WEAVE", "a square lattice of ribbons crossing"),
-                ("HEX", "a regular tile lattice"),
-                ("PLAID", "a straight lattice of lines on dark")),
-    "KALEIDO": (("BLOOM", "radial symmetry about the centre, turning, saturated"),
-                ("SPIRAL", "radial, turning"),
-                ("METER", "radial wedges of flat colour")),
+    "flat": (("plasma", "a full, soft fill of the face, the least 'pattern' of the rest"),
+             ("caustic", "a full fill of one cool hue family"),
+             ("ember", "a full fill, dark to bright, no hard lines")),
+    "rings": (("bloom", "radial about the face centre, the hue riding round it"),
+              ("spiral", "radial, lines leaving the centre, the colour running outward"),
+              ("moire", "beating line fields into travelling bands")),
+    "plaid": (("weave", "a straight warm/cool lattice crossing at right angles"),
+              ("moire", "straight stripe fields interfering into dark and bright"),
+              ("truchet", "a square tile lattice of lines on a dark ground")),
+    "moire": (("plaid", "straight stripe fields interfering"),
+              ("rings", "two line systems beating into bands"),
+              ("caustic", "interfering sine fields, a two-tone cool palette")),
+    "bloom": (("kaleido", "radial symmetry about the centre, turning, round the wheel"),
+              ("spiral", "radial arms about a centre, turning"),
+              ("rings", "radial about the centre, hue round the phase")),
+    "caustic": (("marble", "flowing liquid lines on deep blue, bright filaments"),
+                ("plasma", "summed sine fields flowing over the whole face"),
+                ("moire", "interfering sine stripes, a cool duotone")),
+    "hex": (("cells", "a lattice of cells each in its own hue"),
+            ("truchet", "a regular tile lattice that flips and flows"),
+            ("meter", "discrete segments each lit on its own")),
+    "spiral": (("bloom", "radial about a centre, turning, hue round the wheel"),
+               ("rings", "radial lines out from the centre"),
+               ("kaleido", "radial symmetry, turning")),
+    "cells": (("hex", "a lattice of cells each in its own hue"),
+              ("marble", "organic, drifting, bright veins between darker regions"),
+              ("truchet", "a tiling with bright paths along its edges")),
+    "plasma": (("marble", "a flowing noise/sine field over the whole face"),
+               ("caustic", "summed sine fields flowing"),
+               ("ember", "a soft flowing field, no hard edges")),
+    "weave": (("plaid", "a straight warm/cool lattice crossing at right angles"),
+              ("truchet", "a square tile lattice of ribbons and paths"),
+              ("hex", "a regular lattice of discrete elements")),
+    "ember": (("marble", "fractal noise flowing, bright veins out of dark"),
+              ("plasma", "a soft flowing field over the whole face"),
+              ("caustic", "bright where it peaks out of a dark ground")),
+    "meter": (("pulse", "the other mode that draws the bands themselves"),
+              ("bloom", "radial wedges round the centre, hue round the wheel"),
+              ("kaleido", "radial wedges of flat colour, turning")),
+    "pulse": (("meter", "the other mode that draws the bands themselves"),
+              ("rings", "rings thrown out from the centre"),
+              ("bloom", "a radial shape about the centre, on black")),
+    "marble": (("caustic", "flowing liquid lines on deep blue"),
+               ("ember", "fractal noise flowing, bright veins out of dark"),
+               ("plasma", "a flowing field over the whole face")),
+    "truchet": (("weave", "a square lattice of ribbons crossing"),
+                ("hex", "a regular tile lattice"),
+                ("plaid", "a straight lattice of lines on dark")),
+    "kaleido": (("bloom", "radial symmetry about the centre, turning, saturated"),
+                ("spiral", "radial, turning"),
+                ("meter", "radial wedges of flat colour")),
 }
 
 
@@ -222,7 +222,7 @@ def nearest_kept(mode: str, kept) -> str:
     for name, _ in NEAREST[mode]:
         if name in kept:
             return name
-    rest = [k for k in kept if k != "FLAT"]
+    rest = [k for k in kept if k != "flat"]
     return (rest or kept)[0]
 
 
@@ -386,7 +386,7 @@ def render_map(uses: list[Use]) -> str:
     for k, n in enumerate(NAMES):
         us = by_mode[n]
         lines += [f"### {k} {n}", "", DRAWS[n], ""]
-        if n != "FLAT":
+        if n != "flat":
             lines += [f"![{n}]({n}.png)", ""]
         for state in ("on screen", "faces off", "unwired"):
             for where in ("corpus", "fixture"):
