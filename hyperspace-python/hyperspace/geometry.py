@@ -2087,16 +2087,22 @@ def world_points(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6):
     return np.stack([x1, y1, z1], axis=1), div4, v[:, 3].copy()
 
 
-def model_matrix(zoom: float = 1.0, pan=(0.0, 0.0)) -> np.ndarray:
+def model_matrix(zoom: float = 1.0, pan=(0.0, 0.0), offset=None) -> np.ndarray:
     """camera.zoom / camera.pan as the shape's world transform, 4×4
     (column vectors): scale about the world origin, then move. pan is in
     world units — the shape's unit circumradius — with pan.y positive
     *down* the screen, as it always was (so a stored or routed pan keeps
-    its direction): world y is up, so it moves by −pan.y."""
+    its direction): world y is up, so it moves by −pan.y.
+
+    Plan 59: zoom and pan are the shape object's home pose; `offset` (a
+    4×4, `world.World.offset_matrix`) is the world's offset on it, composed
+    as home ∘ offset — in the home's frame, so it turns the shape about its
+    own centre. None (an identity offset) builds the matrix it always did,
+    multiplying by nothing, so every frame of before is byte for byte the same."""
     m = np.eye(4)
     m[0, 0] = m[1, 1] = m[2, 2] = float(zoom)
     m[0, 3], m[1, 3] = float(pan[0]), -float(pan[1])
-    return m
+    return m if offset is None else m @ np.asarray(offset, dtype=np.float64)
 
 
 def eye_matrix(w: float, h: float, fov: float = EYE_FOV, distance: float = EYE_DISTANCE,
@@ -2123,14 +2129,15 @@ def eye_matrix(w: float, h: float, fov: float = EYE_FOV, distance: float = EYE_D
 def eye_project(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6,
                 w: int = 1200, h: int = 800, *, zoom: float = 1.0, pan=(0.0, 0.0),
                 fov: float = EYE_FOV, distance: float = EYE_DISTANCE,
-                dtype=np.float64) -> tuple[np.ndarray, np.ndarray]:
+                dtype=np.float64, offset=None) -> tuple[np.ndarray, np.ndarray]:
     """(px, py) in logical pixels, y down, through the one camera: what
     the scene's vertex shader computes (`render.FACE_VS`, `LINE_VS`), on
     the CPU. `dtype=np.float32` does the GPU's arithmetic (positions and
     the matrix in float32). With the default eye, zoom 1 and pan 0 it is
-    project_h's (px, py)."""
+    project_h's (px, py). `offset`: the world's offset on the shape (plan 59,
+    `model_matrix`)."""
     P, _, _ = world_points(V, ang, yaw, pitch, d4)
-    mvp = (eye_matrix(w, h, fov, distance) @ model_matrix(zoom, pan)).astype(dtype)
+    mvp = (eye_matrix(w, h, fov, distance) @ model_matrix(zoom, pan, offset)).astype(dtype)
     q = np.concatenate([P, np.ones((len(P), 1))], axis=1).astype(dtype)
     c = q @ mvp.T
     nx, ny = c[:, 0] / c[:, 3], c[:, 1] / c[:, 3]
