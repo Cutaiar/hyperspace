@@ -24,7 +24,7 @@ cd app && npm install && npm run dev
 ```
 
 Then <http://localhost:5181>. Vite 8 binds IPv6 only, so `127.0.0.1` will not
-answer — use `localhost`. Five views:
+answer — use `localhost`. Six views:
 
 - **gallery** — 29 stills across eight 4D subjects, seven dot styles and six
   palettes. Pick a destination and every code gets a verdict against it.
@@ -35,6 +35,9 @@ answer — use `localhost`. Five views:
 - **live solver** — re-derives the whole code per update, **0.2 ms** a solve.
   Grab it and fold it.
 - **sprite** — 216 precomputed frames, 94 KB, every one decode-verified.
+- **editions** — a pose paired with an irrational constant pinned into the
+  fragment, re-derived live. The factorisation is independent of *which*
+  constant, so swapping π for φ costs one re-solve and no new data.
 
 Nothing is generated at page load. `app/public/data` holds finished artefacts,
 served at `/data`, and each is rebuilt by one command:

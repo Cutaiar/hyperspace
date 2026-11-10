@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Builder } from '@/components/Builder'
+import { Editions } from '@/components/Editions'
 import { Families } from '@/components/Families'
 import { Gallery } from '@/components/Gallery'
 import { LiveSolver } from '@/components/LiveSolver'
@@ -11,6 +12,7 @@ const VIEWS = {
   live:    { label: 'live solver', el: <LiveSolver /> },
   sprite:  { label: 'sprite', el: <Sprite /> },
   builder: { label: 'stickers', el: <Builder /> },
+  editions: { label: 'editions', el: <Editions /> },
 } as const
 type View = keyof typeof VIEWS
 

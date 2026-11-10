@@ -37,7 +37,7 @@ Regenerating artefacts needs `uv` and a Chromium (`QRD_CHROME` overrides the
 lookup). Nothing else is machine-specific; verified by cloning the branch
 clean and running the whole thing.
 
-## Five views
+## Six views
 
 | view | what it is |
 | --- | --- |
@@ -46,6 +46,7 @@ clean and running the whole thing.
 | **live solver** | Re-derives the code per update, 0.2 ms a solve. Grab it and fold it. |
 | **sprite** | 216 precomputed frames, 94 KB, no solver on the client. |
 | **stickers** | Lay codes on a sheet, see the cut lines, export SVG or PDF. |
+| **editions** | Browse the one-of-one space live: a pose, a constant pinned into the fragment, a treatment. Swapping the number is free; the panel hands you the command that bakes the real thing. |
 
 ## State: done
 
@@ -53,6 +54,13 @@ clean and running the whole thing.
   solves in 0.2 ms instead of 2 s. The URL is baked into the factorisation —
   point it elsewhere and every artefact must be rebuilt.
 - **29 stills** across eight subjects, seven dot styles, six palettes.
+- **The editions explorer.** A tab that re-derives a code per control change.
+  The trick that makes it possible: the factorisation does **not** depend on
+  which constant is pinned — `_build` picks pivots by position and only
+  `solve()` reads their values — so one blob per digit count serves all fifteen
+  numbers, and swapping π for φ is a 0.2 ms re-solve. Poses ship as target
+  bitmaps (529 bytes each) rather than porting `polytopes.py` to JS.
+  `gen/explore_data.py` writes both, and also does the furniture search below.
 - **Editions.** `gen/editions.py` pairs one pose with one irrational constant,
   pinned into the leading digits of the numeric filler, so the fragment opens
   with the number: a code is a one-of-one in both its shape and its payload.
@@ -142,6 +150,26 @@ See STICKERS.md for the detail. In short, each needs one cheap real-world test:
   a different but equally valid code. Expect a 29-file diff for no change. The
   style fields added to the manifest were therefore written from gallery.py's
   own tables rather than by regenerating; `gallery.py` emits them from now on.
+- **The pose's quarrel is with the QR's furniture, not with the number.** A
+  search over which constant suits which pose is numerology: across 1680
+  combinations the agreement between a pinned bit and the drawing had sd 2.9%
+  where a fair coin gives 2.8%, and the best pairing at one mask correlates
+  −0.009 with the best at another. What *is* real is that 497 modules are
+  finders, timing, alignment and format, fixed by the standard; ink landing on
+  one that shows paper is lost before any budget is spent. That sets a per-pose
+  ceiling (90.3% for `c16_tilt`, 98.6% for `duo88_tilt`) and it predicts the
+  measurements. Margin and the camera distances slide a pose off them —
+  `gen/explore_data.py` does that sweep, nine of fourteen poses reach a 100%
+  ceiling, and `c16_tilt` gains 8.3 points of measured stroke fidelity with its
+  ink count *up* 1.6%. Rotation is never swept: the 0/45/90 rule is load-bearing.
+- **Spend the budget on the ink first.** The committed pivot orders are
+  image-independent because the live solver reuses one factorisation across
+  every frame. A still has no such constraint. A drawing's ink is only a
+  quarter of the symbol, so ranking ink modules first makes every stroke solid
+  and leaves the rest to clump as halo: +11 to +15 points of stroke fidelity at
+  equal digits. It is a redistribution, not a gain — background fidelity drops
+  from 76.6% to 72.8% — and past about 48 pinned digits the background wins and
+  the code goes muddy. 24 to 48 digits is the usable range, not 96.
 - **The affine path's extra noise is the 511 cap, not the pivot order.** An
   affine still is ~3.5 points behind pyqart on drawing fidelity, and it is
   tempting to blame the fixed pivot order. It is not: ranking pivots by image
