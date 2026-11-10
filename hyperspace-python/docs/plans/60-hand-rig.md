@@ -3,7 +3,7 @@
 **Status: built (2026-11-10).** `hyperspace/grip.py` (the params, the clutches),
 the joint and the rigid body in `hyperspace/world.py`, the HANDS page's grip
 section, the turned depth of row 856 (`geometry.turned_depth`); tests
-`tests/test_grip.py`; register rows 857–866, hand checks 661–667. Built on plan
+`tests/test_grip.py`; register rows 857–867, hand checks 661–668. Built on plan
 59 as merged (#442), with the amendments in §10. Plans 61 and 62 are not needed.
 
 The owner, 2026-11-10: *a slider that controls the momentum damping of the
@@ -170,15 +170,26 @@ built and has a register row.
    hand. `world.reset` also lets go and evens the inertia.
 7. **The hand is blended across the steps** (row 859): read once a frame, it
    moves from last frame's pose to this one's across the frame's 960 Hz steps.
-8. **The params are a shared meta group, not per deck** (row 857). The review
-   of plan 59 offered per deck, read from the deck on air; but a per-deck meta
-   param never persists (row 746), so it could have no preset strip, which
-   §4 asks for. One rig on one world: `grip.*` is shared meta, saved in the
-   show. A meta param takes no route (row 775), so "a knob learned onto it"
-   is a desk row that sets it.
+8. **The params are a patch group, per preset** (row 857). The first build made
+   them a shared meta group, one grip for every look. The owner, testing it:
+   "this really should be per preset. This is an absurd level of power to be
+   able to command on any preset". So `grip.*` is in `PATCH_GROUPS`, each
+   deck's own (`Deck.build`, `headless.make_app`), saved in each loadable
+   patch, off in a patch that names none; the on-air deck's acts on the one
+   world. Worked out with the kinetic-presets session: a look either keeps
+   its own fist rows (Clay) or turns the grip on in its own file (Comet);
+   writing both is the author's call.
 9. **§7 is dropped** (row 866): moving the poi changes what a save holds.
 10. **The group is `grip`, not `rig`** (row 857): "rig" leaves every string a
     person reads, ids included (row 779, the owner, 2026-11-06), held by
     `tests/test_person_words.py`. The params, the module (`grip.py`) and the
-    panel section say grip; the plan keeps its name, the hand rig.
+    panel section say grip; the plan keeps its name, the hand rig. (Since
+    #447 the word is allowed again; the ids stay `grip`, saved in patches.)
+11. **A new look starts with the shape home** (row 865): a load (it writes
+    `grip.on`) or a deck switch springs a shape away from home back there,
+    critically damped in about 0.3 s, whether the new look has the grip on or
+    off; a hand closing on the way takes it. Off, once home, nothing steps.
+12. **The box keeps a parked shape whole** (row 862): inset by its radius.
+13. **The grip's own lanes** (row 867): `grip:held`, `grip:flying` (gates),
+    `grip:speed`, `grip:spin` (the shape's, not the hand's), for routes.
 

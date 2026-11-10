@@ -19,11 +19,15 @@ hand-to-shape pose, so nothing jumps; a hand lost opens it.
 - **`grip.skater`**: a change of inertia keeps the angular momentum, so hands
   apart slow the spin and together speed it up.
 
-The params are a shared meta group (`grip`): one world, one grip, every deck
-(register row 852's rule), saved in the show, a module preset strip of their
-own (the HANDS page), an APC40 knob learnable onto any of them. Off by default.
-`grip.clutch` / `grip.shape_clutch` are lane addresses; empty is the default
-gate, so it follows `grip.hand`.
+The params are a patch group (`grip`): a look's own, each deck's, saved in the
+loadable patch, off in one that names none (the owner, 2026-11-10: "this really
+should be per preset"). The on-air deck's grip acts on the one world. A new
+look — a load writes `grip.on`, a deck switch is another `GripState` — sends a
+shape away from home back there first (`Joint.homing`). Its own lanes,
+`grip:held` / `flying` / `speed` / `spin` (`lanes`, `publish`), let a look's
+routes follow the shape in hand or in flight. `grip.clutch` /
+`grip.shape_clutch` are lane addresses; empty is the default gate, so it
+follows `grip.hand`.
 
 Imports only `world`. The registry and the lanes are duck-typed: the host hands
 `apply` a `closed(address) -> bool` (`app._step_world`).
@@ -33,6 +37,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+
+import numpy as np
 
 from . import world as worlds
 
@@ -55,6 +61,7 @@ class GripState:
     skater: bool = True
     clutch: str = ""              # "" — the holding hand's grab
     shape_clutch: str = ""        # "" — the other hand's grab
+    fresh: int = 0                # counts each `grip.on` write: a load, a toggle — a new look
 
     @property
     def side(self) -> str:
@@ -90,9 +97,11 @@ def apply(world, state: GripState, closed: Callable[[str], bool]) -> None:
     shape = worlds.SHAPE
     if shape not in world:
         return
+    key = (id(state), state.fresh)
+    fresh = world.grip_key != key        # a look loaded, the grip toggled, a deck switch
+    world.grip_key = key
     if not state.on:
-        world.joints.pop(shape, None)
-        world.bodies.pop(shape, None)
+        _off(world, shape)
         return
     hand, other = worlds.HANDS[state.side], worlds.HANDS[state.other]
     j = world.joints.get(shape)
@@ -104,9 +113,85 @@ def apply(world, state: GripState, closed: Callable[[str], bool]) -> None:
     b.boxed = True
     b.drag = b.angular_drag = float(state.drag)
     j.closed = bool(closed(clutch_of(state)))
+    if fresh and not _home_and_still(world[shape], b):
+        j.release()
+        j.homing = True                  # the new look starts with the shape at home…
+    if j.homing and (j.closed or _home_and_still(world[shape], b)):
+        j.homing = False                 # …unless a hand takes it first
     j.shaping = bool(closed(shape_clutch_of(state)))
     j.coupling = float(state.coupling)
     j.inertia, j.shape, j.skater = bool(state.inertia), float(state.shape), bool(state.skater)
+
+
+def _off(world, shape: str) -> None:
+    """The grip off — a patch without it loaded, or its switch turned off: a
+    shape still away from home springs back (`Joint.homing`, `world.HOME_HZ`), so a
+    throw never leaks into the next look; once home, the body and joint leave the
+    registries and nothing steps."""
+    obj = world[shape]
+    b, j = world.bodies.get(shape), world.joints.get(shape)
+    if _home_and_still(obj, b):
+        world.joints.pop(shape, None)
+        world.bodies.pop(shape, None)
+        return
+    if j is None:
+        j = world.joint(shape, worlds.Joint(worlds.HANDS["right"], worlds.HANDS["left"]))
+    if b is None:
+        b = world.body(shape, worlds.Body(boxed=True))
+    j.release()
+    j.homing, j.closed, j.shaping = True, False, False
+
+
+def _home_and_still(obj, b) -> bool:
+    return obj.offset.is_identity() and (b is None or not (b.velocity.any() or b.spin_l.any()))
+
+
+# ---------------------------------------------------------------- the lanes
+
+SCHEME = "grip"
+LANES = ("held", "flying", "speed", "spin")
+INDEX = {name: i for i, name in enumerate(LANES)}      # (one dict: the router caches on it)
+GATES = [(INDEX["held"], "grip held"), (INDEX["flying"], "grip flying")]
+RESTS = [0.0] * len(LANES)
+FLYING = 0.05            # world units/s or rad/s: under both, a let-go shape has landed
+SPEED_FULL = 4.0         # world units/s: `grip:speed` reads 1 here and over
+SPIN_FULL = worlds.MAX_SPIN
+
+
+def lanes(world, state: GripState) -> list[float] | None:
+    """This frame's `grip:*` lanes, None while the grip is off (dormant, as a
+    hand away): `held` 1 while the holding clutch has the shape; `flying` 1
+    while a let-go shape still moves; `speed`, `spin` the shape's own speed
+    in the world and its angular speed, 0–1 of `SPEED_FULL` / `SPIN_FULL` —
+    the shape's, not the hand's, so they read on after a throw."""
+    shape = worlds.SHAPE
+    if not state.on or shape not in world:
+        return None
+    b, j = world.bodies.get(shape), world.joints.get(shape)
+    if b is None or j is None:
+        return [0.0, 0.0, 0.0, 0.0]
+    held = j.rel is not None and not j.homing
+    v = float(np.linalg.norm(b.velocity[:3])) * abs(float(world[shape].home.scale))
+    w = float(np.linalg.norm(b.spin_l))
+    flying = not held and not j.homing and (v > FLYING or w > FLYING)
+    return [1.0 if held else 0.0, 1.0 if flying else 0.0,
+            min(1.0, v / SPEED_FULL), min(1.0, w / SPIN_FULL)]
+
+
+def publish(router, world, state: GripState | None) -> None:
+    """The `grip:*` lanes onto `router` for the next frame's routes: their
+    names, labels, gates and rests once, the vector every frame (None, the
+    grip off: its rows let go). After the world's step, so a route reads
+    the frame before's shape, as the hands' lanes read the frame's poll."""
+    if router is None:
+        return
+    names = getattr(router, "names", None)
+    if names is not None and names.get(SCHEME) is not INDEX:
+        names[SCHEME] = INDEX
+        router.labels[SCHEME] = list(LANES)
+        router.gates[SCHEME] = GATES
+        router.rests[SCHEME] = RESTS
+    router.feed(SCHEME, None if state is None else lanes(world, state))
 
 
 def lane_closed(router, address: str) -> bool:
@@ -123,8 +208,8 @@ def lane_closed(router, address: str) -> bool:
 
 
 def register(reg, state: GripState) -> None:
-    """The `grip.*` params on `reg` (the meta controller's): saved in the show,
-    learnable (a knob onto the coupling, say)."""
+    """The `grip.*` params on `reg` (a deck's: a patch group, saved in the
+    loadable patch; the continuous ones routable). `reg.grip` is the state."""
     if f"{GROUP}.on" in reg:
         return
     reg.grip = state
@@ -132,10 +217,14 @@ def register(reg, state: GripState) -> None:
     def setter(key: str, cast):
         return lambda v: setattr(state, key, cast(v))
 
-    reg.toggle(f"{GROUP}.on", "Grip", lambda: state.on, setter("on", bool), group=GROUP,
-               tip="Hold the shape in your hand: close the holding hand's clutch near the "
-                   "shape and it follows the hand; open it and it flies on. Off: the shape "
-                   "stays where it was left (Reset world puts it home).")
+    def set_on(v) -> None:
+        state.on = bool(v)
+        state.fresh += 1          # a load writes it too: the next look starts from home
+
+    reg.toggle(f"{GROUP}.on", "Grip", lambda: state.on, set_on, group=GROUP,
+               tip="This look's grip: close the holding hand's clutch near the shape and "
+                   "it follows the hand; open it and it flies on. Saved with the look; off, "
+                   "or a new look, and the shape springs home.")
     reg.enum(f"{GROUP}.hand", "Hand", lambda: state.hand, setter("hand", int), list(SIDES),
              group=GROUP, tip="Which hand holds the shape; the other shapes its inertia.")
     reg.continuous(f"{GROUP}.coupling", "Coupling", lambda: state.coupling,

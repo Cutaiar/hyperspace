@@ -19,7 +19,7 @@ from hyperspace import grip as R
 from hyperspace import world as W
 from hyperspace.hands import HandSettings, HandsIO, features, skeleton
 from hyperspace.hands import tape as T
-from hyperspace.params import MetaRegistry, part_of
+from hyperspace.params import Registry, part_of
 
 RNG = np.random.default_rng(60)
 
@@ -242,14 +242,14 @@ def test_a_thrown_shape_is_held_to_the_box_while_its_physics_runs_on():
     b.velocity = np.array([3.0, 0.0, 0.0, 0.0])
     for _ in range(60):
         _frame(w, st, gates, 1 / 60, {})
-    assert w["shape"].pose.position[0] == pytest.approx(1.5)        # drawn at the edge
+    assert w["shape"].pose.position[0] == pytest.approx(1.5 - 1.0)  # at the edge, whole
     assert b.place[0] == pytest.approx(3.0, rel=1e-3)               # the physics ran on
     # taking hold there captures what is drawn: nothing jumps, the physics comes back
     gates["hand:right.grab"] = True
     palm = _palm([0, 0, 0, 1], (1.0, 0.0, 0.0))
     _frame(w, st, gates, 1 / 60, {"right": palm})
-    assert w["shape"].pose.position[0] == pytest.approx(1.5)
-    assert b.place[0] == pytest.approx(1.5)
+    assert w["shape"].pose.position[0] == pytest.approx(0.5)
+    assert b.place[0] == pytest.approx(0.5)
 
 
 def test_a_home_outside_the_box_is_not_pulled_in():
@@ -399,15 +399,33 @@ def test_a_nan_puts_the_body_home_and_says_so_once(capsys):
 
 # ---------------------------------------------------------------- the params
 
-def test_off_the_grip_drops_its_body_and_joint_and_the_offset_stays():
+def test_off_the_grip_springs_the_shape_home_then_leaves_the_registries():
+    """The owner, 2026-11-10: the grip is a patch's own, so a look without it must
+    not inherit a thrown shape. Off, it springs home (critically damped,
+    `HOME_HZ`), lands on the exact identity, and its body and joint go."""
+    w, st, gates = _rigged(1.0, zoom=1.0, pan=(0.0, 0.0))
+    b = w.bodies["shape"]
+    b.velocity = np.array([2.0, 0.0, 0.0, 0.0])
+    b.spin3((0.0, 3.0, 0.0))
+    for _ in range(10):
+        _frame(w, st, gates, 1 / 60, {})
+    away = abs(w["shape"].offset.position[0])
+    st.on = False
+    xs = []
+    for _ in range(60):                             # a second: home, and gone
+        _frame(w, st, gates, 1 / 60, {})
+        xs.append(w["shape"].offset.position[0])
+    assert away > 0.2
+    assert abs(xs[18]) < 0.1 * away                 # most of the way within 0.3 s
+    assert w["shape"].offset.is_identity()
+    assert "shape" not in w.bodies and "shape" not in w.joints
+
+
+def test_off_from_home_and_still_steps_nothing():
     w, st, gates = _rigged(1.0)
-    w.bodies["shape"].velocity = np.array([0.5, 0.0, 0.0, 0.0])
-    _frame(w, st, gates, 1 / 60, {})
-    was = w["shape"].offset.position.copy()
     st.on = False
     _frame(w, st, gates, 1 / 60, {})
-    assert "shape" not in w.bodies and "shape" not in w.joints
-    assert np.array_equal(w["shape"].offset.position, was)
+    assert "shape" not in w.bodies and w["shape"].offset.is_identity()
 
 
 def test_the_clutches_default_to_the_grabs_and_follow_the_hand():
@@ -443,6 +461,9 @@ class _Router:
     def __init__(self, vec):
         self.feeds = {"hand": vec}
 
+    def feed(self, scheme, values):
+        self.feeds[scheme] = values
+
     def lane(self, address):
         return ("hand", {"hand:right.grab": 0, "hand:left.grab": 1}.get(address, -1))
 
@@ -456,24 +477,49 @@ def test_a_gate_reads_closed_at_half_and_open_when_away_or_unknown():
     assert not R.lane_closed(_Router(None), "hand:right.grab")
 
 
-def test_the_grip_params_are_a_saved_shared_meta_group():
-    meta = MetaRegistry()
+def test_the_grip_params_are_a_patchs_own_saved_with_it():
+    """The owner, 2026-11-10: per preset, not shared across both decks."""
+    reg = Registry()
     st = R.GripState()
-    R.register(meta, st)
-    ids = [p.id for p in meta if p.group == R.GROUP]
+    R.register(reg, st)
+    ids = [p.id for p in reg if p.group == R.GROUP]
     assert ids == ["grip.on", "grip.hand", "grip.coupling", "grip.drag", "grip.inertia",
                    "grip.shape", "grip.skater", "grip.clutch", "grip.shape_clutch"]
     for pid in ids:
-        p = meta[pid]
-        assert part_of(p) == "shared_meta" and p.persist
-    # a meta param: no route lands on it (row 775); a desk row (a learned knob) sets it
-    assert not meta["grip.coupling"].modulatable
-    meta["grip.coupling"].set(0.25)
-    meta["grip.hand"].set(0)
-    meta["grip.clutch"].set("pad:A")
+        p = reg[pid]
+        assert part_of(p) == "patch" and p.persist
+    # a patch param: a route may drive the continuous ones (a hand onto the coupling)
+    assert all(reg[f"grip.{k}"].modulatable for k in ("coupling", "drag", "shape"))
+    reg["grip.coupling"].set(0.25)
+    reg["grip.hand"].set(0)
+    reg["grip.clutch"].set("pad:A")
     assert (st.coupling, st.side, st.clutch) == (0.25, "left", "pad:A")
-    R.register(meta, st)                          # twice: once
+    R.register(reg, st)                           # twice: once
     assert not st.on                              # off by default
+
+
+def test_each_deck_has_its_own_grip_and_a_patch_without_one_loads_it_off(tmp_path):
+    """Per preset: each deck its own grip, saved in the loadable patch; one whose
+    file names no `grip.*` (every look from before) loads with the grip off,
+    whatever the look before had."""
+    from test_undo import boot
+
+    from hyperspace.deck import Deck
+
+    r = boot(tmp_path)
+    first, second = r.deck, Deck.beside(r.deck)
+    assert first.reg["grip.on"] is not second.reg["grip.on"]
+    lp = first.loaded_patch
+    names = sorted(r.lib.list("loadable"))
+    plain = names[0]
+    first.reg["grip.on"].set(True)
+    first.reg["grip.coupling"].set(0.3)
+    assert first.reg.grip.on and not second.reg.grip.on
+    lp.save_as("held")
+    lp.load(plain)
+    assert not first.reg.grip.on and first.reg.grip.coupling == pytest.approx(0.8)
+    lp.load("held")
+    assert first.reg.grip.on and first.reg.grip.coupling == pytest.approx(0.3)
 
 
 def test_the_host_sets_the_grip_onto_the_world_before_its_frame():
@@ -481,7 +527,7 @@ def test_the_host_sets_the_grip_onto_the_world_before_its_frame():
 
     w = W.World.default()
     st = R.GripState(on=True)
-    h = NS(world=w, grip=st, view=NS(zoom=1.0, pan=[0.0, 0.0]),
+    h = NS(world=w, reg=NS(grip=st), view=NS(zoom=1.0, pan=[0.0, 0.0]),
            router=_Router(np.array([1.0, 0.0])), renderer=NS(ghost=None))
     app._step_world(h, 1 / 60)
     assert w.joints["shape"].closed and not w.joints["shape"].shaping
@@ -513,3 +559,96 @@ def test_the_grip_imports_only_the_world():
         elif isinstance(n, ast.Import):
             assert not any(a.name.startswith("hyperspace") for a in n.names)
     assert got == {"world"}
+
+
+# ---------------------------------------------------------------- per preset (2026-11-10)
+
+def test_a_new_look_with_the_grip_on_starts_with_the_shape_at_home():
+    """A shape thrown in one grip look does not start the next one where it was
+    left: any write of `grip.on` (a load writes it) is a new look, and the
+    shape springs home before the grip acts — unless a hand takes it first."""
+    w, st, gates = _rigged(1.0, zoom=1.0, pan=(0.0, 0.0))
+    b = w.bodies["shape"]
+    b.velocity = np.array([2.0, 0.0, 0.0, 0.0])
+    for _ in range(20):
+        _frame(w, st, gates, 1 / 60, {})
+    assert abs(w["shape"].offset.position[0]) > 0.3
+    reg = Registry()
+    R.register(reg, st)
+    reg["grip.on"].set(True)                       # the next look, grip on too
+    for _ in range(60):
+        _frame(w, st, gates, 1 / 60, {})
+    assert w["shape"].offset.is_identity() and not w.joints["shape"].homing
+    assert "shape" in w.bodies                     # still on: the body stays
+    # a hand closing mid-way home takes the shape where it is
+    b.velocity = np.array([2.0, 0.0, 0.0, 0.0])
+    for _ in range(20):
+        _frame(w, st, gates, 1 / 60, {})
+    reg["grip.on"].set(True)
+    _frame(w, st, gates, 1 / 60, {})
+    gates["hand:right.grab"] = True
+    _frame(w, st, gates, 1 / 60, {"right": _palm([0, 0, 0, 1], (0, 0, 0))})
+    assert not w.joints["shape"].homing and w.joints["shape"].rel is not None
+
+
+def test_a_deck_switch_is_a_new_look_too():
+    w, st, gates = _rigged(1.0, zoom=1.0, pan=(0.0, 0.0))
+    w.bodies["shape"].velocity = np.array([2.0, 0.0, 0.0, 0.0])
+    for _ in range(20):
+        _frame(w, st, gates, 1 / 60, {})
+    other = R.GripState(on=True)                   # the other deck's, on air now
+    _frame(w, other, gates, 1 / 60, {})
+    assert w.joints["shape"].homing
+
+
+def test_a_parked_shape_stays_whole_inside_the_box():
+    w, st, gates = _rigged(1.0, zoom=0.5, pan=(0.0, 0.0))
+    w.box = (2.0, 1.2, 2.0)
+    w.bodies["shape"].velocity = np.array([-20.0, 20.0, 0.0, 0.0])
+    for _ in range(60):
+        _frame(w, st, gates, 1 / 60, {})
+    at = w["shape"].pose.position
+    assert at[0] == pytest.approx(-(2.0 - 0.5)) and at[1] == pytest.approx(1.2 - 0.5)
+
+
+def test_the_grip_lanes_say_held_flying_and_the_shapes_own_speed():
+    w, st, gates = _rigged(1.0, zoom=1.0, pan=(0.0, 0.0), drag=2.0)
+    assert R.lanes(w, R.GripState()) is None               # grip off: dormant
+    _frame(w, st, gates, 1 / 60, {"right": _palm([0, 0, 0, 1], (0, 0, 0))})
+    assert R.lanes(w, st) == [0.0, 0.0, 0.0, 0.0]          # on, open, still: shut, not NaN
+    gates["hand:right.grab"] = True
+    for k in range(10):
+        _frame(w, st, gates, 1 / 60, {"right": _palm(W.qexp([0, 0, k / 30]), (0.02 * k, 0, 0))})
+    held, flying, speed, spin = R.lanes(w, st)
+    assert (held, flying) == (1.0, 0.0)
+    assert speed == pytest.approx(1.2 / R.SPEED_FULL) and spin == pytest.approx(2.0 / R.SPIN_FULL)
+    gates["hand:right.grab"] = False
+    _frame(w, st, gates, 1 / 60, {"right": _palm([0, 0, 0, 1], (0.2, 0, 0))})
+    held, flying, speed, _ = R.lanes(w, st)
+    assert (held, flying) == (0.0, 1.0) and speed > 0.0    # thrown: still reading
+    for _ in range(600):
+        _frame(w, st, gates, 1 / 60, {})
+    assert R.lanes(w, st)[:2] == [0.0, 0.0]                 # landed
+
+
+def test_the_grip_lanes_reach_a_router_by_name_and_gate_a_row():
+    from hyperspace.routing import Bindings, Router
+
+    reg = Registry()
+    router = Router(reg, Bindings([]))
+    w, st, gates = _rigged(1.0, zoom=1.0, pan=(0.0, 0.0))
+    gates["hand:right.grab"] = True
+    _frame(w, st, gates, 1 / 60, {"right": _palm([0, 0, 0, 1], (0, 0, 0))})
+    R.publish(router, w, st)
+    assert R.lane_closed(router, "grip:held") and not R.lane_closed(router, "grip:flying")
+    assert router.gates["grip"] == R.GATES
+    R.publish(router, w, R.GripState())                     # the grip off: not live
+    assert router.feeds.get("grip") is None and not R.lane_closed(router, "grip:held")
+
+
+def test_headless_make_app_has_the_grip(tmp_path):
+    from hyperspace import headless
+
+    app_ = headless.make_app(tmp_path)
+    reg = app_.reg if hasattr(app_, "reg") else app_[0]
+    assert "grip.on" in reg and reg["grip.on"].value is False

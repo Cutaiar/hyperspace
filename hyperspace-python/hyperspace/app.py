@@ -1477,9 +1477,6 @@ class Host:
     # the world objects (world.py, plan 59): the shape and the hands, stepped
     # once a frame after the integrator (`_step_world`). None: no world step
     world: worlds.World | None = None
-    # the grip's settings (grip.py, plan 60, the hand rig): set onto the world's shape
-    # body and joint each frame before its step. None: none
-    grip: grip.GripState | None = None
 
     @property
     def adapters(self) -> tuple:
@@ -1791,11 +1788,17 @@ def _step_world(h: Host, dt: float) -> None:
         return
     view = h.view
     world.home(worlds.SHAPE, worlds.shape_home(view.zoom, view.pan))
-    state = getattr(h, "grip", None)
-    if state is not None:          # plan 60: the grip's body, joint and clutches
+    # plan 60: the on-air deck's grip (a patch's own, `reg.grip`) sets the shape's
+    # body, joint and clutches; a deck switch hands the one world to the other's
+    state = getattr(getattr(h, "reg", None), "grip", None)
+    if not isinstance(getattr(state, "on", None), bool):     # no grip on this registry
+        state = None
+    if state is not None:
         router = h.router
         grip.apply(world, state, lambda address: grip.lane_closed(router, address))
     world.frame(dt, palms_in_world(getattr(h.renderer, "ghost", None)))
+    if state is not None:
+        grip.publish(getattr(h, "router", None), world, state)   # `grip:*`, the next frame's
 
 
 def _hot_error_toast(msg: str) -> None:
@@ -2072,8 +2075,6 @@ def main(argv: list[str] | None = None) -> None:
     # the meta controller's params, with what any deck's registry reads as it is built
     meta_reg = build_meta(control, audio, restart, media=media.state)
     worlds.register(meta_reg, world)          # `world.reset`: one world, every deck
-    grip_state = grip.GripState()              # plan 60: the hand rig, its `grip.*` too
-    grip.register(meta_reg, grip_state)
     meta_reg.dial_launch = _dial_launch(cfg)
     deck = Deck.build(library=library, control=control, audio=audio, table=load_table,
                       renderer=renderer, media=media.state, restart=restart, meta_reg=meta_reg,
@@ -2299,7 +2300,7 @@ def main(argv: list[str] | None = None) -> None:
                 outputs=_outputs_now(slots), deck=deck,
                 off_air=meta.parked, stacks=meta.stacks, on_air_pointer=meta.on_air_pointer,
                 panel_pointer=meta.panel_pointer, keys_pointer=meta.pointer(KEYS), meta=meta,
-                world=world, grip=grip_state)
+                world=world)
 
     def rewired() -> None:
         # what holds a window, as the displays came or went (`hotplug.py`)

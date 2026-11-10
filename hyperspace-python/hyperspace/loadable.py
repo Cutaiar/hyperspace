@@ -777,6 +777,24 @@ def echo_seconds(doc: dict) -> tuple[dict, list[str]]:
     return out, notes
 
 
+GRIP_PREFIX = "grip."
+
+
+def _grip_unless_used(values: dict[str, Any], state) -> dict[str, Any]:
+    """`values` less every `grip.*` (plan 60) while each is its default — a look
+    that never used the grip says nothing of it, so every look from before
+    saves byte for byte as it did, and loads with the grip off (a missing id is
+    its default). The defaults are a fresh state of the grip's own class
+    (`grip.GripState`), read duck-typed: this module imports no grip."""
+    if state is None:
+        return values
+    fresh = type(state)()
+    grip = {k: v for k, v in values.items() if k.startswith(GRIP_PREFIX)}
+    if all(getattr(fresh, k[len(GRIP_PREFIX):], object()) == v for k, v in grip.items()):
+        return {k: v for k, v in values.items() if not k.startswith(GRIP_PREFIX)}
+    return values
+
+
 class LoadedPatch:
     """The loaded patch over one library, registry and router.
 
@@ -1415,8 +1433,9 @@ class LoadedPatch:
         """The loadable patch's `values`: every performance base but the modifiers'
         params, which their entries hold (so a file saved here loads on an
         older build with no unknown id)."""
-        return {k: v for k, v in self.reg.snapshot(part="patch").items()
-                if not k.startswith(modifiers.PREFIX)}
+        values = {k: v for k, v in self.reg.snapshot(part="patch").items()
+                  if not k.startswith(modifiers.PREFIX)}
+        return _grip_unless_used(values, getattr(self.reg, "grip", None))
 
     def _modifiers_part(self, name: str | None = None) -> dict:
         """What a save writes for the modifiers: ``{"modifiers": entries}``
