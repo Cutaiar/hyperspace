@@ -806,6 +806,46 @@ def test_arrow_right_opens_it_and_arrow_left_closes_it(DB):
     assert M.LAST_RECT.get(CKEY), "ArrowLeft closed the parent as well"
 
 
+def test_scrolling_moves_the_pointers_row_under_it(DB):
+    """A wheel moves the rows under a pointer that has not moved at all.
+
+    The claim on a row is taken by MOTION, which is right for a mouse and
+    blind to a scroll: wheel a capped panel and a different trigger is
+    under the cursor with no `mouse_delta` at all, so the panel of the row
+    that used to be there stayed open over the row that is.
+    """
+    h = 560                                         # short: `Deep list` caps
+    script, _at = _open(DB, h)
+    DB.render("dark", W, h, script=script, keep="last")
+    tx, ty = _trigger_xy(index=4)                   # `Deep list`
+    opened = script + [(tx, ty)] * DWELL
+    DB.render("dark", W, h, script=opened, keep="last")
+    key = f"{CKEY}>deep"
+    sub = M.LAST_RECT.get(key)
+    assert sub, "the long submenu did not open"
+    sx, sy, sw, sh = sub
+    assert sh < 28 * M.ITEM_H, "this test wants a capped panel"
+
+    # park on `row 4`, the first trigger in it, and let its panel open
+    row4 = sy + M.SUB_BORDER + M.PAD + M.ITEM_H * 3 + M.ITEM_H / 2
+    at_row4 = opened + [(sx + sw / 2, row4)] * DWELL
+    DB.render("dark", W, h, script=at_row4, keep="last")
+    first = [k for k in M.LAST_RECT if k.startswith(key + ">")]
+    assert first == [f"{key}>deep.4"], f"expected row 4's panel, got {first}"
+
+    # wheel WITHOUT moving the pointer, exactly four rows, so the NEXT
+    # trigger (`row 8`) takes row 4's place under the cursor
+    wheeled = at_row4 + [(sx + sw / 2, row4, False, -2.0)] * 2 \
+        + [(sx + sw / 2, row4)] * DWELL
+    DB.render("dark", W, h, script=wheeled, keep="last")
+    now = [k for k in M.LAST_RECT if k.startswith(key + ">")]
+    # the positive, not merely "something changed": the row now under the
+    # cursor is the one whose panel is open. Unfixed, the claim stays on a
+    # row that has scrolled away and NOTHING opens.
+    assert now == [f"{key}>deep.8"], \
+        f"after the scroll the open panel is {now}, not row 8's"
+
+
 def test_a_parked_mouse_cannot_take_back_a_keyboard_opened_submenu(DB):
     """ArrowRight with the mouse resting on ANOTHER row.
 

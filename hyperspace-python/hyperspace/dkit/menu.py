@@ -997,8 +997,15 @@ def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
     # touching the mouse. The dwell still runs while the pointer rests —
     # that is what a dwell is — but on the row it last MOVED onto.
     io = imgui.get_io()
-    if io.mouse_delta.x or io.mouse_delta.y:
+    # A SCROLL moves the rows under a pointer that has not moved at all, so
+    # the claim has to be re-taken then too: wheel a capped panel and the
+    # trigger under the cursor changes without a pixel of `mouse_delta`,
+    # and the panel of the row that USED to be there would otherwise stay
+    # open over the one that is.
+    off = scrolled(ui, key)
+    if io.mouse_delta.x or io.mouse_delta.y or off != st.get("off"):
         st["pointer_row"] = over
+    st["off"] = off
     on = st.get("pointer_row")
     # `by_key` is the row a KEY asked to open — ArrowRight, Enter or Space.
     # It is not the same as "a panel opened this frame", and conflating the

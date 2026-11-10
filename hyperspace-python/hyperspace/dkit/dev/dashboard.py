@@ -87,6 +87,15 @@ ROW_MENU_SUB = [
     # window is tall once it hangs off a table row.
     M.Item("frames", "Look-back frames", items=tuple(
         M.Item(f"frames.{k}", f"echo.{k}") for k in range(1, 33))),
+    # a panel that SCROLLS and carries triggers of its own: wheeling it
+    # moves a different trigger under a stationary pointer, which is the
+    # one way the row under the pointer changes with no mouse movement
+    M.Item("deep", "Deep list", items=tuple(
+        M.Item(f"deep.{k}", f"row {k}", items=(
+            M.Item(f"deep.{k}.a", f"{k} first"),
+            M.Item(f"deep.{k}.b", f"{k} second"),
+        )) if k % 4 == 0 else M.Item(f"deep.{k}", f"row {k}")
+        for k in range(1, 29))),
     M.sep(),
     M.Item("remove", "Remove from view", icon="trash-2",
            variant="destructive"),
