@@ -16,11 +16,12 @@ The skinning (`bone_matrices`) never reads the tracker's rotations or the
 model's: every bone gets a frame built by one recipe — origin at its
 base joint, z along the bone, x the knuckle line (index knuckle to
 pinky's) made square to it — once on the model's rest joints and once a
-frame on the tracked ones. A bone's matrix is then the tracked frame,
-times a stretch (the bone's tracked length over the model's along z, the
-hand's knuckle span over the model's across), times the inverse of the
-rest frame — so the mesh's fingers land on the performer's, whatever the
-two hands' sizes, and no axis convention of either side matters.
+frame on the tracked ones. The palm stays rigid, in the model's shape,
+scaled by the hand's size (its metacarpals' length); each finger is a
+chain from its knuckle on it, each bone turned to its tracked direction
+and stretched to its tracked length — so the fingers follow the
+performer's, whatever the two hands' sizes, and no axis convention of
+either side matters.
 
 Which file draws a pose is the pose's own handedness (`chirality`), not
 the side the tracker named — a mirrored stage flips it, and a mirrored
@@ -296,35 +297,51 @@ def rest_joints(model: HandModel) -> np.ndarray:
     return J
 
 
+def _palm_length(J: np.ndarray) -> float:
+    """The four finger metacarpals' mean length."""
+    return float(np.mean(np.linalg.norm(J[1:5, 1] - J[1:5, 0], axis=1)))
+
+
 def bone_matrices(model: HandModel, J: np.ndarray, rest: np.ndarray | None = None
                   ) -> np.ndarray:
     """(len(model.names), 4, 4): each joint's skinning matrix taking the
-    model's bind pose onto the tracked joints `J` (5, 5, 3, mm)."""
+    model's bind pose onto the tracked joints `J` (5, 5, 3, mm).
+
+    The palm is rigid, in the model's own shape: placed by the tracked
+    palm's frame and scaled by the hand's size, its metacarpals with it —
+    the tracker fans them as the fingers spread, which would stretch the
+    web between two knuckles into a V. Each finger is a chain from its
+    knuckle on that palm (the thumb from its tracked base): every bone
+    turned to its tracked direction,
+    stretched to its tracked length, and starting where the one before it
+    ends, so the joints stay whole and a fingertip lands within a few mm
+    of the tracked one."""
     R = rest_joints(model) if rest is None else rest
     o_r, f_r, t_r = hand_axes(R)
     o_p, f_p, t_p = hand_axes(J)
-    g = float(np.linalg.norm(t_p)) / max(float(np.linalg.norm(t_r)), 1e-9)
-    g = min(max(g, 0.5), 2.0)
+    # the hand's size: its metacarpals' length, which a spread or a fist
+    # leaves alone (the knuckle span does not: spread fingers widen it)
+    g = _palm_length(J) / max(_palm_length(R), 1e-9)
+    g = min(max(g, 0.8), 1.25)
     palm = frame(o_p, f_p, t_p) @ np.diag((g, g, g, 1.0)) @ np.linalg.inv(frame(o_r, f_r, t_r))
+    chain: dict = {}
+    for d in range(5):
+        parent = palm
+        for k in range(1, 4):
+            a_r, b_r, a_p, b_p = R[d, k], R[d, k + 1], J[d, k], J[d, k + 1]
+            l_r, l_p = float(np.linalg.norm(b_r - a_r)), float(np.linalg.norm(b_p - a_p))
+            if l_r > 1e-6 and l_p > 1e-6:
+                # the thumb's base where it is tracked (it swings off the
+                # palm, and a pinch should meet); a finger's on the palm
+                origin = a_p if parent is palm and d == 0 else parent[:3, :3] @ a_r + parent[:3, 3]
+                s = min(max(l_p / l_r, 0.5), 2.0)
+                parent = (frame(origin, b_p - a_p, t_p) @ np.diag((g, g, s, 1.0))
+                          @ np.linalg.inv(frame(a_r, b_r - a_r, t_r)))
+            chain[(d, k)] = parent
+        chain[(d, 4)] = parent           # a tip rides on its digit's last bone
     out = np.repeat(palm[None], len(model.names), axis=0)
-    tips = []
     for i, name in enumerate(model.names):
         slot = model.slots.get(name, PALM)
-        if slot == PALM:
-            continue
-        if slot[1] >= 4:
-            tips.append((i, slot[0]))     # no bone of its own: rides on the last
-            continue
-        d, k = slot
-        a_r, b_r, a_p, b_p = R[d, k], R[d, k + 1], J[d, k], J[d, k + 1]
-        l_r, l_p = float(np.linalg.norm(b_r - a_r)), float(np.linalg.norm(b_p - a_p))
-        if l_r < 1e-6 or l_p < 1e-6:
-            continue                     # no length to follow: the palm's
-        s = min(max(l_p / l_r, 0.3), 3.0)
-        out[i] = (frame(a_p, b_p - a_p, t_p) @ np.diag((g, g, s, 1.0))
-                  @ np.linalg.inv(frame(a_r, b_r - a_r, t_r)))
-    for i, d in tips:
-        last = [j for j, nm in enumerate(model.names) if model.slots.get(nm) == (d, 3)]
-        if last:
-            out[i] = out[last[0]]
+        if slot != PALM and slot[1] >= 1:
+            out[i] = chain[slot]
     return out

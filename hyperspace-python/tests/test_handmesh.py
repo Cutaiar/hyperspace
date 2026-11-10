@@ -4,6 +4,7 @@ skinning puts each model's bones on the tracked joints, whatever the hand."""
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 
 import numpy as np
@@ -47,25 +48,58 @@ def test_the_rest_pose_skins_to_itself(name):
 
 @pytest.mark.parametrize("grip", ["open", "fist"])
 @pytest.mark.parametrize("name", sorted(HM.MODELS))
-def test_each_bone_lands_on_the_tracked_joints(name, grip):
-    """A bone's base goes to its tracked joint and its far end to the next:
-    the model's fingers on the performer's, whatever the two sizes."""
+def test_each_finger_follows_the_tracked_bones(name, grip):
+    """Each finger bone points where the tracked one does and is as long;
+    each starts where the one before it ends; a fingertip lands near the
+    tracked one (the palm is the model's own shape, so not exactly)."""
     for side in ("left", "right"):
         p = _pose(side, grip)
         m = G.mesh_model(p, name)
         assert m is not None and m.side == side
         mats = HM.bone_matrices(m, p.joints)
         R = HM.rest_joints(m)
-        for i, nm in enumerate(m.names):
-            slot = m.slots[nm]
-            if slot == HM.PALM or slot[1] >= 4:
-                continue
-            d, k = slot
-            if np.linalg.norm(R[d, k] - R[d, k + 1]) < 1e-6:
-                continue
-            rot, off = mats[i, :3, :3], mats[i, :3, 3]
-            assert np.allclose(rot @ R[d, k] + off, p.joints[d, k], atol=1e-6), (nm, side)
-            assert np.allclose(rot @ R[d, k + 1] + off, p.joints[d, k + 1], atol=1e-6), (nm, side)
+        at = {m.slots[nm]: mats[i] for i, nm in enumerate(m.names) if m.slots[nm] != HM.PALM}
+        move = lambda mat, q: mat[:3, :3] @ q + mat[:3, 3]
+        for d in range(5):
+            for k in range(2 if d == 0 else 1, 4):
+                a, b = move(at[(d, k)], R[d, k]), move(at[(d, k)], R[d, k + 1])
+                want = p.joints[d, k + 1] - p.joints[d, k]
+                assert np.allclose(b - a, want, atol=1e-6), (name, side, d, k)
+                if k < 3:
+                    assert np.allclose(b, move(at[(d, k + 1)], R[d, k + 1]), atol=1e-6)
+            tip = move(at[(d, 3)], R[d, 4])
+            # the synthetic hands' knuckles are not a real hand's: loosely
+            assert np.linalg.norm(tip - p.joints[d, 4]) < 0.4 * p.width, (name, side, d)
+
+
+@pytest.mark.parametrize("name", sorted(HM.MODELS))
+def test_spread_fingers_leave_the_palm_alone(name):
+    """Spread fingers fan the tracker's metacarpals; the drawn palm keeps
+    its shape and its size (a spread once ballooned the whole hand)."""
+    def palm_of(p):
+        m = G.mesh_model(p, name)
+        return HM.bone_matrices(m, p.joints)[next(i for i, nm in enumerate(m.names)
+                                                  if m.slots[nm] == HM.PALM)]
+    a, b = _pose("right", spread=1.0), _pose("right", spread=2.2)
+    sa = np.linalg.svd(palm_of(a)[:3, :3], compute_uv=False)
+    sb = np.linalg.svd(palm_of(b)[:3, :3], compute_uv=False)
+    assert np.allclose(sa, sb, rtol=1e-6)
+    assert np.allclose(sa, sa[0])                       # a uniform scale: no stretch
+
+
+@pytest.mark.parametrize("name", sorted(HM.MODELS))
+def test_on_a_real_hands_joints_the_fingertips_land(name):
+    """Ultraleap's reference hand (what the tracker's own hand model
+    reports): each fingertip within 10 mm of the tracked one."""
+    J = np.array(json.loads((Path(__file__).parent / "fixtures" / "leap_reference_hand.json")
+                            .read_text())["joints"])
+    m = HM.models(name)["left"]
+    R, mats = HM.rest_joints(m), HM.bone_matrices(m, J)
+    last = {m.slots[nm][0]: mats[i] for i, nm in enumerate(m.names) if m.slots[nm] != HM.PALM
+            and m.slots[nm][1] == 3}
+    for d in range(5):
+        tip = last[d][:3, :3] @ R[d, 4] + last[d][:3, 3]
+        assert np.linalg.norm(tip - J[d, 4]) < 10.0, (name, d)
 
 
 def test_the_hand_drawn_is_the_poses_own_handedness():
