@@ -64,7 +64,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
-from . import envelope, geometry, lfo, poi, sequencer, tempo, totem
+from . import envelope, geometry, grip, lfo, poi, sequencer, tempo, totem
 from . import undo as undos
 from .fx import FxState
 from .ghost import GhostState
@@ -249,6 +249,10 @@ class Deck:
         seq = sequencer.Sequencer()
         envelope.register(reg, envs, clock)
         sequencer.register(reg, seq, clock)
+        # plan 60: the hand rig's grip, a patch's own (each deck's; the on-air
+        # deck's acts on the one world, `app._step_world`) — before attach, so
+        # "default" holds it off
+        grip.register(reg, grip.GripState())
         # the render window's placement registers before attach, so "default"
         # includes output.* and reset / the dirty dot see them (audit L6)
         if outputs is not None:

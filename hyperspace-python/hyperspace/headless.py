@@ -25,7 +25,7 @@ import shutil
 from pathlib import Path
 from types import SimpleNamespace
 
-from . import envelope, lfo, loadable, routing, sequencer, tempo
+from . import envelope, grip, lfo, loadable, routing, sequencer, tempo
 from .analysis import Analyser
 from .analyzer import Analyzer
 from .control import Control
@@ -57,6 +57,7 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
     lfos, envs, seq = LFOs(), Envelopes(), Sequencer()
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
+    grip.register(reg, grip.GripState())     # plan 60: a patch's own, as `Deck.build` registers it
     if plan31:
         envelope.register(reg, envs, clock)
         sequencer.register(reg, seq, clock)

@@ -39,7 +39,7 @@ from conftest import CORPUS, opened_last, seed
 from test_app_boundary import ORDER, _host
 from test_undo import DT, FakeIn, FakeOut, boot
 
-from hyperspace import app, envelope, hands, lfo, routing, sequencer, tempo, undo
+from hyperspace import app, envelope, grip, hands, lfo, routing, sequencer, tempo, undo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.bands import CEIL
@@ -219,8 +219,11 @@ def test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state(tmp_path)
     r.router.use_lfos(r.lfos, r.clock)          # main's three lines at 749be48
     r.router.use_bank(r.envs, r.clock)
     r.router.use_sequencer(r.seq, r.envs)
+    grip.register(r.reg, grip.GripState())      # and plan 60's: the grip, each deck's
     _compare(_walk(r), new, exact=True)
-    _compare(_walk(old_boot(home)), new, exact=False)     # the old boot, verbatim
+    old = old_boot(home)
+    grip.register(old.reg, grip.GripState())
+    _compare(_walk(old), new, exact=False)     # the old boot, verbatim but the grip
 
 
 def _feed(src: Sources, t: float) -> None:

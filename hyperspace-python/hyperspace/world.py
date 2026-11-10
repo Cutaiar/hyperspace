@@ -74,6 +74,9 @@ SPRING_HZ = (0.3, 30.0)
 SPRING_ZETA = (0.2, 1.0)
 MAX_SPIN = 2.0 * math.pi * 6.0      # rad/s: angular speed held under six turns a second
 INERTIA_RATIO = (0.25, 4.0)         # a shaped inertia's principal ratio, clamped
+HOME_HZ = 2.5                       # a grip turned off springs its body home: critically
+                                    # damped at this, settled in about 0.3 s
+SETTLED = 1e-4                      # …and within this (units, rad, per second) it is home
 INERTIA_RATE = 6.0                  # how fast an inertia may change: its log, a second
 SPAN = 4.0                          # the palms' spread, world units, that shapes fully
                                     # with no box (else the box's width)
@@ -401,6 +404,7 @@ class Joint:
     inertia: bool = False
     shape: float = 1.0
     skater: bool = True
+    homing: bool = False          # the grip off: spring the body home (`HOME_HZ`)
 
     def release(self) -> None:
         self.rel = self.prev = None
@@ -434,6 +438,9 @@ class World:
         # body's object is drawn in (`poi.box_for`, set by the renderer); None: no box
         self.box: tuple[float, float, float] | None = None
         self.note = ""                            # the last NaN reset, said once
+        # (plan 60) whose grip, and which of its looks, last set the shape's joint
+        # (`grip.apply`): a new one sends the shape home before it acts
+        self.grip_key: tuple | None = None
 
     @classmethod
     def default(cls) -> World:
@@ -608,16 +615,21 @@ class World:
         obj.offset = Pose(p, ql, qr, obj.offset.scale)
 
     def _boxed(self, obj: WorldObject, p) -> np.ndarray:
-        """Offset position `p` with the drawn centre (home ∘ it) held to the box —
-        a box grown to take the home in, so a home outside it is not pulled."""
+        """Offset position `p` with the drawn centre (home ∘ it) held to the box,
+        inset across the screen by the shape's own radius (its unit circumradius
+        times the home's scale, the zoom), so a shape parked at the edge stays
+        whole on screen — a box grown to take the home in, so a home outside it
+        is not pulled."""
         box = self.box
         if box is None:
             return np.asarray(p, dtype=np.float64)
         home = obj.home
         at = home.apply(np.asarray(p, dtype=np.float64))
         h = home.position
-        lo = np.array([min(-box[0], h[0]), min(-box[1], h[1]), min(-box[2], h[2])])
-        hi = np.array([max(box[0], h[0]), max(box[1], h[1]), max(box[2], h[2])])
+        r = abs(float(home.scale))
+        half = (max(box[0] - r, 0.0), max(box[1] - r, 0.0), box[2])
+        lo = np.array([min(-half[0], h[0]), min(-half[1], h[1]), min(-half[2], h[2])])
+        hi = np.array([max(half[0], h[0]), max(half[1], h[1]), max(half[2], h[2])])
         held = at.copy()
         held[:3] = np.minimum(hi, np.maximum(lo, at[:3]))
         if np.array_equal(held, at):
@@ -681,6 +693,9 @@ class World:
         v, w = b.velocity.copy(), b.spin_l.copy()
         ib = b.inertia
         held = self._held(obj, j)
+        if j is not None and j.homing:
+            self._home(obj, b, n)
+            return
         if held is not None and j is not None:
             now, prev, v_h, w_h = held
             home_inv = obj.home.inverse()
@@ -725,6 +740,31 @@ class World:
                 q = qnorm(qmul(qexp(w * STEP_S), q))
         r = rot3(q)
         w = _spin_of(r, ib, mom)
+        b.velocity = v
+        b.spin3(w)
+        self._land(obj, b, p, q, q)
+
+    def _home(self, obj: WorldObject, b: Body, n: int) -> None:
+        """A grip turned off (plan 60): the body springs home, critically damped at
+        HOME_HZ, its inertia even; once within SETTLED of home and still, the
+        offset is exactly the identity again (the renderer's matrix of before)."""
+        p, q = self._start(obj, b), obj.offset.ql.copy()
+        v, w = b.velocity.copy(), b.spin_l.copy()
+        wn = 2.0 * math.pi * HOME_HZ
+        k, c = wn * wn, 2.0 * wn
+        ident = np.array(_ID)
+        for _ in range(n):
+            v = v + (-k * p - c * v) * STEP_S
+            p = p + v * STEP_S
+            err = qlog(short(qnorm(qconj(q)), ident))
+            w = _held_spin(w + (k * err - c * w) * STEP_S)
+            q = qnorm(qmul(qexp(w * STEP_S), q))
+        b.inertia = np.eye(3)
+        if (max(float(np.abs(p).max()), float(np.linalg.norm(qlog(short(q, ident)))),
+                float(np.abs(v).max()), float(np.abs(w).max())) < SETTLED):
+            obj.offset = Pose()
+            b.still()
+            return
         b.velocity = v
         b.spin3(w)
         self._land(obj, b, p, q, q)
