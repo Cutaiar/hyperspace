@@ -59,6 +59,7 @@ from typing import cast
 import moderngl
 import numpy as np
 
+from . import handmesh
 from .geometry import EYE_DISTANCE, EYE_FOV, eye_matrix
 from .glsl import QUAD_VS
 
@@ -96,7 +97,8 @@ MODES: dict[str, tuple[tuple[float, float, float], ...]] = {
 # ------------------------------------------------------------------ params
 
 GUIDES = ["OFF", "BESIDE", "ON HAND"]
-STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE", "SKIN"]   # PARTS, in this order
+STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE", "SKIN", "MESH",
+          "LEAP HAND", "LOW POLY"]   # PARTS, in order
 
 @dataclass
 class GhostState:
@@ -237,7 +239,9 @@ def register(reg, state: GhostState, n: int = 1) -> None:
                  "spoke where the fingers point), CAGE (a wire octahedron that turns with "
                  "the palm and breathes with the grip), MARIONETTE (fingertips on strings "
                  "from a bar), SKIN (one smooth skin over the bones: rounded knuckles, a "
-                 "palm, webs between the fingers). The guide and the tethers are the same "
+                 "palm, webs between the fingers), MESH (a rigged hand model bent onto "
+                 "your bones: WebXR's), LEAP HAND (Ultraleap's, with a forearm), LOW POLY "
+                 "(Ultraleap's faceted pair). The guide and the tethers are the same "
                  "in every style.")
 
 
@@ -1349,7 +1353,43 @@ def skin_parts(p: HandPose) -> tuple[list, list, list]:
     return spheres, tubes, hands_parts(p)[2]
 
 
-PARTS = (hands_parts, joints_parts, palms_parts, cage_parts, marionette_parts, skin_parts)
+# ---- MESH: a rigged hand model, skinned to the bones ----
+#
+# The model (`handmesh.MODELS`) bent onto the tracked joints by
+# `handmesh.bone_matrices`, the skinning on the GPU (`SKINMESH_VS`). Its
+# parts are the model's own joints where the skinning puts them — what
+# the lines view's edges skip, what a test can read without GL.
+
+def mesh_model(p: HandPose, name: str):
+    """The `handmesh.HandModel` that draws pose `p` (by its own
+    handedness), or None (palm only, or the model would not load)."""
+    if not len(p.joints):
+        return None
+    ms = handmesh.models(name)
+    return None if ms is None else ms.get(handmesh.chirality(p.joints, p.normal))
+
+
+def _model_parts(name: str):
+    def parts(p: HandPose) -> tuple[list, list, list]:
+        m = mesh_model(p, name)
+        if m is None:
+            return ([_orb(p)], [], []) if not len(p.joints) else hands_parts(p)
+        mats = handmesh.bone_matrices(m, p.joints)
+        r = FINGER_R * p.width
+        # every joint, the palm's too (a wrist, an elbow): each model its own
+        return [(mats[i, :3, :3] @ m.rest[i] + mats[i, :3, 3], r)
+                for i in range(len(m.names))], [], []
+    parts.__name__ = parts.__qualname__ = f"mesh_parts_{name}"
+    parts.model = name           # Geometry draws the mesh, not these parts
+    return parts
+
+
+mesh_parts = _model_parts("webxr")
+leap_parts = _model_parts("ultraleap")
+lowpoly_parts = _model_parts("lowpoly")
+
+PARTS = (hands_parts, joints_parts, palms_parts, cage_parts, marionette_parts, skin_parts,
+         mesh_parts, leap_parts, lowpoly_parts)
 
 
 SKIN_VS = """
@@ -1508,6 +1548,40 @@ def eye_of(view_proj: np.ndarray) -> np.ndarray:
     return np.array([*(d if far[2] > 0 else -d), 0.0])
 
 
+SKINMESH_VS = """
+#version 330
+in vec3 in_pos;
+in vec3 in_n;
+in vec4 in_j;        // four joints (as floats)
+in vec4 in_w;        // their weights
+uniform mat4 u_vp;
+uniform mat4 u_bones[MAX_BONES_N];
+uniform vec4 u_col;
+out vec3 v_pos;
+out vec3 v_n;
+out vec4 v_col;
+void main() {
+    mat4 m = in_w.x * u_bones[int(in_j.x)] + in_w.y * u_bones[int(in_j.y)]
+           + in_w.z * u_bones[int(in_j.z)] + in_w.w * u_bones[int(in_j.w)];
+    v_pos = (m * vec4(in_pos, 1.0)).xyz;
+    v_n = mat3(m) * in_n;
+    v_col = u_col;
+    gl_Position = u_vp * vec4(v_pos, 1.0);
+}
+""".replace("MAX_BONES_N", str(handmesh.MAX_BONES))
+
+
+def _put(prog: moderngl.Program, name: str, v) -> None:
+    """A uniform, by bytes or by value; nothing when the compiler dropped it."""
+    if name not in prog:
+        return
+    u = cast(moderngl.Uniform, prog[name])
+    if isinstance(v, bytes):
+        u.write(v)
+    else:
+        u.value = v
+
+
 def style_parts(i) -> object:
     """The parts function of style index `i` (HANDS for anything else)."""
     try:
@@ -1580,15 +1654,19 @@ class Geometry:
             pk = ctx.program(vertex_shader=SKIN_VS, fragment_shader=SKIN_FS)
             made.append(pk)
             vk = ctx.vertex_array(pk, [(self._unit_c, "3f", "in_unit")])
+            made.append(vk)
+            pg = ctx.program(vertex_shader=SKINMESH_VS, fragment_shader=SHADE_FS)
         except Exception:
             for res in made:
                 res.release()
             raise
         self.progs, self.vaos = (ps, pt, pm), (vs, vt, vm)
         self.skin = (pk, vk)
+        self.skinmesh = pg
+        self._models: dict = {}      # id(model) → (model, its buffers and vao)
 
     def on_reload(self) -> None:
-        old = (*self.vaos, *self.progs, *self.skin)
+        old = (*self.vaos, *self.progs, *self.skin, self.skinmesh, *self._model_res())
         self._build()
         for res in old:
             res.release()
@@ -1612,8 +1690,10 @@ class Geometry:
             return
         s_rows, t_rows, m_rows = [], [], []
         skin = parts is skin_parts          # a field, raymarched, not parts
+        model = getattr(parts, "model", None)
+        meshed = [p for p in poses if model is not None and mesh_model(p, model) is not None]
         for k, p in enumerate(poses):
-            if parts is not None and not skin:
+            if parts is not None and not skin and not any(p is q for q in meshed):
                 col = (*p.colour, float(p.fade))
                 spheres, tubes, tris = parts(p)
                 s_rows += [(*c, r, *col) for c, r in spheres]
@@ -1642,21 +1722,43 @@ class Geometry:
                 vao.render(moderngl.TRIANGLES, vertices=verts, instances=len(data))
         if skin:
             self._draw_skin(poses, vp, view_proj)
+        if meshed:
+            self._draw_meshes(meshed, vp, ey, str(model))
+
+    def _model_res(self) -> list:
+        return [r for _, res in self._models.values() for r in res]
+
+    def _draw_meshes(self, poses: list[HandPose], vp: bytes, eye: tuple, name: str) -> None:
+        """Each pose as the rigged model `name`, skinned to its joints."""
+        prog = self.skinmesh
+        _put(prog, "u_vp", vp)
+        _put(prog, "u_eye", eye)
+        for p in poses:
+            m = mesh_model(p, name)
+            if m is None:
+                continue
+            hit = self._models.get(id(m))
+            if hit is None or hit[0] is not m:
+                v = np.concatenate([m.positions, m.normals, m.joints, m.weights],
+                                   axis=1).astype("f4")
+                vb = self.ctx.buffer(v.tobytes())
+                ib = self.ctx.buffer(m.indices.astype("u4").tobytes())
+                vao = self.ctx.vertex_array(prog, [(vb, "3f 3f 4f 4f", "in_pos", "in_n",
+                                                    "in_j", "in_w")], index_buffer=ib,
+                                            index_element_size=4)
+                hit = self._models[id(m)] = (m, [vao, vb, ib])
+            mats = np.zeros((handmesh.MAX_BONES, 4, 4), dtype="f4")
+            b = handmesh.bone_matrices(m, p.joints)
+            mats[:len(b)] = b
+            _put(prog, "u_bones", np.transpose(mats, (0, 2, 1)).tobytes())   # column-major
+            _put(prog, "u_col", (*p.colour, float(p.fade)))
+            hit[1][0].render(moderngl.TRIANGLES)
 
     def _draw_skin(self, poses: list[HandPose], vp: bytes, view_proj: np.ndarray) -> None:
         """Each pose's SKIN field (`skin_prims`), raymarched in its box: one
         draw a hand, its depth written per pixel where the ray meets it."""
         prog, vao = self.skin
-
-        def put(name: str, v) -> None:
-            if name not in prog:
-                return                  # optimised out
-            u = cast(moderngl.Uniform, prog[name])
-            if isinstance(v, bytes):
-                u.write(v)
-            else:
-                u.value = v
-
+        put = lambda name, v: _put(prog, name, v)
         put("u_vp", vp)
         put("u_cam", tuple(float(x) for x in eye_of(view_proj)))
         for p in poses:
@@ -1681,8 +1783,9 @@ class Geometry:
             vao.render(moderngl.TRIANGLES, vertices=36)
 
     def release(self) -> None:
-        for res in (*self.vaos, *self.progs, *self.skin, self._unit_s, self._unit_t,
-                    self._inst_s, self._inst_t, self._mesh, self._unit_c):
+        for res in (*self.vaos, *self.progs, *self.skin, self.skinmesh, *self._model_res(),
+                    self._unit_s, self._unit_t, self._inst_s, self._inst_t, self._mesh,
+                    self._unit_c):
             res.release()
 
 

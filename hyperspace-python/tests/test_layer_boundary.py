@@ -482,7 +482,7 @@ def _mods(*names: str) -> set[str]:
 # what a patch is made of, and what draws one
 PATCH_MODULES = _mods(
     "patches", "loadable", "nodemode", "graph", "graphmigrate", "modgraph", "modifiers", "modbank",
-    "lfo", "envelope", "sequencer", "patterns", "fx", "ghost", "lookback", "masks", "view",
+    "lfo", "envelope", "sequencer", "patterns", "fx", "ghost", "handmesh", "lookback", "masks", "view",
     "field", "geometry", "glsl", "motion", "tapers", "palettecompat", "render", "media_tex",
     "segment", "dream", "media")
 # what is set for a performance or an install
