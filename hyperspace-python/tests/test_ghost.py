@@ -1135,3 +1135,74 @@ def test_the_guide_on_the_hand_reads_the_same_in_every_style_but_hands(ctx):
     # HANDS: the palm still hides part of its gauge
     _, hands_ro = layer(0, 2, True)
     assert (hands_ro[..., 3] == 255).sum() < (first[..., 3] == 255).sum()
+
+
+@pytest.mark.parametrize("style", ["HANDS", "BONES"])
+def test_the_guide_is_drawn_plain_under_every_material(ctx, style):
+    """The guide is a readout of what the hands are sending, not part of
+    the look. HANDS draws it in the same pass as the hands, so the one
+    `u_mat` shaded the readout too — a GLASS x-axis marker went
+    translucent instead of red (review of #449). Whatever the style, the
+    rows carrying the guide draw PLAIN while the hands take the material.
+    """
+    io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
+                 out=NS(send=print))
+    for st in io.state:
+        st.follow.y = 0.7
+    src = NS(skeleton={"right": skeleton(hand("right", "open", (90.0, 200.0, 10.0)))},
+             cfg={"mode": "desktop"}, axes=io.axes, state=io.state, gates=io.gates)
+    for mat in range(len(G.MATERIALS)):
+        gh = Renderer(ctx).ghost
+        gh.state.on, gh.state.alpha, gh.state.guide = True, 1.0, 2
+        gh.state.style, gh.state.material = G.STYLES.index(style), mat
+        gh.source = src
+        assert gh.layer((320, 200), 1.0)          # builds the geometry
+        calls: list[tuple[bool, bool, int]] = []
+        real = gh.geometry.draw
+
+        def spy(poses, vp, eye, parts=G.hands_parts, extra=None, lines=False, material=0,
+                _real=real, _calls=calls):
+            _calls.append((parts is not None, extra is not None, int(material)))
+            return _real(poses, vp, eye, parts, extra, lines, material)
+
+        gh.geometry.draw = spy
+        for k in range(3):
+            assert gh.layer((320, 200), 1.1 + k / 30)
+        assert any(c[1] for c in calls), (style, calls)       # the guide drew
+        for _parts, is_guide, used in calls:
+            if is_guide:
+                assert used == 0, (style, G.MATERIALS[mat], calls)
+        if mat:
+            assert any(c[0] and c[2] == mat for c in calls), (style, calls)
+            assert all(not c[0] for c in calls if c[1]), (style, calls)
+
+
+def test_glass_leaves_the_scene_visible_through_the_hand(ctx):
+    """Hands inside the scene are solid and drawn before the shape
+    (DECISIONS: order-independent transparency, deferred), so a GLASS
+    hand that only lowered its alpha still wrote depth across its whole
+    silhouette and hid whatever was behind it (review of #449). GLASS
+    writes depth at its edges and nowhere else, so the scene shows
+    through the middle; PLAIN still fills the silhouette."""
+    io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
+                 out=NS(send=print))
+    src = NS(skeleton={"right": skeleton(hand("right", "open", (90.0, 200.0, 10.0)))},
+             cfg={"mode": "desktop"}, axes=io.axes, state=io.state, gates=io.gates)
+    written = {}
+    for name in ("PLAIN", "GLASS"):
+        gh = Renderer(ctx).ghost
+        gh.state.on, gh.state.alpha = True, 1.0
+        gh.state.style = G.STYLES.index("MESH")
+        gh.state.material = G.MATERIALS.index(name)
+        gh.source = src
+        for k in range(4):
+            assert gh.layer((320, 200), 1.0 + k / 30)
+        d = np.frombuffer(gh.depth.read(), dtype="f4").reshape(200, 320)
+        written[name] = d < 1.0                      # nearer than the far plane
+    assert written["PLAIN"].sum() > 0, "the hand never drew"
+    # every pixel GLASS writes is one PLAIN writes: it opens holes, never spreads
+    assert not (written["GLASS"] & ~written["PLAIN"]).any()
+    # and it leaves a real part of the silhouette open for the scene
+    # before the fix GLASS wrote depth over the whole silhouette, so this was 0
+    opened = int((written["PLAIN"] & ~written["GLASS"]).sum())
+    assert opened > 0, "GLASS still fills the silhouette"

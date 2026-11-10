@@ -55,7 +55,7 @@
       "reportAttributeAccessIssue": 25,
       "reportCallIssue": 1,
       "reportGeneralTypeIssues": 1,
-      "reportOptionalMemberAccess": 16
+      "reportOptionalMemberAccess": 14
     },
     "hyperspace/graph.py": {
       "reportArgumentType": 33,

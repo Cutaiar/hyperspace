@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 from hyperspace.hands import tape
@@ -86,21 +87,33 @@ def _record(args) -> None:
         t = tape.record(src, args.seconds, mode=mode)
     src.close()
     if args.fps:
-        t["frames"] = _thinned(t["frames"], args.fps)
+        t["frames"] = _thinned(t["frames"], args.fps,
+                               [v for c in t.get("cues", []) for v in (c["t0"], c["t1"])])
     tape.save(t, args.path)
     print(f"wrote {args.path}: {_summary(t)}")
     for c in t.get("cues", []):
         print(f"  {c['t0']:6.2f}–{c['t1']:5.2f} s  {c['label']}")
 
 
-def _thinned(frames: list[dict], fps: float) -> list[dict]:
+def _thinned(frames: list[dict], fps: float, keep_at: Iterable[float] = ()) -> list[dict]:
     """Every frame whose time has moved on by 1/`fps` — the camera runs at
     about 120, which no replay needs and a committed fixture should not
-    carry. Keeps the first frame of every hold, so a cue's pose survives."""
+    carry.
+
+    `keep_at` are times that must survive whatever the spacing says: a
+    cue's bounds, both of them. Thinning across the whole tape could drop
+    either, and a tape is replayed by taking the last frame at or before
+    a time (`hands.tape.TapeSource`), so a cue's own `t0` landed on the
+    pose before it (review of #449) and its `t1` on a frame it no longer
+    held (review of #450 — 53 of 60 cue lengths lost an end). A kept time
+    also restarts the spacing, so no cue is thinned against its
+    neighbour.
+    """
+    keep = {round(t, 6) for t in keep_at}
     out: list[dict] = []
     step, last = 1.0 / fps, None
     for f in frames:
-        if last is None or f["t"] - last >= step - 1e-9:
+        if round(f["t"], 6) in keep or last is None or f["t"] - last >= step - 1e-9:
             out.append(f)
             last = f["t"]
     return out
