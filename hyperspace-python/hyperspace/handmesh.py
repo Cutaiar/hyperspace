@@ -327,13 +327,19 @@ def bone_matrices(model: HandModel, J: np.ndarray, rest: np.ndarray | None = Non
     chain: dict = {}
     for d in range(5):
         parent = palm
-        for k in range(1, 4):
+        # every digit's first bone starts at its own tracked base — a
+        # finger's metacarpal as much as the thumb's proximal. Riding the
+        # rigid palm instead cost each finger its knuckle's whole offset,
+        # the same displacement all the way to the tip (the pinky's 13 mm
+        # open, 15 mm spread: a finger's own width, and the ring-pinky web
+        # with it). The metacarpals are what these rigs fan the palm by,
+        # so the web between two knuckles is the model's own weights now,
+        # not a gap the skinning opened.
+        for k in range(1 if d == 0 else 0, 4):
             a_r, b_r, a_p, b_p = R[d, k], R[d, k + 1], J[d, k], J[d, k + 1]
             l_r, l_p = float(np.linalg.norm(b_r - a_r)), float(np.linalg.norm(b_p - a_p))
             if l_r > 1e-6 and l_p > 1e-6:
-                # the thumb's base where it is tracked (it swings off the
-                # palm, and a pinch should meet); a finger's on the palm
-                origin = a_p if parent is palm and d == 0 else parent[:3, :3] @ a_r + parent[:3, 3]
+                origin = a_p if parent is palm else parent[:3, :3] @ a_r + parent[:3, 3]
                 s = min(max(l_p / l_r, 0.5), 2.0)
                 parent = (frame(origin, b_p - a_p, t_p) @ np.diag((g, g, s, 1.0))
                           @ np.linalg.inv(frame(a_r, b_r - a_r, t_r)))
@@ -342,6 +348,6 @@ def bone_matrices(model: HandModel, J: np.ndarray, rest: np.ndarray | None = Non
     out = np.repeat(palm[None], len(model.names), axis=0)
     for i, name in enumerate(model.names):
         slot = model.slots.get(name, PALM)
-        if slot != PALM and slot[1] >= 1:
+        if slot != PALM and slot in chain:   # the thumb's (0, 0) stays on the palm
             out[i] = chain[slot]
     return out

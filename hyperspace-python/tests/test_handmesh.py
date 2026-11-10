@@ -164,3 +164,52 @@ def test_the_mesh_styles_draw(ctx):
         assert (px[..., 3] > 0).sum() > 500, style
         seen.append(px.tobytes())
     assert len(set(seen)) == 4
+
+
+@pytest.mark.parametrize("name", sorted(HM.MODELS))
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_every_tracked_joint_lands_where_it_is_tracked(name, side):
+    """On a real hand's joints, knuckle to tip, each digit's joints land
+    on the tracker's own — not merely near them.
+
+    The fingers used to hang off a rigid palm, so each carried its
+    knuckle's offset unchanged all the way to the tip: here the pinky sat
+    13 mm out, a finger's own width, which is what pulled the ring-pinky
+    web about. Driving each finger's metacarpal from the tracker closes
+    it. The reference hand, not `fake_hands`, because the synthetic
+    metacarpals are all ~78 mm where a real hand's taper 68 → 54, which
+    stretches a model's pinky metacarpal past the skinning's own clamp.
+    """
+    J = np.array(json.loads((Path(__file__).parent / "fixtures" / "leap_reference_hand.json")
+                            .read_text())["joints"])
+    if side == "right":                     # the reference hand is a left one
+        J = J * np.array([-1.0, 1.0, 1.0])
+    m = HM.models(name)[side]
+    R, mats = HM.rest_joints(m), HM.bone_matrices(m, J)
+    at = {m.slots[nm]: mats[i] for i, nm in enumerate(m.names) if m.slots[nm] != HM.PALM}
+    for d in range(5):
+        for k in range(1, 5):               # the thumb's (0, 0) stays on the palm
+            if (d, k) not in at:
+                continue
+            got = at[(d, k)][:3, :3] @ R[d, k] + at[(d, k)][:3, 3]
+            assert np.linalg.norm(got - J[d, k]) < 1e-6, (name, side, d, k)
+
+
+@pytest.mark.parametrize("name", sorted(HM.MODELS))
+@pytest.mark.parametrize("grip,kw", [("open", {}), ("fist", {}), ("open", {"spread": 2.2}),
+                                     ("open", {"close": 0.5}), ("open", {"roll": 75.0})])
+def test_no_digit_drifts_a_finger_width_off(name, grip, kw):
+    """Whatever the grip, no joint sits a finger's width (10 mm) from the
+    tracked one. The synthetic hand's metacarpals are long enough to work
+    the skinning's stretch clamp, so this is a bound, not the equality
+    above; off the rigid palm the pinky broke it at 12.6 mm open."""
+    p = _pose("right", grip, **kw)
+    m = G.mesh_model(p, name)
+    R, mats = HM.rest_joints(m), HM.bone_matrices(m, p.joints)
+    at = {m.slots[nm]: mats[i] for i, nm in enumerate(m.names) if m.slots[nm] != HM.PALM}
+    for d in range(5):
+        for k in range(1, 5):
+            if (d, k) not in at:
+                continue
+            got = at[(d, k)][:3, :3] @ R[d, k] + at[(d, k)][:3, 3]
+            assert np.linalg.norm(got - p.joints[d, k]) < 10.0, (name, d, k)
