@@ -830,7 +830,7 @@ def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
             st["open"] = want = over
 
     at = st["open"]
-    subkey = None
+    subkey = ""
     if at is not None and at in rects:
         it = items[at]
         subkey = f"{key}>{getattr(it, 'id', '') or at}"
@@ -854,7 +854,7 @@ def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
     # A panel this level was showing and is not any more has to be begun
     # once more to be dismissed (`_dismiss`).
     shown = st.get("shown")
-    if shown is not None and shown != (subkey if at is not None else None):
+    if shown is not None and shown != (subkey if at is not None else ""):
         _dismiss(ui, shown)
         st["shown"] = None
     if at is None:

@@ -33,7 +33,7 @@ from test_graphview import _in_editor
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import devices, graphmigrate, graphview, headless, loadable, patches, ui_graph, undo
+from hyperspace import devices, graphmigrate, graphview, headless, loadable, patches, ui_graph, ui_menu, undo
 from hyperspace import graph as G
 from hyperspace.library import Marks
 from hyperspace.outputs import Switches, View
@@ -377,35 +377,25 @@ def test_group_from_a_selection_refuses_a_group_and_keeps_the_rest(rig):
 
 def test_the_right_click_menus_offer_group_with_two_nodes_selected(rig, monkeypatch):
     st = noita(rig)
-    items = []
-    monkeypatch.setattr(imgui, "menu_item_simple", lambda label, *a, **k: items.append(label)
-                        or label.startswith("group "))
     _in_editor(rig, lambda: [ed.select_node(ed.NodeId(ui_graph._id(st, "n:" + nid)), True)
                              for nid in NOITA_CORE[:2]])
     _in_editor(rig, lambda: st.__setitem__("menu_sel", ui_graph.selected_ids(st)))
     assert st["menu_sel"] == NOITA_CORE[:2]
     st["menu"] = ("picker", "")
     st["menu_at"] = (0.0, 0.0)
-    imgui.new_frame()
-    imgui.begin("probe")
-    ui_graph.menu(rig.panel, st, st["view"])
-    imgui.end()
-    imgui.end_frame()
-    assert items[0] == "group 2 nodes"
+    m = ui_menu.Menu("t.picker")
+    ui_graph.menu(rig.panel, st, st["view"], m)
+    assert m.labels()[0] == "group 2 nodes"
+    assert m.choose("group 2 nodes")
     assert rig.lib.loaded_patch.groups[0]["nodes"] == NOITA_CORE[:2]
     # the group's own menu: open / fold, rename…, ungroup
     frame(rig.panel, "graph")
-    items.clear()
-    monkeypatch.setattr(imgui, "menu_item_simple", lambda label, *a, **k: items.append(label)
-                        or label == "open")
     st["menu"] = ("node", "group.1")
-    imgui.new_frame()
-    imgui.begin("probe")
-    ui_graph.menu(rig.panel, st, st["view"])
-    imgui.end()
-    imgui.end_frame()
+    g = ui_menu.Menu("t.group")
+    ui_graph.menu(rig.panel, st, st["view"], g)
     # (plan 40 T3: and save as patch…; update patch only for a group with a patch)
-    assert items == ["open", "rename…", "save as patch…", "ungroup"]
+    assert g.labels() == ["open", "rename…", "save as patch…", "ungroup"]
+    assert g.choose("open")
     assert rig.lib.loaded_patch.groups[0]["open"] is True
 
 
@@ -1503,12 +1493,11 @@ def test_the_browser_lists_each_patch_with_its_boundary_in_words(rig, monkeypatc
     spawns = []
     monkeypatch.setattr(ui_graph, "spawn", lambda panel, slug, at=None, splice=None:
                         spawns.append((slug, at)))
-    monkeypatch.setattr(imgui, "begin_menu", lambda label, *a: label == "spawn")
-    monkeypatch.setattr(imgui, "end_menu", lambda: None)
-    monkeypatch.setattr(imgui, "menu_item_simple", lambda label, *a, **k:
-                        label == "acid wash##spawn.acid-wash")
     st["pan"] = (10.0, 20.0)
-    ui_graph._spawn_menu(rig.panel, (110.0, 220.0))
+    m = ui_menu.Menu("t.spawn")
+    ui_graph._spawn_menu(rig.panel, (110.0, 220.0), m)
+    assert m.id_of("spawn", "acid wash") == "spawn.acid-wash"
+    assert m.choose("spawn", "acid wash")
     assert spawns == [("acid-wash", (100.0, 200.0))]
 
 
@@ -1524,11 +1513,10 @@ def test_the_spawn_menu_open_two_frames_lists_the_patches_once(rig, monkeypatch)
     real_list, real_path = lib.list, lib.path_of
     monkeypatch.setattr(lib, "list", lambda g, **k: (lists.append(g), real_list(g, **k))[1])
     monkeypatch.setattr(lib, "path_of", lambda g, n, **k: (paths.append(n), real_path(g, n, **k))[1])
-    monkeypatch.setattr(imgui, "begin_menu", lambda *a: False)
-    ui_graph._spawn_menu(rig.panel, (0.0, 0.0))
+    ui_graph._spawn_menu(rig.panel, (0.0, 0.0), ui_menu.Menu("t.1"))
     first = list(paths)
     assert lists == ["patches"] and first.count("acid wash") == 1
-    ui_graph._spawn_menu(rig.panel, (0.0, 0.0))
+    ui_graph._spawn_menu(rig.panel, (0.0, 0.0), ui_menu.Menu("t.2"))
     assert lists == ["patches"] and paths == first          # the second frame: no disk
     ui_loadable.invalidate(rig.panel, "patches")
     assert [r["slug"] for r in ui_graph.patch_list(rig.panel)] == ["acid-wash"]

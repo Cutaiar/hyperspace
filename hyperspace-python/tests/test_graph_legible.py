@@ -28,7 +28,7 @@ from test_graphview_devices import rig_devices
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import graph as G
+from hyperspace import graph as G, ui_menu
 from hyperspace import graphview, modifiers, ui, ui_graph, ui_pane, ui_routing
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.bands import CEIL
@@ -625,26 +625,22 @@ def test_a_bundles_menu_and_a_nodes_learn_menu_draw(rig, monkeypatch):
     """The right-click menus N7 adds, drawn once each with every submenu
     open: a bundle's (what it holds, expand both ends, delete disabled with
     the words) and a collapsed render node's learn ▸ group ▸ param."""
-    import hyperspace.ui as ui_mod
     st = party(rig)
     items, menus = [], []
-    monkeypatch.setattr(ui_mod.imgui, "begin_menu", lambda label, *a: menus.append(label) or True)
-    monkeypatch.setattr(ui_mod.imgui, "end_menu", lambda: None)
-    monkeypatch.setattr(ui_mod.imgui, "menu_item_simple",
-                        lambda label, *a, **k: items.append(label) and False)
     bid = "bundle:analyzer>render:shape"
     for subject in (("cable", bid), ("node", "render:shape")):
         st["menu"] = subject
-        imgui.new_frame()
-        imgui.begin("menu")
-        ui_graph.menu(rig.panel, st, st["view"])
-        imgui.end()
-        imgui.end_frame()
+        m = ui_menu.Menu(f"t.{subject[1]}")
+        ui_graph.menu(rig.panel, st, st["view"], m)
+        items += [r.label for r in m.walk() if r.kind == ui_menu.ITEM]
+        menus += [r for r in m.walk() if r.kind == ui_menu.SUB]
     assert "expand both ends" in items
     assert f"delete: {graphview.EXPAND_TO_EDIT}" in items
-    assert "expand" in items and "learn" in menus
+    assert "expand" in items and "learn" in [r.label for r in menus]
     shape = [p.param for p in st["view"].node("render:shape").ports if p.param]
-    assert sum(1 for m in menus if m.partition("##")[2] in shape) == len(shape)  # each param
+    # a submenu per param, under learn ▸ (its id is the param's own, which
+    # is what the panel driver finds a row by)
+    assert sum(1 for r in menus if r.id in shape) == len(shape)
     assert st["open"] == set()                          # nothing picked: nothing changed
 
 

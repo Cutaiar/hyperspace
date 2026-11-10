@@ -150,7 +150,7 @@ def test_a_right_click_opens_the_params_menu(cam):
     r, d = cam
     shown: list[str] = []
     real = r.panel._ctx_learn_block
-    r.panel._ctx_learn_block = lambda a, p: (shown.append(a.id), real(a, p))[1]
+    r.panel._ctx_learn_block = lambda a, p, m: (shown.append(a.id), real(a, p, m))[1]
     d.run(d.click("camera.yaw", button=1), d.wait(2))
     assert "camera.yaw" in shown
     d.run(d.key(imgui.Key.escape), d.park(), d.wait(2))

@@ -154,6 +154,56 @@ def frame(panel, page=None):
     imgui.end_frame()
 
 
+class _Menus(list):
+    """What `graph_menus` hands back: the labels of every row that opened,
+    and `pick`, the prefix of the row to click — settable, so one test can
+    arm another click part way through (`.clear()` and a new `.pick`)."""
+
+    pick: str | None = None
+
+
+def graph_menus(monkeypatch, pick=None, once=True):
+    """Stand in for the graph's menu drawing, and report what opened.
+
+    GRAPH's right-click menus are DESCRIBED and then drawn by one of two
+    renderers (`hyperspace/ui_menu.py`), so a test no longer learns what a
+    menu holds by intercepting `imgui.menu_item_simple` — it reads the rows.
+    This patches `ui_graph._popup`, which is where a menu is built, and:
+
+      * records every row's label, in order, in the list it returns;
+      * clicks the first row whose label starts with `pick` — once, unless
+        `once` is off, because `_popup` runs on every frame the menu is up
+        and a click that repeats every frame is not a click.
+
+    Only a menu ImGui actually has open is built, exactly as `_popup`
+    itself does it, so a test still has to perform the right-click.
+    """
+    from hyperspace import ui_graph, ui_menu
+    seen = _Menus()
+    seen.pick = pick
+
+    def popup(panel, key, build, at=None):
+        # begun and ended as the imgui renderer does, so ImGui's popup
+        # lifecycle is the real one: a pick CLOSES the panel, which is what
+        # the gesture tests then assert about Escape and the canvas.
+        if not imgui.begin_popup(key):
+            return None
+        m = ui_menu.Menu(key)
+        build(m)
+        seen.extend(m.labels())
+        row = m.starting(seen.pick) if seen.pick is not None else None
+        if row is not None:
+            if once:
+                seen.pick = None
+            m.pick(row.id)
+            imgui.close_current_popup()
+        imgui.end_popup()
+        return row.id if row is not None else None
+
+    monkeypatch.setattr(ui_graph, "_popup", popup)
+    return seen
+
+
 def page_frame(panel, page=None):
     """One frame of a section's body alone, in a window the size the page
     was: plan 49 stage 3 took the pages away, and a body's own layout and

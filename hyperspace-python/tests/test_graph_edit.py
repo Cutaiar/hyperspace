@@ -16,10 +16,10 @@ import pytest
 from conftest import seed
 from imgui_bundle import imgui
 from test_graphview import FakeDevice
-from test_ui_shell import frame
+from test_ui_shell import frame, graph_menus
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import devices, gamepad, graphview, learn, ui_graph, ui_pad, ui_routing
+from hyperspace import devices, gamepad, graphview, learn, ui_graph, ui_menu, ui_pad, ui_routing
 from hyperspace import graph as G
 from hyperspace.devices import Port
 from hyperspace.learn import Learn
@@ -291,18 +291,12 @@ def test_learn_from_a_port_lands_as_a_cable(rig, monkeypatch):
     seen = []
     real = type(panel)._ctx_learn
     monkeypatch.setattr(type(panel), "_ctx_learn",
-                        lambda self, a, q: (seen.append((a.id, q.id)), real(self, a, q)))
-    # the menu's clicks: "Learn hand" opens, "right" is picked
-    import hyperspace.ui as ui_mod
-    monkeypatch.setattr(ui_mod.imgui, "begin_menu", lambda label, *a: label == "Learn hand")
-    monkeypatch.setattr(ui_mod.imgui, "end_menu", lambda: None)
-    monkeypatch.setattr(ui_mod.imgui, "menu_item_simple", lambda label, *a, **k: label == "right")
-    imgui.new_frame()
-    imgui.begin("menu")
+                        lambda self, a, q, m: (seen.append((a.id, q.id)), real(self, a, q, m)))
+    # the menu's one click: "Learn hand ▸ right"
     st["menu"] = ("pin", f"mod:{p.id}")
-    ui_graph.menu(panel, st, st["view"])
-    imgui.end()
-    imgui.end_frame()
+    m = ui_menu.Menu("t.pin")
+    ui_graph.menu(panel, st, st["view"], m)
+    assert m.choose("Learn hand", "right"), m.labels()
     monkeypatch.undo()
     assert seen == [(p.id, p.id)]
     assert (panel.learn.learning, panel.learn.want) == (p.id, "hand:right")
@@ -313,12 +307,12 @@ def test_learn_from_a_port_lands_as_a_cable(rig, monkeypatch):
     assert c.ref is table.owner(p.id) and c.ref.source == "hand:right.y"
     # the pin's menu with the learn armed draws Cancel; another pin just says what it is
     panel.learn.arm(p.id, "hand:right")
-    imgui.new_frame()
-    imgui.begin("menu")
-    ui_graph._pin_menu(panel, view, f"mod:{p.id}")
-    ui_graph._pin_menu(panel, view, "out:lane:0")
-    imgui.end()
-    imgui.end_frame()
+    armed = ui_menu.Menu("t.armed")
+    ui_graph._pin_menu(panel, view, f"mod:{p.id}", armed)
+    assert armed.labels() == ["Cancel learn"], armed.labels()
+    other = ui_menu.Menu("t.other")
+    ui_graph._pin_menu(panel, view, "out:lane:0", other)
+    assert other.empty() and other.rows
     assert ui_graph.port_param(f"mod:{p.id}") == p.id and ui_graph.port_param("base:x") is None
 
 
@@ -486,11 +480,7 @@ def test_the_page_draws_with_its_editing_menus(rig):
     for subject in (("pin", f"mod:{route.ref.target}"), ("cable", route.id),
                     ("node", "lfo.1"), ("picker", "")):
         st["menu"] = subject
-        imgui.new_frame()
-        imgui.begin("menu")
-        ui_graph.menu(panel, st, view)
-        imgui.end()
-        imgui.end_frame()
+        ui_graph.menu(panel, st, view, ui_menu.Menu(f"t.{subject[0]}"))
     st["note"] = graphview.HAND_NO_BASE
     for _ in range(2):
         frame(panel, "graph")
@@ -1361,32 +1351,25 @@ def banks():
     undo.install(None)
 
 
-def drawn_route_from(panel, p, monkeypatch, pick=None):
-    """Draw the Route from submenu of `p` with imgui's calls recorded:
-    (the submenus opened, the items as (label, checked, enabled)); `pick`
-    is the label of the item that is clicked."""
-    opened, items = [], []
+def drawn_route_from(panel, p, monkeypatch=None, pick=None):
+    """The Route from submenu of `p` as it is DESCRIBED (`ui_menu`):
+    (the submenus, the items as (label, checked, enabled)); `pick` is the
+    label of the item that is clicked.
 
-    def begin_menu(label, *a, **k):
-        opened.append(label)
-        return True
-
-    def menu_item(label, shortcut="", selected=False, enabled=True):
-        items.append((label.split("##")[0], bool(selected), bool(enabled)))
-        return (label.split("##")[0] == pick, selected)
-
-    def menu_item_simple(label, shortcut="", selected=False, enabled=True):
-        return menu_item(label, shortcut, selected, enabled)[0]
-
-    monkeypatch.setattr(imgui, "begin_menu", begin_menu)
-    monkeypatch.setattr(imgui, "end_menu", lambda: None)
-    monkeypatch.setattr(imgui, "menu_item", menu_item)
-    monkeypatch.setattr(imgui, "menu_item_simple", menu_item_simple)
-    monkeypatch.setattr(imgui, "separator", lambda: None)
-    try:
-        ui_graph.route_from_menu(panel, p)
-    finally:
-        monkeypatch.undo()
+    It used to intercept imgui's `begin_menu` / `menu_item` to find out
+    what the menu held. A menu is now described before it is drawn, so the
+    rows can simply be read — and the reading is the same whichever
+    renderer would draw them. `monkeypatch` is no longer needed and is kept
+    only so the callers read as they did.
+    """
+    m = ui_menu.Menu("test.route_from")
+    ui_graph.route_from_menu(panel, p, m)
+    opened = [r.label for r in m.walk() if r.kind == ui_menu.SUB]
+    items = [(r.label, bool(r.checked), r.enabled)
+             for r in m.walk() if r.kind == ui_menu.ITEM]
+    if pick is not None:
+        m.pick(next((r.id for r in m.walk()
+                     if r.kind == ui_menu.ITEM and r.label == pick), None))
     return opened, items
 
 
@@ -1422,21 +1405,15 @@ def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, r
     seen = []
     real = ui_graph.route_from_menu
     monkeypatch.setattr(ui_graph, "route_from_menu",
-                        lambda pan, q: (seen.append(q.id), real(pan, q)))
-    monkeypatch.setattr(imgui, "begin_menu", lambda label, *a: False)
-    monkeypatch.setattr(imgui, "menu_item_simple", lambda label, *a, **k: False)
+                        lambda pan, q, m: (seen.append(q.id), real(pan, q, m)))
     # (plan 36 T3: an effect's params exist where the graph names it)
     gs = rig.panel.library.loaded_patch.graph
     spec = G.read_graph({**gs.spec.to_json(), "nodes": [
         *gs.spec.to_json()["nodes"], {"kind": "effect", "file": "glimmer"}]})
     gs.land(spec, spec.to_json())
     g = rig.reg["fx.glimmer.mix"]
-    imgui.new_frame()
-    imgui.begin("menu")
-    p._ctx_learn(g, g)
-    p._ctx_learn(rig.reg["view.bmp_alpha"], rig.reg["view.bmp_alpha"])
-    imgui.end()
-    imgui.end_frame()
+    p._ctx_learn(g, g, ui_menu.Menu("t.1"))
+    p._ctx_learn(rig.reg["view.bmp_alpha"], rig.reg["view.bmp_alpha"], ui_menu.Menu("t.2"))
     monkeypatch.undo()
     assert seen == ["fx.glimmer.mix", "view.bmp_alpha"]
     assert ui_graph.route_from_items(p, rig.reg["view.bmp_alpha"]) is None   # an alias
@@ -2686,6 +2663,39 @@ def _escape(rig):
     assert not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)
 
 
+def test_the_canvas_menus_are_the_kits_panel_at_the_pointer(rig, monkeypatch):
+    """GRAPH's right-click menus are dkit's measured panel.
+
+    Their ROWS are described (`ui_menu`) and every other test here reads
+    the description, which is the right seam for what a menu offers and
+    says nothing about what is drawn. This asserts the two things a
+    description cannot: that the kit's panel is what opens — `menu.popup`
+    recording its rect in `LAST_RECT` is the only word for that — and that
+    it opens AT THE POINTER, which is `comp_context_menu.place_at_pointer`'s
+    measured law (dx +2, dy 0) rather than wherever ImGui would put a
+    popup.
+    """
+    from hyperspace import ui_kit
+    from hyperspace.dkit import comp_context_menu as CX
+    from hyperspace.dkit import menu as M
+    if not ui_kit.ready():
+        pytest.skip("the kit's faces are not in this atlas")
+    _gs, probe = _drag_rig(rig, monkeypatch, *FRAME0, layout={"render:shape": [-400, 0],
+                                                              "render:scene": [0, 0]})
+    st = ui_graph._state(rig.panel)
+    M.LAST_RECT.clear()
+    _right_click(rig, probe, "render:scene")
+    rect = M.LAST_RECT.get(ui_graph.MENU)
+    assert rect, "the right-click did not open the kit's panel"
+    px, py = st["menu_screen"]
+    assert rect[0] == pytest.approx(px + CX.POINTER_DX, abs=0.5)
+    assert rect[1] == pytest.approx(py + CX.POINTER_DY, abs=0.5)
+    assert rect[2] >= CX.MIN_W              # min-w-36, the measured floor
+    _escape(rig)
+    frame(rig.panel)
+    assert M.LAST_RECT.get(ui_graph.MENU) is None, "the panel outlived its popup"
+
+
 def test_a_group_made_taken_apart_and_remade_by_the_mouse(rig, monkeypatch):
     """Row 563, by the mouse (the real editor, the harness above): two
     effects in the run box-selected and grouped from the right-click menu;
@@ -2711,16 +2721,7 @@ def test_a_group_made_taken_apart_and_remade_by_the_mouse(rig, monkeypatch):
     _box_select(rig, probe, (ax - 30, ay - 80), (wx + ww + 30, max(ay + ah, wy + wh) + 80))
     _in_editor(rig, lambda: st.__setitem__("menu_sel", ui_graph.selected_ids(st)))
     assert sorted(st["menu_sel"]) == ["render:acid", "render:wobble"]
-    picked: list[str] = []
-    want = {"pick": "group "}
-
-    def item(label, *a, **k):               # one click on the item wanted, once
-        picked.append(label)
-        if want["pick"] and label.startswith(want["pick"]):
-            want["pick"] = None
-            return True
-        return False
-    monkeypatch.setattr(imgui, "menu_item_simple", item)
+    picked = graph_menus(monkeypatch, pick="group ")
     _right_click(rig, probe, "render:acid")
     assert "group 2 nodes" in picked, picked
     assert [(g["id"], sorted(g["nodes"]), g["open"]) for g in pre.groups] == [
@@ -2730,7 +2731,7 @@ def test_a_group_made_taken_apart_and_remade_by_the_mouse(rig, monkeypatch):
     assert st["view"].group("group.1") is not None and "render:acid" in st["hide"]
     # 2. open it from its menu, drag one member out, then the other
     picked.clear()
-    want["pick"] = "open"
+    picked.pick = "open"
     _right_click(rig, probe, "group.1")
     assert "open" in picked and pre.groups[0]["open"] is True
     _escape(rig)
@@ -2760,7 +2761,7 @@ def test_a_group_made_taken_apart_and_remade_by_the_mouse(rig, monkeypatch):
     _in_editor(rig, lambda: st.__setitem__("menu_sel", ui_graph.selected_ids(st)))
     assert sorted(st["menu_sel"]) == ["render:acid", "render:wobble"]
     picked.clear()
-    want["pick"] = "group "
+    picked.pick = "group "
     _right_click(rig, probe, "render:wobble")
     assert "group 2 nodes" in picked, picked
     assert [g["id"] for g in pre.groups] == ["group.2"]
