@@ -846,6 +846,45 @@ def test_scrolling_moves_the_pointers_row_under_it(DB):
         f"after the scroll the open panel is {now}, not row 8's"
 
 
+def test_a_keyboard_scroll_hands_a_parked_mouse_nothing(DB):
+    """PageDown scrolls a capped panel to keep its highlight in view, and
+    that is NOT the pointer doing something.
+
+    Reading any offset change as pointer activity handed a parked mouse
+    whatever row the keys slid under it: if that row had a submenu it
+    opened, and an open submenu takes the keys, so Enter could no longer
+    reach the row the person was actually on. The wheel is the pointer's;
+    the keyboard's scroll is not.
+    """
+    h = 560
+    script, _at = _open(DB, h)
+    DB.render("dark", W, h, script=script, keep="last")
+    tx, ty = _trigger_xy(index=4)                   # `Deep list`
+    opened = script + [(tx, ty)] * DWELL
+    DB.render("dark", W, h, script=opened, keep="last")
+    key = f"{CKEY}>deep"
+    sx, sy, sw, sh = M.LAST_RECT[key]
+    assert sh < 28 * M.ITEM_H, "this test wants a capped panel"
+
+    # park on `row 1`, the one plain row in the list, so that ANY movement
+    # of the rows under the pointer puts a TRIGGER there
+    inset = M.SUB_BORDER + M.PAD
+    ordinary = sy + inset + M.ITEM_H / 2
+    parked = opened + [(sx + sw / 2, ordinary)] * DWELL
+    DB.render("dark", W, h, script=parked, keep="last")
+    assert not [k for k in M.LAST_RECT if k.startswith(key + ">")]
+
+    # End sends the highlight to the last row, which scrolls the list to
+    # its foot under a mouse that never moves
+    at = len(parked) + 2
+    DB.render("dark", W, h,
+              script=parked + [(sx + sw / 2, ordinary)] * DWELL,
+              keys=[(at, imgui.Key.end)], keep="last")
+    opened_now = [k for k in M.LAST_RECT if k.startswith(key + ">")]
+    assert not opened_now, \
+        f"a keyboard scroll opened {opened_now} under a mouse that never moved"
+
+
 def test_a_parked_mouse_cannot_take_back_a_keyboard_opened_submenu(DB):
     """ArrowRight with the mouse resting on ANOTHER row.
 
