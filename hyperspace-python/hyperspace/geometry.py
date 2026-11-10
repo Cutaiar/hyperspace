@@ -2087,6 +2087,22 @@ def world_points(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6):
     return np.stack([x1, y1, z1], axis=1), div4, v[:, 3].copy()
 
 
+def turned_depth(i: int, P: np.ndarray, pd: np.ndarray, offset) -> np.ndarray:
+    """`shape_world`'s depth cue `pd` for shape i with the world's offset (a 4×4,
+    `world.World.offset_matrix`) turning it (plan 60, register row 856): a 3D
+    shape's vertices (each 3D layer's, in a scene) cue and sort on their z
+    toward the eye after the offset's turn — what `view_depth` reads, turned; a
+    4D shape's stays its w. The offset's move shifts every depth alike and is
+    left out."""
+    g = geom(i)
+    z = np.asarray(P, dtype=np.float64) @ np.asarray(offset, dtype=np.float64)[2, :3]
+    out = np.array(pd, dtype=np.float64, copy=True)
+    for a, b, j, _ in g.get("layers") or [(0, g["n"], i, 1.0)]:
+        if is_3d(j):
+            out[a:b] = z[a:b]
+    return out
+
+
 def model_matrix(zoom: float = 1.0, pan=(0.0, 0.0), offset=None) -> np.ndarray:
     """camera.zoom / camera.pan as the shape's world transform, 4×4
     (column vectors): scale about the world origin, then move. pan is in

@@ -342,9 +342,27 @@ on the one-copy path and a flat field with Fit off; while it is the identity
 the matrix is built exactly as before. Bodies (velocity, drag), joints,
 puppets and clipping are separate registries keyed by an object's id; the
 world steps once a frame after the integrator (puppets, then fixed physics
-steps of 1/960 s). Nothing moves an offset yet (plan 60 will): **Reset
-world** (`world.reset`, the camera section) puts every one home. Runtime
-state only — never saved, never undone.
+steps of 1/960 s). **Reset world** (`world.reset`, the camera section) puts
+every one home. Runtime state only — never saved, never undone.
+
+**The hand rig** (plan 60, `grip.py`; the HANDS page's **grip** section) moves
+the shape's offset. It is a look's own: `grip.*` is saved in each loadable
+patch, off in one that names none, and the deck on air is the one that acts.
+Close the holding hand's clutch (its grab, or any lane address in **Clutch**)
+and the shape hangs from the hand: at **Coupling** 1 welded, lower on a spring
+from about 30 Hz down to 0.3 Hz with its damping falling too
+(`world.spring_of`); open it and the shape flies on with the hand's velocity,
+slowing at **Drag**, held whole inside what the eye sees (`World.box`).
+**Shaped inertia**: while the other hand's clutch is closed, the line between
+the palms makes the shape heavier (Shape > 0) or lighter about that line,
+ratio 0.25–4, and as it opens that inertia is locked into the shape, which
+then precesses and nutates as a real rigid body (its angular momentum is what
+the physics carries). **Skater**: a change of inertia keeps the momentum, so
+hands apart slow a spin. A new look (a load, a deck switch) starts with the
+shape springing home. Routes can read `grip:held`, `grip:flying`,
+`grip:speed` and `grip:spin`. A turned 3D shape sorts and shades by its turned
+depth (`geometry.turned_depth`). Fit and the 3D lattices take no offset, so
+the grip moves nothing there.
 
 **The eye** is a fixed perspective camera on the world's +z axis looking
 at the origin: `eye.fov` (47.6°, `geometry.EYE_FOV`, across the

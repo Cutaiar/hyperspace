@@ -14,6 +14,7 @@ import pytest
 from conftest import seed
 from imgui_bundle import imgui, implot
 
+from hyperspace import grip as grips
 from hyperspace import hands, lfo, routing, tempo, ui, ui_loadable, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
@@ -85,6 +86,7 @@ def build_rig(tmp_path, renderer=None):
     # Output, the factory table in a Router, the clock and the LFOs
     settings = hands.HandSettings.from_config({})
     hands.register(reg, settings)
+    grips.register(reg, grips.GripState())  # plan 60: the HANDS page's grip section
     hands_io = hands.HandsIO(settings, {"out": ""}, source=FakeLeap(), clock=lambda: 0.0)
     clock, lfos = tempo.Clock(now=lambda: 0.0), lfo.LFOs()   # the LFO page (ui_lfo.py)
     tempo.register(reg, clock)

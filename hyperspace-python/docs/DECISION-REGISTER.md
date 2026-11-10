@@ -855,9 +855,20 @@ here; overturn → the change, then the same.
 | 853 | Plan 59: the pose drawn is home ∘ offset, the offset in the home's frame: it turns the shape about its own centre, and its x, y, z are scaled by `camera.zoom` (at zoom 1 an offset's x and y are a pan's, y the other way up). The shape's home has position and scale but no turn: `camera.yaw` / `.pitch` stay the CPU's turntable, before the world | 659 | (rec) — plan 59 §2.1, §2.4 |
 | 854 | Plan 59: a palm into the world (`app.palms_in_world`) lives in `app.py`, not `ghost.py`: `ghost` is the render stack's and `hands` the meta controller's, and the wall (`tests/test_layer_boundary.py`) lets no patch module reach it. It reads the ghost's own fit (`Ghost.calibrated`, cached) whether or not the ghost hands are shown | — | (rec) |
 | 855 | Plan 59: a puppet sets its object's home and keeps its frame-to-frame velocity and spin on itself (`Palm.velocity`, `.spin`, zero the frame a hand arrives); it feeds no body. A hand not seen stays registered, `present` False, its home where it was last seen | 659 | (rec) |
-| 856 | Plan 59, a limit: a turned offset turns the shape after the painter sort and the depth cue, which read the depth before it, so a 3D shape turned by the offset can sort and shade by its old depth. Nothing moves the offset in plan 59; plan 60, which does, decides | — | (rec) — an item, not built |
+| 856 | Plan 59, a limit: a turned offset turns the shape after the painter sort and the depth cue, which read the depth before it, so a 3D shape turned by the offset can sort and shade by its old depth. Nothing moves the offset in plan 59; plan 60, which does, decides — built, row 865 | — | (rec) — an item, not built |
 | 857 | Choosing a patch to load is the meta controller's: **load…** on GRAPH's deck row opens the library's folders in ImFileDialog and a pick lands on the deck off air by the pads' road (`DeckInstall.load_named`). The side pane lists no patch to load (plan 48's tree and the strip's ◀ ▶ are gone). A patch moved or a folder renamed in Finder is followed live (`Library._hand_moves`) | — | owner — 2026-11-10: "selecting a patch to load is really a meta controller operation"; "Dialog only, no pane list" |
 | 858 | The playlist is the meta controller's: it leaves the side pane, and a **playlist** chip on GRAPH's deck row (lit while one plays, its hover saying where it has got to) opens its controls in a popup under it. `PAGE_KEYS` keeps the `playlist` slot for saved bindings; it shows the selection | — | owner — 2026-11-10: "A playlist is a property of the meta controller, so it should come out of that side pane" |
+| 859 | Plan 60: the hand rig's params are a patch group, `grip` (not `rig`: that word left every string a person reads, row 779): each deck its own, saved in each loadable patch, its preset strip the HANDS page's grip section, the continuous ones routable like any patch param. A patch that names no `grip.*` — every look from before — loads with the grip off. A save writes `grip.*` only when one differs from its default, so a look that never used the grip saves byte for byte as before (`loadable._grip_unless_used`); GRAPH shows the grip's group node, idle while it is off. The on-air deck's grip acts on the one world (row 852). Replaces the first build's shared meta group. A build from before reads a patch with `grip.*` as ids it lacks, and drops them; no schema bump, both Macs running one build | 661, 667 | owner — 2026-11-10, testing it: "This is a thing that really should be per preset. This is an absurd level of power to be able to command on any preset, so this needs to just go and not be a shared parameter across both decks" |
+| 860 | Plan 60: the joint works in the offset's terms — target = home⁻¹ ∘ hand ∘ rel, `rel` captured as the clutch closes from the pose drawn — with a mass-normalized spring (ωn and ζ from `world.spring_of`), so the zoom changes nothing of its feel. Welded (coupling 1) the target is taken whole and the body's velocities are the hand's: its own, plus its turn carrying the shape round it (ω × r), so a throw at the end of a swing flies along the swing. The damper pulls toward the hand's velocity, as the plan's torque does toward its spin | 661, 662 | (rec) — plan 60 §1 |
+| 861 | Plan 60: the hand is read once a frame and the physics steps at 960 Hz, so a held body's target is the hand blended from last frame's pose to this one's across the frame's fixed steps (straight, and the short way round), not a step a frame | 661 | (rec) |
+| 862 | Plan 60: a rigid body steps its angular momentum L in the world, ω = (R I_body Rᵀ)⁻¹ L, so a free body keeps L exactly and precesses and nutates as its fixed inertia turns with it; the rotation spring's torque is at a unit inertia. A body with no joint and an even inertia steps as plan 59's free body, unchanged | 663 | (rec) — plan 60 §2 |
+| 863 | Plan 60: the inertia — the vector from the holding palm to the other, its length over the box's width (`SPAN` 4 with no box), 𝟙 + k m n nᵀ with its ratio clamped to 0.25–4; held fixed in the room while the shaping clutch is closed (taken into the body each frame), locked in the body as it opens. A change goes at most `INERTIA_RATE` (6 a second, in its log), so a jump of the hands is spread over frames. Angular speed held under six turns a second | 663, 664 | (rec) — plan 60 §2, §5 |
+| 864 | Plan 60: the rig's box is `World.box`, set from each scene drawn (`poi.box_for`, the poi's rule: the last scene drawn sets it) inset across the screen by the shape's radius (its circumradius × the zoom) so a parked shape stays whole, and grown to take the shape's home in, so a pan outside it is not pulled in. A boxed body's physics runs on past the edge in `Body.place`; taking hold there captures what is drawn and brings the physics back to it | 662 | (rec) — plan 60 §1 |
+| 865 | Plan 60 builds row 856: while the shape's offset is not the identity, a 3D shape's depth cue and painter sort read its z after the offset's turn (`geometry.turned_depth`); a 4D shape's stay its w, the 4D look. The identity offset takes no new path: every golden unchanged | 666 | (rec) — row 856 left it to plan 60 |
+| 866 | Plan 60: row 851 stands — Fit and the 3D lattices take no offset, so the rig moves nothing there; a flat field with Fit off moves as one figure. `camera.yaw` / `.pitch` stay the CPU's turntable inside the offset: a `turn` row turns the shape about its own axes on top of the rig's turn, and the inertia's body frame is the offset's | 667 | (rec) — plan 59 rows 851, 853 |
+| 867 | Plan 60: the grip is off by default. A new look — any write of `grip.on`, which every load makes, or a deck switch — sends a shape away from home back there, critically damped at `world.HOME_HZ` (2.5 Hz, about 0.3 s), before the grip acts, so a throw never leaks into the next look; a hand closing on the way takes it there. Off, once home, its body and joint leave the registries. A change of hand lets go. `world.reset` also lets every joint go and evens every inertia (a clutch still closed takes hold again from home). A non-finite value anywhere puts the body home and still, said once (`World.note`, stderr) | 667 | (rec) — plan 60 §4, §5 |
+| 868 | Plan 60's optional §7 (the poi onto the world) is not built: the poi writes `camera.pan` / `camera.zoom` as a scene-setter with undo and the dirty dot, and moving it onto an offset changes what a save holds — its own change, not a commit inside this one | — | (rec) — plan 60 §7 "drop it if it grows" |
+| 869 | Plan 60: the grip publishes its own lanes, scheme `grip`: `grip:held` (1 while the clutch has the shape) and `grip:flying` (1 while a let-go shape still moves over 0.05 a second), both offered as gates and 0, not NaN, while the grip is on; `grip:speed` and `grip:spin`, the shape's own world speed over 4 units/s and angular speed over the 6 turns/s cap, 0–1, rest 0, reading on after a throw. Off: no feed, dormant. Published after the world's step, so a route reads the frame before's | 668 | (rec) — asked for by the kinetic-presets session: a comet's tail on the knot's own speed, not the hand's |
 
 "—": no hand check shows it; tests only.
 
@@ -14961,7 +14972,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 ### 856. The painter sort and a turned offset: an item
 
 - **What.** Plan 59, a limit: a turned offset turns the shape after the painter sort and the depth cue, which read the depth before it, so a 3D shape turned by the offset can sort and shade by its old depth. Nothing moves the offset in plan 59; plan 60, which does, decides.
-- **Answer.** (rec) — an item for plan 60, not built. Sorting by the offset's depth means the offset on the CPU before the sort, which moves work the GPU does now.
+- **Answer.** (rec) — an item for plan 60; built there (row 865). Sorting by the offset's depth means the offset on the CPU before the sort, which moves work the GPU does now.
 - **What it would take.** Medium: `shape_world`'s depth through the offset's turn before `edepth` and `pd`, only while the offset is not the identity.
 - **Judge it.** No hand check.
 
@@ -14976,3 +14987,80 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **What.** The playlist leaves the side pane: no **playlist** chip among the pane's tabs, no section. GRAPH's deck row gains a **playlist** chip (deck · load… · playlist · copy on air to off air · fade), reading "playlist: <name>" once one is chosen, lit while it plays, its hover saying where it has got to. A click opens the same controls in a popup under it, 340 px wide: choose or make a list, play and stop, back and on, start at launch, where it has got to, the entries with their dwells and ×, add a look. The fade's seconds are the row's own slider beside **fade**, so the popup no longer repeats it. ⌘Z over the popup takes nothing back, as over the old section (row 709). `PAGE_KEYS` keeps its `playlist` slot so saved bindings keep their indices; that slot now shows the selection.
 - **Answer.** owner — 2026-11-10: "A playlist is a property of the meta controller, so it should come out of that side pane … a very similar UI treatment in that top area".
 - **Judge it.** On the Mac: the chip opens the popup under it; choose a list, play: the chip lights and its hover counts down; ⌘Z with the mouse over the popup says nothing to undo; the pane's chips have no playlist.
+
+### 859. The grip is a patch's own
+
+- **What.** Plan 60: the hand rig's params are a patch group, `grip` (not `rig`: that word left every string a person reads, row 779): each deck its own (`Deck.build` registers it, `headless.make_app` too), saved in each loadable patch, its preset strip the HANDS page's grip section, `grip.coupling` / `.drag` / `.shape` routable like any patch param. A patch that names no `grip.*` loads with the grip off; a save writes `grip.*` only when one differs from its default (`loadable._grip_unless_used`), so every look from before saves byte for byte as it did. The on-air deck's `reg.grip` is what `app._step_world` sets onto the one world.
+- **Answer.** owner — 2026-11-10, testing the first build (a shared meta group, one grip for every look): "This is a thing that really should be per preset. This is an absurd level of power to be able to command on any preset, so this needs to just go and not be a shared parameter across both decks." Worked out with the kinetic-presets session (Leap visual-effect presets): Clay keeps its own fist-and-turn rows with the grip off by omission; Comet turns the grip on in its own file.
+- **Built.** `params.PATCH_GROUPS`, `Deck.build`, `headless.make_app`, `grip.register`, `app._step_world`; `tests/test_grip.py::test_the_grip_params_are_a_patchs_own_saved_with_it`, `::test_each_deck_has_its_own_grip_and_a_patch_without_one_loads_it_off`, `::test_headless_make_app_has_the_grip`.
+- **Judge it.** 661, 667.
+
+### 860. The joint in the offset's terms
+
+- **What.** Plan 60: the joint works in the offset's terms — target = home⁻¹ ∘ hand ∘ rel, `rel` captured as the clutch closes from the pose drawn — with a mass-normalized spring (ωn and ζ from `world.spring_of`), so the zoom changes nothing of its feel. Welded (coupling 1) the target is taken whole and the body's velocities are the hand's: its own, plus its turn carrying the shape round it (ω × r), so a throw at the end of a swing flies along the swing. The damper pulls toward the hand's velocity, as the plan's torque does toward its spin.
+- **Answer.** (rec) — plan 60 §1.
+- **Built.** `World._target`, `World._rigid`, `world.spring_of`; `tests/test_grip.py::test_welded_the_shape_is_the_hands_pose_times_the_captured_one_every_frame`, `::test_a_turning_hand_swings_the_shape_round_it`, `::test_a_step_of_the_hand_settles_as_the_springs_frequency_and_damping_say`.
+- **Judge it.** 661, 662.
+
+### 861. The hand blended across the steps
+
+- **What.** Plan 60: the hand is read once a frame and the physics steps at 960 Hz, so a held body's target is the hand blended from last frame's pose to this one's across the frame's fixed steps (straight, and the short way round), not a step a frame.
+- **Answer.** (rec).
+- **Built.** `World._target` (`f`); `tests/test_grip.py::test_a_step_of_the_hand_settles_as_the_springs_frequency_and_damping_say` (a frame a step).
+- **Judge it.** 661.
+
+### 862. A rigid body steps its momentum
+
+- **What.** Plan 60: a rigid body steps its angular momentum L in the world, ω = (R I_body Rᵀ)⁻¹ L, so a free body keeps L exactly and precesses and nutates as its fixed inertia turns with it; the rotation spring's torque is at a unit inertia. A body with no joint and an even inertia steps as plan 59's free body, unchanged.
+- **Answer.** (rec) — plan 60 §2.
+- **Built.** `World._rigid`, `world._spin_of`; `tests/test_grip.py::test_a_symmetric_body_precesses_at_the_analytic_rate`, `::test_the_angular_momentum_of_a_free_uneven_body_is_kept`, `::test_an_even_inertia_gives_no_gyroscopic_term`.
+- **Judge it.** 663.
+
+### 863. The shaped inertia, its limits
+
+- **What.** Plan 60: the inertia — the vector from the holding palm to the other, its length over the box's width (`SPAN` 4 with no box), 𝟙 + k m n nᵀ with its ratio clamped to 0.25–4; held fixed in the room while the shaping clutch is closed (taken into the body each frame), locked in the body as it opens. A change goes at most `INERTIA_RATE` (6 a second, in its log), so a jump of the hands is spread over frames. Angular speed held under six turns a second.
+- **Answer.** (rec) — plan 60 §2, §5.
+- **Built.** `world.shaped_inertia`, `World._shape`; `tests/test_grip.py::test_the_inertia_shaped_in_the_room_locks_into_the_body_when_its_clutch_opens`, `::test_a_large_inertia_change_is_spread_over_several_frames`, `::test_the_angular_speed_is_held_under_its_ceiling`.
+- **Judge it.** 663, 664.
+
+### 864. The rig's box
+
+- **What.** Plan 60: the rig's box is `World.box`, set from each scene drawn (`poi.box_for`, the poi's rule: the last scene drawn sets it), inset across the screen by the shape's radius (its circumradius × the zoom) so a parked shape stays whole — the kinetic-presets session's finding: a thrown shape parked half off screen — and grown to take the shape's home in, so a pan outside it is not pulled in. A boxed body's physics runs on past the edge in `Body.place`; taking hold there captures what is drawn and brings the physics back to it.
+- **Answer.** (rec) — plan 60 §1.
+- **Built.** `World._boxed`, `Body.place`, `Renderer.draw_scene`; `tests/test_grip.py::test_a_thrown_shape_is_held_to_the_box_while_its_physics_runs_on`, `::test_a_home_outside_the_box_is_not_pulled_in`.
+- **Judge it.** 662.
+
+### 865. The depth of a turned 3D shape (row 856, built)
+
+- **What.** Plan 60 builds row 856: while the shape's offset is not the identity, a 3D shape's depth cue and painter sort read its z after the offset's turn (`geometry.turned_depth`); a 4D shape's stay its w, the 4D look. The identity offset takes no new path: every golden unchanged.
+- **Answer.** (rec) — row 856 left it to plan 60.
+- **Built.** `geometry.turned_depth`, `Renderer.draw_scene`; `tests/test_grip.py::test_a_turned_offset_turns_a_3d_shapes_depth_cue_and_leaves_a_4d_shapes_w`; the goldens.
+- **Judge it.** 666.
+
+### 866. Fit, the lattices and the turntable
+
+- **What.** Plan 60: row 851 stands — Fit and the 3D lattices take no offset, so the rig moves nothing there; a flat field with Fit off moves as one figure. `camera.yaw` / `.pitch` stay the CPU's turntable inside the offset: a `turn` row turns the shape about its own axes on top of the rig's turn, and the inertia's body frame is the offset's.
+- **Answer.** (rec) — plan 59 rows 851, 853.
+- **Built.** Nothing new: `Renderer.draw_scene`'s `legacy`.
+- **Judge it.** 667.
+
+### 867. Off, reset, a hand changed, a NaN
+
+- **What.** Plan 60: the grip is off by default. A new look — any write of `grip.on`, which every load makes, or a deck switch (another deck's `GripState`) — sends a shape away from home back there, critically damped at `world.HOME_HZ` (2.5 Hz, about 0.3 s), before the grip acts, so a throw never leaks into the next look; a hand closing on the way takes it there. Off, once home, its body and joint leave the registries (the first build left the offset where it was; per preset, that would carry a throw into the next look). A change of hand lets go. `world.reset` also lets every joint go and evens every inertia (a clutch still closed takes hold again from home). A non-finite value anywhere puts the body home and still, said once (`World.note`, stderr).
+- **Answer.** (rec) — plan 60 §4, §5.
+- **Built.** `grip.apply`, `World.reset`, `World._nan`; `tests/test_grip.py::test_off_the_grip_springs_the_shape_home_then_leaves_the_registries`, `::test_a_new_look_with_the_grip_on_starts_with_the_shape_at_home`, `::test_a_deck_switch_is_a_new_look_too`, `::test_changing_hands_lets_go`, `::test_world_reset_lets_go_and_evens_the_inertia`, `::test_a_nan_puts_the_body_home_and_says_so_once`.
+- **Judge it.** 667.
+
+### 868. The poi stays where it is
+
+- **What.** Plan 60's optional §7 (the poi onto the world) is not built: the poi writes `camera.pan` / `camera.zoom` as a scene-setter with undo and the dirty dot, and moving it onto an offset changes what a save holds — its own change, not a commit inside this one.
+- **Answer.** (rec) — plan 60 §7 "drop it if it grows".
+- **Built.** Nothing: `poi.py` as it was; `tests/test_poi*.py` unchanged.
+- **Judge it.** No hand check.
+
+### 869. The grip's lanes
+
+- **What.** Plan 60: the grip publishes its own lanes, scheme `grip`: `grip:held` (1 while the clutch has the shape) and `grip:flying` (1 while a let-go shape still moves over 0.05 a second), both offered as gates and 0, not NaN, while the grip is on; `grip:speed` and `grip:spin`, the shape's own world speed over 4 units/s and angular speed over the 6 turns/s cap, 0–1, rest 0, reading on after a throw. Off: no feed, dormant.
+- **Answer.** (rec) — the kinetic-presets session asked for them in this order: a gate for "in hand" vs "thrown", and the shape's own speed for a tail and a glow, since `hand:right.energy` is the hand's and stops at the throw.
+- **Built.** `grip.lanes`, `grip.publish`, `app._step_world` (after `World.frame`); `tests/test_grip.py::test_the_grip_lanes_say_held_flying_and_the_shapes_own_speed`, `::test_the_grip_lanes_reach_a_router_by_name_and_gate_a_row`.
+- **Judge it.** 668.
