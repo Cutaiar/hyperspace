@@ -86,7 +86,7 @@ def test_ascent_and_descent_round_separately_as_blink_does():
 
 
 def test_kerning_and_ligatures_are_applied_before_measuring():
-    glyphs, pen = D.shape("Settings", "regular")
+    glyphs, _pen = D.shape("Settings", "regular")
     assert len(glyphs) == 7, "tt is one glyph, as Chromium shapes it"
     _, pen_c = D.shape("Ctrl", "medium")
     _, pen_c_alone = D.shape("C", "medium")
@@ -175,6 +175,7 @@ def test_a_stock_input_puts_its_glyphs_on_the_labels_baseline(px_, box):
     _gl()
     import numpy as np
     from imgui_bundle import imgui
+
     from hyperspace.dkit.dev.test_interaction import PROBE_X, PROBE_Y, one_widget
 
     def paint(ui):

@@ -13,7 +13,6 @@ reasoned about and diffed one at a time.
 from __future__ import annotations
 
 import functools
-import itertools
 import json
 import math
 from math import floor
