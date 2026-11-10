@@ -102,7 +102,7 @@ fn viewport(s: &App, l: &Look, vw: f32) -> El {
     // A card changes only when it moves, is selected or the filter fades it: rebuild it then.
     for (i, n) in s.nodes.iter().enumerate() {
         let version = (n.pos.map(f32::to_bits), s.selected == Some(i), faded(s, i, n), s.pictures);
-        world = world.child(rune::memo(format!("card-{}", n.id), version, || node(s, l, i, n)));
+        world = world.child(rune::memo(format!("node-{}", n.id), version, || node(s, l, i, n)));
     }
     let size = 640.0;
     let pose = Pose::at(s.t, 0.4 + s.speed * 1.6);

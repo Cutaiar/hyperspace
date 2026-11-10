@@ -2,7 +2,7 @@
 //! audio, tempo and LFOs, camera, output), each folding to a one-line summary.
 
 use rune::{El, LineCap, Path, Shape, TextCase, canvas, col, el, row, text};
-use rune_kit::{Button, ButtonVariant, ControlSize, Kit, SegmentedControl, Select, SelectAppearance, Switch, glyphs};
+use rune_kit::{Button, ButtonVariant, ControlSize, Kit, SegmentedControl, Select, SelectAppearance, Switch};
 
 use crate::App;
 use crate::data::{BANDS, SHAPES, Status};

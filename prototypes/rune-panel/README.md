@@ -37,6 +37,10 @@ The layout is new.
 - **Status bar.** Frame rate, the graph's counts, the players, the library and
   the show.
 
+![The Shape node selected: its cables light up, the inspector shows it](shots/selected.png)
+
+![Panned to the effects and outputs, with the minimap following](shots/effects.png)
+
 ### Choices
 
 - **One accent, and red only for on air.** Interaction is cyan. Red is kept for
@@ -91,6 +95,15 @@ canvas panned to the right-hand columns), `folded`, `camera`, `shape-menu`,
 `scripts/tour.json` selects the Analyzer, drags the Channel A node, drags the
 brightness slider, opens Camera, jumps with the minimap, presses Take and
 folds Shape.
+
+### What a headless run can't tell you
+
+Speed. In a cloud session Rune draws through lavapipe, Mesa's software Vulkan,
+and a frame costs about 32 ms whether the clock runs or not, in debug or
+release: that is the rasteriser, not the view. Frame rate is a check on the
+Mac. The view does rebuild every frame while the shape turns (`poll` returns
+true); the cards, the patch list and the dot grid are `memo`ised so only what
+moves is rebuilt.
 
 ## Files
 

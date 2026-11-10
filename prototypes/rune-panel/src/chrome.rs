@@ -79,8 +79,11 @@ fn beat_light(s: &App, l: &Look) -> El {
 /// Deck 1 on air, the crossfader, deck 2 cued, the fade time and Take.
 fn decks(s: &App, l: &Look, k: &Kit) -> El {
     let deck = |key: &'static str, n: usize, patch: usize, on_air: bool| {
+        // Two elements, not one restyled: CUE leaves and ON AIR arrives rather than one
+        // morphing into the other mid-fade.
         let badge = if on_air {
             row()
+                .key("on-air")
                 .h(18.0)
                 .px(7.0)
                 .gap(5.0)
@@ -91,6 +94,7 @@ fn decks(s: &App, l: &Look, k: &Kit) -> El {
                 .child(text("ON AIR").font(ty::VALUE_SMALL).color(Color::WHITE))
         } else {
             row()
+                .key("cue")
                 .h(18.0)
                 .px(7.0)
                 .center()
