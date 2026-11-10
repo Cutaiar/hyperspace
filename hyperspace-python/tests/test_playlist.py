@@ -15,6 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
+from imgui_bundle import imgui
 from test_loadable import put
 from test_on_off_air import rig as on_off_air_rig
 from test_ui_pane import _st, _tall_driver
@@ -1012,3 +1013,26 @@ def test_a_scene_target_lets_go_of_all_it_made(samples):
         target.ensure(size, samples)
     target.release()
     assert made and [r.released for r in made] == [1] * len(made)
+
+
+def test_a_dwell_typed_and_then_the_popup_dismissed_is_kept(tmp_path, monkeypatch):
+    """Review of #445: a click outside shuts the popup before the dwell field can
+    report it was left, so the typed value is kept pending and written as it shuts."""
+    with build_rig(tmp_path) as r:
+        r.panel.desk = False
+        r.panel.page = PAGE_KEYS.index("graph")
+        d = _tall_driver(r, monkeypatch)
+        p = r.panel.playing = Playing(StandInMeta(), r.panel.library)
+        playlist.register(r.reg, p)
+        playlist.save(r.panel.library, Playlist("cart", [Entry("a", 60.0), Entry("b", 60.0)]))
+        assert p.select("cart")
+        d.run(d.wait(2), d.click("graph.playlist", frames=3), d.wait(2))
+        d.run(d.click("playlist.dwell.0", frames=2), d.wait(1))
+        d.run(d.key(imgui.Key.a, d.ctrl), d.type("90"), d.wait(2))
+        assert "playlist.pick" in d.rects
+        d.run(d.click((5.0, 1500.0), frames=2), d.wait(3))     # far outside: the popup shuts
+        d.rects.clear()
+        d.run(d.wait(2))
+        assert "playlist.pick" not in d.rects
+        assert [e.dwell_s for e in playlist.read(r.panel.library, "cart").entries] == [90.0, 60.0]
+        assert p.playlist.entries[0].dwell_s == 90.0
