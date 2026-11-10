@@ -45,6 +45,7 @@ from . import (
     graphview,
     learn,
     ui_bands,
+    ui_browse,
     ui_camera,
     ui_desk,
     ui_displays,
@@ -1042,10 +1043,7 @@ class Panel:
         quit and on ⌘R, before imgui shuts down; a panel that never drew
         the page holds none — the GRAPH canvas's tap (`canvas_tap`,
         2026-11-02) and the pad drawings' NanoVG (ui_pad_nvg) go with it,
-        while the control window's GL is up. Safe to call twice. A loadable patches
-        fold clicked under `WRITE_AFTER_S` ago is written first (plan 48
-        stage 2)."""
-        ui_loadable.flush_folds(self, force=True)
+        while the control window's GL is up. Safe to call twice."""
         ui_graph.close(self)
         tap, self.canvas_tap = getattr(self, "canvas_tap", None), None
         if tap is not None:
@@ -2249,6 +2247,7 @@ class Panel:
         # Replace / Keep, its own window, before anything can return: a
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
+        ui_browse.draw(self)    # the patches' file explorer, while it is up: its own window
         self.canvas_px = None   # the GRAPH page sets it when it draws (replay.grab reads it)
         ui_desk.tick(self)      # a picked control lets go by itself (ui_desk.PICK_S)
         ui_graph.settle(self)   # a loadable patch landed without the published node: let it go
@@ -2953,6 +2952,8 @@ class Panel:
         self._button("camera.reset", "Reset view")
         beside(imgui.calc_text_size("R  ·  stick click").x)
         imgui.text_disabled("R  ·  stick click")
+        if self.reg.get("world.reset") is not None:     # plan 59: the world's offsets, the meta controller's
+            self._button("world.reset", "Reset world")
 
     def _page_lookback(self, dt: float) -> None:
         ui_lookback.page(self, dt)     # the frame history and its composite

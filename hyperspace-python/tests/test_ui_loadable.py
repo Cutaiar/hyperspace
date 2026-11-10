@@ -26,7 +26,7 @@ from test_ui_shell import (  # noqa: F401 — the fixture
 )
 
 from hyperspace import ui, ui_kit, ui_loadable, ui_pane
-from hyperspace.library import HOME_UNSET, LOADABLE, PATCHES, RETIRED_MODULES, Library
+from hyperspace.library import HOME_UNSET, LOADABLE, PATCHES, RETIRED_MODULES
 from hyperspace.ui import PAGE_KEYS
 
 ACID_WASH = Path(__file__).resolve().parent / "fixtures" / "patches" / "acid-wash.json"
@@ -77,24 +77,25 @@ def _open_patches(monkeypatch):
 
 # ------------------------------------------------------------ the page, top to bottom
 
-def test_the_page_is_strip_list_patches_show_top_to_bottom(rig):  # noqa: F811
-    """The strip's rects, the list's box under it, the show line under
-    that — and nothing of the old page: no bank pill, no "starts on", no
-    loadable patch combo, no "more"."""
+def test_the_page_is_strip_then_show_and_lists_no_patch_to_load(rig):  # noqa: F811
+    """The strip's rects, the show line under it — and no list and no
+    arrows: choosing a patch to load is the meta controller's (load… on
+    GRAPH's deck row). Nothing of the old page either: no bank pill, no
+    "starts on", no loadable patch combo, no "more"."""
     panel = rig.panel
     st = _page(panel)
     rects, page = st["rects"], st["page"]
-    assert {"strip.loadable.name", "strip.loadable.next", "strip.loadable.new",
+    assert {"strip.loadable.name", "strip.loadable.new",
             "strip.loadable.save", "strip.loadable.as"} <= set(rects)
+    assert "strip.loadable.next" not in rects and page["rows"] == []
+    assert not [k for k in page["rects"] if k.startswith("row.")]
     assert {"show.line", "show.name", "show.menu", "show.save", "show.save_as",
             "show.new"} <= set(rects)
     assert not [k for k in rects if k.startswith(("preset.", "starts_on", "strip.loadable.reset"))]
     assert "bank_labels" not in st and "slot_menu" not in st and "dangling" not in st
     new, save, as_ = (rects[f"strip.loadable.{k}"] for k in ("new", "save", "as"))
     assert new[2] <= save[0] < save[2] <= as_[0]                 # new · save · as…, in a row
-    rows = page["rects"]["rows"]
-    assert rects["strip.loadable.name"][3] <= rows[1]            # the strip over the list
-    assert rows[3] <= rects["show.line"][1]                      # the show line under it
+    assert rects["strip.loadable.name"][3] <= rects["show.line"][1]   # the show line under it
     assert rects["show.line"][3] <= rects["show.name"][1]        # then the show's own row
     assert page["group"] == "loadable"
 
@@ -122,135 +123,11 @@ def test_the_strips_name_is_a_readout_and_opens_no_list(rig, monkeypatch):  # no
     assert lib.current("loadable") == "TRIP"
 
 
-def test_the_list_is_every_loadable_by_name_with_rename_and_cross(rig):  # noqa: F811
-    """Every loadable patch of the library, in `Library.list`'s order (case folded),
-    each row `rename` and × — one tier, no row dim, no row hidden; each
-    row's chips clear its name inside the list's box."""
-    panel, lib = rig.panel, rig.lib
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
-    st = _page(panel)
-    page = st["page"]
-    listing = lib.list("loadable")
-    assert len(listing) == 25 and listing == sorted(listing, key=str.lower)
-    assert {"TUMBLE", "BIG BLUE WAVE", "legacy6", "seq-demo", "DIAL"} <= set(listing)
-    assert page["rows"] == [(name, ("rename", "×")) for name in listing]
-    assert page["foot"] == []                                     # an empty trash: no foot
-    box = page["rects"]["rows"]
-    half = imgui.get_style().item_spacing.x / 2      # a selectable spans half a spacing out
-    for name in listing:
-        row, ren, x = (page["rects"][f"{k}.{name}"] for k in ("row", "rename", "×"))
-        assert row[0] + imgui.calc_text_size(name).x < ren[0] < ren[2] <= x[0], name
-        assert box[0] - half <= row[0] and x[2] <= row[2] + 1, name
-        assert row[2] <= box[2] + half, name
-
-
-def test_a_click_on_a_row_loads_it_and_the_loaded_row_is_selected(rig, monkeypatch):  # noqa: F811
-    panel, lib = rig.panel, rig.lib
-    got = _labels(monkeypatch)
-    st = _page(panel)
-    assert lib.current("loadable") is None
-    assert not [label for label, on in got["selectable"] if on]
-    _click(panel, st["page"]["rects"]["row.FIELD"])
-    assert lib.current("loadable") == "FIELD" and not lib.is_dirty("loadable")
-    assert rig.view.shape == lib.read("loadable", "FIELD")["values"]["view.shape"]
-    got["selectable"].clear()
-    page_frame(panel)
-    assert [label for label, on in got["selectable"] if on] == ["FIELD##pick"]
-    _click(panel, st["page"]["rects"]["row.ACID"])
-    assert lib.current("loadable") == "ACID"
-
-
-def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # noqa: F811
-    """× on any row: the file goes to the trash, the row leaves the list,
-    the foot says the trash holds something. A loadable patch a pad names is still
-    its file's: the footer says which pad, nothing is cleared for you."""
-    panel, lib = rig.panel, rig.lib
-    st = _page(panel)
-    page = st["page"]
-    _click(panel, page["rects"]["×.DIAL"])
-    assert not (tmp_path / "loadable" / "dial.json").exists()
-    assert [t.name for t in lib.trash()] == ["DIAL"] and "DIAL" not in lib.list("loadable")
-    assert lib.status == "DIAL is in the trash — the PATCHES section's trash can restore it"
-    page_frame(panel)
-    page = st["page"]
-    assert "DIAL" not in [n for n, _ in page["rows"]] and len(page["rows"]) == 24
-    assert page["foot"] == ["trash (1) ▸"] and "trash" in page["rects"]
-    _click(panel, page["rects"]["×.ACID"])                       # F6's loadable patch
-    assert lib.warning.startswith("ACID is in the trash — F6 still names it")
-    assert lib.install.bank[5] == "ACID" and "ACID" not in lib.list("loadable")
-    page_frame(panel)
-    assert st["page"]["foot"] == ["trash (2) ▸"]
-
-
-def test_a_folder_loadable_sits_under_its_header_and_renames_in_its_folder(rig):  # noqa: F811
-    """Plan 48 row 588, under stage 2's tree (row 636): a loadable patch in
-    ``loadable/party/`` is listed as ``party/DIAL`` and drawn under the
-    ``party`` header by its leaf, its chips clear of it; `rename` seeds
-    the field with the leaf alone, and the file stays in its folder.
-    (The window tall enough that the folder, after every top-level
-    loadable patch, is in view.)"""
-    panel, lib = rig.panel, rig.lib
-    imgui.get_io().display_size = imgui.ImVec2(CONTROL_SIZE[0], 2400)
-    src = lib.path_of("loadable", "DIAL")
-    folder = lib.home / "loadable" / "party"
-    folder.mkdir()
-    src.rename(folder / "dial.json")
-    st = _page(panel)
-    page = st["page"]
-    assert ("party/DIAL", ("rename", "×")) in page["rows"]
-    assert page["rows"][-1][0] == "party/DIAL"                  # after the top level
-    assert ("party", True) in page["folders"]
-    assert ("party", "DIAL") in page["text"] and ("", "TUMBLE") in page["text"]
-    row, ren = page["rects"]["row.party/DIAL"], page["rects"]["rename.party/DIAL"]
-    head = page["rects"]["folder.party"]
-    assert head[3] <= row[1] and head[0] < row[0]               # under it, indented
-    assert row[0] + imgui.calc_text_size("DIAL").x < ren[0]
-    _click(panel, ren)
-    page_frame(panel)
-    assert st["naming"] == "rename:party/DIAL" and st["buf"] == "DIAL"
-    lib.rename("loadable", "party/DIAL", st["buf"] + " TWO")
-    st["naming"] = None
-    assert (folder / "dial-two.json").is_file() and "party/DIAL TWO" in lib.list("loadable")
-
-
-def test_rename_turns_the_row_into_the_field_and_enter_renames(rig, tmp_path):  # noqa: F811
-    """`rename` on a row: the row becomes the name field, seeded with the
-    name; Enter renames the file (the name inside it too) and the list
-    re-lists under the new name. A taken name is refused on the footer."""
-    panel, lib = rig.panel, rig.lib
-    lib.load("loadable", "DIAL")
-    st = _page(panel)
-    _click(panel, st["page"]["rects"]["rename.DIAL"])
-    page_frame(panel)
-    row = next(r for r in st["page"]["rows"] if r[0] == "DIAL")
-    assert row == ("DIAL", ("field",)) and st["naming"] == "rename:DIAL" and st["buf"] == "DIAL"
-    io = imgui.get_io()
-    io.add_input_characters_utf8("DIAL TWO")                      # typed over the seeded name
-    page_frame(panel)
-    io.add_key_event(imgui.Key.enter, True)
-    page_frame(panel)
-    io.add_key_event(imgui.Key.enter, False)
-    page_frame(panel)
-    page_frame(panel)
-    assert st["naming"] is None
-    assert lib.current("loadable") == "DIAL TWO"
-    assert (tmp_path / "loadable" / "dial-two.json").is_file()
-    assert not (tmp_path / "loadable" / "dial.json").exists()
-    assert json.loads((tmp_path / "loadable" / "dial-two.json").read_text())["name"] == "DIAL TWO"
-    assert lib.status.startswith("renamed DIAL → DIAL TWO")
-    names = [n for n, _ in st["page"]["rows"]]
-    assert "DIAL TWO" in names and "DIAL" not in names and names == lib.list("loadable")
-    # a refused rename shows on the warning line (the footer), nothing moves
-    ui_loadable._rename(panel, "DIAL TWO", "TRIP")
-    assert lib.warning.startswith("library: TRIP: that name is taken")
-    assert lib.list("loadable").count("TRIP") == 1 and "DIAL TWO" in lib.list("loadable")
-
-
 def test_the_trash_foot_shows_only_while_the_trash_holds_something_and_restores(
         rig, tmp_path):  # noqa: F811
-    """"trash (n) ▸" at the list's foot only while the trash holds a file;
+    """"trash (n) ▸" under the strip only while the trash holds a file;
     its popup lists them with `restore`, which puts the file back in the
-    list — and the foot goes again."""
+    library — and the line goes again."""
     panel, lib = rig.panel, rig.lib
     st = _page(panel)
     assert st["page"]["foot"] == [] and "trash" not in st["page"]["rects"]
@@ -270,24 +147,6 @@ def test_the_trash_foot_shows_only_while_the_trash_holds_something_and_restores(
     page_frame(panel)
     page_frame(panel)
     assert st["page"]["foot"] == [] and "trash" not in st["page"]["rects"]
-    assert "DIAL" in [n for n, _ in st["page"]["rows"]]
-
-
-def test_the_list_fills_the_page_and_never_pushes_the_show_line_off(rig, monkeypatch):  # noqa: F811
-    """The list is a child that takes the page's room — never shorter than
-    MIN_ROWS rows, scrolling inside itself past that — so the show line
-    sits under it on a short window and a tall one."""
-    panel, lib = rig.panel, rig.lib
-    lib.load("loadable", "TRIP")
-    lib.warning = ""        # (the rig has no envelopes: the `/7`'s env ids are unknown here)
-    assert len(lib.list("loadable")) == 25
-    for size in ((820, 820), CONTROL_SIZE):
-        imgui.get_io().display_size = imgui.ImVec2(*size)
-        st = _page(panel, 3)
-        rows, line = st["page"]["rects"]["rows"], st["rects"]["show.line"]
-        assert rows[3] - rows[1] >= ui_loadable.MIN_ROWS * ui_loadable.list_row_h() - 1
-        assert rows[3] <= line[1], size                           # the show line under the list
-        assert rows[1] < rows[3] <= size[1] and line[3] <= size[1], size
 
 
 def test_the_shows_row_is_never_covered(rig):  # noqa: F811
@@ -304,7 +163,7 @@ def test_the_shows_row_is_never_covered(rig):  # noqa: F811
         for b in keys[i + 1:]:
             assert not _overlap(rects[a], rects[b]), (a, b)
         assert rects[a][1] < name[3] and name[1] < rects[a][3], a   # one row
-    assert rects["show.new"][2] <= ui_loadable._state(panel)["page"]["rects"]["rows"][2] + 1
+    assert rects["show.new"][2] <= ui_loadable._state(panel)["page"]["right"] + 1
 
 
 # ------------------------------------------------------------ the strip
@@ -338,7 +197,7 @@ def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
 
 def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noqa: F811
     """Plan 19 WP5: the dot is a filled red disc 12 px across (`ui.DOT_R`),
-    centred on the name's line between the name and ▶; while it shows the
+    centred on the name's line, right of the name; while it shows the
     save chip is the lit one (solid red) and reads "save" — one tier, the
     only word it has. The row does not grow. Saved: the dot goes and the
     chip is quiet again."""
@@ -359,7 +218,7 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noq
     assert x1 - x0 == y1 - y0 == 2 * ui.DOT_R == 12
     name = rects["strip.loadable.name"]
     assert abs((y0 + y1) / 2 - (name[1] + name[3]) / 2) < 0.5     # on the name's middle
-    assert name[2] <= x0 and x1 <= rects["strip.loadable.next"][0]  # between the name and ▶
+    assert name[2] <= x0 and x1 <= rects["strip.loadable.new"][0]   # between the name and new
     assert st["save"]["strip.loadable"] == ("save", True)          # lit while dirty
     for key in ("strip.loadable.name", "strip.loadable.new", "strip.loadable.save",
                 "strip.loadable.as", "show.name"):
@@ -400,8 +259,8 @@ def test_save_writes_over_the_loaded_loadables_own_file(rig, tmp_path):  # noqa:
 def test_the_loadable_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):  # noqa: F811
     """The preset strip drops `reset` (on a document kind `Library.reset`
     loads a loadable patch called "default", and none is there): at the control
-    size, the longest name loaded and dirty, the strip's items — ◀ name ●
-    ▶ · new · save · as… — clear one another and the page's edge."""
+    size, the longest name loaded and dirty, the strip's items — name ● ·
+    new · save · as… — clear one another and the page's edge."""
     panel, lib = rig.panel, rig.lib
     assert lib.default_name("loadable") is None                 # what reset would load: none
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
@@ -413,9 +272,9 @@ def test_the_loadable_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):
     rects = st["rects"]
     assert "strip.loadable.reset" not in rects
     assert st["save"]["strip.loadable"] == ("save", True)
-    page_right = st["page"]["rects"]["rows"][2]
+    page_right = st["page"]["right"]
     items = {k: r for k, r in rects.items() if k.startswith("strip.loadable.")}
-    assert set(items) == {f"strip.loadable.{k}" for k in ("name", "dot", "next", "new", "save", "as")}
+    assert set(items) == {f"strip.loadable.{k}" for k in ("name", "dot", "new", "save", "as")}
     keys = sorted(items)
     for i, a in enumerate(keys):
         assert items[a][2] <= page_right + 1, a
@@ -451,7 +310,7 @@ def test_a_module_strip_does_not_overlap(rig, monkeypatch, width):  # noqa: F811
     rects = _rects(panel)
     for group in groups:
         items = {k: v for k, v in rects.items() if k.startswith(f"strip.{group}.")}
-        chips = ("name", "next", "save", "as", "reset") if group in modules else ("name", "next", "new", "save", "as")
+        chips = ("name", "next", "save", "as", "reset") if group in modules else ("name", "new", "save", "as")
         assert {f"strip.{group}.{k}" for k in chips} <= set(items), group
         keys = sorted(items)
         for i, a in enumerate(keys):
@@ -628,30 +487,6 @@ def test_empty_asks_once_and_disarms(rig, tmp_path):  # noqa: F811
     assert st["page"]["foot"] == []
 
 
-def test_the_page_does_not_reread_the_library_every_frame(rig, monkeypatch):  # noqa: F811
-    """The list costs what is on the poll cadence, not a pass over the
-    library per row per frame (the owner's 79-preset cloud library once
-    drew at 25 fps with the list open): ten frames of the page re-index
-    the library at most a few times, however many rows it draws."""
-    panel = rig.panel
-    st = _page(panel)
-    assert len(st["page"]["rows"]) > ui_loadable.LIST_ROWS
-    calls = []
-    real = Library._index
-
-    def counted(self, group):
-        calls.append(group)
-        return real(self, group)
-
-    monkeypatch.setattr(Library, "_index", counted)
-    for _ in range(10):
-        page_frame(panel)
-    assert len(st["page"]["rows"]) > ui_loadable.LIST_ROWS
-    assert len(calls) <= 3, f"{len(calls)} library index passes in 10 frames"
-
-
-# ------------------------------------------------------------ the patches fold (plan 40 T3)
-
 def test_the_patches_fold_lists_patches_with_rename_and_cross_and_no_pick(
         rig, monkeypatch):  # noqa: F811
     """The **patches** fold: every patch, each a row of the preset list's
@@ -798,7 +633,8 @@ def test_nothing_on_the_page_says_starts_on_f_keys_hidden_or_factory(rig, monkey
     words = [*texts, *previews, *tips, *got["hint"], *got["header"],
              *(label.split("##")[0] for label in got["button"]),
              *(label.split("##")[0] for label, _ in got["selectable"]),
-             *st["rects"], *st["page"]["rects"], *st["patches"]["rects"]]
+             *st["rects"], *st["page"]["rects"], *st["patches"]["rects"],
+             *st.get("names", {}).values()]      # the kit's strip draws its name itself
     assert len(words) > 40 and "TRIP" in words and "party" in words
     said = "\n".join(words).lower()
     assert re.search(BANNED, said) is None, re.search(BANNED, said)
@@ -928,42 +764,21 @@ def test_a_line_assigned_every_frame_does_not_pin_the_footer(rig, monkeypatch): 
     assert lib.status != line and panel._message() == (lib.status, False)
 
 
-# ---- the list on the kit: a search, and a row's actions shown on its hover ----
-
-def test_the_search_lists_the_patches_that_have_the_letters_flat(rig):  # noqa: F811
-    """A few letters, from a name or its folder: the list is the patches that
-    have them, flat, each with its folder; none, and the list says so."""
-    panel, lib = rig.panel, rig.lib
-    folder = lib.home / "loadable" / "party"
-    folder.mkdir()
-    lib.path_of("loadable", "DIAL").rename(folder / "dial.json")
-    st = _page(panel)
-    every = [n for n, _ in st["page"]["rows"]]
-    assert "party/DIAL" in every and len(every) == 25
-    st["find"] = "wav"
-    page_frame(panel)
-    found = [n for n, _ in st["page"]["rows"]]
-    assert found == [n for n in lib.list("loadable") if "wav" in n.casefold()] and found
-    st["find"] = "PARTY"                            # its folder's letters, either case
-    page_frame(panel)
-    assert [n for n, _ in st["page"]["rows"]] == ["party/DIAL"]
-    assert ("party", "DIAL") in st["page"]["text"]                 # flat: its folder said
-    assert st["page"]["folders"] == []                             # no headers while searching
-    st["find"] = "zzz"
-    page_frame(panel)
-    assert st["page"]["rows"] == []
-    st["find"] = ""
-    page_frame(panel)
-    assert [n for n, _ in st["page"]["rows"]] == every
-
+# ---- a list row on the kit: its actions shown on its hover ----
 
 @pytest.mark.skipif(not ui_kit.enabled(), reason="the kit is switched off (HYPERSPACE_KIT=0)")
-def test_a_rows_actions_show_on_its_hover_and_take_a_click_unseen(rig):  # noqa: F811
-    """On the kit a row's `rename` and × are icons shown while the row is
-    hovered — twenty-five rows are not fifty chips — eased in, and gone
-    again when the pointer leaves; and a click on where one is takes it
-    whether it shows yet or not (the driver's click, a quick pointer)."""
+def test_a_rows_actions_show_on_its_hover_and_take_a_click_unseen(rig, monkeypatch):  # noqa: F811
+    """On the kit a list row's `rename` and × (the patches fold's, a module
+    strip's list) are icons shown while the row is hovered — eased in, and
+    gone again when the pointer leaves; and a click on where one is takes
+    it whether it shows yet or not (the driver's click, a quick pointer)."""
     panel, lib = rig.panel, rig.lib
+    (lib.home / PATCHES).mkdir(parents=True, exist_ok=True)
+    (lib.home / PATCHES / "acid-wash.json").write_text(ACID_WASH.read_text())
+    mine = json.loads(ACID_WASH.read_text())
+    mine["name"] = "my wash"
+    (lib.home / PATCHES / "my-wash.json").write_text(json.dumps(mine))
+    _open_patches(monkeypatch)
     st = _page(panel)
     assert ui_kit.ready()
     anim = panel.__dict__[ui_kit.STATE]["ui"].anim      # the panel's kit state (ui_kit.begin)
@@ -971,16 +786,16 @@ def test_a_rows_actions_show_on_its_hover_and_take_a_click_unseen(rig):  # noqa:
     def reveal(name: str) -> float:
         return anim._t[f"row:{name}:reveal"].value
 
-    assert reveal("DIAL") == 0.0 and reveal("ACID") == 0.0        # at rest: hidden
-    x0, y0, _x1, y1 = st["page"]["rects"]["row.DIAL"]
+    assert reveal("acid wash") == 0.0 and reveal("my wash") == 0.0     # at rest: hidden
+    x0, y0, _x1, y1 = st["patches"]["rects"]["row.acid wash"]
     io = imgui.get_io()
     io.add_mouse_pos_event(x0 + 20, (y0 + y1) / 2)
     for _ in range(20):                                            # past the 150 ms ease
         page_frame(panel)
-    assert reveal("DIAL") == pytest.approx(1.0) and reveal("ACID") == 0.0
+    assert reveal("acid wash") == pytest.approx(1.0) and reveal("my wash") == 0.0
     io.add_mouse_pos_event(-1.0, -1.0)
     for _ in range(20):
         page_frame(panel)
-    assert reveal("DIAL") == pytest.approx(0.0)
-    _click(panel, st["page"]["rects"]["×.DIAL"])                   # unseen, still there
-    assert "DIAL" not in lib.list("loadable")
+    assert reveal("acid wash") == pytest.approx(0.0)
+    _click(panel, st["patches"]["rects"]["×.acid wash"])           # unseen, still there
+    assert lib.list(PATCHES) == ["my wash"]

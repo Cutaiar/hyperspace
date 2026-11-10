@@ -60,8 +60,9 @@ def _draw(panel, group: str, lib, meta) -> None:
     aw = [ui_fields.button_w(k, words[a]) for a in actions]
     actions_w = sum(aw) + gap * (len(aw) - 1)
     x, y, w, _ = ui_kit.block(0.0)
-    roomy = w - actions_w - T.SPACE[2] - 2 * rh >= L.NAME_MIN
-    nav_w = min(w - actions_w - T.SPACE[2] if roomy else w, 2 * rh + L.name_w())
+    arrows_w = 0.0 if group == L.LOADABLE else 2 * rh      # (no ◀ ▶ on the patches' strip)
+    roomy = w - actions_w - T.SPACE[2] - arrows_w >= L.NAME_MIN
+    nav_w = min(w - actions_w - T.SPACE[2] if roomy else w, arrows_w + L.name_w())
     h = rh if roomy else 2 * rh + T.SPACE[2]
     with ui_kit.mod("uictx").chrome(k):
         _nav(panel, k, group, cur, listing, is_dirty, meta, x, y, nav_w, rh)
@@ -82,59 +83,69 @@ def _draw(panel, group: str, lib, meta) -> None:
 
 def _nav(panel, k, group, cur, listing, is_dirty, meta, x, y, w, h) -> None:
     """◀ name ● ▶, one joined group; the arrows step by name order, a module
-    strip's name opens its list. The dirty dot (plan 19 WP5: a 12 px disc
-    between the name and ▶) is a segment of its own, there only while the
-    group has moved off its patch."""
+    strip's name opens its list. The loadable patches' strip is the name
+    alone (and its dot): which patch a deck holds is the meta controller's
+    to choose — load… on GRAPH's deck row, a pad, the walk. The dirty dot
+    (plan 19 WP5: a 12 px disc between the name and ▶) is a segment of its
+    own, there only while the group has moved off its patch."""
     L, C, T = ui_loadable, ui_kit.mod("comp_button"), ui_kit.mod("tokens")
     st = L._state(panel)
+    arrows = group != L.LOADABLE
+    aw = h if arrows else 0.0
     dot_w = 2 * ui.DOT_R + 2 * T.SPACE[1] if is_dirty else 0.0
-    rects = [(x, y, h, h), (x + h, y, w - 2 * h - dot_w, h)]
+    seg: dict = {}
+    if arrows:
+        seg["prev"] = (x, y, h, h)
+    seg["name"] = (x + aw, y, w - 2 * aw - dot_w, h)
     if is_dirty:
-        rects.append((x + w - h - dot_w, y, dot_w, h))
-    rects.append((x + w - h, y, h, h))
-    joins = C.button_group(rects, "horizontal")
+        seg["dot"] = (x + w - aw - dot_w, y, dot_w, h)
+    if arrows:
+        seg["next"] = (x + w - h, y, h, h)
+    join = dict(zip(seg, C.button_group(list(seg.values()), "horizontal")))
     off = not listing
-    # ◀
-    s = C.ui_button(k, f"strip.{group}:prev", *rects[0], "", variant="outline", size=ARROW,
-                    icon="chevron_left", join=joins[0], in_group=True, disabled=off)
-    if s.clicked:
-        L._guard(panel, panel.library.prev, group)
+    if arrows:          # ◀
+        s = C.ui_button(k, f"strip.{group}:prev", *seg["prev"], "", variant="outline",
+                        size=ARROW, icon="chevron_left", join=join["prev"], in_group=True,
+                        disabled=off)
+        if s.clicked:
+            L._guard(panel, panel.library.prev, group)
     # the name: cut to its button; "—" while nothing is loaded
-    nx, ny, nw, nh = rects[1]
+    nx, ny, nw, nh = seg["name"]
     label = L._elide(cur) if cur else "—"
     imgui.push_font(ui._FONTS["ui"], ui.FONT_BASE)
     label = ui.fit_text(label, nw - 2 * T.SPACE[2])
     imgui.pop_font()
     s = C.ui_button(k, f"strip.{group}:name", nx, ny, nw, nh, label, variant="outline",
-                    size="sm", join=joins[1], in_group=True, disabled=off)
+                    size="sm", join=join["name"], in_group=True, disabled=off)
     L._rect(panel, f"strip.{group}.name")
     st.setdefault("names", {})[group] = label       # what the name says (the tests)
     if s.hovered:
         if cur is None:
             ui.tooltip(f"no patch loaded{L._on_deck(meta)}")
         elif group == L.LOADABLE:
-            ui.tooltip(f"{cur}{L._on_deck(meta)}  ·  the loaded patch — the list below "
-                       "loads onto this deck")
+            ui.tooltip(f"{cur}{L._on_deck(meta)}  ·  the loaded patch — load… on GRAPH's "
+                       "deck row picks another")
         else:
             ui.tooltip(f"{cur}  ·  click for the list")
     if s.clicked and group != L.LOADABLE:
         imgui.open_popup("list")
     st["rects"].pop(f"strip.{group}.dot", None)
     if is_dirty:
-        dx, dy, dw, dh = rects[2]
+        dx, dy, dw, dh = seg["dot"]
         d = C.ui_button(k, f"strip.{group}:dot", dx, dy, dw, dh, "", variant="outline",
-                        size="sm", join=joins[2], in_group=True)
+                        size="sm", join=join["dot"], in_group=True)
         cx, cy, r = dx + dw / 2, dy + dh / 2, ui.DOT_R
         k.dl.add_circle_filled(imgui.ImVec2(cx, cy), r, ui.u32(ui.RED))
         st["rects"][f"strip.{group}.dot"] = (cx - r, cy - r, cx + r, cy + r)
         if d.hovered:
             ui.tooltip("edited since the patch loaded — save writes it")
-    # ▶
-    s = C.ui_button(k, f"strip.{group}:next", *rects[-1], "", variant="outline", size=ARROW,
-                    icon="chevron_right", join=joins[-1], in_group=True, disabled=off)
-    L._rect(panel, f"strip.{group}.next")
-    if s.clicked:
-        L._guard(panel, panel.library.next, group)
+    if arrows:          # ▶
+        s = C.ui_button(k, f"strip.{group}:next", *seg["next"], "", variant="outline",
+                        size=ARROW, icon="chevron_right", join=join["next"], in_group=True,
+                        disabled=off)
+        L._rect(panel, f"strip.{group}.next")
+        if s.clicked:
+            L._guard(panel, panel.library.next, group)
 
 
 def _action(panel, k, group, what, words, cur, is_dirty, unsaved, loaded_patch, rect) -> None:
