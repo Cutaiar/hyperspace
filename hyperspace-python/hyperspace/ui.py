@@ -994,15 +994,15 @@ class Panel:
         `ghost.*`, SYSTEM with `desk.slew`, a fixture node in the selection); else the
         section under it (`ui_pane.where`); else the deck. Over the player screen, its
         own window too, `undo.BOARD`: the meta stack, for a player's moves alone (row
-        800). None over the playlist's section: no stack, since an edit there is on none
-        of them (`undo.here`)."""
+        800). None over the playlist (its popup on GRAPH's deck row, `ui_playlist.popup`):
+        no stack, since an edit there is on none of them (`undo.here`)."""
         p = getattr(self, "_param_under", None)
         if p is not None and undo.watched(p):
             return part_of(p) != "patch"
         if ui_players.over(self):
             return undo.BOARD
         section = ui_pane.where(self)
-        if section == "playlist":    # a list's edits are files, on no stack (row 709)
+        if section == ui_playlist.UNDER:   # a list's edits are files, on no stack (row 709)
             return None
         return section in META_SECTIONS
 
@@ -2321,9 +2321,6 @@ class Panel:
         """Who is on air, and what they hold (ui_players.py)."""
         ui_players.section(self, dt)
 
-    def _page_playlist(self, dt: float) -> None:
-        """The playlist, for installs (ui_playlist.py)."""
-        ui_playlist.page(self, dt)
 
     def _page_output(self, dt: float) -> None:
         """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""

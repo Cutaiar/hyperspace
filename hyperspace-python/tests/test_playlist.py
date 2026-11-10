@@ -17,10 +17,10 @@ from types import SimpleNamespace as NS
 import pytest
 from test_loadable import put
 from test_on_off_air import rig as on_off_air_rig
-from test_ui_pane import _only, _spills, _st, _tall_driver
+from test_ui_pane import _st, _tall_driver
 from test_ui_shell import build_rig
 
-from hyperspace import app, hotreload, playlist, ui_graph, ui_pane, ui_players, ui_playlist, undo
+from hyperspace import app, hotreload, playlist, ui_pane, ui_players, ui_playlist, undo
 from hyperspace.library import PLAYLISTS, Library, LibraryError, group_folder
 from hyperspace.params import is_shared_meta_id, part_of
 from hyperspace.playlist import LEAD_S, Entry, Playing, Playlist
@@ -742,10 +742,17 @@ def test_a_long_run_keeps_the_undo_stacks_bounded(air):
         assert len(stack.stack) <= undo.LIMIT
 
 
-# ------------------------------------------------------------------ the section (D6b)
+# ------------------------------------------------------------------ the popup (D6b)
 
-@pytest.mark.parametrize("width", ["min", "default"])
-def test_the_section_fits_the_pane_and_works(tmp_path, monkeypatch, width):
+def test_the_playlist_is_no_section_of_the_pane():
+    """A playlist is the meta controller's (row 852): no pane chip, no menu row. Its
+    `PAGE_KEYS` slot stays, so saved bindings keep their indices; it shows the selection."""
+    assert "playlist" not in ui_pane.KEYS and "playlist" not in ui_pane.TABS
+    assert ui_pane.section_of("playlist") == ui_pane.SELECTION
+    assert "playlist" in PAGE_KEYS
+
+
+def test_the_chip_opens_the_popup_and_it_works(tmp_path, monkeypatch):
     with build_rig(tmp_path) as r:
         r.panel.desk = False
         r.panel.page = PAGE_KEYS.index("graph")
@@ -756,19 +763,27 @@ def test_the_section_fits_the_pane_and_works(tmp_path, monkeypatch, width):
         playlist.save(r.panel.library, Playlist("A long name for a cart", [
             Entry("a-loadable-patch-with-rather-a-long-name", 300.0), Entry("party/b", 60.0)]))
         assert p.select("A long name for a cart")
+        assert ui_playlist.label(p) == "playlist: A long name for a…"
         d.run(d.wait(2))
         st = _st(r)
-        st["side_w"] = ui_graph.SIDE_MIN if width == "min" else ui_graph.SIDE_W
-        _only(r, "playlist")
-        d.run(d.wait(3))
-        assert st["pane_drawn"] == ["playlist"]
-        assert not _spills(d, st)
+        assert "playlist.pick" not in d.rects                  # shut until the chip is clicked
+        d.run(d.click("graph.playlist", frames=3), d.wait(2))
+        x0, y0, x1, y1 = st["playlist_rect"]
+        assert x1 - x0 == pytest.approx(ui_playlist.WIDTH)
+        chip = d.rects["graph.playlist"]
+        assert y0 >= chip[3] and x0 == pytest.approx(chip[0])  # under its chip, never over it
+        mine = {k: v for k, v in d.rects.items() if k.startswith(("playlist.", "chip.playlist."))}
+        assert {"playlist.pick", "chip.playlist.play", "playlist.out.1"} <= set(mine)
+        for k, (a0, b0, a1, b1) in mine.items():                # nothing passes the popup's edge
+            assert x0 - 1 <= a0 and a1 <= x1 + 1 and y0 - 1 <= b0 and b1 <= y1 + 1, k
         d.run(d.click("chip.playlist.play", frames=3))
         assert p.on and r.reg["playlist.play"].get()
         d.run(d.click("playlist.out.1", frames=3))
         assert [e.loadable for e in p.playlist.entries] == ["a-loadable-patch-with-rather-a-long-name"]
         assert [e.loadable for e in playlist.read(r.panel.library, p.playlist.name).entries] == [
             "a-loadable-patch-with-rather-a-long-name"]
+        d.run(d.move("playlist.next", frames=2))
+        assert ui_pane.where(r.panel) == ui_playlist.UNDER      # ⌘Z here: no stack (row 709)
         d.run(d.click("playlist.next", frames=3))
         d.run(d.click("chip.playlist.play", frames=3))
         assert not p.on

@@ -614,12 +614,13 @@ def test_ui_page_on_fx_shows_the_fx_section_and_every_slot_keeps_its_index(pane)
     assert ui_pane.showing(r.panel) == "lfo" and st["pane_drawn"] == ["lfo"]
 
 
-def test_every_page_slot_but_graph_is_a_section():
+def test_every_page_slot_but_graph_and_playlist_is_a_section():
     """No page is left to switch to: the table `ui.page` indexes names a
     section in every slot, GRAPH's being the selection (the canvas is always
-    drawn)."""
+    drawn). The playlist's slot is kept for saved bindings, but it is the meta
+    controller's now (row 852: GRAPH's deck row), so it shows the selection."""
     assert ui_pane.section_of("graph") == "selection"
-    assert {k for k in PAGE_KEYS if ui_pane.section_of(k) != k} == {"graph"}
+    assert {k for k in PAGE_KEYS if ui_pane.section_of(k) != k} == {"graph", "playlist"}
     assert set(ui_pane.KEYS) - set(PAGE_KEYS) == {"selection"}
 
 
