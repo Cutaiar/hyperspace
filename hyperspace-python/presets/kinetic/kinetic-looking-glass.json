@@ -1,0 +1,161 @@
+{
+ "schema": "hyperspace.loadable/11",
+ "name": "kinetic-looking-glass",
+ "note": "Step in front of the webcam. You are the backdrop, folded into a kaleidoscope, and you are on every face of the tesseract. Right hand height counts the mirrors, rolling it swirls them, two hands apart zooms in. Raise the left hand and you turn to neon line art.",
+ "graph": {
+  "frame": "wired",
+  "nodes": [
+   {
+    "kind": "hands",
+    "laid": "over"
+   }
+  ],
+  "wires": [
+   {
+    "from": "shape",
+    "to": "scene.geometry"
+   },
+   {
+    "from": "channel.a",
+    "to": "shape.faces"
+   },
+   {
+    "from": "channel.a",
+    "to": "edges.image"
+   },
+   {
+    "from": "edges",
+    "to": "kaleido.image"
+   },
+   {
+    "from": "kaleido",
+    "to": "backdrop.image"
+   },
+   {
+    "from": "scene",
+    "to": "backdrop.scene"
+   },
+   {
+    "from": "backdrop",
+    "to": "output.all.image"
+   },
+   {
+    "from": "hands",
+    "to": "hands.layer.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.guide"
+   }
+  ]
+ },
+ "values": {
+  "ghost.on": true,
+  "ghost.alpha": 0.35,
+  "view.shape": 3,
+  "view.faces": true,
+  "view.points": false,
+  "view.speed": 0.2,
+  "camera.zoom": 0.9,
+  "fx.face_map": 0,
+  "backdrop.alpha": 1.0,
+  "fx.edges.on": true,
+  "fx.edges.mix": 0.0,
+  "fx.edges.threshold": 0.12,
+  "fx.edges.glow": 1.5,
+  "fx.edges.colour": 2,
+  "fx.kaleido.on": true,
+  "fx.kaleido.segments": 6,
+  "fx.kaleido.zoom": 1.0
+ },
+ "routes": [
+  {
+   "source": "hand:right.y",
+   "target": "fx.kaleido.segments",
+   "op": "position",
+   "value": 1.0
+  },
+  {
+   "source": "hand:right.roll",
+   "target": "fx.kaleido.swirl",
+   "op": "push",
+   "value": 1.0
+  },
+  {
+   "source": "hands:gap",
+   "target": "fx.kaleido.zoom",
+   "op": "push",
+   "value": 0.4
+  },
+  {
+   "source": "hand:left.y",
+   "target": "fx.edges.mix",
+   "op": "position",
+   "value": 0.85
+  },
+  {
+   "source": "hand:left.roll",
+   "target": "view.depth4",
+   "op": "push",
+   "value": 0.5
+  },
+  {
+   "source": "lane:0",
+   "target": "rot.rate.ZW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:1",
+   "target": "rot.rate.XW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:2",
+   "target": "rot.rate.YW",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:3",
+   "target": "rot.rate.XY",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:4",
+   "target": "rot.rate.XZ",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:5",
+   "target": "rot.rate.YZ",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  }
+ ],
+ "macros": {},
+ "units": {
+  "camera.pan": "world",
+  "fx.depth": "taper"
+ },
+ "media": {
+  "channels": {
+   "a": [
+    "camera:FaceTime HD Camera"
+   ]
+  }
+ }
+}

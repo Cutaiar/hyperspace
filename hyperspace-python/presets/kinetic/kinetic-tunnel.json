@@ -1,0 +1,176 @@
+{
+ "schema": "hyperspace.loadable/11",
+ "name": "kinetic-tunnel",
+ "note": "Reach in. The picture feeds back on itself into a tunnel. Pull two hands apart to draw it out longer, bring them together to snap it shut. Turn the hands against each other like a steering wheel to spiral it. Right hand height drives you forward or back. Right trigger floods it with colour.",
+ "graph": {
+  "frame": "wired",
+  "nodes": [
+   {
+    "kind": "hands",
+    "laid": "over"
+   },
+   {
+    "kind": "composite"
+   },
+   {
+    "kind": "delay"
+   }
+  ],
+  "wires": [
+   {
+    "from": "shape",
+    "to": "scene.geometry"
+   },
+   {
+    "from": "pattern",
+    "to": "shape.faces"
+   },
+   {
+    "from": "scene",
+    "to": "composite.over"
+   },
+   {
+    "from": "composite",
+    "to": "output.all.image"
+   },
+   {
+    "from": "composite",
+    "to": "delay.image"
+   },
+   {
+    "from": "delay",
+    "to": "kaleido.image"
+   },
+   {
+    "from": "kaleido",
+    "to": "huecycle.image"
+   },
+   {
+    "from": "huecycle",
+    "to": "fade.image"
+   },
+   {
+    "from": "fade",
+    "to": "composite.under"
+   },
+   {
+    "from": "hands",
+    "to": "hands.layer.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.guide"
+   }
+  ]
+ },
+ "values": {
+  "ghost.on": true,
+  "ghost.alpha": 0.35,
+  "view.shape": 3,
+  "view.points": false,
+  "view.speed": 0.35,
+  "camera.zoom": 0.5,
+  "view.bright": 1.6,
+  "fx.kaleido.on": true,
+  "fx.kaleido.segments": 2,
+  "fx.kaleido.zoom": 0.8,
+  "fx.kaleido.swirl": 0.0,
+  "fx.huecycle.on": true,
+  "fx.huecycle.paint": 0.45,
+  "fx.huecycle.spread": 0.5,
+  "fx.huecycle.rings": 0.0,
+  "fx.fade.on": true,
+  "fx.fade.level": 0.7,
+  "view.faces": true,
+  "view.pattern": 9,
+  "view.pattern_mix": 0.8
+ },
+ "routes": [
+  {
+   "source": "hands:gap",
+   "target": "fx.fade.level",
+   "op": "push",
+   "value": 0.28
+  },
+  {
+   "source": "hands:twist",
+   "target": "fx.kaleido.swirl",
+   "op": "push",
+   "value": 0.6
+  },
+  {
+   "source": "hand:right.y",
+   "target": "fx.kaleido.zoom",
+   "op": "push",
+   "value": 0.35,
+   "rest": 0.5
+  },
+  {
+   "source": "hand:left.y",
+   "target": "fx.kaleido.segments",
+   "op": "position",
+   "value": 1.0,
+   "when": "hand:left.pinch.index"
+  },
+  {
+   "source": "axis:RT",
+   "target": "fx.huecycle.paint",
+   "op": "push",
+   "value": 0.75
+  },
+  {
+   "source": "lane:0",
+   "target": "rot.rate.ZW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:1",
+   "target": "rot.rate.XW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:2",
+   "target": "rot.rate.YW",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:3",
+   "target": "rot.rate.XY",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:4",
+   "target": "rot.rate.XZ",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:5",
+   "target": "rot.rate.YZ",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  }
+ ],
+ "macros": {},
+ "units": {
+  "camera.pan": "world",
+  "fx.depth": "taper"
+ },
+ "media": {
+  "channels": {}
+ }
+}

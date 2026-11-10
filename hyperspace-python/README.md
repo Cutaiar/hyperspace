@@ -69,6 +69,9 @@ live render error is a red banner at the bottom of the control window.
   lights an APC40), `hands_probe.py` (every hand axis live; `--calibrate`
   sweeps the box), `control_shots.py` / `fx_shots.py` / `lookback_shots.py`
   / `dream_shots.py` (screenshots for the docs) and `dream_bench/`.
+- `presets/kinetic/` — six presets played with the hands, a pad or a Joy-Con,
+  to copy into a library's `loadable/` folder; their gestures are in
+  [its README](presets/kinetic/README.md). Not part of the app.
 - `docs/` — [`SETUP.md`](docs/SETUP.md) a new Mac,
   [`ENGINEERING.md`](docs/ENGINEERING.md) the manual,
   [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) the structure,

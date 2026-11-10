@@ -1,0 +1,177 @@
+{
+ "schema": "hyperspace.loadable/11",
+ "name": "kinetic-wand",
+ "note": "Hold a Joy-Con or a DualSense like a wand. Tilt it and the whole field tilts with it, like a tray of marbles. Wave it about and the field sparkles; shake it hard for a burst. The trigger spreads the field out. With hands instead: pull them apart to spread the field, raise the right hand to make it swarm.",
+ "graph": {
+  "frame": "wired",
+  "nodes": [
+   {
+    "kind": "hands",
+    "laid": "over"
+   }
+  ],
+  "wires": [
+   {
+    "from": "shape",
+    "to": "scene.geometry"
+   },
+   {
+    "from": "pattern",
+    "to": "shape.faces"
+   },
+   {
+    "from": "scene",
+    "to": "glimmer.image"
+   },
+   {
+    "from": "glimmer",
+    "to": "zoomblur.image"
+   },
+   {
+    "from": "zoomblur",
+    "to": "output.all.image"
+   },
+   {
+    "from": "hands",
+    "to": "hands.layer.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.guide"
+   }
+  ]
+ },
+ "values": {
+  "ghost.on": true,
+  "ghost.alpha": 0.35,
+  "view.shape": 7,
+  "view.faces": true,
+  "view.pattern": 11,
+  "view.instances": 27,
+  "view.inst_layout": 3,
+  "view.inst_motion": 1,
+  "view.inst_amp": 0.1,
+  "view.inst_spacing": 1.2,
+  "view.inst_fit": true,
+  "view.speed": 0.3,
+  "fx.glimmer.on": true,
+  "fx.glimmer.amount": 0.0,
+  "fx.glimmer.density": 0.4,
+  "fx.zoomblur.on": true,
+  "fx.zoomblur.amount": 0.0,
+  "env.1.mode": 1,
+  "env.1.attack": 0.01,
+  "env.1.decay": 0.6,
+  "env.1.sustain": 0.0
+ },
+ "routes": [
+  {
+   "source": "motion:roll",
+   "target": "camera.yaw",
+   "op": "push",
+   "value": 0.5
+  },
+  {
+   "source": "motion:pitch",
+   "target": "camera.pitch",
+   "op": "push",
+   "value": 0.4
+  },
+  {
+   "source": "motion:energy",
+   "target": "fx.glimmer.amount",
+   "op": "position",
+   "value": 0.8
+  },
+  {
+   "source": "motion:shake",
+   "target": "env.1.fire",
+   "op": "position",
+   "value": 1.0
+  },
+  {
+   "source": "env:0",
+   "target": "fx.zoomblur.amount",
+   "op": "push",
+   "value": 0.7
+  },
+  {
+   "source": "axis:RT",
+   "target": "camera.zoom",
+   "op": "push",
+   "value": 0.08
+  },
+  {
+   "source": "hands:gap",
+   "target": "view.inst_spacing",
+   "op": "push",
+   "value": 0.6
+  },
+  {
+   "source": "hand:right.y",
+   "target": "view.inst_amp",
+   "op": "position",
+   "value": 1.0
+  },
+  {
+   "source": "hand:left.y",
+   "target": "view.inst_rate",
+   "op": "position",
+   "value": 0.7
+  },
+  {
+   "source": "lane:0",
+   "target": "rot.rate.ZW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:1",
+   "target": "rot.rate.XW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:2",
+   "target": "rot.rate.YW",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:3",
+   "target": "rot.rate.XY",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:4",
+   "target": "rot.rate.XZ",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:5",
+   "target": "rot.rate.YZ",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  }
+ ],
+ "macros": {},
+ "units": {
+  "camera.pan": "world",
+  "fx.depth": "taper"
+ },
+ "media": {
+  "channels": {}
+ }
+}
