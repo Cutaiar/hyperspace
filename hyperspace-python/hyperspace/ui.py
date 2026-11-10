@@ -2809,6 +2809,8 @@ class Panel:
         self._button("camera.reset", "Reset view")
         beside(imgui.calc_text_size("R  ·  stick click").x)
         imgui.text_disabled("R  ·  stick click")
+        if self.reg.get("world.reset") is not None:     # plan 59: the world's offsets, the meta controller's
+            self._button("world.reset", "Reset world")
 
     def _page_lookback(self, dt: float) -> None:
         ui_lookback.page(self, dt)     # the frame history and its composite

@@ -8766,6 +8766,14 @@ Headless: `tests/test_ui_pane.py` (every view by the mouse, a canvas click, open
 
 **658. Every node in view.** (Mac, the rig's display) Launch: every node is on screen, centred left of the pane, not under it. Zoom right in and drag away, then load another patch (F-key or PATCHES): its nodes all come into view, gliding. **save as…** and an edit leave the view where it is. Load a patch with three nodes: they're not blown up past the size they open at. With the band under the canvas (the desk up), the nodes sit above the band.
 
+## DW. World objects (rows 851–856, 2026-11-10)
+
+Plan 59. Headless: `tests/test_world.py` (the pose, the registries, the step, a tape's hands as objects, the frames with a default world byte for byte as without). The world is on, but nothing moves an offset yet. A restart after pulling.
+
+**659. A hand in view changes nothing.** (the rig, the Leap on, the ghost hands on) Load a patch you know, with the shape still (rates at 0). Bring one hand in, then both, move and turn them, take them out. *Pass:* the shape and the ghost hands look exactly as they did before this build — nothing jumps, drifts or turns when a hand arrives or leaves; the frame rate is what it was. Repeat with a field of copies (instances 7, Fit off) and with Fit on. *Fail:* any change in the picture with a hand in view.
+
+**660. Reset world.** Open the camera section. *Pass:* **Reset world** sits under **Reset view**; pressing it changes nothing on screen (every offset is already home), on either deck. *Fail:* a missing button, or a press that moves anything.
+
 ## What no test covers
 
 Only a person can settle these:

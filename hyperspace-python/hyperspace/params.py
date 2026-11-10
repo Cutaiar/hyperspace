@@ -174,8 +174,9 @@ F_KEYS = 8
 PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
                       "backdrop", "switch", "resize", "matte", "cut", "segment", "ghost",
                       "cloud", "lfo", "env", "seq", "macro", "pad", "mod")
+# `world` (plan 59): `world.reset`, over the one `world.World` both decks draw from
 SHARED_META_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui", "desk", "playlist")
+                  "overlay", "ui", "desk", "playlist", "world")
 # plan 44 D3 (row 612): the shared meta params inside a patch group, by
 # group → the last segment of their ids — `ghost.mirror`. They keep their group
 # (the HANDS page lists the group; an id is a saved format) and are the meta

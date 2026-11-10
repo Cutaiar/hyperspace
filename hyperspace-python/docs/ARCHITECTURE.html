@@ -732,6 +732,11 @@
         <div class="chip c-read">Reads</div>
       </div>
       <div class="rrow">
+        <div><div class="name">World</div><div class="mods">world</div></div>
+        <div class="what">The things drawn — the shape and the two hands — each with a home pose (what its params or its palm say) and an offset (what the world adds), and the registries keyed by them: bodies, joints, puppets, clipping. A pose is a 4-vector and a pair of quaternions; the world stays 3D. The renderer reads the shape's offset into its model matrix; an identity offset is the matrix of before. <span>A leaf: imports nothing from the package.</span></div>
+        <div class="chip c-read">Poses</div>
+      </div>
+      <div class="rrow">
         <div><div class="name">Graph</div><div class="mods">graph</div></div>
         <div class="what">The frame as nodes — the shape, the hands and a point cloud as geometry, the scene, layers, composites, one node per effect, the look-back and the dream, the masks (a matte, a cut, a segment with its foreground, background and mask), the outputs — built from the preset's graph alone (every edge a drawn wire; a window shows its own wires, else All outputs' by the rig's bus cables), evaluated once a frame in dependency order. <span>Part of the render stack: reads, never writes.</span></div>
         <div class="chip c-read">Reads</div>
@@ -763,7 +768,7 @@
   <section>
     <div class="shead"><span class="num">05</span><h2>The frame</h2></div>
     <p class="dek">
-      Sixteen steps in a fixed order — the one place that order exists, pinned
+      Seventeen steps in a fixed order — the one place that order exists, pinned
       by a test over stubs. The devices run in three of them.
     </p>
 
@@ -792,6 +797,7 @@
       <div class="step mark"><div class="n">11</div><div class="d"><b>reg.apply()</b> — base plus offsets onto every live object</div><div class="chip c-read">objects</div></div>
       <div class="step"><div class="n">12</div><div class="d">Devices send — <b>devices.send()</b>: the sinks send this frame's effective values out (the bridge, the hands' DAW port)</div><div class="chip c-read">out</div></div>
       <div class="step"><div class="n">13</div><div class="d"><b>view.integrate()</b> — the angle advances by rate × dt</div><div class="chip c-read">direct</div></div>
+      <div class="step"><div class="n">13a</div><div class="d">The world (plan 59) — the shape's home from <code>camera.zoom</code> and <code>camera.pan</code>, the palms puppet the hand objects, then the physics' fixed steps move the offsets of the bodies; the render reads the poses</div><div class="chip c-read">world</div></div>
       <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; evaluate the render graph, every render output — a 3D shape's W angles are dropped here. While the projector is held (plan 38), the outputs draw inside the hold, from the held wiring, rig cables and look (written with <code>Param.put</code>, never <code>set</code>, and put back after); then, only while GRAPH shows it, a second renderer draws the live wiring as the preview</div><div class="chip c-read">screen</div></div>
       <div class="step"><div class="n">15</div><div class="d">Draw the control panel</div><div class="chip c-base">base</div></div>
     </div>
@@ -1017,7 +1023,7 @@
         <code>tempo</code>, <code>modbank</code>, <code>sequencer</code>, <code>glsl</code>,
         <code>gamepad</code>, <code>apc40</code>, <code>generic</code>,
         <code>watchdog</code>, <code>modgraph</code> (the modulation graph's
-        sorter), and the hands package's signal and tape modules; <code>lfo</code>
+        sorter), <code>world</code> (the world objects, plan 59), and the hands package's signal and tape modules; <code>lfo</code>
         and <code>envelope</code> import only <code>modbank</code>.
       </p>
 

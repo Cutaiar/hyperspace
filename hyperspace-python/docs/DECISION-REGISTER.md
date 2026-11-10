@@ -850,6 +850,12 @@ here; overturn → the change, then the same.
 | 843 | `Library()` on a `config.toml` that won't parse opens the library this Mac last knew (`sharedfile.library_root`), never the home in its place; knowing none, it opens nothing and every save is refused in words | 653 | the orchestrator's brief |
 | 844 | The library's scan reads the Drive on the main thread (`Library.poll` → `_scan`, every `period`, every folder's `*.json`). Not done here: it needs the scan on a `sharedfile.Worker`, `poll` taking the last result, and the tests that call `poll(now)` expecting a synchronous answer given a way to wait. An item for the cleanup | — | (rec) — an item, not built |
 | 850 | The panel says install where it meant the show: the show line (INSTALL: PADS, META CONTROLLER) and its tips, the footer's "install: saved …", the undo steps ("install <name>", "new install"), the library's lines ("N installs updated", "in the install list", Home's "this install names no startup patch"). "The show" meaning the night stays ("tuned before the show"), as do the migration tool's words about the old `*.hyp.json` show files, and ids (`show.line`, `ui_loadable.PROJECT`'s listing key) | — | owner — 2026-11-07: "yes, show becomes install" |
+| 851 | Plan 59: the world's offset composes into the shape's model matrix on the one-copy path and a flat field with Fit off (`legacy`), never on Fit or the 3D lattices, whose rows carry the camera with a world transform of identity. A field with Fit off turns as one figure about the shape's origin; a culled copy is judged by its box through the whole matrix | 659 | (rec) — plan 59 §2.4 leaves it to the builder |
+| 852 | Plan 59: one `world.World` on the host, held by every renderer (`Renderer.world`, a sibling's too), so both decks' shapes take the one shape object's offset; `world.reset` is a shared meta trigger (group `world`), its button under Reset view in the camera section. The world is runtime state: never saved, never undone | 660 | (rec) |
+| 853 | Plan 59: the pose drawn is home ∘ offset, the offset in the home's frame: it turns the shape about its own centre, and its x, y, z are scaled by `camera.zoom` (at zoom 1 an offset's x and y are a pan's, y the other way up). The shape's home has position and scale but no turn: `camera.yaw` / `.pitch` stay the CPU's turntable, before the world | 659 | (rec) — plan 59 §2.1, §2.4 |
+| 854 | Plan 59: a palm into the world (`app.palms_in_world`) lives in `app.py`, not `ghost.py`: `ghost` is the render stack's and `hands` the meta controller's, and the wall (`tests/test_layer_boundary.py`) lets no patch module reach it. It reads the ghost's own fit (`Ghost.calibrated`, cached) whether or not the ghost hands are shown | — | (rec) |
+| 855 | Plan 59: a puppet sets its object's home and keeps its frame-to-frame velocity and spin on itself (`Palm.velocity`, `.spin`, zero the frame a hand arrives); it feeds no body. A hand not seen stays registered, `present` False, its home where it was last seen | 659 | (rec) |
+| 856 | Plan 59, a limit: a turned offset turns the shape after the painter sort and the depth cue, which read the depth before it, so a 3D shape turned by the offset can sort and shade by its old depth. Nothing moves the offset in plan 59; plan 60, which does, decides | — | (rec) — an item, not built |
 
 "—": no hand check shows it; tests only.
 
@@ -14913,4 +14919,46 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 - **What.** The panel says install where it meant the show: the show line (INSTALL: PADS, META CONTROLLER) and its tips, the footer's "install: saved …", the undo steps ("install <name>", "new install"), the library's lines ("N installs updated", "in the install list", Home's "this install names no startup patch"). "The show" meaning the night stays ("tuned before the show"), as do the migration tool's words about the old `*.hyp.json` show files, and ids (`show.line`, `ui_loadable.PROJECT`'s listing key).
 - **Answer.** owner — 2026-11-07: "yes, show becomes install".
+- **Judge it.** No hand check.
+
+### 851. Fit and the 3D lattices take no offset
+
+- **What.** Plan 59: the world's offset composes into the shape's model matrix on the one-copy path and a flat field with Fit off (`legacy`), never on Fit or the 3D lattices, whose rows carry the camera with a world transform of identity. A field with Fit off turns as one figure about the shape's origin; a culled copy is judged by its box through the whole matrix.
+- **Answer.** plan 59 §2.4: "the builder decides whether the offset composes there too, and records it in the register". (rec): Fit and the lattices place each copy with the camera inside its row and draw with an identity world transform; composing the offset there would turn the whole field about the world's origin, not the shape's, and change a path the goldens pin for no consumer yet.
+- **Built.** `render.Renderer.draw_scene` (`off`), `_copies_of(model=)`; `tests/test_world.py::test_fit_and_the_3d_lattices_take_no_offset`, `::test_an_offset_turn_and_z_reach_the_frame_and_the_cull`.
+- **Judge it.** 659.
+
+### 852. One world, every deck's
+
+- **What.** Plan 59: one `world.World` on the host, held by every renderer (`Renderer.world`, a sibling's too), so both decks' shapes take the one shape object's offset; `world.reset` is a shared meta trigger (group `world`), its button under Reset view in the camera section. The world is runtime state: never saved, never undone.
+- **Answer.** (rec). One world because the hands are one pair whichever deck is on air; the shape object follows the on-air deck's `camera.*` (`_step_world` reads `h.view`). Shared meta, so `world.reset` is one object on every deck (`Registry.add`).
+- **Built.** `app.main` (`worlds.World.default()`, `worlds.register(meta_reg, world)`), `Renderer.sibling`, `ui.Panel._page_camera`. Restart, not hot reload: `Host.world` and `Renderer.world` are new fields on live objects.
+- **Judge it.** 660.
+
+### 853. Home ∘ offset
+
+- **What.** Plan 59: the pose drawn is home ∘ offset, the offset in the home's frame: it turns the shape about its own centre, and its x, y, z are scaled by `camera.zoom` (at zoom 1 an offset's x and y are a pan's, y the other way up). The shape's home has position and scale but no turn: `camera.yaw` / `.pitch` stay the CPU's turntable, before the world.
+- **Answer.** plan 59 §2.1 and §2.4 ("the pose drawn is home ∘ offset"; "yaw and pitch stay where they are"). (rec) for reading the offset in the home's frame: a turn about the shape's own centre is the turn a hand rig wants.
+- **Built.** `geometry.model_matrix(zoom, pan, offset)`, `world.shape_home`; `tests/test_world.py::test_the_pose_drawn_is_home_then_offset`, `::test_an_offset_moved_in_x_and_y_is_a_pan`.
+- **Judge it.** 659.
+
+### 854. The palm glue is the host's
+
+- **What.** Plan 59: a palm into the world (`app.palms_in_world`) lives in `app.py`, not `ghost.py`: `ghost` is the render stack's and `hands` the meta controller's, and the wall (`tests/test_layer_boundary.py`) lets no patch module reach it. It reads the ghost's own fit (`Ghost.calibrated`, cached) whether or not the ghost hands are shown.
+- **Answer.** (rec), from the layer wall: `ghost` is a patch module and may not import `hands.room`.
+- **Built.** `app.palm_in_world`, `app.palms_in_world`; `tests/test_world.py::test_a_tape_puts_each_hand_object_where_the_ghost_puts_its_palm` (mirror on and off).
+- **Judge it.** No hand check.
+
+### 855. A puppet sets the home
+
+- **What.** Plan 59: a puppet sets its object's home and keeps its frame-to-frame velocity and spin on itself (`Palm.velocity`, `.spin`, zero the frame a hand arrives); it feeds no body. A hand not seen stays registered, `present` False, its home where it was last seen.
+- **Answer.** (rec): the puppet is the hand's source, as the params are the shape's; a body moves the offset. Feeding the palm's velocity into a body would move the hand twice.
+- **Built.** `world.Palm`, `World.step_puppets`; `tests/test_world.py::test_a_lost_hand_stays_registered_where_it_was_and_writes_nothing`, `::test_a_puppet_reads_its_spin_from_frame_to_frame`.
+- **Judge it.** 659.
+
+### 856. The painter sort and a turned offset: an item
+
+- **What.** Plan 59, a limit: a turned offset turns the shape after the painter sort and the depth cue, which read the depth before it, so a 3D shape turned by the offset can sort and shade by its old depth. Nothing moves the offset in plan 59; plan 60, which does, decides.
+- **Answer.** (rec) — an item for plan 60, not built. Sorting by the offset's depth means the offset on the CPU before the sort, which moves work the GPU does now.
+- **What it would take.** Medium: `shape_world`'s depth through the offset's turn before `edepth` and `pd`, only while the offset is not the identity.
 - **Judge it.** No hand check.

@@ -490,7 +490,7 @@ META_MODULES = _mods(
     "deck", "playlist", "players", "pointer", "app", "devices", "devicelist", "sharedfile", "displays", "hotplug", "control", "config", "placement",
     "hotreload", "watchdog", "midiports", "midi", "apc40", "generic", "gamepad", "pads", "hands", "bridge",
     "osc", "totem", "poi", "poi_guide", "overlay", "audio", "analysis", "analyzer", "bands",
-    "tempo", "seq_page", "node_desk", "replay", "pinch", "pacing")
+    "tempo", "seq_page", "node_desk", "replay", "pinch", "pacing", "world")
 # one module holding both layers' classes, which an import cannot tell apart. The list is the
 # finding, not a licence: splitting them is the structure audit's (draft #273), and until then
 # `META_NAMES` below stands guard over what a patch module takes from them
