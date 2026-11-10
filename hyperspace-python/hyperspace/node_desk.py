@@ -55,6 +55,13 @@ fill first and pads in list order, each leaving what an earlier one filled, so a
 never changes a desk's map. **Whose pad:** the player's first that is connected, else their first
 listed (`is_first`), as the pad window picks. **A nap changes no map:** a pad asleep is filled as
 the last model it read (`DeviceRegistry.pad_model`).
+
+**The hands** are the pad's road again: their entry says "hands", their rows are pushes about the
+base at `HAND_DEPTH` from the hand axes (`[hands] dofs`, left then right: `hand_freedoms`), and
+`Router` runs them while the hands are on this `Deck`. A level hand, or a height at its rest, adds
+nothing, so the look comes back when the hand drops. An axis an enabled row reads or gates on, or a
+modifier reads, is no freedom; the pinches, grabs and dance lanes fill nothing. They fill after the
+desks and the pads, so pointing them changes no map of those.
 """
 
 from __future__ import annotations
@@ -68,16 +75,23 @@ from .routing_sources import PAIR_SCHEME, pair_address, pair_poles, qualified
 
 KIND = "midi"                  # what a saved entry's `controller` says of a desk
 PAD_KIND = "gamepad"           # ...and of a pad (`PadDevice.kind`)
+HANDS_KIND = "hands"           # ...and of the hands (`HandsDevice.kind`)
+ROUTED_KINDS = (PAD_KIND, HANDS_KIND)   # whose rows are routes, run by `Router`
 # a pad row's depth: a stick's whole throw is half the param's range either way, a trigger's
 # all of it. Not `learn.PUSH_DEPTH`, a route's start for a depth knob to take up: these have no
 # knob, so the stick must reach the param (row 820)
 PAD_DEPTH = 1.0
 PAD_SCHEMES = ("axis", "pad", "hat", PAIR_SCHEME)   # what can hold a freedom of a pad's
+# a hand row's depth: a centred axis's whole throw (a full roll) is half the param's range either
+# way, a one-sided one's (a height) all of it, as a pad's stick and trigger
+HAND_DEPTH = PAD_DEPTH
 
 NOT_FIRST = "{role} is player {player}'s second desk: a patch points at a player's first"
 NOT_FIRST_PAD = ("{role} is not player {player}'s pad in hand: a patch points at a player's "
                  "first connected")
+NOT_FIRST_HANDS = "{role} is player {player}'s second hands: a patch points at a player's first"
 NO_SHAPE = "{role} has no known knobs or faders to fill"
+NO_HAND_AXES = "{role} has no hand axes to fill ([hands] dofs)"
 
 
 def _address(source: str, qualifier: str) -> str:
@@ -149,6 +163,24 @@ def is_pad(d) -> bool:
     return d.kind == PAD_KIND and hasattr(d, "quiet_stick")
 
 
+def is_hands(d) -> bool:
+    """The hands, open or could be, as `is_desk`."""
+    return d.kind == HANDS_KIND and hasattr(d, "axis_names")
+
+
+def hand_freedoms(hands) -> list[tuple[str, ...]]:
+    """What the hands have to fill: each axis (`HandsDevice.axis_names`), in lane order."""
+    return [(f"hand:{name}",) for name in hands.axis_names()]
+
+
+def is_live(d) -> bool:
+    """Is controller `d` giving frames now? A pad's or a desk's adapter says `on`; the hands
+    say so in their status (`HandsDevice.status`)."""
+    if is_hands(d):
+        return d.status == "connected"
+    return bool(getattr(d.io, "on", False))
+
+
 @dataclass
 class Row(Binding):
     """A derived row: `words`, what the on-screen desk says of it. Never saved."""
@@ -207,14 +239,22 @@ class NodeDesk:
         """The pads that are open or could be, in list order: what `first_pad_on` reads."""
         return [d for d in self.devices.devices if is_pad(d)]
 
+    def _hands(self) -> list:
+        """The hands that are open or could be, in list order."""
+        return [d for d in self.devices.devices if is_hands(d)]
+
     def _controllers(self) -> list:
-        """Every controller a patch can reach, in the order they fill: desks, then pads."""
-        return [*self._desks(), *self._pads()]
+        """Every controller a patch can reach, in the order they fill: desks, pads, hands."""
+        return [*self._desks(), *self._pads(), *self._hands()]
 
     def kind_of(self, role: str) -> str:
         """What a saved entry calls `role`'s controller."""
         d = self.devices.get(role)
-        return PAD_KIND if d is not None and is_pad(d) else KIND
+        if d is not None and is_pad(d):
+            return PAD_KIND
+        if d is not None and is_hands(d):
+            return HANDS_KIND
+        return KIND
 
     def player_of(self, role: str) -> int:
         return self.meta.players.player_of(role).number
@@ -225,9 +265,11 @@ class NodeDesk:
         wins, as `DeviceRegistry.live_adapter` draws it: an x360 listed first and unplugged
         must not hold the Joy-Con's node mode, dead, with the window drawing the Joy-Con."""
         n = self.player_of(role)
-        if self.kind_of(role) == PAD_KIND:
-            mine = [d for d in self._pads() if self.player_of(d.role) == n]
-            first = next((d for d in mine if getattr(d.io, "on", False)), mine[0] if mine else None)
+        kind = self.kind_of(role)
+        if kind in ROUTED_KINDS:
+            pool = self._pads() if kind == PAD_KIND else self._hands()
+            mine = [d for d in pool if self.player_of(d.role) == n]
+            first = next((d for d in mine if is_live(d)), mine[0] if mine else None)
             return first is not None and first.role == role
         return next((d.role for d in self._desks() if self.player_of(d.role) == n), None) == role
 
@@ -320,6 +362,29 @@ class NodeDesk:
                 held.update(_reads(probe.bare))
         return [f for f in pad_freedoms(model) if not held.intersection(f)]
 
+    def _hand_free(self, hands) -> list[tuple[str, ...]]:
+        """The hand axes nothing holds: not one an enabled row reads, wherever it aims, nor one
+        a row gates on or a modifier reads (`_pad_free`'s rule). A lane by number is its axis."""
+        t = self.deck.table
+        names = hands.axis_names()
+        held: set[str] = set()
+        addresses: list[str] = []
+        for b in t.bindings:
+            if b.enabled:
+                addresses.append(b.source)
+                if b.when:
+                    addresses.append(b.when)
+        for m in t.modifiers:
+            addresses.extend(a for a in m.inputs if a)
+        for a in addresses:
+            scheme, _, rest = a.partition(":")
+            if scheme != "hand":
+                continue
+            if rest.isdigit():
+                rest = names[int(rest)] if int(rest) < len(names) else ""
+            held.add(f"hand:{rest}")
+        return [f for f in hand_freedoms(hands) if not held.intersection(f)]
+
     def _filled_before(self, role: str) -> tuple[str, ...]:
         """The params the controllers that fill ahead of `role` hold, wherever they are: a
         `Deck` a player moves to must not change the map a file says."""
@@ -332,13 +397,19 @@ class NodeDesk:
 
     def _pad_rows(self, pad, fit: nodemode.Fit, had: list[Binding]) -> list[Binding]:
         """The rows of `fit` on a pad: pushes, each kept while it says the same."""
+        return self._pushes([_pad_source(s.sources, pad.qualifier) for s in fit.slots],
+                            fit, had, PAD_DEPTH)
+
+    def _pushes(self, sources: list[str], fit: nodemode.Fit, had: list[Binding],
+                depth: float) -> list[Binding]:
+        """A routed controller's rows: a push from each source onto its slot's param, each
+        kept while it says the same."""
         reg = self.deck.reg
         keep = {(b.source, b.target): b for b in had}
         out: list[Binding] = []
-        for slot in fit.slots:
-            source = _pad_source(slot.sources, pad.qualifier)
+        for source, slot in zip(sources, fit.slots, strict=True):
             b = keep.get((source, slot.param))
-            out.append(b if b is not None else Row(source, slot.param, "push", PAD_DEPTH,
+            out.append(b if b is not None else Row(source, slot.param, "push", depth,
                                                    words=reg[slot.param].label or slot.param))
         return out
 
@@ -353,8 +424,14 @@ class NodeDesk:
         shape: tuple = ()
         before: tuple[str, ...] = ()
         pad = kind == PAD_KIND
+        hands = kind == HANDS_KIND
         model = self.devices.pad_model(dev) if pad else None
-        if pad and node is not None:
+        if hands and node is not None:
+            before = self._filled_before(role)
+            shape = (dev.axis_names(), before,
+                     tuple(b.when for b in t.bindings if b.when),
+                     tuple(a for m in t.modifiers for a in m.inputs))
+        elif pad and node is not None:
             before = self._filled_before(role)
             shape = (getattr(model, "id", ""), dev.qualifier,
                      getattr(t, "primaries", {}).get("pad", ""), before,
@@ -367,7 +444,13 @@ class NodeDesk:
             return now
         now.key, now.node, now.player = key, node, player
         fit, rows = nodemode.Fit(), []
-        if node is not None and pad:
+        if node is not None and hands:
+            params = nodemode.fillable(deck.reg, self.params_of(node), routed=True)
+            wanted = set(params)
+            fit = nodemode.fill(params, self._hand_free(dev),
+                                [*self._kept(wanted), *(("", p) for p in before)])
+            rows = self._pushes([s.sources[0] for s in fit.slots], fit, now.rows, HAND_DEPTH)
+        elif node is not None and pad:
             params = nodemode.fillable(deck.reg, self.params_of(node), routed=True)
             wanted = set(params)
             fit = nodemode.fill(params, self._pad_free(dev, model),
@@ -419,19 +502,20 @@ class NodeDesk:
             return frozenset()
         out: set[str] = set()
         for d in self._controllers():
-            if self.is_first(d.role) and self.on_here(d.role) and getattr(d.io, "on", False):
+            if self.is_first(d.role) and self.on_here(d.role) and is_live(d):
                 out.update(b.target for b in self._follow(d.role).rows)
         return frozenset(out)
 
     def routed(self) -> list[Binding]:
-        """The rows `Router` runs, read each frame: those of each pad on this `Deck`. A pad on
+        """The rows `Router` runs, read each frame: those of each pad and the hands on this
+        `Deck`. A pad on
         the other runs nothing here, though its lanes are the shared half's and this deck
         could read them: no patch reaches another. One asleep stays, its lanes off, as a
         saved route on it does."""
         if not self.deck.loaded_patch.node_mode:
             return []
         out: list[Binding] = []
-        for d in self._pads():
+        for d in (*self._pads(), *self._hands()):
             if self.is_first(d.role) and self.on_here(d.role):
                 out.extend(self._follow(d.role).rows)
         return out
@@ -475,13 +559,16 @@ class NodeDesk:
 
     def refusal(self, role: str, node: str | None) -> str | None:
         """Why controller `role` may not enter node mode on `node`, or None."""
-        pad = self.kind_of(role) == PAD_KIND
+        kind = self.kind_of(role)
         if not self.is_first(role):
-            return (NOT_FIRST_PAD if pad else NOT_FIRST).format(role=role, player=self.player_of(role))
-        if not pad and not freedoms_of(self._profile(role)):
+            said = {PAD_KIND: NOT_FIRST_PAD, HANDS_KIND: NOT_FIRST_HANDS}.get(kind, NOT_FIRST)
+            return said.format(role=role, player=self.player_of(role))
+        if kind == KIND and not freedoms_of(self._profile(role)):
             return NO_SHAPE.format(role=role)
+        if kind == HANDS_KIND and not self.devices.get(role).axis_names():
+            return NO_HAND_AXES.format(role=role)
         return nodemode.enter_refusal(self.deck.reg, node, self.params_of(node) if node else (),
-                                      routed=pad)
+                                      routed=kind in ROUTED_KINDS)
 
     def enter(self, role: str, node: str | None) -> str | None:
         """Controller `role` on `node` of this deck's patch: one undo step of it, the dot
@@ -500,6 +587,10 @@ class NodeDesk:
     def control_word(self, role: str, b: Binding) -> str:
         """What a person calls row `b`'s control: "K3", "L2", "↑/↓"."""
         dev = self.devices.get(role)
+        if dev is not None and is_hands(dev):
+            name = b.source.partition(":")[2]
+            labels = {p.name: p.label for p in dev.sources if p.scheme == "hand"}
+            return labels.get(name) or name
         if dev is not None and is_pad(dev):
             from . import gamepad
             scheme, _, rest = b.bare.partition(":")

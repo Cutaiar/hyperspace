@@ -3970,7 +3970,7 @@ def _node_desk(panel):
 NODE_CHIP = "node mode"
 OTHER_DECK_TIP = "It is on the other Deck: this brings it here. Its player stays where it is, and moving the player brings it back."
 ASLEEP = "dormant: {role} is on the other Deck"
-FILLS = {"gamepad": "sticks, triggers and free button pairs"}   # what a chip fills, by kind
+FILLS = {"gamepad": "sticks, triggers and free button pairs", "hands": "hand axes"}   # what a chip fills, by kind
 RESTING = "{n} modulator route{s} at rest on these, back on leave"
 
 

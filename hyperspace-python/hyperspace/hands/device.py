@@ -110,6 +110,17 @@ class HandsDevice(Base):
                             group="dance", scheme="hands"))
         return tuple(out)
 
+    def axis_names(self) -> tuple[str, ...]:
+        """The axes' address names under ``hand``, in lane order ("left.x" …
+        "right.yaw"): what node mode fills (`node_desk.hand_freedoms`). From
+        the adapter's setup once open, else from ``[hands]``, so a patch read
+        before the tracker opens fills what it will have."""
+        io = self.io
+        axes = getattr(io, "axes", None) if io is not None else None
+        if axes is None:
+            axes = getattr(self.ctx.hand_settings, "axes", None) or ()
+        return tuple(a.name for a in axes)
+
     def poll(self, dt: float, now: float) -> None:
         self._dt = dt
 
