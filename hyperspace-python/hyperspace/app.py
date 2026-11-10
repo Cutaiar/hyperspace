@@ -2172,6 +2172,7 @@ def main(argv: list[str] | None = None) -> None:
         # the devices' adapters, the shims and the registry (devices.py):
         # re-evaluated each swap, so a device the list brought in counts
         *device_reg.targets(),
+        *world.targets(),         # plan 59: the world, its objects, bodies and puppets
     ], watchers=[library])
     if display_list is not None:
         # the windows follow the rows and the connected list from here on (SC3b)

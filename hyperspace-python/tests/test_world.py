@@ -513,3 +513,66 @@ def test_the_world_check_patches_load_whole_and_stand_still(tmp_path):
         wires = {(w["from"], w["to"]) for w in json.loads(f.read_text())["graph"]["wires"]}
         assert {("shape", "scene.geometry"), ("hands", "scene.geometry"),
                 ("scene", "palette.image"), ("palette", "output.all.image")} <= wires
+
+
+# ---------------------------------------------------------------- review fixes
+
+def test_a_palm_turning_across_the_quaternion_sign_reads_its_small_spin():
+    """240° then 241° about z: `quat_of` hands back opposite signs, and the
+    spin is the one degree's, not nearly a whole turn's."""
+    w = W.World.default()
+    for deg in (240.0, 241.0):
+        th = math.radians(deg)
+        rot = np.array([[math.cos(th), -math.sin(th), 0], [math.sin(th), math.cos(th), 0],
+                        [0, 0, 1]])
+        w.frame(1 / 60, {"right": ((0, 0, 0), rot)})
+    assert np.allclose(w.puppets["hand.right"].spin, (0.0, 0.0, math.radians(1.0) * 60))
+
+
+def test_the_4d_inversion_survives_log_and_exp():
+    """(−1, 1) maps every point to its negative; log/exp keep it so."""
+    p = W.Pose(ql=(0, 0, 0, -1), qr=(0, 0, 0, 1))
+    v = np.array([1.0, 2.0, 3.0, 4.0])
+    assert np.allclose(p.apply(v), -v)
+    assert np.allclose(W.Pose.exp(p.log()).apply(v), -v)
+    q = W.Pose(ql=(0, 0, 0, 1), qr=(0, 0, 0, -1))
+    assert np.allclose(W.Pose.exp(q.log()).apply(v), -v)
+
+
+RELOAD_SCRIPT = """
+import numpy as np
+from hyperspace import world as W
+from hyperspace.hotreload import HotReloader
+from hyperspace.params import MetaRegistry
+
+w = W.World.default()
+w.body("shape", W.Body(velocity=np.array([1.0, 0, 0, 0])))
+w.frame(1 / 60, {"left": ((0.1, 0.2, 0.3), np.eye(3))})
+w.frame(1 / 60, {"left": ((0.1, 0.2, 0.3), np.eye(3))})
+meta = MetaRegistry()
+W.register(meta, w)
+old = W.World
+r = HotReloader(w.targets, modules=("world",), period=0.0)
+r._mtimes["world"] = 0.0                     # as if world.py had just been saved
+assert r.poll(now=1.0), r.error
+import hyperspace.world as N
+assert N.World is not old, "the reload should make a new class"
+assert type(w) is N.World
+assert all(type(o) is N.WorldObject and type(o.home) is N.Pose and type(o.offset) is N.Pose
+           for o in w.objects.values())
+assert type(w.bodies["shape"]) is N.Body and type(w.puppets["hand.left"]) is N.Palm
+assert type(w.puppets["hand.left"].last) is N.Pose
+N.World.reset = lambda self: setattr(self, "reset_by", "new")
+meta["world.reset"].fire()
+assert getattr(w, "reset_by", None) == "new", "the trigger still runs the old reset"
+print("ok")
+"""
+
+
+def test_a_hot_reload_reclasses_the_live_world():
+    import subprocess
+    import sys
+
+    out = subprocess.run([sys.executable, "-c", RELOAD_SCRIPT], capture_output=True, text=True,
+                         check=False, cwd=str(Path(__file__).parents[1]), timeout=120)
+    assert out.returncode == 0 and out.stdout.strip() == "ok", out.stderr

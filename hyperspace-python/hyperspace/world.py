@@ -99,7 +99,11 @@ def qlog(q) -> np.ndarray:
     v = q[:3]
     n = float(np.linalg.norm(v))
     if n < 1e-12:
-        return 2.0 * v / max(q[3], _EPS) if q[3] > 0 else np.zeros(3)
+        if q[3] > 0:
+            return 2.0 * v / max(q[3], _EPS)
+        # −1: a whole turn, about x (any axis is −1 again). Not 0: in a 4D pose
+        # (−1, 1) is the central inversion, and qexp must give −1 back
+        return np.array([2.0 * math.pi, 0.0, 0.0])
     return (2.0 * math.atan2(n, q[3]) / n) * v
 
 
@@ -346,6 +350,21 @@ class World:
     def registries(self) -> tuple[dict, ...]:
         return self.bodies, self.joints, self.puppets, self.clip
 
+    def targets(self) -> list[tuple[object, str, str]]:
+        """The live objects a hot reload re-classes, as (object, module, class):
+        the world, its objects with their poses, the bodies and the puppets.
+        Re-evaluated each swap (the poses are values, replaced as they move)."""
+        out: list[tuple[object, str, str]] = [(self, "world", "World")]
+        for obj in self.objects.values():
+            out += [(obj, "world", "WorldObject"), (obj.home, "world", "Pose"),
+                    (obj.offset, "world", "Pose")]
+        out += [(b, "world", "Body") for b in self.bodies.values()]
+        for p in self.puppets.values():
+            out.append((p, "world", "Palm"))
+            if p.last is not None:
+                out.append((p.last, "world", "Pose"))
+        return out
+
     # ---- the drawn things
     def add(self, oid: str, kind: str, home: Pose | None = None, *,
             present: bool = True) -> WorldObject:
@@ -428,7 +447,11 @@ class World:
             now = Pose.from_matrix3(rot, position)
             if pup.last is not None and dt > 0.0:
                 pup.velocity = (now.position - pup.last.position) / dt
-                pup.spin = qlog(qnorm(qmul(now.ql, qconj(pup.last.ql)))) / dt
+                # q and −q are one 3D turn, and `quat_of` keeps no sign from frame to
+                # frame: the difference is taken the short way round, or a degree's
+                # turn across the sign reads as nearly a whole one
+                rel = qnorm(qmul(now.ql, qconj(pup.last.ql)))
+                pup.spin = qlog(rel if rel[3] >= 0.0 else -rel) / dt
             else:
                 pup.velocity, pup.spin = np.zeros(4), np.zeros(3)
             pup.last = now
@@ -467,7 +490,9 @@ def register(reg, world: World) -> None:
     the identity. A shared meta param: one world, every deck."""
     if f"{GROUP}.reset" in reg:
         return
-    reg.trigger(f"{GROUP}.reset", "Reset world", world.reset, group=GROUP,
+    # through a lambda, not the bound method: a hot reload re-classes the world
+    # (`World.targets`), and the trigger then runs the new `reset`
+    reg.trigger(f"{GROUP}.reset", "Reset world", lambda: world.reset(), group=GROUP,
                 tip="Every world object back where its source puts it: the shape where "
                     "the camera params say, the hands on the palms. Nothing moves them "
                     "off it yet (plan 59).")
