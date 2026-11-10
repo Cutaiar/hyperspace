@@ -1163,3 +1163,19 @@ def test_what_a_chip_would_say_live_is_its_tooltip(pane, monkeypatch):
     words = ui_graph.sel_words(("node", node))
     assert any(t.startswith(f"selected: {words}") for t in said), said
     assert "SELECTION##pane.selection" in d.rects
+
+
+@pytest.mark.parametrize("layout", ["band", "min", "default"])
+def test_the_grip_section_open_whole_stays_inside_the_pane(tmp_path, monkeypatch, layout):
+    """Plan 60: the HANDS page's grip section with every control showing (the
+    grip on, the inertia shaped) draws in the pane and passes no edge."""
+    with build_rig(tmp_path) as r:
+        r.reg["grip.on"].set(True)
+        r.reg["grip.inertia"].set(True)
+        d = _focus_rig(r, monkeypatch, layout)
+        r.reg["ui.page"].set(PAGE_KEYS.index("hands"))
+        d.run(d.wait(4))
+        st = _st(r)
+        assert "hands" in st["pane_drawn"]
+        spills = _spills(d, st)
+        assert not spills, sorted(spills)

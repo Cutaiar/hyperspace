@@ -8766,6 +8766,36 @@ Headless: `tests/test_ui_pane.py` (every view by the mouse, a canvas click, open
 
 **658. Every node in view.** (Mac, the rig's display) Launch: every node is on screen, centred left of the pane, not under it. Zoom right in and drag away, then load another patch (F-key or PATCHES): its nodes all come into view, gliding. **save as…** and an edit leave the view where it is. Load a patch with three nodes: they're not blown up past the size they open at. With the band under the canvas (the desk up), the nodes sit above the band.
 
+## DW. World objects (rows 851–856, 2026-11-10)
+
+Plan 59. Headless: `tests/test_world.py` (the pose, the registries, the step, a tape's hands as objects, the frames with a default world byte for byte as without). The world is on, but nothing moves an offset yet. A restart after pulling.
+
+The patches: copy `tests/fixtures/world-check/` into the library's `loadable/` as a folder named `world check` — **1 one shape**, **2 field** (seven copies, Fit off), **3 fit** (nine copies, Fit on). Each is a still tesseract with both hands drawn inside the scene, one colour effect (palette: the shape and the right hand cyan, the left hand purple) and the guides beside the hands, clean over it. `tools/drive_world_check.py` rebuilds them.
+
+**659. A hand in view changes nothing.** (the rig, the Leap on, the ghost hands on) Load **world check/1 one shape** (the shape still, rates at 0). Bring one hand in, then both, move and turn them, take them out. *Pass:* the shape and the ghost hands look exactly as they did before this build — nothing jumps, drifts or turns when a hand arrives or leaves; the frame rate is what it was. Repeat with **2 field** and **3 fit**. *Fail:* any change in the picture with a hand in view.
+
+**660. Reset world.** Open the camera section. *Pass:* **Reset world** sits under **Reset view**; pressing it changes nothing on screen (every offset is already home), on either deck. *Fail:* a missing button, or a press that moves anything.
+
+## DX. The hand rig (rows 857–866, 2026-11-10)
+
+Plan 60. Headless: `tests/test_grip.py` (no jump on closing, welded every frame, a tape held by its grab, the spring's step response, the release's coast at 30, 60 and 144 fps, the box, the analytic precession rate, the skater's doubled spin with L kept, even inertia, the limits, the params, a turned 3D shape's depth). A restart after pulling (`Host.grip`, `Body.place`, `World.box` are new fields on live objects).
+
+Setup for all: the Leap on, the ghost hands on, HANDS page → **grip** section, **Grip** on, **Hand** right. Load **world check/1 one shape** (plan 59's patches, DW) or any loadable patch with one shape and Fit off.
+
+**661. The coupling's range.** **Coupling** at 1: close your right fist near the shape and move and turn the hand. *Pass:* the shape does not jump as the fist closes, and stays on the hand as if welded — no lag, no wobble. Then 0.7, 0.4 and 0 in turn: the shape follows on a spring that gets looser and bouncier, overshooting and settling, down to a slow sway at 0; turning the hand turns it the same way (no flip, no tumble the wrong way round, even through a hand pointing straight up). *Fail:* a jump on the close, a turn the wrong way, a spring that rings on or blows up. Say which coupling feels right for a show.
+
+**662. A throw.** **Coupling** about 0.8, **Drag** about 0.8. Swing the shape and open the fist mid-swing. *Pass:* it flies on the way it was going and turning, slowing to a stop; at **Drag** 0 it coasts on; it never leaves the picture — at the edge it stops and stays, and closing the fist on it there takes it without a jump. *Fail:* it stops dead on the open, flies the wrong way, or leaves the screen.
+
+**663. Precession.** A 3D shape (a cube). **Shaped inertia** on, **Shape** 1.5. Hold the shape with the right fist; close the left fist with the hands a forearm apart, side by side; open the left. Then spin the shape fast with a flick of the right hand and let go. *Pass:* it does not simply spin about one axis: its axis wobbles round (nutation), and held loosely (**Coupling** 0.3) and turned, it swings off to the side rather than straight (precession). With **Shaped inertia** off the same flick spins about one fixed axis. *Fail:* no difference between on and off, or a tumble that runs away.
+
+**664. The skater.** **Shaped inertia** on, **Skater** on. Spin the shape about the line between your palms with the left fist closed and the hands wide; bring them together. *Pass:* the spin speeds up as the hands close and slows as they part, smoothly, never a jump; **Skater** off: the spin stays as it is. *Fail:* a spike, a stall, or no change.
+
+**665. Which gates suit the tracker** (plan 51's check 518 asked it of the clutch). Try the default grabs, then type `hand:right.pinch.index` into **Clutch**. *Pass:* note which gate holds through a fast swing without dropping, and whether a grab while turning the hand closes cleanly. Not a pass or fail: an answer for the owner.
+
+**666. A turned 3D shape sorts by its depth.** A 3D shape with faces on. Hold it and turn it half round about the vertical. *Pass:* its nearer faces and edges draw in front and brighter, as with the shape turned by `camera.yaw`. *Fail:* the far side drawn over the near after the turn.
+
+**667. Off, reset, Fit.** Move the shape away with the rig, then **Grip** off: *Pass:* it stays where it is. **Reset world** (camera section): it goes home. Rig on, load **world check/3 fit**: the clutch moves nothing (Fit and the lattices take no offset, row 864); **2 field** moves the field as one figure. *Fail:* a jump on off, a reset that misses, or a Fit field that moves.
+
 ## What no test covers
 
 Only a person can settle these:
