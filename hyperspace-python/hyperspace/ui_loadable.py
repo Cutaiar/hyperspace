@@ -65,12 +65,12 @@ SHOW_W = 96          # the open ▾ menu
 LIST_ROWS = 12       # rows of a module strip's list, and of the trash, before each scrolls
 EMPTY_S = 4.0        # how long "empty trash…" stays armed for its second click
 TRASH_KEY = "\0trash"     # the listings cache: the trash
-# what a show is, in one line under the SHOW label and in its hover
+# what a show is, in one line under the show label and in its hover
 SHOW_LINE = "install: pads, meta controller"
 SHOW_TIP = ("An install is the room the patches play in: which patch each of the desk's "
             "twenty-four pads loads, off air (set on the desk — hold a pad, or SAVE + a pad), the "
             "meta controller (tempo, hands, the analyzer, the outputs) and the analyzer's scene. "
-            "A patch is the look, with the bus cables it cuts on GRAPH; the install is everything "
+            "A patch is the look, with the bus cables it cuts on graph; the install is everything "
             "around it. Open another, save this one, or start a new one here.")
 
 
@@ -345,7 +345,7 @@ def strip(panel, group: str) -> None:
         if cur is None:
             ui.tooltip(f"no patch loaded{_on_deck(meta)}")
         elif group == LOADABLE:
-            ui.tooltip(f"{cur}{_on_deck(meta)}  ·  the loaded patch — load… on GRAPH's "
+            ui.tooltip(f"{cur}{_on_deck(meta)}  ·  the loaded patch — load… on the graph's "
                        "deck row picks another")
         else:
             ui.tooltip(f"{cur}  ·  click for the list")
@@ -762,7 +762,7 @@ def patches_fold(panel) -> None:
         drawn["rects"][key] = (a.x, a.y, b.x, b.y)
 
     if not rows:
-        imgui.text_disabled("no patches — on GRAPH, a group's menu: save as patch…")
+        imgui.text_disabled("no patches — on graph, a group's menu: save as patch…")
     for name in rows:
         _list_row(panel, PATCHES, name, None, drawn, rect)
 

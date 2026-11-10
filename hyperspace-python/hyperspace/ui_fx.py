@@ -59,8 +59,8 @@ UNREACHED = "reaches nothing"
 # a picture port's sink → the group it ends in (an output, an aux: by name)
 _ENDS = {"shape.faces": FACES, "pattern.media": PATTERN, "backdrop.image": BACKDROP,
          "fx.image": RUN, "output.all.image": RUN}     # (plan 35: a wired frame's run's end)
-EMPTY = "no effects in the graph — add one on GRAPH (right-click the canvas)"
-SHOW = "Show on GRAPH"
+EMPTY = "no effects in the graph — add one on graph (right-click the canvas)"
+SHOW = "Show on graph"
 NAME_W = 0.42       # of the page's width: a row's name chip
 MIX_W = 0.30        # …and its mix
 IDLE_ALPHA = 0.45   # how much of an idle strip's rows shows through the veil
@@ -69,9 +69,9 @@ IDLE_ALPHA = 0.45   # how much of an idle strip's rows shows through the veil
 IDLE = {
     "off": ("off — nothing below shows until it is on", "turn on", "fx.{name}.on",
             "Switch this effect on."),
-    UNREACHED: ("it reaches nothing — wire it on GRAPH to see it", None, None, None),
+    UNREACHED: ("it reaches nothing — wire it on graph to see it", None, None, None),
     "faces off": ("it ends on the faces, and Faces is off", "faces on", "view.faces",
-                  "Switch the faces on (the Faces check in the VIEW and FACES sections)."),
+                  "Switch the faces on (the Faces check in the view and faces sections)."),
     "bypassed": ("every effect is bypassed", "effects on", "fx.on",
                  "Switch the effects on (the Effects check at the top)."),
     "fx mix 0": ("FX mix is at 0", None, None, None),     # its fader is at the top of the page

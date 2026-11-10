@@ -276,7 +276,9 @@ def _ghost(panel) -> None:
     if _beside(right, more_w):
         imgui.same_line()
     _more_chip(panel, more, notes)
-    for k, (pid, label) in enumerate((("ghost.style", "Style"), ("ghost.guide", "Guide"))):
+    for k, (pid, label) in enumerate((("ghost.style", "Style"),
+                                     ("ghost.material", "Material"),
+                                     ("ghost.guide", "Guide"))):
         if pid not in reg:
             continue
         lw = ui._micro_width(label) + ui.LABEL_GAP

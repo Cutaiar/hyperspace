@@ -121,7 +121,7 @@ def test_the_eight_rows_are_named_and_say_what_each_does_in_this_mode(faces, mod
         assert f"pattern.mod.{k}" in faces.rects, i.name    # the slider
         assert f"neutral.pattern.mod.{k}" in faces.rects
         assert patterns.effect(mode, k) in faces.texts, (i.name, patterns.effect(mode, k))
-    assert f"inputs · {MODES[mode].name}".upper() in faces.texts
+    assert f"inputs · {MODES[mode].name}" in faces.texts
 
 
 def test_flat_says_it_reads_no_input(faces):

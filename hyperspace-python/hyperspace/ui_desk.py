@@ -594,7 +594,7 @@ def _hover(panel, table, c: apc40.Control, b: Binding | None) -> str:
         return f"{tip}\nclick: let go"
     if mappable(table, c) is None:
         return f"{tip}\nclick: pick it — then click a param to put it there"
-    return f"{tip}\nclick: pick it — ROUTING shows its row"
+    return f"{tip}\nclick: pick it — routing shows its row"
 
 
 # ---------------------------------------------------------------- the room

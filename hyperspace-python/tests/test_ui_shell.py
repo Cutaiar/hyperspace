@@ -643,7 +643,8 @@ def test_the_ghost_controls_never_overlap_or_run_off_the_page(rig, monkeypatch, 
     _every_ghost_line(rig)
     rects, right = _ghost_rects(rig, monkeypatch, display, panel_w)
     names = [k.split("##")[-1] for k, _ in rects]
-    for want in ("ghost.on", "ghost.alpha", "ghost.style", "ghost.guide", "ghost.more"):
+    for want in ("ghost.on", "ghost.alpha", "ghost.style", "ghost.material", "ghost.guide",
+                 "ghost.more"):
         assert want in names, (want, names)
     for k, (a, ra) in enumerate(rects):
         assert ra[2] <= right + 0.5, f"{a!r} runs past the page ({ra[2]:.1f} > {right:.1f})"
@@ -653,9 +654,19 @@ def test_the_ghost_controls_never_overlap_or_run_off_the_page(rig, monkeypatch, 
             assert apart, f"{a!r} {ra} overlaps {b!r} {rb}"
     lines = sorted({round(r[1]) for _, r in rects})
     if panel_w is None:
-        assert len(lines) == 2, lines             # two lines at the panel's own width
+        # two lines at the control window's own width; at MIN_SIZE the three
+        # look combos (style, material, guide) no longer share one line, so a
+        # third is a wrap, not the overlap this test is here to catch
+        assert len(lines) == (2 if display[0] > 320 else 3), (display, lines)
     else:
-        assert len(lines) > 2, lines              # narrower: a group wraps rather than overlaps
+        # narrower: the row wraps rather than overlapping, and the lines it
+        # takes are not a constant — a label's own width decides, and every
+        # label got narrower when they stopped being drawn in capitals
+        # (2026-11-10). The invariants above (no overlap, nothing past the
+        # right edge) are what the owner's report was about; this only says
+        # the controls still wrap onto their own lines instead of being
+        # squeezed onto one.
+        assert len(lines) >= 2, lines
 
 
 def test_a_percent_readout_reaches_imgui_doubled(rig, monkeypatch):
@@ -1422,7 +1433,7 @@ def test_the_menu_lists_and_unbinds_with_no_midi_adapter(rig, monkeypatch):
     assert panel.midi is None
     # Brightness: a knob and two step buttons, no route → a plain Unbind
     lines, items = menu(panel, monkeypatch, "view.bright", "view")
-    assert lines[0] == "VIEW.BRIGHT"
+    assert lines[0] == "view.bright"
     assert lines[1:] == ["K1 (track knob 1)", "B16 (▲) · step +3", "B17 (▼) · step -3"]
     assert "Unbind" in items and not any("▸" in i and "Unbind" in i for i in items)
     assert not any(i.startswith("Unbind hand") for i in items)
@@ -1447,7 +1458,7 @@ def test_the_menu_lists_and_unbinds_with_no_midi_adapter(rig, monkeypatch):
     menu(panel, monkeypatch, "view.speed", "view", click="Unbind")
     assert not table.routes_to("view.speed")
     lines, items = menu(panel, monkeypatch, "view.speed", "view")
-    assert lines == ["VIEW.SPEED"] and not any(i.startswith("Unbind") for i in items)
+    assert lines == ["view.speed"] and not any(i.startswith("Unbind") for i in items)
     # both at once
     table.add(Binding("lfo:1", "view.bright", "push", 0.2))
     menu(panel, monkeypatch, "view.bright", "view", click="Unbind/both")
@@ -2222,7 +2233,7 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     reg["ghost.on"].set(False)
     drawn, _ = _output_page(rig, monkeypatch, body=True)
     why = [s for s in drawn if s.startswith(("hands:", "through:"))]
-    assert why[0] == why[-1] == "hands: ghost hands are off (HANDS section)"
+    assert why[0] == why[-1] == "hands: ghost hands are off (hands section)"
     assert "paced by output 1 · frame 1920×1080 · below: output 1's window" in drawn
     # an output the config lists but that did not open: one line, why
     slots[1].win, slots[1].missing = None, "screen 2 is not connected"

@@ -30,7 +30,7 @@ DX = 120.0     # px the mouse travels in each drag
 def view_page(tmp_path, monkeypatch):
     with build_rig(tmp_path) as r:
         imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
-        r.view.instances, r.view.inst_layout = 12, NAMES.index("FCC")   # the depth slider shows
+        r.view.instances, r.view.inst_layout = 12, NAMES.index("fcc")   # the depth slider shows
         d = Driver(step=lambda: page_frame(r.panel, "view"))
         d.record(monkeypatch.setattr)
         d.run(d.wait(2))

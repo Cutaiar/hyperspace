@@ -183,3 +183,54 @@ def test_every_recorded_tape_replays_through_the_ghost(path):
             seen.add(p.side)
             assert np.isfinite(p.joints).all() and p.joints.shape[1:] == (5, 3)
     assert seen, f"{path.name}: no hand ever showed"
+
+
+def test_thinning_keeps_every_cue_its_own_first_frame():
+    """`--fps` thins a tape, and a tape is replayed by taking the last
+    frame at or before a time (`TapeSource`). Spacing the frames across
+    the whole tape could drop a cue's first one, and that cue's `t0` then
+    landed on the pose before it (review of #449). A cue's start survives
+    the thinning, and restarts the spacing."""
+    root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(root / "tools"))
+    from hands_tape import _thinned
+
+    frames = [{"t": round(k / 120, 6)} for k in range(360)]     # 3 s at 120 fps
+    starts = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5]                     # a cue every half second
+    kept = {round(f["t"], 6) for f in _thinned(frames, 30.0, starts)}
+    assert all(round(s, 6) in kept for s in starts), sorted(kept)[:12]
+    blind = {round(f["t"], 6) for f in _thinned(frames, 30.0)}
+    assert not all(round(s, 6) in blind for s in starts)        # what it used to do
+    assert len(kept) <= len(frames) // 3                        # still thinned
+
+
+def test_the_recorded_tape_names_frames_it_holds():
+    """Every cue in the tape under tests/fixtures/hands/ bounds itself on
+    frames the tape still has, so replaying at a cue's own start shows
+    that cue's pose and not the one before it."""
+    import json
+    root = Path(__file__).resolve().parents[1]
+    for path in sorted((root / "tests" / "fixtures" / "hands").glob("*.json")):
+        doc = json.loads(path.read_text())
+        times = {f["t"] for f in doc["frames"]}
+        for cue in doc.get("cues", []):
+            assert cue["t0"] in times, (path.name, cue["label"], "t0")
+            assert cue["t1"] in times, (path.name, cue["label"], "t1")
+
+
+def test_thinning_keeps_both_of_a_cues_bounds():
+    """A cue names a first and a last frame, and the fixture test holds a
+    tape to both. Keeping only the starts left the ends to the spacing,
+    which dropped one for 53 of 60 cue lengths — a fresh `record --cues
+    --fps` would then have failed that test (review of #450)."""
+    root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(root / "tools"))
+    from hands_tape import _thinned
+
+    for n in (20, 31, 47, 60, 79):                  # a cue of n frames at 120 fps
+        frames = [{"t": round(k / 120, 6)} for k in range(2 * n)]
+        cues = [{"t0": 0.0, "t1": round((n - 1) / 120, 6)},
+                {"t0": round(n / 120, 6), "t1": round((2 * n - 1) / 120, 6)}]
+        bounds = [v for c in cues for v in (c["t0"], c["t1"])]
+        kept = {round(f["t"], 6) for f in _thinned(frames, 30.0, bounds)}
+        assert all(round(v, 6) in kept for v in bounds), (n, sorted(kept))

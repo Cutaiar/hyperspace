@@ -79,6 +79,11 @@ KEY = "O"                # opens the board: no row in `routing.keymap` (a test h
 STAYS = " Stays until moved."
 HINT = "Drag a player across to change duty. Drag a controller to another player, or a new one from the tray."
 TRAY_NONE = "nothing loose"
+# The board's own words. Lower case with the rest of the interface
+# (2026-11-10); named because each is measured for its room as well as
+# drawn, and a width probe that says something else is a silent cut.
+PLAYER_WORD = "player"
+NOBODY = "nobody holds"
 ADOPT_TIP = ("Seen on this Mac, and nobody holds it. Drag it to a player: it joins the list "
              "both Macs share, as {role}, and rows can name it. Nothing joins by plugging in.")
 TWINS_TIP = " Two desks with one name show as one here: MIDI can't tell them apart."
@@ -761,9 +766,9 @@ def _draw_token(dl, card: Card, hold: list[Held], s: float, sel, ghost: bool, ta
     cy, right = _badge(dl, card.number, x0 + PAD * s, y0 + PAD * s, s, dim=empty)
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO * min(s, 1.6))
     left = right + 4 * s
-    word = imgui.calc_text_size("PLAYER")
+    word = imgui.calc_text_size(PLAYER_WORD)
     if left + word.x <= x1 - 2:           # whole or not at all: the number is the name
-        dl.add_text(_v(left, cy - word.y / 2), ui.u32(ui.FAINT if empty else ui.DIM), "PLAYER")
+        dl.add_text(_v(left, cy - word.y / 2), ui.u32(ui.FAINT if empty else ui.DIM), PLAYER_WORD)
     if empty:
         room = x1 - x0 - 2 * PAD * s
         hint = "no controller" if imgui.calc_text_size("no controller").x <= room else "empty"
@@ -781,7 +786,7 @@ def _draw_lane(dl, duty: Duty, rect: Rect, deck: int, s: float, target: bool, no
     edge = WHITE if target else (ui.RED if on else ui.LINE)
     dl.add_rect(_v(x0, y0), _v(x1, y1), ui.u32(edge), 8 * s, (3.0 if target else 2.0) * s)
     imgui.push_font(ui._FONTS["micro"], 16.0 * min(s, 1.8))
-    title = "ON AIR" if on else "OFF AIR"
+    title = "on air" if on else "off air"
     size = imgui.calc_text_size(title)
     tx, ty = x0 + PAD * s + 2, y0 + (HEAD * s - size.y) / 2
     dl.add_text(_v(tx, ty), ui.u32(ui.RED if on else ui.DIM), title)
@@ -885,7 +890,7 @@ def _board(panel, sfx: str, s: float) -> None:
                     target=aim == n)
     x0, y0, x1, _y1 = bd.tray
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO * min(s, 1.6))
-    title = "NOBODY HOLDS" if tray else f"NOBODY HOLDS  ·  {TRAY_NONE}"
+    title = NOBODY if tray else f"{NOBODY}  ·  {TRAY_NONE}"
     dl.add_text(_v(x0 + PAD * s + 2, y0 + 6 * s), ui.u32(ui.FAINT), ui.fit_text(title, x1 - x0 - 8))
     imgui.pop_font()
     for h, r in zip(tray, bd.tray_cells, strict=False):

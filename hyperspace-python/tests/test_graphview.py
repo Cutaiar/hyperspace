@@ -715,7 +715,7 @@ def test_graph_has_media_area(rig):
     assert view.node("render:backdrop") is None
     assert owner_of(view, "backdrop.alpha") == "group:backdrop"
     assert all(n.idle for n in chans)                       # nothing in a bin, no cable
-    assert graphview.TITLES[graphview.MEDIA] == "MEDIA"
+    assert graphview.TITLES[graphview.MEDIA] == "media"
     assert graphview.AREAS.index(graphview.MEDIA) < graphview.AREAS.index(graphview.SCENE_AREA)
     lay = graphview.layout(view, collapsed=lambda nid: True)
     assert graphview.MEDIA in lay.titles and lay.idle[graphview.MEDIA]

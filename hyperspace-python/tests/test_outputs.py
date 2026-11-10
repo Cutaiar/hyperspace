@@ -1009,7 +1009,7 @@ def test_the_presenter_handoff_carries_the_readout(ctx):
     assert r.stats["chain_runs"] == 2 and r.stats["direct"] is False
 
 
-@pytest.mark.parametrize("style", range(1, 5))
+@pytest.mark.parametrize("style", range(1, 9))
 def test_every_style_behaves_as_the_hands_in_every_state(ctx, style):
     """Plan 21 WP6: a style is drawn into the same hands' layer, so the
     eight states hold for it as for HANDS — 3 = 4 and 7 = 8, six pictures,
