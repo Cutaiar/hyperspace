@@ -79,6 +79,11 @@ ROW_MENU_SUB = [
         )),
     )),
     M.Item("pin", "Pin to scene", icon="layers"),
+    # 32 rows, which is the look-back frame menu's count and the reason a
+    # submenu has to scroll: at 28 a row it wants 906px, more than the
+    # window is tall once it hangs off a table row.
+    M.Item("frames", "Look-back frames", items=tuple(
+        M.Item(f"frames.{k}", f"echo.{k}") for k in range(1, 33))),
     M.sep(),
     M.Item("remove", "Remove from view", icon="trash-2",
            variant="destructive"),

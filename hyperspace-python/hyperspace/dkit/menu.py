@@ -736,6 +736,12 @@ def _dismiss(ui, key: str) -> None:
             imgui.end_popup()
         imgui.pop_style_var()
         imgui.pop_style_color()
+    # ITS descendants too. `_dismiss` begins this panel only to close it, so
+    # the closed branch of `sub_popup` — which is what normally forgets a
+    # chain — never runs for it, and its own `open` and `shown` would still
+    # name the grandchild. Reopening the panel then brought that grandchild
+    # straight back without its trigger ever being hovered.
+    _forget(ui, key)
     LAST_RECT.pop(key, None)
     ui.anim.to(f"{key}:open", 0.0)
 
@@ -889,6 +895,11 @@ def sub_popup(ui, key: str, items, trig, a: float = 1.0, *,
     """
     w, h = sub_size(ui, items)
     at = place_sub(trig, w, h, ui.viewport)
+    # `place_sub` clamps a panel taller than the viewport, which on its own
+    # would CUT the rows off the bottom: the look-back frame menu is 32
+    # rows, 906px, and the last of them cannot be clicked in any window
+    # shorter than that. Capped, the rows scroll, exactly as `popup`'s do.
+    scrolls = at.h < h - 0.5
     imgui.set_next_window_pos(imgui.ImVec2(at.x, at.y))
     imgui.set_next_window_size(imgui.ImVec2(at.w, at.h))
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
@@ -911,13 +922,28 @@ def sub_popup(ui, key: str, items, trig, a: float = 1.0, *,
         sub_chrome(ui, dl, x, y, at.w, at.h, op)
         inset = PAD + SUB_BORDER
         cw = at.w - 2 * inset
+        ch = h - 2 * inset              # the rows' own height, uncapped
         frozen = _subs(ui, key)["open"] is not None
         hi = highlighted_item(
             items, _begin_keys(ui, key, items, x + inset, y + inset, cw,
                                "menu", frozen))
-        chosen, rects, over = _row_loop(ui, key, items, x + inset, y + inset,
-                                        cw, op, at=hi, row_id=row_id,
-                                        keyboard=True)
+        off = 0.0
+        if scrolls:
+            off = _scroll(ui, key, items, hi, at.h - 2 * inset, ch)
+            dl.push_clip_rect(imgui.ImVec2(x, y + inset),
+                              imgui.ImVec2(x + at.w, y + at.h - inset), True)
+        chosen, rects, over = _row_loop(
+            ui, key, items, x + inset, y + inset - off, cw, op, at=hi,
+            row_id=row_id, keyboard=True,
+            window=(y + inset, y + at.h - inset) if scrolls else None)
+        if scrolls:
+            dl.pop_clip_rect()
+            view = at.h - 2 * inset
+            tw = 4.0
+            th = max(view * view / ch, 16.0)
+            ty = y + inset + (view - th) * (off / max(ch - view, 1.0))
+            D.fill(dl, x + at.w - tw - 2.0 - SUB_BORDER, ty, tw, th,
+                   ui.col("border", op), tw / 2)
         if chosen is not None:
             imgui.close_current_popup()
         else:

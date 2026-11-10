@@ -214,25 +214,25 @@ def _fresh_rects():
     M.LAST_RECT.clear()
 
 
-def _page_view(DB):
+def _page_view(DB, h=H):
     """The page's scroll viewport, as `test_interaction.page_view` has it:
     everything below the header and right of the sidebar."""
-    return (DB.SIDEBAR_W, DB.HEADER_H, W - DB.SIDEBAR_W, H - DB.HEADER_H)
+    return (DB.SIDEBAR_W, DB.HEADER_H, W - DB.SIDEBAR_W, h - DB.HEADER_H)
 
 
-def _row0(DB):
+def _row0(DB, h=H):
     """A script prefix that wheels the table into view, and row 0's rect."""
-    px, py, pw, ph = _page_view(DB)
+    px, py, pw, ph = _page_view(DB, h)
     mx, my = px + pw / 2, py + ph / 2
     prefix = [(mx, my)] * 4 + [(mx, my, False, -3.0)] * 120 + [(mx, my)] * 4
-    DB.render("dark", W, H, script=prefix, keep="last")
+    DB.render("dark", W, h, script=prefix, keep="last")
     sy = DB.render.last_state["page_scroll"]
-    return prefix, DB.lay_out(W, H, body_dy=-sy).table_rows[0]
+    return prefix, DB.lay_out(W, h, body_dy=-sy).table_rows[0]
 
 
-def _open(DB):
+def _open(DB, h=H):
     """The script that right-clicks row 0 open, and row 0's rect."""
-    prefix, (rx, ry, _rw, rh) = _row0(DB)
+    prefix, (rx, ry, _rw, rh) = _row0(DB, h)
     x, y = rx + 200, ry + rh / 2
     script = (prefix + [(x, y)] * 8 + [(x, y, False, 0.0, True)] * 2
               + [(x, y, False, 0.0, False)] * 14)
@@ -354,6 +354,80 @@ def test_a_second_level_opens_too(DB):
     deep = M.LAST_RECT.get(DEEPKEY)
     assert deep, "the second level did not open"
     assert deep[0] == pytest.approx(sx + sw - M.PAD - M.SUB_BORDER, abs=1.5)
+
+
+def test_a_submenu_too_tall_for_the_window_scrolls_to_its_last_row(DB):
+    """The look-back frame menu's shape: 32 rows, 906px, in a window that
+    cannot hold them.
+
+    `place_sub` clamps the panel to the viewport, which on its own CUTS the
+    rows off the bottom — the last of them could not be clicked in any
+    window shorter than the menu. The rows scroll instead, as `popup`'s do,
+    and the test is that the LAST row still lands.
+    """
+    # a window SHORTER than the menu, which is the whole case: 32 rows want
+    # 906px and this leaves them 640 to live in
+    h = 640
+    script, _at = _open(DB, h)
+    DB.render("dark", W, h, script=script, keep="last")
+    tx, ty = _trigger_xy(index=3)                   # `Look-back frames`
+    opened = script + [(tx, ty)] * DWELL
+    DB.render("dark", W, h, script=opened, keep="last")
+    key = f"{CKEY}>frames"
+    sub = M.LAST_RECT.get(key)
+    assert sub, "the long submenu did not open"
+    rows = 32 * M.ITEM_H + 2 * (M.PAD + M.SUB_BORDER)
+    assert sub[3] < rows, "the panel was not capped at all"
+    assert sub[3] + sub[1] <= h + 0.5, "the panel hangs off the window"
+
+    # wheel over it until the end of the list, then click the last row
+    sx, sy, sw, sh = sub
+    wx, wy = sx + sw / 2, sy + sh / 2
+    wheel = opened + [(wx, wy)] * 4 + [(wx, wy, False, -3.0)] * 60 + [(wx, wy)] * 6
+    DB.render("dark", W, h, script=wheel, keep="last")
+    last_y = sy + sh - M.PAD - M.SUB_BORDER - M.ITEM_H / 2
+    DB.render("dark", W, h,
+              script=wheel + [(wx, last_y)] * 8 + [(wx, last_y, True)] * 2
+              + [(wx, last_y, False)] * 8, keep="last")
+    got = DB.render.last_state["ctx"]
+    assert got.startswith("frames.32"), \
+        f"the last row of a scrolled submenu did not land: {got!r}"
+
+
+def test_a_dismissed_submenu_forgets_its_own_descendants(DB):
+    """Close a submenu by moving to another row, and its GRANDCHILD has to
+    go with it.
+
+    `_dismiss` begins the child only to close it, so `sub_popup`'s closed
+    branch — which is what normally forgets a chain — never runs for it. Its
+    own `open` and `shown` still named the grandchild, and hovering the
+    child again brought that grandchild straight back, without its trigger
+    ever being hovered.
+    """
+    script, _at = _open(DB)
+    DB.render("dark", W, H, script=script, keep="last")
+    tx, ty = _trigger_xy()                          # `Insert`
+    opened = script + [(tx, ty)] * DWELL
+    DB.render("dark", W, H, script=opened, keep="last")
+    sx, sy, sw, _sh = M.LAST_RECT[SUBKEY]
+    dx = sx + sw / 2
+    dy = sy + M.SUB_BORDER + M.PAD + M.ITEM_H * 2 + M.ITEM_H / 2    # `More`
+    deep = opened + [(dx, dy)] * DWELL
+    DB.render("dark", W, H, script=deep, keep="last")
+    assert M.LAST_RECT.get(DEEPKEY), "the second level did not open"
+
+    # away to another row of the ROOT, which closes `Insert` and its child
+    ox, oy = _trigger_xy(index=0)
+    away = deep + [(ox, oy)] * DWELL
+    DB.render("dark", W, H, script=away, keep="last")
+    assert not M.LAST_RECT.get(SUBKEY) and not M.LAST_RECT.get(DEEPKEY)
+
+    # back onto `Insert`: it opens, and its grandchild does NOT
+    back = away + [(tx, ty)] * DWELL
+    DB.render("dark", W, H, script=back, keep="last")
+    assert M.LAST_RECT.get(SUBKEY), "the submenu did not reopen"
+    assert not M.LAST_RECT.get(DEEPKEY), \
+        "the grandchild came back without its trigger being hovered"
 
 
 def test_arrow_right_opens_it_and_arrow_left_closes_it(DB):
