@@ -29,10 +29,9 @@ import json
 import sys
 from pathlib import Path
 
+import contour as C
 import numpy as np
 from PIL import Image
-
-import contour as C
 
 HERE = Path(__file__).resolve().parent
 SPEC = json.loads((HERE / "spec.json").read_text())
@@ -259,7 +258,7 @@ def main() -> int:
             bgv = float(react[int(ay + ah) + 4, int(ax)].max())
             if abs(fgv - bgv) < 8:
                 continue
-            cov = lambda im: float(np.clip(
+            cov = lambda im, sl=sl, fgv=fgv, bgv=bgv: float(np.clip(
                 (im[sl].max(axis=2) - bgv) / (fgv - bgv), 0, 1).sum())
             ca, cb = cov(react), cov(mine)
             print(f"  {c['id']:14} react {ca:7.3f}   imgui {cb:7.3f}   "

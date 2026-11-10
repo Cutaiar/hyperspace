@@ -74,7 +74,7 @@ def DB():
 
 def _field(DB):
     r = DB.lay_out(W, H)
-    kx, ky, _kw, kh = r.ctl_rows[5]
+    kx, ky, _kw, _kh = r.ctl_rows[5]
     return kx + DB.CTL_LABEL_W, ky, 150.0, 32.0
 
 
@@ -161,11 +161,11 @@ def test_escape_closes_it_and_keeps_the_field_focused(DB):
     different imgui id from the one outside it."""
     pre, at = _open_by_click(DB)
     esc = len(pre) + 2
-    f, rect = _drive(DB, pre + [at + (False,)] * 24,
+    _f, rect = _drive(DB, pre + [at + (False,)] * 24,
                      keys=[(esc, imgui.Key.escape)])
     assert rect is None, "Escape did not close the list"
     # and the focus came back: an arrow reopens it
-    f, rect = _drive(DB, pre + [at + (False,)] * 46,
+    _f, rect = _drive(DB, pre + [at + (False,)] * 46,
                      keys=[(esc, imgui.Key.escape),
                            (esc + 14, imgui.Key.down_arrow)])
     assert rect, "the field lost focus on Escape - the arrow did not reopen"
@@ -175,7 +175,7 @@ def test_tab_closes_the_list_rather_than_being_swallowed(DB):
     """Tab is not the list's key. The kit ate it inside the popup, so a
     keyboard user could get into the combobox and not out of it."""
     pre, at = _open_by_click(DB)
-    f, rect = _drive(DB, pre + [at + (False,)] * 30,
+    _f, rect = _drive(DB, pre + [at + (False,)] * 30,
                      keys=[(len(pre) + 2, imgui.Key.tab)])
     assert rect is None, "Tab was swallowed; the list is still open"
 
@@ -409,11 +409,11 @@ def test_a_committed_row_leaves_the_field_focused_with_a_caret(DB):
     base = len(pre) + 2
     # the list opens on the committed row, so Enter re-commits the same one
     val = DB.CTL_STATE["plane"]
-    f, rect = _drive(DB, pre + [at + (False,)] * 60,
+    _f, rect = _drive(DB, pre + [at + (False,)] * 60,
                      keys=[(base, imgui.Key.enter)])
     assert rect is None, "Enter did not close the list"
     # the focus came back: an arrow reopens it
-    f, rect = _drive(DB, pre + [at + (False,)] * 60,
+    _f, rect = _drive(DB, pre + [at + (False,)] * 60,
                      keys=[(base, imgui.Key.enter),
                            (base + 20, imgui.Key.down_arrow)])
     assert rect, "the field lost focus on Enter - the arrow did not reopen"
@@ -451,7 +451,7 @@ def _booted(DB):
     helper and the same reason.
     """
     import glfw
-    win, impl, _io, fc, _grad = DB._boot("dark", 320, 240, visible=False,
+    _win, impl, _io, fc, _grad = DB._boot("dark", 320, 240, visible=False,
                                          retina=False)
     try:
         yield fc
@@ -529,7 +529,7 @@ def test_the_list_scrolls_to_follow_the_keyboard_highlight(DB):
     """
     import numpy as np
     TALL = 2600
-    nav, (gx, gy, gw, gh) = _gallery_combobox(DB, W, TALL)
+    nav, (gx, gy, _gw, gh) = _gallery_combobox(DB, W, TALL)
     cx, cy = gx + 40, gy + gh / 2
     pre = nav + [(cx, cy, False)] * 4 + [(cx, cy, True)] * 3 \
         + [(cx, cy, False)] * 10
@@ -594,7 +594,7 @@ def test_clearing_the_field_leaves_the_placeholder_in_it(DB):
     the focus half of the fix works. That half is measured, not tested.
     """
     import numpy as np
-    fx, fy, fw, fh = _field(DB)
+    fx, fy, _fw, fh = _field(DB)
     cx, cy = fx + 40, fy + fh / 2
     pre = [(10, 10, False)] * 10 + [(cx, cy, False)] * 4 \
         + [(cx, cy, True)] * 3 + [(cx, cy, False)] * 10
@@ -628,8 +628,8 @@ def test_a_disabled_combobox_dims_its_chevron_as_well_as_its_box(DB):
     Combobox side by side, so the two are read off ONE frame with the same
     ground.
     """
-    import numpy as np
     import comp_gallery as CG
+    import numpy as np
     import tokens as T
     TALL = 2600
     with _booted(DB) as fc:
@@ -683,7 +683,6 @@ def test_a_second_escape_empties_the_field(DB):
     caller still does the safe thing and `if got is not None` separates the
     three cases.
     """
-    import comp_combobox as CC
     pre, at = _open_by_click(DB)
     esc = len(pre) + 2
     # one Escape closes it; the second, 14 frames later, clears the value

@@ -19,22 +19,22 @@ from pathlib import Path
 
 import glfw
 import numpy as np
-import OpenGL.GL as GL
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
+from OpenGL import GL
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import comp_button as CB  # noqa: E402
-import interact as I      # noqa: E402
-import menu as M          # noqa: E402
-import comp_combobox as CC  # noqa: E402
-import draw as D          # noqa: E402
-from ease import Anim     # noqa: E402
-import gradient as G      # noqa: E402
-import tokens as T        # noqa: E402
+import comp_button as CB
+import comp_combobox as CC
+import draw as D
+import gradient as G
+import interact as I
+import menu as M
+import tokens as T
+from ease import Anim
 
 SPEC = json.loads((HERE / "spec.json").read_text())
 

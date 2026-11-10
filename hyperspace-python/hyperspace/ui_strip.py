@@ -41,7 +41,7 @@ def strip(panel, group: str) -> None:
 
 
 def _draw(panel, group: str, lib, meta) -> None:
-    L, C, T = ui_loadable, ui_kit.mod("comp_button"), ui_kit.mod("tokens")
+    L, T = ui_loadable, ui_kit.mod("tokens")
     st = L._state(panel)
     cur = lib.current(group)
     listing = L.names(panel, group)

@@ -13,7 +13,6 @@ import draw as D
 from combobox_items import _is_row, _k
 from combobox_tokens import combobox_table
 
-
 # --------------------------------------------------------------------------
 # intrinsic size, through the layout tree
 # --------------------------------------------------------------------------

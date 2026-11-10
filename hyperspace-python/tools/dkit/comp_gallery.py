@@ -26,8 +26,6 @@ outside it.
 
 from __future__ import annotations
 
-from imgui_bundle import imgui
-
 import box as B
 import comp_button as CB
 import comp_combobox as CC
@@ -37,6 +35,7 @@ import icons as IC
 import interact as I
 import menu as M
 import tokens as T
+from imgui_bundle import imgui
 
 # ---- the page's own rhythm, on the spacing scale -------------------------
 PAD = T.CARD_PAD            # 16, a Card's own padding
@@ -93,10 +92,10 @@ def _s_button(faces, tn):
     rows.append(row)
 
     row = []
-    for cap, kw in (("disabled", dict(disabled=True)),
-                    ("icon start", dict(icon="plus")),
-                    ("icon end", dict(icon="plus", icon_side="inline-end")),
-                    ("popup trigger", dict(haspopup=True))):
+    for cap, kw in (("disabled", {"disabled": True}),
+                    ("icon start", {"icon": "plus"}),
+                    ("icon end", {"icon": "plus", "icon_side": "inline-end"}),
+                    ("popup trigger", {"haspopup": True})):
         lab = cap.title()
         w, h = CB.button_size("default", lab, faces,
                               icon=bool(kw.get("icon")))
@@ -106,8 +105,8 @@ def _s_button(faces, tn):
                                  **kw)))
     rows.append(row)
     return ("Button",
-            "Six variants, eight sizes. The ring is keyboard-only: click one "
-            "and nothing rings, Tab to it and it does.", rows)
+            ("Six variants, eight sizes. The ring is keyboard-only: click one "
+            "and nothing rings, Tab to it and it does."), rows)
 
 
 def _s_button_group(faces, tn):
@@ -127,8 +126,8 @@ def _s_button_group(faces, tn):
          CB.ui_button_group(ui, k, x, y, h_items, disabled=(1,))),
     ]]
     return ("ButtonGroup",
-            "The seam is a single border, not two: inner corners square, "
-            "outer ones rounded.", rows)
+            ("The seam is a single border, not two: inner corners square, "
+            "outer ones rounded."), rows)
 
 
 def _s_input(faces, tn):
@@ -145,8 +144,8 @@ def _s_input(faces, tn):
         mk("disabled", "g.in3", init="off", disabled=True),
     ]]
     return ("Input",
-            "A real imgui.input_text under the measured chrome, so the caret, "
-            "selection and clipboard are ImGui's and the box is shadcn's.",
+            ("A real imgui.input_text under the measured chrome, so the caret, "
+            "selection and clipboard are ImGui's and the box is shadcn's."),
             rows)
 
 
@@ -172,8 +171,8 @@ def _s_select(faces, tn):
     rows = [[mk("default", "g.sel1"), mk("sm", "g.sel2", size="sm"),
              mk("disabled", "g.sel3", disabled=True)]]
     return ("Select",
-            "73 of the registry's params are enums. The trigger has no hover "
-            "tint in light and does have one in dark — measured, not guessed.",
+            ("73 of the registry's params are enums. The trigger has no hover "
+            "tint in light and does have one in dark — measured, not guessed."),
             rows)
 
 
@@ -202,8 +201,8 @@ def _s_combobox(faces, tn):
     rows = [[("sixteen items", (220.0, 32.0), draw),
              ("disabled", (220.0, 32.0), draw_off)]]
     return ("Combobox",
-            "The trigger IS the input — Base UI's shape, not Popover + "
-            "Command. Sixteen rows clamp to 252px and scroll with no bar.",
+            ("The trigger IS the input — Base UI's shape, not Popover + "
+            "Command. Sixteen rows clamp to 252px and scroll with no bar."),
             rows)
 
 
@@ -221,8 +220,8 @@ def _s_switch(faces, tn):
              mk("sm on", "g.sw5", init=True, size="sm"),
              mk("disabled", "g.sw4", init=True, disabled=True)]]
     return ("Switch",
-            "18.390625 px tall, because the class says h-[18.4px] and "
-            "Chromium lays out on a 1/64 px grid.", rows)
+            ("18.390625 px tall, because the class says h-[18.4px] and "
+            "Chromium lays out on a 1/64 px grid."), rows)
 
 
 def _s_checkbox(faces, tn):
@@ -241,8 +240,8 @@ def _s_checkbox(faces, tn):
              mk("with label", "g.cb5", init=True, label="Bypass when idle"),
              mk("label, disabled", "g.cb6", label="Locked", disabled=True)]]
     return ("Checkbox",
-            "Space toggles and Enter does not; the click target reaches 11px "
-            "past each side, and a click on the label toggles the box.",
+            ("Space toggles and Enter does not; the click target reaches 11px "
+            "past each side, and a click on the label toggles the box."),
             rows)
 
 
@@ -271,9 +270,9 @@ def _s_kbd(faces, tn):
              group("chord", ["\u2318", "\u21e7", "P"]),
              ("in a tooltip", (tip_w, tbl["h"] + 2 * T.SPACE[1.5]), in_tip)]]
     return ("Kbd",
-            "min-w-5 or text + 8, whichever is wider. A KbdGroup's \"+\" is "
+            ("min-w-5 or text + 8, whichever is wider. A KbdGroup's \"+\" is "
             "MONOSPACE in the browser: the group is a <kbd> and never resets "
-            "the UA font.", rows)
+            "the UA font."), rows)
 
 
 def _s_slider(faces, tn):
@@ -294,8 +293,8 @@ def _s_slider(faces, tn):
              ("range", (200.0, 20.0), rng),
              mk("disabled", "g.sl3", 0.4, disabled=True)]]
     return ("Slider",
-            "292 of the registry's 427 params are continuous. The range and "
-            "the thumb use different mappings and agree only at 50%.", rows)
+            ("292 of the registry's 427 params are continuous. The range and "
+            "the thumb use different mappings and agree only at 50%."), rows)
 
 
 def _s_tooltip(faces, tn):
@@ -305,8 +304,8 @@ def _s_tooltip(faces, tn):
                   hovered=hit.hot > 0.0)
     w, h = CB.button_size("default", "Hover me", faces)
     return ("Tooltip",
-            "700ms to open, measured; the panel reserves the arrow's full "
-            "10px while the arrow only paints 5.071 of it.",
+            ("700ms to open, measured; the panel reserves the arrow's full "
+            "10px while the arrow only paints 5.071 of it."),
             [[("after 700ms", (w, h), draw)]])
 
 
@@ -336,9 +335,9 @@ def _s_menu(faces, tn):
     rows = [[("dropdown", (28.0, 28.0), kebab),
              ("context menu", (200.0, 56.0), ctx)]]
     return ("Menu, ContextMenu",
-            "One panel, two ways in. Hover changes the INK as well as the "
+            ("One panel, two ways in. Hover changes the INK as well as the "
             "ground, and a destructive row tints at 10% in light / 20% in "
-            "dark.", rows)
+            "dark."), rows)
 
 
 def _s_scroll(faces, tn):
@@ -358,9 +357,9 @@ def _s_scroll(faces, tn):
               border_col=T.rgba("border", theme=ui.theme),
               radius=T.RADII["lg"])
     return ("ScrollArea",
-            "The bar floats over the content rather than taking a column of "
+            ("The bar floats over the content rather than taking a column of "
             "it, and the corners are painted back because ImGui clips to "
-            "rectangles.", [[("overlay bar", (200.0, 120.0), draw)]])
+            "rectangles."), [[("overlay bar", (200.0, 120.0), draw)]])
 
 
 def _s_icons(faces, tn):
@@ -373,8 +372,8 @@ def _s_icons(faces, tn):
                            T.rgba("foreground", theme=ui.theme))))
     rows.append(row)
     return ("Icons",
-            f"{len(names)} Lucide glyphs as vector paths — crisp at any size, "
-            "coloured by token, no atlas.", rows)
+            (f"{len(names)} Lucide glyphs as vector paths — crisp at any size, "
+            "coloured by token, no atlas."), rows)
 
 
 def _s_type(faces, tn):
@@ -395,8 +394,8 @@ def _s_type(faces, tn):
                             baseline_box=h, tabular=("tabular" in cap))))
     rows.append(row)
     return ("Type",
-            "Six Geist faces cut from the variable woff2 — three weights, "
-            "each with and without tabular figures frozen into the cmap.",
+            ("Six Geist faces cut from the variable woff2 — three weights, "
+            "each with and without tabular figures frozen into the cmap."),
             rows)
 
 
@@ -416,8 +415,8 @@ def _s_tokens(faces, tn):
                            border_col=T.rgba("border", theme=ui.theme),
                            radius=T.RADII["md"]))))
     return ("Colour tokens",
-            "One swap between light and dark; every component reads these "
-            "and nothing holds a literal.", [row])
+            ("One swap between light and dark; every component reads these "
+            "and nothing holds a literal."), [row])
 
 
 SECTIONS = (_s_button, _s_button_group, _s_input, _s_select, _s_combobox,

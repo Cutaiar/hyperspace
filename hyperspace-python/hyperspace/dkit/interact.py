@@ -35,21 +35,24 @@ wheel is in `wheel.py`. Both are re-exported here, so `I.Ui`, `I.chrome` and
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 from imgui_bundle import imgui
 
 from . import draw as D
 from . import tokens as T
 from .ease import mix
+from .rect import stretched_hit
+
 # The per-frame context and the sandwich live in uictx.py. Re-exported for
 # `I.Ui` / `I.chrome` / `I._sandwich_end` callers, and used unqualified below.
-from .uictx import State, Ui, _sandwich_begin, _sandwich_end, chrome
-from .rect import stretched_hit
+from .uictx import State, Ui, _sandwich_begin, _sandwich_end
+
 # The wheel lives in wheel.py; these are re-exported for `I.x` callers, and
 # `snap_scroll` is also called unqualified by `scroll_area` below.
-from .wheel import (_PRECISE, install_wheel, note_wheel_step, scale_wheel,
-                   snap_scroll, wheel_px_per_unit)
-from contextlib import contextmanager
-
+from .wheel import (
+    snap_scroll,
+)
 
 # --------------------------------------------------------------------------
 # interactive primitives
@@ -106,10 +109,10 @@ def tabs(ui: Ui, key, x, y, h, items, active, *, pad=3.0, keys=None, icons=None,
     total = sum(widths) + 2 * pad
     D.fill(ui.dl, x, y, total, h, ui.col("muted"), T.RADII["lg"])
     hit_idx, cx = None, x + pad
-    for i, (s, w) in enumerate(zip(items, widths)):
-        st = ui.hit(keys[i] if keys else f"{key}.{i}", cx, y + pad, w, ih)
+    for i, (s, tw) in enumerate(zip(items, widths)):
+        st = ui.hit(keys[i] if keys else f"{key}.{i}", cx, y + pad, tw, ih)
         if rects is not None:
-            rects.append((cx, y + pad, w, ih))
+            rects.append((cx, y + pad, tw, ih))
         if st.clicked:
             hit_idx = i
         # A TabsTrigger carries Button's band AND a 1px solid outline at full
@@ -118,17 +121,17 @@ def tabs(ui: Ui, key, x, y, h, items, active, *, pad=3.0, keys=None, icons=None,
         ff = ui.focus_f(f"{key}.{i}", st.focused)
         if ff > 0.01:
             tf = T.tabs_focus(ui.theme_name)
-            D.ring(ui.dl, cx, y + pad, w, ih,
+            D.ring(ui.dl, cx, y + pad, tw, ih,
                    ui.col(tf["ring"][0], tf["ring"][1] * ff),
                    T.RADII["md"], tf["ring_w"])
-            D.ring(ui.dl, cx, y + pad, w, ih,
+            D.ring(ui.dl, cx, y + pad, tw, ih,
                    ui.col(tf["outline"][0], tf["outline"][1] * ff),
                    T.RADII["md"], tf["outline_w"])
         sel = ui.anim.to(f"{key}:sel{i}", 1.0 if i == active else 0.0)
         if sel > 0.01:
-            D.shadow(ui.dl, cx, y + pad, w, ih, (0, 0, 0, 0.10 * sel),
+            D.shadow(ui.dl, cx, y + pad, tw, ih, (0, 0, 0, 0.10 * sel),
                      T.RADII["md"], dy=1.0, blur=3.0)
-            D.fill(ui.dl, cx, y + pad, w, ih,
+            D.fill(ui.dl, cx, y + pad, tw, ih,
                    mix(ui.col("transparent"), ui.col("card"), sel),
                    T.RADII["md"])
         if ff > 0.01:
@@ -138,17 +141,17 @@ def tabs(ui: Ui, key, x, y, h, items, active, *, pad=3.0, keys=None, icons=None,
             # Tailwind's output and wins, the same way it does on the outline
             # Button.
             tf = T.tabs_focus(ui.theme_name)
-            D.border(ui.dl, cx, y + pad, w, ih,
+            D.border(ui.dl, cx, y + pad, tw, ih,
                      ui.col(tf["focus_border"][0],
                             tf["focus_border"][1] * ff), T.RADII["md"], 1.0)
         ink = mix(ui.col("muted-foreground"), ui.col("foreground"), st.hot * 0.7)
         ink = mix(ink, ui.col(active_ink or "foreground"), sel)
         if icons:
-            D.icon(ui.dl, icons[i], cx + (w - 16.0) / 2, y + pad + (ih - 16.0) / 2, 16.0, ink)
+            D.icon(ui.dl, icons[i], cx + (tw - 16.0) / 2, y + pad + (ih - 16.0) / 2, 16.0, ink)
         else:
             D.label(ui.dl, cx, y + pad, s, ui.faces, "medium", 14, ink,
-                    align="center", box_w=w, baseline_box=ih)
-        cx += w
+                    align="center", box_w=tw, baseline_box=ih)
+        cx += tw
     return hit_idx, total
 
 
@@ -581,7 +584,7 @@ def select(ui: Ui, key, x, y, w, label, items, *, size="default",
     kind of work.
     """
     from . import menu
-    hh, rkey = T.SELECT_SIZES[size]
+    hh, _rkey = T.SELECT_SIZES[size]
     pkey = f"##sel.{key}"
     st = ui.hit(key, x, y, w, hh)
     # THE KEYBOARD, and the whole of it is `menu`'s. A Select's panel IS

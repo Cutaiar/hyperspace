@@ -7,12 +7,10 @@ Re-exported by `box.py` - see `HANDOFF.md` item 3a.
 from __future__ import annotations
 
 from collections.abc import Callable
-
 from dataclasses import dataclass
 
 from .flex import Item, flex
 from .rect import Rect
-
 
 # --------------------------------------------------------------------------
 # the layout tree: intrinsic sizing, measured then placed
@@ -178,7 +176,7 @@ def lay_auto(root: Node, x: float, y: float, w: float,
     placed into a zero-height box and every child shrinks to nothing. That is
     a trap worth closing with an API rather than a docstring.
     """
-    mw, mh = measure_tree(root)
+    _mw, mh = measure_tree(root)
     return place_tree(root, Rect(x, y, w, mh if h is None else h))
 
 

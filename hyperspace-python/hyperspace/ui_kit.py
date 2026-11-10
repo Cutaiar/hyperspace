@@ -88,7 +88,7 @@ def theme() -> dict:
     """The kit's token names in the panel's palette: each from a name in
     `ui.py` or a colour `ui.apply_style` set, so a palette change there
     lands here. Built per call: `begin` keeps the panel's."""
-    from . import ui   # (late: ui imports this module)
+    from . import ui  # (late: ui imports this module)
     s, put = imgui.get_style(), imgui.Col_
 
     def style(c) -> str:

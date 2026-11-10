@@ -10,9 +10,8 @@ supposed to hold them.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -21,8 +20,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent.parent / "tests"))
 
-import comp_gallery as CG      # noqa: E402
-import tokens as T             # noqa: E402
+import comp_gallery as CG
+import tokens as T
 
 W, H = 1440, 1100
 
@@ -60,9 +59,9 @@ def _booted(DB):
     `faces` held across a render asserts inside `calc_text_size`. So: boot,
     measure, tear down, and only then render.
     """
-    from imgui_bundle import imgui
     import glfw
-    win, impl, _io, fc, _grad = DB._boot("dark", 320, 240, visible=False,
+    from imgui_bundle import imgui
+    _win, impl, _io, fc, _grad = DB._boot("dark", 320, 240, visible=False,
                                          retina=False)
     try:
         yield fc
@@ -82,7 +81,7 @@ def _plan(DB, w, theme="dark"):
 # the plan
 # --------------------------------------------------------------------------
 def test_every_section_is_built_and_named(DB):
-    total, secs = _plan(DB, 1000.0)
+    _total, secs = _plan(DB, 1000.0)
     assert len(secs) == len(CG.SECTIONS)
     titles = [t for t, _b, _h, _p in secs]
     assert len(set(titles)) == len(titles), f"duplicate titles: {titles}"

@@ -13,7 +13,7 @@ within 0.86 levels across a 160px card, which is rounding.
 from __future__ import annotations
 
 import numpy as np
-import OpenGL.GL as GL
+from OpenGL import GL
 
 
 def oklab_to_srgb8(L: float, a: float = 0.0, b: float = 0.0) -> tuple:
@@ -31,7 +31,7 @@ def oklab_to_srgb8(L: float, a: float = 0.0, b: float = 0.0) -> tuple:
     for v in lin:
         v = min(max(v, 0.0), 1.0)
         s8 = 12.92 * v if v <= 0.0031308 else 1.055 * v ** (1 / 2.4) - 0.055
-        out.append(int(round(s8 * 255.0)))
+        out.append(round(s8 * 255.0))
     return tuple(out)
 
 
@@ -54,7 +54,7 @@ def ramp_oklab(stop0: tuple, stop1: tuple, n: int = 256) -> np.ndarray:
         a = (a0 * A0 + (a1 * A1 - a0 * A0) * t) / A
         b = (b0 * A0 + (b1 * A1 - b0 * A0) * t) / A
         r, g, bb = oklab_to_srgb8(L, a, b)
-        out[i] = (r, g, bb, int(round(A * 255.0)))
+        out[i] = (r, g, bb, round(A * 255.0))
     return out
 
 

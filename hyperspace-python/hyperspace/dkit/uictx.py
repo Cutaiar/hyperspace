@@ -18,10 +18,9 @@ would quietly make every one of them point at the wrong file.
 
 from __future__ import annotations
 
-from typing import Any
-
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from typing import Any
 
 from imgui_bundle import imgui
 
@@ -206,7 +205,6 @@ class Ui:
         self.anim.store["dt"] = dt
         self._seen.clear()
         # see `focus_visible`: the last input decides whether a ring shows
-        io = imgui.get_io()
         if any(imgui.is_mouse_clicked(b) for b in (0, 1, 2)):
             self.anim.store["kbd"] = False
         else:

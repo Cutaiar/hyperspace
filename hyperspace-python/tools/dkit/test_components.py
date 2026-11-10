@@ -23,10 +23,11 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import box as B          # noqa: E402
-import draw as D         # noqa: E402
-import tokens as T       # noqa: E402
+import itertools
 
+import box as B
+import draw as D
+import tokens as T
 
 # --------------------------------------------------------------------------
 # Slider
@@ -301,7 +302,7 @@ def test_stack_leaves_a_real_gutter():
     16.5px ones rather than overflowing visibly."""
     rows = B.stack(B.Rect(0.0, 0.0, 200.0, 1000.0), 5, 24.0, gap=T.SPACE[3])
     assert [r.h for r in rows] == [24.0] * 5
-    gaps = [b.y - (a.y + a.h) for a, b in zip(rows, rows[1:])]
+    gaps = [b.y - (a.y + a.h) for a, b in itertools.pairwise(rows)]
     assert gaps == [12.0] * 4
 
     # and it overflows rather than compressing when the box is too small
@@ -421,7 +422,7 @@ def test_stat_card_parts_are_inside_the_card_and_do_not_overlap():
         for x, y, w, h in lines:
             assert cx <= x and x + w <= cx + cw + 0.01, "a line left the card"
             assert cy <= y and y + h <= cy + ch + 0.01, "a line left the card"
-        for (ax, ay, aw, ah), (bx, by, bw, bh) in zip(lines, lines[1:]):
+        for (ax, ay, aw, ah), (bx, by, bw, bh) in itertools.pairwise(lines):
             assert ay + ah <= by + 0.01, (
                 f"stat card lines overlap: {ay + ah} > {by}")
 
@@ -447,7 +448,7 @@ def test_the_page_fits_the_window():
 # the viewport is 198 tall and the scrollbar is 10 wide at x=309, y=1. Its
 # track is the scrollbar less 1px of padding at each end.
 
-BAR = dict(bar_x=309.0, bar_y=1.0, bar_w=10.0, bar_h=198.0, viewport_h=198.0)
+BAR = {"bar_x": 309.0, "bar_y": 1.0, "bar_w": 10.0, "bar_h": 198.0, "viewport_h": 198.0}
 
 
 @pytest.mark.parametrize("content,thumb_h", [
@@ -645,7 +646,7 @@ def test_draw_ring_covers_exactly_the_columns_outside_the_box(painted):
     """
     x, y, w, h, r = 20.0, 40.0, 80.0, 32.0, 10.0
     D.ring(painted, x, y, w, h, (0.1, 0.2, 0.3, 1.0), r)
-    bx, by, bw, bh, _col, rounding, t = band_of(painted)
+    bx, by, bw, _bh, _col, rounding, t = band_of(painted)
     assert t == T.RING_W
     # a stroke of thickness t centred on the path covers [p - t/2, p + t/2),
     # and ImGui's own half-pixel offset is the other 0.5
@@ -666,7 +667,7 @@ def test_the_switch_paints_both_halves_only_when_focused(painted, theme_name):
     suppresses them - the three things `focus_f` is for."""
     theme = THEME[theme_name]
     tbl = T.switch_table(theme_name)
-    kw = dict(theme=theme, tbl=tbl)
+    kw = {"theme": theme, "tbl": tbl}
 
     rest = Painted()
     D.switch(rest, 10.0, 10.0, 0.0, focus_f=0.0, **kw)
@@ -716,7 +717,7 @@ def test_the_select_triggers_border_swaps_to_the_ring(painted, monkeypatch,
     theme = THEME[theme_name]
     tbl = T.select_table(theme_name)
     D.select_trigger(painted, 10.0, 10.0, 160.0, 32.0, theme, tbl, focus_f=1.0)
-    border = [s for s in painted.strokes if s[6] == 1.0][0]
+    border = next(s for s in painted.strokes if s[6] == 1.0)
     assert border[4] == pytest.approx(T.rgba(*tbl["focus_border"], theme=theme))
     assert border[4] != pytest.approx(T.rgba(*tbl["border"], theme=theme))
     assert band_of(painted)[4] == pytest.approx(
@@ -836,6 +837,7 @@ def test_the_scroll_rate_can_be_dialled_without_an_edit():
     cannot be measured on the machine that builds it - the units a trackpad
     sends per point are a property of the GLFW build and the platform."""
     import os
+
     import interact as I
     old = os.environ.get("DKIT_SCROLL_PX")
     os.environ["DKIT_SCROLL_PX"] = "3.5"
@@ -928,6 +930,7 @@ def test_scroll_area_snaps_the_offset_it_hands_its_caller():
     exactly how the wheel fix came to be a no-op.
     """
     import inspect
+
     import interact as I
     src = inspect.getsource(I.scroll_area)
     assert "snap_scroll(imgui.get_scroll_y())" in src, (
@@ -962,7 +965,8 @@ def test_every_coordinate_the_kit_rounds_goes_through_px():
     """The wiring. A monotone helper nobody calls fixes nothing, which is
     how the wheel fix came to be a no-op."""
     import inspect
-    import draw as D                            # (the package's: hyperspace/dkit/draw.py)
+
+    import draw as D  # (the package's: hyperspace/dkit/draw.py)
     src = inspect.getsource(D)
     body = src[src.index("def px("):]
     body = body[body.index("\n\n\n"):]          # everything after px itself

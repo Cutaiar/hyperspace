@@ -155,7 +155,7 @@ def test_a_right_click_opens_the_params_menu(cam):
     assert "camera.yaw" in shown
     d.run(d.key(imgui.Key.escape), d.park(), d.wait(2))
     shown.clear()
-    x0, y0, x1, _ = d.rect("camera.pitch")
+    x0, y0, _x1, _ = d.rect("camera.pitch")
     d.run(d.click((x0 + 8, y0 - 10), button=1), d.wait(2))   # its header, above the slider
     assert "camera.pitch" in shown
 

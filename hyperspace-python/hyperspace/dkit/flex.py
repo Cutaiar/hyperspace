@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 
 from .rect import Rect
 
-
 # --------------------------------------------------------------------------
 # a measured single-line row
 # --------------------------------------------------------------------------
@@ -34,16 +33,16 @@ class Flow:
     gap: float = 0.0
     items: list = field(default_factory=list)
 
-    def icon(self, name: str, size: float) -> "Flow":
+    def icon(self, name: str, size: float) -> Flow:
         self.items.append(_Cell(size, size, "icon", (name,)))
         return self
 
     def text(self, s: str, w: float, h: float, variant: str = "regular",
-             size: float = 14.0, tabular: bool = False) -> "Flow":
+             size: float = 14.0, tabular: bool = False) -> Flow:
         self.items.append(_Cell(w, h, "text", (s, variant, size, tabular)))
         return self
 
-    def space(self, w: float) -> "Flow":
+    def space(self, w: float) -> Flow:
         self.items.append(_Cell(w, 0.0, "space"))
         return self
 

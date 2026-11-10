@@ -168,21 +168,26 @@ from __future__ import annotations
 
 from math import floor
 
-from imgui_bundle import imgui
-
 import box as B
 import draw as D
 import tokens as T
-from ease import mix
+from combobox_items import _is_row, _k, filter_items
+from combobox_measure import _rows_node, list_content_h
+from combobox_select import (
+    _MISSING,
+    CLEARED,
+    SEL_FIRST,
+    SEL_LAST,
+    SEL_NONE,
+    SENTINELS,
+    resolve_open,
+)
+
 # The pure parts live in four modules of their own (HANDOFF item 3c). Every
 # name below is either used by the widget here or re-exported for `C.x`
 # callers - test_module_surface.py checks each one resolves.
-from combobox_tokens import COMBOBOX, COMBOBOX_DARK, combobox_table
-from combobox_items import Item, _is_row, _k, filter_items, heading, sep
-from combobox_select import (CLEARED, SEL_FIRST, SEL_LAST, SEL_NONE,
-                             SENTINELS, _MISSING, resolve_open)
-from combobox_measure import _rows_node, combobox_size, list_content_h
-
+from combobox_tokens import combobox_table
+from imgui_bundle import imgui
 
 # How much room the popup window keeps around its content for the field's
 # focus ring.
@@ -383,7 +388,7 @@ def _read_caret(item_id) -> int | None:
         if st is None or st.id_ != item_id:
             return None
         return int(st.get_cursor_pos())
-    except Exception:
+    except Exception:   # noqa: BLE001 - a binding without the internal state: no caret
         return None
 
 
@@ -405,7 +410,7 @@ def _place_caret(item_id, pos: int) -> bool:
         at = max(0, min(int(pos), int(st.text_len)))
         st.set_selection(at, at)
         return True
-    except Exception:
+    except Exception:   # noqa: BLE001 - a binding without the internal state: no caret
         return False
 
 
@@ -662,7 +667,7 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     import interact as I
 
     tbl = combobox_table(ui.theme_name)
-    hh, rkey = T.SELECT_SIZES[size]
+    hh, _rkey = T.SELECT_SIZES[size]
     pid = f"##cb.{key}"
 
     s = _state(ui, key)

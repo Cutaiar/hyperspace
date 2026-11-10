@@ -85,7 +85,7 @@ def main() -> None:
     for kit in ("0", "1"):
         env = {**os.environ, "HYPERSPACE_KIT": kit}
         res = subprocess.run([sys.executable, __file__, "--one", "--frames", str(a.frames),
-                              "--warm", str(a.warm)], env=env, capture_output=True, text=True,
+                              "--warm", str(a.warm)], env=env, capture_output=True, text=True, check=False,
                              cwd=ROOT)
         if res.returncode:
             sys.exit(res.stderr)

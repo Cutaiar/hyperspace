@@ -315,8 +315,8 @@ def context_menu(ui, key: str, rect, items, *, min_w: float = MIN_W,
     `min-w-36`). The panel's size comes from `menu.measure`, so when
     menu.py's measured row heights are corrected the placement follows.
     """
-    from imgui_bundle import imgui
     import menu
+    from imgui_bundle import imgui
 
     if not isinstance(rect, B.Rect):
         rect = B.Rect(*rect)

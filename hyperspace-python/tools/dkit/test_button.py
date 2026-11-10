@@ -24,11 +24,12 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import comp_button as CB      # noqa: E402
-import draw as D              # noqa: E402
-import tokens as T            # noqa: E402
-from ease import mix, over    # noqa: E402
+import itertools
 
+import comp_button as CB
+import draw as D
+import tokens as T
+from ease import mix, over
 
 # --------------------------------------------------------------------------
 # helpers: the browser's compositing, so a token can be checked as a byte
@@ -388,7 +389,7 @@ def test_every_variant_carries_a_one_pixel_border_visible_or_not():
     """`border border-transparent` on the base, which is why the fill is
     inset even on a `default` button."""
     assert CB.BORDER_W == 1.0
-    for v, row in TL.items():
+    for row in TL.values():
         assert "border" in row
     invisible = [v for v, row in TL.items()
                  if c(LIGHT, row["border"])[3] == 0.0]
@@ -710,7 +711,7 @@ def test_a_groups_total_width_is_the_sum_of_its_children():
     assert [r[0] for r in rects] == pytest.approx([24.0, 72.6875, 120.5])
     assert rects[-1][0] + rects[-1][2] == pytest.approx(24.0 + 154.0625)
     # and each child's left edge is its predecessor's right edge
-    for a, b in zip(rects, rects[1:]):
+    for a, b in itertools.pairwise(rects):
         assert a[0] + a[2] == pytest.approx(b[0])
 
 

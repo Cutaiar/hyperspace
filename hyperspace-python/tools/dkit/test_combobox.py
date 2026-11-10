@@ -25,9 +25,9 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import box as B                  # noqa: E402
-import comp_combobox as C        # noqa: E402
-import tokens as T               # noqa: E402
+import box as B
+import comp_combobox as C
+import tokens as T
 
 
 # A fake text measurer: 7 px a character, which is close enough to Geist at

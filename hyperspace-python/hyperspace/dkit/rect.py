@@ -39,7 +39,7 @@ class Rect:
         return (self.x, self.y, self.w, self.h)
 
     # -- padding ----------------------------------------------------------
-    def pad(self, *v) -> "Rect":
+    def pad(self, *v) -> Rect:
         """Shrink by padding, in CSS shorthand order.
 
         pad(a)          all sides
@@ -62,33 +62,33 @@ class Rect:
         return Rect(self.x + ll, self.y + t,
                     max(self.w - ll - r, 0.0), max(self.h - t - b, 0.0))
 
-    def expand(self, n: float) -> "Rect":
+    def expand(self, n: float) -> Rect:
         return Rect(self.x - n, self.y - n, self.w + 2 * n, self.h + 2 * n)
 
     # -- splitting --------------------------------------------------------
-    def cut_left(self, w: float) -> tuple["Rect", "Rect"]:
+    def cut_left(self, w: float) -> tuple[Rect, Rect]:
         w = min(w, self.w)
         return (Rect(self.x, self.y, w, self.h),
                 Rect(self.x + w, self.y, self.w - w, self.h))
 
-    def cut_right(self, w: float) -> tuple["Rect", "Rect"]:
+    def cut_right(self, w: float) -> tuple[Rect, Rect]:
         w = min(w, self.w)
         return (Rect(self.right - w, self.y, w, self.h),
                 Rect(self.x, self.y, self.w - w, self.h))
 
-    def cut_top(self, h: float) -> tuple["Rect", "Rect"]:
+    def cut_top(self, h: float) -> tuple[Rect, Rect]:
         h = min(h, self.h)
         return (Rect(self.x, self.y, self.w, h),
                 Rect(self.x, self.y + h, self.w, self.h - h))
 
-    def cut_bottom(self, h: float) -> tuple["Rect", "Rect"]:
+    def cut_bottom(self, h: float) -> tuple[Rect, Rect]:
         h = min(h, self.h)
         return (Rect(self.x, self.bottom - h, self.w, h),
                 Rect(self.x, self.y, self.w, self.h - h))
 
     # -- placing ----------------------------------------------------------
     def align(self, w: float, h: float, ax: str = "center",
-              ay: str = "center") -> "Rect":
+              ay: str = "center") -> Rect:
         """A w x h box placed inside this one."""
         x = {"start": self.x, "center": self.x + (self.w - w) / 2.0,
              "end": self.right - w}[ax]

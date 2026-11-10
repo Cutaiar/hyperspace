@@ -36,18 +36,38 @@ existing call sites, and doing so is churn rather than a fix.
 
 from __future__ import annotations
 
-from .rect import (Rect, card_body, place_popover, scroll_thumb, slider_geom,
-                  stretched_hit, switch_geom)
 from .flex import Flow, Item, flex, stack
-from .tree import (AUTO, Node, lay, lay_auto, measure_tree, place_tree,
-                  wants)
+from .rect import (
+                  Rect,
+                  card_body,
+                  place_popover,
+                  scroll_thumb,
+                  slider_geom,
+                  stretched_hit,
+                  switch_geom,
+)
+from .tree import AUTO, Node, lay, lay_auto, measure_tree, place_tree, wants
 
 __all__ = [
-    # rect
-    "Rect", "place_popover", "card_body", "slider_geom", "switch_geom",
-    "scroll_thumb", "stretched_hit",
-    # flex
-    "Flow", "Item", "flex", "stack",
-    # tree
-    "AUTO", "Node", "measure_tree", "place_tree", "lay", "lay_auto", "wants",
+                  # tree
+                  "AUTO",
+                  # flex
+                  "Flow",
+                  "Item",
+                  "Node",
+                  # rect
+                  "Rect",
+                  "card_body",
+                  "flex",
+                  "lay",
+                  "lay_auto",
+                  "measure_tree",
+                  "place_popover",
+                  "place_tree",
+                  "scroll_thumb",
+                  "slider_geom",
+                  "stack",
+                  "stretched_hit",
+                  "switch_geom",
+                  "wants",
 ]

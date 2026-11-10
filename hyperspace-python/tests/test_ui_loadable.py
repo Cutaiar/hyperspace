@@ -972,7 +972,7 @@ def test_a_rows_actions_show_on_its_hover_and_take_a_click_unseen(rig):  # noqa:
         return anim._t[f"row:{name}:reveal"].value
 
     assert reveal("DIAL") == 0.0 and reveal("ACID") == 0.0        # at rest: hidden
-    x0, y0, x1, y1 = st["page"]["rects"]["row.DIAL"]
+    x0, y0, _x1, y1 = st["page"]["rects"]["row.DIAL"]
     io = imgui.get_io()
     io.add_mouse_pos_event(x0 + 20, (y0 + y1) / 2)
     for _ in range(20):                                            # past the 150 ms ease

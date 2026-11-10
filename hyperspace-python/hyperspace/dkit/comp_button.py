@@ -122,7 +122,6 @@ from . import draw as D
 from .ease import mix
 from .tokens import RADII, RING_W, SPACE, rgba
 
-
 # --------------------------------------------------------------------------
 # sizes
 # --------------------------------------------------------------------------
@@ -705,7 +704,7 @@ def button(dl, x, y, w, h, label, faces, theme, tbl, *, variant="default",
 
     # --- content -----------------------------------------------------------
     ink = _dim(c(v["ink"]), dim)
-    bt, br_, bb, bl = borders
+    _bt, br_, _bb, bl = borders
     pad_l = pad_r = s["pad_x"]
     if icon is not None and not s["square"]:
         if icon_side == "inline-start":

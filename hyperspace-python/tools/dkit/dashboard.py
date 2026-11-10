@@ -16,33 +16,33 @@ pass over those rects.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
-import math
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import glfw
 import numpy as np
-import OpenGL.GL as GL
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
+from OpenGL import GL
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import draw as D          # noqa: E402
-import gradient as G      # noqa: E402
-import box as B           # noqa: E402
+import box as B
 import comp_button as CB
 import comp_combobox as CC
-import comp_gallery as CG
 import comp_context_menu as CX
-import interact as I      # noqa: E402
-import menu as M          # noqa: E402
-import tokens as T        # noqa: E402
-from ease import Anim     # noqa: E402
+import comp_gallery as CG
+import draw as D
+import gradient as G
+import interact as I
+import menu as M
+import tokens as T
+from ease import Anim
 
 SHAPES = json.loads(
     (HERE / "../../../prototypes/dashboard/src/data/shapes.json")
@@ -392,7 +392,7 @@ def _dot(dl, cx, cy, col, rad=3.0):
 
 
 def paint(ui: I.Ui, r: Rects, w, h, series, state):
-    dl, faces, theme, grad_tex = ui.dl, ui.faces, ui.theme, ui.grad_tex
+    dl, faces, theme, _grad_tex = ui.dl, ui.faces, ui.theme, ui.grad_tex
     bgc = T.rgba("background", theme=theme)
     D.fill(dl, 0, 0, w, h, bgc)
 
@@ -578,7 +578,6 @@ def _body(ui, r, w, h, series, state):
     # gallery because the gallery is a contact sheet: it proves the chrome to
     # a pixel and shows you nothing about how a disabled control feels under
     # the pointer, or whether a two-thumb range drags the handle you meant.
-    import menu as M
     x, y, cw, ch = r.controls_card
     D.card(dl, {"x": x, "y": y, "w": cw, "h": ch, "variant": "plain"}, theme, None)
     card_head(dl, r.controls_card, "Controls",
@@ -1036,10 +1035,8 @@ def _loop(win, impl, ui, state, series, bgc, prev) -> None:
             glfw.swap_buffers(win)
         except KeyboardInterrupt:
             if open_frame:
-                try:
+                with contextlib.suppress(Exception):   # closing a frame on the way out
                     imgui.end_frame()
-                except Exception:
-                    pass
             return
 
 

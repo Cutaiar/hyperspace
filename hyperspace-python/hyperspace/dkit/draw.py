@@ -12,9 +12,9 @@ reasoned about and diffed one at a time.
 
 from __future__ import annotations
 
+import itertools
 import math
 from math import floor
-
 from pathlib import Path
 
 from imgui_bundle import imgui
@@ -140,7 +140,7 @@ def _blur_layers(sigma: float, reach: int | None = None):
     """
     from math import ceil, erf, sqrt
     if reach is None:
-        reach = max(3, int(ceil(3.0 * sigma)))
+        reach = max(3, ceil(3.0 * sigma))
     # Integer steps. Half-steps were tried on the soft end and came out a
     # level WORSE for twice the draw calls, which says the residual is not
     # quantisation: Chromium blurs with three box passes (Skia), not a true
@@ -500,7 +500,7 @@ def sparkline(dl, x, y, w, h, values, col, *, lo=0.0, hi=1.0, fill_a=0.18):
         # visible streaks across an area chart's interior.
         c = _u32((col[0], col[1], col[2], fill_a))
         base = y + h
-        for a, b in zip(pts, pts[1:]):
+        for a, b in itertools.pairwise(pts):
             dl.add_quad_filled(imgui.ImVec2(a.x, a.y), imgui.ImVec2(b.x, b.y),
                                imgui.ImVec2(b.x, base), imgui.ImVec2(a.x, base), c)
     # imgui_bundle orders this (col, thickness, flags), as with add_rect
@@ -517,7 +517,9 @@ def hrule(dl, x, y, w, theme, col="border"):
 # --------------------------------------------------------------------------
 
 try:
-    from .icons import BOX as ICON_BOX, ICONS, STROKE as ICON_STROKE
+    from .icons import BOX as ICON_BOX
+    from .icons import ICONS
+    from .icons import STROKE as ICON_STROKE
 except ImportError:                       # not built yet
     ICONS, ICON_BOX, ICON_STROKE = {}, 24.0, 2.0
 

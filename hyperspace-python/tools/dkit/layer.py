@@ -45,11 +45,10 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
-from imgui_bundle import imgui
-
 import box as B
 import draw as D
 import tokens as T
+from imgui_bundle import imgui
 
 # --------------------------------------------------------------------------
 # measured

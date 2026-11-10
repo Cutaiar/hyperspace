@@ -23,7 +23,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import box as B          # noqa: E402
+import box as B
 
 CASES = json.loads((HERE / "nestcases.json").read_text())["cases"]
 GOLD = json.loads((HERE / "nestgolden.json").read_text())

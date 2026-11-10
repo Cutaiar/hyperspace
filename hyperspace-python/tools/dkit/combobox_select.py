@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from combobox_items import _k
 
-
 # An arrow pressed while the list is CLOSED decides where the highlight
 # lands, but `rows` is not known until the popup is open - so the open
 # records which end it wants and the next frame resolves it. Sentinels

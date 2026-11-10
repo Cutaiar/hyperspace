@@ -16,15 +16,15 @@ from pathlib import Path
 
 import glfw
 import numpy as np
-import OpenGL.GL as GL
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
+from OpenGL import GL
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import draw as D          # noqa: E402
+import draw as D
 
 CELL = 64
 ICON = 24               # drawn at Lucide's native box, 1 unit = 1 px

@@ -91,7 +91,7 @@ def slider(panel, k, pid: str, rect, label: str | None = None, *,
     the slider alone, centred. A taper slides over its detents, with a tick
     at unity (`Panel._fader`'s notch); an integer over whole steps; a log
     range logarithmically, so Ctrl+click types a value. True when written."""
-    B, T = _m("box"), _m("tokens")
+    T = _m("tokens")
     x, y, w, h = rect
     a = panel.reg[pid]
     p = panel._real(a)
@@ -206,12 +206,12 @@ def _slider(panel, k, a, p, x, y, w, h, box=None) -> bool:
         return False
     undo.by_hand(True)                      # (typed into it, or dragged: row 757)
     if p.taper is not None:
-        pos = int(round(nv))
+        pos = round(nv)
         if pos == p.position():
             return False
         p.set_position(pos)
     elif p.integer:
-        p.set_value(int(round(nv)))
+        p.set_value(round(nv))
     else:
         p.set_value(nv)
     return True
@@ -426,7 +426,6 @@ def inline_check(panel, pid: str, label: str | None = None) -> bool:
     after the hit, so whatever reads a section's text reads them. True
     when flipped."""
     k = ui_kit.begin(panel)
-    D = _m("draw")
     a = panel.reg[pid]
     p = panel._real(a)
     on = bool(p.base)

@@ -12,9 +12,8 @@ drawn, rather than growing without bound.
 
 from __future__ import annotations
 
-from typing import Any
-
 from dataclasses import dataclass
+from typing import Any
 
 # cubic-bezier(0.4, 0, 0.2, 1): P0 (0,0), P1 (0.4,0), P2 (0.2,1), P3 (1,1)
 STANDARD = (0.4, 0.0, 0.2, 1.0)

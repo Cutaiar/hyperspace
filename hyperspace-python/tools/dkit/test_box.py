@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from box import Flow, Rect, place_popover  # noqa: E402
+from box import Flow, Rect, place_popover
 
 VIEW = Rect(0, 0, 1000, 800)
 

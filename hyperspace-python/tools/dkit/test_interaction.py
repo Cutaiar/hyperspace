@@ -168,7 +168,7 @@ def test_destructive_item_is_reachable(DB):
 def test_escape_dismisses_the_menu(DB):
     """ImGui owns dismissal; this checks the kit has not broken it."""
     from imgui_bundle import imgui
-    pre, x, y = kebab_xy(DB)
+    _pre, x, y = kebab_xy(DB)
     script = [(x, y)] * 20 + [(x, y, True)] * 2 + [(x, y, False)] * 12
     DB.render("dark", W, H, script=script,
               keys=[(len(script) - 6, imgui.Key.escape)])
@@ -512,7 +512,7 @@ def test_the_thumb_lands_where_the_geometry_says(DB):
     law cannot drift apart."""
     import box as B
     import tokens as T
-    DBr = DB.lay_out(W, H)
+    DB.lay_out(W, H)
     vx, vy, vw, vh = page_view(DB)
     x, y = vx + vw / 2, vy + vh / 2
     frames = DB.render("dark", W, H,
@@ -556,7 +556,7 @@ def test_right_click_opens_the_context_menu(DB):
     """The gesture a node editor wants. A left click must NOT open it."""
     import menu as M
     pre, r = scrolled_to_bottom(DB)
-    rx, ry, rw, rh = r.table_rows[1]
+    rx, ry, _rw, rh = r.table_rows[1]
     x, y = rx + 200, ry + rh / 2
     DB.render("dark", W, H,
               script=pre + [(x, y)] * 8 + [(x, y, True)] * 2
@@ -571,7 +571,7 @@ def test_right_click_opens_the_context_menu(DB):
 def test_a_context_menu_choice_lands(DB):
     import menu as M
     pre, r = scrolled_to_bottom(DB)
-    rx, ry, rw, rh = r.table_rows[1]
+    rx, ry, _rw, rh = r.table_rows[1]
     x, y = rx + 200, ry + rh / 2
     openit = (pre + [(x, y)] * 8 + [(x, y, False, 0.0, True)] * 2
               + [(x, y, False, 0.0, False)] * 14)
@@ -620,7 +620,6 @@ def test_the_combobox_opens_and_filters(DB):
 def test_the_button_group_picks_the_member_that_was_clicked(DB):
     """Three members abutting with one shared border column, so a click a
     third of the way along must land on the FIRST, not the second."""
-    import comp_button as CB
     r = DB.lay_out(W, H)
     hx, hy, hw, hh = r.header
     # the demo's own right-aligned placement, read back from it rather than
@@ -843,15 +842,14 @@ def one_widget(theme_name, paint, frames, *, script=None, keys=None):
     `script` is (x, y[, down]) per frame - the last entry holds for the rest -
     and `keys` is [(frame, imgui.Key | str)], a str being a character.
     """
-    import glfw
-    import OpenGL.GL as GL
-    from imgui_bundle import imgui
-    from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
-
     import draw as D
+    import glfw
     import interact as I
     import tokens as T
     from ease import Anim
+    from imgui_bundle import imgui
+    from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
+    from OpenGL import GL
 
     theme = T.LIGHT if theme_name == "light" else T.DARK
     if not glfw.init():
@@ -1285,8 +1283,8 @@ def test_the_inputs_value_sits_on_the_placeholders_line(DB):
     second is why this looked far worse on a Retina Mac, where the atlas is
     rasterised at 2x, than the 1px it measures here.
     """
-    import numpy as np
     import comp_gallery as CG
+    import numpy as np
     import tokens as T
 
     TALL = 2600
@@ -1294,9 +1292,9 @@ def test_the_inputs_value_sits_on_the_placeholders_line(DB):
     # boot, measure, tear down, THEN render - `render()` ends in
     # `glfw.terminate()` and that destroys the atlas a held `faces` points
     # at. test_gallery.py carries the same helper and the same note.
-    from imgui_bundle import imgui as _im
     import glfw as _glfw
-    win, impl, _io, fc, _grad = DB._boot("dark", 320, 240, visible=False,
+    from imgui_bundle import imgui as _im
+    _win, impl, _io, fc, _grad = DB._boot("dark", 320, 240, visible=False,
                                          retina=False)
     try:
         gw = (W - DB.SIDEBAR_W) - 2 * DB.GUT

@@ -15,7 +15,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ease import DURATION, STANDARD, Anim, cubic_bezier, mix  # noqa: E402
+import itertools
+
+from ease import DURATION, STANDARD, Anim, cubic_bezier, mix
 
 
 def test_endpoints_are_exact():
@@ -83,7 +85,7 @@ def test_transition_takes_the_whole_duration():
         seen.append(a.to("x", 1.0))
     assert seen[0] < 0.5                # eased in, not linear
     assert seen[-1] == pytest.approx(1.0, abs=1e-6)
-    assert all(b >= a_ - 1e-9 for a_, b in zip(seen, seen[1:]))
+    assert all(b >= a_ - 1e-9 for a_, b in itertools.pairwise(seen))
 
 
 def test_retarget_midflight_starts_from_where_it_is():

@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import glfw
 import numpy as np
-import OpenGL.GL as GL
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
+from OpenGL import GL
 
 W, H = 200, 240
 

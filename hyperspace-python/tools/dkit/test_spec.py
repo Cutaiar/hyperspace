@@ -32,7 +32,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import contour as C      # noqa: E402
+import contour as C
 
 SPEC = json.loads((HERE / "spec.json").read_text())
 CELLS = SPEC["cells"]

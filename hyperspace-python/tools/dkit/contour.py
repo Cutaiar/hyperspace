@@ -28,9 +28,10 @@ from PIL import Image
 HERE = Path(__file__).resolve().parent
 SPEC = json.loads((HERE / "spec.json").read_text())
 
-import sys as _sys                                  # noqa: E402
+import sys as _sys
+
 _sys.path.insert(0, str(HERE))
-from tokens import TOOLTIP                           # noqa: E402
+from tokens import TOOLTIP
 
 # a square of `arrow` px turned 45 degrees has this half-diagonal
 TOOLTIP_ARROW_HALF = TOOLTIP["arrow"] * math.sqrt(2.0) / 2.0
@@ -136,7 +137,7 @@ def icon_boxes(cell):
       tip is blunter than a sharp triangle and sharper than a pure r=2
       diamond. diff.py reports the arrow's area so this stays measured.
     """
-    from tokens import SELECT, TOOLTIP
+    from tokens import SELECT
     if cell["kind"] == "select":
         cs = SELECT["chevron"]
         return [(cell["x"] + cell["w"] - 1.0 - SELECT["pad_r"] - cs,
@@ -416,7 +417,7 @@ def sub_boxes(cell):
         # The slider's thumb does not need this: at 12px against a 4px track
         # it overhangs vertically, so its rays reach the page cleanly even at
         # the ends.
-        near = ("tr", "br") if cell["on"] else ("tl", "bl")
+        ("tr", "br") if cell["on"] else ("tl", "bl")
         far = ("tl", "bl") if cell["on"] else ("tr", "br")
         return [(track.x, track.y, track.w, track.h, track.h / 2.0, False, 0,
                  far),
@@ -435,7 +436,7 @@ CORNERS = {
 
 def sample(img: np.ndarray, x: float, y: float):
     """Bilinear sample; img may be HxW or HxWx3."""
-    x0, y0 = int(math.floor(x)), int(math.floor(y))
+    x0, y0 = math.floor(x), math.floor(y)
     if x0 < 0 or y0 < 0 or x0 + 1 >= img.shape[1] or y0 + 1 >= img.shape[0]:
         return np.full(img.shape[2], np.nan) if img.ndim == 3 else np.nan
     fx, fy = x - x0, y - y0

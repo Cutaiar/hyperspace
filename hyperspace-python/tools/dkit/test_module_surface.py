@@ -172,7 +172,7 @@ def test_every_cross_module_reference_resolves(path):
             continue
         try:
             mod = importlib.import_module(mod_name)
-        except Exception as exc:                      # pragma: no cover
+        except Exception as exc:  # noqa: BLE001 - pragma: no cover; any import failure is a skip
             pytest.skip(f"{mod_name} will not import here: {exc}")
         if not hasattr(mod, attr):
             missing.append(f"{path.name}:{line} wants {mod_name}.{attr}")
@@ -209,7 +209,7 @@ def test_every_from_import_resolves(path):
     for mod_name, name, line in refs:
         try:
             mod = importlib.import_module(mod_name)
-        except Exception as exc:                      # pragma: no cover
+        except Exception as exc:  # noqa: BLE001 - pragma: no cover; any import failure is a skip
             pytest.skip(f"{mod_name} will not import here: {exc}")
         if not hasattr(mod, name):
             missing.append(f"{path.name}:{line} wants {mod_name}.{name}")

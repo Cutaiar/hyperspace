@@ -214,7 +214,7 @@ def _drive(DB, script, keys=None, key=MKEY):
 def _menu_hl(DB, keys, extra=0, key=MKEY, items=None):
     """Open the kebab menu with the pointer, press `keys`, read the
     highlight. Returns (rect_or_None, [row positions])."""
-    script, park, at = _open_kebab(DB)
+    script, park, _at = _open_kebab(DB)
     f, rect = _drive(DB, script + [park] * extra, keys=keys, key=key)
     if rect is None:
         return None, None
@@ -336,7 +336,7 @@ def test_the_probe_reads_a_highlight_it_is_shown(DB):
     wrong and nothing below it means anything.
     """
     script, _park, _at = _open_kebab(DB)
-    f, rect = _drive(DB, script)
+    _f, rect = _drive(DB, script)
     assert rect, "the kebab did not open"
     px, tops = _row_tops(DB, DB.ROW_MENU, rect)
     import menu as M
@@ -579,8 +579,8 @@ def test_a_parked_pointer_does_not_override_the_arrows(DB):
     it has to be driven to be believed.
     """
     import menu as M
-    script, _park, at = _open_kebab(DB)
-    f, rect = _drive(DB, script)
+    script, _park, _at = _open_kebab(DB)
+    _f, rect = _drive(DB, script)
     assert rect, "the kebab did not open"
     px, tops = _row_tops(DB, DB.ROW_MENU, rect)
     on = (px + rect[2] / 2, tops[0] + M.ITEM_H / 2, False)
@@ -611,7 +611,6 @@ def test_the_opening_key_is_not_also_processed_by_the_panel(DB):
     never leaves the window it starts in, so the dropdown has no keyboard
     route to its own trigger yet.
     """
-    import menu as M
     at = _committed(DB)
     for name, k in (("ArrowDown", imgui.Key.down_arrow),
                     ("ArrowUp", imgui.Key.up_arrow),
@@ -631,7 +630,7 @@ def _open_context(DB):
     """Right-click row 1 open, then park the pointer off the panel."""
     prefix, _kx, _ky, ry = _kebab(DB)
     _p, r = _scrolled(DB)
-    rx, rry, rw, rh = r.table_rows[1]
+    rx, rry, _rw, rh = r.table_rows[1]
     x, y = rx + 200, rry + rh / 2
     park = (rx + 40, ry - 300, False, 0.0, False)
     script = (prefix + [(x, y)] * 6 + [(x, y, False, 0.0, True)] * 2
@@ -664,7 +663,7 @@ def test_a_right_clicked_menu_answers_the_same_keys(DB):
              ("End", [(at, imgui.Key.end)], 10, [n - 1]),
              ("Home", [(at, imgui.Key.home)], 10, [0]),
              ("typed 'p'", [(at, "p")], 10, [2]),
-             ("ArrowDown x%d" % (n + 3),
+             (f"ArrowDown x{n + 3}",
               [(at + 6 * i, imgui.Key.down_arrow) for i in range(n + 3)],
               6 * (n + 3) + 20, [n - 1])]
     for name, keys, extra, want in cases:
@@ -710,7 +709,7 @@ def _plane_items(DB):
 
 def _open_plane(DB):
     """Click the Plane Select open, then park the pointer off the panel."""
-    x, y, w, h = _plane_trigger(DB)
+    x, y, _w, h = _plane_trigger(DB)
     on = (x + 20, y + h / 2)
     park = (x - 300, y - 300, False)
     script = ([(10, 10, False)] * 6 + [on] * 4 + [(*on, True)] * 3
@@ -752,7 +751,7 @@ def test_a_select_opens_on_its_committed_row(DB):
     of the dashboard's Selects hold a value.
     """
     at = _committed(DB)
-    script, park, _ = _open_plane(DB)
+    script, _park, _ = _open_plane(DB)
     f, rect = _drive(DB, script, key=PLANE)
     assert rect, "the click did not open the Select"
     assert _highlight(DB, f, rect, _plane_items(DB)) == [at], \

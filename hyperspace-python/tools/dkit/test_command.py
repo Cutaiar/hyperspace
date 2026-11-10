@@ -21,8 +21,8 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import comp_command as C          # noqa: E402
-import comp_combobox as CB        # noqa: E402
+import comp_combobox as CB
+import comp_command as C
 
 
 def items(*labels):

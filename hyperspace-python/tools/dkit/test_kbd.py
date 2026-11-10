@@ -28,8 +28,8 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import draw as D     # noqa: E402
-import tokens as T   # noqa: E402
+import draw as D
+import tokens as T
 
 TBL = T.kbd_table("light")
 
@@ -64,7 +64,7 @@ def test_a_group_with_a_separator_is_spaced_like_the_browser():
     """?probe `Ctrl + B`: group 66.813 wide, second key at 46.813. The "+"
     is 9.609 - monospace 0.6em at the parent's 16px - because KbdGroup is
     a <kbd> and the UA gives <kbd> `font-family: monospace`."""
-    w, h = D.kbd_group_size(["Ctrl", "B"], None, TBL, sep="+", sep_font=16.0,
+    w, _h = D.kbd_group_size(["Ctrl", "B"], None, TBL, sep="+", sep_font=16.0,
                             text_w=browser_text_w)
     # 0.03: two known sub-pixel sources add here - canvas measureText vs the
     # laid-out "Ctrl" (0.011), and Liberation Mono's real advance, 0.6006em

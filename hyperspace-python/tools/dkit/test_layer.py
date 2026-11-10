@@ -18,8 +18,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent.parent / "tests"))
 
-import layer as L           # noqa: E402
-import tokens as T          # noqa: E402
+import layer as L
+import tokens as T
 
 # the viewport the probe measured in
 VP = (1200.0, 900.0)

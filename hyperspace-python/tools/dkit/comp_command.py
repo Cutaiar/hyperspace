@@ -134,10 +134,8 @@ def _score(string, abbr, lower_string, lower_abbr, si, ai, memo):
                 and _at(lower_string, idx - 1) != _at(lower_abbr, ai))):
             t = _score(string, abbr, lower_string, lower_abbr, idx + 1,
                        ai + 2, memo)
-            if t * SCORE_TRANSPOSITION > s:
-                s = t * SCORE_TRANSPOSITION
-        if s > high:
-            high = s
+            s = max(s, t * SCORE_TRANSPOSITION)
+        high = max(high, s)
         idx = lower_string.find(ch, idx + 1)
 
     memo[key] = high

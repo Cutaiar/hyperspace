@@ -29,11 +29,13 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from box import Rect                                       # noqa: E402
-from comp_context_menu import (CONTEXT_MENU,               # noqa: E402
-                               CONTEXT_MENU_DARK,
-                               context_menu_table,
-                               place_at_pointer)
+from box import Rect
+from comp_context_menu import (
+    CONTEXT_MENU,
+    CONTEXT_MENU_DARK,
+    context_menu_table,
+    place_at_pointer,
+)
 
 VIEW = Rect(0, 0, 1000, 800)
 W, H = 144.0, 125.0          # the measured panel on the probe's menu

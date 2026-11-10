@@ -90,7 +90,7 @@ def arc_to_cubics(x0, y0, rx, ry, phi_deg, large, sweep, x, y):
     elif sweep and dth < 0:
         dth += 2 * math.pi
 
-    n = max(1, int(math.ceil(abs(dth) / ARC_MAX)))
+    n = max(1, math.ceil(abs(dth) / ARC_MAX))
     step = dth / n
     # the magic constant for approximating a circular arc with one cubic
     k = 4.0 / 3.0 * math.tan(step / 4.0)
@@ -235,7 +235,7 @@ def rect_ops(x, y, w, h, rx=0.0):
 def convert(node):
     out = []
     for tag, at in node:
-        f = lambda k, d=0.0: float(at.get(k, d))  # noqa: E731
+        f = lambda k, d=0.0, at=at: float(at.get(k, d))
         if tag == "path":
             out.extend(path_ops(at["d"]))
         elif tag == "circle":
@@ -266,21 +266,7 @@ def main() -> None:
             raise SystemExit(f"{name}: unexpected viewBox {d['size']}")
         icons[name] = convert(d["node"])
 
-    body = ["\n".join([
-        '"""Lucide icon geometry, as draw-list paths. GENERATED — do not edit.',
-        "",
-        "Built by tools/dkit/build_icons.py from lucide-react's own node data;",
-        "see that file for how arcs and primitives are resolved. Lucide is ISC",
-        "licensed — fonts/ carries the notice.",
-        "",
-        "Coordinates are in Lucide's 24x24 box. draw.icon() scales them.",
-        '"""',
-        "",
-        "BOX = 24.0",
-        "STROKE = 2.0          # Lucide's stroke-width, in BOX units",
-        "",
-        "ICONS = {",
-    ])]
+    body = ['"""Lucide icon geometry, as draw-list paths. GENERATED — do not edit.\n\nBuilt by tools/dkit/build_icons.py from lucide-react\'s own node data;\nsee that file for how arcs and primitives are resolved. Lucide is ISC\nlicensed — fonts/ carries the notice.\n\nCoordinates are in Lucide\'s 24x24 box. draw.icon() scales them.\n"""\n\nBOX = 24.0\nSTROKE = 2.0          # Lucide\'s stroke-width, in BOX units\n\nICONS = {']
     for name, subs in icons.items():
         body.append(f"    {name.replace('-', '_')!r}: [")
         for sub in subs:

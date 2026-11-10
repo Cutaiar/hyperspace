@@ -25,12 +25,19 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from test_interaction import (DWELL, FAR, PROBE_X, PROBE_Y,  # noqa: E402
-                              _gl_or_skip, ground_of, left_band, one_widget,
-                              ring_ink)
-
-import box as B      # noqa: E402
-import tokens as T   # noqa: E402
+import box as B
+import tokens as T
+from test_interaction import (
+    DWELL,
+    FAR,
+    PROBE_X,
+    PROBE_Y,
+    _gl_or_skip,
+    ground_of,
+    left_band,
+    one_widget,
+    ring_ink,
+)
 
 SIZE = T.CHECKBOX["size"]
 
@@ -165,7 +172,6 @@ def test_a_disabled_checkbox_never_rings_and_space_does_nothing():
 def label_box():
     """Where the label is, asked of the token table and the font - the gap,
     the font size and the text's own width - not copied from ?probe."""
-    import draw as D
     from imgui_bundle import imgui  # noqa: F401  (a context exists in run)
     c = T.CHECKBOX
     return (PROBE_X + SIZE + c["label_gap"],
@@ -250,7 +256,7 @@ def test_the_switch_takes_a_click_off_its_left_end(dx):
     landed in the browser and did nothing here."""
     import interact as I
     _gl_or_skip()
-    tw, th, _ = T.SWITCH_SIZES["default"]
+    _tw, th, _ = T.SWITCH_SIZES["default"]
     state = {"on": False}
 
     def paint(ui):

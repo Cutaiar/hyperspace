@@ -39,8 +39,8 @@ def DB():
 
 def _open_the_combobox(DB):
     """Open the dashboard's Find combobox and return (frame, field, panel)."""
-    import numpy as np
     import comp_combobox as CC
+    import numpy as np
     r = DB.lay_out(W, H)
     kx, ky, _kw, kh = r.ctl_rows[5]
     cx, cy = kx + DB.CTL_LABEL_W + 40, ky + kh / 2
@@ -66,8 +66,7 @@ def test_no_popup_border_bridges_the_gap_under_the_combobox(DB):
     their window IS their panel and their own chrome covers it. That is luck,
     not a decision, so `menu.popup` turns it off too.
     """
-    import comp_combobox as CC
-    f, (fx, fy, fw, fh), (px, py, _pw, _ph) = _open_the_combobox(DB)
+    f, (fx, fy, fw, fh), (_px, py, _pw, _ph) = _open_the_combobox(DB)
     assert py > fy + fh, "this test needs the panel BELOW the field"
     gap = range(int(fy + fh), int(py))
     assert len(gap) >= 4, f"the gap is only {len(gap)} px"

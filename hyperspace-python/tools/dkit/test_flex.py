@@ -24,7 +24,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from box import Item, Rect, flex  # noqa: E402
+from box import Item, Rect, flex
 
 CASES = json.loads((HERE / "flexcases.json").read_text())["cases"]
 GOLDEN = json.loads((HERE / "flexgolden.json").read_text())
