@@ -1399,8 +1399,6 @@ class Geometry:
     `PARTS` (None draws no hand at all), `extra` per pose the rows drawn
     with it, already coloured (the guide's, from `Ghost`)."""
 
-    material = 0             # MATERIALS: `Ghost` sets it before each frame's draws
-
     def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
         self._unit_s = ctx.buffer(_sphere().tobytes())
@@ -1445,7 +1443,8 @@ class Geometry:
             res.release()
 
     def draw(self, poses: list[HandPose], view_proj: np.ndarray, eye: np.ndarray,
-             parts=hands_parts, extra: list | None = None, lines: bool = False) -> None:
+             parts=hands_parts, extra: list | None = None, lines: bool = False,
+             material: int = 0) -> None:
         """Each pose as `parts` draws it, in its colour and fade, then the
         pose's `extra` rows — (sphere rows, tube rows), aligned with `poses`
         — in the same instanced draws, so they share the depth test. With
@@ -1455,7 +1454,7 @@ class Geometry:
         if lines:
             self.ctx.wireframe = True
             try:
-                self.draw(poses, view_proj, eye, parts, extra)
+                self.draw(poses, view_proj, eye, parts, extra, material=material)
             finally:
                 self.ctx.wireframe = False
             return
@@ -1478,7 +1477,7 @@ class Geometry:
         for prog in self.progs:
             prog["u_vp"].write(vp)
             prog["u_eye"].value = ey
-            _put(prog, "u_mat", int(self.material))
+            _put(prog, "u_mat", int(material))
         for rows, buf, vao, verts in ((m_rows, self._mesh, self.vaos[2], None),
                                       (s_rows, self._inst_s, self.vaos[0], self._n_s),
                                       (t_rows, self._inst_t, self.vaos[1], self._n_t)):
@@ -1492,17 +1491,18 @@ class Geometry:
             else:
                 vao.render(moderngl.TRIANGLES, vertices=verts, instances=len(data))
         if meshed:
-            self._draw_meshes(meshed, vp, ey, str(model))
+            self._draw_meshes(meshed, vp, ey, str(model), material)
 
     def _model_res(self) -> list:
         return [r for _, res in self._models.values() for r in res]
 
-    def _draw_meshes(self, poses: list[HandPose], vp: bytes, eye: tuple, name: str) -> None:
+    def _draw_meshes(self, poses: list[HandPose], vp: bytes, eye: tuple, name: str,
+                     material: int = 0) -> None:
         """Each pose as the rigged model `name`, skinned to its joints."""
         prog = self.skinmesh
         _put(prog, "u_vp", vp)
         _put(prog, "u_eye", eye)
-        _put(prog, "u_mat", int(self.material))
+        _put(prog, "u_mat", int(material))
         for p in poses:
             m = mesh_model(p, name)
             if m is None:
@@ -1719,11 +1719,11 @@ class Ghost:
             ctx.enable(moderngl.DEPTH_TEST | moderngl.BLEND)
             ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
             parts = style_parts(getattr(self.state, "style", 0))
-            self.geometry.material = int(getattr(self.state, "material", 0))
+            mat = int(getattr(self.state, "material", 0))
             if lines:
-                self.geometry.draw(poses, view_proj, eye, parts, lines=True)
+                self.geometry.draw(poses, view_proj, eye, parts, lines=True, material=mat)
             else:
-                self.geometry.draw(poses, view_proj, eye, parts)
+                self.geometry.draw(poses, view_proj, eye, parts, material=mat)
         finally:
             ctx.disable(moderngl.DEPTH_TEST)
             ctx.enable(moderngl.BLEND)
@@ -1833,6 +1833,7 @@ class Ghost:
         # `extra` (no style knows the guide exists, plan 21 WP6).
         # getattr: a GhostState from before the style existed
         parts = style_parts(getattr(self.state, "style", 0))
+        mat = int(getattr(self.state, "material", 0))
         guides = [p.guide for p in poses]
         try:
             if hands:
@@ -1854,12 +1855,12 @@ class Ghost:
                     ro.color_mask = (False, False, False, False)
                     try:
                         ro.use()
-                        self.geometry.draw(poses, view_proj, eye, parts)
+                        self.geometry.draw(poses, view_proj, eye, parts, material=mat)
                     finally:
                         ro.color_mask = (True, True, True, True)
                         ro.use()
                 ctx.viewport = (0, 0, w, h)
-                self.geometry.material = 0      # the guide is a readout, never a material
+                # the guide is a readout, never a material: PLAIN by the default
                 self.geometry.draw(poses, view_proj, eye, None, guides)
                 ctx.disable(moderngl.DEPTH_TEST)
                 if any(p.tethers for p in poses):
@@ -1894,16 +1895,16 @@ class Ghost:
         # goes over it: the style first, then the depth cleared, then
         # the guide — the guide reads the same in every style
         over = parts is not hands_parts or lines
-        self.geometry.material = int(getattr(self.state, "material", 0))
+        mat = int(getattr(self.state, "material", 0))
         if lines:                       # the parts' edges; the guide solid, after
-            self.geometry.draw(poses, view_proj, eye, parts, None, lines=True)
+            self.geometry.draw(poses, view_proj, eye, parts, None, lines=True, material=mat)
         else:
             self.geometry.draw(poses, view_proj, eye, parts,
-                               None if split or over else guides)
+                               None if split or over else guides, material=mat)
         if over and not split and any(g[0] or g[1] for g in guides):
             _clear_depth(ctx, draw_fbo)
             ctx.viewport = (0, 0, *self.size)
-            self.geometry.material = 0      # the guide is a readout, never a material
+            # the guide is a readout, never a material: PLAIN by the default
             self.geometry.draw(poses, view_proj, eye, None, guides)
         ctx.disable(moderngl.DEPTH_TEST)
         if not split and any(p.tethers for p in poses):

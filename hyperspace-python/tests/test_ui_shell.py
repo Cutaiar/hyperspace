@@ -589,7 +589,8 @@ def test_the_ghost_controls_never_overlap_or_run_off_the_page(rig, monkeypatch, 
     _every_ghost_line(rig)
     rects, right = _ghost_rects(rig, monkeypatch, display, panel_w)
     names = [k.split("##")[-1] for k, _ in rects]
-    for want in ("ghost.on", "ghost.alpha", "ghost.style", "ghost.guide", "ghost.more"):
+    for want in ("ghost.on", "ghost.alpha", "ghost.style", "ghost.material", "ghost.guide",
+                 "ghost.more"):
         assert want in names, (want, names)
     for k, (a, ra) in enumerate(rects):
         assert ra[2] <= right + 0.5, f"{a!r} runs past the page ({ra[2]:.1f} > {right:.1f})"
@@ -599,7 +600,10 @@ def test_the_ghost_controls_never_overlap_or_run_off_the_page(rig, monkeypatch, 
             assert apart, f"{a!r} {ra} overlaps {b!r} {rb}"
     lines = sorted({round(r[1]) for _, r in rects})
     if panel_w is None:
-        assert len(lines) == 2, lines             # two lines at the panel's own width
+        # two lines at the control window's own width; at MIN_SIZE the three
+        # look combos (style, material, guide) no longer share one line, so a
+        # third is a wrap, not the overlap this test is here to catch
+        assert len(lines) == (2 if display[0] > 320 else 3), (display, lines)
     else:
         assert len(lines) > 2, lines              # narrower: a group wraps rather than overlaps
 

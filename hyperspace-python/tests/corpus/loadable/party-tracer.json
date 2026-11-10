@@ -176,6 +176,7 @@
   "ghost.guide": 0,
   "ghost.tethers": false,
   "ghost.style": 0,
+  "ghost.material": 0,
   "pad.dial.left": 0,
   "pad.dial.right": 1,
   "macro.1": 1.0,
