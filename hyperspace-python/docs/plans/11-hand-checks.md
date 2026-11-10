@@ -8770,7 +8770,9 @@ Headless: `tests/test_ui_pane.py` (every view by the mouse, a canvas click, open
 
 Plan 59. Headless: `tests/test_world.py` (the pose, the registries, the step, a tape's hands as objects, the frames with a default world byte for byte as without). The world is on, but nothing moves an offset yet. A restart after pulling.
 
-**659. A hand in view changes nothing.** (the rig, the Leap on, the ghost hands on) Load a patch you know, with the shape still (rates at 0). Bring one hand in, then both, move and turn them, take them out. *Pass:* the shape and the ghost hands look exactly as they did before this build — nothing jumps, drifts or turns when a hand arrives or leaves; the frame rate is what it was. Repeat with a field of copies (instances 7, Fit off) and with Fit on. *Fail:* any change in the picture with a hand in view.
+The patches: copy `tests/fixtures/world-check/` into the library's `loadable/` as a folder named `world check` — **1 one shape**, **2 field** (seven copies, Fit off), **3 fit** (nine copies, Fit on). Each is a still tesseract with both hands drawn inside the scene, one colour effect (palette: the shape and the right hand cyan, the left hand purple) and the guides beside the hands, clean over it. `tools/drive_world_check.py` rebuilds them.
+
+**659. A hand in view changes nothing.** (the rig, the Leap on, the ghost hands on) Load **world check/1 one shape** (the shape still, rates at 0). Bring one hand in, then both, move and turn them, take them out. *Pass:* the shape and the ghost hands look exactly as they did before this build — nothing jumps, drifts or turns when a hand arrives or leaves; the frame rate is what it was. Repeat with **2 field** and **3 fit**. *Fail:* any change in the picture with a hand in view.
 
 **660. Reset world.** Open the camera section. *Pass:* **Reset world** sits under **Reset view**; pressing it changes nothing on screen (every offset is already home), on either deck. *Fail:* a missing button, or a press that moves anything.
 

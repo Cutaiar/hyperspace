@@ -90,7 +90,7 @@ worked example.
 - A show or preset brings its own camera: set `camera.zoom`, `yaw`,
   `pitch`, `pan` in the script before judging framing (a show left zoom at
   1.3 once and cropped every fitted field in a demo).
-- Load another preset with `panel.loaded_patch.load(name)`.
+- Load another preset with `panel.library.loaded_patch.load(name)`.
 
 ## A video
 

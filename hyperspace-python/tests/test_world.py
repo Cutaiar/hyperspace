@@ -11,7 +11,9 @@ exactly that much.
 from __future__ import annotations
 
 import ast
+import json
 import math
+import shutil
 from pathlib import Path
 from types import SimpleNamespace as NS
 
@@ -480,3 +482,34 @@ def test_fit_and_the_3d_lattices_take_no_offset(ctx):
     w["shape"].offset = W.Pose.turn3(W.qexp([0.0, 0.6, 0.0]), (0.3, 0.0, 0.4))
     fit = _view(instances=9, inst_fit=True)
     assert _draw(ctx, fit, w) == _draw(ctx, fit)
+
+
+# ---------------------------------------------------------------- the check patches
+
+CHECKS = sorted((Path(__file__).parent / "fixtures" / "world-check").glob("*.json"))
+
+
+def test_the_world_check_patches_load_whole_and_stand_still(tmp_path):
+    """Hand checks 659–660 run on tests/fixtures/world-check/ (built and saved by
+    tools/drive_world_check.py through the app's own save): each still loads with
+    no id it names missing, the shape and the hands in one scene through one
+    effect, the shape standing still, a camera the eye can read."""
+    from test_loadable import boot
+
+    rig = boot(tmp_path)
+    folder = tmp_path / "loadable" / "world check"
+    folder.mkdir(parents=True)
+    for f in CHECKS:
+        shutil.copy(f, folder / f.name)
+    assert [f.stem for f in CHECKS] == ["1-one-shape", "2-field", "3-fit"]
+    for f, (n, fit) in zip(CHECKS, ((1, False), (7, False), (9, True)), strict=True):
+        name = "world check/" + json.loads(f.read_text())["name"]
+        assert rig.loaded_patch.load(name) == []
+        reg = rig.reg
+        assert reg["view.instances"].get() == n and reg["view.inst_fit"].get() is fit
+        assert not reg["view.rotate"].get()
+        assert all(reg[f"rot.rate.{p}"].get() == 0.0 for p in ("XY", "XZ", "YZ", "XW", "YW", "ZW"))
+        assert reg["ghost.on"].get() and reg["fx.palette.mix"].get() == 1.0
+        wires = {(w["from"], w["to"]) for w in json.loads(f.read_text())["graph"]["wires"]}
+        assert {("shape", "scene.geometry"), ("hands", "scene.geometry"),
+                ("scene", "palette.image"), ("palette", "output.all.image")} <= wires
