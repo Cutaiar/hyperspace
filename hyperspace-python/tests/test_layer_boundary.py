@@ -497,7 +497,9 @@ META_MODULES = _mods(
 BOTH_LAYERS = _mods("params", "routing", "routing_sources", "library", "undo", "learn",
                     "outputs", "groupwords", "hot_slots")
 # above both: the panel and the headless tools, which may read either
-ABOVE = _mods("ui", "graphview", "headless", "offline")
+# (`dkit`: the panel's component kit, imported by the panel alone, importing nothing of
+# the package's)
+ABOVE = _mods("ui", "graphview", "headless", "offline", "dkit")
 
 # The named surface: every way a patch module reaches a module of the meta controller's today,
 # (module, what it imports, the names) and why. A new crossing fails the wall until it is named

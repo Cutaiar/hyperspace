@@ -1,0 +1,74 @@
+{
+  "_comment": "Nested-layout conformance cases. nest_oracle.js lays each tree out in Chromium as nested flex boxes with height:auto where the case says AUTO, and test_nest.py computes the same with box.lay. The browser is the spec. A node is {w,h,dir,gap,pad,grow,shrink,justify,align,kids}; null means auto.",
+  "cases": [
+    {
+      "id": "column.auto.height",
+      "at": [0, 0, 400, null],
+      "root": {"dir": "column", "pad": [16, 16, 16, 16], "gap": 12,
+               "kids": [{"h": 22}, {"h": 20}, {"h": 24}, {"h": 24}]}
+    },
+    {
+      "id": "column.auto.nogap",
+      "at": [0, 0, 300, null],
+      "root": {"dir": "column", "pad": [0, 0, 0, 0], "gap": 0,
+               "kids": [{"h": 10}, {"h": 20}, {"h": 30}]}
+    },
+    {
+      "id": "row.of.auto.columns",
+      "at": [0, 0, 800, null],
+      "root": {"dir": "row", "gap": 16,
+               "kids": [
+                 {"grow": 1, "dir": "column", "pad": [16, 16, 16, 16], "gap": 12,
+                  "kids": [{"h": 24}, {"h": 24}, {"h": 24}]},
+                 {"grow": 1, "dir": "column", "pad": [16, 16, 16, 16], "gap": 12,
+                  "kids": [{"h": 24}, {"h": 24}]}
+               ]}
+    },
+    {
+      "id": "nested.three.deep",
+      "at": [0, 0, 600, null],
+      "root": {"dir": "column", "pad": [8, 8, 8, 8], "gap": 8,
+               "kids": [
+                 {"h": 40},
+                 {"dir": "row", "gap": 8, "pad": [4, 4, 4, 4],
+                  "kids": [
+                    {"grow": 1, "dir": "column", "gap": 4,
+                     "kids": [{"h": 16}, {"h": 16}]},
+                    {"w": 120, "dir": "column", "gap": 4,
+                     "kids": [{"h": 16}, {"h": 16}, {"h": 16}]}
+                  ]}
+               ]}
+    },
+    {
+      "id": "auto.width.column",
+      "at": [0, 0, null, 200],
+      "root": {"dir": "column", "pad": [10, 10, 10, 10], "gap": 6,
+               "kids": [{"w": 80, "h": 20}, {"w": 140, "h": 20}, {"w": 60, "h": 20}]}
+    },
+    {
+      "id": "row.auto.height.from.tallest",
+      "at": [0, 0, 500, null],
+      "root": {"dir": "row", "gap": 10, "pad": [6, 6, 6, 6],
+               "kids": [{"w": 100, "h": 30}, {"w": 100, "h": 70}, {"w": 100, "h": 50}]}
+    },
+    {
+      "id": "grow.inside.auto.parent",
+      "at": [0, 0, 420, null],
+      "root": {"dir": "column", "gap": 10, "pad": [12, 12, 12, 12],
+               "kids": [
+                 {"h": 30, "dir": "row", "gap": 8,
+                  "kids": [{"grow": 2}, {"grow": 1}, {"w": 50}]},
+                 {"h": 30}
+               ]}
+    },
+    {
+      "id": "padded.nested.stretch",
+      "at": [0, 0, 360, null],
+      "root": {"dir": "column", "pad": [20, 24, 20, 24], "gap": 0,
+               "kids": [
+                 {"dir": "column", "pad": [8, 8, 8, 8], "gap": 4,
+                  "kids": [{"h": 18}, {"h": 18}]}
+               ]}
+    }
+  ]
+}

@@ -23,7 +23,7 @@ from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
 # the narrowest control window that opens the panel at ui.PANEL_W (the
 # default before the 4:3 split): the small desk, glyphs only, beside it
 NARROW_CONTROL = (960, 900)
-from hyperspace import ui_fx
+from hyperspace import ui_fx, ui_kit
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.loadable import LoadedPatch
@@ -554,7 +554,9 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
         finally:
             live[0] = False
     with monkeypatch.context() as m:
-        for fn in ("checkbox", "slider_float", "slider_int", "combo", "button", "dummy"):
+        # (an invisible_button too: a check on the kit is one, ui_fields.inline_check)
+        for fn in ("checkbox", "slider_float", "slider_int", "combo", "button", "dummy",
+                   "invisible_button"):
             m.setattr(ui_mod.imgui, fn, item(fn, getattr(imgui, fn)))
         m.setattr(hp, "_ghost", ghost)
         # a narrower panel is a narrower window: CONTROLS fills it (ui.panel_rect)
@@ -624,22 +626,25 @@ def test_the_ghost_more_popup_has_mirror_and_tethers(rig, monkeypatch):
     with "with a guide on" until a guide is chosen. A click on Mirror in
     the popup sets ghost.mirror."""
     labels: list[str] = []
-    real = imgui.checkbox
     rects: dict[str, tuple] = {}
 
-    def checkbox(label, v):
-        out = real(label, v)
-        labels.append(label)
-        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-        rects[label] = (lo.x, lo.y, hi.x, hi.y)
-        return out
+    def spy(real):
+        def rec(label, *a, **k):
+            out = real(label, *a, **k)
+            key = label.split("##", 1)[-1]      # the param id, stock checkbox or kit check
+            labels.append(key)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            rects[key] = (lo.x, lo.y, hi.x, hi.y)
+            return out
+        return rec
     rig.reg["ghost.on"].set(True)
-    monkeypatch.setattr(imgui, "checkbox", checkbox)
+    monkeypatch.setattr(imgui, "checkbox", spy(imgui.checkbox))
+    monkeypatch.setattr(imgui, "invisible_button", spy(imgui.invisible_button))
     _, lines, _ = _ghost_more(rig, monkeypatch)
-    assert "Mirror##ghost.mirror" in labels and "Tethers##ghost.tethers" in labels
+    assert "ghost.mirror" in labels and "ghost.tethers" in labels
     assert "with a guide on" in lines
     assert rig.reg["ghost.mirror"].value is False
-    _click(rig.panel, rects["Mirror##ghost.mirror"])
+    _click(rig.panel, rects["ghost.mirror"])
     assert rig.reg["ghost.mirror"].value is True
     rig.reg["ghost.guide"].set(1)
     _, lines, _ = _ghost_more(rig, monkeypatch)
@@ -681,11 +686,15 @@ ROT_RATES = tuple(f"rot.rate.{name}" for name in PLANES)
 
 
 def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
-    """The controls WP6 moved — the layout, motion, amp and rate in one row,
-    the six plane rates two to a row — each open their own binding menu on
-    a right-click, and the row's controls sit side by side on one line
-    inside the page."""
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    """The controls WP6 moved — the layout, motion, amp and rate, the six
+    plane rates two to a row — each open their own binding menu on a
+    right-click, and sit side by side inside the page without overlapping:
+    on the kit (`ui_view`) the layout and motion Selects share a line and
+    the amp and rate fields the next; the stock page has all four on one.
+    The window is taller than the control size: on the kit VIEW is longer
+    than one screen (the pane scrolls, REVIEW: a section may scroll down),
+    and a control scrolled out of view takes no click."""
+    imgui.get_io().display_size = imgui.ImVec2(CONTROL_SIZE[0], 1600)
     rects: dict[str, tuple[float, float, float, float]] = {}
     opened: list[str] = []
 
@@ -698,7 +707,7 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
             rects[label.split("##", 1)[-1]] = (lo.x, lo.y, hi.x, hi.y)
             return out
         monkeypatch.setattr(imgui, fn, rec)
-    for fn in ("combo", "slider_float", "slider_int"):
+    for fn in ("combo", "slider_float", "slider_int", "invisible_button"):
         item(fn)
     real_popup = imgui.begin_popup_context_item
 
@@ -715,8 +724,9 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
     for _ in range(3):
         page_frame(rig.panel, "view")
     row = [rects[pid] for pid in FIELD_ROW]
-    assert len({round(r[1]) for r in row}) == 1                    # one line
-    assert all(row[k][2] < row[k + 1][0] for k in range(3))        # none overlaps the next
+    pairs = ((0, 1), (2, 3)) if ui_kit.ready() else ((0, 1), (1, 2), (2, 3))
+    for a, b in pairs:                                             # side by side, apart
+        assert round(row[a][1]) == round(row[b][1]) and row[a][2] < row[b][0], (a, b, row)
     # the count and Fit share a line; spacing and a lattice's depth the next
     rig.reg["view.inst_layout"].set(5)
     for _ in range(3):
@@ -2076,6 +2086,18 @@ def _output_page(rig, monkeypatch, page="output", body=False) -> tuple[list[str]
         m.setattr(ui_mod.imgui, "text_disabled", lambda s: (real["text_disabled"](s), rec(s))[0])
         m.setattr(ui_mod.imgui, "checkbox",
                   lambda label, v: (real["checkbox"](label, v), rec(label.split("##")[0]))[0])
+        # on the kit a check with no param is an invisible_button with the
+        # check's own label (ui_fields.check): its words are the label's too
+        real_ib = imgui.invisible_button
+
+        def ib(label, *a, **k):
+            out = real_ib(label, *a, **k)
+            words = label.split("##")[0]
+            if words and label.startswith(words + "##") and ui_mod.ui_kit.ready() \
+                    and label.split("##", 1)[1].startswith(("through.", "display.")):
+                rec(words)
+            return out
+        m.setattr(ui_mod.imgui, "invisible_button", ib)
         for _ in range(3):
             drawn.clear()
             edges.clear()

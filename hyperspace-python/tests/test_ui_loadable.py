@@ -25,7 +25,7 @@ from test_ui_shell import (  # noqa: F401 — the fixture
     rig,
 )
 
-from hyperspace import ui, ui_loadable, ui_pane
+from hyperspace import ui, ui_kit, ui_loadable, ui_pane
 from hyperspace.library import HOME_UNSET, LOADABLE, PATCHES, RETIRED_MODULES
 from hyperspace.ui import PAGE_KEYS
 
@@ -106,12 +106,17 @@ def test_the_strips_name_is_a_readout_and_opens_no_list(rig, monkeypatch):  # no
     panel, lib = rig.panel, rig.lib
     got = _labels(monkeypatch)
     _page(panel)
-    assert "—##name" in got["button"]
+    st = ui_loadable._state(panel)
+
+    def said() -> str:          # what the name's button reads: the stock button's or the kit's
+        if ui_kit.ready():
+            return st["names"]["loadable"]
+        return next(b for b in got["button"] if b.endswith("##name")).split("##")[0]
+    assert said() == "—"
     lib.load("loadable", "TRIP")
     got["button"].clear()
     page_frame(panel)
-    assert "TRIP##name" in got["button"]
-    st = ui_loadable._state(panel)
+    assert said() == "TRIP"
     _click(panel, st["rects"]["strip.loadable.name"])
     page_frame(panel)
     assert "list" not in st                                       # no popup list opened
@@ -628,7 +633,8 @@ def test_nothing_on_the_page_says_starts_on_f_keys_hidden_or_factory(rig, monkey
     words = [*texts, *previews, *tips, *got["hint"], *got["header"],
              *(label.split("##")[0] for label in got["button"]),
              *(label.split("##")[0] for label, _ in got["selectable"]),
-             *st["rects"], *st["page"]["rects"], *st["patches"]["rects"]]
+             *st["rects"], *st["page"]["rects"], *st["patches"]["rects"],
+             *st.get("names", {}).values()]      # the kit's strip draws its name itself
     assert len(words) > 40 and "TRIP" in words and "party" in words
     said = "\n".join(words).lower()
     assert re.search(BANNED, said) is None, re.search(BANNED, said)
@@ -756,3 +762,40 @@ def test_a_line_assigned_every_frame_does_not_pin_the_footer(rig, monkeypatch): 
     assert lib.said["status"] == said["status"]
     scene.set(2)
     assert lib.status != line and panel._message() == (lib.status, False)
+
+
+# ---- a list row on the kit: its actions shown on its hover ----
+
+@pytest.mark.skipif(not ui_kit.enabled(), reason="the kit is switched off (HYPERSPACE_KIT=0)")
+def test_a_rows_actions_show_on_its_hover_and_take_a_click_unseen(rig, monkeypatch):  # noqa: F811
+    """On the kit a list row's `rename` and × (the patches fold's, a module
+    strip's list) are icons shown while the row is hovered — eased in, and
+    gone again when the pointer leaves; and a click on where one is takes
+    it whether it shows yet or not (the driver's click, a quick pointer)."""
+    panel, lib = rig.panel, rig.lib
+    (lib.home / PATCHES).mkdir(parents=True, exist_ok=True)
+    (lib.home / PATCHES / "acid-wash.json").write_text(ACID_WASH.read_text())
+    mine = json.loads(ACID_WASH.read_text())
+    mine["name"] = "my wash"
+    (lib.home / PATCHES / "my-wash.json").write_text(json.dumps(mine))
+    _open_patches(monkeypatch)
+    st = _page(panel)
+    assert ui_kit.ready()
+    anim = panel.__dict__[ui_kit.STATE]["ui"].anim      # the panel's kit state (ui_kit.begin)
+
+    def reveal(name: str) -> float:
+        return anim._t[f"row:{name}:reveal"].value
+
+    assert reveal("acid wash") == 0.0 and reveal("my wash") == 0.0     # at rest: hidden
+    x0, y0, _x1, y1 = st["patches"]["rects"]["row.acid wash"]
+    io = imgui.get_io()
+    io.add_mouse_pos_event(x0 + 20, (y0 + y1) / 2)
+    for _ in range(20):                                            # past the 150 ms ease
+        page_frame(panel)
+    assert reveal("acid wash") == pytest.approx(1.0) and reveal("my wash") == 0.0
+    io.add_mouse_pos_event(-1.0, -1.0)
+    for _ in range(20):
+        page_frame(panel)
+    assert reveal("acid wash") == pytest.approx(0.0)
+    _click(panel, st["patches"]["rects"]["×.acid wash"])           # unseen, still there
+    assert lib.list(PATCHES) == ["my wash"]

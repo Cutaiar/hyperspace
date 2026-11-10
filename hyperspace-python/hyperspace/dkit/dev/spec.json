@@ -1,0 +1,804 @@
+{
+  "_comment": "The shared gallery spec. Both the React oracle and the ImGui kit read this file and draw the SAME rects, so a diff measures chrome, never text metrics. Rects are CSS/content-box pixels at device-pixel-ratio 1, origin top-left.",
+  "canvas": {
+    "w": 760,
+    "h": 1712,
+    "bg": "#ffffff"
+  },
+  "cells": [
+    {
+      "id": "badge.outline",
+      "kind": "badge",
+      "variant": "outline",
+      "x": 40,
+      "y": 40,
+      "w": 86,
+      "h": 20,
+      "text": "+12.5%"
+    },
+    {
+      "id": "badge.secondary",
+      "kind": "badge",
+      "variant": "secondary",
+      "x": 170,
+      "y": 40,
+      "w": 86,
+      "h": 20,
+      "text": "ZW"
+    },
+    {
+      "id": "badge.default",
+      "kind": "badge",
+      "variant": "default",
+      "x": 300,
+      "y": 40,
+      "w": 86,
+      "h": 20,
+      "text": "Done"
+    },
+    {
+      "id": "badge.destructive",
+      "kind": "badge",
+      "variant": "destructive",
+      "x": 430,
+      "y": 40,
+      "w": 86,
+      "h": 20,
+      "text": "-20%"
+    },
+    {
+      "id": "badge.wide.outline",
+      "kind": "badge",
+      "variant": "outline",
+      "x": 40,
+      "y": 100,
+      "w": 180,
+      "h": 20,
+      "text": "Star polychora"
+    },
+    {
+      "id": "badge.tall.outline",
+      "kind": "badge",
+      "variant": "outline",
+      "x": 260,
+      "y": 100,
+      "w": 120,
+      "h": 32,
+      "text": "taller"
+    },
+    {
+      "id": "badge.sq.secondary",
+      "kind": "badge",
+      "variant": "secondary",
+      "x": 420,
+      "y": 100,
+      "w": 40,
+      "h": 40,
+      "text": "6"
+    },
+    {
+      "id": "badge.small.outline",
+      "kind": "badge",
+      "variant": "outline",
+      "x": 40,
+      "y": 180,
+      "w": 56,
+      "h": 16,
+      "text": "4D"
+    },
+    {
+      "id": "badge.big.default",
+      "kind": "badge",
+      "variant": "default",
+      "x": 140,
+      "y": 180,
+      "w": 220,
+      "h": 70,
+      "text": "big"
+    },
+    {
+      "id": "badge.big.outline",
+      "kind": "badge",
+      "variant": "outline",
+      "x": 400,
+      "y": 180,
+      "w": 220,
+      "h": 70,
+      "text": "unclamped r=26"
+    },
+    {
+      "id": "card.plain",
+      "kind": "card",
+      "variant": "plain",
+      "x": 40,
+      "y": 300,
+      "w": 230,
+      "h": 160,
+      "text": ""
+    },
+    {
+      "id": "card.stat",
+      "kind": "card",
+      "variant": "gradient",
+      "x": 310,
+      "y": 300,
+      "w": 230,
+      "h": 160,
+      "text": ""
+    },
+    {
+      "id": "card.wide",
+      "kind": "card",
+      "variant": "gradient",
+      "x": 580,
+      "y": 300,
+      "w": 140,
+      "h": 160,
+      "text": ""
+    },
+    {
+      "id": "card.small",
+      "kind": "card",
+      "variant": "plain",
+      "x": 40,
+      "y": 480,
+      "w": 120,
+      "h": 34,
+      "text": ""
+    },
+    {
+      "id": "text.body14",
+      "kind": "text",
+      "variant": "regular",
+      "x": 40,
+      "y": 540,
+      "w": 320,
+      "h": 24,
+      "size": 14,
+      "weight": 400,
+      "text": "Rectified 600-cell"
+    },
+    {
+      "id": "text.med14",
+      "kind": "text",
+      "variant": "medium",
+      "x": 40,
+      "y": 570,
+      "w": 320,
+      "h": 24,
+      "size": 14,
+      "weight": 500,
+      "text": "Trending up this month"
+    },
+    {
+      "id": "text.title30",
+      "kind": "text",
+      "variant": "semibold",
+      "x": 40,
+      "y": 600,
+      "w": 320,
+      "h": 36,
+      "size": 30,
+      "weight": 600,
+      "text": "$1,250.00"
+    },
+    {
+      "id": "text.num14",
+      "kind": "text",
+      "variant": "regular",
+      "x": 400,
+      "y": 540,
+      "w": 320,
+      "h": 24,
+      "size": 14,
+      "weight": 400,
+      "text": "1234567890 0.776px"
+    },
+    {
+      "id": "text.small12",
+      "kind": "text",
+      "variant": "medium",
+      "x": 400,
+      "y": 570,
+      "w": 320,
+      "h": 24,
+      "size": 12,
+      "weight": 500,
+      "text": "Star polychora +12.5%"
+    },
+    {
+      "id": "text.mixed",
+      "kind": "text",
+      "variant": "regular",
+      "x": 400,
+      "y": 600,
+      "w": 320,
+      "h": 36,
+      "size": 16,
+      "weight": 400,
+      "text": "Schlafli {5,3,3} 120-cell"
+    },
+    {
+      "id": "slider.v0",
+      "kind": "slider",
+      "variant": "default",
+      "x": 40,
+      "y": 660,
+      "w": 200,
+      "h": 16,
+      "text": "",
+      "fracs": [
+        0.0
+      ]
+    },
+    {
+      "id": "slider.v50",
+      "kind": "slider",
+      "variant": "default",
+      "x": 280,
+      "y": 660,
+      "w": 200,
+      "h": 16,
+      "text": "",
+      "fracs": [
+        0.5
+      ]
+    },
+    {
+      "id": "slider.v100",
+      "kind": "slider",
+      "variant": "default",
+      "x": 520,
+      "y": 660,
+      "w": 200,
+      "h": 16,
+      "text": "",
+      "fracs": [
+        1.0
+      ]
+    },
+    {
+      "id": "slider.v25",
+      "kind": "slider",
+      "variant": "default",
+      "x": 40,
+      "y": 700,
+      "w": 200,
+      "h": 16,
+      "text": "",
+      "fracs": [
+        0.25
+      ]
+    },
+    {
+      "id": "slider.v75",
+      "kind": "slider",
+      "variant": "default",
+      "x": 280,
+      "y": 700,
+      "w": 200,
+      "h": 16,
+      "text": "",
+      "fracs": [
+        0.75
+      ]
+    },
+    {
+      "id": "slider.narrow",
+      "kind": "slider",
+      "variant": "default",
+      "x": 520,
+      "y": 700,
+      "w": 120,
+      "h": 16,
+      "text": "",
+      "fracs": [
+        0.5
+      ]
+    },
+    {
+      "id": "slider.range",
+      "kind": "slider",
+      "variant": "default",
+      "x": 40,
+      "y": 740,
+      "w": 200,
+      "h": 16,
+      "text": "",
+      "fracs": [
+        0.3,
+        0.7
+      ]
+    },
+    {
+      "id": "slider.wide",
+      "kind": "slider",
+      "variant": "default",
+      "x": 280,
+      "y": 740,
+      "w": 320,
+      "h": 16,
+      "text": "",
+      "fracs": [
+        0.375
+      ]
+    },
+    {
+      "id": "switch.off",
+      "kind": "switch",
+      "variant": "default",
+      "x": 40,
+      "y": 790,
+      "w": 32.0,
+      "h": 18.390625,
+      "text": "",
+      "on": false
+    },
+    {
+      "id": "switch.on",
+      "kind": "switch",
+      "variant": "default",
+      "x": 120,
+      "y": 790,
+      "w": 32.0,
+      "h": 18.390625,
+      "text": "",
+      "on": true
+    },
+    {
+      "id": "switch.sm.off",
+      "kind": "switch",
+      "variant": "sm",
+      "x": 200,
+      "y": 790,
+      "w": 24.0,
+      "h": 14.0,
+      "text": "",
+      "on": false
+    },
+    {
+      "id": "switch.sm.on",
+      "kind": "switch",
+      "variant": "sm",
+      "x": 260,
+      "y": 790,
+      "w": 24.0,
+      "h": 14.0,
+      "text": "",
+      "on": true
+    },
+    {
+      "id": "checkbox.off",
+      "kind": "checkbox",
+      "variant": "default",
+      "x": 340,
+      "y": 791,
+      "w": 16.0,
+      "h": 16.0,
+      "text": "",
+      "on": false,
+      "disabled": false
+    },
+    {
+      "id": "checkbox.on",
+      "kind": "checkbox",
+      "variant": "default",
+      "x": 400,
+      "y": 791,
+      "w": 16.0,
+      "h": 16.0,
+      "text": "",
+      "on": true,
+      "disabled": false
+    },
+    {
+      "id": "checkbox.disabled.off",
+      "kind": "checkbox",
+      "variant": "default",
+      "x": 460,
+      "y": 791,
+      "w": 16.0,
+      "h": 16.0,
+      "text": "",
+      "on": false,
+      "disabled": true
+    },
+    {
+      "id": "checkbox.disabled.on",
+      "kind": "checkbox",
+      "variant": "default",
+      "x": 520,
+      "y": 791,
+      "w": 16.0,
+      "h": 16.0,
+      "text": "",
+      "on": true,
+      "disabled": true
+    },
+    {
+      "id": "kbd.letter",
+      "kind": "kbd",
+      "variant": "default",
+      "x": 300,
+      "y": 838,
+      "w": 20.0,
+      "h": 20.0,
+      "text": "K"
+    },
+    {
+      "id": "kbd.word",
+      "kind": "kbd",
+      "variant": "default",
+      "x": 340,
+      "y": 838,
+      "w": 29.203125,
+      "h": 20.0,
+      "text": "Ctrl"
+    },
+    {
+      "id": "kbd.tooltip",
+      "kind": "kbd",
+      "variant": "tooltip",
+      "x": 440,
+      "y": 838,
+      "w": 20.0,
+      "h": 20.0,
+      "text": "S"
+    },
+    {
+      "id": "slider.frac",
+      "kind": "slider",
+      "variant": "default",
+      "x": 40,
+      "y": 840,
+      "w": 200,
+      "h": 16,
+      "text": "",
+      "fracs": [
+        0.333
+      ]
+    },
+    {
+      "id": "input.rest",
+      "kind": "input",
+      "variant": "rest",
+      "x": 40,
+      "y": 880,
+      "w": 200,
+      "h": 32,
+      "text": ""
+    },
+    {
+      "id": "input.invalid",
+      "kind": "input",
+      "variant": "invalid",
+      "x": 280,
+      "y": 880,
+      "w": 200,
+      "h": 32,
+      "text": ""
+    },
+    {
+      "id": "input.disabled",
+      "kind": "input",
+      "variant": "disabled",
+      "x": 520,
+      "y": 880,
+      "w": 200,
+      "h": 32,
+      "text": ""
+    },
+    {
+      "id": "select.default",
+      "kind": "select",
+      "variant": "default",
+      "x": 40,
+      "y": 930,
+      "w": 160,
+      "h": 32,
+      "text": ""
+    },
+    {
+      "id": "select.sm",
+      "kind": "select",
+      "variant": "sm",
+      "x": 240,
+      "y": 930,
+      "w": 160,
+      "h": 28,
+      "text": ""
+    },
+    {
+      "id": "tooltip.panel",
+      "kind": "tooltip",
+      "variant": "plain",
+      "x": 440,
+      "y": 930,
+      "w": 140,
+      "h": 28,
+      "text": ""
+    },
+    {
+      "id": "scroll.top",
+      "kind": "scroll",
+      "variant": "always",
+      "x": 40,
+      "y": 1000,
+      "w": 180,
+      "h": 120,
+      "text": "",
+      "content": 1200,
+      "frac": 0.0
+    },
+    {
+      "id": "scroll.mid",
+      "kind": "scroll",
+      "variant": "always",
+      "x": 260,
+      "y": 1000,
+      "w": 180,
+      "h": 120,
+      "text": "",
+      "content": 1200,
+      "frac": 0.5
+    },
+    {
+      "id": "scroll.end",
+      "kind": "scroll",
+      "variant": "always",
+      "x": 480,
+      "y": 1000,
+      "w": 180,
+      "h": 120,
+      "text": "",
+      "content": 400,
+      "frac": 1.0
+    },
+    {
+      "id": "menu.panel",
+      "kind": "menu",
+      "variant": "plain",
+      "x": 40,
+      "y": 1160,
+      "w": 180,
+      "h": 125,
+      "text": ""
+    },
+    {
+      "id": "button.default",
+      "kind": "button",
+      "variant": "default",
+      "size": "default",
+      "x": 40,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.outline",
+      "kind": "button",
+      "variant": "outline",
+      "size": "default",
+      "x": 160,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.secondary",
+      "kind": "button",
+      "variant": "secondary",
+      "size": "default",
+      "x": 280,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.ghost",
+      "kind": "button",
+      "variant": "ghost",
+      "size": "default",
+      "x": 400,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.destructive",
+      "kind": "button",
+      "variant": "destructive",
+      "size": "default",
+      "x": 520,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.link",
+      "kind": "button",
+      "variant": "link",
+      "size": "default",
+      "x": 640,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.size.xs",
+      "kind": "button",
+      "variant": "outline",
+      "size": "xs",
+      "x": 40,
+      "y": 1380,
+      "w": 90,
+      "h": 24,
+      "text": "Button"
+    },
+    {
+      "id": "button.size.sm",
+      "kind": "button",
+      "variant": "outline",
+      "size": "sm",
+      "x": 150,
+      "y": 1380,
+      "w": 90,
+      "h": 28,
+      "text": "Button"
+    },
+    {
+      "id": "button.size.default",
+      "kind": "button",
+      "variant": "outline",
+      "size": "default",
+      "x": 260,
+      "y": 1380,
+      "w": 90,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.size.lg",
+      "kind": "button",
+      "variant": "outline",
+      "size": "lg",
+      "x": 370,
+      "y": 1380,
+      "w": 90,
+      "h": 36,
+      "text": "Button"
+    },
+    {
+      "id": "button.size.icon-xs",
+      "kind": "button",
+      "variant": "outline",
+      "size": "icon-xs",
+      "x": 480,
+      "y": 1380,
+      "w": 24,
+      "h": 24,
+      "text": ""
+    },
+    {
+      "id": "button.size.icon-sm",
+      "kind": "button",
+      "variant": "outline",
+      "size": "icon-sm",
+      "x": 520,
+      "y": 1380,
+      "w": 28,
+      "h": 28,
+      "text": ""
+    },
+    {
+      "id": "button.size.icon",
+      "kind": "button",
+      "variant": "outline",
+      "size": "icon",
+      "x": 564,
+      "y": 1380,
+      "w": 32,
+      "h": 32,
+      "text": ""
+    },
+    {
+      "id": "button.size.icon-lg",
+      "kind": "button",
+      "variant": "outline",
+      "size": "icon-lg",
+      "x": 612,
+      "y": 1380,
+      "w": 36,
+      "h": 36,
+      "text": ""
+    },
+    {
+      "id": "button.disabled",
+      "kind": "button",
+      "variant": "default",
+      "size": "default",
+      "x": 40,
+      "y": 1440,
+      "w": 100,
+      "h": 32,
+      "text": "Button",
+      "disabled": true
+    },
+    {
+      "id": "button.disabled.outline",
+      "kind": "button",
+      "variant": "outline",
+      "size": "default",
+      "x": 160,
+      "y": 1440,
+      "w": 100,
+      "h": 32,
+      "text": "Button",
+      "disabled": true
+    },
+    {
+      "id": "buttongroup.h",
+      "kind": "buttongroup",
+      "variant": "outline",
+      "x": 300,
+      "y": 1440,
+      "w": 200,
+      "h": 32,
+      "members": [
+        60,
+        60,
+        80
+      ],
+      "orientation": "horizontal"
+    },
+    {
+      "id": "buttongroup.v",
+      "kind": "buttongroup",
+      "variant": "outline",
+      "x": 40,
+      "y": 1490,
+      "w": 80,
+      "h": 64,
+      "members": [
+        32,
+        32
+      ],
+      "orientation": "vertical"
+    },
+    {
+      "id": "contextmenu.panel",
+      "kind": "contextmenu",
+      "variant": "default",
+      "x": 180,
+      "y": 1490,
+      "w": 144,
+      "h": 125
+    },
+    {
+      "id": "combobox.field.rest",
+      "kind": "combobox",
+      "variant": "default",
+      "x": 40,
+      "y": 1640,
+      "w": 200,
+      "h": 32,
+      "text": ""
+    },
+    {
+      "id": "combobox.field.disabled",
+      "kind": "combobox",
+      "variant": "disabled",
+      "x": 280,
+      "y": 1640,
+      "w": 200,
+      "h": 32,
+      "text": ""
+    }
+  ]
+}

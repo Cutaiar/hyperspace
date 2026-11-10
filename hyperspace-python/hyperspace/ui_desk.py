@@ -516,7 +516,7 @@ def _offer_chip(panel) -> None:
         label = OFFER_SHORT
     imgui.push_style_var(imgui.StyleVar_.frame_padding, _v(*OFFER_CHIP_PAD))
     imgui.push_style_var(imgui.StyleVar_.frame_rounding, 999.0)
-    hit = imgui.button(f"{label}##offer")
+    hit = ui.button(f"{label}##offer")
     imgui.pop_style_var(2)
     a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
     _state(panel)["offer_chip"] = (a.x, a.y, b.x, b.y)

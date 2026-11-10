@@ -1,0 +1,810 @@
+[
+  {
+    "name": "Rectified 600-cell",
+    "kind": "icosahedra and octahedra · faces take seconds",
+    "cells": 720,
+    "schlafli": "r{3,3,5}",
+    "family": "600-cell family",
+    "dims": 4
+  },
+  {
+    "name": "600-cell",
+    "kind": "hypericosahedron",
+    "cells": 600,
+    "schlafli": "{3,3,5}",
+    "family": "Regular polytopes",
+    "dims": 4
+  },
+  {
+    "name": "Grand 600-cell",
+    "kind": "star · 600 tetrahedra through the middle",
+    "cells": 600,
+    "schlafli": "{3,3,5/2}",
+    "family": "Star polychora",
+    "dims": 4
+  },
+  {
+    "name": "Grand antiprism",
+    "kind": "the 600-cell less two orthogonal decagons",
+    "cells": 320,
+    "schlafli": "non-Wythoffian",
+    "family": "600-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Disphenoidal 288-cell",
+    "kind": "dual of the bitruncated 24-cell",
+    "cells": 288,
+    "schlafli": "f{3,4,3}",
+    "family": "Catalan duals",
+    "dims": 4
+  },
+  {
+    "name": "Runcinated 24-cell",
+    "kind": "octahedra and triangular prisms",
+    "cells": 240,
+    "schlafli": "t0,3{3,4,3}",
+    "family": "24-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Cantellated 24-cell",
+    "kind": "rhombicuboctahedra, cuboctahedra, prisms",
+    "cells": 144,
+    "schlafli": "rr{3,4,3}",
+    "family": "24-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Cantitruncated 24-cell",
+    "kind": "great rhombicuboctahedra, truncated cubes",
+    "cells": 144,
+    "schlafli": "tr{3,4,3}",
+    "family": "24-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Snub 24-cell",
+    "kind": "the 600-cell less its 24-cell",
+    "cells": 144,
+    "schlafli": "s{3,4,3}",
+    "family": "24-cell family",
+    "dims": 4
+  },
+  {
+    "name": "120-cell",
+    "kind": "hyperdodecahedron",
+    "cells": 120,
+    "schlafli": "{5,3,3}",
+    "family": "Regular polytopes",
+    "dims": 4
+  },
+  {
+    "name": "Great 120-cell",
+    "kind": "star · the 600-cell's edges, pentagon faces",
+    "cells": 120,
+    "schlafli": "{5,5/2,5}",
+    "family": "Star polychora",
+    "dims": 4
+  },
+  {
+    "name": "Great grand stellated 120-cell",
+    "kind": "star · lines only: pentagram faces",
+    "cells": 120,
+    "schlafli": "{5/2,3,3}",
+    "family": "Star polychora",
+    "dims": 4
+  },
+  {
+    "name": "Small stellated 120-cell",
+    "kind": "star · lines only: pentagram faces",
+    "cells": 120,
+    "schlafli": "{5/2,5,3}",
+    "family": "Star polychora",
+    "dims": 4
+  },
+  {
+    "name": "Omnitruncated tesseract",
+    "kind": "the tesseract's every truncation",
+    "cells": 80,
+    "schlafli": "t0,1,2,3{4,3,3}",
+    "family": "Tesseract family",
+    "dims": 4
+  },
+  {
+    "name": "Runcinated tesseract",
+    "kind": "a cube lattice round a tesseract",
+    "cells": 80,
+    "schlafli": "t0,3{4,3,3}",
+    "family": "Tesseract family",
+    "dims": 4
+  },
+  {
+    "name": "Runcitruncated 16-cell",
+    "kind": "rhombicuboctahedra, truncated tetrahedra",
+    "cells": 80,
+    "schlafli": "t0,1,3{3,3,4}",
+    "family": "Tesseract family",
+    "dims": 4
+  },
+  {
+    "name": "Runcitruncated tesseract",
+    "kind": "truncated cubes, prisms, cuboctahedra",
+    "cells": 80,
+    "schlafli": "t0,1,3{4,3,3}",
+    "family": "Tesseract family",
+    "dims": 4
+  },
+  {
+    "name": "Cantellated tesseract",
+    "kind": "rhombicuboctahedra, octahedra, prisms",
+    "cells": 56,
+    "schlafli": "rr{4,3,3}",
+    "family": "Tesseract family",
+    "dims": 4
+  },
+  {
+    "name": "Cantitruncated tesseract",
+    "kind": "great rhombicuboctahedra and more",
+    "cells": 56,
+    "schlafli": "tr{4,3,3}",
+    "family": "Tesseract family",
+    "dims": 4
+  },
+  {
+    "name": "Bitruncated 24-cell",
+    "kind": "48 truncated cubes",
+    "cells": 48,
+    "schlafli": "2t{3,4,3}",
+    "family": "24-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Rectified 24-cell",
+    "kind": "cuboctahedra and cubes",
+    "cells": 48,
+    "schlafli": "r{3,4,3}",
+    "family": "24-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Truncated 24-cell",
+    "kind": "truncated octahedra and cubes",
+    "cells": 48,
+    "schlafli": "t{3,4,3}",
+    "family": "24-cell family",
+    "dims": 4
+  },
+  {
+    "name": "20,20-duoprism",
+    "kind": "icosagon × icosagon",
+    "cells": 40,
+    "schlafli": "{20}×{20}",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "Icosidodecahedral prism",
+    "kind": "hyperprism",
+    "cells": 34,
+    "schlafli": "r{5,3}×{ }",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "Truncated icosahedral prism",
+    "kind": "hyperprism",
+    "cells": 34,
+    "schlafli": "t{3,5}×{ }",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "Dodecahedral prism",
+    "kind": "hyperprism",
+    "cells": 32,
+    "schlafli": "{5,3}×{ }",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "Omnitruncated 5-cell",
+    "kind": "the 4D permutohedron",
+    "cells": 30,
+    "schlafli": "t0,1,2,3{3,3,3}",
+    "family": "5-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Runcinated 5-cell",
+    "kind": "tetrahedra and triangular prisms",
+    "cells": 30,
+    "schlafli": "t0,3{3,3,3}",
+    "family": "5-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Runcitruncated 5-cell",
+    "kind": "cuboctahedra, prisms, truncated tetrahedra",
+    "cells": 30,
+    "schlafli": "t0,1,3{3,3,3}",
+    "family": "5-cell family",
+    "dims": 4
+  },
+  {
+    "name": "12,12-duoprism",
+    "kind": "dodecagon × dodecagon",
+    "cells": 24,
+    "schlafli": "{12}×{12}",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "24-cell",
+    "kind": "no 3D counterpart exists",
+    "cells": 24,
+    "schlafli": "{3,4,3}",
+    "family": "Regular polytopes",
+    "dims": 4
+  },
+  {
+    "name": "Bitruncated tesseract",
+    "kind": "truncated octahedra, hexagons",
+    "cells": 24,
+    "schlafli": "2t{4,3,3}",
+    "family": "Tesseract family",
+    "dims": 4
+  },
+  {
+    "name": "Rectified tesseract",
+    "kind": "cuboctahedra and tetrahedra",
+    "cells": 24,
+    "schlafli": "r{4,3,3}",
+    "family": "Tesseract family",
+    "dims": 4
+  },
+  {
+    "name": "Truncated 16-cell",
+    "kind": "truncated tetrahedra and octahedra",
+    "cells": 24,
+    "schlafli": "t{3,3,4}",
+    "family": "Tesseract family",
+    "dims": 4
+  },
+  {
+    "name": "Truncated tesseract",
+    "kind": "truncation series",
+    "cells": 24,
+    "schlafli": "t{4,3,3}",
+    "family": "Tesseract family",
+    "dims": 4
+  },
+  {
+    "name": "Icosahedral prism",
+    "kind": "hyperprism",
+    "cells": 22,
+    "schlafli": "{3,5}×{ }",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "10,10-duoprism",
+    "kind": "decagon × decagon",
+    "cells": 20,
+    "schlafli": "{10}×{10}",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "Cantellated 5-cell",
+    "kind": "cuboctahedra, octahedra, prisms",
+    "cells": 20,
+    "schlafli": "rr{3,3,3}",
+    "family": "5-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Cantitruncated 5-cell",
+    "kind": "truncated octahedra and tetrahedra",
+    "cells": 20,
+    "schlafli": "tr{3,3,3}",
+    "family": "5-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Dual runcinated 5-cell",
+    "kind": "60 rhombi on two radii",
+    "cells": 20,
+    "schlafli": "dual t0,3{3,3,3}",
+    "family": "Catalan duals",
+    "dims": 4
+  },
+  {
+    "name": "Octagonal antiprism prism",
+    "kind": "hyperprism",
+    "cells": 20,
+    "schlafli": "s{2,16}×{ }",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "Heptagonal antiprism prism",
+    "kind": "hyperprism",
+    "cells": 18,
+    "schlafli": "s{2,14}×{ }",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "16-cell",
+    "kind": "hyperoctahedron",
+    "cells": 16,
+    "schlafli": "{3,3,4}",
+    "family": "Regular polytopes",
+    "dims": 4
+  },
+  {
+    "name": "8,8-duoprism",
+    "kind": "octagon × octagon",
+    "cells": 16,
+    "schlafli": "{8}×{8}",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "5,10-duoprism",
+    "kind": "pentagon × decagon",
+    "cells": 15,
+    "schlafli": "{5}×{10}",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "Pentagonal antiprism prism",
+    "kind": "hyperprism",
+    "cells": 14,
+    "schlafli": "s{2,10}×{ }",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "4,8-duoprism",
+    "kind": "square × octagon",
+    "cells": 12,
+    "schlafli": "{4}×{8}",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "6,6-duoprism",
+    "kind": "hexagon × hexagon",
+    "cells": 12,
+    "schlafli": "{6}×{6}",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "3,8-duoprism",
+    "kind": "triangle × octagon",
+    "cells": 11,
+    "schlafli": "{3}×{8}",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "5,5-duoprism",
+    "kind": "pentagon × pentagon",
+    "cells": 10,
+    "schlafli": "{5}×{5}",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "Bitruncated 5-cell",
+    "kind": "decachoron · ten truncated tetrahedra",
+    "cells": 10,
+    "schlafli": "2t{3,3,3}",
+    "family": "5-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Rectified 5-cell",
+    "kind": "truncation series",
+    "cells": 10,
+    "schlafli": "r{3,3,3}",
+    "family": "5-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Truncated 5-cell",
+    "kind": "ten truncated tetrahedra and tetrahedra",
+    "cells": 10,
+    "schlafli": "t{3,3,3}",
+    "family": "5-cell family",
+    "dims": 4
+  },
+  {
+    "name": "Tesseract",
+    "kind": "hypercube · hyperhexahedron",
+    "cells": 8,
+    "schlafli": "{4,3,3}",
+    "family": "Regular polytopes",
+    "dims": 4
+  },
+  {
+    "name": "3,4-duoprism",
+    "kind": "triangle × square",
+    "cells": 7,
+    "schlafli": "{3}×{4}",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "Cubic pyramid",
+    "kind": "hyperpyramid",
+    "cells": 7,
+    "schlafli": "({4,3}) ∨ •",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "3,3-duoprism",
+    "kind": "triangle × triangle",
+    "cells": 6,
+    "schlafli": "{3}×{3}",
+    "family": "Prisms and pyramids",
+    "dims": 4
+  },
+  {
+    "name": "5-cell",
+    "kind": "hypertetrahedron",
+    "cells": 5,
+    "schlafli": "{3,3,3}",
+    "family": "Regular polytopes",
+    "dims": 4
+  },
+  {
+    "name": "Celestial tesseract",
+    "kind": "scene · glome ⊃ tesseract ⊃ star",
+    "cells": 0,
+    "schlafli": "S³ ⊃ {4,3,3} ⊃ {5/2,5}",
+    "family": "Scenes",
+    "dims": 4
+  },
+  {
+    "name": "Clifford torus",
+    "kind": "flat torus on the 3-sphere",
+    "cells": 0,
+    "schlafli": "S¹ × S¹",
+    "family": "Surfaces and fibrations",
+    "dims": 4
+  },
+  {
+    "name": "Hopf fibration",
+    "kind": "4D · the 3-sphere in linked great circles",
+    "cells": 0,
+    "schlafli": "S³ → S²",
+    "family": "Surfaces and fibrations",
+    "dims": 4
+  },
+  {
+    "name": "Armillary sphere",
+    "kind": "celestial rings · tropics, ecliptic, colures",
+    "cells": 0,
+    "schlafli": "23.44°",
+    "family": "Mathematical toys",
+    "dims": 3
+  },
+  {
+    "name": "Celestial cube",
+    "kind": "scene · armillary ⊃ cube ⊃ star",
+    "cells": 0,
+    "schlafli": "23.44° ⊃ {4,3} ⊃ {5/2,3}",
+    "family": "Scenes",
+    "dims": 3
+  },
+  {
+    "name": "Cube",
+    "kind": "Platonic · 6 squares",
+    "cells": 0,
+    "schlafli": "{4,3}",
+    "family": "Platonic solids",
+    "dims": 3
+  },
+  {
+    "name": "Cube + octahedron",
+    "kind": "compound · duals, edges crossing",
+    "cells": 0,
+    "schlafli": "{4,3}+{3,4}",
+    "family": "Compounds",
+    "dims": 3
+  },
+  {
+    "name": "Cuboctahedron",
+    "kind": "Archimedean · 8 triangles, 6 squares",
+    "cells": 0,
+    "schlafli": "r{4,3}",
+    "family": "Archimedean solids",
+    "dims": 3
+  },
+  {
+    "name": "Dodecahedron",
+    "kind": "Platonic · 12 pentagons",
+    "cells": 0,
+    "schlafli": "{5,3}",
+    "family": "Platonic solids",
+    "dims": 3
+  },
+  {
+    "name": "Dodecahedron + icosahedron",
+    "kind": "compound · duals, edges crossing",
+    "cells": 0,
+    "schlafli": "{5,3}+{3,5}",
+    "family": "Compounds",
+    "dims": 3
+  },
+  {
+    "name": "Five cubes",
+    "kind": "compound · in a dodecahedron",
+    "cells": 0,
+    "schlafli": "5{4,3}",
+    "family": "Compounds",
+    "dims": 3
+  },
+  {
+    "name": "Five tetrahedra",
+    "kind": "compound · chiral, in a dodecahedron",
+    "cells": 0,
+    "schlafli": "5{3,3}",
+    "family": "Compounds",
+    "dims": 3
+  },
+  {
+    "name": "Flow capsules",
+    "kind": "vector · the Flow mark's bars as capsules",
+    "cells": 0,
+    "schlafli": "5 ⊂⊃ × S¹",
+    "family": "Vector marks",
+    "dims": 3
+  },
+  {
+    "name": "Flow mark",
+    "kind": "vector · the Wispr Flow mark, five stadia",
+    "cells": 0,
+    "schlafli": "5 ⊂⊃ · SVG",
+    "family": "Vector marks",
+    "dims": 3
+  },
+  {
+    "name": "Geodesic sphere",
+    "kind": "icosahedron, frequency 3",
+    "cells": 0,
+    "schlafli": "{3,5+}₃,₀",
+    "family": "Mathematical toys",
+    "dims": 3
+  },
+  {
+    "name": "Great stellated dodecahedron",
+    "kind": "Kepler–Poinsot · 20 points",
+    "cells": 0,
+    "schlafli": "{5/2,3}",
+    "family": "Star polyhedra",
+    "dims": 3
+  },
+  {
+    "name": "Heart",
+    "kind": "classic heart curve, extruded",
+    "cells": 0,
+    "schlafli": "x=16 sin³t",
+    "family": "Surfaces",
+    "dims": 3
+  },
+  {
+    "name": "Icosahedron",
+    "kind": "Platonic · 20 triangles",
+    "cells": 0,
+    "schlafli": "{3,5}",
+    "family": "Platonic solids",
+    "dims": 3
+  },
+  {
+    "name": "Icosidodecahedron",
+    "kind": "Archimedean · 20 triangles, 12 pentagons",
+    "cells": 0,
+    "schlafli": "r{5,3}",
+    "family": "Archimedean solids",
+    "dims": 3
+  },
+  {
+    "name": "Klein bottle",
+    "kind": "one-sided bottle, crossing itself",
+    "cells": 0,
+    "schlafli": "χ=0 · one side",
+    "family": "Surfaces",
+    "dims": 3
+  },
+  {
+    "name": "Lissajous knot",
+    "kind": "curve · frequencies 3, 2, 7",
+    "cells": 0,
+    "schlafli": "cos(3t+.7), cos(2t+.2), cos 7t",
+    "family": "Mathematical toys",
+    "dims": 3
+  },
+  {
+    "name": "Loxodrome",
+    "kind": "curve · two rhumb lines, pole to pole",
+    "cells": 0,
+    "schlafli": "λ = ln tan(π/4+φ/2)/k",
+    "family": "Mathematical toys",
+    "dims": 3
+  },
+  {
+    "name": "Moravian star",
+    "kind": "spiked rhombicuboctahedron · 26 points",
+    "cells": 0,
+    "schlafli": "Herrnhut",
+    "family": "Star polyhedra",
+    "dims": 3
+  },
+  {
+    "name": "Mysterium Cosmographicum",
+    "kind": "scene · Kepler's nested solids, 1596",
+    "cells": 0,
+    "schlafli": "♄ {4,3} ♃ {3,3} ♂ {5,3} ♁ {3,5} ♀ {3,4} ☿",
+    "family": "Scenes",
+    "dims": 3
+  },
+  {
+    "name": "Möbius strip",
+    "kind": "one-sided band",
+    "cells": 0,
+    "schlafli": "half-twist band",
+    "family": "Surfaces",
+    "dims": 3
+  },
+  {
+    "name": "Octahedron",
+    "kind": "Platonic · 8 triangles",
+    "cells": 0,
+    "schlafli": "{3,4}",
+    "family": "Platonic solids",
+    "dims": 3
+  },
+  {
+    "name": "Orbit",
+    "kind": "curve · one great circle",
+    "cells": 0,
+    "schlafli": "S¹",
+    "family": "Mathematical toys",
+    "dims": 3
+  },
+  {
+    "name": "Rhombic dodecahedron",
+    "kind": "Catalan · 12 rhombi",
+    "cells": 0,
+    "schlafli": "V3.4.3.4",
+    "family": "Catalan solids",
+    "dims": 3
+  },
+  {
+    "name": "Rhombic triacontahedron",
+    "kind": "Catalan · 30 golden rhombi",
+    "cells": 0,
+    "schlafli": "V3.5.3.5",
+    "family": "Catalan solids",
+    "dims": 3
+  },
+  {
+    "name": "Rhombicuboctahedron",
+    "kind": "Archimedean · 8 triangles, 18 squares",
+    "cells": 0,
+    "schlafli": "rr{4,3}",
+    "family": "Archimedean solids",
+    "dims": 3
+  },
+  {
+    "name": "Rose",
+    "kind": "four-petal rose, extruded",
+    "cells": 0,
+    "schlafli": "r=cos 2θ",
+    "family": "Surfaces",
+    "dims": 3
+  },
+  {
+    "name": "Sierpinski tetrahedron",
+    "kind": "fractal · 64 tetrahedra, dimension 2",
+    "cells": 0,
+    "schlafli": "level 3",
+    "family": "Mathematical toys",
+    "dims": 3
+  },
+  {
+    "name": "Small stellated dodecahedron",
+    "kind": "Kepler–Poinsot · 12 points",
+    "cells": 0,
+    "schlafli": "{5/2,5}",
+    "family": "Star polyhedra",
+    "dims": 3
+  },
+  {
+    "name": "Snub cube",
+    "kind": "Archimedean · chiral, 38 faces",
+    "cells": 0,
+    "schlafli": "sr{4,3}",
+    "family": "Archimedean solids",
+    "dims": 3
+  },
+  {
+    "name": "Star",
+    "kind": "pentagram prism",
+    "cells": 0,
+    "schlafli": "{5/2} polar",
+    "family": "Surfaces",
+    "dims": 3
+  },
+  {
+    "name": "Starburst",
+    "kind": "spiked icosahedron · 20 points",
+    "cells": 0,
+    "schlafli": "{3,5} + pyramids",
+    "family": "Star polyhedra",
+    "dims": 3
+  },
+  {
+    "name": "Starfruit",
+    "kind": "spherical star",
+    "cells": 0,
+    "schlafli": "r=1+½cos 5θ sin⁵φ",
+    "family": "Surfaces",
+    "dims": 3
+  },
+  {
+    "name": "Stella octangula",
+    "kind": "compound · two tetrahedra",
+    "cells": 0,
+    "schlafli": "2{3,3}",
+    "family": "Compounds",
+    "dims": 3
+  },
+  {
+    "name": "Tetrahedron",
+    "kind": "Platonic · 4 triangles",
+    "cells": 0,
+    "schlafli": "{3,3}",
+    "family": "Platonic solids",
+    "dims": 3
+  },
+  {
+    "name": "Torus",
+    "kind": "the donut",
+    "cells": 0,
+    "schlafli": "(R+r cos v)e^iu",
+    "family": "Surfaces",
+    "dims": 3
+  },
+  {
+    "name": "Trefoil knot",
+    "kind": "tube round a (2,3) torus knot",
+    "cells": 0,
+    "schlafli": "sin 3t · e^2it",
+    "family": "Surfaces",
+    "dims": 3
+  },
+  {
+    "name": "Truncated icosahedron",
+    "kind": "Archimedean · the football, C₆₀",
+    "cells": 0,
+    "schlafli": "t{3,5}",
+    "family": "Archimedean solids",
+    "dims": 3
+  },
+  {
+    "name": "Truncated octahedron",
+    "kind": "Archimedean · the space-filler",
+    "cells": 0,
+    "schlafli": "t{3,4}",
+    "family": "Archimedean solids",
+    "dims": 3
+  }
+]

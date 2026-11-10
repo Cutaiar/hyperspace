@@ -254,7 +254,7 @@ def _effect_row(panel, chain, fx, title: str, name: str, open_: bool) -> None:
     if p is not None:
         imgui.same_line()
         real = panel._real(p)
-        changed, on = imgui.checkbox(f"##on.{title}.{name}", bool(real.base))
+        changed, on = ui.checkbox(f"##on.{title}.{name}", bool(real.base))
         panel._tip(p)
         panel._ctx(p, key=".row")
         panel._learn_frame(p)

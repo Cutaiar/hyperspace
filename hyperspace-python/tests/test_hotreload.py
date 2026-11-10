@@ -298,7 +298,10 @@ def test_every_package_module_but_the_cold_core_is_watched():
     # segment (plan 39 T4) is cold: a worker module, its threads outlive a
     # reload (masks went on MODULES, before render, at the 37/38/39 integration)
     # hot_slots (row 802) is what a hot class's slots stand on across a reload
+    # dkit.dev is the kit's workbench (its tests, gallery, oracles): the app
+    # never imports it
     cold = {"app", "hotreload", "offline", "watchdog", "headless", "pinch", "segment", "hot_slots"}
+    names = {n for n in names if n != "dkit.dev" and not n.startswith("dkit.dev.")}
     assert names - cold == set(_watched()), sorted((names - cold) ^ set(_watched()))
 
 

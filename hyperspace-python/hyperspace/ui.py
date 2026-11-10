@@ -46,10 +46,13 @@ from . import (
     learn,
     ui_bands,
     ui_browse,
+    ui_camera,
     ui_desk,
     ui_displays,
     ui_feel,
+    ui_fields,
     ui_graph,
+    ui_kit,
     ui_lfo,
     ui_loadable,
     ui_lookback,
@@ -61,6 +64,7 @@ from . import (
     ui_playlist,
     ui_routing,
     ui_seq,
+    ui_view,
     undo,
 )
 from . import players as players_mod
@@ -118,6 +122,12 @@ DESK_ASPECT = 4 / 3   # at launch the desk diagram left of the panel is this wid
 LABEL_W = 104    # the label column in a _row
 HALF_LABEL_W = 78    # the label column in a half-width table cell (Panel.half)
 SLIDER_MIN = 60.0   # a slider sharing a row in a narrow pane is never thinner
+# the kit's fields (`ui_fields`): a slider's row (the 12 px thumb, its ring, and
+# room to press); a switch's, a select's, a button's row (the panel's frame
+# height); how far a detent's tick stands off the track, above and below
+FIELD_SLIDER_H = 20.0
+FIELD_ROW_H = 28.0
+FIELD_NOTCH = 3.0
 LABEL_GAP = 12   # px between a label cell's text room and its control (Panel._label_cell)
 SCENE_COMBO_MIN = 100   # px; the analyzer's scene combo keeps this beside its label and Reset all
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
@@ -226,6 +236,7 @@ def load_fonts() -> None:
     _add_font("num", FONT_NUM)
     if _FONTS["ui"] is not None:
         imgui.get_io().font_default = _FONTS["ui"]
+    ui_kit.load_faces(imgui.get_io())      # the kit's, for the sections drawn on it
 
 
 TIP_CH = 65   # a tooltip wraps at this many characters: a readable line (the owner, 2026-10-26)
@@ -300,8 +311,12 @@ def u32(c: imgui.ImVec4) -> int:
 CHIP_PAD = imgui.ImVec2(10, 3)
 
 
-def chip(label: str, size: imgui.ImVec2 | None = None) -> bool:
-    """A compact pill button — small_button, with room to breathe."""
+def chip(label: str, size: imgui.ImVec2 | None = None, **kit) -> bool:
+    """A compact pill button — small_button, with room to breathe. `kit`:
+    what the kit's chip can do besides (`ui_fields.chip`: an icon, a
+    variant, a reveal); the stock chip draws its words and ignores them."""
+    if ui_kit.ready():                  # on the kit (hyperspace/dkit): the same size and id
+        return ui_fields.chip(label, size, **kit)
     imgui.push_style_var(imgui.StyleVar_.frame_padding, CHIP_PAD)
     imgui.push_style_var(imgui.StyleVar_.frame_rounding, 999.0)
     hit = imgui.button(label, size if size is not None else imgui.ImVec2(0, 0))
@@ -309,9 +324,99 @@ def chip(label: str, size: imgui.ImVec2 | None = None) -> bool:
     return hit
 
 
+def button(label: str, size: imgui.ImVec2 | None = None) -> bool:
+    """`imgui.button`, on the kit where it is there (`ui_fields.chip`, the
+    stock button's size and id: its words and the frame padding)."""
+    if ui_kit.ready():
+        return ui_fields.chip(label, size, pad=imgui.get_style().frame_padding, pill=False)
+    return imgui.button(label, size if size is not None else imgui.ImVec2(0, 0))
+
+
+def small_button(label: str) -> bool:
+    """`imgui.small_button` — a button with no vertical padding — on the kit
+    where it is there, as `button`."""
+    if ui_kit.ready():
+        return ui_fields.chip(label, pad=imgui.ImVec2(imgui.get_style().frame_padding.x, 0),
+                              pill=False)
+    return imgui.small_button(label)
+
+
+def _arrow_icon(direction) -> str:
+    """Lucide's chevron for an `imgui.Dir` (whose str is a bare number here)."""
+    d = imgui.Dir
+    return {int(d.left): "chevron_left", int(d.right): "chevron_right",
+            int(d.up): "chevron_up", int(d.down): "chevron_down"}[int(direction)]
+
+
+def arrow_button(str_id: str, direction) -> bool:
+    """`imgui.arrow_button` — a frame-high square with an arrow — on the kit
+    where it is there: the kit's Button with Lucide's chevron, the same id."""
+    if ui_kit.ready():
+        name = _arrow_icon(direction)
+        fh = imgui.get_frame_height()
+        return ui_fields.chip(str_id, imgui.ImVec2(fh, fh), pill=False, icon=name)
+    return imgui.arrow_button(str_id, direction)
+
+
+def input_text_with_hint(label: str, hint: str, text: str, flags: int = 0) -> tuple[bool, str]:
+    """`imgui.input_text_with_hint`, on the kit where it is there (a label
+    that is all id, ``##…``: `ui_fields.text_field`, the same id and room)."""
+    if ui_kit.ready() and label.startswith("##"):
+        return ui_fields.text_field(label, hint, text, flags)
+    return imgui.input_text_with_hint(label, hint, text, flags)
+
+
+def input_text(label: str, text: str, flags: int = 0) -> tuple[bool, str]:
+    """`imgui.input_text`, on the kit where it is there, as `input_text_with_hint`."""
+    if ui_kit.ready() and label.startswith("##"):
+        return ui_fields.text_field(label, "", text, flags)
+    return imgui.input_text(label, text, flags)
+
+
+def checkbox(label: str, value: bool) -> tuple[bool, bool]:
+    """`imgui.checkbox` — `(clicked, value)` — for a check with no param
+    behind it (`Panel._check` draws a param's); on the kit where it is
+    there, the same footprint and id (`ui_fields.check`)."""
+    if ui_kit.ready():
+        return ui_fields.check(label, value)
+    return imgui.checkbox(label, value)
+
+
+def chip_group(labels, lit=None, tips=None) -> int | None:
+    """Chips side by side as ONE group, each `lit` (a list; None: none lit)
+    solid red while on, `tips` (a list; None for none) their hovers; on the
+    kit joined — one border between members, the outer corners rounded
+    (`comp_button.button_group`) — and as plain chips without it. The index
+    clicked, or None."""
+    lit = lit or [None] * len(labels)
+    hit = None
+    joins = None
+    if ui_kit.ready():
+        CB = ui_kit.mod("comp_button")
+        joins = CB.button_group([(0, 0, 1, 1)] * len(labels), "horizontal")
+    for i, label in enumerate(labels):
+        if i:
+            imgui.same_line(0, 0 if joins else -1)
+        if joins:           # (through `chip`, so whatever wraps the panel's chips sees these)
+            on = lit[i]
+            clicked = chip(label, lit=bool(on), color=DIM if on is False else None,
+                           join=joins[i])
+        elif (on := lit[i]) is not None:
+            clicked = lit_chip(label, on)
+        else:
+            clicked = chip(label)
+        if tips and tips[i] and imgui.is_item_hovered():
+            tooltip(tips[i])
+        if clicked:
+            hit = i
+    return hit
+
+
 def lit_chip(label: str, lit: bool, color: imgui.ImVec4 | None = None,
              size: imgui.ImVec2 | None = None) -> bool:
     """A chip that is solid red while on — a lit key, readable from the floor."""
+    if ui_kit.ready():                  # on the kit (hyperspace/dkit): the same size and id
+        return ui_fields.chip(label, size, lit=lit, color=color or DIM)
     if lit:
         imgui.push_style_color(imgui.Col_.button, RED)
         imgui.push_style_color(imgui.Col_.button_hovered, imgui.ImVec4(1.0, 0.40, 0.40, 1))
@@ -1621,6 +1726,8 @@ class Panel:
         the readouts' face, off for words that need the room. A value a
         file left outside the range is not pulled in by a fine drag: it can
         come in, and go no further out."""
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a track, its readout beside
+            return ui_fields.inline_raw(self, key, value, lo, hi, fmt, tip, width, log, dim, num)
         value = float(value)
         log = log and lo > 0
         t0 = (math.log(max(value, lo) / lo) / math.log(hi / lo) if log
@@ -1680,6 +1787,8 @@ class Panel:
 
     def _fader(self, pid: str) -> bool:
         """Full-width taper fader: label and readout over a filled track, detent notch."""
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a slider field
+            return ui_fields.inline_fader(self, pid)
         a = self.reg[pid]           # what the widget is: id, label, tip, binding
         p = self._real(a)           # what it reads and writes
         pos = p.position()
@@ -1749,6 +1858,8 @@ class Panel:
     def _slider(self, pid: str, width: float = -1) -> bool:
         """Compact slider with the readout inside. A tapered range slides
         over its detents (the instance count's), as a fader does."""
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a track, its readout beside
+            return ui_fields.inline_slider(self, pid, width)
         a = self.reg[pid]
         p = self._real(a)
         imgui.set_next_item_width(width)
@@ -1808,12 +1919,20 @@ class Panel:
         — the control beside it never lands back over the line's start."""
         pos = imgui.get_cursor_screen_pos()
         fh = FONT_NUM + 2 * imgui.get_style().frame_padding.y
+        words = text.upper()
+        if ui_kit.ready():
+            # cut to its column: the stock slider's opaque frame hid a label's
+            # overflow, the kit's thin track does not ("KNOB SMOOTHING" ran
+            # into its fill). The whole label is the cell's tooltip.
+            words = fit_micro(text, width - LABEL_GAP, 0.0) or words[:1]
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
         imgui.get_window_draw_list().add_text(
             imgui.ImVec2(pos.x, pos.y + (fh - FONT_MICRO) / 2 - 1),
-            u32(DIM if color is None else color), text.upper())
+            u32(DIM if color is None else color), words)
         imgui.pop_font()
         imgui.dummy(imgui.ImVec2(width - LABEL_GAP, fh))
+        if words != text.upper() and imgui.is_item_hovered():
+            tooltip(text)
         imgui.same_line(0, LABEL_GAP)
 
     def _row(self, pid: str, width: float = -1, label: str | None = None,
@@ -1853,6 +1972,10 @@ class Panel:
                rows: int = -1) -> bool:
         """A drop-down of the enum's choices; `rows` the most the list shows
         before it scrolls (imgui's default, eight, at -1)."""
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a Select, short enums
+            got = ui_fields.inline_select(self, pid, width, tip)
+            if got is not None:
+                return got
         a = self.reg[pid]
         p = self._real(a)
         imgui.set_next_item_width(width)
@@ -1899,6 +2022,8 @@ class Panel:
         return changed
 
     def _check(self, pid: str, label: str | None = None) -> bool:
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a Switch, the same room
+            return ui_fields.inline_check(self, pid, label)
         a = self.reg[pid]
         p = self._real(a)
         text = a.label if label is None else label
@@ -1912,6 +2037,8 @@ class Panel:
         return changed
 
     def _button(self, pid: str, label: str | None = None, small: bool = False) -> bool:
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a Button, the same room
+            return ui_fields.inline_button(self, pid, label, small)
         p = self.reg[pid]
         text = f"{p.label if label is None else label}##{pid}"
         hit = chip(text) if small else imgui.button(text)
@@ -2654,7 +2781,7 @@ class Panel:
         on = graphview.is_through(frame, n, bus_cuts)
         why = None if on else graphview.through_refusal(frame, n, slots, bus_cuts)
         imgui.begin_disabled(why is not None)
-        changed, v = imgui.checkbox(f"{THROUGH_WORDS}##through.{n}", on)
+        changed, v = checkbox(f"{THROUGH_WORDS}##through.{n}", on)
         imgui.end_disabled()
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
             tooltip(why or "the hands bent by the effects on this output (written "
@@ -2663,6 +2790,12 @@ class Panel:
             self._graph_edit(lambda e: graphview.set_through(e, n, v), "output_said")
 
     def _page_view(self, dt: float) -> None:
+        """The VIEW section, on the kit (hyperspace/dkit) where it is there
+        (`ui_view.page`); else `_view_stock`."""
+        ui_view.page(self, dt)
+
+    def _view_hero(self) -> None:
+        """VIEW's head: the big cell count, the shape's names beside it."""
         v = self.view
         sh = SHAPES[v.shape]
         g = geom(v.shape)
@@ -2683,6 +2816,11 @@ class Panel:
         imgui.end_group()
         imgui.spacing()
 
+    def _view_stock(self, dt: float) -> None:
+        """VIEW as the stock widgets draw it: the section without the kit."""
+        v = self.view
+        sh = SHAPES[v.shape]
+        self._view_hero()
         self._section("view", "view")
         self._shape_combo()
         self._fader("view.bright")
@@ -2789,6 +2927,12 @@ class Panel:
             return None
 
     def _page_camera(self, dt: float) -> None:
+        """The CAMERA section, on the kit (hyperspace/dkit) where it is there
+        (`ui_camera.page`); else `_camera_stock`."""
+        ui_camera.page(self, dt)
+
+    def _camera_stock(self, dt: float) -> None:
+        """CAMERA as the stock widgets draw it: the section without the kit."""
         self._section("camera", "camera")
         self._row("camera.zoom")
         self._row("camera.yaw")
@@ -2827,7 +2971,7 @@ class Panel:
                 imgui.pop_text_wrap_pos()
         else:
             beside(button_w("Load track"))
-        if imgui.button("Load track"):
+        if button("Load track"):
             self._file_dialog = self.open_file_dialog(
                 "Choose a track", ["Audio", "*.wav *.mp3 *.flac *.ogg"])
             if self._file_dialog is None:
@@ -3303,7 +3447,7 @@ class Panel:
             imgui.text_wrapped(line)
         dismissible = (rw is not None and getattr(rw, "dismissible", False)) or (
             self.dream_error and not getattr(self, "_dream_waved", False))
-        if dismissible and imgui.small_button("dismiss##alerts"):
+        if dismissible and small_button("dismiss##alerts"):
             self.dismiss_alerts()
         imgui.end()
         imgui.pop_style_color(2)

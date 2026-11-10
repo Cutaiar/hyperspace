@@ -76,6 +76,18 @@ In Claude Code, `/deep-review` runs this review on the current branch
   index into it.
 - **Text matches the current model.** Tooltips and labels describe the
   model as it is now, not one the branch replaced.
+- **A colour and a measurement are named, not inline.** `ui.py` holds the
+  palette (`RED`, `TEXT`, `DIM`, `FAINT`, `LINE`) and the panel's metrics
+  (`LABEL_W`, `LABEL_GAP`, `ROUND`, `DOT_R`); a new one goes there and the
+  other modules read it, as `ui_graph.py` already does. An `ImVec4(0.7, 0.7,
+  0.72, 1)` written at a draw site is `DIM` spelled so nothing can find it.
+- **Space is a scale, not a pitch.** A gap, a padding and a row pitch come
+  from one set of steps. Written out per site they stop agreeing: dkit's
+  demo laid rows out as `i * 27` around 24px controls — a 3px gutter — while
+  its card header used 20px where the component it copied uses 4. Nothing in
+  the code said either number was wrong, because no number said what it was.
+  The fix is not better constants; it is not writing constants
+  (`hyperspace/dkit/box.py`, `hyperspace/dkit/tokens.py:SPACE`).
 
 ## The base
 

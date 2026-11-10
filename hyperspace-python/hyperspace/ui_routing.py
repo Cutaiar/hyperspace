@@ -1023,7 +1023,7 @@ def _param_combo(panel, label: str, current: str | None, width: float,
         st["filter"] = ""
         imgui.set_keyboard_focus_here()
     imgui.set_next_item_width(-1)
-    _, st["filter"] = imgui.input_text_with_hint("##find", "find", st["filter"])
+    _, st["filter"] = ui.input_text_with_hint("##find", "find", st["filter"])
     needle = st["filter"].lower()
     if none is not None:
         sel, _ = imgui.selectable(none, current is None)
@@ -1088,7 +1088,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     imgui.push_id(k)
     p = reg.get(b.target)
     # line 1: on · source · target · op · ×
-    changed, on = imgui.checkbox("##on", b.enabled)
+    changed, on = ui.checkbox("##on", b.enabled)
     if changed:
         try:
             router.table.enable(b, on)      # waking a row asks the referee
@@ -1777,7 +1777,7 @@ def macros(panel, router: Router) -> None:
         m = table.macros.get(p.id)
         panel._label_cell(str(k + 1), width=MACRO_LABEL_W)
         imgui.set_next_item_width(MACRO_NAME_W)
-        changed, text = imgui.input_text_with_hint("##label", "label", m.label if m else "")
+        changed, text = ui.input_text_with_hint("##label", "label", m.label if m else "")
         if changed:
             undo.by_hand(True)          # the field's own report: row 757
             _macro(table, p.id).label = text
@@ -2117,7 +2117,7 @@ def sinks(panel, router: Router) -> None:
         if not any(b is x for x in shown):
             continue
         imgui.push_id(f"sink{k}")
-        changed, on = imgui.checkbox("##on", b.enabled)
+        changed, on = ui.checkbox("##on", b.enabled)
         if changed:
             b.enabled = on
             table.write()
@@ -2151,7 +2151,7 @@ def _find_field(panel) -> None:
     on = bool(st["find"].strip())               # spaces alone filter nothing
     ui.flush_right(_find_w(on))
     imgui.set_next_item_width(FIND_W)
-    _, st["find"] = imgui.input_text_with_hint("##rows", "filter", st["find"])
+    _, st["find"] = ui.input_text_with_hint("##rows", "filter", st["find"])
     if st.get("unfind"):
         # a desk click cleared the filter (`goto`); a field that had the
         # keyboard at that moment writes its edit buffer back on the frame

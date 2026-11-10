@@ -13,7 +13,7 @@ from imgui_bundle import imgui, implot
 from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
-from hyperspace import ui, ui_bands, ui_graph, ui_loadable, ui_pane
+from hyperspace import ui, ui_bands, ui_graph, ui_kit, ui_loadable, ui_pane
 from hyperspace.analyzer import N_MAX
 from hyperspace.ui import PAGE_KEYS
 
@@ -95,6 +95,8 @@ def test_each_section_shown_by_a_click_has_its_controls_found_by_id(pane, key):
     r, d = pane
     st = _st(r)
     pid = SECTION_IDS[key]
+    if pid == "new##new" and ui_kit.ready():
+        pid = "strip.loadable:new"      # the kit strip's (ui_strip): a Button has no words in its id
     assert key not in st["pane_drawn"]
     with pytest.raises(KeyError):
         d.rect(pid)
@@ -141,7 +143,9 @@ def test_a_selection_by_code_leaves_the_view_and_its_chip_is_its_name(pane):
     r.panel.select_graph_node(node.id)
     d.run(d.wait(3))
     assert st["pane_drawn"] == ["loadable"]
-    assert "SELECTION##pane.selection" in d.rects
+    # the chip's words are its name alone; on the kit the tab is an icon
+    # and its name is in its tooltip (test_what_a_chip_would_say_live…)
+    assert ("pane.selection" if ui_kit.ready() else "SELECTION##pane.selection") in d.rects
 
 
 def _node_point(monkeypatch, st) -> dict:
@@ -1137,6 +1141,14 @@ def test_each_chip_is_as_wide_as_its_name(pane, monkeypatch):
     _r, d = pane
     monkeypatch.setattr(ui_loadable, "dirty", lambda *a, **k: True)     # every dot up
     d.run(d.wait(2))
+    if ui_kit.ready():
+        # icon tabs (ui_switcher): one TabsList, the seven sharing its width
+        # evenly, edge to edge, the dots taking no room
+        tabs = [d.rect(f"pane.{k}") for k in ui_pane.TABS]
+        widths = {round(x1 - x0, 3) for x0, _y0, x1, _y1 in tabs}
+        assert len(widths) == 1, widths
+        assert all(abs(tabs[i][2] - tabs[i + 1][0]) < 0.01 for i in range(len(tabs) - 1))
+        return
     imgui.new_frame()
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
     extra = set()                       # what a chip adds to its words: the same for all
@@ -1163,7 +1175,10 @@ def test_what_a_chip_would_say_live_is_its_tooltip(pane, monkeypatch):
     d.run(d.move("pane.selection"), d.wait(2))
     words = ui_graph.sel_words(("node", node))
     assert any(t.startswith(f"selected: {words}") for t in said), said
-    assert "SELECTION##pane.selection" in d.rects
+    if ui_kit.ready():          # an icon tab: its name is in the tooltip, after the live words
+        assert any("SELECTION" in t for t in said), said
+    else:
+        assert "SELECTION##pane.selection" in d.rects
 
 
 @pytest.mark.parametrize("layout", ["band", "min", "default"])

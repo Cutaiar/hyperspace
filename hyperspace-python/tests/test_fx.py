@@ -614,7 +614,8 @@ class PageRig:
                 self.disabled[key] = depth[0]
                 return out
             monkeypatch.setattr(imgui, fn, rec)
-        for fn in ("button", "checkbox", "slider_float", "slider_int", "combo"):
+        # (an invisible_button too: a check on the kit is one, ui_fields.inline_check)
+        for fn in ("button", "checkbox", "slider_float", "slider_int", "combo", "invisible_button"):
             item(fn)
         real_text, real_begin, real_end = (imgui.text_colored, imgui.begin_disabled,
                                            imgui.end_disabled)
@@ -1429,9 +1430,9 @@ def test_show_on_graph_selects_the_node(tmp_path, monkeypatch):
         real = ui.chip
         drawn = []
 
-        def chip(label, size=None):                 # a click on the button alone
+        def chip(label, size=None, **kw):           # a click on the button alone
             drawn.append(label)
-            return label.endswith("##fx.show") or real(label, size)
+            return label.endswith("##fx.show") or real(label, size, **kw)
         monkeypatch.setattr(ui, "chip", chip)
         frame(rig.panel, "fx")
         assert f"{ui_fx_show()}##fx.show" in drawn

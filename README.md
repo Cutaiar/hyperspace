@@ -41,6 +41,11 @@ and a prototype:
   under a set of materials. Not part of the app; its shapes are, as the
   Flow mark and Flow capsules.
 
+- **[`prototypes/dashboard/`](prototypes/dashboard/)** — a sketch of a
+  control surface built from [shadcn/ui](https://ui.shadcn.com) components
+  (Vite + React + Tailwind), reading the real shape catalog and band
+  routing. A look at that component library, not a proposed UI. Not part
+  of the app.
 - **[`prototypes/qr-dither/`](prototypes/qr-dither/)** — a tesseract drawn in
   the data of a QR code rather than over one, foldable through 4D with the
   code re-solved every update (0.2 ms a solve) and always scanning to

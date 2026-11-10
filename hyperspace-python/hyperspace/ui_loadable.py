@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import loadable, ui, undo
+from . import loadable, ui, ui_kit, undo
 from .groupwords import group_word
 from .library import (
     LOADABLE,
@@ -212,7 +212,7 @@ def _name_field(panel, key: str, commit, hint: str = "patch name") -> bool:
     imgui.set_next_item_width(-(ui.chip_w("ok", "×") + imgui.get_style().item_spacing.x))
     if st.pop("focus", False):          # the field takes the keyboard once, on open
         imgui.set_keyboard_focus_here()
-    entered, st["buf"] = imgui.input_text_with_hint(
+    entered, st["buf"] = ui.input_text_with_hint(
         f"##name.{key}", hint, st["buf"],
         imgui.InputTextFlags_.enter_returns_true | imgui.InputTextFlags_.auto_select_all,
     )
@@ -287,6 +287,10 @@ def strip(panel, group: str) -> None:
     lib = panel.library
     if lib is None or lib.reg is None or group in RETIRED_MODULES:
         return                  # (plan 40 T5: a retired module group has no strip)
+    if ui_kit.ready():
+        from . import ui_strip  # (late: it imports this module) — on the kit (hyperspace/dkit)
+        ui_strip.strip(panel, group)
+        return
     # the deck this name is on, for the hover (`page` says it over the strip)
     meta = getattr(panel, "meta", None) if group == LOADABLE else None
     imgui.push_id(f"strip.{group}")
@@ -443,20 +447,34 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect) 
         _name_field(panel, key, lambda n, old=name: _rename(panel, old, n, group))
         return
     leaf = name
+    kit = _kit_row(panel, name) if ui_kit.ready() else None
     imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.92, 0.92, 0.92, 1))
-    picked, _ = imgui.selectable(f"{name}##pick", name == cur, imgui.SelectableFlags_.allow_overlap)
+    picked, _ = imgui.selectable(f"{name}##pick", name == cur, imgui.SelectableFlags_.allow_overlap,
+                                 imgui.ImVec2(0, kit["h"]) if kit else imgui.ImVec2(0, 0))
     rect(f"row.{name}")
+    if kit:
+        kit["hot"] = imgui.is_item_hovered()
     imgui.pop_style_color()
     if picked and not patch:
         _guard(panel, lib.load, group, name)
     chips = ("rename", "×") if renamable else ("×",)
     drawn["rows"].append((name, chips))
-    ui.flush_right(ui.chip_w(*chips))
+    if kit:     # the row's actions: icons, at its end, shown while the row is hovered
+        imgui.same_line(0, 0)
+        ui.flush_right(len(chips) * kit["h"] + imgui.get_style().item_spacing.x * (len(chips) - 1))
+    else:
+        ui.flush_right(ui.chip_w(*chips))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
     for i, chip in enumerate(chips):
         if i:
             imgui.same_line()
-        hit = ui.chip(f"{chip}##{chip}.{name}")
+        if kit:
+            hit = ui.chip(f"{chip}##{chip}.{name}", imgui.ImVec2(kit["h"], kit["h"]),
+                          icon=ROW_ICONS[chip], variant="ghost", pill=False, reveal=kit["reveal"],
+                          color=ui.DIM)
+            kit["hot"] = kit["hot"] or imgui.is_item_hovered()
+        else:
+            hit = ui.chip(f"{chip}##{chip}.{name}")
         rect(f"{chip}.{name}")
         if imgui.is_item_hovered():
             ui.tooltip("Give it another name: the file, and every install that names it"
@@ -470,6 +488,61 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect) 
             _guard(panel, lib.delete, group, name)
         invalidate(panel, group)
     imgui.pop_style_color()
+    if kit:
+        _kit_row_end(panel, kit, name, name == cur)
+
+
+# ---- a row on the kit (hyperspace/dkit) ----
+
+ROW_ICONS = {"rename": "pencil", "×": "trash_2"}    # a row's actions, as Lucide draws them
+ROW_INSET = 8.0          # px: a row's words in from its band (tokens.SPACE[2])
+
+
+def _kit_row(panel, name: str) -> dict:
+    """Begin a list row on the kit: the row's height (a chip's, so the list's
+    pitch is `list_row_h` as before), the draw list split so the row's band
+    goes UNDER what the selectable and its actions draw, imgui's own
+    selectable highlight cleared — the kit draws the band — and how far
+    the row's actions are shown (eased on last frame's hover of the row or
+    of either action: an action takes the hover from the row it is on)."""
+    k = ui_kit.begin(panel)
+    p = imgui.get_cursor_screen_pos()
+    h = imgui.get_text_line_height() + 2 * ui.CHIP_PAD.y
+    dl = imgui.get_window_draw_list()
+    dl.channels_split(2)
+    dl.channels_set_current(1)
+    clear = imgui.ImVec4(0, 0, 0, 0)
+    for c in (imgui.Col_.header, imgui.Col_.header_hovered, imgui.Col_.header_active):
+        imgui.push_style_color(c, clear)
+    imgui.push_style_var(imgui.StyleVar_.selectable_text_align, imgui.ImVec2(0.0, 0.5))
+    imgui.indent(ROW_INSET)             # the words clear of the band's red edge
+    hot = _state(panel).setdefault("row_hot", {})
+    return {"k": k, "x": p.x, "y": p.y, "w": imgui.get_content_region_avail().x, "h": h,
+            "dl": dl, "hot": False,
+            "reveal": k.anim.to(f"row:{name}:reveal", 1.0 if hot.get(name) else 0.0)}
+
+
+def _kit_row_end(panel, kit: dict, name: str, loaded: bool) -> None:
+    """End a list row on the kit: the band under it — the loaded patch an
+    `accent` band with the one red at its left edge; a hovered row `muted`,
+    half strength — and the draw list merged back."""
+    k, dl = kit["k"], kit["dl"]
+    imgui.unindent(ROW_INSET)
+    imgui.pop_style_var()
+    imgui.pop_style_color(3)
+    _state(panel)["row_hot"][name] = kit["hot"]
+    dl.channels_set_current(0)
+    x, y, w, h = kit["x"], kit["y"], kit["w"], kit["h"]
+    r = ui_kit.mod("tokens").RADII["md"]
+    hot = k.anim.to(f"row:{name}:hot", 1.0 if kit["hot"] else 0.0)
+    if loaded:
+        dl.add_rect_filled(imgui.ImVec2(x, y), imgui.ImVec2(x + w, y + h),
+                           imgui.color_convert_float4_to_u32(imgui.ImVec4(*k.col("accent"))), r)
+        dl.add_rect_filled(imgui.ImVec2(x, y + 4), imgui.ImVec2(x + 2, y + h - 4), ui.u32(ui.RED), 1.0)
+    elif hot > 0.01:
+        dl.add_rect_filled(imgui.ImVec2(x, y), imgui.ImVec2(x + w, y + h),
+                           imgui.color_convert_float4_to_u32(imgui.ImVec4(*k.col("muted", 0.5 * hot))), r)
+    dl.channels_merge()
 
 
 def _list_popup(panel, group: str, listing: list[str], cur: str | None) -> None:

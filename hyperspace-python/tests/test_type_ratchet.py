@@ -364,6 +364,7 @@ def test_the_settings_the_baseline_was_made_under_are_there():
     py = tomllib.loads((ROOT / "pyproject.toml").read_text())
     assert py["tool"]["pyright"] == {
         "include": ["hyperspace"],
+        "exclude": ["hyperspace/dkit/dev"],   # dkit's workbench: tooling, as tests/ is
         "typeCheckingMode": "basic",
         "pythonVersion": "3.12",
         "pythonPlatform": "Darwin",

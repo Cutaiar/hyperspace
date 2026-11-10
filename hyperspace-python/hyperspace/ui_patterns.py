@@ -368,7 +368,7 @@ def _link(label: str, color: imgui.ImVec4) -> bool:
     imgui.push_style_var(imgui.StyleVar_.frame_padding, LINK_PAD)
     imgui.push_style_var(imgui.StyleVar_.frame_rounding, 999.0)
     imgui.push_style_color(imgui.Col_.text, color)
-    hit = imgui.button(label)
+    hit = ui.button(label)
     imgui.pop_style_color()
     imgui.pop_style_var(2)
     return hit
