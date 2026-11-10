@@ -28,8 +28,8 @@ from test_graphview_devices import rig_devices
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import graph as G, ui_menu
-from hyperspace import graphview, modifiers, ui, ui_graph, ui_pane, ui_routing
+from hyperspace import graph as G
+from hyperspace import graphview, modifiers, ui, ui_graph, ui_menu, ui_pane, ui_routing
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.bands import CEIL
 from hyperspace.graphmigrate import Shows

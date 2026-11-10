@@ -26,9 +26,9 @@ measurement of the chrome.
 from __future__ import annotations
 
 import sys
+import typing
 from pathlib import Path
 
-import numpy as np
 import pytest
 from imgui_bundle import imgui
 
@@ -119,7 +119,7 @@ def test_the_width_law_reserves_the_chevron_with_one_gap(monkeypatch):
     monkeypatch.setattr(D, "text_w", lambda text, *a, **k: 100.0)
 
     class FakeUi:
-        faces: dict = {}
+        faces: typing.ClassVar[dict] = {}
 
     plain, _ = M.measure(FakeUi(), [M.Item("a", "Open")], 0.0)
     sub, _ = M.measure(FakeUi(), [M.Item("a", "Open", items=(M.Item("b", "x"),))], 0.0)

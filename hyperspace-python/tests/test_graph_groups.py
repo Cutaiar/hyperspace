@@ -33,7 +33,17 @@ from test_graphview import _in_editor
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import devices, graphmigrate, graphview, headless, loadable, patches, ui_graph, ui_menu, undo
+from hyperspace import (
+    devices,
+    graphmigrate,
+    graphview,
+    headless,
+    loadable,
+    patches,
+    ui_graph,
+    ui_menu,
+    undo,
+)
 from hyperspace import graph as G
 from hyperspace.library import Marks
 from hyperspace.outputs import Switches, View

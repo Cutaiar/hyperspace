@@ -440,7 +440,6 @@ def test_the_menus_offer_feedback(page, monkeypatch):
     port, a submenu per port on one that feeds several, disabled with why
     on one that feeds nothing, absent on a geometry; the cable menu's
     starters ▸ has feedback."""
-    from imgui_bundle import imgui
     panel = page.panel
     page.lib.loaded_patch.new((0.0, 0.0))
     e = ui_graph.render_edit(panel)

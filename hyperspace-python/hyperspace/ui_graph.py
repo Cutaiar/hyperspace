@@ -221,13 +221,13 @@ Nothing else sets one, and a canvas's change of size keeps both the zoom
 from __future__ import annotations
 
 import colorsys
+import contextlib
 import dataclasses
 import json
 import math
 import os
 import tempfile
 import time
-import contextlib
 from contextlib import contextmanager, suppress
 
 from imgui_bundle import imgui
