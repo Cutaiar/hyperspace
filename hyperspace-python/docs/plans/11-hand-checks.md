@@ -8778,9 +8778,9 @@ The patches: copy `tests/fixtures/world-check/` into the library's `loadable/` a
 
 ## DX. The hand rig (rows 857–866, 2026-11-10)
 
-Plan 60. Headless: `tests/test_rig.py` (no jump on closing, welded every frame, a tape held by its grab, the spring's step response, the release's coast at 30, 60 and 144 fps, the box, the analytic precession rate, the skater's doubled spin with L kept, even inertia, the limits, the params, a turned 3D shape's depth). A restart after pulling (`Host.rig`, `Body.place`, `World.box` are new fields on live objects).
+Plan 60. Headless: `tests/test_grip.py` (no jump on closing, welded every frame, a tape held by its grab, the spring's step response, the release's coast at 30, 60 and 144 fps, the box, the analytic precession rate, the skater's doubled spin with L kept, even inertia, the limits, the params, a turned 3D shape's depth). A restart after pulling (`Host.grip`, `Body.place`, `World.box` are new fields on live objects).
 
-Setup for all: the Leap on, the ghost hands on, HANDS page → **rig** section, **Rig** on, **Hand** right. Load **world check/1 one shape** (plan 59's patches, DW) or any loadable patch with one shape and Fit off.
+Setup for all: the Leap on, the ghost hands on, HANDS page → **grip** section, **Grip** on, **Hand** right. Load **world check/1 one shape** (plan 59's patches, DW) or any loadable patch with one shape and Fit off.
 
 **661. The coupling's range.** **Coupling** at 1: close your right fist near the shape and move and turn the hand. *Pass:* the shape does not jump as the fist closes, and stays on the hand as if welded — no lag, no wobble. Then 0.7, 0.4 and 0 in turn: the shape follows on a spring that gets looser and bouncier, overshooting and settling, down to a slow sway at 0; turning the hand turns it the same way (no flip, no tumble the wrong way round, even through a hand pointing straight up). *Fail:* a jump on the close, a turn the wrong way, a spring that rings on or blows up. Say which coupling feels right for a show.
 
@@ -8794,7 +8794,7 @@ Setup for all: the Leap on, the ghost hands on, HANDS page → **rig** section, 
 
 **666. A turned 3D shape sorts by its depth.** A 3D shape with faces on. Hold it and turn it half round about the vertical. *Pass:* its nearer faces and edges draw in front and brighter, as with the shape turned by `camera.yaw`. *Fail:* the far side drawn over the near after the turn.
 
-**667. Off, reset, Fit.** Move the shape away with the rig, then **Rig** off: *Pass:* it stays where it is. **Reset world** (camera section): it goes home. Rig on, load **world check/3 fit**: the clutch moves nothing (Fit and the lattices take no offset, row 864); **2 field** moves the field as one figure. *Fail:* a jump on off, a reset that misses, or a Fit field that moves.
+**667. Off, reset, Fit.** Move the shape away with the rig, then **Grip** off: *Pass:* it stays where it is. **Reset world** (camera section): it goes home. Rig on, load **world check/3 fit**: the clutch moves nothing (Fit and the lattices take no offset, row 864); **2 field** moves the field as one figure. *Fail:* a jump on off, a reset that misses, or a Fit field that moves.
 
 ## What no test covers
 

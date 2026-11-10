@@ -345,7 +345,7 @@ world steps once a frame after the integrator (puppets, then fixed physics
 steps of 1/960 s). **Reset world** (`world.reset`, the camera section) puts
 every one home. Runtime state only — never saved, never undone.
 
-**The hand rig** (plan 60, `rig.py`; the HANDS page's **rig** section, off by
+**The hand rig** (plan 60, `grip.py`; the HANDS page's **grip** section, off by
 default) moves the shape's offset. Close the holding hand's clutch (its grab,
 or any lane address in **Clutch**) and the shape hangs from the hand: at
 **Coupling** 1 welded, lower on a spring from about 30 Hz down to 0.3 Hz with
@@ -356,7 +356,7 @@ the line between the palms makes the shape heavier (Shape > 0) or lighter
 about that line, ratio 0.25–4, and as it opens that inertia is locked into
 the shape, which then precesses and nutates as a real rigid body (its angular
 momentum is what the physics carries). **Skater**: a change of inertia keeps
-the momentum, so hands apart slow a spin. The `rig.*` params are the meta
+the momentum, so hands apart slow a spin. The `grip.*` params are the meta
 controller's, saved in the show; a turned 3D shape sorts and shades by its
 turned depth (`geometry.turned_depth`). Fit and the 3D lattices take no
 offset, so the rig moves nothing there.

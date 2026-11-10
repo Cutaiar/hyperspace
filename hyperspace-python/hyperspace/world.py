@@ -35,7 +35,7 @@ case with w = 0 (the world stays 3D); the general form is stored so plan 61's
 4D world changes no stored pose. Quaternions are (x, y, z, w), w the real
 part, the layout of a point and of the Leap's bone rotations.
 
-**The rig's physics** (plan 60; `rig.py` sets the joint from its params and
+**The rig's physics** (plan 60; `grip.py` sets the joint from its params and
 gates). A body with a joint is a rigid body: its angular momentum L is what
 carries over, ω = I⁻¹ L with I = R · I_body · Rᵀ, so an uneven inertia fixed
 in the body precesses and nutates (I ω̇ = τ − ω × Iω, integrated as L) and a
@@ -67,7 +67,7 @@ KINDS = ("shape", "hand")
 STEP_S = 1.0 / 960.0
 MAX_STEPS = 96
 _EPS = 1e-12
-# plan 60, the rig's joint: the spring's natural frequency (Hz) at coupling 0
+# plan 60, the hand rig's joint: the spring's natural frequency (Hz) at coupling 0
 # and just under 1 (geometric between; 1 is welded), its damping ratio
 # (linear between: loose and bouncy at the bottom)
 SPRING_HZ = (0.3, 30.0)
@@ -383,7 +383,7 @@ class Body:
 class Joint:
     """The hand rig's joint (plan 60), keyed by the body's object: a 6-DOF
     spring-damper from hand object `hand` to it, acting while `closed` (the
-    clutch, set each frame by `rig.apply`; a hand not present opens it).
+    clutch, set each frame by `grip.apply`; a hand not present opens it).
     `rel` is hand → the drawn object, captured as it closes (None: open);
     `prev` the hand's pose the frame before, blended across the fixed steps.
     `coupling` 1 is welded. The inertia: `inertia` False is even; True, it is
@@ -659,10 +659,11 @@ class World:
         """The joint's target at fraction `f` of the frame, in the offset's terms:
         (position (4), turn q, velocity (4), spin (3)). The hand is blended from
         `prev` to `now` (`dq` the turn between, the short way), times `rel`."""
+        rel = j.rel if j.rel is not None else Pose()             # (held: never None)
         p_h = prev.position + f * (now.position - prev.position)
         q_h = qnorm(qmul(qexp(f * dq), prev.ql))
-        at = p_h + turn3(q_h, j.rel.position)                    # the target in the world
-        q_t = short(qnorm(qmul(home_inv.ql, qmul(q_h, j.rel.ql))), q_near)
+        at = p_h + turn3(q_h, rel.position)                      # the target in the world
+        q_t = short(qnorm(qmul(home_inv.ql, qmul(q_h, rel.ql))), q_near)
         x_t = home_inv.apply(at)
         # the hand's own velocity, and its turn carrying the shape round it
         v_w = np.zeros(4)
@@ -680,7 +681,7 @@ class World:
         v, w = b.velocity.copy(), b.spin_l.copy()
         ib = b.inertia
         held = self._held(obj, j)
-        if held is not None:
+        if held is not None and j is not None:
             now, prev, v_h, w_h = held
             home_inv = obj.home.inverse()
             dq = qlog(short(qnorm(qmul(now.ql, qconj(prev.ql))), np.array(_ID)))
@@ -742,7 +743,7 @@ class World:
             if not acting:
                 if j.rel is not None:
                     j.release()
-            elif j.rel is None:
+            elif j.rel is None and hand is not None:
                 # (its scale is the zoom's, which the target never reads: the
                 # hand moves and turns the shape, the home sizes it)
                 j.rel = hand.home.inverse().compose(obj.pose)
@@ -832,5 +833,5 @@ def register(reg, world: World) -> None:
     # (`World.targets`), and the trigger then runs the new `reset`
     reg.trigger(f"{GROUP}.reset", "Reset world", lambda: world.reset(), group=GROUP,
                 tip="Every world object back where its source puts it: the shape where "
-                    "the camera params say, the hands on the palms — wherever the hand "
-                    "rig left it, still, its inertia even.")
+                    "the camera params say, the hands on the palms — wherever a grip "
+                    "left it, still, its inertia even.")

@@ -186,39 +186,39 @@ def page(panel, dt: float) -> None:
             if f"{GROUP}.{pid}" in panel.reg:    # a setting newer than a hot-reloaded registry
                 panel._row(f"{GROUP}.{pid}")
         _calibrate(io, settings, k)
-    if "rig.on" in panel.reg:
+    if "grip.on" in panel.reg:
         imgui.spacing()
-        rig(panel)
+        grip(panel)
 
 
-RIG_ROWS = ("rig.coupling", "rig.drag")
-RIG_SHAPE_ROWS = ("rig.shape",)
-# (param, label, the RigState property naming its default gate): the state is
-# read duck-typed off the registry (`reg.rig`), the panel importing no rig
-RIG_GATES = (("rig.clutch", "Clutch", "default_clutch"),
-             ("rig.shape_clutch", "Shape clutch", "default_shape_clutch"))
+GRIP_ROWS = ("grip.coupling", "grip.drag")
+GRIP_SHAPE_ROWS = ("grip.shape",)
+# (param, label, the GripState property naming its default gate): the state is
+# read duck-typed off the registry (`reg.grip`), the panel importing no grip.py
+GRIP_GATES = (("grip.clutch", "Clutch", "default_clutch"),
+             ("grip.shape_clutch", "Shape clutch", "default_shape_clutch"))
 
 
-def rig(panel) -> None:
-    """The hand rig (plan 60, rig.py): its section and preset strip, the
+def grip(panel) -> None:
+    """The hand rig (plan 60, grip.py): its section and preset strip, the
     switch, then — while on — the hand, the coupling and drag, the inertia
     and the two clutches as lane addresses (empty: the grabs)."""
     reg = panel.reg
-    panel._section("rig", "rig")
-    panel._check("rig.on")
-    if not bool(reg["rig.on"].value):
+    panel._section("grip", "grip")
+    panel._check("grip.on")
+    if not bool(reg["grip.on"].value):
         return
-    panel._row("rig.hand")
-    for pid in RIG_ROWS:
+    panel._row("grip.hand")
+    for pid in GRIP_ROWS:
         panel._row(pid)
-    panel._check("rig.inertia")
-    if bool(reg["rig.inertia"].value):
+    panel._check("grip.inertia")
+    if bool(reg["grip.inertia"].value):
         ui.beside(ui.chip_w("Skater") + 24)
-        panel._check("rig.skater")
-        for pid in RIG_SHAPE_ROWS:
+        panel._check("grip.skater")
+        for pid in GRIP_SHAPE_ROWS:
             panel._row(pid)
-    state = getattr(reg, "rig", None) or getattr(getattr(reg, "meta_reg", None), "rig", None)
-    for pid, label, key in RIG_GATES:
+    state = getattr(reg, "grip", None) or getattr(getattr(reg, "meta_reg", None), "grip", None)
+    for pid, label, key in GRIP_GATES:
         p = reg[pid]
         default = str(getattr(state, key, "") or "")
         panel._label_cell(label)

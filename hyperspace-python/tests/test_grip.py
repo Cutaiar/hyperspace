@@ -1,6 +1,6 @@
 """Plan 60: the hand rig — the joint, the coupling, the throw, the shaped
 inertia (precession), the skater effect, the box, the safety rules, and the
-`rig.*` params. Tape-driven (`hands/tape.py`) or pure; nothing on a sensor."""
+`grip.*` params. Tape-driven (`hands/tape.py`) or pure; nothing on a sensor."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from fake_hands import hand
 from hyperspace import app
 from hyperspace import geometry as G
 from hyperspace import ghost as GH
-from hyperspace import rig as R
+from hyperspace import grip as R
 from hyperspace import world as W
 from hyperspace.hands import HandSettings, HandsIO, features, skeleton
 from hyperspace.hands import tape as T
@@ -33,11 +33,11 @@ def _palm(q, at) -> tuple:
 
 
 def _rigged(coupling: float = 1.0, *, zoom: float = 0.7, pan=(0.2, 0.1), drag: float = 0.0,
-            **state) -> tuple[W.World, R.RigState, dict]:
-    """A world with the rig on, the holding clutch a dict entry the test flips."""
+            **state) -> tuple[W.World, R.GripState, dict]:
+    """A world with the grip on, the holding clutch a dict entry the test flips."""
     w = W.World.default()
     w.home("shape", W.shape_home(zoom, pan))
-    st = R.RigState(on=True, coupling=coupling, drag=drag, **state)
+    st = R.GripState(on=True, coupling=coupling, drag=drag, **state)
     gates: dict[str, bool] = {}
     R.apply(w, st, lambda a: gates.get(a, False))
     return w, st, gates
@@ -150,7 +150,7 @@ def test_a_tape_held_by_its_grab_welds_the_shape_to_the_palm():
     gh.source = io
     w = W.World.default()
     w.home("shape", W.shape_home(0.8, (0.0, 0.0)))
-    st = R.RigState(on=True, coupling=1.0)
+    st = R.GripState(on=True, coupling=1.0)
     closed = lambda a: a == "hand:right.grab" and io.grab["right"].on   # the lane's Gate
     held = 0
     for k in range(50):
@@ -399,7 +399,7 @@ def test_a_nan_puts_the_body_home_and_says_so_once(capsys):
 
 # ---------------------------------------------------------------- the params
 
-def test_off_the_rig_drops_its_body_and_joint_and_the_offset_stays():
+def test_off_the_grip_drops_its_body_and_joint_and_the_offset_stays():
     w, st, gates = _rigged(1.0)
     w.bodies["shape"].velocity = np.array([0.5, 0.0, 0.0, 0.0])
     _frame(w, st, gates, 1 / 60, {})
@@ -411,7 +411,7 @@ def test_off_the_rig_drops_its_body_and_joint_and_the_offset_stays():
 
 
 def test_the_clutches_default_to_the_grabs_and_follow_the_hand():
-    st = R.RigState()
+    st = R.GripState()
     assert (R.clutch_of(st), R.shape_clutch_of(st)) == ("hand:right.grab", "hand:left.grab")
     st.hand = 0
     assert (R.clutch_of(st), R.shape_clutch_of(st)) == ("hand:left.grab", "hand:right.grab")
@@ -456,32 +456,32 @@ def test_a_gate_reads_closed_at_half_and_open_when_away_or_unknown():
     assert not R.lane_closed(_Router(None), "hand:right.grab")
 
 
-def test_the_rig_params_are_a_saved_shared_meta_group():
+def test_the_grip_params_are_a_saved_shared_meta_group():
     meta = MetaRegistry()
-    st = R.RigState()
+    st = R.GripState()
     R.register(meta, st)
     ids = [p.id for p in meta if p.group == R.GROUP]
-    assert ids == ["rig.on", "rig.hand", "rig.coupling", "rig.drag", "rig.inertia",
-                   "rig.shape", "rig.skater", "rig.clutch", "rig.shape_clutch"]
+    assert ids == ["grip.on", "grip.hand", "grip.coupling", "grip.drag", "grip.inertia",
+                   "grip.shape", "grip.skater", "grip.clutch", "grip.shape_clutch"]
     for pid in ids:
         p = meta[pid]
         assert part_of(p) == "shared_meta" and p.persist
     # a meta param: no route lands on it (row 775); a desk row (a learned knob) sets it
-    assert not meta["rig.coupling"].modulatable
-    meta["rig.coupling"].set(0.25)
-    meta["rig.hand"].set(0)
-    meta["rig.clutch"].set("pad:A")
+    assert not meta["grip.coupling"].modulatable
+    meta["grip.coupling"].set(0.25)
+    meta["grip.hand"].set(0)
+    meta["grip.clutch"].set("pad:A")
     assert (st.coupling, st.side, st.clutch) == (0.25, "left", "pad:A")
     R.register(meta, st)                          # twice: once
     assert not st.on                              # off by default
 
 
-def test_the_host_sets_the_rig_onto_the_world_before_its_frame():
+def test_the_host_sets_the_grip_onto_the_world_before_its_frame():
     from types import SimpleNamespace as NS
 
     w = W.World.default()
-    st = R.RigState(on=True)
-    h = NS(world=w, rig=st, view=NS(zoom=1.0, pan=[0.0, 0.0]),
+    st = R.GripState(on=True)
+    h = NS(world=w, grip=st, view=NS(zoom=1.0, pan=[0.0, 0.0]),
            router=_Router(np.array([1.0, 0.0])), renderer=NS(ghost=None))
     app._step_world(h, 1 / 60)
     assert w.joints["shape"].closed and not w.joints["shape"].shaping
@@ -502,7 +502,7 @@ def test_a_turned_offset_turns_a_3d_shapes_depth_cue_and_leaves_a_4d_shapes_w():
     assert np.array_equal(G.turned_depth(four, P4, pd4, off), pd4)
 
 
-def test_the_rig_imports_only_the_world():
+def test_the_grip_imports_only_the_world():
     tree = ast.parse(Path(R.__file__).read_text())
     got = set()
     for n in ast.walk(tree):

@@ -5,25 +5,25 @@ object, acting while a clutch is closed — by default the same hand's grab
 (`hand:<side>.grab`, plan 51's clutch). As it closes the joint captures the
 hand-to-shape pose, so nothing jumps; a hand lost opens it.
 
-- **`rig.coupling`** (0–1) is the slider. 1: welded, the shape is the hand's
+- **`grip.coupling`** (0–1) is the slider. 1: welded, the shape is the hand's
   pose times the captured one, its velocities the hand's. Lower: a position
   spring and a rotation spring on log(q_target · q̄), acting on the angular
   velocity, their frequency falling geometrically to `world.SPRING_HZ`'s floor
   and their damping ratio with it (`world.spring_of`), loose and bouncy at 0.
 - **Let go**, the shape keeps its linear and angular velocity and coasts down
-  at `rig.drag`, held to the visible box as the poi's wrist is (`World.box`).
-- **`rig.inertia`** on: while a second clutch is closed (by default the other
+  at `grip.drag`, held to the visible box as the poi's wrist is (`World.box`).
+- **`grip.inertia`** on: while a second clutch is closed (by default the other
   hand's grab) the vector between the palms shapes the inertia in the room
-  (`world.shaped_inertia`, k `rig.shape`); as it opens the inertia locks into
+  (`world.shaped_inertia`, k `grip.shape`); as it opens the inertia locks into
   the body, which then precesses and nutates (I ω̇ = τ − ω × Iω).
-- **`rig.skater`**: a change of inertia keeps the angular momentum, so hands
+- **`grip.skater`**: a change of inertia keeps the angular momentum, so hands
   apart slow the spin and together speed it up.
 
-The params are a shared meta group (`rig`): one world, one rig, every deck
+The params are a shared meta group (`grip`): one world, one grip, every deck
 (register row 852's rule), saved in the show, a module preset strip of their
 own (the HANDS page), an APC40 knob learnable onto any of them. Off by default.
-`rig.clutch` / `rig.shape_clutch` are lane addresses; empty is the default
-gate, so it follows `rig.hand`.
+`grip.clutch` / `grip.shape_clutch` are lane addresses; empty is the default
+gate, so it follows `grip.hand`.
 
 Imports only `world`. The registry and the lanes are duck-typed: the host hands
 `apply` a `closed(address) -> bool` (`app._step_world`).
@@ -36,15 +36,15 @@ from dataclasses import dataclass
 
 from . import world as worlds
 
-GROUP = "rig"
+GROUP = "grip"
 SIDES = ("left", "right")
-DRAG = (0.0, 5.0)        # 1/s: rig.drag's range
-SHAPE = (-0.75, 3.0)     # k: rig.shape's range (−: flattened along the palms' line)
+DRAG = (0.0, 5.0)        # 1/s: grip.drag's range
+SHAPE = (-0.75, 3.0)     # k: grip.shape's range (−: flattened along the palms' line)
 
 
 @dataclass
-class RigState:
-    """The rig's settings, what its params read and write."""
+class GripState:
+    """The grip's settings, what its params read and write."""
 
     on: bool = False
     hand: int = 1                 # SIDES index: which hand holds
@@ -73,17 +73,17 @@ class RigState:
         return f"hand:{self.other}.grab"
 
 
-def clutch_of(state: RigState) -> str:
-    """The holding clutch's address: `rig.clutch`, else the hand's grab."""
+def clutch_of(state: GripState) -> str:
+    """The holding clutch's address: `grip.clutch`, else the hand's grab."""
     return state.clutch.strip() or state.default_clutch
 
 
-def shape_clutch_of(state: RigState) -> str:
-    """The shaping clutch's address: `rig.shape_clutch`, else the other hand's grab."""
+def shape_clutch_of(state: GripState) -> str:
+    """The shaping clutch's address: `grip.shape_clutch`, else the other hand's grab."""
     return state.shape_clutch.strip() or state.default_shape_clutch
 
 
-def apply(world, state: RigState, closed: Callable[[str], bool]) -> None:
+def apply(world, state: GripState, closed: Callable[[str], bool]) -> None:
     """Once a frame before `World.frame`: the shape's body and joint as the
     params say, and the two clutches. Off: neither — the offset stays where it
     is. A change of hand lets go (a new joint)."""
@@ -122,20 +122,20 @@ def lane_closed(router, address: str) -> bool:
     return u >= 0.5          # NaN (a hand away) reads open
 
 
-def register(reg, state: RigState) -> None:
-    """The `rig.*` params on `reg` (the meta controller's): saved in the show,
+def register(reg, state: GripState) -> None:
+    """The `grip.*` params on `reg` (the meta controller's): saved in the show,
     learnable (a knob onto the coupling, say)."""
     if f"{GROUP}.on" in reg:
         return
-    reg.rig = state
+    reg.grip = state
 
     def setter(key: str, cast):
         return lambda v: setattr(state, key, cast(v))
 
-    reg.toggle(f"{GROUP}.on", "Rig", lambda: state.on, setter("on", bool), group=GROUP,
-               tip="The hand rig (plan 60): close the holding hand's clutch near the shape "
-                   "and it follows the hand; open it and it flies on. Off: the shape stays "
-                   "where the rig left it (Reset world puts it home).")
+    reg.toggle(f"{GROUP}.on", "Grip", lambda: state.on, setter("on", bool), group=GROUP,
+               tip="Hold the shape in your hand: close the holding hand's clutch near the "
+                   "shape and it follows the hand; open it and it flies on. Off: the shape "
+                   "stays where it was left (Reset world puts it home).")
     reg.enum(f"{GROUP}.hand", "Hand", lambda: state.hand, setter("hand", int), list(SIDES),
              group=GROUP, tip="Which hand holds the shape; the other shapes its inertia.")
     reg.continuous(f"{GROUP}.coupling", "Coupling", lambda: state.coupling,

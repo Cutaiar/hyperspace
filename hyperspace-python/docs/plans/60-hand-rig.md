@@ -1,9 +1,9 @@
 # Plan 60: the hand rig — coupling, precession, the skater effect
 
-**Status: built (2026-11-10).** `hyperspace/rig.py` (the params, the clutches),
-the joint and the rigid body in `hyperspace/world.py`, the HANDS page's rig
+**Status: built (2026-11-10).** `hyperspace/grip.py` (the params, the clutches),
+the joint and the rigid body in `hyperspace/world.py`, the HANDS page's grip
 section, the turned depth of row 856 (`geometry.turned_depth`); tests
-`tests/test_rig.py`; register rows 857–866, hand checks 661–667. Built on plan
+`tests/test_grip.py`; register rows 857–866, hand checks 661–667. Built on plan
 59 as merged (#442), with the amendments in §10. Plans 61 and 62 are not needed.
 
 The owner, 2026-11-10: *a slider that controls the momentum damping of the
@@ -26,7 +26,7 @@ object and the shape object.
   the same hand's grab (`hand:<side>.grab`), the plan 51 clutch. When it
   closes, the joint captures the hand-to-shape relative pose, so nothing jumps.
   A lost hand opens the clutch (plan 51 §5's rule).
-- **Coupling** (`rig.coupling`, 0–1) is the slider:
+- **Coupling** (`grip.coupling`, 0–1) is the slider:
   - **1, welded:** the shape's pose is the hand's pose times the captured
     relative pose, exactly, and its velocities are taken from the hand.
   - **Below 1:** a position spring and a rotation spring toward that target.
@@ -38,7 +38,7 @@ object and the shape object.
     It acts on the angular velocity vector, not on Euler angles, so turns
     combine correctly and there is no gimbal problem.
 - **Release:** the joint lets go and the body keeps its linear and angular
-  velocity, slowed by `rig.drag` (linear and angular). You can throw it. It is
+  velocity, slowed by `grip.drag` (linear and angular). You can throw it. It is
   held to the visible box as the poi's wrist is (`poi.box_for`): the physics
   runs on past the edge and the shape does not.
 - **The `turn` rows still work.** They write the shape's home pose (the
@@ -55,13 +55,13 @@ is shaped in the room and then frozen into the body:
 - **While the inertia clutch is closed**, the vector between the two palms sets
   the inertia in the room: n its direction (heading and depression), m its
   length, normalized by the calibrated box. I = I₀ · (𝟙 + k · m · n nᵀ), with
-  k = `rig.shape` (negative: flattened along n; positive: elongated). The
+  k = `grip.shape` (negative: flattened along n; positive: elongated). The
   ratio between the principal inertias is clamped to [0.25, 4].
 - **When it opens**, the inertia locks into the body's frame,
   I_body = Rᵀ · I · R, and from then on the body is a true rigid body:
   I ω̇ = τ − ω × Iω in the body frame. Precession under the joint's torque, and
   when free, nutation.
-- **`rig.inertia`** off gives even inertia: no gyroscopic term at all.
+- **`grip.inertia`** off gives even inertia: no gyroscopic term at all.
 - **A vector gives a body symmetric about one axis**, so it precesses cleanly
   but never does the unstable "wingnut" tumble, which needs three different
   inertias. Using the shaping hand's palm normal as a second axis would give
@@ -69,7 +69,7 @@ is shaped in the room and then frozen into the body:
 
 ## 3. The skater effect
 
-`rig.skater` (on by default): when the inertia changes, **angular momentum is
+`grip.skater` (on by default): when the inertia changes, **angular momentum is
 conserved**, not angular velocity. Each step, L = I ω carries over and ω = I⁻¹ L.
 So while the inertia clutch is closed, moving your hands apart slows the
 spin and bringing them together speeds it up. This changes the energy, as it
@@ -77,20 +77,20 @@ does for a real skater. Off: ω carries over and only the inertia changes.
 
 ## 4. Params
 
-All in a `rig` group, so the library's preset strip saves a setup and an APC40
+All in a `grip` group (the word "rig" leaves every string a person reads, register row 779), so the library's preset strip saves a setup and an APC40
 knob can be learned onto any of them.
 
 | Param | What |
 | --- | --- |
-| `rig.on` | The rig acts at all (off: the world's offset stays where it is) |
-| `rig.hand` | Which hand holds: left or right |
-| `rig.coupling` | 0–1, the slider (1 welded) |
-| `rig.drag` | Linear and angular, how fast a released shape coasts down |
-| `rig.inertia` | Off (even) or shaped by the hands |
-| `rig.shape` | k, how strongly the hands' vector shapes the inertia (signed) |
-| `rig.skater` | Conserve angular momentum when inertia changes |
+| `grip.on` | The hand rig acts at all (off: the world's offset stays where it is) |
+| `grip.hand` | Which hand holds: left or right |
+| `grip.coupling` | 0–1, the slider (1 welded) |
+| `grip.drag` | Linear and angular, how fast a released shape coasts down |
+| `grip.inertia` | Off (even) or shaped by the hands |
+| `grip.shape` | k, how strongly the hands' vector shapes the inertia (signed) |
+| `grip.skater` | Conserve angular momentum when inertia changes |
 
-`rig.clutch` and `rig.shape_clutch` hold the two gates as lane addresses
+`grip.clutch` and `grip.shape_clutch` hold the two gates as lane addresses
 (defaults as above), so a preset can pick a pinch or a button instead.
 
 ## 5. Safety
@@ -157,7 +157,7 @@ built and has a register row.
    its depth after the offset's turn. A 4D shape keeps its w. The identity
    offset is unchanged, so are the goldens.
 5. **`world.py` imports nothing**, so the gates and the box arrive from the
-   host: `rig.apply` takes a `closed(address)` that `app._step_world` reads
+   host: `grip.apply` takes a `closed(address)` that `app._step_world` reads
    from the on-air router's lanes (the debounced grab, plan 51), and the
    renderer sets `World.box` from the scene drawn (`poi.box_for`, row 862).
    The box holds the shape's drawn centre, in the world, grown to take its
@@ -173,8 +173,12 @@ built and has a register row.
 8. **The params are a shared meta group, not per deck** (row 857). The review
    of plan 59 offered per deck, read from the deck on air; but a per-deck meta
    param never persists (row 746), so it could have no preset strip, which
-   §4 asks for. One rig on one world: `rig.*` is shared meta, saved in the
+   §4 asks for. One rig on one world: `grip.*` is shared meta, saved in the
    show. A meta param takes no route (row 775), so "a knob learned onto it"
    is a desk row that sets it.
 9. **§7 is dropped** (row 866): moving the poi changes what a save holds.
+10. **The group is `grip`, not `rig`** (row 857): "rig" leaves every string a
+    person reads, ids included (row 779, the owner, 2026-11-06), held by
+    `tests/test_person_words.py`. The params, the module (`grip.py`) and the
+    panel section say grip; the plan keeps its name, the hand rig.
 
