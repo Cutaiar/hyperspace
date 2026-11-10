@@ -1,0 +1,22 @@
+[package]
+name = "hyperspace-rune-panel"
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "A UI-only proof of concept: Hyperspace's control window redrawn in Rune."
+
+[[bin]]
+name = "rune-panel"
+path = "src/main.rs"
+
+# Rune is pre-release: pin a rev of its `dev` branch, which is never rewritten.
+[dependencies]
+rune = { git = "https://github.com/anomalyco/rune", rev = "b73010b85b451ad687a7189d347dd8875fb91e24" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "b73010b85b451ad687a7189d347dd8875fb91e24" }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
