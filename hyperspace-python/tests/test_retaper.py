@@ -41,7 +41,8 @@ OLD_PATCH = ROOT / "tests" / "fixtures" / "patches" / "acid-wash.json"
 # ones every effect added since carries: an effect file's own `@param … amount`
 AMOUNTS = {"fx.acid.bend", "fx.acid.twist", "fx.acid.breathe", "fx.deconverge.amount",
            "fx.deconverge.radial", "fx.displace.amount", "fx.doublevision.amount",
-           "fx.fractals.amount", "fx.glimmer.amount", "fx.grain.amount", "fx.grow.amount",
+           "fx.bloom.amount", "fx.fractals.amount", "fx.glimmer.amount", "fx.grain.amount",
+           "fx.grow.amount",
            "fx.oilslick.amount", "fx.plasma.level", "fx.prism.amount", "fx.tripcolour.amount",
            "fx.warp.amount", "fx.wobble.amount", "fx.zoomblur.amount"}
 

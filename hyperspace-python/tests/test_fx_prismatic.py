@@ -1,4 +1,4 @@
-"""The three light effects: `prism`, `oilslick` and `grain` (shaders/fx/).
+"""The light effects: `prism`, `oilslick`, `grain` and `bloom` (shaders/fx/).
 
 Each is one file in the folder, so what is held here is what each one
 *does* — the invariants a knob can break without the compile failing:
@@ -11,6 +11,9 @@ Each is one file in the folder, so what is held here is what each one
   pixel stays black (the sheen it throws back is Glow's, and Ground's).
 - **grain** adds noise and may crush the levels; at Amount 0 with Steps 0
   it is the picture byte for byte.
+- **bloom** spreads what is over the threshold and adds it back, so it only
+  ever lights a pixel and never takes light away, and nothing under the
+  threshold spills at all.
 
 The passes run on a see-through ground (`opaque=0`), so what is asserted
 is what the alpha tail (`fx.FS_TAIL`) leaves: alpha lifted to cover the
@@ -133,7 +136,7 @@ def test_palette_is_still_the_last_order_of_the_three_added_here():
     highest: a new file takes a free number below it."""
     st = FxState()
     orders = {n: s.order for n, s in st.specs.items()}
-    for name in ("prism", "oilslick", "grain"):
+    for name in ("prism", "oilslick", "grain", "bloom"):
         assert orders[name] < orders["palette"], name
     assert len(set(orders.values())) == len(orders), "two files took one order"
 
@@ -293,3 +296,75 @@ def test_grains_shutter_stops_with_the_speed(ctx):
     moved = frames(ctx, "grain", mid, [0.0, 0.2, 0.4], amount=0.6, speed=1.0)
     assert np.array_equal(moved[0], still[0]), "the first frame is not the same field"
     assert not np.array_equal(moved[0], moved[-1]), "the grain never moved"
+
+
+# ---------------------------------------------------------------- bloom
+
+def test_bloom_declares_its_params():
+    spec = parse("bloom", (FX_DIR / "bloom.glsl").read_text())
+    assert spec.label == "Bloom" and spec.blend == 1                  # @blend add
+    got = {p.key: (p.lo, p.hi, p.default, p.integer) for p in spec.params}
+    assert got == {"amount": (0.0, 4.0, 0.8, False), "threshold": (0.0, 1.0, 0.4, False),
+                   "knee": (0.0, 1.0, 0.3, False), "radius": (2.0, 160.0, 20.0, False),
+                   "falloff": (0.5, 4.0, 1.8, False), "taps": (8.0, 96.0, 40.0, True)}
+    # it reads no clock: the kernel is a still disc, and the dither in it is
+    # fixed per pixel, so nothing here boils
+    assert not spec.clocks and "u_phase" not in spec.source
+    assert FxState().errors == {}
+
+
+def test_bloom_spills_nothing_that_is_under_the_threshold(ctx):
+    """A frame no brighter than the threshold has no light to give, so the
+    pass adds nothing and what comes back is what went in — and a frame of
+    nothing stays nothing, Amount as high as it goes."""
+    dim = flat((90, 90, 90))                       # 0.35, under a 0.6 threshold
+    assert np.array_equal(run(ctx, "bloom", dim, threshold=0.6, amount=4.0)[..., :3],
+                          dim[..., :3])
+    assert not run(ctx, "bloom", flat((0, 0, 0), a=0), amount=4.0).any()
+
+
+def test_bloom_only_ever_adds_light(ctx):
+    """`@blend add`: every channel of every pixel comes back at least what it
+    was. A bloom that darkened anything would be a bug in the blend."""
+    pic = white_line()
+    px = run(ctx, "bloom", pic, amount=2.0)
+    assert (px[..., :3].astype(int) >= pic[..., :3].astype(int)).all()
+
+
+def test_blooms_radius_is_how_far_the_light_reaches(ctx):
+    """The halo off a line, measured as the last column that lit up: a wider
+    radius reaches further, and it stops where the radius says."""
+    pic = white_line()
+
+    def reach_px(radius):
+        px = run(ctx, "bloom", pic, amount=4.0, radius=radius, taps=96, falloff=0.5)
+        lit = np.nonzero(px[H // 2 + 3, :, :3].sum(axis=-1) > 0)[0]
+        return W // 2 - lit.min()
+
+    near, far = reach_px(6.0), reach_px(24.0)
+    assert near < far, (near, far)
+    assert near <= 8 and far <= 28, (near, far)   # neither runs past its radius
+
+
+def test_blooms_falloff_decides_how_much_of_the_halo_is_out_at_the_edge(ctx):
+    """Low Falloff is a veil that keeps its light out to the radius; high is a
+    rim that has spent it by then. Measured as the share of the halo's light
+    in the outer half of its reach."""
+    pic = white_line()
+
+    def outer_share(falloff):
+        px = run(ctx, "bloom", pic, amount=3.0, radius=24.0, taps=96, falloff=falloff)
+        row = px[H // 2 + 3, :, :3].astype(float).sum(axis=-1)
+        band = row[W // 2 - 24:W // 2 - 2]
+        return band[:11].sum() / max(band.sum(), 1e-6)   # the outer half of the band
+
+    assert outer_share(0.5) > outer_share(4.0)
+
+
+def test_blooms_knee_brings_the_spill_in_over_a_range(ctx):
+    """At a hard knee a frame just under the threshold gives nothing and one
+    just over gives everything; a wide knee has the one in between give some."""
+    just_over = flat((140, 140, 140))              # 0.55, over a 0.5 threshold
+    hard = run(ctx, "bloom", just_over, threshold=0.5, knee=0.0, amount=1.0)
+    soft = run(ctx, "bloom", just_over, threshold=0.5, knee=0.5, amount=1.0)
+    assert hard[..., :3].mean() > soft[..., :3].mean() > 0
