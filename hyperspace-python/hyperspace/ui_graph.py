@@ -230,6 +230,7 @@ from . import (
     patches,
     pinch,
     ui,
+    ui_browse,
     ui_fx,
     ui_pad,
     ui_pane,
@@ -1398,8 +1399,9 @@ def _wrap_for(width: float) -> None:
 
 def _deck_row(panel, st: dict) -> None:
     """The head's first line (plan 44 D5d): which `Deck` the panel is on, the same
-    words as the window's title, red off air, a click for the other; then the two
-    verbs, "copy on air to off air" and the crossfade, by hand and timed. Nothing with
+    words as the window's title, red off air, a click for the other; then **load…**
+    (a patch from the library onto the deck off air, ui_browse) and the two verbs,
+    "copy on air to off air" and the crossfade, by hand and timed. Nothing with
     no meta controller (a panel from a test). A click moves the panel at the page's end
     (`_arrive`): this frame's view and selection are of the deck it is on."""
     meta = getattr(panel, "meta", None)
@@ -1410,6 +1412,9 @@ def _deck_row(panel, st: dict) -> None:
         st["panel_to"] = meta.decks[1] if meta.panel is meta.decks[0] else meta.decks[0]
     if imgui.is_item_hovered():
         ui.tooltip(DECK_TIP)
+    # choosing a patch to load is the meta controller's: onto the deck off air
+    _wrap_for(ui.chip_w(ui_browse.LABEL))
+    ui_browse.chip(panel)
     _wrap_for(ui.chip_w(COPY_LABEL))
     if ui.chip(f"{COPY_LABEL}##graph.copy"):
         copy_on_air(panel)

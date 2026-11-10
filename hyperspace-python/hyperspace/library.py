@@ -4005,6 +4005,25 @@ class DeckInstall(DeckInstallSlots, Install):
         if where is not None:
             Install.cycle(where, step)        # (its `load_slot` says what loaded)
 
+    def load_named(self, name: str) -> str | None:
+        """The loadable patch `name`, by the meta controller's road (a pad's): onto
+        the deck off air, never the room; refused, said, while the crossfader is
+        between its ends. The **load…** chip's pick on GRAPH (ui_browse). Returns
+        the name loaded, None when it was not."""
+        where = self._landing(name)
+        if where is None:
+            return None
+        loaded_patch = where._loader()
+        if loaded_patch is None:
+            return None
+        try:
+            loaded_patch.load(name)
+        except LibraryError as e:                     # a bad file: said, never fatal
+            where.lib.error = f"library: {e}"
+            return None
+        self._say_loaded(where)
+        return name
+
     def walk(self, step: int = 1) -> str | None:
         where = self._landing("the patch list")
         if where is None:

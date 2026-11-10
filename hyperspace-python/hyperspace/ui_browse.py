@@ -1,18 +1,22 @@
-"""The patches' folder in a file explorer — **browse…** at the foot of the
-PATCHES list (ui_loadable.loadable_list).
+"""Choosing a patch to load — a meta controller verb, so it lives on GRAPH's
+deck row (ui_graph._deck_row: deck · **load…** · copy on air to off air ·
+fade), not in the side pane.
 
-The list in the pane is a tree a few rows tall. This is the same folder in
-a window of its own: Dear ImGui's file dialog (ImFileDialog, in
-imgui-bundle) opened on the folder the loaded patch sits in — folders to
-step into, the path to step back up, a search field, the library's folder
-pinned under Quick Access. A pick loads that patch onto this panel's deck,
-as a click on its row does.
+**load…** opens the patches' folder in Dear ImGui's file dialog
+(ImFileDialog, in imgui-bundle), on the folder the off-air deck's patch
+sits in: folders to step into, the path to step back up, a search field,
+new folder, rename and delete on a right-click, the library's folder
+pinned under Quick Access. A pick loads that patch onto the deck **off
+air**, by the pads' road (`DeckInstall.load_named`: refused while the
+crossfader is between its ends); the fade takes it on air. With no meta
+controller (a test's panel) it loads onto the panel's deck.
 
-It lists **files**, by file name (``party-tumble.json``), not patches by
-the name inside (``TUMBLE``): the pick is mapped back to the listed name
-(`Library.name_at`), and a file that is no patch of this library is
-refused in words. Moving and renaming stay Finder's and the list's: a file
-moved in Finder is followed (`Library._hand_moves`).
+The dialog lists **files**, by file name (``party-tumble.json``), not
+patches by the name inside (``TUMBLE``): the pick is mapped back to the
+listed name (`Library.name_at`), and a file that is no patch of this
+library is refused in words. A file moved or a folder renamed there (or in
+Finder) is followed by the library (`Library._hand_moves`); its delete is
+the dialog's own, for good, never the app's trash.
 
 ImFileDialog draws its icons through a texture loader that imgui-bundle
 sets only under its own runners, and has no Python name for. `_setup`
@@ -22,10 +26,10 @@ one). Where that fails — a wheel that does not export the symbol — the
 native dialog (portable_file_dialogs, as MEDIA's and AUDIO's) opens on the
 same folder and the pick is handled the same way.
 
-`draw` runs every frame from `Panel._draw`, not from the section: the
-dialog is a window of its own and must be drawn (and its answer taken)
-whichever section the pane shows. `scrub` runs before the frame is
-rendered (app.py), for the reason it gives.
+`draw` runs every frame from `Panel._draw`: the dialog is a window of its
+own and must be drawn (and its answer taken) whatever GRAPH shows.
+`scrub` runs before the frame is rendered (app.py), for the reason it
+gives.
 """
 
 from __future__ import annotations
@@ -39,11 +43,13 @@ from imgui_bundle import imgui
 from .library import LOADABLE, LibraryError, loadable_dir
 
 KEY = "hyperspace.patches"            # ImFileDialog's key for this dialog
-TITLE = "Open a patch"
+TITLE = "Load a patch off air"
+LABEL = "load…"
 FILTER = "Patches (*.json){.json},.*"
 SETUP = "_Z30ImFileDialogSetupTextureLoaderv"    # ImFileDialogSetupTextureLoader()
-TIP = ("The patches' folder in a file explorer: step into folders, search, pick a "
-       "file to load it. Files are listed by file name")
+TIP = ("Pick a patch from the library's folders: it loads on the deck off air, and the "
+       "fade takes it on air. Files are listed by file name; right-click in the list for "
+       "new folder, rename and delete (delete is for good)")
 
 _ifd: dict = {}       # {"ok": bool, "why": str} once `_setup` has run
 
@@ -76,8 +82,16 @@ def _state(panel) -> dict:
     return st
 
 
+def _target(panel):
+    """The library view of the deck a pick lands on: the deck off air's
+    (the meta controller's), else the panel's own."""
+    meta = getattr(panel, "meta", None)
+    where = meta.off_air_project() if meta is not None else None
+    return where.lib if where is not None else panel.library
+
+
 def start_dir(lib) -> Path:
-    """Where the dialog opens: the folder the loaded patch's file is in,
+    """Where the dialog opens: the folder the deck's patch file is in,
     else the patches' folder."""
     base = loadable_dir(lib.home)
     cur = lib.current(LOADABLE)
@@ -99,7 +113,7 @@ def open_patches(panel) -> None:
     lib, st = panel.library, _state(panel)
     if lib is None or is_open(panel):
         return
-    where = start_dir(lib)
+    where = start_dir(_target(panel))
     if _setup():
         from imgui_bundle import im_file_dialog as ifd
 
@@ -189,16 +203,25 @@ def take(panel, path: Path) -> str | None:
         lib.say(warning=f"{path.name}: not a patch in this library — "
                         f"its patches are under {loadable_dir(lib.home)}")
         return None
-    ui_loadable._guard(panel, lib.load, LOADABLE, name)
+    meta = getattr(panel, "meta", None)
+    where = meta.off_air_project() if meta is not None else None
+    if meta is not None:
+        if where is None:
+            lib.say(warning=f"{name}: not loaded — there is no deck off air to load")
+            return None
+        got = where.load_named(name)
+    else:
+        got = name if ui_loadable._guard(panel, lib.load, LOADABLE, name) is not None else None
     ui_loadable.invalidate(panel, LOADABLE)
-    return name
+    return got
 
 
 def chip(panel) -> bool:
-    """The **browse…** chip; True when pressed (the dialog is then open)."""
+    """The **load…** chip on GRAPH's deck row; True when pressed (the dialog
+    is then open). Lit while the dialog is up."""
     from . import ui
 
-    hit = ui.chip("browse…##browse")
+    hit = ui.lit_chip(f"{LABEL}##graph.load", is_open(panel))
     if imgui.is_item_hovered():
         ui.tooltip(TIP)
     if hit:

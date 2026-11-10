@@ -938,10 +938,7 @@ class Panel:
         quit and on ⌘R, before imgui shuts down; a panel that never drew
         the page holds none — the GRAPH canvas's tap (`canvas_tap`,
         2026-11-02) and the pad drawings' NanoVG (ui_pad_nvg) go with it,
-        while the control window's GL is up. Safe to call twice. A loadable patches
-        fold clicked under `WRITE_AFTER_S` ago is written first (plan 48
-        stage 2)."""
-        ui_loadable.flush_folds(self, force=True)
+        while the control window's GL is up. Safe to call twice."""
         ui_graph.close(self)
         tap, self.canvas_tap = getattr(self, "canvas_tap", None), None
         if tap is not None:
