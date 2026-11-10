@@ -9,7 +9,8 @@ name: sweeps
 
 on:
   pull_request:
-    # what the sweeps walk and draw; tests/test_ci_layout.py holds the test
+    # what the sweeps walk, draw and compare against (the corpus, the migration
+    # fixtures, the shape digests); tests/test_ci_layout.py holds the test
     # files below to tests/conftest.py's _SWEEP_TESTS
     paths:
       - hyperspace-python/hyperspace/**
@@ -18,6 +19,9 @@ on:
       - "!hyperspace-python/hyperspace/fonts/**"
       - hyperspace-python/presets/**
       - hyperspace-python/tests/corpus/**
+      - hyperspace-python/tests/fixtures/**
+      - hyperspace-python/tests/golden/**
+      - hyperspace-python/pyproject.toml
       - hyperspace-python/tests/conftest.py
       - hyperspace-python/uv.lock
       - .github/workflows/sweeps.yml
