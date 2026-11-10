@@ -213,3 +213,27 @@ def test_no_digit_drifts_a_finger_width_off(name, grip, kw):
                 continue
             got = at[(d, k)][:3, :3] @ R[d, k] + at[(d, k)][:3, 3]
             assert np.linalg.norm(got - p.joints[d, k]) < 10.0, (name, d, k)
+
+
+def test_every_material_draws_the_same_bones_differently(ctx):
+    """`ghost.material` changes what the hands are made of, not what is
+    drawn: the same style and the same poses, a different picture each
+    time, and every one of them still a hand's worth of pixels."""
+    from types import SimpleNamespace as NS
+
+    from hyperspace.render import Renderer
+
+    skel = {"left": skeleton(hand("left", "open", (-90.0, 210.0, 0.0))),
+            "right": skeleton(hand("right", "fist", (90.0, 200.0, 10.0)))}
+    seen = []
+    for mat in range(len(G.MATERIALS)):
+        gh = Renderer(ctx).ghost
+        gh.state.on, gh.state.alpha = True, 1.0
+        gh.state.style, gh.state.material = G.STYLES.index("BONES"), mat
+        gh.source = NS(skeleton=skel, cfg={"mode": "desktop"})
+        for k in range(3):
+            assert gh.layer((320, 200), 1.0 + k / 30)
+        px = np.frombuffer(gh.tex.read(), dtype=np.uint8).reshape(200, 320, 4)
+        assert (px[..., 3] > 0).sum() > 300, G.MATERIALS[mat]
+        seen.append(px.tobytes())
+    assert len(set(seen)) == len(G.MATERIALS)

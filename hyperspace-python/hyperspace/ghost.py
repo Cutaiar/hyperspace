@@ -99,6 +99,12 @@ GUIDES = ["OFF", "BESIDE", "ON HAND"]
 STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE", "MESH",
           "LEAP HAND", "LOW POLY", "BONES"]   # PARTS, in order
 
+# What the hands are made of, over whatever `style` draws: the same
+# geometry and the same draws, a branch in the one shared fragment shader
+# (`SHADE_FS`, `u_mat`), so a material costs nothing a frame. PLAIN is the
+# look the ghost always had, and stays the default.
+MATERIALS = ["PLAIN", "BONE", "GLASS", "EMBER"]
+
 @dataclass
 class GhostState:
     """What the ghost.* params write. The look's, but for `mirror`: see
@@ -110,6 +116,7 @@ class GhostState:
     guide: int = 0          # GUIDES: off, a gauge beside each hand, or on the palm
     tethers: bool = False   # with a guide: a labelled line from each routed mark
     style: int = 0          # STYLES: what is drawn from the poses (HANDS, the capsules)
+    material: int = 0       # MATERIALS: what it is made of (PLAIN, the look it had)
 
 
 def prefix(n: int = 1) -> str:
@@ -242,6 +249,15 @@ def register(reg, state: GhostState, n: int = 1) -> None:
                  "(Ultraleap's faceted pair), BONES (the hand's own 27 bones, each "
                  "carried rigidly by the one it is). The guide and the tethers are the same "
                  "in every style.")
+    reg.enum(f"{pre}.material", f"{lb} material", lambda: getattr(state, "material", 0),
+             lambda i: setattr(state, "material", int(i)), MATERIALS, group=GROUP,
+             modulatable=False,
+             tip="What the hands are made of, whatever style draws them: PLAIN (the lit "
+                 "surface they have always had), BONE (chalky and ivory, the light "
+                 "hardened), GLASS (clear in the middle, bright at every edge — the hand "
+                 "shows as its own silhouette), EMBER (lit from within, cool at the "
+                 "middle and hot at the rim). The guide and the tethers are PLAIN "
+                 "whatever this says.")
 
 
 # ------------------------------------------------------------------ camera
@@ -963,6 +979,7 @@ in vec3 v_pos;
 in vec3 v_n;
 in vec4 v_col;
 uniform vec3 u_eye;
+uniform int u_mat;
 out vec4 f_color;
 void main() {
     vec3 n = normalize(v_n);
@@ -972,8 +989,22 @@ void main() {
     float diff = max(dot(n, l), 0.0);
     float rim = pow(1.0 - max(dot(n, v), 0.0), 2.0);
     vec3 rgb = v_col.rgb * (0.28 + 0.62 * diff) + 0.45 * rim * mix(v_col.rgb, vec3(1.0), 0.5);
+    float a = v_col.a;
+    if (u_mat == 1) {                       // BONE: chalky, the light hardened
+        vec3 bone = mix(v_col.rgb, vec3(0.96, 0.94, 0.88), 0.85);
+        rgb = bone * (0.42 + 0.50 * diff * diff) + 0.30 * pow(rim, 1.5) * vec3(1.0);
+    } else if (u_mat == 2) {                // GLASS: clear within, bright at the edge
+        float f = pow(1.0 - max(dot(n, v), 0.0), 2.2);
+        vec3 tint = mix(v_col.rgb, vec3(0.55, 0.85, 1.0), 0.5);
+        rgb = tint * (0.15 + 0.35 * diff) + 1.15 * f * vec3(1.0);
+        a = v_col.a * clamp(0.10 + 1.25 * f, 0.0, 1.0);
+    } else if (u_mat == 3) {                // EMBER: cool at the middle, hot at the rim
+        float heat = clamp(0.25 + 0.75 * rim, 0.0, 1.0);
+        vec3 hot = mix(vec3(0.35, 0.02, 0.0), vec3(1.0, 0.75, 0.25), heat);
+        rgb = hot * (0.55 + 0.75 * diff) + 0.65 * rim * rim * vec3(1.0, 0.45, 0.1);
+    }
     // premultiplied by the hand's fade: the composite lays it over at ghost.alpha
-    f_color = vec4(min(rgb, vec3(1.0)) * v_col.a, v_col.a);
+    f_color = vec4(min(rgb, vec3(1.0)) * a, a);
 }
 """
 
@@ -1368,6 +1399,8 @@ class Geometry:
     `PARTS` (None draws no hand at all), `extra` per pose the rows drawn
     with it, already coloured (the guide's, from `Ghost`)."""
 
+    material = 0             # MATERIALS: `Ghost` sets it before each frame's draws
+
     def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
         self._unit_s = ctx.buffer(_sphere().tobytes())
@@ -1445,6 +1478,7 @@ class Geometry:
         for prog in self.progs:
             prog["u_vp"].write(vp)
             prog["u_eye"].value = ey
+            _put(prog, "u_mat", int(self.material))
         for rows, buf, vao, verts in ((m_rows, self._mesh, self.vaos[2], None),
                                       (s_rows, self._inst_s, self.vaos[0], self._n_s),
                                       (t_rows, self._inst_t, self.vaos[1], self._n_t)):
@@ -1468,6 +1502,7 @@ class Geometry:
         prog = self.skinmesh
         _put(prog, "u_vp", vp)
         _put(prog, "u_eye", eye)
+        _put(prog, "u_mat", int(self.material))
         for p in poses:
             m = mesh_model(p, name)
             if m is None:
@@ -1684,6 +1719,7 @@ class Ghost:
             ctx.enable(moderngl.DEPTH_TEST | moderngl.BLEND)
             ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
             parts = style_parts(getattr(self.state, "style", 0))
+            self.geometry.material = int(getattr(self.state, "material", 0))
             if lines:
                 self.geometry.draw(poses, view_proj, eye, parts, lines=True)
             else:
@@ -1823,6 +1859,7 @@ class Ghost:
                         ro.color_mask = (True, True, True, True)
                         ro.use()
                 ctx.viewport = (0, 0, w, h)
+                self.geometry.material = 0      # the guide is a readout, never a material
                 self.geometry.draw(poses, view_proj, eye, None, guides)
                 ctx.disable(moderngl.DEPTH_TEST)
                 if any(p.tethers for p in poses):
@@ -1857,6 +1894,7 @@ class Ghost:
         # goes over it: the style first, then the depth cleared, then
         # the guide — the guide reads the same in every style
         over = parts is not hands_parts or lines
+        self.geometry.material = int(getattr(self.state, "material", 0))
         if lines:                       # the parts' edges; the guide solid, after
             self.geometry.draw(poses, view_proj, eye, parts, None, lines=True)
         else:
@@ -1865,6 +1903,7 @@ class Ghost:
         if over and not split and any(g[0] or g[1] for g in guides):
             _clear_depth(ctx, draw_fbo)
             ctx.viewport = (0, 0, *self.size)
+            self.geometry.material = 0      # the guide is a readout, never a material
             self.geometry.draw(poses, view_proj, eye, None, guides)
         ctx.disable(moderngl.DEPTH_TEST)
         if not split and any(p.tethers for p in poses):
