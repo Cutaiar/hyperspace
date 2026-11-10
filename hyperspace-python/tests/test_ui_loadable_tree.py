@@ -254,3 +254,22 @@ def test_new_folder_at_the_foot_and_inside_and_remove_only_when_empty(rig):  # n
     assert st["menu_for"] == "ambient/slow"
     _click(panel, st["menu"]["remove"])
     assert lib.folders() == ["ambient"] and lib.status == "removed the folder ambient/slow"
+
+
+# ------------------------------------------------ browse… (ui_browse.py)
+
+def test_browse_is_at_the_foot_and_a_picked_file_loads_by_its_listed_name(rig):  # noqa: F811
+    from hyperspace import ui_browse
+    panel, lib = rig.panel, rig.lib
+    rects = _page(panel)["page"]["rects"]
+    assert rects["browse"][2] <= rects["new_folder"][0]          # left of "new folder"
+    assert abs(rects["browse"][1] - rects["new_folder"][1]) < 1  # on its line
+    _folders(lib, {"party": ["DIAL"]})
+    assert ui_browse.take(panel, lib.home / "loadable" / "party" / "dial.json") == "party/DIAL"
+    name = "party/DIAL"
+    assert lib.current("loadable") == name
+    # a file that is no patch of this library is refused in words, nothing loaded
+    assert ui_browse.take(panel, lib.home / "installs" / "nope.json") is None
+    assert "not a patch in this library" in lib.warning and lib.current("loadable") == name
+    # with no dialog up, the frame's draw lists are not looked at
+    assert ui_browse.scrub(panel, None) == 0 and not ui_browse.is_open(panel)

@@ -29,7 +29,8 @@ bottom (``page``):
               nested; a row's right-click is "move to ▸", a row drags
               onto a header; a header's right-click makes a folder
               inside, renames it, removes it (empty only); "new folder"
-              at the foot makes one at the top
+              at the foot makes one at the top, and "browse…" beside it
+              opens the folder in a file explorer (ui_browse.py)
   trash (n) ▸ at the list's foot, only while the trash holds something:
               its own popup — restore per file, "empty trash…" asked twice
               in place
@@ -58,7 +59,7 @@ import time
 
 from imgui_bundle import imgui
 
-from . import loadable, ui, undo
+from . import loadable, ui, ui_browse, undo
 from .groupwords import group_word
 from .library import (
     LOADABLE,
@@ -617,9 +618,11 @@ def loadable_list(panel) -> None:
     if _name_field(panel, "newfolder:", lambda n: _make_folder(panel, "", n), "folder name"):
         return
     chip = "new folder"
+    browse = "browse…"
     if bin_:
         line = f"trash ({len(bin_)}) ▸"
-        width = imgui.get_content_region_avail().x - ui.chip_w(chip) - imgui.get_style().item_spacing.x
+        width = (imgui.get_content_region_avail().x - ui.chip_w(browse, chip)
+                 - imgui.get_style().item_spacing.x)
         hit, _ = imgui.selectable(f"{line}##trash", False, 0, imgui.ImVec2(max(width, 1.0), 0))
         drawn["foot"].append(line)
         rect("trash")
@@ -632,8 +635,11 @@ def loadable_list(panel) -> None:
         _trash_popup(panel, bin_)
         imgui.same_line()
     imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
-                           - ui.chip_w(chip))
+                           - ui.chip_w(browse, chip))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
+    ui_browse.chip(panel)               # the folder in a file explorer (ui_browse)
+    rect("browse")
+    imgui.same_line()
     if ui.chip(f"{chip}##newfolder"):
         _begin_naming(panel, "newfolder:", "")
     imgui.pop_style_color()

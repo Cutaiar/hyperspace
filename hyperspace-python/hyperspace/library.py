@@ -2454,7 +2454,10 @@ class Library:
         With `loose` — a **read** only: a load, a pad, the startup loadable patch,
         what a show still names — a loadable patch name whose folder is not on
         disk also tries its `slug` among the top-level files, an old show's
-        ``Ac/Dc`` for the top-level ``ac-dc.json`` (plan 48 review). A
+        ``Ac/Dc`` for the top-level ``ac-dc.json`` (plan 48 review); and a
+        name nothing answers to finds the one patch with that leaf in any
+        other folder — a file moved by hand in Finder, while the app was
+        shut or before `poll` saw it (`_hand_moves`). A
         writer (`save_as`, `delete`, `rename`) never takes that road:
         ``party/TRIP`` typed with no ``party/`` is a new file in a new
         folder, never the top-level ``party-trip.json``. None for none, and
@@ -2486,12 +2489,14 @@ class Library:
 
     @staticmethod
     def _resolve(group: str, name: str, snap: tuple, *, loose: bool,
-                 say=None) -> Path | None:
+                 say=None, elsewhere: bool = True) -> Path | None:
         """`path_of` over a `_lookup` snapshot. A fold that two files answer
         to (``trip_2`` / ``trip-2``; ``Trip`` / ``trip`` on a case-sensitive
         disk) is never settled by sort order: a name that is a file key as
         on disk (``trip_2``) finds that file, any other spelling neither,
-        and `say` (a loose read's) is told which two."""
+        and `say` (a loose read's) is told which two. `elsewhere` off: a
+        loose read less its last road, the patch moved by hand — for a
+        caller asking what a name is, not what a slot meant by it."""
         idx, files, byfold, folders = snap
         hit = idx.get(name)
         if hit is not None:
@@ -2516,9 +2521,41 @@ class Library:
 
         if byfold.get(key) or not loose:
             return one(key)
-        folder = split_name(name)[0]
+        folder, leaf = split_name(name)
         if folder and fold_folder(folder) not in folders:
-            return one(slug(name))                  # a top-level key has no "/"
+            hit = one(slug(name))                   # a top-level key has no "/"
+            if hit is not None:
+                return hit
+        # a file moved to another folder by hand (Finder), which no install
+        # was told of: the one patch anywhere with that leaf — by its listed
+        # name or its file's stem. Two of them: neither, and `say` which
+        if not elsewhere:
+            return None
+        want = slug(leaf)
+        found = sorted({p for n, p in idx.items() if slug(split_name(n)[1]) == want}
+                       | {p for k, p in files.items() if slug(k.rpartition("/")[2]) == want})
+        if len(found) == 1:
+            return found[0]
+        if found and say is not None:
+            say(f"{name}: not where it was, and two patches have that name — "
+                f"{found[0].parent.name}/{found[0].name} and "
+                f"{found[1].parent.name}/{found[1].name}")
+        return None
+
+    def name_at(self, path: Path, group: str = LOADABLE) -> str | None:
+        """The name the file at `path` is listed by — a file picked in a
+        file dialog (ui_browse) — or None for a file that is no patch of
+        the group in this library."""
+        try:
+            want = Path(path).resolve()
+        except OSError:
+            return None
+        for name, p in self._index(group).items():
+            try:
+                if p == path or p.resolve() == want:
+                    return name
+            except OSError:
+                continue
         return None
 
     def list(self, group: str) -> list[str]:
@@ -2547,7 +2584,9 @@ class Library:
         ``startup``."""
         pr, key = self.install, self._fold(LOADABLE, name)
         snap = self._lookup(LOADABLE)                   # one look for every slot
-        target = path or self._resolve(LOADABLE, name, snap, loose=True)
+        # (the name asked about is not followed to another folder: a bare
+        # ``C`` is a top-level patch, never ``party/deep/C``)
+        target = path or self._resolve(LOADABLE, name, snap, loose=True, elsewhere=False)
 
         def names(n: str | None) -> bool:
             return bool(n) and (n == name or (key is not None and self._fold(LOADABLE, n) == key)
@@ -3795,8 +3834,73 @@ class Library:
         self.__dict__.get("_walks", {}).clear()     # our own write: walk again
         self._defaults.clear()
 
+    def _hand_moves(self, was: dict[Path, float], seen: dict[Path, float]) -> set[Path]:
+        """Loadable patches moved between folders by hand since the last
+        scan — in Finder, a folder's rename there too — followed as
+        `move` follows its own (`_follow_many`): the loaded patch's name and
+        every install's slots take the new folder, so a pad still loads its
+        patch and a save lands on the file where it now is. A move is a
+        file gone from one folder and one of the same file name new in
+        another (two candidates: the one whose mtime did not move, as a
+        Finder move leaves it; else none — the loose read still finds a
+        patch with a name of its own, `_resolve`). Returns where the moved
+        files are now: the same bytes, so `poll` re-applies none of them."""
+        base = self.home / LOADABLE
+        gone = [p for p in was if p not in seen and p.is_relative_to(base)]
+        if not gone:
+            return set()
+        new: dict[str, list[Path]] = {}
+        for p in seen:
+            if p not in was and p.is_relative_to(base):
+                new.setdefault(p.name, []).append(p)
+        lost: dict[str, list[Path]] = {}
+        for p in gone:
+            lost.setdefault(p.name, []).append(p)
+        pairs: dict[Path, Path] = {}
+        for old in gone:
+            cands = [p for p in new.get(old.name, []) if p.parent != old.parent]
+            if len(cands) > 1 or len(lost[old.name]) > 1:
+                cands = [p for p in cands if seen[p] == was[old]
+                         and sum(was[o] == was[old] for o in lost[old.name]) == 1]
+            if len(cands) == 1 and cands[0] not in pairs.values():
+                pairs[old] = cands[0]
+        if not pairs:
+            return set()
+        # the library as it was before: what is listed now, each moved file
+        # back at its old path under its old folder
+        idx, files, _byfold, folders = self._lookup(LOADABLE)
+        back: dict[Path, Path] = {dst: old for old, dst in pairs.items()}
+        moves: dict[Path, str] = {}
+        named: dict[Path, str] = {}         # old path → the name it was listed by
+        idx0: dict[str, Path] = {}
+        for n, p in idx.items():
+            if p in back:
+                moves[back[p]] = n
+                n = named[back[p]] = self._prefix(LOADABLE, back[p]) + split_name(n)[1]
+            idx0.setdefault(n, back[p] if p in back else p)  # noqa: SIM401 — typed, as .get is not
+        files0: dict[str, Path] = {}
+        for k, p in files.items():
+            old = back[p] if p in back else p  # noqa: SIM401
+            files0[old.relative_to(base).as_posix()[:-5] if p in back else k] = old
+        byfold0: dict[str | None, list[Path]] = {}
+        for k, p in sorted(files0.items()):
+            byfold0.setdefault(fold(k), []).append(p)
+        folders0 = folders | {fold_folder(self._prefix(LOADABLE, old)[:-1]) for old in pairs}
+        if not moves:
+            return set()
+        first = next(iter(moves))
+        what = (f"{named[first]} → {moves[first]}" if len(moves) == 1
+                else f"{len(moves)} patches")
+        try:
+            self._follow_many(moves, (idx0, files0, byfold0, folders0),
+                              "moved in the folder:", what)
+        except (LibraryError, OSError) as e:        # an install that would not write
+            self.say(warning=f"moved in the folder: {what}; installs not updated ({e})")
+        return {pairs[old] for old in moves}
+
     def poll(self, now: float | None = None) -> bool:
-        """Re-apply whatever is loaded from a file that changed on disk."""
+        """Re-apply whatever is loaded from a file that changed on disk, and
+        follow a patch moved between folders by hand (`_hand_moves`)."""
         now = time.monotonic() if now is None else now
         if now < self._next:
             return False
@@ -3804,12 +3908,13 @@ class Library:
         seen = self._scan()
         changed = {p for p in seen.keys() | self._mtimes.keys()
                    if seen.get(p) != self._mtimes.get(p)}
-        self._mtimes = seen
+        was, self._mtimes = self._mtimes, seen
         if not changed:
             return False
         for p in changed:
             self._docs.pop(p, None)
         self._defaults.clear()
+        changed -= self._hand_moves(was, seen)
         if self.reg is None:
             return True
         hit = []

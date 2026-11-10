@@ -551,3 +551,94 @@ def test_two_files_of_one_spelling_are_never_picked_by_sort_order(lib_dirs):
     assert r.lib.path_of(LOADABLE, "Trip! 2", loose=True) is None
     assert "two patches answer to that name" in r.lib.warning
     assert "trip-2.json" in r.lib.warning and "trip_2.json" in r.lib.warning
+
+
+# ------------------------------------------- a file moved by hand (in Finder)
+
+def test_a_loadable_moved_by_hand_is_still_found_by_the_name_a_slot_holds(lib_dirs):
+    """Moved while the app was shut: no install was told. The bare name the
+    bank holds finds the one patch with that leaf, wherever it now is."""
+    p = lib_dirs.loaded_patch
+    (p / "night").mkdir()
+    (p / "a.json").rename(p / "night" / "a.json")
+    r = make(lib_dirs)
+    assert r.lib.list(LOADABLE).count("night/A") == 1 and "A" not in r.lib.list(LOADABLE)
+    assert r.lib.path_of(LOADABLE, "A", loose=True) == p / "night" / "a.json"
+    assert r.lib.path_of(LOADABLE, "A") is None             # a writer never follows it
+    pr = r.lib.install
+    assert pr.bank[0] == "A"
+    pr.load_slot(0)
+    assert r.lib.current(LOADABLE) == "night/A"
+    # out of one folder into another, the folder still there
+    (p / "party" / "deep" / "c.json").rename(p / "night" / "c.json")
+    r.lib._sync()
+    assert r.lib.path_of(LOADABLE, "party/deep/C", loose=True) == p / "night" / "c.json"
+
+
+def test_two_loadables_of_one_name_are_not_guessed_between(lib_dirs):
+    p = lib_dirs.loaded_patch
+    _put(p / "night" / "a.json", "A")
+    _put(p / "day" / "a.json", "A")
+    (p / "a.json").unlink()
+    r = make(lib_dirs)
+    assert r.lib.path_of(LOADABLE, "A", loose=True) is None
+    assert "two patches have that name" in r.lib.warning
+
+
+def test_the_running_app_follows_a_move_made_by_hand(lib_dirs):
+    """`poll` sees a file gone from one folder and new in another: the
+    loaded patch's name and the installs' slots follow, as `move`'s do, and
+    nothing is re-applied (the bytes are the same: an edit stays)."""
+    r = make(lib_dirs)
+    p = lib_dirs.loaded_patch
+    pr = r.lib.install
+    r.loaded_patch.load("A")
+    r.reg["camera.zoom"].set_value(1.7)
+    assert r.lib.is_dirty(LOADABLE)
+    (p / "night").mkdir()
+    (p / "a.json").rename(p / "night" / "a.json")
+    assert r.lib.poll(now=10.0)
+    assert r.lib.current(LOADABLE) == "night/A"
+    assert pr.bank[0] == "night/A" and pr.startup == "night/A" and pr.bank[1] == "party/B"
+    shown = json.loads((lib_dirs.root / "installs" / "night.json").read_text())
+    assert shown["bank"][0] == "night/A" and shown["startup"] == "night/A"
+    assert "moved in the folder" in r.lib.status and "A → night/A" in r.lib.status
+    assert r.reg["camera.zoom"].get() == pytest.approx(1.7) and r.lib.is_dirty(LOADABLE)
+    # a save lands on the file where it now is, and makes no second one
+    r.lib.overwrite(LOADABLE)
+    assert not (p / "a.json").exists()
+    assert json.loads((p / "night" / "a.json").read_text())["name"] == "A"
+
+
+def test_the_running_app_follows_a_folder_renamed_by_hand(lib_dirs):
+    r = make(lib_dirs)
+    p = lib_dirs.loaded_patch
+    pr = r.lib.install
+    pr.put_slot(2, "party/deep/C")
+    r.loaded_patch.load("party/B")
+    (p / "party").rename(p / "late")
+    assert r.lib.poll(now=10.0)
+    assert r.lib.current(LOADABLE) == "late/B"
+    assert pr.bank[1] == "late/B" and pr.bank[2] == "late/deep/C" and pr.bank[0] == "A"
+    assert "3 patches" in r.lib.status
+    assert r.lib.folders() == ["late", "late/deep"]
+
+
+def test_a_copy_made_by_hand_is_no_move(lib_dirs):
+    import shutil
+    r = make(lib_dirs)
+    p = lib_dirs.loaded_patch
+    pr = r.lib.install
+    (p / "night").mkdir()
+    shutil.copy2(p / "a.json", p / "night" / "a.json")
+    r.lib.poll(now=10.0)
+    assert pr.bank[0] == "A" and {"A", "night/A"} <= set(r.lib.list(LOADABLE))
+
+
+def test_name_at_is_the_listed_name_of_a_picked_file(lib_dirs):
+    r = make(lib_dirs)
+    p = lib_dirs.loaded_patch
+    assert r.lib.name_at(p / "party" / "deep" / "c.json") == "party/deep/C"
+    assert r.lib.name_at(p / "a.json") == "A"
+    assert r.lib.name_at(lib_dirs.root / "installs" / "night.json") is None
+    assert r.lib.name_at(p / "nope.json") is None
