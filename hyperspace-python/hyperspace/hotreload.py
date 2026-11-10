@@ -69,7 +69,7 @@ MODULES = (
     "pointer", "players", "analysis", "tapers", "motion", "media.transport", "media.mixer", "media.channels", "modifiers", "palettecompat", "groupwords", "undo", "placement", "geometry", "world", "bands", "analyzer", "audio", "tempo", "modbank", "lfo", "envelope", "sequencer", "glsl", "masks", "patterns",
     "lookback", "dream", "fx", "ghost", "outputs", "pacing", "replay", "view", "field", "graph", "routing_sources", "graphmigrate", "media_tex", "poi_guide", "render", "params", "library", "playlist", "control", "config",
     "overlay", "pads.models", "pads.gesture", "poi", "totem", "pads.sony", "pads.nintendo", "pads.hid", "pads", "gamepad", "apc40", "generic", "sharedfile", "devicelist", "displays", "hotplug", "modgraph", "seq_page", "routing", "nodemode", "patches", "loadable", "learn", "deck", "midiports", "midi", "bridge",
-    "hands.signal", "hands.tape", "hands.room", "hands.core", "hands", "devices", "media.live", "media.panel", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "node_desk", "osc", "graphview", "ui_loadable", "ui_lookback", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
+    "hands.signal", "hands.tape", "hands.room", "hands.core", "hands", "devices", "media.live", "media.panel", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "node_desk", "osc", "graphview", "ui_browse", "ui_loadable", "ui_lookback", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
     "ui_lfo", "ui_media", "ui_diagram", "ui_desk", "ui_pad_lab", "ui_pad_nvg", "ui_pad_views", "ui_pad", "hands.panel", "ui_players", "ui_displays", "ui_playlist", "ui_pane", "ui_graph", "ui_seq", "ui",
 )
 # (plan 39 T2: `masks` sits after `glsl`, whose QUAD_VS it binds, and before

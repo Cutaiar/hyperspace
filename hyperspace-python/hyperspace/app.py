@@ -92,6 +92,7 @@ from . import (
     sharedfile,
     tempo,
     totem,
+    ui_browse,
 )
 from . import ghost as ghosts
 from . import undo as undos
@@ -2343,6 +2344,7 @@ def main(argv: list[str] | None = None) -> None:
             _hot_error_toast(reloader.error or reloader.runtime_error)
 
         imgui.render()
+        ui_browse.scrub(panel, imgui.get_draw_data())    # a deleted icon texture: see there
         impl.render(imgui.get_draw_data())
         # the GRAPH canvas into its tap, from the lists just drawn, on a frame
         # a channel asked for `panel:graph` (replay.py, 2026-11-02)
