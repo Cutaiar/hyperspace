@@ -8,7 +8,7 @@ no other code in the series carries both.
 
     uv run --with pyqart --with pillow --with numpy --with mpmath \\
       --with segno --with zxing-cpp python3 gen/editions.py \\
-      --url https://hyperspace.cutaiar.io
+      --url https://www.instagram.com/hyperspace.av/
 
 Nothing here is trusted on looks: every SVG is rasterised by headless Chrome,
 decoded by zxing, and the decoded fragment is checked to actually begin with

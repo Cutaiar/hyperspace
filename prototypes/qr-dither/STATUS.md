@@ -21,7 +21,7 @@ separate step, because it needs Chrome and a Python stack the app does not:
 
 ```sh
 uv run --with pillow --with numpy --with segno --with zxing-cpp \
-  python3 gen/sheets.py --url https://hyperspace.cutaiar.io
+  python3 gen/sheets.py --url https://www.instagram.com/hyperspace.av/
 ```
 
 That one also wants **poppler** — the only system package this prototype needs

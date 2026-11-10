@@ -48,7 +48,7 @@ export const SHEET = { w: 7.44 * 25.4, h: 9.94 * 25.4, gutter: (3 / 16) * 25.4 }
 export const MEDIA: Medium[] = [
   { id: 'screen-200', label: 'Contact page, 200px', group: 'Screen', size: 200, unit: 'px',
     safety: 3, measured: true,
-    blurb: 'What hyperspace.cutaiar.io renders today.' },
+    blurb: 'What the linked page renders today.' },
   { id: 'screen-400', label: 'Contact page, 400px', group: 'Screen', size: 400, unit: 'px',
     safety: 3, measured: true,
     blurb: 'What the art codes have always wanted.' },

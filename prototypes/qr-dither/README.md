@@ -44,7 +44,7 @@ served at `/data`, and each is rebuilt by one command:
 
 ```sh
 uv run --with pyqart --with pillow --with numpy --with segno --with zxing-cpp \
-  python3 gen/gallery.py --url https://hyperspace.cutaiar.io
+  python3 gen/gallery.py --url https://www.instagram.com/hyperspace.av/
 ```
 
 `uv` resolves the dependencies per run, so there is no virtualenv to create or
@@ -99,7 +99,7 @@ structural: no control in the UI can break it, only make it harder to read.
 
 ```sh
 uv run --with pyqart --with pillow --with numpy --with zxing-cpp \
-  python3 gen/gallery.py --url https://hyperspace.cutaiar.io
+  python3 gen/gallery.py --url https://www.instagram.com/hyperspace.av/
 ```
 
 [`gen/polytopes.py`](gen/polytopes.py) generalises the tesseract to a family —
@@ -154,7 +154,7 @@ missing:
 
 ```sh
 uv run --with pyqart --with pillow --with numpy \
-  python3 gen/export_js.py --url https://hyperspace.cutaiar.io \
+  python3 gen/export_js.py --url https://www.instagram.com/hyperspace.av/ \
   --order streak --out solver-streak
 ```
 

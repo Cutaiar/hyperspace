@@ -16,7 +16,7 @@ not swept: only edges quantising to 0, 45 or 90 degrees survive a square grid,
 so the angles stay put.
 
     uv run --with pyqart --with pillow --with numpy --with mpmath \\
-      python3 gen/explore_data.py --url https://hyperspace.cutaiar.io
+      python3 gen/explore_data.py --url https://www.instagram.com/hyperspace.av/
 """
 import argparse
 import base64

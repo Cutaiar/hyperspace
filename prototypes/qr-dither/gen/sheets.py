@@ -16,7 +16,7 @@ because the answer there is what decides whether 44 mm is enough.
 
     cd app && npm run check
     uv run --with pillow --with numpy --with segno --with zxing-cpp \\
-      python3 gen/sheets.py --url https://hyperspace.cutaiar.io
+      python3 gen/sheets.py --url https://www.instagram.com/hyperspace.av/
 
 Needs headless Chrome, as gen/gallery.py does, and one system package the rest
 of this prototype does not: poppler, for `pdftoppm` (`brew install poppler`,
