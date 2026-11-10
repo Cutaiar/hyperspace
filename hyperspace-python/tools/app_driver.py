@@ -23,7 +23,7 @@ opens it (GRAPH, the pane on the selection): a script shows the section it
 wants first — ``panel.reg["ui.page"].set(PAGE_KEYS.index("view"))``, a frame or
 two before it looks for a control, or a click on its chip (``pane.<key>``, or
 ``pane.sections`` and then the menu's row) —
-and loads a loadable patch with ``panel.loaded_patch.load(name)`` if it wants another.
+and loads a loadable patch with ``panel.library.loaded_patch.load(name)`` if it wants another.
 
 Off the Mac, run it under the virtual display (the cloud session's
 DISPLAY=:99, or ``xvfb-run -a``). The software rasteriser draws what the
