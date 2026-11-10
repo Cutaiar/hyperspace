@@ -1,5 +1,5 @@
 """The playlist (plan 44 D6b): choose one, play it, and write one. A playlist is the meta
-controller's (owner, 2026-11-10, register row 852), so it is not in the side pane: a
+controller's (owner, 2026-11-10, register row 858), so it is not in the side pane: a
 **playlist** chip on GRAPH's deck row (deck · load… · playlist · copy on air to off air ·
 fade; `ui_graph._deck_row`), lit while one plays, its hover saying where it has got to
 (`where`), opens these controls in a popup under it (`popup`), `WIDTH` wide.

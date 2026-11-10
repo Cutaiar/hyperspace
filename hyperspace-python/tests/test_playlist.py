@@ -745,7 +745,7 @@ def test_a_long_run_keeps_the_undo_stacks_bounded(air):
 # ------------------------------------------------------------------ the popup (D6b)
 
 def test_the_playlist_is_no_section_of_the_pane():
-    """A playlist is the meta controller's (row 852): no pane chip, no menu row. Its
+    """A playlist is the meta controller's (row 858): no pane chip, no menu row. Its
     `PAGE_KEYS` slot stays, so saved bindings keep their indices; it shows the selection."""
     assert "playlist" not in ui_pane.KEYS and "playlist" not in ui_pane.TABS
     assert ui_pane.section_of("playlist") == ui_pane.SELECTION
