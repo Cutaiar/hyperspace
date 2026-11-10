@@ -394,8 +394,8 @@ def chip_group(labels, lit=None, tips=None) -> int | None:
             on = lit[i]
             clicked = chip(label, lit=bool(on), color=DIM if on is False else None,
                            join=joins[i])
-        elif lit[i] is not None:
-            clicked = lit_chip(label, lit[i])
+        elif (on := lit[i]) is not None:
+            clicked = lit_chip(label, on)
         else:
             clicked = chip(label)
         if tips and tips[i] and imgui.is_item_hovered():
