@@ -81,7 +81,7 @@ def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):
     # channel under the scene is the graph's wire)
     from hyperspace import graphmigrate as M
 
-    # (plan 60, row 857: the grip at its defaults, never used, is left out)
+    # (plan 60, row 859: the grip at its defaults, never used, is left out)
     assert doc["values"] == {k: v for k, v in reg.snapshot(part="patch").items()
                              if not k.startswith("grip.")}
     assert not [k for k in doc["values"] if M.retired(k)]

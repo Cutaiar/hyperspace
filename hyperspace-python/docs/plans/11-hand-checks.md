@@ -8776,11 +8776,11 @@ The patches: copy `tests/fixtures/world-check/` into the library's `loadable/` a
 
 **660. Reset world.** Open the camera section. *Pass:* **Reset world** sits under **Reset view**; pressing it changes nothing on screen (every offset is already home), on either deck. *Fail:* a missing button, or a press that moves anything.
 
-## DX. The hand rig (rows 857–867, 2026-11-10)
+## DX. The hand rig (rows 859–869, 2026-11-10)
 
 Plan 60. Headless: `tests/test_grip.py` (no jump on closing, welded every frame, a tape held by its grab, the spring's step response, the release's coast at 30, 60 and 144 fps, the box, the analytic precession rate, the skater's doubled spin with L kept, even inertia, the limits, the params, a turned 3D shape's depth). A restart after pulling (`Host.grip`, `Body.place`, `World.box` are new fields on live objects).
 
-Setup for all: the Leap on, the ghost hands on. The grip is a look's own (row 857): load **world check/1 one shape** (plan 59's patches, DW) or any loadable patch with one shape and Fit off, then HANDS page → **grip** section, **Grip** on, **Hand** right (save the look to keep it).
+Setup for all: the Leap on, the ghost hands on. The grip is a look's own (row 859): load **world check/1 one shape** (plan 59's patches, DW) or any loadable patch with one shape and Fit off, then HANDS page → **grip** section, **Grip** on, **Hand** right (save the look to keep it).
 
 **661. The coupling's range.** **Coupling** at 1: close your right fist near the shape and move and turn the hand. *Pass:* the shape does not jump as the fist closes, and stays on the hand as if welded — no lag, no wobble. Then 0.7, 0.4 and 0 in turn: the shape follows on a spring that gets looser and bouncier, overshooting and settling, down to a slow sway at 0; turning the hand turns it the same way (no flip, no tumble the wrong way round, even through a hand pointing straight up). *Fail:* a jump on the close, a turn the wrong way, a spring that rings on or blows up. Say which coupling feels right for a show.
 
@@ -8794,7 +8794,7 @@ Setup for all: the Leap on, the ghost hands on. The grip is a look's own (row 85
 
 **666. A turned 3D shape sorts by its depth.** A 3D shape with faces on. Hold it and turn it half round about the vertical. *Pass:* its nearer faces and edges draw in front and brighter, as with the shape turned by `camera.yaw`. *Fail:* the far side drawn over the near after the turn.
 
-**667. Off, reset, Fit.** Move the shape away with the rig, then **Grip** off: *Pass:* it stays where it is. **Reset world** (camera section): it goes home. Rig on, load **world check/3 fit**: the clutch moves nothing (Fit and the lattices take no offset, row 864); **2 field** moves the field as one figure. *Fail:* a jump on off, a reset that misses, or a Fit field that moves.
+**667. Off, reset, Fit.** Move the shape away with the rig, then **Grip** off: *Pass:* it stays where it is. **Reset world** (camera section): it goes home. Rig on, load **world check/3 fit**: the clutch moves nothing (Fit and the lattices take no offset, row 866); **2 field** moves the field as one figure. *Fail:* a jump on off, a reset that misses, or a Fit field that moves.
 
 **668. Per look, home on a new look, the lanes.** Save a look with the grip on (**gripped**), throw the shape, and load another look that never had the grip. *Pass:* the shape springs home in about a third of a second and the fist does nothing; reload **gripped**: the grip is on again with its own values; throw, then load **gripped** again: home first, then the fist takes it. With the second deck: its own grip, off until set, and crossfading to it sends a thrown shape home. Add a route from `grip:speed` onto any effect's amount: it rises with a throw and falls as the shape slows, after the fist has opened. *Fail:* a look without the grip that still grabs, a thrown shape carried into the next look, or `grip:speed` that stops at the release.
 
