@@ -366,7 +366,7 @@ def test_page_param_is_ui_state_not_a_loadable(rig):
 
 # the sections `ui.page` focuses with a `_page_<key>` body of their own
 # (plan 49 stage 3: GRAPH is always drawn, the fx section is `ui_fx.page`'s)
-DRAWN = [k for k in PAGE_KEYS if k not in ("fx", "graph")]
+DRAWN = [k for k in PAGE_KEYS if k not in ("fx", "graph", "playlist")]   # (playlist: GRAPH's deck row)
 
 
 def _page_scroll(rig, monkeypatch) -> dict[str, float]:
