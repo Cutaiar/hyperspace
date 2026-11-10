@@ -56,6 +56,18 @@ LABEL_H = 24.0
 ITEM_PAD_X = 6.0     # px-1.5
 GAP = 6.0            # gap-1.5
 MIN_W = 128.0        # min-w-32
+# How wide a panel may get. The real component has no maximum: a shadcn menu
+# item carries no `truncate`, so in the browser a long row simply makes the
+# panel as wide as its words (and wraps once the viewport runs out). That is
+# not a law this kit can keep — a menu row here is ONE line, and the graph's
+# insert menu carries refusals like "faces pattern: Faces pattern is in the
+# graph already: drag it onto the cable", which made a 980px panel over the
+# canvas. So this is the kit's own policy, like the x-clamp in
+# `comp_context_menu.place_at_pointer`, and the number is the one the kit
+# already uses for a floating box of words (`interact.tooltip`'s max_w).
+# A row too long for it is ellipsised, and the host can put the whole of it
+# in that row's tooltip (`ui_menu._tips_kit`).
+MAX_W = 320.0
 SEP_MY = 4.0         # my-1
 DESTRUCTIVE_HOVER_A = {"light": 0.10, "dark": 0.20}
 # `tracking-widest` is real and Chromium trails it: a 12px shortcut measures
@@ -114,6 +126,15 @@ SUB_MIN_W = 128.0       # min-w-32
 SUB_BORDER = 1.0        # `border`, and inside the box
 SUB_SHADOW = T.SHADOW_LG
 SUB_OPEN_S = 0.10       # Radix's hover timer
+# THE SAFE TRIANGLE (Amazon's "golden triangle", jQuery menu-aim's cone).
+# Not from the browser: Radix has none, and a diagonal from a trigger to the
+# far corner of its panel crosses the rows between them, each of which would
+# take the pointer and close the panel you were on your way to. The triangle
+# is the standard answer - while the pointer is inside the wedge from where
+# it was to the panel's near edge, it is treated as heading there, and the
+# rows it crosses do nothing.
+AIM_SAMPLE_S = 0.15     # how old the point the wedge is drawn from may be
+AIM_HOLD_S = 0.70       # a pointer parked in the wedge gives up after this
 CHEVRON = "chevron_right"
 
 
@@ -501,19 +522,33 @@ def _keys(ui, key: str, items, rows, role: str) -> None:
 
 
 def _begin_keys(ui, key: str, items, x, y, w, role: str,
-                frozen: bool = False, off: float = 0.0):
+                frozen: bool = False, off: float = 0.0, hold: bool = False):
     """Resolve the open, let the pointer and the keys move the highlight,
     and hand back which row holds it. Runs BEFORE the rows are drawn.
 
     Returns a position in `item_rows(items)`, or None for "nothing
     highlighted" - which a pointer-opened menu really is.
 
-    `frozen` keeps the highlight exactly where it is: it is what a panel
-    with an open SUBMENU does, because the keys then belong to the deepest
-    panel and two levels both reading ArrowDown would move two highlights
-    with one press. The pointer is frozen with them, so a mouse sitting
-    over the trigger cannot drag the parent's highlight away while the
-    submenu is being driven by the keyboard.
+    `frozen` holds the KEYS off: a panel with an open submenu has handed
+    them to that panel, and two levels both reading ArrowDown would move
+    two highlights with one press.
+
+    It does NOT hold the pointer off, and that is the correction to a
+    first version which did. A frozen pointer leaves the highlight behind:
+    move down a menu, open one row's submenu in passing, carry on to
+    another row, and the first row stayed lit while the second ran the
+    submenu - two rows lit at once, which is what the owner saw. Nothing
+    is lost by letting the pointer through, because the hand-over below
+    only happens when the mouse MOVES: a mouse parked over a trigger while
+    the keyboard drives the submenu cannot take anything.
+
+    `hold` is the pointer's own exception, and it is the other half of the
+    safe triangle (`_keep`): while the pointer is INSIDE this panel's open
+    submenu, or cutting the corner toward it, the rows it is passing over
+    must not take the highlight either - the row that owns the open panel
+    keeps it. Without this the parent lit the row under the pointer while
+    the submenu of another row stood open beside it, which is the same two
+    rows lit, arrived at the other way round.
 
     `off` is where the rows START, scrolled (`scrolled`). Without it a
     capped panel hit-tests the pointer against the UNSCROLLED rows: on a
@@ -551,7 +586,7 @@ def _begin_keys(ui, key: str, items, x, y, w, role: str,
     # `ui.hit`, so it can be read before the row is submitted and the
     # highlight the keys chose is the one THIS frame paints.
     io = imgui.get_io()
-    if rows and not frozen and (io.mouse_delta.x or io.mouse_delta.y):
+    if rows and not hold and (io.mouse_delta.x or io.mouse_delta.y):
         iy = y - off
         for i, it in enumerate(items):
             if i in rows and imgui.is_mouse_hovering_rect(
@@ -712,7 +747,8 @@ def sub_size(ui, items) -> tuple[float, float]:
     128 and its rows 118.
     """
     edge = 2 * (PAD + SUB_BORDER)
-    cw, ch = measure(ui, items, SUB_MIN_W - 2 * SUB_BORDER)
+    cw, ch = measure(ui, items, SUB_MIN_W - 2 * SUB_BORDER,
+                     MAX_W - 2 * SUB_BORDER)
     return cw + edge, ch + edge
 
 
@@ -752,7 +788,33 @@ def _dismiss(ui, key: str) -> None:
     ui.anim.to(f"{key}:open", 0.0)
 
 
-def place_sub(trig, w: float, h: float, avail) -> B.Rect:
+def chain_side(trig, avail, width: float = MAX_W) -> str:
+    """Which side a whole chain of submenus opens on: "right" or "left".
+
+    Decided ONCE, when a menu's first submenu opens, and kept for every
+    level under it. Each level choosing for itself is what made the menus
+    jump: a narrow panel fits to the right of a trigger near the window's
+    edge and a wide one does not, so `insert ▸` opened rightward and
+    `effects ▸` under it flipped back over the top of it. Nothing about the
+    menu changed between those two moments except how long one word was.
+
+    `width` is what a panel may take at most (`MAX_W`), not what the next
+    one happens to need — that is the whole point. A side with room for the
+    widest panel the kit can draw has room for every panel in the chain, so
+    the decision taken here cannot be overtaken by a later level.
+    """
+    if not isinstance(trig, B.Rect):
+        trig = B.Rect(*trig)
+    if trig.right + width <= avail.right:
+        return "right"
+    if trig.x - width >= avail.x:
+        return "left"
+    # neither side has room for the widest panel: take the roomier one,
+    # which is the same rule `place_sub` falls back on
+    return "right" if (avail.right - trig.right) >= (trig.x - avail.x) else "left"
+
+
+def place_sub(trig, w: float, h: float, avail, side: str = "") -> B.Rect:
     """Where a submenu panel goes beside its trigger row. Pure geometry.
 
     The law is measured: `x = trigger.right`, `y = trigger.y`, anchored on
@@ -766,21 +828,71 @@ def place_sub(trig, w: float, h: float, avail) -> B.Rect:
     side that overflows less when neither does. An ImGui popup that leaves
     the window is simply lost, which is the reason the divergence is worth
     it here and was worth it there.
+
+    `side` is the chain's own, from `chain_side`, and when it is given it
+    is obeyed rather than worked out per panel: a chain that opens leftward
+    stays leftward, however wide its levels turn out to be.
     """
     if not isinstance(trig, B.Rect):
         trig = B.Rect(*trig)
     h = min(h, max(avail.h, 0.0))
-    x = trig.right
-    if x + w > avail.right:
-        alt = trig.x - w
-        if (avail.x - alt) < (x + w - avail.right):
-            x = alt
+    if side == "left":
+        x = trig.x - w
+    elif side == "right":
+        x = trig.right
+    else:
+        x = trig.right
+        if x + w > avail.right:
+            alt = trig.x - w
+            if (avail.x - alt) < (x + w - avail.right):
+                x = alt
     # clamp last, and low last of all, as `place_at_pointer` does: a panel
     # that cannot fit pins to the top-left rather than hiding its first row
     x = min(x, avail.right - w)
     x = max(x, avail.x)
     y = min(trig.y, avail.bottom - h)
     return B.Rect(x, max(y, avail.y), w, h)
+
+
+def _side(a, b, p) -> float:
+    """Which side of the line a->b the point p is on (its cross product)."""
+    return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+
+
+def in_triangle(p, a, b, c) -> bool:
+    """Is `p` inside the triangle `a b c` (edges count as inside)."""
+    d1, d2, d3 = _side(a, b, p), _side(b, c, p), _side(c, a, p)
+    neg = d1 < 0 or d2 < 0 or d3 < 0
+    pos = d1 > 0 or d2 > 0 or d3 > 0
+    return not (neg and pos)
+
+
+def aiming_at(prev, now, rect) -> bool:
+    """Is the pointer on its way INTO the panel at `rect`?
+
+    The wedge is `prev` and the panel's two NEAR corners - its left edge
+    when the panel is to the right, its right edge when it is to the left.
+    A pointer anywhere in that wedge is moving toward the panel however
+    many rows lie under the diagonal, which is the whole trick: without it
+    the rows between a trigger and the far corner of its own panel each
+    take the pointer in turn and close the panel it was heading for.
+
+    Pure geometry, so the rule can be read without a GL context.
+    """
+    if prev is None or rect is None or prev == now:
+        # A PARKED pointer is heading nowhere, and the degenerate triangle a
+        # zero-length move makes contains every point — so without this the
+        # wedge is "true" for as long as the hand rests on the trigger, and
+        # its patience (`AIM_HOLD_S`) is spent before the move it exists for
+        # has even started. Measured in the app: five seconds of it.
+        return False
+    x, y, w, h = rect
+    near_x = x if now[0] <= x else x + w
+    if x <= now[0] <= x + w:
+        return False                    # already over the panel: not "toward"
+    if (near_x - now[0]) * (near_x - prev[0]) < 0:
+        return False                    # it has crossed the panel's edge line
+    return in_triangle(now, prev, (near_x, y), (near_x, y + h))
 
 
 def _subs(ui, key: str) -> dict:
@@ -809,6 +921,51 @@ def _forget(ui, key: str) -> None:
         LAST_RECT.pop(shown, None)
         ui.anim.to(f"{shown}:open", 0.0)
     st["open"], st["shown"], st["hot"], st["age"] = None, None, None, 0.0
+    st["side"] = None           # the next open decides it afresh
+
+
+def _keep(ui, st: dict) -> bool:
+    """Should this panel's open submenu stay open, whatever row the pointer
+    is geometrically over?
+
+    Two reasons it should, and the first is not the clever one:
+
+    * **the pointer is IN it.** `is_mouse_hovering_rect` knows nothing
+      about which window is on top, so a parent panel reads the pointer as
+      being on one of its own rows while it is really inside the submenu
+      drawn over them — and closed the submenu the pointer had reached.
+      The two panels overlap by four pixels by construction (the submenu
+      starts at `trigger.right`, which is inside the parent's padding), so
+      this is not an edge case: every approach from the parent's side
+      crosses it.
+    * **the pointer is on its way in** — the safe triangle.
+
+    Keeps the wedge's origin ~`AIM_SAMPLE_S` old rather than last frame's
+    point: a wedge drawn from 16ms ago is barely a direction at all, and
+    one drawn from a quarter of a second ago is the path the hand is
+    actually on. A pointer that sits in the wedge without arriving gives up
+    after `AIM_HOLD_S`, so a menu can never be stuck open by a parked
+    mouse. Having ARRIVED never ages out: the submenu is the pointer's.
+    """
+    m = imgui.get_mouse_pos()
+    now = (m.x, m.y)
+    st["aim_t"] = st.get("aim_t", 0.0) + ui._dt
+    if st.get("aim_from") is None or st["aim_t"] >= AIM_SAMPLE_S:
+        st["aim_from"], st["aim_t"] = st.get("aim_now", now), 0.0
+    st["aim_now"] = now
+    rect = LAST_RECT.get(st.get("shown") or "") if st.get("open") is not None else None
+    if rect is None:
+        st["aim_age"] = 0.0
+        return False
+    x, y, w, h = rect
+    if x <= now[0] < x + w and y <= now[1] < y + h:
+        st["aim_age"] = 0.0
+        return True                     # arrived
+    if not aiming_at(st.get("aim_from"), now, rect):
+        st["aim_age"] = 0.0
+        return False
+    st["aim_age"] = st.get("aim_age", 0.0) + ui._dt
+    return st["aim_age"] < AIM_HOLD_S
 
 
 def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
@@ -827,19 +984,37 @@ def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
     the panel has to STAY open).
     """
     st, kb = _subs(ui, key), _kb(ui, key)
-    want = kb.pop("open_sub", None)
-    if want is not None and want in rects:
-        st["open"], st["hot"], st["age"] = want, want, 0.0
+    # already worked out this frame, before the keys ran (`popup`)
+    aim = st.get("keep", False)
+    # `by_key` is the row a KEY asked to open — ArrowRight, Enter or Space.
+    # It is not the same as "a panel opened this frame", and conflating the
+    # two armed a HOVER-opened panel on its first row: measured, a hover
+    # open highlights nothing, and a row lit under a pointer that is still
+    # in the parent is the second of the two rows the owner saw lit at once.
+    by_key = kb.pop("open_sub", None)
+    if by_key is not None and by_key in rects:
+        st["open"], st["hot"], st["age"] = by_key, by_key, 0.0
+    elif aim:
+        # in the open panel, or on its way into it: the rows it crosses do
+        # nothing, and neither their dwell nor the open one's closing may
+        # start (`_keep`)
+        pass
     elif over is not None and over != st["open"]:
-        # Radix's 100 ms, and the dwell is per ROW: moving along the rows
-        # must not pour one row's wait into the next.
+        # The pointer is on ANOTHER row, so the open panel goes at once —
+        # whether that row has a submenu of its own or not. Closing is
+        # immediate and only OPENING is on Radix's 100 ms timer, and the
+        # two were conflated here: a move from one SubTrigger to the next
+        # left the first panel up for the whole dwell, so for six frames
+        # the menu had TWO rows lit, the old one on `data-open` and the new
+        # one on hover. The real component never shows that.
+        st["open"] = None
+        # the dwell is per ROW: moving along them must not pour one row's
+        # wait into the next
         if st["hot"] != over:
             st["hot"], st["age"] = over, 0.0
         st["age"] += ui._dt
-        if over not in rects:
-            st["open"] = None       # another row: measured, the sub closes
-        elif st["age"] >= SUB_OPEN_S:
-            st["open"] = want = over
+        if over in rects and st["age"] >= SUB_OPEN_S:
+            st["open"] = over
 
     at = st["open"]
     subkey = ""
@@ -873,20 +1048,24 @@ def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
         return None
 
     st["shown"] = subkey
+    root = _subs(ui, key.split(">")[0])
+    if root.get("side") is None:
+        root["side"] = chain_side(rects[at], ui.viewport)
     if not imgui.is_popup_open(subkey):
         imgui.open_popup(subkey)
-        if want is not None:
+        if by_key is not None:
             # a KEY opened it: measured, the first row is highlighted. A
             # hover open highlights nothing, which is what no `arm` means.
             arm(ui, subkey, SEL_FIRST)
-    chosen = sub_popup(ui, subkey, items[at].items, rects[at], a, row_id=row_id)
+    chosen = sub_popup(ui, subkey, items[at].items, rects[at], a,
+                       row_id=row_id, side=root["side"])
     if chosen is not None:
         st["open"] = None
     return chosen
 
 
 def sub_popup(ui, key: str, items, trig, a: float = 1.0, *,
-              row_id=None) -> str | None:
+              row_id=None, side: str = "") -> str | None:
     """Draw one submenu panel beside `trig`. Returns the chosen id.
 
     The panel is a nested ImGui popup with `no_focus_on_appearing`, and
@@ -900,7 +1079,7 @@ def sub_popup(ui, key: str, items, trig, a: float = 1.0, *,
     whole menu" needs.
     """
     w, h = sub_size(ui, items)
-    at = place_sub(trig, w, h, ui.viewport)
+    at = place_sub(trig, w, h, ui.viewport, side)
     # `place_sub` clamps a panel taller than the viewport, which on its own
     # would CUT the rows off the bottom: the look-back frame menu is 32
     # rows, 906px, and the last of them cannot be clicked in any window
@@ -929,11 +1108,14 @@ def sub_popup(ui, key: str, items, trig, a: float = 1.0, *,
         inset = PAD + SUB_BORDER
         cw = at.w - 2 * inset
         ch = h - 2 * inset              # the rows' own height, uncapped
-        frozen = _subs(ui, key)["open"] is not None
+        sub_st = _subs(ui, key)
+        frozen = sub_st["open"] is not None
+        sub_st["keep"] = _keep(ui, sub_st)
         hi = highlighted_item(
             items, _begin_keys(ui, key, items, x + inset, y + inset, cw,
                                "menu", frozen,
-                               scrolled(ui, key) if scrolls else 0.0))
+                               scrolled(ui, key) if scrolls else 0.0,
+                               sub_st["keep"]))
         off = 0.0
         if scrolls:
             off = _scroll(ui, key, items, hi, at.h - 2 * inset, ch)
@@ -1057,8 +1239,32 @@ def row_h(it) -> float:
     return LABEL_H if it.kind == "label" else ITEM_H
 
 
-def measure(ui, items, min_w: float = MIN_W) -> tuple[float, float]:
-    """The content box a menu needs, before chrome padding."""
+def label_room(it, cw: float, ui) -> float:
+    """How much of a row `cw` wide is left for its label.
+
+    The same reservations `measure` makes, read the other way round: what
+    the label may take once its icon, its chevron and its shortcut have
+    had theirs. `_row` draws to it, so a label that did not fit is
+    ellipsised rather than running under the chevron or off the panel.
+    """
+    room = cw - 2 * ITEM_PAD_X
+    if it.icon or it.checked is not None:
+        room -= ICON + GAP
+    if is_sub(it):
+        room -= GAP + ICON
+    if it.shortcut:
+        room -= GAP + D.text_w(it.shortcut, ui.faces, "regular", 12, True) \
+            + SHORTCUT_TRACKING * len(it.shortcut)
+    return max(room, 0.0)
+
+
+def measure(ui, items, min_w: float = MIN_W,
+            max_w: float = MAX_W) -> tuple[float, float]:
+    """The content box a menu needs, before chrome padding.
+
+    Capped at `max_w` (`MAX_W`): past it a row's label is ellipsised, which
+    is this kit's policy rather than the browser's — see MAX_W.
+    """
     w = min_w - 2 * PAD
     h = 0.0
     for it in items:
@@ -1083,6 +1289,8 @@ def measure(ui, items, min_w: float = MIN_W) -> tuple[float, float]:
             extra += GAP + D.text_w(it.shortcut, ui.faces, "regular", 12,
                                     True) + SHORTCUT_TRACKING * len(it.shortcut)
         w = max(w, tw + extra)
+    if max_w:
+        w = min(w, max_w - 2 * PAD)
     return w, h
 
 
@@ -1164,7 +1372,7 @@ def _row(ui, it, x, y, w, key, alpha, *, chrome_only: bool = False,
         D.icon(ui.dl, it.icon, tx, y + (ITEM_H - ICON) / 2, ICON, ink)
         tx += ICON + GAP
     D.label(ui.dl, tx, y, it.label, ui.faces, "regular", 14, ink,
-            baseline_box=ITEM_H)
+            baseline_box=ITEM_H, max_w=max(x + w - ITEM_PAD_X - tx - _after(it, ui), 0.0))
     if it.shortcut:
         D.label(ui.dl, x, y, it.shortcut, ui.faces, "regular", 12,
                 sc_ink, align="right",
@@ -1187,6 +1395,17 @@ def scrolled(ui, key: str) -> float:
     rows that were painted last frame, at last frame's offset.
     """
     return ui.anim.store.get("menu_scroll", {}).get(key, 0.0)
+
+
+def _after(it, ui) -> float:
+    """What a row keeps to the RIGHT of its label: the chevron of a
+    SubTrigger, or a shortcut. The label is drawn to what is left."""
+    if is_sub(it):
+        return GAP + ICON
+    if it.shortcut:
+        return GAP + D.text_w(it.shortcut, ui.faces, "regular", 12, True) \
+            + SHORTCUT_TRACKING * len(it.shortcut)
+    return 0.0
 
 
 def _scroll(ui, key: str, items, at, view: float, content: float) -> float:
@@ -1305,11 +1524,16 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
         at = None
         # a panel with a SUBMENU up hands its keys to that panel, and holds
         # its own highlight where it is (`_begin_keys`' `frozen`)
-        frozen = _subs(ui, key)["open"] is not None
+        sub_st = _subs(ui, key)
+        frozen = sub_st["open"] is not None
+        # ONCE a frame, and before the keys: `_keep` ages a timer, and the
+        # pointer's hand-over has to know its answer
+        sub_st["keep"] = _keep(ui, sub_st)
         if keyboard:
             at = highlighted_item(
                 items, _begin_keys(ui, key, items, x + PAD, y + PAD, cw, role,
-                                   frozen, scrolled(ui, key) if scrolls else 0.0))
+                                   frozen, scrolled(ui, key) if scrolls else 0.0,
+                                   sub_st["keep"]))
 
         off = 0.0
         if scrolls:

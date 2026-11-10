@@ -353,10 +353,14 @@ def _tips_kit(kit, m: Menu, items, B, M) -> None:
     tooltip itself is the panel's own (`ui.tooltip`): an imgui tooltip
     window sits above the popup stack, where a tooltip drawn into the
     panel's draw list would be clipped to the panel.
+
+    A row with no tip of its own gets one when its LABEL did not fit: the
+    panel is capped at `menu.MAX_W` and a long row is ellipsised there, so
+    the words that were cut have to be reachable. The graph's refusals are
+    what need it — "faces pattern: Faces pattern is in the graph already:
+    drag it onto the cable" is a whole sentence on one row.
     """
     tips = {r.id: r.tip for r in m.walk() if r.tip}
-    if not tips:
-        return
     mouse = imgui.get_mouse_pos()
     for key, rect in list(M.LAST_RECT.items()):
         if not key.startswith(m.key):
@@ -369,11 +373,24 @@ def _tips_kit(kit, m: Menu, items, B, M) -> None:
         iy = y + inset
         for it in rows:
             rh = M.row_h(it)
-            tip = tips.get(getattr(it, "id", ""))
-            if tip and x <= mouse.x < x + w and iy <= mouse.y < iy + rh:
-                ui.tooltip(tip)
+            if x <= mouse.x < x + w and iy <= mouse.y < iy + rh:
+                tip = tips.get(getattr(it, "id", "")) or _cut_label(kit, it, w - 2 * inset, M)
+                if tip:
+                    ui.tooltip(tip)
                 return
             iy += rh
+
+
+def _cut_label(kit, it, cw: float, M) -> str:
+    """The row's whole label, where the panel's cap cut it; "" otherwise."""
+    label = getattr(it, "label", "")
+    if not label or getattr(it, "kind", "item") == "sep":
+        return ""
+    D = ui_kit.mod("draw")
+    size = 12 if getattr(it, "kind", "item") == "label" else 14
+    variant = "medium" if getattr(it, "kind", "item") == "label" else "regular"
+    room = M.label_room(it, cw, kit) if size == 14 else cw - 2 * M.ITEM_PAD_X
+    return label if D.text_w(label, kit.faces, variant, size) > room + 0.5 else ""
 
 
 def _rows_at(items, key: str, root: str):

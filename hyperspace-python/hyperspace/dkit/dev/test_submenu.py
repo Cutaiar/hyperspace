@@ -29,6 +29,7 @@ import sys
 import typing
 from pathlib import Path
 
+import numpy as np
 import pytest
 from imgui_bundle import imgui
 
@@ -104,6 +105,52 @@ def test_a_sub_trigger_can_hold_the_highlight():
     opens it, so `item_rows` must count it."""
     items = [M.Item("a", "Open"), M.Item("b", "Insert", items=(M.Item("c", "Gain"),))]
     assert M.item_rows(items) == [0, 1]
+
+
+def test_a_panel_is_capped_and_a_long_row_is_cut_to_it(monkeypatch):
+    """`MAX_W` is the kit's own policy, not the browser's.
+
+    A shadcn item carries no `truncate`, so in the browser a long row makes
+    the panel as wide as its words. A menu row here is one line and the
+    graph's insert menu carries whole sentences — "faces pattern: Faces
+    pattern is in the graph already: drag it onto the cable" — which made a
+    980px panel over the canvas. Capped, the row is ellipsised and the
+    words that were cut are the row's tooltip (`ui_menu._tips_kit`).
+    """
+    from hyperspace.dkit import draw as D
+    monkeypatch.setattr(D, "text_w", lambda text, *a, **k: 9.0 * len(text))
+
+    class FakeUi:
+        faces: typing.ClassVar[dict] = {}
+
+    long = M.Item("a", "faces pattern: Faces pattern is in the graph already: "
+                       "drag it onto the cable")
+    w, _h = M.measure(FakeUi(), [long])
+    assert w == M.MAX_W - 2 * M.PAD, "the panel was not capped"
+    # uncapped it is as wide as the whole sentence, which is the bug: the
+    # panel the owner saw over the canvas was ~980px
+    uncapped = M.measure(FakeUi(), [long], max_w=0.0)[0]
+    assert uncapped == 9.0 * len(long.label) + 2 * M.ITEM_PAD_X
+    assert uncapped > 2 * M.MAX_W
+
+
+def test_a_row_keeps_room_for_its_chevron_and_its_shortcut(monkeypatch):
+    """`label_room` is `measure`'s reservation read the other way round, so
+    an ellipsised label cannot run under the chevron or off the panel."""
+    from hyperspace.dkit import draw as D
+    monkeypatch.setattr(D, "text_w", lambda text, *a, **k: 9.0 * len(text))
+
+    class FakeUi:
+        faces: typing.ClassVar[dict] = {}
+
+    ui = FakeUi()
+    plain = M.Item("a", "Open")
+    sub = M.Item("b", "Insert", items=(M.Item("c", "x"),))
+    cut = M.Item("d", "Copy", shortcut="\u2318C")
+    assert M.label_room(plain, 200.0, ui) == 200.0 - 2 * M.ITEM_PAD_X
+    assert M.label_room(plain, 200.0, ui) - M.label_room(sub, 200.0, ui) == M.GAP + M.ICON
+    assert M.label_room(cut, 200.0, ui) < M.label_room(plain, 200.0, ui)
+    assert M.label_room(plain, 4.0, ui) == 0.0          # never negative
 
 
 def test_the_width_law_reserves_the_chevron_with_one_gap(monkeypatch):
@@ -186,6 +233,79 @@ def test_a_panel_taller_than_the_view_pins_to_the_top():
 # driven: the gesture
 # --------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# the chain keeps one side, and the safe triangle
+# --------------------------------------------------------------------------
+
+def test_a_chain_picks_its_side_from_the_widest_panel_it_could_draw():
+    """`chain_side` answers for the WHOLE chain, not for the panel in
+    hand: a side with room for `MAX_W` has room for every level."""
+    view = Rect(0, 0, 1000, 800)
+    assert M.chain_side(Rect(100, 200, 136, M.ITEM_H), view) == "right"
+    # 700 + 136 = 836, and 836 + 320 > 1000: a narrow panel would still fit
+    # to the right, which is exactly the trap
+    trig = Rect(700, 200, 136, M.ITEM_H)
+    assert trig.right + M.SUB_MIN_W < view.right          # the narrow one fits
+    assert M.chain_side(trig, view) == "left"             # the chain still goes left
+
+
+def test_neither_side_roomy_takes_the_roomier_one():
+    view = Rect(0, 0, 400, 800)
+    assert M.chain_side(Rect(40, 0, 100, M.ITEM_H), view) == "right"
+    assert M.chain_side(Rect(260, 0, 100, M.ITEM_H), view) == "left"
+
+
+def test_a_given_side_is_obeyed_however_wide_the_panel():
+    """The point of the chain's side: a level that would not have chosen it
+    still uses it, so the menus cannot jump between levels."""
+    view = Rect(0, 0, 1000, 800)
+    trig = Rect(700, 200, 136, M.ITEM_H)
+    assert M.place_sub(trig, 128.0, 90.0, view, "left").x == trig.x - 128
+    assert M.place_sub(trig, 128.0, 90.0, view, "right").x == trig.right
+    # and with no side given it still works it out for itself, as before
+    assert M.place_sub(trig, 128.0, 90.0, view).x == trig.right
+
+
+def test_the_safe_triangle_is_the_wedge_to_the_panels_near_edge():
+    """Amazon's golden triangle: while the pointer is inside the wedge from
+    where it was to the panel's near edge, it is on its way there — and the
+    rows it crosses on the diagonal do nothing."""
+    panel = (300.0, 100.0, 128.0, 200.0)        # to the RIGHT of the pointer
+    was = (200.0, 110.0)
+    assert M.aiming_at(was, (250.0, 150.0), panel)      # diagonal, inside
+    assert M.aiming_at(was, (280.0, 240.0), panel)      # steep, still inside
+    assert not M.aiming_at(was, (290.0, 290.0), panel)  # under the wedge's edge
+    assert not M.aiming_at(was, (250.0, 400.0), panel)  # past the bottom corner
+    assert not M.aiming_at(was, (210.0, 10.0), panel)   # away, above it
+    assert not M.aiming_at(None, (250.0, 150.0), panel)
+    assert not M.aiming_at(was, (250.0, 150.0), None)
+
+
+def test_a_parked_pointer_is_aiming_at_nothing():
+    """A zero-length move makes a degenerate triangle, which contains every
+    point — so without this the wedge reads "true" for as long as the hand
+    rests on the trigger, and its patience is spent before the move it
+    exists for begins. Measured in the app: five seconds of it, and the
+    diagonal then failed on its first step."""
+    panel = (300.0, 100.0, 128.0, 200.0)
+    assert not M.aiming_at((250.0, 150.0), (250.0, 150.0), panel)
+
+
+def test_a_pointer_already_over_the_panel_is_not_aiming():
+    """Inside it is not toward it: the panel keeps itself open from there,
+    and a wedge over its own rows would swallow their hover."""
+    panel = (300.0, 100.0, 128.0, 200.0)
+    assert not M.aiming_at((200.0, 110.0), (350.0, 150.0), panel)
+
+
+def test_the_wedge_works_leftward_too():
+    """A chain on the left of its trigger needs the mirror of it."""
+    panel = (100.0, 100.0, 128.0, 200.0)        # to the LEFT of the pointer
+    was = (300.0, 110.0)
+    assert M.aiming_at(was, (250.0, 150.0), panel)
+    assert not M.aiming_at(was, (250.0, 400.0), panel)
+
+
 def _gl_or_skip():
     try:
         import gl_probe
@@ -230,10 +350,14 @@ def _row0(DB, h=H):
     return prefix, DB.lay_out(W, h, body_dy=-sy).table_rows[0]
 
 
-def _open(DB, h=H):
-    """The script that right-clicks row 0 open, and row 0's rect."""
+def _open(DB, h=H, at_x=200.0):
+    """The script that right-clicks row 0 open, and where it clicked.
+
+    `at_x` is how far into the row the click lands, which is how a test
+    puts the menu near the window's right edge.
+    """
     prefix, (rx, ry, _rw, rh) = _row0(DB, h)
-    x, y = rx + 200, ry + rh / 2
+    x, y = rx + at_x, ry + rh / 2
     script = (prefix + [(x, y)] * 8 + [(x, y, False, 0.0, True)] * 2
               + [(x, y, False, 0.0, False)] * 14)
     return script, (x, y)
@@ -282,6 +406,105 @@ def test_one_frame_on_the_trigger_is_not_enough(DB):
     tx, ty = _trigger_xy()
     DB.render("dark", W, H, script=script + [(tx, ty)] * 2, keep="last")
     assert not M.LAST_RECT.get(SUBKEY), "two frames of hover opened it"
+
+
+def test_only_one_row_is_ever_lit(DB):
+    """Moving from one SubTrigger to the NEXT closes the first at once.
+
+    Closing is immediate and only opening is on the 100 ms timer, and the
+    two were conflated: a move from `Insert` to `Look-back frames` left
+    `Insert`'s panel up for the whole dwell, so the menu had two rows lit —
+    the old one on `data-open`, the new one on hover — which the real
+    component never shows. The panel being up is what lights the row, so
+    its rect is the thing to assert on.
+    """
+    script, _at = _open(DB)
+    DB.render("dark", W, H, script=script, keep="last")
+    tx, ty = _trigger_xy()                          # `Insert`
+    opened = script + [(tx, ty)] * DWELL
+    DB.render("dark", W, H, script=opened, keep="last")
+    assert M.LAST_RECT.get(SUBKEY), "the first submenu did not open"
+    nx, ny = _trigger_xy(index=3)                   # `Look-back frames`
+    # ONE frame on the other row: well inside the 100 ms its own panel waits
+    DB.render("dark", W, H, script=opened + [(nx, ny)], keep="last")
+    assert not M.LAST_RECT.get(SUBKEY), \
+        "the old submenu stayed up while another row was hovered"
+    assert not M.LAST_RECT.get(f"{CKEY}>frames"), "the new one opened with no dwell"
+    # and the new one does open, once its dwell is up
+    DB.render("dark", W, H, script=opened + [(nx, ny)] * DWELL, keep="last")
+    assert M.LAST_RECT.get(f"{CKEY}>frames"), "the new submenu never opened"
+    assert not M.LAST_RECT.get(SUBKEY)
+
+
+def _lit(frame, rect, items, sub: bool):
+    """Which rows of the panel at `rect` are filled differently from its
+    ground — the rows a person sees as highlighted.
+
+    Sampled SIX PIXELS IN, in the row's own left padding where the fill is
+    and no glyph reaches, against the padding strip above the first row,
+    which is `popover` and nothing else. `test_menu_keys._highlight` reads
+    a menu the same way and for the same reasons.
+    """
+    x, y, _w, _h = rect
+    inset = M.PAD + (M.SUB_BORDER if sub else 0.0)
+    ground = frame[int(y) + 2, int(x) + int(_w) // 2].astype(int)
+    out, iy = [], y + inset
+    for i, it in enumerate(items):
+        rh = M.row_h(it)
+        if it.kind == "item":
+            # three pixels into the ROW, inside its own px-1.5 padding and
+            # before any glyph: six would land on the first letter
+            px = frame[int(iy + M.ITEM_H / 2), int(x + inset) + 3].astype(int)
+            if abs(px - ground).max() > 2:
+                out.append(i)
+        iy += rh
+    return out
+
+
+def test_a_hover_opened_submenu_highlights_nothing(DB):
+    """Measured: a hover open highlights NOTHING — only ArrowRight, Enter
+    and Space open it on its first row.
+
+    It armed every open, so a panel the pointer had merely dwelled on came
+    up with its first row lit while the pointer was still in the parent:
+    two rows filled, in two panels, with the pointer on neither of them.
+    Read off the pixels, because that is what the owner saw.
+    """
+    script, _at = _open(DB)
+    DB.render("dark", W, H, script=script, keep="last")
+    tx, ty = _trigger_xy()                          # `Insert`
+    f = np.asarray(DB.render("dark", W, H, script=script + [(tx, ty)] * DWELL,
+                             keep="last")[-1])[:, :, :3]
+    sub = M.LAST_RECT.get(SUBKEY)
+    assert sub, "the submenu did not open"
+    rows = list(DB.ROW_MENU_SUB[1].items)
+    assert _lit(f, sub, rows, sub=True) == [], \
+        "a hover-opened submenu lit a row with the pointer still in the parent"
+    # the parent's own trigger IS lit, which is `data-open:bg-accent`
+    assert 1 in _lit(f, M.LAST_RECT[CKEY], DB.ROW_MENU_SUB, sub=False)
+
+
+def test_the_highlight_follows_the_pointer_past_an_open_submenu(DB):
+    """Exactly one row of a panel is ever lit, and it is the one under the
+    pointer (or the one whose submenu is open, which is the same row).
+
+    Walking down a menu opens a submenu in passing. The highlight used to
+    be FROZEN while one was open, so it stayed on the row that had opened
+    it while the pointer ran the next one — two rows lit, in one panel,
+    which is what the owner's screenshot showed. A parked mouse still
+    cannot take the highlight: the hand-over only happens on movement.
+    """
+    script, _at = _open(DB)
+    DB.render("dark", W, H, script=script, keep="last")
+    tx, ty = _trigger_xy()                          # `Insert`, a SubTrigger
+    opened = script + [(tx, ty)] * DWELL
+    DB.render("dark", W, H, script=opened, keep="last")
+    assert M.LAST_RECT.get(SUBKEY), "the submenu did not open"
+    px, py = _trigger_xy(index=2)                   # `Pin to scene`, no submenu
+    f = np.asarray(DB.render("dark", W, H, script=opened + [(px, py)] * DWELL,
+                             keep="last")[-1])[:, :, :3]
+    lit = _lit(f, M.LAST_RECT[CKEY], DB.ROW_MENU_SUB, sub=False)
+    assert lit == [2], f"rows {lit} are lit; only the one under the pointer may be"
 
 
 def test_moving_to_another_row_closes_it(DB):
@@ -465,6 +688,103 @@ def test_a_dismissed_submenu_forgets_its_own_descendants(DB):
     assert M.LAST_RECT.get(SUBKEY), "the submenu did not reopen"
     assert not M.LAST_RECT.get(DEEPKEY), \
         "the grandchild came back without its trigger being hovered"
+
+
+def test_both_levels_of_a_chain_land_on_the_same_side(DB):
+    """The owner's report: "the small menu opens to the right of the
+    initial panel, and then a larger menu opens to the left. It feels
+    scary."
+
+    Opened near the window's right edge, level one (128 wide) still fits on
+    the right and level two (wide) does not — so each deciding for itself
+    put them on opposite sides, one over the top of the other. The chain
+    decides once, for the widest panel the kit can draw, and both go the
+    same way.
+    """
+    script, _at = _open(DB, at_x=760.0)             # near the right edge
+    DB.render("dark", W, H, script=script, keep="last")
+    root = M.LAST_RECT.get(CKEY)
+    assert root, "the menu did not open"
+    # THE TRAP, stated rather than hoped for: a narrow panel still fits to
+    # the right of level one's trigger here, so a panel deciding for itself
+    # goes right — and the wide level under it cannot, so it goes left.
+    trig_right = root[0] + root[2] - M.PAD
+    assert trig_right + M.SUB_MIN_W <= W
+    assert trig_right + M.MAX_W > W
+    tx, ty = _trigger_xy()                          # `Insert`
+    opened = script + [(tx, ty)] * DWELL
+    DB.render("dark", W, H, script=opened, keep="last")
+    one = M.LAST_RECT.get(SUBKEY)
+    assert one, "level one did not open"
+
+    sx, sy, sw, _sh = one
+    dx = sx + sw / 2
+    dy = sy + M.SUB_BORDER + M.PAD + M.ITEM_H * 2 + M.ITEM_H / 2    # `More`
+    DB.render("dark", W, H, script=opened + [(dx, dy)] * DWELL, keep="last")
+    two = M.LAST_RECT.get(DEEPKEY)
+    assert two, "level two did not open"
+    assert two[2] > M.SUB_MIN_W, "level two was meant to be the wide one"
+    # same side: both to the left of their trigger, or both to the right
+    one_left = one[0] < root[0]
+    two_left = two[0] < sx
+    assert one_left == two_left, \
+        f"level one went {'left' if one_left else 'right'} and level two " \
+        f"went {'left' if two_left else 'right'}"
+
+
+def test_a_diagonal_into_an_open_submenu_does_not_close_it(DB):
+    """Amazon's golden triangle, driven.
+
+    The path from a trigger to the far corner of its own panel crosses the
+    rows under it. Each of those took the pointer and closed the panel that
+    was being aimed at, so the only way in was an L: straight across, then
+    down. With the wedge, the diagonal works.
+    """
+    script, _at = _open(DB)
+    DB.render("dark", W, H, script=script, keep="last")
+    tx, ty = _trigger_xy()                          # `Insert`
+    opened = script + [(tx, ty)] * DWELL
+    DB.render("dark", W, H, script=opened, keep="last")
+    sx, sy, sw, sh = M.LAST_RECT[SUBKEY]
+    assert sx > tx, "this test wants the panel on the right"
+
+    # a straight diagonal from the trigger to the panel's bottom row,
+    # crossing the parent's own rows on the way
+    end = (sx + sw / 2, sy + sh - M.ITEM_H)
+    steps = 10
+    path = [(tx + (end[0] - tx) * k / steps, ty + (end[1] - ty) * k / steps)
+            for k in range(1, steps + 1)]
+    crossed = [p for p in path if p[0] < sx]
+    assert len(crossed) >= 3, "the diagonal must cross the parent's rows"
+    f = np.asarray(DB.render("dark", W, H, script=opened + path + [end] * 6,
+                             keep="last")[-1])[:, :, :3]
+    assert M.LAST_RECT.get(SUBKEY), \
+        "the rows under the diagonal closed the panel it was heading for"
+    # and the row that OWNS the open panel keeps the highlight: the parent
+    # reads the pointer as being on its own rows the whole way (the panels
+    # overlap, and `is_mouse_hovering_rect` knows nothing about what is on
+    # top), so without the hold it lit whichever row the pointer was over
+    lit = _lit(f, M.LAST_RECT[CKEY], DB.ROW_MENU_SUB, sub=False)
+    assert lit == [1], f"rows {lit} are lit; only `Insert`, whose panel is open, may be"
+
+
+def test_a_pointer_that_parks_in_the_wedge_gives_up(DB):
+    """The wedge cannot hold a menu open for ever: a pointer that stops
+    inside it without arriving releases after `AIM_HOLD_S`, so a row it is
+    resting on gets its turn."""
+    script, _at = _open(DB)
+    DB.render("dark", W, H, script=script, keep="last")
+    tx, ty = _trigger_xy()
+    opened = script + [(tx, ty)] * DWELL
+    DB.render("dark", W, H, script=opened, keep="last")
+    sx, sy, _sw, sh = M.LAST_RECT[SUBKEY]
+    # one step into the wedge, then parked there, on another parent row
+    park = ((tx + sx) / 2, sy + sh * 0.7)
+    DB.render("dark", W, H, script=opened + [park] * 4, keep="last")
+    DB.render("dark", W, H,
+              script=opened + [park] * (4 + int(M.AIM_HOLD_S * 60) + 40),
+              keep="last")
+    assert not M.LAST_RECT.get(SUBKEY), "a parked pointer held the menu open"
 
 
 def test_arrow_right_opens_it_and_arrow_left_closes_it(DB):

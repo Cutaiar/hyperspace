@@ -73,9 +73,12 @@ ROW_MENU_SUB = [
     M.Item("insert", "Insert", items=(
         M.Item("insert.gain", "Gain"),
         M.Item("insert.curve", "Curve"),
+        # a WIDE second level, on purpose: a chain whose levels want
+        # different widths is what made the menus flip sides, so the test
+        # for that needs one that cannot fit where the level above it did
         M.Item("insert.deep", "More", items=(
-            M.Item("insert.deep.one", "One"),
-            M.Item("insert.deep.two", "Two"),
+            M.Item("insert.deep.one", "One of the wider rows in this menu"),
+            M.Item("insert.deep.two", "Two of the wider rows in this menu"),
         )),
     )),
     M.Item("pin", "Pin to scene", icon="layers"),
