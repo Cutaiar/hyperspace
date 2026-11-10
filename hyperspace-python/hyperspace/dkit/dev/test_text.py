@@ -216,6 +216,7 @@ def test_a_kerned_string_draws_as_wide_as_it_measures():
     (Chromium); drawn as one run, its ink would overshoot by ~6px."""
     _gl()
     import numpy as np
+
     from hyperspace.dkit.dev.test_interaction import PROBE_X, PROBE_Y, one_widget
     s, size = "AVATAR WAVE", 14.0
     got = {}
