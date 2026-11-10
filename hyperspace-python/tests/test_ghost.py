@@ -881,7 +881,7 @@ def test_every_style_draws_from_the_same_poses():
     parts for the same pose, and openness read from the pose alone — 0 a
     fist, 1 open — which PALMS' orb and CAGE's size follow."""
     poses, _, _ = _guided_poses()
-    assert G.STYLES == ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE"]
+    assert G.STYLES == ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE", "SKIN"]
     assert len(G.PARTS) == len(G.STYLES) and G.PARTS[0] is G.hands_parts
     for p in poses:
         drawn = []
@@ -907,7 +907,7 @@ def test_every_style_draws_from_the_same_poses():
     b = np.array([c for c, _ in G.cage_parts(turned)[0]]) - right.palm
     assert not np.allclose(a, b)
     # out-of-range or junk style indexes draw HANDS
-    for bad in (-1, 5, 99, "x", None):
+    for bad in (-1, len(G.STYLES), 99, "x", None):
         assert G.style_parts(bad) is G.hands_parts
 
 
@@ -947,7 +947,7 @@ def test_a_style_never_draws_the_guide(ctx):
         assert np.array_equal(split, hands), G.STYLES[style]
         assert ro is not None and ro.reshape(-1, 4)[:, 3].max() == 255
         seen.add(hands.tobytes())
-    assert len(seen) == len(G.STYLES)                             # five different layers
+    assert len(seen) == len(G.STYLES)                             # a different layer each
 
 
 def test_a_palm_only_hand_draws_in_every_style(ctx):

@@ -42,9 +42,10 @@ The drawn object is swappable (`ghost.style`, plan 21 WP6). `HandPose` is
 the data path (stage-space joints and the bones' raw rotations, per hand,
 with its fade and colour); a style is a pure function from one pose to
 spheres, tubes and triangles (`PARTS`: HANDS — a sphere per joint, a
-capsule per bone and a palm — JOINTS, PALMS, CAGE, MARIONETTE), and
-`Geometry` draws whichever is picked. The guide is not a style's: `Ghost`
-passes its rows to `Geometry.draw` beside the hands'. A skinned mesh is
+capsule per bone and a palm — JOINTS, PALMS, CAGE, MARIONETTE, SKIN), and
+`Geometry` draws whichever is picked; SKIN is a distance field over the
+bones (`skin_prims`), which `Geometry` raymarches rather than meshing. The
+guide is not a style's: `Ghost` passes its rows to `Geometry.draw` beside the hands'. A skinned mesh is
 another parts function, or another class with the same `draw`.
 """
 
@@ -53,6 +54,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from itertools import pairwise
+from typing import cast
 
 import moderngl
 import numpy as np
@@ -94,7 +96,7 @@ MODES: dict[str, tuple[tuple[float, float, float], ...]] = {
 # ------------------------------------------------------------------ params
 
 GUIDES = ["OFF", "BESIDE", "ON HAND"]
-STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE"]   # PARTS, in this order
+STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE", "SKIN"]   # PARTS, in this order
 
 @dataclass
 class GhostState:
@@ -234,7 +236,9 @@ def register(reg, state: GhostState, n: int = 1) -> None:
                  "bead per joint), PALMS (an orb that swells as the hand opens, a ring, a "
                  "spoke where the fingers point), CAGE (a wire octahedron that turns with "
                  "the palm and breathes with the grip), MARIONETTE (fingertips on strings "
-                 "from a bar). The guide and the tethers are the same in every style.")
+                 "from a bar), SKIN (one smooth skin over the bones: rounded knuckles, a "
+                 "palm, webs between the fingers). The guide and the tethers are the same "
+                 "in every style.")
 
 
 # ------------------------------------------------------------------ camera
@@ -1233,7 +1237,275 @@ def marionette_parts(p: HandPose) -> tuple[list, list, list]:
     return spheres, tubes, []
 
 
-PARTS = (hands_parts, joints_parts, palms_parts, cage_parts, marionette_parts)
+# ---- SKIN: one smooth surface over the bones (raymarched) ----
+#
+# The hand as a signed distance field: a tapered capsule (a round cone) per
+# bone, a rounded slab for the palm, a wrist, blended with a smooth minimum
+# — the joints round over, the thumb's base swells into the palm, the
+# webs fill in — and raymarched inside the hand's bounding box on the GPU
+# (`SKIN_FS`, writing its own depth, so the hand is depth-tested like any
+# other part). `skin_prims` is the field's data, pure; `skin_parts` the
+# same shapes as spheres and tubes, for the lines view and anything that
+# wants parts (a field has no edges to draw).
+
+SKIN_MAX = 24        # round cones a hand's field holds (the shader's arrays)
+SKIN_TIP = 0.82      # a fingertip's radius as a fraction of the distal bone's
+SKIN_K_JOINT = 0.30  # the blend along a finger, as a fraction of the joint's radius
+SKIN_K_KNUCKLE = 0.07  # a finger into the palm, as a fraction of palm width
+SKIN_K_PALM = 0.12   # within the palm (metacarpals, the thumb's base, the wrist)
+SKIN_PALM_T = 0.13   # the palm's half thickness, as a fraction of palm width
+SKIN_ROUND = 0.10    # the palm slab's rounding
+
+
+def skin_prims(p: HandPose) -> dict:
+    """The SKIN field of one pose, in the stage (mm): `cones` (N, 8) —
+    each a round cone (ax, ay, az, ra, bx, by, bz, rb) — and `info` (N, 4):
+    (blend within its group, blend into the palm, first of a group, last
+    of a group: 2 the palm's, 1 a finger's); the palm slab (`palm`: centre, `axes` (3, 3) rows across /
+    along / out of the palm, `half` extents, `round`, `k`); `lo` / `hi` the
+    box the field lies in. Groups: the palm's (metacarpals, the thumb's
+    base, the wrist) blend broadly; each finger blends along itself, then
+    into the hand at its knuckle; finger to finger only through the hand."""
+    w = p.width
+    f, s, n = palm_frame(p)
+    col_r = FINGER_R * w
+    cones: list = []
+    info: list = []
+
+    def group(rows: list, k_in: float, k_out: float, palm: bool = False) -> None:
+        last = 2.0 if palm else 1.0
+        for i, (a, ra, b, rb) in enumerate(rows):
+            cones.append((*a, ra, *b, rb))
+            info.append((k_in, k_out, float(i == 0), last if i == len(rows) - 1 else 0.0))
+
+    if len(p.joints):
+        J = p.joints
+        radius = lambda d, b: (BONE_R * p.widths[d, b] if p.widths[d, b] > 0 else col_r)
+        # the palm's group: the four metacarpals, fattened, the thumb's base
+        # bone (Leap's thumb "proximal", the anatomical metacarpal) as the
+        # thenar mass, and the wrist two cones wide
+        palm_rows = []
+        for d in (1, 2, 3, 4):
+            r = 1.15 * radius(d, 0)
+            palm_rows.append((J[d, 0], 1.25 * r, J[d, 1], r))
+        rt = radius(0, 1)
+        palm_rows.append((J[0, 1], 1.45 * rt, J[0, 2], 1.1 * rt))
+        base = np.mean(J[1:5, 0], axis=0)
+        for side in (-1.0, 1.0):
+            a = base + s * side * 0.08 * w
+            palm_rows.append((a, 0.16 * w, a - f * 0.2 * w, 0.15 * w))
+        group(palm_rows, SKIN_K_PALM * w, SKIN_K_PALM * w, palm=True)
+        # each finger, proximal to tip (the thumb from its own proximal on)
+        for d in range(5):
+            rows = []
+            for b in range(2 if d == 0 else 1, 4):
+                r0 = radius(d, b)
+                r1 = radius(d, b + 1) if b < 3 else SKIN_TIP * r0
+                r1 = 0.5 * (r0 + r1) if b < 3 else r1
+                ra = 1.05 * r0 if b == (2 if d == 0 else 1) else rows[-1][3]
+                rows.append((J[d, b], ra, J[d, b + 1], r1))
+            group(rows, SKIN_K_JOINT * float(np.mean([r[1] for r in rows])),
+                  SKIN_K_KNUCKLE * w)
+        # the slab between the metacarpals: knuckles to their bases, the
+        # index's knuckle to the pinky's across
+        pts = np.concatenate([J[1:5, 0], J[1:5, 1]])
+        centre = np.mean(pts, axis=0)
+        across = 0.5 * abs(float((J[1, 1] - J[4, 1]) @ s))
+        along = 0.5 * float(np.mean([(J[d, 1] - J[d, 0]) @ f for d in (1, 2, 3, 4)]))
+        half = (max(across, 0.25 * w), max(abs(along), 0.25 * w), SKIN_PALM_T * w)
+    else:
+        # palm only: the slab where the palm is, a palm long and wide
+        centre, half = p.palm, (0.42 * w, 0.48 * w, SKIN_PALM_T * w)
+    rnd = SKIN_ROUND * w
+    half = tuple(max(h - rnd, 1e-3) for h in half)
+    c = np.asarray(cones, dtype=np.float64).reshape(-1, 8)
+    ext = np.abs(np.array([s, f, n])).T @ (np.array(half) + rnd)
+    los = [centre - ext]
+    his = [centre + ext]
+    if len(c):
+        for e in (c[:, 0:4], c[:, 4:8]):
+            los.append((e[:, :3] - e[:, 3:4]).min(axis=0))
+            his.append((e[:, :3] + e[:, 3:4]).max(axis=0))
+    margin = 0.1 * w
+    return {"cones": c[:SKIN_MAX], "info": np.asarray(info, dtype=np.float64).reshape(-1, 4)[:SKIN_MAX],
+            "palm": np.asarray(centre, dtype=np.float64), "axes": np.array([s, f, n]),
+            "half": np.array(half), "round": rnd, "k": SKIN_K_PALM * w,
+            "lo": np.min(los, axis=0) - margin, "hi": np.max(his, axis=0) + margin}
+
+
+def skin_parts(p: HandPose) -> tuple[list, list, list]:
+    """SKIN as parts: each round cone's two end spheres and a tube between
+    them at their mean radius, the palm as HANDS draws it. What the lines
+    view draws; filled, `Geometry` raymarches `skin_prims` instead."""
+    pr = skin_prims(p)
+    spheres, tubes = [], []
+    for ax, ay, az, ra, bx, by, bz, rb in pr["cones"]:
+        a, b = np.array([ax, ay, az]), np.array([bx, by, bz])
+        spheres += [(a, float(ra)), (b, float(rb))]
+        if np.linalg.norm(b - a) > 1e-3:
+            tubes.append((a, b, 0.5 * float(ra + rb)))
+    if not spheres:
+        spheres.append(_orb(p))          # palm only: the orb, as every style but HANDS
+    return spheres, tubes, hands_parts(p)[2]
+
+
+PARTS = (hands_parts, joints_parts, palms_parts, cage_parts, marionette_parts, skin_parts)
+
+
+SKIN_VS = """
+#version 330
+in vec3 in_unit;     // the unit cube, 0..1
+uniform vec3 u_lo;
+uniform vec3 u_hi;
+uniform mat4 u_vp;
+out vec3 v_pos;
+void main() {
+    v_pos = mix(u_lo, u_hi, in_unit);
+    gl_Position = u_vp * vec4(v_pos, 1.0);
+}
+"""
+
+SKIN_FS = """
+#version 330
+#define MAXC SKIN_MAX_N
+in vec3 v_pos;
+uniform mat4 u_vp;
+uniform vec4 u_cam;          // the eye (w 1), or the view's direction (w 0)
+uniform vec3 u_lo;
+uniform vec3 u_hi;
+uniform int u_n;
+uniform vec4 u_a[MAXC];      // a, its radius
+uniform vec4 u_b[MAXC];      // b, its radius
+uniform vec4 u_info[MAXC];   // blend in group, blend into the hand, first, last
+uniform vec3 u_pc;           // the palm slab: centre,
+uniform mat3 u_pm;           // its axes (columns: across, along, out),
+uniform vec3 u_ph;           // half extents,
+uniform vec2 u_pr;           // rounding, the palm's blend
+uniform vec4 u_col;          // rgb, fade
+out vec4 f_color;
+
+float smin(float a, float b, float k) {
+    if (k <= 0.0) return min(a, b);
+    float h = max(k - abs(a - b), 0.0) / k;
+    return min(a, b) - h * h * k * 0.25;
+}
+
+// a round cone: the hull of two spheres (Inigo Quilez's, exact)
+float round_cone(vec3 p, vec3 a, vec3 b, float r1, float r2) {
+    vec3 ba = b - a;
+    float l2 = dot(ba, ba);
+    vec3 pa = p - a;
+    if (l2 < 1e-6) return length(pa) - max(r1, r2);
+    float rr = r1 - r2;
+    float a2 = l2 - rr * rr;
+    float il2 = 1.0 / l2;
+    float y = dot(pa, ba);
+    float z = y - l2;
+    vec3 xv = pa * l2 - ba * y;
+    float x2 = dot(xv, xv);
+    float y2 = y * y * l2;
+    float z2 = z * z * l2;
+    float k = sign(rr) * rr * rr * x2;
+    if (sign(z) * a2 * z2 > k) return sqrt(x2 + z2) * il2 - r2;
+    if (sign(y) * a2 * y2 < k) return sqrt(x2 + y2) * il2 - r1;
+    return (sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+}
+
+float field(vec3 p) {
+    vec3 q = abs(transpose(u_pm) * (p - u_pc)) - u_ph;
+    float h = length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - u_pr.x;
+    // the palm's group blends into the slab; each finger then into the
+    // palm alone, so two fingers side by side keep the crease between them
+    float g = 1e9, res = h;
+    for (int i = 0; i < MAXC; i++) {
+        if (i >= u_n) break;
+        vec4 inf = u_info[i];
+        float d = round_cone(p, u_a[i].xyz, u_b[i].xyz, u_a[i].w, u_b[i].w);
+        g = inf.z > 0.5 ? d : smin(g, d, inf.x);
+        if (inf.w > 1.5) { h = smin(h, g, inf.y); res = h; }
+        else if (inf.w > 0.5) res = min(res, smin(h, g, inf.y));
+    }
+    return res;
+}
+
+vec3 normal_at(vec3 p) {
+    const vec2 e = vec2(0.25, -0.25);
+    return normalize(e.xyy * field(p + e.xyy) + e.yyx * field(p + e.yyx)
+                     + e.yxy * field(p + e.yxy) + e.xxx * field(p + e.xxx));
+}
+
+void main() {
+    vec3 ro, rd;
+    if (u_cam.w > 0.5) {
+        ro = u_cam.xyz;
+        rd = normalize(v_pos - ro);
+    } else {
+        rd = normalize(u_cam.xyz);
+        ro = v_pos - rd * 1e5;
+    }
+    // the ray through the box: from where it enters (or the eye) to where it leaves
+    vec3 inv = 1.0 / (rd + vec3(equal(rd, vec3(0.0))) * 1e-9);
+    vec3 t0s = (u_lo - ro) * inv, t1s = (u_hi - ro) * inv;
+    vec3 tmin = min(t0s, t1s), tmax = max(t0s, t1s);
+    float t0 = max(max(tmin.x, tmin.y), tmin.z);
+    float t1 = min(min(tmax.x, tmax.y), tmax.z);
+    if (t1 < max(t0, 0.0)) discard;
+    // both the box's faces draw: march once, from its front face (or the
+    // eye inside it), so a back face's fragment stands down
+    float tv = dot(v_pos - ro, rd);
+    if (t0 > 0.0 && tv > t0 + 0.5) discard;
+    float t = max(t0, 0.0);
+    bool hit = false;
+    vec3 p;
+    for (int i = 0; i < 96; i++) {
+        p = ro + rd * t;
+        float d = field(p);
+        if (d < 0.05) { hit = true; break; }
+        t += d;
+        if (t > t1) break;
+    }
+    if (!hit) discard;
+    vec3 n = normal_at(p);
+    vec3 v = -rd;
+    vec3 l = normalize(vec3(-0.35, 0.8, 0.5));
+    float diff = max(dot(n, l), 0.0);
+    float wrap = max((dot(n, l) + 0.4) / 1.4, 0.0);       // light through the skin's edge
+    float rim = pow(1.0 - max(dot(n, v), 0.0), 2.0);
+    float ao = clamp(field(p + n * 4.0) / 4.0, 0.0, 1.0);  // creases darker
+    vec3 c = u_col.rgb;
+    vec3 rgb = c * (0.22 + 0.45 * diff + 0.2 * wrap) * (0.55 + 0.45 * ao)
+             + 0.4 * rim * mix(c, vec3(1.0), 0.5);
+    vec3 hv = normalize(l + v);
+    rgb += 0.12 * pow(max(dot(n, hv), 0.0), 24.0);
+    f_color = vec4(min(rgb, vec3(1.0)) * u_col.a, u_col.a);
+    vec4 clip = u_vp * vec4(p, 1.0);
+    gl_FragDepth = clamp(0.5 * clip.z / clip.w + 0.5, 0.0, 1.0);
+}
+""".replace("SKIN_MAX_N", str(SKIN_MAX))
+
+
+def _cube() -> np.ndarray:
+    """The unit cube's twelve triangles, 0..1: (36, 3) float32."""
+    c = [(x, y, z) for x in (0, 1) for y in (0, 1) for z in (0, 1)]
+    faces = ((0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3))
+    tri = []
+    for a, b, cc, d in faces:
+        tri += [c[a], c[b], c[cc], c[a], c[cc], c[d]]
+    return np.array(tri, dtype=np.float32)
+
+
+def eye_of(view_proj: np.ndarray) -> np.ndarray:
+    """Where `view_proj` sees from, as (x, y, z, 1) — or, for a parallel
+    view, the direction it looks in as (x, y, z, 0): the point its x, y
+    and w rows all send to zero."""
+    m = np.asarray(view_proj, dtype=np.float64)[[0, 1, 3], :]
+    c = np.linalg.svd(m)[2][-1]
+    if abs(c[3]) > 1e-9:
+        return np.array([*(c[:3] / c[3]), 1.0])
+    d = c[:3] / max(np.linalg.norm(c[:3]), 1e-12)
+    # looking along +d: a point ahead of the eye has a larger clip depth
+    far = np.asarray(view_proj, dtype=np.float64) @ np.array([*d, 0.0])
+    return np.array([*(d if far[2] > 0 else -d), 0.0])
 
 
 def style_parts(i) -> object:
@@ -1284,6 +1556,7 @@ class Geometry:
         self._inst_s = ctx.buffer(reserve=64 * 8 * 4, dynamic=True)
         self._inst_t = ctx.buffer(reserve=64 * 11 * 4, dynamic=True)
         self._mesh = ctx.buffer(reserve=128 * 10 * 4, dynamic=True)
+        self._unit_c = ctx.buffer(_cube().tobytes())
         self._build()
 
     def _build(self) -> None:
@@ -1303,14 +1576,19 @@ class Geometry:
                                        (self._inst_t, "3f 4f 4f/i", "in_a", "in_b", "in_col")])
             made.append(vt)
             vm = ctx.vertex_array(pm, [(self._mesh, "3f 3f 4f", "in_pos", "in_n", "in_col")])
+            made.append(vm)
+            pk = ctx.program(vertex_shader=SKIN_VS, fragment_shader=SKIN_FS)
+            made.append(pk)
+            vk = ctx.vertex_array(pk, [(self._unit_c, "3f", "in_unit")])
         except Exception:
             for res in made:
                 res.release()
             raise
         self.progs, self.vaos = (ps, pt, pm), (vs, vt, vm)
+        self.skin = (pk, vk)
 
     def on_reload(self) -> None:
-        old = (*self.vaos, *self.progs)
+        old = (*self.vaos, *self.progs, *self.skin)
         self._build()
         for res in old:
             res.release()
@@ -1326,13 +1604,16 @@ class Geometry:
         if lines:
             self.ctx.wireframe = True
             try:
-                self.draw(poses, view_proj, eye, parts, extra)
+                # a field has no edges: SKIN's lines are its cones as parts
+                edges = (lambda p: skin_parts(p)) if parts is skin_parts else parts
+                self.draw(poses, view_proj, eye, edges, extra)
             finally:
                 self.ctx.wireframe = False
             return
         s_rows, t_rows, m_rows = [], [], []
+        skin = parts is skin_parts          # a field, raymarched, not parts
         for k, p in enumerate(poses):
-            if parts is not None:
+            if parts is not None and not skin:
                 col = (*p.colour, float(p.fade))
                 spheres, tubes, tris = parts(p)
                 s_rows += [(*c, r, *col) for c, r in spheres]
@@ -1359,10 +1640,49 @@ class Geometry:
                 vao.render(moderngl.TRIANGLES, vertices=len(data))
             else:
                 vao.render(moderngl.TRIANGLES, vertices=verts, instances=len(data))
+        if skin:
+            self._draw_skin(poses, vp, view_proj)
+
+    def _draw_skin(self, poses: list[HandPose], vp: bytes, view_proj: np.ndarray) -> None:
+        """Each pose's SKIN field (`skin_prims`), raymarched in its box: one
+        draw a hand, its depth written per pixel where the ray meets it."""
+        prog, vao = self.skin
+
+        def put(name: str, v) -> None:
+            if name not in prog:
+                return                  # optimised out
+            u = cast(moderngl.Uniform, prog[name])
+            if isinstance(v, bytes):
+                u.write(v)
+            else:
+                u.value = v
+
+        put("u_vp", vp)
+        put("u_cam", tuple(float(x) for x in eye_of(view_proj)))
+        for p in poses:
+            pr = skin_prims(p)
+            n = len(pr["cones"])
+            a = np.zeros((SKIN_MAX, 4), dtype="f4")
+            b = np.zeros((SKIN_MAX, 4), dtype="f4")
+            inf = np.zeros((SKIN_MAX, 4), dtype="f4")
+            a[:n], b[:n], inf[:n] = pr["cones"][:, :4], pr["cones"][:, 4:], pr["info"]
+            put("u_n", n)
+            put("u_a", a.tobytes())
+            put("u_b", b.tobytes())
+            put("u_info", inf.tobytes())
+            put("u_lo", tuple(float(x) for x in pr["lo"]))
+            put("u_hi", tuple(float(x) for x in pr["hi"]))
+            put("u_pc", tuple(float(x) for x in pr["palm"]))
+            # columns across, along, out: the rows of `axes`, column-major
+            put("u_pm", np.asarray(pr["axes"], dtype="f4").tobytes())
+            put("u_ph", tuple(float(x) for x in pr["half"]))
+            put("u_pr", (float(pr["round"]), float(pr["k"])))
+            put("u_col", (*p.colour, float(p.fade)))
+            vao.render(moderngl.TRIANGLES, vertices=36)
 
     def release(self) -> None:
-        for res in (*self.vaos, *self.progs, self._unit_s, self._unit_t, self._inst_s,
-                    self._inst_t, self._mesh):
+        for res in (*self.vaos, *self.progs, *self.skin, self._unit_s, self._unit_t,
+                    self._inst_s, self._inst_t, self._mesh, self._unit_c):
             res.release()
 
 
