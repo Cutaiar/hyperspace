@@ -4,19 +4,19 @@
   uv run python tools/layout_shots.py           # the render grid → inst-layouts.png
   uv run python tools/layout_shots.py --page    # the VIEW page   → view-page-layout.png
   uv run python tools/layout_shots.py --page RING RIPPLE /tmp/ring.png   # another state
-  uv run python tools/layout_shots.py --page HEX ORBIT /tmp/d.png --driven   # lanes on the rates
+  uv run python tools/layout_shots.py --page hex orbit /tmp/d.png --driven   # lanes on the rates
 
 Both land in docs/plans/assets/20-fx-dream-looks/.
 
 The render grid is the real pipeline (render.py) on a standalone context:
-one row per layout — GRID, HEX, RING — at 7, 19 and 37 copies, and a last
+one row per layout — grid, hex, ring — at 7, 19 and 37 copies, and a last
 row with a motion on in each layout (mid-motion, the clock pinned). Each
 tile's camera is zoomed to fit its field, and its label says by how much.
 An offscreen render, not the rig: it shows what the scene pass puts in the
 framebuffer, not what a projector shows.
 
 The page shot is the control panel's VIEW page at the control size, drawn
-in a hidden GLFW window (never shown) with seven copies in HEX and ORBIT
+in a hidden GLFW window (never shown) with seven copies in hex and orbit
 on: the layout combo, the motion combo, amp and rate in one row, and the
 rotation rates two to a row. `tools/undo_demo.py` is imported first: it
 sets HYPERSPACE_HOME to a fresh temp home before anything reads it.
@@ -83,7 +83,7 @@ def grid() -> None:
     rows: list[list[tuple[str, ViewState]]] = []
     for layout, name in enumerate(INST_LAYOUT):
         rows.append([(f"{name} · {n}", view(n, layout)) for n in (7, 19, 37)])
-    moving = ((0, 19, 2), (1, 19, 1), (2, 12, 3))      # GRID WAVE, HEX ORBIT, RING RIPPLE
+    moving = ((0, 19, 2), (1, 19, 1), (2, 12, 3))      # grid wave, hex orbit, ring ripple
     rows.append([(f"{INST_LAYOUT[lay]} · {n} · {INST_MOTION[m]}", view(n, lay, m))
                  for lay, n, m in moving])
     sheet = Image.new("RGB", (3 * W, len(rows) * (H + LABEL)), "black")
@@ -102,7 +102,7 @@ def grid() -> None:
     print("wrote", path.relative_to(ROOT))
 
 
-def page(layout: str = "HEX", motion: str = "ORBIT", name: str = "view-page-layout.png",
+def page(layout: str = "hex", motion: str = "orbit", name: str = "view-page-layout.png",
          driven: bool = False) -> None:
     import glfw
     from imgui_bundle import imgui, implot
@@ -145,8 +145,10 @@ def page(layout: str = "HEX", motion: str = "ORBIT", name: str = "view-page-layo
     panel = Panel(control, audio, v, bank=lib.install, registry=reg, library=lib)
     reg["ui.page"].set(PAGE_KEYS.index("view"))
     reg["view.instances"].set(7)
-    reg["view.inst_layout"].set(INST_LAYOUT.index(layout))
-    reg["view.inst_motion"].set(INST_MOTION.index(motion))
+    # case-folded: the names are lower case as of 2026-11-10, and the
+    # command line in this file's own header asked for them in capitals
+    reg["view.inst_layout"].set(INST_LAYOUT.index(layout.lower()))
+    reg["view.inst_motion"].set(INST_MOTION.index(motion.lower()))
 
     room: list[float] = []
     draw_page = Panel._page_view

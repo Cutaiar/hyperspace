@@ -22,7 +22,7 @@ What a tile shows, the same for every mode (only `view.pattern` differs):
   default pattern depth, set as the inputs' bases since the rig's analyzer
   is never fed;
 - the analyzer's lanes as the renderer reads them (`Renderer.bands`) at
-  the same passage, which only METER and PULSE draw.
+  the same passage, which only meter and pulse draw.
 
 Two sheets, because one shape does not show every mode's character:
 `party-faces` (a tesseract turning in 4D, many small faces seen through
@@ -42,7 +42,7 @@ the real loader lands them (`usage`). `--check` regenerates it and fails when th
     uv run python tools/faces_sheets.py            # sheets + map
     uv run python tools/faces_sheets.py --map      # the map only (no GL)
     uv run python tools/faces_sheets.py --check    # exit 1 if the map is stale
-    uv run python tools/faces_sheets.py --frames 3 --only RINGS,HEX
+    uv run python tools/faces_sheets.py --frames 3 --only rings,HEX
 
 Writes, under docs/plans/assets/37-faces/:
   <NAME>.png            one per mode on party-faces, 480×300 (the frame's
@@ -150,7 +150,7 @@ DRAWS: dict[str, str] = {
 # same structure on the face — radial about the centre, a straight-line
 # lattice, a cell lattice, a flowing field, a band reader — then (2) the
 # same palette and light (dark ground with bright lines, or a full fill),
-# then (3) the same motion. FLAT has no neighbour by look but RINGS is the
+# then (3) the same motion. flat has no neighbour by look but rings is the
 # plainest fill-the-face pattern; any mode's list names three so that
 # whichever subset is kept, the first kept name in the list is the answer
 # (and `nearest_kept` falls back to the first kept mode in NAMES order).
@@ -212,7 +212,7 @@ NEAREST: dict[str, tuple[tuple[str, str], ...]] = {
 def nearest_kept(mode: str, kept) -> str:
     """The mode a loadable patch on `mode` migrates to when only `kept` stay: the
     first kept name in `mode`'s ranked list, else the first kept mode in
-    NAMES order (FLAT, when kept, is never chosen for a patterned mode
+    NAMES order (flat, when kept, is never chosen for a patterned mode
     unless nothing else is)."""
     kept = [k for k in NAMES if k in set(kept)]
     if not kept:
@@ -524,7 +524,9 @@ def main() -> int:
         return 0
     from PIL import Image
 
-    only = [x.strip().upper() for x in a.only.split(",") if x.strip()]
+    # case-folded, not upper-cased: the mode names are lower case as of
+    # 2026-11-10 and an argument typed either way has to land
+    only = [x.strip().lower() for x in a.only.split(",") if x.strip()]
     if bad := [x for x in only if x not in NAMES]:
         ap.error(f"no such mode: {', '.join(bad)} (one of {', '.join(NAMES)})")
     modes = [NAMES.index(x) for x in only] if only else list(range(len(MODES)))

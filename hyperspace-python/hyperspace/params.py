@@ -121,7 +121,7 @@ from .view import (
 PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
 # field.py's layouts, in its order: three flat, then the six 3D lattices
 INST_LAYOUT = ["grid", "hex", "ring", "cubic", "bcc", "fcc", "hcp", "hex prism", "diamond"]
-INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
+INST_MOTION = ["still", "orbit", "wave", "ripple"]
 MEDIA_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]   # the faces' media path (view.media_mode)
 BMP_ALPHA = "view.bmp_alpha"   # the one bitmap id kept: an alias of view.media_alpha
 PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
@@ -2202,14 +2202,14 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
                      lambda: chain().spec[idx()].f,
                      lambda v: chain().set_band(idx(), f=v),
                      lo=F_LO, hi=F_HI, log=True, fmt=fmt_hz, group=g, alias=alias,
-                     tip="LOG, 20 Hz to 20 kHz. The band's centre frequency; the edges "
+                     tip="log, 20 Hz to 20 kHz. The band's centre frequency; the edges "
                          "follow from it and Q.")
         r.continuous(f"{prefix}.q", label_of("Q"),
                      lambda: chain().spec[idx()].q,
                      lambda v: chain().set_band(idx(), q=v),
                      lo=Q_LO, hi=Q_HI, log=True, fmt=lambda v: f"Q {v:.2f}", group=g,
                      alias=alias,
-                     tip="LOG, 0.1 to 20. Centre over bandwidth: 1 is an octave-ish "
+                     tip="log, 0.1 to 20. Centre over bandwidth: 1 is an octave-ish "
                          "band, 0.1 spans most of the spectrum, 20 is a sliver.")
         r.enum(f"{prefix}.curve", label_of("Curve"),
                lambda: chain().spec[idx()].curve,
