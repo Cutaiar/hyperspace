@@ -24,8 +24,8 @@ only** chip and the node's own **all ports / patched only** chip within
 node's stub opens a picker of its ports (`open_land`, `land`) and lands
 through `Edit.connect`; right-click a node for Learn on any of its params.
 The collapse state is the page's UI state (`st["open"]`), saved nowhere.
-**Tidy** collapses every node, forgets every position and says what it
-did; the details chip shows only with a selection on a narrow page.
+**Tidy** (the head's chip, or T) collapses every node, forgets every
+position and says what it did, leaving the canvas where you left it; the details chip shows only with a selection on a narrow page.
 
 An expanded node folds its port groups (the hands' axes, the desk's
 knobs) one by one. (Plan 28 N5's desk-template subgraph went with the
@@ -172,10 +172,16 @@ one can be patched; patched, it is drawn as any node. The picker still
 offers every idle macro. **Tidy** (`tidy`) collapses every node, closes
 the idle lines, forgets every position on the canvas and lays them all
 out again in their areas — one undo step for the positions (`forget`) —
-frames the canvas on them in what the side pane leaves of it (`ask_fit`, as the
-canvas's open and every load do) and says so on the head ("laid out 36 nodes in
+and says so on the head ("laid out 36 nodes in
 6 areas, every one collapsed · 12 idle off the canvas", or "already
-tidy"). **The side pane is always on** (plan 49: `ui_pane.py`), one
+tidy"). **T** does it too (`KEY`, `tidy_pressed`: no row in
+`routing.keymap`, the key left the overlay for it on 2026-11-11, and a
+row the owner learns onto T takes it back). The tidy does not move the
+canvas: the zoom and the place you are looking at stay as they are. **0**
+is what frames every node in what the pane leaves of the canvas (`FIT_KEY`,
+`ask_fit`, as the canvas's open and every load do); it left the track
+restart the same day.
+**The side pane is always on** (plan 49: `ui_pane.py`), one
 view at a time at its full height (2026-11-07): the selection's details
 (`_side`; with nothing selected, a line saying so), or the body of one
 of the other pages, which this page's pane is the only home of (plan 49,
@@ -289,9 +295,11 @@ BELOW_H = 240.0          # the selection's height below the canvas
 TIMES = 120              # draws the SYSTEM line's median is over
 PATCHED_TIP = ("Patched only: an expanded node shows just its patched ports — "
                "its own all / patched chip flips it")
+KEY = "T"                # tidies: no row in `routing.keymap` (a test holds it so)
+FIT_KEY = "0"            # …and fits: every node in view, as a load does. No row either
 TIDY_TIP = ("Collapse every node, forget every position on the canvas and lay them all "
             "out again in their areas — controllers, audio, modulation, geometry, shaders "
-            "(⌘Z puts the positions back)")
+            "(T does it too; ⌘Z puts the positions back)")
 # plan 28 N9: the areas' titles on the canvas, and the idle lines
 TITLE_SIZE = 30.0        # canvas units: an area's title at full zoom
 TITLE_SCREEN = 18.0      # px: what it stays on screen while the canvas is zoomed out
@@ -778,8 +786,10 @@ def tidy(panel, st: dict, view: graphview.View) -> str:
     in its area (plan 28 N9), the idle lines closed — and the head says
     what it did (`tidied`: "laid out 36 nodes in 6 areas, every one
     collapsed · 12 idle off the canvas"), or "already tidy" when nothing
-    moved or folded. The canvas is framed on the nodes after it, in what
-    the pane leaves of it (`ask_fit`)."""
+    moved or folded. The canvas itself does not move: the zoom and the
+    place you are looking at are yours, and a tidy under them lays the
+    nodes out where they were laid out before (the owner, 2026-11-11 —
+    it used to frame every node, which threw away where you were)."""
     was_open = bool(st["open"]) or bool(st.setdefault("idle_open", set()))
     st["open"] = set()
     st["idle_open"] = set()
@@ -793,7 +803,6 @@ def tidy(panel, st: dict, view: graphview.View) -> str:
                 != tuple(round(v) for v in auto.get(n.id, (0.0, 0.0)))))
     said = tidied(view) if (moved or was_open) else ALREADY_TIDY
     st["note"], st["said"] = "", said
-    ask_fit(st)
     return said
 
 
@@ -1218,6 +1227,45 @@ def delete_pressed() -> bool:
             and not imgui.get_io().want_text_input
             and not imgui.is_any_item_active()
             and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+
+
+def _row_on_key(panel, name: str) -> bool:
+    """Does the live table have a row on key `name`? Asked only when it is
+    pressed. The factory table has none on either of the canvas's two (T
+    left the overlay and 0 the track restart, `routing.RETIRED_KEY_ROWS`),
+    but a row the owner learns onto one is the owner's: the canvas stands
+    down for it, as the player board's O does."""
+    table = getattr(getattr(panel, "router", None), "table", None)
+    rows = table.of("key") if table is not None else ()
+    return any(b.key_name == name for b in rows)
+
+
+def _bare(key, panel, name: str) -> bool:
+    """`key` pressed this frame, bare, and nothing else wants it: no text
+    field being typed in, no modifier held, no control active, no popup
+    open, and no row of the live table on `name`."""
+    io = imgui.get_io()
+    return (imgui.is_key_pressed(key, False)
+            and not io.want_text_input
+            and not (io.key_ctrl or io.key_super or io.key_alt or io.key_shift)
+            and not imgui.is_any_item_active()
+            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)
+            and not _row_on_key(panel, name))
+
+
+def tidy_pressed(panel) -> bool:
+    """T pressed this frame, and nothing else wants it (`_bare`)."""
+    return _bare(imgui.Key.t, panel, KEY)
+
+
+def _tidy_key(panel, st: dict) -> None:
+    """T asks for the tidy the head's chip asks for (`_place` does it next
+    frame); 0 asks for the fit a load asks for (`ask_fit`: every node in
+    view, in what the pane leaves of the canvas)."""
+    if tidy_pressed(panel):
+        st["tidy"] = True
+    if _bare(imgui.Key._0, panel, FIT_KEY):
+        ask_fit(st)
 
 
 def _select(st: dict, view: graphview.View) -> None:
@@ -1838,13 +1886,14 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     held = ui_routing._state(panel).pop("reveal", None)     # "Route a lane here…"
     if held is not None:
         reveal(st, view, held)
-    _fit_when_asked(panel, st, view, lay, size)    # open, a load, a tidy: every node in view
+    _fit_when_asked(panel, st, view, lay, size)    # the open and a load: every node in view
     area = st.pop("frame_area", None)   # N9: an area chip or a title clicked
     if area is not None:
         frame_area(st, view, area)
     _title_click(st)
     _create(panel, st, view)
     _delete_key()
+    _tidy_key(panel, st)                # T and 0: the tidy and the fit, from the keyboard
     _delete(panel, st, view)
     _menus(panel, st, view)
     _hover(st, view, panel)

@@ -255,7 +255,8 @@ class Output:
         reg.toggle("output.overlay", "Overlay", lambda: self.overlay,
                    self._set_overlay, group=g,
                    tip="Float the render, frameless and see-through, over the whole "
-                       "screen — above a fullscreen video. T toggles.", **settings)
+                       "screen — above a fullscreen video. The APC40's MASTER "
+                       "select toggles it (T tidies the graph now).", **settings)
         reg.toggle("output.passthrough", "Click-through", lambda: self.passthrough,
                    lambda v: setattr(self, "passthrough", bool(v)), group=g,
                    tip="On (the default): in overlay, clicks go to whatever is underneath, "

@@ -27,6 +27,7 @@ from test_graphview import _in_editor, stacked, thru
 from test_graphview_devices import rig_devices
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
+from ui_driver import Driver
 
 from hyperspace import graph as G
 from hyperspace import graphview, modifiers, ui, ui_graph, ui_pane, ui_routing
@@ -326,6 +327,62 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     assert all(st["applied"][n.id] == auto[n.id] for n in view.nodes
                if not n.idle)                           # N9: an idle node is not placed
     assert st["applied"]["render:camera"] != (900.0, 40.0)
+
+
+def test_t_tidies_the_graph(rig):
+    """T is the tidy's key (`ui_graph.KEY`, the owner 2026-11-11): one bare
+    press lays the nodes out again, as the head's chip does. A modified T
+    is not T, and neither is one typed into a field."""
+    st = party(rig)
+    d = Driver(step=lambda: frame(rig.panel, "graph"))
+    ui_graph.toggle_open(st, "render:shape")
+    frame(rig.panel, "graph")
+    assert st["open"] == {"render:shape"}
+    d.run(d.key(imgui.Key.t), d.wait(2))
+    assert st["open"] == set() and st["said"].startswith("laid out ")
+    ui_graph.toggle_open(st, "render:shape")
+    d.run(d.key(imgui.Key.t, d.ctrl), d.wait(2))
+    assert st["open"] == {"render:shape"}, "a modified T is not T"
+
+
+def test_zero_fits_every_node_into_view(rig):
+    """0 asks for the fit a load asks for (`ask_fit`), where T tidies: the
+    owner's, 2026-11-11. It left the track restart to get here."""
+    party(rig)
+    d = Driver(step=lambda: frame(rig.panel, "graph"))
+    asked = []
+    real = ui_graph.ask_fit
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(ui_graph, "ask_fit",
+                   lambda state, **kw: asked.append(True) or real(state, **kw))
+        d.run(d.key(imgui.Key._0), d.wait(2))
+        assert asked, "0 asks for the fit"
+        asked.clear()
+        d.run(d.key(imgui.Key._0, d.ctrl), d.wait(2))
+        assert not asked, "a modified 0 is not 0"
+
+
+def test_t_has_no_row_so_it_changes_nothing_on_the_output(rig):
+    """`app.Keys` polls the control window for every row whenever imgui is
+    not typing: a key with a row would tidy and move the look in one press.
+    T left the overlay for this (`routing.RETIRED_KEY_ROWS`)."""
+    from hyperspace import routing
+
+    taken = {b.source.removeprefix("key:") for b in routing.keymap()}
+    for key in (ui_graph.KEY, ui_graph.FIT_KEY):
+        assert key not in taken
+        assert not any(k.endswith(f"+{key}") for k in taken)
+
+
+def test_a_row_learned_onto_t_keeps_it(rig):
+    """A row the owner learns onto T is the owner's: the canvas stands down."""
+    st = party(rig)
+    table = rig.panel.router.table
+    table.set_routes([*table.routes(), Binding(f"key:{ui_graph.KEY}", "view.bright", "push", 1.0)])
+    ui_graph.toggle_open(st, "render:shape")
+    d = Driver(step=lambda: frame(rig.panel, "graph"))
+    d.run(d.key(imgui.Key.t), d.wait(2))
+    assert st["open"] == {"render:shape"}
 
 
 def test_beside_shows_on_a_narrow_page_selected_or_not(rig, monkeypatch):

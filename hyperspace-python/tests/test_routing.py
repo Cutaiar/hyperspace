@@ -493,8 +493,10 @@ def test_factory_table_binds_only_real_params(tmp_path):
     keys = [(b.key, b.layer) for b in t.bindings if b.scheme != "lane"]
     assert len(keys) == len(set(keys))                  # one row per control per layer
     # + R, F1–F8, ⇧F1–F8 (plan 11), + undo and redo on ⌘ and Ctrl (plan 15 WP1),
-    # + Home (plan 15 WP2)
-    assert len(t.of("key")) == 25 + 17 + 4 + 1
+    # + Home (plan 15 WP2). 24, not 25: T left the overlay for GRAPH's tidy
+    # (the owner, 2026-11-11) and 0 the track restart for its fit: the panel's
+    # own keys, not rows
+    assert len(t.of("key")) == 23 + 17 + 4 + 1
     assert len(t.of("pad")) == 9 and len(t.of("hat")) == 2     # BACK chases, START is free
     assert len(t.midi()) == 113 + 6 + 1 + 4 + 1 + 1 and t.mods() == []   # + SHIFT, the global track
     # knobs, OVERDUB (plan 15 WP2) (the clip-stop row's eight, plan 15 WP4,
@@ -950,7 +952,7 @@ def test_midi_view_shares_the_table(tmp_path):
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
     assert again.for_param("view.zoom").source == "cc:0:99"
-    assert len(again.of("key")) == 25 + 17 + 4 + 1 and again.mods() == []
+    assert len(again.of("key")) == 23 + 17 + 4 + 1 and again.mods() == []
     # a meta row (no layer: invariant) is edited in bindings.json, not
     # unbound from the panel (plan 13 WP5; tests/test_midi.py has the rest)
     m.unbind("view.zoom")
