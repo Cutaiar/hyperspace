@@ -17,12 +17,12 @@ import pytest
 
 # ---------------------------------------------------------------- test tiers
 # A bare `pytest` runs the fast tier in parallel (pyproject addopts:
-# -n auto -m "not golden and not slow and not live"); `pytest --all` runs
-# everything. The markers are applied here, by name, so no test file carries
-# them: re-measure with `pytest --all --durations=60` and edit these tables
-# when a test is added or its time changes.
+# -n auto -m "not golden and not slow and not live and not sweep"); `pytest
+# --all` runs everything. The markers are applied here, by name, so no test
+# file carries them: re-measure with `pytest --all --durations=60` and edit
+# these tables when a test is added or its time changes.
 
-_FAST = "not golden and not slow and not live"      # = pyproject's addopts -m
+_FAST = "not golden and not slow and not live and not sweep"   # = pyproject's addopts -m
 _GOLDEN_FILES = {"test_golden_frames.py"}
 # whole files: torch on MPS, or loopbacks with multi-second timeouts
 _LIVE_FILES = {"test_media_live.py", "test_media_publish.py"}
@@ -67,6 +67,49 @@ _SLOW_TESTS = {
     "test_render.py::test_every_layout_and_motion_draws_any_count",
     "test_desk_coverage.py::test_the_committed_report_is_fresh_and_regenerates_byte_identical",
     "test_loadable.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says",
+}
+
+# The sweep tier (row 870): a test that walks a whole library of content (every
+# effect, knob, shape or corpus loadable patch), a long soak, or a check that a
+# finished migration still lands as the old way did. Its use is while that content
+# changes, not on every merge, so it is out of the fast tier and of `tests.yml`:
+# `pytest -m sweep` runs it, `--all` too, and `.github/workflows/sweeps.yml` runs it
+# on its own runner when a PR touches what it walks (its `paths:` name every file
+# below, tests/test_ci_layout.py holds the two together). A contract any PR can
+# break (the watch list, the walls, the words, a registration) stays in the fast
+# tier however it is spelled.
+_SWEEP_TESTS = {
+    "test_analyzer.py::test_legacy_layout_is_bit_exact",
+    "test_catalog.py::test_a_catalog_shape_is_well_formed",
+    "test_catalog.py::test_a_shortlisted_polytope_has_the_counts_plan_22_measured",
+    "test_deck.py::test_a_deck_beside_changes_nothing_on_air_and_lands_what_one_deck_lands",
+    "test_deck.py::test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state",
+    "test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did",
+    "test_deck_crossfade.py::test_copy_then_every_patch_param_of_both_decks_equal_each_frame",
+    "test_deck_crossfade.py::test_copy_then_xfade_1_is_deck_1_at_0",
+    "test_deck_fade.py::test_deck_2_at_xfade_1_is_deck_1_on_the_same_loadable_byte_for_byte",
+    "test_fx.py::test_each_effect_changes_the_frame",
+    "test_fx.py::test_every_effect_runs_on_the_face_target",
+    "test_fx_palette.py::test_the_defaults_leave_every_frame_byte_identical",
+    "test_ghost.py::test_the_guide_on_the_hand_reads_the_same_in_every_style_but_hands",
+    "test_graph_areas.py::test_no_cable_runs_backwards_across_areas",
+    "test_graph_frame.py::test_the_wired_frame_builds_what_default_graph_builds",
+    "test_graph_groups.py::test_groups_keep_their_invariants_over_the_corpus",
+    "test_graph_migrate.py::test_every_section_loads_as_a_wired_frame",
+    "test_lookback.py::test_every_corpus_loadable_renders_opaque_in_window_mode",
+    "test_media_faces_aux.py::test_old_effects_still_compile",
+    "test_meta_controller.py::test_every_pointer_on_deck_1_lands_every_corpus_loadable_as_before",
+    "test_nodemode.py::test_node_mode_round_trips_over_the_corpus",
+    "test_outputs.py::test_every_style_behaves_as_the_hands_in_every_state",
+    "test_patterns.py::test_every_input_moves_every_mode_from_1_to_2_6",
+    "test_plan36_seven.py::test_every_corpus_loadable_is_its_sources_seven_and_round_trips",
+    "test_players.py::test_every_corpus_loadable_lands_as_before_with_players_and_a_list",
+    "test_playlist.py::test_a_long_run_keeps_the_undo_stacks_bounded",
+    "test_render.py::test_shape_renders",
+    "test_routing.py::test_legacy6_reproduces_planedrive_and_u_bands",
+    "test_shapes4d.py::test_every_4d_shape_clears_the_volume_floor",
+    "test_shapes4d.py::test_every_shape_draws_what_it_was_recorded_drawing",
+    "test_step_continuity.py::test_every_knob_of_every_effect_steps_the_same_an_hour_in",
 }
 
 
@@ -121,6 +164,27 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.live)
         if path in _SLOW_FILES or key in _SLOW_TESTS:
             item.add_marker(pytest.mark.slow)
+        if key in _SWEEP_TESTS:
+            item.add_marker(pytest.mark.sweep)
+    # The longest first (row 870): `--dist load` hands tests out in this order,
+    # so a 20 s test that sorts late by name starts while the quick ones fill in
+    # around it, not alone at the end with every other worker idle. The times are
+    # CI's (tests/ci_durations.json, `tools/ci_shard.py durations`); a test it
+    # doesn't name keeps its place. Stable, so every worker sees one order.
+    slow = _ci_durations().get("tests", {})
+    if slow:
+        items.sort(key=lambda item: -slow.get(item.nodeid, 0.0))
+
+
+def _ci_durations() -> dict:
+    """tests/ci_durations.json, or nothing: a missing or broken file only loses
+    the order."""
+    import json
+
+    try:
+        return json.loads((Path(__file__).parent / "ci_durations.json").read_text())
+    except (OSError, ValueError):
+        return {}
 
 
 # pytest's own fixtures wider than a test, which hold no device
