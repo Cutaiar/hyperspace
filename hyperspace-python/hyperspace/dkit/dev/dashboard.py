@@ -361,27 +361,6 @@ def lay_out(w: int, h: int, n_rows: int | None = None,
     return r
 
 
-_LAID: dict = {}
-
-
-def _laid_out(w, h, body_dy) -> Rects:
-    """`lay_out`, memoised for `paint` - which asks for the same page every
-    frame the window is neither resized nor scrolled.
-
-    The key is every argument, and that is the whole of what `lay_out`
-    depends on: it is a pure function of them and of module constants.
-    Private to `paint` rather than a cache on `lay_out` itself, because the
-    returned Rects are mutable and a caller that edited its own copy would
-    otherwise edit everybody's; `paint` only reads them."""
-    key = (w, h, body_dy)
-    r = _LAID.get(key)
-    if r is None:
-        if len(_LAID) > 64:             # a scroll mints a key per offset
-            _LAID.clear()
-        _LAID[key] = r = lay_out(w, h, body_dy=body_dy)
-    return r
-
-
 # --------------------------------------------------------------------------
 # drawing
 # --------------------------------------------------------------------------
@@ -495,7 +474,7 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
                        backdrop=T.rgba("background", theme=theme),
                        border=0.0) as view:
         # re-lay-out at this frame's scroll, so there is no frame of lag
-        rr = _laid_out(w, h, view.y - by)
+        rr = lay_out(w, h, body_dy=view.y - by)
         _body(ui, rr, w, h, series, state)
     state["page_scroll"], state["page_max"] = I.scrolled(ui, "page")
     return

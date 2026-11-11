@@ -735,29 +735,6 @@ def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
                            tabular=tabular)
     if line_h is None:
         line_h = TEXT_LEADING.get(float(size), 0.0)
-    k = (s, variant, size, tabular, max_w, align, box_w, baseline_box,
-         line_h, x, y)
-    plan = _LABELS.get(k)
-    if plan is not None:
-        # The same call as a previous frame's: replay its placement. Only
-        # the push, the colour and the draw calls run - the colour live
-        # because `_u32` reads ImGui's style alpha, which `begin_disabled`
-        # changes. The density is checked rather than keyed because it is
-        # only known with the face pushed.
-        w, density, glyphs, pen, tx, base, runs = plan
-        push_css_font(faces, variant, size, tabular)
-        try:
-            baked = imgui.get_font().get_font_baked(size)
-            if baked.rasterizer_density == density:
-                c = _u32(col)
-                if runs is None:
-                    _glyph_run(dl, tx, base, glyphs, pen, size, c)
-                else:
-                    for at, sub in runs:
-                        dl.add_text(at, c, sub)
-                return w
-        finally:
-            imgui.pop_font()
     if max_w:
         s = fit_text(s, faces, variant, size, max_w, tabular)
     glyphs, pen = shape(s, variant, tabular)
@@ -772,36 +749,18 @@ def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
             tx = x + (box_w - w) / 2.0
         base = baseline_y(y, size, baseline_box, line_h)
         c = _u32(col)
-        baked = imgui.get_font().get_font_baked(size)
-        runs = None
         if len(glyphs) == 1:
             _glyph_run(dl, tx, base, glyphs, pen, size, c)
         elif glyphs:
+            baked = imgui.get_font().get_font_baked(size)
             top = base - baked.ascent
-            # add_text TRUNCATES its origin; rounding first makes it round
-            runs = tuple((imgui.ImVec2(px(tx + off), top), sub)
-                         for off, sub in _runs(glyphs, pen,
-                                               face_key(variant, tabular),
-                                               size, baked))
-            for at, sub in runs:
-                dl.add_text(at, c, sub)
-        else:
-            runs = ()
-        if len(_LABELS) > 4096:         # a scroll mints a key per offset
-            _LABELS.clear()
-        _LABELS[k] = (float(w), baked.rasterizer_density, glyphs, pen, tx,
-                      base, runs)
+            for off, sub in _runs(glyphs, pen, face_key(variant, tabular), size,
+                                  baked):
+                # add_text TRUNCATES its origin; rounding first makes it round
+                dl.add_text(imgui.ImVec2(px(tx + off), top), c, sub)
         return float(w)
     finally:
         imgui.pop_font()
-
-
-# Each `label` call's placement - its fitted text, width, baseline and the
-# origin of every `add_text` run - keyed on every argument that decides it.
-# An immediate-mode page makes the same calls every frame, and working them
-# out again was most of the Python in a label. Nothing font-dependent is
-# reused across a change of density (see the check in `label`).
-_LABELS: dict = {}
 
 
 def text_w(s, faces, variant, size, tabular=False) -> float:
