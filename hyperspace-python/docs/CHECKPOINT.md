@@ -277,6 +277,14 @@ an idealized control object; draft PR #342 is its record.
   Tests run against a temp home (`HYPERSPACE_HOME`, set by
   `tests/conftest.py`).
 - Never push to `main`. The owner merges.
+- **The app leaves by one door.** Ctrl-C asks the frame loop to quit
+  (`app._install_quit_signals`); nothing in `app.main` may let a signal
+  unwind the stack, or the teardown after the loop is skipped and the
+  terminal gets a traceback (2026-11-11). **And SIGTERM stays the
+  kernel's** — a Python handler cannot run while the main thread is wedged
+  in a driver call, which is when a kill matters most, so handling it would
+  cost more than the teardown it would buy.
+  `tests/test_quit_signal.py` runs the real app and interrupts it.
 - A change to a file format backs the old file up before the first
   rewrite.
 - **Work on current `main`, and stay on it.** `git fetch origin main` before
