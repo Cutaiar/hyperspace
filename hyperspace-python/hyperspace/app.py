@@ -56,6 +56,7 @@ import argparse
 import importlib.util
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -175,6 +176,67 @@ LOOP_KEYS = ("SUPER+R", "SUPER+LEFT_BRACKET", "SUPER+RIGHT_BRACKET",
 
 def _err(where: str, e: Exception) -> str:
     return f"{where}: {type(e).__name__}: {e}"[:160]
+
+
+# ---- Ctrl-C (2026-11-11) ----
+
+QUIT_GRACE_S = 2.0      # a second Ctrl-C this long after the first: out now, teardown or no
+
+
+@dataclass
+class Quit:
+    """What a Ctrl-C asked for: `at` is when the first signal arrived."""
+
+    at: float | None = None
+
+    @property
+    def asked(self) -> bool:
+        return self.at is not None
+
+
+def _exit_now() -> None:
+    """The escape hatch: no teardown, no traceback, 130 — a shell's own code
+    for a Ctrl-C."""
+    print("quit: forced", file=sys.stderr, flush=True)
+    os._exit(130)       # every exit hook skipped: that is the point
+
+
+def _install_quit_signals(quitting: Quit | None = None, *, clock=time.perf_counter,
+                          hard=_exit_now) -> Quit:
+    """Ctrl-C asks the loop to quit; it never unwinds the stack.
+
+    With no handler, SIGINT raises KeyboardInterrupt wherever the signal
+    lands — mid-frame, inside a draw — and `main` dies with a traceback,
+    every window, the audio stream and the devices still open and the
+    window placement unsaved. A handler instead sets `Quit.at`, and the
+    loop leaves by the door a window close uses, so the one teardown runs
+    (`close_all`, audit P1). SIGTERM is the same: `uv run`, a launchd job
+    or a terminal closing is a quit, not a kill.
+
+    A further signal `QUIT_GRACE_S` after the first is for a teardown that
+    wedges: out now. One inside that window is a double tap, and is ignored.
+
+    Call it again with the same `Quit` to re-register the handlers, in case
+    something opened in between installed its own.
+    """
+    quitting = Quit() if quitting is None else quitting
+
+    def handler(signum, frame) -> None:      # the signal module's shape
+        now = clock()
+        if quitting.at is None:
+            quitting.at = now
+        elif now - quitting.at >= QUIT_GRACE_S:
+            hard()
+
+    for name in ("SIGINT", "SIGTERM"):
+        sig = getattr(signal, name, None)
+        if sig is None:
+            continue
+        try:
+            signal.signal(sig, handler)
+        except (OSError, ValueError):     # not the main thread; the loop is, so not the app
+            pass
+    return quitting
 
 
 def _quiet(fn) -> None:
@@ -1833,6 +1895,9 @@ def _args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = _args(argv)                    # before GLFW: --help prints and exits here
+    # before GLFW too: a Ctrl-C during the seconds of startup below is a quit,
+    # not a traceback out of half-built windows
+    quitting = _install_quit_signals()
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise")
     cfg = config.load()                   # before the windows: [output] overlay is a creation hint
@@ -2318,51 +2383,65 @@ def main(argv: list[str] | None = None) -> None:
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None
 
     watchdog.start()          # last, so startup is not a stall
+    # and the handlers again: anything opened above (PortAudio, a driver) may
+    # have installed its own SIGINT handler over ours
+    _install_quit_signals(quitting)
 
     last = time.perf_counter()
     fps = 0.0
-    # the loop ends when a person closes a window (the smoke run closes output 1). A window whose
-    # display went is `hotplug.py`'s to close, and is in no slot by then
-    while not (any(glfw.window_should_close(w) for w in _slot_windows(slots))
-               or glfw.window_should_close(ctrl_win)):
-        if frames_left is not None:
-            frames_left -= 1
-            if frames_left <= 0:
-                glfw.set_window_should_close(ctrl_win, True)
-        if display_list is not None:
-            display_list.look()        # memory: its worker does the disk
-        glfw.poll_events()
-        if plug is not None:
-            plug.between_frames()      # a display came or went: never inside the poll, or a frame
-        # the control window's imgui frame starts BEFORE input handling:
-        # with the 1.87+ event queue, want_capture_keyboard only holds this
-        # frame's value once new_frame() has run — reading it earlier sees
-        # last frame's. The render window has no imgui to defer to.
-        imgui.set_current_context(ui_ctx)
-        impl.process_inputs()
-        imgui.new_frame()
-        keys.typing = io.want_capture_keyboard
-        # the one frame clock: keys' hold timing, the tempo clock and the
-        # LFOs all read this `now` (the file watchers keep their own)
-        now = time.perf_counter()
-        dt = min(now - last, 0.05)
-        last = now
-        fps = fps * 0.95 + (1.0 / max(dt, 1e-6)) * 0.05
+    # the loop ends when a person closes a window (the smoke run closes output 1), or when
+    # a Ctrl-C asked (`_install_quit_signals`). A window whose display went is
+    # `hotplug.py`'s to close, and is in no slot by then
+    try:
+        while not (quitting.asked
+                   or any(glfw.window_should_close(w) for w in _slot_windows(slots))
+                   or glfw.window_should_close(ctrl_win)):
+            if frames_left is not None:
+                frames_left -= 1
+                if frames_left <= 0:
+                    glfw.set_window_should_close(ctrl_win, True)
+            if display_list is not None:
+                display_list.look()        # memory: its worker does the disk
+            glfw.poll_events()
+            if plug is not None:
+                plug.between_frames()      # a display came or went: never inside the poll, or a frame
+            # the control window's imgui frame starts BEFORE input handling:
+            # with the 1.87+ event queue, want_capture_keyboard only holds this
+            # frame's value once new_frame() has run — reading it earlier sees
+            # last frame's. The render window has no imgui to defer to.
+            imgui.set_current_context(ui_ctx)
+            impl.process_inputs()
+            imgui.new_frame()
+            keys.typing = io.want_capture_keyboard
+            # the one frame clock: keys' hold timing, the tempo clock and the
+            # LFOs all read this `now` (the file watchers keep their own)
+            now = time.perf_counter()
+            dt = min(now - last, 0.05)
+            last = now
+            fps = fps * 0.95 + (1.0 / max(dt, 1e-6)) * 0.05
 
-        frame(host, now, dt, fps)
+            frame(host, now, dt, fps)
 
-        if reloader.error or reloader.runtime_error:
-            _hot_error_toast(reloader.error or reloader.runtime_error)
+            if reloader.error or reloader.runtime_error:
+                _hot_error_toast(reloader.error or reloader.runtime_error)
 
-        imgui.render()
-        ui_browse.scrub(panel, imgui.get_draw_data())    # a deleted icon texture: see there
-        impl.render(imgui.get_draw_data())
-        # the GRAPH canvas into its tap, from the lists just drawn, on a frame
-        # a channel asked for `panel:graph` (replay.py, 2026-11-02)
-        replay.grab(panel.canvas_tap, impl, imgui.get_draw_data(), panel.canvas_px)
-        glfw.swap_buffers(ctrl_win)
-        root.pacer.end_frame()     # the floor: a swap that didn't wait can't run the loop away
-        watchdog.pet(now)          # a frame completed: one float write
+            imgui.render()
+            ui_browse.scrub(panel, imgui.get_draw_data())    # a deleted icon texture: see there
+            impl.render(imgui.get_draw_data())
+            # the GRAPH canvas into its tap, from the lists just drawn, on a frame
+            # a channel asked for `panel:graph` (replay.py, 2026-11-02)
+            replay.grab(panel.canvas_tap, impl, imgui.get_draw_data(), panel.canvas_px)
+            glfw.swap_buffers(ctrl_win)
+            root.pacer.end_frame()     # the floor: a swap that didn't wait can't run the loop away
+            watchdog.pet(now)          # a frame completed: one float write
+
+    except KeyboardInterrupt:
+        # something replaced our handler after the line above and the signal
+        # unwound the stack after all: quit the way a Ctrl-C does, and take the
+        # handlers back, so the grace window's escape hatch stays open
+        if quitting.at is None:
+            quitting.at = time.perf_counter()
+        _install_quit_signals(quitting)
 
     _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
     # the watchdog first: teardown is no stall; the panel before imgui goes
