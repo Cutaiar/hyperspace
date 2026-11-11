@@ -57,6 +57,7 @@ type Cell = {
   content?: number
   frac?: number
   disabled?: boolean
+  intrinsic?: boolean
   members?: number[]
   orientation?: string
 }
@@ -106,7 +107,7 @@ export default function Gallery({
             // pins the baseline deterministically.
             <span
               style={{
-                fontFamily: '"Geist Variable", sans-serif',
+                fontFamily: '"Inter Variable", sans-serif',
                 fontSize: c.size,
                 fontWeight: c.weight,
                 lineHeight: `${c.h}px`,
@@ -279,13 +280,14 @@ export default function Gallery({
             // Pinned to the spec rect by inline style, which beats the
             // size variant's own h-8/size-8 classes without touching any
             // other chrome. Text transparent: the chrome pass never
-            // measures glyphs, and a Button's intrinsic WIDTH comes from
-            // its label, which is the one thing the spec exists to pin.
+            // measures glyphs. An `intrinsic` cell keeps its own WIDTH -
+            // its label's - as the kit draws its own, so the cell checks
+            // the width law and the text measure feeding it (RETRO row 61).
             <Button
               variant={c.variant as never}
               size={c.size as never}
               disabled={c.disabled}
-              style={{ width: "100%", height: "100%", color: "transparent" }}
+              style={{ width: c.intrinsic ? undefined : "100%", height: "100%", color: "transparent" }}
             >
               {c.text}
             </Button>

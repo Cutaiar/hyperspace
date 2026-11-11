@@ -1283,7 +1283,7 @@ def test_the_inputs_value_sits_on_the_placeholders_line(DB):
     Two causes, both now fixed. ImGui draws an InputText's text at the
     cursor PLUS `FramePadding`, default (4, 3), which the kit's own frame
     does not want; and the stock widget renders in imgui's CURRENT font,
-    which is not the Geist face at `font * FONT_SPAN_EM` that `draw.label`
+    which is not the kit's face at `font * FONT_SPAN_EM` that `draw.label`
     draws the placeholder with - so the two had different metrics. The
     second is why this looked far worse on a Retina Mac, where the atlas is
     rasterised at 2x, than the 1px it measures here.
@@ -1341,10 +1341,14 @@ def test_the_inputs_value_sits_on_the_placeholders_line(DB):
         return int(rows.min()), int(rows.max())
 
     ph_top, ph_bot = ink_top("placeholder")
-    v_top, _v_bot = ink_top("value")
-    assert v_top == ph_top, (
-        f"the value's ink starts at row {v_top} and the placeholder's at "
-        f"{ph_top} - they are one line of one field")
+    _v_top, v_bot = ink_top("value")
+    # The BASELINE - the bottom of the ink, as neither "Placeholder" nor
+    # "600-cell" has a descender. Not the top: the placeholder is the fainter
+    # ink, so its antialiased top row can fall under the threshold where the
+    # value's does not, and in Inter it did - a row apart on one baseline.
+    assert v_bot == ph_bot, (
+        f"the value's ink ends at row {v_bot} and the placeholder's at "
+        f"{ph_bot} - they are one line of one field")
     # and that line is centred in the field, which is what makes BOTH right
     # rather than equally wrong
     h = spots["placeholder"][3]

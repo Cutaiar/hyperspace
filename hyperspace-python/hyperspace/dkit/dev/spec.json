@@ -431,7 +431,7 @@
       "variant": "default",
       "x": 340,
       "y": 838,
-      "w": 29.203125,
+      "w": 28.75,
       "h": 20.0,
       "text": "Ctrl"
     },
@@ -637,9 +637,10 @@
       "size": "xs",
       "x": 40,
       "y": 1380,
-      "w": 90,
+      "w": 55.578125,
       "h": 24,
-      "text": "Button"
+      "text": "Button",
+      "intrinsic": true
     },
     {
       "id": "button.size.sm",
@@ -648,9 +649,10 @@
       "size": "sm",
       "x": 150,
       "y": 1380,
-      "w": 90,
+      "w": 62.078125,
       "h": 28,
-      "text": "Button"
+      "text": "Button",
+      "intrinsic": true
     },
     {
       "id": "button.size.default",
@@ -659,9 +661,10 @@
       "size": "default",
       "x": 260,
       "y": 1380,
-      "w": 90,
+      "w": 65.84375,
       "h": 32,
-      "text": "Button"
+      "text": "Button",
+      "intrinsic": true
     },
     {
       "id": "button.size.lg",
@@ -670,9 +673,10 @@
       "size": "lg",
       "x": 370,
       "y": 1380,
-      "w": 90,
+      "w": 65.84375,
       "h": 36,
-      "text": "Button"
+      "text": "Button",
+      "intrinsic": true
     },
     {
       "id": "button.size.icon-xs",
