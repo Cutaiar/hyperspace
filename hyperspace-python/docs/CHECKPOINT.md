@@ -281,6 +281,8 @@ an idealized control object; draft PR #342 is its record.
   to quit (`app._install_quit_signals`); nothing in `app.main` may let a
   signal unwind the stack, or the teardown after the loop is skipped and
   the terminal gets a traceback (2026-11-11).
+  Nothing rests on the asking being heard, either: the first signal arms a
+  five-second kernel alarm, so a wedged frame cannot outlive one SIGTERM.
   `tests/test_quit_signal.py` runs the real app and interrupts it.
 - A change to a file format backs the old file up before the first
   rewrite.

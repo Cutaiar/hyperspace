@@ -1358,8 +1358,15 @@ go to the field. More render outputs come from `[[output.screens]]` (§14).
   windows destroyed. It never raises `KeyboardInterrupt` through the
   frame (2026-11-11: it used to, mid-draw, and left all of that open).
   A further Ctrl-C two seconds on is the escape hatch for a teardown
-  that wedges: out at once, code 130. `app._install_quit_signals`;
-  `tests/test_quit_signal.py` holds it, in CI's merge gate.
+  that wedges: out at once, code 130. And five seconds after the first
+  signal the process is gone whatever it is doing — a frame stuck in a
+  driver call never reaches the loop's condition, and nothing Python
+  runs while that call holds the GIL, so the backstop is SIGALRM left
+  at its default and the kill is the kernel's. One SIGTERM from a
+  launcher is therefore enough on its own. `app._install_quit_signals`,
+  `_arm_hard_exit`, `_restore_quit_signals` (which hands the signals
+  back, for `tools/` that call `main` and go on working);
+  `tests/test_quit_signal.py` holds all of it, in CI's merge gate.
 - **Restart in place:** Cmd+R or the SYSTEM page's *Restart process*
   (`os.execv`: same PID, same terminal). Every open adapter (MIDI, the
   bridge, the hands, the dream worker) and then the

@@ -122,6 +122,49 @@ def test_a_signal_quits_the_real_app_without_a_traceback(quiet_on_a_mac, gl_wind
     assert time.monotonic() - sent < QUIT_S
 
 
+# a frame that never comes back to the loop's condition — a driver call that
+# stopped returning, which is the one thing asking the loop to quit cannot
+# answer. `QUIT_HARD_S` down from 5 s so the test waits a second, not five:
+# what is under test is that the backstop fires at all, without a second signal
+WEDGED = """
+import time
+
+from hyperspace import app
+
+app.QUIT_HARD_S = 1
+app._install_quit_signals()
+print("armed", flush=True)
+while True:
+    time.sleep(0.05)
+"""
+
+
+def test_one_sigterm_ends_a_wedged_app_with_no_second_signal():
+    """The handler is only worth the loop that reads it, and a launcher sends
+    one SIGTERM and waits. Before this branch the default disposition ended a
+    wedged app; `_arm_hard_exit` is what keeps that promise now — the kernel's
+    own alarm, which needs nothing of this process to run."""
+    p = subprocess.Popen([sys.executable, "-c", WEDGED], cwd=str(ROOT), text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert p.stdout is not None
+    assert p.stdout.readline().strip() == "armed", "the handlers were never installed"
+
+    sent = time.monotonic()
+    p.send_signal(signal.SIGTERM)
+    try:
+        _, err = p.communicate(timeout=QUIT_S)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        pytest.fail("one SIGTERM left a wedged app running")
+    took = time.monotonic() - sent
+
+    assert "Traceback" not in err, err[-2000:]
+    # SIGALRM's default action, or `_exit_now` if the loop had got a look in
+    assert p.returncode in (-signal.SIGALRM, 130), f"{p.returncode}: {err[-2000:]}"
+    assert took > 0.2, "the signal was not handled at all — this is the old default action"
+    assert took < 5.0, took
+
+
 def test_the_handlers_are_installed_before_the_windows_and_again_before_the_loop():
     """Where the two calls are is the whole of what they cover: the first
     before `glfw.init`, so a Ctrl-C through the seconds of startup is a quit
@@ -131,6 +174,8 @@ def test_the_handlers_are_installed_before_the_windows_and_again_before_the_loop
     src = (ROOT / "hyperspace" / "app.py").read_text()
     assert src.index("quitting = _install_quit_signals()") < src.index("if not glfw.init():")
     assert src.index("_install_quit_signals(quitting)\n") < src.index("while not (quitting.asked")
+    # and what main does on the way out, after the last window is gone
+    assert src.index("_restore_quit_signals(quitting)\n") > src.index("glfw.terminate()")
 
 
 def test_the_loop_leaves_by_the_same_door_a_window_close_does():
@@ -147,23 +192,56 @@ def test_the_loop_leaves_by_the_same_door_a_window_close_does():
 @pytest.fixture
 def handler():
     """`_install_quit_signals` on a clock of the test's own, with this
-    process's own handlers put back after it."""
-    before = {s: signal.getsignal(s) for s in (signal.SIGINT, signal.SIGTERM)}
+    process's own handlers — and its alarm — put back after it. The teardown
+    matters: a signal here arms a real SIGALRM, and the default action for
+    one is to kill this worker."""
+    before = {s: signal.getsignal(s) for s in (signal.SIGINT, signal.SIGTERM, signal.SIGALRM)}
     clock, forced = [0.0], []
     quitting = app._install_quit_signals(clock=lambda: clock[0], hard=lambda: forced.append(1))
     try:
         yield signal.getsignal(signal.SIGINT), quitting, clock, forced
     finally:
+        signal.alarm(0)
         for s, was in before.items():
             signal.signal(s, was)
 
 
-def test_the_first_signal_asks_the_loop_to_quit_and_nothing_else(handler):
+def test_the_first_signal_asks_the_loop_to_quit_and_arms_the_backstop(handler):
+    """It asks — and leaves nothing resting on the asking being heard."""
     fire, quitting, clock, forced = handler
-    assert not quitting.asked
+    assert not quitting.asked and not quitting.armed
     clock[0] = 7.0
     fire(signal.SIGINT, None)
     assert quitting.asked and quitting.at == 7.0 and not forced
+    assert quitting.armed
+    assert signal.getsignal(signal.SIGALRM) is signal.SIG_DFL, "the kernel does this one"
+    assert 0 < signal.alarm(0) <= app.QUIT_HARD_S       # (and disarms it again)
+
+
+def test_the_restore_disarms_the_backstop_and_gives_the_signals_back(handler):
+    """What `main` does on its way out: a tool that calls it goes on owning
+    its own Ctrl-C, and the alarm set for a quit that finished is gone."""
+    fire, quitting, _, _ = handler
+    mine = signal.getsignal(signal.SIGTERM)
+    fire(signal.SIGINT, None)
+    app._restore_quit_signals(quitting)
+    assert not quitting.armed and signal.alarm(0) == 0
+    assert signal.getsignal(signal.SIGINT) is not fire
+    assert signal.getsignal(signal.SIGTERM) is not mine
+
+
+def test_a_handler_someone_else_meant_to_install_is_left_alone(handler):
+    """Only ours is taken back: a restore never undoes a handler that
+    something installed after us on purpose."""
+    fire, quitting, _, _ = handler
+
+    def mine(signum, frame):
+        pass
+
+    assert signal.signal(signal.SIGTERM, mine) is fire      # installed over ours
+    app._restore_quit_signals(quitting)
+    assert signal.getsignal(signal.SIGTERM) is mine, "a restore took back what wasn't ours"
+    assert signal.getsignal(signal.SIGINT) is not fire, "and left ours where it was"
 
 
 def test_a_second_ctrl_c_inside_the_grace_window_is_a_double_tap(handler):

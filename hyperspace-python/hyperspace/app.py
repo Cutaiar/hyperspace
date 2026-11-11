@@ -181,6 +181,7 @@ def _err(where: str, e: Exception) -> str:
 # ---- Ctrl-C (2026-11-11) ----
 
 QUIT_GRACE_S = 2.0      # a second Ctrl-C this long after the first: out now, teardown or no
+QUIT_HARD_S = 5         # and out anyway this long after the first, loop or no loop (whole seconds)
 
 
 @dataclass
@@ -188,6 +189,9 @@ class Quit:
     """What a Ctrl-C asked for: `at` is when the first signal arrived."""
 
     at: float | None = None
+    handler: Any = None             # what we installed, so a restore knows ours from another's
+    before: dict = field(default_factory=dict)      # signal → what was handling it before us
+    armed: bool = False             # the SIGALRM backstop is set
 
     @property
     def asked(self) -> bool:
@@ -199,6 +203,34 @@ def _exit_now() -> None:
     for a Ctrl-C."""
     print("quit: forced", file=sys.stderr, flush=True)
     os._exit(130)       # every exit hook skipped: that is the point
+
+
+def _arm_hard_exit(quitting: Quit) -> None:
+    """The backstop under the backstop: `QUIT_HARD_S` from the first signal
+    the kernel ends the process, whatever this one is doing.
+
+    The asking a signal does is only worth as much as the loop that reads it:
+    a frame wedged in a driver call never comes back to the condition, and
+    then nothing Python — no handler, no thread — runs either, because that
+    call holds the GIL (`watchdog.py` says the same of a stall it cannot see).
+    So this is SIGALRM left at SIG_DFL: the alarm is the kernel's, and the
+    kill is the kernel's. It is why one SIGTERM from a launcher is enough,
+    with no second signal and no kill timeout of its own — which the default
+    disposition this handler replaced used to give it for nothing.
+
+    Disarmed by `_restore_quit_signals` the moment `main` is through its
+    teardown, so a show that quits normally never meets it.
+    """
+    sig = getattr(signal, "SIGALRM", None)
+    if sig is None or quitting.armed:       # no SIGALRM on Windows; arm once
+        return
+    try:
+        quitting.before.setdefault(sig, signal.getsignal(sig))
+        signal.signal(sig, signal.SIG_DFL)  # the default action is "terminate": no Python needed
+        signal.alarm(QUIT_HARD_S)
+    except (OSError, ValueError):
+        return
+    quitting.armed = True
 
 
 def _install_quit_signals(quitting: Quit | None = None, *, clock=time.perf_counter,
@@ -213,11 +245,15 @@ def _install_quit_signals(quitting: Quit | None = None, *, clock=time.perf_count
     (`close_all`, audit P1). SIGTERM is the same: `uv run`, a launchd job
     or a terminal closing is a quit, not a kill.
 
-    A further signal `QUIT_GRACE_S` after the first is for a teardown that
-    wedges: out now. One inside that window is a double tap, and is ignored.
+    Asking is not enough on its own, so the first signal also arms
+    `_arm_hard_exit`: the process is gone `QUIT_HARD_S` after it whether or
+    not any of this code ever runs again. A further signal `QUIT_GRACE_S`
+    after the first is the same escape hatch for someone who would rather
+    not wait; one inside that window is a double tap, and is ignored.
 
     Call it again with the same `Quit` to re-register the handlers, in case
-    something opened in between installed its own.
+    something opened in between installed its own; `_restore_quit_signals`
+    puts back what was there before.
     """
     quitting = Quit() if quitting is None else quitting
 
@@ -225,18 +261,43 @@ def _install_quit_signals(quitting: Quit | None = None, *, clock=time.perf_count
         now = clock()
         if quitting.at is None:
             quitting.at = now
+            _arm_hard_exit(quitting)
         elif now - quitting.at >= QUIT_GRACE_S:
             hard()
 
+    quitting.handler = handler
     for name in ("SIGINT", "SIGTERM"):
         sig = getattr(signal, name, None)
         if sig is None:
             continue
         try:
+            before = signal.getsignal(sig)
             signal.signal(sig, handler)
         except (OSError, ValueError):     # not the main thread; the loop is, so not the app
-            pass
+            continue
+        if before is not handler:         # the second install: keep the first call's answer
+            quitting.before.setdefault(sig, before)
     return quitting
+
+
+def _restore_quit_signals(quitting: Quit) -> None:
+    """Disarm the hard exit and put back whatever was handling these signals
+    before `main` — `tools/app_driver.py` and `tools/control_shots.py` call
+    it and go on working, and a Ctrl-C of theirs is theirs. A handler that is
+    no longer ours was installed by someone who meant it, and is left alone.
+    """
+    sig = getattr(signal, "SIGALRM", None)
+    if sig is not None and quitting.armed:
+        _quiet(lambda: signal.alarm(0))
+        quitting.armed = False
+    for s, before in quitting.before.items():
+        if s is not sig and signal.getsignal(s) is not quitting.handler:
+            continue
+        try:
+            signal.signal(s, before)
+        except (OSError, ValueError):
+            pass
+    quitting.before.clear()
 
 
 def _quiet(fn) -> None:
@@ -2452,6 +2513,8 @@ def main(argv: list[str] | None = None) -> None:
     impl.shutdown()
     _destroy_windows(all_windows())   # every window before terminate: the exit crash
     glfw.terminate()
+    # the quit is done: the hard exit is disarmed and SIGINT is whoever's it was
+    _restore_quit_signals(quitting)
 
 
 if __name__ == "__main__":
