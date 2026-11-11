@@ -231,12 +231,29 @@ def handler():
     try:
         yield signal.getsignal(signal.SIGINT), quitting, clock, forced
     finally:
-        signal.alarm(0)
+        if quitting.armed:          # only ours: `no_deadline_of_its_own` owns the rest
+            signal.alarm(0)
         for s, was in before.items():
             signal.signal(s, was)
 
 
-def test_the_first_signal_asks_the_loop_to_quit_and_arms_the_backstop(handler):
+@pytest.fixture
+def no_deadline_of_its_own():
+    """A test of the backstop needs a process with no deadline running, and
+    this is not one: pytest-timeout holds `ITIMER_REAL` for its own `--timeout`
+    (which is how the rule below came to be written — `_arm_hard_exit` found
+    it there and declined to take it over). Stand it down, and put it back to
+    the microsecond after."""
+    left = signal.setitimer(signal.ITIMER_REAL, 0)[0]
+    try:
+        yield
+    finally:
+        if left:
+            signal.setitimer(signal.ITIMER_REAL, left)
+
+
+def test_the_first_signal_asks_the_loop_to_quit_and_arms_the_backstop(no_deadline_of_its_own,
+                                                                      handler):
     """It asks — and leaves nothing resting on the asking being heard."""
     fire, quitting, clock, forced = handler
     assert not quitting.asked and not quitting.armed
@@ -245,19 +262,40 @@ def test_the_first_signal_asks_the_loop_to_quit_and_arms_the_backstop(handler):
     assert quitting.asked and quitting.at == 7.0 and not forced
     assert quitting.armed
     assert signal.getsignal(signal.SIGALRM) is signal.SIG_DFL, "the kernel does this one"
-    assert 0 < signal.alarm(0) <= app.QUIT_HARD_S       # (and disarms it again)
+    assert 0 < signal.getitimer(signal.ITIMER_REAL)[0] <= app.QUIT_HARD_S
 
 
-def test_the_restore_disarms_the_backstop_and_gives_the_signals_back(handler):
+def test_the_restore_disarms_the_backstop_and_gives_the_signals_back(no_deadline_of_its_own,
+                                                                     handler):
     """What `main` does on its way out: a tool that calls it goes on owning
     its own Ctrl-C, and the alarm set for a quit that finished is gone."""
     fire, quitting, _, _ = handler
     before = signal.getsignal(signal.SIGALRM)
     fire(signal.SIGINT, None)
     app._restore_quit_signals(quitting)
-    assert not quitting.armed and signal.alarm(0) == 0
+    assert not quitting.armed and signal.getitimer(signal.ITIMER_REAL)[0] == 0
     assert signal.getsignal(signal.SIGINT) is not fire
     assert signal.getsignal(signal.SIGALRM) is before, "SIGALRM was left at SIG_DFL"
+
+
+def test_a_deadline_someone_else_set_is_never_taken_over(handler):
+    """SIGALRM is one timer for the whole process. A caller that had a
+    deadline of its own running when it called `main` keeps it, to the
+    second: this quit is the one that goes without a backstop, because
+    theirs is not ours to shorten, and a restore putting back an
+    approximation of what is left is not the same promise."""
+    fire, quitting, _, _ = handler
+    signal.setitimer(signal.ITIMER_REAL, 30.0)      # a caller's, running
+    try:
+        fire(signal.SIGINT, None)
+        assert quitting.asked, "the quit is still asked for"
+        assert not quitting.armed, "it armed over a deadline that was not its own"
+        assert signal.SIGALRM not in quitting.before, "it took SIGALRM's handler too"
+        assert 25.0 < signal.getitimer(signal.ITIMER_REAL)[0] <= 30.0, "the caller's deadline"
+        app._restore_quit_signals(quitting)
+        assert signal.getitimer(signal.ITIMER_REAL)[0] > 25.0, "the restore cancelled theirs"
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 def test_a_handler_someone_else_meant_to_install_is_left_alone(handler):

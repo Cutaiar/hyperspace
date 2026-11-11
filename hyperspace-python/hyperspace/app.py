@@ -228,10 +228,17 @@ def _arm_hard_exit(quitting: Quit) -> None:
     if sig is None or quitting.armed:       # no SIGALRM on Windows; arm once
         return
     try:
+        # one timer for the whole process, and `alarm` would silently take it:
+        # a caller of `main` with a deadline of its own keeps it, and this quit
+        # goes without a backstop rather than cancel someone else's. Read with
+        # getitimer, which an alarm also sets, so there is no window where
+        # theirs is ours (`signal.alarm` can only read its answer by replacing it)
+        if signal.getitimer(signal.ITIMER_REAL)[0]:
+            return
         quitting.before.setdefault(sig, signal.getsignal(sig))
         signal.signal(sig, signal.SIG_DFL)  # the default action is "terminate": no Python needed
         signal.alarm(QUIT_HARD_S)
-    except (OSError, ValueError):
+    except (OSError, ValueError, AttributeError):
         return
     quitting.armed = True
 

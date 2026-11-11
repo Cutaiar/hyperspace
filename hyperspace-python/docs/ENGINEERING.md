@@ -1358,7 +1358,9 @@ go to the field. More render outputs come from `[[output.screens]]` (§14).
   frame (2026-11-11: it used to, mid-draw, and left all of that open). A
   further Ctrl-C two seconds on exits at once, code 130, and the first one
   arms a five-second kernel alarm so a teardown that wedges cannot hold the
-  process either. `app._install_quit_signals`, `_arm_hard_exit`,
+  process either — unless something that called `main` had a deadline of its
+  own running, since `SIGALRM` is one timer for the whole process and
+  theirs is not ours to cancel. `app._install_quit_signals`, `_arm_hard_exit`,
   `_restore_quit_signals` (which hands SIGINT back, for `tools/` that call
   `main` and go on working).
 - **SIGTERM is the kernel's**, and nothing in the app may take it: a
