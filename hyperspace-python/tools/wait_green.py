@@ -41,8 +41,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 WORKFLOW = "tests"      # `name:` in .github/workflows/tests.yml; a test holds the two together
-APPEAR_S, APPEAR_POLL_S = 10 * 60, 10   # for a run to appear
-FINISH_S, FINISH_POLL_S = 30 * 60, 20   # for it to finish, from when it appeared
+# Polls of 5 s (row 870): a merge waits up to one poll past green, and with CI
+# near two minutes 20 s was a sixth of it. Two `gh` reads a poll, far inside the API's limit.
+APPEAR_S, APPEAR_POLL_S = 10 * 60, 5    # for a run to appear
+FINISH_S, FINISH_POLL_S = 30 * 60, 5    # for it to finish, from when it appeared
 SILENT_S = 5 * 60                       # no answer from `gh` for this long is the end of the wait
 GH_TIMEOUT_S = 60                       # a hung `gh` is one read with no answer
 MIN_HEAD = 7                            # a shorter prefix checks next to nothing

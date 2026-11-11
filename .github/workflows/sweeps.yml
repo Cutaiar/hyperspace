@@ -1,0 +1,82 @@
+# The sweep tier (row 870): tests that walk a whole library of content
+# (every effect, knob, shape or corpus loadable patch), soaks, and finished
+# migrations' old-way checks. Out of tests.yml, the merge gate: here on a
+# runner of its own when a PR touches what they walk, and after every push
+# to main. tools/wait_green.py doesn't wait for it; a red sweep shows on the
+# PR as its own check. `pytest -m sweep` runs the same tests on a Mac, and
+# `pytest --all` with every other tier.
+name: sweeps
+
+on:
+  pull_request:
+    # what the sweeps walk, draw and compare against (the corpus, the migration
+    # fixtures, the shape digests); tests/test_ci_layout.py holds the test
+    # files below to tests/conftest.py's _SWEEP_TESTS
+    paths:
+      - hyperspace-python/hyperspace/**
+      - "!hyperspace-python/hyperspace/ui*.py"
+      - "!hyperspace-python/hyperspace/dkit/**"
+      - "!hyperspace-python/hyperspace/fonts/**"
+      - hyperspace-python/presets/**
+      - hyperspace-python/tests/corpus/**
+      - hyperspace-python/tests/fixtures/**
+      - hyperspace-python/tests/golden/**
+      - hyperspace-python/pyproject.toml
+      - hyperspace-python/tests/conftest.py
+      - hyperspace-python/uv.lock
+      - .github/workflows/sweeps.yml
+      - .github/actions/setup/**
+      - hyperspace-python/tests/test_analyzer.py
+      - hyperspace-python/tests/test_catalog.py
+      - hyperspace-python/tests/test_deck.py
+      - hyperspace-python/tests/test_deck_crossfade.py
+      - hyperspace-python/tests/test_deck_fade.py
+      - hyperspace-python/tests/test_fx.py
+      - hyperspace-python/tests/test_fx_palette.py
+      - hyperspace-python/tests/test_ghost.py
+      - hyperspace-python/tests/test_graph_areas.py
+      - hyperspace-python/tests/test_graph_frame.py
+      - hyperspace-python/tests/test_graph_groups.py
+      - hyperspace-python/tests/test_graph_migrate.py
+      - hyperspace-python/tests/test_lookback.py
+      - hyperspace-python/tests/test_media_faces_aux.py
+      - hyperspace-python/tests/test_meta_controller.py
+      - hyperspace-python/tests/test_nodemode.py
+      - hyperspace-python/tests/test_outputs.py
+      - hyperspace-python/tests/test_patterns.py
+      - hyperspace-python/tests/test_plan36_seven.py
+      - hyperspace-python/tests/test_players.py
+      - hyperspace-python/tests/test_playlist.py
+      - hyperspace-python/tests/test_render.py
+      - hyperspace-python/tests/test_routing.py
+      - hyperspace-python/tests/test_shapes4d.py
+      - hyperspace-python/tests/test_step_continuity.py
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: sweeps-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sweeps:
+    name: sweeps
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: hyperspace-python
+    env:
+      UV_NO_GROUP: hands dream
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+
+      - name: Warm the assert cache
+        run: uv run python tools/ci_shard.py prewarm 0 1
+
+      - name: Sweeps
+        run: >
+          xvfb-run -a -s "-screen 0 1920x1080x24"
+          uv run pytest -q -rs -m sweep --dist load --timeout 120 --max-worker-restart=4 --durations=10

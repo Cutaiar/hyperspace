@@ -101,6 +101,8 @@ def gh(tmp_path, monkeypatch):
     monkeypatch.setattr(tool, "APPEAR_S", 40)
     monkeypatch.setattr(tool, "FINISH_S", 80)
     monkeypatch.setattr(tool, "SILENT_S", 30)
+    monkeypatch.setattr(tool, "APPEAR_POLL_S", 10)
+    monkeypatch.setattr(tool, "FINISH_POLL_S", 20)
     return Rig(tool, tmp_path)
 
 
@@ -288,6 +290,7 @@ def test_the_finish_wait_starts_when_the_run_appears(gh):
 def test_the_real_waits_are_the_scripts_and_on_a_monotonic_clock():
     tool = _tool()
     assert (tool.APPEAR_S, tool.FINISH_S, tool.SILENT_S) == (10 * 60, 30 * 60, 5 * 60)
+    assert (tool.APPEAR_POLL_S, tool.FINISH_POLL_S) == (5, 5)   # row 870: a merge waits one poll past green at most
     assert inspect.signature(tool.wait).parameters["clock"].default is time.monotonic
 
 
@@ -309,13 +312,13 @@ def _slow_gh(tool, monkeypatch, runs):
 
 
 def test_a_slow_gh_cant_stretch_the_thirty_minutes():
-    """Counting tries, 90 polls of two 60 s reads and a 20 s sleep would be 3.5 hours saying 30 min."""
+    """Counting tries, 360 polls of two 60 s reads and a 5 s sleep would be 12.5 hours saying 30 min."""
     tool = _tool()
     with pytest.MonkeyPatch.context() as mp:
         now, sleep = _slow_gh(tool, mp, [GOING])
         assert tool.wait("7", HEAD, sleep=sleep, clock=lambda: now[0]) == 5
     first_poll_done = 3 * tool.GH_TIMEOUT_S
-    assert tool.FINISH_S <= now[0] - first_poll_done <= tool.FINISH_S + 20 + 2 * tool.GH_TIMEOUT_S
+    assert tool.FINISH_S <= now[0] - first_poll_done <= tool.FINISH_S + tool.FINISH_POLL_S + 2 * tool.GH_TIMEOUT_S
 
 
 def test_a_slow_gh_cant_stretch_the_ten_minutes():
