@@ -162,10 +162,11 @@ slowest to build, take under a second), the disphenoidal 288-cell
 (`edges_by_classes`: two edge lengths) and the dual runcinated 5-cell
 (its cells' polar points), four star polychora on the 600-cell's and
 120-cell's corners (`_star`: one distance class; the two with {5/2}
-pentagram faces drawn as lines only, since a pentagram needs points the
-face pipeline does not have), and more duoprisms and prisms. A solid's
-faces come from the polytope extraction; a star (drawn as what shows: its
-spikes, the core buried) or a compound brings its own. A curve (the toys
+pentagram faces drawn as lines only, since a pentagram needs its edges'
+crossings as points and `_star` adds none), and more duoprisms and prisms.
+A solid's faces come from the polytope extraction; a star (a Kepler star
+drawn as what shows: its spikes, the core buried; the snub
+icosidodecadodecahedron with its faces whole) or a compound brings its own. A curve (the toys
 with F 0) draws no points: its samples are not corners.
 
 **The warm-up.** `geometry.warm_all`, started in `app.main` after the
@@ -262,6 +263,7 @@ The index stays the identity, so the menu's order never reaches a loadable patch
 | 99 | Truncated icosahedral prism | Prisms and pyramids | 154 | 120 | 240 |
 | 100 | Flow mark | Vector marks | 5 | 130 | 130 |
 | 101 | Flow capsules | Vector marks | 1040 | 970 | 2000 |
+| 102 | Snub icosidodecadodecahedron | Star polyhedra | 104 | 60 | 180 |
 
 **Vector marks** (3D, after the prisms). A subject read from a vector
 source instead of a formula: the Wispr Flow mark, five pill-shaped bars
@@ -277,6 +279,26 @@ face-on (§1, the depth cue)
 A browser prototype of their looks (flat ↔ capsules, materials,
 textures, bars moving to audio) is in
 [`prototypes/subjects/`](../../prototypes/subjects/).
+
+**The snub icosidodecadodecahedron** (102, Star polyhedra, after the
+vector marks). The uniform star polyhedron U46, | 5/3 3 5: 60 corners,
+180 edges and 104 faces — 80 triangles, 12 pentagons and 12 pentagrams,
+four triangles, a pentagon and a pentagram at every corner. Its corners
+are one corner's 60 turns by the icosahedral group (dodeca3's), and at
+edge 2 that corner is (√(2 − ρ), √(ρ + φρ²), √(ρ − ρ²/φ)), ρ the plastic
+number (`geometry.PLASTIC`, the real root of ρ³ = ρ + 1), so its
+circumradius is ½√(ρ⁴ + 2) edges. Its edges are the pairs at that
+length, not the shortest distance. Its faces are drawn whole and cross
+each other, as a star's do; a pentagram is filled, its outline its five
+tips and the five points where its edges cross (`_star_crossings`).
+Those crossings are V's rows after its corners (`geom()["corners"]`):
+faces use them, no edge does, and the renderer dots only the corners,
+in a scene too (`_scene_style`). VIEW's header and the table above count
+the corners as V
+(`tests/test_catalog.py::test_the_snub_icosidodecadodecahedron_is_uniform`,
+`::test_the_snub_icosidodecadodecahedron_is_sized_by_the_plastic_number`,
+`::test_a_pentagram_face_is_filled_once`,
+`tests/test_render.py::test_only_a_shapes_corners_are_dotted`).
 
 **Scenes** (`Shape.layers`, `geometry.Layer`). A scene is several shapes
 in one frame sharing a centre — a glome round a tesseract round a star.

@@ -2829,7 +2829,7 @@ class Panel:
         imgui.text(sh.name)
         imgui.pop_font()
         _micro(sh.alias, RED)
-        _micro(f"{sh.dims}D  ·  {g['n']}V {g['m']}E  ·  {sh.sym}")
+        _micro(f"{sh.dims}D  ·  {g.get('corners', g['n'])}V {g['m']}E  ·  {sh.sym}")
         imgui.end_group()
         imgui.spacing()
 

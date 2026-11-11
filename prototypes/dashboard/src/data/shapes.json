@@ -736,6 +736,14 @@
     "dims": 3
   },
   {
+    "name": "Snub icosidodecadodecahedron",
+    "kind": "uniform star · chiral, from the plastic number",
+    "cells": 0,
+    "schlafli": "| 5/3 3 5",
+    "family": "Star polyhedra",
+    "dims": 3
+  },
+  {
     "name": "Star",
     "kind": "pentagram prism",
     "cells": 0,

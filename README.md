@@ -1,6 +1,6 @@
 # Hyperspace
 
-A real-time 4D polytope visualizer. 101 shapes (the 5-cell to the 600-cell and
+A real-time 4D polytope visualizer. 102 shapes (the 5-cell to the 600-cell and
 some forty more 4-polytopes from the grand antiprism to the star polychora, the
 Clifford torus, eight surfaces from
 the Heart to a Klein bottle, and — plan 28's spike — a catalog of 3D solids,

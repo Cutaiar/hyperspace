@@ -22,11 +22,11 @@ type Stat = {
 const STATS: Stat[] = [
   {
     label: "Shapes in catalog",
-    value: "101",
-    delta: "+43",
+    value: "102",
+    delta: "+44",
     up: true,
     headline: "Catalog complete",
-    detail: "61 four-dimensional, 40 three-dimensional",
+    detail: "61 four-dimensional, 41 three-dimensional",
   },
   {
     label: "Frame rate",

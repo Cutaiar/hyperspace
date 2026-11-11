@@ -36,15 +36,17 @@ def test_geometry_traces_present():
 
 
 def test_the_engineering_table_matches_the_code():
-    """ENGINEERING §1 lists every shape's V and E; the numbers are geom()'s."""
+    """ENGINEERING §1 lists every shape's V and E; the numbers are geom()'s
+    (V its corners, where a face needs points that are not corners)."""
     rows = ve_table()
-    assert len(rows) == len(SHAPES) == 101
+    assert len(rows) == len(SHAPES) == 102
     for i, (name, n, m) in enumerate(rows):
         g = geom(i)
+        v = g.get("corners", g["n"])
         first = SHAPES[i].name.split(" ")[0].lower()[:4]
         assert name.lower().startswith(first), (i, name, SHAPES[i].name)
-        assert (g["n"], g["m"]) == (n, m), (
-            f"row {i + 1} {name}: ENGINEERING says {n}/{m}, geom {g['n']}/{g['m']}"
+        assert (v, g["m"]) == (n, m), (
+            f"row {i + 1} {name}: ENGINEERING says {n}/{m}, geom {v}/{g['m']}"
         )
 
 

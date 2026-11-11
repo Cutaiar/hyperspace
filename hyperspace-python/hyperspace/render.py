@@ -3390,6 +3390,7 @@ class Renderer:
 
         # ---- face fills, under the wireframe (agent-validated prototype) ----
         self._face_verts = 0
+        self._point_verts = 0
         self._copies = 0
         if s.faces:
             self._maybe_reload_patterns()
@@ -3493,8 +3494,11 @@ class Renderer:
                 draws.append((self._lvao, len(verts), self._lines, float(alpha.max())))
 
             if s.points and not g.get("curve"):   # a curve (plan 28) has no corners to dot
-                tp = (pd - near) / span
-                order_p = np.argsort(pd, kind="stable")
+                # V's corners only: the rows after them (a pentagram's
+                # crossings) are points a face needs, not corners to dot
+                n = g.get("corners", g["n"])
+                tp = (pd[:n] - near) / span
+                order_p = np.argsort(pd[:n], kind="stable")
                 # radius in framebuffer px (× dpr) at scale 1; POINT_VS scales
                 # it by the copy in world space (plan 26 A2b) and rounds the
                 # diameter to whole pixels, as the point sprites the quads
@@ -3517,7 +3521,6 @@ class Renderer:
                     pa = pa * st["p_alpha"]
                     r = r * np.sqrt(st["p_alpha"])
                     prgb = np.where(st["p_tinted"][:, None], st["p_rgb"], RED)[order_p]
-                n = g["n"]
                 pverts = np.empty((n * 6, 10), dtype=np.float32)
                 for k in range(6):
                     pverts[k::6, 0:3] = P[order_p]
@@ -3532,6 +3535,7 @@ class Renderer:
                 self._points["u_px"].value = (float(max(vpx[2], 1)), float(max(vpx[3], 1)))
                 self._points["u_wscale"].value = wsc
                 self._pvao.render(moderngl.TRIANGLES, vertices=len(pverts), instances=copies)
+                self._point_verts = len(pverts)
                 draws.append((self._pvao, len(pverts), self._points, float(pa.max())))
 
             if has_depth:

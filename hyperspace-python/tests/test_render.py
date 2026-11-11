@@ -58,6 +58,26 @@ def test_shape_renders(ctx, i):
         assert (img[:, :, 0] > img[:, :, 1]).any(), "no red-dominant (vertex) pixels"
 
 
+def test_only_a_shapes_corners_are_dotted(ctx):
+    # the snub icosidodecadodecahedron's V holds its 60 corners and then the
+    # 60 points where its pentagrams' edges cross, which only its faces use
+    # (geometry.geom's "corners"): a dot — one quad, six vertices — on each
+    # corner and none on a crossing; a shape without them dots every row
+    from hyperspace.geometry import shape_index
+    from hyperspace.render import Renderer
+
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((300, 200))])
+    fbo.use()
+    ctx.viewport = (0, 0, 300, 200)
+    r = Renderer(ctx)
+    snub, cube = shape_index("Snub icosidodecadodecahedron"), shape_index("Cube")
+    r.draw(ViewState(shape=snub, **VIEW), 300, 200)
+    assert geom(snub)["n"] == 120 and r._point_verts == 60 * 6
+    r.draw(ViewState(shape=cube, **VIEW), 300, 200)
+    assert r._point_verts == geom(cube)["n"] * 6
+    fbo.release()
+
+
 @pytest.mark.parametrize("name,ang", [("Flow mark", [0.0] * 6),
                                       ("Orbit", [0.0, 0.0, math.pi / 2, 0.0, 0.0, 0.0])])
 def test_a_shape_flat_toward_the_eye_draws_at_full_weight(ctx, name, ang):

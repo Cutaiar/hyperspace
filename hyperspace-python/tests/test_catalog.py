@@ -23,8 +23,9 @@ SOLIDS = [i for i in CATALOG if G.SHAPES[i].family in SOLID_FAMILIES]
 SCENES = [i for i in CATALOG if G.SHAPES[i].family == "Scenes"]
 BY_NAME = {s.name: i for i, s in enumerate(G.SHAPES)}
 
-# V, E, F of every solid: the textbook counts. A star is counted as what is
-# seen — its visible surface, the buried core left out
+# V, E, F of every solid: the textbook counts. A Kepler star or a spiked
+# one is counted as what is seen — its visible surface, the buried core
+# left out; a uniform star by its corners, its faces whole
 COUNTS = {
     "Tetrahedron": (4, 6, 4), "Cube": (8, 12, 6), "Octahedron": (6, 12, 8),
     "Dodecahedron": (20, 30, 12), "Icosahedron": (12, 30, 20),
@@ -37,6 +38,7 @@ COUNTS = {
     "Stella octangula": (8, 12, 8), "Five tetrahedra": (20, 30, 20),
     "Five cubes": (20, 60, 30), "Cube + octahedron": (14, 24, 14),
     "Dodecahedron + icosahedron": (32, 60, 32),
+    "Snub icosidodecadodecahedron": (60, 180, 104),
 }
 
 # plan 22's shortlist, as it measured them (docs/plans/22-polytope-shortlist.md):
@@ -72,8 +74,8 @@ POLYTOPES = {
     "Rectified 600-cell": (720, 3600, 3600, {3: 3600}),
     "Dual runcinated 5-cell": (30, 70, 60, {4: 60}),
     # the stars: faces where they are triangles or convex pentagons; a
-    # {5/2} pentagram face needs points the face pipeline does not have,
-    # so those two are drawn as lines
+    # {5/2} pentagram face needs its edges' crossings as points, which
+    # `_star` does not add, so those two are drawn as lines
     "Grand 600-cell": (120, 720, 1200, {3: 1200}),
     "Great 120-cell": (120, 720, 720, {5: 720}),
     "Small stellated 120-cell": (120, 1200, 0, {}),
@@ -131,8 +133,9 @@ def test_every_solid_has_a_count_and_every_count_a_solid():
 
 @pytest.mark.parametrize("i", SOLIDS, ids=lambda i: G.SHAPES[i].name)
 def test_a_solid_has_its_textbook_counts(i):
+    # V is its corners: a pentagram's crossings are face points, not corners
     g, F = G.geom(i), G.faces(i)
-    assert (g["n"], g["m"], len(F)) == COUNTS[G.SHAPES[i].name]
+    assert (g.get("corners", g["n"]), g["m"], len(F)) == COUNTS[G.SHAPES[i].name]
 
 
 @pytest.mark.parametrize("i", CATALOG, ids=lambda i: G.SHAPES[i].name)
@@ -192,6 +195,77 @@ def test_a_kepler_star_is_spikes_on_its_buried_core():
         assert (r == 1.0).sum() == points
 
 
+SNUB = BY_NAME["Snub icosidodecadodecahedron"]
+
+
+def _pentagram_edges(cyc: list, corners: int) -> list:
+    """A pentagram face's edges: its outline runs tip, crossing, tip, …, and
+    an edge joins every other tip."""
+    tips = [v for v in cyc if v < corners]
+    assert len(tips) == 5 and tips == cyc[0::2]
+    return [(tips[k], tips[(k + 2) % 5]) for k in range(5)]
+
+
+def test_the_snub_icosidodecadodecahedron_is_uniform():
+    # U46, | 5/3 3 5: 60 corners on the sphere, one edge length, and at
+    # every corner the same six faces — four triangles, a pentagon, a
+    # pentagram (3.3.3.5.3.5/3); every edge on two faces
+    from collections import Counter
+
+    g, F = G.geom(SNUB), G.faces(SNUB)
+    V, E, k = g["V"], g["E"], g["corners"]
+    assert G.SHAPES[SNUB].family == "Star polyhedra" and G.SHAPES[SNUB].dims == 3
+    assert np.allclose(np.linalg.norm(V[:k], axis=1), 1.0)
+    lens = np.linalg.norm(V[E[:, 0]] - V[E[:, 1]], axis=1)
+    assert np.ptp(lens) < 1e-12 and (E < k).all()
+    assert Counter(len(c) for c in F) == {3: 80, 5: 12, 10: 12}
+    around = [Counter() for _ in range(k)]
+    sides: Counter = Counter()
+    for c in F:
+        for v in c:
+            if v < k:
+                around[v][len(c)] += 1
+        pairs = (_pentagram_edges(c, k) if len(c) == 10
+                 else [(c[j], c[(j + 1) % len(c)]) for j in range(len(c))])
+        sides.update(frozenset(p) for p in pairs)
+    assert all(a == {3: 4, 5: 1, 10: 1} for a in around)
+    assert set(sides) == {frozenset(e) for e in E.tolist()} and set(sides.values()) == {2}
+
+
+def test_the_snub_icosidodecadodecahedron_is_sized_by_the_plastic_number():
+    # its circumradius is ½√(ρ⁴ + 2) edges, ρ the plastic number — the real
+    # root of x³ = x + 1, found here on its own, not read from the builder
+    roots = np.roots([1, 0, -1, -1])
+    rho = float(roots[np.abs(roots.imag) < 1e-12].real[0])
+    assert G.PLASTIC == pytest.approx(rho, abs=1e-15)
+    g = G.geom(SNUB)
+    edge = np.linalg.norm(g["V"][g["E"][0, 0]] - g["V"][g["E"][0, 1]])
+    assert 1 / edge == pytest.approx(0.5 * np.sqrt(rho ** 4 + 2), abs=1e-12)
+
+
+def test_a_pentagram_face_is_filled_once():
+    # a pentagram's outline is its five tips and the five crossings of its
+    # edges, a simple decagon: the triangles cover the star once (its area,
+    # inner pentagon and all), its crossings lie on its edges, and the
+    # crossings are face points only, joined by no edge
+    g, F, T = G.geom(SNUB), G.faces(SNUB), G.face_triangles(SNUB)
+    V, k = g["V"][:, :3], g["corners"]
+    assert g["n"] == k + 60 and (g["E"] < k).all()
+    for fi, c in enumerate(F):
+        if len(c) != 10:
+            continue
+        tips = V[c[0::2]]
+        r = np.linalg.norm(tips - tips.mean(axis=0), axis=1)[0]
+        star = 5 * r * r / G.PH2 * np.sin(np.pi / 5)       # tips plus the inner pentagon
+        tris = T[T[:, 3] == fi][:, :3]
+        area = sum(np.linalg.norm(np.cross(V[b] - V[a], V[d] - V[a])) / 2 for a, b, d in tris)
+        assert area == pytest.approx(star, rel=1e-9)
+        for a, b in _pentagram_edges(c, k):
+            on = [x for x in c[1::2]
+                  if np.linalg.norm(np.cross(V[b] - V[a], V[x] - V[a])) < 1e-9]
+            assert len(on) == 2                              # each edge crosses two others
+
+
 @pytest.mark.parametrize("name,k", [("Five tetrahedra", 5), ("Five cubes", 5),
                                     ("Stella octangula", 2)])
 def test_a_compound_shares_its_corners(name, k):
@@ -238,6 +312,14 @@ def test_a_scene_is_its_layers_in_order(i):
     # faces only from the layers that draw them
     assert len(G.faces(i)) == sum(len(G.faces(j)) for _, _, j, _ in rows
                                   if s.layers[[r[2] for r in rows].index(j)].faces > 0)
+
+
+def test_a_scene_layer_dots_only_its_shapes_corners():
+    # in a scene, a layer's face points (a pentagram's crossings) take no
+    # dot, as the shape alone draws none: their points' alpha is 0
+    g = G._build_scene((G.Layer("Cube", 1.0), G.Layer("Snub icosidodecadodecahedron", 0.8)))
+    st = G._scene_style(g["layers"], len(g["V"]), len(g["E"]), len(g["F"]))["style"]
+    assert st["p_alpha"].tolist() == [1.0] * (8 + 60) + [0.0] * 60
 
 
 def test_a_scene_turns_each_layer_at_its_own_angles():

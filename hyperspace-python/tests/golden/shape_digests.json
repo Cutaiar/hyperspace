@@ -705,5 +705,12 @@
   "m": 2000,
   "faces": 1040,
   "sha256": "af8dbd44e3df7f99bcb6924b562a8b39239a30e3fb048816dfa15fd341fbf62d"
+ },
+ "101": {
+  "name": "Snub icosidodecadodecahedron",
+  "n": 120,
+  "m": 180,
+  "faces": 104,
+  "sha256": "5fa61865d6cf6dfed1b884b906f7490f81b209c1e2657b7a5e6d6bf77feb82fd"
  }
 }

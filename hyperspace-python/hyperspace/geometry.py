@@ -414,8 +414,9 @@ def _star(V, cls: int, face_len: int = 0) -> dict:
     cls-th shortest distance. Its faces cross through the middle, so the
     support test cannot find them: with face_len 3 or 5 they are the planar
     cycles of that length in the edge graph (triangles, convex pentagons);
-    with 0 there are none drawn — a {5/2} pentagram face needs points the
-    face pipeline does not have (plan 22's shortlist)."""
+    with 0 there are none drawn — a {5/2} pentagram face needs its edges'
+    crossings as points, which this builder does not add (plan 22's
+    shortlist; the snub icosidodecadodecahedron's does, `_star_crossings`)."""
     V = [list(v) for v in V]
     iu, ju, d = _pair_d2(V)
     target = sorted(_distance_classes(d, 1e-4))[cls]
@@ -932,6 +933,81 @@ def _build_great_stellated() -> dict:
     # buried icosahedron
     V3 = dodeca3()
     return _pentagram_tips(V3, _rings_at(V3, DODECA_AXES))
+
+
+# the plastic number: the real root of ρ³ = ρ + 1 (Cardano), ≈ 1.3247
+PLASTIC = ((9 + math.sqrt(69)) / 18) ** (1 / 3) + ((9 - math.sqrt(69)) / 18) ** (1 / 3)
+
+
+def _tetra_turns(p) -> list[list[float]]:
+    """The twelve turns of p by the tetrahedron's rotations: its cyclic
+    shifts, each with no sign changed or two."""
+    out = []
+    for c in range(3):
+        q = [float(p[(k + c) % 3]) for k in range(3)]
+        out.append(q)
+        out.extend([x if k == keep else -x for k, x in enumerate(q)] for keep in range(3))
+    return out
+
+
+def _star_crossings(T: np.ndarray) -> np.ndarray:
+    """Where a {5/2} pentagram's edges cross: with its five tips T in order
+    round its centre c, the crossing between T_k and T_{k+1} is
+    c − (T_{k+3} − c)/φ². Tips and crossings in turn are its outline, a
+    simple decagon, so a fill covers the star once, inner pentagon and all."""
+    c = T.mean(axis=0)
+    return np.asarray([c - (T[(k + 3) % 5] - c) / PH2 for k in range(5)])
+
+
+def _build_snub_icosidodecadodeca() -> dict:
+    # U46, | 5/3 3 5: 80 triangles, 12 pentagons and 12 pentagrams, six at
+    # each of its 60 corners (3.3.3.5.3.5/3). The corners are one corner's
+    # 60 turns by the icosahedral group (dodeca3's: five-fold axes
+    # DODECA_AXES, the twelve turns of the tetrahedron and fifths of a turn
+    # about one axis), and at edge 2 that corner is
+    # (√(2 − ρ), √(ρ + φρ²), √(ρ − ρ²/φ)), ρ the plastic number: its
+    # circumradius is ½√(ρ⁴ + 2) edges. Its edges are the pairs at 2 (not
+    # the shortest distance: a star's faces cross), a triangle is three
+    # corners joined pairwise, and along each five-fold axis a ring of five
+    # is a pentagon or, joined every other corner, a pentagram. A pentagram
+    # is drawn filled, so its outline takes the five points where its edges
+    # cross: they are face points, not corners ("corners": 60)
+    rho = PLASTIC
+    p = np.array([math.sqrt(2 - rho), math.sqrt(rho + PHI * rho * rho),
+                  math.sqrt(rho - rho * rho / PHI)])
+    V3 = np.asarray([v for k in range(5)
+                     for v in _tetra_turns(_rot3(DODECA_AXES[0], 2 * math.pi * k / 5) @ p)])
+    iu, ju, d = _pair_d2(V3)
+    E = _pairs(iu, ju, np.abs(d - 4.0) < 1e-9)
+    edge = {frozenset(e) for e in E}
+    nbrs: list[set] = [set() for _ in V3]
+    for a, b in E:
+        nbrs[a].add(b)
+        nbrs[b].add(a)
+    F: list[list[int]] = [[a, b, c] for a, b in E for c in sorted(nbrs[a] & nbrs[b]) if c > b]
+    stars = []
+    for axis in DODECA_AXES:
+        n = np.asarray(axis, dtype=np.float64) / np.linalg.norm(axis)
+        u = np.cross(n, [0.0, 0.0, 1.0])
+        w = np.cross(n, u)
+        h = V3 @ n
+        up = np.argsort(h, kind="stable")
+        for level in np.split(up, np.flatnonzero(np.diff(h[up]) > 1e-6) + 1):
+            if len(level) != 5 or h[level[0]] < 0:
+                continue                # a ring below is the opposite axis's
+            ring = sorted(level.tolist(), key=lambda i: math.atan2(V3[i] @ w, V3[i] @ u))
+            if all(frozenset((ring[k], ring[(k + 1) % 5])) in edge for k in range(5)):
+                F.append(ring)
+            elif all(frozenset((ring[k], ring[(k + 2) % 5])) in edge for k in range(5)):
+                stars.append(ring)
+    V = V3.tolist()
+    for ring in stars:
+        cyc = []
+        for k, q in enumerate(_star_crossings(V3[ring])):
+            cyc += [ring[k], len(V)]
+            V.append(q.tolist())
+        F.append(cyc)
+    return {"V": _w0(V), "E": E, "F": F, "corners": len(V3)}
 
 
 # compounds: several solids sharing one centre, crossing each other
@@ -1487,6 +1563,9 @@ SHAPES = [
           _build_flow_mark, dims=3, family="Vector marks"),
     Shape("Flow capsules", "vector · the Flow mark's bars as capsules", 0, "5 ⊂⊃ × S¹",
           _build_flow_capsules, dims=3, family="Vector marks"),
+    # -------- a uniform star polyhedron (appended: index is identity)
+    Shape("Snub icosidodecadodecahedron", "uniform star · chiral, from the plastic number", 0,
+          "| 5/3 3 5", _build_snub_icosidodecadodeca, dims=3, family="Star polyhedra"),
 ]
 
 # The Shape menu (ui.Panel._shape_combo): sections, each a run of
@@ -1536,7 +1615,9 @@ def _lock(i: int) -> threading.RLock:
 def geom(i: int) -> dict:
     """Built geometry, normalised to unit circumradius, cached.
 
-    Returns {"V": float64 (n,4), "E": int32 (m,2), "n": int, "m": int}.
+    Returns {"V": float64 (n,4), "E": int32 (m,2), "n": int, "m": int}, and
+    "corners" when only V's first rows are corners (dotted, counted as its V)
+    and the rest are points a face needs: a pentagram's crossings.
     """
     g = _cache.get(i)
     if g is not None:
@@ -1557,6 +1638,8 @@ def _geom_build(i: int) -> dict:
         out["F"] = g["F"]
     if g.get("curve"):  # a curve's samples are not corners: no points drawn
         out["curve"] = True
+    if "corners" in g:  # V's first rows are its corners; the rest are face points
+        out["corners"] = g["corners"]
     if "layers" in g:  # a scene: whose rows are whose, and how each draws
         out.update(_scene_style(g["layers"], len(g["V"]), len(g["E"]), len(g["F"])))
     return out
@@ -1587,6 +1670,7 @@ def _scene_style(parts, n: int, m: int, nf: int) -> dict:
         st["e_rgb"][ea:eb] = L.tint
         st["e_m"][ea:eb] = eb - ea
         st["p_alpha"][a:b] = 0.0 if geom(j).get("curve") else L.points
+        st["p_alpha"][a + geom(j).get("corners", b - a):b] = 0.0   # face points, not corners
         st["p_rgb"][a:b] = L.tint
         st["p_tinted"][a:b] = tuple(L.tint) != (1.0, 1.0, 1.0)
         st["f_alpha"][fa:fb] = L.faces

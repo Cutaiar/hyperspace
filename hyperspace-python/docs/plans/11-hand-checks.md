@@ -8798,6 +8798,12 @@ Setup for all: the Leap on, the ghost hands on. The grip is a look's own (row 85
 
 **668. Per look, home on a new look, the lanes.** Save a look with the grip on (**gripped**), throw the shape, and load another look that never had the grip. *Pass:* the shape springs home in about a third of a second and the fist does nothing; reload **gripped**: the grip is on again with its own values; throw, then load **gripped** again: home first, then the fist takes it. With the second deck: its own grip, off until set, and crossfading to it sends a thrown shape home. Add a route from `grip:speed` onto any effect's amount: it rises with a throw and falls as the shape slows, after the fist has opened. *Fail:* a look without the grip that still grabs, a thrown shape carried into the next look, or `grip:speed` that stops at the release.
 
+## DY. The snub icosidodecadodecahedron (row 872, 2026-11-11)
+
+Headless: `tests/test_catalog.py` (the counts, six faces at every corner, every edge on two faces, the circumradius ½√(ρ⁴ + 2) edges against the plastic number found on its own, a pentagram filled once), `tests/test_render.py::test_only_a_shapes_corners_are_dotted`, `tests/test_shapes4d.py` (its recorded digest). A restart after pulling (a new shape).
+
+**669. The snub icosidodecadodecahedron.** (laptop, VIEW) Open the Shape menu's 3D part, **Star polyhedra**, and pick **Snub icosidodecadodecahedron** (last in the group). Turn Faces on, then XZ and YZ, and let it turn; then Points off and on. *Pass:* the header reads `3D · 60V 180E · | 5/3 3 5`; a ball of crossing faces with twelve five-pointed stars standing out, each filled right into its middle, among triangles and pentagons; red dots only where edges meet — none at the five points inside each star where its edges cross; it turns the same with the W planes on. Say whether it reads as the picture it was asked for (Wikipedia's, the stars red). *Fail:* a star filled only at its tips or brighter in its middle (filled twice), a red dot inside a star, or a header saying 120V.
+
 ## What no test covers
 
 Only a person can settle these:

@@ -32,7 +32,7 @@ Four panels, each fed from the real catalog rather than invented numbers:
   it drives.
 - **Plane routing** — the band → plane table, with each band's crossover
   range and direction.
-- **Shape catalog** — all 101 shapes, filterable by dimension and family.
+- **Shape catalog** — all 102 shapes, filterable by dimension and family.
 
 ## Where the data comes from
 
@@ -41,7 +41,7 @@ the point was to exercise the components, not to fake telemetry.
 
 | Panel | Source |
 |---|---|
-| Shape catalog | **Real.** `src/data/shapes.json`, exported from `hyperspace.geometry.SHAPES` (101 shapes, 61 four-dimensional and 40 three-dimensional). |
+| Shape catalog | **Real.** `src/data/shapes.json`, exported from `hyperspace.geometry.SHAPES` (102 shapes, 61 four-dimensional and 41 three-dimensional). |
 | Plane routing | **Real.** `src/data/bands.ts` mirrors `BANDS` in `hyperspace-python/hyperspace/bands.py` — the same six bands, crossovers and directions. |
 | Band levels | **Synthetic.** A seeded generator stands in for a live analyzer frame, so the page renders identically every time. |
 | Stat cards | **Synthetic**, apart from the catalog count. |
