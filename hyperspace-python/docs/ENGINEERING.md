@@ -1351,22 +1351,24 @@ diagram, the cheat sheet). Keys work from both, and from every extra
 render output; while a text field in the panel is being typed into, keys
 go to the field. More render outputs come from `[[output.screens]]` (§14).
 
-- **Quit:** Esc or Q, or close any window. **Ctrl-C** in the terminal
-  (and a SIGTERM, from a closing terminal or the launcher) is the same
-  quit: the frame it is on finishes and the one teardown runs — the
-  window placement saved, every adapter and the audio stream closed, the
-  windows destroyed. It never raises `KeyboardInterrupt` through the
-  frame (2026-11-11: it used to, mid-draw, and left all of that open).
-  A further Ctrl-C two seconds on is the escape hatch for a teardown
-  that wedges: out at once, code 130. And five seconds after the first
-  signal the process is gone whatever it is doing — a frame stuck in a
-  driver call never reaches the loop's condition, and nothing Python
-  runs while that call holds the GIL, so the backstop is SIGALRM left
-  at its default and the kill is the kernel's. One SIGTERM from a
-  launcher is therefore enough on its own. `app._install_quit_signals`,
-  `_arm_hard_exit`, `_restore_quit_signals` (which hands the signals
-  back, for `tools/` that call `main` and go on working);
-  `tests/test_quit_signal.py` holds all of it, in CI's merge gate.
+- **Quit:** Esc or Q, or close any window. **Ctrl-C** in the terminal is
+  the same quit: the frame it is on finishes and the one teardown runs —
+  the window placement saved, every adapter and the audio stream closed,
+  the windows destroyed. It never raises `KeyboardInterrupt` through the
+  frame (2026-11-11: it used to, mid-draw, and left all of that open). A
+  further Ctrl-C two seconds on exits at once, code 130, and the first one
+  arms a five-second kernel alarm so a teardown that wedges cannot hold the
+  process either. `app._install_quit_signals`, `_arm_hard_exit`,
+  `_restore_quit_signals` (which hands SIGINT back, for `tools/` that call
+  `main` and go on working).
+- **SIGTERM is the kernel's**, and nothing in the app may take it: a
+  Python handler runs only where the interpreter reaches a check point, so
+  a main thread wedged in a driver call takes no signal at all — and that
+  is exactly when `kill` has to work. Handling it would turn one kill on a
+  hung show into a wait with nothing behind it (measured 2026-11-11, on a
+  `pthread_mutex_lock` deadlock). The cost is that a SIGTERM skips the
+  teardown; a Ctrl-C does not, and Ctrl-C is how the show ends.
+  `tests/test_quit_signal.py` holds both halves, in CI's merge gate.
 - **Restart in place:** Cmd+R or the SYSTEM page's *Restart process*
   (`os.execv`: same PID, same terminal). Every open adapter (MIDI, the
   bridge, the hands, the dream worker) and then the

@@ -206,17 +206,20 @@ def _exit_now() -> None:
 
 
 def _arm_hard_exit(quitting: Quit) -> None:
-    """The backstop under the backstop: `QUIT_HARD_S` from the first signal
-    the kernel ends the process, whatever this one is doing.
+    """A deadline on the quit once it has been heard: `QUIT_HARD_S` from the
+    signal, the kernel ends the process.
 
-    The asking a signal does is only worth as much as the loop that reads it:
-    a frame wedged in a driver call never comes back to the condition, and
-    then nothing Python — no handler, no thread — runs either, because that
-    call holds the GIL (`watchdog.py` says the same of a stall it cannot see).
-    So this is SIGALRM left at SIG_DFL: the alarm is the kernel's, and the
-    kill is the kernel's. It is why one SIGTERM from a launcher is enough,
-    with no second signal and no kill timeout of its own — which the default
-    disposition this handler replaced used to give it for nothing.
+    For the quit the loop never gets to — the frame wedges after the signal
+    was taken, or the teardown itself does. SIGALRM left at SIG_DFL, so the
+    alarm is the kernel's and so is the kill: no handler, no thread and no
+    GIL are needed once it is set.
+
+    What it cannot do is cover a main thread that was *already* wedged in a
+    native call when the signal arrived. CPython runs a Python handler only
+    where the interpreter reaches a check point, so nothing here runs, and
+    there is nothing to arm (2026-11-11, measured on a `pthread_mutex_lock`
+    deadlock). That is true of every Python handler, SIGINT's own default
+    included — it is why SIGTERM is left to the kernel entirely.
 
     Disarmed by `_restore_quit_signals` the moment `main` is through its
     teardown, so a show that quits normally never meets it.
@@ -237,21 +240,29 @@ def _install_quit_signals(quitting: Quit | None = None, *, clock=time.perf_count
                           hard=_exit_now) -> Quit:
     """Ctrl-C asks the loop to quit; it never unwinds the stack.
 
-    With no handler, SIGINT raises KeyboardInterrupt wherever the signal
-    lands — mid-frame, inside a draw — and `main` dies with a traceback,
-    every window, the audio stream and the devices still open and the
-    window placement unsaved. A handler instead sets `Quit.at`, and the
+    With no handler of ours, SIGINT raises KeyboardInterrupt wherever the
+    signal lands — mid-frame, inside a draw — and `main` dies with a
+    traceback, every window, the audio stream and the devices still open and
+    the window placement unsaved. A handler instead sets `Quit.at`, and the
     loop leaves by the door a window close uses, so the one teardown runs
-    (`close_all`, audit P1). SIGTERM is the same: `uv run`, a launchd job
-    or a terminal closing is a quit, not a kill.
+    (`close_all`, audit P1).
 
-    Asking is not enough on its own, so the first signal also arms
-    `_arm_hard_exit`: the process is gone `QUIT_HARD_S` after it whether or
-    not any of this code ever runs again. A further signal `QUIT_GRACE_S`
-    after the first is the same escape hatch for someone who would rather
-    not wait; one inside that window is a double tap, and is ignored.
+    The first signal also arms `_arm_hard_exit`, a deadline for the quit the
+    loop never gets to, and a further signal `QUIT_GRACE_S` after the first
+    is the same exit for someone who would rather not wait; one inside that
+    window is a double tap, and is ignored.
 
-    Call it again with the same `Quit` to re-register the handlers, in case
+    **SIGINT only, on purpose.** Handling SIGTERM too was the obvious next
+    line and it is a trap: a Python handler runs only where the interpreter
+    reaches a check point, so a main thread wedged in a driver call cannot
+    take the signal at all, and a launcher's one SIGTERM — which the kernel's
+    default disposition would have made fatal — would leave a hung show
+    running (2026-11-11, measured). We have nothing to trade for that, since
+    nothing in this process can act while that thread is stuck. SIGINT is
+    different only because CPython installs a Python handler for it at
+    startup whatever we do, so there is no kernel guarantee there to lose.
+
+    Call it again with the same `Quit` to re-register the handler, in case
     something opened in between installed its own; `_restore_quit_signals`
     puts back what was there before.
     """
@@ -266,25 +277,21 @@ def _install_quit_signals(quitting: Quit | None = None, *, clock=time.perf_count
             hard()
 
     quitting.handler = handler
-    for name in ("SIGINT", "SIGTERM"):
-        sig = getattr(signal, name, None)
-        if sig is None:
-            continue
-        try:
-            before = signal.getsignal(sig)
-            signal.signal(sig, handler)
-        except (OSError, ValueError):     # not the main thread; the loop is, so not the app
-            continue
-        if before is not handler:         # the second install: keep the first call's answer
-            quitting.before.setdefault(sig, before)
+    try:
+        before = signal.signal(signal.SIGINT, handler)
+    except (OSError, ValueError):      # not the main thread; the loop is, so not the app
+        return quitting
+    if before is not handler:          # the second install: keep the first call's answer
+        quitting.before.setdefault(signal.SIGINT, before)
     return quitting
 
 
 def _restore_quit_signals(quitting: Quit) -> None:
-    """Disarm the hard exit and put back whatever was handling these signals
-    before `main` — `tools/app_driver.py` and `tools/control_shots.py` call
-    it and go on working, and a Ctrl-C of theirs is theirs. A handler that is
-    no longer ours was installed by someone who meant it, and is left alone.
+    """Disarm the hard exit and put back whatever was handling SIGINT (and
+    SIGALRM) before `main` — `tools/app_driver.py` and `tools/control_shots.py`
+    call it and go on working, and a Ctrl-C of theirs is theirs. A handler
+    that is no longer ours was installed by someone who meant it, and is left
+    alone.
     """
     sig = getattr(signal, "SIGALRM", None)
     if sig is not None and quitting.armed:
@@ -1957,7 +1964,8 @@ def _args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> None:
     args = _args(argv)                    # before GLFW: --help prints and exits here
     # before GLFW too: a Ctrl-C during the seconds of startup below is a quit,
-    # not a traceback out of half-built windows
+    # not a traceback out of half-built windows. SIGTERM is the kernel's, and
+    # stays the kernel's: see `_install_quit_signals`
     quitting = _install_quit_signals()
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise")
@@ -2444,7 +2452,7 @@ def main(argv: list[str] | None = None) -> None:
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None
 
     watchdog.start()          # last, so startup is not a stall
-    # and the handlers again: anything opened above (PortAudio, a driver) may
+    # and the handler again: anything opened above (PortAudio, a driver) may
     # have installed its own SIGINT handler over ours
     _install_quit_signals(quitting)
 

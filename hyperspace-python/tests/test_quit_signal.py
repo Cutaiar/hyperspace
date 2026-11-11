@@ -17,6 +17,14 @@ stderr, and the `windows.json` only the teardown writes. A unit test of
 the handler could not have caught the original bug; this one fails on the
 build before the fix, every time.
 
+The other half of the rule is what the app must *not* handle. SIGTERM is
+the kernel's: a Python handler runs only where the interpreter reaches a
+check point, so a main thread wedged in a driver call can take no signal
+at all, and handling SIGTERM would have turned a launcher's one kill — the
+thing that always worked on a hung show — into a wait with nothing behind
+it. `test_one_sigterm_ends_an_app_wedged_in_a_native_call` is that rule,
+and it is the reason the handler below is SIGINT alone.
+
 It is in the fast tier, CI's merge gate, and not in `live`: the loop that
 Ctrl-C has to leave is the app's, and nothing stubbed stands in for it.
 On a Mac the app's windows take the focus for the few seconds it runs, so
@@ -93,76 +101,98 @@ def quiet_on_a_mac(request):
         pytest.skip("the real app takes the focus on a Mac: `pytest --all`")
 
 
-@pytest.mark.parametrize("sig", [signal.SIGINT, signal.SIGTERM], ids=["ctrl-c", "sigterm"])
-def test_a_signal_quits_the_real_app_without_a_traceback(quiet_on_a_mac, gl_window_ok,
-                                                         tmp_path, sig):
-    """A Ctrl-C into the running app — and a SIGTERM, which a closing
-    terminal or `uv run` sends — leaves it the way quitting does: nothing on
-    stderr, 0, and the teardown's own files written."""
+def test_ctrl_c_quits_the_real_app_without_a_traceback(quiet_on_a_mac, gl_window_ok, tmp_path):
+    """A Ctrl-C into the running app leaves it the way quitting does:
+    nothing on stderr, 0, and the teardown's own files written."""
     home = tmp_path / "home"
     p = _launch(home)
     _in_the_loop(p, home)
 
     sent = time.monotonic()
-    p.send_signal(sig)
+    p.send_signal(signal.SIGINT)
     try:
         _, err = p.communicate(timeout=QUIT_S)
     except subprocess.TimeoutExpired:
         p.kill()
         _, err = p.communicate()
-        pytest.fail(f"{sig.name} left the app running:\n{err[-3000:]}")
+        pytest.fail(f"Ctrl-C left the app running:\n{err[-3000:]}")
 
     tail = err[-3000:]
-    assert "Traceback" not in err, f"{sig.name} dumped a traceback:\n{tail}"
-    assert "KeyboardInterrupt" not in err, f"{sig.name} unwound the stack:\n{tail}"
-    assert p.returncode == 0, f"{sig.name} exited {p.returncode}:\n{tail}"
+    assert "Traceback" not in err, f"Ctrl-C dumped a traceback:\n{tail}"
+    assert "KeyboardInterrupt" not in err, f"Ctrl-C unwound the stack:\n{tail}"
+    assert p.returncode == 0, f"Ctrl-C exited {p.returncode}:\n{tail}"
     # the teardown ran: `_quiet(save_windows)` is its first line, and nothing
     # else in a launch writes this file (placement.py)
-    assert (home / "windows.json").exists(), f"{sig.name} skipped the teardown:\n{tail}"
+    assert (home / "windows.json").exists(), f"Ctrl-C skipped the teardown:\n{tail}"
     assert time.monotonic() - sent < QUIT_S
 
 
-# a frame that never comes back to the loop's condition — a driver call that
-# stopped returning, which is the one thing asking the loop to quit cannot
-# answer. `QUIT_HARD_S` down from 5 s so the test waits a second, not five:
-# what is under test is that the backstop fires at all, without a second signal
-WEDGED = """
-import time
+def test_sigterm_is_left_to_the_kernel_and_ends_the_real_app(quiet_on_a_mac, gl_window_ok,
+                                                             tmp_path):
+    """Nothing of ours handles SIGTERM, so a launcher's kill is the kernel's
+    business and always lands. It costs the teardown — no `windows.json` —
+    and that is the trade: see the wedged case below for what handling it
+    would have cost instead."""
+    home = tmp_path / "home"
+    p = _launch(home)
+    _in_the_loop(p, home)
 
-from hyperspace import app
-
-app.QUIT_HARD_S = 1
-app._install_quit_signals()
-print("armed", flush=True)
-while True:
-    time.sleep(0.05)
-"""
-
-
-def test_one_sigterm_ends_a_wedged_app_with_no_second_signal():
-    """The handler is only worth the loop that reads it, and a launcher sends
-    one SIGTERM and waits. Before this branch the default disposition ended a
-    wedged app; `_arm_hard_exit` is what keeps that promise now — the kernel's
-    own alarm, which needs nothing of this process to run."""
-    p = subprocess.Popen([sys.executable, "-c", WEDGED], cwd=str(ROOT), text=True,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    assert p.stdout is not None
-    assert p.stdout.readline().strip() == "armed", "the handlers were never installed"
-
-    sent = time.monotonic()
     p.send_signal(signal.SIGTERM)
     try:
         _, err = p.communicate(timeout=QUIT_S)
     except subprocess.TimeoutExpired:
         p.kill()
-        pytest.fail("one SIGTERM left a wedged app running")
-    took = time.monotonic() - sent
+        pytest.fail("SIGTERM left the app running")
+    assert p.returncode == -signal.SIGTERM, f"{p.returncode}: {err[-2000:]}"
 
-    assert "Traceback" not in err, err[-2000:]
-    # SIGALRM's default action, or `_exit_now` if the loop had got a look in
-    assert p.returncode in (-signal.SIGALRM, 130), f"{p.returncode}: {err[-2000:]}"
-    assert took > 0.2, "the signal was not handled at all — this is the old default action"
-    assert took < 5.0, took
+
+# A frame that never comes back to the loop's condition *and* never returns to
+# the interpreter: two locks of a non-recursive mutex on one thread, which is a
+# driver's deadlock without a driver. `pthread_mutex_lock` returns for no signal,
+# so no Python handler of ours — and none of CPython's — runs again in this
+# process. It is the case nothing in-process can answer, which is why it decides
+# what the app may handle rather than how it handles it.
+WEDGED = """
+import ctypes
+
+from hyperspace import app
+
+app._install_quit_signals()
+lib = ctypes.CDLL(None)
+m = ctypes.create_string_buffer(128)      # pthread_mutex_t: 40 bytes on glibc, 64 on macOS
+lib.pthread_mutex_init(m, None)
+lib.pthread_mutex_lock(m)
+print("wedging", flush=True)
+lib.pthread_mutex_lock(m)
+print("impossible", flush=True)
+"""
+
+
+def test_one_sigterm_ends_an_app_wedged_in_a_native_call():
+    """The rule that keeps `_install_quit_signals` to SIGINT.
+
+    A show whose driver has deadlocked is exactly when a kill has to work,
+    and it is exactly when no Python can run to notice one. The kernel's
+    default disposition is the only thing that ends this process, so nothing
+    may take SIGTERM away from it — not a handler, however graceful, and not
+    a handler that arms a deadline, because the arming cannot happen either.
+
+    Measured 2026-11-11: with SIGTERM handled, this process sat through the
+    signal and outlived a one-second hard deadline that was never armed.
+    """
+    p = subprocess.Popen([sys.executable, "-c", WEDGED], cwd=str(ROOT), text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert p.stdout is not None
+    assert p.stdout.readline().strip() == "wedging", "the app never reached the deadlock"
+
+    p.send_signal(signal.SIGTERM)
+    try:
+        out, err = p.communicate(timeout=QUIT_S)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        pytest.fail("one SIGTERM left a wedged app running: something is handling it")
+    assert "impossible" not in out, "the mutex was not a deadlock; the test proves nothing"
+    assert p.returncode == -signal.SIGTERM, f"{p.returncode}: {err[-2000:]}"
 
 
 def test_the_handlers_are_installed_before_the_windows_and_again_before_the_loop():
@@ -222,12 +252,12 @@ def test_the_restore_disarms_the_backstop_and_gives_the_signals_back(handler):
     """What `main` does on its way out: a tool that calls it goes on owning
     its own Ctrl-C, and the alarm set for a quit that finished is gone."""
     fire, quitting, _, _ = handler
-    mine = signal.getsignal(signal.SIGTERM)
+    before = signal.getsignal(signal.SIGALRM)
     fire(signal.SIGINT, None)
     app._restore_quit_signals(quitting)
     assert not quitting.armed and signal.alarm(0) == 0
     assert signal.getsignal(signal.SIGINT) is not fire
-    assert signal.getsignal(signal.SIGTERM) is not mine
+    assert signal.getsignal(signal.SIGALRM) is before, "SIGALRM was left at SIG_DFL"
 
 
 def test_a_handler_someone_else_meant_to_install_is_left_alone(handler):
@@ -238,10 +268,9 @@ def test_a_handler_someone_else_meant_to_install_is_left_alone(handler):
     def mine(signum, frame):
         pass
 
-    assert signal.signal(signal.SIGTERM, mine) is fire      # installed over ours
+    assert signal.signal(signal.SIGINT, mine) is fire       # installed over ours
     app._restore_quit_signals(quitting)
-    assert signal.getsignal(signal.SIGTERM) is mine, "a restore took back what wasn't ours"
-    assert signal.getsignal(signal.SIGINT) is not fire, "and left ours where it was"
+    assert signal.getsignal(signal.SIGINT) is mine, "a restore took back what wasn't ours"
 
 
 def test_a_second_ctrl_c_inside_the_grace_window_is_a_double_tap(handler):
@@ -260,12 +289,16 @@ def test_a_ctrl_c_after_the_grace_window_leaves_at_once(handler):
     fire, _, clock, forced = handler
     fire(signal.SIGINT, None)
     clock[0] = app.QUIT_GRACE_S
-    fire(signal.SIGTERM, None)
+    fire(signal.SIGINT, None)
     assert forced == [1]
 
 
-def test_sigterm_is_the_same_handler_and_a_reinstall_keeps_the_one_quit(handler):
+def test_sigterm_is_nobody_of_ours(handler):
+    """The unit-level half of the wedged test: installing leaves SIGTERM
+    exactly as it was, so the kernel's default disposition still holds it."""
     fire, quitting, _, _ = handler
-    assert signal.getsignal(signal.SIGTERM) is fire
+    assert signal.getsignal(signal.SIGTERM) is not fire
+    assert signal.SIGTERM not in quitting.before
     again = app._install_quit_signals(quitting)
     assert again is quitting and signal.getsignal(signal.SIGINT) is not fire
+    assert signal.getsignal(signal.SIGTERM) is not quitting.handler
