@@ -2460,7 +2460,7 @@ class Panel:
 
     def _page_output(self, dt: float) -> None:
         """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""
-        self._section("output", "output", note="T overlay · G click-through")
+        self._section("output", "output", note="G click-through")
         if self.output is None or "output.overlay" not in self.reg:
             imgui.text_disabled("no render window attached")
             return
