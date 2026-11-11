@@ -469,27 +469,37 @@ Measured and worth knowing:
   in the diff for that reason.
 
 **The text-metric finding (RETRO 61) is FIXED** - rows 77-82 for what it
-was, 83-85 for making it cheap, 86-89 for the port onto the package. In
-short: the loader is FreeType (not stb_truetype) and hinted; ImGui 1.92
+was, 83-85 for making it cheap, 86-89 for the port onto the package, 90-94
+for the move to Inter. **The kit's font is Inter**, the panel's own family,
+and the React oracle renders in the same Inter (`--font-sans` in
+`prototypes/dashboard/src/index.css`), so the diff still compares one
+typeface with itself. In short: the loader is FreeType (not stb_truetype) and hinted; ImGui 1.92
 rounds font sizes, so `css x 1.30` drew 12px at 16; its ascent is ceil'd
-where Blink rounds; and ImGui applies no `kern`/`liga`. Read `draw.py`'s
+where Blink rounds; and ImGui applies no OpenType features - Inter's
+`kern` and `calt` (contextual alternates) are exported by the build and
+replayed by `draw.shape`, checked against HarfBuzz. Read `draw.py`'s
 "faces and metrics" and `dev/build_fonts.py`'s docstring before touching
 text. Measured:
 
 | | before | after |
 |---|---|---|
-| text widths vs canvas `measureText`, 156 strings (3 weights, 12-16px, kerned and ligated words) | "Ctrl" 22 vs 21.192, "Save Changes" 82 vs 78.541 | worst **0.016px** |
-| Kbd glyph ink, vertical (12px, `test_kbd`) | 0.93px low | **0.04px** |
-| baseline rule, 252 measured cells | - | **252 / 252** (`draw.baseline_y`) |
-| gallery text cells, ink extent vs the oracle | -6 to +6 px | 0 to +-2 |
-| the PANEL's 12px segmented labels / "Restart process", offset from their box's centre | +1.26 / +1.46 px | +0.37 / +0.53 px |
+| text widths vs canvas `measureText`, 216 strings (3 weights, 12-16px, kerned and contextual words) | Geist: "Ctrl" 22 vs 21.192, "Save Changes" 82 vs 78.541 | Inter: worst **0.012px** |
+| `draw.shape` vs HarfBuzz (Chromium's shaper), glyph for glyph | - | **0 different** of 27,319 strings x 6 faces (run by the build) |
+| Kbd glyph ink, vertical (12px, `test_kbd`) | 0.93px low | **< 0.1px** |
+| baseline rule, 252 measured cells | - | **252 / 252** in Geist and in Inter (`draw.baseline_y`) |
+| gallery text cells, ink extent vs the oracle | -6 to +6 px | 0 to +-1 |
+| the PANEL's 12px segmented labels / "Restart process", offset from their box's centre (ink centroid; "process" has a descender) | +1.26 / +1.46 px | +0.05 / +0.46 px (Inter; +0.37 / +0.53 in Geist before the line-height fix) |
 
-What changed for callers: `push_css_font` pushes the CSS px itself for
-Geist (ImGui's `get_font_size()` is the CSS px, not x1.30); `label` and
-`text_w` shape with Geist's tables and draw in `add_text` runs; `label(line_h=)`
-for a line-height that is not `normal`; a STOCK InputText is placed with
-`draw.stock_text_y`. **A host's faces (`host_faces`) keep the old path** -
-the tables are Geist's - which `Faces.geist` decides (RETRO 87).
+What changed for callers: `push_css_font` pushes the CSS px itself for the
+kit's faces (ImGui's `get_font_size()` is the CSS px, not x span); `label`
+and `text_w` shape with the font's tables and draw in `add_text` runs;
+`label`'s line-height defaults to Tailwind's for the size
+(`draw.TEXT_LEADING`; `line_h=0` for `normal`); a STOCK InputText is placed
+with `draw.stock_text_y`. **A host's faces (`host_faces`) keep the old
+path** - the tables are the kit's font's - which `Faces.measured` decides
+(RETRO 87). To change the font again: `FAMILY` and `SRC` in
+`dev/build_fonts.py`, the oracle's `--font-sans`, then re-measure (RETRO
+90-94 is the list of what that turned up last time).
 
 **Cost, measured where it is paid.** On the demo dashboard (`dev/bench_paint.py`,
 ~200 labels a frame) the text path and the CPU pass take `paint()` from
@@ -506,9 +516,9 @@ Left, each written down rather than done:
   `add_text` truncates a text origin to a whole one, so text drawn in runs
   or by a stock InputText can sit one device pixel off `baseline_y` there.
   Not measurable on this rig (Mesa, density 1).
-* **`label` assumes `line-height: normal`** unless told otherwise; the
-  rule needs the real line-height when the leading inside the line box is
-  odd. Every current caller is even.
+* **A caller whose text is not on Tailwind's scale** (a size outside
+  `TEXT_LEADING`, or `leading-*` overriding it) must pass `line_h`; it
+  defaults to `normal` there.
 * **Horizontal ink** of whole strings differs from Chromium's by up to
   ~0.4px while extents match: run placement (glyphs within ~0.7px of
   Chromium's pen, `DRIFT_PX`) and the rasterizer's stroke weight.
