@@ -238,3 +238,25 @@ def test_a_kerned_string_draws_as_wide_as_it_measures():
     assert abs(ink_right - (PROBE_X + got["w"])) < 1.5, (
         f"ink ends at {ink_right}, the string measures to "
         f"{PROBE_X + got['w']:.2f}")
+
+
+def test_the_text_caches_survive_a_hot_reload_unless_shaping_changed():
+    """REVIEW.md: module-level caches survive their module being reloaded.
+    Shaped strings, widths and run cuts live in `draw._TEXT_CACHE`, kept
+    across a reload; every key carries `draw._FINGERPRINT` (the font tables
+    and the shaping code's source), so a reload that changes how text is
+    shaped misses instead of serving the old result."""
+    import importlib
+    s = "Survives a hot reload"
+    first = D.shape(s, "regular")
+    cache = D._TEXT_CACHE
+    importlib.reload(D)
+    assert D._TEXT_CACHE is cache, "the reload replaced the cache"
+    assert D.shape(s, "regular") is first, "the reload emptied the cache"
+    kept = D._FINGERPRINT
+    try:
+        D._FINGERPRINT = ("shaping code changed",)
+        assert D.shape(s, "regular") is not first, \
+            "a changed fingerprint served the old result"
+    finally:
+        D._FINGERPRINT = kept

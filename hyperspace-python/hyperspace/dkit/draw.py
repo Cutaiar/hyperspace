@@ -12,7 +12,7 @@ reasoned about and diffed one at a time.
 
 from __future__ import annotations
 
-import functools
+import inspect
 import itertools
 import json
 import math
@@ -235,8 +235,8 @@ def card(dl, cell, theme, grad_tex: int | None) -> None:
 #   `kern` and the default substitutions (`calt`, `liga`, ...). They are
 #   exported at build time into fonts/metrics.json and replayed by `shape`.
 
-_METRICS = json.loads(
-    (Path(__file__).resolve().parent / "fonts" / "metrics.json").read_text())
+_METRICS_TEXT = (Path(__file__).resolve().parent / "fonts" / "metrics.json").read_text()
+_METRICS = json.loads(_METRICS_TEXT)
 
 # The font's REAL vertical metrics - the TTFs no longer carry them (above).
 UPEM = float(_METRICS["upem"])
@@ -456,7 +456,6 @@ class _Shaper:
 _SHAPERS = {key: _Shaper(_METRICS["faces"][fn]) for key, fn in FACE_FILES}
 
 
-@functools.lru_cache(maxsize=4096)
 def shape(s: str, variant: str, tabular: bool = False):
     """(glyphs, pen) for `s`: the string after the font's substitutions, and the
     pen's advance after each glyph in em - its `hmtx` advance plus the
@@ -464,9 +463,13 @@ def shape(s: str, variant: str, tabular: bool = False):
     font does not carry (it comes from the fallback face, whose advance the
     loaded font supplies).
 
-    Pure: no ImGui, so it is cached - an immediate-mode UI shapes the same
-    strings every frame. Ligatures first, then kerning between what they
-    leave, as GSUB precedes GPOS."""
+    Pure: no ImGui, so it is cached (`_memo`) - an immediate-mode UI shapes
+    the same strings every frame. Substitutions first, then kerning between
+    what they leave, as GSUB precedes GPOS."""
+    return _memo(("shape", s, variant, tabular), lambda: _shape(s, variant, tabular))
+
+
+def _shape(s: str, variant: str, tabular: bool):
     sh = _SHAPERS.get(face_key(variant, tabular)) or _SHAPERS[variant]
     g = sh.subst(s)
     pen = []
@@ -550,7 +553,6 @@ def push_css_font(faces, variant: str, css_px: float, tabular: bool = False):
     imgui.push_font(face, css_px if is_measured(faces) else css_px * span_em(faces, variant))
 
 
-@functools.lru_cache(maxsize=64)
 def ascent_descent(css_px: float) -> tuple:
     """Blink's ascent and descent for the kit's font at `css_px`: each ROUNDED to a
     whole pixel on its own (SkScalarRoundToScalar, Linux and Windows)."""
@@ -643,11 +645,12 @@ def _glyph_run(dl, x: float, base: float, glyphs: str, pen, css_px: float,
         x += g.advance_x if p is None else p * css_px
 
 
-@functools.lru_cache(maxsize=4096)
 def _width_em(s: str, variant: str, tabular: bool = False):
     """`s`'s advance in em, or None if a glyph needs the fallback face."""
-    pen = shape(s, variant, tabular)[1]
-    return None if None in pen else sum(pen)
+    def make():
+        pen = shape(s, variant, tabular)[1]
+        return (None if None in pen else sum(pen),)
+    return _memo(("width", s, variant, tabular), make)[0]
 
 
 def _run_w(glyphs: str, pen, css_px: float) -> float:
@@ -686,9 +689,6 @@ def fit_text(s, faces, variant, size, max_w, tabular=False) -> str:
 # ~10x the cost - 3ms of a dashboard frame. See RETRO row 83.
 DRIFT_PX = 0.25
 
-_RUNS: dict = {}
-
-
 def _runs(glyphs: str, pen, key: str, css_px: float, baked) -> tuple:
     """`glyphs` cut into ((offset, text), ...) for `add_text`, with the face
     pushed. Inside a run ImGui places glyphs on its own advances - unhinted,
@@ -696,10 +696,11 @@ def _runs(glyphs: str, pen, key: str, css_px: float, baked) -> tuple:
     than DRIFT_PX from the kerned one, and the next starts at the kerned
     offset. Cached: the cut depends only on the string, face and size (and
     the density the face was baked at)."""
-    ck = (glyphs, key, css_px, baked.rasterizer_density)
-    hit = _RUNS.get(ck)
-    if hit is not None:
-        return hit
+    return _memo(("runs", glyphs, key, css_px, baked.rasterizer_density),
+                 lambda: _cut(glyphs, pen, css_px, baked))
+
+
+def _cut(glyphs: str, pen, css_px: float, baked) -> tuple:
     out, start, rs, ipos, exact = [], 0, 0.0, 0.0, 0.0
     for i, c in enumerate(glyphs):
         if i > start and abs(rs + ipos - exact) > DRIFT_PX:
@@ -709,9 +710,30 @@ def _runs(glyphs: str, pen, key: str, css_px: float, baked) -> tuple:
         ipos += adv
         exact += adv if pen[i] is None else pen[i] * css_px
     out.append((rs, glyphs[start:]))
-    if len(_RUNS) > 8192:
-        _RUNS.clear()
-    _RUNS[ck] = hit = tuple(out)
+    return tuple(out)
+
+
+# The text caches - shaped strings, their widths, their run cuts - in one
+# dict that SURVIVES a hot reload of this module (REVIEW.md: module-level
+# caches do), each key carrying `_FINGERPRINT`: the font tables and the
+# source of the code that computed the entry. A reload that leaves both
+# alone - an edit to a colour, a box, anything upstream in
+# hotreload.MODULES - keeps every entry; one that changes how text is
+# shaped or cut starts clean, so a fix shows on the next frame rather than
+# at the next restart.
+_TEXT_CACHE: dict = globals().get("_TEXT_CACHE", {})
+_FINGERPRINT = hash((_METRICS_TEXT, DRIFT_PX, inspect.getsource(_Shaper),
+                     inspect.getsource(_shape), inspect.getsource(_cut),
+                     inspect.getsource(_width_em)))
+
+
+def _memo(key: tuple, make):
+    k = (_FINGERPRINT, *key)
+    hit = _TEXT_CACHE.get(k)
+    if hit is None:
+        if len(_TEXT_CACHE) > 16384:
+            _TEXT_CACHE.clear()
+        _TEXT_CACHE[k] = hit = make()
     return hit
 
 
