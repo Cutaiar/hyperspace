@@ -80,9 +80,9 @@ worst corner 0.776 px, "all cells within the bar" in BOTH themes - with
 the Kbd cells and four Button sizes at INTRINSIC width.
 ```
 
-Measured after the text fix and the CPU pass were ported onto the package
-(RETRO 77-89). The four new skips are `test_text.py`'s and
-`test_caches.py`'s no-from-imports cases in `test_module_surface`.
+Measured after the text fix was ported onto the package and moved to
+Inter (RETRO 77-95). The figures below are re-run after the CPU pass was
+taken out again (RETRO 95).
 
 Before that, measured after the Kbd. Adding the Checkbox and then the Kbd each changed
 ZERO ImGui gallery pixels outside their own cells, in both themes, each
@@ -469,8 +469,8 @@ Measured and worth knowing:
   in the diff for that reason.
 
 **The text-metric finding (RETRO 61) is FIXED** - rows 77-82 for what it
-was, 83-85 for making it cheap, 86-89 for the port onto the package, 90-94
-for the move to Inter. **The kit's font is Inter**, the panel's own family,
+was, 83 for making it cheap, 86-89 for the port onto the package, 90-94
+for the move to Inter (84-85, a CPU pass, were reverted: row 95). **The kit's font is Inter**, the panel's own family,
 and the React oracle renders in the same Inter (`--font-sans` in
 `prototypes/dashboard/src/index.css`), so the diff still compares one
 typeface with itself. In short: the loader is FreeType (not stb_truetype) and hinted; ImGui 1.92
@@ -501,12 +501,13 @@ path** - the tables are the kit's font's - which `Faces.measured` decides
 `dev/build_fonts.py`, the oracle's `--font-sans`, then re-measure (RETRO
 90-94 is the list of what that turned up last time).
 
-**Cost, measured where it is paid.** On the demo dashboard (`dev/bench_paint.py`,
-~200 labels a frame) the text path and the CPU pass take `paint()` from
-4.44 ms on main to 3.11 ms (medians of three paired runs, this rig). On the real PANEL they change nothing measurable: the
-panel draws ~7 kit labels a frame, kit text is 0.06 ms of it, and the
-whole-frame CPU median is 6.41 ms on main against 6.35 ms ported (8 paired
-runs; 4.48 with `HYPERSPACE_KIT=0`). The panel's kit time is chrome -
+**Cost, measured where it is paid.** On the demo dashboard
+(`dev/bench_paint.py`, ~200 labels a frame) the measured text path costs
+about 0.6 ms of `paint()` over the old one (4.6 -> 5.2 ms, paired runs on a
+quiet machine; RETRO 83). On the real PANEL it is nothing measurable: the
+panel draws ~7 kit labels a frame and kit text is 0.06 ms of it (whole
+frame 6.41 ms on main, 6.35 with the text fix and the since-reverted CPU
+pass; 4.48 with `HYPERSPACE_KIT=0`). The panel's kit time is chrome -
 `comp_button.chip_chrome` (~34 a frame), sliders, buttons - which is 5c's
 finding too; `tools/profile_kit.py` is the panel's benchmark.
 
