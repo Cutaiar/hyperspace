@@ -16,6 +16,7 @@ import inspect
 import itertools
 import json
 import math
+from collections import OrderedDict
 from math import floor
 from pathlib import Path
 
@@ -716,24 +717,33 @@ def _cut(glyphs: str, pen, css_px: float, baked) -> tuple:
 # The text caches - shaped strings, their widths, their run cuts - in one
 # dict that SURVIVES a hot reload of this module (REVIEW.md: module-level
 # caches do), each key carrying `_FINGERPRINT`: the font tables and the
-# source of the code that computed the entry. A reload that leaves both
+# source of the code that computed the entry (and `face_key`, which picks
+# the face it was shaped in). A reload that leaves both
 # alone - an edit to a colour, a box, anything upstream in
 # hotreload.MODULES - keeps every entry; one that changes how text is
 # shaped or cut starts clean, so a fix shows on the next frame rather than
 # at the next restart.
-_TEXT_CACHE: dict = globals().get("_TEXT_CACHE", {})
+#
+# Least-recently-used out when full, one entry at a time: a readout whose
+# digits change every frame mints a key a frame, and clearing the whole
+# dict when it filled threw out every stable label with them.
+_TEXT_CACHE_MAX = 16384
+_kept = globals().get("_TEXT_CACHE")
+_TEXT_CACHE: OrderedDict = _kept if isinstance(_kept, OrderedDict) else OrderedDict()
 _FINGERPRINT = hash((_METRICS_TEXT, DRIFT_PX, inspect.getsource(_Shaper),
-                     inspect.getsource(_shape), inspect.getsource(_cut),
-                     inspect.getsource(_width_em)))
+                     inspect.getsource(face_key), inspect.getsource(_shape),
+                     inspect.getsource(_cut), inspect.getsource(_width_em)))
 
 
 def _memo(key: tuple, make):
     k = (_FINGERPRINT, *key)
     hit = _TEXT_CACHE.get(k)
     if hit is None:
-        if len(_TEXT_CACHE) > 16384:
-            _TEXT_CACHE.clear()
         _TEXT_CACHE[k] = hit = make()
+        while len(_TEXT_CACHE) > _TEXT_CACHE_MAX:
+            _TEXT_CACHE.popitem(last=False)
+    else:
+        _TEXT_CACHE.move_to_end(k)
     return hit
 
 

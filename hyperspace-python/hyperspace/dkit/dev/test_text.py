@@ -260,3 +260,17 @@ def test_the_text_caches_survive_a_hot_reload_unless_shaping_changed():
             "a changed fingerprint served the old result"
     finally:
         D._FINGERPRINT = kept
+
+
+def test_a_full_text_cache_drops_the_oldest_strings_not_every_label(monkeypatch):
+    """A readout whose digits change every frame mints a new key a frame.
+    When the cache is full it must drop the least recently used entries -
+    never the labels drawn every frame alongside them, which a clear-all
+    threw out and rebuilt in one frame (REVIEW.md: no per-frame rebuilds)."""
+    monkeypatch.setattr(D, "_TEXT_CACHE_MAX", 8)
+    D._TEXT_CACHE.clear()
+    stable = D.shape("Save Changes", "medium")
+    for i in range(50):
+        D.shape(f"{i * 0.37:.2f}", "regular", True)       # the readout
+        assert D.shape("Save Changes", "medium") is stable, f"evicted at {i}"
+    assert len(D._TEXT_CACHE) <= 8
