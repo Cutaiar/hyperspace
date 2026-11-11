@@ -539,7 +539,7 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
     imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, 0))
     # The SAME font `draw.label` draws the placeholder with. Without this
     # the stock widget renders the value in imgui's CURRENT font at imgui's
-    # current size, which is not the Geist face at `font * FONT_SPAN_EM` -
+    # current size, which is not the kit's face at `font * FONT_SPAN_EM` -
     # so the value and the placeholder, one line of one field, had
     # different metrics and did not land on the same rows. Measured 1 px
     # apart on Mesa at density 1; far wider on a Retina Mac, where the

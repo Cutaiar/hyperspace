@@ -481,7 +481,7 @@ KBD = {
     # Measured: the "+" is 9.609 wide at 16px = 0.6em, the advance of every
     # common UA monospace (Liberation Mono, SF Mono, Menlo). The kit has no
     # mono face, so a separator ADVANCES by this and its glyph is centred in
-    # the slot - the layout is the browser's, the glyph shape is Geist's.
+    # the slot - the layout is the browser's, the glyph shape is the kit's font's.
     "group_gap": SPACE[1],
     "group_sep_em": 0.6,
     # Inside a Tooltip the recipe restyles it from the ancestor's data-slot:

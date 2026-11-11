@@ -107,7 +107,7 @@ export default function Gallery({
             // pins the baseline deterministically.
             <span
               style={{
-                fontFamily: '"Geist Variable", sans-serif',
+                fontFamily: '"Inter Variable", sans-serif',
                 fontSize: c.size,
                 fontWeight: c.weight,
                 lineHeight: `${c.h}px`,

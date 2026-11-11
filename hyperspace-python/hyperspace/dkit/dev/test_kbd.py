@@ -13,7 +13,7 @@ restyle included). The diff hides glyphs, so what it cannot see is here:
 
 Every number marked "?probe" was measured on the real component - the
 probe blocks `kbd.*` and `tooltip.kbd`, and the canvas `measureText` widths
-of Geist Variable at 12px - not derived from the classes.
+of Inter Variable at 12px - not derived from the classes.
 
     xvfb-run -a uv run python -m pytest hyperspace/dkit/dev/test_kbd.py -q -n0
 """
@@ -32,12 +32,12 @@ from hyperspace.dkit import tokens as T
 
 TBL = T.kbd_table("light")
 
-# Chromium's widths, Geist Variable 500 at 12px (canvas measureText), and
+# Chromium's widths, Inter Variable 500 at 12px (canvas measureText), and
 # the ⌘ / ⇧ of the fallback font it used here (Inter - see test docstring)
-BROWSER_TEXT = {"K": 7.872, "B": 8.256, "Ctrl": 21.192, "⌘": 12.012,
+BROWSER_TEXT = {"K": 8.25, "B": 7.881, "Ctrl": 20.736, "⌘": 12.012,
                 "⇧": 12.369}
 # the Kbd boxes ?probe measured
-BROWSER_W = {"K": 20.0, "Ctrl": 29.203, "⌘": 20.016, "⇧": 20.375}
+BROWSER_W = {"K": 20.0, "Ctrl": 28.75, "⌘": 20.016, "⇧": 20.375}
 
 
 def browser_text_w(s, variant, size):
@@ -60,7 +60,7 @@ def test_the_width_law_reproduces_the_browser(s):
 
 
 def test_a_group_with_a_separator_is_spaced_like_the_browser():
-    """?probe `Ctrl + B`: group 66.813 wide, second key at 46.813. The "+"
+    """?probe `Ctrl + B`: group 66.359 wide, second key at 46.359. The "+"
     is 9.609 - monospace 0.6em at the parent's 16px - because KbdGroup is
     a <kbd> and the UA gives <kbd> `font-family: monospace`."""
     w, _h = D.kbd_group_size(["Ctrl", "B"], None, TBL, sep="+", sep_font=16.0,
@@ -68,7 +68,7 @@ def test_a_group_with_a_separator_is_spaced_like_the_browser():
     # 0.03: two known sub-pixel sources add here - canvas measureText vs the
     # laid-out "Ctrl" (0.011), and Liberation Mono's real advance, 0.6006em
     # rather than 0.6 (0.009). Neither is a disagreement about the law.
-    assert abs(w - 66.813) < 0.03, w
+    assert abs(w - 66.359) < 0.03, w
     assert abs(D.kbd_sep_w("+", TBL, 16.0) - 9.609) < 0.01
 
 
@@ -108,7 +108,7 @@ def _ink_centroid(frame, x, y, w, h):
 
 # Chromium's glyph ink centroids inside the 20px box, read off ?probe
 # screenshots at dpr 1 - identical in both themes to 0.02
-BROWSER_INK = {"K": (9.55, 9.69), "W": (10.07, 9.63)}
+BROWSER_INK = {"K": (9.69, 9.6), "W": (10.02, 9.48)}
 
 
 def _render(theme, s):

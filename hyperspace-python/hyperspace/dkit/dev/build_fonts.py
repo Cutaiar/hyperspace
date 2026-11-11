@@ -1,40 +1,47 @@
-"""Build dkit's font files from Geist's variable woff2.
+"""Build dkit's font files from Inter's variable woff2 - the same file the
+React oracle renders with, so the comparison is the same typeface - and the
+same family the panel sets its own words in (`hyperspace/fonts`, Inter 4.1).
 
-    uv run --with fonttools --with brotli python hyperspace/dkit/dev/build_fonts.py
+    uv run --with fonttools --with brotli --with uharfbuzz \
+        python hyperspace/dkit/dev/build_fonts.py
 
-Two things have to happen ahead of time, because Dear ImGui cannot do either
+The last step checks `draw.shape` against HarfBuzz - Chromium's shaper - on
+every string literal in the app plus 20000 generated ones, every face, and
+fails the build on any difference in glyphs or advances.
+
+Things that have to happen ahead of time, because Dear ImGui cannot do them
 at runtime:
 
-1. **Instance the variable axis.** stb_truetype reads neither a woff2
+1. **Instance the variable axis.** ImGui's loader reads neither a woff2
    container nor a variation instance, so each weight is cut to a static TTF.
 
-2. **Freeze `tnum`.** stb_truetype applies no OpenType features at all, which
-   is why a digit-heavy string measured 4% narrow against the browser. The
+2. **Freeze `tnum`.** ImGui applies no OpenType features at all, so the
    tabular-figures substitution is baked into the cmap instead, producing a
    parallel `-tnum` face used wherever numbers are set.
 
-3. **Freeze `liga` the same way.** Chromium applies Geist's ligatures by
-   default and some change the width - `tt` and `ff` are 0.05em narrower
-   than their two letters, so "Settings" is 0.6px narrower at 12px. Each
-   ligature glyph is given a Private Use codepoint, and `fonts/metrics.json`
-   lists which letter sequences become which, for `draw.py` to substitute
-   before it measures or draws.
+3. **Export the substitutions Chromium applies by default** - `ccmp`,
+   `liga`, `calt` and the rest of HarfBuzz's default set, whichever the font
+   has - to `fonts/metrics.json`, for `draw.shape` to replay. Some change a
+   width (Inter's `->` is one glyph, narrower than two; Geist's `tt` and
+   `ff` were 0.05em narrower than their letters); others change only a
+   shape (Inter raises a colon between digits and a hyphen between
+   capitals). Every glyph a substitution can produce is given a Private Use
+   codepoint in the cmap, so the kit can name it and ImGui can draw it.
 
 4. **Give the line box a span of one em.** Dear ImGui's FreeType loader
    sizes a face by `FT_SIZE_REQUEST_TYPE_REAL_DIM` - ascender minus
    descender - and ImGui 1.92 ROUNDS every font size to a whole pixel. With
-   Geist's own 1005 / -295 the kit had to ask for `css_px * 1.30`, which
-   rounds (12px -> 15.6 -> 16), so 12px text drew 2.6% large. With a span
-   of exactly upem the size the kit pushes IS the CSS px, and needs no
-   rounding. The split, 800 / -200, only places ImGui's own line box (which
-   stock widgets such as InputText use); see `ONE_EM` below.
+   the font's own metrics the kit had to ask for `css_px * span`, which
+   rounds (Geist: 12px -> 15.6 -> 16, text 2.6% large). With a span of
+   exactly upem the size the kit pushes IS the CSS px, and needs no
+   rounding. The split only places ImGui's own line box (which stock
+   widgets such as InputText use); see `ONE_EM` below.
 
-5. **Write what the TTFs no longer say** to `fonts/metrics.json`: Geist's
-   real ascender and descender, which `draw.py` places a baseline with the
-   way Blink does, and the `kern` feature as a table of character pairs,
-   because ImGui applies no OpenType positioning and Chromium kerns by
-   default ("Ctrl" is 21.588 unkerned and 21.192 kerned at 12px medium).
-   And every glyph's advance from `hmtx`, exactly: FreeType reports one in
+5. **Write what the TTFs no longer say** to `fonts/metrics.json`: the real
+   ascender and descender, which `draw.py` places a baseline with the way
+   Blink does; the `kern` feature as a table of character pairs, because
+   ImGui applies no OpenType positioning and Chromium kerns by default; and
+   every glyph's advance from `hmtx`, exactly - FreeType reports one in
    1/64ths of a pixel, which drifts a long string by 0.05px or more.
 
 Freezing is deliberately kept to a separate face rather than applied to the
@@ -53,17 +60,24 @@ from fontTools.varLib import instancer
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE.parent / "fonts"   # the package's
+FAMILY = "Inter"
+# fontsource's default `@fontsource-variable/inter` import: the wght axis
+# only, at Inter's text optical size - the cut the panel's own Inter is.
 SRC = (HERE / "../../../../prototypes/dashboard/node_modules/"
-       "@fontsource-variable/geist/files/geist-latin-wght-normal.woff2")
+       "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2")
 
 WEIGHTS = {"Regular": 400, "Medium": 500, "SemiBold": 600}
 
 # The line box written into the TTFs. Its SUM is what matters - one em, so
-# ImGui's size is the CSS px. The split is chosen so ImGui's own line box,
-# ceil(0.8 * px) above the baseline, puts a stock widget's baseline where
-# Blink's centring does at 12, 13 and 14px; draw.py corrects what is left
-# (`draw.stock_text_y`) rather than relying on it.
-ONE_EM = (800, -200)
+# ImGui's size is the CSS px. The split only places ImGui's own line box,
+# ceil(ONE_EM[0] / upem * px) above the baseline, which stock widgets use;
+# draw.py corrects what is left (`draw.stock_text_y`) rather than relying on
+# it. In font units of a 2048-upem font: 0.8 em above, 0.2 below.
+ONE_EM_FRAC = (0.8, -0.2)
+
+# HarfBuzz's default substitution features for horizontal text, which
+# Chromium leaves on (`locl` needs a language and the kit sets none).
+GSUB_FEATURES = ("ccmp", "rlig", "liga", "clig", "calt", "rclt")
 
 
 def single_subs(font: TTFont, tag: str) -> dict:
@@ -102,45 +116,176 @@ def freeze(font: TTFont, tag: str) -> int:
 PUA = 0xE000
 
 
-def freeze_liga(font: TTFont) -> list:
-    """Map every `liga` output glyph into the cmap; return the rules.
+def _lookup(table, li):
+    """(type, subtables) with Extension (GSUB 7 / GPOS 9) unwrapped."""
+    lk = table.LookupList.Lookup[li]
+    subs = [getattr(st, "ExtSubTable", st) for st in lk.SubTable]
+    ty = lk.LookupType
+    if ty in (7, 9) and lk.SubTable:
+        ty = lk.SubTable[0].ExtensionLookupType
+    return ty, subs
 
-    The rules come back as [letters, codepoint] in the order HarfBuzz tries
-    them - lookup by lookup, and within a lookup the ligature set of the
-    first letter in the font's own order, which puts the longest first.
-    Codepoints are assigned from U+E000 by sorted glyph name, so every face
-    agrees on them."""
+
+def _chain_records(st):
+    """Every SubstLookupRecord in a chain subtable, of any format."""
+    if st.Format == 3:
+        return list(st.SubstLookupRecord)
+    sets = st.ChainSubRuleSet if st.Format == 1 else st.ChainSubClassSet
+    rule = "ChainSubRule" if st.Format == 1 else "ChainSubClassRule"
+    return [r for rs in sets if rs for ru in getattr(rs, rule) for r in ru.SubstLookupRecord]
+
+
+def _chain_rules(st, rev) -> list:
+    """A chain subtable as coverage-form rules, in the order HarfBuzz tries
+    them: [backtrack sets, input sets, lookahead sets, records]. Formats 1
+    (glyph sequences) and 2 (class sequences) are rewritten into format 3's
+    shape, which is lossless here because the build knows every character
+    the buffer can hold (`rev`) - class 0, "every glyph in no class", is
+    spelled out as exactly that."""
+    alphabet = set(rev)
+
+    def chars(glyphs):
+        return "".join(sorted(chr(rev[g]) for g in glyphs if g in rev))
+
+    def recs(ru):
+        return [[r.SequenceIndex, r.LookupListIndex] for r in ru.SubstLookupRecord]
+
+    if st.Format == 3:
+        return [[[chars(c.glyphs) for c in st.BacktrackCoverage],
+                 [chars(c.glyphs) for c in st.InputCoverage],
+                 [chars(c.glyphs) for c in st.LookAheadCoverage],
+                 recs(st)]]
+    cov = set(st.Coverage.glyphs)
+    out = []
+    if st.Format == 1:
+        for first, rs in zip(st.Coverage.glyphs, st.ChainSubRuleSet):
+            for ru in (rs.ChainSubRule if rs else ()):
+                out.append([[chars([g]) for g in ru.Backtrack],
+                            [chars([first])] + [chars([g]) for g in ru.Input],
+                            [chars([g]) for g in ru.LookAhead], recs(ru)])
+        return out
+
+    def members(cd):
+        by = {}
+        for g, k in cd.classDefs.items():
+            by.setdefault(k, set()).add(g)
+        by[0] = alphabet - set(cd.classDefs)
+        return lambda k: chars(by.get(k, ()))
+
+    bk, ik, ak = (members(st.BacktrackClassDef), members(st.InputClassDef),
+                  members(st.LookAheadClassDef))
+    for k1, rs in enumerate(st.ChainSubClassSet):
+        if not rs:
+            continue
+        first = chars(cov & {g for g in alphabet
+                             if st.InputClassDef.classDefs.get(g, 0) == k1})
+        for ru in rs.ChainSubClassRule:
+            out.append([[bk(k) for k in ru.Backtrack],
+                        [first] + [ik(k) for k in ru.Input],
+                        [ak(k) for k in ru.LookAhead], recs(ru)])
+    return out
+
+
+def export_gsub(font: TTFont, features=GSUB_FEATURES) -> list:
+    """The default substitutions as data `draw.shape` can replay; maps every
+    glyph they can produce into the cmap at a Private Use codepoint.
+
+    Returned: [lookups, order, sets]. `order` is the top-level lookups in the
+    order HarfBuzz applies them - every enabled feature's lookups together,
+    by lookup index. `lookups[i]` is one of
+      ["single", {char: char}]
+      ["liga",   {first char: [[rest, out char], ...]}]   (font order)
+      ["chain",  [[backtrack sets, input sets, lookahead sets,
+                   [[sequence index, lookup index], ...]], ...]]
+    with each set an index into `sets`, a list of strings of characters; chains of every format come out in
+    coverage form (`_chain_rules`). Any other lookup type stops the build
+    rather than being approximated. dev/test_text.py checks the replay
+    against HarfBuzz."""
     gsub = font["GSUB"].table
     cmap = font.getBestCmap()
     rev = {}
     for cp, g in sorted(cmap.items()):
         rev.setdefault(g, cp)
-    lookups = []
-    for fr in gsub.FeatureList.FeatureRecord:
-        if fr.FeatureTag == "liga":
-            lookups += [i for i in fr.Feature.LookupListIndex if i not in lookups]
-    rules, outs = [], set()
-    for li in lookups:
-        lk = gsub.LookupList.Lookup[li]
-        for st in lk.SubTable:
-            st = getattr(st, "ExtSubTable", st)
-            if lk.LookupType not in (4, 7) or not hasattr(st, "ligatures"):
-                raise SystemExit(f"liga lookup {li} is type {lk.LookupType}")
-            for first, ligs in st.ligatures.items():
-                for lig in ligs:
-                    seq = [first] + list(lig.Component)
-                    if all(g in rev for g in seq):
-                        rules.append(("".join(chr(rev[g]) for g in seq),
-                                      lig.LigGlyph))
-                        outs.add(lig.LigGlyph)
-    code = {g: rev.get(g) or PUA + i
-            for i, g in enumerate(sorted(o for o in outs if o not in rev))}
-    code.update({g: rev[g] for g in outs if g in rev})
+    order = sorted({li for fr in gsub.FeatureList.FeatureRecord
+                    if fr.FeatureTag in features
+                    for li in fr.Feature.LookupListIndex})
+    # every lookup reachable from the top level, and every glyph produced
+    need, todo = set(), list(order)
+    while todo:
+        li = todo.pop()
+        if li in need:
+            continue
+        need.add(li)
+        ty, subs = _lookup(gsub, li)
+        if ty == 6:
+            for st in subs:
+                todo += [r.LookupListIndex for r in _chain_records(st)]
+        elif ty not in (1, 4):
+            raise SystemExit(f"lookup {li}: GSUB type {ty} is not replayed")
+    outs = set()
+    for li in need:
+        ty, subs = _lookup(gsub, li)
+        for st in subs:
+            if ty == 1:
+                outs.update(st.mapping.values())
+            elif ty == 4:
+                outs.update(lig.LigGlyph for ligs in st.ligatures.values()
+                            for lig in ligs)
+    fresh = sorted(o for o in outs if o not in rev)
+    for i, g in enumerate(fresh):
+        rev[g] = PUA + i
     for table in font["cmap"].tables:
         if table.isUnicode():
-            for g, cp in code.items():
-                table.cmap[cp] = g
-    return [[letters, code[g]] for letters, g in rules]
+            for g in fresh:
+                table.cmap[rev[g]] = g
+
+    def ch(g):
+        return chr(rev[g]) if g in rev else None
+
+    lookups = {}
+    for li in sorted(need):
+        ty, subs = _lookup(gsub, li)
+        if ty == 1:
+            m = {}
+            for st in subs:
+                for a, b in st.mapping.items():
+                    if ch(a) and a not in m:
+                        m[ch(a)] = ch(b)
+            lookups[li] = ["single", m]
+        elif ty == 4:
+            m = {}
+            for st in subs:
+                for first, ligs in st.ligatures.items():
+                    if not ch(first):
+                        continue
+                    for lig in ligs:
+                        rest = [ch(g) for g in lig.Component]
+                        if all(rest):
+                            m.setdefault(ch(first), []).append(
+                                ["".join(rest), ch(lig.LigGlyph)])
+            lookups[li] = ["liga", m]
+        else:
+            rules = []
+            for st in subs:
+                rules += _chain_rules(st, rev)
+            lookups[li] = ["chain", rules]
+    # Each distinct character set once, rules naming it by index: the same
+    # capitals or digits recur in dozens of rules, and spelled out each time
+    # they made metrics.json ten times its size.
+    sets, index = [], {}
+
+    def ref(chars):
+        if chars not in index:
+            index[chars] = len(sets)
+            sets.append(chars)
+        return index[chars]
+
+    for kind, data in lookups.values():
+        if kind == "chain":
+            for rule in data:
+                for part in range(3):
+                    rule[part] = [ref(x) for x in rule[part]]
+    return [{str(k): v for k, v in lookups.items()}, order, sets]
 
 
 def kern_pairs(font: TTFont) -> dict:
@@ -187,10 +332,10 @@ def kern_pairs(font: TTFont) -> dict:
         for rc, rg in glyphs.items():
             total = 0
             for li in lookups:
-                lk = gpos.LookupList.Lookup[li]
-                if lk.LookupType != 2:
-                    raise SystemExit(f"kern lookup {li} is type {lk.LookupType}")
-                for st in lk.SubTable:
+                ty, subs = _lookup(gpos, li)
+                if ty != 2:
+                    raise SystemExit(f"kern lookup {li} is type {ty}")
+                for st in subs:
                     hit, v = one(st, lg, rg)
                     if hit:
                         total += v
@@ -240,22 +385,21 @@ def classes(pairs: dict) -> dict:
 def one_em(font: TTFont) -> None:
     """hhea and the typo metrics both: the font sets USE_TYPO_METRICS, and
     FreeType honours it."""
-    font["hhea"].ascent, font["hhea"].descent = ONE_EM
+    upem = font["head"].unitsPerEm
+    asc = round(ONE_EM_FRAC[0] * upem)
+    one = (asc, asc - upem)
+    font["hhea"].ascent, font["hhea"].descent = one
     font["hhea"].lineGap = 0
     os2 = font["OS/2"]
-    os2.sTypoAscender, os2.sTypoDescender = ONE_EM
+    os2.sTypoAscender, os2.sTypoDescender = one
     os2.sTypoLineGap = 0
 
 
-def cut(weight: int, tnum: bool) -> TTFont:
+def cut(weight: int) -> TTFont:
     # recalcTimestamp off, so a rebuild changes only what the build changes
     f = TTFont(SRC, recalcTimestamp=False)
     instancer.instantiateVariableFont(f, {"wght": weight}, inplace=True,
                                       updateFontNames=False)
-    if tnum:
-        n = freeze(f, "tnum")
-        if not n:
-            raise SystemExit("tnum produced no substitutions — wrong source?")
     f.flavor = None                       # woff2 container off; plain TTF out
     return f
 
@@ -268,29 +412,101 @@ def main() -> None:
             "the same woff2 the React oracle renders with, so the comparison "
             "is the same typeface")
     OUT.mkdir(parents=True, exist_ok=True)
-    meta = {"faces": {}}
+    meta = {"family": FAMILY, "faces": {}}
     for name, wght in WEIGHTS.items():
         for tnum in (False, True):
-            dest = OUT / f"Geist-{name}{'-tnum' if tnum else ''}.ttf"
-            f = cut(wght, tnum)
+            dest = OUT / f"{FAMILY}-{name}{'-tnum' if tnum else ''}.ttf"
+            f = cut(wght)
             # read BEFORE one_em overwrites them
             meta.update(upem=f["head"].unitsPerEm,
                         ascender=f["hhea"].ascent, descender=f["hhea"].descent)
-            liga = freeze_liga(f)
+            # `tnum` is REPLAYED with the rest, in lookup order, not frozen
+            # first: Inter's tabular figures cover punctuation too, and its
+            # `calt` raises that punctuation between digits - frozen ahead
+            # of `calt`, the raised forms were never chosen (9065 of 27k
+            # strings differed from HarfBuzz).
+            gsub = export_gsub(f, GSUB_FEATURES + (("tnum",) if tnum else ()))
             kern = kern_pairs(f)
             hmtx = f["hmtx"]
             adv = {chr(cp): hmtx[g][0] for cp, g in f.getBestCmap().items()
                    if cp >= 0x20}
-            meta["faces"][dest.name] = dict(classes(kern), liga=liga, adv=adv)
+            meta["faces"][dest.name] = dict(classes(kern), gsub=gsub, adv=adv)
+            # ...and ALSO frozen into the cmap, after the tables are read,
+            # for the one path that draws without `draw.shape`: a stock
+            # widget (InputText) setting digits in the tabular face.
+            if tnum and not freeze(f, "tnum"):
+                raise SystemExit("tnum produced no substitutions - wrong source?")
             one_em(f)
             f.save(dest)
             print(f"{dest.name:28} wght {wght}  {len(kern)} kern pairs, "
-                  f"{len(liga)} ligatures"
+                  f"{len(gsub[1])} substitution lookups"
                   f"{'  tabular figures frozen' if tnum else ''}")
     (OUT / "metrics.json").write_text(
         json.dumps(meta, sort_keys=True, ensure_ascii=False,
                    separators=(",", ":")) + "\n")
 
 
+def check_shaping() -> None:
+    """`draw.shape` against HarfBuzz on the SOURCE font, glyph for glyph and
+    advance for advance, for every face. The corpus is every string literal
+    in the app - its real labels - and 20000 generated strings over the
+    characters the context rules turn on (digits, capitals, brackets,
+    dashes, colons). Run on the files just written."""
+    import ast
+    import importlib
+    import io
+    import random
+
+    import uharfbuzz as hb
+
+    from hyperspace.dkit import draw as D
+    importlib.reload(D)                  # the metrics.json just written
+    src = TTFont(SRC)
+    src.flavor = None
+    raw = io.BytesIO()
+    src.save(raw)
+    face, order = hb.Face(raw.getvalue()), src.getGlyphOrder()
+    upem, have = src["head"].unitsPerEm, set(src.getBestCmap())
+    corpus = set()
+    for py in (HERE.parent.parent).rglob("*.py"):
+        for n in ast.walk(ast.parse(py.read_text())):
+            v = getattr(n, "value", None)
+            if isinstance(n, ast.Constant) and isinstance(v, str) and 0 < len(v) < 60:
+                corpus.add(v)
+    rnd = random.Random(1)
+    alpha = "AXYZabcxyz0123456789:-\u2013\u2014()[]{}<>=+*/.,% xX\u00d7@#&!?'\"_|"
+    for _ in range(20000):
+        corpus.add("".join(rnd.choice(alpha) for _ in range(rnd.randint(2, 7))))
+    corpus = sorted(t for t in corpus if all(ord(c) >= 0x20 and ord(c) in have for c in t))
+    bad = []
+    for variant, wght in (("regular", 400), ("medium", 500), ("semibold", 600)):
+        for tnum in (False, True):
+            font = hb.Font(face)
+            font.set_variations({"wght": wght})
+            built = TTFont(OUT / dict(D.FACE_FILES)[D.face_key(variant, tnum)])
+            name_of = built.getBestCmap()
+            for t in corpus:
+                buf = hb.Buffer()
+                buf.add_str(t)
+                buf.guess_segment_properties()
+                hb.shape(font, buf, {"tnum": True} if tnum else {})
+                want = [order[i.codepoint] for i in buf.glyph_infos]
+                adv = [p.x_advance for p in buf.glyph_positions]
+                glyphs, pen = D.shape(t, variant, tnum)
+                if [name_of.get(ord(c)) for c in glyphs] != want or None in pen or \
+                        any(abs(a - b * upem) > 1.5 for a, b in zip(adv, pen)):
+                    bad.append((variant, tnum, t))
+    print(f"shaping checked against HarfBuzz: {len(corpus)} strings x 6 faces, "
+          f"{len(bad)} different")
+    if bad:
+        raise SystemExit(f"draw.shape differs from HarfBuzz, e.g. {bad[:5]}")
+
+
 if __name__ == "__main__":
     main()
+    try:
+        import uharfbuzz  # noqa: F401
+    except ImportError:
+        raise SystemExit("uharfbuzz missing: the files are written but NOT "
+                         "checked - run with `--with uharfbuzz`") from None
+    check_shaping()

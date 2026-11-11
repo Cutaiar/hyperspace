@@ -501,7 +501,7 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     imgui.push_style_color(imgui.Col_.nav_cursor, imgui.ImVec4(0, 0, 0, 0))
     # The SAME font `draw.label` draws every other string in the kit with.
     # Without it the stock widget renders the value in imgui's CURRENT font
-    # at imgui's current size, which is not the Geist face at
+    # at imgui's current size, which is not the kit's face at
     # `font * FONT_SPAN_EM` - so the value and the placeholder, one line of
     # one field, had different metrics and did not land on the same rows.
     # Measured 1 px apart on Mesa at density 1; far wider on a Retina Mac,

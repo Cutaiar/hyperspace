@@ -395,8 +395,8 @@ def _s_type(faces, tn):
                             baseline_box=h, tabular=("tabular" in cap))))
     rows.append(row)
     return ("Type",
-            ("Six Geist faces cut from the variable woff2 — three weights, "
-            "each with and without tabular figures frozen into the cmap."),
+            ("Six Inter faces cut from the variable woff2 — three weights, "
+            "each with and without tabular figures."),
             rows)
 
 

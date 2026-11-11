@@ -81,7 +81,7 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
         padding: 24,
         width: 900,
         background: dark ? "#0a0a0a" : "#ffffff",
-        fontFamily: '"Geist Variable", sans-serif',
+        fontFamily: '"Inter Variable", sans-serif',
       }}
     >
       {/* ---- Slider: the value->thumb-centre law is the thing to measure.
@@ -111,7 +111,7 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
       </P>
 
       {/* ---- Kbd: the registry's own demo shapes. One glyph (min-w-5
-           decides its width), a word (px-1 decides it), a symbol Geist does
+           decides its width), a word (px-1 decides it), a symbol Inter does
            not carry (the font FALLBACK decides it), and KbdGroup, which is
            `inline-flex gap-1` around Kbds and a plain "+" span. ---- */}
       <P id="kbd.letter" w={80}>

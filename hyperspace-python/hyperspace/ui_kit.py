@@ -64,7 +64,7 @@ def mod(name: str):
 
 
 def load_faces(io) -> None:
-    """Put the kit's faces (Geist, the symbol fallback behind each) in the
+    """Put the kit's faces (Inter, the symbol fallback behind each) in the
     atlas, beside the panel's own: every time `ui.load_fonts` builds one
     (a new imgui context is a new atlas — the test rigs make one each —
     and the old faces went with the old one). In place, so a `Ui` holding

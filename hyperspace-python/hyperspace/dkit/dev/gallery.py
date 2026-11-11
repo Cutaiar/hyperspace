@@ -44,9 +44,9 @@ def _menu_items():
             M.sep(),
             M.Item(id="del", label="Delete", variant="destructive")]
 
-# Geist ships only as a variable woff2, which stb_truetype can read neither of.
-# hyperspace/dkit/fonts holds static instances cut from that exact file at the
-# three weights shadcn uses, so the comparison is the same typeface.
+# The oracle's Inter is a variable woff2, which ImGui's loader can read neither
+# of. hyperspace/dkit/fonts holds static instances cut from that exact file at
+# the three weights shadcn uses, so the comparison is the same typeface.
 FACES = dict(D.FACE_FILES)
 
 

@@ -2,13 +2,14 @@
 
 RETRO row 61 found the kit's text measured differently from the browser's
 in two ways: advances were whole pixels (and 12px text was set at 16/15.6
-of its size), and 12px text sat ~0.93px low. Both came from how the faces
+of its size), and 12px text sat ~0.93px low. Fixed in Geist (rows 77-82),
+then the kit moved to Inter, the panel's own family (row 90). Both came from how the faces
 were loaded, not from any one component - see "faces and metrics" in
 `draw.py` and `build_fonts.py` - so they are pinned here, once, against
 numbers Chromium produced:
 
-* WIDTHS are canvas `measureText` with `"Geist Variable"` on `?probe`,
-  which is the same text shaping the DOM uses (kerning and ligatures on);
+* WIDTHS are canvas `measureText` with `"Inter Variable"` on `?probe`,
+  which is the same text shaping the DOM uses (kerning and `calt` on);
 * BASELINES are the bottom row of an "H"'s ink in a flex `items-center`
   box, one cell per (font size, box height, line-height), at dpr 1.
 
@@ -23,28 +24,32 @@ from hyperspace.dkit import draw as D
 
 VARIANT = {400: "regular", 500: "medium", 600: "semibold"}
 
-# (weight, px, text, Chromium's width). Chosen to cover each mechanism:
-# kerning ("Ctrl", "AVATAR"), the width-changing ligatures ("Settings",
-# "Effects", "office" - tt and ff), every weight, 12-16px, and long strings
-# where per-glyph rounding would add up.
+# (weight, px, text, Chromium's width) in Inter Variable. Chosen to cover
+# each mechanism: kerning ("AVATAR", "Toggle"), the contextual alternates
+# (below), every weight, 12-16px, and long strings where per-glyph rounding
+# would add up.
 BROWSER_W = [
-    (500, 12, "Ctrl", 21.192),
-    (400, 12, "Save Changes", 78.541),
-    (500, 12, "Save Changes", 80.197),
-    (500, 12, "K", 7.872),
-    (500, 12, "W", 11.616),
-    (500, 12, "B", 8.256),
-    (400, 12, "Settings", 45.42),
-    (500, 14, "Settings", 54.67),
-    (600, 16, "Settings", 64.4),
-    (400, 14, "Effects", 44.45),
-    (500, 12, "office", 31.414),
-    (500, 14, "AVATAR", 50.078),
-    (400, 14, "1234567890", 80.416),
-    (400, 16, "Toggle sidebar", 107.04),
-    (600, 14, "Type a command or search...", 188.355),
-    (600, 16, "Type a command or search...", 215.264),
-    (400, 13, "Select a fruit", 76.193),
+    (500, 12, "Ctrl", 20.736),
+    (400, 12, "Save Changes", 81.521),
+    (500, 12, "Save Changes", 82.297),
+    (500, 12, "K", 8.25),
+    (500, 12, "W", 12.035),
+    (500, 12, "B", 7.881),
+    (400, 12, "Settings", 46.236),
+    (500, 14, "Effects", 46.616),
+    (500, 14, "AVATAR", 53.486),
+    (400, 14, "1234567890", 82.811),
+    (400, 16, "Toggle sidebar", 112.406),
+    (600, 14, "Type a command or search...", 196.596),
+    (600, 16, "Type a command or search...", 224.681),
+    (400, 13, "Select a fruit", 77.733),
+    # Inter's `calt`: one arrow glyph; a narrower multiplication sign
+    # between digits; a raised colon, hyphen and parens (shape only)
+    (400, 14, "->", 13.357),
+    (500, 12, "1x2", 20.385),
+    (400, 14, "12:30", 35.745),
+    (500, 12, "A-B", 21.533),
+    (400, 16, "(XY)", 33.445),
 ]
 
 # (px, box height, line-height or 0 for normal, Chromium's baseline row).
@@ -53,17 +58,17 @@ BROWSER_W = [
 # INSIDE the line box goes up (13 at 16px line-height in 16).
 BROWSER_BASELINE = [
     (11, 15, 0, 12),
-    (12, 20, 0, 14),
+    (12, 20, 0, 15),
     (12, 21, 0, 15),
-    (13, 15, 20, 12),
+    (13, 15, 20, 13),
     (13, 16, 0, 13),
-    (13, 16, 16, 12),
-    (14, 32, 0, 21),
+    (13, 16, 16, 13),
+    (14, 32, 0, 22),
     (14, 33, 20, 22),
     (15, 17, 16, 14),
     (15, 18, 0, 15),
     (16, 24, 0, 18),
-    (16, 33, 20, 22),
+    (16, 33, 20, 23),
     (20, 23, 0, 19),
 ]
 
@@ -78,20 +83,20 @@ def test_the_baseline_is_where_chromium_puts_it(px_, box, lh, want):
 
 
 def test_ascent_and_descent_round_separately_as_blink_does():
-    """12px Geist is 12.06 above and 3.54 below: 12 and 4, so a 16px glyph
-    box - where rounding the SUM (15.6) would give 16 as well, but put the
-    baseline at 13 under a ceil'd ascent, which is what the kit had."""
-    assert D.ascent_descent(12.0) == (12.0, 4.0)
-    assert D.ascent_descent(14.0) == (14.0, 4.0)
+    """12px Inter is 11.63 above and 2.89 below: 12 and 3, a 15px glyph box.
+    (Geist was 12.06 and 3.54: 12 and 4 - and ImGui, ceiling the ascent of
+    a box it had rounded up to 16, put the baseline at 13, a pixel low.)"""
+    assert D.ascent_descent(12.0) == (12.0, 3.0)
+    assert D.ascent_descent(14.0) == (14.0, 3.0)
 
 
-def test_kerning_and_ligatures_are_applied_before_measuring():
-    glyphs, _pen = D.shape("Settings", "regular")
-    assert len(glyphs) == 7, "tt is one glyph, as Chromium shapes it"
-    _, pen_c = D.shape("Ctrl", "medium")
-    _, pen_c_alone = D.shape("C", "medium")
-    assert pen_c[0] < pen_c_alone[0], "C before t is kerned in"
-    # a character Geist does not carry is left to the fallback face
+def test_substitutions_and_kerning_are_applied_before_measuring():
+    glyphs, _pen = D.shape("->", "regular")
+    assert len(glyphs) == 1, "`calt` makes -> one arrow, as Chromium shapes it"
+    _, pen_av = D.shape("AV", "medium")
+    _, pen_a = D.shape("A", "medium")
+    assert pen_av[0] < pen_a[0], "A before V is kerned in"
+    # a character the font does not carry is left to the fallback face
     assert D.shape("⌘", "medium")[1] == (None,)
 
 
@@ -148,18 +153,18 @@ def test_the_size_pushed_is_the_size_drawn():
 
 
 def test_the_faces_are_not_hinted():
-    """A hinted advance is a whole pixel. Medium "K" at 12px is 7.872 in
-    Chromium and 8 with hinting on."""
+    """A hinted advance is a whole pixel. Medium "W" at 12px is 12.035 in
+    Chromium and 12 with hinting on. (Not "K": Inter's is 8.25 exactly.)"""
     _gl()
     from imgui_bundle import imgui
     got = {}
 
     def paint(ui):
         D.push_css_font(ui.faces, "medium", 12.0)
-        got["k"] = imgui.get_font().get_font_baked(12.0).get_char_advance(ord("K"))
+        got["w"] = imgui.get_font().get_font_baked(12.0).get_char_advance(ord("W"))
         imgui.pop_font()
     _run(paint)
-    assert abs(got["k"] - 7.872) < 0.02, got
+    assert abs(got["w"] - 12.035) < 0.02, got
 
 
 @pytest.mark.parametrize("px_, box", [(11.0, 20.0), (16.0, 36.0), (14.0, 32.0)])
@@ -201,7 +206,7 @@ def test_a_stock_input_puts_its_glyphs_on_the_labels_baseline(px_, box):
         col = (255 - f[y0:y1, int(x0):int(x0) + 30]).sum(axis=1)
         return y0 + int(np.nonzero(col > 200)[0][-1]) + 1
 
-    want = D.baseline_y(PROBE_Y, px_, box)
+    want = D.baseline_y(PROBE_Y, px_, box, D.TEXT_LEADING.get(px_, 0.0))
     assert ink_bottom(PROBE_X) == want, "the label is off its own baseline"
     assert ink_bottom(PROBE_X + 60) == want, (
         f"the stock input's glyphs end at row {ink_bottom(PROBE_X + 60)}, "
