@@ -334,7 +334,7 @@ def test_a_menu_over_the_canvas_swallows_the_hover_words_under_it(rig, monkeypat
     hang this on: `ed.get_hovered_link` answers for whatever lies under the
     pointer in the CANVAS, panel or no panel, and a tooltip is drawn in the
     foreground — above the very panel that should have swallowed it. So the
-    canvas's hover words ask `ui_graph.menu_up()` first, as the click, the
+    canvas's hover words ask `ui_graph._menu_up()` first, as the click, the
     wheel, the width grip, Esc and Delete already did.
     """
     st = party(rig)

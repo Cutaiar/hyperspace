@@ -936,7 +936,7 @@ def page(panel, dt: float) -> None:
     _arrive(panel, st)
 
 
-def menu_up() -> bool:
+def _menu_up() -> bool:
     """A menu (or any other popup) is open over the window.
 
     imgui's hover tests know nothing about what is drawn on top: both
@@ -964,7 +964,7 @@ def _note_pick(panel, st: dict, origin, size) -> None:
         st["canvas_press"] = (
             origin[0] <= m.x < origin[0] + size[0] and origin[1] <= m.y < origin[1] + size[1]
             and not st.get("over_details") and not getattr(panel, "_picking", False)
-            and not menu_up())
+            and not _menu_up())
     if imgui.is_mouse_released(0) and st.pop("canvas_press", False):
         st["canvas_pick"] = True
 
@@ -1008,7 +1008,7 @@ def _scroll(st: dict, origin, size) -> None:
     over = (origin[0] <= m.x < origin[0] + size[0] and origin[1] <= m.y < origin[1] + size[1])
     spread = pinch.take()
     if (not over or st.get("over_details")
-            or menu_up()):
+            or _menu_up()):
         return
     if spread:                                  # a pinch: the editor's zoom, at the cursor
         io.mouse_wheel, io.mouse_wheel_h = pinch_wheel(spread), 0.0
@@ -1080,7 +1080,7 @@ def _grip(st: dict, pos: tuple[float, float], size: tuple[float, float], avail_w
     m = imgui.get_mouse_pos()
     over = (pos[0] <= m.x < pos[0] + GRIP_W and pos[1] <= m.y < pos[1] + size[1]
             and imgui.is_window_hovered(imgui.HoveredFlags_.child_windows)
-            and not menu_up())
+            and not _menu_up())
     if over and imgui.is_mouse_clicked(0):
         st["side_drag"] = True
     held = bool(st.get("side_drag"))
@@ -1232,7 +1232,7 @@ def escaped() -> bool:
     player screen, drawn first, did not take it."""
     return (imgui.is_key_pressed(imgui.Key.escape, False)
             and not imgui.get_io().want_text_input
-            and not menu_up()
+            and not _menu_up()
             and not ui_players.took_escape())
 
 
@@ -1245,7 +1245,7 @@ def delete_pressed() -> bool:
     return (any(imgui.is_key_pressed(k, False) for k in DELETE_KEYS)
             and not imgui.get_io().want_text_input
             and not imgui.is_any_item_active()
-            and not menu_up())
+            and not _menu_up())
 
 
 def _select(st: dict, view: graphview.View) -> None:
@@ -3507,7 +3507,7 @@ def cable_tip(view: graphview.View, c: graphview.VCable) -> str:
 
 
 def _hover(st: dict, view: graphview.View, panel=None) -> None:
-    if menu_up():
+    if _menu_up():
         return          # 2026-11-11: a menu swallows the canvas under it, words and all
     if st.get("onto_lit") is not None:
         return          # 2026-10-29: a node drag's own words (`_drag_preview`) are not covered
