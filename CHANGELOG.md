@@ -1,11 +1,11 @@
 # Changelog
 
-## v1.3 — 2026-11-08
+## v1.3 — 2026-11-10
 
 ### Panel
 
 - GRAPH is always on screen: the rail is gone and every other page (presets, look-back, faces, analyzer, media, fx, LFO, sequencer, audio, camera, output, view, routing, hands, system) is a section of GRAPH's side pane, and the FX page is retired (#345, #350, #360)
-- The side pane shows one view at a time at full height — the selection or one section — picked from a row of chips (SELECTION, PATCHES, AUDIO, ROUTING, PLAYLIST, PLAYERS, SYSTEM, and **SECTIONS ▾** for the rest); ⌘[ / ⌘] step back and forward through every view and every node you selected, and each section keeps its own scroll (#439)
+- The side pane shows one view at a time at full height — the selection or one section — picked from a row of chips (selection, patches, audio, routing, players, system, and **sections ▾** for the rest); ⌘[ / ⌘] step back and forward through every view and every node you selected, and each section keeps its own scroll (#439)
 - The pane's chips hold still: each is as wide as its name, with a dirty dot in its corner, and what's selected, where the playlist is and who's on air move into their tooltips (#439, #440)
 - LOOKBACK is drawn as its two picture nodes, LOOK-BACK and DREAM, with `dream.on` on the dream's head (#350)
 - Hold Shift while dragging a panel slider or fader and it moves a tenth as far, with no jump when Shift goes down or up, one undo step a drag (#348)
@@ -19,6 +19,8 @@
 - GRAPH opens, and refits with a glide whenever another patch loads, with every node in view beside the side pane; **Tidy** frames the same way, keeping the selection; the fit zooms in no further than 1.3× on a 1080p show display or a Retina screen, 1.5× on a large one; resizing the window no longer zooms or moves the canvas, and the panel's stray scrollbar is gone (#411, #429, #439)
 - CONTROLS is the control window itself, not a window inside it: no title bar, nothing to drag or close by accident, and it follows the window's size; H still shows and hides it, and the floating pad diagram gets an × (#426)
 - Plainer words: "session" and "rig" are gone (now "meta controller", "this Mac", "bus cable"), "preset" becomes "patch" (the **PATCHES** section, "patch: saved TRIP 2") and "show" becomes "install" ("install: saved party"); saved ids and files are unchanged (#407, #436, #437)
+- No all caps: the panel draws its words as written ("knob smoothing", not "KNOB SMOOTHING"), from field labels to GRAPH's area titles and pattern names; pad and APC40 button legends and acronyms (LFO, MIDI) stay in capitals, and no saved file changes (#451)
+- The side pane is drawn with a new measured kit (dkit, after shadcn/ui): icon tabs for the views, list rows whose actions show on hover, CAMERA, VIEW, every param slider and switch, chips and GRAPH's header; `HYPERSPACE_KIT=0` draws it all as before (#446)
 - Nudge chips each open their own popup, and a patch strip's save chip no longer covers ▶ in a narrow pane (#414)
 
 ### Displays
@@ -33,7 +35,7 @@
 - HOLD, TAKE and DROP are gone: there are two decks, one on air and one off air; the APC40's crossfader fades between them (`output.xfade`) and MASTER dims the room (`output.dim`); GRAPH's head shows which deck you're looking at (click it for the other), **copy** on air to off air, the crossfade slider and a timed fade (#380)
 - F1–F8, Home, next / prev and the preset list, from keys or pads, always load into the off-air deck, and are refused in words while the fader is between its ends or a timed fade runs; the panel's own load still lands on the deck it shows (#380)
 - You can always tell the decks apart: the deck off air is framed in red with an ON AIR inset; the loaded look's strip ("deck 2 · off air"), the desk diagram's header ("the desk plays deck 1"), ROUTING's desk section, the window title and SYSTEM's GPU line all say which is which (#380, #393)
-- Playlists for installs: a new playlist section in the side pane plays a list of looks, each for its own dwell in seconds, fading between them — choose or make a list, play / stop, back / on, fade seconds, add a look; lists live in `<library>/playlists/` (#392, #400)
+- Playlists for installs: the **playlist** chip on GRAPH's deck row opens a list of looks, each played for its own dwell in seconds, fading between them — choose or make a list, play / stop, back / on, add a look; the chip is lit while a list plays, and lists live in `<library>/playlists/` (#392, #400, #445)
 - A fade between decks or a window resize no longer leaks about 16 MB each, which would have ended a long-running install within days (#400)
 
 ### Players
@@ -51,7 +53,9 @@
 
 ### Presets
 
-- The presets list is a tree of folding folders: right-click a preset → move to ▸, or drag it onto a folder; make, rename and remove folders from the panel (#349)
+- Load a patch from GRAPH's deck row: **load…** opens a file browser on `loadable/` and loads the pick onto the off-air deck; the side pane's folder tree and the strip's ◀ ▶ are gone (#349, #444)
+- A patch or folder moved or renamed in Finder is followed: the loaded patch and every install keep pointing at it, and unsaved edits stay (#444)
+- Six kinetic presets to copy into `<library>/loadable/`, played with the hands, a pad or a Joy-Con: `kinetic-clay`, `-comet`, `-tunnel`, `-looking-glass`, `-wand` and `-finger-drums`, in `presets/kinetic/` with a gesture table each (#448)
 - A preset now holds the hands' look, the clouds' look and the bus cuts; presets move to `/10` and shows to `/3`, migrated with a backup (#351)
 - One saved format: module presets are patches of one group (`patches/<group>/`, `hyperspace.patch/2`), and a group holds any node the preset saves; run `tools/migrate_library.py --apply` once, both Macs on this build, between shows (#352)
 - A patch can hold the scene, shape, backdrop, pattern, look-back and dream, so a dream + fx + composite patch can be saved; spawning one where the host already has that node is refused in words (#355)
@@ -107,6 +111,11 @@
 - Ultraleap room-frame palm lanes, `hand:<side>.room.roll` / `pitch` / `yaw`, read the same on both hands, with HANDS → feel & calibration → **level room** (#358)
 - The orbit: close a hand and turn it, and the camera turns with it, staying put when you open it — a new `turn` route op, clutched by the same hand's grab; not yet tried on a real sensor (#358, #362)
 - A deck dropping its hands node no longer takes the other deck's mirror with it: every hands node now follows the one `ghost.mirror` (#408)
+- The grip: catch the shape in a fist and it moves with your hand — welded, or on a loose spring with `grip.coupling` — and flies on when you let go, coasting down at `grip.drag` and staying whole on screen; the other hand's grab shapes how it spins; set per patch in the HANDS page's **grip** section, off in any patch that doesn't name it (#442, #443)
+- New lanes from the grip: `grip:held` and `grip:flying` as gates, `grip:speed` and `grip:spin` reading on after a throw; a new look springs a moved shape home in about 0.3 s, and a `world.reset` button sits under Reset view (#442, #443)
+- Ghost hands land where they're tracked: each finger starts at its tracked knuckle (the pinky was up to 15 mm off), and a short wrist cuff replaces the stray forearms (#449)
+- A new **BONES** ghost style draws the hand's 27 bones; SKIN is gone, as it couldn't hold a frame at any projector size (#449)
+- `ghost.material` beside the style: PLAIN, BONE, GLASS or EMBER, with GLASS letting the scene show through and the guide always drawn plain (#449, #450)
 
 ### For developers
 
@@ -126,6 +135,10 @@
 - `Param.__post_init__` makes every meta param non-modulatable (#409); `Project` is `Install` in code (`Library.install`, `DeckInstall`) (#436); `routing.layout_of` gives rows by pad model (#431)
 - `tools/type_ratchet.py` fails a PR on a new pyright complaint against `tools/type_baseline.json` (#412); `docs/AUDIT-STRUCTURE-2026-10.md` records the structure audit (#413); `tools/wait_green.py`, re-measured test times (#403); `tools/poi_probe.py` replays a real Joy-Con tape (#410); the doc tails were restored and `tests/test_doc_numbers.py` checks more (#432)
 - The `abs14` route op reads CC n + 32 as the LSB and rests between detents; `midi.heard_as` and `midi.LISTEN_S` drive the listening Learn, and `players.controllers_of` feeds its menu (#438); `Panel.graph_fit` switches GRAPH's fit off, as the canvas tests' rig does — restart after pulling (#439)
+- `world.py`: `Pose` (a 4-vector and a quaternion pair), `World` with home ∘ offset per drawn object, and `bodies` / `joints` / `puppets` / `clip` registries, stepped in `app._step_world` at the poi's 960 Hz; `world.Joint` and the `grip.*` group build plan 60 on it (plans 59–62 in `docs/plans/`) (#441, #442, #443)
+- dkit is a package, `hyperspace/dkit`, with its workbench and tests in `dev/` (`pytest hyperspace/dkit/dev`); `ui_kit.theme()` maps its tokens onto the panel's palette (#446)
+- CI fans out: `tests.yml` runs lint and pyright beside four fast-tier shards split by `tools/ci_shard.py`, and a `sweep` tier (`pytest -m sweep`) runs in `sweeps.yml` only when its inputs change (#453)
+- `hands_tape.py record --cues` keeps each pose's span in the tape and `--fps` thins it, with `tests/fixtures/hands/rig.json` a real take (#449, #450); the words guard allows "rig" again (#447)
 
 ## v1.2 — 2026-11-02
 
