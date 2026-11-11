@@ -5,16 +5,16 @@
 // @tip Film grain and an ordered dither. The grain is a field of noise redrawn 24 times
 // @tip a second (speed is the shutter: 0 freezes it), strongest in the midtones where
 // @tip film's is, and Size is how coarse it is — one px is video noise, eight is 16 mm.
-// @tip Steps then crushes each channel to that many levels and the 4×4 dither breaks the
-// @tip banding into a printed screen; at 0 nothing is crushed. Ground puts grain on the
-// @tip black too, which lights those pixels.
+// @tip Steps then crushes each channel to that many steps between black and white and
+// @tip the 4×4 dither breaks the banding into a printed screen; at 0 nothing is crushed.
+// @tip Ground puts grain on the black too, which lights those pixels.
 
 uniform float u_amount; // @param 0 1 0.15 amount "Amount" How deep the grain cuts.
 uniform float u_size;   // @param 0.5 8 1 log "Size" One grain, px — the film stock.
 uniform float u_tone;   // @param 0 1 0.6 "Tone" How much the grain follows the picture: 1 is film (midtones only, black and white left alone), 0 is flat video noise.
 uniform float u_colour; // @param 0 1 0.25 "Colour" Grey grain at 0; at 1 each channel gets its own, for colour speckle.
 uniform float u_ground; // @param 0 1 0 "Ground" How much grain lands where the frame is see-through. Above 0 it lights the empty frame, so the desktop sees it too.
-uniform int u_steps;    // @param 0 32 0 "Steps" Levels each channel is crushed to — 2 is a two-tone print, 8 a cheap screen. 0 crushes nothing.
+uniform int u_steps;    // @param 0 32 0 "Steps" Steps each channel is crushed to, counted as the gaps between its levels — 1 is a two-tone print, 4 a five-level screen. 0 crushes nothing.
 uniform float u_dither; // @param 0 1 1 "Dither" How much of the 4×4 ordered pattern goes into the crush: 1 trades the bands for a dot screen, 0 leaves hard steps.
 
 // The 4×4 ordered (Bayer) matrix as its two 2×2 levels, 0 … 1 over a 4-px tile
@@ -39,7 +39,9 @@ vec4 effect(vec2 uv) {
     vec3 col = max(c.rgb + mix(vec3(grey), n, u_colour) * (tone * u_amount
                                                            * max(c.a, u_ground)), 0.0);
     if (u_steps > 0) {
-        float lv = max(float(u_steps) - 1.0, 1.0);   // steps levels: lv gaps between them
+        // the gaps, not the levels: every value of the knob then means
+        // something — 1 is one gap, black to white, and `steps + 1` levels
+        float lv = float(u_steps);
         col = floor(col * lv + (bayer4(uv * u_res) - 0.5) * u_dither + 0.5) / lv;
     }
     return vec4(col, c.a);

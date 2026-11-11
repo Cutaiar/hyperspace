@@ -157,15 +157,26 @@ def test_prism_with_no_split_is_the_picture_it_was_given(ctx, rgb):
 
 def test_prism_splits_a_white_line_red_outward_and_blue_inward(ctx):
     """Lateral chromatic aberration: the long wavelengths land further from
-    the centre than the short ones, so the fringe left of a line left of
-    centre is blue and the fringe on its right (away from the middle) is red."""
+    the centre than the short ones. For a line left of the middle, *outward*
+    is to its left and *inward* is to its right, so the left fringe is red
+    and the right one blue.
+
+    This is the one the sampling direction gets wrong by a sign, and where a
+    tap reads is the inverse of where its light lands — so the bands are
+    named here by which side of the frame's centre they are on, never by
+    left and right, which is how the first version of this test came to
+    assert the inverted picture under this name (#454)."""
     pic = flat((0, 0, 0))
-    pic[:, 16, :3] = 255                       # a line left of the centre column
+    line = 16                                  # a line left of the centre column, W // 2
+    pic[:, line, :3] = 255
     px = run(ctx, "prism", pic, amount=0.08, rim=0.0, fringe=0.0, taps=24)
-    row = px[H // 2]
-    left, right = row[10:16, :3].astype(int), row[17:23, :3].astype(int)
-    assert left[:, 2].sum() > left[:, 0].sum() * 1.5, "the inward fringe is not blue"
-    assert right[:, 0].sum() > right[:, 2].sum() * 1.5, "the outward fringe is not red"
+    row = px[H // 2].astype(int)
+    assert line < W // 2, "the line has to be off centre for there to be an outward"
+    outward, inward = row[line - 6:line, :3], row[line + 1:line + 7, :3]
+    assert outward[:, 0].sum() > outward[:, 2].sum() * 1.5, \
+        f"the outward fringe is not red: R={outward[:, 0].sum()} B={outward[:, 2].sum()}"
+    assert inward[:, 2].sum() > inward[:, 0].sum() * 1.5, \
+        f"the inward fringe is not blue: R={inward[:, 0].sum()} B={inward[:, 2].sum()}"
 
 
 def test_prisms_rim_decides_where_the_split_happens(ctx):
@@ -269,18 +280,33 @@ def test_grains_colour_decides_whether_the_three_channels_share_their_noise(ctx)
     assert chroma(run(ctx, "grain", mid, amount=0.6, colour=1.0, tone=0.0)).max() > 4
 
 
-def test_grains_steps_crush_the_levels_and_the_dither_breaks_the_bands(ctx):
-    """A ramp through Steps 4 with no dither holds four values a channel;
-    the dither trades those hard steps for a 4-px pattern, so the ramp comes
-    back with more values than levels and no more than the levels in any
-    one row of a tile."""
+def ramp_picture() -> np.ndarray:
+    """A black-to-white ramp across the frame, opaque."""
     ramp = np.zeros((H, W, 4), np.uint8)
     ramp[..., 3] = 255
     ramp[..., :3] = (np.arange(W) * 255 // (W - 1)).astype(np.uint8)[None, :, None]
+    return ramp
+
+
+@pytest.mark.parametrize("steps", [1, 2, 3, 4, 8, 32])
+def test_grains_steps_are_the_gaps_so_every_value_of_the_knob_means_something(ctx, steps):
+    """Steps counts the gaps between the levels, which is what the word
+    means, so Steps n leaves n + 1 of them and the knob has no value that
+    does nothing or doubles up. Steps 1 is one gap — a two-tone print — and
+    not the two gaps a count of levels would have made of it (#454)."""
+    px = run(ctx, "grain", ramp_picture(), amount=0.0, steps=steps, dither=0.0)
+    assert len(np.unique(px[..., 0])) == steps + 1, np.unique(px[..., 0])
+
+
+def test_grains_steps_crush_the_levels_and_the_dither_breaks_the_bands(ctx):
+    """A ramp through Steps 4 with no dither holds its five values a
+    channel; the dither trades those hard steps for a 4-px pattern without
+    inventing a level between them."""
+    ramp = ramp_picture()
     hard = run(ctx, "grain", ramp, amount=0.0, steps=4, dither=0.0)
-    assert len(np.unique(hard[..., 0])) == 4, np.unique(hard[..., 0])
+    assert len(np.unique(hard[..., 0])) == 5, np.unique(hard[..., 0])
     dithered = run(ctx, "grain", ramp, amount=0.0, steps=4, dither=1.0)
-    assert len(np.unique(dithered[..., 0])) == 4, "the dither invented a level"
+    assert len(np.unique(dithered[..., 0])) == 5, "the dither invented a level"
     # the same column is not the same value down the frame any more: the
     # 4 × 4 pattern decides which side of a step each pixel falls
     assert (dithered[:, :, 0].std(axis=0) > 0).any(), "the dither changed nothing"

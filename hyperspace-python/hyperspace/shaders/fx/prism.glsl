@@ -44,7 +44,11 @@ vec4 effect(vec2 uv) {
     for (int k = 0; k < u_taps; k++) {
         float t = clamp((float(k) + 0.5) / n + j, 0.0, 1.0);
         vec3 w = spectrum(t);
-        vec4 s = src(uncentred(p + split * ((0.5 - t) * 2.0)));  // red out, violet in
+        // where a tap reads is the inverse of where the light lands: a tap
+        // that reaches inward puts what it finds further out. So the long
+        // wavelengths reach in, and come out on the outside — red out,
+        // violet in, the way a lens throws them
+        vec4 s = src(uncentred(p + split * ((t - 0.5) * 2.0)));
         acc += w * s.rgb;
         wsum += w;
         float wa = w.r + w.g + w.b;
