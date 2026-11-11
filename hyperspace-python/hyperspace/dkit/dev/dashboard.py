@@ -63,6 +63,47 @@ ROW_MENU = [
            variant="destructive"),
 ]
 
+# Row 0's right-click menu, and only row 0's: the SUBMENU's driving ground.
+# A submenu cannot be driven without one somewhere in this app, and adding a
+# row to ROW_MENU would move the rows `test_menu_keys` counts - "the last
+# row" is a measured rule and it is asserted on that list. So the submenu
+# lives on a row no test names, with the same ids either side of it.
+ROW_MENU_SUB = [
+    M.Item("open", "Open in catalog", icon="eye"),
+    M.Item("insert", "Insert", items=(
+        M.Item("insert.gain", "Gain"),
+        M.Item("insert.curve", "Curve"),
+        # a WIDE second level, on purpose: a chain whose levels want
+        # different widths is what made the menus flip sides, so the test
+        # for that needs one that cannot fit where the level above it did
+        M.Item("insert.deep", "More", items=(
+            M.Item("insert.deep.one", "One of the wider rows in this menu"),
+            M.Item("insert.deep.two", "Two of the wider rows in this menu"),
+        )),
+    )),
+    M.Item("pin", "Pin to scene", icon="layers"),
+    # 32 rows, which is the look-back frame menu's count and the reason a
+    # submenu has to scroll: at 28 a row it wants 906px, more than the
+    # window is tall once it hangs off a table row.
+    M.Item("frames", "Look-back frames", items=tuple(
+        M.Item(f"frames.{k}", f"echo.{k}") for k in range(1, 33))),
+    # a panel that SCROLLS and carries triggers of its own: wheeling it
+    # moves a different trigger under a stationary pointer, which is the
+    # one way the row under the pointer changes with no mouse movement
+    # row 1 is the only plain one, so a test can park on it and know that
+    # ANY movement of the rows under the pointer puts a trigger there
+    M.Item("deep", "Deep list", items=tuple(
+        M.Item(f"deep.{k}", f"row {k}") if k == 1 else
+        M.Item(f"deep.{k}", f"row {k}", items=(
+            M.Item(f"deep.{k}.a", f"{k} first"),
+            M.Item(f"deep.{k}.b", f"{k} second"),
+        ))
+        for k in range(1, 29))),
+    M.sep(),
+    M.Item("remove", "Remove from view", icon="trash-2",
+           variant="destructive"),
+]
+
 NAV = [("Overview", "gauge"), ("Gallery", "boxes"), ("Catalog", "shapes"),
        ("Scenes", "layers"), ("Analyzer", "activity"), ("Routing", "waves")]
 # Which nav row shows the contact sheet rather than the dashboard body.
@@ -774,7 +815,8 @@ def _table_rows(ui, rows, view, r, faces, theme, ink, state):
         # The same menu on a right-click anywhere in the row - which is the
         # gesture a node editor wants. `allow_overlap` is on by default, so
         # the row's target does not swallow the kebab's hover.
-        got = CX.context_menu(ui, f"ctx.{ri}", (rx, ry, rw, rh), ROW_MENU)
+        got = CX.context_menu(ui, f"ctx.{ri}", (rx, ry, rw, rh),
+                              ROW_MENU_SUB if ri == 0 else ROW_MENU)
         if got:
             state["ctx"] = f"{got} \u00b7 {row['name']}"
             state["said"] = state["ctx"]

@@ -56,7 +56,17 @@ pins (`_create`) and a cable or node deleted (`_delete`) go through
 edits, so either page shows the other's change next frame, and undo, the
 loadable patch's dirt and the referee are theirs. A taken param asks Replace /
 Keep (ROUTING's prompt, `ui_routing.ask`); a refusal says why on the
-page's head (`st["note"]`) and on the drag. Right-click: a param's `mod`
+page's head (`st["note"]`) and on the drag.
+
+**Every right-click menu on the canvas is described, not drawn**
+(`ui_menu.Menu`, built in `_popup`): the rows and the action behind each
+are the same whichever renderer draws them, and the renderer is dkit's
+measured ContextMenu panel where the kit is there, imgui's own menu items
+with ``HYPERSPACE_KIT=0``. A menu opened over the canvas is a popup window
+of its own, so `replay.keep` leaves it out of the `panel:graph` texture —
+it is on the screen, never in the picture.
+
+Right-click: a param's `mod`
 pin offers the param menu's Learn items (`Panel._ctx_learn_block`, the same
 function), a cable offers "insert" (a modifier onto it) and delete, the
 canvas the node picker (a modifier of each kind, a macro, and since plan
@@ -217,6 +227,7 @@ Nothing else sets one, and a canvas's change of size keeps both the zoom
 from __future__ import annotations
 
 import colorsys
+import contextlib
 import dataclasses
 import json
 import math
@@ -239,6 +250,7 @@ from . import (
     ui_browse,
     ui_fx,
     ui_kit,
+    ui_menu,
     ui_pad,
     ui_pane,
     ui_players,
@@ -933,6 +945,22 @@ def page(panel, dt: float) -> None:
     _arrive(panel, st)
 
 
+def _menu_up() -> bool:
+    """A menu (or any other popup) is open over the window.
+
+    imgui's hover tests know nothing about what is drawn on top: both
+    `is_mouse_hovering_rect` and the node editor's `get_hovered_link` /
+    `get_hovered_pin` / `get_hovered_node` answer for whatever lies under
+    the pointer in the CANVAS, panel or no panel. There is no z-index and
+    no pointer-events here, so each canvas path that reads the pointer has
+    to ask this itself: the click, the wheel, the width grip, Esc, Delete,
+    and the hover words (`_hover`), whose tooltip is drawn in the
+    foreground and so lands ON TOP of the very menu that should have
+    swallowed the pointer (2026-11-11).
+    """
+    return imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)
+
+
 def _note_pick(panel, st: dict, origin, size) -> None:
     """A left click on the canvas — pressed there and let go, not over the
     pane, no menu open, no desk control picked — asks the next frame to
@@ -945,7 +973,7 @@ def _note_pick(panel, st: dict, origin, size) -> None:
         st["canvas_press"] = (
             origin[0] <= m.x < origin[0] + size[0] and origin[1] <= m.y < origin[1] + size[1]
             and not st.get("over_details") and not getattr(panel, "_picking", False)
-            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+            and not _menu_up())
     if imgui.is_mouse_released(0) and st.pop("canvas_press", False):
         st["canvas_pick"] = True
 
@@ -989,7 +1017,7 @@ def _scroll(st: dict, origin, size) -> None:
     over = (origin[0] <= m.x < origin[0] + size[0] and origin[1] <= m.y < origin[1] + size[1])
     spread = pinch.take()
     if (not over or st.get("over_details")
-            or imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)):
+            or _menu_up()):
         return
     if spread:                                  # a pinch: the editor's zoom, at the cursor
         io.mouse_wheel, io.mouse_wheel_h = pinch_wheel(spread), 0.0
@@ -1061,7 +1089,7 @@ def _grip(st: dict, pos: tuple[float, float], size: tuple[float, float], avail_w
     m = imgui.get_mouse_pos()
     over = (pos[0] <= m.x < pos[0] + GRIP_W and pos[1] <= m.y < pos[1] + size[1]
             and imgui.is_window_hovered(imgui.HoveredFlags_.child_windows)
-            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+            and not _menu_up())
     if over and imgui.is_mouse_clicked(0):
         st["side_drag"] = True
     held = bool(st.get("side_drag"))
@@ -1213,7 +1241,7 @@ def escaped() -> bool:
     player screen, drawn first, did not take it."""
     return (imgui.is_key_pressed(imgui.Key.escape, False)
             and not imgui.get_io().want_text_input
-            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)
+            and not _menu_up()
             and not ui_players.took_escape())
 
 
@@ -1226,7 +1254,7 @@ def delete_pressed() -> bool:
     return (any(imgui.is_key_pressed(k, False) for k in DELETE_KEYS)
             and not imgui.get_io().want_text_input
             and not imgui.is_any_item_active()
-            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+            and not _menu_up())
 
 
 def _row_on_key(panel, name: str) -> bool:
@@ -3149,20 +3177,23 @@ def _patch_rows(panel) -> None:
             imgui.text_disabled(row["words"])
 
 
-def _spawn_menu(panel, at=None) -> None:
+def _spawn_menu(panel, at, m: ui_menu.Menu) -> None:
     """The canvas's **spawn ▸** (plan 40 T3): the browser's list, each item
     spawning at the point the menu opened (`at`, canvas units)."""
     rows = patch_list(panel)
-    if not rows or not imgui.begin_menu("spawn"):
+    if not rows:
         return
     st = _state(panel)
-    for row in rows:
-        if imgui.menu_item_simple(f"{row['name']}##spawn.{row['slug']}"):
-            px, py = panned(st)
-            spawn(panel, row["slug"], None if not at else (at[0] - px, at[1] - py))
-        if imgui.is_item_hovered() and (row["note"] or row["words"]):
-            ui.tooltip("\n".join(x for x in (row["note"], row["words"]) if x))
-    imgui.end_menu()
+
+    def at_pointer(slug: str) -> None:
+        px, py = panned(st)
+        spawn(panel, slug, None if not at else (at[0] - px, at[1] - py))
+
+    with m.sub("spawn"):
+        for row in rows:
+            m.item(row["name"], lambda slug=row["slug"]: at_pointer(slug),
+                   id=f"spawn.{row['slug']}",
+                   tip="\n".join(x for x in (row["note"], row["words"]) if x))
 
 
 def _drop_target(panel, st: dict, view: graphview.View) -> None:
@@ -3213,29 +3244,27 @@ def _patch_drop(panel, st: dict, view: graphview.View) -> None:
         spawn(panel, slug, (m.x - px, m.y - py), splice=c)
 
 
-def _group_menu(panel, st: dict, view: graphview.View, g) -> None:
+def _group_menu(panel, st: dict, view: graphview.View, g, m: ui_menu.Menu) -> None:
     """A group's right-click menu: Open / Fold, Rename… (the side pane's
     name, the group selected), Ungroup."""
-    imgui.text_disabled(g.name)
-    if imgui.menu_item_simple("fold" if g.open else "open"):
-        set_open(panel, g.id, not g.open)
-    if imgui.menu_item_simple("rename…"):
+    def form(update: bool = False) -> None:
         st["select_group"] = g.id
-    if imgui.menu_item_simple("save as patch…"):          # plan 40 T3: the side pane's form
-        st["select_group"] = g.id
-        open_patch_form(panel, g)
-    if g.patch and imgui.menu_item_simple("update patch"):
-        st["select_group"] = g.id
-        open_patch_form(panel, g, update=True)
-    if imgui.menu_item_simple("ungroup"):
-        ungroup(panel, g.id)
+        open_patch_form(panel, g, update=update)
+
+    m.note(g.name)
+    m.item("fold" if g.open else "open", lambda: set_open(panel, g.id, not g.open))
+    m.item("rename…", lambda: st.__setitem__("select_group", g.id))
+    m.item("save as patch…", form)              # plan 40 T3: the side pane's form
+    if g.patch:
+        m.item("update patch", lambda: form(True))
+    m.item("ungroup", lambda: ungroup(panel, g.id))
 
 
-def _group_item(panel, st: dict) -> None:
+def _group_item(panel, st: dict, m: ui_menu.Menu) -> None:
     """The menus' **Group** item, while two nodes or more are selected."""
     sel = st.get("menu_sel") or []
-    if len(sel) >= 2 and imgui.menu_item_simple(f"group {len(sel)} nodes"):
-        group_nodes(panel, sel)
+    if len(sel) >= 2:
+        m.item(f"group {len(sel)} nodes", lambda: group_nodes(panel, sel))
 
 
 # ---------------------------------------------------------------- plan 37 C1: the thumbnails
@@ -3527,6 +3556,8 @@ def cable_tip(view: graphview.View, c: graphview.VCable) -> str:
 
 
 def _hover(st: dict, view: graphview.View, panel=None) -> None:
+    if _menu_up():
+        return          # 2026-11-11: a menu swallows the canvas under it, words and all
     if st.get("onto_lit") is not None:
         return          # 2026-10-29: a node drag's own words (`_drag_preview`) are not covered
     tip = None
@@ -3688,7 +3719,7 @@ def _delete_render_node(panel, st: dict, view: graphview.View, n) -> None:
 LOOKBACK_MENU = "look-back frame"     # plan 34's echo items, under look-back ▸
 
 
-def render_picker(panel, at=None) -> None:
+def render_picker(panel, at, m: ui_menu.Menu) -> None:
     """The picker's render items (`graphview.picker`), grouped by primitive
     (plan 35 G, `graphview.PICKER_GROUP`): starters ▸ at the top (plan 36
     T5, `graphview.STARTERS`), then scene ▸, look-back ▸ (its look-back frames under `LOOKBACK_MENU`),
@@ -3707,45 +3738,46 @@ def render_picker(panel, at=None) -> None:
         mine = [it for it in items if graphview.PICKER_GROUP.get(it[0]) == group]
         if not mine:
             continue
-        if not imgui.begin_menu(f"{group}##graph.pick"):
-            continue
-        for kind, f, label in mine:
-            if kind in ("echo", "channels"):        # (their own submenus)
-                continue
-            if kind == "channel":                   # 2026-10-31: selects, makes nothing
-                if imgui.menu_item_simple(label):
-                    pick_channel(panel, f, at)
-                continue
-            if imgui.menu_item_simple(label, enabled=graphview.picked_name(kind, f) not in have):
-                add_render(panel, e, kind, f, at)
-            if kind == "lookback":
-                _echo_menu(panel, e, [it for it in mine if it[0] == "echo"], have, at)
-            if kind == "switch":
-                _channels_menu(panel, e, items, at)
-        imgui.end_menu()
+        with m.sub(group, id=f"graph.pick.{group}"):
+            for kind, f, label in mine:
+                if kind in ("echo", "channels"):     # (their own submenus)
+                    continue
+                if kind == "channel":                # 2026-10-31: selects, makes nothing
+                    m.item(label, lambda f=f: pick_channel(panel, f, at))
+                    continue
+                free = graphview.picked_name(kind, f) not in have
+                m.item(label,
+                       (lambda kind=kind, f=f: add_render(panel, e, kind, f, at))
+                       if free else None, enabled=free)
+                if kind == "lookback":
+                    _echo_menu(panel, e, [it for it in mine if it[0] == "echo"],
+                               have, at, m)
+                if kind == "switch":
+                    _channels_menu(panel, e, items, at, m)
 
 
-def _echo_menu(panel, e: graphview.Edit, echoes, have: set[str], at=None) -> None:
+def _echo_menu(panel, e: graphview.Edit, echoes, have: set[str], at,
+               m: ui_menu.Menu) -> None:
     """Plan 34's look-back frames, echo.1 (newest) … echo.32 (oldest), in
     their own submenu under look-back ▸; one already in the section drawn
     disabled."""
-    if imgui.begin_menu(LOOKBACK_MENU):
+    with m.sub(LOOKBACK_MENU):
         for kind, f, label in echoes:
-            if imgui.menu_item_simple(label, enabled=f"echo.{f}" not in have):
-                add_render(panel, e, kind, f, at)
-        imgui.end_menu()
+            free = f"echo.{f}" not in have
+            m.item(label, (lambda kind=kind, f=f: add_render(panel, e, kind, f, at))
+                   if free else None, enabled=free)
 
 
-def _channels_menu(panel, e: graphview.Edit, items, at=None) -> None:
+def _channels_menu(panel, e: graphview.Edit, items, at, m: ui_menu.Menu) -> None:
     """R28: "switch over the channels ▸ faces media / backdrop", under the
     picker's switch: one undo step (`Edit.switch_channels`), the new switch
     put where the menu opened."""
     ports = [(port, label) for kind, port, label in items if kind == "channels"]
-    if ports and imgui.begin_menu("switch over the channels"):
+    if not ports:
+        return
+    with m.sub("switch over the channels"):
         for port, label in ports:
-            if imgui.menu_item_simple(label):
-                switch_channels(panel, e, port, at)
-        imgui.end_menu()
+            m.item(label, lambda port=port: switch_channels(panel, e, port, at))
 
 
 def switch_channels(panel, e: graphview.Edit, port: str, at=None) -> str | None:
@@ -3821,7 +3853,7 @@ def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | N
     return insert_node(panel, cable, "effect", file, None, at)
 
 
-def render_node_menu(panel, n) -> None:
+def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
     """A render node's menu items: a hands node drawn solid or as lines, a
     composite's blend, a picture node's "add feedback after" (wave 0 E1:
     `_feedback_after_menu`, `add_feedback_after`), delete."""
@@ -3830,39 +3862,37 @@ def render_node_menu(panel, n) -> None:
     kind = graphview.kind_of(name) if name else None
     if kind in ("hands", "layer", "guide"):              # (plan 35 V2: the new ids)
         for how in rgraph.DRAWS:
-            if imgui.menu_item_simple(f"draw {how}"):
-                _render_said(panel, e, lambda e, how=how: e.set_node(name, draw=how))
+            m.item(f"draw {how}", lambda how=how: _render_said(
+                panel, e, lambda e, how=how: e.set_node(name, draw=how)))
     if kind == "composite":
         for how in rgraph.BLENDS:
-            if imgui.menu_item_simple(f"laid {how}"):
-                _render_said(panel, e, lambda e, how=how: e.set_node(name, blend=how))
+            m.item(f"laid {how}", lambda how=how: _render_said(
+                panel, e, lambda e, how=how: e.set_node(name, blend=how)))
     feeds = graphview.picture_feeds(e, name) if name else None   # (the spec's wires, no copy)
     if feeds is not None:
-        _feedback_after_menu(panel, name, feeds)
-    if imgui.menu_item_simple("delete"):
-        _render_said(panel, e, lambda e: e.drop_node(n.id))
+        _feedback_after_menu(panel, name, feeds, m)
+    m.item("delete", lambda: _render_said(panel, e, lambda e: e.drop_node(n.id)),
+           variant="destructive")
 
 
 FEEDBACK_AFTER = "add feedback after"
 
 
-def _feedback_after_menu(panel, name: str, feeds: list[tuple[str, str]]) -> None:
+def _feedback_after_menu(panel, name: str, feeds: list[tuple[str, str]],
+                         m: ui_menu.Menu) -> None:
     """A picture node's "add feedback after" (wave 0 E1, 2026-11-02): the
     feedback starter on the cable out of it — one cable, the item itself;
     several, a submenu naming each port it feeds; none, the item disabled
     with why (`graphview.FEEDBACK_FEEDS_NOTHING`). The loop lands under the
     node's box (`add_feedback_after`, `node_below`)."""
     if not feeds:
-        imgui.menu_item_simple(f"{FEEDBACK_AFTER}: {graphview.FEEDBACK_FEEDS_NOTHING}",
-                               enabled=False)
+        m.item(f"{FEEDBACK_AFTER}: {graphview.FEEDBACK_FEEDS_NOTHING}", enabled=False)
     elif len(feeds) == 1:
-        if imgui.menu_item_simple(FEEDBACK_AFTER):
-            add_feedback_after(panel, name, feeds[0][1])
-    elif imgui.begin_menu(FEEDBACK_AFTER):
-        for _, d in feeds:
-            if imgui.menu_item_simple(f"→ {d}"):
-                add_feedback_after(panel, name, d)
-        imgui.end_menu()
+        m.item(FEEDBACK_AFTER, lambda: add_feedback_after(panel, name, feeds[0][1]))
+    else:
+        with m.sub(FEEDBACK_AFTER):
+            for _, d in feeds:
+                m.item(f"→ {d}", lambda d=d: add_feedback_after(panel, name, d))
 
 
 def node_below(st: dict, nid: str) -> tuple[float, float] | None:
@@ -4825,32 +4855,31 @@ def route_from_new(panel, scheme: str, pid: str):
     return route_from(panel, voice_pin(ui_routing.router_of(panel), *hit), pid)
 
 
-def route_from_menu(panel, p) -> None:
-    """Draw "Route from ▸" for the real param `p` inside the open param
+def route_from_menu(panel, p, m: ui_menu.Menu) -> None:
+    """Describe "Route from ▸" for the real param `p` in the open param
     menu (`Panel._ctx_learn`): one submenu per section offered
     (`route_from_items`) — LFO ▸, envelope ▸, macro ▸ — nothing where none
-    is. A checked item already lands on `p`: a click on it does nothing.
-    Every `begin_menu` here is closed here."""
+    is. A checked item already lands on `p`: a click on it does nothing."""
     sections = route_from_items(panel, p)
-    if not sections or not imgui.begin_menu(ROUTE_FROM):
+    if not sections:
         return
-    for section, items in sections.items():
-        if not imgui.begin_menu(SECTION_WORDS[section]):
-            continue
-        picks = [it for it in items if it[1] not in graphview.BANK_SCHEMES]
-        for i, (label, pin, checked, _) in enumerate(picks):
-            clicked, _ = imgui.menu_item(f"{label}##route_from.{section}.{i}", "", checked)
-            if clicked and not checked:
-                route_from(panel, pin, p.id)
-        news = items[len(picks):]
-        if news:
-            imgui.separator()
-        for label, scheme, _, why in news:
-            if imgui.menu_item_simple(f"{label}##route_from.new.{scheme}", enabled=why is None) \
-                    and why is None:
-                route_from_new(panel, scheme, p.id)
-        imgui.end_menu()
-    imgui.end_menu()
+    with m.sub(ROUTE_FROM):
+        for section, items in sections.items():
+            with m.sub(SECTION_WORDS[section], id=f"route_from.{section}"):
+                picks = [it for it in items if it[1] not in graphview.BANK_SCHEMES]
+                for i, (label, pin, checked, _) in enumerate(picks):
+                    m.item(label,
+                           (lambda pin=pin: route_from(panel, pin, p.id))
+                           if not checked else None,
+                           id=f"route_from.{section}.{i}", checked=checked)
+                news = items[len(picks):]
+                if news:
+                    m.sep()
+                for label, scheme, _, why in news:
+                    m.item(label,
+                           (lambda scheme=scheme: route_from_new(panel, scheme, p.id))
+                           if why is None else None,
+                           id=f"route_from.new.{scheme}", enabled=why is None)
 
 
 def dropped(panel, view: graphview.View, nid: str, centre, size=None,
@@ -5133,7 +5162,7 @@ def put_onto(panel, view: graphview.View, nid: str, c: graphview.VCable,
     return None if isinstance(res, graphview.Refusal) else c
 
 
-def _onto_menu(panel, st: dict, view: graphview.View) -> None:
+def _onto_menu(panel, st: dict, view: graphview.View, m: ui_menu.Menu) -> None:
     """The chooser a node let go over several cables opens: one item per
     cable (`graphview.onto_words`), nearest first; picked, the node goes
     onto it (`put_onto`). Or (2026-11-01) the inlets of a node with
@@ -5151,21 +5180,30 @@ def _onto_menu(panel, st: dict, view: graphview.View) -> None:
             return
         src, _ = graphview.onto_sides(view, c)
         what = n.label if n is not None else held.get("insert", ("node",))[0]
-        ui._micro(f"{what} onto {graphview.onto_words(view, c)}: which takes {src}?")
+        m.heading(f"{what} onto {graphview.onto_words(view, c)}: which takes {src}?")
         for port in inlets:
-            if imgui.menu_item_simple(f"{port}##onto.{port}"):
-                if held.get("insert"):
-                    st["onto"] = None
-                    kind, file = held["insert"]
-                    insert_node(panel, c, kind, file, port, held.get("at"))
-                else:
-                    put_onto(panel, view, held["node"], c, port)
+            m.item(port, lambda port=port, c=c: _onto_inlet(panel, st, view, c, port),
+                   id=f"onto.{port}")
         return
-    ui._micro(f"put {n.label if n is not None else held['node']} onto")
+    m.heading(f"put {n.label if n is not None else held['node']} onto")
     for cid in held["cables"]:
         c = next((x for x in view.cables if x.id == cid), None)
-        if c is not None and imgui.menu_item_simple(f"{graphview.onto_words(view, c)}##{cid}"):
-            put_onto(panel, view, held["node"], c)
+        if c is not None:
+            m.item(graphview.onto_words(view, c),
+                   lambda c=c: put_onto(panel, view, held["node"], c), id=cid)
+
+
+def _onto_inlet(panel, st: dict, view: graphview.View, c, port: str) -> None:
+    """An inlet picked in the chooser (2026-11-01): from the cable menu's
+    insert ▸ a new node of that kind is made and spliced there, otherwise
+    the held node goes onto that cable's inlet."""
+    held = st["onto"] or {}
+    if held.get("insert"):
+        st["onto"] = None
+        kind, file = held["insert"]
+        insert_node(panel, c, kind, file, port, held.get("at"))
+    else:
+        put_onto(panel, view, held["node"], c, port)
 
 
 def macros_free(panel, view: graphview.View) -> list[str]:
@@ -5304,32 +5342,29 @@ def land(panel, fixed: str, pin: str):
     return connect(panel, fixed, pin)
 
 
-def _land_menu(panel, st: dict, view: graphview.View) -> None:
+def _land_menu(panel, st: dict, view: graphview.View, m: ui_menu.Menu) -> None:
     """The stub's picker: the node's ports a drag may land on, by port
     group when there are more than twelve; a refused one is left out (and
     when every one is, the first refusal is said)."""
     held = st["land"]
     n = view.node(held["node"])
     label = n.label if n is not None else held["node"]
-    ui._micro(f"onto {label}")
+    m.heading(f"onto {label}")
     ok = [c for c in held["choices"] if c[3] is None]
     if not ok:
         first = next((c[3] for c in held["choices"] if c[3]), None)
-        imgui.text_disabled(graphview.NOTHING_TAKES.format(label=label)
-                            + (f": {first}" if first else ""))
+        m.note(graphview.NOTHING_TAKES.format(label=label)
+               + (f": {first}" if first else ""))
         return
     groups: dict[str, list] = {}
     for c in ok:
         groups.setdefault(c[2] or "", []).append(c)
     nested = len(ok) > 12 and len(groups) > 1
     for g, items in groups.items():
-        if nested and not imgui.begin_menu(f"{g or 'misc'} ({len(items)})"):
-            continue
-        for pin, text, _, _ in items:
-            if imgui.menu_item_simple(f"{text}##{pin}"):
-                land(panel, held["fixed"], pin)
-        if nested:
-            imgui.end_menu()
+        with (m.sub(f"{g or 'misc'} ({len(items)})") if nested
+              else contextlib.nullcontext()):
+            for pin, text, _, _ in items:
+                m.item(text, lambda pin=pin: land(panel, held["fixed"], pin), id=pin)
 
 
 def _value_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> None:
@@ -5491,12 +5526,43 @@ def _delete(panel, st: dict, view: graphview.View) -> None:
         ed.end_delete()
 
 
+def _popup(panel, key: str, build, at=None) -> str | None:
+    """Draw the open menu `key`, described by `build(m)` (`ui_menu`).
+
+    The kit's measured panel where the kit is there (`ui_kit.ready`), and
+    imgui's own menu items where it is not — as every section that moved
+    onto dkit keeps its stock drawing for ``HYPERSPACE_KIT=0``.
+
+    The kit's `menu.popup` is called whether or not the panel is open: its
+    closed branch is what resets the open animation and clears
+    `menu.LAST_RECT`, and a caller that only called it while open left that
+    rect outliving its panel for the rest of the process. The ROWS are only
+    built while it is open, which is what the `begin_popup` the imgui path
+    still uses did for free.
+    """
+    m = ui_menu.Menu(key)
+    if ui_kit.ready():
+        if imgui.is_popup_open(key):
+            build(m)
+        return ui_menu.draw_kit(panel, m, at)
+    if imgui.begin_popup(key):
+        build(m)
+        rid = ui_menu.draw_imgui(m)
+        imgui.end_popup()
+        return rid
+    return None
+
+
 def _menus(panel, st: dict, view: graphview.View) -> None:
     """Right-click on the canvas: a pin's menu, a cable's, a node's, the
     picker on the background. Opened and drawn with the editor suspended."""
     at = imgui.get_mouse_pos()                 # canvas units, inside the editor
     names = st["names"]
     ed.suspend()
+    # the editor suspended, the mouse is back in SCREEN pixels — which is
+    # what a panel is placed in. `at` above is canvas units, which is what a
+    # new node is placed in, and the two are not interchangeable.
+    scr = imgui.get_mouse_pos()
     pin, link, node = ed.PinId(), ed.LinkId(), ed.NodeId()
     subject = None
     if ed.show_pin_context_menu(pin):
@@ -5511,55 +5577,59 @@ def _menus(panel, st: dict, view: graphview.View) -> None:
         subject = None
     if subject is not None:
         st["menu"], st["menu_at"] = subject, (at.x, at.y)
+        st["menu_screen"] = (scr.x, scr.y)
         st["menu_sel"] = selected_ids(st)       # plan 40 T2: what Group would group
         imgui.open_popup(MENU)
-    if imgui.begin_popup(MENU):
-        menu(panel, st, view)
-        imgui.end_popup()
+    _popup(panel, MENU, lambda m: menu(panel, st, view, m),
+           st.get("menu_screen"))
     held = st["land"]                       # plan 28 N7: a drag let go on a stub
     if held is not None:
         if held.pop("open", False):
+            held["screen"] = (scr.x, scr.y)
             imgui.open_popup(LAND)
-        if imgui.begin_popup(LAND):
-            _land_menu(panel, st, view)
-            imgui.end_popup()
+        if imgui.is_popup_open(LAND):
+            _popup(panel, LAND, lambda m: _land_menu(panel, st, view, m),
+                   held.get("screen"))
         else:
+            _popup(panel, LAND, lambda m: None, held.get("screen"))
             st["land"] = None               # closed without a pick
     held = st["onto"]                       # 2026-10-29: a node let go over several cables
     if held is not None:
         if held.pop("open", False):
+            held["screen"] = (scr.x, scr.y)
             imgui.open_popup(ONTO)
-        if imgui.begin_popup(ONTO):
-            _onto_menu(panel, st, view)
-            imgui.end_popup()
+        if imgui.is_popup_open(ONTO):
+            _popup(panel, ONTO, lambda m: _onto_menu(panel, st, view, m),
+                   held.get("screen"))
         else:
+            _popup(panel, ONTO, lambda m: None, held.get("screen"))
             st["onto"] = None               # closed without a pick
     ed.resume()
 
 
-def menu(panel, st: dict, view: graphview.View) -> None:
-    """The open right-click menu's items, for `st["menu"]`."""
+def menu(panel, st: dict, view: graphview.View, m: ui_menu.Menu) -> None:
+    """The open right-click menu's rows, for `st["menu"]`."""
     what, name = st["menu"] or ("", "")
     if what == "pin":
-        _pin_menu(panel, view, name)
+        _pin_menu(panel, view, name, m)
     elif what == "cable":
         b = st["bundles"].get(name)
         c = next((x for x in view.cables if x.id == name), None) if b is None else None
         if b is not None:
-            _bundle_menu(panel, st, view, b)
+            _bundle_menu(panel, st, view, b, m)
         elif c is not None:
-            _cable_menu(panel, view, c, st["menu_at"])
+            _cable_menu(panel, view, c, st["menu_at"], m)
     elif what == "node":
         n = view.node(name)
         g = group_at(view, name) if n is None else None
         if n is not None:
-            _group_item(panel, st)              # plan 40 T2: with nodes selected
-            _node_menu(panel, view, n)
+            _group_item(panel, st, m)           # plan 40 T2: with nodes selected
+            _node_menu(panel, view, n, m)
         elif g is not None:
-            _group_menu(panel, st, view, g)
+            _group_menu(panel, st, view, g, m)
     elif what == "picker":
-        _group_item(panel, st)                  # plan 40 T2: with nodes selected
-        picker(panel, view, st["menu_at"])
+        _group_item(panel, st, m)               # plan 40 T2: with nodes selected
+        picker(panel, view, st["menu_at"], m)
 
 
 def port_param(pin: str) -> str | None:
@@ -5568,7 +5638,7 @@ def port_param(pin: str) -> str | None:
     return pid if kind == graphview.MOD and pid else None
 
 
-def _pin_menu(panel, view: graphview.View, pin: str) -> None:
+def _pin_menu(panel, view: graphview.View, pin: str, m: ui_menu.Menu) -> None:
     """A pin's menu: on a param's `mod` stub, the param menu's Learn items
     — the same function the panel's widgets' menu calls (`Panel._ctx_learn_block`:
     desk, hand ▸ left / right, pad, a role, sink), or Cancel while armed —
@@ -5576,71 +5646,71 @@ def _pin_menu(panel, view: graphview.View, pin: str) -> None:
     from the table); any other pin says what it is."""
     pid = port_param(pin)
     a = panel.reg.get(pid) if pid else None
-    ui._micro(pid or pin)
+    m.heading(pid or pin)
     if a is None:
         hit = view.owner(pin)
         if hit is not None and hit[1] is not None:
-            imgui.text_disabled(f"{hit[0].label} · {hit[1].name}")
+            m.note(f"{hit[0].label} · {hit[1].name}")
         return
-    panel._ctx_learn_block(a, panel._real(a))
+    panel._ctx_learn_block(a, panel._real(a), m)
 
 
-def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at=None) -> None:
+def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at,
+                m: ui_menu.Menu) -> None:
     """A cable's menu: insert ▸ — a modifier of a kind on a route or a
     modifier's input; on a picture cable (2026-11-01) effects ▸ and every
     other picture node kind (`graphview.insert_items`), made and spliced
     in one undo step, a composite or a switch asked its inlet — the
     starters, delete."""
-    imgui.text_disabled(cable_tip(view, c).splitlines()[0])
+    m.note(cable_tip(view, c).splitlines()[0])
     if c.kind == graphview.NODE_MODE:           # not a row: leaving the node is what ends it
         role = c.ref[0] if c.ref is not None else None
-        if role is not None and imgui.menu_item_simple(f"{role}: leave node mode"):
-            _leave(panel, role)
+        if role is not None:
+            m.item(f"{role}: leave node mode", lambda: _leave(panel, role))
         return
-    if c.kind in ("route", "input") and imgui.begin_menu("insert"):
-        for kind in modifiers.KINDS:
-            if imgui.menu_item_simple(kind):
-                insert_modifier(panel, c, kind)
-        imgui.end_menu()
+    if c.kind in ("route", "input"):
+        with m.sub("insert"):
+            for kind in modifiers.KINDS:
+                m.item(kind, lambda kind=kind: insert_modifier(panel, c, kind))
     if c.kind == "render" and c.type == graphview.IMAGE:
         e = render_edit(panel)
         files = [f for kind, f, _ in graphview.picker(e) if kind == "effect"]
-        if imgui.begin_menu("insert"):          # plan 33 U; 2026-11-01: every picture node
-            if files and imgui.begin_menu("effects"):
+        with m.sub("insert"):                   # plan 33 U; 2026-11-01: every picture node
+            with m.sub("effects"):
                 for f in files:
-                    if imgui.menu_item_simple(f):
-                        insert_effect(panel, c, f, at)
-                imgui.end_menu()
+                    m.item(f, lambda f=f: insert_effect(panel, c, f, at))
             for kind, label, why in graphview.insert_items(e):
-                if imgui.menu_item_simple(label if why is None else f"{label}: {why}",
-                                          enabled=why is None):
-                    insert_node(panel, c, kind, None, None, at)
-            imgui.end_menu()
-        if imgui.begin_menu("starters"):        # plan 36 T5: laid on this cable's picture
+                m.item(label if why is None else f"{label}: {why}",
+                       (lambda kind=kind: insert_node(panel, c, kind, None, None, at))
+                       if why is None else None, enabled=why is None)
+        with m.sub("starters"):                 # plan 36 T5: laid on this cable's picture
             for which, label in graphview.STARTERS:
-                if which in graphview.CABLE_STARTERS and imgui.menu_item_simple(label):
-                    add_starter(panel, which, c, at)
-            imgui.end_menu()
-    if imgui.menu_item_simple("delete"):
-        if c.kind == "render":                  # N4: unwire, its own undo step
-            _render_said(panel, render_edit(panel), lambda e: e.unwire(c))
-        else:
-            disconnect(panel, c)
+                if which in graphview.CABLE_STARTERS:
+                    m.item(label, lambda which=which: add_starter(panel, which, c, at))
+    m.item("delete", lambda: _cable_delete(panel, c), variant="destructive")
 
 
-def _bundle_menu(panel, st: dict, view: graphview.View, b: graphview.VBundle) -> None:
+def _cable_delete(panel, c: graphview.VCable) -> None:
+    """A cable's menu's **delete**: a render cable is unwired as its own
+    undo step (N4), anything else is disconnected."""
+    if c.kind == "render":
+        _render_said(panel, render_edit(panel), lambda e: e.unwire(c))
+    else:
+        disconnect(panel, c)
+
+
+def _bundle_menu(panel, st: dict, view: graphview.View, b: graphview.VBundle,
+                 m: ui_menu.Menu) -> None:
     """A bundle's menu (plan 28 N7): what it holds, expand its ends (its
     cables appear), and no delete — "expand a node to edit its cables"."""
-    imgui.text_disabled(graphview.bundle_tip(view, b).split("\n")[0])
-    imgui.text_disabled(f"{b.count} cable{'s' if b.count != 1 else ''}")
-    if imgui.menu_item_simple("expand both ends"):
-        st["open"] |= {b.src, b.dst}
+    m.note(graphview.bundle_tip(view, b).split("\n")[0])
+    m.note(f"{b.count} cable{'s' if b.count != 1 else ''}")
+    m.item("expand both ends", lambda: st["open"].update({b.src, b.dst}))
     roles = _node_mode_roles(b)
     for role in roles:
-        if imgui.menu_item_simple(f"{role}: leave node mode"):
-            _leave(panel, role)
+        m.item(f"{role}: leave node mode", lambda role=role: _leave(panel, role))
     if not roles:
-        imgui.menu_item_simple(f"delete: {graphview.EXPAND_TO_EDIT}", enabled=False)
+        m.item(f"delete: {graphview.EXPAND_TO_EDIT}", enabled=False)
 
 
 def learn_params(n: graphview.VNode) -> dict[str, list[str]]:
@@ -5654,58 +5724,53 @@ def learn_params(n: graphview.VNode) -> dict[str, list[str]]:
     return out
 
 
-def _node_menu(panel, view: graphview.View, n: graphview.VNode) -> None:
-    imgui.text_disabled(n.label)
+def _node_menu(panel, view: graphview.View, n: graphview.VNode, m: ui_menu.Menu) -> None:
+    m.note(n.label)
     st = _state(panel)
-    if imgui.menu_item_simple("collapse" if is_open(st, n.id) else "expand"):
-        toggle_open(st, n.id)
+    m.item("collapse" if is_open(st, n.id) else "expand",
+           lambda: toggle_open(st, n.id))
     params = learn_params(n)
-    if params and imgui.begin_menu("learn"):            # N3's param Learn, per param
-        nested = len(params) > 1
-        for g, pids in params.items():
-            if nested and not imgui.begin_menu(f"{g or 'misc'} ({len(pids)})"):
-                continue
-            for pid in pids:
-                p = panel.reg.get(pid)
-                if imgui.begin_menu(f"{p.label if p is not None and p.label else pid}##{pid}"):
-                    _pin_menu(panel, view, f"{graphview.MOD}:{pid}")
-                    imgui.end_menu()
-            if nested:
-                imgui.end_menu()
-        imgui.end_menu()
-    if n.kind in ("modifier", "macro") and imgui.menu_item_simple("delete"):
-        remove_node(panel, n.id)
+    if params:
+        with m.sub("learn"):                            # N3's param Learn, per param
+            # one port group: its params straight under learn ▸; more than
+            # one: a level per group, as the stock menu nested them
+            nested = len(params) > 1
+            for g, pids in params.items():
+                with (m.sub(f"{g or 'misc'} ({len(pids)})") if nested
+                      else contextlib.nullcontext()):
+                    for pid in pids:
+                        p = panel.reg.get(pid)
+                        label = p.label if p is not None and p.label else pid
+                        with m.sub(label, id=pid):
+                            _pin_menu(panel, view, f"{graphview.MOD}:{pid}", m)
+    if n.kind in ("modifier", "macro"):
+        m.item("delete", lambda: remove_node(panel, n.id), variant="destructive")
     if n.kind in graphview.BANK_SCHEMES:          # plan 31 G1: an LFO, an envelope
         why = voice_refusal(n)
-        if imgui.menu_item_simple("delete", enabled=why is None):
-            remove_node(panel, n.id)
-        if why is not None and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            ui.tooltip(why)
+        m.item("delete", (lambda: remove_node(panel, n.id)) if why is None else None,
+               enabled=why is None, variant="destructive", tip=why or "")
     if n.kind in graphview.FRAME_VKINDS:
-        render_node_menu(panel, n)
+        render_node_menu(panel, n, m)
 
 
-def picker(panel, view: graphview.View, at=None) -> None:
+def picker(panel, view: graphview.View, at, m: ui_menu.Menu) -> None:
     """The node picker (right-click on the canvas): a modifier of each
     kind, a macro not on the canvas yet; the node lands where the menu
     opened."""
-    ui._micro("add")
-    if imgui.begin_menu("modifier"):
+    m.heading("add")
+    with m.sub("modifier"):
         for kind in modifiers.KINDS:
-            if imgui.menu_item_simple(kind):
-                add_modifier(panel, kind, at)
-        imgui.end_menu()
+            m.item(kind, lambda kind=kind: add_modifier(panel, kind, at))
     for scheme in graphview.BANK_SCHEMES:       # plan 31 G1: another LFO, envelope
         why = add_refusal(panel, scheme)
         one = graphview.BANK_WORDS[scheme][0]
-        if imgui.menu_item_simple(one if why is None else f"{one}: {why}",
-                                  enabled=why is None):
-            add_voice(panel, scheme, at)
-    render_picker(panel, at)                    # N4 (and plan 33 U): an effect, a switch …
-    _spawn_menu(panel, at)                      # plan 40 T3: a patch, spawned here
+        m.item(one if why is None else f"{one}: {why}",
+               (lambda scheme=scheme: add_voice(panel, scheme, at)) if why is None else None,
+               enabled=why is None)
+    render_picker(panel, at, m)                 # N4 (and plan 33 U): an effect, a switch …
+    _spawn_menu(panel, at, m)                   # plan 40 T3: a patch, spawned here
     free = macros_free(panel, view)
-    if free and imgui.begin_menu("macro"):
-        for mid in free:
-            if imgui.menu_item_simple(mid):
-                show_macro(panel, mid, at)
-        imgui.end_menu()
+    if free:
+        with m.sub("macro"):
+            for mid in free:
+                m.item(mid, lambda mid=mid: show_macro(panel, mid, at))

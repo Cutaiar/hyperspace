@@ -57,6 +57,7 @@ from . import (
     ui_loadable,
     ui_lookback,
     ui_media,
+    ui_menu,
     ui_pad,
     ui_pane,
     ui_patterns,
@@ -1155,8 +1156,16 @@ class Panel:
         desk, routes = self._ctx_lines(a, p)    # what is bound here, a line each
         # Learn is the host's, not the MIDI adapter's, and it says what it
         # waits for (plan 17 WP2): the desk, or one hand — nothing else can
-        # complete it
-        self._ctx_learn_block(a, p)
+        # complete it.
+        #
+        # Described, then drawn (`ui_menu`): the block is shared with
+        # GRAPH's `mod` pin menu (plan 28 N3), which draws it on dkit, and
+        # one description is what keeps the two saying the same thing. The
+        # imgui renderer submits the same menu items this called directly,
+        # so the rows after it still land in the same popup.
+        block = ui_menu.Menu(self._ctx_id(a, key))
+        self._ctx_learn_block(a, p, block)
+        ui_menu.draw_imgui(block)
         if lrn is not None:
             self._ctx_unbind(a, p, desk, routes)
         ui_hands.ctx_rows(self, p, lines=False)     # the hand rows' "Gate: … ▸"
@@ -1293,22 +1302,22 @@ class Panel:
             lrn.unbind(ids, name=self._row_name)
         imgui.end_menu()
 
-    def _ctx_learn_block(self, a: Param, p: Param) -> None:
-        """The menu's Learn block: "no learn" without one; while `a` is
-        armed, what it waits for and Cancel; else the Learn items
-        (`_ctx_learn`). The param menu and the GRAPH page's `mod` pin
-        menu (plan 28 N3) both draw it."""
+    def _ctx_learn_block(self, a: Param, p: Param, m) -> None:
+        """The menu's Learn block, described into `m` (`ui_menu.Menu`): "no
+        learn" without one; while `a` is armed, what it waits for and
+        Cancel; else the Learn items (`_ctx_learn`). The param menu and the
+        graph's `mod` pin menu (plan 28 N3) both describe it, and each
+        draws it with its own renderer."""
         lrn = self.learn
         if lrn is None:
-            imgui.text_disabled("no learn")
+            m.note("no learn")
         elif lrn.learning == a.id:
-            imgui.text_colored(RED, self._learn_hint())
-            if imgui.menu_item_simple("Cancel learn"):
-                lrn.arm(None)
+            m.note(self._learn_hint())
+            m.item("Cancel learn", lambda: lrn.arm(None))
         else:
-            self._ctx_learn(a, p)
+            self._ctx_learn(a, p, m)
 
-    def _ctx_learn(self, a: Param, p: Param) -> None:
+    def _ctx_learn(self, a: Param, p: Param, m) -> None:
         """The Learn items of a param not armed (plan 17 WP2, fork 5).
         **Learn desk**: wherever a desk row can go — not a file path, not
         SHIFT's own param, not a meta param (what `ui_routing._desk_targets`
@@ -1339,70 +1348,65 @@ class Panel:
         with no players keeps the flat items below."""
         lrn = cast(learn.Learn, self.learn)
         if getattr(self, "meta", None) is not None and getattr(self, "devices", None) is not None:
-            if imgui.begin_menu("Learn"):
+            with m.sub("Learn"):
                 for n in players_mod.NUMBERS:
-                    self._learn_player(a, p, n)
-                imgui.separator()
-                if self._desk_target(a) and imgui.menu_item_simple("Any desk"):
-                    lrn.arm(a.id, "desk")
-                self._learn_pairs(a, p)
+                    self._learn_player(a, p, n, m)
+                m.sep()
+                if self._desk_target(a):
+                    m.item("Any desk", lambda: lrn.arm(a.id, "desk"))
+                self._learn_pairs(a, p, m)
                 # plugged in, held by nobody (the board's tray): said, so it is found
                 for h in ui_players.tray(self):
-                    imgui.text_disabled(f"{h.name}: nobody holds it — press "
-                                        f"{ui_players.KEY} and drag it to a player")
-                imgui.end_menu()
-            ui_graph.route_from_menu(self, p)
-            self._learn_sinks(a, p)
+                    m.note(f"{h.name}: nobody holds it — press "
+                           f"{ui_players.KEY} and drag it to a player")
+            ui_graph.route_from_menu(self, p, m)
+            self._learn_sinks(a, p, m)
             return
-        if self._desk_target(a) and imgui.menu_item_simple("Learn desk"):
-            lrn.arm(a.id, "desk")
+        if self._desk_target(a):
+            m.item("Learn desk", lambda: lrn.arm(a.id, "desk"))
         sides = self._hand_sides() if ui_routing.route_target(p) else []
-        if sides and imgui.begin_menu("Learn hand"):
-            for side in sides:
-                if imgui.menu_item_simple(side):
-                    lrn.arm(a.id, f"hand:{side}")
-            imgui.end_menu()
+        if sides:
+            with m.sub("Learn hand"):
+                for side in sides:
+                    m.item(side, lambda side=side: lrn.arm(a.id, f"hand:{side}"))
         pad = getattr(self, "pad", None)
-        if (pad is not None and pad.on and ui_routing.pad_target(a)
-                and imgui.menu_item_simple("Learn pad")):
-            lrn.arm(a.id, "pad")
-        self._learn_pairs(a, p)
+        if pad is not None and pad.on and ui_routing.pad_target(a):
+            m.item("Learn pad", lambda: lrn.arm(a.id, "pad"))
+        self._learn_pairs(a, p, m)
         # any other device the registry lists can be armed for by its role
         # (plan 27 B2, `Learn.wants`): "Learn <role>", on a param a lane
         # can drive; the device completes it from its own `learn`
         if ui_routing.route_target(p):
             for want in learn_wants(lrn):
-                if imgui.menu_item_simple(f"Learn {want}"):
-                    lrn.arm(a.id, want)
+                m.item(f"Learn {want}", lambda want=want: lrn.arm(a.id, want))
         # the owner, 2026-10-24: an LFO or an envelope onto the param — no
-        # gesture to wait for, so not a Learn; the cable a drag on GRAPH
+        # gesture to wait for, so not a Learn; the cable a drag on the graph
         # makes (`ui_graph.route_from_menu`)
-        ui_graph.route_from_menu(self, p)
-        self._learn_sinks(a, p)
+        ui_graph.route_from_menu(self, p, m)
+        self._learn_sinks(a, p, m)
 
-    def _learn_pairs(self, a: Param, p: Param) -> None:
+    def _learn_pairs(self, a: Param, p: Param, m) -> None:
         """plan 56: two presses, one axis. A pair moves along a range, so a
         param with one; "(spring)" a route, on what a route can carry."""
         lrn, pad = self.learn, getattr(self, "pad", None)
         if pad is not None and pad.on and self._desk_target(a) and p.kind in (
                 Kind.CONTINUOUS, Kind.ENUM):
-            if imgui.menu_item_simple("Learn pair"):
-                lrn.arm(a.id, learn.PAIR_WANT)
-            if (p.modulatable and p.kind is Kind.CONTINUOUS and not p.integer
-                    and imgui.menu_item_simple("Learn pair (spring)")):
-                lrn.arm(a.id, learn.PAIR_SPRING_WANT)
+            m.item("Learn pair", lambda: lrn.arm(a.id, learn.PAIR_WANT))
+            if p.modulatable and p.kind is Kind.CONTINUOUS and not p.integer:
+                m.item("Learn pair (spring)",
+                       lambda: lrn.arm(a.id, learn.PAIR_SPRING_WANT))
 
-    def _learn_sinks(self, a: Param, p: Param) -> None:
+    def _learn_sinks(self, a: Param, p: Param, m) -> None:
         """plan 27 B3: the param *out* to a sink port — the meta controller's ports
         (`Learn.sinks`), a pick lands at once as a meta row
         (`Learn.learn_sink`): no prompt, no undo step, no loadable patch dirt."""
         lrn = self.learn
         ports = sink_items(lrn) if p.kind is not Kind.TRIGGER else []
-        if ports and imgui.begin_menu("Learn sink"):
-            for address, text in ports:
-                if imgui.menu_item_simple(text):
-                    lrn.learn_sink(a.id, address)
-            imgui.end_menu()
+        if ports:
+            with m.sub("Learn sink"):
+                for address, text in ports:
+                    m.item(text,
+                           lambda address=address: lrn.learn_sink(a.id, address))
 
     def player_learns(self, a: Param, p: Param, number: int) -> list[tuple[str, str | None]]:
         """Learn ▸ Learn Player `number`'s items: (label, want) for each
@@ -1430,16 +1434,20 @@ class Panel:
                             learn.only_want(h.role) if on else None))
         return out
 
-    def _learn_player(self, a: Param, p: Param, number: int) -> None:
+    def _learn_player(self, a: Param, p: Param, number: int, m) -> None:
         """One player's submenu (`player_learns`), greyed when it holds nothing
         that can drive this param."""
         items = self.player_learns(a, p, number)
-        if not imgui.begin_menu(f"Learn Player {number}", bool(items)):
+        if not items:
+            # the stock menu drew the row greyed; a kit panel measures its
+            # rows, so an empty submenu is a row that opens onto nothing
+            m.item(f"Learn Player {number}", enabled=False)
             return
-        for label, want in items:
-            if imgui.menu_item(label, "", False, want is not None)[0] and want is not None:
-                cast(learn.Learn, self.learn).arm(a.id, want)
-        imgui.end_menu()
+        with m.sub(f"Learn Player {number}"):
+            for label, want in items:
+                m.item(label,
+                       (lambda want=want: cast(learn.Learn, self.learn).arm(a.id, want))
+                       if want is not None else None, enabled=want is not None)
 
     def _hand_sides(self) -> list[str]:
         """The hands this meta controller's axes belong to, left first; none without a

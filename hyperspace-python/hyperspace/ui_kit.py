@@ -28,7 +28,7 @@ from imgui_bundle import imgui
 
 # what the panel uses of the kit, leaves first (hotreload.MODULES has them in this order)
 KIT_MODULES = ("tokens", "ease", "icons", "rect", "flex", "tree", "box", "draw", "uictx",
-               "wheel", "comp_button", "interact", "menu")
+               "wheel", "comp_button", "interact", "menu", "comp_context_menu")
 STATE = "_kit"           # the panel's attribute: survives a reload of this module
 ENV = "HYPERSPACE_KIT"   # "0": no kit, every section as it was drawn before
 
