@@ -299,6 +299,9 @@ the corners as V
 `::test_the_snub_icosidodecadodecahedron_is_sized_by_the_plastic_number`,
 `::test_a_pentagram_face_is_filled_once`,
 `tests/test_render.py::test_only_a_shapes_corners_are_dotted`).
+`tools/snub_prism_demo.py --out <folder>` renders two demo videos of it
+through the Prism effect: its knobs one at a time, and Prism with Bloom on
+a 120 BPM envelope.
 
 **Scenes** (`Shape.layers`, `geometry.Layer`). A scene is several shapes
 in one frame sharing a centre — a glome round a tesseract round a star.
