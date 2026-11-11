@@ -19,8 +19,9 @@ from types import SimpleNamespace as NS
 import moderngl
 import pytest
 from conftest import seed
+from imgui_bundle import imgui
 from test_graph_legible import party
-from test_ui_shell import frame
+from test_ui_shell import frame, graph_menus
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as G
@@ -318,3 +319,42 @@ def test_the_page_draws_with_the_switch_lit_and_a_thumbnail_hovered(rig, monkeyp
     want = graphview.picture_hover(scene, 0.75)
     assert [t for t in tips if t.startswith(want)] == [want + f"\n{scene.status}"]
     assert "1920×1080 picture" in want and "gpu 0.75 ms" in want
+
+
+# ------------------------------------------------- a menu swallows what is under it
+
+def test_a_menu_over_the_canvas_swallows_the_hover_words_under_it(rig, monkeypatch):
+    """2026-11-11, the owner: a wire's words were drawn OVER the open menu.
+
+    The pointer resting on a row of the picker still counted as resting on
+    the cable the menu was drawn across, and the words it asked for landed
+    on top of the menu itself.
+
+    Neither imgui nor the node editor has a z-index or pointer-events to
+    hang this on: `ed.get_hovered_link` answers for whatever lies under the
+    pointer in the CANVAS, panel or no panel, and a tooltip is drawn in the
+    foreground — above the very panel that should have swallowed it. So the
+    canvas's hover words ask `ui_graph.menu_up()` first, as the click, the
+    wheel, the width grip, Esc and Delete already did.
+    """
+    st = party(rig)
+    cid = next(iter(st["bundles"]))
+    lid = ui_graph._id(st, "c:" + cid)
+    monkeypatch.setattr(ui_graph.ed, "get_hovered_link", lambda: NS(id=lambda: lid))
+    monkeypatch.setattr(ui_graph.ed, "get_hovered_pin", lambda: NS(id=lambda: 0))
+    monkeypatch.setattr(ui_graph.ed, "get_hovered_node", lambda: NS(id=lambda: 0))
+    tips: list[str] = []
+    monkeypatch.setattr(ui, "tooltip", lambda t, *a, **k: tips.append(t))
+    frame(rig.panel, "graph")
+    assert tips, "with no menu up, the pointer on a wire says what it carries"
+
+    graph_menus(monkeypatch)                  # the panel, begun and ended for real
+    opens = itertools.count()
+    monkeypatch.setattr(ui_graph.ed, "show_background_context_menu",
+                        lambda: next(opens) == 0)     # right-click, once
+    tips.clear()
+    frame(rig.panel, "graph")                 # the frame the menu opens on
+    assert st["menu"] is not None and tips == []
+    frame(rig.panel, "graph")                 # and every frame it stays up
+    # (a named id needs the current window, which there is none of between frames)
+    assert imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id) and tips == []
