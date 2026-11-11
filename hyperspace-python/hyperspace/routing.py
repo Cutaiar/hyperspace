@@ -555,6 +555,21 @@ APC_NEW_ROWS = (
 # the owner put on a clip-stop button is kept
 RETIRED_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
     (f"note:{k}:{apc40.N_CLIPSTOP}", "preset.save_new", "hold", 1.0) for k in range(8))
+# T left the overlay for GRAPH's tidy (the owner, 2026-11-11): the key lays the
+# canvas out again (`ui_graph.KEY`, no row here, as the player board's O), and the
+# overlay keeps the panel's toggle and the APC40's MASTER select. A file written
+# before holds the old factory row, which would fire the overlay under every tidy;
+# `remap_factory` drops that exact row, with a note. A row the owner put on T is kept
+# (and GRAPH's key stands down for it, `ui_graph._row_on_key`).
+# …and 0, which restarted the track, for GRAPH's fit (the same day): the key
+# brings every node into view. Each retired key row carries the words its note says.
+RETIRED_KEY_ROWS: dict[tuple[str, str, str, float], str] = {
+    ("key:T", "output.overlay", "toggle", 1.0):
+        "T tidies the graph now: the overlay keeps the panel's toggle and the "
+        "APC40's MASTER select",
+    ("key:0", "audio.restart", "fire", 1.0):
+        "0 fits the graph now: the track restarts from the panel's AUDIO section",
+}
 # the keys WP4 added, likewise only where the key is free
 # the keys plan 11 moved out of app.py's loop into the table (audit R2;
 # decision register row 7): R resets the camera, F1–F8 load the loadable patch
@@ -1226,8 +1241,7 @@ def keymap() -> list[Binding]:
         ("LEFT_BRACKET", "view.bright", "step", -3), ("RIGHT_BRACKET", "view.bright", "step", 3),
         ("COMMA", "view.speed", "step", -4), ("PERIOD", "view.speed", "step", 4),
         ("M", "audio.mic", "toggle"), ("K", "audio.play", "toggle"),
-        ("0", "audio.restart", "fire"),
-        ("T", "output.overlay", "toggle"), ("G", "output.passthrough", "toggle"),
+        ("G", "output.passthrough", "toggle"),
         ("B", "tempo.tap", "fire"), ("SHIFT+B", "lfo.trigger", "fire"),
         *[(str(p + 1), f"view.plane.{n}", "toggle") for p, n in enumerate(PLANES)],
         *LOOP_KEY_ROWS,
@@ -1515,6 +1529,9 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40", seen: str = "
         if key in RETIRED_ROWS:
             notes.append(f"removed {b.source} → {b.target} (the clip-stop SAVE AS bar is "
                          "retired: hold an empty bank pad to save into it; the row is free)")
+            continue
+        if key in RETIRED_KEY_ROWS:
+            notes.append(f"removed {b.source} → {b.target} ({RETIRED_KEY_ROWS[key]})")
             continue
         if b.target in GONE_TARGETS:
             notes.append(f"removed {b.source} → {b.target} (HOLD, TAKE and DROP are gone: "

@@ -382,18 +382,18 @@ def test_overlay_is_shut_by_default():
 
 
 def test_overlay_refuses_every_road_while_the_config_shuts_it(gated):
-    """The T key and the APC40's MASTER select are rows on `overlay.on`
-    (the factory table, apc40.DEFAULT_MAP); the panel sets `output.overlay`;
-    a loadable patch restores values. Every one lands on the one param, and it
-    stays off — the window never leaves window mode."""
+    """The APC40's MASTER select is a row on `overlay.on` (apc40.DEFAULT_MAP);
+    the panel sets `output.overlay`; a loadable patch restores values. Every
+    one lands on the one param, and it stays off — the window never leaves
+    window mode. (The T key was a road too, until it left for GRAPH's tidy:
+    `routing.RETIRED_KEY_ROWS`, 2026-11-11.)"""
     from hyperspace import apc40, routing
 
     r, out = gated.reg, gated.out
-    t = next(b for b in routing.Bindings.factory().bindings
-             if b.source == "key:T" and b.target == "output.overlay")
+    assert not [b for b in routing.Bindings.factory().of("key")
+                if b.target == "output.overlay"], "no key row on the overlay"
     master = next(d for d in apc40.DEFAULT_MAP if d["source"] == "note:0:80")
     assert master["target"] == "output.overlay"
-    routing.act(r, t)                                         # T
     routing.act(r, routing.Binding.from_json(master))         # MASTER select
     r["output.overlay"].set(True)                             # the panel's toggle
     r["overlay.on"].toggle()

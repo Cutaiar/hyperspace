@@ -17,8 +17,6 @@
   {"source": "key:PERIOD", "target": "view.speed", "op": "step", "value": 4},
   {"source": "key:M", "target": "audio.mic", "op": "toggle"},
   {"source": "key:K", "target": "audio.play", "op": "toggle"},
-  {"source": "key:0", "target": "audio.restart", "op": "fire"},
-  {"source": "key:T", "target": "output.overlay", "op": "toggle"},
   {"source": "key:G", "target": "output.passthrough", "op": "toggle"},
   {"source": "key:B", "target": "tempo.tap", "op": "fire"},
   {"source": "key:SHIFT+B", "target": "lfo.trigger", "op": "fire"},

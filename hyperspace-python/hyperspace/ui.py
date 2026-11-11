@@ -791,7 +791,8 @@ CHEATSHEET = [
     ("↑ ↓", "4D depth · hold accelerates"),
     ("[ ]  , .", "brightness · speed"),
     ("M", "mic on/off"),
-    ("K / 0", "play-pause / restart track"),
+    ("K", "play-pause track"),
+    ("0", "fit the graph: every node in view"),
     ("R", "reset view + camera"),
     ("F1–F8", "load off air · ⇧ saves"),
     ("B", "tap tempo · ⇧B LFO trigger"),
@@ -800,7 +801,7 @@ CHEATSHEET = [
     ("Cmd+R", "restart process"),
     ("Cmd+[ ]", "panel section back · forward"),
     ("H / ?", "panel / this sheet"),
-    ("T", "overlay (if config.toml allows)"),
+    ("T", "tidy the graph: lay every node out again, where you are"),
     ("G", "overlay: clicks through / back"),
     ("Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
@@ -2459,7 +2460,7 @@ class Panel:
 
     def _page_output(self, dt: float) -> None:
         """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""
-        self._section("output", "output", note="T overlay · G click-through")
+        self._section("output", "output", note="G click-through")
         if self.output is None or "output.overlay" not in self.reg:
             imgui.text_disabled("no render window attached")
             return

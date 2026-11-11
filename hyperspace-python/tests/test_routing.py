@@ -493,8 +493,10 @@ def test_factory_table_binds_only_real_params(tmp_path):
     keys = [(b.key, b.layer) for b in t.bindings if b.scheme != "lane"]
     assert len(keys) == len(set(keys))                  # one row per control per layer
     # + R, F1–F8, ⇧F1–F8 (plan 11), + undo and redo on ⌘ and Ctrl (plan 15 WP1),
-    # + Home (plan 15 WP2)
-    assert len(t.of("key")) == 25 + 17 + 4 + 1
+    # + Home (plan 15 WP2). 24, not 25: T left the overlay for GRAPH's tidy
+    # (the owner, 2026-11-11) and 0 the track restart for its fit: the panel's
+    # own keys, not rows
+    assert len(t.of("key")) == 23 + 17 + 4 + 1
     assert len(t.of("pad")) == 9 and len(t.of("hat")) == 2     # BACK chases, START is free
     assert len(t.midi()) == 113 + 6 + 1 + 4 + 1 + 1 and t.mods() == []   # + SHIFT, the global track
     # knobs, OVERDUB (plan 15 WP2) (the clip-stop row's eight, plan 15 WP4,
@@ -950,7 +952,7 @@ def test_midi_view_shares_the_table(tmp_path):
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
     assert again.for_param("view.zoom").source == "cc:0:99"
-    assert len(again.of("key")) == 25 + 17 + 4 + 1 and again.mods() == []
+    assert len(again.of("key")) == 23 + 17 + 4 + 1 and again.mods() == []
     # a meta row (no layer: invariant) is edited in bindings.json, not
     # unbound from the panel (plan 13 WP5; tests/test_midi.py has the rest)
     m.unbind("view.zoom")
@@ -1663,6 +1665,44 @@ def test_an_old_crossfader_row_moves_to_the_decks_with_a_backup(tmp_path, capsys
             continue
         assert t.notes == [] and json.loads(path.read_text()) == doc
         assert not list(path.parent.glob("bindings.json.bak-*"))
+
+
+def test_the_old_t_and_zero_key_rows_go_from_an_old_file_with_a_backup(tmp_path, capsys):
+    """T left `output.overlay` and 0 `audio.restart` for GRAPH's tidy and fit
+    (register row 871, the owner 2026-11-11). A file written before holds both
+    factory rows, which would fire the output and the track under every tidy and
+    fit: `remap_factory` drops exactly those two, says so, and the file as it was
+    is kept beside itself first. Every other row stays, the owner's own ⇧T among
+    them, and the next load is quiet."""
+    path = bindings_path(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mine = {"source": "key:SHIFT+T", "target": "view.bright", "op": "step", "value": 3}
+    old = [{"source": "key:T", "target": "output.overlay", "op": "toggle"},
+           {"source": "key:0", "target": "audio.restart", "op": "fire"}]
+    doc = {"schema": SCHEMA, "profile": "apc40",
+           "bindings": [b.to_json() for b in meta_rows()] + [*old, mine]}
+    path.write_text(json.dumps(doc))
+
+    t = Bindings.load(path, legacy_midi=None)
+    err = capsys.readouterr().err
+    assert t.error == ""
+    assert t.notes == [
+        ("removed key:T → output.overlay (T tidies the graph now: the overlay keeps the "
+         "panel's toggle and the APC40's MASTER select)"),
+        ("removed key:0 → audio.restart (0 fits the graph now: the track restarts from the "
+         "panel's AUDIO section)")]
+    assert all(note in err for note in t.notes) and "kept as bindings.json.bak-v" in err
+    assert not [b for b in t.bindings if b.source in ("key:T", "key:0")]
+    kept, = [b for b in t.bindings if b.source == "key:SHIFT+T"]      # the owner's own: kept
+    assert (kept.target, kept.op, kept.value) == ("view.bright", "step", 3)
+    assert [b.to_json() for b in t.bindings if b.source != "key:SHIFT+T"] == \
+           [b.to_json() for b in meta_rows()]
+    bak, = path.parent.glob("bindings.json.bak-*")
+    assert json.loads(bak.read_text()) == doc                 # the file as it was
+    assert json.loads(path.read_text()) == t.to_json()        # written back once
+    again = Bindings.load(path, legacy_midi=None)
+    assert again.notes == [] and not again.changed and capsys.readouterr().err == ""
+    assert len(list(path.parent.glob("bindings.json.bak-*"))) == 1
 
 
 def test_the_master_faders_old_row_moves_to_the_dim_and_the_gain_keeps_the_panel(tmp_path, capsys):
