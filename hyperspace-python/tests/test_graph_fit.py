@@ -142,15 +142,27 @@ def test_a_fit_keeps_the_selection(fitted):
     assert "fit" not in st and r.panel.graph_selected == nid
 
 
-def test_tidy_frames_in_what_the_pane_leaves(fitted, monkeypatch):
+def test_tidy_leaves_the_canvas_where_it_is(fitted, monkeypatch):
+    """A tidy lays the nodes out again and does not move the canvas: the
+    zoom and the place being looked at are the owner's (2026-11-11, they
+    used to be thrown away by a fit). Tidied once from well off to the
+    side, a second tidy moves nothing — every node stays on the same
+    pixels, at the same zoom, and no fit is asked."""
     r, st, rects = fitted
     st["pan"] = (-3000.0, 0.0)
     for _ in range(3):
         frame(r.panel, "graph")
     ui_graph.tidy(r.panel, st, ui_graph.view_of(r.panel))
-    for _ in range(30):                                 # (a glide, then still)
+    for _ in range(30):                                 # (nothing to glide to, now)
         frame(r.panel, "graph")
-    _in_view(r, st, rects)
+    zoom, before = st["zoom"], dict(rects)
+    assert before and "fit" not in st
+    ui_graph.tidy(r.panel, st, ui_graph.view_of(r.panel))   # the same layout again
+    for _ in range(30):
+        frame(r.panel, "graph")
+    assert "fit" not in st and st["zoom"] == zoom
+    assert {k: tuple(round(v, 3) for v in xy) for k, xy in rects.items()} == \
+           {k: tuple(round(v, 3) for v in xy) for k, xy in before.items()}
 
 
 def test_off_in_the_rig_the_canvas_opens_as_measured(tmp_path):

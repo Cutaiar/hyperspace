@@ -180,7 +180,7 @@ changes brightness or volume instead).
 ## Running the automated tests (tiers)
 
 `uv run pytest` is the inner loop: it runs the fast tier on every core
-(its size and cost: the last-measured line in `ENGINEERING.md` §16). It leaves out three
+(its size and cost: the last-measured line in `ENGINEERING.md` §16). It leaves out four
 tiers that `tests/conftest.py` marks by name:
 
 - `golden`: the golden-frame draws (`tests/test_golden_frames.py`: one
@@ -193,6 +193,11 @@ tiers that `tests/conftest.py` marks by name:
   names, so they run on one worker and can fail under heavy load. Plan
   39's two real-model tests are here too (Apple Vision and torchvision,
   once each on a made-up frame: `uv run pytest -q --all tests/test_segment.py`).
+- `sweep`: a test that walks a whole library of content (every effect, knob,
+  shape or corpus loadable patch), a soak, or a finished migration's old-way
+  check (row 870). Run them while changing that content: `uv run pytest -m sweep`.
+  CI runs them on a runner of their own when a PR touches what they walk
+  (`.github/workflows/sweeps.yml`), never in the merge gate.
 
 GL-window tests (a real hidden GLFW window: `test_the_drawings_show_upright_through_real_gl`
 and the Syphon loopbacks) probe `glfw.init()` in a child process first
@@ -202,10 +207,11 @@ recover: `ENGINEERING.md` §16, "Why `glfwInit()` hangs on the Mac". Never run
 two test tiers at once on the Mac.
 
 `uv run pytest --all` runs every tier. Pick a tier with
-`-m golden`, `-m slow` or `-m live` (add `--all` or name the file), and
+`-m golden`, `-m slow`, `-m live` or `-m sweep` (add `--all` or name the file), and
 use `-n0` to run serially (for a debugger). A test named by node id is
 still skipped by the default `-m`: add `--all`. A new test that takes a
-second or more goes in the tables at the top of `tests/conftest.py`.
+second or more goes in the tables at the top of `tests/conftest.py`; so does a new
+sweep, in `_SWEEP_TESTS`, with its file in `sweeps.yml`'s `paths:`.
 
 ## Summary
 

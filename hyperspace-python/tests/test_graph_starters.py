@@ -18,7 +18,7 @@ from test_graph_edit import wired_rig, wired_wires
 from test_ui_shell import _click, frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import graphview, loadable, ui_graph, ui_loadable, undo
+from hyperspace import graphview, loadable, ui_graph, ui_loadable, ui_menu, undo
 from hyperspace.library import Marks
 
 ALL = "output.all.image"
@@ -440,7 +440,6 @@ def test_the_menus_offer_feedback(page, monkeypatch):
     port, a submenu per port on one that feeds several, disabled with why
     on one that feeds nothing, absent on a geometry; the cable menu's
     starters ▸ has feedback."""
-    from imgui_bundle import imgui
     panel = page.panel
     page.lib.loaded_patch.new((0.0, 0.0))
     e = ui_graph.render_edit(panel)
@@ -451,31 +450,25 @@ def test_the_menus_offer_feedback(page, monkeypatch):
     view = ui_graph._state(panel)["view"]
     items: list[tuple[str, bool]] = []
     menus: list[str] = []
-    monkeypatch.setattr(imgui, "menu_item_simple",
-                        lambda label, *a, **k: items.append((label, k.get("enabled", True)))
-                        and False)
-    monkeypatch.setattr(imgui, "begin_menu", lambda label, *a, **k: menus.append(label) or True)
-    monkeypatch.setattr(imgui, "end_menu", lambda: None)
-
     def drawn(fn):
-        items.clear()
-        menus.clear()
-        imgui.new_frame()
-        imgui.begin("menu")
-        fn()
-        imgui.end()
-        imgui.end_frame()
-    drawn(lambda: ui_graph.render_node_menu(panel, view.node("render:scene")))
+        """One menu described (`ui_menu`): its items as (label, enabled),
+        and the labels of its submenus."""
+        m = ui_menu.Menu("t.menu")
+        fn(m)
+        items[:] = [(r.label, r.enabled) for r in m.walk() if r.kind == ui_menu.ITEM]
+        menus[:] = [r.label for r in m.walk() if r.kind == ui_menu.SUB]
+
+    drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:scene"), m))
     assert menus == [ui_graph.FEEDBACK_AFTER]
     assert ("→ output.all.image", True) in items and ("→ lookback.image", True) in items
-    drawn(lambda: ui_graph.render_node_menu(panel, view.node("render:lookback")))
+    drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:lookback"), m))
     assert (ui_graph.FEEDBACK_AFTER, True) in items and menus == []
-    drawn(lambda: ui_graph.render_node_menu(panel, view.node("render:composite")))
+    drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:composite"), m))
     assert (f"{ui_graph.FEEDBACK_AFTER}: {graphview.FEEDBACK_FEEDS_NOTHING}", False) in items
-    drawn(lambda: ui_graph.render_node_menu(panel, view.node("render:shape")))
+    drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:shape"), m))
     assert not [label for label, _ in items if label.startswith(ui_graph.FEEDBACK_AFTER)]
     cable = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
-    drawn(lambda: ui_graph._cable_menu(panel, view, cable, (0.0, 0.0)))
+    drawn(lambda m: ui_graph._cable_menu(panel, view, cable, (0.0, 0.0), m))
     assert "starters" in menus and ("feedback", True) in items
 
 
