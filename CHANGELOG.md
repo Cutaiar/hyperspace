@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-10
+## v1.3 — 2026-11-11
 
 ### Panel
 
@@ -16,11 +16,12 @@
 - ⌘Z takes back the last edit of the preset you're on, or, with the mouse over a rig-tuning section (the analyzer, hands …), that section's last edit, so a ⌘Z mid-set never undoes a tuning tweak from an hour ago; undoing a whole show load is now two ⌘Zs (#373)
 - After you move to another deck or section, ⌘Z takes nothing back until you make a change there ("nothing to undo here yet: make a change on deck 2 first"), so a stray ⌘Z can't undo something from ten minutes ago; hovering alone no longer changes what ⌘Z reaches (#386)
 - A cursor left in a text field (a find box, a name) no longer counts as working the panel, so a controller move while it sits there can't steal ⌘Z's target (#398)
-- GRAPH opens, and refits with a glide whenever another patch loads, with every node in view beside the side pane; **Tidy** frames the same way, keeping the selection; the fit zooms in no further than 1.3× on a 1080p show display or a Retina screen, 1.5× on a large one; resizing the window no longer zooms or moves the canvas, and the panel's stray scrollbar is gone (#411, #429, #439)
+- GRAPH opens, and refits with a glide whenever another patch loads, with every node in view beside the side pane; the fit zooms in no further than 1.3× on a 1080p show display or a Retina screen, 1.5× on a large one; resizing the window no longer zooms or moves the canvas, and the panel's stray scrollbar is gone (#411, #429, #439)
 - CONTROLS is the control window itself, not a window inside it: no title bar, nothing to drag or close by accident, and it follows the window's size; H still shows and hides it, and the floating pad diagram gets an × (#426)
 - Plainer words: "session" and "rig" are gone (now "meta controller", "this Mac", "bus cable"), "preset" becomes "patch" (the **PATCHES** section, "patch: saved TRIP 2") and "show" becomes "install" ("install: saved party"); saved ids and files are unchanged (#407, #436, #437)
 - No all caps: the panel draws its words as written ("knob smoothing", not "KNOB SMOOTHING"), from field labels to GRAPH's area titles and pattern names; pad and APC40 button legends and acronyms (LFO, MIDI) stay in capitals, and no saved file changes (#451)
 - The side pane is drawn with a new measured kit (dkit, after shadcn/ui): icon tabs for the views, list rows whose actions show on hover, CAMERA, VIEW, every param slider and switch, chips and GRAPH's header; `HYPERSPACE_KIT=0` draws it all as before (#446)
+- Ctrl-C in the terminal quits the app as Esc or Q do: no traceback, the audio and devices are closed and the window spots saved; a second Ctrl-C more than 2 s later quits at once (#456)
 - Nudge chips each open their own popup, and a patch strip's save chip no longer covers ▶ in a narrow pane (#414)
 
 ### Displays
@@ -91,11 +92,14 @@
 
 ### Graph
 
+- T tidies GRAPH and leaves the canvas where you were looking; 0 frames every node, as a load does; T no longer toggles the overlay and 0 no longer restarts the track (the panel's toggle, the APC40's MASTER select and the AUDIO section still do), and a bindings file holding either old row has it dropped with a note (#455)
+- GRAPH's right-click menus (a pin's, a cable's, a node's, a group's, the node picker …) are drawn with the new kit, with submenus that open on hover or →; while a menu is up, no wire or node words show through it; `HYPERSPACE_KIT=0` draws them as before (#452)
 - Matte and segment nodes show their mask as a thumbnail on GRAPH, a segment's `fg` and `bg` pins show their own pictures, and a mask that can't be shown says why (#405)
 
 ### Effects
 
 - New **Grow** effect: grass, sprouts, blobs, noodles, mould, coral or cells grow out of the picture and push its pixels (a lens-like bulge, or a lift along Angle); ride `fx.grow.grow` with an LFO to grow it in and out — at 0 the frame is untouched (#381)
+- Four new light effects: **Prism** opens edges into a rainbow around a lens you can move (Centre X / Y), **Oil slick** tints what's lit with a thin film's rainbow and leaves black black, **Bloom** spills a soft glow from whatever is over Threshold (chain two for a frame-wide veil), and **Grain** adds film grain, with **Steps** and **Dither** for a crushed, dot-screen print look (#454)
 - New **Wave Table** effect: a disc of the picture at each root is dragged along grass, noodle or curl paths into an extruded tube; scrub or LFO `fx.wavetable.pos` — at 0 the frame is untouched (#406)
 
 ### Media
@@ -139,6 +143,8 @@
 - dkit is a package, `hyperspace/dkit`, with its workbench and tests in `dev/` (`pytest hyperspace/dkit/dev`); `ui_kit.theme()` maps its tokens onto the panel's palette (#446)
 - CI fans out: `tests.yml` runs lint and pyright beside four fast-tier shards split by `tools/ci_shard.py`, and a `sweep` tier (`pytest -m sweep`) runs in `sweeps.yml` only when its inputs change (#453)
 - `hands_tape.py record --cues` keeps each pose's span in the tape and `--fps` thins it, with `tests/fixtures/hands/rig.json` a real take (#449, #450); the words guard allows "rig" again (#447)
+- `ui_menu.Menu` describes a menu once and draws it with imgui (`draw_imgui`) or the kit (`draw_kit`), each action run after the draw; dkit's `menu.py` gains measured submenus placed by `place_sub` (#452); `routing.RETIRED_KEY_ROWS` drops retired factory key rows at load (#455)
+- `app._install_quit_signals` handles SIGINT only — SIGTERM stays the kernel's — with a `QUIT_HARD_S` alarm behind the quit, and `tests/test_quit_signal.py` in the fast tier holds it (#456)
 
 ## v1.2 — 2026-11-02
 
