@@ -1,0 +1,128 @@
+{
+ "schema": "hyperspace.loadable/11",
+ "name": "distort-shake-buzz",
+ "note": "The whole frame buzzes side to side, blurred across its travel, a camera on a speaker cabinet. It only shivers until the sub hits. The sub band pushes Amount. The right hand's height brings in the colour split; the left hand's height moves the rate.",
+ "graph": {
+  "frame": "wired",
+  "nodes": [
+   {
+    "kind": "hands",
+    "laid": "over"
+   }
+  ],
+  "wires": [
+   {
+    "from": "shape",
+    "to": "scene.geometry"
+   },
+   {
+    "from": "pattern",
+    "to": "shape.faces"
+   },
+   {
+    "from": "scene",
+    "to": "shake.image"
+   },
+   {
+    "from": "shake",
+    "to": "output.all.image"
+   },
+   {
+    "from": "hands",
+    "to": "hands.layer.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.guide"
+   }
+  ]
+ },
+ "values": {
+  "ghost.on": true,
+  "ghost.alpha": 0.35,
+  "view.shape": 55,
+  "view.faces": true,
+  "view.pattern": 2,
+  "view.speed": 0.3,
+  "view.bright": 1.35,
+  "camera.zoom": 1.5,
+  "fx.shake.on": true,
+  "fx.shake.amount": 0.003,
+  "fx.shake.rate": 14.0,
+  "fx.shake.smear": 0.8
+ },
+ "routes": [
+  {
+   "source": "lane:0",
+   "target": "fx.shake.amount",
+   "op": "push",
+   "value": 0.4
+  },
+  {
+   "source": "hand:right.y",
+   "target": "fx.shake.split",
+   "op": "push",
+   "value": 0.8
+  },
+  {
+   "source": "hand:left.y",
+   "target": "fx.shake.rate",
+   "op": "push",
+   "value": 0.4
+  },
+  {
+   "source": "lane:0",
+   "target": "rot.rate.ZW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:1",
+   "target": "rot.rate.XW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:2",
+   "target": "rot.rate.YW",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:3",
+   "target": "rot.rate.XY",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:4",
+   "target": "rot.rate.XZ",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:5",
+   "target": "rot.rate.YZ",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  }
+ ],
+ "macros": {},
+ "units": {
+  "camera.pan": "world",
+  "fx.depth": "taper"
+ },
+ "media": {
+  "channels": {}
+ }
+}

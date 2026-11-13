@@ -1,0 +1,131 @@
+{
+ "schema": "hyperspace.loadable/11",
+ "name": "distort-blocks-rings",
+ "note": "Cells turning in a wave that runs out from the middle in square rings. The sub band pushes Amount. The right hand's height brings in the colour split; the left hand's height moves how far each ring lags the last.",
+ "graph": {
+  "frame": "wired",
+  "nodes": [
+   {
+    "kind": "hands",
+    "laid": "over"
+   }
+  ],
+  "wires": [
+   {
+    "from": "shape",
+    "to": "scene.geometry"
+   },
+   {
+    "from": "pattern",
+    "to": "shape.faces"
+   },
+   {
+    "from": "scene",
+    "to": "blocks.image"
+   },
+   {
+    "from": "blocks",
+    "to": "output.all.image"
+   },
+   {
+    "from": "hands",
+    "to": "hands.layer.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.guide"
+   }
+  ]
+ },
+ "values": {
+  "ghost.on": true,
+  "ghost.alpha": 0.35,
+  "view.shape": 55,
+  "view.faces": true,
+  "view.pattern": 2,
+  "view.speed": 0.3,
+  "view.bright": 1.35,
+  "camera.zoom": 1.5,
+  "fx.blocks.on": true,
+  "fx.blocks.amount": 1.0,
+  "fx.blocks.cell": 60.0,
+  "fx.blocks.action": 3,
+  "fx.blocks.rule": 3,
+  "fx.blocks.spread": 0.12,
+  "fx.blocks.drift": 0.4
+ },
+ "routes": [
+  {
+   "source": "lane:0",
+   "target": "fx.blocks.amount",
+   "op": "push",
+   "value": 0.25
+  },
+  {
+   "source": "hand:right.y",
+   "target": "fx.blocks.split",
+   "op": "push",
+   "value": 0.8
+  },
+  {
+   "source": "hand:left.y",
+   "target": "fx.blocks.spread",
+   "op": "push",
+   "value": 0.5
+  },
+  {
+   "source": "lane:0",
+   "target": "rot.rate.ZW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:1",
+   "target": "rot.rate.XW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:2",
+   "target": "rot.rate.YW",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:3",
+   "target": "rot.rate.XY",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:4",
+   "target": "rot.rate.XZ",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:5",
+   "target": "rot.rate.YZ",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  }
+ ],
+ "macros": {},
+ "units": {
+  "camera.pan": "world",
+  "fx.depth": "taper"
+ },
+ "media": {
+  "channels": {}
+ }
+}
