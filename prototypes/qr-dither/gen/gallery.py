@@ -52,6 +52,10 @@ def find_chrome():
 OUT = WEB / "gallery"
 RAST = WORK / "gallery-rast"
 
+# subject id -> family id, off the taxonomy rather than restated here
+FAMILY_OF = {s["id"]: f["id"]
+             for f in polytopes.taxonomy() for s in f["subjects"]}
+
 RED, INK, PAPER = "#ff2b2b", "#000000", "#ffffff"
 
 # (id, pose, stroke, version, title, blurb, style overrides)
@@ -124,6 +128,37 @@ PALETTES = [
     ("pal-plate",  "tess_tilt",      2, 12, "extra-rounded", "Rounded plate",
      "A rounded white plate, for dropping on the black page as a sticker.",
      INK, None, PAPER),
+
+    # --- inverted, the sticker case -------------------------------------
+    # A dark sticker is the one people actually want on a laptop lid, and
+    # inversion is the hardest thing to ask of a reader: pal-invert measures 3
+    # px/module where square-on-white measures 1, and loses blur headroom with
+    # it. So these stay on the bold silhouettes and keep their modules square
+    # or barely rounded -- circular modules on top of inversion would stack the
+    # two worst effects. Every one is measured below; the numbers decide, not
+    # the look.
+    ("inv-tess",   "tess_tilt",      2, 12, "extra-rounded", "Inverted tesseract",
+     "The signature pose, white on black. Softened modules keep the strokes "
+     "joined where inversion thins them.", PAPER, None, INK),
+    ("inv-duo",    "duo88_tilt",     3, 12, "square", "Inverted duoprism",
+     "Two octagonal rings at a 3-module stroke. The boldest thing here, which "
+     "is what inversion wants.", PAPER, None, INK),
+    ("inv-c24",    "c24_tilt",       2, 12, "square", "Inverted 24-cell",
+     "96 edges reversed out. The densest subject against the least forgiving "
+     "palette.", PAPER, None, INK),
+    ("inv-cube",   "cube_tilt",      2, 12, "rounded", "Inverted cube",
+     "The sparsest solid, so the most black left over. The calmest of these.",
+     PAPER, None, INK),
+    ("inv-plate",  "tess_nested",    2, 12, "extra-rounded", "Inverted plate",
+     "A rounded black plate: the sticker shape, cut as a dark square with "
+     "soft corners.", PAPER, None, INK),
+    ("inv-red",    "c16_tilt",       2, 12, "square", "Red on black",
+     "Red reversed out of black. Red carries about a third of white's "
+     "luminance, so this has the least contrast here \u2014 and yet it "
+     "measures the same 3 px/module as the other inverted ones. The margin "
+     "is thinner than the number shows; this is the one to test on a real "
+     "print.",
+     RED, None, INK),
 ]
 
 
@@ -202,7 +237,26 @@ def main():
                       "bytes": len(svg), "decodes": ok,
                       "dark": kw.get("bg", "#ffffff").lower() in ("#000000", "#000"),
                       "pose": pose, "stroke": stroke, "version": version,
+                      # which solid this is and which family it belongs to, so
+                      # the app can group by family without a second copy of
+                      # polytopes.py's taxonomy to drift from
+                      "subject": polytopes.POSES[pose][0] if pose in polytopes.POSES else None,
+                      "family": FAMILY_OF.get(
+                          polytopes.POSES[pose][0] if pose in polytopes.POSES else None),
+                      # Everything handed to style.to_svg, so the manifest
+                      # carries the look as well as the grid. The sticker
+                      # exporters re-render from the grid at a physical size
+                      # and need the same arguments this call used; a table of
+                      # them in the app would be a second place to drift.
+                      # Defaults mirror to_svg's own signature.
                       "dot": kw.get("dot", "square"),
+                      "eye_frame": kw.get("eye_frame", "square"),
+                      "eye_core": kw.get("eye_core", "square"),
+                      "fg": kw.get("fg", "#000000"),
+                      "fg2": kw.get("fg2"),
+                      "bg": kw.get("bg", "#ffffff"),
+                      "plate_radius": kw.get("plate_radius", 0),
+                      "style_eyes": kw.get("style_eyes", True),
                       "min_ppm": rb["min_ppm"], "blur": rb["blur"], "flash": rb["flash"],
                       "matrix": robust.pack(m)})
         if not ok:
@@ -227,7 +281,7 @@ def main():
         emit(ident, pose, stroke, ver, title, blurb, "palettes",
              dot=dot, eye_frame="rounded", eye_core="rounded",
              fg=fg, fg2=fg2, bg=bg,
-             plate_radius=6 if ident == "pal-plate" else 0)
+             plate_radius=6 if ident in ("pal-plate", "inv-plate") else 0)
 
     # The control has to be a code for the URL you actually asked for. It used
     # to be a committed file, which silently kept pointing at the old
@@ -256,6 +310,10 @@ def main():
 
     (OUT / "manifest.json").write_text(
         json.dumps({"url": base, "items": items, "baselines": baselines,
+                    # the whole family tree, including members with no still:
+                    # a subject that was rendered and rejected is part of the
+                    # answer, and the reason is the part worth keeping
+                    "families": polytopes.taxonomy(),
                     "matrix_encoding": "base64, row-major, MSB first, bit i = y*n + x"},
                    indent=1), encoding="utf-8")
 

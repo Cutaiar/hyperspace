@@ -8,7 +8,7 @@ import zxingcpp
 import tesseract
 from basis import Affine
 
-URL = "https://hyperspace.cutaiar.io"
+URL = "https://www.instagram.com/hyperspace.av/"
 
 
 def decode(m):

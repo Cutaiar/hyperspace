@@ -1,0 +1,110 @@
+{
+ "digits": 48,
+ "constants": [
+  {
+   "id": "pi",
+   "glyph": "\u03c0",
+   "name": "Pi",
+   "note": "circle constant; transcendental (Lindemann 1882)",
+   "digits": "314159265358979323846264338327950288419716939937"
+  },
+  {
+   "id": "tau",
+   "glyph": "\u03c4",
+   "name": "Tau",
+   "note": "2\u03c0 \u2014 one full turn",
+   "digits": "628318530717958647692528676655900576839433879875"
+  },
+  {
+   "id": "e",
+   "glyph": "\u212f",
+   "name": "Euler's number",
+   "note": "base of the natural log",
+   "digits": "271828182845904523536028747135266249775724709369"
+  },
+  {
+   "id": "phi",
+   "glyph": "\u03c6",
+   "name": "Golden ratio",
+   "note": "(1+\u221a5)/2; all 1s in its continued fraction",
+   "digits": "161803398874989484820458683436563811772030917980"
+  },
+  {
+   "id": "sqrt2",
+   "glyph": "\u221a2",
+   "name": "Pythagoras' constant",
+   "note": "the first number proved irrational",
+   "digits": "141421356237309504880168872420969807856967187537"
+  },
+  {
+   "id": "sqrt3",
+   "glyph": "\u221a3",
+   "name": "Theodorus' constant",
+   "note": "the measure of the fish",
+   "digits": "173205080756887729352744634150587236694280525381"
+  },
+  {
+   "id": "gamma",
+   "glyph": "\u03b3",
+   "name": "Euler\u2013Mascheroni",
+   "note": "nobody knows if it is even irrational",
+   "digits": "057721566490153286060651209008240243104215933593"
+  },
+  {
+   "id": "apery",
+   "glyph": "\u03b6(3)",
+   "name": "Ap\u00e9ry's constant",
+   "note": "proved irrational in 1978, to general astonishment",
+   "digits": "120205690315959428539973816151144999076498629234"
+  },
+  {
+   "id": "catalan",
+   "glyph": "G",
+   "name": "Catalan's constant",
+   "note": "irrationality still unproven",
+   "digits": "091596559417721901505460351493238411077414937428"
+  },
+  {
+   "id": "khinchin",
+   "glyph": "K\u2080",
+   "name": "Khinchin's constant",
+   "note": "almost every real shares this continued-fraction mean",
+   "digits": "268545200106530644530971483548179569382038229399"
+  },
+  {
+   "id": "glaisher",
+   "glyph": "A",
+   "name": "Glaisher\u2013Kinkelin",
+   "note": "the hyperfactorial's Stirling constant",
+   "digits": "128242712910062263687534256886979172776768892732"
+  },
+  {
+   "id": "gelfond",
+   "glyph": "e^\u03c0",
+   "name": "Gelfond's constant",
+   "note": "transcendental; e^\u03c0 \u2212 \u03c0 is 19.999099979\u2026",
+   "digits": "231406926327792690057290863679485473802661062426"
+  },
+  {
+   "id": "omega",
+   "glyph": "\u03a9",
+   "name": "Omega constant",
+   "note": "\u03a9e^\u03a9 = 1, the Lambert W fixed point",
+   "digits": "056714329040978387299996866221035554975381578718"
+  },
+  {
+   "id": "silver",
+   "glyph": "\u03b4\u209b",
+   "name": "Silver ratio",
+   "note": "the golden ratio's next of kin",
+   "digits": "241421356237309504880168872420969807856967187537"
+  },
+  {
+   "id": "lemnis",
+   "glyph": "\u03d6",
+   "name": "Lemniscate constant",
+   "note": "\u03c0's twin for the lemniscate, Gauss's obsession",
+   "digits": "262205755429211981046483958989111941368275495143"
+  }
+ ]
+}
