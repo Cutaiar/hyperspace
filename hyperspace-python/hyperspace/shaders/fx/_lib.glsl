@@ -101,3 +101,37 @@ float reach(vec2 uv, float r) {
     }
     return m;
 }
+
+// ---- distortion: where each pixel reads from -------------------------------
+// A distortion is a field of offsets: for every pixel, how far away it
+// reads the frame. Three questions make one — what is measured across the
+// frame (a distance along a line, a radius, a block's number), what shape
+// is laid over that measure (`wave`), and which way the result pushes —
+// and `pushed` does the read. shake, wave and blocks are all this.
+
+// One cycle of a waveform over x (period 1), −1 … 1, all in step with the
+// sine: 0 sine, 1 triangle, 2 square, 3 saw, 4 noise (a new random level at
+// each whole x, eased between; it repeats every 4096, a @clock's period)
+float wave(int shape, float x) {
+    if (shape == 1) return 4.0 * abs(fract(x - 0.25) - 0.5) - 1.0;
+    if (shape == 2) return fract(x) < 0.5 ? 1.0 : -1.0;
+    if (shape == 3) return 2.0 * fract(x) - 1.0;
+    if (shape == 4) {
+        float i = floor(x), f = fract(x);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(hash21(vec2(mod(i, 4096.0), 7.3)),
+                   hash21(vec2(mod(i + 1.0, 4096.0), 7.3)), f) * 2.0 - 1.0;
+    }
+    return sin(x * TAU);
+}
+
+// the frame read d away from uv (d in frame heights, so a push is as long
+// across as it is up). Split parts the colours along the push: red reads
+// (1 + split) × as far, green as far, blue (1 − split) × — every distortion
+// its own chromatic aberration, widest where it moves the most
+vec4 pushed(vec2 uv, vec2 d, float split) {
+    vec2 o = d * vec2(u_res.y / u_res.x, 1.0);
+    if (split <= 0.0) return src(uv + o);
+    vec4 R = src(uv + o * (1.0 + split)), G = src(uv + o), B = src(uv + o * (1.0 - split));
+    return vec4(R.r, G.g, B.b, max(R.a, max(G.a, B.a)));
+}
