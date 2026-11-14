@@ -338,6 +338,28 @@ def _a_launch_waits_for_its_read(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_process_list(monkeypatch):
+    """No test reads the machine's process list: `ps -axo …` answers with no
+    rows, unless the test patches `subprocess.run` itself (a later setattr
+    wins). `tools/migrate_library.py --apply` asks it whether Hyperspace is
+    open (`app_running`) and refuses if so, and the suite does open it:
+    `test_quit_signal.py` launches the real app, which another xdist worker's
+    migration then saw and refused over (PR #458's CI, fast tier 0; on the
+    owner's Mac it would be the owner's own running app). Every other
+    command goes through untouched."""
+    import subprocess
+
+    real = subprocess.run
+
+    def run(args, *a, **k):
+        if isinstance(args, (list, tuple)) and list(args[:2]) == ["ps", "-axo"]:
+            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+        return real(args, *a, **k)
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+
+@pytest.fixture(autouse=True)
 def _no_real_midi(monkeypatch):
     """No test reaches the machine's MIDI: the port lists are empty and an
     open raises, unless the test patches mido itself (a later setattr wins).
