@@ -312,6 +312,24 @@ def test_the_app_is_seen_by_its_command_line(tool, monkeypatch):
     assert tool.app_running()[0] is False
 
 
+def test_the_suite_never_sees_an_app_another_test_opened(tool):
+    """`test_quit_signal.py` launches the real app, and under xdist it runs beside the
+    migrations here: `--apply` saw it once and refused (PR #458's CI). conftest's
+    `_no_real_process_list` answers `ps -axo` with no rows, so a process that reads as the
+    app, open for as long as this test asks, is not seen; any other command still runs."""
+    import subprocess
+    import sys
+
+    p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)  # hyperspace.app"])
+    try:
+        assert tool.app_running()[0] is False
+        assert subprocess.run(["echo", "1"], capture_output=True, text=True,
+                              check=True).stdout == "1\n"
+    finally:
+        p.kill()
+        p.wait()
+
+
 def test_an_old_builds_save_after_the_run_is_taken_in(tool, tmp_path, capsys):
     """Plan 58 §2a: saving from the old build puts old files in the old folder; another run
     takes them, and never over a file."""

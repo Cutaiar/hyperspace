@@ -1,0 +1,164 @@
+{
+ "schema": "hyperspace.loadable/11",
+ "name": "distort-all-three",
+ "note": "Wave into Blocks into Shake: ripples, strips losing sync and a smeared buzz, in a row. The sub band pushes all three Amounts; the right hand's height sets how many ripples, the left's the strip height.",
+ "graph": {
+  "frame": "wired",
+  "nodes": [
+   {
+    "kind": "hands",
+    "laid": "over"
+   }
+  ],
+  "wires": [
+   {
+    "from": "shape",
+    "to": "scene.geometry"
+   },
+   {
+    "from": "pattern",
+    "to": "shape.faces"
+   },
+   {
+    "from": "scene",
+    "to": "wave.image"
+   },
+   {
+    "from": "wave",
+    "to": "blocks.image"
+   },
+   {
+    "from": "blocks",
+    "to": "shake.image"
+   },
+   {
+    "from": "shake",
+    "to": "output.all.image"
+   },
+   {
+    "from": "hands",
+    "to": "hands.layer.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.guide"
+   }
+  ]
+ },
+ "values": {
+  "ghost.on": true,
+  "ghost.alpha": 0.35,
+  "view.shape": 55,
+  "view.faces": true,
+  "view.pattern": 2,
+  "view.speed": 0.3,
+  "view.bright": 1.35,
+  "camera.zoom": 1.5,
+  "fx.wave.on": true,
+  "fx.wave.amount": 0.02,
+  "fx.wave.waves": 4.0,
+  "fx.wave.along": 1,
+  "fx.wave.push": 1,
+  "fx.wave.drift": 0.8,
+  "fx.wave.split": 0.5,
+  "fx.blocks.on": true,
+  "fx.blocks.amount": 0.1,
+  "fx.blocks.cell": 36.0,
+  "fx.blocks.aspect": 8.0,
+  "fx.blocks.rule": 0,
+  "fx.blocks.shape": 4,
+  "fx.blocks.spread": 0.37,
+  "fx.blocks.drift": 4.0,
+  "fx.shake.on": true,
+  "fx.shake.amount": 0.003,
+  "fx.shake.rate": 12.0,
+  "fx.shake.smear": 0.7,
+  "fx.shake.split": 0.6
+ },
+ "routes": [
+  {
+   "source": "lane:0",
+   "target": "fx.wave.amount",
+   "op": "push",
+   "value": 0.2
+  },
+  {
+   "source": "lane:0",
+   "target": "fx.blocks.amount",
+   "op": "push",
+   "value": 0.3
+  },
+  {
+   "source": "lane:0",
+   "target": "fx.shake.amount",
+   "op": "push",
+   "value": 0.4
+  },
+  {
+   "source": "hand:right.y",
+   "target": "fx.wave.waves",
+   "op": "push",
+   "value": 0.4
+  },
+  {
+   "source": "hand:left.y",
+   "target": "fx.blocks.cell",
+   "op": "push",
+   "value": 0.4
+  },
+  {
+   "source": "lane:0",
+   "target": "rot.rate.ZW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:1",
+   "target": "rot.rate.XW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:2",
+   "target": "rot.rate.YW",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:3",
+   "target": "rot.rate.XY",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:4",
+   "target": "rot.rate.XZ",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:5",
+   "target": "rot.rate.YZ",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  }
+ ],
+ "macros": {},
+ "units": {
+  "camera.pan": "world",
+  "fx.depth": "taper"
+ },
+ "media": {
+  "channels": {}
+ }
+}

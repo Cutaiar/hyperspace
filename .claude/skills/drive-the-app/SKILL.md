@@ -124,3 +124,12 @@ videos out of the repository — send the file to the person.
 - **Coordinates and feedback loops on sliders**, the way demos were driven
   before `ui_driver`: they miss by a row, overshoot, and break when the
   layout moves.
+
+## A demo of an effect
+
+`tools/distort_demo.py` is the worked example, and `docs/DISTORTION.md`
+("Showing an effect") says why each part is there: one captioned segment
+per idea, the real pass (`FxChain.run_one`) over the scene, the same pass
+over a test card in the corner, a meter for whatever drives Amount, and a
+contact sheet of one still per segment. Copy it for a new effect; send
+the video with a table of the nodes and what was not checked.

@@ -39,10 +39,11 @@ OLD_PATCH = ROOT / "tests" / "fixtures" / "patches" / "acid-wash.json"
 
 # PR #304's amount-type params, the ones the `amount` flag now marks, and the
 # ones every effect added since carries: an effect file's own `@param … amount`
-AMOUNTS = {"fx.acid.bend", "fx.acid.twist", "fx.acid.breathe", "fx.deconverge.amount",
+AMOUNTS = {"fx.acid.bend", "fx.acid.twist", "fx.acid.breathe", "fx.blocks.amount",
+           "fx.deconverge.amount",
            "fx.deconverge.radial", "fx.displace.amount", "fx.doublevision.amount",
            "fx.bloom.amount", "fx.fractals.amount", "fx.glimmer.amount", "fx.grain.amount",
-           "fx.grow.amount",
+           "fx.grow.amount", "fx.shake.amount", "fx.wave.amount",
            "fx.oilslick.amount", "fx.plasma.level", "fx.prism.amount", "fx.tripcolour.amount",
            "fx.warp.amount", "fx.wobble.amount", "fx.zoomblur.amount"}
 
