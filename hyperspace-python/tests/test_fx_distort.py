@@ -324,6 +324,23 @@ def test_a_swap_shows_every_cell_once(ctx, rule, angle):
     assert np.array_equal(twice[whole], pic[whole])
 
 
+def test_a_square_wave_trades_and_trades_back(ctx):
+    """A pair's number counts trades from none at its trough to Amount at
+    its peak, so a square wave at Amount 1 is a trade for half a cycle and
+    none for the other half: Drift moves a swap, whatever the shape."""
+    pic = cells()
+    cx, cy = cell_ids()
+    whole = (cx >= -2) & (cx <= 3) & (cy >= -2) & (cy <= 2)
+    # Drift 1, Spread 0: every pair on the crest at 0 s, on the trough by 0.4 s
+    # (in two steps: a frame's clock moves at most a quarter second)
+    on, _, off = frames(ctx, "blocks", pic, [0.0, 0.2, 0.4], amount=1.0, cell=8.0, drift=1.0,
+                     spread=0.0, action=choice("blocks", "action", "swap"),
+                     shape=choice("blocks", "shape", "square"),
+                     rule=choice("blocks", "rule", "rows"))
+    assert np.array_equal(off[whole], pic[whole])
+    assert not (on[whole] == pic[whole]).all(-1).any()       # every whole cell traded
+
+
 def test_spread_zero_puts_every_block_in_step_random_included(ctx):
     for rule in ("rows", "diagonal", "random"):
         px = run(ctx, "blocks", white_line(), amount=0.5, cell=8.0, drift=0.0, spread=0.0,

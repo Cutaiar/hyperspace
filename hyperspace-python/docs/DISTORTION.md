@@ -79,7 +79,7 @@ uses it.
 
 | Knob | What it does |
 | --- | --- |
-| Amount | How much a cell does at its number's peak: cells moved (shift), doublings of size (zoom, stretch, bulge), quarter turns (turn), trades (swap: from 0.5 a pair trades, from 1.5 it trades back) |
+| Amount | How much a cell does at its number's peak: cells moved (shift), doublings of size (zoom, stretch, bulge), quarter turns (turn), trades (swap: none at the number's trough, Amount at its peak; an odd count is a trade) |
 | Cell, Aspect | A cell's height in px; its width over its height (16 is long strips) |
 | Group | Cells on a side that share one number: 4 is "4 × 4 blocks of units" |
 | Rule | How the number runs over the grid: rows, columns, diagonal, rings (square, from the middle), random |

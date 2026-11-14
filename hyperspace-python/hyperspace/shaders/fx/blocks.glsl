@@ -11,7 +11,7 @@
 // @tip with the block beside it. Group hands one number to a whole block of cells, so 4 is
 // @tip "4 × 4 blocks of 16-px units, each block doing its own thing".
 
-uniform float u_amount; // @param 0 4 0.5 amount "Amount" How much a cell does at its number's peak — shift: cells moved; zoom, stretch and bulge: doublings of size; turn: quarter turns; swap: trades (from 0.5 a block and the one beside it trade places, from 1.5 they trade back).
+uniform float u_amount; // @param 0 4 0.5 amount "Amount" How much a cell does at its number's peak — shift: cells moved; zoom, stretch and bulge: doublings of size; turn: quarter turns; swap: trades at the peak, none at the trough (1 is a block and the one beside it trading places and back as the number swings).
 uniform float u_cell;   // @param 4 512 48 log "Cell" One cell's height, px.
 uniform float u_aspect; // @param 0.0625 16 1 log "Aspect" A cell's width over its height: 16 is long strips across, 1/16 tall slats.
 uniform int u_group;    // @param 1 8 1 "Group" Cells on a side that share one number: 4 moves the grid in 4 × 4 blocks.
@@ -59,9 +59,11 @@ vec4 effect(vec2 uv) {
         float rr = length(lp) * 2.0 / min(cs.x, cs.y);
         dl = rr < 1.0 ? l * (pow(max(rr, 1e-4), exp2(a) - 1.0) - 1.0) : vec2(0.0);
     } else if (u_action == 5) {
-        // an odd whole number of trades is a trade, an even one is none:
-        // each block of a pair reads the other, so every cell is shown once
-        float n = floor(abs(a) + 0.5);
+        // the pair's number counts trades, none at its trough and Amount at
+        // its peak (so a square wave trades and trades back); an odd count
+        // is a trade, an even one is none. Each block of a pair reads the
+        // other, so every cell is shown once
+        float n = floor(0.5 * (a + u_amount) + 0.5);
         float first = 1.0 - 2.0 * mod(along, 2.0);      // +1 the pair's first block, −1 its second
         dl = mod(n, 2.0) > 0.5 ? ax * first * float(u_group) : vec2(0.0);
     } else {
