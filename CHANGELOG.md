@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-11
+## v1.3 — 2026-11-13
 
 ### Panel
 
@@ -101,6 +101,7 @@
 - New **Grow** effect: grass, sprouts, blobs, noodles, mould, coral or cells grow out of the picture and push its pixels (a lens-like bulge, or a lift along Angle); ride `fx.grow.grow` with an LFO to grow it in and out — at 0 the frame is untouched (#381)
 - Four new light effects: **Prism** opens edges into a rainbow around a lens you can move (Centre X / Y), **Oil slick** tints what's lit with a thin film's rainbow and leaves black black, **Bloom** spills a soft glow from whatever is over Threshold (chain two for a frame-wide veil), and **Grain** adds film grain, with **Steps** and **Dither** for a crushed, dot-screen print look (#454)
 - New **Wave Table** effect: a disc of the picture at each root is dragged along grass, noodle or curl paths into an extruded tube; scrub or LFO `fx.wavetable.pos` — at 0 the frame is untouched (#406)
+- Three distortion effects that move the picture's pixels: **Shake** moves the whole frame (buzz, orbit, punch or jolt, with Smear and Split), **Wave** lays one waveform across it along lines, rings or spokes, and **Blocks** cuts it into cells that shift, zoom, stretch, turn, bulge or swap — every Amount is untouched at 0, so a lane, hand or pad fades it in; 23 ready patches in `presets/distort/` play them (#458)
 
 ### Media
 
@@ -145,6 +146,7 @@
 - `hands_tape.py record --cues` keeps each pose's span in the tape and `--fps` thins it, with `tests/fixtures/hands/rig.json` a real take (#449, #450); the words guard allows "rig" again (#447)
 - `ui_menu.Menu` describes a menu once and draws it with imgui (`draw_imgui`) or the kit (`draw_kit`), each action run after the draw; dkit's `menu.py` gains measured submenus placed by `place_sub` (#452); `routing.RETIRED_KEY_ROWS` drops retired factory key rows at load (#455)
 - `app._install_quit_signals` handles SIGINT only — SIGTERM stays the kernel's — with a `QUIT_HARD_S` alarm behind the quit, and `tests/test_quit_signal.py` in the fast tier holds it (#456)
+- Distortion lives in GLSL only: `_lib.glsl` gains `wave(shape, x)` and `pushed(uv, d, split)`; `docs/DISTORTION.md` explains the model and how to add one, and `tools/distort_demo.py` draws the demo video and contact sheet through the real passes (#458)
 
 ## v1.2 — 2026-11-02
 
