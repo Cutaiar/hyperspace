@@ -109,19 +109,24 @@ float reach(vec2 uv, float r) {
 // is laid over that measure (`wave`), and which way the result pushes —
 // and `pushed` does the read. shake, wave and blocks are all this.
 
+// A new random level at each whole x, eased between, −1 … 1, the same
+// again every `every` (a whole number): 4096 is a @clock's period, and a
+// count round a circle is how many waves meet there, so the last joins the first
+float noise1(float x, float every) {
+    float i = floor(x), f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(hash21(vec2(mod(i, every), 7.3)),
+               hash21(vec2(mod(i + 1.0, every), 7.3)), f) * 2.0 - 1.0;
+}
+
 // One cycle of a waveform over x (period 1), −1 … 1, all in step with the
-// sine: 0 sine, 1 triangle, 2 square, 3 saw, 4 noise (a new random level at
-// each whole x, eased between; it repeats every 4096, a @clock's period)
+// sine: 0 sine, 1 triangle, 2 square, 3 saw, 4 noise (`noise1`, repeating
+// every 4096)
 float wave(int shape, float x) {
     if (shape == 1) return 4.0 * abs(fract(x - 0.25) - 0.5) - 1.0;
     if (shape == 2) return fract(x) < 0.5 ? 1.0 : -1.0;
     if (shape == 3) return 2.0 * fract(x) - 1.0;
-    if (shape == 4) {
-        float i = floor(x), f = fract(x);
-        f = f * f * (3.0 - 2.0 * f);
-        return mix(hash21(vec2(mod(i, 4096.0), 7.3)),
-                   hash21(vec2(mod(i + 1.0, 4096.0), 7.3)), f) * 2.0 - 1.0;
-    }
+    if (shape == 4) return noise1(x, 4096.0);
     return sin(x * TAU);
 }
 

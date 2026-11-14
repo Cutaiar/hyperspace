@@ -79,14 +79,14 @@ uses it.
 
 | Knob | What it does |
 | --- | --- |
-| Amount | How much a cell does at its number's peak: cells moved (shift, swap), doublings of size (zoom, stretch, bulge), quarter turns (turn) |
+| Amount | How much a cell does at its number's peak: cells moved (shift), doublings of size (zoom, stretch, bulge), quarter turns (turn), trades (swap: from 0.5 a pair trades, from 1.5 it trades back) |
 | Cell, Aspect | A cell's height in px; its width over its height (16 is long strips) |
 | Group | Cells on a side that share one number: 4 is "4 × 4 blocks of units" |
 | Rule | How the number runs over the grid: rows, columns, diagonal, rings (square, from the middle), random |
-| Spread | How far out of step one block is with the next along the rule. 0.5 on diagonal is a checkerboard |
+| Spread | How far out of step one block is with the next along the rule. 0.5 on diagonal is a checkerboard; 0 is every block in step, random included |
 | Shape, Drift | How a cell's number moves in time, and how fast. Drift 0 holds the grid still |
-| Action | `shift` · `zoom` · `stretch` (one way; low numbers pull a line into streaks) · `turn` · `bulge` (a lens inside the cell, still at its rim, so cells stay joined) · `swap` (whole cells trade places) |
-| Angle, Split | The way shift, stretch and swap go; the colour split |
+| Action | `shift` · `zoom` · `stretch` (one way; low numbers pull a line into streaks) · `turn` · `bulge` (a lens inside the cell's inscribed circle, still at its rim, so cells stay joined) · `swap` (blocks pair off and each pair trades places: every cell is shown once, none twice) |
+| Angle, Split | The way shift and stretch go, and whether swap trades across or up and down; the colour split |
 
 ## Adding another distortion
 

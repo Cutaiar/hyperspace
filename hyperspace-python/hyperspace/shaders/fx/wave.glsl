@@ -29,17 +29,21 @@ vec4 effect(vec2 uv) {
     vec2 out_ = r > 1e-5 ? p / r : vec2(0.0);
     vec2 g;          // the way the measure grows
     float x;         // the measure, in waves
+    float every = 4096.0;   // where the noise repeats
     if (u_along == 1) {
         g = out_;
         x = r * u_waves;
     } else if (u_along == 2) {
         g = vec2(-out_.y, out_.x);
-        x = atan(p.y, p.x) / TAU * max(floor(u_waves + 0.5), 1.0);
+        every = max(floor(u_waves + 0.5), 1.0);
+        x = atan(p.y, p.x) / TAU * every;
     } else {
         g = vec2(cos(u_angle), sin(u_angle));
         x = dot(p, g) * u_waves;
     }
-    float w = wave(u_shape, x - u_drift_t);
+    // round a circle the noise repeats every turn, so it has no seam where
+    // the angle wraps (the other shapes have period 1 and need nothing)
+    float w = u_shape == 4 ? noise1(x - u_drift_t, every) : wave(u_shape, x - u_drift_t);
     if (u_steps > 0) w = floor(w * float(u_steps) + 0.5) / float(u_steps);
     vec2 dir = u_push == 0 ? vec2(-g.y, g.x) : g;
     return pushed(uv, dir * w * u_amount, u_split);

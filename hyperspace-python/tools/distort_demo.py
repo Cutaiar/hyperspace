@@ -127,8 +127,8 @@ def segments() -> list[Segment]:
         S("Blocks · bulge", "a lens in every cell, still at its rim, so the picture stays "
           "joined", "blocks", "swell", amount=2.0, cell=120.0, action=4, rule=2, spread=0.5,
           drift=0.4),
-        S("Blocks · swap · noise", "cells trade places with their neighbours, whole cells "
-          "at a time", "blocks", "", amount=2.5, cell=80.0, action=5, shape=4, drift=2.0),
+        S("Blocks · swap · noise", "cells pair off and trade places, each pair when its "
+          "number says", "blocks", "", amount=2.5, cell=80.0, action=5, shape=4, drift=2.0),
         S("Blocks · shift + Split", "the colours part along each cell's move · on the kick",
           "blocks", "kick", amount=0.8, cell=40.0, group=2, split=1.0, shape=4, drift=3.0),
         # ---- together

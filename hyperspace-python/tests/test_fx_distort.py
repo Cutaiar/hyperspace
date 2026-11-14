@@ -217,6 +217,24 @@ def test_rings_squeeze_is_the_same_all_the_way_round(ctx):
     assert np.abs(px - px[::-1]).max() <= 2 and np.abs(px - px[:, ::-1]).max() <= 2
 
 
+@pytest.mark.parametrize("shape", ["sine", "noise"])
+def test_spokes_have_no_seam_where_the_angle_wraps(ctx, shape):
+    """Counted round the centre, the wave meets itself where the angle wraps
+    (the −x axis): noise repeats every turn there, as a sine does. A smooth
+    picture pushed by it is as smooth across that line as across the +x one."""
+    yy, xx = np.mgrid[0:H, 0:W]
+    pic = flat((0, 0, 0))
+    pic[..., 0] = xx * 255 // (W - 1)
+    pic[..., 1] = yy * 255 // (H - 1)
+    px = run(ctx, "wave", pic, amount=0.2, waves=5.0, drift=0.0,
+             along=choice("wave", "along", "spokes"), shape=choice("wave", "shape", shape))
+    px = px.astype(int)
+    assert np.abs(px - pic).max() > 20
+    jump = np.abs(px[H // 2] - px[H // 2 - 1])[:, :2].max(axis=-1)   # across the x axis
+    left, right = jump[4:W // 2 - 4], jump[W // 2 + 4:W - 4]
+    assert left.max() <= right.max() + 12, (left.max(), right.max())
+
+
 def test_the_wave_drifts_and_split_follows_the_push(ctx):
     line = white_line()
     a, b = frames(ctx, "wave", line, [0.0, 0.25], amount=0.125, waves=1.0, drift=1.0)
@@ -253,32 +271,87 @@ def test_a_group_hands_one_number_to_a_block_of_cells(ctx):
     assert set(np.diff(np.flatnonzero(np.diff(cols) != 0))) == {8}   # in 2-cell rows
 
 
-def test_a_swap_moves_whole_cells(ctx):
-    """Swap rounds the move to cells, so every pixel of the output is a
-    pixel of the input one cell over: nothing is cut inside a cell."""
-    pic = speckle()
-    px = run(ctx, "blocks", pic, amount=1.0, cell=8.0, drift=0.0,
-             action=choice("blocks", "action", "swap"), rule=choice("blocks", "rule", "rows"))
-    assert not np.array_equal(px, pic)
-    left, right = np.roll(pic, 8, axis=1), np.roll(pic, -8, axis=1)
-    inner = np.s_[:, 8:-8]                               # clear of the mirrored edge
-    same = ((px == left).all(-1) | (px == right).all(-1))[inner]
-    assert same.all()
+def cell_ids() -> tuple[np.ndarray, np.ndarray]:
+    """Each pixel's cell in an 8-px grid, as the shader counts them: a cell
+    sits on the frame's centre, so cell 0 is x 28 … 35 and y 20 … 27."""
+    yy, xx = np.mgrid[0:H, 0:W]
+    return (np.floor((xx + 0.5 - W / 2) / 8 + 0.5).astype(int),
+            np.floor((yy + 0.5 - H / 2) / 8 + 0.5).astype(int))
 
 
-def test_a_bulge_leaves_the_cell_corners_alone(ctx):
-    """The lens lives inside the cell's inscribed circle: outside it (the
-    corners) the picture is untouched, which is what keeps cells joined."""
+def cells() -> np.ndarray:
+    """Every 8-px cell its own flat colour."""
+    cx, cy = cell_ids()
+    pic = flat((0, 0, 0))
+    pic[..., 0] = (cx + 8) * 13
+    pic[..., 1] = (cy + 8) * 17
+    return pic
+
+
+@pytest.mark.parametrize("rule", ["rows", "columns", "random"])
+@pytest.mark.parametrize("angle", [0.0, np.pi / 2])
+def test_a_swap_shows_every_cell_once(ctx, rule, angle):
+    """Blocks pair off (cells 2k and 2k + 1 along the angle's nearer axis)
+    and a pair shares one number, so both agree to trade: whatever the rule,
+    the output is the input's cells rearranged — each whole, each exactly
+    once — and a cell that moved is where its partner was."""
+    pic = cells()
+    swap = choice("blocks", "action", "swap")
+    px = run(ctx, "blocks", pic, amount=1.0, cell=8.0, drift=0.0, angle=angle, spread=0.37,
+             action=swap, rule=choice("blocks", "rule", rule))
+    cx, cy = cell_ids()
+    along = cx if angle == 0.0 else cy
+    # the whole cells whose partner is whole too (the frame's edge cuts the rest)
+    whole = (cx >= -3) & (cx <= 3) & (cy >= -2) & (cy <= 2)
+    whole &= (along >= -2) & (along <= (3 if angle == 0.0 else 1))
+    partner = np.where(along % 2 == 0, 8, -8)
+    there = np.roll(pic, -8, axis=1 if angle == 0.0 else 0)
+    back = np.roll(pic, 8, axis=1 if angle == 0.0 else 0)
+    traded = np.where((partner == 8)[..., None], there, back)
+    kept = (px == pic).all(-1)
+    moved = (px == traded).all(-1)
+    assert (kept | moved)[whole].all()
+    assert moved[whole].any()
+    # a cell moves whole, and with its partner: the pair's 16 × 8 px agree
+    pair = (np.floor(along / 2), np.where(angle == 0.0, cy, cx))
+    for a in np.unique(pair[0][whole]):
+        for b in np.unique(pair[1][whole]):
+            m = whole & (pair[0] == a) & (pair[1] == b)
+            assert moved[m].all() or kept[m].all(), (a, b)
+    # two trades put every cell back
+    twice = run(ctx, "blocks", pic, amount=2.0, cell=8.0, drift=0.0, angle=angle, spread=0.0,
+                action=swap, rule=choice("blocks", "rule", rule))
+    assert np.array_equal(twice[whole], pic[whole])
+
+
+def test_spread_zero_puts_every_block_in_step_random_included(ctx):
+    for rule in ("rows", "diagonal", "random"):
+        px = run(ctx, "blocks", white_line(), amount=0.5, cell=8.0, drift=0.0, spread=0.0,
+                 rule=choice("blocks", "rule", rule))
+        assert set(column(px)) == {W // 2 - 4}, rule         # one slide, the whole frame
+    apart = run(ctx, "blocks", white_line(), amount=0.5, cell=8.0, drift=0.0, spread=0.5,
+                rule=choice("blocks", "rule", "random"))
+    assert len(set(column(apart))) > 2
+
+
+@pytest.mark.parametrize("aspect", [1.0, 2.0, 0.5])
+def test_a_bulge_is_a_circle_and_leaves_the_rest_of_the_cell_alone(ctx, aspect):
+    """The lens lives inside the cell's inscribed circle, measured in px, so
+    it is a circle in a cell of any Aspect: outside it the picture is
+    untouched, which is what keeps cells joined."""
     pic = speckle()
-    px = run(ctx, "blocks", pic, amount=2.0, cell=16.0, drift=0.0,
+    cw, ch = 16.0 * aspect, 16.0
+    px = run(ctx, "blocks", pic, amount=2.0, cell=ch, aspect=aspect, drift=0.0,
              action=choice("blocks", "action", "bulge"), rule=choice("blocks", "rule", "rows"))
     yy, xx = np.mgrid[0:H, 0:W]
     # a cell sits on the frame's centre: its own centre is (W/2, H/2)
-    lx = (xx + 0.5 - W / 2 + 8) % 16 - 8
-    ly = (yy + 0.5 - H / 2 + 8) % 16 - 8
-    outside = np.hypot(lx, ly) > 8.5
+    lx = (xx + 0.5 - W / 2 + cw / 2) % cw - cw / 2
+    ly = (yy + 0.5 - H / 2 + ch / 2) % ch - ch / 2
+    r = min(cw, ch) / 2
+    outside = np.hypot(lx, ly) > r + 0.5
     assert np.array_equal(px[outside], pic[outside])
-    assert not np.array_equal(px[~outside], pic[~outside])
+    inside = np.hypot(lx, ly) < r - 1.5
+    assert (px[inside] != pic[inside]).any(axis=-1).mean() > 0.5
 
 
 def test_the_grid_moves_with_drift_and_holds_without(ctx):
