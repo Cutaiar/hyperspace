@@ -435,6 +435,10 @@ def _state(panel) -> dict:
     st.setdefault("revealed", set())
     st.setdefault("tint", False)            # plan 37 C2 (D3): plain red until lit
     st.setdefault("thumb_hover", None)      # the node whose thumbnail the pointer is on
+    # the effects whose thumbnail shows the test card through them, not their
+    # picture (`card_shown`, the "card" chip on the thumbnail), by their
+    # thumbnail's name: a view setting, never saved, not an undo step
+    st.setdefault("card", set())
     st.setdefault("tints", {})              # cable id → its tinted colour, this frame
     # 2026-10-27: the side column's width (None until this Mac's file has been
     # asked), whether its grip is held, and the machine folder the width is kept in
@@ -1857,7 +1861,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     # (plan 37 C2: the SYSTEM page's GPU medians, for a thumbnail's hover;
     # all three from the renderer the canvas reads: `picture_sources`)
     st["thumbs"], st["preview"], st["gpu_ms"] = picture_sources(panel)
-    st["thumb_hover"] = None
+    st["thumb_hover"] = st["chip_hover"] = None
     imgui.push_font(None, ui.FONT_BASE * graphview.SCALE)    # the canvas's own text size
     density = imgui.internal.get_font_rasterizer_density()
     imgui.internal.set_font_rasterizer_density(held_density(st, canvas_density(density, st["zoom"])))
@@ -3303,7 +3307,7 @@ def thumb_wants(st: dict, view: graphview.View, where) -> dict[str, str]:
             continue
         if rect is not None and not on_screen(rect, *where(n.id)):
             continue
-        out[thumb_name(n)] = n.thumb
+        out[thumb_name(n)] = graphview.CARD_PIC if card_shown(st, n) else n.thumb
     for g in view.groups:               # plan 40 T2: a folded group's last picture outlet
         n = graphview.group_picture(view, g) if not g.open else None
         if n is None or n.thumb is None or by_preview(n):
@@ -3326,6 +3330,74 @@ def tint_wants(st: dict, view: graphview.View, want: dict[str, str]) -> dict[str
         if hit is not None and thumb_name(hit[0]) in want:
             out[pin] = graphview.PICTURE
     return out
+
+
+def has_card(n: graphview.VNode) -> bool:
+    """Can node `n`'s thumbnail be switched to the test card? An effect's
+    can (a copy of one too): the card is put through that one effect."""
+    return n.thumb == graphview.PICTURE and graphview.kind_of(n.id.partition(":")[2]) \
+        in graphview.CARD_KINDS
+
+
+def card_shown(st: dict, n: graphview.VNode) -> bool:
+    """Is node `n`'s thumbnail showing the test card through it?"""
+    return has_card(n) and thumb_name(n) in st.get("card", ())
+
+
+def toggle_card(st: dict, n: graphview.VNode) -> bool:
+    """Switch node `n`'s thumbnail between its picture and the test card
+    through it; what it shows now (True: the card). Nothing for a node
+    with no card to show."""
+    if not has_card(n):
+        return False
+    shown = st.setdefault("card", set())
+    name = thumb_name(n)
+    if name in shown:
+        shown.discard(name)
+        return False
+    shown.add(name)
+    return True
+
+
+# the "card" chip in a thumbnail's top right corner: its size, and its inset
+CHIP_W, CHIP_H, CHIP_IN = 38.0, 17.0, 4.0
+CHIP_TIP_ON = ("Showing the test card through this effect: what it does to straight lines, "
+               "a circle and flat colour. Nothing on the outputs changes. Click for its picture.")
+CHIP_TIP_OFF = ("Showing this effect's picture. Click to show the test card through it "
+                "instead (a Test card effect in the graph sets its grid). A view setting: not saved.")
+
+
+def chip_rect(p0, width: float = NODE_W) -> tuple[tuple[float, float], tuple[float, float]]:
+    """The chip's box for a thumbnail whose top left is `p0` (screen px)."""
+    x1, y0 = p0[0] + width - CHIP_IN, p0[1] + CHIP_IN
+    return (x1 - CHIP_W, y0), (x1, y0 + CHIP_H)
+
+
+def in_rect(pos, rect) -> bool:
+    (x0, y0), (x1, y1) = rect
+    return x0 <= pos[0] < x1 and y0 <= pos[1] < y1
+
+
+def _chip(st: dict, n: graphview.VNode, p0, hovered: bool) -> None:
+    """The "card" chip on effect node `n`'s thumbnail: drawn while the
+    thumbnail is hovered or the card is shown (lit then), and a click on it
+    switches what the thumbnail shows (`toggle_card`)."""
+    on = card_shown(st, n)
+    if not (on or hovered):
+        return
+    a, b = chip_rect((p0.x, p0.y))
+    over = hovered and in_rect(tuple(imgui.get_mouse_pos()), (a, b))
+    if over:
+        st["chip_hover"] = n.id
+        if imgui.is_mouse_clicked(0):
+            on = toggle_card(st, n)
+    dl = imgui.get_window_draw_list()
+    ground = (0.9, 0.9, 0.9, 0.95) if on else (0.0, 0.0, 0.0, 0.75 if over else 0.55)
+    ink = (0.05, 0.05, 0.05, 1.0) if on else (0.9, 0.9, 0.9, 1.0)
+    dl.add_rect_filled(imgui.ImVec2(*a), imgui.ImVec2(*b), ui.u32(imgui.ImVec4(*ground)), 3.0)
+    size = imgui.calc_text_size("card")
+    dl.add_text(imgui.ImVec2(a[0] + (CHIP_W - size.x) * 0.5, a[1] + (CHIP_H - size.y) * 0.5),
+                ui.u32(imgui.ImVec4(*ink)), "card")
 
 
 def _where(st: dict, nid: str):
@@ -3386,7 +3458,8 @@ def _thumb(st: dict, n: graphview.VNode) -> None:
     as the backdrop is."""
     p0 = imgui.get_cursor_screen_pos()
     imgui.dummy(imgui.ImVec2(NODE_W, graphview.THUMB_H))
-    if imgui.is_item_hovered():                 # plan 37 C2: the hover gives details
+    hovered = imgui.is_item_hovered()
+    if hovered:                                 # plan 37 C2: the hover gives details
         st["thumb_hover"] = n.id
     p1 = imgui.ImVec2(p0.x + NODE_W, p0.y + graphview.THUMB_H)
     dl = imgui.get_window_draw_list()
@@ -3396,6 +3469,8 @@ def _thumb(st: dict, n: graphview.VNode) -> None:
         a, b = backdrop_rect((p0.x, p0.y), (NODE_W, graphview.THUMB_H), tuple(tex.size))
         dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
                      imgui.ImVec2(0, 1), imgui.ImVec2(1, 0), ui.u32(imgui.ImVec4(k, k, k, 1.0)))
+    if has_card(n):
+        _chip(st, n, p0, hovered)
     words = graphview.mask_words(n) if k < 1.0 else ""
     if words:                                   # SM3: no mask, and it says why, on the node
         step = imgui.get_text_line_height_with_spacing()
@@ -3431,7 +3506,11 @@ def thumb_tip(st: dict, n: graphview.VNode) -> str:
     """Hovering node `n`'s thumbnail (plan 37 C2, P1): `graphview.picture_hover`
     with its GPU time from the SYSTEM page's medians (`st["gpu_ms"]`, by its
     render node's name), and its status when it has one."""
+    if has_card(n) and st.get("chip_hover") == n.id:    # on the chip: what a click does
+        return CHIP_TIP_ON if card_shown(st, n) else CHIP_TIP_OFF
     tip = graphview.picture_hover(n, st.get("gpu_ms", {}).get(thumb_name(n)))
+    if card_shown(st, n):
+        tip += "\nshowing the test card through it"
     return tip + (f"\n{n.status}" if n.status else "")
 
 

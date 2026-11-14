@@ -1047,7 +1047,8 @@ class FxChain:
 
     def run_one(self, name: str, src: moderngl.Texture, dst: moderngl.Framebuffer,
                 t: float, opaque: int | None = None,
-                aux: moderngl.Texture | None = None) -> None:
+                aux: moderngl.Texture | None = None,
+                res: tuple[int, int] | None = None) -> None:
         """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
         program over `src` into `dst`'s viewport, every uniform set, the
         clocks moved first (once per frame time,
@@ -1058,7 +1059,10 @@ class FxChain:
         hands' layer, whose ground is see-through whatever the window's.
         `aux` (plan 32 R): the picture wired into the effect's `aux` port,
         bound on unit 1 (`u_aux_on` 1); None leaves it off, and `aux(uv)`
-        reads transparent black."""
+        reads transparent black. `res`: the size the pass is told its
+        picture has (`u_res`) when that is not `src`'s — a generator painted
+        over no picture of the size it draws at (the test card,
+        `render.card_through`)."""
         self.state.advance_to(t)
         pv = self._program(name)
         ctx = self.ctx
@@ -1075,7 +1079,7 @@ class FxChain:
                 self._copy_vao.render(moderngl.TRIANGLES, vertices=3)
                 return
             prog, vao = pv
-            self._uniforms(prog, name, src.size, t,
+            self._uniforms(prog, name, src.size if res is None else res, t,
                            self._opaque() if opaque is None else int(opaque))
             for k, x in one.items():
                 self._set(prog, k, x)

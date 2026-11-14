@@ -946,6 +946,12 @@ NO_SUCH_COPY = "copy of {of}: no such effect instance in the graph"
 # the modulation side) stay text.
 PICTURE, SCENE_PIC, LAYER_PIC, WINDOW_PIC = "picture", "scene", "layer", "window"
 MASK_PIC = "mask"
+# an effect's thumbnail switched to the test card (the node's "card" chip,
+# `ui_graph.card_shown`): not the picture it made but the test card put
+# through it (`render.card_through`). The page asks with this word; no kind
+# has it in `THUMBS`, and a node's own `thumb` stays "picture"
+CARD_PIC = "card"
+CARD_KINDS = ("effect", "copy")         # the kinds whose thumbnail has the chip
 THUMBS: dict[str, str] = {
     "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
     "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,

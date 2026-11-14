@@ -98,6 +98,18 @@ through again, and its mix lays the card over the scene. Knobs: Grid
 (squares up the frame), Line (px), Circle, Bars, Ground. It is the card
 the demo video shows in its corner, as a node.
 
+**The card on an effect's own thumbnail.** Every effect node on the graph
+has a `card` chip in the top right corner of its thumbnail (it appears on
+hover). Click it and that thumbnail shows the test card put through that one
+effect, with its knobs and clocks as they are, in place of the picture it
+made; click again for the picture. Nothing in the graph is rewired and the
+outputs never see the card, so it is safe during a show. It is a view
+setting: not saved, not an undo step. The card's grid follows a Test card
+effect's knobs when the graph holds one, else the file's defaults. What it
+does not show: the effect's `aux` input, or anything fed back round a loop.
+A node that reaches no output has no thumbnail, card or not.
+(`render.card_through`, `ui_graph.toggle_card`, `tests/test_thumb_card.py`.)
+
 ## Adding another distortion
 
 Write a file that computes `d`, the offset in frame heights, and ends

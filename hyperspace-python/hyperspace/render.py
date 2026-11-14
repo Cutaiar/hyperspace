@@ -165,7 +165,17 @@ from .graph import (
 from .lookback import Dreamer, DreamState, Lookback
 from .masks import MaskPasses
 from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
-from .outputs import Handoff, Presenter, PreviewTextures, Switches, View, capped, fit
+from .outputs import (
+    THUMB_PX,
+    Handoff,
+    Presenter,
+    PreviewTextures,
+    Switches,
+    View,
+    capped,
+    fit,
+    thumb_size,
+)
 from .patterns import MODES, SPEED
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
@@ -1066,7 +1076,10 @@ def thumb_source(frame: Frame, name: str, how: str,
       never asked here;
     - ``mask``: a matte or a segment (SM3): the mask this frame already
       made, at its own size (`graph.mask_made`), else None: a thumbnail
-      never makes one. The caller reads it as a mask (`PreviewTextures.put`)."""
+      never makes one. The caller reads it as a mask (`PreviewTextures.put`);
+    - ``card``: an effect whose thumbnail is switched to the test card
+      (`card_through`): never the frame's picture, and nothing of the
+      frame is pulled for it."""
     g = frame.graph
     node = g.nodes.get(name) if g is not None else None
     if node is None:
@@ -1081,6 +1094,8 @@ def thumb_source(frame: Frame, name: str, how: str,
         return own[0] if own and isinstance(own[0], moderngl.Texture) else None
     if how == "mask":
         return mask_made(node, frame)
+    if how == "card":
+        return card_through(frame, node)
     if how in ("scene", "layer"):
         if how == "layer":
             layer = next((n for n in g.order if isinstance(n, HandsLayer)
@@ -1103,6 +1118,42 @@ def thumb_source(frame: Frame, name: str, how: str,
     if not node.reads(frame):
         return None
     return picture(frame, node)
+
+
+CARD_EFFECT = "testcard"        # the effect file that draws the card (shaders/fx/testcard.glsl)
+# the card is put through an effect at twice a thumbnail's size, so the
+# thumbnail's own downsample smooths what the pass made
+CARD_PX = 2 * THUMB_PX
+
+
+def card_through(frame: Frame, node) -> moderngl.Texture | None:
+    """The test card put through effect node `node`, as a small texture: what
+    its thumbnail shows while switched to the card (`graphview.CARD_PIC`).
+
+    The card is the `testcard` effect file's picture at the frame's size
+    (`Renderer.card`: its knobs are the graph's Test card's when it holds
+    one, else the file's defaults), so the pass is told the frame's size and a knob
+    in px — a cell, a split — is as big against the card as against the
+    picture. The pass runs once more for this, into a thumbnail-sized
+    texture, with the effect's values and clocks as the frame left them;
+    nothing of the frame is read, pulled or changed, and the outputs never
+    see the card. An effect that is off shows the card as it is, as it
+    passes its picture through. Its `aux` reads nothing here: what an aux
+    adds is the graph's, not the effect's own. None for a node that is no
+    effect, or with no `testcard` file to draw."""
+    r = frame.r
+    name = getattr(node, "effect", None)
+    chain = r.fx
+    if name is None or name not in chain.state.specs:
+        return None
+    card = r.card(frame.size, frame.t)
+    if card is None:
+        return None
+    if not chain.state.live(name) or not chain.ready(name):
+        return card
+    tex, fbo = r.card_out(thumb_size(frame.size, CARD_PX))
+    chain.run_one(name, card, fbo, frame.t, opaque=1)
+    return tex
 
 
 class Renderer:
@@ -1234,6 +1285,13 @@ class Renderer:
         # until then)
         self.thumbs = PreviewTextures(ctx)
         self._thumb_frame: Frame | None = None
+        # the test card at the frame's size (`card`), what it was drawn
+        # from, and the small textures the card is put through an effect
+        # into (`card_out`), by size
+        self._card: tuple | None = None
+        self._card_key: tuple | None = None
+        self._card_fx: FxChain | None = None     # the card's own chain, over the file
+        self._card_outs: dict[tuple[int, int], tuple] = {}
         self._view_now: ViewState | None = None    # the frame's (`_draw_frame`)
         # face program is assembled around the user-editable patterns.glsl
         self.pattern_error = ""
@@ -1925,6 +1983,59 @@ class Renderer:
         if th is None:
             th = self.thumbs = PreviewTextures(self.ctx)
         return th
+
+    def card(self, size: tuple[int, int], t: float) -> moderngl.Texture | None:
+        """The test card at `size` (`card_through`): the `testcard` effect
+        file's picture, drawn again only when the size, a knob or the file
+        changed. Its knobs are the graph's Test card's when the graph holds
+        one, else the file's defaults: the state holds only the effects the
+        graph names (`FxState.hold`), so the card is drawn by a chain of the
+        renderer's own over the file, and nothing of the graph's is touched.
+        Its lines are widened by the frame's size over the thumbnail's, so
+        Line is their width in the thumbnail's pixels and a 1-px line of a
+        1080p card is not lost in a 192-px picture; mipmapped, so the smaller
+        pass over it reads it smoothly. None when it cannot be drawn."""
+        st = self.fx.state
+        spec = (getattr(st, "files", None) or st.specs).get(CARD_EFFECT)
+        if spec is None:
+            return None
+        own = self._card_fx
+        if own is None or own.state.specs[CARD_EFFECT].source != spec.source:
+            own = self._card_fx = FxChain(self.ctx, FxState())
+            self._card_key = None
+        if CARD_EFFECT not in own.state.specs or not own.ready(CARD_EFFECT):
+            return None
+        knobs = st.values.get(CARD_EFFECT) or {}
+        vals = {q.key: knobs.get(q.key, q.default) for q in own.state.specs[CARD_EFFECT].params}
+        size = (max(int(size[0]), 1), max(int(size[1]), 1))
+        key = (size, tuple(vals.items()))
+        if self._card is not None and self._card_key == key:
+            return self._card[0]
+        if self._card is None or tuple(self._card[0].size) != size:
+            if self._card is not None:
+                for o in self._card[::-1]:
+                    o.release()
+            tex = self.ctx.texture(size, 4)
+            tex.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
+            self._card = (tex, self.ctx.framebuffer(color_attachments=[tex]))
+        tex, fbo = self._card
+        if "line" in vals:
+            vals["line"] = float(vals["line"]) * max(size) / max(thumb_size(size, THUMB_PX))
+        own.state.values[CARD_EFFECT].update(on=True, mix=1.0, blend=0, **vals)
+        own.run_one(CARD_EFFECT, self._blank, fbo, t, opaque=1, res=size)
+        tex.build_mipmaps()
+        self._card_key = key
+        return tex
+
+    def card_out(self, size: tuple[int, int]) -> tuple:
+        """(texture, framebuffer) of `size` for the card put through an
+        effect: one per size, each wanted thumbnail copied out of it
+        (`PreviewTextures.put`) before the next is painted into it."""
+        got = self._card_outs.get(size)
+        if got is None:
+            tex = self.ctx.texture(size, 4)
+            got = self._card_outs[size] = (tex, self.ctx.framebuffer(color_attachments=[tex]))
+        return got
 
     def _thumbnails(self) -> None:
         """The end of a frame (`_for_the_panel`): each node the GRAPH page
