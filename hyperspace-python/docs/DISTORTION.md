@@ -88,6 +88,16 @@ uses it.
 | Action | `shift` · `zoom` · `stretch` (one way; low numbers pull a line into streaks) · `turn` · `bulge` (a lens inside the cell's inscribed circle, still at its rim, so cells stay joined) · `swap` (blocks pair off and each pair trades places: every cell is shown once, none twice) |
 | Angle, Split | The way shift and stretch go, and whether swap trades across or up and down; the colour split |
 
+## Test card (`testcard.glsl`)
+
+A generator, not a distortion: a grid, a cross, a circle and six colour
+bars, drawn in place of its picture. Wire it ahead of an effect (scene →
+test card → Wave) and that effect's thumbnail on the graph shows what the
+field does to straight lines; switch the test card off and the scene comes
+through again, and its mix lays the card over the scene. Knobs: Grid
+(squares up the frame), Line (px), Circle, Bars, Ground. It is the card
+the demo video shows in its corner, as a node.
+
 ## Adding another distortion
 
 Write a file that computes `d`, the offset in frame heights, and ends
