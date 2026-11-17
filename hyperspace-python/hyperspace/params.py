@@ -2665,6 +2665,7 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         view.body = None            # the pose the 3D switch folded in (plan 28)
         view.yaw = view.pitch = 0.0
         view.zoom, view.pan = 1.0, [0.0, 0.0]
+        view.dive.reset()           # back out of a self-similar shape (fractal.py)
 
     r.trigger("camera.reset", "Reset view", reset_view, group=g,
               tip="Reset rotation phases, orbit, zoom and pan.")

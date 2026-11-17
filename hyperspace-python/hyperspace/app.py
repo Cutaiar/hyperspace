@@ -1838,6 +1838,14 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         ok, reloader.runtime_error = False, _err("view.integrate", e)
     if said := _off_air(h, "integrate", lambda d: d.view.integrate(dt)):
         ok, reloader.runtime_error = False, said
+    # a self-similar shape's view, re-rooted once the zoom has gone a level
+    # in or out (fractal.py): the same picture at a zoom that never runs out
+    try:
+        h.view.reroot(reg)
+    except Exception as e:  # noqa: BLE001
+        ok, reloader.runtime_error = False, _err("view.reroot", e)
+    if said := _off_air(h, "reroot", lambda d: d.view.reroot(d.reg)):
+        ok, reloader.runtime_error = False, said
     # the world (plan 59): the shape's home from this frame's params, the
     # puppets (the palms, read after HandsIO.poll), then the physics' fixed
     # steps; the render below reads the poses

@@ -111,6 +111,7 @@ import moderngl
 import numpy as np
 
 from . import field as _field_mod
+from . import fractal as _fractal
 from . import poi
 from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
     LAYOUT_GRID,
@@ -3254,13 +3255,20 @@ class Renderer:
         cleared it and drew the solid geometry (the hands) first, whose
         depth hides the shape behind them."""
         g = geom(s.shape)
+        # a self-similar shape (fractal.py) is made for the frame: what the
+        # eye can see of it at this zoom, in the detail the screen can show
+        frac = _fractal.spec_of(s.shape)
         # a 3D shape is drawn with no W turn and cues on its depth toward
         # the 3D camera; a 4D shape is turned to its body first, and with
         # the 3D switch holding it (ViewState.held, set by integrate) by
         # its 3D angles alone; a scene, each layer at its own
         # (geometry.shape_world, plan 28's catalog)
-        P, w4, pd = shape_world(s.shape, s.ang, s.yaw, s.pitch, d4=s.depth4,
-                                flat=getattr(s, "held", False), body=getattr(s, "body", None))
+        if frac is not None and hasattr(s, "dive"):
+            g, P, w4, pd = _fractal.frame(frac, s, w, h)
+        else:
+            frac = None
+            P, w4, pd = shape_world(s.shape, s.ang, s.yaw, s.pitch, d4=s.depth4,
+                                    flat=getattr(s, "held", False), body=getattr(s, "body", None))
         # a scene's per-layer weights (geometry._scene_style), else None
         st = g.get("style")
 
@@ -3302,7 +3310,12 @@ class Renderer:
         n_inst = max(0, int(s.instances))   # 0: the ground alone (returns below)
         t_m = self.now(t_now)
 
-        near, far = pd.min(), pd.max()
+        if frac is not None:
+            # a fractal's cue has fixed ends (the octaves about the eye's
+            # distance), so a cell's weight does not move with what else is drawn
+            near, far = g["cue"]
+        else:
+            near, far = pd.min(), pd.max()
         span = max(far - near, 1e-6)
         if span < DEPTH_FLOOR:
             # pd grows toward the eye, so `far` (pd.max) is the nearest
@@ -3317,8 +3330,9 @@ class Renderer:
         order = np.argsort(edepth, kind="stable")  # painter: far first
 
         t = (edepth[order] - near) / span
-        dens = clamp(340 / max(g["m"], 1), 0.42, 1)
-        heavy = g["m"] > 500
+        dens_m = g.get("dens_m", g["m"])     # (a fractal's: a constant, fractal.DENS_M)
+        dens = clamp(340 / max(dens_m, 1), 0.42, 1)
+        heavy = dens_m > 500
         B = s.bright * dens
         alpha = np.clip((0.10 + 0.90 * t * t) * B, 0.015, 1)
 
@@ -3336,7 +3350,9 @@ class Renderer:
         # the shaders scale a stroke by its copy (field path, world space);
         # the legacy path scales it here, by the zoom, as before
         wsc = 0.0 if screen_strokes or legacy else 1.0
-        sz = 1.0 if screen_strokes or not legacy else zoom
+        # (a fractal's zoom is re-rooted as it grows — fractal.step — so its
+        # strokes take their weight from the depth cue alone)
+        sz = 1.0 if screen_strokes or not legacy or frac is not None else zoom
         wscale = clamp(0.75 + 0.35 * s.bright, 0.6, 1.35)
         width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale
         if st is not None:
@@ -3418,7 +3434,7 @@ class Renderer:
             self.ctx.enable(moderngl.DEPTH_TEST)
         draws: list[tuple] = []        # (vao, vertices, program, the most alpha a fragment has)
         try:
-            if s.faces and self._face_prog is not None:
+            if s.faces and self._face_prog is not None and frac is None:
                 tris = face_triangles(s.shape)
                 if len(tris):
                     td = (pd[tris[:, 0]] + pd[tris[:, 1]] + pd[tris[:, 2]]) / 3.0

@@ -925,9 +925,11 @@ def test_the_frame_runs_the_off_air_deck_after_the_lead_and_its_raises_cost_noth
     h.off_air = [SimpleNamespace(
         router=SimpleNamespace(modulate=boom, follow_macros=lambda: calls.append("off.macros")),
         reg=SimpleNamespace(apply=lambda: calls.append("off.apply")),
-        view=SimpleNamespace(integrate=lambda dt: calls.append("off.integrate")))]
+        view=SimpleNamespace(integrate=lambda dt: calls.append("off.integrate"),
+                             reroot=lambda reg: calls.append("off.reroot")))]
     assert app.frame(h, now=1.0, dt=DT, fps=60.0) is False      # said, the frame goes on
-    assert calls == ["off.macros", "on.modulate", "on.apply", "off.modulate", "off.integrate"]
+    assert calls == ["off.macros", "on.modulate", "on.apply", "off.modulate", "off.integrate",
+                     "off.reroot"]
     assert "deck 2 is broken" in h.reloader.runtime_error
     assert "render.draw" in log and "panel.draw" in log
 
