@@ -212,7 +212,7 @@ The index stays the identity, so the menu's order never reaches a loadable patch
 | 49 | Hopf fibration | Surfaces and fibrations | 0 | 864 | 864 |
 | 50 | Armillary sphere | Mathematical toys | 0 | 374 | 384 |
 | 51 | Geodesic sphere | Mathematical toys | 180 | 92 | 270 |
-| 52 | Sierpinski tetrahedron | Mathematical toys | 256 | 130 | 384 |
+| 52 | Sierpinski tetrahedron | Fractals | 256 | 130 | 384 |
 | 53 | Lissajous knot | Mathematical toys | 0 | 240 | 240 |
 | 54 | Loxodrome | Mathematical toys | 0 | 240 | 240 |
 | 55 | Orbit | Mathematical toys | 0 | 64 | 64 |
@@ -262,6 +262,20 @@ The index stays the identity, so the menu's order never reaches a loadable patch
 | 99 | Truncated icosahedral prism | Prisms and pyramids | 154 | 120 | 240 |
 | 100 | Flow mark | Vector marks | 5 | 130 | 130 |
 | 101 | Flow capsules | Vector marks | 1040 | 970 | 2000 |
+| 102 | Octahedron flake | Fractals | 0 | 85 | 264 |
+| 103 | Menger sponge | Fractals | 0 | 896 | 1992 |
+| 104 | Cantor dust | Fractals | 0 | 512 | 660 |
+| 105 | Vicsek cross | Fractals | 0 | 232 | 456 |
+| 106 | Icosahedron flake | Fractals | 0 | 104 | 300 |
+
+**Fractals** (3D, appended last; `fractal.py`). Shapes made of copies of
+themselves — the Sierpinski tetrahedron (row 52), the octahedron and
+icosahedron flakes (a copy at each corner), and three cuts of a cube into
+27: the Menger sponge (the 20 on its corners and edges), Cantor dust (the
+8 corners) and the Vicsek cross (the middle and the 6 face centres). The
+row above is each one's first levels, what a thumbnail and `geom` hold;
+on screen it is drawn for the frame, to the detail the zoom shows, and
+`camera.zoom` never runs out on it (`fractal.step`). No faces.
 
 **Vector marks** (3D, after the prisms). A subject read from a vector
 source instead of a formula: the Wispr Flow mark, five pill-shaped bars

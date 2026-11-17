@@ -2,7 +2,8 @@
 forever (fractal.py) — in for sixteen levels at the stick's rate, a pan
 across it deep inside, then all the way out to the whole shape. Each
 frame's `camera.zoom` and depth go to `$FRACTAL_LOG` (a JSON list), for a
-readout under the video.
+readout under the video. With `$FRACTAL_TOUR` (shape names, comma-separated)
+it visits those instead, each in and out again.
 
     uv run python tools/app_driver.py tools/drive_fractal.py --out /tmp/fractal --every 1
 """
@@ -30,6 +31,22 @@ def script(d, panel):
             log.append({"zoom": float(view.zoom), "depth": len(view.dive.path), "say": say})
             yield
 
+    tour = os.environ.get("FRACTAL_TOUR")
+    if tour:
+        # the others, one after another: in, and out again
+        for name in tour.split(","):
+            reg["view.shape"].set(shape_index(name))
+            reg["camera.reset"].fire()
+            reg["camera.zoom"].set_value(1.3)
+            reg["camera.yaw"].set_value(0.45)
+            reg["camera.pitch"].set_value(0.3)
+            yield from d.wait(4)
+            yield from frames(40, say=name)
+            yield from frames(22 * 11, zoom=IN, say=f"{name}: zooming in")
+            yield from frames(30, say=name)
+            yield from frames(22 * 11, zoom=1 / IN, say=f"{name}: zooming out")
+        _save(log)
+        return
     reg["view.shape"].set(shape_index("Sierpinski tetrahedron"))
     reg["camera.zoom"].set_value(0.9)
     reg["camera.yaw"].set_value(0.45)
@@ -45,6 +62,10 @@ def script(d, panel):
     yield from frames(22 * 6, zoom=IN, say="and in again")
     yield from frames(22 * 22, zoom=1 / IN, say="zooming out")
     yield from frames(70, say="out: the whole shape, centred")
+    _save(log)
+
+
+def _save(log) -> None:
     if os.environ.get("FRACTAL_LOG"):
         with open(os.environ["FRACTAL_LOG"], "w") as f:
             json.dump(log, f)

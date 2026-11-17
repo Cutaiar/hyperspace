@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from hyperspace import fractal, geometry
 from hyperspace.analysis import Analyser
@@ -17,8 +18,11 @@ SIERPINSKI = geometry.shape_index("Sierpinski tetrahedron")
 W, H = 960, 540
 
 
-def _view(zoom: float = 1.0) -> ViewState:
-    s = ViewState(shape=SIERPINSKI, zoom=zoom)
+EVERY = pytest.mark.parametrize("name", list(fractal.FRACTALS))
+
+
+def _view(zoom: float = 1.0, name: str = "Sierpinski tetrahedron") -> ViewState:
+    s = ViewState(shape=geometry.shape_index(name), zoom=zoom)
     s.ang = [0.3, 0.7, 1.1, 0.0, 0.0, 0.0]
     s.yaw, s.pitch = 0.4, 0.25
     return s
@@ -41,8 +45,21 @@ def test_the_split_of_a_tetrahedron_adds_an_octahedron():
     assert f.new_V.shape == (6, 3) and len(f.new_E) == 12 and f.new_dot.all()
 
 
-def test_a_reroot_moves_nothing_in_the_world():
-    s = _view(fractal.Z_IN * 1.01)
+def test_every_fractal_is_in_the_catalog_under_fractals():
+    for name in fractal.FRACTALS:
+        assert geometry.SHAPES[geometry.shape_index(name)].family == "Fractals"
+    assert {s.name for s in geometry.SHAPES if s.family == "Fractals"} == set(fractal.FRACTALS)
+
+
+def test_a_cube_is_cut_as_its_name_says():
+    assert [len(fractal.FRACTALS[n].centres)
+            for n in ("Menger sponge", "Cantor dust", "Vicsek cross")] == [20, 8, 7]
+
+
+@EVERY
+def test_a_reroot_moves_nothing_in_the_world(name):
+    s = _view(fractal.Z_IN * 1.01, name)
+    f = fractal.spec_of(s.shape)
     s.pan = [0.3, -0.2]
     before = _world(s)
     for depth in range(1, 6):
@@ -51,13 +68,14 @@ def test_a_reroot_moves_nothing_in_the_world():
         after = _world(s)
         # (the top cell's own outline is all a deeper root may add or drop)
         both = {tuple(r) for r in before} & {tuple(r) for r in after}
-        assert len(both) >= len(before) - 4 and len(both) >= len(after) - 4
-        s.zoom *= 2.0
+        assert len(both) >= len(before) - len(f.V) and len(both) >= len(after) - len(f.V)
+        s.zoom /= f.ratio
         before = _world(s)
 
 
-def test_the_zoom_never_runs_out():
-    s = _view()
+@EVERY
+def test_the_zoom_never_runs_out(name):
+    s = _view(name=name)
     reg = _reg(s)
     for _ in range(600):
         reg["camera.zoom"].scale(1.05)
@@ -67,13 +85,14 @@ def test_the_zoom_never_runs_out():
         assert s.zoom < fractal.Z_IN
         assert reg["camera.zoom"].base == s.zoom
         assert max(abs(s.pan[0]), abs(s.pan[1])) < 11.0
-    assert len(s.dive.path) > 30
+    assert len(s.dive.path) > 20
     g, _, _, _ = fractal.frame(fractal.spec_of(s.shape), s, W, H)
-    assert 200 < g["m"] < 12 * (fractal.BUDGET + 800)
+    assert 100 < g["m"] <= fractal.BUDGET + len(fractal.spec_of(s.shape).E)
 
 
-def test_all_the_way_out_is_the_whole_shape_centred():
-    s = _view()
+@EVERY
+def test_all_the_way_out_is_the_whole_shape_centred(name):
+    s = _view(name=name)
     for _ in range(300):
         s.zoom *= 1.05
         s.integrate(1 / 60)

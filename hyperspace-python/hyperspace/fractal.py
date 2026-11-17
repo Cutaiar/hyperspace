@@ -59,11 +59,13 @@ Z_HOME = 1.0
 # fractal): past the 2.3 a point inside a cell can be from the nearest of
 # its children, so the two rules agree
 OUTSIDE = 2.6
-# how many levels above the rooted cell are drawn
-ABOVE = 8
-# a cell splits once its radius is this share of the picture's shorter side;
-# what the split adds fades in over the next factor of 2, by when its own
-# children begin to
+# the cells above the rooted one are drawn up to the first this many times
+# its size (past it a float32 has too few digits for what is near the eye)
+ABOVE = 256.0
+# a cell splits once its radius is this share of the picture's shorter side
+# (`Fractal.split`, this for the pyramid: a denser fractal takes more); what
+# the split adds fades in over the next factor of 1 / ratio, by when its
+# own children begin to
 SPLIT = 0.055
 # the depth cue (the scene pass's `pd`, nearer is larger) is −log2 of the
 # distance from the eye, over this many octaves either side of the plane
@@ -75,8 +77,8 @@ FOG = 0.35
 # a cell about to pass the eye dissolves rather than sweep across the
 # picture: gone at this many octaves nearer than the middle
 CUE_GONE = 2.5
-# the most cells split in a frame; over it the frame is drawn coarser
-BUDGET = 2600
+# the most edges in a frame; over it the frame is drawn coarser
+BUDGET = 30000
 # what the stroke density reads (render.draw_scene's `dens`): a constant, so
 # a frame's weight does not move with how many edges it happens to hold
 DENS_M = 384
@@ -88,12 +90,24 @@ class Fractal:
     (n, 3) and edges, unit circumradius about the origin; cell k is the
     shape × `ratio` about `centres[k]`. `new_V`, `new_E`: what splitting a
     cell adds to its outline — its children's edges but for those that lie
-    along its own — and `new_dot`, which of those points are new corners."""
+    along its own — and `new_dot`, which of those points are new corners.
+    `outline`: whether the whole shape's own outline is part of the picture
+    (not where the cells stand clear of it: the Vicsek cross); `split`: how
+    large a cell is on screen before it splits (`SPLIT`); `far`: how many
+    octaves past the middle it is drawn to (`CUE_FAR`) — a fractal that fills
+    more of space is seen less far into, or the picture is all lines; `near`:
+    how many octaves nearer than the middle a cell is gone (`CUE_GONE`); `ink`:
+    × its strokes' alpha, for the same reason."""
 
     V: np.ndarray
     E: np.ndarray
     centres: np.ndarray
     ratio: float
+    outline: bool = True
+    split: float = SPLIT
+    far: float = CUE_FAR
+    near: float = CUE_GONE
+    ink: float = 1.0
     new_V: np.ndarray = field(init=False)
     new_E: np.ndarray = field(init=False)
     new_dot: np.ndarray = field(init=False)
@@ -132,15 +146,69 @@ class Fractal:
         object.__setattr__(self, "new_dot", np.array([k not in own for k in keys], dtype=bool))
 
 
-def _sierpinski() -> Fractal:
-    V = np.asarray(geometry._tetra3(), dtype=np.float64)
+def _edges(V: np.ndarray) -> np.ndarray:
+    return np.array(geometry.edges_by_min_dist(V.tolist()), dtype=np.int32)
+
+
+def _at_corners(V3, ratio: float, **kw) -> Fractal:
+    """A flake: a copy of the solid at each of its corners."""
+    V = np.asarray(V3, dtype=np.float64)
     V = V / np.linalg.norm(V[0])
-    E = np.array([[a, b] for a in range(4) for b in range(a + 1, 4)], dtype=np.int32)
-    return Fractal(V, E, V.copy(), 0.5)
+    return Fractal(V, _edges(V), V.copy(), ratio, **kw)
 
 
-# by the shape's name in the catalog (geometry.SHAPES)
-FRACTALS: dict[str, Fractal] = {"Sierpinski tetrahedron": _sierpinski()}
+def _cubes(keep, **kw) -> Fractal:
+    """A cube cut 3 × 3 × 3, the small cubes `keep` says (of its place in
+    {−1, 0, 1}³) kept."""
+    V = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]) / math.sqrt(3.0)
+    at = [c for c in np.ndindex(3, 3, 3) if keep(sorted(abs(x - 1) for x in c))]
+    return Fractal(V, _edges(V), (np.array(at, dtype=np.float64) - 1.0) / math.sqrt(3.0),
+                   1.0 / 3.0, **kw)
+
+
+def _octahedron() -> list:
+    return [[s if k == a else 0.0 for k in range(3)] for a in range(3) for s in (1.0, -1.0)]
+
+
+# by the shape's name in the catalog (geometry.SHAPES). A cube's small cube
+# is at a corner (1, 1, 1 from the middle), on an edge (0, 1, 1), in a face
+# (0, 0, 1) or the middle one (0, 0, 0)
+FRACTALS: dict[str, Fractal] = {
+    "Sierpinski tetrahedron": _at_corners(geometry._tetra3(), 0.5),
+    "Octahedron flake": _at_corners(_octahedron(), 0.5, split=0.14, far=0.9, near=1.2, ink=0.7),
+    "Icosahedron flake": _at_corners(geometry.icosa3(), 1.0 / (1.0 + geometry.PHI), split=0.20, far=0.9, near=1.2, ink=0.7),
+    "Menger sponge": _cubes(lambda c: c.count(0) <= 1, split=0.15, far=0.8, near=1.2, ink=0.8),
+    "Cantor dust": _cubes(lambda c: c.count(0) == 0, split=0.07, far=2.5),
+    "Vicsek cross": _cubes(lambda c: c.count(0) >= 2, outline=False, split=0.08, far=2.0),
+}
+
+
+def build(name: str, depth: int) -> dict:
+    """The fractal as fixed geometry, `depth` splits deep: what the catalog,
+    a thumbnail and `geometry.geom` hold of it (no faces)."""
+    f = FRACTALS[name]
+    ids: dict[tuple, int] = {}
+    V: list[list[float]] = []
+    E: set[tuple[int, int]] = set()
+
+    def add(P, edges) -> None:
+        ix = []
+        for q in P:
+            k = geometry.kkey(q)
+            if k not in ids:
+                ids[k] = len(V)
+                V.append([float(x) for x in q] + [0.0])
+            ix.append(ids[k])
+        E.update((min(ix[a], ix[b]), max(ix[a], ix[b])) for a, b in edges)
+
+    if f.outline:
+        add(f.V, f.E)
+    cells = [(1.0, np.zeros(3))]
+    for _ in range(depth):
+        for s, o in cells:
+            add(s * f.new_V + o, f.new_E)
+        cells = [(s * f.ratio, o + s * (1.0 - f.ratio) * c) for s, o in cells for c in f.centres]
+    return {"V": V, "E": [list(e) for e in sorted(E)], "F": []}
 
 
 def spec_of(i: int) -> Fractal | None:
@@ -257,25 +325,30 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
     tx, ty = (tan * aspect, tan) if aspect >= 1.0 else (tan, tan / aspect)
     nx, ny = math.hypot(1.0, tx), math.hypot(1.0, ty)
     px = min(w, h) / 2.0 / tan                      # px a unit spans at distance 1
-    far = min(dist * 2.0 ** CUE_FAR, EYE_FAR)
-    gone = dist * 2.0 ** -CUE_GONE
+    far = min(dist * 2.0 ** spec.far, EYE_FAR)
+    gone = dist * 2.0 ** -spec.near
+    top = min(CUE_NEAR, 0.4 * spec.near)            # the cue's near end: full weight
     r = spec.ratio
 
     # the top cell: up the path from the rooted one (scale 1 at the origin)
-    scale, origin = 1.0, np.zeros(3)
-    above = d.path[-ABOVE:] if d.path else []
-    for k in reversed(above):
+    scale, origin, up = 1.0, np.zeros(3), 0
+    for k in reversed(d.path):
+        if scale >= ABOVE:
+            break
         scale = scale / r
         origin = origin - scale * (1.0 - r) * spec.centres[k]
-    whole = len(above) == len(d.path)
+        up += 1
+    whole = spec.outline and up == len(d.path)
 
-    split = SPLIT * min(w, h)
+    split = spec.split * min(w, h)
+    grow = 1.0 / r - 1.0                            # a split is all in by a child's own
+    most = BUDGET // max(len(spec.new_E), 1)
     while True:
         sc = np.array([scale])
         og = origin[None]
         got_s, got_o, got_a = [], [], []
         total = 0
-        for _ in range(ABOVE + 24):
+        for _ in range(48):
             c = zoom * (og @ M) + p                  # the cells' centres in the world
             R = zoom * sc
             depth = dist - c[:, 2]
@@ -291,18 +364,18 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
             # what this split adds: in over the next factor of 2 in size,
             # out over the far end of the cue
             cue = -np.log2(np.maximum(range_, 1e-9) / dist)
-            fog = (_smooth((cue + CUE_FAR) / (FOG * (CUE_NEAR + CUE_FAR)))
-                   * _smooth((CUE_GONE - cue) / (CUE_GONE - CUE_NEAR)))
+            fog = (_smooth((cue + spec.far) / (FOG * (top + spec.far)))
+                   * _smooth((spec.near - cue) / (spec.near - top)))
             got_s.append(sc)
             got_o.append(og)
-            got_a.append(_smooth((size - split) / split) * fog)
+            got_a.append(_smooth((size - split) / (split * grow)) * fog * spec.ink)
             total += len(sc)
-            if total > BUDGET:
+            if total > most:
                 break
             n = len(spec.centres)
             og = (og[:, None, :] + (sc * (1.0 - r))[:, None, None] * spec.centres[None]).reshape(-1, 3)
             sc = np.repeat(sc * r, n)
-        if total <= BUDGET:
+        if total <= most:
             break
         split *= 1.35                                # too much to draw: coarser
 
@@ -320,7 +393,7 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
         # the whole shape's own outline, while the view can reach it
         E = np.concatenate([E, spec.E + len(X)])
         X = np.concatenate([X, scale * spec.V + origin])
-        e_alpha = np.concatenate([e_alpha, np.ones(len(spec.E))])
+        e_alpha = np.concatenate([e_alpha, np.full(len(spec.E), spec.ink)])
         p_alpha = np.concatenate([p_alpha, np.ones(len(spec.V))])
 
     P = X @ M
@@ -329,11 +402,11 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
     world[:, 0] += p[0]
     world[:, 1] += p[1]
     range_ = np.sqrt(world[:, 0] ** 2 + world[:, 1] ** 2 + (dist - world[:, 2]) ** 2)
-    pd = np.clip(-np.log2(np.maximum(range_, 1e-9) / dist), -CUE_FAR, CUE_NEAR)
+    pd = np.clip(-np.log2(np.maximum(range_, 1e-9) / dist), -spec.far, top)
     n, m = len(X), len(E)
     st = {"e_alpha": e_alpha, "e_width": np.ones(m), "e_rgb": np.ones((m, 3)),
           "e_m": np.full(m, float(DENS_M)), "p_alpha": p_alpha, "p_rgb": np.ones((n, 3)),
           "p_tinted": np.zeros(n, bool), "f_alpha": np.ones(0)}
     g = {"V": X, "E": E.astype(np.int32), "n": n, "m": m, "style": st,
-         "cue": (-CUE_FAR, CUE_NEAR), "dens_m": DENS_M}
+         "cue": (-spec.far, top), "dens_m": DENS_M}
     return g, P, np.full(n, float(s.depth4)), pd
