@@ -1508,6 +1508,10 @@ SHAPES = [
           lambda: _build_fractal("Icosahedron flake", 1), dims=3, family="Fractals"),
     Shape("Sierpinski 5-cell", "4D fractal · 5 at ½, dimension 2.32", 0, "ln 5 / ln 2",
           lambda: _build_fractal("Sierpinski 5-cell", 2), family="4D fractals"),
+    Shape("4D Cantor dust", "4D fractal · 16 at ⅓, dimension 2.52", 0, "ln 16 / ln 3",
+          lambda: _build_fractal("4D Cantor dust", 1), family="4D fractals"),
+    Shape("4D Vicsek cross", "4D fractal · 9 at ⅓, dimension 2", 0, "ln 9 / ln 3",
+          lambda: _build_fractal("4D Vicsek cross", 2), family="4D fractals"),
 ]
 
 # The Shape menu (ui.Panel._shape_combo): sections, each a run of

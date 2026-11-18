@@ -268,6 +268,8 @@ The index stays the identity, so the menu's order never reaches a loadable patch
 | 105 | Vicsek cross | Fractals | 0 | 232 | 456 |
 | 106 | Icosahedron flake | Fractals | 0 | 104 | 300 |
 | 107 | Sierpinski 5-cell | 4D fractals | 0 | 65 | 190 |
+| 108 | 4D Cantor dust | 4D fractals | 0 | 256 | 480 |
+| 109 | 4D Vicsek cross | 4D fractals | 0 | 736 | 1824 |
 
 **Fractals** (3D, appended last; `fractal.py`). Shapes made of copies of
 themselves — the Sierpinski tetrahedron (row 52), the octahedron and
@@ -284,6 +286,10 @@ scale in 4D, before the 4D divide — the shadow of a 4D fractal is not
 self-similar, the fractal is — so the view dives toward the 4D origin and
 re-roots there in all four coordinates (`Dive.w` beside `Dive.z`); what
 comes near the 4D eye along w, or goes far from it, fades (`fractal.W_*`).
+Two cuts of a tesseract into 81 follow it: **4D Cantor dust** (its 16
+corners, dimension ≈ 2.52) and the **4D Vicsek cross** (its middle and its
+8 cells' middles, dimension 2). A split of a tesseract adds hundreds of
+edges, so they are drawn coarser than the rest (`Fractal.split`).
 
 **Vector marks** (3D, after the prisms). A subject read from a vector
 source instead of a formula: the Wispr Flow mark, five pill-shaped bars

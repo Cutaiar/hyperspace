@@ -54,7 +54,8 @@ def test_every_fractal_is_in_the_catalog_under_fractals():
 
 def test_a_cube_is_cut_as_its_name_says():
     assert [len(fractal.FRACTALS[n].centres)
-            for n in ("Menger sponge", "Cantor dust", "Vicsek cross")] == [20, 8, 7]
+            for n in ("Menger sponge", "Cantor dust", "Vicsek cross",
+                      "4D Cantor dust", "4D Vicsek cross")] == [20, 8, 7, 16, 9]
 
 
 @EVERY

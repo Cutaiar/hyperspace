@@ -747,5 +747,19 @@
   "m": 190,
   "faces": 0,
   "sha256": "2a8eb8e81f4b4b8b59567340f98f48299048911fa2397b16bb92e6bc94abda09"
+ },
+ "107": {
+  "name": "4D Cantor dust",
+  "n": 256,
+  "m": 480,
+  "faces": 0,
+  "sha256": "cf7ea7ce9414014036d1c9ec423d1b00d116557773eb04e0048bfacfff74c7d6"
+ },
+ "108": {
+  "name": "4D Vicsek cross",
+  "n": 736,
+  "m": 1824,
+  "faces": 0,
+  "sha256": "a4bdc9e6e3a59cd2df91110c00ad7a9c80d8092f916e9f2aab80d8bd11cc3a68"
  }
 }

@@ -40,6 +40,7 @@ grabbed fractal is culled as if it were not turned), and a file format:
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import dataclass, field
 
@@ -169,12 +170,12 @@ def _at_corners(V3, ratio: float, **kw) -> Fractal:
     return Fractal(V, _edges(V), V.copy(), ratio, **kw)
 
 
-def _cubes(keep, **kw) -> Fractal:
-    """A cube cut 3 × 3 × 3, the small cubes `keep` says (of its place in
-    {−1, 0, 1}³) kept."""
-    V = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]) / math.sqrt(3.0)
-    at = [c for c in np.ndindex(3, 3, 3) if keep(sorted(abs(x - 1) for x in c))]
-    return Fractal(V, _edges(V), (np.array(at, dtype=np.float64) - 1.0) / math.sqrt(3.0),
+def _cubes(keep, n: int = 3, **kw) -> Fractal:
+    """A cube cut 3 × 3 × 3 (n = 4: a tesseract cut 3 × 3 × 3 × 3), the
+    small ones `keep` says (of its place in {−1, 0, 1}ⁿ) kept."""
+    V = np.array(list(itertools.product((-1, 1), repeat=n))) / math.sqrt(n)
+    at = [c for c in np.ndindex(*(3,) * n) if keep(sorted(abs(x - 1) for x in c))]
+    return Fractal(V, _edges(V), (np.array(at, dtype=np.float64) - 1.0) / math.sqrt(n),
                    1.0 / 3.0, **kw)
 
 
@@ -193,6 +194,11 @@ FRACTALS: dict[str, Fractal] = {
     "Cantor dust": _cubes(lambda c: c.count(0) == 0, split=0.07, far=2.5),
     "Vicsek cross": _cubes(lambda c: c.count(0) >= 2, outline=False, split=0.08, far=2.0),
     # 4D: the pyramid's elder — a 5-cell at each corner of a 5-cell
+    # …and the dust and the cross of a tesseract: its 16 corners; its middle
+    # and its 8 cells' middles
+    "4D Cantor dust": _cubes(lambda c: c.count(0) == 0, 4, split=0.27, far=1.0, near=1.2, ink=0.7),
+    "4D Vicsek cross": _cubes(lambda c: c.count(0) >= 3, 4, outline=False, split=0.31,
+                              far=1.0, near=1.2, ink=0.7),
     "Sierpinski 5-cell": _at_corners(geometry.simplex5(), 0.5, split=0.10, far=1.5, near=1.5, ink=0.8),
 }
 
@@ -364,6 +370,9 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
         origin = origin - scale * (1.0 - r) * spec.centres[k]
         up += 1
     whole = spec.outline and up == len(d.path)
+    # a shape with no outline of its own is its first split: drawn whole,
+    # however small, as the others' outlines are
+    bare = not spec.outline and up == len(d.path)
 
     split = spec.split * min(w, h)
     grow = 1.0 / r - 1.0                            # a split is all in by a child's own
@@ -373,7 +382,7 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
         og = origin[None]
         got_s, got_o, got_a = [], [], []
         total = 0
-        for _ in range(48):
+        for level in range(48):
             q = zoom * (og @ M) + p                  # the cells' centres, in 4D
             R4 = zoom * sc
             rho = d4 - q[:, 3]                       # how far along w from the 4D eye
@@ -389,6 +398,9 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
                     & ((np.abs(c[:, 1]) - ty * depth) / ny < R))
             size = R4 * d4 / np.maximum(rho, w_gone) / np.maximum(range_, 1e-9) * px
             go = seen & (size > split)
+            first = bare and level == 0
+            if first:
+                go = np.ones(1, bool)
             if not go.any():
                 break
             sc, og, size, range_ = sc[go], og[go], size[go], range_[go]
@@ -399,7 +411,8 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
                    * _smooth((spec.near - cue) / (spec.near - top)))
             got_s.append(sc)
             got_o.append(og)
-            got_a.append(_smooth((size - split) / (split * grow)) * fog * spec.ink)
+            grown = np.ones(1) if first else _smooth((size - split) / (split * grow))
+            got_a.append(grown * fog * spec.ink)
             total += len(sc)
             if total > most:
                 break
