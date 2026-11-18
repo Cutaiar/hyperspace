@@ -79,6 +79,13 @@ FOG = 0.35
 CUE_GONE = 2.5
 # the most edges in a frame; over it the frame is drawn coarser
 BUDGET = 30000
+# the same along w, for a 4D fractal, in octaves of the distance from the
+# 4D eye (`view.depth4`): full weight to W_NEAR nearer than the middle, gone
+# by W_GONE (the divide is by that distance: at the eye it is unbounded);
+# full weight to W_FAR farther, lost by W_LOST (where the divide has
+# gathered everything into the middle of the picture)
+W_NEAR, W_GONE = 0.5, 1.0
+W_FAR, W_LOST = 0.5, 1.2
 # what the stroke density reads (render.draw_scene's `dens`): a constant, so
 # a frame's weight does not move with how many edges it happens to hold
 DENS_M = 384
@@ -113,6 +120,11 @@ class Fractal:
     new_dot: np.ndarray = field(init=False)
 
     def __post_init__(self) -> None:
+        for name in ("V", "centres"):               # 4-vectors throughout: a 3D one at w = 0
+            a = np.asarray(getattr(self, name), dtype=np.float64)
+            if a.shape[1] == 3:
+                a = np.concatenate([a, np.zeros((len(a), 1))], axis=1)
+            object.__setattr__(self, name, a)
         r, V, E = self.ratio, self.V, self.E
         keys: dict[tuple, int] = {}
         pts: list[np.ndarray] = []
@@ -127,9 +139,9 @@ class Fractal:
         def on_own_edge(p, q) -> bool:
             for a, b in E:
                 d = V[b] - V[a]
-                if all(np.linalg.norm(np.cross(x - V[a], d)) < 1e-6
-                       and -1e-6 <= np.dot(x - V[a], d) / np.dot(d, d) <= 1 + 1e-6
-                       for x in (p, q)):
+                ts = [np.dot(x - V[a], d) / np.dot(d, d) for x in (p, q)]
+                if all(-1e-6 <= t <= 1 + 1e-6 and np.linalg.norm(x - V[a] - t * d) < 1e-6
+                       for t, x in zip(ts, (p, q), strict=True)):
                     return True
             return False
 
@@ -180,6 +192,8 @@ FRACTALS: dict[str, Fractal] = {
     "Menger sponge": _cubes(lambda c: c.count(0) <= 1, split=0.15, far=0.8, near=1.2, ink=0.8),
     "Cantor dust": _cubes(lambda c: c.count(0) == 0, split=0.07, far=2.5),
     "Vicsek cross": _cubes(lambda c: c.count(0) >= 2, outline=False, split=0.08, far=2.0),
+    # 4D: the pyramid's elder — a 5-cell at each corner of a 5-cell
+    "Sierpinski 5-cell": _at_corners(geometry.simplex5(), 0.5, split=0.10, far=1.5, near=1.5, ink=0.8),
 }
 
 
@@ -197,13 +211,13 @@ def build(name: str, depth: int) -> dict:
             k = geometry.kkey(q)
             if k not in ids:
                 ids[k] = len(V)
-                V.append([float(x) for x in q] + [0.0])
+                V.append([float(x) for x in q])
             ix.append(ids[k])
         E.update((min(ix[a], ix[b]), max(ix[a], ix[b])) for a, b in edges)
 
     if f.outline:
         add(f.V, f.E)
-    cells = [(1.0, np.zeros(3))]
+    cells = [(1.0, np.zeros(4))]
     for _ in range(depth):
         for s, o in cells:
             add(s * f.new_V + o, f.new_E)
@@ -224,23 +238,31 @@ class Dive:
     """Where a view is inside its fractal (`ViewState.dive`): `path`, the
     cell of each level taken on the way in, outermost first (empty: the
     whole shape); `z`, the shape's place along the eye's axis, which
-    camera.pan has no word for; `last`, the zoom `step` last saw."""
+    camera.pan has no word for, and `w`, its place along the fourth (a 4D
+    fractal's; 0 for a 3D one); `last`, the zoom `step` last saw."""
 
     path: list[int] = field(default_factory=list)
     z: float = 0.0
+    w: float = 0.0
     last: float = 1.0
 
     def reset(self) -> None:
         self.path.clear()
-        self.z, self.last = 0.0, 1.0
+        self.z, self.w, self.last = 0.0, 0.0, 1.0
 
 
 def turn(s) -> np.ndarray:
-    """The view's turn of a 3D shape, 3×3: a point x (a row) lands at
-    x @ turn(s) — `geometry.world_points` at the shape's own angles."""
+    """The view's turn of the shape, 4×4: a point x (a row, 4D) lands at
+    x @ turn(s) — the shape's own angles (a 4D one's body first), then the
+    camera's yaw and pitch on x, y, z; w is the depth the 4D divide reads."""
     la = geometry.view_angles(s.shape, s.ang, getattr(s, "held", False))
-    P, _, _ = geometry.world_points(np.eye(4)[:3], la, s.yaw, s.pitch, d4=s.depth4)
-    return P
+    B = np.eye(4)
+    body = getattr(s, "body", None)
+    if body is not None and not geometry.is_3d(s.shape):
+        B = B @ np.asarray(body).T
+    v = geometry.rotate4(B, la)
+    x, y, z = geometry._camera(v[:, 0], v[:, 1], v[:, 2], s.yaw, s.pitch)
+    return np.stack([x, y, z, v[:, 3]], axis=1)
 
 
 def step(s, reg=None) -> None:
@@ -252,13 +274,13 @@ def step(s, reg=None) -> None:
     d = s.dive
     spec = spec_of(s.shape)
     if spec is None:
-        if d.path or d.z:
+        if d.path or d.z or d.w:
             d.reset()
         return
     M = turn(s)
     r = spec.ratio
     zoom0 = zoom = max(float(s.zoom), 1e-3)
-    p0 = np.array([float(s.pan[0]), -float(s.pan[1]), d.z])
+    p0 = np.array([float(s.pan[0]), -float(s.pan[1]), d.z, d.w])
     p = p0.copy()
 
     def out() -> None:
@@ -293,7 +315,7 @@ def step(s, reg=None) -> None:
     d.last = zoom
     if zoom == zoom0 and np.array_equal(p, p0):
         return
-    d.z = float(p[2])
+    d.z, d.w = float(p[2]), float(p[3])
     if reg is not None:
         if zoom != zoom0:
             reg["camera.zoom"].scale(zoom / zoom0)
@@ -317,7 +339,10 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
     d = s.dive
     M = turn(s)
     zoom = max(float(s.zoom), 1e-3)
-    p = np.array([float(s.pan[0]), -float(s.pan[1]), d.z])
+    p = np.array([float(s.pan[0]), -float(s.pan[1]), d.z, d.w])
+    d4 = float(s.depth4)
+    w_gone, w_near = d4 * 2.0 ** -W_GONE, d4 * 2.0 ** -W_NEAR
+    w_far, w_lost = d4 * 2.0 ** W_FAR, d4 * 2.0 ** W_LOST
     fov = getattr(s, "eye_fov", EYE_FOV)
     dist = getattr(s, "eye_distance", EYE_DISTANCE)
     tan = math.tan(math.radians(fov) / 2.0)
@@ -331,7 +356,7 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
     r = spec.ratio
 
     # the top cell: up the path from the rooted one (scale 1 at the origin)
-    scale, origin, up = 1.0, np.zeros(3), 0
+    scale, origin, up = 1.0, np.zeros(4), 0
     for k in reversed(d.path):
         if scale >= ABOVE:
             break
@@ -349,14 +374,20 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
         got_s, got_o, got_a = [], [], []
         total = 0
         for _ in range(48):
-            c = zoom * (og @ M) + p                  # the cells' centres in the world
-            R = zoom * sc
+            q = zoom * (og @ M) + p                  # the cells' centres, in 4D
+            R4 = zoom * sc
+            rho = d4 - q[:, 3]                       # how far along w from the 4D eye
+            # through the 4D divide: where the cell lands in the world, and
+            # the most its radius can be there (its nearest part along w)
+            c = q[:, :3] * (d4 / np.maximum(rho, w_gone))[:, None]
+            R = R4 * d4 / np.maximum(rho - R4, w_gone)
             depth = dist - c[:, 2]
             range_ = np.sqrt(c[:, 0] ** 2 + c[:, 1] ** 2 + depth ** 2)
-            seen = ((depth + R > EYE_NEAR) & (range_ - R < far) & (range_ + R > gone)
+            seen = ((rho + R4 > w_gone) & (rho - R4 < w_lost)
+                    & (depth + R > EYE_NEAR) & (range_ - R < far) & (range_ + R > gone)
                     & ((np.abs(c[:, 0]) - tx * depth) / nx < R)
                     & ((np.abs(c[:, 1]) - ty * depth) / ny < R))
-            size = R / np.maximum(range_, 1e-9) * px
+            size = R4 * d4 / np.maximum(rho, w_gone) / np.maximum(range_, 1e-9) * px
             go = seen & (size > split)
             if not go.any():
                 break
@@ -373,7 +404,7 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
             if total > most:
                 break
             n = len(spec.centres)
-            og = (og[:, None, :] + (sc * (1.0 - r))[:, None, None] * spec.centres[None]).reshape(-1, 3)
+            og = (og[:, None, :] + (sc * (1.0 - r))[:, None, None] * spec.centres[None]).reshape(-1, 4)
             sc = np.repeat(sc * r, n)
         if total <= most:
             break
@@ -382,12 +413,12 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
     nv, ne = len(spec.new_V), len(spec.new_E)
     if got_s:
         S, O, A = np.concatenate(got_s), np.concatenate(got_o), np.concatenate(got_a)
-        X = (S[:, None, None] * spec.new_V[None] + O[:, None, :]).reshape(-1, 3)
+        X = (S[:, None, None] * spec.new_V[None] + O[:, None, :]).reshape(-1, 4)
         E = (spec.new_E[None] + (np.arange(len(S)) * nv)[:, None, None]).reshape(-1, 2)
         e_alpha = np.repeat(A, ne)
         p_alpha = (A[:, None] * spec.new_dot[None]).reshape(-1)
     else:
-        X, E = np.zeros((0, 3)), np.zeros((0, 2), dtype=np.int64)
+        X, E = np.zeros((0, 4)), np.zeros((0, 2), dtype=np.int64)
         e_alpha, p_alpha = np.zeros(0), np.zeros(0)
     if whole:
         # the whole shape's own outline, while the view can reach it
@@ -396,11 +427,21 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
         e_alpha = np.concatenate([e_alpha, np.full(len(spec.E), spec.ink)])
         p_alpha = np.concatenate([p_alpha, np.ones(len(spec.V))])
 
-    P = X @ M
-    P[:, 2] += d.z / zoom
-    world = zoom * P
-    world[:, 0] += p[0]
-    world[:, 1] += p[1]
+    # the points: placed in 4D, through the 4D divide (the eye's side of it
+    # clamped: what is that near along w has faded out), then back to what
+    # the scene pass takes, before camera.zoom and pan
+    Q = zoom * (X @ M) + p
+    rho = d4 - Q[:, 3]
+    world = Q[:, :3] * (d4 / np.maximum(rho, w_gone))[:, None]
+    P = world.copy()
+    P[:, 0] -= p[0]
+    P[:, 1] -= p[1]
+    P /= zoom
+    along = (_smooth((rho - w_gone) / (w_near - w_gone))
+             * _smooth((w_lost - rho) / (w_lost - w_far)))
+    if len(E):
+        e_alpha = e_alpha * np.minimum(along[E[:, 0]], along[E[:, 1]])
+    p_alpha = p_alpha * along
     range_ = np.sqrt(world[:, 0] ** 2 + world[:, 1] ** 2 + (dist - world[:, 2]) ** 2)
     pd = np.clip(-np.log2(np.maximum(range_, 1e-9) / dist), -spec.far, top)
     n, m = len(X), len(E)

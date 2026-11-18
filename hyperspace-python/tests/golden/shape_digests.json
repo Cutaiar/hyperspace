@@ -740,5 +740,12 @@
   "m": 300,
   "faces": 0,
   "sha256": "57e3868d9bf7c3594fa7015981434ca20e35678c3337c7ac7a3d7716db987153"
+ },
+ "106": {
+  "name": "Sierpinski 5-cell",
+  "n": 65,
+  "m": 190,
+  "faces": 0,
+  "sha256": "2a8eb8e81f4b4b8b59567340f98f48299048911fa2397b16bb92e6bc94abda09"
  }
 }

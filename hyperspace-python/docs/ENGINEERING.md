@@ -267,6 +267,7 @@ The index stays the identity, so the menu's order never reaches a loadable patch
 | 104 | Cantor dust | Fractals | 0 | 512 | 660 |
 | 105 | Vicsek cross | Fractals | 0 | 232 | 456 |
 | 106 | Icosahedron flake | Fractals | 0 | 104 | 300 |
+| 107 | Sierpinski 5-cell | 4D fractals | 0 | 65 | 190 |
 
 **Fractals** (3D, appended last; `fractal.py`). Shapes made of copies of
 themselves — the Sierpinski tetrahedron (row 52), the octahedron and
@@ -276,6 +277,13 @@ icosahedron flakes (a copy at each corner), and three cuts of a cube into
 row above is each one's first levels, what a thumbnail and `geom` hold;
 on screen it is drawn for the frame, to the detail the zoom shows, and
 `camera.zoom` never runs out on it (`fractal.step`). No faces.
+
+**4D fractals.** The **Sierpinski 5-cell**: a 5-cell at each corner of a
+5-cell, the pyramid's elder (dimension ln 5 / ln 2 ≈ 2.32). Its zoom is a
+scale in 4D, before the 4D divide — the shadow of a 4D fractal is not
+self-similar, the fractal is — so the view dives toward the 4D origin and
+re-roots there in all four coordinates (`Dive.w` beside `Dive.z`); what
+comes near the 4D eye along w, or goes far from it, fades (`fractal.W_*`).
 
 **Vector marks** (3D, after the prisms). A subject read from a vector
 source instead of a formula: the Wispr Flow mark, five pill-shaped bars

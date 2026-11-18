@@ -42,13 +42,14 @@ def _world(s: ViewState) -> np.ndarray:
 
 def test_the_split_of_a_tetrahedron_adds_an_octahedron():
     f = fractal.spec_of(SIERPINSKI)
-    assert f.new_V.shape == (6, 3) and len(f.new_E) == 12 and f.new_dot.all()
+    assert f.new_V.shape == (6, 4) and len(f.new_E) == 12 and f.new_dot.all()
 
 
 def test_every_fractal_is_in_the_catalog_under_fractals():
     for name in fractal.FRACTALS:
-        assert geometry.SHAPES[geometry.shape_index(name)].family == "Fractals"
-    assert {s.name for s in geometry.SHAPES if s.family == "Fractals"} == set(fractal.FRACTALS)
+        shape = geometry.SHAPES[geometry.shape_index(name)]
+        assert shape.family == ("Fractals" if shape.dims == 3 else "4D fractals")
+    assert {s.name for s in geometry.SHAPES if s.family.endswith("ractals")} == set(fractal.FRACTALS)
 
 
 def test_a_cube_is_cut_as_its_name_says():

@@ -1506,6 +1506,8 @@ SHAPES = [
           lambda: _build_fractal("Vicsek cross", 2), dims=3, family="Fractals"),
     Shape("Icosahedron flake", "fractal · 12 at 1/(1+φ), dimension 2.58", 0, "ln 12 / ln (1+φ)",
           lambda: _build_fractal("Icosahedron flake", 1), dims=3, family="Fractals"),
+    Shape("Sierpinski 5-cell", "4D fractal · 5 at ½, dimension 2.32", 0, "ln 5 / ln 2",
+          lambda: _build_fractal("Sierpinski 5-cell", 2), family="4D fractals"),
 ]
 
 # The Shape menu (ui.Panel._shape_combo): sections, each a run of
@@ -1514,7 +1516,7 @@ SHAPES = [
 MENU = (
     ("4D", ("Regular polytopes", "5-cell family", "Tesseract family", "24-cell family",
             "600-cell family", "Catalan duals", "Star polychora", "Prisms and pyramids",
-            "Surfaces and fibrations")),
+            "Surfaces and fibrations", "4D fractals")),
     ("3D", ("Surfaces", "Platonic solids", "Archimedean solids", "Catalan solids",
             "Star polyhedra", "Compounds", "Mathematical toys", "Fractals", "Vector marks")),
     ("Scenes", ("Scenes",)),
