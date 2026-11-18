@@ -32,8 +32,7 @@ under the eye however deep the view), and zooming out of the last cell
 eases the shape back to the middle of the screen (`step`), so "all the
 way out" is always the whole shape, centred.
 
-What this leaves out, on purpose (proof of concept): faces (a fractal
-draws lines and points), the world's offset on the shape (plan 59 — a
+What this leaves out, on purpose (proof of concept): the world's offset on the shape (plan 59 — a
 grabbed fractal is culled as if it were not turned), and a file format:
 `Dive` is not saved, so a loaded view starts at the top.
 """
@@ -119,6 +118,11 @@ class Fractal:
     new_V: np.ndarray = field(init=False)
     new_E: np.ndarray = field(init=False)
     new_dot: np.ndarray = field(init=False)
+    # the solid's faces, triangulated: corners (T, 3) into V, each corner's
+    # uv on its face (T, 3, 2), and which face (T,)
+    tris: np.ndarray = field(init=False)
+    tri_uv: np.ndarray = field(init=False)
+    tri_face: np.ndarray = field(init=False)
 
     def __post_init__(self) -> None:
         for name in ("V", "centres"):               # 4-vectors throughout: a 3D one at w = 0
@@ -157,6 +161,33 @@ class Fractal:
         object.__setattr__(self, "new_V", np.array(pts, dtype=np.float64))
         object.__setattr__(self, "new_E", np.array(sorted(edges), dtype=np.int32))
         object.__setattr__(self, "new_dot", np.array([k not in own for k in keys], dtype=bool))
+        # the faces: the triangles of the edge graph (a simplex, an octahedron,
+        # an icosahedron), or with none its squares (a cube, a tesseract)
+        nb = {i: set() for i in range(len(V))}
+        for a, b in E.tolist():
+            nb[a].add(b)
+            nb[b].add(a)
+        cycles = sorted({tuple(sorted((a, b, c))) for a in nb for b in nb[a] for c in nb[a] & nb[b]})
+        if not cycles:
+            seen: set = set()
+            for a, beside in nb.items():
+                for b in beside:
+                    for c in nb[b] - {a}:
+                        for d in (nb[c] & beside) - {b}:
+                            if frozenset((a, b, c, d)) not in seen:
+                                seen.add(frozenset((a, b, c, d)))
+                                cycles.append((a, b, c, d))
+        corner = ((0.0, 0.0), (1.0, 0.0), (0.5, 1.0)) if len(cycles[0]) == 3 else (
+            (0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
+        tris, uv, face = [], [], []
+        for fi, cyc in enumerate(cycles):
+            for k in range(1, len(cyc) - 1):
+                tris.append((cyc[0], cyc[k], cyc[k + 1]))
+                uv.append((corner[0], corner[k], corner[k + 1]))
+                face.append(fi)
+        object.__setattr__(self, "tris", np.array(tris, dtype=np.int32))
+        object.__setattr__(self, "tri_uv", np.array(uv, dtype=np.float64))
+        object.__setattr__(self, "tri_face", np.array(face, dtype=np.int32))
 
 
 def _edges(V: np.ndarray) -> np.ndarray:
@@ -374,6 +405,7 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
     # however small, as the others' outlines are
     bare = not spec.outline and up == len(d.path)
 
+    faces = bool(getattr(s, "faces", False))
     split = spec.split * min(w, h)
     grow = 1.0 / r - 1.0                            # a split is all in by a child's own
     most = BUDGET // max(len(spec.new_E), 1)
@@ -381,6 +413,8 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
         sc = np.array([scale])
         og = origin[None]
         got_s, got_o, got_a = [], [], []
+        f_s, f_o, f_a = [], [], []                   # the cells drawn as solids (faces)
+        under = np.ones(1)                           # how far in each cell's parent's split is
         total = 0
         for level in range(48):
             q = zoom * (og @ M) + p                  # the cells' centres, in 4D
@@ -401,17 +435,28 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
             first = bare and level == 0
             if first:
                 go = np.ones(1, bool)
-            if not go.any():
-                break
-            sc, og, size, range_ = sc[go], og[go], size[go], range_[go]
-            # what this split adds: in over the next factor of 2 in size,
-            # out over the far end of the cue
+            # what a split adds comes in over the next factor of 1 / ratio in
+            # size, and goes out over the far end of the cue
             cue = -np.log2(np.maximum(range_, 1e-9) / dist)
             fog = (_smooth((cue + spec.far) / (FOG * (top + spec.far)))
                    * _smooth((spec.near - cue) / (spec.near - top)))
+            grown = np.where(go, _smooth((size - split) / (split * grow)), 0.0)
+            if first:
+                grown = np.ones(1)
+            if faces:
+                # every cell is a solid, the split ones too: its faces came
+                # in with its parent's split and stay, so a picture on the
+                # faces is there at every size, a small one inside a large
+                fa = np.where(seen, under * fog, 0.0)
+                keep = fa > 0.004
+                f_s.append(sc[keep])
+                f_o.append(og[keep])
+                f_a.append(fa[keep])
+            if not go.any():
+                break
+            sc, og, fog, grown = sc[go], og[go], fog[go], grown[go]
             got_s.append(sc)
             got_o.append(og)
-            grown = np.ones(1) if first else _smooth((size - split) / (split * grow))
             got_a.append(grown * fog * spec.ink)
             total += len(sc)
             if total > most:
@@ -419,6 +464,7 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
             n = len(spec.centres)
             og = (og[:, None, :] + (sc * (1.0 - r))[:, None, None] * spec.centres[None]).reshape(-1, 4)
             sc = np.repeat(sc * r, n)
+            under = np.repeat(grown, n)
         if total <= most:
             break
         split *= 1.35                                # too much to draw: coarser
@@ -440,6 +486,20 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
         e_alpha = np.concatenate([e_alpha, np.full(len(spec.E), spec.ink)])
         p_alpha = np.concatenate([p_alpha, np.ones(len(spec.V))])
 
+    # the solids' corners, after the lines' points: no dots of their own
+    n_lines = len(X)
+    tris, tri_uv, tri_alpha = np.zeros((0, 4), np.int32), np.zeros((0, 3, 2)), np.zeros(0)
+    if faces and f_s and sum(len(a) for a in f_s):
+        FS, FO, FA = np.concatenate(f_s), np.concatenate(f_o), np.concatenate(f_a)
+        k = len(spec.V)
+        X = np.concatenate([X, (FS[:, None, None] * spec.V[None] + FO[:, None, :]).reshape(-1, 4)])
+        p_alpha = np.concatenate([p_alpha, np.zeros(len(FS) * k)])
+        ix = spec.tris[None] + (n_lines + np.arange(len(FS)) * k)[:, None, None]
+        fid = np.broadcast_to(spec.tri_face[None, :, None], (len(FS), len(spec.tris), 1))
+        tris = np.concatenate([ix, fid], axis=2).reshape(-1, 4).astype(np.int32)
+        tri_uv = np.broadcast_to(spec.tri_uv[None], (len(FS), *spec.tri_uv.shape)).reshape(-1, 3, 2)
+        tri_alpha = np.repeat(FA, len(spec.tris))
+
     # the points: placed in 4D, through the 4D divide (the eye's side of it
     # clamped: what is that near along w has faded out), then back to what
     # the scene pass takes, before camera.zoom and pan
@@ -455,12 +515,18 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
     if len(E):
         e_alpha = e_alpha * np.minimum(along[E[:, 0]], along[E[:, 1]])
     p_alpha = p_alpha * along
+    if len(tris):
+        tri_alpha = tri_alpha * along[tris[:, :3]].min(axis=1)
     range_ = np.sqrt(world[:, 0] ** 2 + world[:, 1] ** 2 + (dist - world[:, 2]) ** 2)
     pd = np.clip(-np.log2(np.maximum(range_, 1e-9) / dist), -spec.far, top)
     n, m = len(X), len(E)
     st = {"e_alpha": e_alpha, "e_width": np.ones(m), "e_rgb": np.ones((m, 3)),
           "e_m": np.full(m, float(DENS_M)), "p_alpha": p_alpha, "p_rgb": np.ones((n, 3)),
-          "p_tinted": np.zeros(n, bool), "f_alpha": np.ones(0)}
+          "p_tinted": np.zeros(n, bool),
+          "f_alpha": np.ones(int(spec.tri_face.max()) + 1)}
     g = {"V": X, "E": E.astype(np.int32), "n": n, "m": m, "style": st,
-         "cue": (-spec.far, top), "dens_m": DENS_M}
-    return g, P, np.full(n, float(s.depth4)), pd
+         "cue": (-spec.far, top), "dens_m": DENS_M,
+         "tris": tris, "tri_uv": tri_uv, "tri_alpha": tri_alpha}
+    # (the divisor the face shader multiplies back in: the uv stays
+    # perspective-correct across the 4D divide)
+    return g, P, np.maximum(rho, w_gone), pd

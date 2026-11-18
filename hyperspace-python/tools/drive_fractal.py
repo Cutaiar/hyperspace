@@ -3,7 +3,8 @@ forever (fractal.py) — in for sixteen levels at the stick's rate, a pan
 across it deep inside, then all the way out to the whole shape. Each
 frame's `camera.zoom` and depth go to `$FRACTAL_LOG` (a JSON list), for a
 readout under the video. With `$FRACTAL_TOUR` (shape names, comma-separated)
-it visits those instead, each in and out again.
+it visits those instead, each in and out again, under `$FRACTAL_PATCH` if
+set (a patch's name, or a .json file), with the faces on.
 
     uv run python tools/app_driver.py tools/drive_fractal.py --out /tmp/fractal --every 1
 """
@@ -34,7 +35,19 @@ def script(d, panel):
     tour = os.environ.get("FRACTAL_TOUR")
     if tour:
         # the others, one after another: in, and out again
+        patch = os.environ.get("FRACTAL_PATCH")
         for name in tour.split(","):
+            if patch:
+                # a look for the faces: a patch of the library's by name, or a
+                # file's (a look kept outside it), loaded afresh for each shape
+                if patch.endswith(".json"):
+                    with open(patch) as f:
+                        panel.library.loaded_patch.load_doc(json.load(f))
+                else:
+                    panel.library.loaded_patch.load(patch)
+                reg["view.faces"].set(True)
+                reg["view.instances"].set_value(1)
+                yield from d.wait(2)
             reg["view.shape"].set(shape_index(name))
             reg["camera.reset"].fire()
             reg["camera.zoom"].set_value(1.3)

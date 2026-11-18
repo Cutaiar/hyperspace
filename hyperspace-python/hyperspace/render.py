@@ -3434,8 +3434,9 @@ class Renderer:
             self.ctx.enable(moderngl.DEPTH_TEST)
         draws: list[tuple] = []        # (vao, vertices, program, the most alpha a fragment has)
         try:
-            if s.faces and self._face_prog is not None and frac is None:
-                tris = face_triangles(s.shape)
+            if s.faces and self._face_prog is not None:
+                # (a fractal's solids are the frame's own: fractal.frame)
+                tris = g["tris"] if frac is not None else face_triangles(s.shape)
                 if len(tris):
                     td = (pd[tris[:, 0]] + pd[tris[:, 1]] + pd[tris[:, 2]]) / 3.0
                     torder = np.argsort(td, kind="stable")
@@ -3446,7 +3447,12 @@ class Renderer:
                     to = tris[torder]
                     if st is not None:
                         fa = fa * st["f_alpha"][to[:, 3]]
-                    uv = face_uvs(s.shape).reshape(-1, 3, 2)[torder]
+                    if frac is not None:
+                        # each solid's own weight: out as it splits, in the fog
+                        fa = fa * g["tri_alpha"][torder]
+                        uv = g["tri_uv"][torder]
+                    else:
+                        uv = face_uvs(s.shape).reshape(-1, 3, 2)[torder]
                     fverts = np.empty((len(tris) * 3, 8), dtype=np.float32)
                     for corner in range(3):
                         fverts[corner::3, 0:3] = P[to[:, corner]]

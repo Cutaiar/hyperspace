@@ -122,3 +122,28 @@ def test_another_shape_is_left_alone():
     s.reroot()
     assert (s.zoom, s.pan, s.dive.path, s.dive.z) == (37.0, [1.5, -2.0], [], 0.0)
     assert fractal.spec_of(3) is None
+
+
+@EVERY
+def test_a_fractals_cells_are_solids_with_the_faces_on(name):
+    s = _view(fractal.Z_IN * 0.8, name)
+    f = fractal.spec_of(s.shape)
+    g, P, div4, _ = fractal.frame(f, s, W, H)
+    assert len(g["tris"]) == 0                       # faces off: lines and points alone
+    s.faces = True
+    g, P, div4, _ = fractal.frame(f, s, W, H)
+    tris = g["tris"]
+    assert len(tris) and len(tris) % len(f.tris) == 0
+    assert tris[:, :3].max() < g["n"] == len(P) == len(div4)
+    assert g["tri_uv"].shape == (len(tris), 3, 2) and g["tri_alpha"].shape == (len(tris),)
+    assert 0.0 <= g["tri_uv"].min() and g["tri_uv"].max() <= 1.0
+    assert (g["tri_alpha"] >= 0).all() and g["tri_alpha"].max() <= 1.0
+    assert set(tris[:, 3].tolist()) == set(range(len(g["style"]["f_alpha"])))
+    assert (g["style"]["p_alpha"][tris[:, :3]] == 0).all()     # a solid's corners draw no dots
+
+
+def test_a_solid_has_its_faces():
+    count = {n: int(fractal.FRACTALS[n].tri_face.max()) + 1 for n in fractal.FRACTALS}
+    assert count == {"Sierpinski tetrahedron": 4, "Octahedron flake": 8, "Icosahedron flake": 20,
+                     "Menger sponge": 6, "Cantor dust": 6, "Vicsek cross": 6,
+                     "4D Cantor dust": 24, "4D Vicsek cross": 24, "Sierpinski 5-cell": 10}

@@ -278,7 +278,9 @@ icosahedron flakes (a copy at each corner), and three cuts of a cube into
 8 corners) and the Vicsek cross (the middle and the 6 face centres). The
 row above is each one's first levels, what a thumbnail and `geom` hold;
 on screen it is drawn for the frame, to the detail the zoom shows, and
-`camera.zoom` never runs out on it (`fractal.step`). No faces.
+`camera.zoom` never runs out on it (`fractal.step`). Its faces are every cell's, the
+split ones too, so a face pattern or a picture wired into `shape.faces`
+is drawn at every size, one inside another.
 
 **4D fractals.** The **Sierpinski 5-cell**: a 5-cell at each corner of a
 5-cell, the pyramid's elder (dimension ln 5 / ln 2 ≈ 2.32). Its zoom is a
