@@ -478,3 +478,16 @@ def test_every_size_is_a_choice_of_lines():
     assert tuple(int(n) for n in names) == M.SIZES
     assert math.isclose(M.PERTURB_AT, 1e4)
 
+
+def test_the_rig_bench_runs_and_prints_a_line_a_size(capsys):
+    """`tools/mandel_bench.py --quick` end to end (its numbers are the rig's)."""
+    import importlib.util
+    from pathlib import Path
+    path = Path(__file__).resolve().parents[1] / "tools" / "mandel_bench.py"
+    spec = importlib.util.spec_from_file_location("mandel_bench", path)
+    bench = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bench)
+    assert bench.main(["--quick", "--out", "96x64"]) == 0
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith(("whole", "minibrot"))]
+    assert len(lines) == 2 * len(M.SIZES)
+    assert any("perturb" in ln for ln in lines) and any("direct" in ln for ln in lines)
