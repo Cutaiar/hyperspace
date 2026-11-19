@@ -308,6 +308,15 @@ the CPU), then draws them one of two ways, `view.frac_additive`:
 The two place every point alike to float32's precision
 (`tests/test_fractal_gpu.py`).
 
+**Grabbing a fractal** (plan 64, part 2). While the whole shape fits the
+rig's box the grip holds it as an object, as any shape. Once it doesn't, or
+the view has gone into a cell, the fist holds the space: what the grip moves
+is folded into the view, turning about the middle of the screen and
+travelling through the fractal's own space (`fractal.fold_flight`). There is
+no box and no shaped inertia then. The crossing redraws nothing, and the
+view re-roots only inside. A loadable patch saved inside keeps the dive
+(`"dive"`, row 889).
+
 **Vector marks** (3D, after the prisms). A subject read from a vector
 source instead of a formula: the Wispr Flow mark, five pill-shaped bars
 taken from wisprflow.ai's SVG (`geometry.FLOW_BARS`, each bar's centre

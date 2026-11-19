@@ -1,6 +1,6 @@
 # Plan 64: recursive geometry — fractals you zoom into forever
 
-**Status: built, a draft PR waiting for the owner's look (2026-11-19).**
+**Status: built (2026-11-19), with its part 2; the owner's answers in §5.**
 Branch `plan-64-recursive-geometry`, cut from Dillon's
 `claude/tender-heisenberg-knlvgq` with `main` merged in (already current:
 the merge was a no-op). Register rows 882–891; hand checks 679–688, group
@@ -92,81 +92,70 @@ faces brighten where they cross (dense regions go white), and the red dots
 add into the white lines instead of sitting over them, so they read pink.
 The toggle is not saved (row 884) and shows in VIEW only on a fractal.
 
-### 2.4 The cull and the re-root read the world's offset
+### 2.4 The cull reads the offset; what a grab holds is part 2
 
 Plan 59's offset (a grabbed or moved shape) composes into the model matrix
 as home ∘ offset, home being camera.zoom and pan.
 
 - **The cull.** The walk culled as if the offset were the identity, so a
   grabbed fractal lost cells at the screen's edge and kept ones off it.
-  Now `fractal.walk(…, off)` moves each cell's centre by the offset before
-  the frustum, range and size tests (its reach scaled by the offset's own
-  scale), and the depth cue reads where a point is drawn (`Walk.place`; the
-  shader reads `u_off` for the same).
-- **The re-root.** As first pushed, `fractal.step` ignored the offset: each
-  re-root changes the home, and with it the offset's share of every point,
-  so a moved or turned fractal jumped at every level (0.61 world units for
-  an offset of 0.3, 0.76 for a turn of 0.5 rad). Now `fractal.step(…, off)`
-  takes the cell under the eye where the shape is drawn, and keeps every
-  point where it was across a re-root:
-  - **a 3D fractal** leaves the offset alone and makes the re-root up in
-    camera.pan and the dive's depth (a 3×3 solve), so the zoom still
-    centres on the cell under the eye, as with no offset;
-  - **a 4D fractal**, where a pan is no uniform shift through the 4D
-    divide, or a 3D one turned to within 0.2 of edge-on, has its offset
-    rebased onto the new home instead (`world.World.rebase`, called by
-    `app._reroot`): the picture stays whole, but the offset's translation
-    grows and the zoom carries the dive sideways — for the 4D fractals far
-    enough to leave the shape (a turned 5-cell draws 6 cells after 9 levels
-    where it would draw 284). Open: the pan and depth can't stand in for a
-    4D offset (66–107 px jumps when tried), and the old re-root stays
-    centred but jumps about 100 px a level. A rebase alone, tried
-    first for every fractal, did that to a turned tetrahedron: after 80
-    frames the rooted cell was 900 px off centre and 60 units deep.
-- **What stays as plan 59 has it.** The offset is in the home's units,
-  × camera.zoom, so a *moved* fractal slides outward as it is zoomed, as any
-  moved shape does; held in the grip it is re-targeted to the hand each
-  frame. The offset is the one world's: only the deck on air re-roots with
-  it, so a deck off air's preview of a moved fractal still jumps.
+  Now `fractal.walk(…, off)` moves each cell's centre by the offset drawn
+  after the shape (`shapeframe.drawn_offset`) before the frustum, range and
+  size tests, its reach scaled by the offset's own scale. The depth cue
+  reads where a point is drawn (`Walk.place`; the shader reads `u_off`).
+- **The re-root.** As first pushed, `fractal.step` ignored the offset, so a
+  moved or turned fractal jumped at every level (0.61 world units for an
+  offset of 0.3). A compensation was pushed next, and a 4D fractal still
+  drifted off its cells. The owner chose a depth-dependent grab instead,
+  built as [part 2](64-depth-dependent-grab.md):
+  - outside (the shape fits the rig's box) the fist holds an object, as
+    plan 59;
+  - inside it holds the space, whose flight is folded into the view.
 
-The proof: `tools/fractal_reroot_demo.py`, the same turned and moved dive
-before and after the fix, with each re-root's jump measured under it
-([`assets/64-recursive-geometry/reroot-fix.mp4`](assets/64-recursive-geometry/reroot-fix.mp4)).
+  An object is never re-rooted, so nothing has to make up for an offset
+  across a re-root, and the compensation is gone. Every crossing and
+  re-root draws every point where it was, for 3D and 4D alike.
 
-### 2.5 The dive is not saved: a recommendation (row 889, pending the owner)
+### 2.5 The dive is saved (row 889, the owner's, 2026-11-19)
 
-`ViewState.dive` (the path, `z`, `w`) is runtime state, so a loaded look
-starts at the top of its fractal at the saved zoom and pan, which are a
-rooted cell's: a different picture from the one saved. Saving it is a
-format change; **not built.**
+`ViewState.dive` was runtime state, so a loaded look started at the top of
+its fractal at the saved zoom and pan, which are a rooted cell's: a
+different picture from the one saved. A load also kept whatever dive the
+view was in, under the new look's camera.
 
-**Recommended:** an optional key in the loadable patch,
-`"dive": {"shape": "<fractal's name>", "path": [k, …], "z": z, "w": w}`,
-written only while the shape is a fractal and the path is not empty, read
-only when the loaded shape has that name.
+Now a loadable patch saved while its view is inside a fractal writes an
+optional key (`loadable.DIVE_KEY`, `fractal.Dive.to_json`):
+`"dive": {"shape": "<fractal's name>", "path": [k, …], "z", "w", "turn", "shift"}`.
+`turn` and `shift` are part 2's: the space's own turn and its room
+placement. A load puts the dive back for the shape it names
+(`Dive.from_json`). A file with none, or one for another shape, starts at
+the top: a load always replaces the dive.
 
-- **Validated on load:** each k inside the fractal's `centres`, the path
-  at most a few thousand long, z and w finite. Anything else is dropped,
-  with a note, and the look starts at the top as today.
+- **Validated whole on load.** It is refused, with a note, for any of:
+  - a cell index outside the fractal;
+  - a path over 4096;
+  - a number that is not finite;
+  - a turn that is not one.
 - **No schema bump**, by the node-mode precedent (#377: an optional key).
   A build from before ignores the key and shows the top of the shape at
   the saved zoom: a different picture, nothing broken. Both Macs run one
-  build (the DECISIONS precedent), and a DECISIONS row would say so.
-- **`centres`' order becomes a format.** A test would freeze each
-  fractal's list, since a path indexes it.
-- **Not a param.** A persisted `camera.dive` would be a new saved id, a
-  string no route or LFO can use, and would ride every show.
+  build (DECISIONS).
+- **Byte for byte as before.** Every other loadable patch writes no key.
+- **`centres`' order is a file format now.** A path indexes it, and
+  `tests/test_fractal_grab.py::test_each_fractals_cells_keep_their_order`
+  freezes each fractal's.
 
-The alternative, keeping it unsaved, costs nothing; it fits a look that
-starts at the top and dives live.
-
-### 2.6 The comparison and the bench
+### 2.6 The comparison, the demo and the bench
 
 - `tools/fractal_compare.py`: the same dive (tetrahedron, Menger sponge,
   5-cell), four views in lockstep — faces off and on, sorted and additive —
   as one still and one 10 s video each, in
   [`assets/64-recursive-geometry/`](assets/64-recursive-geometry/).
   Rendered offscreen on Mesa's llvmpipe in a cloud session, not the rig.
+- `tools/fractal_grab_demo.py` (part 2): a grabbed fractal dived into and
+  flown through. Each crossing's and re-root's jump is measured; all read
+  0.000 px
+  ([`grab-dive.mp4`](assets/64-recursive-geometry/grab-dive.mp4)).
 - `tools/fractal_bench.py`: every fractal at 0, 3, 8 and 16 levels in,
   faces off and on, sorted and additive. It times the walk, each path's CPU
   build, the whole `draw_scene` wall time (GPU waited on) and its GPU time
@@ -175,14 +164,16 @@ starts at the top and dives live.
 
 ## 3. Restart or hot reload
 
-**Restart.** A new field on a live object (`ViewState.frac_additive`), two
-new modules (`shapeframe`, `fractal_gl`, in `hotreload.MODULES` after
-`fractal`), and a new param. A hot reload after the restart rebuilds the
-GPU path's programs (`Renderer.on_reload` drops `_cells`).
+**Restart.** There are new fields on live objects (`ViewState.frac_additive`,
+`Dive`'s, `WorldObject.bounded`), two new modules (`shapeframe`,
+`fractal_gl`, in `hotreload.MODULES` after `fractal`), a new param, and new
+frame steps (`app._space`, `app._fly`). A hot reload after the restart
+rebuilds the GPU path's programs (`Renderer.on_reload` drops `_cells`).
 
 ## 4. Tests
 
-`tests/test_fractal_gpu.py` (the re-root's tests: §2.4):
+`tests/test_fractal_gpu.py` (part 2's tests and the saved dive's are in
+`tests/test_fractal_grab.py`):
 
 - the provider gives every non-fractal shape exactly what draw_scene made,
   with and without an offset;
@@ -193,15 +184,13 @@ GPU path's programs (`Renderer.on_reload` drops `_cells`).
   and draw_scene handing the offset over;
 - an additive frame draws the sorted frame's pixels, with copies too.
 
-## 5. Open for the owner
+## 5. The owner's answers (2026-11-19), and what is open
 
-- The look of additive against sorted (rows 884, hand checks 679–681):
-  keep sorted as the default, make additive the default, or drop it.
-- Whether to save the dive (row 889, §2.5).
-- The re-root of a 4D fractal (or a 3D one turned edge-on) under an
-  offset: no jump, but the dive drifts off the shape (row 887). The owner
-  chose a depth-dependent grab (2026-11-19): planned in
-  [`64-depth-dependent-grab.md`](64-depth-dependent-grab.md), which
-  removes the compensation and the drift.
-- The frame times on the rig (hand checks 686–687): whether the GPU path is
-  worth its weight at the depths a show uses.
+- **Sorted stays the default** (row 884). Additive stays as a switch,
+  unsaved.
+- **The dive is saved** as an optional key (row 889, §2.5).
+- **Grab:** depth-dependent, with sane defaults to tune by playing
+  ([part 2](64-depth-dependent-grab.md) §10). Inside a 4D fractal a drag
+  travels through its 4D space.
+- **Open:** the frame times on the rig (hand checks 686–687), and whether
+  the GPU path is worth its weight at the depths a show uses.
