@@ -513,6 +513,30 @@ class World:
             return None
         return obj.offset.model3()
 
+    def rebase(self, oid: str, k: float, g) -> None:
+        """The object's home was re-rooted (a fractal's view, `fractal.step`,
+        plan 64): the new home is the old one × `k`, moved by `g` × the old
+        zoom. The offset is rebased onto it, so home ∘ offset — what is drawn —
+        is what it was: offset' = G⁻¹ ∘ offset ∘ G, G = home⁻¹ ∘ home' (P ↦ k·P + g).
+        Its turn and scale stay; its position, its body's velocity and its
+        box place (the offset's own units) go to the new home's."""
+        obj = self.objects.get(oid)
+        if obj is None:
+            return
+        off = obj.offset
+        g4 = np.zeros(4)
+        g4[:3] = np.asarray(g, dtype=np.float64)[:3]
+
+        def moved(x: np.ndarray) -> np.ndarray:
+            return (x + off.scale * off.turn(g4) - g4) / float(k)
+
+        obj.offset = Pose(moved(off.position), off.ql, off.qr, off.scale)
+        b = self.bodies.get(oid)
+        if b is not None:
+            b.velocity = b.velocity / float(k)
+            if b.place is not None:
+                b.place = moved(b.place)
+
     def reset(self) -> None:
         """Every offset back to the identity, every body still, its inertia
         even, every joint let go (`world.reset`; a clutch still closed takes

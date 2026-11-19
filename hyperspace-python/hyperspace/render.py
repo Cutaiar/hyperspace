@@ -121,7 +121,6 @@ from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
     field,
     inst_positions,
 )
-from .field import is_3d as is_3d_layout
 from .fx import SCREEN, FxChain, FxState
 from .geometry import (
     EYE_DISTANCE,
@@ -3271,8 +3270,7 @@ class Renderer:
         # the camera in them, the world transform the identity, the strokes
         # scaled per copy in the shaders (`_copies_of`)
         zoom = max(s.zoom, 1e-3)
-        legacy = not getattr(s, "inst_fit", False) and (
-            int(s.instances) <= 1 or not is_3d_layout(int(getattr(s, "inst_layout", 0))))
+        legacy = _field_mod.takes_offset(s)
         # plan 59: the world's offset on the shape object (home ∘ offset, the
         # home being zoom and pan), None while it is the identity — the matrix
         # of before, built exactly as before. Fit and the 3D lattices carry the

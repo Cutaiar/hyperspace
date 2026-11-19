@@ -96,6 +96,7 @@ from . import (
     totem,
     ui_browse,
 )
+from . import field as field_mod
 from . import ghost as ghosts
 from . import undo as undos
 from . import world as worlds
@@ -1655,6 +1656,19 @@ def _off_air(h: Host, what: str, step: Callable[[Deck], object]) -> str:
     return said
 
 
+def _reroot(h: Host, reg) -> None:
+    """The on-air view re-rooted (`ViewState.reroot`), the world's offset on
+    the shape (plan 59) rebased onto the new home, so a moved or grabbed
+    fractal draws where it was (plan 64, row 887). The offset is the world's,
+    one for both decks: a deck off air re-roots without it (`frame`)."""
+    world = h.world
+    off = (world.offset_matrix("shape")
+           if world is not None and field_mod.takes_offset(h.view) else None)
+    moved = h.view.reroot(reg, off)
+    if moved is not None and world is not None and off is not None:
+        world.rebase("shape", *moved)
+
+
 def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     """One frame, in the order ARCHITECTURE §2 states: the scene-setters
     (keys, loop keys, the devices polled — pad, MIDI — the macros' base
@@ -1841,7 +1855,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # a self-similar shape's view, re-rooted once the zoom has gone a level
     # in or out (fractal.py): the same picture at a zoom that never runs out
     try:
-        h.view.reroot(reg)
+        _reroot(h, reg)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("view.reroot", e)
     if said := _off_air(h, "reroot", lambda d: d.view.reroot(d.reg)):

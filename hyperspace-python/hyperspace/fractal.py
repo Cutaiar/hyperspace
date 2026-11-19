@@ -316,41 +316,92 @@ def turn(s) -> np.ndarray:
     return np.stack([x, y, z, v[:, 3]], axis=1)
 
 
-def step(s, reg=None) -> None:
+def step(s, reg=None, off=None) -> tuple[float, np.ndarray] | None:
     """Once a frame, after the params have landed: re-root the view (module
     docstring). Moves `s.zoom`, `s.pan` and `s.dive` together, so the frame
     drawn next is the same picture; with a registry the move goes onto the
     params' bases as well (a ratio on camera.zoom, a nudge on camera.pan),
-    so a route or a performer's offset rides on it as on any other move."""
+    so a route or a performer's offset rides on it as on any other move.
+
+    `off`: the world's offset on the shape (plan 59, a 4×4; None the
+    identity). The renderer draws home ∘ offset, home being camera.zoom and
+    pan, so the cell taken is the one under the eye where the shape is drawn,
+    and a re-root must leave the drawn shape where it is (row 887):
+
+    - a 3D fractal: the offset is left as it is and the re-root's move goes
+      onto the pan and the dive's depth instead (`_follow`), so the zoom
+      still centres on the cell under the eye;
+    - a 4D fractal, or an offset that turns the shape's depth axis flat to
+      the screen (where a pan and a depth can't make up for it): the view
+      moves as it does with no offset, and the change of home is returned —
+      (k, g): the new home is the old one × k, moved by g × the old zoom
+      (x, y, 0) — for the offset to be rebased onto it (`world.World.rebase`).
+
+    Returns that change, or None when the offset needs nothing (an ease home
+    is a pan, like any other, and moves the picture on purpose)."""
     d = s.dive
     spec = spec_of(s.shape)
     if spec is None:
         if d.path or d.z or d.w:
             d.reset()
-        return
+        return None
     M = turn(s)
     r = spec.ratio
     zoom0 = zoom = max(float(s.zoom), 1e-3)
     p0 = np.array([float(s.pan[0]), -float(s.pan[1]), d.z, d.w])
     p = p0.copy()
+    # the middle of the screen in the walk's world (before the offset): the
+    # origin, or with an offset what it draws at the origin. A re-root with
+    # its rebase draws every point where it was, so this stays put
+    mid = np.zeros(4)
+    A = t = None
+    follow = False
+    if off is not None:
+        m = np.asarray(off, dtype=np.float64)
+        A, t = m[:3, :3], m[:3, 3]
+        pxy = np.array([p0[0], p0[1], 0.0])
+        mid[:3] = np.linalg.solve(A, -zoom0 * t - pxy) + pxy
+        # the pan and the depth can stand in for the offset: a 3D fractal (no
+        # 4D divide across the cell), its depth axis not flat to the screen
+        flat = not spec.V[:, 3].any() and not spec.centres[:, 3].any() and d.w == 0.0
+        follow = flat and abs(A[2, 2]) > 0.2 * float(np.cbrt(abs(np.linalg.det(A))))
+
+    def moved_to(p_old, z_old, p_new, z_new) -> np.ndarray:
+        """`p_new`, the re-root's view with no offset, made up for the offset
+        (`follow`): with it, every point is drawn where it was."""
+        nonlocal mid
+        if not follow:
+            return p_new
+        assert A is not None and t is not None
+        dp = np.array([p_new[0] - p_old[0], p_new[1] - p_old[1], 0.0])
+        e = (A - np.eye(3)) @ dp + (z_old - z_new) * t
+        B = np.array([[1.0, 0.0, A[0, 2]], [0.0, 1.0, A[1, 2]], [0.0, 0.0, A[2, 2]]])
+        delta = np.linalg.solve(B, e)
+        out = p_new.copy()
+        out[:3] += delta
+        mid = mid.copy()
+        mid[:3] += delta                   # the walk's world moved with it
+        return out
 
     def out() -> None:
         nonlocal zoom, p
         k = d.path.pop()
-        zoom = zoom / r
-        p = p - zoom * (1.0 - r) * (spec.centres[k] @ M)
+        z1 = zoom / r
+        p = moved_to(p, zoom, p - z1 * (1.0 - r) * (spec.centres[k] @ M), z1)
+        zoom = z1
 
     def into() -> None:
         nonlocal zoom, p
-        x = (-p / zoom) @ M.T               # the middle of the screen, in the shape
+        x = ((mid - p) / zoom) @ M.T        # the middle of the screen, in the shape
         k = int(np.argmin(np.linalg.norm(x - (1.0 - r) * spec.centres, axis=1)))
-        p = p + zoom * (1.0 - r) * (spec.centres[k] @ M)
-        zoom = zoom * r
+        z1 = zoom * r
+        p = moved_to(p, zoom, p + zoom * (1.0 - r) * (spec.centres[k] @ M), z1)
+        zoom = z1
         d.path.append(k)
 
     # a pan off the side of the rooted cell: up until the view is over an
     # ancestor, and the zoom rule below takes it down again beside
-    while d.path and np.linalg.norm(p) / zoom > OUTSIDE:
+    while d.path and np.linalg.norm(mid - p) / zoom > OUTSIDE:
         out()
     for _ in range(64):
         if zoom < Z_IN:
@@ -358,6 +409,8 @@ def step(s, reg=None) -> None:
         into()
     while d.path and zoom < Z_IN * r * Z_SLACK:
         out()
+    moved = None if off is None or follow or (zoom == zoom0 and np.array_equal(p, p0)) else (
+        zoom / zoom0, np.array([p[0] - p0[0], p[1] - p0[1], 0.0]) / zoom0)
     if not d.path and zoom < d.last and d.last > Z_HOME:
         # out of the last cell and still zooming out: ease the shape home,
         # there by Z_HOME
@@ -365,7 +418,7 @@ def step(s, reg=None) -> None:
         p = p * min(max(f, 0.0), 1.0)
     d.last = zoom
     if zoom == zoom0 and np.array_equal(p, p0):
-        return
+        return moved
     d.z, d.w = float(p[2]), float(p[3])
     if reg is not None:
         if zoom != zoom0:
@@ -374,6 +427,7 @@ def step(s, reg=None) -> None:
         reg["camera.pan.y"].nudge(float(-(p[1] - p0[1])))
     s.zoom = zoom
     s.pan[0], s.pan[1] = float(p[0]), float(-p[1])
+    return moved
 
 
 def _smooth(x):

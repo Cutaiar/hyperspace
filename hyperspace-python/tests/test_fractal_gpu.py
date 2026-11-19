@@ -291,3 +291,171 @@ def test_draw_scene_hands_the_offset_to_the_fractal(ctx):
     plain = lit()
     wd.objects["shape"].offset = W.Pose.turn3(W.qexp([0.0, 0.0, 0.0]), (6.0, 0.0, 0.0))
     assert lit() < 0.5 * plain
+
+
+# ---- the re-root with the world's offset (row 887): nothing jumps
+
+def _drawn(s, off, x_root) -> np.ndarray:
+    """Where points of the shape (its top frame) are drawn: the walk's
+    placement, then the renderer's model matrix (home ∘ offset)."""
+    spec = fractal.spec_of(s.shape)
+    r = spec.ratio
+    x = np.array(x_root, dtype=np.float64)
+    for k in s.dive.path:
+        x = (x - (1.0 - r) * spec.centres[k]) / r
+    P, _, _, _ = fractal.walk(spec, s, WD, HT, off).place(x)
+    m = geometry.model_matrix(s.zoom, s.pan, off)
+    return P @ m[:3, :3].T + m[:3, 3]
+
+
+OFFSETS = {
+    "moved": W.Pose.turn3(W.qexp([0.0, 0.0, 0.0]), (0.3, -0.1, 0.0)),
+    "moved in depth": W.Pose.turn3(W.qexp([0.0, 0.0, 0.0]), (0.0, 0.0, 0.4)),
+    "turned, moved, scaled": W.Pose.turn3(W.qexp([0.2, 0.5, -0.3]), (0.2, -0.1, 0.3), 1.3),
+    # the depth axis edge-on to the screen: a 3D fractal falls back to the rebase
+    "turned edge-on": W.Pose.turn3(W.qexp([0.0, 1.5708, 0.0]), (0.1, 0.0, 0.0)),
+}
+
+
+@EVERY
+@pytest.mark.parametrize("pose", list(OFFSETS))
+def test_a_reroot_of_a_moved_fractal_moves_nothing(name, pose):
+    """In and back out, a level at a time: at each re-root every point is
+    drawn where it was — the drawn shape does not jump (it did by 0.6 world
+    units for an offset of 0.3 before plan 64's fix). A 3D fractal makes up
+    for the offset in its pan and depth; a 4D one has its offset rebased
+    (`World.rebase`)."""
+    wd = W.World.default()
+    wd.objects["shape"].offset = OFFSETS[pose]
+    s = ViewState(shape=geometry.shape_index(name), yaw=0.4, pitch=0.25)
+    s.ang = [0.3, 0.7, 1.1, 0.2, 0.0, 0.1]
+    s.pan = [0.05, 0.02]
+    rng = np.random.default_rng(3)
+    X = np.c_[rng.uniform(-0.4, 0.4, (5, 3)), np.zeros(5)]
+    reroots = 0
+    for f in [1.15] * 40 + [1 / 1.15] * 40:
+        s.zoom *= f
+        off = wd.offset_matrix("shape")
+        before = _drawn(s, off, X)
+        path = list(s.dive.path)
+        moved = fractal.step(s, None, off)
+        if moved is not None:
+            wd.rebase("shape", *moved)
+        if s.dive.path == path:
+            continue
+        reroots += 1
+        after = _drawn(s, wd.offset_matrix("shape"), X)
+        assert np.allclose(after, before, atol=1e-9 * max(1.0, s.zoom / fractal.Z_IN)), (
+            np.abs(after - before).max())
+    assert reroots >= 4
+
+
+def test_the_reroot_dives_into_the_cell_under_the_eye_where_it_is_drawn():
+    """With the shape turned by the offset, the cell taken is the one the
+    middle of the screen is over as drawn: after a dive the rooted cell
+    holds the point drawn at the middle of the screen. (A moved offset is in
+    the home's units, × camera.zoom (plan 59): zooming in carries a moved
+    shape off the screen, as it does any shape, so it is turned here.)"""
+    i = geometry.shape_index("Sierpinski tetrahedron")
+    wd = W.World.default()
+    wd.objects["shape"].offset = W.Pose.turn3(W.qexp([0.3, 0.9, -0.2]))
+    s = ViewState(shape=i, yaw=0.4, pitch=0.25, pan=[0.04, -0.03])
+    for _ in range(60):
+        s.zoom *= 1.1
+        moved = fractal.step(s, None, wd.offset_matrix("shape"))
+        if moved is not None:
+            wd.rebase("shape", *moved)
+    assert len(s.dive.path) >= 4
+    off = wd.offset_matrix("shape")
+    # the point drawn at the middle, in the rooted cell's own frame
+    m = geometry.model_matrix(s.zoom, s.pan, off)
+    P = np.linalg.solve(m[:3, :3], -m[:3, 3])
+    wf = s.zoom * P + np.array([s.pan[0], -s.pan[1], 0.0])
+    q = np.r_[wf, 0.0] - np.array([s.pan[0], -s.pan[1], s.dive.z, s.dive.w])
+    x = (q / s.zoom) @ fractal.turn(s).T
+    assert np.linalg.norm(x) < fractal.OUTSIDE
+
+
+def test_rebase_keeps_what_is_drawn():
+    """`World.rebase`: home ∘ offset is the same map before and after, the
+    turn and scale kept, the body's velocity in the new home's units."""
+    wd = W.World.default()
+    pose = OFFSETS["turned, moved, scaled"]
+    wd.objects["shape"].offset = pose
+    b = wd.body("shape")
+    b.velocity = np.array([0.4, -0.2, 0.1, 0.0])
+    z0, pan0, k = 3.0, (0.2, -0.3), 0.5
+    g = np.array([0.15, -0.05, 0.0])
+    z1, pan1 = z0 * k, (pan0[0] + g[0] * z0, pan0[1] - g[1] * z0)
+    before = geometry.model_matrix(z0, pan0, wd.offset_matrix("shape"))
+    wd.rebase("shape", k, g)
+    after = geometry.model_matrix(z1, pan1, wd.offset_matrix("shape"))
+    # a point of the old frame P and the same point of the new frame (P - g) / k
+    P = np.array([[0.3, 0.1, -0.2], [-0.5, 0.4, 0.6]])
+    old = P @ before[:3, :3].T + before[:3, 3]
+    new = ((P - g) / k) @ after[:3, :3].T + after[:3, 3]
+    assert np.allclose(old, new)
+    off = wd.objects["shape"].offset
+    assert np.allclose(off.ql, pose.ql) and off.scale == pose.scale
+    assert np.allclose(b.velocity, np.array([0.4, -0.2, 0.1, 0.0]) / k)
+
+
+@pytest.mark.parametrize(("name", "rebased"), [("Menger sponge", False),
+                                              ("Sierpinski 5-cell", True)])
+def test_the_app_hands_the_offset_to_the_reroot(name, rebased):
+    """`app._reroot`: the on-air view re-roots with the world's offset. A 3D
+    fractal leaves the offset as it is (its pan and depth make up for it); a
+    4D one has it rebased; with Fit on the offset is not drawn and the view
+    re-roots as with none."""
+    from types import SimpleNamespace
+
+    from hyperspace import app
+
+    for fit in (False, True):
+        wd = W.World.default()
+        wd.objects["shape"].offset = OFFSETS["moved"]
+        s = ViewState(shape=geometry.shape_index(name), zoom=4.5, inst_fit=fit)
+        s.dive.last = 4.5
+        app._reroot(SimpleNamespace(view=s, world=wd), None)
+        assert s.dive.path
+        moved = not np.allclose(wd.objects["shape"].offset.position, OFFSETS["moved"].position)
+        assert moved == (rebased and not fit)
+
+
+def test_a_turned_fractal_dives_as_an_unturned_one():
+    """The zoom still centres on the cell under the eye with the shape
+    turned by the offset: the rooted cell stays as near the middle of the
+    screen, and at the same depth, as with no offset (a rebase alone kept
+    the picture whole at each re-root but let the zoom carry the dive off
+    sideways and away: 900 px and 60 units deep after 80 frames)."""
+    vp = geometry.eye_matrix(960, 540)
+
+    def dive(pose):
+        wd = W.World.default()
+        wd.objects["shape"].offset = pose
+        s = ViewState(shape=geometry.shape_index("Sierpinski tetrahedron"), yaw=0.4,
+                      pitch=0.25, pan=[0.04, -0.03])
+        far = 0.0
+        for _ in range(80):
+            s.zoom *= 1.1
+            moved = fractal.step(s, None, wd.offset_matrix("shape"))
+            assert moved is None                     # a 3D fractal: the offset stays
+            m = geometry.model_matrix(s.zoom, s.pan, wd.offset_matrix("shape"))
+            D = m[:3, :3] @ np.array([0.0, 0.0, s.dive.z / s.zoom]) + m[:3, 3]
+            c = vp @ np.r_[D, 1.0]
+            far = max(far, float(c[3]))
+        return len(s.dive.path), far
+
+    plain, turned = dive(W.Pose()), dive(W.Pose.turn3(W.qexp([0.3, 0.9, -0.2])))
+    assert turned[0] == plain[0] >= 8
+    assert turned[1] < 2.0 * plain[1]
+
+
+def test_takes_offset_is_the_scene_passs_rule():
+    from hyperspace import field
+
+    assert field.takes_offset(ViewState(instances=1))
+    assert field.takes_offset(ViewState(instances=7, inst_layout=0))
+    assert not field.takes_offset(ViewState(instances=1, inst_fit=True))
+    lattice = next(i for i in range(len(field.NAMES)) if field.is_3d(i))
+    assert not field.takes_offset(ViewState(instances=7, inst_layout=lattice))
