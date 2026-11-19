@@ -32,9 +32,15 @@ under the eye however deep the view), and zooming out of the last cell
 eases the shape back to the middle of the screen (`step`), so "all the
 way out" is always the whole shape, centred.
 
-What this leaves out, on purpose (proof of concept): the world's offset on the shape (plan 59 — a
-grabbed fractal is culled as if it were not turned), and a file format:
-`Dive` is not saved, so a loaded view starts at the top.
+Two ways to draw a frame's cells (plan 64): `frame`, the CPU path, makes
+the frame's geometry in numpy and the scene pass painter-sorts it as any
+shape's; `instances` hands the same walk (`walk`) to the GPU as one row a
+cell, and fractal_gl.py's vertex shaders place, turn and divide each cell's
+copy of one mesh, drawn unsorted and additive (`view.frac_additive`). The
+cull and the split stay here, on the CPU, either way.
+
+What this leaves out: a file format — `Dive` is not saved, so a loaded
+view starts at the top (register row 889, pending the owner).
 """
 
 from __future__ import annotations
@@ -262,6 +268,14 @@ def build(name: str, depth: int) -> dict:
     return {"V": V, "E": [list(e) for e in sorted(E)], "F": []}
 
 
+def name_of(spec: Fractal) -> str:
+    """The catalog's name of a fractal of `FRACTALS`."""
+    for name, f in FRACTALS.items():
+        if f is spec:
+            return name
+    raise KeyError(spec)
+
+
 def spec_of(i: int) -> Fractal | None:
     """Shape i's fractal, None for a shape that is not one."""
     try:
@@ -367,12 +381,94 @@ def _smooth(x):
     return x * x * (3.0 - 2.0 * x)
 
 
-def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
-    """This frame's geometry, as `render.draw_scene` takes a shape's:
-    (g, P, div4, pd) — g a `geometry.geom` dict with a scene's "style" (each
-    edge's and point's own alpha: what a split adds fades in, the far end
-    fades out), P the points turned as the view turns the shape (before
-    camera.zoom and pan), pd their depth cue and g["cue"] its fixed ends."""
+@dataclass(frozen=True, eq=False)
+class Walk:
+    """One frame's walk of a fractal (`walk`): which cells are drawn and how
+    strongly, and the view they were walked in. What the CPU path makes its
+    geometry from (`frame`) and the GPU path its instance rows
+    (`instances`), so the two draw the same cells.
+
+    Cells are in the shape's own frame: cell k at scale `s` about `o` (4D)
+    is the whole shape × s + o. `line_*`: the cells whose split is drawn
+    (their `new_E`, at alpha `line_a`); `face_*`: the cells drawn as solids
+    (the faces on); `whole`: the whole shape's own outline is drawn too, at
+    (`scale`, `origin`). The view: a point x of the shape is at
+    zoom · (x @ M) + p in 4D (before the 4D divide); `off`, the world's
+    offset on the shape (plan 59), a 4×4 or None."""
+
+    spec: Fractal
+    M: np.ndarray
+    p: np.ndarray
+    zoom: float
+    d4: float
+    dist: float
+    w_gone: float
+    w_near: float
+    w_far: float
+    w_lost: float
+    top: float
+    faces: bool
+    whole: bool
+    scale: float
+    origin: np.ndarray
+    line_s: np.ndarray
+    line_o: np.ndarray
+    line_a: np.ndarray
+    face_s: np.ndarray
+    face_o: np.ndarray
+    face_a: np.ndarray
+    off: np.ndarray | None = None
+
+    @property
+    def cue(self) -> tuple[float, float]:
+        """The depth cue's fixed ends (render.draw_scene's near and far)."""
+        return (-self.spec.far, self.top)
+
+    def place(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Points X of the shape (n, 4), in its own frame, to what the scene
+        pass takes: (P, div4, pd, along) — P before camera.zoom and pan (and
+        the world's offset), the 4D divisor, the depth cue and the fade along
+        w. The vertex shader's `frac_place` (fractal_gl.py) is this, in float32."""
+        Q = self.zoom * (X @ self.M) + self.p
+        return self.place_q(Q)
+
+    def place_q(self, Q: np.ndarray):
+        """`place` from the points already in the view (4D, before the divide)."""
+        p, zoom, d4 = self.p, self.zoom, self.d4
+        rho = d4 - Q[:, 3]
+        world = Q[:, :3] * (d4 / np.maximum(rho, self.w_gone))[:, None]
+        P = world.copy()
+        P[:, 0] -= p[0]
+        P[:, 1] -= p[1]
+        P /= zoom
+        along = (_smooth((rho - self.w_gone) / (self.w_near - self.w_gone))
+                 * _smooth((self.w_lost - rho) / (self.w_lost - self.w_far)))
+        if self.off is not None:
+            world = _offset_world(world, self.off, p, zoom)
+        range_ = np.sqrt(world[:, 0] ** 2 + world[:, 1] ** 2 + (self.dist - world[:, 2]) ** 2)
+        pd = np.clip(-np.log2(np.maximum(range_, 1e-9) / self.dist), -self.spec.far, self.top)
+        return P, np.maximum(rho, self.w_gone), pd, along
+
+
+def _offset_world(c: np.ndarray, off, p: np.ndarray, zoom: float) -> np.ndarray:
+    """Points `c` where the walk would put them in the world (3D, after the 4D
+    divide), moved by the world's offset on the shape: the renderer's model
+    matrix is home ∘ offset (geometry.model_matrix), home being camera.zoom
+    and pan, so a point P (the scene pass's, before them) lands at
+    zoom · off(P) + pan."""
+    m = np.asarray(off, dtype=np.float64)
+    pxy = np.array([p[0], p[1], 0.0])
+    P = (c - pxy) / zoom
+    return zoom * (P @ m[:3, :3].T + m[:3, 3]) + pxy
+
+
+def walk(spec: Fractal, s, w: int, h: int, off=None) -> Walk:
+    """The cells of this frame (module docstring, `Walk`): from the top cell
+    down, those the eye can see, split while large on screen, faded in as
+    they split and out at the cue's ends, at most `BUDGET` edges. `off`, the
+    world's offset on the shape (plan 59, `world.World.offset_matrix`): the
+    cull and the cue read where a cell is with it, so a grabbed or moved
+    fractal is culled where it is drawn."""
     d = s.dive
     M = turn(s)
     zoom = max(float(s.zoom), 1e-3)
@@ -391,6 +487,8 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
     gone = dist * 2.0 ** -spec.near
     top = min(CUE_NEAR, 0.4 * spec.near)            # the cue's near end: full weight
     r = spec.ratio
+    # the offset's own scale (a Pose's), on a cell's reach
+    k_off = 1.0 if off is None else float(np.cbrt(abs(np.linalg.det(np.asarray(off)[:3, :3]))))
 
     # the top cell: up the path from the rooted one (scale 1 at the origin)
     scale, origin, up = 1.0, np.zeros(4), 0
@@ -423,14 +521,16 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
             # through the 4D divide: where the cell lands in the world, and
             # the most its radius can be there (its nearest part along w)
             c = q[:, :3] * (d4 / np.maximum(rho, w_gone))[:, None]
-            R = R4 * d4 / np.maximum(rho - R4, w_gone)
+            R = R4 * d4 / np.maximum(rho - R4, w_gone) * k_off
+            if off is not None:
+                c = _offset_world(c, off, p, zoom)
             depth = dist - c[:, 2]
             range_ = np.sqrt(c[:, 0] ** 2 + c[:, 1] ** 2 + depth ** 2)
             seen = ((rho + R4 > w_gone) & (rho - R4 < w_lost)
                     & (depth + R > EYE_NEAR) & (range_ - R < far) & (range_ + R > gone)
                     & ((np.abs(c[:, 0]) - tx * depth) / nx < R)
                     & ((np.abs(c[:, 1]) - ty * depth) / ny < R))
-            size = R4 * d4 / np.maximum(rho, w_gone) / np.maximum(range_, 1e-9) * px
+            size = R4 * k_off * d4 / np.maximum(rho, w_gone) / np.maximum(range_, 1e-9) * px
             go = seen & (size > split)
             first = bare and level == 0
             if first:
@@ -469,9 +569,33 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
             break
         split *= 1.35                                # too much to draw: coarser
 
+    def cat(parts, shape):
+        return np.concatenate(parts) if parts else np.zeros(shape)
+
+    return Walk(spec, M, p, zoom, d4, dist, w_gone, w_near, w_far, w_lost, top, faces,
+                whole, scale, origin, cat(got_s, (0,)), cat(got_o, (0, 4)), cat(got_a, (0,)),
+                cat(f_s, (0,)), cat(f_o, (0, 4)), cat(f_a, (0,)),
+                None if off is None else np.asarray(off, dtype=np.float64))
+
+
+def frame(spec: Fractal, s, w: int, h: int, off=None
+          ) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
+    """This frame's geometry, as `render.draw_scene` takes a shape's:
+    (g, P, div4, pd) — g a `geometry.geom` dict with a scene's "style" (each
+    edge's and point's own alpha: what a split adds fades in, the far end
+    fades out), P the points turned as the view turns the shape (before
+    camera.zoom and pan), pd their depth cue and g["cue"] its fixed ends.
+    The CPU path, and the oracle the GPU path (`instances`, fractal_gl.py)
+    is tested against."""
+    return geometry_of(walk(spec, s, w, h, off))
+
+
+def geometry_of(wk: Walk) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
+    """`frame` from a walk already made."""
+    spec = wk.spec
     nv, ne = len(spec.new_V), len(spec.new_E)
-    if got_s:
-        S, O, A = np.concatenate(got_s), np.concatenate(got_o), np.concatenate(got_a)
+    S, O, A = wk.line_s, wk.line_o, wk.line_a
+    if len(S):
         X = (S[:, None, None] * spec.new_V[None] + O[:, None, :]).reshape(-1, 4)
         E = (spec.new_E[None] + (np.arange(len(S)) * nv)[:, None, None]).reshape(-1, 2)
         e_alpha = np.repeat(A, ne)
@@ -479,18 +603,18 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
     else:
         X, E = np.zeros((0, 4)), np.zeros((0, 2), dtype=np.int64)
         e_alpha, p_alpha = np.zeros(0), np.zeros(0)
-    if whole:
+    if wk.whole:
         # the whole shape's own outline, while the view can reach it
         E = np.concatenate([E, spec.E + len(X)])
-        X = np.concatenate([X, scale * spec.V + origin])
+        X = np.concatenate([X, wk.scale * spec.V + wk.origin])
         e_alpha = np.concatenate([e_alpha, np.full(len(spec.E), spec.ink)])
         p_alpha = np.concatenate([p_alpha, np.ones(len(spec.V))])
 
     # the solids' corners, after the lines' points: no dots of their own
     n_lines = len(X)
     tris, tri_uv, tri_alpha = np.zeros((0, 4), np.int32), np.zeros((0, 3, 2)), np.zeros(0)
-    if faces and f_s and sum(len(a) for a in f_s):
-        FS, FO, FA = np.concatenate(f_s), np.concatenate(f_o), np.concatenate(f_a)
+    if wk.faces and len(wk.face_s):
+        FS, FO, FA = wk.face_s, wk.face_o, wk.face_a
         k = len(spec.V)
         X = np.concatenate([X, (FS[:, None, None] * spec.V[None] + FO[:, None, :]).reshape(-1, 4)])
         p_alpha = np.concatenate([p_alpha, np.zeros(len(FS) * k)])
@@ -503,30 +627,49 @@ def frame(spec: Fractal, s, w: int, h: int) -> tuple[dict, np.ndarray, np.ndarra
     # the points: placed in 4D, through the 4D divide (the eye's side of it
     # clamped: what is that near along w has faded out), then back to what
     # the scene pass takes, before camera.zoom and pan
-    Q = zoom * (X @ M) + p
-    rho = d4 - Q[:, 3]
-    world = Q[:, :3] * (d4 / np.maximum(rho, w_gone))[:, None]
-    P = world.copy()
-    P[:, 0] -= p[0]
-    P[:, 1] -= p[1]
-    P /= zoom
-    along = (_smooth((rho - w_gone) / (w_near - w_gone))
-             * _smooth((w_lost - rho) / (w_lost - w_far)))
+    P, div4, pd, along = wk.place(X)
     if len(E):
         e_alpha = e_alpha * np.minimum(along[E[:, 0]], along[E[:, 1]])
     p_alpha = p_alpha * along
     if len(tris):
         tri_alpha = tri_alpha * along[tris[:, :3]].min(axis=1)
-    range_ = np.sqrt(world[:, 0] ** 2 + world[:, 1] ** 2 + (dist - world[:, 2]) ** 2)
-    pd = np.clip(-np.log2(np.maximum(range_, 1e-9) / dist), -spec.far, top)
     n, m = len(X), len(E)
     st = {"e_alpha": e_alpha, "e_width": np.ones(m), "e_rgb": np.ones((m, 3)),
           "e_m": np.full(m, float(DENS_M)), "p_alpha": p_alpha, "p_rgb": np.ones((n, 3)),
           "p_tinted": np.zeros(n, bool),
           "f_alpha": np.ones(int(spec.tri_face.max()) + 1)}
     g = {"V": X, "E": E.astype(np.int32), "n": n, "m": m, "style": st,
-         "cue": (-spec.far, top), "dens_m": DENS_M,
+         "cue": wk.cue, "dens_m": DENS_M,
          "tris": tris, "tri_uv": tri_uv, "tri_alpha": tri_alpha}
     # (the divisor the face shader multiplies back in: the uv stays
     # perspective-correct across the 4D divide)
-    return g, P, np.maximum(rho, w_gone), pd
+    return g, P, div4, pd
+
+
+def instances(wk: Walk) -> dict[str, np.ndarray]:
+    """The GPU path's instance rows (fractal_gl.py), float32, one per cell:
+    the cell's centre already in the view (4D, zoom · (o @ M) + p, before the
+    divide: the large numbers cancel here, in float64, so the vertex shader
+    adds only a cell-sized turn of its mesh), its radius in the view
+    (zoom · s) and its alpha. "lines": the split cells (their `new_E`);
+    "outline": the whole shape's own (empty unless `whole`); "faces": the
+    solids (empty with the faces off)."""
+    def rows(S, O, A):
+        out = np.empty((len(S), 6), dtype=np.float32)
+        if len(S):
+            out[:, 0:4] = wk.zoom * (O @ wk.M) + wk.p
+            out[:, 4] = wk.zoom * S
+            out[:, 5] = A
+        return out
+
+    spec = wk.spec
+    one = np.ones(1)
+    return {
+        "lines": rows(wk.line_s, wk.line_o, wk.line_a),
+        "outline": rows(one * wk.scale, wk.origin[None], one * spec.ink) if wk.whole
+        else np.zeros((0, 6), np.float32),
+        "corners": rows(one * wk.scale, wk.origin[None], one) if wk.whole
+        else np.zeros((0, 6), np.float32),
+        "faces": rows(wk.face_s, wk.face_o, wk.face_a) if wk.faces
+        else np.zeros((0, 6), np.float32),
+    }

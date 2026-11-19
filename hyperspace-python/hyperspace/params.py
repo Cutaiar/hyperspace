@@ -2458,6 +2458,14 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
              tip="Off: the edges and the dots are drawn in world space — they grow and "
                  "shrink with the shape as you zoom. On: screen space — they keep the "
                  "same pixel weight whatever the zoom.")
+    # plan 64 (register row 884): a fractal's lines and faces sorted on the
+    # CPU (off, the default) or additive and unsorted on the GPU. Not saved
+    # while the owner judges the look; a fractal's alone (fractal.py)
+    r.toggle("view.frac_additive", "Additive", *_attr(view, "frac_additive"), group=g,
+             persist=False, modulatable=False,
+             tip="A fractal only. Off: its lines and faces are sorted far to near on "
+                 "the CPU, as every shape's are. On: its cells are drawn on the GPU, "
+                 "unsorted, and add up where they overlap.")
     r.toggle("view.faces", "Faces", *_attr(view, "faces"), group=g,
              tip="Translucent fills on the true 2-faces, under the wireframe. "
                  "First build per shape takes a moment (extraction is cached).")

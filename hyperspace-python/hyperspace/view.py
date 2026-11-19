@@ -160,6 +160,11 @@ class ViewState:
     # (the pre-A2 feel). True — screen space: they keep their pixel weight
     # whatever the zoom (A2's behaviour)
     screen_strokes: bool = False
+    # plan 64: a fractal's line order. False (the default) — sorted: the CPU
+    # makes the frame and the painter sorts it, as any shape. True — additive:
+    # its cells go to the GPU, one instance each, and blend unsorted
+    # (fractal_gl.py). Not saved: a look for the owner to judge (row 884)
+    frac_additive: bool = False
     playing: bool = True
     planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)
