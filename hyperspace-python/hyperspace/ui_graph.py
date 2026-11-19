@@ -24,7 +24,7 @@ only** chip and the node's own **all ports / patched only** chip within
 node's stub opens a picker of its ports (`open_land`, `land`) and lands
 through `Edit.connect`; right-click a node for Learn on any of its params.
 The collapse state is the page's UI state (`st["open"]`), saved nowhere.
-**Tidy** (the head's chip, or T) collapses every node, forgets every
+**Turbo Tidy** (the head's chip, flames off it while hovered, or T) collapses every node, forgets every
 position and says what it did, leaving the canvas where you left it; the details chip shows only with a selection on a narrow page.
 
 An expanded node folds its port groups (the hands' axes, the desk's
@@ -232,9 +232,11 @@ from __future__ import annotations
 import colorsys
 import contextlib
 import dataclasses
+import itertools
 import json
 import math
 import os
+import random
 import tempfile
 import time
 from contextlib import contextmanager, suppress
@@ -313,6 +315,7 @@ PATCHED_TIP = ("Patched only: an expanded node shows just its patched ports — 
                "its own all / patched chip flips it")
 KEY = "T"                # tidies: no row in `routing.keymap` (a test holds it so)
 FIT_KEY = "0"            # …and fits: every node in view, as a load does. No row either
+TIDY_CHIP = "Turbo Tidy##graph"     # the owner's name for the flow layout's tidy (2026-11-19)
 TIDY_TIP = ("Collapse every node, forget every position on the canvas and lay them all "
             "out again left to right, the way the signal flows — what moves the params, "
             "then what makes the picture, then what works on it, then the outputs — each "
@@ -832,6 +835,121 @@ def tidy(panel, st: dict, view: graphview.View) -> str:
     said = tidied(view) if (moved or was_open) else ALREADY_TIDY
     st["note"], st["said"] = "", said
     return said
+
+
+# ---------------------------------------------------------------- Turbo Tidy's flames
+#
+# The owner, 2026-11-19: "make it so that that button emits flames when you
+# hover over it". A handful of embers rise off the chip while the pointer
+# is on it — born white-hot along its foot, cooling through orange to red
+# as they climb, shrink and fade — and a burst of them on a click. Drawn
+# over the chip on the head's own draw list; nothing else reads them.
+
+FLAME_RATE = 140.0          # embers a second while hovered
+FLAME_BURST = 60            # embers a click throws
+FLAME_LIFE = (0.45, 0.95)   # seconds an ember lives
+FLAME_RISE = (70.0, 170.0)  # px a second it climbs at birth
+FLAME_SWAY = 22.0           # px a second it drifts side to side
+FLAME_SIZE = (0.14, 0.30)   # its radius at birth, as a share of the chip's height
+FLAME_TAIL = 4              # circles in an ember's tongue, tapering ahead along its way
+FLAME_TAIL_S = 0.035        # seconds of travel the tongue spans
+FLAME_MAX = 400             # embers at most at once
+# its colour as it ages: white-hot, yellow, orange, red, then gone (rgb at an age 0…1)
+FLAME_RGB = ((0.0, (1.00, 0.97, 0.80)), (0.18, (1.00, 0.82, 0.25)),
+             (0.45, (1.00, 0.45, 0.05)), (0.75, (0.80, 0.12, 0.04)),
+             (1.0, (0.35, 0.05, 0.05)))
+FLAME_GLOW = (1.00, 0.40, 0.05)   # the chip's own glow under the embers
+FLAME_GLOW_ALPHA = 0.22
+
+
+def flame_rgb(age: float) -> tuple[float, float, float]:
+    """An ember's colour at `age` (0 born … 1 gone), between `FLAME_RGB`'s stops."""
+    age = max(0.0, min(1.0, age))
+    for (a0, c0), (a1, c1) in itertools.pairwise(FLAME_RGB):
+        if age <= a1:
+            t = (age - a0) / (a1 - a0) if a1 > a0 else 0.0
+            return (c0[0] + (c1[0] - c0[0]) * t, c0[1] + (c1[1] - c0[1]) * t,
+                    c0[2] + (c1[2] - c0[2]) * t)
+    return FLAME_RGB[-1][1]
+
+
+@dataclasses.dataclass
+class Flames:
+    """Turbo Tidy's embers: each [x, y, vx, vy, age, life, radius, phase] in
+    screen px; `heat` (0…1) how lit the chip is, easing in and out;
+    `burst` how many embers the next step throws at once."""
+
+    embers: list = dataclasses.field(default_factory=list)
+    heat: float = 0.0
+    burst: int = 0
+    owed: float = 0.0
+    rng: random.Random = dataclasses.field(default_factory=lambda: random.Random(7))
+    lo: imgui.ImVec2 | None = None      # the chip, as last stepped (screen px)
+    hi: imgui.ImVec2 | None = None
+
+    def step(self, lo, hi, hot: bool, dt: float) -> None:
+        """Age, move and cull the embers by `dt` seconds; while `hot`, new
+        ones born along the chip (`lo`–`hi`, screen px) at `FLAME_RATE`."""
+        dt = max(0.0, min(dt, 0.1))
+        self.heat = max(0.0, min(1.0, self.heat + (dt * 6.0 if hot else -dt * 3.0)))
+        h = max(1.0, hi.y - lo.y)
+        born = self.burst
+        self.burst = 0
+        if hot:
+            self.owed += FLAME_RATE * dt
+            born += int(self.owed)
+            self.owed -= int(self.owed)
+        r = self.rng
+        for _ in range(min(born, FLAME_MAX - len(self.embers))):
+            x = r.uniform(lo.x + 2.0, hi.x - 2.0)
+            y = r.uniform(lo.y - h * 0.05, lo.y + h * 0.3)     # off its top: the words clear
+            self.embers.append([x, y, r.uniform(-FLAME_SWAY, FLAME_SWAY),
+                                -r.uniform(*FLAME_RISE), 0.0, r.uniform(*FLAME_LIFE),
+                                h * r.uniform(*FLAME_SIZE), r.uniform(0.0, math.tau)])
+        keep = []
+        for e in self.embers:
+            e[4] += dt
+            if e[4] >= e[5]:
+                continue
+            e[7] += dt * 9.0
+            e[0] += (e[2] + math.sin(e[7]) * FLAME_SWAY) * dt
+            e[1] += e[3] * dt
+            e[3] *= 1.0 - 0.6 * dt          # (rising slower as it cools)
+            keep.append(e)
+        self.embers = keep
+        self.lo, self.hi = lo, hi
+
+    def draw(self, dl) -> None:
+        """The chip's glow, then every ember: older (redder, smaller,
+        fainter) first, so the hot ones burn on top."""
+        if self.heat > 0.0 and self.lo is not None and self.hi is not None:
+            g = FLAME_GLOW
+            for k, grow in enumerate((10.0, 5.0, 1.0)):
+                a = FLAME_GLOW_ALPHA * self.heat * (k + 1) / 3
+                dl.add_rect_filled(imgui.ImVec2(self.lo.x - grow, self.lo.y - grow),
+                                   imgui.ImVec2(self.hi.x + grow, self.hi.y + grow),
+                                   ui.u32(imgui.ImVec4(*g, a)), 999.0)
+        for e in sorted(self.embers, key=lambda e: -e[4] / e[5]):
+            age = e[4] / e[5]
+            rgb = flame_rgb(age)
+            alpha = (1.0 - age) ** 1.3
+            rad = e[6] * (1.0 - 0.7 * age)
+            dl.add_circle_filled(imgui.ImVec2(e[0], e[1]), rad * 2.2,
+                                 ui.u32(imgui.ImVec4(*rgb, alpha * 0.12)))
+            for k in range(FLAME_TAIL, -1, -1):     # a tongue: broad below, its tip ahead
+                back = k / FLAME_TAIL
+                c = imgui.ImVec2(e[0] + e[2] * FLAME_TAIL_S * back,
+                                 e[1] + e[3] * FLAME_TAIL_S * back * 1.6)
+                dl.add_circle_filled(c, rad * (1.0 - 0.75 * back),
+                                     ui.u32(imgui.ImVec4(*rgb, alpha * (0.85 - 0.45 * back))))
+
+
+def flames(st: dict) -> Flames:
+    """The page's Turbo Tidy embers (`Flames`), made on first ask."""
+    f = st.get("flames")
+    if not isinstance(f, Flames):
+        f = st["flames"] = Flames()
+    return f
 
 
 # ---------------------------------------------------------------- the page
@@ -1384,10 +1502,15 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if imgui.is_item_hovered():
         ui.tooltip(ALL_TIP)
     imgui.same_line()
-    if ui.chip("tidy##graph", variant="ghost"):
+    if ui.chip(TIDY_CHIP, variant="ghost"):
         st["tidy"] = True
-    if imgui.is_item_hovered():
+        flames(st).burst = FLAME_BURST
+    hot = imgui.is_item_hovered()
+    if hot:
         ui.tooltip(TIDY_TIP)
+    flames(st).step(imgui.get_item_rect_min(), imgui.get_item_rect_max(), hot,
+                    imgui.get_io().delta_time)
+    flames(st).draw(imgui.get_window_draw_list())
     imgui.same_line()
     hit = ui.chip_group(["patched only##graph", "patch only##graph"],
                         [st["patched_only"], st["patch_only"]], [PATCHED_TIP, PATCH_ONLY_TIP])
@@ -1892,6 +2015,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     for n in view.nodes:
         if drawn_node(st, n):
             _node(st, n, drawn)
+    _back_pins(st, view, drawn)         # 2026-11-19: the slings' ends
     for g in view.groups:               # plan 40 T2: a folded group's node, an open one's title
         if g.open:
             _region_title(panel, st, g)
@@ -1916,17 +2040,28 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     singles, bundles = _wiring(st, view)
     st["tints"] = cable_tints(st, view)     # plan 37 C2: the through wires known
     wires = 0
+    want: dict[str, float] = {}               # the sling pins the next frame draws
+    st["curves"] = {}
+    held: list = []
+
+    def boxes() -> list:
+        if not held:
+            held.append(_node_boxes(st, view))
+        return held[0]
+
     for c, a, b in singles:
         if a in drawn and b in drawn:
-            _cable(st, c, a, b)
+            _cable(st, c, *_ends(st, view, c.id, a, b, drawn, want, boxes))
             wires += 1
     st["bundles"] = {}
     for b in bundles:
         if b.src_port in drawn and b.dst_port in drawn:
-            _bundle(st, b)
+            _bundle(st, b, *_ends(st, view, b.id, b.src_port, b.dst_port, drawn, want, boxes))
             st["bundles"][b.id] = b
             wires += 1
     st["wires"] = wires
+    st["back_want"] = want
+
     held = ui_routing._state(panel).pop("reveal", None)     # "Route a lane here…"
     if held is not None:
         reveal(st, view, held)
@@ -2321,6 +2456,102 @@ def _stub(st: dict, pin: str, kind, lit: bool, drawn: set[str]) -> None:
          grow=GROW_LEFT if kind == ed.PinKind.input else GROW_RIGHT)
 
 
+def _back_pins(st: dict, view: graphview.View, drawn: set[str]) -> None:
+    """The sling pins (`graphview.back_pin`) a cable running back asked
+    for last frame (`st["back_want"]`: pin → handle length), each on an
+    anchor of its own — a node with nothing to see or hit, put at its
+    node's bottom (or top) corner every frame: an out pin at the right,
+    an in pin at the left, pointing down (or up), its handles that long.
+    The nodes themselves are left as they are (a pin of no size inside a
+    node keeps the widget from selecting a node on a click)."""
+    want = st.get("back_want", {})
+    if not want:
+        return
+    clear = imgui.ImVec4(0, 0, 0, 0)
+    ed.push_style_color(ed.StyleColor.node_bg, clear)
+    ed.push_style_color(ed.StyleColor.node_border, clear)
+    ed.push_style_color(ed.StyleColor.hov_node_border, clear)
+    ed.push_style_color(ed.StyleColor.sel_node_border, clear)
+    ed.push_style_var(ed.StyleVar.node_padding, imgui.ImVec4(0, 0, 0, 0))
+    ed.push_style_var(ed.StyleVar.node_border_width, 0.0)
+    ed.push_style_var(ed.StyleVar.hovered_node_border_width, 0.0)
+    ed.push_style_var(ed.StyleVar.selected_node_border_width, 0.0)
+    for pin, strength in want.items():
+        _, side, kind, nid = pin.split(":", 3)
+        n = view.node(nid)
+        if n is None or not drawn_node(st, n):
+            continue
+        k = ed.NodeId(_id(st, "n:" + nid))
+        p, sz = ed.get_node_position(k), ed.get_node_size(k)
+        if sz.x <= 0:
+            continue
+        x = p.x + (sz.x - PIN if kind == "out" else PIN)
+        at = imgui.ImVec2(x, p.y + sz.y if side == graphview.DOWN else p.y)
+        way = imgui.ImVec2(*graphview.sling_way(side, kind))
+        anchor = ed.NodeId(_id(st, "a:" + pin))
+        ed.set_node_position(anchor, at)
+        ed.push_style_var(ed.StyleVar.source_direction if kind == "out"
+                          else ed.StyleVar.target_direction, way)
+        ed.push_style_var(ed.StyleVar.link_strength, strength)
+        ed.begin_node(anchor)
+        ed.begin_pin(ed.PinId(_id(st, pin)),
+                     ed.PinKind.output if kind == "out" else ed.PinKind.input)
+        imgui.dummy(imgui.ImVec2(1.0, 1.0))
+        ed.pin_pivot_rect(at, at)
+        ed.end_pin()
+        ed.end_node()
+        ed.pop_style_var(2)
+        if ed.is_node_selected(anchor):         # (a box across it: never part of a selection)
+            ed.deselect_node(anchor)
+        drawn.add(pin)
+        st["pin_xy"][pin] = (at.x, at.y)
+    ed.pop_style_var(4)
+    ed.pop_style_color(4)
+
+
+def _node_boxes(st: dict, view: graphview.View) -> list[graphview.Box]:
+    """Every drawn node's box this frame, in canvas units."""
+    out = []
+    for n in view.nodes:
+        if drawn_node(st, n):
+            k = ed.NodeId(_id(st, "n:" + n.id))
+            p, sz = ed.get_node_position(k), ed.get_node_size(k)
+            out.append((p.x, p.y, p.x + sz.x, p.y + sz.y))
+    return out
+
+
+def _ends(st: dict, view: graphview.View, wid: str, a: str, b: str, drawn: set[str],
+          want: dict, boxes) -> tuple[str, str]:
+    """The pins a wire from `a` to `b` is drawn between: its own, unless
+    it runs back (`graphview.runs_back`, by where they were drawn this
+    frame) — then its two nodes' sling pins, the way round and the
+    handles `graphview.sling` picks; asked for in `want` for the next
+    frame's nodes (the first frame a wire runs back it is drawn as it
+    was), its points kept in `st["curves"]` for a drop onto it."""
+    xy = st["pin_xy"]
+    if a not in xy or b not in xy or not graphview.runs_back(xy[a], xy[b]):
+        return a, b
+    s, d = graphview.node_of(view, a), graphview.node_of(view, b)
+    sk, dk = ed.NodeId(_id(st, "n:" + s)), ed.NodeId(_id(st, "n:" + d))
+    if view.node(s) is None or view.node(d) is None:
+        return a, b
+    sp, ss = ed.get_node_position(sk), ed.get_node_size(sk)
+    dp, ds = ed.get_node_position(dk), ed.get_node_size(dk)
+    side, strength = graphview.sling((sp.x, sp.y, sp.x + ss.x, sp.y + ss.y),
+                                     (dp.x, dp.y, dp.x + ds.x, dp.y + ds.y), boxes())
+    po, pi = graphview.back_pin(s, side, "out"), graphview.back_pin(d, side, "in")
+    want[po] = max(want.get(po, 0.0), strength)
+    want[pi] = max(want.get(pi, 0.0), strength)
+    if po not in drawn or pi not in drawn:
+        return a, b
+    held = st.get("back_want", {})               # the handles the pins were drawn with
+    (ox, oy), (ix, iy) = graphview.sling_way(side, "out"), graphview.sling_way(side, "in")
+    p0, p3, so, si = xy[po], xy[pi], held.get(po, strength), held.get(pi, strength)
+    st["curves"][wid] = graphview.cubic(p0, (p0[0] + ox * so, p0[1] + oy * so),
+                                        (p3[0] + ix * si, p3[1] + iy * si), p3)
+    return po, pi
+
+
 def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     ed.begin_node(ed.NodeId(_id(st, "n:" + n.id)))
     imgui.push_id(n.id)
@@ -2499,7 +2730,7 @@ def selected_ids(st: dict) -> list[str]:
     out = []
     for nk in ed.get_selected_nodes():
         name = st["names"].get(nk.id(), "")[2:]
-        if name and not name.startswith(("idle:", REGION)):
+        if name and not name.startswith(("idle:", REGION, "back:")):
             out.append(name)
     return list(dict.fromkeys(out))
 
@@ -3622,7 +3853,7 @@ def _bundle_colour(b: graphview.VBundle) -> imgui.ImVec4:
     return k or COLOURS.get(b.type, ui.DIM)
 
 
-def _bundle(st: dict, b: graphview.VBundle) -> None:
+def _bundle(st: dict, b: graphview.VBundle, a: str | None = None, z: str | None = None) -> None:
     """The one wire between two nodes while either is collapsed: coloured
     by what it carries, as thick as it is many, faint while dormant."""
     k = _bundle_colour(b)
@@ -3634,8 +3865,8 @@ def _bundle(st: dict, b: graphview.VBundle) -> None:
             col, thick = DROP_COLOUR, max(thick, DROP_WIRE)     # the cable it lands in is here
         elif not all(c.id in lit.get("cold", ()) for c in b.cables):
             col = imgui.ImVec4(col.x, col.y, col.z, min(col.w, SPOT_ALPHA))
-    ed.link(ed.LinkId(_id(st, "c:" + b.id)), ed.PinId(_id(st, b.src_port)),
-            ed.PinId(_id(st, b.dst_port)), col, thick)
+    ed.link(ed.LinkId(_id(st, "c:" + b.id)), ed.PinId(_id(st, a or b.src_port)),
+            ed.PinId(_id(st, z or b.dst_port)), col, thick)
 
 
 def _said(v: float | None) -> str:
@@ -5130,7 +5361,7 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
         e = render_edit(panel) if never is None else None
         ok, refused = [], {}
         for d, c in graphview.cables_near(view, pins, centre, near, kinds=kinds,
-                                          skip={nid}, size=size):
+                                          skip={nid}, size=size, curves=st.get("curves")):
             if c.kind != "render":
                 refused[c.id] = never or PICTURE_ON_VALUE.format(node=n.label)
             elif c.id in cold:
@@ -5145,7 +5376,7 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
         ok, refused = [], {}
         # (only a cable with a source to take: `insert_modifier`'s rule)
         for d, c in graphview.cables_near(view, pins, centre, near, kinds=kinds,
-                                          skip=(nid,), size=size):
+                                          skip=(nid,), size=size, curves=st.get("curves")):
             if c.kind == "render":
                 refused[c.id] = MOD_ON_PICTURE
             elif c.kind in ("route", "input") and c.addr:
@@ -5158,7 +5389,7 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
     if thr:
         tv = graphview.View(nodes=view.nodes, cables=list(thr.values()), pins=view.pins)
         for d, c in graphview.cables_near(tv, pins, centre, near, kinds=(graphview.THROUGH,),
-                                          skip={nid}, size=size):
+                                          skip={nid}, size=size, curves=st.get("curves")):
             plural = "effects:" in c.label
             refused.setdefault(c.id, never or THROUGH_DROP.format(
                 through=c.label, it="them" if plural else "it"))

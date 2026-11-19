@@ -1140,3 +1140,75 @@ def test_a_loadable_landing_without_the_node_lets_it_go(rig):
     rig.lib.loaded_patch.new()                                 # shape → scene → output: no pattern
     frame(panel, "view")
     assert panel.graph_selected is None and panel.graph_selected_at > at
+
+
+# ---------------------------------------------------------------- a cable that runs back (2026-11-19)
+
+def test_a_sling_goes_round_the_short_way_and_clears_every_node():
+    """A cable from a node back to one left of it: under (or over) every
+    node across its run, whichever way is shorter, `BACK_CLEAR` clear —
+    its curve, as the widget draws it from the sling pins, never inside a
+    node it does not end at."""
+    src, dst = (700.0, 100.0, 937.0, 160.0), (0.0, 100.0, 237.0, 160.0)
+    tall_below = (350.0, 200.0, 587.0, 600.0)          # in the way below: go over
+    side, s = graphview.sling(src, dst, [src, dst, tall_below])
+    assert side == graphview.UP
+    curve = graphview.sling_curve((src[2] - 12, src[1]), (dst[0] + 12, dst[1]), side, s, 64)
+    for x, y in curve:
+        assert not (tall_below[0] < x < tall_below[2] and tall_below[1] < y < tall_below[3])
+    assert min(y for _, y in curve) <= 100.0 - graphview.BACK_CLEAR + 1.0
+    above = (350.0, -400.0, 587.0, 60.0)              # in the way above: go under
+    side, s = graphview.sling(src, dst, [src, dst, above])
+    assert side == graphview.DOWN and s >= graphview.BACK_MIN
+    curve = graphview.sling_curve((src[2] - 12, src[3]), (dst[0] + 12, dst[3]), side, s, 64)
+    assert max(y for _, y in curve) >= 160.0 + graphview.BACK_CLEAR - 1.0
+    assert not any(n[0] < x < n[2] and n[1] < y < n[3] for x, y in curve for n in (above,))
+
+
+def test_only_a_cable_whose_end_is_left_of_its_start_runs_back():
+    assert graphview.runs_back((500.0, 0.0), (100.0, 0.0))
+    assert graphview.runs_back((500.0, 0.0), (500.0, 300.0))          # straight below
+    assert not graphview.runs_back((500.0, 0.0), (600.0, 300.0))
+
+
+def test_the_page_draws_a_cable_that_runs_back_between_sling_pins(rig, monkeypatch):
+    """A render node dragged left of what feeds it: from the next frame its
+    cable is drawn between the two nodes' sling pins, pointing the way
+    round `sling` picks, its curve kept for a drop onto it — and the
+    anchors that hold the pins are never part of a selection."""
+    st = load(rig, "party-trip")
+    lay = rig.lib.loaded_patch.layout
+    lay["render:scene"] = [-2000, 0]                  # left of the shape that feeds it
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    links = []
+    real = ui_graph.ed.link
+    monkeypatch.setattr(ui_graph.ed, "link", lambda lid, a, b, *r: (
+        links.append((st["names"].get(lid.id()), st["names"].get(a.id()),
+                      st["names"].get(b.id()))), real(lid, a, b, *r))[1])
+    frame(rig.panel, "graph")
+    back = [x for x in links if x[1].startswith("back:")]
+    assert any(x[1].endswith(":out:render:shape") and x[2].endswith(":in:render:scene")
+               for x in back), back
+    assert all(cid[2:] in st["curves"] for cid, _, _ in back)
+    assert not any(n.startswith("back:") for n in ui_graph.selected_ids(st))
+
+
+def test_turbo_tidys_flames_rise_while_hovered_and_die_down_after():
+    """Hovered, the chip throws embers that rise and cool; a click throws
+    a burst; off it, no new ones are born and the last go out."""
+    from imgui_bundle import imgui
+    f = ui_graph.Flames()
+    lo, hi = imgui.ImVec2(100, 100), imgui.ImVec2(190, 122)
+    for _ in range(30):
+        f.step(lo, hi, True, 1 / 30)
+    assert f.embers and f.heat == 1.0
+    assert all(e[1] < hi.y for e in f.embers)                  # risen off its top
+    n = len(f.embers)
+    f.burst = ui_graph.FLAME_BURST
+    f.step(lo, hi, True, 1 / 30)
+    assert len(f.embers) >= n
+    for _ in range(60):
+        f.step(lo, hi, False, 1 / 30)
+    assert f.embers == [] and f.heat == 0.0
+    assert ui_graph.flame_rgb(0.0)[1] > ui_graph.flame_rgb(0.8)[1]  # white-hot, then red

@@ -5490,8 +5490,81 @@ def bezier(p0, p3, strength: float = LINK_STRENGTH, steps: int = 16) -> list[tup
     """A cable's curve as the widget draws it: a cubic from an output pin
     at `p0` to an input pin at `p3`, its handles `strength` out to the
     right of the output and to the left of the input."""
-    p1 = (p0[0] + strength, p0[1])
-    p2 = (p3[0] - strength, p3[1])
+    return cubic(p0, (p0[0] + strength, p0[1]), (p3[0] - strength, p3[1]), p3, steps)
+
+
+# ---- a cable that runs back: the sling (the owner, 2026-11-19: "if a cable
+# runs backwards … it looks way worse than cables that run forwards") ----
+#
+# A cable whose end sits left of its start is not drawn as the widget's S
+# (out to the right, across every node between, in from the left): it
+# drops from the bottom of the node it leaves, runs under everything
+# between its two nodes, and rises into the bottom of the node it enters —
+# or over the top, whichever way round is shorter. The page draws it
+# between two pins of its own on each node (`back_pin`), their direction
+# down (or up) and their handles as long as the way round needs
+# (`sling`), so the widget's own curve is the sling and hovering,
+# selecting and deleting it work as for any cable.
+
+BACK_RUN = 24.0            # a cable whose end is not this far right of its start runs back
+BACK_CLEAR = GAP           # how far a sling passes clear of the nodes it goes round
+BACK_MIN = 60.0            # its shortest handles: a sling between two near nodes still bends
+DOWN, UP = "down", "up"
+SLING_DIR = (0.6, 0.8)     # a sling's handles: out and down (or up) — clear of a node
+                           # straight above or below the end it leaves or enters
+
+
+def back_pin(nid: str, side: str, kind: str) -> str:
+    """The canvas id of node `nid`'s sling pin: `side` DOWN (its bottom
+    edge) or UP (its top), `kind` "out" (the cable leaves there) or "in"."""
+    return f"back:{side}:{kind}:{nid}"
+
+
+def runs_back(a: tuple, b: tuple) -> bool:
+    """Does a cable from pin `a` to pin `b` (canvas positions) run back —
+    its end not `BACK_RUN` right of its start?"""
+    return b[0] < a[0] + BACK_RUN
+
+
+Box = tuple[float, float, float, float]     # x0, y0, x1, y1 in canvas units
+
+
+def sling(src: Box, dst: Box, boxes: Iterable[Box]) -> tuple[str, float]:
+    """Which way round a cable from node box `src` back to node box `dst`
+    goes, and its handles' length: DOWN under, or UP over, every box of
+    `boxes` (the drawn nodes, the two ends among them) across the run
+    between them, `BACK_CLEAR` clear — whichever needs the shorter
+    handles, DOWN on a tie, never under `BACK_MIN`. A cubic whose handles
+    are `s` long, `SLING_DIR` down from y0 and y3, reaches
+    (y0 + y3) / 2 + ¾ s·dy."""
+    dy = SLING_DIR[1]
+    lo, hi = min(src[0], dst[0]), max(src[2], dst[2])
+    span = [bx for bx in (*boxes, src, dst) if bx[0] < hi and bx[2] > lo]
+    floor = max(bx[3] for bx in span) + BACK_CLEAR
+    roof = min(bx[1] for bx in span) - BACK_CLEAR
+    down = (floor - (src[3] + dst[3]) / 2) / (0.75 * dy)
+    up = ((src[1] + dst[1]) / 2 - roof) / (0.75 * dy)
+    return (DOWN, max(BACK_MIN, down)) if down <= up else (UP, max(BACK_MIN, up))
+
+
+def sling_curve(p0, p3, side: str, strength: float, steps: int = 16) -> list[tuple]:
+    """A sling as the widget draws it: a cubic from pin `p0` to pin `p3`,
+    both handles `strength` long along `sling_way` (out right of `p0`,
+    out left of `p3`, down for `side` DOWN or up)."""
+    (ox, oy), (ix, iy) = sling_way(side, "out"), sling_way(side, "in")
+    return cubic(p0, (p0[0] + ox * strength, p0[1] + oy * strength),
+                 (p3[0] + ix * strength, p3[1] + iy * strength), p3, steps)
+
+
+def sling_way(side: str, kind: str) -> tuple[float, float]:
+    """A sling pin's direction (`SLING_DIR`): right from an out pin, left
+    into an in pin; down for `side` DOWN, up for UP."""
+    hx, vy = SLING_DIR
+    return (hx if kind == "out" else -hx, vy if side == DOWN else -vy)
+
+
+def cubic(p0, p1, p2, p3, steps: int = 16) -> list[tuple]:
+    """`steps` + 1 points along the cubic Bézier `p0`…`p3`."""
     out = []
     for i in range(steps + 1):
         t = i / steps
@@ -5530,7 +5603,8 @@ def _seg_hits_box(a, b, lo, hi) -> bool:
 
 def cables_near(view: View, pins: Mapping[str, tuple], point, within: float = NEAR,
                 kinds=("route", "input"), skip: Iterable[str] = (),
-                size: tuple[float, float] | None = None) -> list[tuple[float, VCable]]:
+                size: tuple[float, float] | None = None,
+                curves: Mapping[str, list] | None = None) -> list[tuple[float, VCable]]:
     """Every cable of `kinds` under a dragged node centred on `point`
     (canvas units), as (distance from the centre, cable), nearest first —
     by the curve the widget draws between its pins' positions (`pins`: pin
@@ -5539,8 +5613,10 @@ def cables_near(view: View, pins: Mapping[str, tuple], point, within: float = NE
     cable into or out of a node in `skip` (the node being dropped) is
     passed over. A render cable with a collapsed end is drawn to that
     node's stub (plan 28 N7), so the stub's position stands for the pin it
-    does not draw."""
+    does not draw. A cable drawn as a sling (`curves`: cable id → its
+    points, as the page drew them) is measured along that."""
     skip = set(skip)
+    curves = curves or {}
     box = None
     if size is not None:
         hw, hh = size[0] / 2 + within, size[1] / 2 + within
@@ -5556,7 +5632,7 @@ def cables_near(view: View, pins: Mapping[str, tuple], point, within: float = NE
             b = b or pins.get(stub_in(d))
         if a is None or b is None or {s, d} & skip:
             continue
-        segs = list(itertools.pairwise(bezier(a, b)))
+        segs = list(itertools.pairwise(curves.get(c.id) or bezier(a, b)))
         dist = min(_seg_dist(point, p, q) for p, q in segs)
         if dist < within or (box is not None and any(_seg_hits_box(p, q, *box) for p, q in segs)):
             hits.append((dist, c))
