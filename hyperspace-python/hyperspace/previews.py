@@ -32,8 +32,13 @@ state, made again after a restart or a reload.
 `ATLAS_COLS` × `ATLAS_ROWS` cells of `PREVIEW_W` × `PREVIEW_H` (cell 0 the
 still, cells 1… the loop): 960 × 540 × 4 = 2.07 MB a file, so the 27 files
 on this build (26 effects and the test card) are 56.0 MB of textures, all
-kept once made (`ATLAS_BYTES`, `bytes_kept`), plus the card and the
-work picture at `WORK_W` × `WORK_H` (2.1 MB and 2.8 MB, mipmapped). Each is made once a session and kept: a file that is gone
+kept once made (`ATLAS_BYTES`, `bytes_kept`), plus the card, the aux
+picture and the work picture at `WORK_W` × `WORK_H` (2.1 MB each, the work
+picture 2.8 MB mipmapped).
+
+**The aux.** An effect that reads a second picture (`fx.EffectSpec.aux`:
+Blend and Displace on this build) is previewed with a known one wired into
+its aux, `AUX_FS`'s soft disc, so its tile shows what it does with one. Each is made once a session and kept: a file that is gone
 from the folder has its atlas freed.
 
 **Families.** The picker groups the tiles by family, read from data, never
@@ -50,6 +55,7 @@ from typing import Any
 import moderngl
 
 from .fx import FX_DIR, FxChain, FxState, clock_rate
+from .glsl import QUAD_VS
 
 CARD_EFFECT = "testcard"        # the effect file that draws the card (shaders/fx/testcard.glsl)
 
@@ -153,6 +159,29 @@ def card_values(spec) -> dict[str, Any]:
 
 SHRINK = ""     # `FxChain.run_one` of a name no file has copies its picture: the shrink
 
+# the second picture wired into the aux of an effect that reads one
+# (`fx.EffectSpec.aux`: Blend, Displace), so its preview shows what it does
+# with one: a soft disc, white at its centre fading to black at its rim and
+# clear outside it (premultiplied), warm so a blend's modes read against the
+# card's greys — Displace bulges the grid by its brightness, Blend lays it on
+AUX_RADIUS = 0.42               # the disc's radius, in frame heights
+AUX_TINT = (1.0, 0.62, 0.25)    # its colour at the centre
+AUX_FS = """
+#version 330
+in vec2 v_uv;
+out vec4 f_color;
+uniform vec2 u_res;
+uniform float u_radius;
+uniform vec3 u_tint;
+void main() {
+    vec2 p = (v_uv - 0.5) * vec2(u_res.x / u_res.y, 1.0);
+    float r = length(p) / u_radius;
+    float a = 1.0 - smoothstep(0.97, 1.0, r);          // a hard rim, eased over a pixel
+    float lum = 1.0 - smoothstep(0.0, 1.0, r);          // bright at the centre, dark at the rim
+    f_color = vec4(mix(vec3(0.0), u_tint, lum) * a, a);
+}
+"""
+
 
 def cell_rect(k: int) -> tuple[int, int, int, int]:
     """Cell `k`'s viewport in its atlas (x, y, w, h; GL's, y up)."""
@@ -199,6 +228,7 @@ class EffectPreviews:
         self._card_key: tuple | None = None
         self._blank: moderngl.Texture | None = None     # what the card is painted over
         self._work: tuple[moderngl.Texture, moderngl.Framebuffer] | None = None
+        self._aux: tuple[moderngl.Texture, moderngl.Framebuffer] | None = None
 
     # ---- the page's side
 
@@ -240,6 +270,7 @@ class EffectPreviews:
         """The textures' bytes: every atlas kept and the card."""
         work = WORK_W * WORK_H * 4
         return (len(self.atlas) * ATLAS_BYTES + (work if self._card is not None else 0)
+                + (work if self._aux is not None else 0)
                 + (work * 4 // 3 if self._work is not None else 0))
 
     # ---- the renderer's side
@@ -286,10 +317,11 @@ class EffectPreviews:
         if self._blank is not None:
             self._blank.release()
             self._blank = None
-        if self._work is not None:
-            self._work[1].release()
-            self._work[0].release()
-            self._work = None
+        for got in (self._work, self._aux):
+            if got is not None:
+                got[1].release()
+                got[0].release()
+        self._work = self._aux = None
         if self._chain is not None:
             self._chain.release()
             self._chain = None
@@ -374,6 +406,32 @@ class EffectPreviews:
         self.passes += 1
         return tex
 
+    def _aux_picture(self, ctx: moderngl.Context) -> moderngl.Texture:
+        """The aux picture (`AUX_FS`) at the work size, drawn on first use."""
+        got = self._aux
+        if got is None:
+            tex = ctx.texture((WORK_W, WORK_H), 4)
+            tex.repeat_x = tex.repeat_y = False
+            fbo = ctx.framebuffer(color_attachments=[tex])
+            prog = ctx.program(vertex_shader=QUAD_VS, fragment_shader=AUX_FS)
+            for key, value in (("u_res", (float(WORK_W), float(WORK_H))),
+                               ("u_radius", AUX_RADIUS), ("u_tint", AUX_TINT)):
+                uniform = prog[key]
+                if isinstance(uniform, moderngl.Uniform):
+                    uniform.value = value
+            vao = ctx.vertex_array(prog, [])
+            fbo.use()
+            fbo.clear(0.0, 0.0, 0.0, 0.0)
+            ctx.disable(moderngl.BLEND)
+            try:
+                vao.render(moderngl.TRIANGLES, vertices=3)
+            finally:
+                ctx.enable(moderngl.BLEND)
+                vao.release()
+                prog.release()
+            got = self._aux = (tex, fbo)
+        return got[0]
+
     @staticmethod
     def _at(own: FxState, spec, name: str, t: float) -> None:
         """Effect `name`'s clocks at `t` s of its default speed: its phase
@@ -413,7 +471,8 @@ class EffectPreviews:
         t = STILL_T if k == 0 else loop_t(k - 1)
         self._at(own, spec, name, t)
         work, wfbo = work_fb
-        chain.run_one(name, card, wfbo, t, opaque=1)
+        aux = self._aux_picture(ctx) if getattr(spec, "aux", False) else None
+        chain.run_one(name, card, wfbo, t, opaque=1, aux=aux)
         work.build_mipmaps()
         fbo = got[1]
         fbo.viewport = cell_rect(k)

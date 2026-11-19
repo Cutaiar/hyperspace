@@ -79,3 +79,16 @@ def script(d, panel):
     yield from _wait(d, 40)
     _mark(panel, "added")
     yield from _wait(d, 4)
+    # the effects that read an aux (Blend, Displace): their tips say so, and
+    # their previews have a known disc wired in
+    fxpick.open_picker(st, "add", (at[0] + 600.0, at[1] + 520.0))
+    yield from _wait(d, 6)
+    for ch in "aux":
+        yield from d.type(ch)
+        _mark.n += 1
+    yield from _wait(d, 4)
+    yield from d.move(fxpick.TILE.format("displace"), frames=1)
+    _mark.n += 1
+    yield from _wait(d, 30)
+    _mark(panel, "aux")
+    yield from _wait(d, 4)

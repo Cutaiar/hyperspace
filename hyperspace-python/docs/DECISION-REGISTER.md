@@ -872,15 +872,15 @@ here; overturn → the change, then the same.
 | 870 | CI is for contracts, and as fast as it can be made: the fast tier is split by CI time over four runners beside a lint-and-types runner (`tools/ci_shard.py`, `tests/ci_durations.json`); the type ratchet's pyright runs in that job, not on a fast-tier worker; each shard warms pytest's assert cache in four processes first; the tests CI timed at 1 s or more are handed out first; apt packages come from a cache; `wait_green.py` polls every 5 s. A new `sweep` tier (content-library sweeps, soaks, finished migrations' old-way checks) leaves the fast tier and the merge gate and runs in `sweeps.yml`, on its own runner, when a PR touches what it walks and after each push to main | — | owner — 2026-11-10: "getting the CI tests down as low as possible is the main objective" |
 | 871 | T is GRAPH's tidy and 0 its fit, neither a row: T lays the canvas out again and 0 brings every node into view (`ui_graph.KEY`, `FIT_KEY`, the panel's own keys, as the player board's O). T leaves the overlay (the panel's toggle and the APC40's MASTER select keep it) and 0 the track restart (the AUDIO section keeps it); the old factory rows are dropped from a file that holds them (`routing.RETIRED_KEY_ROWS`). The tidy no longer frames every node: the zoom and the place being looked at stay as they are, and 0 is what frames | — | owner — 2026-11-11: T and 0, over the overlay's and the track restart's claim on them |
 | 892 | Plan 65: GRAPH's two effects ▸ submenus (the canvas picker's and a picture cable's insert ▸) are one row each, **effects…**, opening the effect picker; a click on a tile runs the very action the menu's row ran (`add_render` unwired where the menu opened, `insert_effect` on the cable). The rest of the menus are as they were | 689, 693 | (rec) — plan 65 §2 |
-| 893 | Plan 65: a preview is the test card through the effect at its file's defaults (a `@mix` 0 file at mix 1), the still at 0.6 s of its clock; the card, not the scene or the effect's input, so every tile is compared on one picture | 689 | (rec) — plan 65 §1 |
+| 893 | Plan 65: a preview is the test card through the effect at its file's defaults (a `@mix` 0 file at mix 1), the still at 0.6 s of its clock; the card, not the scene or the effect's input, so every tile is compared on one picture. An effect that reads its aux (Blend, Displace) has a known second picture wired in: a warm disc, bright at its centre (`previews.AUX_FS`) | 689 | (rec) — plan 65 §1 |
 | 894 | Plan 65: the loop is 24 frames over 2 s of the effect's clock at its default speed, made once a session and kept, played while the tile is hovered; a cut of the clock, not a cycle | 690 | (rec) — plan 65 §1 |
 | 895 | Plan 65: every preview pass runs at 960 × 540 told its true size and is shrunk through mipmaps into its 192 × 108 cell, so an effect that reads by the pixel draws as on stage; a px knob is then twice what it is against a 1080p frame | 690 | (rec) — plan 65 §1: telling a small picture it was 1080p made Edges draw nothing |
-| 896 | Plan 65: at most 3 preview passes a frame, at the frame's end after the thumbnails, stills first; every file kept once made — one 2.07 MB atlas a file, 56.0 MB for the 27 files, 60.8 MB with the card and the work picture; view state, never saved, let go on a reload of the renderer | 690, 696 | (rec) — plan 65 §1 |
+| 896 | Plan 65: at most 3 preview passes a frame, at the frame's end after the thumbnails, stills first; every file kept once made — one 2.07 MB atlas a file, 56.0 MB for the 27 files, 62.9 MB with the card, the aux disc and the work picture; view state, never saved, let go on a reload of the renderer | 690, 696 | (rec) — plan 65 §1 |
 | 897 | Plan 65: the previews read the show's `FxState.files` (its hot reload): a file whose program source — the file, `_lib.glsl`, `_common.glsl` — changed is made again on the next ask, a file gone has its atlas freed, one that does not compile shows the plain card | 692 | (rec) — plan 65 §1 |
-| 898 | Plan 65: the picker's families are data: a file's `// @family <name>` (`EffectSpec.family`, parsed, declares nothing, written by no file yet), else its `@order` band from one table, `previews.ORDER_FAMILIES` (generators, distort, split, glow and texture, colour). The shader roundup writes `@family` | — | (rec) — plan 65 §2: the owner asked for a hook, not today's list |
+| 898 | Plan 65: the picker's families are data: a file's `// @family <name>` (`EffectSpec.family`, parsed, declares nothing, written by no file yet), else its `@order` band from one table, `previews.ORDER_FAMILIES` (generators, distort, split, glow and texture, colour). The shader roundup writes `@family`. So is the aux port: every effect node had one, two files read it (Blend, Displace); GRAPH draws it only when the file's code calls `aux(` or `aux_luma(` (`fx.reads_aux`) or a saved wire goes into it | 693 | (rec) — plan 65 §2: the owner asked for a hook, not today's list |
 | 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
 | 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
-| 901 | Plan 65, open: about a third of the effects barely change the card at their defaults (Displace and Blend need an `aux`, Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
+| 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
 
 "—": no hand check shows it; tests only.
 
@@ -15100,9 +15100,9 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 ### 893. A preview is the test card through the effect, at its defaults
 
-- **What.** Each tile is the test card through that effect with every knob at the file's default, so tiles compare on one picture. A file that starts as a no-op (`@mix 0`: palette) is shown at mix 1. The still is 0.6 s into the effect's clock, since at phase 0 some effects are the plain card.
+- **What.** Each tile is the test card through that effect with every knob at the file's default, so tiles compare on one picture. A file that starts as a no-op (`@mix 0`: palette) is shown at mix 1. The still is 0.6 s into the effect's clock, since at phase 0 some effects are the plain card. A file that reads its aux is previewed with a known picture in it, a warm disc bright at its centre, so Blend lays it on and Displace bends the grid by it (the owner, 2026-11-19, asked for a known aux on these previews); their tiles carry an **aux** badge.
 - **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
-- **Built.** `previews.preview_values`, `previews.STILL_T`, `previews.card_values`; `tests/test_effect_previews.py::test_a_no_op_mix_is_shown_at_full_mix`.
+- **Built.** `previews.preview_values`, `previews.STILL_T`, `previews.card_values`, `previews.AUX_FS`, `EffectPreviews._aux_picture`; `tests/test_effect_previews.py::test_a_no_op_mix_is_shown_at_full_mix`, `::test_an_aux_effects_preview_has_the_known_aux_and_shows_it`.
 - **Judge it.** 689.
 
 ### 894. A two-second loop, made once
@@ -15121,7 +15121,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 ### 896. Three passes a frame, every file kept
 
-- **What.** The picker wants its tiles each frame; the renderer makes at most three passes at its frame's end (`_for_the_panel`, after the thumbnails), the card and the stills before any loop. Every file's atlas is kept once made (2.07 MB each, 56.0 MB for the 27 files; 60.8 MB with the card and the work picture). Never saved; a reload of the renderer lets them go and they are made again on the next ask.
+- **What.** The picker wants its tiles each frame; the renderer makes at most three passes at its frame's end (`_for_the_panel`, after the thumbnails), the card and the stills before any loop. Every file's atlas is kept once made (2.07 MB each, 56.0 MB for the 27 files; 62.9 MB with the card, the aux disc and the work picture). Never saved; a reload of the renderer lets them go and they are made again on the next ask.
 - **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
 - **Built.** `previews.PASSES_PER_FRAME`, `EffectPreviews.make`, `bytes_kept`, `Renderer.effect_previews`, `Renderer._make_previews`, `Renderer.on_reload`; `tests/test_effect_previews.py::test_never_more_than_the_budget_a_frame_and_the_stills_first`, `::test_every_file_fits_in_the_memory_the_plan_states`, `::test_a_reload_of_the_renderer_lets_the_previews_go`.
 - **Judge it.** 690, 696.
@@ -15133,12 +15133,12 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Built.** `EffectPreviews._sync`, `EffectPreviews.failed`; `tests/test_effect_previews.py::test_a_file_changed_on_disk_is_made_again_and_only_it`, `::test_the_shared_lib_changing_makes_every_file_again`, `::test_a_file_that_does_not_compile_shows_the_plain_card_and_says_why`.
 - **Judge it.** 692.
 
-### 898. Families from the files
+### 898. Families, and the aux port, from the files
 
-- **What.** The picker groups by `previews.family_of`: a file's `@family` line, else the band its `@order` is in (`ORDER_FAMILIES`, one table). No file says `@family` yet; the shader roundup writes them. A family declares nothing, so it is outside `EffectSpec.signature`.
-- **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
-- **Built.** `fx.EffectSpec.family`, `fx._DIRECTIVE`, `previews.family_of`, `previews.families`, `previews.ORDER_FAMILIES`; `tests/test_effect_previews.py::test_a_files_family_is_its_at_family_else_its_order_band`, `::test_the_groups_come_from_the_files_in_family_order`, `::test_every_shipped_file_has_a_family_and_the_test_card_is_a_generator`.
-- **Judge it.** No hand check: the roundup's families will be judged with it.
+- **What.** The picker groups by `previews.family_of`: a file's `@family` line, else the band its `@order` is in (`ORDER_FAMILIES`, one table). No file says `@family` yet; the shader roundup writes them. A family declares nothing, so it is outside `EffectSpec.signature`. The aux port is read from the files the same way: every effect node (and copy) had an `aux` port, and only Blend and Displace read it. GRAPH now draws it only when the file's code calls `aux(` or `aux_luma(` outside a comment (`fx.reads_aux`, `EffectSpec.aux`), or when a saved wire goes into it — that wire loads, is drawn and can be deleted. Nothing about the file format changes: the port still exists, it is only not offered where it does nothing.
+- **Answer.** (rec) — the builder's, plan 65 (2026-11-19); the aux port's, the owner's ask of 2026-11-19 ("for a lot of the effects, the auxiliary input doesn't really do anything").
+- **Built.** `fx.EffectSpec.family`, `fx.EffectSpec.aux`, `fx.reads_aux`, `fx._DIRECTIVE`, `graphview.aux_shown`, `previews.family_of`, `previews.families`, `previews.ORDER_FAMILIES`; `tests/test_effect_previews.py::test_a_files_family_is_its_at_family_else_its_order_band`, `::test_the_groups_come_from_the_files_in_family_order`, `::test_every_shipped_file_has_a_family_and_the_test_card_is_a_generator`, `::test_a_file_reads_aux_when_its_code_calls_it_and_not_in_a_comment`, `::test_on_this_build_only_blend_and_displace_read_their_aux`, `tests/test_aux_ports.py`.
+- **Judge it.** 693 (the aux port); the roundup's families will be judged with it.
 
 ### 899. The search, and Enter
 
@@ -15156,7 +15156,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 ### 901. What the previews show at the defaults
 
-- **What.** The contact sheet shows about a third of the effects barely touching the card at their defaults. The plan builds the previews at the defaults, as asked; the owner and the shader roundup decide whether each file gets showcase values for its preview.
+- **What.** The contact sheet shows about a quarter of the effects barely touching the card at their defaults (Blend and Displace no longer: they have a known aux). The plan builds the previews at the defaults, as asked; the owner and the shader roundup decide whether each file gets showcase values for its preview.
 - **Answer.** pending the owner.
 - **Built.** Nothing: a question. The options are in `docs/plans/65-effect-previews.md`, "What the previews show at the defaults".
 - **Judge it.** 689, by eye on the contact sheet and in the picker.

@@ -264,3 +264,36 @@ def test_a_no_op_mix_is_shown_at_full_mix():
     assert st.files["palette"].mix == 0.0
     assert pv.preview_values(st.files["palette"])["mix"] == 1.0
     assert pv.preview_values(st.files["wave"])["mix"] == st.files["wave"].mix
+
+
+# ---------------------------------------------------------------- the aux
+
+def test_a_file_reads_aux_when_its_code_calls_it_and_not_in_a_comment():
+    assert fx.reads_aux("vec4 effect(vec2 uv) { return aux(uv); }")
+    assert fx.reads_aux("vec4 effect(vec2 uv) { float l = aux_luma (uv); return src(uv); }")
+    assert not fx.reads_aux("// the aux(uv) is not read\nvec4 effect(vec2 uv) { return src(uv); }")
+    assert not fx.reads_aux("/* aux(uv) */ vec4 effect(vec2 uv) { return src(uv); }")
+    assert not fx.reads_aux("vec4 effect(vec2 uv) { float auxiliary(uv); return src(uv); }")
+
+
+def test_on_this_build_only_blend_and_displace_read_their_aux():
+    """The finding the plan records (2026-11-19): every effect node has an aux
+    port, and two files read it. A file that starts reading one is found by
+    `fx.reads_aux`; this list is the record, to be changed with the file."""
+    st = FxState()
+    assert sorted(n for n, s in st.files.items() if s.aux) == ["blend", "displace"]
+    assert st.files["blend"].signature() == fx.parse("blend", st.files["blend"].source).signature()
+
+
+def test_an_aux_effects_preview_has_the_known_aux_and_shows_it(ctx):
+    cache, _ = _cache(ctx, budget=1000)
+    _until_done(cache, ["blend", "displace", "testcard", "wave"])
+    card = _cell(cache, "testcard")
+    # blend lays the aux disc over the card: its warm centre in the middle
+    blend = _cell(cache, "blend")
+    h, w = blend.shape[:2]
+    r, _, b = blend[h // 2, w // 2 + 8, :3]
+    assert r > 180 and r > b + 80
+    # displace bends the card's lines inside the disc
+    assert np.abs(_cell(cache, "displace") - card).mean() > 4
+    assert cache._aux is not None

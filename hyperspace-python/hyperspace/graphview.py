@@ -1135,6 +1135,21 @@ def _tip(reg, name: str) -> str:
     return (head + "." if dot else tip).strip()
 
 
+def aux_shown(reg, effect: str, wired: bool = False) -> bool:
+    """Plan 65: does effect instance `effect`'s node draw an `aux` port? When
+    its file reads one (`fx.EffectSpec.aux`: Blend, Displace on this
+    build), or a saved wire goes into it (kept and drawn, so it can be seen
+    and deleted); also with no FxState to ask (a stand-in registry)."""
+    if wired:
+        return True
+    st = getattr(reg, "fx_state", None)
+    files = getattr(st, "files", None) or getattr(st, "specs", None)
+    if not files:
+        return True
+    spec = files.get(rgraph.split_instance(effect)[0]) or files.get(effect)
+    return spec is None or bool(getattr(spec, "aux", True))
+
+
 ECHO_PINS = 4      # plan 36 T4: the echo pins a look-back always draws (echo.1 … echo.4)
 
 
@@ -1599,6 +1614,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         r, src = refs.get(w.node), refs.get(w.src)
         if w.node in stood and src is not None and w.port in r.INPUTS:
             r.inputs[w.port] = src
+    aux_wired = {w.dst for w in frame.all_wires() if w.port == rgraph.AUX}
     for name, r in refs.items():
         kind = kind_of(name)
         vkind = ("channel" if kind == "channel" else
@@ -1609,6 +1625,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                            status=hover_of(name, slots, of=of,
                                            tip=_tip(reg, name) if kind == "effect" else "")))
         for port, typ in _takes(kind).items():
+            if port == rgraph.AUX and kind in ("effect", "copy") and not aux_shown(
+                    reg, of or name, f"{name}.{port}" in aux_wired):
+                continue                        # plan 65: a file that reads no aux has no port
             add_port(n, VPort(f"rin:{name}/{port}", port, IN, typ))
         made = _makes(kind)
         if made is not None:

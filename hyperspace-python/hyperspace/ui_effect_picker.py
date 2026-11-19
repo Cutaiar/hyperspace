@@ -43,6 +43,7 @@ SEARCH_HINT = "search effects"
 FOOT_IDLE = "Hover an effect to see it move · click to add · Enter takes the first · Esc closes"
 FOOT_INSERT = "Hover an effect to see it move · click to put it on the cable · Esc closes"
 NO_MATCH = "No effect matches"
+AUX_BADGE = "aux"   # on the tile of an effect that reads a second picture (`EffectSpec.aux`)
 
 # a tile: the preview at its own size, one line of label under it
 TILE_W, PIC_H = float(pv.PREVIEW_W), float(pv.PREVIEW_H)
@@ -215,6 +216,12 @@ def _tile(spec, cache, hover: str | None, now: float) -> tuple[bool, bool]:
         dl.add_image_rounded(imgui.ImTextureRef(tex.glo), a, pic_b, imgui.ImVec2(*uv0),
                              imgui.ImVec2(*uv1), ui.u32(imgui.ImVec4(*WHITE)), RADII["md"],
                              imgui.ImDrawFlags_.round_corners_top)
+    if getattr(spec, "aux", False):             # it reads its aux: a warm disc is wired in here
+        bw = imgui.calc_text_size(AUX_BADGE)
+        b0 = imgui.ImVec2(p0.x + TILE_W - bw.x - 3 * SPACE[1], p0.y + SPACE[1])
+        b1 = imgui.ImVec2(p0.x + TILE_W - SPACE[1], p0.y + SPACE[1] + bw.y + SPACE[1])
+        dl.add_rect_filled(b0, b1, ui.u32(imgui.ImVec4(*GROUND)), RADII["sm"])
+        dl.add_text(imgui.ImVec2(b0.x + SPACE[1], b0.y + SPACE[0.5]), ui.u32(ui.TEXT), AUX_BADGE)
     label = ui.fit_text(spec.label, TILE_W - 2 * SPACE[2])
     tw = imgui.calc_text_size(label)
     dl.add_text(imgui.ImVec2(p0.x + (TILE_W - tw.x) / 2, p0.y + PIC_H + (LABEL_H - tw.y) / 2),
@@ -233,6 +240,7 @@ def _foot(s: dict, specs: list[Any], hover: str | None) -> None:
         if spec.tip:
             imgui.same_line()
             imgui.text_colored(ui.DIM, _first_sentence(spec.tip))
+
     else:
         imgui.text_colored(ui.FAINT, FOOT_INSERT if s.get("mode") == "insert" else FOOT_IDLE)
     imgui.pop_text_wrap_pos()

@@ -63,7 +63,7 @@ the file's own defaults and keeps the pictures:
 **Memory.** One RGBA8 atlas a file, 5 × 5 cells of 192 × 108 (cell 0 the
 still, cells 1–24 the loop): 960 × 540 × 4 = **2.07 MB a file**, so the 27
 files are **56.0 MB**, kept once made, plus the card and the work picture
-(2.1 MB and 2.8 MB mipmapped): **60.8 MB** with every file made
+(2.1 MB, 2.8 MB mipmapped, and the aux disc's 2.1 MB): **62.9 MB** with every file made
 (`bytes_kept`, held under 64 MiB by
 `tests/test_effect_previews.py::test_every_file_fits_in_the_memory_the_plan_states`).
 On the Mac's unified memory that is comfortable; a smaller loop would be
@@ -179,12 +179,44 @@ the picker groups them. It refuses to write under `~/Hyperspace`.
 `assets/65-effect-previews/sheet.png` and the two GIFs there are its
 output.
 
+### 5. The aux port, and a known aux in the previews (the owner, 2026-11-19)
+
+The owner: "most of our effect nodes … have an image input and an
+auxiliary input. I think for a lot of the effects, the auxiliary input
+doesn't really do anything." Found:
+
+- **Every effect node has an `aux` port**, and every copy: `graph.Effect.INPUTS`
+  is `image` and `aux` for any file (plan 32 R, row 332). `_lib.glsl`
+  gives every effect `aux(uv)` and `aux_luma(uv)`, transparent black while
+  nothing is wired.
+- **Two files read it**: **Displace** (moves the frame's pixels by the aux:
+  along an angle by its brightness, or by its red and green) and **Blend**
+  (lays the aux on the frame: over, multiply, screen, difference, luma
+  key). The other 25 ignore whatever is wired there.
+
+Built:
+
+- **The port only where it does something.** `fx.reads_aux` reads the
+  file: an effect has `EffectSpec.aux` when its code calls `aux(` or
+  `aux_luma(` outside a comment, so a file that starts using one gains the
+  port with no list to edit. GRAPH draws the aux port of an effect (or a
+  copy of one) only then (`graphview.aux_shown`) — or when a saved wire goes
+  into it, which still loads, is drawn and can be deleted. Nothing about
+  the saved format changes, and a wire into an ignoring aux is still
+  accepted by the graph as it was.
+- **A known aux in the previews.** Blend and Displace are previewed with a
+  known second picture wired into their aux: a warm disc, white-orange at
+  its centre fading to black at its rim, clear outside it
+  (`previews.AUX_FS`). Blend lays it on the card; Displace bends the grid
+  inside it. Its tile carries an **aux** badge.
+  The disc is drawn once, at the work size, by a program of the cache's
+  own (another 2.1 MB).
+
 ## What the previews show at the defaults
 
 The contact sheet (`assets/65-effect-previews/sheet.png`) is the honest
-answer to "what does each effect do", and for about a third of the files
-the answer at their defaults is "very little": **Displace** and **Blend**
-need an `aux` picture (none in a preview), **Fade** is level 1, **Double
+answer to "what does each effect do", and for about a quarter of the files
+the answer at their defaults is "very little": **Fade** is level 1, **Double
 vision**, **Deconverge**, **Trip colour**, **Grain** and **Shake** are at
 their first-stage amounts, and **Palette** compresses the full wheel (an
 identity). The previews are as asked — the file's defaults — and this is
@@ -205,6 +237,10 @@ or leave the defaults.
   and [`-zoom`](assets/65-effect-previews/unwired-thumbnail-zoom.png) — the
   Kaleidoscope just added, on no wire, faint, its thumbnail the test card
   through it.
+- [`assets/65-effect-previews/picker-aux.png`](assets/65-effect-previews/picker-aux.png)
+  — "aux": the two effects that read a second picture, each with its
+  **aux** badge and the warm disc wired in (Displace bends the grid inside
+  it, Blend lays it on).
 - [`assets/65-effect-previews/sheet.png`](assets/65-effect-previews/sheet.png),
   [`kaleido.gif`](assets/65-effect-previews/kaleido.gif),
   [`wave.gif`](assets/65-effect-previews/wave.gif) — the export tool.

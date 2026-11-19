@@ -208,6 +208,11 @@ class EffectSpec:
     # picker groups by `order`, `previews.family_of`). Declares nothing, so
     # it is not in `signature`: a family change re-declares no param
     family: str = ""
+    # plan 65: whether the file reads the second picture wired into its
+    # `aux` port (`reads_aux`: its code calls `aux(` or `aux_luma(`). GRAPH
+    # draws an effect's aux port only when it does (or a saved wire goes
+    # in); like `family`, it declares no param, so it is not in `signature`
+    aux: bool = False
 
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
@@ -342,6 +347,18 @@ def _check_clocks(name: str, spec: EffectSpec) -> None:
         spec.clocks[k] = replace(c, rate="*".join(factors), factors=tuple(factors))
 
 
+_AUX_CALL = re.compile(r"\baux(?:_luma)?\s*\(")
+
+
+def reads_aux(source: str) -> bool:
+    """Plan 65: does effect source `source` read its aux picture — call
+    `aux(uv)` or `aux_luma(uv)` (`_lib.glsl`) outside a comment? Read from
+    the file itself, so an effect that starts using one gains the port."""
+    code = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
+    code = re.sub(r"//[^\n]*", " ", code)
+    return bool(_AUX_CALL.search(code))
+
+
 def parse(name: str, source: str) -> EffectSpec:
     """An effect file's text → its spec. Raises SpecError on a bad header."""
     if not _NAME.match(name):
@@ -421,6 +438,7 @@ def parse(name: str, source: str) -> EffectSpec:
     if not re.search(r"\bvec4\s+effect\s*\(", source):
         raise SpecError(f"{name}: no 'vec4 effect(vec2 uv)'")
     _check_clocks(name, spec)
+    spec.aux = reads_aux(source)
     return spec
 
 
