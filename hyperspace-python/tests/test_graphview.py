@@ -368,10 +368,11 @@ def test_layout_round_trips_through_the_loadable_and_the_show(rig):
 
 
 def test_auto_layout_gives_every_unplaced_node_a_column(rig):
-    """Every node not placed gets a position, in its area's columns left to
-    right (plan 28 N9: controllers → audio → modulation → plan 35 G's media
-    → scene → look-back → effects → outputs; the render nodes by their
-    depth within theirs); a placed node keeps its own and takes no room."""
+    """Every node not placed gets a position, in its band's columns left to
+    right (the flow layout, 2026-11-19: the controllers and the audio →
+    the modulation → the media and the scene → the look-back and the
+    effects → the outputs; inside a band, each node past what feeds it);
+    a placed node keeps its own."""
     rig.lib.load("loadable", "lfo-breathe")
     rig.router.table.add_modifier("smooth", ["lane:0"], rig.reg)
     # (plan 36 T4: the look-back drawn, as the old words with it on)
@@ -393,8 +394,10 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     assert view.node("render:acid").idle
     assert any(c.src_port == "rout:composite" and c.dst_port == "rin:output.all/image"
                for c in graphview.layout(view).throughs)
-    assert col == sorted(col) and len(set(col)) == len(col)
-    assert x["group:tempo"] == x[graphview.ANALYZER]
+    # (2026-11-19, the flow layout: the controllers and the audio one band,
+    # what moves the params — both fed by nothing, they share its first column)
+    assert col == sorted(col) and col[0] == col[1] and len(set(col[1:])) == len(col) - 1
+    assert x[graphview.ANALYZER] < x["group:tempo"] < x["lfo.1"]      # the band's own cable
     assert x["mod.1"] == x["macro.1"] == x["lfo.1"]
     assert x["render:output.1"] == max(x.values())
     # a column's drawn nodes are stacked, never on top of one another (N9:

@@ -181,7 +181,10 @@ macros · 3 idle LFOs", `_idle_line`) whose **+** shows them under it so
 one can be patched; patched, it is drawn as any node. The picker still
 offers every idle macro. **Tidy** (`tidy`) collapses every node, closes
 the idle lines, forgets every position on the canvas and lays them all
-out again in their areas — one undo step for the positions (`forget`) —
+out again left to right by the flow layout (`graphview.flow`, 2026-11-19:
+the bands of `graphview.BANDS`, each node past what feeds it, a passing
+cable given a lane in each column it crosses, the order down a column
+picked for the fewest crossings) — one undo step for the positions (`forget`) —
 and says so on the head ("laid out 36 nodes in
 6 areas, every one collapsed · 12 idle off the canvas", or "already
 tidy"). **T** does it too (`KEY`, `tidy_pressed`: no row in
@@ -311,7 +314,9 @@ PATCHED_TIP = ("Patched only: an expanded node shows just its patched ports — 
 KEY = "T"                # tidies: no row in `routing.keymap` (a test holds it so)
 FIT_KEY = "0"            # …and fits: every node in view, as a load does. No row either
 TIDY_TIP = ("Collapse every node, forget every position on the canvas and lay them all "
-            "out again in their areas — controllers, audio, modulation, geometry, shaders "
+            "out again left to right, the way the signal flows — what moves the params, "
+            "then what makes the picture, then what works on it, then the outputs — each "
+            "cable given room past the columns it crosses "
             "(T does it too; ⌘Z puts the positions back)")
 # plan 28 N9: the areas' titles on the canvas, and the idle lines
 TITLE_SIZE = 30.0        # canvas units: an area's title at full zoom
@@ -695,8 +700,11 @@ def hidden_ids(st: dict, view: graphview.View) -> frozenset[str]:
     """Plan 36 T6: the node ids the **preset only** chip leaves off the
     canvas (`graphview.patch_only` draws the rest, and so does what the
     picker added this session, `reveal_node`); none while it is off.
-    Drawing only: no wire, table or position changes, and the layout
-    (`areas_of`) still lays every node out, so hiding moves nothing.
+    Drawing only: no wire, table or saved position changes, and a node on
+    the canvas stays where it is; the layout (`areas_of`) makes no room
+    for a hidden node (2026-11-19: a tidy lays out what is drawn, with no
+    holes), so a node shown again lands where the layout of everything
+    would put it, and the next tidy lays it in.
     Plan 40 T2 (D4): and a folded group's members, whatever the chip —
     their group's node stands for them until +."""
     fold = frozenset(graphview.folded(view))
@@ -775,11 +783,14 @@ ALREADY_TIDY = "already tidy"
 def areas_of(st: dict, view: graphview.View, stored=None) -> graphview.Layout:
     """`graphview.layout` with this page's state: a collapsed node its
     title and lines, an expanded one its ports, the open idle lines'
-    nodes under them."""
+    nodes under them; a node the preset only view hides takes no room (a
+    folded group's member still does: its group's node sits where it is)."""
+    hidden = frozenset(st.get("hide", ())) - frozenset(graphview.folded(view))
     return graphview.layout(
         view, stored, lambda nid: full(st, nid),
         st["folds"], collapsed=lambda nid: collapsed(st, nid),
-        idle_open=st.setdefault("idle_open", set()))
+        idle_open=st.setdefault("idle_open", set()),
+        shown=lambda nid: nid not in hidden)
 
 
 def layout_of(st: dict, view: graphview.View, stored=None) -> dict:
@@ -1755,7 +1766,7 @@ def _place(panel, st: dict, view: graphview.View) -> None:
     px, py = panned(st)                        # the canvas as the fingers moved it (whole units)
     stored = {**(show or {}), **(pre or {})}
     k = (id(view), frozenset(st["open"]), frozenset(st["flip"]), st["patched_only"],
-         frozenset(st["folds"]), frozenset(st["idle_open"]),
+         frozenset(st["folds"]), frozenset(st["idle_open"]), frozenset(st.get("hide", ())),
          tuple(sorted((n, tuple(xy)) for n, xy in stored.items())))
     held = st.get("auto")
     if held is None or held[0] != k:          # the areas, kept while nothing moves them

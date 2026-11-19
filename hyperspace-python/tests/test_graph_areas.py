@@ -21,6 +21,7 @@ fixture under tests/fixtures/presets — the APC40 as a real
 `devices.MidiDevice` over a stand-in adapter, the page drawn for real on
 `imgui_node_editor`. No loadable patch is edited or added."""
 
+import itertools
 import json
 from itertools import pairwise
 from pathlib import Path
@@ -253,37 +254,39 @@ def test_a_scene_picture_into_a_switch_runs_back_by_design(rig):
 
 
 def test_auto_layout_stacks_each_area_and_keeps_saved_positions(rig):
-    """Each area's nodes are stacked down its columns under its title, never
-    on one another; *other* is titled under the audio's last node; a node
-    with a saved position keeps it on the canvas and takes no room in its
-    column (the node under it moves up into it)."""
+    """Each area's title over one of its own columns, in a row over the
+    canvas (2026-11-19, the flow layout: two areas may share a column, so a
+    title whose column is taken moves right inside its area, else up a
+    row); the nodes stacked down their columns under the titles, never on
+    one another; a node with a saved position keeps it on the canvas and
+    the node under it is not moved into the gap."""
     st = load(rig, "party-trip")
     view = st["view"]
     lay = ui_graph.areas_of(st, view)
     assert set(lay.titles) == set(graphview.ORDER)
     drawn = [n for n in view.nodes if not n.idle]
+    assert all(xy[1] >= graphview.TITLE_H for nid, xy in lay.nodes.items()
+               if not view.node(nid).idle)
+    spots = set()
     for a, (tx, ty) in lay.titles.items():
+        assert ty <= 0 and (tx, ty) not in spots
+        spots.add((tx, ty))
         mine = [n for n in drawn if n.area == a]
         if not mine:                    # (plan 35 G: MEDIA's channels all idle: its line)
             continue
-        first = min(n.column for n in mine)
-        assert tx == first * graphview.COL_W
-        assert all(lay.nodes[n.id][1] >= ty + graphview.TITLE_H for n in mine
-                   if n.column == first)
+        assert tx / graphview.COL_W in {lay.cols[n.id] for n in mine}
     for col in {n.column for n in drawn}:
         here = sorted(((lay.nodes[n.id][1], n) for n in drawn if n.column == col),
                       key=lambda t: t[0])
         for (y0, n0), (y1, _) in pairwise(here):
             assert y1 >= y0 + graphview.height(n0, collapsed=True) + graphview.GAP
-    audio = [lay.nodes[n.id][1] for n in view.nodes if n.area == graphview.AUDIO]
-    assert lay.titles[graphview.OTHER][1] > max(audio)
     # a saved position wins — and the node it left is not moved into the gap
     # (2026-10-26: no layout runs on its own; only tidy lays out again)
-    below = next(n.id for n in drawn if n.column == view.node("render:shape").column
-                 and lay.nodes[n.id][1] > lay.nodes["render:shape"][1])
-    rig.lib.loaded_patch.layout["render:shape"] = [4000, 4000]
+    top, below = next((r.id, n.id) for r in drawn if r.kind == "render" for n in drawn
+                      if n.column == r.column and lay.nodes[n.id][1] > lay.nodes[r.id][1])
+    rig.lib.loaded_patch.layout[top] = [4000, 4000]
     frame(rig.panel, "graph")
-    assert st["applied"]["render:shape"] == (4000.0, 4000.0)
+    assert st["applied"][top] == (4000.0, 4000.0)
     assert st["applied"][below] == lay.nodes[below]
 
 
@@ -474,39 +477,63 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
                                       if isinstance(n.ref, G.Effect))
 
 
-def test_the_shader_chain_wraps_in_rows_of_four(rig):
-    """The app's whole chain, laid out in full (the effects' line open): the
-    effects take four columns, their depths in Z rows — every row left to
-    right, a render cable inside a row running right, one from a row's end
-    to the next row's start the only kind that runs back (`returns`); the
-    whole canvas about a dozen columns (plan 32 T10's media area one of
-    them, plan 35 G's look-back and outputs two more), not twenty-three."""
+def test_the_shader_chain_runs_left_to_right_and_never_wraps(rig):
+    """The app's whole chain, laid out in full (the effects' line open):
+    the flow layout (the owner, 2026-11-19: "this graph is read from left
+    to right") wraps nothing — every row 0, no cable a return but what is
+    kept for the next frame — every render cable runs right, the bands in
+    their order (the modulation left of the picture's makers, the makers
+    left of the effects, the effects left of the outputs), and no two
+    nodes on top of one another."""
     st = load(rig, "party-trip", real_graph())
     view = st["view"]
-    for opened in ((), (graphview.EFFECTS_AREA,)):
-        lay = graphview.layout(view, collapsed=lambda nid: True, idle_open=opened)
-        assert lay.spans[graphview.EFFECTS_AREA] <= graphview.SHADER_ROW
-        cols = 1 + max(lay.cols.values())
-        assert cols <= 13, (opened, cols)
     lay = graphview.layout(view, collapsed=lambda nid: True, idle_open=(graphview.EFFECTS_AREA,))
-    assert lay.spans[graphview.EFFECTS_AREA] == graphview.SHADER_ROW
-    assert max(lay.rows.values()) >= 2
+    assert set(lay.rows.values()) == {0}
     back = graphview.returns(view, lay)
-    assert back
     for c in view.cables:
-        if c.kind != "render":
-            continue
         a, b = graphview.node_of(view, c.src_port), graphview.node_of(view, c.dst_port)
-        if view.node(a).area == view.node(b).area == graphview.EFFECTS_AREA:
-            if lay.rows[a] == lay.rows[b]:
-                assert lay.cols[a] < lay.cols[b], c.id
-            else:
-                assert c.id in back and lay.rows[b] > lay.rows[a]
-    # each row starts under the tallest column of the one before
-    sh = [n for n in view.nodes if n.id in lay.cols and n.area == graphview.EFFECTS_AREA]
-    for r in range(1, max(lay.rows.values()) + 1):
-        above = max(lay.nodes[n.id][1] for n in sh if lay.rows[n.id] == r - 1)
-        assert all(lay.nodes[n.id][1] > above for n in sh if lay.rows[n.id] == r)
+        if c.kind == "render" and a in lay.cols and b in lay.cols and c.id not in back:
+            assert lay.cols[a] < lay.cols[b], c.id
+    band = {}
+    for nid, col in lay.cols.items():
+        band.setdefault(graphview.band_of(view.node(nid)), []).append(col)
+    bands = sorted(band)
+    for lo, hi in itertools.pairwise(bands):
+        assert max(band[lo]) < min(band[hi]), (lo, hi)
+    box = {nid: (x, y, x + ui_graph.NODE_W, y + graphview.height(view.node(nid), collapsed=True))
+           for nid, (x, y) in lay.nodes.items() if nid in lay.cols}
+    for (p, q), (r, t) in itertools.combinations(box.items(), 2):
+        assert not (q[0] < t[2] and t[0] < q[2] and q[1] < t[3] and t[1] < q[3]), (p, r)
+
+
+def _flowed(links, bands=None):
+    """`graphview.flow` over hand-made nodes named by `links`' ends, each
+    in the modulation (or its area in `bands`), every node 60 tall."""
+    names = list(dict.fromkeys(k for ab in links for k in ab))
+    nodes = [graphview.VNode(k, "lfo", k) for k in names]
+    for n in nodes:
+        n.area = (bands or {}).get(n.id, graphview.MODULATION)
+    return graphview.flow(nodes, dict.fromkeys(links, 1.0), lambda n: 60.0)
+
+
+def test_a_cable_past_a_column_is_given_room_there():
+    """a → b → c and a → c: the cable a → c passes b's column, and is
+    given a lane there — b sits off the straight line from a's pins to
+    c's, so the cable is not drawn behind it."""
+    cols, tops = _flowed([("a", "b"), ("b", "c"), ("a", "c")])
+    assert (cols["a"], cols["b"], cols["c"]) == (0, 1, 2)
+    pin = graphview.PIN_DY
+    mid = (tops["a"] + tops["c"]) / 2 + pin           # the cable, half way: b's column
+    assert not tops["b"] - graphview.LANE_H / 2 < mid < tops["b"] + 60.0 + graphview.LANE_H / 2
+
+
+def test_the_flow_uncrosses_two_cables():
+    """Two makers fed into two takers crosswise in view order: the order
+    down the second column follows the first, so the cables do not cross;
+    a node fed by nothing of its band sits just left of what it feeds."""
+    cols, tops = _flowed([("a1", "b2"), ("a2", "b1"), ("b1", "c"), ("b2", "c"), ("z", "c")])
+    assert (tops["a1"] < tops["a2"]) == (tops["b2"] < tops["b1"])
+    assert cols["z"] == cols["c"] - 1
 
 
 def test_the_modulation_has_its_own_depth(rig):

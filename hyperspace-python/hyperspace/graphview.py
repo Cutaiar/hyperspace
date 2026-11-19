@@ -2436,7 +2436,6 @@ def idle_id(area: str) -> str:
     return f"idle:{area}"
 
 
-SHADER_ROW = 4         # the effects' chain wraps into rows of this many columns (Z rows)
 THROUGH = "through"    # a display-only wire over a run of hidden (off) effects
 NODE_MODE = "node_mode"    # a controller's control on a node's param (plan 57, `nodemode`)
 NODE_PIN = "node"          # the pin such a cable lands on when its param's port is another node's
@@ -2489,26 +2488,98 @@ def throughs(view: View, shown: Callable[[VNode], bool]) -> list[VCable]:
     return list(made.values())
 
 
-def _links(view: View, cables: Iterable[VCable]) -> list[tuple[str, str]]:
-    return [(node_of(view, c.src_port), node_of(view, c.dst_port)) for c in cables]
+# ---------------------------------------------------------------- the flow layout
+#
+# The owner, 2026-11-19: "This graph is read from left to right, and that's
+# what I want tidy to do" — the things moving parameters on the left, the
+# geometry, the scene and the hands after them, the picture work (the
+# look-back, the effects) nearer the outputs; and "clear cables running
+# from node to node that are not occluded behind other nodes and that have
+# room to breathe". So the canvas is laid out as a layered drawing
+# (Sugiyama's method, kept small), in four steps, each one tunable below:
+#
+# 1. columns (`_ranks`): each node's *band* (`BANDS`, by its area) is a run
+#    of columns; the bands follow one another left to right, and inside a
+#    band a node sits one column past the deepest node of its band that
+#    feeds it — so every cable inside a band runs right, and so does every
+#    cable between bands (`laid_areas` keeps a cable from running back
+#    across areas). A node fed by nothing of its band sits just left of
+#    what it feeds there, not at the band's edge.
+# 2. lanes: a cable that passes columns gets a *lane* in each (a short
+#    stand-in item, `LANE_H` tall), so the column makes room for it rather
+#    than drawing a node across it.
+# 3. order (`_order`): down each column, nodes and lanes sorted by where
+#    what they connect to sits (the barycentre, `SWEEPS` sweeps both ways),
+#    the order with the fewest crossings kept.
+# 4. heights (`_heights`): each item pulled toward the height of what it
+#    connects to (`SETTLE` sweeps), the column's order and spacing held
+#    (`FLOW_GAP` between nodes) — a cable's lanes settle on the straight
+#    line between its ends, which is where the editor draws it, and a
+#    picture cable pulls `PICTURE_PULL` times as hard, so the signal chain
+#    reads as one straight run.
+
+# a node's band by its area: the bands run left to right in their numbers'
+# order; two areas of one band share its columns, laid by their cables
+BANDS: dict[str, int] = {
+    CONTROLLERS: 0, AUDIO: 0, OTHER: 0,          # what moves the params
+    MODULATION: 1,                               # LFOs, modifiers, macros
+    MEDIA: 2, SCENE_AREA: 2,                     # what makes a picture: the shape, the hands
+    LOOKBACK_AREA: 3, EFFECTS_AREA: 3,           # what works on a picture
+    OUTPUTS_AREA: 4,
+}
+FLOW_GAP = GAP * 1.5        # between two nodes of a column ("room to breathe")
+LANE_H = ROW_H * 0.6        # a passing cable's room in a column
+PICTURE_PULL = 4.0          # a picture cable's pull on its ends, a value cable's 1
+FLOW_NODE_W = float(round(190 * SCALE))    # a node's width (as `ui_graph.NODE_W`)
+LANE_MAX = HEAD_H * 1.5       # the most room a steep cable is given (more feeds back:
+                            # a taller lane pushes its own ends apart, steepening it)
+LANE_PULL = 4.0             # a passing cable's pull on its lanes: how hard it keeps straight
+SWEEPS = 8                  # ordering sweeps (each one down and one up)
+SETTLE = 12                 # height sweeps (each one down and one up)
+PIN_DY = HEAD_H / 2         # a collapsed node's pins: on its title line
 
 
-def _depths(nodes: list[VNode], links: Iterable[tuple[str, str]]) -> dict[str, int]:
-    """Each node's depth inside its own area: 0, or one more than the
-    deepest node of the same area with a cable into it — the longest path
-    over the area's own cables, a loop's closing cable left out (a DFS in
-    view order drops each edge back onto its stack). For the render nodes
-    that is their depth in the render graph; for the modulation an LFO or
-    a macro fed by nothing is 0, a modifier one past what feeds it."""
-    area = {n.id: n.area for n in nodes}
+def _flow_links(view: View, ids: set[str], extra: Iterable[VCable]
+                ) -> dict[tuple[str, str], float]:
+    """The cables between the nodes `ids` as (maker, taker) → pull: a
+    picture cable `PICTURE_PULL`, any other 1, summed per pair (capped at
+    `PICTURE_PULL`); a cable kept for the next frame (`kept`) and a node's
+    cable to itself left out — a loop by design is no part of the flow."""
+    out: dict[tuple[str, str], float] = {}
+    for c in (*view.cables, *extra):
+        a, b = node_of(view, c.src_port), node_of(view, c.dst_port)
+        if a == b or a not in ids or b not in ids:
+            continue
+        bn = view.node(b)
+        if bn is not None and kept(c, bn):
+            continue
+        w = PICTURE_PULL if c.kind in ("render", THROUGH) or c.type in RENDER_TYPES else 1.0
+        out[(a, b)] = min(PICTURE_PULL, out.get((a, b), 0.0) + w)
+    return out
+
+
+def band_of(n: VNode) -> int:
+    """Node `n`'s band (`BANDS`); an area no row names (or none: a
+    hand-made view), after the last."""
+    return BANDS.get(n.area, max(BANDS.values()) + 1)
+
+
+def _ranks(nodes: list[VNode], links: Iterable[tuple[str, str]]) -> dict[str, int]:
+    """Each node's column (step 1 of the flow layout): the bands left to
+    right, a band as many columns as its longest chain of cables; inside
+    one, a node one past the deepest node of its band feeding it (a loop's
+    closing cable left out: a DFS in view order drops each cable back onto
+    its stack), then a node fed by nothing of its band moved right to just
+    left of the nearest node it feeds there."""
+    band = {n.id: band_of(n) for n in nodes}
     succ: dict[str, list[str]] = {}
     for a, b in links:
-        if a != b and a in area and b in area and area[a] == area[b]:
+        if a != b and a in band and b in band and band[a] == band[b]:
             succ.setdefault(a, []).append(b)
-    dag: dict[str, list[str]] = {k: [] for k in area}
+    dag: dict[str, list[str]] = {k: [] for k in band}
     state: dict[str, int] = {}
     post: list[str] = []
-    for root in area:
+    for root in band:
         if root in state:
             continue
         state[root] = 1
@@ -2527,66 +2598,219 @@ def _depths(nodes: list[VNode], links: Iterable[tuple[str, str]]) -> dict[str, i
                 state[v] = 2
                 post.append(v)
                 stack.pop()
-    depth = dict.fromkeys(area, 0)
-    for v in reversed(post):
+    topo = post[::-1]
+    fed = {w for v in dag for w in dag[v]}
+    depth = dict.fromkeys(band, 0)
+    for v in topo:
         for w in dag[v]:
             depth[w] = max(depth[w], depth[v] + 1)
-    return depth
+    for v in post:                             # (reverse topological: what it feeds is settled)
+        if v not in fed and dag[v]:
+            depth[v] = max(depth[v], min(depth[w] for w in dag[v]) - 1)
+    start, col = {}, 0
+    for b in sorted(set(band.values())):
+        start[b] = col
+        col += 1 + max(depth[k] for k in band if band[k] == b)
+    return {k: start[band[k]] + depth[k] for k in band}
+
+
+def _crossings(order: list[list[str]], edges: list[tuple[str, str, float]],
+               rank: dict[str, int]) -> int:
+    """How many pairs of segments cross between neighbouring columns."""
+    pos = {k: i for col in order for i, k in enumerate(col)}
+    per: dict[int, list[tuple[int, int]]] = {}
+    for a, b, _ in edges:
+        per.setdefault(rank[a], []).append((pos[a], pos[b]))
+    total = 0
+    for segs in per.values():
+        segs.sort()
+        seen: list[int] = []
+        for _, q in segs:                  # inversions: an earlier segment landing lower
+            lo, hi = 0, len(seen)
+            while lo < hi:
+                mid = (lo + hi) // 2
+                if seen[mid] <= q:
+                    lo = mid + 1
+                else:
+                    hi = mid
+            total += len(seen) - lo
+            seen.insert(lo, q)
+    return total
+
+
+def _mean_at(near: Iterable[tuple[str, float]], pos: Mapping[str, int], i: int) -> float:
+    """The weighted mean place in `pos` of what an item connects to
+    (`near`: item → pull); its own place `i` when none is there."""
+    got = [(pos[m], w) for m, w in near if m in pos]
+    if not got:
+        return float(i)
+    return sum(p * w for p, w in got) / sum(w for _, w in got)
+
+
+def _order(order: list[list[str]], edges: list[tuple[str, str, float]],
+           rank: dict[str, int]) -> list[list[str]]:
+    """Each column's items sorted by the weighted mean place of what they
+    connect to in the column before (a sweep down) or after (up), an item
+    connected to nothing there keeping its place — `SWEEPS` times, the
+    order with the fewest crossings kept (step 3)."""
+    preds: dict[str, list[tuple[str, float]]] = {}
+    succs: dict[str, list[tuple[str, float]]] = {}
+    for a, b, w in edges:
+        succs.setdefault(a, []).append((b, w))
+        preds.setdefault(b, []).append((a, w))
+    order = [list(c) for c in order]
+    best, fewest = [list(c) for c in order], _crossings(order, edges, rank)
+
+    def sweep(cols: Iterable[int], near: dict[str, list[tuple[str, float]]]) -> None:
+        for c in cols:
+            pos = {k: i for i, k in enumerate(order[c - 1 if near is preds else c + 1])}
+            here = order[c]
+
+            order[c] = [k for _, _, k in sorted((_mean_at(near.get(k, ()), pos, i), i, k)
+                                                for i, k in enumerate(here))]
+
+    for _ in range(SWEEPS):
+        sweep(range(1, len(order)), preds)
+        sweep(range(len(order) - 2, -1, -1), succs)
+        k = _crossings(order, edges, rank)
+        if k < fewest:
+            best, fewest = [list(c) for c in order], k
+    return best
+
+
+def _fit_in_order(want: list[float], weight: list[float], seps: list[float]) -> list[float]:
+    """The heights nearest `want` (weighted least squares) that keep the
+    items in order, item i+1 at least `seps[i]` under item i: the
+    pool-adjacent-violators answer on the heights less their spacing."""
+    off = [0.0]
+    for s in seps:
+        off.append(off[-1] + s)
+    blocks: list[list[float]] = []         # [weighted sum, weight, items]
+    for z, w in zip((v - o for v, o in zip(want, off, strict=True)), weight, strict=True):
+        blocks.append([z * w, w, 1])
+        while len(blocks) > 1 and blocks[-2][0] * blocks[-1][1] > blocks[-1][0] * blocks[-2][1]:
+            s, w2, k = blocks.pop()
+            blocks[-1][0] += s
+            blocks[-1][1] += w2
+            blocks[-1][2] += k
+    out: list[float] = []
+    for s, w, k in blocks:
+        out += [s / w] * int(k)
+    return [v + o for v, o in zip(out, off, strict=True)]
+
+
+def _heights(order: list[list[str]], edges: list[tuple[str, str, float]],
+             above: dict[str, float], below: dict[str, float],
+             chain: Mapping[str, tuple[str, str]]) -> dict[str, float]:
+    """Each item's pin height (step 4): stacked down its column at first,
+    then `SETTLE` sweeps each way pulling every item toward the weighted
+    mean height of what it connects to, each column kept in order and
+    spaced by `above` and `below` (an item's room over and under its pins).
+    A lane (`chain`: lane → the items before and after it on its cable) is
+    as tall as its cable's sweep across a node's width at its slope, so a
+    steep cable is given the room it crosses, not a sliver of it."""
+    near: dict[str, list[tuple[str, float]]] = {}
+    for a, b, w in edges:
+        near.setdefault(a, []).append((b, w))
+        near.setdefault(b, []).append((a, w))
+    y: dict[str, float] = {}
+    for col in order:
+        t = 0.0
+        for k in col:
+            t += above[k]
+            y[k] = t
+            t += below[k]
+
+    def settle(c: int) -> None:
+        col = order[c]
+        if not col:
+            return
+        for k in col:
+            if k in chain:
+                p, q = chain[k]
+                sweep = abs(y[q] - y[p]) / (2 * COL_W) * FLOW_NODE_W
+                half = (LANE_H + min(sweep, LANE_MAX)) / 2
+                above[k] = below[k] = half
+        want, weight = [], []
+        for k in col:
+            got = near.get(k, ())
+            w = sum(x for _, x in got)
+            want.append(sum(y[m] * x for m, x in got) / w if w else y[k])
+            weight.append(w if w else 1e-3)
+        seps = [below[a] + above[b] for a, b in itertools.pairwise(col)]
+        for k, v in zip(col, _fit_in_order(want, weight, seps), strict=True):
+            y[k] = v
+
+    for _ in range(SETTLE):
+        for c in range(len(order)):
+            settle(c)
+        for c in range(len(order) - 1, -1, -1):
+            settle(c)
+    return y
+
+
+def flow(nodes: list[VNode], links: Mapping[tuple[str, str], float],
+         size: Callable[[VNode], float]) -> tuple[dict[str, int], dict[str, float]]:
+    """The flow layout of `nodes` (the four steps above): each node's
+    column and the height of its top, from `links` ((maker, taker) → pull)
+    and each node's height on the canvas (`size`). A cable that does not
+    run right (a loop's, a return) takes no part in the order or the
+    heights: it is drawn back, by design."""
+    rank = _ranks(nodes, links)
+    by = {n.id: n for n in nodes}
+    above = {k: PIN_DY + FLOW_GAP / 2 for k in by}
+    below = {k: size(by[k]) - PIN_DY + FLOW_GAP / 2 for k in by}
+    edges: list[tuple[str, str, float]] = []
+    chain: dict[str, tuple[str, str]] = {}
+    for (a, b), w in links.items():
+        ra, rb = rank[a], rank[b]
+        if rb <= ra:
+            continue
+        prev = a
+        for r in range(ra + 1, rb):        # a lane in each column it passes
+            lane = f"lane:{a}>{b}@{r}"
+            rank[lane] = r
+            above[lane] = below[lane] = LANE_H / 2
+            edges.append((prev, lane, w * LANE_PULL))
+            chain[lane] = (prev, f"lane:{a}>{b}@{r + 1}" if r + 1 < rb else b)
+            prev = lane
+        edges.append((prev, b, w * (LANE_PULL if prev != a else 1.0)))
+    cols = 1 + max(rank.values(), default=-1)
+    order: list[list[str]] = [[] for _ in range(cols)]
+    first = {n.id: (band_of(n), ORDER.index(n.area) if n.area in ORDER else len(ORDER), i)
+             for i, n in enumerate(nodes)}
+    for k in sorted(by, key=first.__getitem__):
+        order[rank[k]].append(k)
+    for a, b, _ in edges:                  # each lane after its maker's, in the order made
+        if b.startswith("lane:"):
+            order[rank[b]].append(b)
+    order = _order(order, edges, rank)
+    y = _heights(order, edges, above, below, chain)
+    return {k: rank[k] for k in by}, {k: y[k] - PIN_DY for k in by}
 
 
 def _grid(view: View, opened: set, extra: Iterable[VCable]):
-    """The canvas's grid: (column, row) for each node laid out by depth —
-    every drawn node but an idle one shown under its line — each area's
-    span in columns and its first column. An area's columns are its
-    depths (`_depths`, over the drawn nodes' cables and the through
-    wires); the effects' depths wrapped into rows of `SHADER_ROW` (Z order:
-    every row left to right; plan 35 G: the outputs are an area of their
-    own). The areas follow one another in `AREAS`; `OTHER` takes the
-    audio's first column."""
+    """The nodes the canvas lays out — every drawn node but an idle one,
+    and an idle render node or channel while its area's line is open (an
+    off effect in its place in the chain) — and their links (`_flow_links`)."""
     def gridded(n: VNode) -> bool:
         return not n.idle or (n.area in opened and n.kind in ("render", "channel"))
 
-    nodes = [n for n in view.nodes if n.area and gridded(n)]
-    ids = {n.id for n in nodes}
-    links = [(a, b) for a, b in _links(view, (*view.cables, *extra))
-             if a in ids and b in ids]
-    depth = _depths(nodes, links)
-    local: dict[str, tuple[int, int]] = {}
-    for n in nodes:
-        d = depth[n.id]
-        if n.area == EFFECTS_AREA:
-            local[n.id] = (d % SHADER_ROW, d // SHADER_ROW)
-        elif n.area == OTHER:
-            local[n.id] = (0, 0)
-        else:
-            local[n.id] = (d, 0)
-    present = {n.area for n in view.nodes if n.area}
-    width: dict[str, int] = {a: 1 for a in present}
-    for n in nodes:
-        width[n.area] = max(width[n.area], local[n.id][0] + 1)
-    first: dict[str, int] = {}
-    col = 0
-    for a in AREAS:
-        if a in present or any(SHARES.get(b) == a for b in present):
-            first[a] = col
-            col += width.get(a, 1)
-    for a, under in SHARES.items():
-        if a in present:
-            first[a] = first.get(under, 0)
-            width[a] = 1
-    cols = {n.id: first[n.area] + local[n.id][0] for n in nodes}
-    rows = {n.id: local[n.id][1] for n in nodes}
-    return cols, rows, {a: width[a] for a in present}, first
+    nodes = [n for n in view.nodes if gridded(n)]
+    return nodes, _flow_links(view, {n.id for n in nodes}, extra)
 
 
 def _columns(view: View, render_graph=None) -> None:
     """Each node's column on the default canvas (every idle line shut):
-    `_grid`'s, an idle node its area's first column."""
+    the flow layout's (`_ranks`); an idle node its area's first column."""
     for n in view.nodes:
         if not n.area:
             n.area = area_of(n)
-    shown = (lambda n: not n.idle)
-    cols, _, _, first = _grid(view, set(), throughs(view, shown))
+    nodes, links = _grid(view, set(), throughs(view, lambda n: not n.idle))
+    cols = _ranks(nodes, links)
+    first: dict[str, int] = {}
+    for n in nodes:
+        first[n.area] = min(first.get(n.area, cols[n.id]), cols[n.id])
     for n in view.nodes:
         n.column = cols.get(n.id, first.get(n.area, 0))
 
@@ -2596,9 +2820,10 @@ class Layout:
     """`layout`'s answer: a position for each node (`nodes`), each area's
     title (`titles`, over its first column), each area's idle line
     (`lines`) and the idle nodes it stands for (`idle`); how many columns
-    each area spans (`spans`); each laid-out node's grid column (`cols`)
-    and row (`rows`: only the effects wrap); the through wires over the
-    hidden effects (`throughs`)."""
+    each area spans (`spans`); each laid-out node's column (`cols`) and row
+    (`rows`: 0 for every node since the flow layout, which wraps nothing —
+    kept for `returns`); the through wires over the hidden effects
+    (`throughs`)."""
 
     nodes: dict[str, tuple[float, float]] = field(default_factory=dict)
     titles: dict[str, tuple[float, float]] = field(default_factory=dict)
@@ -2616,9 +2841,9 @@ TAKEN_BACK = (rgraph.Shape, rgraph.PatternNode, rgraph.BackdropNode, rgraph.Swit
 
 
 def returns(view: View, lay: Layout) -> set[str]:
-    """The ids of the wires that run back by design: inside the effects,
-    from one row of the wrapped chain to a later one (the row's last
-    output to the next row's first input); (plan 33 T6) a picture the
+    """The ids of the wires that run back by design: a wire from one row
+    of a wrapped chain to a later one (none since the flow layout of
+    2026-11-19, which wraps nothing: every row is 0); (plan 33 T6) a picture the
     scene made, taken back into a sink that sits left of where it was made
     (`TAKEN_BACK`: `lookback → acid.2 → switch.in1`; into the faces, the
     pattern or the backdrop such a picture is a loop — the scene draws
@@ -2684,88 +2909,108 @@ def layout(view: View, placed: Mapping[str, Any] | None = None,
            expanded: Callable[[str], bool] | None = None,
            folds=frozenset(),
            collapsed: Callable[[str], bool] | None = None,
-           idle_open: Iterable[str] = ()) -> Layout:
-    """The canvas laid out by area (plan 28 N9): area by area in `ORDER`,
-    every node `placed` does not hold stacked down its grid column
-    (`_grid`: an area's depths left to right, the shaders wrapped into
-    rows — each row starting under the tallest column of the one before),
-    the columns starting under a row for the areas' titles; `OTHER`
-    titled and stacked under the audio in its column. An area's idle
-    nodes (`VNode.idle`) take no room: its idle line goes under its nodes
-    in its first column and they sit at it — unless the area is in
-    `idle_open`, when they are laid out (an off effect in its place in
-    the chain, any other under the line). The nodes already placed keep
-    their positions and take no room here (a tidy passes none).
-    `expanded(node id)` says which nodes show every port (default none)
-    and `folds` which of their groups are folded, so an expanded node
-    pushes the column under it down instead of overlapping. `collapsed(node
-    id)` (plan 28 N7: the page's default, every node) says which nodes draw
-    only their title and lines; such a node takes that much room whatever
-    `expanded` says."""
+           idle_open: Iterable[str] = (),
+           shown: Callable[[str], bool] | None = None) -> Layout:
+    """The canvas laid out left to right by the flow layout (`flow`, the
+    owner's of 2026-11-19): every node `placed` does not hold at its column
+    and height; each area's title in a row over the canvas, over its first
+    column (a title whose column another took moves right inside its own
+    columns, else up a row); and each area with idle nodes (`VNode.idle`)
+    its idle line under the canvas, at its title's column, the idle nodes
+    sitting at it — unless the area is in `idle_open`, when they are laid
+    out (an off effect in its place in the chain, any other under the
+    line). The nodes already placed keep their positions (a tidy passes
+    none). `shown(node id)` False leaves a node out altogether (the preset
+    only view's hidden nodes: no room for what is not drawn). `expanded(node
+    id)` says which nodes show every port (default none) and `folds` which
+    of their groups are folded, so an expanded node is as tall as it is
+    drawn. `collapsed(node id)` (plan 28 N7: the page's default, every
+    node) says which nodes draw only their title and lines; such a node
+    takes that much room whatever `expanded` says."""
     placed = placed or {}
     opened = set(idle_open)
-    thr = throughs(view, lambda n: not n.idle or n.area in opened)
-    cols, rows, spans, first = _grid(view, opened, thr)
-    out = Layout(spans=spans, cols=cols, rows=rows, throughs=thr)
-    tops: dict[int, float] = {}
+    keep = shown or (lambda nid: True)
+    thr = throughs(view, lambda n: (not n.idle or n.area in opened) and keep(n.id))
+    nodes, links = _grid(view, opened, thr)
+    nodes = [n for n in nodes if keep(n.id)]
+    ids = {n.id for n in nodes}
+    links = {ab: w for ab, w in links.items() if ab[0] in ids and ab[1] in ids}
 
-    def put(n: VNode, col: int) -> None:
-        if n.id in placed:
-            return
+    def size(n: VNode) -> float:
         full = bool(expanded(n.id)) if expanded is not None else False
         shut = bool(collapsed(n.id)) if collapsed is not None else False
         # an expanded node on the N7 page has its all ports / patched only line
         chip = ROW_H if collapsed is not None and not shut else 0.0
-        out.nodes[n.id] = (col * COL_W, tops[col])
-        tops[col] += height(n, full, folds, shut) + chip + GAP
+        return height(n, full, folds, shut) + chip
 
+    cols, tops = flow(nodes, links, size)
+    lift = TITLE_H - min(tops.values(), default=0.0)
+    out = Layout(cols=cols, rows=dict.fromkeys(cols, 0), throughs=thr)
+    for n in nodes:
+        if n.id not in placed:
+            out.nodes[n.id] = (cols[n.id] * COL_W, float(round(tops[n.id] + lift)))
+    bottom = max((tops[n.id] + lift + size(n) for n in nodes), default=TITLE_H)
+    # each area: its columns, or (none laid out) the first column of its band's place
+    span: dict[str, list[int]] = {}
+    for n in nodes:
+        span.setdefault(n.area, []).append(cols[n.id])
+    band_at: dict[int, int] = {}
+    for n in nodes:
+        b = band_of(n)
+        band_at[b] = min(band_at.get(b, cols[n.id]), cols[n.id])
+    taken: set[tuple[int, int]] = set()
+    lines_at: dict[int, float] = {}
     for area in ORDER:
-        mine = [n for n in view.nodes if n.area == area]
+        mine = [n for n in view.nodes if n.area == area and keep(n.id)]
         if not mine:
             continue
-        f = first[area]
-        span = range(f, f + spans.get(area, 1))
-        tops[f] = tops[f] + TITLE_H if f in tops else TITLE_H   # a second area: under the first
-        for c in span:
-            tops.setdefault(c, TITLE_H)
-        out.titles[area] = (f * COL_W, tops[f] - TITLE_H)
-        grid = [n for n in mine if n.id in cols]
-        for r in range(max((rows[n.id] for n in grid), default=0) + 1):
-            if r:                                   # a wrapped row: under the tallest
-                t = max(tops[c] for c in span)
-                for c in span:
-                    tops[c] = t
-            for n in grid:
-                if rows[n.id] == r:
-                    put(n, cols[n.id])
-        idle = [n for n in mine if n.idle]
+        if area in span:
+            lo, hi = min(span[area]), max(span[area])
+        else:
+            b = BANDS.get(area, max(BANDS.values()) + 1)
+            lo = hi = min((c for k, c in band_at.items() if k >= b), default=0)
+        out.spans[area] = hi - lo + 1
+        row = 0
+        while True:
+            free = next((c for c in range(lo, hi + 1) if (row, c) not in taken), None)
+            if free is not None:
+                break
+            row += 1
+        taken.add((row, free))
+        out.titles[area] = (free * COL_W, -row * TITLE_H)
+        idle = [n for n in mine if n.idle and n.id not in cols]
         if not idle:
             continue
         out.idle[area] = [n.id for n in idle]
-        line = (f * COL_W, tops[f])
-        out.lines[area] = line
-        tops[f] += IDLE_H + GAP
+        y = lines_at.get(free, bottom + FLOW_GAP)
+        out.lines[area] = (free * COL_W, float(round(y)))
+        y += IDLE_H + GAP
         for n in idle:
-            if n.id in cols:
-                continue
             if area in opened:
-                put(n, f)
+                if n.id not in placed:
+                    out.nodes[n.id] = (free * COL_W, float(round(y)))
+                y += size(n) + GAP
             elif n.id not in placed:
-                out.nodes[n.id] = line
-    for n in view.nodes:                    # a node of no area (a hand-made view)
-        if n.area not in ORDER:
-            tops.setdefault(n.column, 0.0)
-            put(n, n.column)
+                out.nodes[n.id] = out.lines[area]
+        lines_at[free] = y
+    y = max(lines_at.values(), default=bottom + FLOW_GAP)
+    for n in view.nodes:                    # an idle node of no area (a hand-made view)
+        if n.id not in cols and n.id not in out.nodes and n.id not in placed and keep(n.id) \
+                and n.area not in ORDER:
+            out.nodes[n.id] = (0.0, float(round(y)))
+            y += size(n) + GAP
     return out
+
 
 def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
                 expanded: Callable[[str], bool] | None = None,
                 folds=frozenset(),
                 collapsed: Callable[[str], bool] | None = None,
-                idle_open: Iterable[str] = ()) -> dict[str, tuple[float, float]]:
+                idle_open: Iterable[str] = (),
+                shown: Callable[[str], bool] | None = None) -> dict[str, tuple[float, float]]:
     """A position for every node `placed` does not hold: `layout`'s nodes
     (its titles and idle lines left out)."""
-    return layout(view, placed, expanded, folds, collapsed, idle_open).nodes
+    return layout(view, placed, expanded, folds, collapsed, idle_open, shown).nodes
 
 
 def patch_only(view: View) -> frozenset[str]:
