@@ -19,6 +19,8 @@ helpers every effect can call)::
     // @speed  1                    the default time rate
     // @mix    1                    the default wet/dry (0: starts as a no-op)
     // @tip    …                    one line for the tooltip
+    // @family distort              the effect picker's group (plan 65); none:
+                                    the band its @order sits in (`previews`)
     // @hook   mandel               (plan 63) a Python half: `HOOKS` names the
                                     module that runs the pass and its drives
     uniform float u_amount;  // @param 0 2 0.5 "Amount" tooltip text…
@@ -137,7 +139,7 @@ RELOAD_EVERY = 30               # frames between mtime checks of the folder
 HOOKS = {"mandel": mandel}
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock|hook)\s+(.*?)\s*$")
+_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock|family|hook)\s+(.*?)\s*$")
 _CLOCK_UNIFORM = re.compile(r"^u_[a-z][a-z0-9_]*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
 _CHOICE = re.compile(
@@ -211,6 +213,15 @@ class EffectSpec:
     mix: float = 1.0         # the default wet/dry (@mix); 0 for a pass that starts as a no-op
     tip: str = ""
     clocks: list[ClockSpec] = field(default_factory=list)   # `@clock` lines, in file order
+    # `@family` (plan 65): the effect picker's group, "" for none (then the
+    # picker groups by `order`, `previews.family_of`). Declares nothing, so
+    # it is not in `signature`: a family change re-declares no param
+    family: str = ""
+    # plan 65: whether the file reads the second picture wired into its
+    # `aux` port (`reads_aux`: its code calls `aux(` or `aux_luma(`). GRAPH
+    # draws an effect's aux port only when it does (or a saved wire goes
+    # in); like `family`, it declares no param, so it is not in `signature`
+    aux: bool = False
 
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
@@ -345,6 +356,18 @@ def _check_clocks(name: str, spec: EffectSpec) -> None:
         spec.clocks[k] = replace(c, rate="*".join(factors), factors=tuple(factors))
 
 
+_AUX_CALL = re.compile(r"\baux(?:_luma)?\s*\(")
+
+
+def reads_aux(source: str) -> bool:
+    """Plan 65: does effect source `source` read its aux picture — call
+    `aux(uv)` or `aux_luma(uv)` (`_lib.glsl`) outside a comment? Read from
+    the file itself, so an effect that starts using one gains the port."""
+    code = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
+    code = re.sub(r"//[^\n]*", " ", code)
+    return bool(_AUX_CALL.search(code))
+
+
 def parse(name: str, source: str) -> EffectSpec:
     """An effect file's text → its spec. Raises SpecError on a bad header."""
     if not _NAME.match(name):
@@ -370,6 +393,8 @@ def parse(name: str, source: str) -> EffectSpec:
                     spec.blend = BLENDS.index(val.lower())
                 elif key == "clock":
                     spec.clocks.append(_parse_clock(name, n, val))
+                elif key == "family":
+                    spec.family = val.strip().lower()
                 elif key == "hook":
                     if val not in HOOKS:
                         raise SpecError(f"{name}:{n}: @hook {val!r} is none of {sorted(HOOKS)}")
@@ -426,6 +451,7 @@ def parse(name: str, source: str) -> EffectSpec:
     if not re.search(r"\bvec4\s+effect\s*\(", source):
         raise SpecError(f"{name}: no 'vec4 effect(vec2 uv)'")
     _check_clocks(name, spec)
+    spec.aux = reads_aux(source)
     return spec
 
 
@@ -1080,7 +1106,8 @@ class FxChain:
 
     def run_one(self, name: str, src: moderngl.Texture, dst: moderngl.Framebuffer,
                 t: float, opaque: int | None = None,
-                aux: moderngl.Texture | None = None) -> None:
+                aux: moderngl.Texture | None = None,
+                res: tuple[int, int] | None = None) -> None:
         """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
         program over `src` into `dst`'s viewport, every uniform set, the
         clocks moved first (once per frame time,
@@ -1091,7 +1118,10 @@ class FxChain:
         hands' layer, whose ground is see-through whatever the window's.
         `aux` (plan 32 R): the picture wired into the effect's `aux` port,
         bound on unit 1 (`u_aux_on` 1); None leaves it off, and `aux(uv)`
-        reads transparent black."""
+        reads transparent black. `res`: the size the pass is told its
+        picture has (`u_res`) when that is not `src`'s — a generator painted
+        over no picture of the size it draws at (the test card,
+        `render.card_through`)."""
         self.state.advance_to(t)
         pv = self._program(name)
         ctx = self.ctx
@@ -1108,7 +1138,7 @@ class FxChain:
                 self._copy_vao.render(moderngl.TRIANGLES, vertices=3)
                 return
             prog, vao = pv
-            self._uniforms(prog, name, src.size, t,
+            self._uniforms(prog, name, src.size if res is None else res, t,
                            self._opaque() if opaque is None else int(opaque))
             for k, x in one.items():
                 self._set(prog, k, x)
