@@ -136,21 +136,26 @@ float orbit(vec2 off, out bool inside) {
     vec2 dc = (1.0 - s) * dq;
     vec2 d = s * dq;                      // δ₀ = δz₀
     vec2 Z0 = ref_at(0);
-    vec2 z = Z0 + d, saved = z;
+    // never subtract two full z's: in float32 the full z has lost δ's digits deep in.
+    // A z is kept as its reference value and its δ, and differences are taken
+    // part by part (mandel.perturbed_counts says the same)
+    vec2 savedZ = Z0, savedD = d;
     int m = 0, lim = 8, since = 0;
     for (int n = 0; n < cap; n++) {
         d = binomial_delta(ref_at(m), d, p) + dc;
         m++;
-        z = ref_at(m) + d;
+        vec2 Zm = ref_at(m);
+        vec2 z = Zm + d;
         float r2 = dot(z, z);
         if (r2 > BAIL) return max(float(n) + 1.0 - log(0.5 * log(r2)) / lp, 0.0);
-        // the rebase (Zhuoran): when the full z is nearer the orbit's start than δ is
-        // to the reference, or the reference has run out, carry on from the start
-        vec2 back = z - Z0;
-        if (m >= u_ref_n || dot(back, back) < dot(d, d)) { d = back; m = 0; }
-        vec2 e = z - saved;
+        // the rebase (Zhuoran): when z is nearer the orbit's start than δ is to the
+        // reference, or the reference has run out, carry on from the start, with
+        // δ = z − Z₀ taken as (Zₘ − Z₀) + δ
+        vec2 back = (Zm - Z0) + d;
+        if (m >= u_ref_n || dot(back, back) < dot(d, d)) { d = back; m = 0; Zm = Z0; }
+        vec2 e = (Zm - savedZ) + (d - savedD);
         if (dot(e, e) < eps2) { inside = true; return float(n); }
-        if (++since == lim) { saved = z; since = 0; lim *= 2; }
+        if (++since == lim) { savedZ = Zm; savedD = d; since = 0; lim *= 2; }
     }
     inside = true;
     return float(cap);

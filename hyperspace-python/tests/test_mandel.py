@@ -578,3 +578,77 @@ def test_a_new_reference_redraws_the_same_picture(rig):
     b = rig.steps(centre_x=SEAHORSE.real)
     assert rig.stats["references"] == refs and refs >= 2
     assert mismatch(a, b) < 0.05
+
+
+# ---------------------------------------- review fixes (Devin, PR #462)
+
+def test_deep_periodicity_compares_parts_and_finds_no_false_inside(rig):
+    """At Centre (0, 1), 10¹², every pixel escapes. Subtracting two float32 z's
+    (each Z + δ, δ's digits gone) read them as one cycle and painted it black;
+    the check compares (Zₘ − Z_saved) + (δ − δ_saved)."""
+    q, zoom = 1j, 1e12
+    off = M.offsets(W, H, zoom)
+    ref = M.reference_orbit(q, 0j, 2, 512)
+    eps = M.view_height(zoom) / H * M.PERIOD_EPS
+    n, ins, _ = M.perturbed_counts(ref, off, 0, 2, 512, periodic_eps=eps)
+    n0, in0 = M.escape_counts(q + off, 0, 2, 512)
+    assert not in0.any() and not ins.any()
+    assert mismatch(counts(n, ins), counts(n0, in0)) < 0.02
+    got = rig.steps(centre_x=0.0, centre_y=1.0, zoom=zoom, iters=512.0, skip=1)
+    assert rig.stats["perturb"] and not (got < 0).any()
+    assert mismatch(got, counts(n0, in0)) < 0.05
+
+
+def test_a_rebase_from_a_start_off_zero_keeps_a_tiny_delta():
+    """A Julia reference starting at 1 (c = 0): z − Z₀ taken from the full
+    float32 z rounded a 10⁻⁹ δ to zero and the point never escaped; taken as
+    (Zₘ − Z₀) + δ it escapes where the oracle says."""
+    ref = M.reference_orbit(0j, 1 + 0j, 2, 512)
+    n, ins, _ = M.perturbed_counts(ref, np.array([0j]), np.array([1e-9 + 0j]), 2, 512)
+    n0, in0 = M.escape_counts(np.array([0j]), np.array([1 + 1e-9 + 0j]), 2, 512)
+    assert not in0[0] and not ins[0]
+    assert abs(n[0] - n0[0]) < 1.0
+
+
+def test_a_deep_julia_view_off_zero_is_its_oracle(rig):
+    v = {"slice": 1.0, "c_x": 0.0, "c_y": 0.0, "centre_x": 1.0, "centre_y": 0.0,
+         "zoom": 1e9, "iters": 512.0, "skip": 1}
+    got = rig.steps(**v)
+    assert rig.stats["perturb"]
+    want = oracle(rig.v)
+    assert (want < 0).mean() > 0.2 and (want >= 0).mean() > 0.2    # the circle crosses it
+    assert mismatch(got, want) < 0.05
+
+
+def test_a_deleted_instance_frees_its_gl_objects(rig):
+    rig.shot(iters=32.0)
+    st = rig.chain.mandel.states["mandel"]
+    assert st.border.tex is not None            # the skip ran: three targets made
+    rig.st.hold([])                             # a patch without it lands
+    rig.chain.tick()
+    assert "mandel" not in rig.chain.mandel.states
+    assert st.border.tex is None and st.tiles.tex is None and st.ref.tex is None
+
+
+def test_a_reload_of_the_module_drops_the_old_objects(rig):
+    rig.shot(iters=32.0)
+    gl = rig.chain.mandel
+    st = gl.states["mandel"]
+
+    class Old(M.Gl):            # what a live Gl is once mandel.py is reloaded
+        pass
+
+    gl.__class__ = Old
+    rig.chain.tick()
+    assert rig.chain.mandel is None and st.border.tex is None and gl.tiles_prog is None
+    rig.shot()                  # made again, by the module as it is now
+    assert type(rig.chain.mandel) is M.Gl
+
+
+def test_a_reload_of_fx_drops_them_too(rig):
+    rig.shot(iters=32.0)
+    st = rig.chain.mandel.states["mandel"]
+    rig.chain.on_reload()
+    assert rig.chain.mandel is None and st.border.tex is None
+    rig.shot()
+    assert rig.chain.mandel is not None

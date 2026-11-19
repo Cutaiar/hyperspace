@@ -970,8 +970,13 @@ class FxChain:
         self._copy["u_src"].value = 0
 
     def on_reload(self) -> None:
-        """Hot-swap hook: every program is rebuilt from source on next use."""
+        """Hot-swap hook: every program is rebuilt from source on next use (plan
+        63: the hook's GL objects too, made again by the reloaded module)."""
         self._release_programs()
+        gl = getattr(self, "mandel", None)
+        if gl is not None:
+            gl.release()
+            self.mandel = None
         self._copy_vao.release()
         self._copy.release()
         self._build_copy()
@@ -983,6 +988,7 @@ class FxChain:
         self._frame += 1
         if self._frame % RELOAD_EVERY == 0:
             self.state.poll()
+        mandel.tick(self)       # plan 63: the hook's objects for gone instances, or a reload
 
     def pool(self, size: tuple[int, int], n: int = 2
              ) -> list[tuple[moderngl.Texture, moderngl.Framebuffer]]:

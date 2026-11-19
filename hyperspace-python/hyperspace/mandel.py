@@ -181,7 +181,8 @@ def binomial_delta(Z, d, p: int):
 
 def rebase(z, d, Z0) -> np.ndarray:
     """Where the rebase fires: the full z nearer the orbit's start Z₀ than δ
-    is to the reference (with Z₀ = 0, |Z + δ| < |δ|)."""
+    is to the reference (with Z₀ = 0, |Z + δ| < |δ|). The rule; the iteration
+    takes z − Z₀ part by part, (Zₘ − Z₀) + δ (`perturbed_counts`)."""
     return np.abs(z - Z0) < np.abs(d)
 
 
@@ -200,8 +201,10 @@ def perturbed_counts(ref: np.ndarray, dc, dz0, p: int, iters: int, *,
     d = np.broadcast_to(np.asarray(dz0, dtype=dtype), dc.shape).copy()
     m = np.zeros(dc.shape, np.int64)
     Z0 = R[0]
-    z = Z0 + d
-    saved = z.copy()
+    # a z is its reference value and its δ, never their float32 sum subtracted
+    # from another: deep in, that sum has lost δ's digits (the shader's rule)
+    savedZ = np.full(dc.shape, Z0, dtype=dtype)
+    savedD = d.copy()
     count = np.full(dc.shape, float(iters))
     inside = np.ones(dc.shape, bool)
     live = np.ones(dc.shape, bool)
@@ -217,25 +220,27 @@ def perturbed_counts(ref: np.ndarray, dc, dz0, p: int, iters: int, *,
         zl = R[ml] + dl
         r2 = zl.real.astype(np.float64) ** 2 + zl.imag.astype(np.float64) ** 2
         out = r2 > BAIL
-        back = zl - Z0
-        reb = ~out & ((ml >= last) | (rebase(zl, dl, Z0) if rebasing else False))
+        back = (R[ml] - Z0) + dl                 # z − Z₀, part by part
+        near = np.abs(back) < np.abs(dl)         # `rebase`'s rule
+        reb = ~out & ((ml >= last) | (near if rebasing else False))
         rebases += int(reb.sum())
         dl = np.where(reb, back, dl)
         ml = np.where(reb, 0, ml)
-        d.flat[idx], m.flat[idx], z.flat[idx] = dl, ml, zl
+        d.flat[idx], m.flat[idx] = dl, ml
         gone = idx[out]
         count.flat[gone] = smooth(n, r2[out], p)
         inside.flat[gone] = False
         live.flat[gone] = False
         if eps2 is not None:
-            e = z - saved
+            Zm = R[m]
+            e = (Zm - savedZ) + (d - savedD)
             caught = live & ((e.real.astype(np.float64) ** 2 + e.imag.astype(np.float64) ** 2)
                              < eps2)
             count[caught] = n
             live &= ~caught
             since += 1
             if since == lim:
-                saved = z.copy()
+                savedZ, savedD = Zm.copy(), d.copy()
                 since, lim = 0, lim * 2
     return count, inside, rebases
 
@@ -452,6 +457,12 @@ class Gl:
     def state(self, name: str) -> State:
         return self.states.setdefault(name, State())
 
+    def prune(self, names) -> None:
+        """Release every instance's objects that is not among `names` (a
+        node deleted, a patch loaded without it)."""
+        for name in [n for n in self.states if n not in names]:
+            self.states.pop(name).release()
+
     def tiles(self, ctx: moderngl.Context):
         if self.tiles_prog is None:
             self.tiles_prog = ctx.program(vertex_shader=QUAD_VS, fragment_shader=TILES_FS)
@@ -468,6 +479,22 @@ class Gl:
             if res is not None:
                 res.release()
         self.tiles_prog = self.tiles_vao = None
+
+
+def tick(chain) -> None:
+    """Once a frame (`FxChain.tick`): free the objects of instances that no
+    longer exist, and drop them all after a hot reload of this module (a live
+    `Gl` of the old class, its helpers and its tile program built from the
+    old source) — rebuilt on next use."""
+    gl = getattr(chain, "mandel", None)
+    if gl is None:
+        return
+    if type(gl) is not Gl:
+        gl.release()
+        chain.mandel = None
+        return
+    if gl.states:
+        gl.prune(chain.state.specs)
 
 
 def gl_of(chain) -> Gl:

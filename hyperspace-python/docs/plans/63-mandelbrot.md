@@ -103,6 +103,13 @@ recomputed only when a term changes (p, Steps, Slice, c, z₀) or its point
 leaves the view; a pan inside the view moves only a float64 shift sent as
 float32.
 
+Deep in, the full z = Zₙ + δₙ in float32 has lost δ's digits, so no two full
+z's are ever subtracted: the rebase's z − Z₀ is (Zₘ − Z₀) + δ, and the
+periodicity check compares (Zₘ − Z_saved) + (δ − δ_saved). The first build
+subtracted full z's and painted escaping pixels black at 10¹² (a false cycle)
+and on a Julia slice off zero (a rebase to δ = 0); Devin's review of PR #462
+found both, and `tests/test_mandel.py` holds the fix.
+
 Measured (`tests/test_mandel.py`): float64 perturbation is the oracle within
 2% of pixels a step apart at 10⁵–10⁹×; float32 direct is 34% off at 10⁵×,
 float32 perturbation 6%, which is float32's own: the GPU agrees with numpy's
