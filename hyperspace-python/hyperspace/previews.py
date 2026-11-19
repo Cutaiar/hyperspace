@@ -30,8 +30,9 @@ state, made again after a restart or a reload.
 
 **Memory.** Each file's still and loop share one RGBA8 atlas of
 `ATLAS_COLS` × `ATLAS_ROWS` cells of `PREVIEW_W` × `PREVIEW_H` (cell 0 the
-still, cells 1… the loop): 960 × 540 × 4 = 2.07 MB a file, so the 27 files
-on this build (26 effects and the test card) are 56.0 MB of textures, all
+still, cells 1… the loop): 960 × 540 × 4 = 2.07 MB a file, so the 28 files
+on this build (27 effects with the Mandelbrot, and the test card) are 58.1 MB of
+textures, all
 kept once made (`ATLAS_BYTES`, `bytes_kept`), plus the card, the aux
 picture and the work picture at `WORK_W` × `WORK_H` (2.1 MB each, the work
 picture 2.8 MB mipmapped).

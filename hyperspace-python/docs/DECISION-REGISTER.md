@@ -875,12 +875,22 @@ here; overturn → the change, then the same.
 | 893 | Plan 65: a preview is the test card through the effect at its file's defaults (a `@mix` 0 file at mix 1), the still at 0.6 s of its clock; the card, not the scene or the effect's input, so every tile is compared on one picture. An effect that reads its aux (Blend, Displace) has a known second picture wired in: a warm disc, bright at its centre (`previews.AUX_FS`) | 689 | (rec) — plan 65 §1 |
 | 894 | Plan 65: the loop is 24 frames over 2 s of the effect's clock at its default speed, made once a session and kept, played while the tile is hovered; a cut of the clock, not a cycle | 690 | (rec) — plan 65 §1 |
 | 895 | Plan 65: every preview pass runs at 960 × 540 told its true size and is shrunk through mipmaps into its 192 × 108 cell, so an effect that reads by the pixel draws as on stage; a px knob is then twice what it is against a 1080p frame | 690 | (rec) — plan 65 §1: telling a small picture it was 1080p made Edges draw nothing |
-| 896 | Plan 65: at most 3 preview passes a frame, at the frame's end after the thumbnails, stills first; every file kept once made — one 2.07 MB atlas a file, 56.0 MB for the 27 files, 62.9 MB with the card, the aux disc and the work picture; view state, never saved, let go on a reload of the renderer | 690, 696 | (rec) — plan 65 §1 |
+| 896 | Plan 65: at most 3 preview passes a frame, at the frame's end after the thumbnails, stills first; every file kept once made — one 2.07 MB atlas a file, 58.1 MB for the 28 files, 65.0 MB with the card, the aux disc and the work picture; view state, never saved, let go on a reload of the renderer | 690, 696 | (rec) — plan 65 §1 |
 | 897 | Plan 65: the previews read the show's `FxState.files` (its hot reload): a file whose program source — the file, `_lib.glsl`, `_common.glsl` — changed is made again on the next ask, a file gone has its atlas freed, one that does not compile shows the plain card | 692 | (rec) — plan 65 §1 |
 | 898 | Plan 65: the picker's families are data: a file's `// @family <name>` (`EffectSpec.family`, parsed, declares nothing, written by no file yet), else its `@order` band from one table, `previews.ORDER_FAMILIES` (generators, distort, split, glow and texture, colour). The shader roundup writes `@family`. So is the aux port: every effect node had one, two files read it (Blend, Displace); GRAPH draws it only when the file's code calls `aux(` or `aux_luma(` (`fx.reads_aux`) or a saved wire goes into it | 693 | (rec) — plan 65 §2: the owner asked for a hook, not today's list |
 | 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
 | 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
 | 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
+| 872 | Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema | — | owner (2026-11-19, as recommended) |
+| 873 | Plan 63: every term a param (owner decision 1). Slice s lays the pixel's point q into the terms as c = mix(q, c, s), z₀ = mix(z₀, q, s): 0 the Mandelbrot set, 1 a Julia set. Power a whole number 2–8, an int param; a fractional p not built | 671 | owner (2026-11-18) — the mapping (rec) |
+| 874 | Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go | 669, 670 | owner (2026-11-19, as recommended): velocity, not displacement |
+| 875 | Plan 63: Size is a choice of 540, 810 or 1080 lines (owner decision 2), default 810; the pass renders at that many lines at the output's aspect and the chain's copy stretches it over the output (LINEAR); an output with no more lines is drawn straight into | 672, 673, 674 | owner (2026-11-18); the default 810 kept by the owner (2026-11-19, as recommended) until the bench and check 674 say otherwise |
+| 876 | Plan 63: the tiers (owner decision 3): float32 direct to 10⁴×, then perturbation (Tier forces either). Reference in float64 at the view's centre, RG32F 1024 wide; δ by the binomial theorem in Horner form; the rebase generalised to abs(z − Z₀) < abs(δ) for a start z₀ ≠ 0 (abs(Z + δ) < abs(δ) at Z₀ = 0) and when the reference runs out; recomputed only when a term changes or the point leaves the view | 677, 678 | owner (2026-11-18) — the details (rec) |
+| 877 | Plan 63: periodicity is Brent's doubling window with z within 5% of a pixel of the saved z; deep in on float32 it rarely fires, so the inside costs the full cap there unless the skip runs. The cardioid and period-2 bulb test only at p = 2, z₀ = 0, Slice 0, the inside black | 676 | (rec) |
+| 878 | Plan 63: Skip black is Mariani–Silver on 16×16 tiles in three passes (border pixels iterate, a tile pass reads each border, the picture fills flagged tiles), only where the set has no holes (p whole and z₀ = 0 on the Mandelbrot slice, or a pure Julia slice) and the inside black. Last frame's black tiles as a hint is not built: the GPU runs every tile at once and the border test always runs, so a hint could skip nothing | 673 | owner (2026-11-19, as recommended): the hint is dropped |
+| 879 | Plan 63: colour by steps (owner decision 5): the smooth count n + 1 − log_p log abs(z) with abs(z)² > 10⁴ the bail-out; Output steps is grey that rises over Cycle steps and falls over the next, so Palette's gradient wraps with no seam; Output ramp a built-in colour ramp; Inside coloured shows the periodicity time and turns the cardioid test and the skip off | 675, 676 | owner (2026-11-18) — the rise and fall (rec) |
+| 880 | Plan 63: Steps is a float log knob rounded to a whole cap (an integer log param cannot move one detent at a time); Zoom runs 0.5–10¹³, the float64 reference's reach, and a log param over six orders reads in three figures ("4.2e+07×") | — | (rec) |
+| 881 | Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes | — | owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before |
 
 "—": no hand check shows it; tests only.
 
@@ -15121,7 +15131,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 ### 896. Three passes a frame, every file kept
 
-- **What.** The picker wants its tiles each frame; the renderer makes at most three passes at its frame's end (`_for_the_panel`, after the thumbnails), the card and the stills before any loop. Every file's atlas is kept once made (2.07 MB each, 56.0 MB for the 27 files; 62.9 MB with the card, the aux disc and the work picture). Never saved; a reload of the renderer lets them go and they are made again on the next ask.
+- **What.** The picker wants its tiles each frame; the renderer makes at most three passes at its frame's end (`_for_the_panel`, after the thumbnails), the card and the stills before any loop. Every file's atlas is kept once made (2.07 MB each, 58.1 MB for the 28 files; 65.0 MB with the card, the aux disc and the work picture). Never saved; a reload of the renderer lets them go and they are made again on the next ask.
 - **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
 - **Built.** `previews.PASSES_PER_FRAME`, `EffectPreviews.make`, `bytes_kept`, `Renderer.effect_previews`, `Renderer._make_previews`, `Renderer.on_reload`; `tests/test_effect_previews.py::test_never_more_than_the_budget_a_frame_and_the_stills_first`, `::test_every_file_fits_in_the_memory_the_plan_states`, `::test_a_reload_of_the_renderer_lets_the_previews_go`.
 - **Judge it.** 690, 696.
@@ -15160,3 +15170,72 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** pending the owner.
 - **Built.** Nothing: a question. The options are in `docs/plans/65-effect-previews.md`, "What the previews show at the defaults".
 - **Judge it.** 689, by eye on the contact sheet and in the picker.
+### 872. The Mandelbrot is an effect file with a Python half
+
+- **What.** Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema.
+- **Answer.** owner (2026-11-19, as recommended).
+- **Built.** `fx.HOOKS`, `EffectSpec.hook`, `FxChain.run_one`, `FxChain.upscale`, `FxState.advance`, `mandel.run`, `mandel.advance`; `tests/test_mandel.py::test_the_file_declares_its_hook_and_a_wrong_hook_is_refused`, `::test_the_drives_run_only_while_the_effect_draws`.
+- **Judge it.** No hand check.
+
+### 873. Every term a param, laid by the Slice
+
+- **What.** Plan 63: every term a param (owner decision 1). Slice s lays the pixel's point q into the terms as c = mix(q, c, s), z₀ = mix(z₀, q, s): 0 the Mandelbrot set, 1 a Julia set. Power a whole number 2–8, an int param; a fractional p not built.
+- **Answer.** owner (2026-11-18) — the mapping (rec).
+- **Built.** `mandel.terms`, `mandel.glsl`'s `orbit`; `tests/test_mandel.py::test_the_direct_tier_is_its_float32_twin`, `::test_perturbation_in_float64_is_the_oracle`.
+- **Judge it.** 671.
+
+### 874. Zoom-scaled sensitivity as drives in the node
+
+- **What.** Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go.
+- **Answer.** owner (2026-11-19, as recommended): velocity, not displacement.
+- **Built.** `mandel.advance`, `mandel.DRIVES`; `tests/test_mandel.py::test_a_pan_moves_the_picture_the_same_on_screen_at_any_depth`, `::test_dive_doubles_and_every_drive_moves_by_the_view`, `::test_a_drive_at_rest_writes_nothing_and_a_term_stays_in_range`.
+- **Judge it.** 669, 670.
+
+### 875. Size: 540, 810, 1080 lines, then upscaled
+
+- **What.** Plan 63: Size is a choice of 540, 810 or 1080 lines (owner decision 2), default 810; the pass renders at that many lines at the output's aspect and the chain's copy stretches it over the output (LINEAR); an output with no more lines is drawn straight into.
+- **Answer.** owner (2026-11-18); the default 810 kept by the owner (2026-11-19, as recommended) until the bench and check 674 say otherwise.
+- **Built.** `mandel.render_size`, `mandel.run`, `FxChain.upscale`; `tests/test_mandel.py::test_the_size_renders_at_its_lines_and_upscales`.
+- **Judge it.** 672, 673, 674.
+
+### 876. The tiers and the reference
+
+- **What.** Plan 63: the tiers (owner decision 3): float32 direct to 10⁴×, then perturbation (Tier forces either). Reference in float64 at the view's centre, RG32F 1024 wide; δ by the binomial theorem in Horner form; the rebase generalised to |z − Z₀| < |δ| for a start z₀ ≠ 0 (|Z + δ| < |δ| at Z₀ = 0) and when the reference runs out; recomputed only when a term changes or the point leaves the view.
+- **Answer.** owner (2026-11-18) — the details (rec).
+- **Built.** `mandel.reference_orbit`, `binomial_delta`, `rebase`, `perturbed_counts`, `Reference`, `perturbs`; `tests/test_mandel.py::test_perturbation_in_float64_is_the_oracle`, `::test_without_the_rebase_a_reference_that_escapes_early_glitches`, `::test_the_reference_is_made_again_only_when_it_must_be`.
+- **Judge it.** 677, 678.
+
+### 877. Periodicity and the cardioid
+
+- **What.** Plan 63: periodicity is Brent's doubling window with z within 5% of a pixel of the saved z; deep in on float32 it rarely fires, so the inside costs the full cap there unless the skip runs. The cardioid and period-2 bulb test only at p = 2, z₀ = 0, Slice 0, the inside black.
+- **Answer.** (rec).
+- **Built.** `mandel.PERIOD_EPS`, `escape_counts(periodic_eps=…)`, `in_cardioid`; `tests/test_mandel.py::test_periodicity_stops_the_inside_early_and_agrees_with_the_oracle`, `::test_the_cardioid_test_never_calls_an_outside_point_inside`.
+- **Judge it.** 676.
+
+### 878. Skip black, and no hint
+
+- **What.** Plan 63: Skip black is Mariani–Silver on 16×16 tiles in three passes (border pixels iterate, a tile pass reads each border, the picture fills flagged tiles), only where the set has no holes (p whole and z₀ = 0 on the Mandelbrot slice, or a pure Julia slice) and the inside black. Last frame's black tiles as a hint is not built: the GPU runs every tile at once and the border test always runs, so a hint could skip nothing.
+- **Answer.** owner (2026-11-19, as recommended): the hint is dropped.
+- **Built.** `mandel.skip_valid`, `tile_flags`, `fill_tiles`, `TILES_FS`, `mandel.run`; `tests/test_mandel.py::test_a_tile_is_flagged_by_its_border_alone`, `::test_where_the_skip_may_run`, `::test_the_skip_fills_whole_tiles_and_moves_almost_nothing`.
+- **Judge it.** 673.
+
+### 879. Colour by steps
+
+- **What.** Plan 63: colour by steps (owner decision 5): the smooth count n + 1 − log_p log|z| with |z|² > 10⁴ the bail-out; Output steps is grey that rises over Cycle steps and falls over the next, so Palette's gradient wraps with no seam; Output ramp a built-in colour ramp; Inside coloured shows the periodicity time and turns the cardioid test and the skip off.
+- **Answer.** owner (2026-11-18) — the rise and fall (rec).
+- **Built.** `mandel.smooth`, `mandel.glsl`'s `rise`; `tests/test_mandel.py::test_the_smooth_count_is_continuous_where_the_whole_count_steps`, `::test_inside_black_coloured_and_the_ramp`.
+- **Judge it.** 675, 676.
+
+### 880. Steps and Zoom as knobs
+
+- **What.** Plan 63: Steps is a float log knob rounded to a whole cap (an integer log param cannot move one detent at a time); Zoom runs 0.5–10¹³, the float64 reference's reach, and a log param over six orders reads in three figures ("4.2e+07×").
+- **Answer.** (rec).
+- **Built.** `mandel.steps`, `fx._fmt`; `tests/test_mandel.py::test_the_zoom_reads_in_figures_and_a_power_of_ten`, `tests/test_step_continuity.py`.
+- **Judge it.** No hand check.
+
+### 881. Stage 5 not built
+
+- **What.** Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes.
+- **Answer.** owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before.
+- **Built.** Nothing.
+- **Judge it.** No hand check.

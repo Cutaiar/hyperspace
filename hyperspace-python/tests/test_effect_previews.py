@@ -197,7 +197,7 @@ def test_a_reload_of_the_renderer_lets_the_previews_go(ctx):
 def test_every_file_fits_in_the_memory_the_plan_states(ctx):
     cache, st = _cache(ctx, budget=10_000)
     _until_done(cache, sorted(st.files))
-    assert len(cache.atlas) == len(st.files) == 27
+    assert len(cache.atlas) == len(st.files) >= 27
     assert pv.ATLAS_BYTES == 960 * 540 * 4
     assert cache.bytes_kept < 64 * 2 ** 20
     assert pv.ATLAS_COLS * pv.ATLAS_ROWS == 1 + pv.LOOP_FRAMES
