@@ -8798,6 +8798,32 @@ Setup for all: the Leap on, the ghost hands on. The grip is a look's own (row 85
 
 **668. Per look, home on a new look, the lanes.** Save a look with the grip on (**gripped**), throw the shape, and load another look that never had the grip. *Pass:* the shape springs home in about a third of a second and the fist does nothing; reload **gripped**: the grip is on again with its own values; throw, then load **gripped** again: home first, then the fist takes it. With the second deck: its own grip, off until set, and crossfading to it sends a thrown shape home. Add a route from `grip:speed` onto any effect's amount: it rises with a throw and falls as the shape slows, after the fist has opened. *Fail:* a look without the grip that still grabs, a thrown shape carried into the next look, or `grip:speed` that stops at the release.
 
+## DZ. Fractals, sorted and additive (rows 882–891, 2026-11-19)
+
+Plan 64. Headless: `tests/test_fractal.py` (the re-root, the zoom that never runs out, all the way out) and `tests/test_fractal_gpu.py` (the provider byte for byte, the GPU's points against the CPU's, the instance rows, the cull with an offset). The comparison the owner asked for is in `plans/assets/64-recursive-geometry/` — a still and a video for each of the tetrahedron, the Menger sponge and the 5-cell, four views each (faces off and on, sorted and additive), rendered offscreen on Mesa's software GL, not the rig. A restart after pulling (`ViewState.frac_additive` is a new field).
+
+Setup for all: VIEW → shape **Sierpinski tetrahedron** (3D → Fractals); **Additive** sits under **Screen strokes** on a fractal only.
+
+**679. Sorted against additive, the lines.** Faces off. Zoom in a few levels with the stick and hold there, turning. Flip **Additive** on and off. *Pass:* the same cells in the same places either way; with it on, where lines cross they add up brighter and the red dots read pink on white lines. Say which look you want as the default. *Fail:* a cell that is in one and not the other, a jump on the flip, or a flicker in either.
+
+**680. Sorted against additive, the faces.** As 679 with **Faces** on, a face pattern on (any), then a picture wired into `shape.faces`. *Pass:* the faces are the same solids at every size; additive brightens their overlaps instead of layering them far to near. Say whether additive's faces are usable in a show. *Fail:* faces missing in one mode, or a pattern that moves on the flip.
+
+**681. The dense ones.** The **Menger sponge** and the **Sierpinski 5-cell**, faces off then on, each mode, deep in. *Pass:* additive's white-out in the dense parts is a look you'd keep or one you'd not, not a fault; say which. *Fail:* the 5-cell's fade along w (what passes the 4D eye) differs between the modes.
+
+**682. A long dive in and back out.** Sorted. Hold the zoom in for a minute (twenty-odd levels), turn, pan across deep inside, then hold the zoom out until it stops. *Pass:* no jump at any level, no shimmer or wobble however deep, the detail steady on screen; all the way out is the whole shape, centred. Repeat in additive. *Fail:* a jump, a jitter that grows with depth, or a shape that comes back off centre.
+
+**683. Additive deep down.** Additive, as deep as 682 reaches, still. *Pass:* lines are as steady as sorted's at the same depth (the GPU's float32 holds a cell to a few parts in a million). *Fail:* a crawl or a shake in additive that sorted hasn't.
+
+**684. A grabbed fractal.** Load a look with the grip on (plan 60, DX), a fractal as its shape, a few levels in. Grab it and carry it to the screen's edge, turn it, let go. *Pass:* the cells at the edge stay drawn right to the edge and nothing pops in or out as it moves; what goes off screen is gone, what comes on is there; both modes. *Fail:* cells missing at an edge, or drawn where the shape isn't.
+
+**685. Diving into a moved fractal.** As 684, park the fractal off centre, then zoom in a few levels. *Pass:* nothing jumps. Note where the dive goes: it re-roots into the cell under the middle of the screen as if the shape were unmoved (row 887), so it may dive beside what you are looking at. Say whether that needs fixing. *Fail:* a jump or a blank frame.
+
+**686. Frame time on the rig, the bench.** On the M3 Max: `uv run python tools/fractal_bench.py --json fractal-bench.json`. *Pass:* the table prints for all nine fractals at 0, 3, 8 and 16 levels in; note each path's worst `draw` and `gpu` ms; the GPU path is no slower than the CPU path where the cells are many. Send the JSON with the PR. *Fail:* an error, or a GPU path slower than the CPU one at depth.
+
+**687. Frame time on the rig, live.** Each fractal in turn, faces off then on, a few levels in, at the show's output size: the SYSTEM page's GPU ms for the scene and the app's frame rate, sorted then additive. *Pass:* both hold the show's frame rate; note the numbers. *Fail:* a fractal that drops frames in either mode.
+
+**688. Additive with copies and the look-back.** Additive, **Instances** 5 (Fit off, then on), faces on, the look-back on. *Pass:* every copy draws the fractal, each the same; the look-back's trail is hidden behind the faces as it is in sorted. *Fail:* a copy missing or different, or the trail drawn over the faces.
+
 ## What no test covers
 
 Only a person can settle these:

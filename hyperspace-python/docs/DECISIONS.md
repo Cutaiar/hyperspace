@@ -420,6 +420,14 @@ The owner's two sentences (2026-10-27), which the plan builds on:
 | **Plan 39 ran in parallel** with plans 37 and 38, each on its own branch. | `plans/37-38-39-orchestrator-prompt.md` | owner (decision 8); row 447 |
 | A segment's worker exists only on the program renderer; the hold's preview passes a person segment through. A held matte, cut or segment keeps its knobs for the projector. | `Renderer.segment_cfg`, `hold.HELD_GROUPS` | rows 484, 495, 496 |
 
+## Recursive geometry (plan 64)
+
+| Decision | Where | Who |
+|---|---|---|
+| **A fractal stays stateless and re-rooted.** Each frame walks it from the top (`fractal.walk`); the view re-roots into the cell under the middle of the screen as the zoom passes a level, the path the only state, so the zoom never runs out of float32. | `fractal.py` | owner, 2026-11-18 (row 882) |
+| **A fractal's cells are world geometry,** placed through the shape's model matrix and seen through the one eye like every other shape — never screen-space copies. `field.py`'s instances, placed after the projection, are not the model for them. | `fractal_gl.py`, `shapeframe.py` | owner, 2026-11-18 (row 883) |
+| **Unsorted additive blending is rendered for the owner to look at before anything depends on it.** `view.frac_additive` (not saved) switches a fractal to it; sorted, the CPU painter order, stays the default until the owner has looked. | `Renderer._draw_cells`, `view.frac_additive` | owner, 2026-11-18 (rows 884, 888) |
+
 ## Face patterns
 
 | Decision | Where | Who |

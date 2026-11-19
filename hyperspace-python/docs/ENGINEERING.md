@@ -293,6 +293,21 @@ corners, dimension ≈ 2.52) and the **4D Vicsek cross** (its middle and its
 8 cells' middles, dimension 2). A split of a tesseract adds hundreds of
 edges, so they are drawn coarser than the rest (`Fractal.split`).
 
+**Drawing a fractal** (plan 64). The renderer draws every shape through one
+interface (`shapeframe.frame`); a fractal's provider walks the cells the eye
+can see (`fractal.walk`: the cull, with the world's offset, and the split, on
+the CPU), then draws them one of two ways, `view.frac_additive`:
+
+- **sorted** (the default) makes the frame's geometry on the CPU
+  (`fractal.geometry_of`) and the scene pass painter-sorts it as any
+  shape's;
+- **additive** uploads one row a cell (`fractal.instances`: its centre in
+  the view, its radius, its alpha) and draws each mesh, uploaded once, per
+  cell on the GPU (`fractal_gl.py`), unsorted, colour adding up.
+
+The two place every point alike to float32's precision
+(`tests/test_fractal_gpu.py`).
+
 **Vector marks** (3D, after the prisms). A subject read from a vector
 source instead of a formula: the Wispr Flow mark, five pill-shaped bars
 taken from wisprflow.ai's SVG (`geometry.FLOW_BARS`, each bar's centre
