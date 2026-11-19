@@ -478,15 +478,15 @@ def step(s, reg=None, off=None) -> None:
 
 
 def _land(s, reg, zoom0: float, p0: np.ndarray, zoom: float, p: np.ndarray) -> None:
-    """The view moved to (`zoom`, `p`) from (`zoom0`, `p0`): onto the view, and
-    with a registry onto the camera params' bases (a ratio, a nudge)."""
+    """The view moved to (`zoom`, `p`) from (`zoom0`, `p0`): written onto the
+    view — camera.zoom and camera.pan's objects — and nowhere else. A param no
+    source modulates has its base there, so the base moves with it; one a
+    route or an LFO modulates adopts the move into its base at its next
+    `Param.apply` (what wrote the object since it last did belongs to the
+    base), once. Writing the base as well applied the move twice under
+    modulation (the review of 2026-11-19). `reg` stays for the callers' sake."""
     d = s.dive
     d.z, d.w = float(p[2]), float(p[3])
-    if reg is not None:
-        if zoom != zoom0:
-            reg["camera.zoom"].scale(zoom / zoom0)
-        reg["camera.pan.x"].nudge(float(p[0] - p0[0]))
-        reg["camera.pan.y"].nudge(float(-(p[1] - p0[1])))
     s.zoom = zoom
     s.pan[0], s.pan[1] = float(p[0]), float(-p[1])
 

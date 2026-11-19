@@ -473,3 +473,65 @@ def test_a_fractal_switched_for_another_mid_dive_starts_at_its_top(a, b):
     _frame(h)
     _frame(h)
     assert h.view.dive.shape == h.view.shape and not h.view.dive.path
+
+
+# ---- Devin's review (2026-11-19)
+
+@pytest.mark.parametrize("pid", ["camera.zoom", "camera.pan.x"])
+def test_a_reroot_under_modulation_lands_once(pid):
+    """A modulated camera param adopts the re-root's move into its base once,
+    at its next apply — the move is written to the view alone (it was
+    written to the base as well, and applied twice: zoom 2.05 became 1.025)."""
+    from tests.test_fractal import _reg
+
+    s = ViewState(shape=geometry.shape_index("Sierpinski tetrahedron"), yaw=0.4, pitch=0.25)
+    reg = _reg(s)
+    p = reg[pid]
+    s.zoom, s.pan = 4.1, [0.05, -0.02]
+    for _ in range(2):                              # held by a zero-valued source
+        p.modulate(0.0)
+        p.apply()
+    fractal.step(s, reg)
+    assert s.dive.path
+    zoom, pan = s.zoom, list(s.pan)
+    for _ in range(3):
+        p.modulate(0.0)
+        p.apply()
+    assert s.zoom == pytest.approx(zoom) and s.pan == pytest.approx(pan)
+    assert p.base == pytest.approx(s.zoom if pid == "camera.zoom" else s.pan[0])
+
+
+def test_a_dive_made_off_air_is_saved(tmp_path):
+    """A deck off air re-roots without the on-air crossing: its dive has a
+    path and no `inside`, and a save keeps it all the same."""
+    rig = _rig(tmp_path)
+    reg, view = rig.reg, rig.view
+    reg["view.shape"].set(geometry.shape_index("Sierpinski tetrahedron"))
+    view.zoom = 1.3
+    for _ in range(60):                              # the off-air road: the re-root alone
+        view.zoom *= 1.1
+        view.reroot(reg)
+    assert view.dive.path and not view.dive.inside
+    doc = json.loads(rig.loaded_patch.save_as("Off air").read_text())
+    assert doc["dive"]["path"] == view.dive.path
+    path = list(view.dive.path)
+    rig.reg["camera.reset"].fire()
+    rig.loaded_patch.load("Off air")
+    assert rig.view.dive.path == path
+
+
+def test_a_load_under_a_route_holding_the_shape_says_why_its_dive_waits(tmp_path):
+    """A route holds the live shape on another: the load's dive is read for
+    the shape it landed, and said, not dropped in silence."""
+    from tests.test_loadable import put
+    rig = _rig(tmp_path)
+    p = rig.reg["view.shape"]
+    p.set(3)
+    p.modulate(0.0)
+    p.apply()                                        # held at shape 3
+    menger = geometry.shape_index("Menger sponge")
+    put(rig.home, "Held", values={"view.shape": menger},
+        dive={"shape": "Menger sponge", "path": [0, 1]})
+    rig.loaded_patch.load("Held")
+    assert int(p.base) == menger and rig.view.shape == 3
+    assert any("route holds the shape" in n for n in rig.loaded_patch.notes)

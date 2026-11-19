@@ -1442,7 +1442,11 @@ class LoadedPatch:
         """This deck's view's dive as a loadable patch keeps it, None while the
         view is not inside a fractal (plan 64, row 889)."""
         vd = self._view_dive()
-        if vd is None or not vd[1].inside or fractal.spec_of(vd[0].shape) is None:
+        # (inside, or gone into a cell: a deck off air re-roots without the
+        # on-air crossing, so its dive has a path and no `inside` of its own)
+        if vd is None or not (vd[1].inside or vd[1].path):
+            return None
+        if fractal.spec_of(vd[0].shape) is None:
             return None
         return vd[1].to_json(SHAPES[int(vd[0].shape)].name)
 
@@ -1453,12 +1457,20 @@ class LoadedPatch:
         if vd is None:
             return ""
         view, dive = vd
-        if fractal.spec_of(view.shape) is None:
+        # the shape this load landed (the param's base: a route may hold the
+        # live shape elsewhere until it lets go)
+        p = self.reg.get("view.shape")
+        landed = int(p.base) if p is not None else int(view.shape)
+        if fractal.spec_of(landed) is None:
             dive.reset()
             return ""
-        said = dive.from_json(doc, SHAPES[int(view.shape)].name)
+        said = dive.from_json(doc, SHAPES[landed].name)
+        if dive.inside and landed != int(view.shape):
+            dive.reset()
+            return (f"the saved dive is for {SHAPES[landed].name}, but a route holds the "
+                    f"shape on {SHAPES[int(view.shape)].name}; starts at the top")
         if dive.inside:
-            dive.shape = int(view.shape)
+            dive.shape = landed
         return said
 
     def banks(self) -> dict:
