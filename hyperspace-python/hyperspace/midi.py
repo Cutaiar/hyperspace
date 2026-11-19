@@ -148,6 +148,7 @@ from typing import cast
 import mido
 
 from . import apc40, generic, seq_page
+from .idle_lights import IdleLights
 from .learn import Learn
 from .midiports import port_names
 from .params import Kind, Param, Registry, is_meta_id
@@ -418,6 +419,9 @@ class MidiIO:
     reg = Through("reg")
     table = Through("table")
     learner = Through("learn", via="panel_pointer")
+    # the entry's idle animation (idle_lights.py), set by `devices.MidiDevice.open`;
+    # a class default so a desk made before it existed reads None after a hot reload
+    idle: IdleLights | None = None
 
     def __init__(self, registry: Registry, table: Bindings | None = None, *,
                  path: Path | None = None, port: str | None = None, profile: str = "apc40",
@@ -541,6 +545,8 @@ class MidiIO:
             for msg in self.profile.enter():
                 self._send(msg)
             self.redraw(whole=True)     # every control: lit by a row, else dark
+        if self.idle is not None:
+            self.idle.forget_sent()     # a running animation sends every light again
 
     def _let_go_held(self, reg=None) -> None:
         """Every press this desk can no longer end (`routing.let_go_lost`), its
@@ -567,8 +573,13 @@ class MidiIO:
     def close(self) -> None:
         self._let_go_held()     # no poll follows, so `poll`'s cable check will not (plan 52)
         self._land_all()        # knob smoothing: no value is left between detents at exit
+        idle = self.idle
+        if idle is not None:
+            idle.close()
         if self.out is not None:
             try:
+                if idle is not None:
+                    self._send_idle(idle.end_now())     # no frame of it is left lit
                 for msg in self.profile.leave():
                     self._send(msg)
             except Exception:  # noqa: BLE001, S110
@@ -667,7 +678,11 @@ class MidiIO:
         self._follow_pointer()
         self._follow_table()
         self._uncatch_moved()
+        heard = False
         for msg in self.ports.recv():
+            # anything the device says ends the idle animation but a clock tick:
+            # a press, and a SysEx answer to another app's query (Rekordbox asks)
+            heard = heard or msg.type not in ("clock", "active_sensing")
             self._handle(msg)
         self._flush14()             # an MSB no LSB followed this poll
         self._settle_heard()        # a listening learn that has heard enough
@@ -678,7 +693,31 @@ class MidiIO:
         # ended its glides (`redraw`) before any of them steps over it
         self._glide(self._now())
         self._follow_fine()
-        self.feedback()
+        if not self._idle_frame(heard):
+            self.feedback()
+
+    def _idle_frame(self, heard: bool) -> bool:
+        """The idle animation's frame (idle_lights.py), sent past the profile's
+        FEEDBACK gate: it is the entry's own choice to light the device. True
+        while it holds the lights, so this frame's feedback waits. On the
+        frame it ends, a desk that owns its lights (FEEDBACK) redraws them."""
+        idle = self.idle
+        if idle is None:
+            return False
+        if heard:
+            idle.touched()
+        self._send_idle(idle.tick())
+        if idle.ended and getattr(self.profile, "FEEDBACK", True):
+            self.redraw(whole=True)
+        return idle.running
+
+    def _send_idle(self, msgs: list) -> None:
+        for kind, ch, number, value in msgs:
+            if kind == "cc":
+                self.ports.send(mido.Message("control_change", channel=ch, control=number,
+                                             value=value))
+            else:
+                self.ports.send(mido.Message("note_on", channel=ch, note=number, velocity=value))
 
     def point(self, pointer, panel=None) -> None:
         """This desk's rows act on the deck `pointer` is on from now on, and
