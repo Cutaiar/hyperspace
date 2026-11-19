@@ -19,6 +19,8 @@ helpers every effect can call)::
     // @speed  1                    the default time rate
     // @mix    1                    the default wet/dry (0: starts as a no-op)
     // @tip    …                    one line for the tooltip
+    // @family distort              the effect picker's group (plan 65); none:
+                                    the band its @order sits in (`previews`)
     uniform float u_amount;  // @param 0 2 0.5 "Amount" tooltip text…
     uniform float u_scale;   // @param 0.5 12 3 log "Scale" …
     uniform int   u_count;   // @param 2 16 6 "Count" …    (int uniform → integer param)
@@ -129,7 +131,7 @@ AMOUNT_OCTAVES = 10
 RELOAD_EVERY = 30               # frames between mtime checks of the folder
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock)\s+(.*?)\s*$")
+_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock|family)\s+(.*?)\s*$")
 _CLOCK_UNIFORM = re.compile(r"^u_[a-z][a-z0-9_]*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
 _CHOICE = re.compile(
@@ -202,6 +204,10 @@ class EffectSpec:
     mix: float = 1.0         # the default wet/dry (@mix); 0 for a pass that starts as a no-op
     tip: str = ""
     clocks: list[ClockSpec] = field(default_factory=list)   # `@clock` lines, in file order
+    # `@family` (plan 65): the effect picker's group, "" for none (then the
+    # picker groups by `order`, `previews.family_of`). Declares nothing, so
+    # it is not in `signature`: a family change re-declares no param
+    family: str = ""
 
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
@@ -361,6 +367,8 @@ def parse(name: str, source: str) -> EffectSpec:
                     spec.blend = BLENDS.index(val.lower())
                 elif key == "clock":
                     spec.clocks.append(_parse_clock(name, n, val))
+                elif key == "family":
+                    spec.family = val.strip().lower()
             except SpecError:
                 raise                       # already says what is wrong
             except ValueError as e:

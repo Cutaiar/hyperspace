@@ -952,6 +952,11 @@ MASK_PIC = "mask"
 # has it in `THUMBS`, and a node's own `thumb` stays "picture"
 CARD_PIC = "card"
 CARD_KINDS = ("effect", "copy")         # the kinds whose thumbnail has the chip
+# plan 65: an effect (or copy) that reaches nothing (`unreached`, faint) is
+# never built, so it made no picture: its thumbnail is its input — else the
+# test card — put through it at a thumbnail's size (`render.unwired_through`)
+UNWIRED_PIC = "unwired"
+UNWIRED_WORDS = "reaches nothing: its input, or the test card, through it here"
 THUMBS: dict[str, str] = {
     "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
     "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,

@@ -258,6 +258,7 @@ from . import (
     ui_routing,
     undo,
 )
+from . import ui_effect_picker as fxpick
 from .bands import CEIL
 from .graph import Effect
 from .groupwords import group_title
@@ -3307,7 +3308,7 @@ def thumb_wants(st: dict, view: graphview.View, where) -> dict[str, str]:
             continue
         if rect is not None and not on_screen(rect, *where(n.id)):
             continue
-        out[thumb_name(n)] = graphview.CARD_PIC if card_shown(st, n) else n.thumb
+        out[thumb_name(n)] = thumb_how(st, n)
     for g in view.groups:               # plan 40 T2: a folded group's last picture outlet
         n = graphview.group_picture(view, g) if not g.open else None
         if n is None or n.thumb is None or by_preview(n):
@@ -3330,6 +3331,18 @@ def tint_wants(st: dict, view: graphview.View, want: dict[str, str]) -> dict[str
         if hit is not None and thumb_name(hit[0]) in want:
             out[pin] = graphview.PICTURE
     return out
+
+
+def thumb_how(st: dict, n: graphview.VNode) -> str:
+    """How node `n`'s thumbnail is asked for: the test card through it when
+    its chip is lit; plan 65, an effect that reaches nothing (faint, never
+    built) its input or the card through it (`graphview.UNWIRED_PIC`); else
+    its kind's word (`graphview.THUMBS`)."""
+    if card_shown(st, n):
+        return graphview.CARD_PIC
+    if getattr(n, "faint", False) and has_card(n):
+        return graphview.UNWIRED_PIC
+    return n.thumb
 
 
 def has_card(n: graphview.VNode) -> bool:
@@ -3511,6 +3524,8 @@ def thumb_tip(st: dict, n: graphview.VNode) -> str:
     tip = graphview.picture_hover(n, st.get("gpu_ms", {}).get(thumb_name(n)))
     if card_shown(st, n):
         tip += "\nshowing the test card through it"
+    elif getattr(n, "faint", False) and has_card(n):
+        tip += f"\n{graphview.UNWIRED_WORDS}"
     return tip + (f"\n{n.status}" if n.status else "")
 
 
@@ -3796,6 +3811,39 @@ def _delete_render_node(panel, st: dict, view: graphview.View, n) -> None:
 
 
 LOOKBACK_MENU = "look-back frame"     # plan 34's echo items, under look-back ▸
+EFFECTS_GROUP = "effects"             # the picker group the effect picker replaces (plan 65)
+PICKED_CABLE_GONE = "that cable is gone"
+
+
+def effect_picker(panel, st: dict, view: graphview.View) -> str | None:
+    """Plan 65: the effect picker (`ui_effect_picker`) while it is asked
+    for — its tiles every effect file the menu's effects ▸ listed
+    (`graphview.picker`), with the show's specs for their labels, tips
+    and families, and the renderer's previews. A pick does what the menu's
+    row did (`pick_effect`). Returns the file picked this frame."""
+    if fxpick.state(st) is None:
+        return None
+    e = render_edit(panel)
+    files = [f for kind, f, _ in graphview.picker(e) if kind == "effect"]
+    fx = getattr(getattr(e, "graph", None), "fx", None)
+    specs = fxpick.specs_of(files, getattr(fx, "files", None))
+    r = getattr(panel, "renderer", None)
+    cache = r.effect_previews() if hasattr(r, "effect_previews") else None
+    s = fxpick.state(st)
+    return fxpick.draw(st, specs, lambda f: pick_effect(panel, view, s, f), cache)
+
+
+def pick_effect(panel, view: graphview.View, s: dict, file: str) -> str | None:
+    """The picker's click on `file`: in "add" mode `add_render` where the
+    menu opened (unwired, as effects ▸ <file> was); in "insert" mode
+    `insert_effect` on the cable the menu was opened on (wired, as insert ▸
+    effects ▸ <file> was). Returns the refusal, or None."""
+    if s.get("mode") == "insert":
+        c = next((x for x in view.cables if x.id == s.get("cable")), None)
+        if c is None:
+            return PICKED_CABLE_GONE
+        return insert_effect(panel, c, file, s.get("at"))
+    return add_render(panel, render_edit(panel), "effect", file, s.get("at"))
 
 
 def render_picker(panel, at, m: ui_menu.Menu) -> None:
@@ -3816,6 +3864,11 @@ def render_picker(panel, at, m: ui_menu.Menu) -> None:
     for group in graphview.PICKER_GROUPS:
         mine = [it for it in items if graphview.PICKER_GROUP.get(it[0]) == group]
         if not mine:
+            continue
+        if group == EFFECTS_GROUP:              # plan 65: the picker, not a submenu
+            m.item(fxpick.MENU_LABEL,
+                   lambda: fxpick.open_picker(_state(panel), "add", at),
+                   id=f"graph.pick.{group}")
             continue
         with m.sub(group, id=f"graph.pick.{group}"):
             for kind, f, label in mine:
@@ -5683,6 +5736,7 @@ def _menus(panel, st: dict, view: graphview.View) -> None:
         else:
             _popup(panel, ONTO, lambda m: None, held.get("screen"))
             st["onto"] = None               # closed without a pick
+    effect_picker(panel, st, view)          # plan 65: over the canvas, as a menu is
     ed.resume()
 
 
@@ -5753,11 +5807,10 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at,
                 m.item(kind, lambda kind=kind: insert_modifier(panel, c, kind))
     if c.kind == "render" and c.type == graphview.IMAGE:
         e = render_edit(panel)
-        files = [f for kind, f, _ in graphview.picker(e) if kind == "effect"]
         with m.sub("insert"):                   # plan 33 U; 2026-11-01: every picture node
-            with m.sub("effects"):
-                for f in files:
-                    m.item(f, lambda f=f: insert_effect(panel, c, f, at))
+            # plan 65: the effect picker, spliced into this cable
+            m.item(fxpick.MENU_LABEL,
+                   lambda: fxpick.open_picker(_state(panel), "insert", at, c.id))
             for kind, label, why in graphview.insert_items(e):
                 m.item(label if why is None else f"{label}: {why}",
                        (lambda kind=kind: insert_node(panel, c, kind, None, None, at))
