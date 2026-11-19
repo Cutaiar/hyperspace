@@ -199,8 +199,9 @@ GPU path's programs (`Renderer.on_reload` drops `_cells`).
   keep sorted as the default, make additive the default, or drop it.
 - Whether to save the dive (row 889, §2.5).
 - The re-root of a 4D fractal (or a 3D one turned edge-on) under an
-  offset: no jump, but the dive drifts off the shape (row 887). Accept it,
-  go back to jumping for 4D, or design the offset into the fractal's own
-  view (a bigger change)?
+  offset: no jump, but the dive drifts off the shape (row 887). The owner
+  chose a depth-dependent grab (2026-11-19): planned in
+  [`64-depth-dependent-grab.md`](64-depth-dependent-grab.md), which
+  removes the compensation and the drift.
 - The frame times on the rig (hand checks 686–687): whether the GPU path is
   worth its weight at the depths a show uses.
