@@ -535,3 +535,50 @@ def test_a_load_under_a_route_holding_the_shape_says_why_its_dive_waits(tmp_path
     rig.loaded_patch.load("Held")
     assert int(p.base) == menger and rig.view.shape == 3
     assert any("route holds the shape" in n for n in rig.loaded_patch.notes)
+
+
+@pytest.mark.parametrize("pid", ["camera.zoom", "camera.pan.x"])
+def test_a_reroot_then_a_source_letting_go_keeps_the_picture(pid):
+    """The source holding a camera param lets go the frame after a re-root:
+    the base it restores has the re-root's move in it (`Param.follow`), so
+    the camera and the dive's path still agree."""
+    from tests.test_fractal import _reg
+
+    s = ViewState(shape=geometry.shape_index("Sierpinski tetrahedron"), yaw=0.4, pitch=0.25)
+    reg = _reg(s)
+    p = reg[pid]
+    s.zoom, s.pan = 4.1, [0.05, -0.02]
+    for _ in range(2):
+        p.modulate(0.0)
+        p.apply()
+    fractal.step(s, reg)
+    assert s.dive.path
+    zoom, pan = s.zoom, list(s.pan)
+    p.apply()                                       # no source this frame: let go
+    assert s.zoom == pytest.approx(zoom) and s.pan == pytest.approx(pan)
+
+
+def test_a_dive_saved_under_a_route_holding_another_fractal_comes_back(tmp_path):
+    """The file names the shape's base, the dive the fractal drawn (a route
+    holding it): reloaded with the route still holding, the dive lands."""
+    rig = _rig(tmp_path)
+    p = rig.reg["view.shape"]
+    menger = geometry.shape_index("Menger sponge")
+    p.set(menger)
+    p.modulate(0.0)
+    p.apply()                                       # a route holds the Menger sponge
+    p.set(geometry.shape_index("Sierpinski tetrahedron"))   # the base elsewhere
+    assert rig.view.shape == menger
+    view = rig.view
+    view.zoom = 1.3
+    for _ in range(40):
+        view.zoom *= 1.12
+        view.reroot(None)
+    path = list(view.dive.path)
+    assert path
+    doc = json.loads(rig.loaded_patch.save_as("Held dive").read_text())
+    assert doc["dive"]["shape"] == "Menger sponge"
+    view.dive.reset()
+    # the load's last step, with the route still holding the Menger sponge
+    assert rig.loaded_patch._land_dive(doc["dive"]) == ""
+    assert rig.view.shape == menger and rig.view.dive.path == path

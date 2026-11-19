@@ -1457,18 +1457,26 @@ class LoadedPatch:
         if vd is None:
             return ""
         view, dive = vd
-        # the shape this load landed (the param's base: a route may hold the
-        # live shape elsewhere until it lets go)
+        # the shape drawn now, or the one this load landed (the param's base:
+        # a route may hold the live shape elsewhere) — a dive is saved for the
+        # shape drawn, and lands on whichever of the two it names
+        live = int(view.shape)
         p = self.reg.get("view.shape")
-        landed = int(p.base) if p is not None else int(view.shape)
+        landed = int(p.base) if p is not None else live
+        named = doc.get("shape") if isinstance(doc, dict) else None
+        if named is not None and fractal.spec_of(live) is not None and SHAPES[live].name == named:
+            said = dive.from_json(doc, named)
+            if dive.inside:
+                dive.shape = live
+            return said
         if fractal.spec_of(landed) is None:
             dive.reset()
             return ""
         said = dive.from_json(doc, SHAPES[landed].name)
-        if dive.inside and landed != int(view.shape):
+        if dive.inside and landed != live:
             dive.reset()
             return (f"the saved dive is for {SHAPES[landed].name}, but a route holds the "
-                    f"shape on {SHAPES[int(view.shape)].name}; starts at the top")
+                    f"shape on {SHAPES[live].name}; starts at the top")
         if dive.inside:
             dive.shape = landed
         return said

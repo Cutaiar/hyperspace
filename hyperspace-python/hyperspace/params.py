@@ -555,6 +555,26 @@ class Param:
     # every frame — so the value is written raw through set(), and a
     # modulated base keeps its continuous position (_taper_pos).
 
+    def follow(self, v) -> None:
+        """The object's owner moved it to `v` (plan 64: a fractal's re-root,
+        a crossing, a flight — the same picture written another way): the
+        object and the base move together, once, held or not. While a source
+        modulates the param its base takes the move (in normalized units, so
+        a tapered zoom's ratio holds), and the last value the param wrote is
+        set to it, so its next `apply` adopts nothing twice — and a source
+        letting go restores a base that has the move in it."""
+        old = self._norm_of(self.get())
+        self.put(v)
+        if self._base is None or self.kind is not Kind.CONTINUOUS:
+            return
+        cur = self._norm_of(self.get())
+        if not (math.isfinite(cur) and math.isfinite(old)):
+            return
+        self._base += cur - old
+        self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
+        if self._last is not None:
+            self._last = cur
+
     def nudge(self, delta: float) -> float:
         """Add `delta` to the base, wrapped or clamped into range; returns
         the delta actually applied (less than asked at a stop)."""

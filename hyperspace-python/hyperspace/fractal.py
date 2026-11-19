@@ -478,17 +478,21 @@ def step(s, reg=None, off=None) -> None:
 
 
 def _land(s, reg, zoom0: float, p0: np.ndarray, zoom: float, p: np.ndarray) -> None:
-    """The view moved to (`zoom`, `p`) from (`zoom0`, `p0`): written onto the
-    view — camera.zoom and camera.pan's objects — and nowhere else. A param no
-    source modulates has its base there, so the base moves with it; one a
-    route or an LFO modulates adopts the move into its base at its next
-    `Param.apply` (what wrote the object since it last did belongs to the
-    base), once. Writing the base as well applied the move twice under
-    modulation (the review of 2026-11-19). `reg` stays for the callers' sake."""
+    """The view moved to (`zoom`, `p`) from (`zoom0`, `p0`): the same picture,
+    written another way. With a registry through `Param.follow` — camera.zoom
+    and camera.pan's objects and bases move together, once, so a route or an
+    LFO modulating them rides on the move, still or letting go (writing the
+    base and the object apart applied it twice, or lost it at a release: the
+    reviews of 2026-11-19); without one onto the view alone."""
     d = s.dive
     d.z, d.w = float(p[2]), float(p[3])
+    pan = (float(p[0]), float(-p[1]))
+    ids = ("camera.zoom", "camera.pan.x", "camera.pan.y")
+    if reg is not None and all(i in reg for i in ids):
+        for pid, v in zip(ids, (zoom, *pan), strict=True):
+            reg[pid].follow(v)
     s.zoom = zoom
-    s.pan[0], s.pan[1] = float(p[0]), float(-p[1])
+    s.pan[0], s.pan[1] = pan
 
 
 # ---- plan 64, part 2: what a grab holds, outside a fractal and inside it
