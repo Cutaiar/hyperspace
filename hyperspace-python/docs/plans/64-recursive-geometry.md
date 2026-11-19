@@ -92,16 +92,46 @@ faces brighten where they cross (dense regions go white), and the red dots
 add into the white lines instead of sitting over them, so they read pink.
 The toggle is not saved (row 884) and shows in VIEW only on a fractal.
 
-### 2.4 The cull reads the world's offset
+### 2.4 The cull and the re-root read the world's offset
 
 Plan 59's offset (a grabbed or moved shape) composes into the model matrix
-as home ∘ offset. The walk culled as if the offset were the identity, so a
-grabbed fractal lost cells at the screen's edge and kept ones off it. Now
-`fractal.walk(…, off)` moves each cell's centre by the offset before the
-frustum, range and size tests (its reach scaled by the offset's own scale),
-and the depth cue reads where a point is drawn (`Walk.place`; the shader
-reads `u_off` for the same). The re-root (`fractal.step`) still picks the
-cell under the middle of the screen as if unmoved: row 887.
+as home ∘ offset, home being camera.zoom and pan.
+
+- **The cull.** The walk culled as if the offset were the identity, so a
+  grabbed fractal lost cells at the screen's edge and kept ones off it.
+  Now `fractal.walk(…, off)` moves each cell's centre by the offset before
+  the frustum, range and size tests (its reach scaled by the offset's own
+  scale), and the depth cue reads where a point is drawn (`Walk.place`; the
+  shader reads `u_off` for the same).
+- **The re-root.** As first pushed, `fractal.step` ignored the offset: each
+  re-root changes the home, and with it the offset's share of every point,
+  so a moved or turned fractal jumped at every level (0.61 world units for
+  an offset of 0.3, 0.76 for a turn of 0.5 rad). Now `fractal.step(…, off)`
+  takes the cell under the eye where the shape is drawn, and keeps every
+  point where it was across a re-root:
+  - **a 3D fractal** leaves the offset alone and makes the re-root up in
+    camera.pan and the dive's depth (a 3×3 solve), so the zoom still
+    centres on the cell under the eye, as with no offset;
+  - **a 4D fractal**, where a pan is no uniform shift through the 4D
+    divide, or a 3D one turned to within 0.2 of edge-on, has its offset
+    rebased onto the new home instead (`world.World.rebase`, called by
+    `app._reroot`): the picture stays whole, but the offset's translation
+    grows and the zoom carries the dive sideways — for the 4D fractals far
+    enough to leave the shape (a turned 5-cell draws 6 cells after 9 levels
+    where it would draw 284). Open: the pan and depth can't stand in for a
+    4D offset (66–107 px jumps when tried), and the old re-root stays
+    centred but jumps about 100 px a level. A rebase alone, tried
+    first for every fractal, did that to a turned tetrahedron: after 80
+    frames the rooted cell was 900 px off centre and 60 units deep.
+- **What stays as plan 59 has it.** The offset is in the home's units,
+  × camera.zoom, so a *moved* fractal slides outward as it is zoomed, as any
+  moved shape does; held in the grip it is re-targeted to the hand each
+  frame. The offset is the one world's: only the deck on air re-roots with
+  it, so a deck off air's preview of a moved fractal still jumps.
+
+The proof: `tools/fractal_reroot_demo.py`, the same turned and moved dive
+before and after the fix, with each re-root's jump measured under it
+([`assets/64-recursive-geometry/reroot-fix.mp4`](assets/64-recursive-geometry/reroot-fix.mp4)).
 
 ### 2.5 The dive is not saved: a recommendation (row 889, pending the owner)
 
@@ -152,7 +182,7 @@ GPU path's programs (`Renderer.on_reload` drops `_cells`).
 
 ## 4. Tests
 
-`tests/test_fractal_gpu.py`:
+`tests/test_fractal_gpu.py` (the re-root's tests: §2.4):
 
 - the provider gives every non-fractal shape exactly what draw_scene made,
   with and without an offset;
@@ -168,6 +198,9 @@ GPU path's programs (`Renderer.on_reload` drops `_cells`).
 - The look of additive against sorted (rows 884, hand checks 679–681):
   keep sorted as the default, make additive the default, or drop it.
 - Whether to save the dive (row 889, §2.5).
-- Whether the re-root should follow a grabbed fractal (row 887).
+- The re-root of a 4D fractal (or a 3D one turned edge-on) under an
+  offset: no jump, but the dive drifts off the shape (row 887). Accept it,
+  go back to jumping for 4D, or design the offset into the fractal's own
+  view (a bigger change)?
 - The frame times on the rig (hand checks 686–687): whether the GPU path is
   worth its weight at the depths a show uses.
