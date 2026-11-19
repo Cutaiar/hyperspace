@@ -5640,10 +5640,11 @@ def cables_near(view: View, pins: Mapping[str, tuple], point, within: float = NE
 
 
 def cable_near(view: View, pins: Mapping[str, tuple], point, within: float = NEAR,
-               kinds=("route", "input"), skip: Iterable[str] = ()) -> VCable | None:
+               kinds=("route", "input"), skip: Iterable[str] = (),
+               curves: Mapping[str, list] | None = None) -> VCable | None:
     """The cable of `kinds` nearest `point` (canvas units) within
-    `within` (`cables_near`'s first); None."""
-    near = cables_near(view, pins, point, within, kinds, skip)
+    `within` (`cables_near`'s first, a sling measured along `curves`); None."""
+    near = cables_near(view, pins, point, within, kinds, skip, curves=curves)
     return near[0][1] if near else None
 
 

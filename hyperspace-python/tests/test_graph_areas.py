@@ -1212,3 +1212,21 @@ def test_turbo_tidys_flames_rise_while_hovered_and_die_down_after():
         f.step(lo, hi, False, 1 / 30)
     assert f.embers == [] and f.heat == 0.0
     assert ui_graph.flame_rgb(0.0)[1] > ui_graph.flame_rgb(0.8)[1]  # white-hot, then red
+
+
+def test_a_drop_onto_a_cable_finds_a_sling_where_it_is_drawn():
+    """A cable drawn as a sling is a drop target along the sling, not along
+    the S the widget would have drawn (review of #463: a library patch
+    dragged onto a sling missed it)."""
+    c = graphview.VCable("w", "rout:a", "rin:b/image", graphview.IMAGE, kind="render")
+    view = graphview.View(nodes=[graphview.VNode("render:a", "render", "a"),
+                                 graphview.VNode("render:b", "render", "b")],
+                          cables=[c], pins={"rout:a": ("render:a", None),
+                                            "rin:b/image": ("render:b", None)})
+    pins = {"rout:a": (937.0, 117.0), "rin:b/image": (0.0, 117.0)}
+    sling = graphview.sling_curve((925.0, 160.0), (12.0, 160.0), graphview.DOWN, 60.0)
+    low = max(sling, key=lambda p: p[1])
+    s_mid = graphview.bezier(pins["rout:a"], pins["rin:b/image"])[8]
+    assert graphview.cable_near(view, pins, low, kinds=("render",), curves={"w": sling}) is c
+    assert graphview.cable_near(view, pins, s_mid, kinds=("render",), curves={"w": sling}) is None
+    assert graphview.cable_near(view, pins, s_mid, kinds=("render",)) is c   # (no sling: the S)

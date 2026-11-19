@@ -3453,7 +3453,8 @@ def _drop_target(panel, st: dict, view: graphview.View) -> None:
     if not slug:
         return
     m = imgui.get_mouse_pos()                  # canvas units, inside the editor
-    c = graphview.cable_near(view, st["pin_xy"], (m.x, m.y), kinds=("render",))
+    c = graphview.cable_near(view, st["pin_xy"], (m.x, m.y), kinds=("render",),
+                             curves=st.get("curves"))     # (a sling where it is drawn)
     if c is None:
         return
     row = next((r for r in patch_list(panel) if r["slug"] == slug), None)
