@@ -1671,6 +1671,8 @@ def _space(h: Host, reg) -> None:
     view = h.view
     shape = _shape_of(h.world)
     dive = _dive_of(view)
+    if dive is not None and dive.shape is not None and dive.shape != int(view.shape):
+        dive.reset()                     # another shape: the dive starts over
     if dive is None or fractal.spec_of(view.shape) is None:
         if dive is not None and dive.inside:
             dive.reset()
@@ -1681,8 +1683,11 @@ def _space(h: Host, reg) -> None:
     if shape is not None and shape[0].box is not None:
         box = shape[0].box
     if dive.inside:
-        if shape is not None and shape[1].bounded:        # a load handed a dive in
-            shape[0].to_space(worlds.SHAPE, view.zoom, view.pan)
+        if shape is not None and shape[1].bounded:        # a load handed a dive in:
+            shape[0].to_space(worlds.SHAPE, view.zoom, view.pan)   # a new look, still
+            b = shape[0].bodies.get(worlds.SHAPE)
+            if b is not None:
+                b.still()
         if not fractal.wants_inside(view, box, shapeframe.drawn_offset(view)):
             off = fractal.go_outside(view, reg)
             if shape is not None:
@@ -1699,9 +1704,12 @@ def _space(h: Host, reg) -> None:
             shape[0].to_space(worlds.SHAPE, zoom, pan)
 
 
-def _dive_of(view) -> fractal.Dive | None:
+def _dive_of(view):
+    """The view's dive (`fractal.Dive`), by its fields, not its class: a hot
+    reload of fractal.py leaves the live one an older class. None for a view
+    with none (or a stand-in)."""
     d = getattr(view, "dive", None)
-    return d if isinstance(d, fractal.Dive) else None
+    return d if isinstance(getattr(d, "path", None), list) and hasattr(d, "inside") else None
 
 
 def _shape_of(world) -> tuple[worlds.World, worlds.WorldObject] | None:
@@ -1735,7 +1743,7 @@ def _fly(h: Host, reg) -> None:
     shape, dive = _shape_of(h.world), _dive_of(h.view)
     if shape is None or shape[1].bounded or dive is None or not dive.inside:
         return
-    fractal.fold_flight(h.view, reg, shape[1].offset.model3())
+    fractal.fold_flight(h.view, reg, shape[1].offset.model3(), shape[1].epoch)
 
 
 def frame(h: Host, now: float, dt: float, fps: float) -> bool:

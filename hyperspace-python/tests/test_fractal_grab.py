@@ -349,14 +349,24 @@ def test_a_loadable_patch_not_inside_writes_no_dive(tmp_path):
     {"shape": "Sierpinski tetrahedron", "path": [0] * 5000},          # too long
     {"shape": "Sierpinski tetrahedron", "path": [0], "z": "nan"},     # not finite
     {"shape": "Sierpinski tetrahedron", "path": [0], "turn": [2, 0, 0, 0, 1, 0, 0, 0, 1]},
+    {"shape": "Sierpinski tetrahedron", "path": [float("inf")]},     # json's Infinity
+    {"shape": "Sierpinski tetrahedron", "path": "0123"},             # not a list
+    {"shape": "Sierpinski tetrahedron", "path": [True, 1]},          # not whole numbers
+    {"shape": "Sierpinski tetrahedron", "path": [1.5]},
+    {"shape": "Sierpinski tetrahedron", "path": [0], "z": True},
+    {"shape": "Sierpinski tetrahedron", "path": [0], "w": 1e300},     # past any dive
+    {"shape": "Sierpinski tetrahedron", "path": [0], "shift": [0, 0]},
     "not a dive",
 ])
 def test_a_dive_that_cannot_land_is_refused_whole_and_said(tmp_path, bad):
+    """Refused, said, the view at the top — and the rest of the patch landed:
+    a bad dive never raises out of a load half done."""
     from tests.test_loadable import put
     rig = _rig(tmp_path)
-    put(rig.home, "Bad", values={"view.shape": geometry.shape_index("Sierpinski tetrahedron")},
-        dive=bad)
+    put(rig.home, "Bad", values={"view.shape": geometry.shape_index("Sierpinski tetrahedron"),
+                                 "camera.zoom": 2.5}, dive=bad)
     rig.loaded_patch.load("Bad")
+    assert rig.view.zoom == pytest.approx(2.5) and rig.loaded_patch.current == "Bad"
     d = rig.view.dive
     assert not d.inside and d.path == []
     assert any("dive" in n for n in rig.loaded_patch.notes)
@@ -381,3 +391,85 @@ CENTRES = {'4D Cantor dust': 'bcb46c9a5ad8230b',
  'Sierpinski 5-cell': 'a142473a3c0bd242',
  'Sierpinski tetrahedron': '360aa265d3eff4d4',
  'Vicsek cross': '2f07b110eb4cf2e3'}
+
+
+# ---- the review's cases (2026-11-19)
+
+def _flown(h):
+    """Inside, flown a little: the flight's baseline away from the identity."""
+    h.view.zoom = 3.0
+    _frame(h)
+    assert h.view.dive.inside
+    app._fly(h, None)
+    h.world.objects["shape"].offset = W.Pose.turn3(W.qexp([0.1, 0.3, 0.0]), (0.2, 0.0, 0.1))
+    app._fly(h, None)
+
+
+def test_reset_world_inside_moves_nothing():
+    """Reset world rewrites the flight to the identity: the next fold reads it
+    afresh instead of folding the whole flight back (a 0.94 jump before)."""
+    h = _host("Menger sponge", OFFSETS["turned"])
+    _flown(h)
+    X = _points()
+    before = _drawn(h, X)
+    h.world.reset()
+    app._fly(h, None)
+    assert np.allclose(_drawn(h, X), before, atol=1e-12)
+
+
+def test_a_deck_switch_and_back_moves_nothing():
+    """The other deck on air turns the world's shape back into an object;
+    this deck back on air takes the space again — and its next fold reads
+    the rewritten flight afresh."""
+    h = _host("Menger sponge", OFFSETS["turned"])
+    _flown(h)
+    X = _points()
+    before = _drawn(h, X)
+    other = SimpleNamespace(view=ViewState(shape=3), world=h.world)
+    app._space(other, None)                          # the other deck on air
+    assert h.world.objects["shape"].bounded
+    _frame(h)                                         # back
+    assert not h.world.objects["shape"].bounded
+    app._fly(h, None)
+    assert np.allclose(_drawn(h, X), before, atol=1e-12)
+
+
+def test_an_older_dive_class_still_steers_after_a_hot_reload():
+    """A hot reload of fractal.py leaves the live dive an older class: the
+    frame reads it by its fields, so the inside split holds and the flight
+    still folds."""
+    import copy
+
+    class Older:                                      # the same fields, another class
+        pass
+
+    h = _host("Menger sponge")
+    h.view.zoom = 3.0
+    _frame(h)
+    assert h.view.dive.inside
+    older = Older()
+    older.__dict__.update(copy.deepcopy(vars(h.view.dive)))
+    h.view.dive = older
+    _frame(h)
+    assert not h.world.objects["shape"].bounded and h.view.dive.inside
+    pan0 = list(h.view.pan)
+    h.world.objects["shape"].offset = W.Pose.turn3(W.qexp([0.0, 0.0, 0.0]), (0.2, 0.0, 0.0))
+    app._fly(h, None)
+    assert h.view.pan[0] != pan0[0]
+
+
+@pytest.mark.parametrize(("a", "b"), [("Menger sponge", "Sierpinski tetrahedron"),
+                                      ("Sierpinski tetrahedron", "Sierpinski 5-cell")])
+def test_a_fractal_switched_for_another_mid_dive_starts_at_its_top(a, b):
+    """The path indexes the first fractal's cells: the second starts over
+    instead of raising every frame."""
+    h = _host(a)
+    for _ in range(40):
+        h.view.zoom *= 1.12
+        _frame(h)
+    assert len(h.view.dive.path) >= 2
+    h.view.shape = geometry.shape_index(b)
+    h.view.zoom = 1.0
+    _frame(h)
+    _frame(h)
+    assert h.view.dive.shape == h.view.shape and not h.view.dive.path

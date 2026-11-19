@@ -344,6 +344,10 @@ class WorldObject:
     # space's flight (folded into the view, `fractal.fold_flight`, never drawn
     # as an offset), and it is neither boxed nor given a shaped inertia
     bounded: bool = True
+    # counts every rewrite of the offset that is not the physics' own step (a
+    # crossing, `World.reset`): what a fold of the flight read before it is
+    # no longer the same pose (`fractal.fold_flight`)
+    epoch: int = 0
 
     @property
     def pose(self) -> Pose:
@@ -530,6 +534,7 @@ class World:
             b.spin_r = b.spin_l.copy()
             b.place, b.boxed, b.inertia = None, False, np.eye(3)
         obj.home, obj.offset, obj.bounded = Pose(), Pose(), False
+        obj.epoch += 1
         self._retake(oid)
 
     def to_object(self, oid: str, offset, zoom: float, pan) -> None:
@@ -553,6 +558,7 @@ class World:
             b.velocity = np.r_[v / home.scale, 0.0]
             b.place = None
         obj.home, obj.offset, obj.bounded = home, new, True
+        obj.epoch += 1
         self._retake(oid)
 
     def _retake(self, oid: str) -> None:
@@ -579,6 +585,7 @@ class World:
         hold again from home)."""
         for obj in self.objects.values():
             obj.offset = Pose()
+            obj.epoch += 1
         for b in self.bodies.values():
             b.still()
             b.inertia = np.eye(3)

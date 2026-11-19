@@ -320,12 +320,15 @@ class Dive:
     turn: np.ndarray = field(default_factory=lambda: np.eye(3))
     shift: np.ndarray = field(default_factory=lambda: np.zeros(3))
     flown: np.ndarray | None = None
+    flown_epoch: int = -1             # the world object's epoch `flown` was read in
+    shape: int | None = None          # the shape this dive is in (another: it starts over)
 
     def reset(self) -> None:
         self.path.clear()
         self.z, self.w, self.last = 0.0, 0.0, 1.0
         self.inside = False
         self.turn, self.shift, self.flown = np.eye(3), np.zeros(3), None
+        self.flown_epoch, self.shape = -1, None
 
     def to_json(self, name: str) -> dict:
         """The dive as a loadable patch keeps it (`DIVE_KEY`, row 889)."""
@@ -343,18 +346,25 @@ class Dive:
         if doc is None:
             return ""
         spec = FRACTALS.get(name)
-        try:
-            if not isinstance(doc, dict) or doc.get("shape") != name or spec is None:
-                return "the saved dive is for another shape; starts at the top"
-            path = [int(k) for k in doc.get("path", [])]
-            z, w = float(doc.get("z", 0.0)), float(doc.get("w", 0.0))
-            T = np.asarray(doc.get("turn", np.eye(3).ravel()), dtype=np.float64).reshape(3, 3)
-            sh = np.asarray(doc.get("shift", np.zeros(3)), dtype=np.float64).reshape(3)
-        except (TypeError, ValueError):
+        if not isinstance(doc, dict) or doc.get("shape") != name or spec is None:
+            return "the saved dive is for another shape; starts at the top"
+        path = doc.get("path", [])
+        z, w = doc.get("z", 0.0), doc.get("w", 0.0)
+        turn_, shift_ = doc.get("turn", list(np.eye(3).ravel())), doc.get("shift", [0.0] * 3)
+        # as written: whole numbers for the cells, real numbers for the rest
+        if (not isinstance(path, list) or not all(_whole(k) for k in path)
+                or not all(_real(x) for x in (z, w))
+                or not isinstance(turn_, list) or len(turn_) != 9
+                or not isinstance(shift_, list) or len(shift_) != 3
+                or not all(_real(x) for x in (*turn_, *shift_))):
             return "the saved dive would not read; starts at the top"
+        path = [int(k) for k in path]
+        z, w = float(z), float(w)
+        T = np.asarray(turn_, dtype=np.float64).reshape(3, 3)
+        sh = np.asarray(shift_, dtype=np.float64)
         n = len(spec.centres)
         if (len(path) > MAX_PATH or any(not 0 <= k < n for k in path)
-                or not all(math.isfinite(x) for x in (z, w, *T.ravel(), *sh))
+                or not all(math.isfinite(x) and abs(x) < 1e12 for x in (z, w, *T.ravel(), *sh))
                 or not np.allclose(T @ T.T, np.eye(3), atol=1e-6)
                 or np.linalg.det(T) <= 0.0):
             return "the saved dive is not one this fractal can take; starts at the top"
@@ -362,6 +372,14 @@ class Dive:
         self.z, self.w, self.turn, self.shift = z, w, T, sh
         self.inside = True
         return ""
+
+
+def _whole(x) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def _real(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
 
 
 def turn(s) -> np.ndarray:
@@ -405,10 +423,12 @@ def step(s, reg=None, off=None) -> None:
     nothing and nothing here makes up for it."""
     d = s.dive
     spec = spec_of(s.shape)
-    if spec is None:
-        if d.path or d.z or d.w or d.inside:
-            d.reset()
-        return
+    if spec is None or (d.shape is not None and d.shape != int(s.shape)):
+        if d.path or d.z or d.w or d.inside or d.shape is not None:
+            d.reset()                # another shape: its cells are not this one's
+        if spec is None:
+            return
+    d.shape = int(s.shape)
     M = turn(s)
     r = spec.ratio
     zoom0 = zoom = max(float(s.zoom), 1e-3)
@@ -544,6 +564,7 @@ def go_inside(s, reg, off) -> None:
     p = p0.copy()
     p[:3] = k * (R @ p0[:3])
     zoom = zoom0 * k
+    d.last *= k                      # (a scale is a zoom, not a move: no ease home)
     d.shift = -A @ pxy + zoom0 * t + pxy
     _land(s, reg, zoom0, p0, zoom, p)
 
@@ -568,17 +589,19 @@ def go_outside(s, reg) -> np.ndarray:
     return off
 
 
-def fold_flight(s, reg, flight: np.ndarray) -> None:
+def fold_flight(s, reg, flight: np.ndarray, epoch: int = 0) -> None:
     """Inside, the world's flight pose (`flight`, a 4×4 in world units: the
     shape object's offset, home the identity, moved by the grip and its
     physics) folded into the view: what it moved since the last fold turns the
     space about the middle of the screen and moves it through the fractal's
     own space, before the 4D divide — `Dive.turn`, camera.pan, `Dive.z` — and
-    turns the room placement (`Dive.shift`) with it."""
+    turns the room placement (`Dive.shift`) with it. `epoch`: the world
+    object's (`WorldObject.epoch`); a pose rewritten since the last fold — a
+    crossing, a deck switch, Reset world — is read afresh, never folded."""
     d = s.dive
     F = np.asarray(flight, dtype=np.float64)
-    if d.flown is None:
-        d.flown = F.copy()
+    if d.flown is None or d.flown_epoch != epoch:
+        d.flown, d.flown_epoch = F.copy(), epoch
         return
     delta = F @ np.linalg.inv(d.flown)
     d.flown = F.copy()

@@ -1430,11 +1430,13 @@ class LoadedPatch:
             doc[MEDIA_KEY] = media.to_json()
         return doc
 
-    def _view_dive(self) -> tuple[Any, fractal.Dive] | None:
-        """This deck's view and its dive; None for a registry with no view."""
+    def _view_dive(self) -> tuple[Any, Any] | None:
+        """This deck's view and its dive (`fractal.Dive`, read by its fields: a
+        hot reload leaves the live one an older class); None with no view."""
         view = getattr(self.reg, "view", None)
         dive = getattr(view, "dive", None)
-        return (view, dive) if isinstance(dive, fractal.Dive) else None
+        ok = isinstance(getattr(dive, "path", None), list) and hasattr(dive, "inside")
+        return (view, dive) if ok else None
 
     def _dive_part(self) -> dict | None:
         """This deck's view's dive as a loadable patch keeps it, None while the
@@ -1454,7 +1456,10 @@ class LoadedPatch:
         if fractal.spec_of(view.shape) is None:
             dive.reset()
             return ""
-        return dive.from_json(doc, SHAPES[int(view.shape)].name)
+        said = dive.from_json(doc, SHAPES[int(view.shape)].name)
+        if dive.inside:
+            dive.shape = int(view.shape)
+        return said
 
     def banks(self) -> dict:
         """The router's modulator banks by scheme (plan 31 B); none on a
