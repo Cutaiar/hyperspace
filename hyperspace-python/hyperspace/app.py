@@ -83,6 +83,7 @@ from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 from . import (
     config,
     devices,
+    fractal,
     gamepad,
     grip,
     lfo,
@@ -91,6 +92,7 @@ from . import (
     playlist,
     poi,
     replay,
+    shapeframe,
     sharedfile,
     tempo,
     totem,
@@ -1656,17 +1658,84 @@ def _off_air(h: Host, what: str, step: Callable[[Deck], object]) -> str:
     return said
 
 
+def _space(h: Host, reg) -> None:
+    """Plan 64, part 2: is the on-air view inside its fractal? Outside, a grab
+    holds the shape as an object (the world's offset, plan 59); inside — the
+    shape too big to keep whole in the rig's box, or the view gone into a cell
+    (`fractal.wants_inside`) — it holds the space, whose placement and flight
+    are the view's own. Crosses when that changes, redrawing nothing: the
+    view takes the object's offset in (`fractal.go_inside`, `World.to_space`)
+    or hands it back (`fractal.go_outside`, `World.to_object`). A view whose
+    dive a load or Reset view set brings the world along with it. Before the
+    re-root, so an object is never re-rooted."""
+    view = h.view
+    shape = _shape_of(h.world)
+    dive = _dive_of(view)
+    if dive is None or fractal.spec_of(view.shape) is None:
+        if dive is not None and dive.inside:
+            dive.reset()
+        if shape is not None and not shape[1].bounded:
+            shape[0].to_object(worlds.SHAPE, np.eye(4), view.zoom, view.pan)
+        return
+    box = poi.DEFAULT_BOX
+    if shape is not None and shape[0].box is not None:
+        box = shape[0].box
+    if dive.inside:
+        if shape is not None and shape[1].bounded:        # a load handed a dive in
+            shape[0].to_space(worlds.SHAPE, view.zoom, view.pan)
+        if not fractal.wants_inside(view, box, shapeframe.drawn_offset(view)):
+            off = fractal.go_outside(view, reg)
+            if shape is not None:
+                shape[0].to_object(worlds.SHAPE, off, view.zoom, view.pan)
+        return
+    if shape is not None and not shape[1].bounded:        # Reset view: the space comes home
+        shape[0].to_object(worlds.SHAPE, np.eye(4), view.zoom, view.pan)
+    off = (shape[0].offset_matrix(worlds.SHAPE)
+           if shape is not None and field_mod.takes_offset(view) else None)
+    if fractal.wants_inside(view, box, off):
+        zoom, pan = float(view.zoom), (float(view.pan[0]), float(view.pan[1]))
+        fractal.go_inside(view, reg, off)
+        if shape is not None:
+            shape[0].to_space(worlds.SHAPE, zoom, pan)
+
+
+def _dive_of(view) -> fractal.Dive | None:
+    d = getattr(view, "dive", None)
+    return d if isinstance(d, fractal.Dive) else None
+
+
+def _shape_of(world) -> tuple[worlds.World, worlds.WorldObject] | None:
+    """The world and its shape object; None with no world (or a stand-in)."""
+    if not isinstance(world, worlds.World):
+        return None
+    obj = world.objects.get(worlds.SHAPE)
+    return (world, obj) if obj is not None else None
+
+
 def _reroot(h: Host, reg) -> None:
-    """The on-air view re-rooted (`ViewState.reroot`), the world's offset on
-    the shape (plan 59) rebased onto the new home, so a moved or grabbed
-    fractal draws where it was (plan 64, row 887). The offset is the world's,
-    one for both decks: a deck off air re-roots without it (`frame`)."""
-    world = h.world
-    off = (world.offset_matrix("shape")
-           if world is not None and field_mod.takes_offset(h.view) else None)
-    moved = h.view.reroot(reg, off)
-    if moved is not None and world is not None and off is not None:
-        world.rebase("shape", *moved)
+    """The on-air view re-rooted (`ViewState.reroot`, `fractal.step`), told
+    the offset drawn after the shape (`shapeframe.drawn_offset`) so the cell
+    it takes is the one under the eye. Decks off air re-root with none."""
+    view, off = h.view, None
+    if _dive_of(view) is not None and field_mod.takes_offset(view):
+        shape = _shape_of(h.world)
+        if shape is not None:
+            off = shapeframe.drawn_offset(view, shape[0].offset_matrix(worlds.SHAPE),
+                                          shape[1].bounded)
+        else:
+            off = shapeframe.drawn_offset(view)
+    view.reroot(reg, off)
+
+
+def _fly(h: Host, reg) -> None:
+    """Plan 64, part 2: inside a fractal, what the grip and its physics did to
+    the space this frame (the shape object's offset, world units) folded into
+    the view (`fractal.fold_flight`): it turns about the middle of the screen
+    and moves through the fractal's own space. After the world's step."""
+    shape, dive = _shape_of(h.world), _dive_of(h.view)
+    if shape is None or shape[1].bounded or dive is None or not dive.inside:
+        return
+    fractal.fold_flight(h.view, reg, shape[1].offset.model3())
 
 
 def frame(h: Host, now: float, dt: float, fps: float) -> bool:
@@ -1855,6 +1924,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # a self-similar shape's view, re-rooted once the zoom has gone a level
     # in or out (fractal.py): the same picture at a zoom that never runs out
     try:
+        _space(h, reg)
         _reroot(h, reg)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("view.reroot", e)
@@ -1865,6 +1935,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # steps; the render below reads the poses
     try:
         _step_world(h, dt)
+        _fly(h, reg)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("world", e)
     # the analyzer's lanes as a route reads them (out / CEIL), for the
@@ -1947,7 +2018,11 @@ def _step_world(h: Host, dt: float) -> None:
     if world is None:
         return
     view = h.view
-    world.home(worlds.SHAPE, worlds.shape_home(view.zoom, view.pan))
+    # (plan 64, part 2: inside a fractal the shape is the space, its home the
+    # identity — the camera is the dive's view, not the shape's placement)
+    shape = _shape_of(world)
+    if shape is None or shape[1].bounded:
+        world.home(worlds.SHAPE, worlds.shape_home(view.zoom, view.pan))
     # plan 60: the on-air deck's grip (a patch's own, `reg.grip`) sets the shape's
     # body, joint and clutches; a deck switch hands the one world to the other's
     state = getattr(getattr(h, "reg", None), "grip", None)

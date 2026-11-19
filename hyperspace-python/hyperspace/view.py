@@ -298,15 +298,14 @@ class ViewState:
             if self.planes[p]:
                 self.ang[p] += dt * self.speed * RATE[p] * self.rate[p]
 
-    def reroot(self, reg=None, off=None):
+    def reroot(self, reg=None, off=None) -> None:
         """A self-similar shape's view, re-rooted once the zoom has gone a
         level in or out (`fractal.step`): the same picture, at a zoom that
         never runs out. Once a frame, after `integrate`; `reg` takes the move
-        onto the camera params' bases; `off`, the world's offset on the shape
-        as drawn. Returns the re-root's change of home for the offset
-        (`world.World.rebase`), None when there was none. Nothing for any
-        other shape."""
-        return fractal.step(self, reg, off)
+        onto the camera params' bases; `off`, the offset drawn after the
+        shape (`shapeframe.drawn_offset`), read for the cell under the eye.
+        Nothing for any other shape."""
+        fractal.step(self, reg, off)
 
     def pose(self) -> list[float]:
         """The spin's pose as six plane angles, each in (−π, π] — what a

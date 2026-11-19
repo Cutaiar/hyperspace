@@ -124,6 +124,25 @@ class Fractal:
                           _faces=lambda: (np.zeros((0, 4), np.int32), np.zeros((0, 3, 2)), None))
 
 
+def drawn_offset(s, world_off=None, bounded: bool = True):
+    """The offset the scene pass composes after the shape's own geometry (a
+    4×4 in the home's frame, as `world.World.offset_matrix`; None the
+    identity). Plan 64, part 2: a fractal the view is inside draws the room
+    placement it had as an object (`Dive.shift`, fixed in world units: in the
+    home's frame ÷ camera.zoom); its flight is folded into the view itself.
+    Otherwise the world's offset on the shape — while the world's shape is
+    an object (`bounded`); while it is the space, no shape draws it."""
+    d = getattr(s, "dive", None)
+    if d is not None and d.inside and fractal.spec_of(s.shape) is not None:
+        sh = np.asarray(d.shift, dtype=np.float64)
+        if not sh.any():
+            return None
+        m = np.eye(4)
+        m[:3, 3] = sh / max(float(s.zoom), 1e-3)
+        return m
+    return world_off if bounded else None
+
+
 def provider(i: int, by_geom: bool = False) -> Fixed | Fractal:
     """Shape i's provider: a fractal's, a scene's or a fixed shape's.
     `by_geom`: a fractal as its built levels (a view with no `dive`, which

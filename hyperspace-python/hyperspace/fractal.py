@@ -39,8 +39,12 @@ cell, and fractal_gl.py's vertex shaders place, turn and divide each cell's
 copy of one mesh, drawn unsorted and additive (`view.frac_additive`). The
 cull and the split stay here, on the CPU, either way.
 
-What this leaves out: a file format — `Dive` is not saved, so a loaded
-view starts at the top (register row 889, pending the owner).
+A loadable patch keeps the dive (`loadable.DIVE_KEY`, row 889): a load puts
+the view back in the cell it was saved in.
+
+What a grab holds (plan 64, part 2, the module's end): outside, the shape
+is an object; inside — too big to keep whole on screen, or gone into a
+cell — the space, whose flight is this view's own.
 """
 
 from __future__ import annotations
@@ -85,6 +89,13 @@ FOG = 0.35
 CUE_GONE = 2.5
 # the most edges in a frame; over it the frame is drawn coarser
 BUDGET = 30000
+# a saved dive's longest path (row 889): far past any dive float64 can tell
+# apart, short enough that a hand-edited file can't make a load crawl
+MAX_PATH = 4096
+# plan 64, part 2: the view goes inside once the shape no longer fits the
+# rig's box (a corner past its half, across or up), and comes back out only
+# within this share of it, so a zoom riding the edge doesn't flip it
+FIT_OUT = 0.9
 # the same along w, for a 4D fractal, in octaves of the distance from the
 # 4D eye (`view.depth4`): full weight to W_NEAR nearer than the middle, gone
 # by W_GONE (the divide is by that distance: at the eye it is unbounded);
@@ -290,22 +301,74 @@ class Dive:
     cell of each level taken on the way in, outermost first (empty: the
     whole shape); `z`, the shape's place along the eye's axis, which
     camera.pan has no word for, and `w`, its place along the fourth (a 4D
-    fractal's; 0 for a 3D one); `last`, the zoom `step` last saw."""
+    fractal's; 0 for a 3D one); `last`, the zoom `step` last saw.
+
+    Inside (plan 64, part 2: `inside`), what a grab holds is the space, and
+    its motion is part of this view rather than an offset on a world object:
+    `turn` (3×3), the space turned about the middle of the screen, on x, y, z
+    before the 4D divide (`fractal.turn`), and `shift` (3, world units), the
+    room placement the shape had as an object when the view went inside,
+    after the divide. Both are the identity outside. `flown`: the world's
+    flight pose already folded into this view (`fold_flight`); None until the
+    first fold, or after a reset or a load."""
 
     path: list[int] = field(default_factory=list)
     z: float = 0.0
     w: float = 0.0
     last: float = 1.0
+    inside: bool = False
+    turn: np.ndarray = field(default_factory=lambda: np.eye(3))
+    shift: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    flown: np.ndarray | None = None
 
     def reset(self) -> None:
         self.path.clear()
         self.z, self.w, self.last = 0.0, 0.0, 1.0
+        self.inside = False
+        self.turn, self.shift, self.flown = np.eye(3), np.zeros(3), None
+
+    def to_json(self, name: str) -> dict:
+        """The dive as a loadable patch keeps it (`DIVE_KEY`, row 889)."""
+        return {"shape": name, "path": [int(k) for k in self.path],
+                "z": float(self.z), "w": float(self.w),
+                "turn": [float(x) for x in np.asarray(self.turn).ravel()],
+                "shift": [float(x) for x in np.asarray(self.shift).ravel()]}
+
+    def from_json(self, doc, name: str) -> str:
+        """This view's dive from a loadable patch's key, for the shape `name`:
+        "" when it landed, else why not (the dive left at the top). A key for
+        another shape, a cell index outside the fractal, a path too long, a
+        number that is not finite or a turn that is not one are refused whole."""
+        self.reset()
+        if doc is None:
+            return ""
+        spec = FRACTALS.get(name)
+        try:
+            if not isinstance(doc, dict) or doc.get("shape") != name or spec is None:
+                return "the saved dive is for another shape; starts at the top"
+            path = [int(k) for k in doc.get("path", [])]
+            z, w = float(doc.get("z", 0.0)), float(doc.get("w", 0.0))
+            T = np.asarray(doc.get("turn", np.eye(3).ravel()), dtype=np.float64).reshape(3, 3)
+            sh = np.asarray(doc.get("shift", np.zeros(3)), dtype=np.float64).reshape(3)
+        except (TypeError, ValueError):
+            return "the saved dive would not read; starts at the top"
+        n = len(spec.centres)
+        if (len(path) > MAX_PATH or any(not 0 <= k < n for k in path)
+                or not all(math.isfinite(x) for x in (z, w, *T.ravel(), *sh))
+                or not np.allclose(T @ T.T, np.eye(3), atol=1e-6)
+                or np.linalg.det(T) <= 0.0):
+            return "the saved dive is not one this fractal can take; starts at the top"
+        self.path[:] = path
+        self.z, self.w, self.turn, self.shift = z, w, T, sh
+        self.inside = True
+        return ""
 
 
 def turn(s) -> np.ndarray:
     """The view's turn of the shape, 4×4: a point x (a row, 4D) lands at
     x @ turn(s) — the shape's own angles (a 4D one's body first), then the
-    camera's yaw and pitch on x, y, z; w is the depth the 4D divide reads."""
+    camera's yaw and pitch on x, y, z, then inside the space's own turn
+    (`Dive.turn`); w is the depth the 4D divide reads."""
     la = geometry.view_angles(s.shape, s.ang, getattr(s, "held", False))
     B = np.eye(4)
     body = getattr(s, "body", None)
@@ -313,90 +376,64 @@ def turn(s) -> np.ndarray:
         B = B @ np.asarray(body).T
     v = geometry.rotate4(B, la)
     x, y, z = geometry._camera(v[:, 0], v[:, 1], v[:, 2], s.yaw, s.pitch)
-    return np.stack([x, y, z, v[:, 3]], axis=1)
+    M = np.stack([x, y, z, v[:, 3]], axis=1)
+    d = getattr(s, "dive", None)
+    if d is not None and d.inside:
+        M = M @ _block(np.asarray(d.turn).T)
+    return M
 
 
-def step(s, reg=None, off=None) -> tuple[float, np.ndarray] | None:
+def _block(R3) -> np.ndarray:
+    """A 3×3 on x, y, z as a 4×4 that leaves w alone."""
+    m = np.eye(4)
+    m[:3, :3] = R3
+    return m
+
+
+def step(s, reg=None, off=None) -> None:
     """Once a frame, after the params have landed: re-root the view (module
     docstring). Moves `s.zoom`, `s.pan` and `s.dive` together, so the frame
     drawn next is the same picture; with a registry the move goes onto the
     params' bases as well (a ratio on camera.zoom, a nudge on camera.pan),
     so a route or a performer's offset rides on it as on any other move.
 
-    `off`: the world's offset on the shape (plan 59, a 4×4; None the
-    identity). The renderer draws home ∘ offset, home being camera.zoom and
-    pan, so the cell taken is the one under the eye where the shape is drawn,
-    and a re-root must leave the drawn shape where it is (row 887):
-
-    - a 3D fractal: the offset is left as it is and the re-root's move goes
-      onto the pan and the dive's depth instead (`_follow`), so the zoom
-      still centres on the cell under the eye;
-    - a 4D fractal, or an offset that turns the shape's depth axis flat to
-      the screen (where a pan and a depth can't make up for it): the view
-      moves as it does with no offset, and the change of home is returned —
-      (k, g): the new home is the old one × k, moved by g × the old zoom
-      (x, y, 0) — for the offset to be rebased onto it (`world.World.rebase`).
-
-    Returns that change, or None when the offset needs nothing (an ease home
-    is a pan, like any other, and moves the picture on purpose)."""
+    `off`: the offset the scene pass composes after the walk (`shapeframe.
+    drawn_offset`, a 4×4 in the home's frame; None the identity), read only
+    for which cell is under the middle of the screen as drawn. A re-root
+    happens only inside (plan 64, part 2), where that offset is the room
+    placement the shape had (`Dive.shift`), fixed in world units, so it moves
+    nothing and nothing here makes up for it."""
     d = s.dive
     spec = spec_of(s.shape)
     if spec is None:
-        if d.path or d.z or d.w:
+        if d.path or d.z or d.w or d.inside:
             d.reset()
-        return None
+        return
     M = turn(s)
     r = spec.ratio
     zoom0 = zoom = max(float(s.zoom), 1e-3)
     p0 = np.array([float(s.pan[0]), -float(s.pan[1]), d.z, d.w])
     p = p0.copy()
-    # the middle of the screen in the walk's world (before the offset): the
-    # origin, or with an offset what it draws at the origin. A re-root with
-    # its rebase draws every point where it was, so this stays put
+    # the middle of the screen in the walk's world: the origin, or with an
+    # offset the point it draws at the origin (the offset is in world units)
     mid = np.zeros(4)
-    A = t = None
-    follow = False
     if off is not None:
         m = np.asarray(off, dtype=np.float64)
-        A, t = m[:3, :3], m[:3, 3]
         pxy = np.array([p0[0], p0[1], 0.0])
-        mid[:3] = np.linalg.solve(A, -zoom0 * t - pxy) + pxy
-        # the pan and the depth can stand in for the offset: a 3D fractal (no
-        # 4D divide across the cell), its depth axis not flat to the screen
-        flat = not spec.V[:, 3].any() and not spec.centres[:, 3].any() and d.w == 0.0
-        follow = flat and abs(A[2, 2]) > 0.2 * float(np.cbrt(abs(np.linalg.det(A))))
-
-    def moved_to(p_old, z_old, p_new, z_new) -> np.ndarray:
-        """`p_new`, the re-root's view with no offset, made up for the offset
-        (`follow`): with it, every point is drawn where it was."""
-        nonlocal mid
-        if not follow:
-            return p_new
-        assert A is not None and t is not None
-        dp = np.array([p_new[0] - p_old[0], p_new[1] - p_old[1], 0.0])
-        e = (A - np.eye(3)) @ dp + (z_old - z_new) * t
-        B = np.array([[1.0, 0.0, A[0, 2]], [0.0, 1.0, A[1, 2]], [0.0, 0.0, A[2, 2]]])
-        delta = np.linalg.solve(B, e)
-        out = p_new.copy()
-        out[:3] += delta
-        mid = mid.copy()
-        mid[:3] += delta                   # the walk's world moved with it
-        return out
+        mid[:3] = np.linalg.solve(m[:3, :3], -zoom0 * m[:3, 3] - pxy) + pxy
 
     def out() -> None:
         nonlocal zoom, p
         k = d.path.pop()
-        z1 = zoom / r
-        p = moved_to(p, zoom, p - z1 * (1.0 - r) * (spec.centres[k] @ M), z1)
-        zoom = z1
+        zoom = zoom / r
+        p = p - zoom * (1.0 - r) * (spec.centres[k] @ M)
 
     def into() -> None:
         nonlocal zoom, p
         x = ((mid - p) / zoom) @ M.T        # the middle of the screen, in the shape
         k = int(np.argmin(np.linalg.norm(x - (1.0 - r) * spec.centres, axis=1)))
-        z1 = zoom * r
-        p = moved_to(p, zoom, p + zoom * (1.0 - r) * (spec.centres[k] @ M), z1)
-        zoom = z1
+        p = p + zoom * (1.0 - r) * (spec.centres[k] @ M)
+        zoom = zoom * r
         d.path.append(k)
 
     # a pan off the side of the rooted cell: up until the view is over an
@@ -409,8 +446,6 @@ def step(s, reg=None, off=None) -> tuple[float, np.ndarray] | None:
         into()
     while d.path and zoom < Z_IN * r * Z_SLACK:
         out()
-    moved = None if off is None or follow or (zoom == zoom0 and np.array_equal(p, p0)) else (
-        zoom / zoom0, np.array([p[0] - p0[0], p[1] - p0[1], 0.0]) / zoom0)
     if not d.path and zoom < d.last and d.last > Z_HOME:
         # out of the last cell and still zooming out: ease the shape home,
         # there by Z_HOME
@@ -418,7 +453,14 @@ def step(s, reg=None, off=None) -> tuple[float, np.ndarray] | None:
         p = p * min(max(f, 0.0), 1.0)
     d.last = zoom
     if zoom == zoom0 and np.array_equal(p, p0):
-        return moved
+        return
+    _land(s, reg, zoom0, p0, zoom, p)
+
+
+def _land(s, reg, zoom0: float, p0: np.ndarray, zoom: float, p: np.ndarray) -> None:
+    """The view moved to (`zoom`, `p`) from (`zoom0`, `p0`): onto the view, and
+    with a registry onto the camera params' bases (a ratio, a nudge)."""
+    d = s.dive
     d.z, d.w = float(p[2]), float(p[3])
     if reg is not None:
         if zoom != zoom0:
@@ -427,8 +469,129 @@ def step(s, reg=None, off=None) -> tuple[float, np.ndarray] | None:
         reg["camera.pan.y"].nudge(float(-(p[1] - p0[1])))
     s.zoom = zoom
     s.pan[0], s.pan[1] = float(p[0]), float(-p[1])
-    return moved
 
+
+# ---- plan 64, part 2: what a grab holds, outside a fractal and inside it
+#
+# Outside, the shape is an object: the world's offset on it (plan 59) is
+# drawn home ∘ offset, as any shape's. Inside — once it no longer fits the
+# rig's box, or the view has gone into a cell (`wants_inside`) — a grab holds
+# the space: its motion is folded into this view (`fold_flight`), turning it
+# about the middle of the screen and moving it through the fractal's own 4D
+# space, and the offset the object had is kept as `Dive.turn` and
+# `Dive.shift` (`go_inside`), handed back when the view comes out
+# (`go_outside`). Each crossing redraws nothing.
+
+
+def _pan3(s) -> np.ndarray:
+    return np.array([float(s.pan[0]), -float(s.pan[1]), 0.0])
+
+
+def drawn_corners(s, off=None) -> np.ndarray:
+    """Where the whole shape's own corners are drawn (n, 3, world units),
+    the view at the top (path empty: the top cell is the shape at p, radius
+    camera.zoom), through the 4D divide and then `off`, the offset composed
+    after the walk (home frame; None the identity). The fractal lies within
+    their convex hull, and the divide keeps a hull a hull, so they bound
+    exactly what is drawn."""
+    spec = spec_of(s.shape)
+    assert spec is not None
+    d = s.dive
+    zoom = max(float(s.zoom), 1e-3)
+    p = np.array([float(s.pan[0]), -float(s.pan[1]), d.z, d.w])
+    d4 = float(s.depth4)
+    w_gone = d4 * 2.0 ** -W_GONE
+    Q = zoom * (spec.V @ turn(s)) + p
+    wf = Q[:, :3] * (d4 / np.maximum(d4 - Q[:, 3], w_gone))[:, None]
+    if off is None:
+        return wf
+    return _offset_world(wf, off, p, zoom)
+
+
+def wants_inside(s, box, off=None) -> bool:
+    """Whether the view of a fractal is inside it (plan 64, part 2): it has
+    gone into a cell, or is about to, or the shape no longer fits `box` (the
+    rig's: half the view across and up, world units, at depth 0) — what can't
+    be kept whole on screen is not an object you hold. Out again only once
+    every corner is within `FIT_OUT` of the box and the view is at the top."""
+    d = s.dive
+    if d.path or float(s.zoom) >= Z_IN:
+        return True
+    c = drawn_corners(s, off)
+    over = float(max(np.abs(c[:, 0]).max() / max(float(box[0]), 1e-9),
+                     np.abs(c[:, 1]).max() / max(float(box[1]), 1e-9)))
+    return over > (FIT_OUT if d.inside else 1.0)
+
+
+def go_inside(s, reg, off) -> None:
+    """Into the space: the object's offset `off` (home frame, plan 59; None the
+    identity) becomes the view's own — its turn `Dive.turn`, about the middle
+    of the screen before the 4D divide (where a turn commutes with it), the
+    view's camera turned with it, and the rest `Dive.shift`, a move in world
+    units after the divide. What is drawn is what was: camera ∘ offset is
+    shift ∘ the view turned (a rotation and a uniform scale, which goes on
+    camera.zoom)."""
+    d = s.dive
+    zoom0 = max(float(s.zoom), 1e-3)
+    p0 = np.array([float(s.pan[0]), -float(s.pan[1]), d.z, d.w])
+    A = np.eye(3) if off is None else np.asarray(off, dtype=np.float64)[:3, :3]
+    t = np.zeros(3) if off is None else np.asarray(off, dtype=np.float64)[:3, 3]
+    k = float(np.cbrt(abs(np.linalg.det(A))))
+    R = A / k
+    pxy = np.array([p0[0], p0[1], 0.0])
+    d.turn, d.inside, d.flown = R, True, None
+    # the walk's point Q turns to R Q, scaled by k about the middle: wf → k R wf
+    p = p0.copy()
+    p[:3] = k * (R @ p0[:3])
+    zoom = zoom0 * k
+    d.shift = -A @ pxy + zoom0 * t + pxy
+    _land(s, reg, zoom0, p0, zoom, p)
+
+
+def go_outside(s, reg) -> np.ndarray:
+    """Out of the space, at the top: the view's own turn and room placement
+    (`Dive.turn`, `Dive.shift`) handed back as the object's offset, returned
+    (a 4×4 in the home's frame, for `world`); the view unturned. What is drawn
+    is what was."""
+    d = s.dive
+    zoom = max(float(s.zoom), 1e-3)
+    p0 = np.array([float(s.pan[0]), -float(s.pan[1]), d.z, d.w])
+    R = np.asarray(d.turn, dtype=np.float64)
+    p = p0.copy()
+    p[:3] = R.T @ p0[:3]
+    pxy = np.array([p[0], p[1], 0.0])
+    off = np.eye(4)
+    off[:3, :3] = R
+    off[:3, 3] = (np.asarray(d.shift) + R @ pxy - pxy) / zoom
+    d.inside, d.turn, d.shift, d.flown = False, np.eye(3), np.zeros(3), None
+    _land(s, reg, zoom, p0, zoom, p)
+    return off
+
+
+def fold_flight(s, reg, flight: np.ndarray) -> None:
+    """Inside, the world's flight pose (`flight`, a 4×4 in world units: the
+    shape object's offset, home the identity, moved by the grip and its
+    physics) folded into the view: what it moved since the last fold turns the
+    space about the middle of the screen and moves it through the fractal's
+    own space, before the 4D divide — `Dive.turn`, camera.pan, `Dive.z` — and
+    turns the room placement (`Dive.shift`) with it."""
+    d = s.dive
+    F = np.asarray(flight, dtype=np.float64)
+    if d.flown is None:
+        d.flown = F.copy()
+        return
+    delta = F @ np.linalg.inv(d.flown)
+    d.flown = F.copy()
+    R, u = delta[:3, :3], delta[:3, 3]
+    if np.allclose(R, np.eye(3), atol=1e-12) and not u.any():
+        return
+    zoom = max(float(s.zoom), 1e-3)
+    p0 = np.array([float(s.pan[0]), -float(s.pan[1]), d.z, d.w])
+    p = p0.copy()
+    p[:3] = R @ p0[:3] + u
+    d.turn = R @ np.asarray(d.turn)
+    d.shift = R @ np.asarray(d.shift)
+    _land(s, reg, zoom, p0, zoom, p)
 
 def _smooth(x):
     x = np.clip(x, 0.0, 1.0)

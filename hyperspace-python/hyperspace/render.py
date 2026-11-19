@@ -3480,7 +3480,12 @@ class Renderer:
         # of before, built exactly as before. Fit and the 3D lattices carry the
         # camera in each copy's row and take no offset (register row 851)
         world = getattr(self, "world", None)
-        off = world.offset_matrix("shape") if world is not None and legacy else None
+        off = None
+        if legacy:
+            obj = getattr(world, "objects", {}).get("shape") if world is not None else None
+            off = shapeframe.drawn_offset(
+                s, world.offset_matrix("shape") if world is not None else None,
+                getattr(obj, "bounded", True))
         model = model_matrix(zoom, s.pan, off) if legacy else model_matrix(1.0, (0.0, 0.0))
         if world is not None and hasattr(world, "box"):
             # plan 60: the box the rig holds the shape to, what the eye sees at
