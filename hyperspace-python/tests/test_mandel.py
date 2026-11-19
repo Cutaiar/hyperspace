@@ -510,3 +510,71 @@ def test_the_rig_bench_runs_and_prints_a_line_a_size(capsys):
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith(("whole", "minibrot"))]
     assert len(lines) == 2 * len(M.SIZES)
     assert any("perturb" in ln for ln in lines) and any("direct" in ln for ln in lines)
+
+
+# ------------------------------------------- continuity at long horizons
+#
+# The generic sweep (`tests/test_step_continuity.py`) measures a knob step as
+# displacement of a UV picture an effect bends; this effect paints over its
+# input, and reads no clock. Time reaches it only through the drives (terms
+# integrated in float64) and the reference orbit (remade as the view moves).
+# So "a knob step is the same an hour in as a second in" is held here in
+# those terms.
+
+def test_the_shader_reads_no_clock():
+    src = FxState().specs["mandel"].source
+    assert "u_phase" not in src and "u_time" not in src
+    assert not FxState().specs["mandel"].clocks
+
+
+def test_the_picture_is_the_same_a_second_and_two_hours_in(rig):
+    kw = {"centre_x": SEAHORSE.real, "centre_y": SEAHORSE.imag, "zoom": 1e6, "iters": 300.0}
+    rig.v.update(kw)
+    rig.chain.run_one("mandel", rig.src, rig.out, 1.0, opaque=1)
+    early = rig.shot()
+    rig.chain.run_one("mandel", rig.src, rig.out, 7231.9, opaque=1)
+    late = rig.shot()
+    assert np.array_equal(early, late)
+
+
+def test_a_drive_held_an_hour_moves_by_the_view_and_no_more():
+    """An hour of frames at 60 fps with Pan held at 10⁹×: the centre has gone
+    the distance the rate says, to 0.01% — float64 rounds each frame's tiny
+    step the same way, so the speed is that little off, steadily, and nothing
+    jumps (nearer 10¹³× the step nears the centre's last digit: the deep
+    tier's reach, row 881) — and a step of the drive an hour in moves the
+    picture on screen as a step a second in does."""
+    spec = FxState().specs["mandel"]
+    v = values(zoom=1e9, centre_x=-0.75, pan_x=0.01)
+    for _ in range(3600 * 60):
+        M.advance(spec, v, 1 / 60)
+    h = M.view_height(1e9)
+    assert (v["centre_x"] + 0.75) / h == pytest.approx(0.01 * 3600, rel=1e-3)
+    moved = []
+    for when in (v, values(zoom=1e9, centre_x=-0.75)):
+        w = dict(when, pan_x=0.02)          # one step up the drive
+        x0 = w["centre_x"]
+        M.advance(spec, w, 1 / 60)
+        moved.append((w["centre_x"] - x0) / h)
+    assert moved[0] == pytest.approx(moved[1], rel=1e-6)
+
+
+def test_a_step_of_a_drive_moves_nothing_until_the_next_frame(rig):
+    rig.v.update(zoom=1e5, centre_x=SEAHORSE.real, centre_y=SEAHORSE.imag, iters=200.0)
+    before = rig.shot()
+    rig.v["pan_x"] = 0.5             # the knob moves; no frame time has passed
+    assert np.array_equal(rig.shot(), before)
+
+
+def test_a_new_reference_redraws_the_same_picture(rig):
+    """Deep in, a pan that carries the reference out of the view remakes it at
+    the new centre: panning back shows the same picture to float32's error,
+    so a remade reference never jumps the frame."""
+    kw = {"centre_x": SEAHORSE.real, "centre_y": SEAHORSE.imag, "zoom": 1e6, "iters": 400.0}
+    a = rig.steps(**kw)
+    rig.shot(centre_x=SEAHORSE.real + 5 * M.view_height(1e6))
+    rig.shot(centre_x=SEAHORSE.real + 0.45 * M.view_height(1e6))   # reference there, in view
+    refs = rig.stats["references"]
+    b = rig.steps(centre_x=SEAHORSE.real)
+    assert rig.stats["references"] == refs and refs >= 2
+    assert mismatch(a, b) < 0.05

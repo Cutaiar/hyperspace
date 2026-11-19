@@ -106,7 +106,9 @@ def shipped() -> tuple[fx.FxState, Registry]:
 # (its lines; a no-op at this test's 320×200), Tier (float32 direct or
 # perturbation, the same picture to float32's error) and Skip black (the inside
 # filled without iterating) — `tests/test_mandel.py` holds each to the picture
-# (`test_how_it_computes_never_changes_what_it_shows`).
+# (`test_how_it_computes_never_changes_what_it_shows`). Its own long-horizon
+# continuity — no clock read, drives that hold an hour, a remade reference that
+# never jumps the frame — is held there too ("continuity at long horizons").
 HOW = {"mandel": ("size", "tier", "skip")}
 
 
