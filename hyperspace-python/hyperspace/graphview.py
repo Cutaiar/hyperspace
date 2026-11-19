@@ -946,6 +946,17 @@ NO_SUCH_COPY = "copy of {of}: no such effect instance in the graph"
 # the modulation side) stay text.
 PICTURE, SCENE_PIC, LAYER_PIC, WINDOW_PIC = "picture", "scene", "layer", "window"
 MASK_PIC = "mask"
+# an effect's thumbnail switched to the test card (the node's "card" chip,
+# `ui_graph.card_shown`): not the picture it made but the test card put
+# through it (`render.card_through`). The page asks with this word; no kind
+# has it in `THUMBS`, and a node's own `thumb` stays "picture"
+CARD_PIC = "card"
+CARD_KINDS = ("effect", "copy")         # the kinds whose thumbnail has the chip
+# plan 65: an effect (or copy) that reaches nothing (`unreached`, faint) is
+# never built, so it made no picture: its thumbnail is its input — else the
+# test card — put through it at a thumbnail's size (`render.unwired_through`)
+UNWIRED_PIC = "unwired"
+UNWIRED_WORDS = "reaches nothing: its input, or the test card, through it here"
 THUMBS: dict[str, str] = {
     "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
     "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,
@@ -1122,6 +1133,21 @@ def _tip(reg, name: str) -> str:
     tip = str(getattr(spec, "tip", "") or "")
     head, dot, _ = tip.partition(". ")
     return (head + "." if dot else tip).strip()
+
+
+def aux_shown(reg, effect: str, wired: bool = False) -> bool:
+    """Plan 65: does effect instance `effect`'s node draw an `aux` port? When
+    its file reads one (`fx.EffectSpec.aux`: Blend, Displace on this
+    build), or a saved wire goes into it (kept and drawn, so it can be seen
+    and deleted); also with no FxState to ask (a stand-in registry)."""
+    if wired:
+        return True
+    st = getattr(reg, "fx_state", None)
+    files = getattr(st, "files", None) or getattr(st, "specs", None)
+    if not files:
+        return True
+    spec = files.get(rgraph.split_instance(effect)[0]) or files.get(effect)
+    return spec is None or bool(getattr(spec, "aux", True))
 
 
 ECHO_PINS = 4      # plan 36 T4: the echo pins a look-back always draws (echo.1 … echo.4)
@@ -1588,6 +1614,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         r, src = refs.get(w.node), refs.get(w.src)
         if w.node in stood and src is not None and w.port in r.INPUTS:
             r.inputs[w.port] = src
+    aux_wired = {w.dst for w in frame.all_wires() if w.port == rgraph.AUX}
     for name, r in refs.items():
         kind = kind_of(name)
         vkind = ("channel" if kind == "channel" else
@@ -1598,6 +1625,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                            status=hover_of(name, slots, of=of,
                                            tip=_tip(reg, name) if kind == "effect" else "")))
         for port, typ in _takes(kind).items():
+            if port == rgraph.AUX and kind in ("effect", "copy") and not aux_shown(
+                    reg, of or name, f"{name}.{port}" in aux_wired):
+                continue                        # plan 65: a file that reads no aux has no port
             add_port(n, VPort(f"rin:{name}/{port}", port, IN, typ))
         made = _makes(kind)
         if made is not None:

@@ -8823,6 +8823,54 @@ Setup for all: VIEW → shape **Sierpinski tetrahedron** (3D → Fractals); **Ad
 **687. Frame time on the rig, live.** Each fractal in turn, faces off then on, a few levels in, at the show's output size: the SYSTEM page's GPU ms for the scene and the app's frame rate, sorted then additive. *Pass:* both hold the show's frame rate; note the numbers. *Fail:* a fractal that drops frames in either mode.
 
 **688. Additive with copies and the look-back.** Additive, **Instances** 5 (Fit off, then on), faces on, the look-back on. *Pass:* every copy draws the fractal, each the same; the look-back's trail is hidden behind the faces as it is in sorted. *Fail:* a copy missing or different, or the trail drawn over the faces.
+## EA. Effect previews and the picker (rows 892–901, 2026-11-19)
+
+Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stills first, a loop only for the tile asked, a changed file made again, the outputs' bytes and the show's values untouched, the memory), `tests/test_effect_picker.py` (driven by mouse and keys: the menus' one row, a tile landing what the menu's row landed, insert on a cable, the search, Enter, Esc, the canvas swallowed) and `tests/test_unwired_thumbs.py`. The pictures were made on Mesa's software rasteriser; nothing here was seen on the Mac. A restart after pulling (two new modules).
+
+**689. Picking an effect on a trackpad.** (Mac, the rig's display, the trackpad, the stage's distance) Right-click the bare canvas → **effects…**. *Pass:* the picker opens over the canvas within a second with every tile showing its picture; each tile is easy to land on with the trackpad and a click adds that effect where you right-clicked, faint, as the old menu did; the search takes typing at once; you can tell the effects apart from their pictures and the foot's line; Blend shows a warm disc laid on the card and Displace the grid bent inside it, and both tiles carry an **aux** badge. Note which tiles say too little at their defaults (row 901): an answer for the owner. *Fail:* a missed click, a tile that adds another effect, tiny text you need to read to choose.
+
+**690. The loops on the rig.** (Mac, the show running on the outputs) Open the picker and rest the pointer on Wave, then Kaleidoscope, then Trip warp. *Pass:* within half a second each plays a smooth two-second loop that jumps back at its end; the outputs and the frame rate do not stutter while the loops are made (SYSTEM's FPS); a second visit plays at once. *Fail:* a loop that stutters within itself, a dropped frame on the outputs when a tile is hovered.
+
+**691. An unwired node's thumbnail.** (Mac, `fx.on` on) Add Wave from the picker and leave it on no wire. *Pass:* its node is faint and its thumbnail is the test card bending in Wave's ripple, moving; hover it: "reaches nothing: its input, or the test card, through it here". Wire the scene into its `image` (still no output): the thumbnail is the scene through the wave. Turn Wave off: the thumbnail is its input, as it is. The outputs never show any of it. *Fail:* a black thumbnail, or the wave on an output.
+
+**692. Hot reload of an effect file updates its tile.** (Mac, the app running) Open `shaders/fx/wave.glsl`, change a default (Waves' third number, 3, to 8) and save; open the picker. *Pass:* Wave's tile shows the new default within a second, the other tiles as they were. Save a typo: Wave's tile is the plain card and the FX page names the error; undo the typo: the wave is back. *Fail:* a tile that keeps the old picture until a restart.
+
+**693. Insert on a cable from the picker.** Right-click a picture cable → **insert ▸ effects…** → click Kaleidoscope. *Pass:* Kaleidoscope is spliced into that cable where you clicked, lit (it reaches), and the output shows it; ⌘Z takes it out in one step. Expand Kaleidoscope's node: it has an `image` port and no `aux`; add Displace or Blend: they have both. Open a patch saved with a wire into a Kaleidoscope's aux: that port and its cable are drawn, and deleting the cable works. *Fail:* a node left unwired, two undo steps, an aux port on an effect that ignores it, or a saved aux wire lost.
+
+**694. The search and Enter.** Open the picker and type `wave`. *Pass:* Wave and Wave Table, and the effects whose tips mention waves (Prism, Oil slick); Enter adds Wave. Type `dither`: Grain alone. Clear it: every tile back, in its families. *Fail:* Enter adding a tile that only matched by its tip while a label matched.
+
+**695. The canvas under the picker.** With the picker open, move over a node and a cable behind it, scroll, and press Delete with a node selected. *Pass:* no hover words, no zoom, nothing deleted; Esc closes it, and so does a click outside it, adding nothing. *Fail:* the canvas answering through the dialog.
+
+**696. The first open after a launch.** (Mac, a show on the outputs) Launch, then open the picker for the first time. *Pass:* the tiles fill in over a fraction of a second without a visible hitch on the outputs — each effect is compiled on its first preview. Note the worst frame time on SYSTEM. *Fail:* a stall a person in the room would see.
+
+**697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
+
+**698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## DY. The Mandelbrot (rows 872–881, 2026-11-19)
+
+Plan 63. Headless: `tests/test_mandel.py` (the maths against a float64 oracle, the shader against its float32 twin, the drives, the reference's lifetime, the tiles, the sizes). Frame times off the rig mean nothing, so every check here is the rig's. A restart after pulling (`FxChain.mandel` is a new field on a live object, and `mandel` a new module).
+
+Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its image and it into an output (or All outputs). For colour, wire a **Palette** in gradient mode after it.
+
+**669. A pan feels the same at every depth.** Route a hand axis (or a knob) onto **Pan x** with a push. At Zoom 1, move the hand from rest and back; then **Dive** to about 10⁸× (or type the zoom) and do the same. *Pass:* the picture slides across the screen at about the same speed at both depths, and stops when the hand is back at rest; nothing jumps when the zoom moves. *Fail:* a crawl deep in, a race zoomed out, a jump. Say whether a rate (this) or a hand that drags the picture by its displacement would feel better (row 874).
+
+**670. Dive.** A knob or a hand on **Dive**. *Pass:* up zooms in smoothly, down out, the middle holds; at full throw it feels fast but followable (four doublings a second). *Fail:* steps, a wrong direction, or a rate you would change — say what.
+
+**671. The terms by hand.** **Slice** 1 (a Julia set): a hand on **c drive x** and **c drive y**. Then sweep **Slice** from 0 to 1 by hand, then **Power** 2 to 8, then **z₀ x** off 0 on Slice 0. *Pass:* each moves the shape continuously, the tilt between the two sets reads as one shape changing, and a drive deep in moves c only a little. *Fail:* a jump, a flash of black, a term that does nothing.
+
+**672. The bench.** Run `uv run python tools/mandel_bench.py` (and with `--out 3840x2160`). *Pass:* the table prints with a GPU line naming the M3 Max; note where each view at 1080 lines passes 8 ms (120 fps) and 16 ms (60 fps), and the `ref ms` column at 4096 steps. Not a pass or fail beyond running: numbers for the owner.
+
+**673. Frame times in the app at each Size.** SYSTEM page, the Mandelbrot node's GPU line. The whole set (the default view), then a view deep in with lots of black. Switch **Size** 540 → 810 → 1080 live, and **Skip black** on and off. *Pass:* Size switches without a hitch; the times fall with the size; Skip on is cheaper where the picture has large black areas. *Fail:* a hitch on switching, or Skip costing more than off.
+
+**674. The upscale's look.** On the projector and the glass, Size 540, 810 and 1080 on a detailed view. *Pass:* note which size is soft enough to notice at the room's distance. An answer, not a pass or fail: which default the show wants (row 875 is 810).
+
+**675. Colour by steps.** **Output** steps through a Palette gradient; turn **Cycle** from 8 to 512. Then **Output** ramp. *Pass:* the bands wrap with no hard seam at any Cycle; the ramp reads as colour with the inside black. *Fail:* a hard line where the brightness turns, or banding that flickers while still.
+
+**676. The inside.** **Inside** coloured on a view with large black areas (the whole set; a minibrot). *Pass:* the inside shows settling bands, and the SYSTEM line shows the cost rising (the skip and the cardioid test are off). Say whether coloured is worth its cost. *Fail:* a speckled inside, or no change in cost.
+
+**677. The tier switch.** Dive steadily from 1× through 10⁴× to about 10⁸× into the seahorse valley (Centre −0.7436, 0.1318). *Pass:* no seam, flash or shift at 10⁴× where perturbation takes over; at 10⁵× and past the picture is sharp, where **Tier** direct (forced) is blocky. *Fail:* any visible switch.
+
+**678. A hand on c deep in.** At 10⁶× with **Steps** at 4096, a hand on **c drive x**. *Pass:* the picture keeps the frame rate while c moves (the reference is computed every frame c changes). *Fail:* a stutter: say at which Steps it starts (the bench's `ref ms`).
 
 ## What no test covers
 

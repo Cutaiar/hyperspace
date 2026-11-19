@@ -19,6 +19,10 @@ helpers every effect can call)::
     // @speed  1                    the default time rate
     // @mix    1                    the default wet/dry (0: starts as a no-op)
     // @tip    …                    one line for the tooltip
+    // @family distort              the effect picker's group (plan 65); none:
+                                    the band its @order sits in (`previews`)
+    // @hook   mandel               (plan 63) a Python half: `HOOKS` names the
+                                    module that runs the pass and its drives
     uniform float u_amount;  // @param 0 2 0.5 "Amount" tooltip text…
     uniform float u_scale;   // @param 0.5 12 3 log "Scale" …
     uniform int   u_count;   // @param 2 16 6 "Count" …    (int uniform → integer param)
@@ -101,7 +105,7 @@ from typing import Any
 
 import moderngl
 
-from . import tapers
+from . import mandel, tapers
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 
 FX_DIR = Path(__file__).parent / "shaders" / "fx"
@@ -127,9 +131,15 @@ T_SPEED = tapers.exp_signed(SPEED_UNITY, SPEED_SIDE)
 # doublings (200 detents) up to its hi — about hi / 1000 one step up
 AMOUNT_OCTAVES = 10
 RELOAD_EVERY = 30               # frames between mtime checks of the folder
+# plan 63: `// @hook <name>` — an effect with a Python half. The module runs
+# the pass (`run(chain, name, prog, vao, src, dst)`, every uniform of the
+# file set) and the effect's drives (`advance(spec, values, dt)`, while it
+# is live). One so far: the Mandelbrot, whose reference orbit, render size
+# and tile pre-passes a fragment shader alone cannot hold.
+HOOKS = {"mandel": mandel}
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock)\s+(.*?)\s*$")
+_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock|family|hook)\s+(.*?)\s*$")
 _CLOCK_UNIFORM = re.compile(r"^u_[a-z][a-z0-9_]*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
 _CHOICE = re.compile(
@@ -197,11 +207,21 @@ class EffectSpec:
     # `@order`: no part in anything drawn (plan 33) — the stack position an
     # old loadable patch naming none had, which `graphmigrate` reads it as
     order: int = 50
+    hook: str = ""          # plan 63: `// @hook <name>`, a key of `HOOKS` ("" none)
     blend: int = 0
     speed: float = 1.0
     mix: float = 1.0         # the default wet/dry (@mix); 0 for a pass that starts as a no-op
     tip: str = ""
     clocks: list[ClockSpec] = field(default_factory=list)   # `@clock` lines, in file order
+    # `@family` (plan 65): the effect picker's group, "" for none (then the
+    # picker groups by `order`, `previews.family_of`). Declares nothing, so
+    # it is not in `signature`: a family change re-declares no param
+    family: str = ""
+    # plan 65: whether the file reads the second picture wired into its
+    # `aux` port (`reads_aux`: its code calls `aux(` or `aux_luma(`). GRAPH
+    # draws an effect's aux port only when it does (or a saved wire goes
+    # in); like `family`, it declares no param, so it is not in `signature`
+    aux: bool = False
 
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
@@ -336,6 +356,18 @@ def _check_clocks(name: str, spec: EffectSpec) -> None:
         spec.clocks[k] = replace(c, rate="*".join(factors), factors=tuple(factors))
 
 
+_AUX_CALL = re.compile(r"\baux(?:_luma)?\s*\(")
+
+
+def reads_aux(source: str) -> bool:
+    """Plan 65: does effect source `source` read its aux picture — call
+    `aux(uv)` or `aux_luma(uv)` (`_lib.glsl`) outside a comment? Read from
+    the file itself, so an effect that starts using one gains the port."""
+    code = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
+    code = re.sub(r"//[^\n]*", " ", code)
+    return bool(_AUX_CALL.search(code))
+
+
 def parse(name: str, source: str) -> EffectSpec:
     """An effect file's text → its spec. Raises SpecError on a bad header."""
     if not _NAME.match(name):
@@ -361,6 +393,12 @@ def parse(name: str, source: str) -> EffectSpec:
                     spec.blend = BLENDS.index(val.lower())
                 elif key == "clock":
                     spec.clocks.append(_parse_clock(name, n, val))
+                elif key == "family":
+                    spec.family = val.strip().lower()
+                elif key == "hook":
+                    if val not in HOOKS:
+                        raise SpecError(f"{name}:{n}: @hook {val!r} is none of {sorted(HOOKS)}")
+                    spec.hook = val
             except SpecError:
                 raise                       # already says what is wrong
             except ValueError as e:
@@ -413,6 +451,7 @@ def parse(name: str, source: str) -> EffectSpec:
     if not re.search(r"\bvec4\s+effect\s*\(", source):
         raise SpecError(f"{name}: no 'vec4 effect(vec2 uv)'")
     _check_clocks(name, spec)
+    spec.aux = reads_aux(source)
     return spec
 
 
@@ -674,6 +713,11 @@ class FxState:
                 if c.period:
                     x %= c.period
                 ph[c.uniform] = x
+            # plan 63: a hooked effect's drives, while it draws — not scaled
+            # by its speed (they are where the view goes, not a clock)
+            hook = HOOKS.get(getattr(spec, "hook", "") or "")
+            if hook is not None and self.live(n):
+                hook.advance(spec, v, dt)
 
     def advance_to(self, t: float) -> float:
         """Every effect's clock up to the frame time `t`: advance(dt) with
@@ -761,6 +805,10 @@ def _key(d: dict, k: str):
 def _fmt(p: ParamSpec) -> Callable[[float], str]:
     if p.integer:
         return lambda x: f"{int(x)}"
+    if p.log and p.hi >= 1e6 * p.lo:
+        # plan 63: a range of many orders (the Mandelbrot's zoom, to 10¹³)
+        # reads in three figures and its power of ten, "4.2e+07×"
+        return lambda x: f"{x:.3g}×" if x >= 1e4 else f"{x:.2f}×"
     span = p.hi - p.lo
     digits = 3 if span <= 0.2 else 2 if span <= 20 else 1 if span <= 200 else 0
     return lambda x: f"{x:.{digits}f}"
@@ -939,6 +987,7 @@ class FxChain:
         self.errors: dict[str, str] = {}
         self._frame = 0
         self.opaque = False     # the ground is opaque: every pass writes alpha 1 (Renderer.draw)
+        self.mandel = None      # plan 63: `mandel.Gl`, the hook's GL objects, made on first use
         self._build_copy()
 
     def _build_copy(self) -> None:
@@ -947,8 +996,13 @@ class FxChain:
         self._copy["u_src"].value = 0
 
     def on_reload(self) -> None:
-        """Hot-swap hook: every program is rebuilt from source on next use."""
+        """Hot-swap hook: every program is rebuilt from source on next use (plan
+        63: the hook's GL objects too, made again by the reloaded module)."""
         self._release_programs()
+        gl = getattr(self, "mandel", None)
+        if gl is not None:
+            gl.release()
+            self.mandel = None
         self._copy_vao.release()
         self._copy.release()
         self._build_copy()
@@ -960,6 +1014,7 @@ class FxChain:
         self._frame += 1
         if self._frame % RELOAD_EVERY == 0:
             self.state.poll()
+        mandel.tick(self)       # plan 63: the hook's objects for gone instances, or a reload
 
     def pool(self, size: tuple[int, int], n: int = 2
              ) -> list[tuple[moderngl.Texture, moderngl.Framebuffer]]:
@@ -999,6 +1054,10 @@ class FxChain:
         self._release_programs()
         self._copy_vao.release()
         self._copy.release()
+        gl = getattr(self, "mandel", None)      # plan 63: the hook's GL objects
+        if gl is not None:
+            gl.release()
+            self.mandel = None
 
     def _release_programs(self) -> None:
         """This chain's effect programs."""
@@ -1047,7 +1106,8 @@ class FxChain:
 
     def run_one(self, name: str, src: moderngl.Texture, dst: moderngl.Framebuffer,
                 t: float, opaque: int | None = None,
-                aux: moderngl.Texture | None = None) -> None:
+                aux: moderngl.Texture | None = None,
+                res: tuple[int, int] | None = None) -> None:
         """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
         program over `src` into `dst`'s viewport, every uniform set, the
         clocks moved first (once per frame time,
@@ -1058,7 +1118,10 @@ class FxChain:
         hands' layer, whose ground is see-through whatever the window's.
         `aux` (plan 32 R): the picture wired into the effect's `aux` port,
         bound on unit 1 (`u_aux_on` 1); None leaves it off, and `aux(uv)`
-        reads transparent black."""
+        reads transparent black. `res`: the size the pass is told its
+        picture has (`u_res`) when that is not `src`'s — a generator painted
+        over no picture of the size it draws at (the test card,
+        `render.card_through`)."""
         self.state.advance_to(t)
         pv = self._program(name)
         ctx = self.ctx
@@ -1075,7 +1138,7 @@ class FxChain:
                 self._copy_vao.render(moderngl.TRIANGLES, vertices=3)
                 return
             prog, vao = pv
-            self._uniforms(prog, name, src.size, t,
+            self._uniforms(prog, name, src.size if res is None else res, t,
                            self._opaque() if opaque is None else int(opaque))
             for k, x in one.items():
                 self._set(prog, k, x)
@@ -1083,9 +1146,22 @@ class FxChain:
                 aux.use(location=1)
                 self._set(prog, "u_aux_on", 1)
                 self._set(prog, "u_aux_size", tuple(float(x) for x in aux.size))
+            hook = HOOKS.get(getattr(self.state.specs[name], "hook", "") or "")
+            if hook is not None:        # plan 63: the Python half runs the pass
+                hook.run(self, name, prog, vao, src, dst)
+                return
             vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
             ctx.enable(moderngl.BLEND)
+
+    def upscale(self, tex: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
+        """`tex` stretched over `dst`'s viewport through its LINEAR sampler
+        (plan 63: a hooked pass rendered at fewer lines, `mandel.run`)."""
+        dst.use()
+        tex.use(location=0)
+        self._set(self._copy, "u_scaled", 1)
+        self._set(self._copy, "u_origin", tuple(int(x) for x in dst.viewport[:2]))
+        self._copy_vao.render(moderngl.TRIANGLES, vertices=3)
 
     @staticmethod
     def _set(prog: moderngl.Program, name: str, value) -> None:
