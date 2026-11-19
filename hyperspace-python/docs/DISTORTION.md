@@ -107,7 +107,7 @@ outputs never see the card, so it is safe during a show. It is a view
 setting: not saved, not an undo step. The card's grid follows a Test card
 effect's knobs when the graph holds one, else the file's defaults. What it
 does not show: the effect's `aux` input, or anything fed back round a loop.
-A node that reaches no output has no thumbnail, card or not.
+A node that reaches no output is never built, so its thumbnail is made beside the graph (plan 65): its input, else the card, through the effect.
 (`render.card_through`, `ui_graph.toggle_card`, `tests/test_thumb_card.py`.)
 
 ## Adding another distortion

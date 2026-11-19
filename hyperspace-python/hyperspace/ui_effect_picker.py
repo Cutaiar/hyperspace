@@ -46,20 +46,22 @@ NO_MATCH = "No effect matches"
 
 # a tile: the preview at its own size, one line of label under it
 TILE_W, PIC_H = float(pv.PREVIEW_W), float(pv.PREVIEW_H)
-LABEL_H = 28.0
+LABEL_H = SPACE[8]                  # the label's line under the picture
 TILE_H = PIC_H + LABEL_H
 GAP = SPACE[3]                      # between tiles
 PAD = SPACE[4]                      # the dialog's inset
 EDGE = SPACE[12]                    # kept clear around the dialog, in the window
-SEARCH_H = 40.0                     # the search box's height: a finger's, not a line's
-FOOT_H = 44.0                       # the tip's room at the foot (two lines)
+SEARCH_H = SPACE[10]                # the search box's height: a finger's, not a line's
+FOOT_H = SPACE[12]                  # the tip's room at the foot (two lines)
+MIN_H = 6 * SPACE[10]               # the dialog is never shorter (a short window)
 MAX_COLS = 6
 ROUND = RADII["lg"]
-# the dialog's colours: dkit's dark tokens (the popover, its border, the ring)
+OUTLINE, OUTLINE_LIT = 1.0, 2.0     # a tile's outline, and the hovered one's
+WHITE = (1.0, 1.0, 1.0, 1.0)        # the picture drawn as it is (no tint)
+# the dialog's colours: dkit's dark tokens (the popover, a tile, its border, the hovered one's)
 GROUND = rgba("popover", theme=DARK)
 CARD = rgba("muted", theme=DARK)
 BORDER = rgba("border", theme=DARK)
-RING = rgba("ring", theme=DARK)
 LIT = rgba("primary", theme=DARK)
 
 
@@ -123,7 +125,7 @@ def draw(st: dict, specs: list[Any], on_pick: Callable[[str], object],
     vp = imgui.get_main_viewport()
     cols = columns(vp.work_size.x - 2 * EDGE - 2 * PAD)
     w = cols * TILE_W + (cols - 1) * GAP + 2 * PAD + imgui.get_style().scrollbar_size
-    h = max(240.0, vp.work_size.y - 2 * EDGE)
+    h = max(MIN_H, vp.work_size.y - 2 * EDGE)
     imgui.set_next_window_pos(imgui.ImVec2(vp.work_pos.x + (vp.work_size.x - w) / 2,
                                            vp.work_pos.y + EDGE))
     imgui.set_next_window_size(imgui.ImVec2(w, h))
@@ -211,14 +213,14 @@ def _tile(spec, cache, hover: str | None, now: float) -> tuple[bool, bool]:
     if got is not None:
         tex, uv0, uv1 = got
         dl.add_image_rounded(imgui.ImTextureRef(tex.glo), a, pic_b, imgui.ImVec2(*uv0),
-                             imgui.ImVec2(*uv1), ui.u32(imgui.ImVec4(1, 1, 1, 1)), RADII["md"],
+                             imgui.ImVec2(*uv1), ui.u32(imgui.ImVec4(*WHITE)), RADII["md"],
                              imgui.ImDrawFlags_.round_corners_top)
     label = ui.fit_text(spec.label, TILE_W - 2 * SPACE[2])
     tw = imgui.calc_text_size(label)
     dl.add_text(imgui.ImVec2(p0.x + (TILE_W - tw.x) / 2, p0.y + PIC_H + (LABEL_H - tw.y) / 2),
                 ui.u32(ui.TEXT if over else ui.DIM), label)
     ring = imgui.ImVec4(*(LIT if over else BORDER))
-    dl.add_rect(a, b, ui.u32(ring), RADII["md"], 2.0 if over else 1.0)
+    dl.add_rect(a, b, ui.u32(ring), RADII["md"], OUTLINE_LIT if over else OUTLINE)
     return clicked, over
 
 

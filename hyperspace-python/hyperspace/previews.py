@@ -49,7 +49,7 @@ from typing import Any
 
 import moderngl
 
-from .fx import FX_DIR, FxChain, FxState, clock_rate, fragment_source
+from .fx import FX_DIR, FxChain, FxState, clock_rate
 
 CARD_EFFECT = "testcard"        # the effect file that draws the card (shaders/fx/testcard.glsl)
 
@@ -190,13 +190,13 @@ class EffectPreviews:
         self.loops: list[str] = []              # … and a loop of, first first
         self.atlas: dict[str, tuple[moderngl.Texture, moderngl.Framebuffer]] = {}
         self.made: dict[str, set[int]] = {}
-        self.key: dict[str, str] = {}           # file → the program source its cells are of
+        self.key: dict[str, tuple] = {}         # file → what its cells' program was built from
         self.passes = 0
         self.error = ""
         self._own: FxState | None = None        # this module's state and chain (made on first use)
         self._chain: FxChain | None = None
         self._card: tuple[moderngl.Texture, moderngl.Framebuffer] | None = None
-        self._card_key: str | None = None
+        self._card_key: tuple | None = None
         self._blank: moderngl.Texture | None = None     # what the card is painted over
         self._work: tuple[moderngl.Texture, moderngl.Framebuffer] | None = None
 
@@ -331,7 +331,9 @@ class EffectPreviews:
             spec = own.specs.get(name)
             if spec is None:
                 continue
-            src = fragment_source(own.lib, spec.source, own.common, spec.clocks)
+            # (what its program is built from; the same string objects frame to
+            # frame until a reload, so the compare is by identity, no text built)
+            src = (spec.source, own.lib, own.common, tuple(spec.clocks))
             if self.key.get(name) != src:
                 self.key[name] = src
                 self.made[name] = set()
@@ -353,7 +355,7 @@ class EffectPreviews:
             self._card = (tex, ctx.framebuffer(color_attachments=[tex]))
             self._card_key = None
         spec = own.specs.get(CARD_EFFECT)
-        key = self.key.get(CARD_EFFECT, "") if spec is not None else "grey"
+        key = self.key.get(CARD_EFFECT, ()) if spec is not None else ("grey",)
         tex, fbo = self._card
         if self._card_key == key:
             return tex
