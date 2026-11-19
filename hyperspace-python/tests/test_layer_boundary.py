@@ -483,7 +483,7 @@ def _mods(*names: str) -> set[str]:
 PATCH_MODULES = _mods(
     "patches", "loadable", "nodemode", "graph", "graphmigrate", "modgraph", "modifiers", "modbank",
     "lfo", "envelope", "sequencer", "patterns", "fx", "mandel", "ghost", "handmesh", "lookback", "masks", "view",
-    "field", "geometry", "glsl", "motion", "tapers", "palettecompat", "render", "media_tex",
+    "field", "geometry", "fractal", "fractal_gl", "shapeframe", "glsl", "motion", "tapers", "palettecompat", "render", "media_tex",
     "segment", "dream", "media", "previews")
 # what is set for a performance or an install
 META_MODULES = _mods(

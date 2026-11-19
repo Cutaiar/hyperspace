@@ -111,7 +111,10 @@ def apply(world, state: GripState, closed: Callable[[str], bool]) -> None:
     b = world.bodies.get(shape)
     if b is None:
         b = world.body(shape, worlds.Body(boxed=True))
-    b.boxed = True
+    # plan 64, part 2: inside a fractal the fist holds the space, not an
+    # object — nothing to keep whole on screen, no body to shape
+    bounded = bool(getattr(world[shape], "bounded", True))
+    b.boxed = bounded
     b.drag = b.angular_drag = float(state.drag)
     j.closed = bool(closed(clutch_of(state)))
     if fresh and not _home_and_still(world[shape], b):
@@ -119,9 +122,10 @@ def apply(world, state: GripState, closed: Callable[[str], bool]) -> None:
         j.homing = True                  # the new look starts with the shape at home…
     if j.homing and (j.closed or _home_and_still(world[shape], b)):
         j.homing = False                 # …unless a hand takes it first
-    j.shaping = bool(closed(shape_clutch_of(state)))
+    j.shaping = bounded and bool(closed(shape_clutch_of(state)))
     j.coupling = float(state.coupling)
-    j.inertia, j.shape, j.skater = bool(state.inertia), float(state.shape), bool(state.skater)
+    j.inertia, j.shape, j.skater = (bounded and bool(state.inertia), float(state.shape),
+                                    bool(state.skater))
 
 
 def _off(world, shape: str) -> None:
@@ -139,6 +143,7 @@ def _off(world, shape: str) -> None:
         j = world.joint(shape, worlds.Joint(worlds.HANDS["right"], worlds.HANDS["left"]))
     if b is None:
         b = world.body(shape, worlds.Body(boxed=True))
+    b.boxed = bool(getattr(obj, "bounded", True))      # (plan 64, part 2: the space is not boxed)
     j.release()
     j.homing, j.closed, j.shaping = True, False, False
 

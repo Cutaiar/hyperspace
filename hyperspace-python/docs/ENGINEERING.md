@@ -212,7 +212,7 @@ The index stays the identity, so the menu's order never reaches a loadable patch
 | 49 | Hopf fibration | Surfaces and fibrations | 0 | 864 | 864 |
 | 50 | Armillary sphere | Mathematical toys | 0 | 374 | 384 |
 | 51 | Geodesic sphere | Mathematical toys | 180 | 92 | 270 |
-| 52 | Sierpinski tetrahedron | Mathematical toys | 256 | 130 | 384 |
+| 52 | Sierpinski tetrahedron | Fractals | 256 | 130 | 384 |
 | 53 | Lissajous knot | Mathematical toys | 0 | 240 | 240 |
 | 54 | Loxodrome | Mathematical toys | 0 | 240 | 240 |
 | 55 | Orbit | Mathematical toys | 0 | 64 | 64 |
@@ -262,6 +262,60 @@ The index stays the identity, so the menu's order never reaches a loadable patch
 | 99 | Truncated icosahedral prism | Prisms and pyramids | 154 | 120 | 240 |
 | 100 | Flow mark | Vector marks | 5 | 130 | 130 |
 | 101 | Flow capsules | Vector marks | 1040 | 970 | 2000 |
+| 102 | Octahedron flake | Fractals | 0 | 85 | 264 |
+| 103 | Menger sponge | Fractals | 0 | 896 | 1992 |
+| 104 | Cantor dust | Fractals | 0 | 512 | 660 |
+| 105 | Vicsek cross | Fractals | 0 | 232 | 456 |
+| 106 | Icosahedron flake | Fractals | 0 | 104 | 300 |
+| 107 | Sierpinski 5-cell | 4D fractals | 0 | 65 | 190 |
+| 108 | 4D Cantor dust | 4D fractals | 0 | 256 | 480 |
+| 109 | 4D Vicsek cross | 4D fractals | 0 | 736 | 1824 |
+
+**Fractals** (3D, appended last; `fractal.py`). Shapes made of copies of
+themselves — the Sierpinski tetrahedron (row 52), the octahedron and
+icosahedron flakes (a copy at each corner), and three cuts of a cube into
+27: the Menger sponge (the 20 on its corners and edges), Cantor dust (the
+8 corners) and the Vicsek cross (the middle and the 6 face centres). The
+row above is each one's first levels, what a thumbnail and `geom` hold;
+on screen it is drawn for the frame, to the detail the zoom shows, and
+`camera.zoom` never runs out on it (`fractal.step`). Its faces are every cell's, the
+split ones too, so a face pattern or a picture wired into `shape.faces`
+is drawn at every size, one inside another.
+
+**4D fractals.** The **Sierpinski 5-cell**: a 5-cell at each corner of a
+5-cell, the pyramid's elder (dimension ln 5 / ln 2 ≈ 2.32). Its zoom is a
+scale in 4D, before the 4D divide — the shadow of a 4D fractal is not
+self-similar, the fractal is — so the view dives toward the 4D origin and
+re-roots there in all four coordinates (`Dive.w` beside `Dive.z`); what
+comes near the 4D eye along w, or goes far from it, fades (`fractal.W_*`).
+Two cuts of a tesseract into 81 follow it: **4D Cantor dust** (its 16
+corners, dimension ≈ 2.52) and the **4D Vicsek cross** (its middle and its
+8 cells' middles, dimension 2). A split of a tesseract adds hundreds of
+edges, so they are drawn coarser than the rest (`Fractal.split`).
+
+**Drawing a fractal** (plan 64). The renderer draws every shape through one
+interface (`shapeframe.frame`); a fractal's provider walks the cells the eye
+can see (`fractal.walk`: the cull, with the world's offset, and the split, on
+the CPU), then draws them one of two ways, `view.frac_additive`:
+
+- **sorted** (the default) makes the frame's geometry on the CPU
+  (`fractal.geometry_of`) and the scene pass painter-sorts it as any
+  shape's;
+- **additive** uploads one row a cell (`fractal.instances`: its centre in
+  the view, its radius, its alpha) and draws each mesh, uploaded once, per
+  cell on the GPU (`fractal_gl.py`), unsorted, colour adding up.
+
+The two place every point alike to float32's precision
+(`tests/test_fractal_gpu.py`).
+
+**Grabbing a fractal** (plan 64, part 2). While the whole shape fits the
+rig's box the grip holds it as an object, as any shape. Once it doesn't, or
+the view has gone into a cell, the fist holds the space: what the grip moves
+is folded into the view, turning about the middle of the screen and
+travelling through the fractal's own space (`fractal.fold_flight`). There is
+no box and no shaped inertia then. The crossing redraws nothing, and the
+view re-roots only inside. A loadable patch saved inside keeps the dive
+(`"dive"`, row 889).
 
 **Vector marks** (3D, after the prisms). A subject read from a vector
 source instead of a formula: the Wispr Flow mark, five pill-shaped bars

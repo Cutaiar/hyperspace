@@ -111,7 +111,8 @@ import moderngl
 import numpy as np
 
 from . import field as _field_mod
-from . import poi
+from . import fractal as _fractal
+from . import fractal_gl, poi, shapeframe
 from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
     LAYOUT_GRID,
     LAYOUT_HEX,
@@ -120,7 +121,6 @@ from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
     field,
     inst_positions,
 )
-from .field import is_3d as is_3d_layout
 from .fx import SCREEN, FxChain, FxState
 from .geometry import (
     EYE_DISTANCE,
@@ -129,12 +129,7 @@ from .geometry import (
     EYE_NEAR,
     SCALE,
     eye_matrix,
-    face_triangles,
-    face_uvs,
-    geom,
     model_matrix,
-    shape_world,
-    turned_depth,
 )
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
@@ -1459,6 +1454,11 @@ class Renderer:
         self._build_wire_programs()
         for res in olds:
             res.release()
+        # a fractal's GPU draw (plan 64): made again from fractal_gl as it is now
+        cells = getattr(self, "_cells", None)
+        if cells is not None:
+            cells.release()
+        self._cells = None
         self._build_face_program()
         # the faces' pictures are made again from the module as it is now
         # (app.py's reloader does not re-class them), rebuilt on next use. A
@@ -1597,8 +1597,8 @@ class Renderer:
         try:
             src = PATTERNS_GLSL.read_text()
             self._patterns_mtime = self._shader_mtime()
-            prog = ctx.program(vertex_shader=FACE_VS,
-                               fragment_shader=_face_fragment(FACE_FS_HEAD, src, FACE_FS_TAIL))
+            face_fs = _face_fragment(FACE_FS_HEAD, src, FACE_FS_TAIL)
+            prog = ctx.program(vertex_shader=FACE_VS, fragment_shader=face_fs)
             made.append(prog)
             seed = ctx.program(vertex_shader=QUAD_VS,
                                fragment_shader=_face_fragment(SEED_FS_HEAD, src, SEED_FS_TAIL))
@@ -1621,6 +1621,7 @@ class Renderer:
             if res is not None:
                 res.release()
         self._face_prog, self._fvao, self._seed_prog, self._seed_vao = prog, fvao, seed, svao
+        self._face_fs = face_fs          # (a fractal's cells draw their faces with it too)
         prog["u_pic"].value = 1          # its own unit: the bitmap has 0
         self.pattern_error = ""
 
@@ -3405,7 +3406,13 @@ class Renderer:
         self.cover.fbo.use()
         ctx.viewport = (0, 0, *self.scene.size)
         ctx.clear(0.0, 0.0, 0.0, 0.0)
-        if self._face_verts and self._copies:
+        cells = getattr(self, "_cover_cells", None)
+        if cells is not None and self._copies:
+            # a fractal's solids on the GPU (plan 64): its own cover program
+            ctx.disable(moderngl.BLEND)
+            cells()
+            ctx.enable(moderngl.BLEND)
+        elif self._face_verts and self._copies:
             ctx.disable(moderngl.BLEND)
             # the scene pass's camera, as it drew those vertices
             vp, model = self._scene_mats
@@ -3457,17 +3464,6 @@ class Renderer:
         Plan 26 A3: `clear` False draws over what is bound — the scene node
         cleared it and drew the solid geometry (the hands) first, whose
         depth hides the shape behind them."""
-        g = geom(s.shape)
-        # a 3D shape is drawn with no W turn and cues on its depth toward
-        # the 3D camera; a 4D shape is turned to its body first, and with
-        # the 3D switch holding it (ViewState.held, set by integrate) by
-        # its 3D angles alone; a scene, each layer at its own
-        # (geometry.shape_world, plan 28's catalog)
-        P, w4, pd = shape_world(s.shape, s.ang, s.yaw, s.pitch, d4=s.depth4,
-                                flat=getattr(s, "held", False), body=getattr(s, "body", None))
-        # a scene's per-layer weights (geometry._scene_style), else None
-        st = g.get("style")
-
         # the camera: the shape's world transform and the eye, as the vertex
         # shaders take them (column-major). Two ways to place the copies:
         # a flat layout (or one copy) with Fit off is the field it always was — the
@@ -3478,25 +3474,35 @@ class Renderer:
         # the camera in them, the world transform the identity, the strokes
         # scaled per copy in the shaders (`_copies_of`)
         zoom = max(s.zoom, 1e-3)
-        legacy = not getattr(s, "inst_fit", False) and (
-            int(s.instances) <= 1 or not is_3d_layout(int(getattr(s, "inst_layout", 0))))
+        legacy = _field_mod.takes_offset(s)
         # plan 59: the world's offset on the shape object (home ∘ offset, the
         # home being zoom and pan), None while it is the identity — the matrix
         # of before, built exactly as before. Fit and the 3D lattices carry the
         # camera in each copy's row and take no offset (register row 851)
         world = getattr(self, "world", None)
-        off = world.offset_matrix("shape") if world is not None and legacy else None
+        off = None
+        if legacy:
+            obj = getattr(world, "objects", {}).get("shape") if world is not None else None
+            off = shapeframe.drawn_offset(
+                s, world.offset_matrix("shape") if world is not None else None,
+                getattr(obj, "bounded", True))
         model = model_matrix(zoom, s.pan, off) if legacy else model_matrix(1.0, (0.0, 0.0))
         if world is not None and hasattr(world, "box"):
             # plan 60: the box the rig holds the shape to, what the eye sees at
             # depth 0 — set from the scene drawn, as the poi's (`poi.box_for`)
             world.box = tuple(poi.box_for(w, h, getattr(s, "eye_fov", EYE_FOV),
                                           getattr(s, "eye_distance", EYE_DISTANCE)))
-        if off is not None:
-            # plan 60 (register row 856): a turned offset turns a 3D shape before
-            # the painter sort and the depth cue read its depth, so it sorts and
-            # shades by where it is now; a 4D shape's cue stays its w
-            pd = turned_depth(s.shape, P, pd, off)
+        # what the shape is this frame (plan 64, shapeframe.py): a fixed shape
+        # its cached geometry, turned — a 3D shape with no W turn, cueing on its
+        # depth toward the 3D camera; a 4D shape turned to its body first, and
+        # with the 3D switch holding it (ViewState.held) by its 3D angles alone
+        # —, a scene each layer at its own (plan 28's catalog), a fractal made
+        # for the frame (fractal.py). The offset turns a 3D shape's cue
+        # (plan 60, register row 856); a fractal culls by it
+        sf = shapeframe.frame(s, w, h, off)
+        g, P, w4, pd = sf.g, sf.P, sf.w4, sf.pd
+        # a scene's per-layer weights (geometry._scene_style), else None
+        st = sf.style
         vp = eye_matrix(w, h, getattr(s, "eye_fov", EYE_FOV),
                         getattr(s, "eye_distance", EYE_DISTANCE))
         mats = (np.asarray(vp, dtype="f4").T.tobytes(),
@@ -3506,7 +3512,12 @@ class Renderer:
         n_inst = max(0, int(s.instances))   # 0: the ground alone (returns below)
         t_m = self.now(t_now)
 
-        near, far = pd.min(), pd.max()
+        if sf.cue is not None:
+            # fixed ends (a fractal's: the octaves about the eye's distance),
+            # so a cell's weight does not move with what else is drawn
+            near, far = sf.cue
+        else:
+            near, far = pd.min(), pd.max()
         span = max(far - near, 1e-6)
         if span < DEPTH_FLOOR:
             # pd grows toward the eye, so `far` (pd.max) is the nearest
@@ -3521,8 +3532,9 @@ class Renderer:
         order = np.argsort(edepth, kind="stable")  # painter: far first
 
         t = (edepth[order] - near) / span
-        dens = clamp(340 / max(g["m"], 1), 0.42, 1)
-        heavy = g["m"] > 500
+        dens_m = sf.dens_m        # (a fractal's: a constant, fractal.DENS_M)
+        dens = clamp(340 / max(dens_m, 1), 0.42, 1)
+        heavy = dens_m > 500
         B = s.bright * dens
         alpha = np.clip((0.10 + 0.90 * t * t) * B, 0.015, 1)
 
@@ -3540,7 +3552,9 @@ class Renderer:
         # the shaders scale a stroke by its copy (field path, world space);
         # the legacy path scales it here, by the zoom, as before
         wsc = 0.0 if screen_strokes or legacy else 1.0
-        sz = 1.0 if screen_strokes or not legacy else zoom
+        # (a fractal's zoom is re-rooted as it grows — fractal.step — so its
+        # strokes take their weight from the depth cue alone: zoom_strokes)
+        sz = 1.0 if screen_strokes or not legacy or not sf.zoom_strokes else zoom
         wscale = clamp(0.75 + 0.35 * s.bright, 0.6, 1.35)
         width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale
         if st is not None:
@@ -3595,6 +3609,7 @@ class Renderer:
         # ---- face fills, under the wireframe (agent-validated prototype) ----
         self._face_verts = 0
         self._copies = 0
+        self._cover_cells = None
         if s.faces:
             self._maybe_reload_patterns()
         if n_inst == 0:
@@ -3622,8 +3637,13 @@ class Renderer:
             self.ctx.enable(moderngl.DEPTH_TEST)
         draws: list[tuple] = []        # (vao, vertices, program, the most alpha a fragment has)
         try:
-            if s.faces and self._face_prog is not None:
-                tris = face_triangles(s.shape)
+            if sf.walk is not None:
+                # a fractal on the GPU (plan 64, fractal_gl.py): its cells, one
+                # instance each, unsorted and additive
+                self._draw_cells(sf, s, w, h, dpr, inst, mats, blend, near, span, dens,
+                                 heavy, wscale, legacy, wsc, t_m, draws)
+            elif s.faces and self._face_prog is not None:
+                tris, tri_uv, tri_alpha = sf.faces()
                 if len(tris):
                     td = (pd[tris[:, 0]] + pd[tris[:, 1]] + pd[tris[:, 2]]) / 3.0
                     torder = np.argsort(td, kind="stable")
@@ -3634,7 +3654,11 @@ class Renderer:
                     to = tris[torder]
                     if st is not None:
                         fa = fa * st["f_alpha"][to[:, 3]]
-                    uv = face_uvs(s.shape).reshape(-1, 3, 2)[torder]
+                    if tri_alpha is not None:
+                        # each triangle's own weight (a fractal's solid: out as
+                        # it splits, in the fog)
+                        fa = fa * tri_alpha[torder]
+                    uv = tri_uv[torder]
                     fverts = np.empty((len(tris) * 3, 8), dtype=np.float32)
                     for corner in range(3):
                         fverts[corner::3, 0:3] = P[to[:, corner]]
@@ -3676,7 +3700,7 @@ class Renderer:
                     # on that clamp (patterns.glsl cannot exceed it)
                     draws.append((self._fvao, len(fverts), p, float(fa.max()) * 2.8))
 
-            if s.lines:
+            if s.lines and sf.walk is None:
                 eo = E[order]
                 m = g["m"]
                 rgb = st["e_rgb"][order] if st is not None else (1.0, 1.0, 1.0)
@@ -3696,7 +3720,7 @@ class Renderer:
                 self._lvao.render(moderngl.TRIANGLES, vertices=len(verts), instances=copies)
                 draws.append((self._lvao, len(verts), self._lines, float(alpha.max())))
 
-            if s.points and not g.get("curve"):   # a curve (plan 28) has no corners to dot
+            if s.points and not g.get("curve") and sf.walk is None:   # a curve (plan 28) has no corners to dot
                 tp = (pd - near) / span
                 order_p = np.argsort(pd, kind="stable")
                 # radius in framebuffer px (× dpr) at scale 1; POINT_VS scales
@@ -3746,6 +3770,100 @@ class Renderer:
                 fbo.depth_mask = True
                 fbo.use()
 
+    def _draw_cells(self, sf, s: ViewState, w: int, h: int, dpr: float, inst: np.ndarray,
+                    mats: tuple, blend: tuple, near: float, span: float, dens: float,
+                    heavy: bool, wscale: float, legacy: bool, wsc: float, t_m: float,
+                    draws: list) -> None:
+        """A fractal's cells on the GPU (plan 64, fractal_gl.py): the walk's
+        rows uploaded, each mesh drawn once per cell and per copy — the
+        faces, the lines, the dots, by the scene pass's own rules, which the
+        vertex shaders apply — blended additively and not sorted. Adds the
+        draws to `draws`, for the depth pass; the faces' cover is
+        `_cover_cells`. The CPU path (`fractal.geometry_of`, sorted) is the
+        oracle the shaders are tested against."""
+        cd = getattr(self, "_cells", None)
+        if cd is None:
+            cd = self._cells = fractal_gl.CellDraw(self.ctx, LINE_FS, POINT_FS, COVER_FS)
+        wk = sf.walk
+        spec = wk.spec
+        name = _fractal.name_of(spec)
+        cd.meshes(spec, name)
+        cd.upload(_fractal.instances(wk))
+        # colour adds up, unsorted; alpha composites as the pass's own blend
+        add = ((moderngl.SRC_ALPHA, moderngl.ONE) + tuple(blend[2:]) if len(blend) == 4
+               else (moderngl.SRC_ALPHA, moderngl.ONE, moderngl.SRC_ALPHA,
+                     moderngl.ONE_MINUS_SRC_ALPHA))
+        fractal_gl.blend(self.ctx, add)
+
+        put = fractal_gl.put
+
+        def setup(prog) -> None:
+            self._camera_uniforms(prog, mats, -1.0)
+            fractal_gl.view_uniforms(prog, wk, near, span)
+
+        try:
+            if s.faces and self._face_prog is not None:
+                fp = cd.face_program(getattr(self, "_face_fs", ""))
+                if fp is not None:
+                    setup(fp)
+                    self._face_uniforms(fp, s, t_m)
+                    if getattr(self, "_face_plain", False):
+                        put(fp, "u_mode", 0)
+                        put(fp, "u_bmp_on", 0)
+                    pic = getattr(self, "_pic", None)
+                    if pic is None:
+                        put(fp, "u_pic_on", 0)
+                    else:
+                        pic.use(location=1)
+                        screen = int(getattr(self.fx.state, "face_map", 0)) == SCREEN
+                        put(fp, "u_pic_on", 2 if screen else 1)
+                        put(fp, "u_pic_fb", tuple(float(x) for x in self.scene.size))
+                    nfaces = int(spec.tri_face.max()) + 1
+                    fdens = min(1.0, 24.0 / max(nfaces, 1))
+                    put(fp, "u_face", (float(s.bright), 0.35 + 0.65 * fdens))
+                    go = cd.draw(name, "faces", "faces", fp, inst)
+                    if go is not None:
+                        # the most a fill's vertex alpha can be, × 2.8 (draw_scene)
+                        top = float(wk.face_a.max()) * 0.065 * s.bright
+                        draws.append((None, 0, fp, top * 2.8, go))
+
+                        def cover(cp=cd.cover, rows=inst):
+                            vp, model = self._scene_mats
+                            put(cp, "u_vp", vp)
+                            put(cp, "u_model", model)
+                            fractal_gl.view_uniforms(cp, wk, near, span)
+                            cd.draw(name, "faces", "faces", cp, rows)
+                        self._cover_cells = cover
+            if s.lines:
+                lp = cd.lines
+                setup(lp)
+                put(lp, "u_size", (float(w), float(h)))
+                put(lp, "u_wscale", wsc)
+                put(lp, "u_stroke", (float(s.bright * dens), float(wscale),
+                                     float(s.lines_alpha), 1.0 if heavy else 0.0))
+                put(lp, "u_legacy", 1.0 if legacy else 0.0)
+                for mesh, kind in (("lines", "lines"), ("outline", "outline")):
+                    go = cd.draw(name, mesh, kind, lp, inst)
+                    if go is not None:
+                        draws.append((None, 0, lp, float(s.bright * dens) * s.lines_alpha, go))
+            if s.points:
+                pp = cd.points
+                setup(pp)
+                vpx = self.ctx.viewport
+                put(pp, "u_px", (float(max(vpx[2], 1)), float(max(vpx[3], 1))))
+                put(pp, "u_wscale", wsc)
+                pb = s.bright * clamp(dens * 1.5, 0.55, 1)
+                put(pp, "u_dot", (float(pb), float(s.points_alpha), float(dpr),
+                                  1.0 if heavy else 0.0))
+                put(pp, "u_legacy", 1.0 if legacy else 0.0)
+                put(pp, "u_rgb", tuple(float(x) for x in RED))
+                for mesh, kind in (("dots", "lines"), ("corners", "corners")):
+                    go = cd.draw(name, mesh, kind, pp, inst)
+                    if go is not None:
+                        draws.append((None, 0, pp, float(pb) * s.points_alpha, go))
+        finally:
+            fractal_gl.blend(self.ctx, blend)
+
     def _depth_pass(self, fbo: moderngl.Framebuffer, draws: list[tuple], mats: tuple,
                     blend: tuple, copies: int = 1) -> None:
         """The shape's depth, after its colour (plan 26 A2): the same draws
@@ -3762,12 +3880,16 @@ class Renderer:
         fbo.use()
         ctx.blend_func = moderngl.ZERO, moderngl.ONE
         try:
-            for vao, n, prog, _ in live:
+            for d in live:
+                vao, n, prog = d[:3]
                 prog["u_depth_alpha"].value = DEPTH_ALPHA
-                vao.render(moderngl.TRIANGLES, vertices=n, instances=copies)
+                if len(d) > 4:          # a draw of its own (the fractal's cells)
+                    d[4]()
+                else:
+                    vao.render(moderngl.TRIANGLES, vertices=n, instances=copies)
         finally:
-            for _, _, prog, _ in live:
-                prog["u_depth_alpha"].value = -1.0
+            for d in live:
+                d[2]["u_depth_alpha"].value = -1.0
             ctx.blend_func = blend
 
     @staticmethod

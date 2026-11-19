@@ -16,6 +16,8 @@ from typing import Any
 
 import numpy as np
 
+from . import fractal
+from .fractal import Dive
 from .geometry import (
     EYE_DISTANCE,
     EYE_FOV,
@@ -158,6 +160,11 @@ class ViewState:
     # (the pre-A2 feel). True — screen space: they keep their pixel weight
     # whatever the zoom (A2's behaviour)
     screen_strokes: bool = False
+    # plan 64: a fractal's line order. False (the default) — sorted: the CPU
+    # makes the frame and the painter sorts it, as any shape. True — additive:
+    # its cells go to the GPU, one instance each, and blend unsorted
+    # (fractal_gl.py). Not saved: a look for the owner to judge (row 884)
+    frac_additive: bool = False
     playing: bool = True
     planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)
@@ -173,6 +180,10 @@ class ViewState:
     # position in world units (the unit circumradius; pan.y positive down)
     zoom: float = 1.0
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])
+    # where the view is inside a self-similar shape (fractal.py): the host's
+    # `fractal.step` re-roots zoom and pan through it each frame, so the zoom
+    # never runs out. Empty for every other shape; not saved
+    dive: Dive = field(default_factory=Dive)
     # the eye (eye.* — the loadable patch's since plan 43 C2): the one fixed camera
     # the scene is seen through; the defaults are project_h's divide
     # (geometry.EYE_FOV / EYE_DISTANCE), the meta controller's reference eye the hands'
@@ -286,6 +297,15 @@ class ViewState:
         for p in range(6 if not self.three_d else 3):
             if self.planes[p]:
                 self.ang[p] += dt * self.speed * RATE[p] * self.rate[p]
+
+    def reroot(self, reg=None, off=None) -> None:
+        """A self-similar shape's view, re-rooted once the zoom has gone a
+        level in or out (`fractal.step`): the same picture, at a zoom that
+        never runs out. Once a frame, after `integrate`; `reg` takes the move
+        onto the camera params' bases; `off`, the offset drawn after the
+        shape (`shapeframe.drawn_offset`), read for the cell under the eye.
+        Nothing for any other shape."""
+        fractal.step(self, reg, off)
 
     def pose(self) -> list[float]:
         """The spin's pose as six plane angles, each in (−π, π] — what a

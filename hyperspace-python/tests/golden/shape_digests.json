@@ -705,5 +705,61 @@
   "m": 2000,
   "faces": 1040,
   "sha256": "af8dbd44e3df7f99bcb6924b562a8b39239a30e3fb048816dfa15fd341fbf62d"
+ },
+ "101": {
+  "name": "Octahedron flake",
+  "n": 85,
+  "m": 264,
+  "faces": 0,
+  "sha256": "ff8a3f2a9148f591366fc9f9896e491bd3b484b8d535e8a0ed30b4fff082d496"
+ },
+ "102": {
+  "name": "Menger sponge",
+  "n": 896,
+  "m": 1992,
+  "faces": 0,
+  "sha256": "995ef285ecb8d55c6571fd4342a49ffef59d20bebcec74e17567349a66be7a31"
+ },
+ "103": {
+  "name": "Cantor dust",
+  "n": 512,
+  "m": 660,
+  "faces": 0,
+  "sha256": "2139f53f09d7cf7c3bd3172651cd349b53fd8c184cfc9f7ef878e463b2351270"
+ },
+ "104": {
+  "name": "Vicsek cross",
+  "n": 232,
+  "m": 456,
+  "faces": 0,
+  "sha256": "8b49e74d886a351e39bc51bd0fbbb3930d4ab596380c2828997a3d0ca7c6796c"
+ },
+ "105": {
+  "name": "Icosahedron flake",
+  "n": 104,
+  "m": 300,
+  "faces": 0,
+  "sha256": "57e3868d9bf7c3594fa7015981434ca20e35678c3337c7ac7a3d7716db987153"
+ },
+ "106": {
+  "name": "Sierpinski 5-cell",
+  "n": 65,
+  "m": 190,
+  "faces": 0,
+  "sha256": "2a8eb8e81f4b4b8b59567340f98f48299048911fa2397b16bb92e6bc94abda09"
+ },
+ "107": {
+  "name": "4D Cantor dust",
+  "n": 256,
+  "m": 480,
+  "faces": 0,
+  "sha256": "cf7ea7ce9414014036d1c9ec423d1b00d116557773eb04e0048bfacfff74c7d6"
+ },
+ "108": {
+  "name": "4D Vicsek cross",
+  "n": 736,
+  "m": 1824,
+  "faces": 0,
+  "sha256": "a4bdc9e6e3a59cd2df91110c00ad7a9c80d8092f916e9f2aab80d8bd11cc3a68"
  }
 }

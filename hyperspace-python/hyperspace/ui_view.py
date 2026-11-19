@@ -16,7 +16,7 @@ What the kit draws, laid out as a form (`ui_fields.rows`, on
   row;
 - points, lines, rotate, faces and 3D as switches, two to a row;
 - the two layers' opacities side by side, the screen-strokes switch under
-  them;
+  them, and for a fractal its line order (`view.frac_additive`, plan 64);
 - the copies: their count and Fit, then — with more than one — the layout
   and the motion as Selects, the motion's depth and rate, the spacing and
   a lattice's perspective;
@@ -27,7 +27,7 @@ Without the kit, `Panel._view_stock`.
 
 from __future__ import annotations
 
-from . import field, ui, ui_fields, ui_kit
+from . import field, fractal, ui, ui_fields, ui_kit
 from .geometry import SHAPES
 from .params import PLANES
 
@@ -63,8 +63,10 @@ def spec(panel) -> list:
         out.append([(pid, rh) for pid in sw[:2]] + ([("blank", rh)] if len(sw) == 1 else []))
         sw = sw[2:]
     out += [[None], [("view.points_alpha", fh), ("view.lines_alpha", fh)],
-            [("view.screen_strokes", rh)],
-            [None], [("view.instances", fh, 2.0), ("view.inst_fit", fh, 1.0)]]
+            [("view.screen_strokes", rh)]]
+    if fractal.spec_of(v.shape) is not None:
+        out.append([("view.frac_additive", rh)])      # plan 64: a fractal's line order
+    out += [[None], [("view.instances", fh, 2.0), ("view.inst_fit", fh, 1.0)]]
     if v.instances > 1:
         out.append([("view.inst_layout", rh), ("view.inst_motion", rh)])
         if v.inst_motion:

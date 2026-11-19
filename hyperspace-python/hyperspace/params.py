@@ -555,6 +555,26 @@ class Param:
     # every frame — so the value is written raw through set(), and a
     # modulated base keeps its continuous position (_taper_pos).
 
+    def follow(self, v) -> None:
+        """The object's owner moved it to `v` (plan 64: a fractal's re-root,
+        a crossing, a flight — the same picture written another way): the
+        object and the base move together, once, held or not. While a source
+        modulates the param its base takes the move (in normalized units, so
+        a tapered zoom's ratio holds), and the last value the param wrote is
+        set to it, so its next `apply` adopts nothing twice — and a source
+        letting go restores a base that has the move in it."""
+        old = self._norm_of(self.get())
+        self.put(v)
+        if self._base is None or self.kind is not Kind.CONTINUOUS:
+            return
+        cur = self._norm_of(self.get())
+        if not (math.isfinite(cur) and math.isfinite(old)):
+            return
+        self._base += cur - old
+        self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
+        if self._last is not None:
+            self._last = cur
+
     def nudge(self, delta: float) -> float:
         """Add `delta` to the base, wrapped or clamped into range; returns
         the delta actually applied (less than asked at a stop)."""
@@ -2458,6 +2478,14 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
              tip="Off: the edges and the dots are drawn in world space — they grow and "
                  "shrink with the shape as you zoom. On: screen space — they keep the "
                  "same pixel weight whatever the zoom.")
+    # plan 64 (register row 884): a fractal's lines and faces sorted on the
+    # CPU (off, the default) or additive and unsorted on the GPU. Not saved
+    # while the owner judges the look; a fractal's alone (fractal.py)
+    r.toggle("view.frac_additive", "Additive", *_attr(view, "frac_additive"), group=g,
+             persist=False, modulatable=False,
+             tip="A fractal only. Off: its lines and faces are sorted far to near on "
+                 "the CPU, as every shape's are. On: its cells are drawn on the GPU, "
+                 "unsorted, and add up where they overlap.")
     r.toggle("view.faces", "Faces", *_attr(view, "faces"), group=g,
              tip="Translucent fills on the true 2-faces, under the wireframe. "
                  "First build per shape takes a moment (extraction is cached).")
@@ -2665,6 +2693,7 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         view.body = None            # the pose the 3D switch folded in (plan 28)
         view.yaw = view.pitch = 0.0
         view.zoom, view.pan = 1.0, [0.0, 0.0]
+        view.dive.reset()           # back out of a self-similar shape (fractal.py)
 
     r.trigger("camera.reset", "Reset view", reset_view, group=g,
               tip="Reset rotation phases, orbit, zoom and pan.")

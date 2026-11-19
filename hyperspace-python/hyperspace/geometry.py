@@ -1078,6 +1078,12 @@ def _build_sierpinski() -> dict:
                    for T in split(T0, 3)])
 
 
+def _build_fractal(name: str, depth: int) -> dict:
+    # a fractal's first levels (fractal.py, which imports this module)
+    from . import fractal
+    return fractal.build(name, depth)
+
+
 def _build_lissajous() -> dict:
     # a Lissajous knot: cos(3t + 0.7), cos(2t + 0.2), cos 7t — three
     # coprime frequencies close into a knot
@@ -1364,7 +1370,7 @@ SHAPES = [
     Shape("Geodesic sphere", "icosahedron, frequency 3", 0, "{3,5+}₃,₀", _build_geodesic,
           dims=3, family="Mathematical toys"),
     Shape("Sierpinski tetrahedron", "fractal · 64 tetrahedra, dimension 2", 0, "level 3",
-          _build_sierpinski, dims=3, family="Mathematical toys"),
+          _build_sierpinski, dims=3, family="Fractals"),
     Shape("Lissajous knot", "curve · frequencies 3, 2, 7", 0, "cos(3t+.7), cos(2t+.2), cos 7t",
           _build_lissajous, dims=3, family="Mathematical toys"),
     Shape("Loxodrome", "curve · two rhumb lines, pole to pole", 0, "λ = ln tan(π/4+φ/2)/k",
@@ -1487,6 +1493,25 @@ SHAPES = [
           _build_flow_mark, dims=3, family="Vector marks"),
     Shape("Flow capsules", "vector · the Flow mark's bars as capsules", 0, "5 ⊂⊃ × S¹",
           _build_flow_capsules, dims=3, family="Vector marks"),
+    # -------- fractals (fractal.py): shapes made of copies of themselves,
+    # drawn for the frame and zoomed into forever; what is built here is
+    # the first levels, for a thumbnail and the catalog
+    Shape("Octahedron flake", "fractal · 6 at ½, dimension 2.58", 0, "ln 6 / ln 2",
+          lambda: _build_fractal("Octahedron flake", 2), dims=3, family="Fractals"),
+    Shape("Menger sponge", "fractal · 20 at ⅓, dimension 2.73", 0, "ln 20 / ln 3",
+          lambda: _build_fractal("Menger sponge", 2), dims=3, family="Fractals"),
+    Shape("Cantor dust", "fractal · 8 at ⅓, dimension 1.89", 0, "ln 8 / ln 3",
+          lambda: _build_fractal("Cantor dust", 2), dims=3, family="Fractals"),
+    Shape("Vicsek cross", "fractal · 7 at ⅓, dimension 1.77", 0, "ln 7 / ln 3",
+          lambda: _build_fractal("Vicsek cross", 2), dims=3, family="Fractals"),
+    Shape("Icosahedron flake", "fractal · 12 at 1/(1+φ), dimension 2.58", 0, "ln 12 / ln (1+φ)",
+          lambda: _build_fractal("Icosahedron flake", 1), dims=3, family="Fractals"),
+    Shape("Sierpinski 5-cell", "4D fractal · 5 at ½, dimension 2.32", 0, "ln 5 / ln 2",
+          lambda: _build_fractal("Sierpinski 5-cell", 2), family="4D fractals"),
+    Shape("4D Cantor dust", "4D fractal · 16 at ⅓, dimension 2.52", 0, "ln 16 / ln 3",
+          lambda: _build_fractal("4D Cantor dust", 1), family="4D fractals"),
+    Shape("4D Vicsek cross", "4D fractal · 9 at ⅓, dimension 2", 0, "ln 9 / ln 3",
+          lambda: _build_fractal("4D Vicsek cross", 2), family="4D fractals"),
 ]
 
 # The Shape menu (ui.Panel._shape_combo): sections, each a run of
@@ -1495,9 +1520,9 @@ SHAPES = [
 MENU = (
     ("4D", ("Regular polytopes", "5-cell family", "Tesseract family", "24-cell family",
             "600-cell family", "Catalan duals", "Star polychora", "Prisms and pyramids",
-            "Surfaces and fibrations")),
+            "Surfaces and fibrations", "4D fractals")),
     ("3D", ("Surfaces", "Platonic solids", "Archimedean solids", "Catalan solids",
-            "Star polyhedra", "Compounds", "Mathematical toys", "Vector marks")),
+            "Star polyhedra", "Compounds", "Mathematical toys", "Fractals", "Vector marks")),
     ("Scenes", ("Scenes",)),
 )
 

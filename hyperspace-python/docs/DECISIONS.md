@@ -420,6 +420,16 @@ The owner's two sentences (2026-10-27), which the plan builds on:
 | **Plan 39 ran in parallel** with plans 37 and 38, each on its own branch. | `plans/37-38-39-orchestrator-prompt.md` | owner (decision 8); row 447 |
 | A segment's worker exists only on the program renderer; the hold's preview passes a person segment through. A held matte, cut or segment keeps its knobs for the projector. | `Renderer.segment_cfg`, `hold.HELD_GROUPS` | rows 484, 495, 496 |
 
+## Recursive geometry (plan 64)
+
+| Decision | Where | Who |
+|---|---|---|
+| **A fractal stays stateless and re-rooted.** Each frame walks it from the top (`fractal.walk`); the view re-roots into the cell under the middle of the screen as the zoom passes a level, the path the only state, so the zoom never runs out of float32. | `fractal.py` | owner, 2026-11-18 (row 882) |
+| **A fractal's cells are world geometry,** placed through the shape's model matrix and seen through the one eye like every other shape — never screen-space copies. `field.py`'s instances, placed after the projection, are not the model for them. | `fractal_gl.py`, `shapeframe.py` | owner, 2026-11-18 (row 883) |
+| **Unsorted additive blending is rendered for the owner to look at before anything depends on it.** `view.frac_additive` (not saved) switches a fractal to it. Looked at: **sorted, the CPU painter order, is the default.** | `Renderer._draw_cells`, `view.frac_additive` | owner, 2026-11-18 and 2026-11-19 (rows 884, 888) |
+| **The dive is saved, as an optional loadable patch key** (`"dive"`: the fractal's name, the cells gone into, the depth, the space's turn and room placement), written only while the view is inside a fractal, validated whole on load; a load always replaces the dive. **No schema bump**: a build from before ignores the key and shows the top of the shape, nothing broken, and both Macs run one build (node mode's precedent, #377). Each fractal's cell order is a file format now. | `loadable.DIVE_KEY`, `fractal.Dive.to_json` / `from_json` | owner, 2026-11-19 (row 889) |
+| **What a grab holds depends on depth.** Outside (the shape fits the rig's box) the fist holds the fractal as an object, as any shape; inside (it doesn't, or the view is in a cell) it holds the space, whose flight is folded into the view — turning about the middle of the screen, travelling through the fractal's own 4D space — with no box and no shaped inertia. Each crossing redraws nothing. The margins and the inside behaviour are sane defaults, to be tuned by playing. | `fractal.wants_inside`, `go_inside`, `go_outside`, `fold_flight`, `World.to_space` / `to_object`, `app._space`, `app._fly` | owner, 2026-11-19 (row 887; `plans/64-depth-dependent-grab.md`) |
+
 ## Face patterns
 
 | Decision | Where | Who |
