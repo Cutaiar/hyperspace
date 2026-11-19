@@ -118,7 +118,7 @@ tile's border (`TILES_FS`); the picture pass, which fills a flagged tile black
 without iterating. Anywhere else the periodicity check alone stops the inside
 early. **Last frame's black tiles as a hint is not built**: on a GPU every tile
 runs at once, so there is no "first", and since the border test always runs a
-hint can skip nothing (pending the owner, row 878).
+hint can skip nothing; the owner dropped it (2026-11-19, row 878).
 
 ### Colour (row 879)
 
@@ -128,6 +128,14 @@ rises over Cycle steps and falls over the next, so Palette's gradient wraps
 with no seam. Inside coloured takes the step at which the periodicity check
 caught the point (the cap where none did), through the same rise; it turns the
 cardioid test and the skip off.
+
+## The owner's answers (2026-11-19)
+
+Every recommendation taken: an effect may have a Python half (row 872); the
+drives are velocity, not displacement (row 874); Size stays 810 by default
+until the bench and check 674 say otherwise (row 875); the skip's last-frame
+hint is dropped (row 878); `mpmath` becomes a direct dependency when the deep
+tier is built (row 881); and no schema bump, as for every new effect file.
 
 ## On the rig
 
@@ -144,7 +152,8 @@ frame a term changes. Hand checks 669–678 are what the owner judges.
 
 - **The deep tier** past ~10¹³×: an arbitrary-precision reference needs
   `mpmath` as a direct dependency (it is in `uv.lock` only transitively).
-  (rec) — pending the owner; Zoom stops at 10¹³ until then.
+  The owner agreed (2026-11-19, row 881): it becomes a direct dependency when
+  the deep tier is built. Zoom stops at 10¹³ until then.
 - **Floatexp δ** past 10³⁸×: only after the deep tier.
 - **The endless loop at a Misiurewicz point**, with Newton tracking of the
   point as p changes: not built.

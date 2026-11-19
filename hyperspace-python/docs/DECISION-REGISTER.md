@@ -871,16 +871,16 @@ here; overturn → the change, then the same.
 | 869 | Plan 60: the grip publishes its own lanes, scheme `grip`: `grip:held` (1 while the clutch has the shape) and `grip:flying` (1 while a let-go shape still moves over 0.05 a second), both offered as gates and 0, not NaN, while the grip is on; `grip:speed` and `grip:spin`, the shape's own world speed over 4 units/s and angular speed over the 6 turns/s cap, 0–1, rest 0, reading on after a throw. Off: no feed, dormant. Published after the world's step, so a route reads the frame before's | 668 | (rec) — asked for by the kinetic-presets session: a comet's tail on the knot's own speed, not the hand's |
 | 870 | CI is for contracts, and as fast as it can be made: the fast tier is split by CI time over four runners beside a lint-and-types runner (`tools/ci_shard.py`, `tests/ci_durations.json`); the type ratchet's pyright runs in that job, not on a fast-tier worker; each shard warms pytest's assert cache in four processes first; the tests CI timed at 1 s or more are handed out first; apt packages come from a cache; `wait_green.py` polls every 5 s. A new `sweep` tier (content-library sweeps, soaks, finished migrations' old-way checks) leaves the fast tier and the merge gate and runs in `sweeps.yml`, on its own runner, when a PR touches what it walks and after each push to main | — | owner — 2026-11-10: "getting the CI tests down as low as possible is the main objective" |
 | 871 | T is GRAPH's tidy and 0 its fit, neither a row: T lays the canvas out again and 0 brings every node into view (`ui_graph.KEY`, `FIT_KEY`, the panel's own keys, as the player board's O). T leaves the overlay (the panel's toggle and the APC40's MASTER select keep it) and 0 the track restart (the AUDIO section keeps it); the old factory rows are dropped from a file that holds them (`routing.RETIRED_KEY_ROWS`). The tidy no longer frames every node: the zoom and the place being looked at stay as they are, and 0 is what frames | — | owner — 2026-11-11: T and 0, over the overlay's and the track restart's claim on them |
-| 872 | Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema | — | (rec) |
+| 872 | Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema | — | owner (2026-11-19, as recommended) |
 | 873 | Plan 63: every term a param (owner decision 1). Slice s lays the pixel's point q into the terms as c = mix(q, c, s), z₀ = mix(z₀, q, s): 0 the Mandelbrot set, 1 a Julia set. Power a whole number 2–8, an int param; a fractional p not built | 671 | owner (2026-11-18) — the mapping (rec) |
-| 874 | Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go | 669, 670 | (rec) — the owner's decision, built this way |
-| 875 | Plan 63: Size is a choice of 540, 810 or 1080 lines (owner decision 2), default 810; the pass renders at that many lines at the output's aspect and the chain's copy stretches it over the output (LINEAR); an output with no more lines is drawn straight into | 672, 673, 674 | owner (2026-11-18) — the default (rec) |
+| 874 | Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go | 669, 670 | owner (2026-11-19, as recommended): velocity, not displacement |
+| 875 | Plan 63: Size is a choice of 540, 810 or 1080 lines (owner decision 2), default 810; the pass renders at that many lines at the output's aspect and the chain's copy stretches it over the output (LINEAR); an output with no more lines is drawn straight into | 672, 673, 674 | owner (2026-11-18); the default 810 kept by the owner (2026-11-19, as recommended) until the bench and check 674 say otherwise |
 | 876 | Plan 63: the tiers (owner decision 3): float32 direct to 10⁴×, then perturbation (Tier forces either). Reference in float64 at the view's centre, RG32F 1024 wide; δ by the binomial theorem in Horner form; the rebase generalised to abs(z − Z₀) < abs(δ) for a start z₀ ≠ 0 (abs(Z + δ) < abs(δ) at Z₀ = 0) and when the reference runs out; recomputed only when a term changes or the point leaves the view | 677, 678 | owner (2026-11-18) — the details (rec) |
 | 877 | Plan 63: periodicity is Brent's doubling window with z within 5% of a pixel of the saved z; deep in on float32 it rarely fires, so the inside costs the full cap there unless the skip runs. The cardioid and period-2 bulb test only at p = 2, z₀ = 0, Slice 0, the inside black | 676 | (rec) |
-| 878 | Plan 63: Skip black is Mariani–Silver on 16×16 tiles in three passes (border pixels iterate, a tile pass reads each border, the picture fills flagged tiles), only where the set has no holes (p whole and z₀ = 0 on the Mandelbrot slice, or a pure Julia slice) and the inside black. Last frame's black tiles as a hint is not built: the GPU runs every tile at once and the border test always runs, so a hint could skip nothing | 673 | (rec) — the hint pending the owner |
+| 878 | Plan 63: Skip black is Mariani–Silver on 16×16 tiles in three passes (border pixels iterate, a tile pass reads each border, the picture fills flagged tiles), only where the set has no holes (p whole and z₀ = 0 on the Mandelbrot slice, or a pure Julia slice) and the inside black. Last frame's black tiles as a hint is not built: the GPU runs every tile at once and the border test always runs, so a hint could skip nothing | 673 | owner (2026-11-19, as recommended): the hint is dropped |
 | 879 | Plan 63: colour by steps (owner decision 5): the smooth count n + 1 − log_p log abs(z) with abs(z)² > 10⁴ the bail-out; Output steps is grey that rises over Cycle steps and falls over the next, so Palette's gradient wraps with no seam; Output ramp a built-in colour ramp; Inside coloured shows the periodicity time and turns the cardioid test and the skip off | 675, 676 | owner (2026-11-18) — the rise and fall (rec) |
 | 880 | Plan 63: Steps is a float log knob rounded to a whole cap (an integer log param cannot move one detent at a time); Zoom runs 0.5–10¹³, the float64 reference's reach, and a log param over six orders reads in three figures ("4.2e+07×") | — | (rec) |
-| 881 | Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes | — | (rec) — pending the owner (the dependency) |
+| 881 | Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes | — | owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before |
 
 "—": no hand check shows it; tests only.
 
@@ -15094,7 +15094,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 ### 872. The Mandelbrot is an effect file with a Python half
 
 - **What.** Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema.
-- **Answer.** (rec).
+- **Answer.** owner (2026-11-19, as recommended).
 - **Built.** `fx.HOOKS`, `EffectSpec.hook`, `FxChain.run_one`, `FxChain.upscale`, `FxState.advance`, `mandel.run`, `mandel.advance`; `tests/test_mandel.py::test_the_file_declares_its_hook_and_a_wrong_hook_is_refused`, `::test_the_drives_run_only_while_the_effect_draws`.
 - **Judge it.** No hand check.
 
@@ -15108,14 +15108,14 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 ### 874. Zoom-scaled sensitivity as drives in the node
 
 - **What.** Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go.
-- **Answer.** (rec) — the owner's decision, built this way.
+- **Answer.** owner (2026-11-19, as recommended): velocity, not displacement.
 - **Built.** `mandel.advance`, `mandel.DRIVES`; `tests/test_mandel.py::test_a_pan_moves_the_picture_the_same_on_screen_at_any_depth`, `::test_dive_doubles_and_every_drive_moves_by_the_view`, `::test_a_drive_at_rest_writes_nothing_and_a_term_stays_in_range`.
 - **Judge it.** 669, 670.
 
 ### 875. Size: 540, 810, 1080 lines, then upscaled
 
 - **What.** Plan 63: Size is a choice of 540, 810 or 1080 lines (owner decision 2), default 810; the pass renders at that many lines at the output's aspect and the chain's copy stretches it over the output (LINEAR); an output with no more lines is drawn straight into.
-- **Answer.** owner (2026-11-18) — the default (rec).
+- **Answer.** owner (2026-11-18); the default 810 kept by the owner (2026-11-19, as recommended) until the bench and check 674 say otherwise.
 - **Built.** `mandel.render_size`, `mandel.run`, `FxChain.upscale`; `tests/test_mandel.py::test_the_size_renders_at_its_lines_and_upscales`.
 - **Judge it.** 672, 673, 674.
 
@@ -15136,7 +15136,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 ### 878. Skip black, and no hint
 
 - **What.** Plan 63: Skip black is Mariani–Silver on 16×16 tiles in three passes (border pixels iterate, a tile pass reads each border, the picture fills flagged tiles), only where the set has no holes (p whole and z₀ = 0 on the Mandelbrot slice, or a pure Julia slice) and the inside black. Last frame's black tiles as a hint is not built: the GPU runs every tile at once and the border test always runs, so a hint could skip nothing.
-- **Answer.** (rec) — the hint pending the owner.
+- **Answer.** owner (2026-11-19, as recommended): the hint is dropped.
 - **Built.** `mandel.skip_valid`, `tile_flags`, `fill_tiles`, `TILES_FS`, `mandel.run`; `tests/test_mandel.py::test_a_tile_is_flagged_by_its_border_alone`, `::test_where_the_skip_may_run`, `::test_the_skip_fills_whole_tiles_and_moves_almost_nothing`.
 - **Judge it.** 673.
 
@@ -15157,6 +15157,6 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 ### 881. Stage 5 not built
 
 - **What.** Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes.
-- **Answer.** (rec) — pending the owner (the dependency).
+- **Answer.** owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before.
 - **Built.** Nothing.
 - **Judge it.** No hand check.
