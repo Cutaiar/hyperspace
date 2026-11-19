@@ -231,7 +231,7 @@ class EffectPreviews:
     def failed(self, name: str) -> str:
         """Why file `name` shows the plain card: its parse or compile
         error, "" when it runs."""
-        if self._chain is not None and name in self._own.specs:
+        if self._chain is not None and self._own is not None and name in self._own.specs:
             return self._chain.error(name)
         return (getattr(self.show, "errors", None) or {}).get(name, "")
 
@@ -255,17 +255,18 @@ class EffectPreviews:
         if not stills and not loops:
             return 0
         try:
-            self._sync(stills | set(loops))
+            own, chain, ctx = self._sync(stills | set(loops))
             todo = [(n, 0) for n in sorted(stills | set(loops), key=lambda n: n not in loops)]
             todo += [(n, k) for n in loops for k in range(1, LOOP_FRAMES + 1)]
             for name, k in todo:
                 if self.passes >= self.budget:
                     break
-                if name not in self._own.specs or k in self.made.get(name, ()):
+                if name not in own.specs or k in self.made.get(name, ()):
                     continue
-                if not self._card_ready() or self.passes >= self.budget:
+                card = self._card_ready(own, chain, ctx)
+                if card is None or self.passes >= self.budget:
                     break
-                self._pass(name, k)
+                self._pass(own, chain, ctx, card, name, k)
         except Exception as e:  # noqa: BLE001 — a preview must not take the frame down
             self.error = f"{type(e).__name__}: {e}"[:160]
         return self.passes
@@ -295,11 +296,13 @@ class EffectPreviews:
 
     # ---- inside
 
-    def _sync(self, names: set[str]) -> None:
+    def _sync(self, names: set[str]) -> tuple[FxState, FxChain, moderngl.Context]:
         """This cache's own state made the show's files as they are now
         (the show's chain polls the folder): a file whose program changed
-        has its cells forgotten, a file gone its atlas released."""
-        if self.ctx is None:
+        has its cells forgotten, a file gone its atlas released. Returns
+        (its state, its chain, the context)."""
+        ctx = self.ctx
+        if ctx is None:
             raise RuntimeError("no GL context")
         show = self.show
         files = dict(getattr(show, "files", None) or getattr(show, "specs", None) or {})
@@ -314,8 +317,9 @@ class EffectPreviews:
         for n, s in own.specs.items():
             if n not in own.values:
                 own._adopt(s)
-        if self._chain is None:
-            self._chain = FxChain(self.ctx, own)
+        chain = self._chain
+        if chain is None:
+            chain = self._chain = FxChain(ctx, own)
         for name in list(self.atlas):
             if name not in own.specs:
                 tex, fbo = self.atlas.pop(name)
@@ -334,13 +338,15 @@ class EffectPreviews:
                 own._adopt(spec)
                 if name == CARD_EFFECT:
                     self._card_key = None
+        return own, chain, ctx
 
-    def _card_ready(self) -> bool:
+    def _card_ready(self, own: FxState, chain: FxChain,
+                    ctx: moderngl.Context) -> moderngl.Texture | None:
         """The test card at the work size, drawn now if it is not (one pass
         of the budget): the `testcard` file's picture at its defaults, its
-        lines widened for a tile (`card_values`). A mid grey when there is no test card file.
-        False when the budget is spent."""
-        own, ctx = self._own, self.ctx
+        lines widened for a tile (`card_values`). A mid grey when there is
+        no test card file. The card's texture, or None when the budget is
+        spent."""
         if self._card is None:
             tex = ctx.texture((WORK_W, WORK_H), 4)
             tex.repeat_x = tex.repeat_y = False
@@ -348,29 +354,29 @@ class EffectPreviews:
             self._card_key = None
         spec = own.specs.get(CARD_EFFECT)
         key = self.key.get(CARD_EFFECT, "") if spec is not None else "grey"
-        if self._card_key == key:
-            return True
-        if self.passes >= self.budget:
-            return False
         tex, fbo = self._card
+        if self._card_key == key:
+            return tex
+        if self.passes >= self.budget:
+            return None
         if spec is None:
             fbo.clear(0.5, 0.5, 0.5, 1.0)
         else:
             own.values[CARD_EFFECT] = card_values(spec)
-            self._at(spec, CARD_EFFECT, 0.0)
-            if self._blank is None:
-                self._blank = ctx.texture((1, 1), 4, bytes(4))
-            self._chain.run_one(CARD_EFFECT, self._blank, fbo, 0.0, opaque=1,
-                                res=(WORK_W, WORK_H))
+            self._at(own, spec, CARD_EFFECT, 0.0)
+            blank = self._blank
+            if blank is None:
+                blank = self._blank = ctx.texture((1, 1), 4, bytes(4))
+            chain.run_one(CARD_EFFECT, blank, fbo, 0.0, opaque=1, res=(WORK_W, WORK_H))
         self._card_key = key
         self.passes += 1
-        return True
+        return tex
 
-    def _at(self, spec, name: str, t: float) -> None:
+    @staticmethod
+    def _at(own: FxState, spec, name: str, t: float) -> None:
         """Effect `name`'s clocks at `t` s of its default speed: its phase
         and each `@clock`'s, as `FxState.advance` would have them from 0,
         and the state's last time `t`, so the pass moves nothing."""
-        own = self._own
         v = own.values[name]
         speed = float(v["speed"])
         own.phase[name] = t * speed
@@ -381,12 +387,12 @@ class EffectPreviews:
         own._clocks()[name] = ph
         own._t_last = t
 
-    def _pass(self, name: str, k: int) -> None:
+    def _pass(self, own: FxState, chain: FxChain, ctx: moderngl.Context,
+              card: moderngl.Texture, name: str, k: int) -> None:
         """Cell `k` of file `name`'s atlas: the card through the effect at
         its defaults, `STILL_T` (the still, cell 0) or `loop_t(k - 1)` s
         into its clock, made at the work size and shrunk into the cell. The
         test card's own tile is the card as the others see it."""
-        own, ctx = self._own, self.ctx
         got = self.atlas.get(name)
         if got is None:
             tex = ctx.texture((ATLAS_W, ATLAS_H), 4)
@@ -394,21 +400,22 @@ class EffectPreviews:
             tex.repeat_x = tex.repeat_y = False
             got = self.atlas[name] = (tex, ctx.framebuffer(color_attachments=[tex]))
             got[1].clear(0.0, 0.0, 0.0, 1.0)
-        if self._work is None:
+        work_fb = self._work
+        if work_fb is None:
             w = ctx.texture((WORK_W, WORK_H), 4)
             w.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
             w.repeat_x = w.repeat_y = False
-            self._work = (w, ctx.framebuffer(color_attachments=[w]))
+            work_fb = self._work = (w, ctx.framebuffer(color_attachments=[w]))
         spec = own.specs[name]
         own.values[name] = card_values(spec) if name == CARD_EFFECT else preview_values(spec)
         t = STILL_T if k == 0 else loop_t(k - 1)
-        self._at(spec, name, t)
-        work, wfbo = self._work
-        self._chain.run_one(name, self._card[0], wfbo, t, opaque=1)
+        self._at(own, spec, name, t)
+        work, wfbo = work_fb
+        chain.run_one(name, card, wfbo, t, opaque=1)
         work.build_mipmaps()
         fbo = got[1]
         fbo.viewport = cell_rect(k)
-        self._chain.run_one(SHRINK, work, fbo, t, opaque=1)     # (no such effect: a copy)
+        chain.run_one(SHRINK, work, fbo, t, opaque=1)     # (no such effect: a copy)
         fbo.viewport = (0, 0, ATLAS_W, ATLAS_H)
         self.made.setdefault(name, set()).add(k)
         self.passes += 1

@@ -3342,7 +3342,7 @@ def thumb_how(st: dict, n: graphview.VNode) -> str:
         return graphview.CARD_PIC
     if getattr(n, "faint", False) and has_card(n):
         return graphview.UNWIRED_PIC
-    return n.thumb
+    return n.thumb or graphview.PICTURE
 
 
 def has_card(n: graphview.VNode) -> bool:
@@ -3821,15 +3821,15 @@ def effect_picker(panel, st: dict, view: graphview.View) -> str | None:
     (`graphview.picker`), with the show's specs for their labels, tips
     and families, and the renderer's previews. A pick does what the menu's
     row did (`pick_effect`). Returns the file picked this frame."""
-    if fxpick.state(st) is None:
+    s = fxpick.state(st)
+    if s is None:
         return None
     e = render_edit(panel)
-    files = [f for kind, f, _ in graphview.picker(e) if kind == "effect"]
+    files = [f for kind, f, _ in graphview.picker(e) if kind == "effect" and f]
     fx = getattr(getattr(e, "graph", None), "fx", None)
     specs = fxpick.specs_of(files, getattr(fx, "files", None))
-    r = getattr(panel, "renderer", None)
-    cache = r.effect_previews() if hasattr(r, "effect_previews") else None
-    s = fxpick.state(st)
+    made = getattr(getattr(panel, "renderer", None), "effect_previews", None)
+    cache = made() if callable(made) else None
     return fxpick.draw(st, specs, lambda f: pick_effect(panel, view, s, f), cache)
 
 

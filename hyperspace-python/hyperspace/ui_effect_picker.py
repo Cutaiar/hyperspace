@@ -88,11 +88,12 @@ def specs_of(files: Iterable[str], known: dict | None) -> list[Any]:
 
 
 def first_match(specs: list[Any], query: str):
-    """The file Enter takes: the first tile the search leaves, or None."""
-    for _, group in pv.families(specs, query):
-        if group:
-            return group[0].name
-    return None
+    """The file Enter takes: the first tile the search leaves whose label
+    answers it (a tip that mentions waves is not the Wave), else the first
+    tile; None when it leaves none."""
+    tiles = [s for _, group in pv.families(specs, query) for s in group]
+    named = [s for s in tiles if pv.matches(NS(label=s.label), query)]
+    return (named or tiles)[0].name if tiles else None
 
 
 def columns(width: float) -> int:
@@ -103,7 +104,7 @@ def columns(width: float) -> int:
 # ---------------------------------------------------------------- drawing
 
 def draw(st: dict, specs: list[Any], on_pick: Callable[[str], object],
-         cache: pv.EffectPreviews | None = None, now: float | None = None) -> str | None:
+         cache: Any = None, now: float | None = None) -> str | None:
     """The picker this frame, if asked for: opened on the first frame, drawn
     while open, its state dropped once closed. `on_pick(file)` adds the
     effect (the menu row's action); `cache` the renderer's previews (None:
@@ -134,6 +135,7 @@ def draw(st: dict, specs: list[Any], on_pick: Callable[[str], object],
     flags = (imgui.WindowFlags_.no_move | imgui.WindowFlags_.no_saved_settings
              | imgui.WindowFlags_.no_scrollbar)
     if imgui.begin_popup(KEY, flags):
+        s["up"] = True                      # (drawn this frame: what a test reads)
         picked = _body(s, specs, cache, now, h)
         if picked is None and imgui.is_key_pressed(imgui.Key.escape):
             imgui.close_current_popup()
@@ -216,7 +218,7 @@ def _tile(spec, cache, hover: str | None, now: float) -> tuple[bool, bool]:
     dl.add_text(imgui.ImVec2(p0.x + (TILE_W - tw.x) / 2, p0.y + PIC_H + (LABEL_H - tw.y) / 2),
                 ui.u32(ui.TEXT if over else ui.DIM), label)
     ring = imgui.ImVec4(*(LIT if over else BORDER))
-    dl.add_rect(a, b, ui.u32(ring), RADII["md"], 0, 2.0 if over else 1.0)
+    dl.add_rect(a, b, ui.u32(ring), RADII["md"], 2.0 if over else 1.0)
     return clicked, over
 
 
