@@ -429,6 +429,25 @@ def test_the_skip_fills_whole_tiles_and_moves_almost_nothing(ctx):
         r.release()
 
 
+def test_how_it_computes_never_changes_what_it_shows(ctx):
+    """Size, Tier and Skip black choose how the picture is made, not what it is
+    (so `tests/test_step_continuity.py` holds them at their defaults): at the
+    sweep's own 320×200, every Size is the output itself; direct and
+    perturbation agree at zoom 1 to float32's error; the skip moves only
+    pixels of the inside."""
+    r = Rig(ctx, 320, 200)
+    try:
+        kw = {"iters": 200.0, "cycle": 4096.0, "zoom": 1.0}
+        base = r.steps(size=0, tier=1, skip=0, **kw)
+        for size in range(len(M.SIZES)):
+            assert np.array_equal(r.steps(size=size, tier=1, skip=0), base), size
+            assert r.stats["size"] == (320, 200)
+        assert mismatch(r.steps(size=0, tier=2, skip=0), base) < 0.02
+        assert np.mean(r.steps(size=0, tier=1, skip=1) != base) < 0.002
+    finally:
+        r.release()
+
+
 def test_the_size_renders_at_its_lines_and_upscales(ctx):
     r = Rig(ctx, 960, 720)
     try:
