@@ -1206,3 +1206,15 @@ def test_glass_leaves_the_scene_visible_through_the_hand(ctx):
     # before the fix GLASS wrote depth over the whole silhouette, so this was 0
     opened = int((written["PLAIN"] & ~written["GLASS"]).sum())
     assert opened > 0, "GLASS still fills the silhouette"
+
+
+def test_the_show_look_is_bones_in_glass_on_at_35_and_the_bare_state_stays_neutral():
+    """Owner, 2026-11-15: the app starts every hands node as the show's ghost
+    hands — on, BONES, GLASS, 35% — while `GhostState()` stays the neutral draw."""
+    st = G.show_look()
+    assert st.on and st.alpha == 0.35
+    assert G.STYLES[st.style] == "BONES" and G.MATERIALS[st.material] == "GLASS"
+    held = G.GhostState(mirror=True, guide=1)
+    assert G.show_look(held) is held and held.mirror and held.guide == 1 and held.on
+    bare = G.GhostState()
+    assert not bare.on and bare.style == 0 and bare.material == 0

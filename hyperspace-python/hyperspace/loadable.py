@@ -145,6 +145,7 @@ from .geometry import SHAPES
 from .ghost import GhostState
 from .ghost import prefix as ghost_prefix
 from .ghost import register as declare_ghost
+from .ghost import show_look
 from .graph import (
     EMPTY,
     FRAME_KEY,
@@ -466,7 +467,7 @@ class GraphSection:
         for name in sorted(self.declared - set(want)):
             reg.remove_prefix(name + ".")
         for name, n in want.items():
-            declare_ghost(reg, self.states.setdefault(name, GhostState()), n)
+            declare_ghost(reg, self.states.setdefault(name, show_look()), n)
         self.declared = set(want)
         self._settle(spec)
         self.spec, self.doc = spec, copy.deepcopy(doc)
