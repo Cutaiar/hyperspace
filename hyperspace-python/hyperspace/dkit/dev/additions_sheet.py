@@ -46,8 +46,10 @@ def _boot(w: int, h: int):
     glfw.window_hint(glfw.COCOA_RETINA_FRAMEBUFFER, False)
     win = glfw.create_window(w, h, "sheet", None, None)
     glfw.make_context_current(win)
-    imgui.create_context()
-    return win, GlfwRenderer(win)
+    ctx = imgui.create_context()
+    impl = GlfwRenderer(win)
+    impl.dkit_ctx = ctx        # for `shot` to destroy: see its teardown
+    return win, impl
 
 
 def shot(theme_name: str, paint, frames: int = 3, w: int = CELL_W, h: int = CELL_H,
@@ -104,6 +106,11 @@ def shot(theme_name: str, paint, frames: int = 3, w: int = CELL_W, h: int = CELL
         raw = GL.glReadPixels(0, 0, fw, fh, GL.GL_RGB, GL.GL_UNSIGNED_BYTE)
         px = np.frombuffer(raw, dtype=np.uint8).reshape(fh, fw, 3)[::-1].copy()
     impl.shutdown()
+    # Destroy the context, as dashboard.render and test_interaction.one_widget
+    # do: left alive, the next render in the same process inherited it, and a
+    # dashboard test that ran after this one in an xdist worker could not open
+    # its context menu (a test-order failure on main, exposed by the port).
+    imgui.destroy_context(impl.dkit_ctx)
     glfw.terminate()
     return px
 

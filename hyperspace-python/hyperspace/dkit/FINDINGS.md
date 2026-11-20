@@ -85,6 +85,9 @@ reading documentation.
    `font-size`. Geist is upem 1000 with ascent 1005 / descent −295, so its span
    is 1.30em and ImGui draws 14px CSS text at **77%** of the right size. The
    ratio belongs to the font, so the kit carries it per face.
+   *(Superseded, RETRO row 61: the loader is FreeType, ImGui 1.92 rounds the
+   multiplied size to a whole pixel, and the faces are now built with a
+   one-em line box instead - see README "Text".)*
 
 4. **A theme is not only a colour swap.** The card gradient's endpoints are
    `primary` and `card`, so in dark the wash runs *light*. And the destructive
@@ -95,7 +98,8 @@ reading documentation.
 
 - **No OpenType features.** `tabular-nums` is the one shadcn leans on, and
   stb_truetype cannot apply it: a digit-heavy string comes out 4% narrow
-  (138px → 132px). The project already answers this the other way round, with
+  (138px → 132px). *(Since RETRO row 61 the frozen face, kerning and
+  ligatures bring that string to the oracle's 138px.)* The project already answers this the other way round, with
   a mono face for readouts (`ui.py:126-129`), and that remains the answer.
 - **No variable fonts, no woff2.** Static instances have to be cut ahead of
   time (`fonts/README.md`). Fine for a fixed set of weights; not fine if a
