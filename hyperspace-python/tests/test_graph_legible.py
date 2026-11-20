@@ -109,7 +109,7 @@ def test_every_node_starts_collapsed_with_at_most_five_lines(rig):
     # pattern's seven (view.pattern*, view.media_*), plus fx.face_map; plan
     # 33 T7: less view.media (retired: the wire into pattern.media); less the
     # eight pattern.mod.k, the faces pattern node's since 2026-10-27
-    assert graphview.summary(view.node("render:shape"))[0].startswith("42 params · ")
+    assert graphview.summary(view.node("render:shape"))[0].startswith("46 params · ")   # (plan 64: Detail, Reach, Near, To the top)
     assert st["wires"] < len(view.cables) / 3
     # a collapsed node takes its lines' room in the column, not its ports' —
     # plan 37 C1: a picture node (the shape's is its scene's, faint) its
