@@ -129,6 +129,90 @@ def test_every_set_and_pattern_stays_in_midi_range(name, pattern):
             assert 0 <= v <= 127 and 0 <= lt.channel <= 15 and 0 <= lt.number <= 127
 
 
+# ---------------------------------------------------------------- the effects (idle_effects.py)
+
+
+def test_the_apc40_set_is_every_lit_button_at_its_place_on_the_face_and_no_ring():
+    """Its positions are apc40.LAYOUT's centres, so an effect crosses the real
+    desk; the knob rings are left out (a ring value re-bases its knob)."""
+    from hyperspace import apc40
+    lights = {lt.key: lt for lt in idle_lights.SETS["apc40"]()}
+    grid = [c for c in apc40.LAYOUT if c.kind == "grid" and c.source.startswith("note:")]
+    assert len(grid) == len(lights)
+    for c in grid:
+        _kind, ch, num = c.source.split(":")
+        lt = lights[("note", 0 if ch == "*" else int(ch), int(num))]
+        assert (lt.x, lt.y) == pytest.approx((c.x + c.w / 2, c.y + c.h / 2)), c.source
+        assert bool(lt.colours) == (int(num) in apc40.N_CLIP)
+    assert dict(lights[("note", 0, 0x35)].colours) == {
+        "green": apc40.GREEN, "yellow": apc40.YELLOW, "red": apc40.RED}
+    assert not any(k[0] == "cc" for k in lights)
+
+
+@pytest.mark.parametrize("name", sorted(idle_lights.SETS))
+@pytest.mark.parametrize("pattern", idle_lights.pattern_names())
+def test_every_effect_on_every_set_sends_only_values_its_lights_take(name, pattern):
+    a = from_entry({"lights": name, "pattern": pattern, "yield_to": []}, start_watch=False)
+    assert a is not None
+    for t in (0.0, 0.37, 1.2, 3.9, 11.0):
+        for lt, (level, colour) in zip(a.lights, a._levels(t), strict=True):
+            for d in (None, 0.125, 0.875):
+                v = lt.show(level, colour, d)
+                assert v in (lt.levels or range(128)), (lt, level, colour)
+
+
+def test_an_effect_colours_the_clip_grid_and_lights_a_one_colour_button_on():
+    pad = idle_lights.SETS["apc40"]()[0]
+    button = Light("note", 0, 0x52, levels=(0, 1))
+    assert [pad.show(0.9, c) for c in ("green", "yellow", "red")] == [1, 5, 3]
+    assert pad.show(0.4, "red") == 0 and pad.show(0.9, None) == 3     # no colour: the ramp
+    assert button.show(0.9, "red") == 1 and button.show(0.4, "red") == 0
+
+
+def test_dither_moves_the_threshold_so_a_middling_level_comes_and_goes():
+    pad = idle_lights.SETS["apc40"]()[0]
+    assert {pad.show(0.5, "red", d) for d in (0.125, 0.625, 0.375, 0.875)} == {0, 3}
+    assert {pad.show(1.0, "red", d) for d in (0.125, 0.875)} == {3}
+
+
+def test_a_list_plays_each_in_turn_and_the_next_spell_starts_on_the_next():
+    clock = Clock()
+    a = from_entry({"lights": "apc40", "pattern": ["ripple", "hearts", "wave"], "each": 10,
+                    "after": 0, "yield_to": []}, start_watch=False, clock=clock)
+    assert a is not None and a.names == ("ripple", "hearts", "wave")
+    a.tick()
+    first = a._effect
+    assert a.running and first is not None and first[1] == "ripple"
+    clock.t = 10.5
+    a.tick()
+    assert a._effect is not None and a._effect[1] == "hearts"
+    clock.t = 20.5
+    a.tick()
+    assert a.names[a._at] == "wave" and a._effect is None      # a per-light pattern
+    a.touched()
+    a.tick()                                    # ended on wave
+    clock.t = 21.0
+    a.tick()                                    # the next spell: round to ripple, made anew
+    assert a._effect is not None and a._effect[1] == "ripple" and a._effect[2] is not first[2]
+
+
+def test_all_is_every_pattern_and_a_spell_makes_its_effect_afresh():
+    clock = Clock()
+    a = from_entry({"lights": "apc40", "pattern": "all", "after": 0, "yield_to": []},
+                   start_watch=False, clock=clock)
+    assert a is not None and a.names == idle_lights.pattern_names()
+    one = from_entry({"lights": "apc40", "pattern": "fireworks", "after": 0, "yield_to": []},
+                     start_watch=False, clock=clock)
+    assert one is not None
+    one.tick()
+    made = one._effect
+    one.touched()
+    one.tick()
+    clock.t = 1.0
+    one.tick()
+    assert one._effect is not None and made is not None and one._effect[2] is not made[2]
+
+
 # ---------------------------------------------------------------- the entry
 
 
@@ -138,7 +222,7 @@ def test_from_entry_reads_the_shorthands_and_the_table():
     assert a is not None and a.after == idle_lights.AFTER_S
     assert a.watch is not None and a.watch.names == ("rekordbox",)    # yields by default
     b = from_entry(True, default_set="apc40", start_watch=False)
-    assert b is not None and len(b.lights) == 45
+    assert b is not None and len(b.lights) == 87       # every lit button, no ring
     c = from_entry({"lights": "ddj-flx4", "after": 5, "pattern": "breathe", "yield_to": [],
                     "never": ["note:0:11", "note@ddj-flx4:1:11", "cc:0:2"]}, start_watch=False)
     assert c is not None and c.after == 5.0 and c.watch is None
@@ -149,6 +233,9 @@ def test_from_entry_reads_the_shorthands_and_the_table():
 
 @pytest.mark.parametrize("bad", [
     "nope", True, 7, {"lights": "ddj-flx4", "pattern": "spin"},
+    {"lights": "apc40", "pattern": ["ripple", "spin"]}, {"lights": "apc40", "pattern": []},
+    {"lights": "apc40", "pattern": "zoom", "shape": "Blob"},
+    {"lights": "apc40", "pattern": "all", "each": 0},
     {"lights": "ddj-flx4", "after": -1}, {"lights": "ddj-flx4", "after": float("nan")},
     {"lights": "ddj-flx4", "never": ["sysex:0:1"]}, {"lights": "ddj-flx4", "never": ["note:a:1"]},
 ])
