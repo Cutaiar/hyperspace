@@ -10,8 +10,9 @@ of a light set)::
     port = "DDJ-FLX4"
     idle = { lights = "ddj-flx4", after = 30, yield_to = ["rekordbox"] }
 
-Nothing is toggled by hand. The animation starts on its own once the device
-has sent nothing for ``after`` seconds and ends on the frame it sends anything.
+Nothing is toggled by hand. The animation starts on its own once nobody has
+touched the device for ``after`` seconds and ends on the frame someone does
+(`IdleLights.is_touch`: a fader twitching on its own is not a touch).
 It never runs while an app named in ``yield_to`` is running, and it ends when
 one starts. ``never`` lists lights it must leave alone
 (``["note:0:11", "cc:0:2"]``: kind, 0-based channel, number).
@@ -25,17 +26,34 @@ lights and put them back. So it keeps out of the way instead:
   1. It runs only while no ``yield_to`` app runs (a background look at the
      process list every `LOOK_S`), or with ``yield_to = []`` alongside it,
      on the lights ``never`` leaves it.
-  2. Any input from the device ends it on that frame.
+  2. A touch on the device ends it on that frame.
   3. When it ends it sends every light it drew dark (`IdleLights.tick`), so no
      stale frame is left. Rekordbox lights its own as its state changes; on the
      FLX4 a pad-mode press makes it repaint the pads at once. A desk whose
      profile owns its lights (the APC40) redraws its own state after the dark.
 
-What is not known yet, until `tools/flx4_led_probe.py` runs on the hardware:
-whether Rekordbox repaints the FLX4 on its own at any moment (focus, a deck
-load), and whether every address in `flx4()` lights in every pad mode. The
-addresses are Mixxx's community mapping of the FLX4 (Pioneer-DDJ-FLX4.midi.xml),
-not Pioneer's own list.
+What `tools/flx4_led_probe.py` found on the owner's FLX4 (2026-11-19):
+
+  * **The addresses** (Mixxx's community mapping, Pioneer-DDJ-FLX4.midi.xml)
+    light what they name, but for reloop (0x4D): the FLX4 has no such button,
+    so it is not in the set. Deck 1's level meter did not light, but it was
+    the first light sent, while the FLX4 was still coming out of its own demo
+    show, and deck 2's identical one did. It is kept until a re-run says otherwise.
+  * **Pads** show only the hot-cue block (notes 0-7) in hot-cue mode.
+  * **Left alone**, the FLX4 plays a demo show of its own and its crossfader
+    twitches (546 messages in 120 s): hence `is_touch`.
+  * **Rekordbox starting**: its process showed 8 s after launch, the device
+    first heard from 22 s, and its lights taken over at 29.5 s. Yielding (a look
+    every `LOOK_S`) darkens about 20 s before Rekordbox writes anything, so the
+    dark never lands on its lights.
+  * **Rekordbox running** lets the device stay silent: no keepalive answers come
+    back, so only `yield_to` keeps the animation off while it runs.
+    It repaints its full last state when it connects, and after that only what
+    changes (play, cue, a meter, a pad, the SHIFT layer while SHIFT is held),
+    plus a blinking play. Sent dark, it relit play, the hot cues and release FX
+    within seconds; anything else written over stays that way until its own
+    state changes. That is why the animation yields to it by default and darkens
+    what it drew.
 
 Imports nothing from the package.
 """
@@ -47,15 +65,18 @@ import os
 import subprocess
 import threading
 import time
+from collections import deque
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
-__all__ = ["AFTER_S", "FLX4_NAMES", "FPS", "LOOK_S", "PATTERNS", "SETS", "AppWatch",
+__all__ = ["AFTER_S", "BURST_N", "BURST_S", "FLX4_NAMES", "FPS", "JITTER", "LOOK_S", "PATTERNS", "SETS", "AppWatch",
            "IdleLights", "Light", "flx4", "from_entry", "parse_never"]
 
 AFTER_S = 30.0      # untouched this long, it starts
 FPS = 30.0          # frames sent a second, at most (only lights that changed)
 LOOK_S = 1.0        # the process list is read this often, off the frame thread
+JITTER = 3          # a continuous control this many steps (of 127) from its last value moved
+BURST_N, BURST_S = 6, 0.5   # this many messages from one control this fast: it moved
 
 
 @dataclass(frozen=True)
@@ -99,7 +120,7 @@ def _flx4_named() -> list[tuple[str, Light]]:
         for i in range(8):                                   # pads 1-4 over 5-8
             out.append((f"{d} pad {i + 1}", Light("note", pad_ch, i, x0 + i % 4, 1.0 + i // 4)))
         for name, n, x, y in (("loop in", 0x10, 0.0, 3.0), ("loop out", 0x11, 1.0, 3.0),
-                              ("reloop", 0x4D, 2.0, 3.0), ("headphone cue", 0x54, 4.5, 2.0),
+                              ("headphone cue", 0x54, 4.5, 2.0),
                               ("sync", 0x58, 3.0, 4.0), ("cue", 0x0C, 0.0, 4.0),
                               ("play / pause", 0x0B, 1.0, 4.0)):
             out.append((f"{d} {name}", Light("note", ch, n, x0 + x, y)))
@@ -214,6 +235,9 @@ class IdleLights:
     _started: float = field(default=0.0, init=False)
     _next_frame: float = field(default=0.0, init=False)
     _sent: dict[tuple[str, int, int], int] = field(default_factory=dict, init=False)
+    # `is_touch`'s memory: each continuous control's last value, and its recent message times
+    _cc_last: dict[tuple[str, int, int], int] = field(default_factory=dict, init=False)
+    _bursts: dict[tuple[str, int, int], deque] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
         self._last_touch = self.clock()
@@ -225,6 +249,32 @@ class IdleLights:
 
     def touched(self) -> None:
         self._last_touch = self.clock()
+
+    def is_touch(self, kind: str, channel: int, number: int, value: int) -> bool:
+        """Is a message from the device a person's touch? A note, a SysEx and anything
+        else is. A continuous control (``cc``, ``pitch`` with its value in 0..127) is
+        not when it is only twitching. The FLX4 probe (2026-11-19) heard its crossfader
+        send 546 messages in 120 s with no hand on it, its 14-bit pair (CC 31 / 63
+        on channel 6): the MSB wandering a step at a time, the LSB anywhere. So:
+
+          * an LSB (CC 32-63 once its MSB, CC n - 32, has been heard) never is;
+          * a value `JITTER` or more from the control's last one is;
+          * so are `BURST_N` messages from one control inside `BURST_S`: a jog's
+            relative ticks repeat one value, and a quick fader move is fast.
+
+        A control's first message only sets where it is."""
+        if kind not in ("cc", "pitch"):
+            return True
+        if kind == "cc" and 32 <= number < 64 and ("cc", channel, number - 32) in self._cc_last:
+            return False
+        key, now = (kind, channel, number), self.clock()
+        last = self._cc_last.get(key)
+        self._cc_last[key] = value
+        times = self._bursts.setdefault(key, deque(maxlen=BURST_N))
+        times.append(now)
+        if len(times) == BURST_N and now - times[0] <= BURST_S:
+            return True
+        return last is not None and abs(value - last) >= JITTER
 
     def forget_sent(self) -> None:
         """The device came back (a reconnect): every light is sent again."""

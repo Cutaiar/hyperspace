@@ -241,7 +241,7 @@ def test_the_apc40_holds_its_feedback_while_idle_and_redraws_it_after(rig, monke
     d.io.poll()
     assert d.io.idle.running and calls == {"feedback": 0, "redraw": 0}
     d.out.sent.clear()
-    d.inp.queue.append(cc(0x30, 64))                # a track knob
+    d.inp.queue.extend([cc(0x30, 64), cc(0x30, 70)])    # a track knob turned
     d.io.poll()
     assert not d.io.idle.running and calls["redraw"] == 1 and calls["feedback"] >= 1
 
@@ -261,3 +261,72 @@ def test_a_desk_made_before_idle_lights_reads_none(rig):  # noqa: F811
     d.__dict__.pop("idle", None)
     assert d.idle is None
     d.poll()
+
+
+# ---------------------------------------------------------------- what counts as a touch
+
+# what the FLX4 sent in the probe's 120 s with no hand on it (2026-11-19): its crossfader's
+# 14-bit pair on channel 6, the MSB (CC 31) wandering a step, the LSB (CC 63) anywhere
+FLX4_TWITCH = ["B6 1F 43", "B6 3F 1E", "B6 1F 42", "B6 3F 6B", "B6 1F 42", "B6 3F 37",
+               "B6 1F 42", "B6 3F 03", "B6 1F 41", "B6 3F 4F", "B6 1F 41", "B6 3F 1B"]
+
+
+def _twitch_msgs():
+    return [mido.Message.from_hex(h) for h in FLX4_TWITCH]
+
+
+def test_the_probes_crossfader_twitch_is_not_a_touch():
+    a, clock = _anim(after=1.0)
+    clock.t = 1.0
+    a.tick()
+    for k, m in enumerate(_twitch_msgs()):
+        clock.t = 1.0 + k * 0.22                 # ~4.5 a second, as the probe heard
+        assert not a.is_touch("cc", m.channel, m.control, m.value), m.hex()
+    assert a.running
+
+
+def test_a_real_move_is_a_touch():
+    a, clock = _anim()
+    assert not a.is_touch("cc", 6, 31, 66)               # the first: only where it is
+    clock.t = 1.0
+    assert not a.is_touch("cc", 6, 31, 67)               # a twitch
+    clock.t = 2.0
+    assert a.is_touch("cc", 6, 31, 70)                   # three steps: moved
+    assert a.is_touch("note", 7, 0, 127)                 # a pad
+    assert a.is_touch("note", 7, 0, 0)
+    assert a.is_touch("sysex", 0, 0, 0)
+
+
+def test_a_jog_spin_is_a_touch_by_its_rate():
+    a, clock = _anim()
+    said = []
+    for k in range(idle_lights.BURST_N):
+        clock.t = 5.0 + k * 0.02
+        said.append(a.is_touch("cc", 0, 0x22, 65))       # one value, over and over
+    assert said[-1] and not any(said[:-1])
+
+
+def test_a_lone_cc_32_to_63_with_no_msb_heard_is_its_own_control():
+    a, clock = _anim()
+    a.is_touch("cc", 0, 40, 10)
+    clock.t = 1.0
+    assert a.is_touch("cc", 0, 40, 90)
+
+
+def test_a_twitching_crossfader_on_a_desk_lets_the_animation_run(rig):  # noqa: F811
+    d = _desk(rig, "generic")
+    d.clock.t = 1.0
+    d.io.poll()
+    for k, m in enumerate(_twitch_msgs()):
+        d.clock.t = 1.0 + k * 0.22
+        d.inp.queue.append(m)
+        d.io.poll()
+    assert d.io.idle.running
+    d.inp.queue.append(note(0, 127, channel=7))
+    d.io.poll()
+    assert not d.io.idle.running
+
+
+def test_reloop_is_not_on_the_flx4():
+    assert not any(lt.number == 0x4D for lt in idle_lights.flx4())
+    assert len(idle_lights.flx4()) == 30

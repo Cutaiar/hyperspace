@@ -82,13 +82,15 @@ class Probe:
         return list(self.inp.iter_pending())
 
     def listen(self, seconds: float) -> dict:
-        """What the device sent in `seconds`: counts by type, and the first few."""
-        end, kinds, first = time.monotonic() + seconds, Counter(), []
+        """What the device sent in `seconds`: counts by type, and the first few of each
+        type (the crossfader's twitch alone would fill a shared list)."""
+        end, kinds, first = time.monotonic() + seconds, Counter(), {}
         while time.monotonic() < end:
             for m in self.drain():
                 kinds[m.type] += 1
-                if len(first) < 12:
-                    first.append(m.hex())
+                seen = first.setdefault(m.type, [])
+                if len(seen) < 12:
+                    seen.append(m.hex())
             time.sleep(0.01)
         return {"seconds": seconds, "by_type": dict(kinds), "first": first}
 
@@ -101,9 +103,10 @@ class Probe:
 
     # ---- the steps ----
 
-    def addresses(self) -> None:
+    def addresses(self, only: str = "") -> None:
         print("\n1. Addresses — close Rekordbox. Each light comes on alone.")
-        lights, out = flx4(), []
+        lights = [lt for lt in flx4() if only.lower() in FLX4_NAMES.get(lt.key, "").lower()]
+        out = []
         self.all(lights, False)
         for lt in lights:
             name = FLX4_NAMES.get(lt.key, "?")
@@ -197,9 +200,11 @@ def main() -> None:
                     default=Path(f"flx4-probe-{time.strftime('%Y%m%d-%H%M%S')}.json"))
     ap.add_argument("--alone", type=float, default=120.0, help="step 3's wait, seconds")
     ap.add_argument("--steps", default="12345", help="which steps to run, e.g. 45")
+    ap.add_argument("--lights", default="", help="step 1: only lights whose name has this, "
+                    "e.g. 'level meter'")
     a = ap.parse_args()
     p = Probe(a.port)
-    steps = {"1": p.addresses, "2": p.pad_modes, "3": lambda: p.left_alone(a.alone),
+    steps = {"1": lambda: p.addresses(a.lights), "2": p.pad_modes, "3": lambda: p.left_alone(a.alone),
              "4": lambda: p.launch_race(180.0), "5": p.side_by_side}
     try:
         for k in a.steps:

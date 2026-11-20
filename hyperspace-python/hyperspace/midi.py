@@ -680,9 +680,7 @@ class MidiIO:
         self._uncatch_moved()
         heard = False
         for msg in self.ports.recv():
-            # anything the device says ends the idle animation but a clock tick:
-            # a press, and a SysEx answer to another app's query (Rekordbox asks)
-            heard = heard or msg.type not in ("clock", "active_sensing")
+            heard = self._is_touch(msg) or heard
             self._handle(msg)
         self._flush14()             # an MSB no LSB followed this poll
         self._settle_heard()        # a listening learn that has heard enough
@@ -710,6 +708,18 @@ class MidiIO:
         if idle.ended and getattr(self.profile, "FEEDBACK", True):
             self.redraw(whole=True)
         return idle.running
+
+    def _is_touch(self, msg) -> bool:
+        """Does this message end the idle animation (`IdleLights.is_touch`)? A clock
+        tick never does, a fader's twitch doesn't; a press or a SysEx does."""
+        idle, t = self.idle, msg.type
+        if idle is None or t in ("clock", "active_sensing"):
+            return False
+        if t == "control_change":
+            return idle.is_touch("cc", msg.channel, msg.control, msg.value)
+        if t == "pitchwheel":
+            return idle.is_touch("pitch", msg.channel, 0, (msg.pitch + 8192) >> 7)
+        return True
 
     def _send_idle(self, msgs: list) -> None:
         for kind, ch, number, value in msgs:
