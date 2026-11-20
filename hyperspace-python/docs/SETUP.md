@@ -196,6 +196,37 @@ profile = "generic"
 port = "Launch Control"
 ```
 
+**Idle lights.** A MIDI entry's `idle` makes its LEDs play an animation
+while nobody is using it. It starts on its own once the desk has sent nothing
+for `after` seconds, and stops the moment you touch anything. It never runs
+while an app in `yield_to` is open (Rekordbox, by default) and stops when one
+opens. When it stops, every light it drew goes dark. The APC40 then redraws
+its own lights. A DJ app relights its own as its state changes; on the
+DDJ-FLX4 a pad-mode press repaints the pads straight away.
+
+```toml
+[[devices]]
+role = "ddj-flx4"
+kind = "midi"
+profile = "generic"
+port = "DDJ-FLX4"
+idle = { lights = "ddj-flx4", after = 30 }
+
+# all the keys, with their defaults:
+# idle = { lights = "ddj-flx4", after = 30, pattern = "wave",
+#          yield_to = ["rekordbox"], never = [] }
+```
+
+`lights` is `"ddj-flx4"` or `"apc40"`; the APC40's entry can say just
+`idle = true`. `pattern` is `"wave"` or `"breathe"`. `never` lists lights to
+leave alone, as a row's source names them without the role
+(`"note:0:11"` is deck 1's play, `"cc:0:2"` its level meter). With
+`yield_to = []` the animation also runs while Rekordbox is open. Then put every
+light Rekordbox uses in `never`, or the animation will cover them. The two apps
+can share the device's ports, but each light shows whichever app wrote to it
+last. `tools/flx4_led_probe.py` checks all of this on the hardware and writes
+a report.
+
 **A phone** (TouchOSC or any OSC app) on the same Wi-Fi: set the app to
 send to the Mac's address, port 9000, and list the addresses its faders
 and buttons send. Allow Python's incoming connections when macOS asks.
