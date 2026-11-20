@@ -280,7 +280,7 @@ def test_the_probes_crossfader_twitch_is_not_a_touch():
     clock.t = 1.0
     a.tick()
     for k, m in enumerate(_twitch_msgs()):
-        clock.t = 1.0 + k * 0.22                 # ~4.5 a second, as the probe heard
+        clock.t = 1.0 + (k // 2) * 0.44          # a pair, back to back, ~2 a second
         assert not a.is_touch("cc", m.channel, m.control, m.value), m.hex()
     assert a.running
 
@@ -317,9 +317,10 @@ def test_a_twitching_crossfader_on_a_desk_lets_the_animation_run(rig):  # noqa: 
     d = _desk(rig, "generic")
     d.clock.t = 1.0
     d.io.poll()
-    for k, m in enumerate(_twitch_msgs()):
+    msgs = _twitch_msgs()
+    for k in range(0, len(msgs), 2):
         d.clock.t = 1.0 + k * 0.22
-        d.inp.queue.append(m)
+        d.inp.queue.extend(msgs[k:k + 2])               # each pair in one poll
         d.io.poll()
     assert d.io.idle.running
     d.inp.queue.append(note(0, 127, channel=7))
@@ -330,3 +331,58 @@ def test_a_twitching_crossfader_on_a_desk_lets_the_animation_run(rig):  # noqa: 
 def test_reloop_is_not_on_the_flx4():
     assert not any(lt.number == 0x4D for lt in idle_lights.flx4())
     assert len(idle_lights.flx4()) == 30
+
+
+# ---------------------------------------------------------------- review of PR #464
+
+
+def test_a_touch_ends_it_even_with_no_idle_delay():
+    a, clock = _anim(after=0.0)
+    a.tick()
+    assert a.running
+    a.touched()
+    assert a.tick() and a.ended and not a.running      # darkened this frame
+    clock.t = 1.0
+    assert a.tick() and a.running                       # and back the next
+
+
+def test_an_apc40_track_knob_ends_it_after_its_device_knob_was_turned():
+    a, clock = _anim()
+    for k, v in enumerate((10, 30, 50)):                # device knob 1 (CC 16)
+        clock.t = k * 1.0
+        a.is_touch("cc", 0, 16, v)
+    said = []
+    for k, v in enumerate((20, 40, 60, 80)):            # track knob 1 (CC 48), later
+        clock.t = 10.0 + k * 0.3
+        said.append(a.is_touch("cc", 0, 48, v))
+    assert said[1:] == [True, True, True]
+
+
+def test_an_lsb_is_one_only_straight_after_its_msb():
+    a, clock = _anim()
+    a.is_touch("cc", 6, 31, 66)
+    assert not a.is_touch("cc", 6, 63, 10)              # straight after: the LSB
+    clock.t = 1.0
+    a.is_touch("cc", 6, 31, 66)
+    clock.t = 1.0 + 2 * idle_lights.PAIR_S
+    a.is_touch("cc", 6, 63, 10)                         # too late: a control of its own
+    clock.t = 2.0
+    assert a.is_touch("cc", 6, 63, 90)
+
+
+def test_the_pattern_is_looked_up_by_name_each_frame(monkeypatch):
+    a = from_entry({"lights": "ddj-flx4", "after": 0, "yield_to": []}, clock=Clock())
+    assert a is not None and a.pattern_name == "wave"
+    monkeypatch.setitem(idle_lights.PATTERNS, "wave", lambda light, t: 1.0)   # a reload's edit
+    assert {v for *_k, v in a.tick()} == {127}
+
+
+def test_the_desk_hands_its_animator_and_watch_to_the_hot_reloader():
+    from hyperspace import devices
+    idle = from_entry({"lights": "ddj-flx4"}, start_watch=False)
+    io = NS(idle=idle)
+    pairs = {(m, c) for _, m, c in devices.MidiDevice("flx4", io=io).targets()}
+    assert pairs == {("midi", "MidiIO"), ("idle_lights", "IdleLights"),
+                     ("idle_lights", "AppWatch")}
+    assert {(m, c) for _, m, c in devices.MidiDevice("apc40", io=NS(idle=None)).targets()} \
+        == {("midi", "MidiIO")}

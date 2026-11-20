@@ -69,7 +69,7 @@ from collections import deque
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
-__all__ = ["AFTER_S", "BURST_N", "BURST_S", "FLX4_NAMES", "FPS", "JITTER", "LOOK_S", "PATTERNS", "SETS", "AppWatch",
+__all__ = ["AFTER_S", "BURST_N", "BURST_S", "FLX4_NAMES", "FPS", "JITTER", "LOOK_S", "PAIR_S", "PATTERNS", "SETS", "AppWatch",
            "IdleLights", "Light", "flx4", "from_entry", "parse_never"]
 
 AFTER_S = 30.0      # untouched this long, it starts
@@ -77,6 +77,7 @@ FPS = 30.0          # frames sent a second, at most (only lights that changed)
 LOOK_S = 1.0        # the process list is read this often, off the frame thread
 JITTER = 3          # a continuous control this many steps (of 127) from its last value moved
 BURST_N, BURST_S = 6, 0.5   # this many messages from one control this fast: it moved
+PAIR_S = 0.05       # a 14-bit LSB follows its MSB at once, within this
 
 
 @dataclass(frozen=True)
@@ -228,6 +229,9 @@ class IdleLights:
     after: float = AFTER_S
     pattern: Callable[[Light, float], float] = _wave
     watch: AppWatch | None = None
+    # the pattern by its PATTERNS name, looked up each frame, so a hot reload's edit
+    # to it is drawn; `pattern` is used when this is None (a test's own function)
+    pattern_name: str | None = None
     clock: Callable[[], float] = time.monotonic
     running: bool = False
     ended: bool = False                 # `tick` just ended it: the desk redraws
@@ -238,6 +242,8 @@ class IdleLights:
     # `is_touch`'s memory: each continuous control's last value, and its recent message times
     _cc_last: dict[tuple[str, int, int], int] = field(default_factory=dict, init=False)
     _bursts: dict[tuple[str, int, int], deque] = field(default_factory=dict, init=False)
+    _prev: tuple[tuple[str, int, int], float] | None = field(default=None, init=False)
+    _touch_due: bool = field(default=False, init=False)   # a touch `tick` has not seen
 
     def __post_init__(self) -> None:
         self._last_touch = self.clock()
@@ -248,7 +254,7 @@ class IdleLights:
         return self.watch is not None and self.watch.running
 
     def touched(self) -> None:
-        self._last_touch = self.clock()
+        self._last_touch, self._touch_due = self.clock(), True
 
     def is_touch(self, kind: str, channel: int, number: int, value: int) -> bool:
         """Is a message from the device a person's touch? A note, a SysEx and anything
@@ -257,17 +263,21 @@ class IdleLights:
         send 546 messages in 120 s with no hand on it, its 14-bit pair (CC 31 / 63
         on channel 6): the MSB wandering a step at a time, the LSB anywhere. So:
 
-          * an LSB (CC 32-63 once its MSB, CC n - 32, has been heard) never is;
+          * an LSB never is: CC 32-63 arriving straight after its MSB, CC n - 32,
+            within `PAIR_S`. Not merely 32 apart: the APC40's track knobs
+            (CC 48-55) are knobs of their own, 32 above its device knobs;
           * a value `JITTER` or more from the control's last one is;
           * so are `BURST_N` messages from one control inside `BURST_S`: a jog's
             relative ticks repeat one value, and a quick fader move is fast.
 
         A control's first message only sets where it is."""
+        key, now = (kind, channel, number), self.clock()
+        prev, self._prev = self._prev, (key, now)
         if kind not in ("cc", "pitch"):
             return True
-        if kind == "cc" and 32 <= number < 64 and ("cc", channel, number - 32) in self._cc_last:
+        if (kind == "cc" and 32 <= number < 64 and prev is not None
+                and prev[0] == ("cc", channel, number - 32) and now - prev[1] <= PAIR_S):
             return False
-        key, now = (kind, channel, number), self.clock()
         last = self._cc_last.get(key)
         self._cc_last[key] = value
         times = self._bursts.setdefault(key, deque(maxlen=BURST_N))
@@ -286,7 +296,9 @@ class IdleLights:
         dark on the frame it ends, else nothing."""
         now = self.clock()
         self.ended = False
-        want = not self.yielding and now - self._last_touch >= self.after
+        # a touch since the last frame ends it, even with `after` 0
+        touch, self._touch_due = self._touch_due, False
+        want = not touch and not self.yielding and now - self._last_touch >= self.after
         if self.running and not want:
             return self._end()
         if not want:
@@ -297,9 +309,10 @@ class IdleLights:
             return []
         self._next_frame = now + 1.0 / FPS
         t = now - self._started
+        pattern = PATTERNS.get(self.pattern_name or "", self.pattern)
         out: list[Message] = []
         for light in self.lights:
-            v = light.value(self.pattern(light, t))
+            v = light.value(pattern(light, t))
             if self._sent.get(light.key) != v:
                 self._sent[light.key] = v
                 out.append((*light.key, v))
@@ -372,4 +385,5 @@ def from_entry(idle, *, default_set: str | None = None, start_watch: bool = True
     never = parse_never(idle.get("never", ()))
     lights = tuple(lt for lt in SETS[name]() if lt.key not in never)
     watch = AppWatch(yield_to, start=start_watch) if yield_to else None
-    return IdleLights(lights, after=after, pattern=PATTERNS[pattern], watch=watch, clock=clock)
+    return IdleLights(lights, after=after, pattern=PATTERNS[pattern], watch=watch, clock=clock,
+                      pattern_name=pattern)

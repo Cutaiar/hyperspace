@@ -580,7 +580,16 @@ class MidiDevice(Base):
             self.io.poll()
 
     def targets(self) -> list[tuple]:
-        return [(self.io, "midi", "MidiIO")] if self.io is not None else []
+        io = self.io
+        if io is None:
+            return []
+        out: list[tuple] = [(io, "midi", "MidiIO")]
+        idle = getattr(io, "idle", None)            # its idle animation and app watch, too
+        if idle is not None:
+            out.append((idle, "idle_lights", "IdleLights"))
+            if idle.watch is not None:
+                out.append((idle.watch, "idle_lights", "AppWatch"))
+        return out
 
 
 class PadDevice(Base):
