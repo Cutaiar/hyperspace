@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-13
+## v1.3 — 2026-11-19
 
 ### Panel
 
@@ -96,12 +96,22 @@
 - GRAPH's right-click menus (a pin's, a cable's, a node's, a group's, the node picker …) are drawn with the new kit, with submenus that open on hover or →; while a menu is up, no wire or node words show through it; `HYPERSPACE_KIT=0` draws them as before (#452)
 - Matte and segment nodes show their mask as a thumbnail on GRAPH, a segment's `fg` and `bg` pins show their own pictures, and a mask that can't be shown says why (#405)
 
+- Tidy (the chip, now **Turbo Tidy**, with flames on hover) lays GRAPH out left to right by signal flow — controllers and audio, then modulation, picture makers, effects, outputs — with about half the cable crossings; a cable that runs backward is drawn as a sling under (or over) the nodes it spans, and a tidied graph is wider and taller than before (#463)
+- Adding an effect opens **effects…**, a picker of tiles grouped by family: each shows the effect over a test card and plays its loop on hover, search finds by name or tip and Enter takes the first match; it replaces the effects ▸ submenu in the add menu and a cable's insert ▸ (#461)
+- An effect that isn't wired yet still shows a thumbnail, through its input or the test card, and only effects that read a second picture (Blend, Displace) have an `aux` port; a saved aux wire still loads (#461)
 ### Effects
 
 - New **Grow** effect: grass, sprouts, blobs, noodles, mould, coral or cells grow out of the picture and push its pixels (a lens-like bulge, or a lift along Angle); ride `fx.grow.grow` with an LFO to grow it in and out — at 0 the frame is untouched (#381)
 - Four new light effects: **Prism** opens edges into a rainbow around a lens you can move (Centre X / Y), **Oil slick** tints what's lit with a thin film's rainbow and leaves black black, **Bloom** spills a soft glow from whatever is over Threshold (chain two for a frame-wide veil), and **Grain** adds film grain, with **Steps** and **Dither** for a crushed, dot-screen print look (#454)
 - New **Wave Table** effect: a disc of the picture at each root is dragged along grass, noodle or curl paths into an extruded tube; scrub or LFO `fx.wavetable.pos` — at 0 the frame is untouched (#406)
 - Three distortion effects that move the picture's pixels: **Shake** moves the whole frame (buzz, orbit, punch or jolt, with Smear and Split), **Wave** lays one waveform across it along lines, rings or spokes, and **Blocks** cuts it into cells that shift, zoom, stretch, turn, bulge or swap — every Amount is untouched at 0, so a lane, hand or pad fades it in; 23 ready patches in `presets/distort/` play them (#458)
+- New **Mandelbrot** effect, a live Mandelbrot / Julia generator to explore by hand or controller: every term of z → z^p + c is a knob (Centre, Zoom to 10¹³×, z₀, c, Slice, Power 2–8, Steps); Pan, Dive and the drives move the picture as far at any depth, Size (540 / 810 / 1080 lines) sets its cost, and it feeds Palette's gradient or a built-in ramp (#462)
+
+### Shapes
+
+- Nine fractals to zoom into forever with the same detail at every depth: the Sierpinski tetrahedron and 5-cell, the octahedron and icosahedron flakes, the Menger sponge, and Cantor dust and the Vicsek cross in 3D and 4D; VIEW's **Additive** switch draws one on the GPU, unsorted and glowing, instead of sorted (#460)
+- A fist grabs a fractal as an object from outside; once you're inside it, the fist holds the space and moving it flies you through the fractal's 4D space, with no jump at any depth (#460)
+- A patch saves where you are inside a fractal (its dive) and loading it takes you back; a broken saved dive is refused with a note and the rest of the patch still loads (#460)
 
 ### Media
 
@@ -147,6 +157,9 @@
 - `ui_menu.Menu` describes a menu once and draws it with imgui (`draw_imgui`) or the kit (`draw_kit`), each action run after the draw; dkit's `menu.py` gains measured submenus placed by `place_sub` (#452); `routing.RETIRED_KEY_ROWS` drops retired factory key rows at load (#455)
 - `app._install_quit_signals` handles SIGINT only — SIGTERM stays the kernel's — with a `QUIT_HARD_S` alarm behind the quit, and `tests/test_quit_signal.py` in the fast tier holds it (#456)
 - Distortion lives in GLSL only: `_lib.glsl` gains `wave(shape, x)` and `pushed(uv, d, split)`; `docs/DISTORTION.md` explains the model and how to add one, and `tools/distort_demo.py` draws the demo video and contact sheet through the real passes (#458)
+- `shapeframe.py` draws every shape through one provider (`Fixed`, `Scene`, `Fractal`), byte-identical for every non-fractal frame; `fractal_gl.py` instances a fractal's cells on the GPU; `tools/fractal_compare.py`, `tools/fractal_grab_demo.py` and `tools/fractal_bench.py` (#460)
+- An effect file can hand its pass to Python with `// @hook <module>`: `mandel.py` holds Mandelbrot's float64 reference orbit, perturbation and tile pre-passes; `tools/mandel_bench.py` times it on the rig (#462)
+- `previews.py` draws each effect's still and loop off the show's chain, `fx.reads_aux` decides the aux port and a `// @family` directive groups the picker; `tools/effect_previews.py` writes stills, GIFs and a contact sheet (#461); the tidy is `graphview.flow` and `graphview.sling`, tuned beside `BANDS` (#463)
 
 ## v1.2 — 2026-11-02
 
