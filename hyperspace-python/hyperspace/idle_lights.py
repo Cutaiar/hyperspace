@@ -36,9 +36,9 @@ What `tools/flx4_led_probe.py` found on the owner's FLX4 (2026-11-19):
 
   * **The addresses** (Mixxx's community mapping, Pioneer-DDJ-FLX4.midi.xml)
     light what they name, but for reloop (0x4D): the FLX4 has no such button,
-    so it is not in the set. Deck 1's level meter did not light, but it was
-    the first light sent, while the FLX4 was still coming out of its own demo
-    show, and deck 2's identical one did. It is kept until a re-run says otherwise.
+    so it is not in the set. Deck 1's level meter did not light the first time,
+    sent while the FLX4 was still coming out of its own demo show; a re-run
+    (`--lights "level meter"`) lit both meters. Every light in `flx4()` is confirmed.
   * **Pads** show only the hot-cue block (notes 0-7) in hot-cue mode.
   * **Left alone**, the FLX4 plays a demo show of its own and its crossfader
     twitches (546 messages in 120 s): hence `is_touch`.
@@ -107,8 +107,8 @@ class Light:
 # ---- the light sets ----
 
 def _flx4_named() -> list[tuple[str, Light]]:
-    """The DDJ-FLX4's lights with their names (Mixxx's mapping, unverified on our
-    unit). Deck 1 is channel 0, deck 2 channel 1; the pads are on channel 7
+    """The DDJ-FLX4's lights with their names (Mixxx's mapping, each confirmed on
+    the owner's unit by tools/flx4_led_probe.py, 2026-11-19). Deck 1 is channel 0, deck 2 channel 1; the pads are on channel 7
     (deck 1) and 9 (deck 2), one note block per pad mode, SHIFT's on 8 and 10.
     Only the hot-cue block (notes 0-7, the mode it powers up in) is drawn:
     another mode's block would light pads that mode shows. x runs left to
