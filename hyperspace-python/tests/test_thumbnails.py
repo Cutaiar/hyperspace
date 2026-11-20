@@ -357,7 +357,9 @@ def test_the_page_draws_a_thumbnail_on_every_picture_node_collapsed_or_not(rig, 
           if not ui_graph.by_preview(view.node(nid))
           and ui_graph.on_screen(rect, *ui_graph._where(st, nid))}
     assert "scene" in th.wanted and set(th.wanted) == on
-    assert "output.1" not in th.wanted and "composite" not in th.wanted   # off screen
+    assert "output.1" not in th.wanted                  # off screen, at the right
+    assert on < {ui_graph.thumb_name(view.node(nid)) for nid in drawn_pics
+                 if not ui_graph.by_preview(view.node(nid))}    # something is off screen
     assert scene.picture == (1920, 1080)        # the hook C2's hover reads
     for nid in drawn_pics:
         for line in graphview.summary(view.node(nid)):
