@@ -55,7 +55,18 @@ What `tools/flx4_led_probe.py` found on the owner's FLX4 (2026-11-19):
     state changes. That is why the animation yields to it by default and darkens
     what it drew.
 
-Imports nothing from the package.
+**Patterns.** ``pattern`` is one name, a list played in turn (each for
+``each`` seconds, and the next idle spell starts on the one after), or
+``"all"``. ``wave`` and ``breathe`` are a brightness per light; the rest are
+`idle_effects`: whole-desk animations (wash, ripple, wobble, heat, fireworks,
+hearts, heartbeat, zoom; ``shape`` names zoom's polytope) that colour the
+APC40's clip grid and run as shapes on a one-colour device. ``dither = true``
+spreads each light's threshold over frames, so a level between reads as a
+duty cycle (software dimming; whether it reads dim or flickers is a check by
+eye at the desk).
+
+Imports nothing from the package but `idle_effects` (which imports only
+`geometry`, and that only for a zoom).
 """
 
 from __future__ import annotations
@@ -69,8 +80,10 @@ from collections import deque
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
-__all__ = ["AFTER_S", "BURST_N", "BURST_S", "FLX4_NAMES", "FPS", "JITTER", "LOOK_S", "PAIR_S", "PATTERNS", "SETS", "AppWatch",
-           "IdleLights", "Light", "flx4", "from_entry", "parse_never"]
+from . import idle_effects
+
+__all__ = ["AFTER_S", "BURST_N", "BURST_S", "EACH_S", "FLX4_NAMES", "FPS", "JITTER", "LOOK_S", "PAIR_S", "PATTERNS", "SETS",
+           "AppWatch", "IdleLights", "Light", "flx4", "from_entry", "parse_never", "pattern_names"]
 
 AFTER_S = 30.0      # untouched this long, it starts
 FPS = 30.0          # frames sent a second, at most (only lights that changed)
@@ -78,13 +91,17 @@ LOOK_S = 1.0        # the process list is read this often, off the frame thread
 JITTER = 3          # a continuous control this many steps (of 127) from its last value moved
 BURST_N, BURST_S = 6, 0.5   # this many messages from one control this fast: it moved
 PAIR_S = 0.05       # a 14-bit LSB follows its MSB at once, within this
+EACH_S = 20.0       # a list of patterns: each plays this long
+_BAYER = (0.125, 0.625, 0.375, 0.875)   # `dither`'s threshold offsets, a light's phase a frame
 
 
 @dataclass(frozen=True)
 class Light:
     """One LED: the message that sets it, where it sits on the device (for a
     pattern that sweeps), and the values it takes, darkest first. A ``cc``
-    light with ``levels`` None takes any value 0..127 (a level meter)."""
+    light with ``levels`` None takes any value 0..127 (a level meter).
+    ``colours`` names the values of a light that shows colour (the APC40's
+    clip pads), for an `idle_effects` effect that says which."""
 
     kind: str                   # "note" (velocity) or "cc" (value)
     channel: int                # 0-based
@@ -92,17 +109,29 @@ class Light:
     x: float = 0.0
     y: float = 0.0
     levels: tuple[int, ...] | None = (0, 127)
+    colours: tuple[tuple[str, int], ...] = ()
 
     @property
     def key(self) -> tuple[str, int, int]:
         return (self.kind, self.channel, self.number)
 
-    def value(self, b: float) -> int:
-        """The value that shows brightness `b` (0..1) on this light."""
+    def value(self, b: float, dither: float | None = None) -> int:
+        """The value that shows brightness `b` (0..1) on this light; `dither`
+        (0..1, this frame's phase) moves where each step falls."""
         b = 0.0 if not b > 0.0 else min(1.0, b)     # NaN reads dark
         if self.levels is None:
             return round(b * 127)
-        return self.levels[min(len(self.levels) - 1, int(b * len(self.levels)))]
+        n = len(self.levels)
+        i = int(b * n) if dither is None else int(b * (n - 1) + dither)
+        return self.levels[min(n - 1, i)]
+
+    def show(self, level: float, colour: str | None = None, dither: float | None = None) -> int:
+        """The value for an effect's (level, colour): a colour light lit in
+        that colour above `idle_effects.THRESHOLD`, any other the level."""
+        if colour is not None and self.colours:
+            thr = idle_effects.THRESHOLD if dither is None else 1.0 - dither
+            return dict(self.colours).get(colour, 0) if level > thr else 0
+        return self.value(level, dither)
 
 
 # ---- the light sets ----
@@ -136,14 +165,27 @@ def flx4() -> tuple[Light, ...]:
 FLX4_NAMES: dict[tuple[str, int, int], str] = {lt.key: name for name, lt in _flx4_named()}
 
 
+# the APC40's button field below its clip grid, top to bottom (apc40.py's
+# N_CLIPSTOP, N_SELECT, N_ACTIVATOR, N_SOLO, N_ARM) and each row's centre in
+# layout units (apc40.LAYOUT; tests/test_idle_lights.py holds the two together)
+_APC40_ROWS = ((0x34, 5.8), (0x33, 6.9), (0x32, 8.1), (0x31, 9.1), (0x30, 10.1))
+_APC40_GRID = (("green", 1), ("yellow", 5), ("red", 3))     # apc40.GREEN, YELLOW, RED
+
+
 def _apc40() -> tuple[Light, ...]:
-    """The APC40's clip grid (notes 0x35-0x39, a track a channel) and scene
-    launch column, in green, yellow, red as they brighten (apc40.py's
-    velocities: 1 green, 5 yellow, 3 red)."""
-    grid = (0, 1, 5, 3)
-    out = [Light("note", track, 0x35 + row, float(track), float(row), grid)
+    """Every APC40 button with a light, at its centre on the face
+    (apc40.LAYOUT, x right, y down): the clip grid (notes 0x35-0x39, a track
+    a channel) in green, yellow, red as they brighten, and colours for an
+    effect; the five button rows under it; the scene launch column, STOP ALL
+    CLIPS and MASTER select, one colour each. Not the knob rings: a ring
+    value re-bases its knob (`idle_effects`)."""
+    grid = (0, *(v for _c, v in _APC40_GRID))
+    out = [Light("note", track, 0x35 + row, track + 0.5, row + 0.5, grid, _APC40_GRID)
            for row in range(5) for track in range(8)]
-    out += [Light("note", 0, 0x52 + row, 8.5, float(row), (0, 1)) for row in range(5)]
+    out += [Light("note", track, note, track + 0.5, y, (0, 1))
+            for note, y in _APC40_ROWS for track in range(8)]
+    out += [Light("note", 0, 0x52 + row, 8.7, row + 0.5, (0, 1)) for row in range(5)]
+    out += [Light("note", 0, 0x51, 8.7, 5.8, (0, 1)), Light("note", 0, 0x50, 8.7, 6.9, (0, 1))]
     return tuple(out)
 
 
@@ -166,6 +208,11 @@ def _breathe(light: Light, t: float) -> float:
 
 
 PATTERNS: dict[str, Callable[[Light, float], float]] = {"wave": _wave, "breathe": _breathe}
+
+
+def pattern_names() -> tuple[str, ...]:
+    """Every pattern a config can name: the effects, then the per-light ones."""
+    return (*idle_effects.EFFECTS, *PATTERNS)
 
 
 # ---- is another app running ----
@@ -232,6 +279,12 @@ class IdleLights:
     # the pattern by its PATTERNS name, looked up each frame, so a hot reload's edit
     # to it is drawn; `pattern` is used when this is None (a test's own function)
     pattern_name: str | None = None
+    # several patterns played in turn, `each` seconds apiece (overrides `pattern_name`);
+    # a name may be an `idle_effects` effect, made fresh each time it comes up
+    names: tuple[str, ...] = ()
+    each: float = EACH_S
+    shape: str = "Tesseract"            # the zoom effect's polytope
+    dither: bool = False
     clock: Callable[[], float] = time.monotonic
     running: bool = False
     ended: bool = False                 # `tick` just ended it: the desk redraws
@@ -244,6 +297,10 @@ class IdleLights:
     _bursts: dict[tuple[str, int, int], deque] = field(default_factory=dict, init=False)
     _prev: tuple[tuple[str, int, int], float] | None = field(default=None, init=False)
     _touch_due: bool = field(default=False, init=False)   # a touch `tick` has not seen
+    _turn: int = field(default=0, init=False)             # where the list starts next spell
+    _at: int = field(default=0, init=False)               # the list's entry playing now
+    _effect: tuple[int, str, idle_effects.Effect] | None = field(default=None, init=False)
+    _frames: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
         self._last_touch = self.clock()
@@ -305,21 +362,40 @@ class IdleLights:
             return []
         if not self.running:
             self.running, self._started, self._next_frame = True, now, now
+            self._effect = None
         if now < self._next_frame:
             return []
         self._next_frame = now + 1.0 / FPS
+        self._frames += 1
         t = now - self._started
-        pattern = PATTERNS.get(self.pattern_name or "", self.pattern)
         out: list[Message] = []
-        for light in self.lights:
-            v = light.value(pattern(light, t))
+        for i, (light, (level, colour)) in enumerate(zip(self.lights, self._levels(t))):
+            d = _BAYER[(self._frames + i) % 4] if self.dither else None
+            v = light.show(level, colour, d)
             if self._sent.get(light.key) != v:
                 self._sent[light.key] = v
                 out.append((*light.key, v))
         return out
 
+    def _levels(self, t: float) -> list[tuple[float, str | None]]:
+        """This frame's (level, colour) per light, `t` seconds into the spell."""
+        names = self.names or ((self.pattern_name,) if self.pattern_name else ())
+        name, start = (names[0] if names else ""), 0.0
+        if len(names) > 1:
+            turn = int(t // self.each)
+            self._at = (self._turn + turn) % len(names)
+            name, start = names[self._at], turn * self.each
+        if name in idle_effects.EFFECTS:
+            if self._effect is None or self._effect[:2] != (self._at, name):
+                self._effect = (self._at, name, idle_effects.make(name, self.lights, shape=self.shape))
+            return self._effect[2].frame(t - start)
+        self._effect = None
+        pattern = PATTERNS.get(name, self.pattern)
+        return [(pattern(light, t), None) for light in self.lights]
+
     def _end(self) -> list[Message]:
         self.running, self.ended = False, True
+        self._turn, self._effect = self._at + 1, None    # the next spell plays the next one
         out = [(*key, 0) for key, v in self._sent.items() if v != 0]
         self._sent.clear()
         return out
@@ -359,8 +435,10 @@ def from_entry(idle, *, default_set: str | None = None, start_watch: bool = True
     """The animator a `[[devices]]` entry's ``idle`` asks for, or None.
     ``idle`` is absent / false (none), true (the profile's own set,
     `default_set`), a set's name, or a table: ``lights`` (a set's name),
-    ``after`` (seconds), ``pattern``, ``yield_to`` (app names; default
-    ``["rekordbox"]``) and ``never``. A bad value raises ValueError naming it."""
+    ``after`` (seconds), ``pattern`` (a name, a list, or ``"all"``),
+    ``each`` (seconds a listed pattern plays), ``shape`` (zoom's polytope),
+    ``dither``, ``yield_to`` (app names; default ``["rekordbox"]``) and
+    ``never``. A bad value raises ValueError naming it."""
     if idle is None or idle is False:
         return None
     if idle is True:
@@ -374,8 +452,21 @@ def from_entry(idle, *, default_set: str | None = None, start_watch: bool = True
     if name not in SETS:
         raise ValueError(f"idle.lights: {name!r} is not one of {', '.join(SETS)}")
     pattern = idle.get("pattern", "wave")
-    if pattern not in PATTERNS:
-        raise ValueError(f"idle.pattern: {pattern!r} is not one of {', '.join(PATTERNS)}")
+    names = pattern_names() if pattern == "all" else (pattern,) if isinstance(pattern, str) else pattern
+    if not isinstance(names, (list, tuple)) or not names:
+        raise ValueError(f"idle.pattern: {pattern!r} is not a pattern's name, a list of them or 'all'")
+    for n in names:
+        if n not in pattern_names():
+            raise ValueError(f"idle.pattern: {n!r} is not one of {', '.join(pattern_names())}")
+    each = float(idle.get("each", EACH_S))
+    if not each > 0.0:
+        raise ValueError(f"idle.each: {idle.get('each')!r} is not a number of seconds")
+    shape = str(idle.get("shape", "Tesseract"))
+    if "zoom" in names:
+        try:
+            idle_effects.shape_vertices(shape)
+        except KeyError:
+            raise ValueError(f"idle.shape: {shape!r} is not a shape's name") from None
     after = float(idle.get("after", AFTER_S))
     if not after >= 0.0:
         raise ValueError(f"idle.after: {idle.get('after')!r} is not a number of seconds")
@@ -385,5 +476,7 @@ def from_entry(idle, *, default_set: str | None = None, start_watch: bool = True
     never = parse_never(idle.get("never", ()))
     lights = tuple(lt for lt in SETS[name]() if lt.key not in never)
     watch = AppWatch(yield_to, start=start_watch) if yield_to else None
-    return IdleLights(lights, after=after, pattern=PATTERNS[pattern], watch=watch, clock=clock,
-                      pattern_name=pattern)
+    first = names[0]
+    return IdleLights(lights, after=after, pattern=PATTERNS.get(first, _wave), watch=watch, clock=clock,
+                      pattern_name=first, names=tuple(names) if len(names) > 1 else (),
+                      each=each, shape=shape, dither=bool(idle.get("dither", False)))
