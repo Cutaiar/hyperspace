@@ -273,3 +273,4 @@ Tests with tests/ui_driver.py: every VIEW control is still reachable by its id; 
 on one row; the folds start closed and remember nothing in a saved patch; the media-path controls set their
 params. Capture before/after screens of VIEW and MEDIA with drive-the-app and commit them under
 docs/plans/assets/76-view-page/.
+```
