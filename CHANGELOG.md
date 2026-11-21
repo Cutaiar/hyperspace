@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-19
+## v1.3 — 2026-11-20
 
 ### Panel
 
@@ -89,16 +89,17 @@
 - The on-screen APC40 draws SEND B as FINE, lit while held, rather than as a free button (#375)
 - A generic MIDI desk such as the DDJ-FLX4 learns at full resolution: Learn listens for a moment, then a 14-bit fader becomes an `abs14` row, a jog a `rel64` / `rel` row, anything else `abs` as before; notes and the APC40 still learn at once; not yet tried on a real FLX4 (#438)
 - Learn ▸ Learn Player 1–4 ▸ a controller learns from that one controller, named by model or port ("DDJ-FLX4"); **Any desk** is the old Learn desk, and a plugged-in controller nobody holds is listed greyed (#438)
+- Idle lights: give a MIDI desk `idle = { lights = "ddj-flx4" }` (or `idle = true` on the APC40) in `config.toml` and its LEDs play a `wave` or `breathe` animation after 30 s untouched (`after`), go dark the moment you touch it, and stay off while Rekordbox (`yield_to`) is open (#464)
 
 ### Graph
 
 - T tidies GRAPH and leaves the canvas where you were looking; 0 frames every node, as a load does; T no longer toggles the overlay and 0 no longer restarts the track (the panel's toggle, the APC40's MASTER select and the AUDIO section still do), and a bindings file holding either old row has it dropped with a note (#455)
 - GRAPH's right-click menus (a pin's, a cable's, a node's, a group's, the node picker …) are drawn with the new kit, with submenus that open on hover or →; while a menu is up, no wire or node words show through it; `HYPERSPACE_KIT=0` draws them as before (#452)
 - Matte and segment nodes show their mask as a thumbnail on GRAPH, a segment's `fg` and `bg` pins show their own pictures, and a mask that can't be shown says why (#405)
-
 - Tidy (the chip, now **Turbo Tidy**, with flames on hover) lays GRAPH out left to right by signal flow — controllers and audio, then modulation, picture makers, effects, outputs — with about half the cable crossings; a cable that runs backward is drawn as a sling under (or over) the nodes it spans, and a tidied graph is wider and taller than before (#463)
 - Adding an effect opens **effects…**, a picker of tiles grouped by family: each shows the effect over a test card and plays its loop on hover, search finds by name or tip and Enter takes the first match; it replaces the effects ▸ submenu in the add menu and a cable's insert ▸ (#461)
 - An effect that isn't wired yet still shows a thumbnail, through its input or the test card, and only effects that read a second picture (Blend, Displace) have an `aux` port; a saved aux wire still loads (#461)
+
 ### Effects
 
 - New **Grow** effect: grass, sprouts, blobs, noodles, mould, coral or cells grow out of the picture and push its pixels (a lens-like bulge, or a lift along Angle); ride `fx.grow.grow` with an LFO to grow it in and out — at 0 the frame is untouched (#381)
