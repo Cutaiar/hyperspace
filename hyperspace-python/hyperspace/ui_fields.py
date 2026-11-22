@@ -366,7 +366,7 @@ def marks(dl, shape: Shape, x0: float, span: float, cy: float, half: float) -> N
 def _snap(p, shape: Shape, nv: float, span: float) -> float:
     """A dragged fader's new value `nv` (a taper's position) moved onto
     the shape's detent when it lands within `ui.DETENT_PX` of it."""
-    if shape.detent is None or span <= 0:
+    if shape.detent is None or shape.neutral is None or span <= 0:
         return nv
     try:
         t = nv / p.taper.steps if p.taper is not None else float(p._norm_of(nv))
