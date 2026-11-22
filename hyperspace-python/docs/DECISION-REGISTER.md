@@ -901,6 +901,16 @@ here; overturn → the change, then the same.
 | 879 | Plan 63: colour by steps (owner decision 5): the smooth count n + 1 − log_p log abs(z) with abs(z)² > 10⁴ the bail-out; Output steps is grey that rises over Cycle steps and falls over the next, so Palette's gradient wraps with no seam; Output ramp a built-in colour ramp; Inside coloured shows the periodicity time and turns the cardioid test and the skip off | 675, 676 | owner (2026-11-18) — the rise and fall (rec) |
 | 880 | Plan 63: Steps is a float log knob rounded to a whole cap (an integer log param cannot move one detent at a time); Zoom runs 0.5–10¹³, the float64 reference's reach, and a log param over six orders reads in three figures ("4.2e+07×") | — | (rec) |
 | 881 | Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes | — | owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before |
+| 1020 | Plan 82: one abstraction (`ui_fields.Shape`, `shape_of`) draws every continuous fader — unipolar (fill from the left), bipolar (from 0, a detent there), unity (a multiplier: from 1, a detent there), and steps as ticks; the kit slider, the stock fallback (`Panel._origin`) and the pad's knobs read it | 820, 821 | (rec) — pending the owner |
+| 1021 | Plan 82: bipolar is inferred for a range across 0 with a 0 default — or no default to read (a param that is not an effect's: VIEW's rates, the camera), as they filled from 0 before. A range across 0 with another default is unipolar: the Mandelbrot's c, z₀ and centre now fill from the left. An effect line can say `bipolar` or `unipolar` | 820 | (rec) — pending the owner |
+| 1022 | Plan 82: unity (detent at 1) is inferred for a default of 1 in the middle of its range, linear (lo + hi = 2) or log (lo · hi = 1): Kaleidoscope's zoom, Blocks' aspect, Hue cycle's saturation. Prism's rim, Deconverge's amount, the drifts are not. No `unity` marker on `@param` | 821 | (rec) — pending the owner |
+| 1023 | Plan 82: a drag within 6 px (`ui.DETENT_PX`) of a bipolar or unity detent lands on it; a typed value and a ⇧ fine drag are never moved; a taper's unity notch (speed 1×) is drawn, not snapped | 820 | (rec) — pending the owner |
+| 1024 | Plan 82: ticks on an integer param with no taper, one a step down to 6 px apart (`ui.TICK_GAP`), then every 2nd, 4th, 5th, 10th … whole value, both ends always | 822 | (rec) — pending the owner |
+| 1025 | Plan 82: `// @pair u_x u_y "Label"` and `// @volume u_x u_y u_z "Label"` name the file's own continuous params, each on one pad at most; drawing only, not in `EffectSpec.signature`; no param renamed or re-keyed | 823 | (rec) — pending the owner |
+| 1026 | Plan 82, D3 as built: Prism and Wave a Centre pair, Wave Table an Offset pair, Zoom burst a Burst volume (cx, cy, amount) and no pair beside it, since a param is on one pad | 823, 824 | (rec) — pending the owner |
+| 1027 | Plan 82: the pad sets X and Y where it is pressed (Y up), ⇧ a tenth from where they were; each knob a vertical drag, 200 px a throw, ⇧ a tenth, a double-click to its detent; Z by its knob only (no scroll over the pad); no typing into a knob | 823, 824 | (rec) — pending the owner |
+| 1028 | Plan 82: a lane on a pad shows as a white dot (and halo) where the lanes have it, a line from the bases' dot, and a white tick on each knob; the pad's head is its label alone, the values under the knobs | 825 | (rec) — pending the owner |
+| 1029 | Plan 82: `ui_fx.strip` (outside the row's files) draws a pad at its first param's place instead of its sliders; without the kit the sliders stay | 823 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -15319,3 +15329,73 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before.
 - **Built.** Nothing.
 - **Judge it.** No hand check.
+
+### 1020. One shape for every fader
+
+- **What.** Plan 82: `ui_fields.Shape` (`shape_of`) says how a continuous param's fader is drawn: unipolar (filled from the left), bipolar (from 0, with a detent there), unity (a multiplier, from 1, with a detent there), and an integer range's ticks. The kit slider, the stock fallback (`Panel._origin`) and the pad's knobs and crosshair all read it.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields.Shape`, `shape_of`, `marks`; `tests/test_control_widgets.py::test_shapes_of_the_effects_params`.
+- **Judge it.** 820, 821.
+
+### 1021. Bipolar, inferred
+
+- **What.** Plan 82: a range across 0 with a 0 default is bipolar; so is one with no default to read (a param that is not an effect's own: VIEW's rates, the camera's yaw), which filled from 0 before. A range across 0 with another default is unipolar — the Mandelbrot's c, z₀ and centre now fill from the left. An effect's `@param` line can say `bipolar` or `unipolar` (`fx.ParamSpec.polarity`).
+- **Answer.** (rec) — pending the owner. If the Mandelbrot's terms should fill from 0, plan 80 adds `bipolar` to their lines.
+- **Built.** `ui_fields.polarity`, `fx.POLARITIES`; `tests/test_control_widgets.py::test_polarity_is_inferred_from_the_range_and_the_default`, `::test_a_param_line_may_say_its_polarity`.
+- **Judge it.** 820.
+
+### 1022. Unity, inferred
+
+- **What.** Plan 82: a default of 1 in the middle of its range — linear (lo + hi = 2) or log (lo · hi = 1) — is a unity multiplier with a detent at 1: Kaleidoscope's zoom, Blocks' aspect, Hue cycle's saturation. A 1 elsewhere in the range (Prism's rim 0…3, Deconverge's amount, the drifts) is no neutral. There is no `unity` marker.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields.polarity`; the same tests.
+- **Judge it.** 821.
+
+### 1023. The detent
+
+- **What.** Plan 82: a drag that lands within `ui.DETENT_PX` (6 px) of a bipolar or unity detent lands on it. A typed value (Ctrl+click) and a ⇧ fine drag are never moved. A taper's unity notch (an effect's speed at 1×) is drawn but not snapped; its stop, in the middle, is the detent.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields._snap`; `tests/test_control_widgets.py::test_a_bipolar_fader_rests_centred_and_a_drag_near_centre_lands_on_zero`.
+- **Judge it.** 820.
+
+### 1024. Ticks
+
+- **What.** Plan 82: an integer param with no taper draws a tick under its track a step, down to `ui.TICK_GAP` (6 px) apart; past that every 2nd, 4th, 5th, 10th … whole value (the first stride that leaves the gap), both ends always, an inner tick too near an end left out.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields.ticks`; `tests/test_control_widgets.py::test_ticks_one_a_step_while_they_fit`, `::test_ticks_thin_and_never_crowd`, `::test_a_stepped_fader_draws_its_ticks`.
+- **Judge it.** 822.
+
+### 1025. `@pair` and `@volume`
+
+- **What.** Plan 82: `// @pair u_x u_y "Label"` and `// @volume u_x u_y u_z "Label"` in an effect file name two or three of the file's own continuous params (no choice), each on one pad at most. Drawing only: not in `EffectSpec.signature`, no param renamed or re-keyed, so saved patches, routes and learn are as they were.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `fx.PadSpec`, `_parse_pad`, `_check_pads`, `pad_of`; `tests/test_control_widgets.py::test_pair_and_volume_lines_name_the_files_own_params`, `::test_a_bad_pad_line_says_why`.
+- **Judge it.** 823.
+
+### 1026. D3 as built
+
+- **What.** Plan 82: Prism and Wave carry `@pair u_cx u_cy "Centre"`, Wave Table `@pair u_offset_x u_offset_y "Offset"`, Zoom burst `@volume u_cx u_cy u_amount "Burst"` — and no pair beside its volume, since a param is on one pad and the volume is the pair plus Amount.
+- **Answer.** (rec) — pending the owner (D3 as recommended).
+- **Built.** The four files; `tests/test_control_widgets.py::test_the_four_files_carry_their_pads_and_no_param_moved`.
+- **Judge it.** 823, 824.
+
+### 1027. How a pad and a knob move
+
+- **What.** Plan 82: the square sets X and Y where it is pressed and dragged, Y up; ⇧ held moves a tenth as far, from where they were. A knob turns by a vertical drag, `ui.KNOB_THROW` (200 px) a full throw, ⇧ a tenth; a double-click returns it to its detent. A volume's Z is its knob alone: no scroll over the pad, since a trackpad's scroll would change it while scrolling the pane. No typing into a knob.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields._square`, `knob`, `_write_norm`; `tests/test_control_widgets.py::test_a_drag_on_the_pad_sets_both_params`, `::test_a_knob_turns_one_axis_and_a_double_click_centres_it`.
+- **Judge it.** 823, 824.
+
+### 1028. Modulation on a pad
+
+- **What.** Plan 82: while a lane rides an axis, the pad draws a white dot where the lanes have it now, a line to it from the bases' dot, a white halo for a volume's Z, and each knob a white tick with its readout red. The pad's head is its label alone; each knob says its value under it.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields._square`, `knob`; `tests/test_control_widgets.py::test_the_pad_shows_a_lane_riding_it`.
+- **Judge it.** 825.
+
+### 1029. The strip draws the pad
+
+- **What.** Plan 82: `ui_fx.strip`, outside the row's files, draws a pad at its first param's place in place of its sliders — the one place an effect's params are drawn. Without the kit the sliders stay.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fx.strip`, `ui_fields.inline_pad`; `tests/test_control_widgets.py::test_the_strip_draws_no_slider_for_a_padded_param`.
+- **Judge it.** 823.

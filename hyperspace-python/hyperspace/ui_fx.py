@@ -46,8 +46,8 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import ui
-from .fx import FACE_MAPS, FX_DIR, PER_FACE
+from . import ui, ui_fields, ui_kit
+from .fx import FACE_MAPS, FX_DIR, PER_FACE, pad_of
 from .graph import _PICTURE_PORTS, run_back, run_of, wire_node_kind
 
 # the groups `groups` makes, as their headers say them
@@ -362,8 +362,17 @@ def strip(panel, sel: str) -> None:
     mode = fx.values[sel].get("mode", 0)
     labels = {p.key: p.label.lower() for p in spec.params}
     choices = {p.key for p in spec.params if p.choices}
+    padded: set[str] = set()                # plan 82: a @pair's or @volume's keys, drawn once
     for label, keys in strip_rows(sel, [p.key for p in spec.params if f"{pre}.{p.key}" in r],
                                   mode):
+        pad = pad_of(spec, keys[0]) if len(keys) == 1 else None
+        if pad is not None and ui_kit.ready() and all(f"{pre}.{k}" in r for k in pad.keys):
+            if keys[0] not in padded:       # at its first key's place: the square and its knobs
+                padded.update(pad.keys)
+                for pid, rr in ui_fields.inline_pad(panel, [f"{pre}.{k}" for k in pad.keys],
+                                                    pad.label).items():
+                    rects[pid] = rr
+            continue
         if len(keys) == 1 and keys[0] in choices:
             # a discrete choice (plan 30 N8, `@param choice`): a picker
             panel._label_cell(labels[keys[0]])
