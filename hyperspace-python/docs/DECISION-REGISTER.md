@@ -895,7 +895,7 @@ here; overturn → the change, then the same.
 | 903 | Plan 66: until fields are a wire, Time Displace carries its own field, 0 … 1 of Span: line (the slit-scan, along Angle), rings, spokes, flat (an echo), aux (the aux picture's brightness: black now, white Span ago); Repeat, Drift (a `@clock`), Steps, Flip | 699, 700 | (rec) — plan 66 §5, Q4 |
 | 904 | Plan 66: a time between two of the ring's frames blends them by time (Between blend) or takes the nearer (nearest); between now and the newest frame it blends its own input, so Span 0 and a field of 0 are its input byte for byte; Span is an amount (0 … 8 s, zero-safe log taper) | 701 | (rec) — plan 66 §5 |
 | 905 | Plan 66: a time older than the ring holds reads its oldest frame (the ring holds 32 × `dream.gap`: about 1 s at the default, 8 s at the most); no ring of that number, an empty one or one being remade reads its input | 702 | (rec) — plan 66 §5 |
-| 906 | Plan 66, open: is a field its own wire (`field`, RG32F, signed; a one-way grey promotion into picture ports; a `picture` converter) or a picture read by convention, as Displace's aux is | — | **pending the owner** (Q1; rec: its own wire) |
+| 906 | Plan 66, open: is a field its own wire (`field`, RG32F, signed; a one-way grey promotion into picture ports; a `picture` converter) or a picture read by convention, as Displace's aux is | — | owner (2026-11-22): its own wire; plan 67 makes it a texture (§3.13) |
 | 907 | Plan 66, open: the word. "Field" is the instance field today (`field.py`, `ui_fields.py`); the new wire as **field** and the copies' layout renamed with SEM, or the new thing a **map** | — | **pending the owner** (Q2) |
 | 908 | Plan 66, open: stage 2's reach. Keep `wave.glsl` and `blocks.glsl` and add patches proven byte-identical, or retire them with a migration; Shake stays its file (not one field) | — | **pending the owner** (Q3; rec: keep) |
 | 909 | Plan 66, open: memory for the past at full size (a texture-array ring: 265 MB for 32 frames at 1080p) and the look-ahead window for files (128 MB a channel at half its size) | 703 | **pending the owner** (Q5, Q6) |
@@ -15290,7 +15290,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 ### 906. Is a field its own wire
 
 - **What.** Plan 66 Q1. Its own wire, as a mask is (plan 39): two float32 channels, signed and unbounded, at the frame's size; into a picture port it reads as grey (Displace's mid-grey convention), one way; a picture becomes one only through the `picture` generator. Or a picture read by convention: no graph change, fields ride the half-float pool about mid-grey, clamped at every 8-bit crossing, and stage 2 is "within a level", not byte for byte.
-- **Answer.** pending the owner. Recommended: its own wire.
+- **Answer.** owner (2026-11-22): "Field is its own wire", with the ask that the primitives stop overlapping and competing — plan 67 (`docs/plans/67-primitives.md`) is the model that answers it, and makes a field a texture (§3.13).
 - **Built.** Nothing.
 - **Judge it.** No hand check.
 

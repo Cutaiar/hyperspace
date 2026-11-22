@@ -1,10 +1,15 @@
 # Plan 66 — fields: maps that say where and when each pixel reads
 
-**Planned** 2026-11-22. **Stage 3a built** on `ccr-956dc2aa-r1kaqe`: Time Displace
-over the live look-back, which stands alone (§5). Every other stage waits on the
-owner's answers in §8. Register rows 902–910 (902–905 built, 906–910 open); hand
-checks 699–703, group EB. Read at `main` b08a256. Tags: **[V]** read or run in the
-code, **[I]** inferred, **[Rec]** a recommendation.
+**Planned** 2026-11-22. **Rescoped under [plan 67](67-primitives.md)** the same day: the
+owner answered Q1 (**a field is its own wire**) and asked that the primitives stop
+overlapping and competing. Plan 67's model and order (P0–P6) overrule this plan's stages
+and work packages where they differ; this plan keeps the detail (§3–§6, the memory budget).
+**Stage 3a was built** on `ccr-956dc2aa-r1kaqe` (Time Displace over the live look-back),
+and by plan 67 §4 it is the pattern to avoid — a private measure, a knob naming a
+look-back — so it is held unmerged until it is rebuilt on the field and history wires
+(plan 67 Q7). Register rows 902–910; hand checks 699–703, group EB. Read at `main`
+b08a256. Tags: **[V]** read or run in the code, **[I]** inferred, **[Rec]** a
+recommendation.
 
 ## 1. Why
 
@@ -235,7 +240,7 @@ T3 and T4 are measured before they are built. W2 can go any time; W1 rides the l
 
 ## 8. Questions for the owner
 
-1. **Is a field its own wire** (`field`, RG32F, signed, a one-way grey promotion into
+1. **Answered (owner, 2026-11-22): a field is its own wire.** The question was: is a field its own wire (`field`, RG32F, signed, a one-way grey promotion into
    picture ports, a `picture` converter the other way — §3), **or a picture read by
    convention**, as Displace's aux is today (no graph change; fields ride the half-float
    pool about mid-grey)? [Rec] its own wire: values are signed and unbounded, the 8-bit

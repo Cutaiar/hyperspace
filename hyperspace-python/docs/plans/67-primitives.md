@@ -1,0 +1,310 @@
+# Plan 67 — the primitives: a few kinds, one grammar
+
+**A model, not a build** (2026-11-22). The frame plan 66 (fields) and the shader roundup
+are measured against. Nothing here is built. Tags: **[V]** read in the code, **[Rec]** a
+recommendation.
+
+The owner, 2026-11-22, after plan 66's questions:
+
+> "A lot of these questions … are indicating that a lot of our concepts and primitives
+> overlap / are unaware of each other / are competing. The whole goal here is to enable us
+> to hold the primitives in our head when we're jamming and be able to compose them
+> together in novel ways. When primitives compete / have esoteric quirks / don't interface
+> with each other, you end up with a pile of disjoint bitmaps stacked on top of each other."
+
+And the decision that started it: **a field is its own wire** (owner, 2026-11-22; row 906).
+
+Two sessions answered the owner's question separately — plan 66's builder and the session
+that wrote plan 66's brief — and agreed on the diagnosis. This doc merges them; where an
+item came from the brief's session it says **(brief)**. Their claims were checked against
+the code; corrections are marked.
+
+## 1. The test every primitive passes
+
+1. **It is one kind of thing, on one kind of wire.** What it takes and what it makes are
+   wires of §2's kinds, and nothing else.
+2. **It reads only from wires.** No knob names another node (a "which look-back" knob
+   fails), and it has no private copy of another primitive (a file that measures rings
+   for itself, when a measure is a primitive, fails).
+3. **One vocabulary.** The same operation has the same name, the same knobs, the same
+   choices in the same order and the same units in every kind it applies to: frame
+   heights for distance, seconds for time, turns or radians for angle (once, everywhere),
+   0 … 1 or −1 … 1 for a level.
+4. **Every kind can be seen, and turned into another only on purpose.** Each kind has a
+   one-way promotion to a picture, so a thumbnail and an output can always show it, and
+   every other conversion is a named node.
+5. **A convenience is a patch, not a fork.** "Wave" is a saved patch of primitives that
+   folds to one node, not a file that re-implements them. When the patch is the fast path
+   too, there is only one thing to learn.
+
+## 2. The kinds
+
+Four dimensions cover everything the graph carries:
+
+| Kind | A value of … | Over | Made by (today, and to come) | Seen as |
+| --- | --- | --- | --- | --- |
+| **lane** | a number | time | the analyzer, LFOs, envelopes, the sequencer, controllers, modifiers | a meter (and the `value` port, §3.8) |
+| **field** | a number or a pair | space | measure, point, pins, a picture's read, a region; ops (plan 66) | grey about the middle |
+| **picture** | a colour | space | the scene, a channel, effects, composites, switches | itself |
+| **history** | a picture | space and time | a look-back (live), a file's decoded window, a delay (one frame) | its newest frame |
+
+Beside them stay two kinds that are not values of a dimension:
+
+- **mask**: a pattern, a pixel passes or it does not (the owner's plan 39 words). A field
+  is continuous and signed; a mask is binary. [Rec] keep it its own kind, with
+  `threshold` (field → mask) and the promotion mask → field (0 / 1) as its converters.
+- **geometry**: draw calls, drawn by a scene or a layer.
+
+**History is new** [Rec, Q1]. Today the past is four unrelated things (§3.4); as a kind,
+it has makers and readers like any other, and a reader takes it on a wire.
+
+## 3. What overlaps today, and what each becomes
+
+### 3.1 Curve shapes: one list [V]
+
+`wave()` in `_lib.glsl`: sine, triangle, square, saw, noise (that order, stored as an
+index in every distortion's `shape`). The LFOs (`lfo.SHAPES`): sine, tri, saw, square,
+random. **The same five curves, two spellings and two orders.** A performer who learns
+"square is 2" on Wave finds 3 on an LFO.
+
+→ **One `shapes` list**, one spelling, one order, used by the LFOs, by `wave()` and by any
+field or remap that takes a curve. The words change on the panel now (a label is not
+saved); the stored indices are mapped in the format lane (both are saved indices: a
+migration, a backup, an end-to-end test).
+
+### 3.2 Operations: one vocabulary across lanes and fields [V]
+
+The modifiers (`modifiers.KINDS`) are curve, scale, smooth, combine, threshold, delay, on
+lanes. Plan 66 proposed remap, add, multiply, quantise and gradient on fields. They are the
+same operations in another dimension.
+
+| Operation | On a lane | On a field | On a picture |
+| --- | --- | --- | --- |
+| **remap** (curve + range) | `curve`, `scale` | remap | (grade: the roundup) |
+| **combine** (add, multiply, min, max) | `combine` | add, multiply | composite |
+| **threshold** | `threshold` | → a mask | `matte` |
+| **quantise** (steps) | — | quantise | — |
+| **smooth** | `smooth` (in time) | blur (in space) | blur |
+| **delay** | `delay` (a frame) | — | a one-frame history |
+| **gradient** | the rate of change | gradient (scalar → vector) | — |
+
+→ One name per row and the same knobs in each column it fills. The field ops are written
+to the modifiers' names (`remap`, `combine`, `threshold`, `smooth`), not new ones, and a
+missing cell is a gap to fill in either kind (`quantise` on a lane is a stepped LFO).
+
+### 3.3 Measures: one primitive [V]
+
+Wave counts its wave along a line, rings or spokes; Blocks numbers cells by a rule; plan
+66's Time Displace measures a line, rings and spokes for itself. Sixteen files compute a
+centre-relative position or an angle of their own; the roundup says which of those are a
+measure.
+
+→ **`measure` is a field generator** (line, rings, spokes, cells by rule, noise), written
+once in `_lib.glsl`; the generator node and any file that still measures inline call the
+same function, so a patch and a file agree to the bit.
+
+**The effects that hide a field (brief).** Each builds a field inside its shader and uses
+it at once:
+
+| Effect | The field it hides | Becomes |
+| --- | --- | --- |
+| Wave | measure × waveform | measure → waveform → Displace |
+| Blocks | a cell-number field | measure (cells) → … → Displace |
+| Trip warp | noise vectors | measure (noise, vector) → Displace |
+| Wobble, Acid | a swirl | a swirl generator → Displace |
+| Kaleidoscope | angle folding | a fold generator → Displace |
+| Zoom burst, Prism, Deconverge | radial from a centre | `point` → a blur or split that follows a field |
+| Shake, Double vision | one vector for the whole frame | a constant vector → Displace; **but** Shake's Smear and Split read past *phases*, so Shake is a field over time (§3.4), not one field (plan 66 §4) |
+
+**`point` is one pin** (brief): Wave, Prism and Zoom burst each carry their own Centre X/Y
+[V], and plan 66's Time Displace added a fourth. One `point` generator, wired into each.
+
+A file kept for speed or for saved looks stays, and is proven equal to its patch (plan 66
+§4: a float32 field and the same arithmetic).
+
+### 3.4 The past: one kind, `history` [V]
+
+| Today | What it is | How it is reached |
+| --- | --- | --- |
+| `delay` | last frame's picture | a wire |
+| the look-back's ring | 32 frames, `gap` apart | its trail, its `echo.<k>` pins |
+| `echo.<k>` | one frame of a ring | a pin of the look-back |
+| `dream` | the dream buffer, fed by the look-back | a node |
+| Shake's Smear and Split | the frame at past phases | inside one shader |
+| Time Displace (plan 66, branch) | the ring at a field of ages | **a knob naming the look-back** |
+| the look-ahead (plan 66, planned) | a file's decoded window | — |
+| a channel's `pos`, `jog` | where a clip is | params |
+
+→ **A history is a wire.** Its makers are a look-back (a picture recorded, live), a file
+channel's window (past and future), and a delay (a history one frame deep). Its readers
+are an **echo** (the history at one age: a constant field of time), a **trail** (a
+weighted sum over ages: today's look-back picture) and **time displace** (the history at
+a field of ages). The look-back stops being a node that is also its own reader: it makes a
+history, and the trail is one reader among three.
+
+**Its storage is a time volume (brief).** Today's ring is 32 slots stacked in one 2D atlas,
+so the driver's largest texture caps a slot's size (`fit_atlas`). One `TimeVolume` object,
+a 3D texture (or a texture array), filled by the live ring and by a file's window alike: a
+3D texture blends two neighbouring moments in hardware, so a read between frames is one
+fetch, and the slot is no longer capped by the stack. An echo is a read at a constant age;
+the trail is a weighting over ages, which a field could then vary per pixel. Memory is the
+question (plan 66 Q5, Q6): 32 × 1920 × 1080 × 4 = 265 MB.
+
+### 3.5 Blending: one list [V]
+
+Three lists share words and differ:
+
+- each effect's own `blend` (`fx.BLENDS`): mix, add, screen, multiply;
+- the Blend effect's Mode: over, multiply, screen, difference, luma key;
+- a composite's: over, add, depth.
+
+→ **Composite owns blending** and has the one list. An effect keeps `mix` (a fade-in from
+its input: rule 1 of DISTORTION.md, "Amount 0 is the picture again") and loses its own
+blend modes; Blend becomes a composite. A question for the roundup (Q3): 29 files say
+`@blend`, and saved looks carry `fx.<n>.blend`.
+
+### 3.6 The wavetable is the shapes bank; the switch gets a position [V]
+
+Two things were both heading for the name "wavetable" in plan 66: a bank of curves, and a
+node that crossfades pictures. They are one idea, "a bank and a position between its
+entries", in two kinds:
+
+- **Curves (brief).** The one `shapes` list of §3.1 *is* the wavetable: a bank of
+  waveforms the LFOs read on the CPU and shaders read as a small texture. An LFO's shape
+  becomes a position in it, so it morphs between shapes instead of switching. Envelopes and
+  the sequencer's steps are one-dimensional over time too, and can be entries.
+- **Pictures, fields, histories.** No new node [Rec, Q4]: the switch's select becomes a
+  position, a whole number a cut as today, a fraction a crossfade of the two neighbours
+  (still only those two built), on inputs of any one kind.
+
+Both use the same word for the knob, **position**, and the same blend between neighbours.
+"Wave Table", the effect, is renamed **Stamp Trail** (plan 66 Q7) so nothing else is called
+a wavetable.
+
+### 3.7 The second input: typed, not "aux" [V]
+
+`aux` means a picture laid on (Blend), an offset by convention (Displace) and, on the
+branch, a field of time (Time Displace). → A file says what its second input is (`// @takes
+aux field`, `picture`, `mask`), the port is named for it, and the wire is checked (plan 65
+already reads whether a file has one at all).
+
+### 3.8 Lanes into the picture graph [V]
+
+`graph.VALUE` is declared and unused. → It is a **lane** on the render graph: a knob of
+any node can take one by wire, the same lane the routes carry, and a field read at a point
+(`sample`) makes one, which closes the loop from what is on screen back to what moves.
+
+### 3.9 Any knob takes a field (brief)
+
+The largest single lever. A knob today takes lanes over time (the routes). It should take
+a field over space the same way: **value + depth × field(uv)**, per pixel. Every existing
+effect then consumes fields at once, without its logic rewritten: Amount by a radial
+`point`, Mix by a mask promoted, Hue by a measure.
+
+- **The control model holds.** ARCHITECTURE §3.5 allows one performer per parameter. A
+  field does not perform the knob; it varies it per pixel *about* its value, the way the
+  knob's base and its lanes already land in one `apply`. An LFO and a field on the same
+  knob compose (the LFO moves the value, the field spreads it) instead of fighting.
+- **Mechanical, but every file.** A shader reads a knob through a generated accessor
+  (`P_amount(uv)` instead of `u_amount`), which `fx.py` writes from the `@param` lines: a
+  bare uniform where no field is wired, so an unwired knob costs nothing and renders the
+  same bytes. It touches all the effect files, which is the roundup's work anyway.
+- **What cannot vary per pixel** [V]: a choice (`@param choice`), an integer that sets a loop
+  count, and a `@clock`'s rate — the host integrates one phase per effect, so a rate field
+  would need a phase per pixel. Those knobs refuse a field in words.
+
+### 3.10 Generators that pretend to be effects (brief)
+
+Fractals, Glimmer, Grain, Oil slick and Test card fade out their input with a **Ground**
+knob [V: those five carry one; the brief also named Plasma and Hue cycle, which do not,
+and Mandelbrot, which paints over its input at mix 1]. Each is a field and a colouring of
+it. → Split each into a field generator and a **colour ramp**.
+
+**Palette is two ideas (brief).** The HSV slice is a colour → colour transform; the
+gradient map is a field → colour consumer that only takes brightness. → The gradient map
+comes out as the colour ramp, taking any scalar field; the slice stays Palette. The
+Mandelbrot's smooth escape count is a scalar field like any other: into a ramp, a Displace,
+or a Time Displace.
+
+### 3.11 One key: measure, then threshold (brief)
+
+`masks.py`'s `MATTE_FS`, Blend's **luma key** mode and session 1's black key are three
+copies of the same steps: measure the picture, threshold it, soften the edge. → A matte is
+picture → field (brightness, coverage, distance from a hue: the `picture` generator) then
+field → mask (`threshold` with Softness). The owner's rule holds: a mask stays
+pass-or-fail, reached through a field. The measure and the ramp are shared helpers in
+`_lib.glsl` from the start.
+
+**For session 1, now** (the brief's note, to paste there): *Build the black key's measure
+(max rgb / luma) and threshold + softness ramp as shared helpers, not inline. `masks.py`'s
+`MATTE_FS` and `blend.glsl`'s luma-key mode do the same thing and will be refactored onto
+them by the fields plan.*
+
+### 3.12 Fields beyond the effects
+
+- **The copies (brief).** Each copy of the shape (the instance layout, `field.py`) could
+  sample a field at its position for its scale, alpha or offset, so the copies answer the
+  same gradient as the picture. Later.
+- **The face patterns** (`shaders/patterns.glsl`) make fields in each face's own
+  coordinates from eight modulation inputs; let them take a field input later. Not
+  redesigned now.
+- **Left alone**: tapers, routing and the binding rows work on single values.
+
+### 3.13 A field is a texture, now (brief)
+
+A field as a **texture** can be wired to many consumers, seen and shared, at one pass and
+one read each. A field as **code** inlined into its one consumer at compile time is faster
+but invisible. [Rec, both sessions] textures now; later, a generator wired to a single
+consumer may be inlined as an optimisation that renders the same bytes. Everything else
+depends on this; it is recorded so nobody re-asks it.
+
+### 3.14 One meaning for "field" [V]
+
+"Field" means four things today: the instance layout (`field.py`, `ui_fields.py`), Wave
+Table's **Field** knob (grass, noodles or curls), Grow's **Field** knob, and — added by plan
+66's branch — Time Displace's **Field** knob. The glossary needs one meaning before the
+wire uses the word (plan 66 Q2): rename the instance layout (**lattice**, the brief's
+suggestion; its 3D layouts are lattices already) and the three knobs, or call the new kind
+a **map**.
+
+## 4. What this does to plan 66
+
+- **Field is its own wire, stored as a texture** (decided; §3.13).
+- **Time Displace as built on the branch is the pattern to avoid**: a private measure
+  (line, rings, spokes), a fourth Centre X/Y, a fourth "Field" knob, and a knob naming a
+  look-back. [Rec] it does not merge as it is. Rebuilt on §2 it takes a history, a field of
+  ages and the picture now, with two knobs, Span and Between; its slit-scan is the saved
+  patch `measure (line) → time displace`.
+- **Wave and Blocks**, and the rest of §3.3's table, become patches over generators and
+  Displace (rule 5); the files stay until the lane retires them (plan 66 Q3 stands).
+- **The wavetable** is the shapes bank and the switch's position (§3.6).
+- **The look-ahead** is a second maker of history, filling the same time volume.
+
+## 5. Order [Rec]
+
+| Step | What | Unblocks |
+| --- | --- | --- |
+| **P0** | This model agreed with the owner; the roundup puts every effect file through §1 and fills one table: kinds in and out, the field it hides, private copies (centres, measures, keys, blends), quirks, its family. Session 1's key built on shared helpers (§3.11) | everything |
+| P1 | The word (§3.14); one `shapes` list and one op vocabulary, on the panel (§3.1, §3.2) | the names the rest uses |
+| P2 | The field wire as a texture; `measure`, `point`, `picture` and the ops in `_lib.glsl`; Displace's field port; threshold as field → mask | §3.3's patches, §3.11 |
+| P3 | Any knob takes a field (§3.9): the accessor, file by file with the roundup | every effect a consumer |
+| P4 | The history wire on a time volume (§3.4): the look-back makes one; echo, trail and time displace read one; a delay is one deep | Time Displace rebuilt, the look-ahead |
+| P5 | The colour ramp out of Palette; the generators split (§3.10); the shapes bank and the switch's position (§3.6); typed second inputs (§3.7); lanes into the picture graph (§3.8) | — |
+| P6 | Blending owned by composite (§3.5), if the owner says so | — |
+
+## 6. Questions for the owner
+
+1. **Is history a kind** (a wire, on a time volume), with the look-back, a file's window and
+   a delay its makers and echo, trail and time displace its readers? [Rec] yes.
+2. **Mask stays its own kind** beside field, binary, reached from a field by `threshold`?
+   [Rec] yes, as plan 39 meant it.
+3. **Any knob takes a field**, about its value, never replacing it (§3.9)? [Rec] yes: it is
+   what makes every effect composable at once.
+4. **Who owns blending**: composite alone (effects keep `mix` only), or every effect keeps
+   its blend modes? It reaches 29 files and every saved look.
+5. **The wavetable is the shapes bank plus the switch's position**, not a new node? [Rec] yes.
+6. **The word**: the instance layout renamed **lattice** (and the three "Field" knobs
+   renamed), or the new kind called a **map**?
+7. **Time Displace on the branch**: hold it unmerged until P2 and P4 [Rec], or merge it now
+   as a stopgap and rebuild it then? Merged, its knobs land in saved looks and become one
+   more thing to migrate.
