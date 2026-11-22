@@ -901,6 +901,14 @@ here; overturn → the change, then the same.
 | 879 | Plan 63: colour by steps (owner decision 5): the smooth count n + 1 − log_p log abs(z) with abs(z)² > 10⁴ the bail-out; Output steps is grey that rises over Cycle steps and falls over the next, so Palette's gradient wraps with no seam; Output ramp a built-in colour ramp; Inside coloured shows the periodicity time and turns the cardioid test and the skip off | 675, 676 | owner (2026-11-18) — the rise and fall (rec) |
 | 880 | Plan 63: Steps is a float log knob rounded to a whole cap (an integer log param cannot move one detent at a time); Zoom runs 0.5–10¹³, the float64 reference's reach, and a log param over six orders reads in three figures ("4.2e+07×") | — | (rec) |
 | 881 | Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes | — | owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before |
+| 1000 | Plan 80: an effect whose Python half says `GENERATOR` (the Mandelbrot) draws with nothing wired into its `image`, over transparent black; `graph.Effect.generates`. Every other effect with no input still reads nothing. A change to `graph.py`, outside plan 80's files, kept to `Effect.reads`, `paint` and `_pass` | 800 | (rec) — pending the owner |
+| 1001 | Plan 80: Inside coloured is how fast a point settles onto its cycle — L·ln K / ln abs(λ_L) from the sum of ln abs(f′(z)) over a lag L the periodicity check found, K = what 5 % of a pixel is at zoom 1 and 810 lines — not the step the check caught it at. That step hung on a pixel-sized tolerance (deep in, most of the inside never settled before the cap: flat grey), Brent's window (bands, discs) and float32's last bit after a rebase (blocks). The inside/outside decision is unchanged | 801 | (rec) — pending the owner |
+| 1002 | Plan 80: a c or z₀ drive moves its term by the view height × min(1, TERM_RATE × R), R the term's measured sensitivity (how much a pan changes the picture over how much the term does, per plane unit, on a 16×9 grid of the view), measured every 0.25 s a drive runs, a faster rate eased in over 0.5 s and a slower one taken at once. TERM_RATE 0.1, to be tuned on the rig. Pan and Dive unchanged; an unused term keeps plan 63's rate | 802, 803 | (rec) — pending the owner |
+| 1003 | Plan 80: the perturbation loop fetches the reference once a step (Zₘ carried), p = 2 takes (2Z + δ)·δ and other powers walk Z's powers up with no array, texel coordinates by mask and shift; the skip's border pass is packed, 64 slots a tile along x, so every pixel of it iterates a border pixel | 804, 807 | (rec) |
+| 1004 | Plan 80: Skip black turns itself off where under 30 % of tiles are flagged (counted by a samples query on the tiles pass, read three passes late), probing again every 30 passes or at once when the zoom has moved a doubling. On by the old rule where it may run | 805 | (rec) — pending the owner |
+| 1005 | Plan 80: series approximation (skip the first iterations for the whole screen) is not built: a stretch, left for a later plan | — | (rec) |
+| 1006 | Plan 80: `tools/mandel_bench.py --owner` runs the owner's rig cases (the seahorse, Size 810, Steps 2000: direct and perturbation at 1.5e4, 4e5, 1e7, the skip on and off at 3e6, the coloured inside at 1e6 and 9e6), each line a steady state with the skip's gate reset and settled | 804 | (rec) |
+| 1007 | Plan 80, open: the Test card is also a generator (it draws a card whatever comes in), so it could say so too and draw with no wire in. Not done: its file and its Python are not plan 80's | — | **pending the owner** |
 
 "—": no hand check shows it; tests only.
 
@@ -15317,5 +15325,61 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 - **What.** Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes.
 - **Answer.** owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before.
+- **Built.** Nothing.
+- **Judge it.** No hand check.
+
+### 1000. A generator draws with nothing wired in
+
+- **What.** Plan 80: the owner's report — with nothing wired into `mandel.image` the frame was black, with no note, though the node paints the whole frame and ignores its input. `graph.Effect.reads` and `paint` returned at once with no input. Now an effect whose Python half says `GENERATOR = True` (`mandel.py`) reads and paints with no input: `_pass` clears its input texture to transparent black and runs the pass. With a wire in, nothing changes; an ordinary effect with no input still reads nothing.
+- **Answer.** (rec) — pending the owner. `graph.py` is outside plan 80's files; the change is these three methods and `generates`.
+- **Built.** `mandel.GENERATOR`, `graph.Effect.generates`; `tests/test_mandel.py::test_with_nothing_wired_in_it_draws_the_whole_frame`, `::test_with_nothing_wired_in_and_switched_off_it_draws_nothing`.
+- **Judge it.** 800.
+
+### 1001. The coloured inside is how fast a point settles
+
+- **What.** Plan 80: at the seahorse, 9e6×, Steps 6000, the inside was flat grey with rectangular blocks; at 1e6×, odd flat bands and discs. The cause was the colour rule, mixed with float32 after a rebase. The colour was the step at which the periodicity check caught a point, with a tolerance of 5 % of a pixel. Deep in, that tolerance is so small that even the float64 oracle leaves 81 % of the inside at the cap at 9e6× (the flat grey), with eight values in all. What it does catch is quantised by Brent's doubling window (the bands and discs). In float32, after a rebase, a catch needs the last bit to repeat (the blocks: 19 % of catch steps off the oracle). The fix colours by the cycle's multiplier: the sum of ln abs(f′(z)) = ln p + (p − 1) ln abs(z) since the last save gives ln abs(λ_L) wherever z is back within 10⁻³ of the saved z. L·ln K / ln abs(λ_L) is then the steps to come K times nearer, the same whatever multiple of the period L is. It is smooth, the same at any depth or tolerance, and barely moved by float32. Each later lag overwrites the last; no lag, or no contraction, leaves the cap. Whether a point is inside is decided as before.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `mandel.Settle`, `SETTLE_K`, `SETTLE_NEAR`, `escape_counts(settle=True)`, `perturbed_counts(settle=True)`, `mandel.glsl`'s `settled`; `tests/test_mandel.py::test_the_coloured_inside_under_perturbation_is_the_float64_oracle`, `::test_settling_is_the_multiplier_not_the_tolerance`, `::test_the_gpu_coloured_inside_is_its_float32_twin_deep_in`, `::test_the_coloured_inside_in_the_direct_tier_is_the_oracle`, `::test_the_shader_holds_the_settle_constants`.
+- **Judge it.** 801.
+
+### 1002. An off-screen term's drive answers the picture
+
+- **What.** Plan 80: on a Julia slice at zoom 1.7, a view height is 1.8 units of c, and 0.03 of c tears the set apart, so routes on the c drive needed depths near 0.01. A term's effect on the picture does not follow the zoom. Across eight Julia views, the step of c that changes the picture as much as a pan was 3·10⁻⁵ to 20 view heights. So a term's drive is measured: R = Σ abs(∂z/∂q)·g / Σ abs(∂z/∂term)·g over a 16×9 grid of the view, iterated to 192 steps, g = 1/(abs(z) ln abs(z)) at escape (how a point's smooth count, and so its brightness, answers a change of z). R predicted the measured ratio within about ×2 at most views; plain view height was off by up to five orders. The rate is the view height × min(1, 0.1 × R). It is measured on a drive's first frame, then every 0.25 s while one runs (0.05 s after Slice or Power moves). A faster rate is eased in over 0.5 s and a slower one taken at once. At the owner's view, a second at full throw now moves c by 0.067, where plan 63 moved it 1.765. Pan and Dive are unchanged, and a term the picture does not use (c at Slice 0) keeps plan 63's rate.
+- **Answer.** (rec) — pending the owner: TERM_RATE 0.1 is a first value for the rig (check 802).
+- **Built.** `mandel.sensitivity`, `term_scale`, `advance`, `TERM_RATE`, `SENS_*`; `tests/test_mandel.py::test_c_on_a_julia_slice_is_slowed_to_what_the_picture_takes`, `::test_the_measured_scale_follows_the_picture_across_views`, `::test_an_unused_term_and_pan_keep_their_rates_and_the_rate_never_jumps`, `::test_dive_doubles_and_every_drive_moves_by_the_view`.
+- **Judge it.** 802, 803.
+
+### 1003. The perturbation loop and the packed border pass
+
+- **What.** Plan 80: the perturbation loop fetched the reference twice a step, at m and m + 1. Zₘ is now carried from the step before. `binomial_delta` kept Z's powers in a dynamically indexed array; p = 2 now takes its closed form (2Z + δ)·δ (Horner's one step, the same sum), and other powers walk Z's powers up as the coefficients walk down. Texel coordinates use `& 1023` and `>> 10`. The skip's border pass ran at full size and returned off the border. Every SIMD group of a 16×16 tile meets its first or last column, so the pass cost nearly a whole picture, which is why the skip made perturbation slower. It is now packed: 64 slots a tile along x, each pixel iterating one border pixel (`border_px`, `mandel.border_slot`). On this M3 Max, Size 810, Steps 2000, 1080p out: perturbation at 1.5e4 19.7 → 5.1 ms, 4e5 36.9 → 9.3, 1e7 81.1 → 14.9, and the skip at 3e6 75.8 → 12.8 ms on, 60.7 → 27.4 off.
+- **Answer.** (rec).
+- **Built.** `mandel.glsl`'s `orbit`, `binomial_delta`, `ref_at`, `border_px`; `mandel.BORDER`, `border_slot`, `TILES_FS`, `run`; `tests/test_mandel.py::test_the_packed_border_slots_are_a_tiles_border`, `::test_the_skip_with_the_packed_pass_flags_what_the_rule_flags`, `::test_the_binomial_without_an_array_is_the_difference_for_every_power`.
+- **Judge it.** 804, 807.
+
+### 1004. The skip rests where it costs more
+
+- **What.** Plan 80: forced on against off, the skip paid only where at least a third of the tiles were flagged: seahorse 3e6× and 1e7× at 0.7–1.0 flagged, 0.24–0.52× the cost. Elsewhere it cost 1.0–2.3×: the whole set at 7.5 % flagged (the cardioid test already makes its inside cheap), Julia, the elephant valley, filaments. So it rests under `SKIP_MIN` = 30 % flagged. The count is a samples query on the tiles pass, which now discards unflagged tiles over a cleared target, read `SKIP_LAG` = 3 passes late so the CPU never waits. Resting, it probes every 30 passes, and at once when the zoom has moved a doubling since it last looked. A context with no samples queries keeps plan 63's behaviour.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `mandel.SkipGate`, `SKIP_MIN`, `SKIP_PROBE`, `SKIP_LAG`, `State.gate`, the `flagged` and `skip_valid` stats; `tests/test_mandel.py::test_the_skip_rests_where_few_tiles_are_flagged_and_looks_again`, `::test_a_dive_wakes_a_resting_skip_at_once`, `::test_a_context_with_no_queries_keeps_the_skip_on`, `::test_on_the_gpu_the_skip_turns_itself_off_and_the_picture_stays`.
+- **Judge it.** 805.
+
+### 1005. Series approximation not built
+
+- **What.** Plan 80: series approximation, skipping the first iterations for the whole screen with a polynomial in δc, was in scope as a stretch. It is not built. After 1003 the owner's deepest case runs in about 15 ms; the inside running to the cap is what is left, and series approximation would cut the shared early steps of every pixel.
+- **Answer.** (rec).
+- **Built.** Nothing.
+- **Judge it.** No hand check.
+
+### 1006. The bench's owner cases
+
+- **What.** Plan 80: `tools/mandel_bench.py --owner` runs the cases the owner measured after plan 63, one line each with the tier and whether the skip ran, beside plan 63's rig ms. Every line resets the skip's gate and runs it a few passes untimed first, so a line is the steady state at its view and nothing carries from the line before.
+- **Answer.** (rec).
+- **Built.** `tools/mandel_bench.py` (`OWNER`, `owner`, `bench`); `tests/test_mandel.py::test_the_rig_bench_runs_and_prints_a_line_a_size`.
+- **Judge it.** 804.
+
+### 1007. The Test card as a generator
+
+- **What.** Plan 80, open: the Test card also paints a picture whatever comes in. With a Python half, or a header line saying the same, it could draw with no wire in too. Not done: `testcard.glsl` and `fx.py`'s parse are not plan 80's files. The recommendation is an `@generator` header line read by `fx.py`, replacing `GENERATOR` on the module, once plan 82 (which owns `fx.py`'s directive parse) has merged.
+- **Answer.** **pending the owner**.
 - **Built.** Nothing.
 - **Judge it.** No hand check.

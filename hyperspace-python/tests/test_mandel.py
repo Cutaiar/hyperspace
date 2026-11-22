@@ -1015,3 +1015,16 @@ def test_the_binomial_without_an_array_is_the_difference_for_every_power(rig):
         n, ins, _ = M.perturbed_counts(ref, M.offsets(W, H, zoom), 0, p, 300,
                                        periodic_eps=M.view_height(zoom) / H * M.PERIOD_EPS)
         assert mismatch(got, counts(n, ins)) < 0.05, p
+
+
+def test_a_dive_wakes_a_resting_skip_at_once():
+    g = M.SkipGate()
+    ctx = _QCtx(5)
+    assert g.want(1e4)
+    g.issue(ctx, 100)
+    for _ in range(M.SKIP_LAG + 1):
+        g.read()
+    assert not g.on
+    assert not g.want(1.5e4)                  # less than a doubling: still resting
+    assert g.want(3e4)                        # a doubling since it looked: probe now
+    assert not g.want(3.5e4)

@@ -635,19 +635,23 @@ class SkipGate:
 
     on: bool = True
     rest: int = 0                     # passes since the last probe while off
+    zoom: float = 1.0                 # the zoom it last looked at
     pending: list = field(default_factory=list)       # [query, tiles, age]
     free: list = field(default_factory=list)          # read queries, used again (moderngl
                                                       # 5's Query has no release)
     flagged: float | None = None      # the last share read back
     queries: bool = True              # False once a query could not be made
 
-    def want(self) -> bool:
-        """Run the skip this pass?"""
+    def want(self, zoom: float = 1.0) -> bool:
+        """Run the skip this pass? Resting, it probes every `SKIP_PROBE`
+        passes, and at once when the zoom has moved a doubling since it
+        last looked (a dive into a place it may pay)."""
         if self.on:
+            self.zoom = zoom
             return True
         self.rest += 1
-        if self.rest >= SKIP_PROBE:
-            self.rest = 0
+        if self.rest >= SKIP_PROBE or abs(math.log2(max(zoom, 1e-300) / self.zoom)) >= 1.0:
+            self.rest, self.zoom = 0, zoom
             return True
         return False
 
@@ -817,7 +821,7 @@ def run(chain, name: str, prog: moderngl.Program, vao: moderngl.VertexArray,
     valid = skip_valid(v)
     if valid:
         st.gate.read()
-    skip = valid and st.gate.want()
+    skip = valid and st.gate.want(float(v["zoom"]))
     st.stats.update(size=(w, h), perturb=pert, skip=skip, skip_valid=valid,
                     flagged=st.gate.flagged)
     _set(prog, "u_tiles_on", 0)

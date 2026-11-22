@@ -101,7 +101,9 @@ def owner(ctx, chain, st, out, src, frames: int, rows: list) -> None:
 
 def bench(ctx, chain, st, out, src, view: dict, frames: int) -> float | None:
     """The median GPU ms of the pass over `frames` frames at `view` (over the
-    defaults: nothing carries from the line before)."""
+    defaults: nothing carries from the line before — plan 80: the skip's
+    gate starts again too, and settles over a few untimed passes, so a line
+    is the steady state at its view)."""
     timer = PassTimer(ctx)
     if not timer.on:
         return None
@@ -110,6 +112,11 @@ def bench(ctx, chain, st, out, src, view: dict, frames: int) -> float | None:
     v.update(DEFAULTS)
     v.update(view)
     t = 0.0
+    if chain.mandel is not None and "mandel" in chain.mandel.states:
+        chain.mandel.states["mandel"].gate = M.SkipGate()
+    for _ in range(M.SKIP_LAG + 2):
+        chain.run_one("mandel", src, out, t, opaque=1)
+        t += 1 / 60
     for _ in range(frames + PassTimer.LAG + 1):
         with timer.time("mandel"):
             chain.run_one("mandel", src, out, t, opaque=1)
