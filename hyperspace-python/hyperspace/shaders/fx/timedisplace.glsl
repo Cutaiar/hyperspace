@@ -1,5 +1,5 @@
 // @label Time Displace
-// @order 23
+// @order 21
 // @blend mix
 // @speed 1
 // @hook timedisplace

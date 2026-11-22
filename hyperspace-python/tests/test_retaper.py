@@ -43,7 +43,7 @@ AMOUNTS = {"fx.acid.bend", "fx.acid.twist", "fx.acid.breathe", "fx.blocks.amount
            "fx.deconverge.amount",
            "fx.deconverge.radial", "fx.displace.amount", "fx.doublevision.amount",
            "fx.bloom.amount", "fx.fractals.amount", "fx.glimmer.amount", "fx.grain.amount",
-           "fx.grow.amount", "fx.shake.amount", "fx.wave.amount",
+           "fx.grow.amount", "fx.shake.amount", "fx.wave.amount", "fx.timedisplace.span",
            "fx.oilslick.amount", "fx.plasma.level", "fx.prism.amount", "fx.tripcolour.amount",
            "fx.warp.amount", "fx.wobble.amount", "fx.zoomblur.amount"}
 
