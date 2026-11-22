@@ -116,6 +116,7 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("selection", "selection", (), None),
     ("loadable", "patches", ("loadable",), _paged("loadable")),
     ("view", "view", ("view",), _paged("view")),
+    ("fractal", "fractal", ("view",), _paged("fractal")),
     ("fx", "fx", ("fx",), _fx),
     ("lookback", "lookback", ("dream",), _paged("lookback")),
     ("faces", "faces", ("pattern",), _paged("faces")),
