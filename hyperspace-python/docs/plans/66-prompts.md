@@ -1,17 +1,17 @@
-# Plan 66: the cloud-agent prompts
+# The post-install wave: the cloud-agent prompts
 
-One prompt per item in [`66-post-install.md`](66-post-install.md). Paste the block under an item into a new Claude Code cloud session on the `hyperspace` repo. Wave 1 (67–73) can all go at once. Wave 2 (74, 75) waits for decisions D1 and D2 and for 70 to merge.
+One prompt per item in [`66-post-install.md`](66-post-install.md). Paste the block under an item into a new Claude Code cloud session on the `hyperspace` repo. Wave 1 (80–86) can all go at once. Wave 2 (87, 88) waits for decisions D1 and D2 and for 83 to merge; 89 waits for 82.
 
 Every prompt starts the same way, so an agent reads the plan before it builds.
 
 ---
 
-## 67. Mandelbrot fixes
+## 80. Mandelbrot fixes
 
 ```
-You are building plan 67 of Hyperspace (Python + moderngl, in hyperspace-python/).
+You are building plan 80 of Hyperspace (Python + moderngl, in hyperspace-python/).
 First: git fetch origin plans/66-post-install && git show origin/plans/66-post-install:hyperspace-python/docs/plans/66-post-install.md
-Follow its §6 builder brief. Your row in §1 is 67 (files, rows 902–909, checks 699–706, group EB).
+Follow its §6 builder brief. Your row in §1 is 80 (files, rows 1000–1007, checks 800–807, group FA).
 
 Plan 63 (PR #462) built the Mandelbrot node: mandel.glsl plus its Python half mandel.py, through @hook.
 Read docs/plans/63-mandelbrot.md first. Making patches with it on the rig (an M3 Max) turned up four problems.
@@ -45,12 +45,12 @@ The library's three Mandelbrot patches are in 5-zooms-nov/mandelbrot/ in the own
 You can't reach them. Their behaviour is described above.
 ```
 
-## 68. An endless, centred fractal dive
+## 81. An endless, centred fractal dive
 
 ```
-You are building plan 68 of Hyperspace (Python + moderngl, in hyperspace-python/).
+You are building plan 81 of Hyperspace (Python + moderngl, in hyperspace-python/).
 First: git fetch origin plans/66-post-install && git show origin/plans/66-post-install:hyperspace-python/docs/plans/66-post-install.md
-Follow its §6 builder brief. Your row in §1 is 68 (files, rows 910–917, checks 707–712, group EC).
+Follow its §6 builder brief. Your row in §1 is 81 (files, rows 1010–1017, checks 810–815, group FB).
 
 Plan 64 (PR #460) built recursive geometry. Read docs/plans/64-recursive-geometry.md and
 64-depth-dependent-grab.md, and fractal.py (Dive, step, frame). Making loadable patches turned up two problems:
@@ -66,18 +66,22 @@ Plan 64 (PR #460) built recursive geometry. Read docs/plans/64-recursive-geometr
    Decide where it lives (a camera param, or a fractal-only one) and record it as a register row. It must
    save in a loadable patch like any param.
 
+Branch claude/serene-davinci-cgtewx (unmerged, 2026-11-20) adds a FRACTAL side-pane section (Detail, Reach,
+Near, To the top) and moves view.frac_additive there. If it has merged, put the dive-rate control in that
+section; if not, read it and don't duplicate it.
+
 Tests: a long dive (hundreds of levels) at a fixed rate stays centred and never jumps; a negative rate
 climbs back out to the whole shape; the 3D and 4D fractals both work.
 Render a before/after video pair of a Menger sponge dive with drive-the-app and commit it under
-docs/plans/assets/68-fractal-dive/.
+docs/plans/assets/81-fractal-dive/.
 ```
 
-## 69. Control widgets
+## 82. Control widgets
 
 ```
-You are building plan 69 of Hyperspace (Python + moderngl, in hyperspace-python/).
+You are building plan 82 of Hyperspace (Python + moderngl, in hyperspace-python/).
 First: git fetch origin plans/66-post-install && git show origin/plans/66-post-install:hyperspace-python/docs/plans/66-post-install.md
-Follow its §6 builder brief. Your row in §1 is 69 (files, rows 918–927, checks 713–722, group ED).
+Follow its §6 builder brief. Your row in §1 is 82 (files, rows 1020–1029, checks 820–829, group FC).
 
 Three control improvements from the install, for the panel's sliders (ui_fields.py and the fader drawing
 in ui.py):
@@ -103,15 +107,15 @@ in ui.py):
    - It must work on a trackpad on stage: big, with a clear dot.
 
 Tests with tests/ui_driver.py: a drag on a pad sets both params; a bipolar fader rests centred; ticks
-count right. Capture screens with drive-the-app and commit them under docs/plans/assets/69-control-widgets/.
+count right. Capture screens with drive-the-app and commit them under docs/plans/assets/82-control-widgets/.
 ```
 
-## 70. Save and load live
+## 83. Save and load live
 
 ```
-You are building plan 70 of Hyperspace (Python + moderngl, in hyperspace-python/).
+You are building plan 83 of Hyperspace (Python + moderngl, in hyperspace-python/).
 First: git fetch origin plans/66-post-install && git show origin/plans/66-post-install:hyperspace-python/docs/plans/66-post-install.md
-Follow its §6 builder brief. Your row in §1 is 70 (files, rows 928–933, checks 723–728, group EE).
+Follow its §6 builder brief. Your row in §1 is 83 (files, rows 1030–1035, checks 830–835, group FD).
 
 Two pains from the install, on a trackpad during a live set:
 
@@ -129,12 +133,12 @@ ui_playlist.py, playlist.py). Tests with tests/ui_driver.py: one click saves a n
 equal; a 40-entry playlist scrolls and its playing row stays in view.
 ```
 
-## 71. GRAPH: GPU cost at a glance
+## 84. GRAPH: GPU cost at a glance
 
 ```
-You are building plan 71 of Hyperspace (Python + moderngl, in hyperspace-python/).
+You are building plan 84 of Hyperspace (Python + moderngl, in hyperspace-python/).
 First: git fetch origin plans/66-post-install && git show origin/plans/66-post-install:hyperspace-python/docs/plans/66-post-install.md
-Follow its §6 builder brief. Your row in §1 is 71 (files, rows 934–939, checks 729–734, group EF).
+Follow its §6 builder brief. Your row in §1 is 84 (files, rows 1040–1045, checks 840–845, group FE).
 
 Hovering a node on GRAPH already shows its GPU time per frame (plan 37; render.py's per-node pass timer,
 around line 903). That readout is how we caught a preset (Rugged Doctor) sitting at the 60 FPS floor with
@@ -154,12 +158,12 @@ Tests: the ranking and smoothing are pure and unit-tested; the chip off draws no
 with the chip on using drive-the-app.
 ```
 
-## 72. Hands default: BONES, PLAIN, 50%
+## 85. Hands default: BONES, PLAIN, 50%
 
 ```
-You are working on plan 72 of Hyperspace (Python + moderngl, in hyperspace-python/).
+You are working on plan 85 of Hyperspace (Python + moderngl, in hyperspace-python/).
 First: git fetch origin plans/66-post-install && git show origin/plans/66-post-install:hyperspace-python/docs/plans/66-post-install.md
-Follow its §6 builder brief. Your row in §1 is 72 (files, rows 940–943, checks 735–737, group EG).
+Follow its §6 builder brief. Your row in §1 is 85 (files, rows 1050–1053, checks 850–852, group FF).
 
 The owner changed the ghost hands' show look on 2026-11-18: on, BONES style, PLAIN material, opacity 0.5.
 PR #459 (branch worktree-ghost-bones-default) set it as GLASS at 0.35 and isn't merged.
@@ -177,12 +181,12 @@ PR #459 (branch worktree-ghost-bones-default) set it as GLASS at 0.35 and isn't 
    real library.
 ```
 
-## 73. Loader and node-mode fixes
+## 86. Loader and node-mode fixes
 
 ```
-You are building plan 73 of Hyperspace (Python + moderngl, in hyperspace-python/).
+You are building plan 86 of Hyperspace (Python + moderngl, in hyperspace-python/).
 First: git fetch origin plans/66-post-install && git show origin/plans/66-post-install:hyperspace-python/docs/plans/66-post-install.md
-Follow its §6 builder brief. Your row in §1 is 73 (files, rows 944–949, checks 738–741, group EH).
+Follow its §6 builder brief. Your row in §1 is 86 (files, rows 1060–1065, checks 855–858, group FG).
 
 1. A loadable patch file with no "units" marker is read as an older file, and the loader silently rescales
    route depths on effect amount params (0.12 became 0.28; 0.25 became 0.8) with no note. Two agents writing
@@ -195,12 +199,12 @@ Follow its §6 builder brief. Your row in §1 is 73 (files, rows 944–949, chec
    The owner suspects some of the program's ideas don't line up underneath here, so explain what you find.
 ```
 
-## 74. Audio reactivity that survives a load (wave 2: after D1 and after 70 merges)
+## 87. Audio reactivity that survives a load (wave 2: after D1 and after 83 merges)
 
 ```
-You are building plan 74 of Hyperspace (Python + moderngl, in hyperspace-python/).
+You are building plan 87 of Hyperspace (Python + moderngl, in hyperspace-python/).
 First: git fetch origin plans/66-post-install && git show origin/plans/66-post-install:hyperspace-python/docs/plans/66-post-install.md
-Follow its §6 builder brief. Your row in §1 is 74 (files, rows 950–957, checks 742–749, group EI).
+Follow its §6 builder brief. Your row in §1 is 87 (files, rows 1070–1077, checks 860–867, group FH).
 
 Every time a patch loads, the owner opens the faces UI and uses the shortcut that routes an analyzer band's
 lane to the face fader (ui_routing.py, "route the selected band's lane to this param"). Doing that on every
@@ -218,12 +222,12 @@ with the band choice editable. Tests: load three patches in a row and the routes
 click; an opted-out patch has none; nothing of the meta controller's routes is saved into a patch.
 ```
 
-## 75. Install mode (wave 2: after D2 and after 70 merges)
+## 88. Install mode (wave 2: after D2 and after 83 merges)
 
 ```
-You are building plan 75 of Hyperspace (Python + moderngl, in hyperspace-python/).
+You are building plan 88 of Hyperspace (Python + moderngl, in hyperspace-python/).
 First: git fetch origin plans/66-post-install && git show origin/plans/66-post-install:hyperspace-python/docs/plans/66-post-install.md
-Follow its §6 builder brief. Your row in §1 is 75 (files, rows 958–965, checks 750–757, group EJ).
+Follow its §6 builder brief. Your row in §1 is 88 (files, rows 1080–1087, checks 870–877, group FI).
 
 At a multi-day install the rig ran for hours with nobody at it. It should do something good on its own and
 hand back the moment someone touches a controller.
@@ -242,12 +246,12 @@ is actually tracked. Tests with a fake clock: idle triggers at the threshold, a 
 patch and values, and a playlist end loops.
 ```
 
-## 76. The VIEW page, reviewed and fixed (wave 2: after 69 merges)
+## 89. The VIEW page, reviewed and fixed (wave 2: after 82 merges)
 
 ```
-You are building plan 76 of Hyperspace (Python + moderngl, in hyperspace-python/).
+You are building plan 89 of Hyperspace (Python + moderngl, in hyperspace-python/).
 First: git fetch origin plans/66-post-install && git show origin/plans/66-post-install:hyperspace-python/docs/plans/66-post-install.md
-Follow its §6 builder brief. Your row in §1 is 76 (files, rows 966–975, checks 758–765, group EK).
+Follow its §6 builder brief. Your row in §1 is 89 (files, rows 1090–1099, checks 880–887, group FJ).
 §5 of that plan is the review of the VIEW page (2026-11-20): what it holds, how the 158 library patches
 use each control, and what to build. Decisions D5–D7 there are yours, built as recommended unless the owner
 wrote otherwise below.
@@ -264,7 +268,11 @@ Build §5's list:
    (view.bmp_alpha) must keep working unchanged.
 
 Build it on dkit (ui_view.py, ui_fields) and keep Panel._view_stock in step for the no-kit path.
-Plan 69 (control widgets: ticks, bipolar faders, XY pads) has merged before you start; use its widgets.
+Plan 82 (control widgets: ticks, bipolar faders, XY pads) has merged before you start; use its widgets.
+
+Branches that touch the same ground, unmerged on 2026-11-22: claude/serene-davinci-cgtewx moves the fractal
+controls (and view.frac_additive) out of VIEW into a FRACTAL section; claude/hyperspace-luma-key-transparency-ysmbfq
+adds a key to each media channel on MEDIA. Build on whichever has merged.
 
 Before you change anything, re-run the review against the current code: a control added since the review,
 or one moved, goes in your plan doc.
@@ -272,5 +280,5 @@ or one moved, goes in your plan doc.
 Tests with tests/ui_driver.py: every VIEW control is still reachable by its id; a plane's toggle and rate sit
 on one row; the folds start closed and remember nothing in a saved patch; the media-path controls set their
 params. Capture before/after screens of VIEW and MEDIA with drive-the-app and commit them under
-docs/plans/assets/76-view-page/.
+docs/plans/assets/89-view-page/.
 ```

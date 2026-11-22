@@ -1,4 +1,9 @@
-# Plan 66: the post-install wave
+# The post-install wave (plans 80–89)
+
+**Renumbered 2026-11-22.** First numbered plan 66 with items 67–76, register rows 902–975, hand checks 699–765
+and groups EB–EK. Three unmerged branches took plan 66, plan 67, rows 902–913, checks 699–706 and group EB
+first, so this wave now uses plans 80–89, rows 1000–1099, checks 800–887 and groups FA–FJ. The file paths
+(`66-*.md` on branch `plans/66-post-install`) are unchanged so the prompts still fetch them.
 
 Written 2026-11-20 from the install debrief, the Claude Doc "Install debrief — November 2026". It collects every open item in that doc except the shader roundup and consolidation, which have their own track. Each item is one cloud agent, one draft PR to `main`.
 
@@ -6,38 +11,38 @@ Written 2026-11-20 from the install debrief, the Claude Doc "Install debrief —
 
 | Plan | Item | Wave | Owns (files it may change) | Rows | Checks | Group |
 | --- | --- | --- | --- | --- | --- | --- |
-| 67 | **Mandelbrot fixes**: input-less render, coloured interior under perturbation, off-screen term sensitivity, perturbation and skip cost | 1 | `mandel.py`, `shaders/fx/mandel.glsl`, `tools/mandel_*`, `tests/test_mandel.py` | 902–909 | 699–706 | EB |
-| 68 | **An endless, centred fractal dive** | 1 | `fractal.py`, `view.py` (`reroot`), `tests/test_fractal*.py` | 910–917 | 707–712 | EC |
-| 69 | **Control widgets**: tick marks, unipolar/bipolar drawing, XY pads and XYZ volumes | 1 | `ui_fields.py`, the fader drawing in `ui.py`, `fx.py` (directive parse), `@pair` lines in four effect files | 918–927 | 713–722 | ED |
-| 70 | **Save and load live**: Save as on the meta controller, a scrolling playlist | 1 | `deck.py`, `ui_loadable.py`, `ui_playlist.py`, `playlist.py` | 928–933 | 723–728 | EE |
-| 71 | **GRAPH: GPU cost at a glance** | 1 | `ui_graph.py` (a toggle and node tint), the pass timer's read side in `render.py` | 934–939 | 729–734 | EF |
-| 72 | **Hands default: BONES, PLAIN, 50%** (update PR #459) | 1 | `ghost.py`, `app.py`'s show-look call, a library tool | 940–943 | 735–737 | EG |
-| 73 | **Loader and node-mode fixes**: a note for a missing `units` marker; node mode and dropdowns | 1 | `loadable.py` (the units read), `nodemode.py` | 944–949 | 738–741 | EH |
-| 74 | **Audio reactivity that survives a load** | 2 | the meta controller's routes (`routing.py` layer, `deck.py` where 70 left it), its panel | 950–957 | 742–749 | EI |
-| 75 | **Install mode**: plays on its own when nobody touches anything | 2 | a new `install_mode.py`, `config.py` keys, a read of `idle_lights.IdleLights.touched` | 958–965 | 750–757 | EJ |
-| 76 | **The VIEW page, reviewed and fixed** (§5) | 2 | `ui_view.py`, `Panel._view_stock` and `_view_hero` in `ui.py`, VIEW params' labels and tips in `params.py`, the media-path rows on `ui_media.py` | 966–975 | 758–765 | EK |
+| 80 | **Mandelbrot fixes**: input-less render, coloured interior under perturbation, off-screen term sensitivity, perturbation and skip cost | 1 | `mandel.py`, `shaders/fx/mandel.glsl`, `tools/mandel_*`, `tests/test_mandel.py` | 1000–1007 | 800–807 | FA |
+| 81 | **An endless, centred fractal dive** | 1 | `fractal.py`, `view.py` (`reroot`), `tests/test_fractal*.py` | 1010–1017 | 810–815 | FB |
+| 82 | **Control widgets**: tick marks, unipolar/bipolar drawing, XY pads and XYZ volumes | 1 | `ui_fields.py`, the fader drawing in `ui.py`, `fx.py` (directive parse), `@pair` lines in four effect files | 1020–1029 | 820–829 | FC |
+| 83 | **Save and load live**: Save as on the meta controller, a scrolling playlist | 1 | `deck.py`, `ui_loadable.py`, `ui_playlist.py`, `playlist.py` | 1030–1035 | 830–835 | FD |
+| 84 | **GRAPH: GPU cost at a glance** | 1 | `ui_graph.py` (a toggle and node tint), the pass timer's read side in `render.py` | 1040–1045 | 840–845 | FE |
+| 85 | **Hands default: BONES, PLAIN, 50%** (update PR #459) | 1 | `ghost.py`, `app.py`'s show-look call, a library tool | 1050–1053 | 850–852 | FF |
+| 86 | **Loader and node-mode fixes**: a note for a missing `units` marker; node mode and dropdowns | 1 | `loadable.py` (the units read), `nodemode.py` | 1060–1065 | 855–858 | FG |
+| 87 | **Audio reactivity that survives a load** | 2 | the meta controller's routes (`routing.py` layer, `deck.py` where 83 left it), its panel | 1070–1077 | 860–867 | FH |
+| 88 | **Install mode**: plays on its own when nobody touches anything | 2 | a new `install_mode.py`, `config.py` keys, a read of `idle_lights.IdleLights.touched` | 1080–1087 | 870–877 | FI |
+| 89 | **The VIEW page, reviewed and fixed** (§5) | 2 | `ui_view.py`, `Panel._view_stock` and `_view_hero` in `ui.py`, VIEW params' labels and tips in `params.py`, the media-path rows on `ui_media.py` | 1090–1099 | 880–887 | FJ |
 
-Wave 1 runs at once: no two items own the same file. Wave 2 waits for the owner's decisions below and for 70 to merge, since 74 and 75 touch the meta controller and the playlist after it. 76 waits for 69 to merge, because both draw VIEW's controls.
+Wave 1 runs at once: no two items own the same file. Wave 2 waits for the owner's decisions below and for 83 to merge, since 87 and 88 touch the meta controller and the playlist after it. 89 waits for 82 to merge, because both draw VIEW's controls.
 
 ## 2. Decisions the owner makes before dispatch
 
 | # | For | Question | Recommendation |
 | --- | --- | --- | --- |
-| D1 | 74 | Where does audio reactivity live? | **A:** band-to-fader routes on the meta controller, laid over whatever patch loads, with one toggle and a depth knob; a patch can opt out with a flag |
-| D2 | 75 | What plays when nobody is touching anything, and after how long? | A named playlist from `config.toml` (`[install] playlist`), after 300 s with no desk, pad or hand input. Any touch returns to the patch that was loaded, at the point it was left |
-| D3 | 69 | Which X/Y pairs become pads now? | Prism, Wave and Zoom burst `cx`/`cy`, and Wave Table `offset_x`/`offset_y`, declared with a `@pair` line and **no param renamed** (the roundup may rename later). Zoom burst's centre plus amount as the first XYZ volume |
-| D4 | 68 | The fractal dive drifts toward an edge. By design? | No: zoom about the screen centre, so the point under it stays put through every re-root |
-| D5 | 76 | VIEW's new layout | One page in three sections, Shape, Spin and Copies (§5), with the rarely used controls in a fold under each |
-| D6 | 76 | The four media-path params drawn nowhere | Draw them on MEDIA beside Media alpha |
-| D7 | 76 | Rename the `view.*` ids that belong to faces and media? | No: labels, tips and grouping only. A rename is a format change for 158 patches |
+| D1 | 87 | Where does audio reactivity live? | **A:** band-to-fader routes on the meta controller, laid over whatever patch loads, with one toggle and a depth knob; a patch can opt out with a flag |
+| D2 | 88 | What plays when nobody is touching anything, and after how long? | A named playlist from `config.toml` (`[install] playlist`), after 300 s with no desk, pad or hand input. Any touch returns to the patch that was loaded, at the point it was left |
+| D3 | 82 | Which X/Y pairs become pads now? | Prism, Wave and Zoom burst `cx`/`cy`, and Wave Table `offset_x`/`offset_y`, declared with a `@pair` line and **no param renamed** (the roundup may rename later). Zoom burst's centre plus amount as the first XYZ volume |
+| D4 | 81 | The fractal dive drifts toward an edge. By design? | No: zoom about the screen centre, so the point under it stays put through every re-root |
+| D5 | 89 | VIEW's new layout | One page in three sections, Shape, Spin and Copies (§5), with the rarely used controls in a fold under each |
+| D6 | 89 | The four media-path params drawn nowhere | Draw them on MEDIA beside Media alpha |
+| D7 | 89 | Rename the `view.*` ids that belong to faces and media? | No: labels, tips and grouping only. A rename is a format change for 158 patches |
 
 Wave 1 needs only D3 and D4, and both recommendations are written into the prompts. Change them there if you decide otherwise.
 
 ## 3. Not for cloud agents (on the rig, by the owner or a local session)
 
 - **Rugged Doctor at the 60 FPS floor.** Time its passes with the GPU timer on the rig. The roundup found the Blocks shader cheap, so the cost is elsewhere.
-- **The benches:** `tools/mandel_bench.py` and `tools/fractal_bench.py`, and again after 67 lands.
-- **Re-set the library's hands look** with 72's tool, once 72 merges.
+- **The benches:** `tools/mandel_bench.py` and `tools/fractal_bench.py`, and again after 80 lands.
+- **Re-set the library's hands look** with 85's tool, once 85 merges.
 - **Look at sorted vs. additive** (`docs/plans/assets/64-recursive-geometry/`).
 - **The hand checks** for groups DY, DZ, EA and every group below.
 - **Out of scope:** Dillon's interface redesign; the APC40 idle effects (#465, open); the shader roundup, face shaders and preview showcase values; Invisible City.
@@ -65,7 +70,7 @@ VIEW (`ui_view.page` on dkit, `Panel._view_stock` without it) has collected cont
 - **Media:** `view.media_alpha` is on MEDIA. `view.media_scale`, `media_mode`, `media_amp` and `media_rate` (the faces' media path) are **drawn nowhere**, though 20 patches set two of them.
 - **The legacy alias:** `view.bmp_alpha`, an alias of media alpha, is still the default APC40 layer's knob 7 (`apc40.py:547`), and so in 104 patches' desk layers. It works; leave it.
 
-**What 76 builds** (D5–D7 as recommended):
+**What 89 builds** (D5–D7 as recommended):
 
 1. **One page, three sections:**
    - **Shape:** the menu, Brightness, 4D depth, Points, Lines and Faces.
@@ -93,7 +98,7 @@ You build one item as one draft PR to `main`. The owner reviews and merges; you 
 - The panel must stay legible at a distance: big targets, little text, no all caps.
 - Report faithfully: failures with their output, a skipped step as skipped.
 
-**Your numbers** are your row of the table in §1. Use only those: register rows in `docs/DECISION-REGISTER.md` (a table row plus a `### <n>.` section each), hand checks in `docs/plans/11-hand-checks.md` under your group, and a plan doc `docs/plans/<plan>-<slug>.md` with a line in `docs/plans/README.md`. Where the owner hasn't answered something, build the recommendation and mark the row "(rec) — pending the owner".
+**Your numbers** are your row of the table in §1 (rows 1000+, checks 800+, groups FA–FJ; never 902–999 or 699–799, which other branches hold). Use only those: register rows in `docs/DECISION-REGISTER.md` (a table row plus a `### <n>.` section each), hand checks in `docs/plans/11-hand-checks.md` under your group, and a plan doc `docs/plans/<plan>-<slug>.md` with a line in `docs/plans/README.md`. Where the owner hasn't answered something, build the recommendation and mark the row "(rec) — pending the owner".
 
 **Testing:** cloud setup is `.claude/hooks/session-start.sh`, or drive-the-app §0. Run `uv run pytest -q` from `hyperspace-python/`; it must be green. Cloud machines render in software, so frame times there mean nothing: anything about speed gets a tool the owner runs on the rig, with the command in the PR body.
 
