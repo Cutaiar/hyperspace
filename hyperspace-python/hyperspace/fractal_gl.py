@@ -281,7 +281,7 @@ def view_uniforms(prog: moderngl.Program, wk: fractal.Walk, near: float, span: f
     put(prog, "u_view", (float(wk.zoom), float(wk.d4), float(wk.dist), float(wk.w_gone)))
     put(prog, "u_wfade", (float(wk.w_near), float(wk.w_far), float(wk.w_lost)))
     put(prog, "u_pan", (float(wk.p[0]), float(wk.p[1])))
-    put(prog, "u_clamp", (float(-wk.spec.far), float(wk.top)))
+    put(prog, "u_clamp", (float(-wk.far), float(wk.top)))
     off = np.eye(4) if wk.off is None else wk.off
     put(prog, "u_off", np.ascontiguousarray(np.asarray(off).T, dtype="f4").tobytes())
     put(prog, "u_tspan", (float(near), float(span)))
