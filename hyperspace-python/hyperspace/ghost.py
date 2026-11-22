@@ -119,12 +119,13 @@ class GhostState:
     material: int = 0       # MATERIALS: what it is made of (PLAIN, the look it had)
 
 
-# The show's ghost hands (owner, 2026-11-15): on, BONES in GLASS at 35% —
-# what every library preset carries. `GhostState()` stays the neutral draw the
-# tests measure; the app starts each hands node's state from this (`show_look`),
-# so a new patch's fresh values are the show's.
-SHOW_LOOK = {"on": True, "alpha": 0.35, "style": STYLES.index("BONES"),
-             "material": MATERIALS.index("GLASS")}
+# The show's ghost hands (owner, 2026-11-18, plan 85; was BONES in GLASS at
+# 35% on 2026-11-15): on, BONES in PLAIN at 50% — what every library preset
+# carries (tools/set_hands_look.py). `GhostState()` stays the neutral draw the
+# tests measure; the app starts each hands node's state from this
+# (`show_look`), so a new patch's fresh values are the show's.
+SHOW_LOOK = {"on": True, "alpha": 0.5, "style": STYLES.index("BONES"),
+             "material": MATERIALS.index("PLAIN")}
 
 
 def show_look(state: GhostState | None = None) -> GhostState:

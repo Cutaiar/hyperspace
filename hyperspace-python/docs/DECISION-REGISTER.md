@@ -901,6 +901,10 @@ here; overturn → the change, then the same.
 | 879 | Plan 63: colour by steps (owner decision 5): the smooth count n + 1 − log_p log abs(z) with abs(z)² > 10⁴ the bail-out; Output steps is grey that rises over Cycle steps and falls over the next, so Palette's gradient wraps with no seam; Output ramp a built-in colour ramp; Inside coloured shows the periodicity time and turns the cardioid test and the skip off | 675, 676 | owner (2026-11-18) — the rise and fall (rec) |
 | 880 | Plan 63: Steps is a float log knob rounded to a whole cap (an integer log param cannot move one detent at a time); Zoom runs 0.5–10¹³, the float64 reference's reach, and a log param over six orders reads in three figures ("4.2e+07×") | — | (rec) |
 | 881 | Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes | — | owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before |
+| 1050 | Plan 85: the show look in code is on, BONES, PLAIN, 50% (`ghost.SHOW_LOOK`; #459 had BONES in GLASS at 35%, the 2026-11-15 look). The app sets the on-air renderer's hands state to it at startup, deck 2's sibling gets one, and every extra hands node's state starts from it (`GraphSection.land`), so New patch carries it. `GhostState()` stays the neutral draw (off, HANDS, PLAIN, 60%) the ghost and render tests and the goldens measure | 850 | owner — 2026-11-18 |
+| 1051 | Plan 85: `tools/set_hands_look.py` sets the library's patches to the show look: every loadable patch under `loadable/` and `presets/`, every folder down (the era folders), as `migrate_library.loadable_files` lists them; `ghost.*` and each extra hands node's `ghost.<n>.*` `on`, `alpha`, `style`, `material` set, `guide`, `tethers`, the room's `mirror`, routes and desk rows untouched. A dry run by default; `--apply` refuses while the app is open on this Mac, backs the whole library up to `<home>/library-backup-<stamp>/` first, and writes atomically in the app's layout (`loadable.dumps`). A file that is no loadable patch or does not load is named and left | 851 | (rec) — the owner's ask, the build's details; pending the owner |
+| 1052 | Plan 85: a hands layer that reaches no output (`graph.reaches`) gets the standard wires, each only where missing: `hands → hands.layer.hands`, `hands.layer → output.all.hands`, `hands.layer → output.all.guide` (as #459's 2026-11-15 run did for 20 presets). A layer that reaches an output any other way is left as wired. Each changed patch is loaded again from what would be written; one whose load notes change is named and not written | 851, 852 | (rec) — pending the owner |
+| 1053 | Plan 85: the test corpus (`tests/corpus/loadable`) is not set to the show look: it keeps the neutral hands, so no golden frame moves; the tool is never run on it but on tmp copies in its tests. The golden rig holds an extra hands node a fixture sets no values for (`hands-glass-only`'s `ghost.2`) at `GhostState()`'s look, as it already holds its `on` | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -15318,4 +15322,32 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **What.** Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes.
 - **Answer.** owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before.
 - **Built.** Nothing.
+- **Judge it.** No hand check.
+
+### 1050. The show look in code: BONES, PLAIN, 50%
+
+- **What.** The owner changed the show's ghost hands on 2026-11-18: on, BONES style, PLAIN material, 50% opacity. `ghost.SHOW_LOOK` holds it and `ghost.show_look(state)` applies it. The app applies it to the on-air renderer's hands at startup, to deck 2's sibling, and to every extra hands node's fresh state, so a new patch's values and **New patch** carry it. `GhostState()` keeps its neutral defaults: changing them broke 14 ghost and render tests in #459 and would move the goldens.
+- **Answer.** owner — 2026-11-18 (supersedes #459's GLASS at 35%, 2026-11-15).
+- **Built.** `ghost.SHOW_LOOK`, `ghost.show_look`; `app.main` (two calls), `loadable.GraphSection.land`; `tests/test_ghost.py::test_the_show_look_is_bones_in_plain_on_at_50_and_the_bare_state_stays_neutral`.
+- **Judge it.** 850.
+
+### 1051. A tool sets the library's patches to the show look
+
+- **What.** A patch's hands look is the patch's values (plan 44 D3), so changing the code default changes no saved patch. `tools/set_hands_look.py` walks the library's loadable patches every folder down, sets each hands node's `on`, `alpha`, `style` and `material` to `SHOW_LOOK`, and leaves everything else. A dry run by default; `--apply` backs up the whole library first (`migrate_library.backup`) and refuses while the app is open on this Mac. A second run finds nothing to do.
+- **Answer.** (rec) — the owner asked for the tool; the details are the build's, pending the owner.
+- **Built.** `tools/set_hands_look.py`; `tests/test_set_hands_look.py`.
+- **Judge it.** 851.
+
+### 1052. An unwired hands layer gets the standard wires
+
+- **What.** The 2026-11-15 run found 20 presets whose hands layer reached no output, so the look did nothing there; it wired them by hand. The tool does the same: a layer outside `graph.reaches` gets `hands → hands.layer.hands`, `hands.layer → output.all.hands` and `hands.layer → output.all.guide`, each only where missing. A layer reaching an output another way is left as it is. Each patch is loaded again from what would be written; one whose load notes change is not written.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `set_hands_look.wire_layer`, `set_hands_look.plan`.
+- **Judge it.** 851, 852.
+
+### 1053. The test corpus keeps the neutral hands
+
+- **What.** The corpus is what the goldens draw. Setting it to the show look would turn the hands on in every corpus golden, and only the M3 Max can re-record those. So the corpus keeps the neutral look and the tool is tested on tmp copies.
+- **Answer.** (rec) — pending the owner.
+- **Built.** Nothing in the corpus; `tests/test_set_hands_look.py` copies it. `tools/golden_frames.py`: the rig sets an extra hands node's `alpha`, `style` and `material` to `GhostState()`'s where the file sets none, so `hands-glass-only` draws its second node as it was recorded.
 - **Judge it.** No hand check.
