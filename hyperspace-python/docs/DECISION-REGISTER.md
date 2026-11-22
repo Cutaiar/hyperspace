@@ -901,6 +901,12 @@ here; overturn → the change, then the same.
 | 879 | Plan 63: colour by steps (owner decision 5): the smooth count n + 1 − log_p log abs(z) with abs(z)² > 10⁴ the bail-out; Output steps is grey that rises over Cycle steps and falls over the next, so Palette's gradient wraps with no seam; Output ramp a built-in colour ramp; Inside coloured shows the periodicity time and turns the cardioid test and the skip off | 675, 676 | owner (2026-11-18) — the rise and fall (rec) |
 | 880 | Plan 63: Steps is a float log knob rounded to a whole cap (an integer log param cannot move one detent at a time); Zoom runs 0.5–10¹³, the float64 reference's reach, and a log param over six orders reads in three figures ("4.2e+07×") | — | (rec) |
 | 881 | Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes | — | owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before |
+| 1030 | Plan 83: **save as** sits on GRAPH's deck row beside **load…** and presses `preset.save_new`, the one action START held on a pad and a learned button press: the deck the panel is on, saved as a new loadable patch named from the loaded one (moo → moo 2) in that patch's folder, never over a file. No new param: the chip's right-click is that param's menu, so Learn puts the same press on a desk or pad button | 830, 831, 832 | (rec) — pending the owner |
+| 1031 | Plan 83: the chip's save takes the next empty pad, as `preset.save_new` always has (a full bank saves to the list and says so); a save from the panel that left the pads alone would be a second action with the same words | 830 | (rec) — pending the owner |
+| 1032 | Plan 83: with nothing loaded, save as writes at the library's top level, named `PATCH <n>` as the pad's hold names | 833 | (rec) — the launch sheet's recommendation, pending the owner |
+| 1033 | Plan 83: after a save the chip reads "saved <name>" (its folder left off, elided), lit, for 4 s (`ui_loadable.SAVED_S`); the full name on its hover and on the footer. A pad's or a learned button's press says it on the footer only | 830 | (rec) — pending the owner |
+| 1034 | Plan 83: the playlist's entries are a list of their own that scrolls, as tall as the screen leaves under the popup (never under three rows), with the add list under it always in view; each entry is one row 34 px tall (`ui_playlist.ROW_H`): its place and name, its dwell, a square × | 834 | (rec) — pending the owner |
+| 1035 | Plan 83: the entry on air is scrolled to the list's middle when the popup opens and each time it changes; between, a hand's scroll is left where it put the list | 835 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -15319,3 +15325,45 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before.
 - **Built.** Nothing.
 - **Judge it.** No hand check.
+
+### 1030. Save as beside load…, one action
+
+- **What.** Plan 83: **save as** sits on GRAPH's deck row beside **load…** and presses `preset.save_new`, the one action START held on a pad and a learned button press: the deck the panel is on, saved as a new loadable patch named from the loaded one (moo → moo 2) in that patch's folder, never over a file. No new param: the chip's right-click is that param's menu, so Learn puts the same press on a desk or pad button.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_loadable.save_as_chip`, `save_as`, `ui_graph._deck_row`; `tests/test_save_live.py::test_one_click_saves_a_new_patch_in_its_folder_that_loads_back_equal`, `::test_a_second_click_never_overwrites`, `::test_it_is_the_learnable_action_a_pad_presses`.
+- **Judge it.** 830, 831, 832.
+
+### 1031. Save as takes the next empty pad
+
+- **What.** Plan 83: the chip's save takes the next empty pad, as `preset.save_new` always has (a full bank saves to the list and says so); a save from the panel that left the pads alone would be a second action with the same words.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `library.Install.save_new` (unchanged); `tests/test_save_live.py::test_one_click_saves_a_new_patch_in_its_folder_that_loads_back_equal`.
+- **Judge it.** 830.
+
+### 1032. Save as with nothing loaded
+
+- **What.** Plan 83: with nothing loaded, save as writes at the library's top level, named `PATCH <n>` as the pad's hold names.
+- **Answer.** (rec) — the launch sheet's recommendation, pending the owner.
+- **Built.** `library.Install._save_new` (unchanged); `tests/test_save_live.py::test_with_nothing_loaded_it_saves_at_the_top_named_as_the_pads_hold_names`.
+- **Judge it.** 833.
+
+### 1033. The new name, for a moment
+
+- **What.** Plan 83: after a save the chip reads "saved <name>" (its folder left off, elided), lit, for 4 s (`ui_loadable.SAVED_S`); the full name on its hover and on the footer. A pad's or a learned button's press says it on the footer only.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_loadable.save_as_label`, `SAVED_S`; `tests/test_save_live.py::test_one_click_saves_a_new_patch_in_its_folder_that_loads_back_equal`, `::test_nothing_saved_shows_no_name`.
+- **Judge it.** 830.
+
+### 1034. The playlist's entries scroll
+
+- **What.** Plan 83: the playlist's entries are a list of their own that scrolls, as tall as the screen leaves under the popup (never under three rows), with the add list under it always in view; each entry is one row 34 px tall (`ui_playlist.ROW_H`): its place and name, its dwell, a square ×.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_playlist._entries`, `_row`, `_room`; `tests/test_save_live.py::test_forty_entries_stay_on_screen_and_the_playing_row_is_in_view`, `::test_a_click_on_a_row_far_down_lands_on_that_row`.
+- **Judge it.** 834.
+
+### 1035. The entry on air stays in view
+
+- **What.** Plan 83: the entry on air is scrolled to the list's middle when the popup opens and each time it changes; between, a hand's scroll is left where it put the list.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_playlist._entries`, `popup`; `tests/test_save_live.py::test_the_list_scrolls_under_the_wheel_and_follows_the_look_on_air`.
+- **Judge it.** 835.
