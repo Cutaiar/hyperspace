@@ -604,7 +604,8 @@ def test_ui_page_on_fx_shows_the_fx_section_and_every_slot_keeps_its_index(pane)
     st = _st(r)
     assert PAGE_KEYS == [
         "output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-        "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist"]
+        "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist",
+        "fractal"]                                       # (plan 64: appended, every slot kept)
     fx = PAGE_KEYS.index("fx")
     assert "fx" not in st["pane_drawn"]
     r.reg["ui.page"].set(fx)
@@ -1195,3 +1196,28 @@ def test_the_grip_section_open_whole_stays_inside_the_pane(tmp_path, monkeypatch
         assert "hands" in st["pane_drawn"]
         spills = _spills(d, st)
         assert not spills, sorted(spills)
+
+
+@pytest.mark.parametrize("layout", ["band", "min", "default"])
+@pytest.mark.parametrize("name", ["Menger sponge", "Sierpinski 5-cell"])
+def test_the_fractal_section_draws_its_controls_inside_the_pane(tmp_path, monkeypatch,
+                                                               layout, name):
+    """Plan 64: the FRACTAL section on a fractal draws its sliders, its
+    switch and its button, every one in the pane; on another shape it says
+    how to pick one and draws none of them."""
+    from hyperspace.geometry import shape_index
+
+    with build_rig(tmp_path) as r:
+        d = _focus_rig(r, monkeypatch, layout)
+        r.reg["view.shape"].set(shape_index(name))
+        r.reg["ui.page"].set(PAGE_KEYS.index("fractal"))
+        d.run(d.wait(4))
+        st = _st(r)
+        assert "fractal" in st["pane_drawn"]
+        for pid in ("view.frac_detail", "view.frac_far", "view.frac_near",
+                    "view.frac_additive", "view.frac_top"):
+            d.rect(pid)                                  # drawn (raises if not)
+        assert not _spills(d, st), sorted(_spills(d, st))
+        r.reg["view.shape"].set(3)
+        d.run(d.wait(3))
+        assert "view.frac_detail" not in d.rects            # (this frame's alone)

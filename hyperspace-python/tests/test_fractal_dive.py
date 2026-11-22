@@ -336,15 +336,24 @@ def test_the_dive_rate_is_a_param_a_route_drives():
 
 
 def test_the_dive_rate_saves_in_a_loadable_patch(tmp_path):
+    """Under the FRACTAL section's key, with Detail, Reach and Near (row 902):
+    written only for a fractal, so no other look's file changes; a key from
+    before plan 81 (no "dive") loads it at 0."""
     from tests.test_fractal_grab import _rig
+    from tests.test_loadable import put
     rig = _rig(tmp_path)
     rig.reg["view.shape"].set(geometry.shape_index("Menger sponge"))
     rig.reg["view.frac_dive"].set(0.75)
     path = rig.loaded_patch.save_as("Endless")
-    assert json.loads(path.read_text())["values"]["view.frac_dive"] == 0.75
+    doc = json.loads(path.read_text())
+    assert doc["fractal"]["dive"] == 0.75 and "view.frac_dive" not in doc["values"]
     rig.reg["view.frac_dive"].set(0.0)
     rig.loaded_patch.load("Endless")
     assert rig.view.frac_dive == 0.75
+    put(rig.home, "Before", values={"view.shape": geometry.shape_index("Menger sponge")},
+        fractal={"detail": 1.0, "far": 0.0, "near": 0.0})
+    rig.loaded_patch.load("Before")
+    assert rig.view.frac_dive == 0.0
 
 
 def test_another_shape_ignores_the_rate():

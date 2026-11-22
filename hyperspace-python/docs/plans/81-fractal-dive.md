@@ -107,18 +107,17 @@ middle) and pulls no further.
   `view.frac_additive`. A level is a fractal's: on any other shape it does
   nothing. It is not a camera param, since a "level" means nothing to a
   polytope.
-- **Saved like any param:** persisted, so a loadable patch's `values` hold
-  it (`"view.frac_dive": 0.75`). An older file without it loads at 0. Every
-  loadable patch saved from now on carries the key, as with any new param
-  (the no-old-schema rule).
+- **Saved** as the FRACTAL section's Detail, Reach and Near are (row 902):
+  persisted (undo, the dirty dot and an export hold it), and written as
+  `"dive"` under the loadable patch's optional `fractal` key, only while the
+  shape is a fractal (`loadable.FRACTAL_IDS`). No other look's file
+  changes. A file with no key, or a key from before plan 81, loads it at 0.
 - **Routable:** an LFO (any shape: a saw no longer jumps, since it drives a
   velocity), a hand or a knob. `ViewState.reroot(reg, off, dt)` takes the
   frame's seconds; `app._reroot` passes them, on air and off.
-- **Drawn** in VIEW under Screen strokes, beside Additive, on a fractal only
-  (`ui_view.spec`, `Panel._view_stock`). The FRACTAL side-pane section
-  (`claude/serene-davinci-cgtewx`, unmerged on 2026-11-22: Detail, Reach,
-  Near, To the top) should take it when it merges, as it takes Additive.
-  This branch adds nothing that duplicates that one (row 1015).
+- **Drawn** as **Dive**, the first slider of the FRACTAL section, above
+  Detail (`ui_fractal.spec`, row 1015). The section (#466) merged into `main`
+  while this was built. It was drawn in VIEW until then; the merge moved it.
 
 ### 2.4 An endless dive's path (row 1014)
 
@@ -178,20 +177,21 @@ Plan 81's row owns `fractal.py`, `view.py`'s `reroot` and
 - `params.py`: the `view.frac_dive` param;
 - `view.py`: the `frac_dive` field;
 - `app.py`: `_reroot` and the off-air reroot pass the frame's seconds;
-- `ui_view.py`, `ui.py`: one line each, the slider beside Additive;
+- `ui_fractal.py`: the slider, one row;
+- `loadable.py`: `"dive"` in `FRACTAL_IDS` / `FRACTAL_OWN`;
 - `tools/fractal_dive_demo.py`: the demo;
-- the corpus loadables (`tests/corpus/loadable/*.json`, 25) and
-  `tests/fixtures/groups/party-noita-grouped.json`: each resaved through the
-  loader, which adds exactly one line, `"view.frac_dive": 0.0`. A new
-  saved param is in every save, as with `ghost.material` (#449);
 - `tests/test_deck_fade.py` (a stand-in view's `reroot` takes the new
-  arguments) and `tests/test_graph_legible.py` (the shape node has 43
-  params, not 42).
+  arguments), `tests/test_graph_legible.py` (the shape node has 47 params)
+  and `tests/test_fractal_grab.py::test_the_fractal_controls_are_the_looks_own`
+  (the `fractal` key holds `"dive"` too).
+
+No loadable patch that is not a fractal saves differently. The corpus and
+every fixture are byte for byte as they were.
 
 **Goldens.** None should move. No corpus loadable's shape is a fractal, and
 the golden harness draws one frame without stepping a dive. Only a fractal,
 after a step inside it, draws differently. The new param's default (0)
-changes no picture. A golden that moves is a fault: stop and report.
+changes no picture, and it isn't saved for a look that isn't a fractal. A golden that moves is a fault: stop and report.
 
 ## 6. Restart or hot reload
 

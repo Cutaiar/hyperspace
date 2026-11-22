@@ -8876,7 +8876,7 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 Plan 81. Headless: `tests/test_fractal_dive.py` (every fractal dived sixty levels at a fixed rate, and the sponge and the 5-cell three hundred: no re-root moves a point; the cell's middle stays near the screen's or, holding a point, the point never leaves it; a negative rate back to the whole shape; a grabbed shape dived into; the param routed, saved and loaded). The before/after pair and the alternative are in `plans/assets/81-fractal-dive/`, rendered offscreen on Mesa's software GL, not the rig. A restart after pulling.
 
-Setup for all: VIEW → shape **Menger sponge** (3D → Fractals); **Dive** is the slider under **Screen strokes**, beside **Additive**, on a fractal only.
+Setup for all: VIEW → shape **Menger sponge** (3D → Fractals); **Dive** is the first slider of the FRACTAL section, above **Detail**.
 
 **810. An endless dive.** **Dive** at +1 for two minutes, the shape turning. Then route an LFO to **Dive**, a saw, then a sine. *Pass:* it goes in and never stops; no jump at any level or at the saw's wrap; the picture stays full and centred on what it dives into, not sliding off to one side as before (`before.mp4` beside `after.mp4`). On the sine it dives in and climbs out smoothly. *Fail:* a jump, a stall, the screen half empty, or the picture creeping toward an edge.
 
@@ -8886,9 +8886,20 @@ Setup for all: VIEW → shape **Menger sponge** (3D → Fractals); **Dive** is t
 
 **813. A pan and a grab during a dive.** Diving at +1, pan with the stick, then (the grip on, plan 60) grab inside and pull, turn, let go. *Pass:* the pan moves the view and stays moved; the grab moves the space as before (DZ 685); the dive goes on about the middle of the screen; nothing jumps. *Fail:* a pan the dive takes back, a jump at a re-root while held, or a dive that leaves the middle.
 
-**814. Saved with a dive rate.** **Dive** at +0.5 deep in, save the look, load another, load it again. *Pass:* it opens in the same cell (row 889) and goes on diving at once at +0.5. A look saved before plan 81 opens with **Dive** at 0. *Fail:* the rate lost, or a dive that does not start.
+**814. Saved with a dive rate.** **Dive** at +0.5 deep in, save the look, load another, load it again. *Pass:* it opens in the same cell (row 889) and goes on diving at once at +0.5. A look saved before plan 81 opens with **Dive** at 0, and a look that is not a fractal saves no dive at all (its file unchanged). *Fail:* the rate lost, or a dive that does not start.
 
 **815. The settle's cost on the rig.** The SYSTEM page's frame time, diving at +2 into the **Sierpinski 5-cell**, the **Cantor dust** and the sponge, faces off, at the show's output size, against the same fractal held still. *Pass:* the frame rate holds; note any spike at a level (a re-root searches the cells; a cloud machine put the worst frame at about 4 ms). *Fail:* a dropped frame at each level.
+## EB. The FRACTAL section (rows 902–905, 2026-11-20)
+
+Plan 64. Headless: `tests/test_ui_pane.py::test_the_fractal_section_draws_its_controls_inside_the_pane` (every control drawn, inside the pane, at every layout) and `tests/test_fractal_grab.py` (Detail, Reach and Near change what is drawn, To the top, saved with the look). A restart after pulling (new fields on `ViewState`).
+
+Setup for all: the sections menu → **fractal**, VIEW's shape a fractal.
+
+**699. The section.** *Pass:* it says the shape, how many levels in, inside or outside, and the zoom, changing as you dive; Detail, Reach, Near, Additive and To the top are all there without scrolling; on a cube it says how to pick a fractal and shows no controls. *Fail:* a control missing, cut off, or a readout that doesn't follow the dive.
+
+**700. The controls, by eye.** A few levels into the Menger sponge and the 5-cell: drag **Detail** up and down, then **Reach**, then **Near**. *Pass:* Detail makes the cells split finer or coarser; Reach draws further into the shape or less; Near lets cells come closer before they dissolve, or fade sooner; none jumps or flickers, and the frame rate holds at the top of Detail on the rig. Save the look, load another and back: the three are as you left them. Say what ranges you want. *Fail:* a slider that does nothing, a jump, or a value not saved.
+
+**701. To the top.** Deep in, turned: press **To the top**. *Pass:* the whole shape, centred, at zoom 1, still turned as it was; a grabbed fractal comes home. *Fail:* a dive left behind, or the turn lost.
 
 ## What no test covers
 

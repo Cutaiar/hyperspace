@@ -51,6 +51,7 @@ from . import (
     ui_displays,
     ui_feel,
     ui_fields,
+    ui_fractal,
     ui_graph,
     ui_kit,
     ui_lfo,
@@ -73,7 +74,6 @@ from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
 from .control import Control
-from .fractal import FRACTALS as _FRACTALS
 from .geometry import SHAPES, geom, menu
 from .graph import (
     ALL_OUTPUTS,
@@ -845,7 +845,8 @@ META_SECTIONS = ("output", "audio", "analyzer", "hands")
 VIDEO_SOUND_REACHES = "Off air reacts to on air's video sound."
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-             "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist"]
+             "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist",
+             "fractal"]
 
 
 View = tuple[int, "str | None"]     # (a PAGE_KEYS index, the node selected in the selection view)
@@ -2807,6 +2808,10 @@ class Panel:
         if changed:
             self._graph_edit(lambda e: graphview.set_through(e, n, v), "output_said")
 
+    def _page_fractal(self, dt: float) -> None:
+        """The FRACTAL section (plan 64): `ui_fractal.page`."""
+        ui_fractal.page(self, dt)
+
     def _page_view(self, dt: float) -> None:
         """The VIEW section, on the kit (hyperspace/dkit) where it is there
         (`ui_view.page`); else `_view_stock`."""
@@ -2881,9 +2886,6 @@ class Panel:
         self._slider("view.lines_alpha", half)
         beside(strokes_w)
         self._check("view.screen_strokes")
-        if sh.name in _FRACTALS:
-            self._slider("view.frac_dive", imgui.get_content_region_avail().x)  # plan 81
-            self._check("view.frac_additive")      # plan 64: a fractal's line order
         # the count, and Fit beside it: whole copies only, framed to the screen
         fit_w = imgui.calc_text_size("Fit").x + imgui.get_frame_height() + 2 * imgui.get_style(
             ).item_inner_spacing.x
