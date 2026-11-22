@@ -1239,6 +1239,7 @@ class Renderer:
         self.rings: dict[str, Lookback] = {self.lookback.name: self.lookback}
         self.dreamer = Dreamer(ctx, self.lookback.state)
         self.fx = FxChain(ctx, fx)      # every effect node's programs and textures
+        self.fx.rings = self.rings      # plan 66: Time Displace reads a ring by name
         # the picture the faces show while something other than the
         # pattern is wired into them (plan 33 R: `shape.faces`, painted by
         # the graph at FACE_PIC², `graph.Shape.prepare`). Nothing is

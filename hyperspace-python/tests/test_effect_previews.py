@@ -276,12 +276,13 @@ def test_a_file_reads_aux_when_its_code_calls_it_and_not_in_a_comment():
     assert not fx.reads_aux("vec4 effect(vec2 uv) { float auxiliary(uv); return src(uv); }")
 
 
-def test_on_this_build_only_blend_and_displace_read_their_aux():
+def test_on_this_build_the_files_that_read_their_aux():
     """The finding the plan records (2026-11-19): every effect node has an aux
     port, and two files read it. A file that starts reading one is found by
-    `fx.reads_aux`; this list is the record, to be changed with the file."""
+    `fx.reads_aux`; this list is the record, to be changed with the file
+    (plan 66: Time Displace reads its aux as a field, the third)."""
     st = FxState()
-    assert sorted(n for n, s in st.files.items() if s.aux) == ["blend", "displace"]
+    assert sorted(n for n, s in st.files.items() if s.aux) == ["blend", "displace", "timedisplace"]
     assert st.files["blend"].signature() == fx.parse("blend", st.files["blend"].source).signature()
 
 

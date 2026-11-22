@@ -88,6 +88,29 @@ uses it.
 | Action | `shift` · `zoom` · `stretch` (one way; low numbers pull a line into streaks) · `turn` · `bulge` (a lens inside the cell's inscribed circle, still at its rim, so cells stay joined) · `swap` (blocks pair off and each pair trades places: every cell is shown once, none twice) |
 | Angle, Split | The way shift and stretch go, and whether swap trades across or up and down; the colour split |
 
+## Time Displace (`timedisplace.glsl`, plan 66)
+
+The same model in time instead of space: a field says, for every pixel,
+how long ago it shows the picture, and the past is a look-back's frames
+(the ring the echo nodes read). It has a Python half (`timedisplace.py`,
+`// @hook`) that binds that ring. Wire a look-back with its capture, then
+Time Displace anywhere after the picture.
+
+| Knob | What it does |
+| --- | --- |
+| Span | How far back the field's whole value reaches, seconds (0 … 8; an amount: 0 is the picture) |
+| Field | `line` a ramp across the frame along Angle (the slit-scan) · `rings` from the centre · `spokes` round it · `flat` every pixel Span ago (an echo) · `aux` the aux picture's brightness, black now |
+| Repeat, Drift | The ramp laid that many times; swept on, repeats a second (a `@clock`) |
+| Steps, Flip | Bands; the field end for end |
+| Between | Two of the ring's frames blended by time, or the nearer: hard bands |
+| Look-back | Which look-back's frames: 1 `lookback`, 2 `lookback.2` … |
+| Centre X/Y | Rings and spokes |
+
+The ring holds 32 frames, one every `dream.gap` (about a second at the
+default), at `dream.res` on the short side, so the past is softer than the
+live picture and a Span past the ring reads its oldest frame. With no ring to
+read it shows its input. Plan 66 (`plans/66-fields.md`) is where fields go next.
+
 ## Test card (`testcard.glsl`)
 
 A generator, not a distortion: a grid, a cross, a circle and six colour

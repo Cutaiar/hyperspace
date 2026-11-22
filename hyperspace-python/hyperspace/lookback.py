@@ -886,6 +886,14 @@ class Lookback:
         """How many commits the ring holds (plan 34 E: an echo's words)."""
         return len(self._captures)
 
+    def frames(self, now: float | None = None) -> list[tuple[int, float]]:
+        """(slot, age in seconds) of every commit the ring holds, newest
+        first, aged against `now` (default: the frame being drawn) — all of
+        them, not only the `echoes` the trail composites (plan 66: Time
+        Displace reads the past at any age the ring reaches)."""
+        now = self.now() if now is None else now
+        return [(slot, now - t) for slot, t in reversed(self._captures)]
+
     def echo_slot(self, k: int) -> int | None:
         """The atlas slot of the k-th newest commit (`lookback.echo.<k>`,
         plan 34 E, row 361; 1 the newest), or None while the ring does not

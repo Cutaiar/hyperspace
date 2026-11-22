@@ -891,6 +891,15 @@ here; overturn → the change, then the same.
 | 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
 | 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
 | 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
+| 902 | Plan 66: Time Displace is an effect file with a Python half (`shaders/fx/timedisplace.glsl`, `// @hook timedisplace`, `hyperspace/timedisplace.py`), not a graph node kind: no schema move; its look-back is a knob (**Look-back** 1 … 8: `lookback`, `lookback.<n>`), read through the renderer's rings handed to its chain (`FxChain.rings`) | 699, 703 | (rec) — plan 66 §5, Q8 |
+| 903 | Plan 66: until fields are a wire, Time Displace carries its own field, 0 … 1 of Span: line (the slit-scan, along Angle), rings, spokes, flat (an echo), aux (the aux picture's brightness: black now, white Span ago); Repeat, Drift (a `@clock`), Steps, Flip | 699, 700 | (rec) — plan 66 §5, Q4 |
+| 904 | Plan 66: a time between two of the ring's frames blends them by time (Between blend) or takes the nearer (nearest); between now and the newest frame it blends its own input, so Span 0 and a field of 0 are its input byte for byte; Span is an amount (0 … 8 s, zero-safe log taper) | 701 | (rec) — plan 66 §5 |
+| 905 | Plan 66: a time older than the ring holds reads its oldest frame (the ring holds 32 × `dream.gap`: about 1 s at the default, 8 s at the most); no ring of that number, an empty one or one being remade reads its input | 702 | (rec) — plan 66 §5 |
+| 906 | Plan 66, open: is a field its own wire (`field`, RG32F, signed; a one-way grey promotion into picture ports; a `picture` converter) or a picture read by convention, as Displace's aux is | — | **pending the owner** (Q1; rec: its own wire) |
+| 907 | Plan 66, open: the word. "Field" is the instance field today (`field.py`, `ui_fields.py`); the new wire as **field** and the copies' layout renamed with SEM, or the new thing a **map** | — | **pending the owner** (Q2) |
+| 908 | Plan 66, open: stage 2's reach. Keep `wave.glsl` and `blocks.glsl` and add patches proven byte-identical, or retire them with a migration; Shake stays its file (not one field) | — | **pending the owner** (Q3; rec: keep) |
+| 909 | Plan 66, open: memory for the past at full size (a texture-array ring: 265 MB for 32 frames at 1080p) and the look-ahead window for files (128 MB a channel at half its size) | 703 | **pending the owner** (Q5, Q6) |
+| 910 | Plan 66, open: the wavetable — a render node for pictures and fields, a modifier for curves — and the existing "Wave Table" renamed: label **Stamp Trail** now, `fx.wavetable.*` → `fx.stamptrail.*` in the next format-lane migration | — | **pending the owner** (Q7) |
 | 872 | Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema | — | owner (2026-11-19, as recommended) |
 | 873 | Plan 63: every term a param (owner decision 1). Slice s lays the pixel's point q into the terms as c = mix(q, c, s), z₀ = mix(z₀, q, s): 0 the Mandelbrot set, 1 a Julia set. Power a whole number 2–8, an int param; a fractional p not built | 671 | owner (2026-11-18) — the mapping (rec) |
 | 874 | Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go | 669, 670 | owner (2026-11-19, as recommended): velocity, not displacement |
@@ -15227,7 +15236,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 - **What.** The picker groups by `previews.family_of`: a file's `@family` line, else the band its `@order` is in (`ORDER_FAMILIES`, one table). No file says `@family` yet; the shader roundup writes them. A family declares nothing, so it is outside `EffectSpec.signature`. The aux port is read from the files the same way: every effect node (and copy) had an `aux` port, and only Blend and Displace read it. GRAPH now draws it only when the file's code calls `aux(` or `aux_luma(` outside a comment (`fx.reads_aux`, `EffectSpec.aux`), or when a saved wire goes into it — that wire loads, is drawn and can be deleted. Nothing about the file format changes: the port still exists, it is only not offered where it does nothing.
 - **Answer.** (rec) — the builder's, plan 65 (2026-11-19); the aux port's, the owner's ask of 2026-11-19 ("for a lot of the effects, the auxiliary input doesn't really do anything").
-- **Built.** `fx.EffectSpec.family`, `fx.EffectSpec.aux`, `fx.reads_aux`, `fx._DIRECTIVE`, `graphview.aux_shown`, `previews.family_of`, `previews.families`, `previews.ORDER_FAMILIES`; `tests/test_effect_previews.py::test_a_files_family_is_its_at_family_else_its_order_band`, `::test_the_groups_come_from_the_files_in_family_order`, `::test_every_shipped_file_has_a_family_and_the_test_card_is_a_generator`, `::test_a_file_reads_aux_when_its_code_calls_it_and_not_in_a_comment`, `::test_on_this_build_only_blend_and_displace_read_their_aux`, `tests/test_aux_ports.py`.
+- **Built.** `fx.EffectSpec.family`, `fx.EffectSpec.aux`, `fx.reads_aux`, `fx._DIRECTIVE`, `graphview.aux_shown`, `previews.family_of`, `previews.families`, `previews.ORDER_FAMILIES`; `tests/test_effect_previews.py::test_a_files_family_is_its_at_family_else_its_order_band`, `::test_the_groups_come_from_the_files_in_family_order`, `::test_every_shipped_file_has_a_family_and_the_test_card_is_a_generator`, `::test_a_file_reads_aux_when_its_code_calls_it_and_not_in_a_comment`, `::test_on_this_build_the_files_that_read_their_aux`, `tests/test_aux_ports.py`.
 - **Judge it.** 693 (the aux port); the roundup's families will be judged with it.
 
 ### 899. The search, and Enter
@@ -15250,6 +15259,69 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** pending the owner.
 - **Built.** Nothing: a question. The options are in `docs/plans/65-effect-previews.md`, "What the previews show at the defaults".
 - **Judge it.** 689, by eye on the contact sheet and in the picker.
+### 902. Time Displace is an effect with a Python half
+
+- **What.** Plan 66 stage 3a: each pixel reads a look-back's past at `now − field × Span`. An effect file with a Python half, as the Mandelbrot is (row 872): `timedisplace.glsl` says `// @hook timedisplace`, and `timedisplace.run` binds the ring's atlas on unit 2 and uploads every frame the ring holds, newest first (`Lookback.frames`: not only the `echoes` the trail composites). The renderer hands its chain its rings (`FxChain.rings` is `Renderer.rings`); a chain of its own (the previews', the card's) has none and shows its input. The other way was a graph node kind like the echo, its look-back a wire: a new node kind is a format move.
+- **Answer.** (rec) — the builder's, plan 66 (2026-11-22); Q8 asks the owner to keep it.
+- **Built.** `shaders/fx/timedisplace.glsl`, `timedisplace.run`, `ring_of`, `frames_of`, `ring_name`, `Lookback.frames`, `FxChain.rings`, `fx.HOOKS`; `tests/test_time_displace.py::test_the_renderer_hands_its_chain_its_rings`, `::test_in_a_graph_it_reads_the_look_back_that_graph_records`.
+- **Judge it.** 699, 703.
+
+### 903. Its own field, until fields are a wire
+
+- **What.** Field: line (a ramp across the frame along Angle, edge to edge: the slit-scan), rings (from Centre out to the far corner), spokes (round it), flat (every pixel Span ago: the echo node's constant field), aux (the brightness of the picture in its aux: black now, white Span ago; one-sided, since the live ring has no future). Repeat lays the ramp that many times; Drift sweeps it (`@clock u_drift_t`); Steps flattens it into bands; Flip turns it end for end. Displace reads mid-grey as zero instead; a field wire (stage 3b) would carry signed time.
+- **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
+- **Built.** `timedisplace.glsl`'s `when`; `tests/test_time_displace.py::test_a_line_is_the_slit_scan_now_at_one_edge_the_past_at_the_other`, `::test_rings_run_from_now_at_the_centre`, `::test_the_aux_brightness_is_the_field`, `::test_steps_and_nearest_make_hard_bands`, `::test_drift_sweeps_the_ramp`.
+- **Judge it.** 699, 700.
+
+### 904. Between frames, and Span 0
+
+- **What.** A pixel whose time falls between two of the ring's frames blends them by time, or (Between nearest) takes the nearer: hard bands. Between now and the newest frame it blends its own input with that frame, so a field of 0 is its input, sharp, and Span 0 is the picture again, byte for byte. Span is an `amount` param, 0 … 8 s (32 frames at the largest gap).
+- **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
+- **Built.** `timedisplace.glsl`'s `effect`; `tests/test_time_displace.py::test_span_zero_is_its_input_byte_for_byte`, `::test_between_two_frames_it_blends_by_time_or_takes_the_nearer`, `::test_between_now_and_the_newest_frame_it_blends_its_input`, `::test_the_flat_field_at_a_frames_age_shows_that_frame`.
+- **Judge it.** 701.
+
+### 905. Past the ring, and nothing to read
+
+- **What.** A time older than the oldest frame reads the oldest. The ring holds 32 frames one `dream.gap` apart (1/30 s by default: about a second; 8 s at 0.25 s), so reaching further back means a coarser gap; Span's tip says so. With no look-back of that number in the graph, a ring that holds nothing, or one about to be made again for a `dream.res` change, the pass is its input. Its past is the ring's: 8-bit, at `dream.res` on the short side (Q5 asks for a full-size ring).
+- **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
+- **Built.** `timedisplace.frames_of`; `tests/test_time_displace.py::test_older_than_the_ring_holds_is_its_oldest`, `::test_with_nothing_to_read_it_is_its_input`, `::test_a_ring_being_remade_reads_nothing`.
+- **Judge it.** 702.
+
+### 906. Is a field its own wire
+
+- **What.** Plan 66 Q1. Its own wire, as a mask is (plan 39): two float32 channels, signed and unbounded, at the frame's size; into a picture port it reads as grey (Displace's mid-grey convention), one way; a picture becomes one only through the `picture` generator. Or a picture read by convention: no graph change, fields ride the half-float pool about mid-grey, clamped at every 8-bit crossing, and stage 2 is "within a level", not byte for byte.
+- **Answer.** pending the owner. Recommended: its own wire.
+- **Built.** Nothing.
+- **Judge it.** No hand check.
+
+### 907. The word "field"
+
+- **What.** Plan 66 Q2. `field.py` is the instance field (where each copy sits), `ui_fields.py` its panel. The glossary is signed and renames ride SEM. Either the new wire is **field** and the copies' layout is renamed in prose now and in code with SEM, or the new thing is a **map**.
+- **Answer.** pending the owner.
+- **Built.** Nothing.
+- **Judge it.** No hand check.
+
+### 908. Stage 2's reach
+
+- **What.** Plan 66 Q3. Wave and Blocks are pure offset fields, so each can be a generator and Displace with the same bytes (a float32 field read at the texel centre, the same `pushed`). Shake is not one field: Smear averages eight phases and Split reads three. Keep the files and add the patches proven identical, or retire the files with a migration in the format lane.
+- **Answer.** pending the owner. Recommended: keep the files now.
+- **Built.** Nothing.
+- **Judge it.** No hand check.
+
+### 909. Memory for the past and the future
+
+- **What.** Plan 66 Q5 and Q6. A full-size look-back ring needs a texture array (the atlas is capped by the largest texture): 32 × 1920 × 1080 × 4 = 265 MB, 64 frames 530 MB. The look-ahead for a file channel is a decoded window around the playhead: 2 s at 30 fps is 498 MB at 1080p, 124 MB at 960 × 540. Recommended: measure first; a 128 MB budget a channel at half its size.
+- **Answer.** pending the owner.
+- **Built.** Nothing.
+- **Judge it.** 703 (what the ring's size looks like today).
+
+### 910. The wavetable, and Stamp Trail
+
+- **What.** Plan 66 Q7. A wavetable is a bank of entries of one kind and a Position that crossfades the two neighbours: a render node (a switch that blends, only two inputs built) for pictures and fields, a modifier for curves. The existing "Wave Table" effect stamps the picture along paths; renamed **Stamp Trail**: the label now (not saved), the file and `fx.wavetable.*` ids in the next format-lane migration with a backup and an end-to-end test.
+- **Answer.** pending the owner.
+- **Built.** Nothing.
+- **Judge it.** No hand check.
+
 ### 872. The Mandelbrot is an effect file with a Python half
 
 - **What.** Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema.

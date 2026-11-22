@@ -105,7 +105,7 @@ from typing import Any
 
 import moderngl
 
-from . import mandel, tapers
+from . import mandel, tapers, timedisplace
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 
 FX_DIR = Path(__file__).parent / "shaders" / "fx"
@@ -135,8 +135,9 @@ RELOAD_EVERY = 30               # frames between mtime checks of the folder
 # the pass (`run(chain, name, prog, vao, src, dst)`, every uniform of the
 # file set) and the effect's drives (`advance(spec, values, dt)`, while it
 # is live). One so far: the Mandelbrot, whose reference orbit, render size
-# and tile pre-passes a fragment shader alone cannot hold.
-HOOKS = {"mandel": mandel}
+# and tile pre-passes a fragment shader alone cannot hold. Plan 66: Time
+# Displace, whose past is a look-back's ring (`FxChain.rings`).
+HOOKS = {"mandel": mandel, "timedisplace": timedisplace}
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock|family|hook)\s+(.*?)\s*$")
@@ -988,6 +989,10 @@ class FxChain:
         self._frame = 0
         self.opaque = False     # the ground is opaque: every pass writes alpha 1 (Renderer.draw)
         self.mandel = None      # plan 63: `mandel.Gl`, the hook's GL objects, made on first use
+        # plan 66: the renderer's look-back rings by name (`Renderer.rings`,
+        # the same dict), read by Time Displace's hook; None on a chain of
+        # its own (the previews', the card's), where it reads its input
+        self.rings: dict | None = None
         self._build_copy()
 
     def _build_copy(self) -> None:
