@@ -35,9 +35,7 @@ def save_text(r, name):
 def test_channel_params_registered(rig):
     reg = rig.reg
     media = [p.id for p in reg if p.id.startswith("media.")]
-    # eight params a channel (plan 45 V2: audio, gain), and plan 66's seven
-    # for black is clear (tests/test_media_key.py)
-    assert len(media) == 120
+    assert len(media) == 64      # eight params a channel (plan 45 V2: audio, gain)
     for c in CHANNELS:
         slot = reg[f"media.{c}.slot"]
         assert slot.kind is Kind.CONTINUOUS and slot.integer and (slot.lo, slot.hi) == (0, 15)

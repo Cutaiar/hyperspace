@@ -187,6 +187,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     UNITS,
     UNITS_KEY,
     declare_cuts,
+    declare_keys,
     declare_lookbacks,
     declare_mattes,
     declare_resizes,
@@ -195,6 +196,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     fx_files,
     is_cut_id,
     is_instance_id,
+    is_key_id,
     is_lookback_id,
     is_lookback_knob,
     is_matte_id,
@@ -479,10 +481,10 @@ class GraphSection:
         """The node instances `spec` declares (None: none), by kind — what a landing
         settles: ``fx`` (the effect instances that exist, `FxState.held`'s word),
         ``switch``, ``resize``, ``lookback``, and (plan 39 T2–T4) ``matte``, ``cut``,
-        ``segment``."""
+        ``segment``; (plan 66) ``key``, the nodes keyed."""
         if spec is None:
             return {"fx": frozenset(), "switch": [], "resize": [], "lookback": [],
-                    "matte": [], "cut": [], "segment": []}
+                    "matte": [], "cut": [], "segment": [], "key": []}
         return {"fx": frozenset(spec.effect_names()),
                 "switch": [sw.name for sw in spec.switches],
                 "resize": [z.name for z in spec.resizes],
@@ -490,7 +492,9 @@ class GraphSection:
                 # plan 39 T2–T4: the mattes, cuts and segments, by their entries
                 "matte": [m.name for m in spec.mattes],
                 "cut": [c.name for c in spec.cuts],
-                "segment": [x.name for x in spec.segments]}
+                "segment": [x.name for x in spec.segments],
+                # plan 66: the nodes the graph keys (black is clear)
+                "key": list(getattr(spec, "keys", ()))}
 
     def _settle(self, spec: GraphSpec | None) -> None:
         """Declare `spec`'s instances and drop the others'."""
@@ -511,6 +515,8 @@ class GraphSection:
         declare_cuts(reg, names["cut"])
         # plan 39 T4: each segment's values, by its entry, as a cut's
         declare_segments(reg, names["segment"])
+        # plan 66: each keyed node's black is clear, by the section's `keys`
+        declare_keys(reg, names["key"])
         # plan 36 T4: each extra look-back's own ring and trail, by its entry
         declare_lookbacks(reg, names["lookback"])
 
@@ -956,7 +962,7 @@ class LoadedPatch:
                   and not is_instance_id(k) and not is_switch_id(k)
                   and not is_resize_id(k) and not is_lookback_id(k)
                   and not is_matte_id(k) and not is_cut_id(k)
-                  and not is_segment_id(k)}
+                  and not is_segment_id(k) and not is_key_id(k)}
         doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PATCH, "values": values,
                "routes": [], "macros": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
@@ -1072,7 +1078,7 @@ class LoadedPatch:
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
             elif (is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid)
                   or is_lookback_id(pid) or is_matte_id(pid) or is_cut_id(pid)
-                  or is_segment_id(pid)
+                  or is_segment_id(pid) or is_key_id(pid)
                   or graphmigrate.effect_of(pid) is not None):
                 # (plan 33 S: a switch's `select` too — its graph declares it;
                 # plan 34 Z: and a resize's values (plan 39 T2: a matte's, T3: a

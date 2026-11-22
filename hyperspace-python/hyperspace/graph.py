@@ -152,6 +152,7 @@ from .view import (
     SEGMENT_MODES,
     SEGMENT_QUALITY,
     CutState,
+    KeyState,
     MatteState,
     ResizeState,
     SegmentState,
@@ -198,6 +199,10 @@ HANDS_IN = ("layer", "scene")
 # or screened, `src + dst·(1 − src)` — black adds nothing, nothing passes
 # white. Appended, never inserted (a saved composite names its blend)
 BLENDS = ("over", "add", "depth", "screen")
+# plan 66, black is clear: the graph section's key naming the picture nodes
+# whose dark parts are clear (`GraphSpec.keys`), written only when one is
+KEYS_KEY = "keys"
+KEY_NOT_A_NODE = "keys: {name!r} is not a node of the frame — dropped"
 # what a blend says in words, after the layer it lays (over says nothing)
 BLEND_WORDS = {"over": "", "add": "added", "depth": "depth-aware", "screen": "screened"}
 
@@ -346,6 +351,9 @@ class Wiring:
     # (its entry's `laid`): how that layer is laid on at an output — any
     # other layer is laid over
     laid_on: int = 1
+    # plan 66: the picture nodes keyed, black is clear (`GraphSpec.keys`):
+    # each built wrapped in a `KeyNode` (a channel keyed in its own fit pass)
+    keys: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.backdrop, str) or (
@@ -2269,6 +2277,8 @@ class GraphSpec:
     # plan 35 T3 (row 380): the hands entry `laid` sits on in a wired frame,
     # where any hands node may have a layer (1 outside one: the layer node's)
     laid_on: int = 1
+    # plan 66: the picture nodes keyed, black is clear (`"keys"`), sorted
+    keys: tuple[str, ...] = ()
 
     @property
     def frame_nodes(self) -> tuple:
@@ -2296,7 +2306,7 @@ class GraphSpec:
             return Wiring(draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
                           blend=self.laid, placed=placed, wires=self.wires,
                           composites=self.composites(), wired=True, copies=self.copies,
-                          laid_on=self.laid_on)
+                          laid_on=self.laid_on, keys=self.keys)
         run, wires = None, self.wires
         if any(w.src == "frame" or w.dst == "fx.image" for w in wires):
             # plan 33 R: the section says the run (every loadable patch loaded on
@@ -2452,9 +2462,12 @@ class GraphSpec:
             nodes.append(to() if to is not None else {"kind": kind, **dict(got)})
         # plan 35 F: a wired frame says so first
         head = {FRAME_KEY: WIRED_FRAME} if self.wired else {}
+        # plan 66: the keyed nodes last, and only when there are any (a
+        # section with none is the bytes it was)
+        tail = {KEYS_KEY: list(self.keys)} if self.keys else {}
         if not self.wires:                     # N4: a graph with no wires is D1's, short
-            return {**head, "nodes": nodes}
-        return {**head, "nodes": nodes, "wires": [w.to_json() for w in self.wires]}
+            return {**head, "nodes": nodes, **tail}
+        return {**head, "nodes": nodes, "wires": [w.to_json() for w in self.wires], **tail}
 
 
 def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *,
@@ -2483,10 +2496,10 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
     as it always was: it is only ever a migration's input."""
     if not isinstance(section, dict):
         raise GraphError(f"not an object but {type(section).__name__}")
-    extra = sorted(set(section) - {"nodes", "wires", FRAME_KEY})
+    extra = sorted(set(section) - {"nodes", "wires", FRAME_KEY, KEYS_KEY})
     if extra:
-        raise GraphError(f"no key {', '.join(map(repr, extra))} (it takes nodes, wires and "
-                         "frame)")
+        raise GraphError(f"no key {', '.join(map(repr, extra))} (it takes nodes, wires, "
+                         "frame and keys)")
     # plan 35 F: the marker — a wired frame, its one value
     if FRAME_KEY in section and section[FRAME_KEY] != WIRED_FRAME:
         raise GraphError(FRAME_VALUE.format(value=section[FRAME_KEY]))
@@ -2589,9 +2602,11 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
         # plan 36 T3: hands 1 is always there, and a `/7` writes its entry
         # (`to_json`): read with or without it, the spec is one spec
         hands.setdefault(1, HandsAt(1))
+    keys = _read_keys(section.get(KEYS_KEY, []), wired, notes)
     spec = GraphSpec(hands=tuple(hands[n] for n in sorted(hands)),
                      history=history if history is not None else HistoryAt(),
-                     effects=effects_at, others=tuple(others), notes=tuple(notes), wired=wired)
+                     effects=effects_at, others=tuple(others), notes=tuple(notes), wired=wired,
+                     keys=keys)
     try:
         wiring = spec.wiring()
     except ValueError as err:
@@ -2642,6 +2657,22 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
     except ValueError as err:
         raise GraphError(str(err)) from err
     return spec
+
+
+def _read_keys(raw: Any, wired: bool, notes: list[str]) -> tuple[str, ...]:
+    """The section's `"keys"` (plan 66): the node names keyed, sorted, each
+    once. A list of anything else is refused (`GraphError`); a name that is
+    no node of a wired frame is a note and dropped (the rest stands). An
+    unwired (old) section keys nothing."""
+    if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+        raise GraphError(f"{KEYS_KEY} is not a list of node names")
+    out = set()
+    for name in raw:
+        if not wired or wire_node_kind(name, wired=True) is None:
+            notes.append(KEY_NOT_A_NODE.format(name=name))
+        else:
+            out.add(name)
+    return tuple(sorted(out))
 
 
 def _through_missing(raw: Any, ctx: _WireCtx, d1: list[Wire], wires: tuple[Wire, ...],
@@ -3212,6 +3243,19 @@ class Frame:
         `matte[.n].*` params') — what `MatteNode` makes its mask by, a value,
         never a rebuild (getattr: a view state from before the matte has none)."""
         return getattr(self.root.s, "mattes", None) or {}
+
+    @property
+    def keys(self) -> dict[str, Any]:
+        """Plan 66: each keyed node's black is clear this frame (node name →
+        its `view.KeyState`): the view state's (`ViewState.keys`, the
+        `key.<node>.*` params') — a value, never a rebuild (getattr: a view
+        state from before the key has none)."""
+        return getattr(self.root.s, "keys", None) or {}
+
+    def clear(self, name: str) -> KeyState:
+        """Node `name`'s black is clear this frame (`keys`), its defaults
+        while its knobs are not declared yet."""
+        return self.keys.get(name) or _KEY_DEFAULT
 
     @property
     def cuts(self) -> dict[str, Any]:
@@ -3930,6 +3974,10 @@ class MediaNode(Node):
         super().__init__(name, after)
         self.channel = channel
         self.alpha_of = alpha_of
+        # plan 66: the graph's name this channel is keyed under (black is
+        # clear, `Wiring.keys`) — keyed in its own fit pass, no pass more —
+        # or None
+        self.keyed: str | None = None
 
     def opacity(self, frame: Frame) -> float:
         """The opacity folded into the picture this frame: the `alpha_of`
@@ -3943,8 +3991,13 @@ class MediaNode(Node):
         if key not in frame.data:
             fit = getattr(frame.r, "_media_fit", None)
             with frame.timed(self.name):
-                frame.data[key] = (fit(self.channel, frame.size, self.opacity(frame))
-                                   if fit is not None else None)
+                if fit is None:
+                    frame.data[key] = None
+                elif self.keyed is None:
+                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame))
+                else:
+                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame),
+                                          key=frame.r.key_of(frame.clear(self.keyed)))
         return frame.data[key]
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
@@ -5729,6 +5782,51 @@ class Capture(Node):
 
 # ---------------------------------------------------------------- composite
 
+_KEY_DEFAULT = KeyState()
+
+
+class KeyNode(Node):
+    """Black is clear (plan 66) on any picture: `image`'s picture with its
+    dark parts transparent, by the node's knobs (`key.<of>.*`, `Frame.clear`),
+    through `MaskPasses.key` into a frame texture of its own, once a frame.
+    The build puts one after every node its graph keys (`Wiring.keys`) but
+    a channel (keyed in its fit pass), so every consumer of that node reads
+    it keyed; `of` is the keyed node's graph name. Its opacity, depth and
+    whether it reads anything are its picture's. It makes no mask and reads
+    none: a picture's own transparency, not a mask (row 440)."""
+
+    KIND = "key"
+    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
+    OUTPUT = IMAGE
+
+    def __init__(self, name: str, of: str, image: Node | None = None):
+        super().__init__(name, image=image)
+        self.of = of
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        if self.name not in frame.data:
+            src = self.inputs["image"]
+            tex = picture(frame, src) if src is not None else None
+            if tex is not None:
+                with frame.timed(self.name):
+                    tex = frame.r.mask_passes().key(tex, frame.key(self.name), frame.size,
+                                                    frame.clear(self.of))
+            frame.data[self.name] = tex
+        return frame.data[self.name]
+
+    def depth(self, frame: Frame) -> moderngl.Texture | None:
+        src = self.inputs["image"]
+        return src.depth(frame) if src is not None else None
+
+    def alpha(self, frame: Frame) -> float:
+        src = self.inputs["image"]
+        return src.alpha(frame) if src is not None else 1.0
+
+    def reads(self, frame: Frame) -> bool:
+        src = self.inputs["image"]
+        return src is not None and src.reads(frame)
+
+
 class Composite(Node):
     """`over` laid on `under` (`Renderer.lay`), premultiplied at `over`'s
     opacity (`ghost.alpha` for the hands' layer): `blend` "over" (today's
@@ -6885,8 +6983,21 @@ class _Build:
         if name in self.made:
             return self.made[name]
         self.made[name] = None                       # (a loop reads nothing: refused at read)
-        got = self.made[name] = self._make(name)
+        got = self.made[name] = self._keyed(name, self._make(name))
         return got
+
+    def _keyed(self, name: str, got: Node | None) -> Node | None:
+        """Plan 66: `got`, the node built for `name`, keyed when the wiring
+        keys `name` (black is clear) and it makes a picture — a channel in
+        its own fit pass (`MediaNode.keyed`), anything else read through a
+        `KeyNode` its consumers read instead."""
+        if (got is None or name not in getattr(self.wiring, "keys", ())
+                or got.OUTPUT != IMAGE or isinstance(got, KeyNode)):
+            return got
+        if isinstance(got, MediaNode) and got.alpha_of is None:
+            got.keyed = name
+            return got
+        return self._keep(KeyNode(f"{name}(key)", name, image=got))
 
     def _make(self, name: str) -> Node | None:
         kind = _kind(name)

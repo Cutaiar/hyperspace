@@ -102,6 +102,7 @@ from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
 from .tapers import clamp as _clamp
 from .view import (
+    KEY_MEASURES,
     MATTE_FEATHER,
     MATTE_FROM,
     RESIZE_ASPECTS,
@@ -113,6 +114,7 @@ from .view import (
     SEGMENT_MODES,
     SEGMENT_QUALITY,
     CutState,
+    KeyState,
     MatteState,
     ResizeState,
     SegmentState,
@@ -172,7 +174,7 @@ F_KEYS = 8
 # changes what its own `axis:L.*` / `axis:R.*` routes do. The pad's feel (`desk.pad.*`)
 # is about the hardware, and stays the meta controller's
 PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
-                      "backdrop", "switch", "resize", "matte", "cut", "segment", "ghost",
+                      "backdrop", "switch", "resize", "matte", "cut", "segment", "key", "ghost",
                       "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "mod")
 # `grip` (plan 60, the hand rig): a patch's own, each deck's — the owner, 2026-11-10,
 # testing it: "this really should be per preset". The on-air deck's acts on the one world
@@ -1921,6 +1923,96 @@ def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 66: black is clear, on any picture node ----
+KEY_GROUP = "key"
+KEY_PREFIX = "key."
+KEY_FEATHER = MATTE_FEATHER         # the most px a key's feather blurs by (masks.MAX_FEATHER)
+# `key.<node>.<k>`: the knobs of a node the loadable patch's graph keys
+# (`"keys"`), in the panel's order
+_KEY_KEYS = ("level", "soft", "measure", "feather", "keep", "invert")
+_KEY_ID = re.compile(r"key\.(.+)\.(" + "|".join(_KEY_KEYS) + ")")
+_KEY_WORDS = {"level": "clear level", "soft": "clear softness", "measure": "clear measure",
+              "feather": "clear feather", "keep": "keep colour", "invert": "white is clear"}
+_KEY_TIPS = {
+    "level": "Black is clear on {name}: at or below this brightness a pixel is clear.",
+    "soft": "How far above the level a pixel of {name} takes to become solid: 0 a hard "
+            "edge, higher a gentler one. Pure black is always clear.",
+    "measure": "What counts as bright in {name}: peak, the largest of red, green and blue "
+               "(a saturated colour stays); luma, the eye's brightness (a deep blue goes "
+               "with the black).",
+    "feather": "Blurs {name}'s clear edge by this many pixels. Two passes more while "
+               "above 0.",
+    "keep": "Keep colour: a dim glow in {name} stays as bright over what is under it "
+            "(only the alpha comes from the brightness). Off, colour goes with alpha and "
+            "the edges dim. Not used with white is clear.",
+    "invert": "{name}'s white is clear instead of its black.",
+}
+
+
+def key_ids(name: str) -> list[str]:
+    """Keyed node `name`'s knobs (`scene` → `key.scene.level` …), in order."""
+    return [f"{KEY_PREFIX}{name}.{k}" for k in _KEY_KEYS]
+
+
+def is_key_id(pid: str) -> bool:
+    """Is `pid` a keyed node's knob — one that exists only while a loadable
+    patch's graph keys that node (plan 66)? A load sorts such ids against the
+    graph it lands, as it does a matte's."""
+    return bool(_KEY_ID.fullmatch(pid))
+
+
+def _key_state(r: Registry) -> dict[str, KeyState]:
+    """The states the key params write, node name → `KeyState`: the view
+    state's (`ViewState.keys`), kept by `build_registry` as `r.key_state`; a
+    dict of the registry's own for one built without a view (as `_cut_state`)."""
+    state = getattr(r, "key_state", None)
+    if not isinstance(state, dict):
+        state = {}
+        vars(r)["key_state"] = state    # (a field the registry does not declare)
+    return state
+
+
+def declare_keys(r: Registry, names: Iterable[str]) -> list[str]:
+    """Black is clear's knobs (plan 66), as `declare_mattes` does the
+    mattes': for each node `names` keys, `level` 0–1 (0.02), `soft` 0–1
+    (0.1), `measure` (peak, luma), `feather` 0–32 px (0), `keep` (on) and
+    `invert` (off) — group `key` (a patch group), modulatable — over a
+    `KeyState` made when first declared and kept while the name stays;
+    those of every node no longer keyed dropped, with their states. Returns
+    the ids that appeared or went."""
+    state = _key_state(r)
+    want = {n: key_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == KEY_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        if st is None:
+            st = state[name] = KeyState()
+        for pid, key in zip(ids, _KEY_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {_KEY_WORDS[key]}"
+            tip = _KEY_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key == "measure":
+                r.enum(pid, label, *got, list(KEY_MEASURES), group=KEY_GROUP, tip=tip)
+            elif key in ("keep", "invert"):
+                r.toggle(pid, label, *got, group=KEY_GROUP, tip=tip)
+            elif key == "feather":
+                r.continuous(pid, label, *got, lo=0.0, hi=KEY_FEATHER, group=KEY_GROUP,
+                             fmt=lambda v: f"{v:.0f} px", tip=tip)
+            else:
+                r.continuous(pid, label, *got, lo=0.0, hi=1.0, group=KEY_GROUP,
+                             fmt=lambda v: f"{v:.3f}", tip=tip)
+            changed.append(pid)
+    return changed
+
+
 # ---- plan 39 T4: the segments' values ----
 SEGMENT_GROUP = "segment"
 _SEGMENT_KEYS = ("mode", "quality", "feather", "smooth", "on", "sense", "learn")
@@ -2418,6 +2510,15 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.matte_state = mattes
+    # plan 66: the keyed nodes' black is clear likewise (`ViewState.keys`)
+    keys = getattr(view, "keys", None)
+    if not isinstance(keys, dict):
+        keys = {}
+        try:
+            view.keys = keys
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    vars(r)["key_state"] = keys       # (as `_key_state`)
     # plan 39 T3: the cuts' values likewise (`ViewState.cuts`)
     cuts = getattr(view, "cuts", None)
     if not isinstance(cuts, dict):
@@ -2613,36 +2714,6 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         r.continuous(f"media.{c}.gain", f"{c.upper()} gain", *_attr(ch, "gain"),
                      taper=tapers.T_MEDIA_GAIN, fmt=tapers.fmt_level, group=g,
                      tip="The channel's sound level, off to +6 dB; unity at the notch.")
-        # plan 66: black is clear — the channel's own transparency, worked
-        # out from its brightness in the fit pass (`Renderer._media_fit`);
-        # off by default, so every saved look stays as it was
-        r.toggle(f"media.{c}.key", f"{c.upper()} black is clear", *_attr(ch, "key"),
-                 group=g, tip="Black is clear: the picture's dark parts are transparent, "
-                              "so what is under it shows through. Off, the picture is "
-                              "opaque, as a video or a camera is.")
-        r.enum(f"media.{c}.key_measure", f"{c.upper()} key measure", *_attr(ch, "key_measure"),
-               list(media_channels.KEY_MEASURES), group=g,
-               tip="What counts as bright: peak, the largest of red, green and blue "
-                   "(a saturated colour stays); luma, the eye's brightness (a deep "
-                   "blue goes with the black).")
-        r.continuous(f"media.{c}.key_level", f"{c.upper()} key level", *_attr(ch, "key_level"),
-                     lo=0.0, hi=1.0, fmt=lambda v: f"level {v:.3f}", group=g,
-                     tip="At or below this brightness a pixel is clear.")
-        r.continuous(f"media.{c}.key_soft", f"{c.upper()} key softness", *_attr(ch, "key_soft"),
-                     lo=0.0, hi=1.0, fmt=lambda v: f"soft {v:.2f}", group=g,
-                     tip="How far above the level a pixel takes to become solid: 0 a "
-                         "hard edge, higher a gentler one. Pure black is always clear.")
-        r.toggle(f"media.{c}.key_keep", f"{c.upper()} keep colour", *_attr(ch, "key_keep"),
-                 group=g, tip="Keep colour: a dim glow stays as bright over what is under "
-                              "it (only the alpha comes from the brightness). Off, colour "
-                              "goes with alpha and the edges dim. Not used inverted.")
-        r.continuous(f"media.{c}.key_feather", f"{c.upper()} key feather",
-                     *_attr(ch, "key_feather"), lo=0.0, hi=media_channels.KEY_FEATHER,
-                     fmt=lambda v: f"feather {v:.0f} px", group=g,
-                     tip="Blurs the clear edge by this many pixels. Costs two passes "
-                         "more while above 0.")
-        r.toggle(f"media.{c}.key_invert", f"{c.upper()} key invert", *_attr(ch, "key_invert"),
-                 group=g, tip="White is clear instead of black.")
 
     # ---- the backdrop (plan 32 R, row 330): a picture under the scene ----
     # (which is the graph's wire into `backdrop.image`: plan 33 T7 retired

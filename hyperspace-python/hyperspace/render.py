@@ -165,7 +165,8 @@ from .media_tex import (
     KEY_HERE,
     KEY_MASK,
     KEY_OFF,
-    KEY_RAMP,
+    KEY_RAMP_OUT,
+    Key,
     MediaTextures,
     UiTextures,
     fit_scale,
@@ -2339,21 +2340,24 @@ class Renderer:
             now[key] = self._media_textures().texture(c, f)
         return now[key]
 
-    def _media_fit(self, c: str, size: tuple[int, int],
-                   alpha: float = 1.0) -> moderngl.Texture | None:
+    # plan 66: a keyed node's state as the fit pass's cache key reads it
+    # (`media_tex.key_of`: hashable, held to its ranges) — `graph.MediaNode`
+    key_of = staticmethod(key_of)
+
+    def _media_fit(self, c: str, size: tuple[int, int], alpha: float = 1.0,
+                   key: Key | None = None) -> moderngl.Texture | None:
         """Channel `c` fitted to a frame of `size` (`media.<c>.fit`: cover,
         contain, stretch), premultiplied by `alpha`: one pass into a
         texture of the renderer's (`_frame_target`, one per channel and
         alpha 1 or not), once a frame per (channel, size, alpha, fit, key).
         With no picture it is transparent black — a texture all the same,
-        so an `IMAGE` port always has one. Plan 66: with the channel's
-        black is clear on (`media_tex.key_of`) the same pass keys it; with
-        a feather, the ramp alone first into a one-channel target, blurred
-        by `MaskPasses.feather`, and the pass reads that. Leaves its target
-        bound."""
+        so an `IMAGE` port always has one. Plan 66: `key` (a keyed channel
+        node's black is clear, `graph.MediaNode`) keys it in the same pass,
+        into a target of its own; with a feather, the ramp alone first into
+        a one-channel target, blurred by `MaskPasses.feather`, and the pass
+        reads that. Leaves its target bound."""
         ch = getattr(getattr(self, "media", None), "channels", {}).get(c)
         fit = int(getattr(ch, "fit", 0) or 0)
-        key = key_of(ch)
         size = (int(size[0]), int(size[1]))
         alpha = min(max(float(alpha), 0.0), 1.0)
         now = self._media_frame_now()
@@ -2364,6 +2368,8 @@ class Renderer:
         # (plan 33 R: fitted at another size than the frame's — a branch on
         # the faces — it is a target of its own, `(name, size)`)
         name = f"media.{c}" if alpha >= 1.0 else f"media.{c}@alpha"
+        if key is not None:
+            name += "@key"
         at = getattr(self, "_frame_size", None)
         tkey = name if at is None or size == tuple(at) else (name, size)
         mask = None
@@ -2410,14 +2416,14 @@ class Renderer:
 
     def _key_ramp(self, c: str, src: moderngl.Texture, tkey, size: tuple[int, int], fit: int,
                   key) -> moderngl.Texture:
-        """Plan 66's feather: channel `c`'s ramp alone (`KEY_RAMP`) into a
+        """Plan 66's feather: channel `c`'s ramp alone (`KEY_RAMP_OUT`) into a
         one-channel target of `size` under `(tkey, "key")`, blurred by
         `key.feather` px (`MaskPasses.feather`, under `(tkey, "key/feather")`).
         Returns the blurred ramp, which the fit pass reads 1:1."""
         ramp, rfbo = self._frame_target((tkey, "key"), size, components=1)
         rfbo.use()
         self.ctx.viewport = (0, 0, *size)
-        self._fit_pass(c, src, size, fit, 1.0, key, KEY_RAMP)
+        self._fit_pass(c, src, size, fit, 1.0, key, KEY_RAMP_OUT)
         return self.mask_passes().feather(ramp, (tkey, "key/feather"), key.feather)
 
     def _fit_program(self) -> tuple[moderngl.Program, moderngl.VertexArray]:

@@ -891,18 +891,18 @@ here; overturn → the change, then the same.
 | 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
 | 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
 | 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
-| 902 | Plan 66: the key is a setting on the channel (the source), applied where the source becomes a picture; not a node, not a mask, no mask wire: alpha as "how transparent", row 440 kept | 699 | (rec) |
-| 903 | Plan 66: seven persisted params per channel, `media.<c>.key`, `key_measure` (peak, luma), `key_level` 0.02, `key_soft` 0.1, `key_keep` on, `key_feather` 0, `key_invert` off; the panel's words "black is clear" | 699, 700 | (rec) |
-| 904 | Plan 66: one-sided ramp `smoothstep(level, level + soft, m)` on the straight colour: pure black always clear; the matte's symmetric edge is left as it is | 700 | (rec) |
+| 902 | Plan 66: black is clear on **any picture node**, switched from the node's menu (and MEDIA for a channel) into the graph section's `"keys"`, its knobs then on the selection; channels on the same model. Not a toggle param on every node. A picture's own transparency, not a mask: row 440 kept | 699, 707 | **owner — 2026-11-22**: "this is supposed to apply to all bitmap outputting nodes, not just media nodes"; "Node menu, then knobs"; channels "Same model as every node" |
+| 903 | Plan 66: the knobs `key.<node>.level` 0.02, `soft` 0.1, `measure` (peak, luma), `feather` 0–32 px, `keep` on, `invert` off: declared while the node is keyed (group `key`), not under the node's own prefix; the panel's words "black is clear" | 699, 700 | (rec) |
+| 904 | Plan 66: one-sided ramp `smoothstep(level, level + soft, m)` on the straight colour (`glsl.KEY_RAMP`, one for both passes): pure black always clear; the matte's symmetric edge left as it is | 700 | (rec) |
 | 905 | Plan 66: keep colour on: premultiplied colour untouched, alpha from the ramp; off: colour goes with alpha. Inverted, keep colour does not apply | 701 | (rec) |
-| 906 | Plan 66: feather: the ramp alone into a one-channel target, `MaskPasses.feather`, read 1:1 by the fit pass; two passes more only while the feather is above 0 | 702 | (rec) |
-| 907 | Plan 66: off for every existing patch, show and golden (a missing value lands the build's off); no schema bump (row 582's precedent); a build from before notes the ids and shows the picture opaque, and reads a patch with a `screen` composite as black, with the reason in its notes | 706 | (rec) |
-| 908 | Plan 66: keyed: every `media.<c>` picture (wires, the backdrop). Not keyed: the faces' raw channel, the segment's CPU frame, the MEDIA previews | 703 | (rec) |
+| 906 | Plan 66: a keyed node is read through a `KeyNode` (one pass); a channel is keyed in its fit pass (no pass more); the feather is the ramp alone blurred by `MaskPasses.feather`, two passes more only above 0 | 702 | (rec) |
+| 907 | Plan 66: nothing keyed is the graph, the bytes and the save it was; `"keys"` is written only when there are any; no schema bump — a build from before refuses a section with `"keys"` or a `screen` composite in words (that patch black) | 706 | (rec) |
+| 908 | Plan 66: not keyed: the faces' raw channel, the segment's CPU frame, the MEDIA previews | 703 | (rec) |
 | 909 | Plan 66: `screen` appended to `graph.BLENDS`: premultiplied `src + dst·(1 − src)`, one blend function; the composite's and a hands node's laid; "screened" | 704 | (rec) |
-| 910 | Plan 66: generators surveyed: Plasma, Fractals and Glimmer already write alpha = peak; Test card and Mandelbrot are opaque by design; no effect gets a key | 705 | (rec) |
-| 911 | Plan 66: whether the key defaults **on** for a channel in a new loadable patch (a fresh patch, or a channel first given a source), while every existing patch stays off | 699 | **pending the owner** |
-| 912 | Plan 66: whether to build the one-step **black is clear** cable starter (matte + cut, §5) for the pictures the channel key does not reach | — | **pending the owner** |
-| 913 | Plan 66: a restart after pulling: `Channel`'s seven new fields do not reach live channels by hot reload | — | (rec) |
+| 910 | Plan 66: generators: the Test card and the Mandelbrot are keyed like any node; Plasma, Fractals and Glimmer need nothing (alpha = peak) | 705 | (rec) |
+| 911 | Plan 66: whether a node starts keyed when it is added (a channel, say, since most VJ footage is made on black), while every existing patch stays as it is | 699 | **pending the owner** |
+| 912 | Plan 66: the one-step matte + cut "black is clear" starter is not built: the key reaches every picture | — | (rec) |
+| 913 | Plan 66: a restart after pulling: `ViewState.keys`, `Wiring.keys`, `GraphSpec.keys` and `MediaNode.keyed` do not reach live objects by hot reload | — | (rec) |
 | 872 | Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema | — | owner (2026-11-19, as recommended) |
 | 873 | Plan 63: every term a param (owner decision 1). Slice s lays the pixel's point q into the terms as c = mix(q, c, s), z₀ = mix(z₀, q, s): 0 the Mandelbrot set, 1 a Julia set. Power a whole number 2–8, an int param; a fractional p not built | 671 | owner (2026-11-18) — the mapping (rec) |
 | 874 | Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go | 669, 670 | owner (2026-11-19, as recommended): velocity, not displacement |
@@ -15332,87 +15332,86 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Built.** Nothing.
 - **Judge it.** No hand check.
 
+### 902. Black is clear on any picture node, switched from its menu
 
-### 902. The key is the channel's, not a node or a mask
+- **What.** Plan 66: The owner (2026-11-22), after the first build keyed only the media channels: "this is supposed to apply to all bitmap outputting nodes, not just media nodes". Any node that makes a picture is keyed by naming it in the graph section's `"keys"`, switched from its GRAPH menu (**black is clear**, checked while on) and, for a channel, from MEDIA (the same edit); its knobs are then on its selection. The other option was a toggle param on every picture node (Learnable on/off, but ~7 values per picture node in every save and a wrapper in every graph). Channels are on the same model. A picture's own transparency, not a mask: row 440 kept.
+- **Answer.** owner — 2026-11-22: "Node menu, then knobs"; channels "Same model as every node".
+- **Built.** `GraphSpec.keys`, `Wiring.keys`, `graphview.render_key`, `keyable`, `ui_graph.render_node_menu` (`KEY_ITEM`), `ui_media._key`; `tests/test_black_is_clear.py::test_the_node_menu_keys_a_node_in_one_undo_step`, `::test_black_is_clear_on_the_media_page_by_the_mouse`.
+- **Judge it.** 699, 707.
 
-- **What.** Plan 66: Black is clear is a setting on the media channel, applied where the channel's texture becomes a picture (the fit pass). It makes no mask wire and reads no mask from alpha: it sets how transparent each pixel is, from the source's own brightness — the alpha a PNG would have carried. Row 440 ("alpha is not a mask") is kept: a mask is still made only by `matte` and `segment`. The other option was the matte → cut pair as it is, or a key node.
+### 903. The knobs, and their ids
+
+- **What.** Plan 66: `key.<node>.level` 0.02, `soft` 0.1, `measure` (peak, luma), `feather` 0–32 px, `keep` on, `invert` off, declared while the node is keyed (group `key`, as a matte's are) and dropped with it. Not under the node's own prefix: an effect's `fx.<name>.*` are its file's uniforms. Each id is now a file format.
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
-- **Built.** `media_tex.key_of`, `FIT_FS`, `Renderer._media_fit`; `tests/test_media_key.py::test_the_key_matches_its_oracle`.
-- **Judge it.** 699.
-
-### 903. Seven params a channel, and their defaults
-
-- **What.** Plan 66: `media.<c>.key` (off), `key_measure` (peak, luma; peak), `key_level` (0.02), `key_soft` (0.1), `key_keep` (on), `key_feather` (0–32 px, 0), `key_invert` (off): persisted, modulatable, group `media`. The panel says **black is clear**. Each id is now a file format.
-- **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
-- **Built.** `params.build_registry`, `media.channels.Channel`, `ui_media._key`; `tests/test_media_key.py::test_the_key_params_per_channel`.
+- **Built.** `params.declare_keys`, `key_ids`, `is_key_id`, `view.KeyState`; `tests/test_black_is_clear.py::test_the_knobs_are_declared_while_a_node_is_keyed`.
 - **Judge it.** 699, 700.
 
 ### 904. A one-sided ramp
 
-- **What.** Plan 66: `k = smoothstep(level, level + soft, m)` on the straight colour (hard step at soft 0), so pure black is always fully clear. The matte's symmetric edge (`key ± soft`) would let 35 % of pure black through at the ask's numbers; it is left as it is for the matte.
+- **What.** Plan 66: `k = smoothstep(level, level + soft, m)` on the straight colour (a hard step at soft 0), one GLSL function for both passes, so pure black is always fully clear. The matte's symmetric edge (`key ± soft`) would let 35 % of pure black through at these numbers; it is left as it is for the matte.
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
-- **Built.** `FIT_FS`'s `ramp`; `tests/test_media_key.py::test_the_key_matches_its_oracle`.
+- **Built.** `glsl.KEY_RAMP`; `tests/test_black_is_clear.py::test_a_keyed_channel_matches_its_oracle`, `::test_any_picture_keyed_matches_its_oracle`.
 - **Judge it.** 700.
 
 ### 905. Keep colour
 
-- **What.** Plan 66: On (the default): the premultiplied colour is left as it was and only alpha comes from the ramp, so a dim glow stays as bright over what is under it. Off: colour goes with alpha, as matte → cut gives. Inverted, keep colour does not apply (a bright pixel kept at alpha 0 would be added, not cleared). A downstream pass that unpremultiplies sees colour above its alpha near black.
+- **What.** Plan 66: On (the default): the premultiplied colour is left as it was and only alpha comes from the ramp, so a dim glow stays as bright over what is under it. Off: colour goes with alpha, as matte → cut gives. Inverted, keep colour does not apply. A pixel below the level keeps its colour at alpha 0: added over what is under it.
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
-- **Built.** `FIT_FS`; `tests/test_media_key.py::test_the_key_matches_its_oracle`.
+- **Built.** `masks.KEY_FS`, `media_tex.FIT_FS`; the oracle tests.
 - **Judge it.** 701.
 
-### 906. The feather
+### 906. Where it runs
 
-- **What.** Plan 66: Above 0 px, the ramp alone is drawn into a one-channel target at the frame's size (sampled clamped into the picture, so a letterbox does not eat its edge), blurred by `MaskPasses.feather` (masks.py's `BLUR_FS`), and read 1:1 by the fit pass. At 0, no pass more.
+- **What.** Plan 66: Any picture but a channel is read by its consumers through a `graph.KeyNode` (one pass, `MaskPasses.key`); a channel is keyed inside its own fit pass (no pass more, into `media.<c>@key`). The feather is the ramp alone into a one-channel target blurred by `MaskPasses.feather`: two passes more, only above 0; a channel's ramp is sampled clamped into the picture, so a letterbox does not eat its edge.
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
-- **Built.** `Renderer._key_ramp`, `media_tex.KEY_RAMP`, `KEY_MASK`; `tests/test_media_key.py::test_the_feather_blurs_the_alpha_alone_and_only_when_asked`, `::test_the_feather_does_not_eat_the_pictures_edge_at_the_letterbox`.
+- **Built.** `graph.KeyNode`, `_Build._keyed`, `MediaNode.keyed`, `Renderer._media_fit`, `_key_ramp`; `tests/test_black_is_clear.py::test_a_keyed_node_is_read_through_its_key_by_every_consumer`, `::test_a_keyed_channel_is_keyed_in_its_own_fit_pass`, `::test_the_feather_blurs_the_alpha_alone_and_only_when_asked`, `::test_a_keyed_effect_lets_the_scene_through_its_black`.
 - **Judge it.** 702.
 
-### 907. No saved look changes, no schema
+### 907. Nothing keyed is what it was; no schema
 
-- **What.** Plan 66: Every key is off by default and a file that names no key id lands them at the build's off (`Library._fresh_of`), so every loadable patch, show and golden is the same picture; the off pass is the same arithmetic, byte for byte. No schema bump, as row 582 for the sound: a build from before notes the ids as unknown and shows the picture opaque. A patch with a `screen` composite is black on a build from before (`read_graph` refuses the blend it does not know, as any node kind it does not know, with the reason in the notes). Both Macs run one build.
+- **What.** Plan 66: A section without `"keys"` keys nothing, declares no knob and saves without the key, so every saved patch and the corpus resave byte for byte; an unkeyed channel is the fit pass's old bytes; a graph keying nothing builds no `KeyNode`. No schema bump: a build from before refuses a section with `"keys"` (or a `screen` composite) in words and loads that patch black; only patches that use them are affected, and both Macs run one build.
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
-- **Built.** `tests/test_media_key.py::test_off_is_the_pass_from_before_byte_for_byte`, `::test_an_old_loadable_patch_lands_every_key_off`; the goldens unchanged.
+- **Built.** `tests/test_black_is_clear.py::test_a_channel_nothing_keys_is_the_pass_from_before_byte_for_byte`, `::test_a_patch_from_before_keys_nothing_and_saves_the_same`; the corpus round trips unchanged.
 - **Judge it.** 706.
 
-### 908. What is keyed
+### 908. What is not keyed
 
-- **What.** Plan 66: Every `media.<c>` picture: a wire's and the backdrop's. Not the faces' raw channel texture (sampled outside the fit pass), not the segment's CPU frame (a person is found in the picture as shot), not the MEDIA page's previews (what the source is).
+- **What.** Plan 66: The faces' raw channel texture (sampled outside the fit pass), the segment's CPU frame (a person is found in the picture as shot), the MEDIA page's previews (what the source is).
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
-- **Built.** `Renderer._media_fit` only.
+- **Built.** Nothing: they read what they read.
 - **Judge it.** 703.
 
 ### 909. `screen` on the composite
 
-- **What.** Plan 66: Appended to `graph.BLENDS`: premultiplied `src + dst·(1 − src)` in colour, alpha as over (left alone on an opaque ground) — one blend function, `(ONE, ONE_MINUS_SRC_COLOR)`. A composite's **laid screen** and a hands node's `laid`, the presenter's hand-off too. Black adds nothing and nothing passes white. Words: "screened" (`graph.blend_words`).
+- **What.** Plan 66: Appended to `graph.BLENDS`: premultiplied `src + dst·(1 − src)` in colour, alpha as over (left alone on an opaque ground), one blend function `(ONE, ONE_MINUS_SRC_COLOR)`. A composite's **laid screen** and a hands node's `laid`, the presenter's hand-off too. Black adds nothing and nothing passes white. "screened" (`graph.blend_words`).
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
-- **Built.** `graph.BLENDS`, `blend_words`, `Renderer.lay`, `outputs`; `tests/test_media_key.py::test_a_screen_lay_is_premultiplied_screen`.
+- **Built.** `graph.BLENDS`, `blend_words`, `Renderer.lay`, `outputs`; `tests/test_black_is_clear.py::test_a_screen_lay_is_premultiplied_screen`.
 - **Judge it.** 704.
 
-### 910. Generators: nothing to key
+### 910. Generators
 
-- **What.** Plan 66: Plasma, Fractals and Glimmer already write alpha = the peak of their colour (and the effect tail never lets alpha fall below it); the Test card (a card shows its black) and the Mandelbrot ("it paints the whole frame") are opaque by design. No effect gets a key in this plan.
+- **What.** Plan 66: Every effect is a picture node, so the Test card and the Mandelbrot (opaque by design) are keyed like any node; Plasma, Fractals and Glimmer already write alpha = the peak of their colour and need nothing.
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
-- **Built.** Nothing.
+- **Built.** `tests/test_black_is_clear.py::test_a_keyed_effect_lets_the_scene_through_its_black`.
 - **Judge it.** 705.
 
-### 911. The key on by default for a new patch's channel?
+### 911. A node keyed when it is added?
 
-- **What.** Plan 66: Every existing patch stays off whatever is chosen. The question is whether a channel in a fresh loadable patch — or a channel first given a source — starts with black is clear on. For: most VJ footage is made on black, and the fit pass is the only cost. Against: a camera or a photo is opaque by nature, and a picture that turns see-through by itself surprises.
+- **What.** Plan 66: Every existing patch stays as it is whatever is chosen. The question is whether a node starts keyed when it is added — a channel, say, since most VJ footage is made on black. For: one click fewer for the common case. Against: a camera or a photo is opaque by nature, and a picture that turns see-through by itself surprises.
 - **Answer.** **pending the owner**.
-- **Built.** Off everywhere, the build's value.
+- **Built.** Nothing keyed until asked.
 - **Judge it.** 699.
 
-### 912. A one-step black is clear starter?
+### 912. No matte + cut starter
 
-- **What.** Plan 66: A cable starter: the cable's picture into a new `matte` (luma, 0.02, soft 0.1) and a new `cut`, the cut onto the cable — for the pictures the channel key does not reach (the scene, an effect, a Mandelbrot). It needs a starter that sets a new node's params on landing (none does yet) and a one-sided edge on the matte to match row 904.
-- **Answer.** **pending the owner**.
+- **What.** Plan 66: The first build left open a one-step starter (a new matte and cut on a cable) for pictures the channel key did not reach. The key now reaches every picture, so it is not built.
+- **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
 - **Built.** Nothing.
 - **Judge it.** No hand check.
 
 ### 913. Restart after pulling
 
-- **What.** Plan 66: `Channel` gains seven fields; a live channel from before a hot reload lacks them. The renderer reads them by `getattr` (off), but the params bind to the fields: restart.
+- **What.** Plan 66: `ViewState.keys`, `Wiring.keys`, `GraphSpec.keys` and `MediaNode.keyed` are new fields on live objects; hot reload does not give them to the objects already made.
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
-- **Built.** `media_tex.key_of`; `tests/test_media_key.py::test_key_of_is_none_while_off_and_for_a_channel_from_before`.
+- **Built.** —
 - **Judge it.** No hand check.

@@ -94,6 +94,30 @@ class MatteState:
     sat: float = 1.0
 
 
+# plan 66, black is clear: what a keyed node measures a pixel's brightness
+# by — the largest of r, g, b, or Rec. 709 luma — by index (`key.<node>.measure`)
+KEY_MEASURES = ("peak", "luma")
+
+
+@dataclass
+class KeyState:
+    """One keyed node's black is clear (plan 66, `key.<node>.*`:
+    params.declare_keys), read once a frame by the renderer (`ViewState.keys`,
+    `graph.Frame.keys`): `measure` an index into `KEY_MEASURES`, `level` the
+    brightness at or below which a pixel is clear, `soft` the ramp above it
+    (to solid at level + soft; 0 a hard edge), `keep` keep colour
+    (premultiplied colour untouched, alpha from the ramp), `feather` a blur
+    of the ramp in px, `invert` white is clear instead. A value, never a
+    rebuild: whether a node is keyed at all is its graph's (`"keys"`)."""
+
+    measure: int = 0
+    level: float = 0.02
+    soft: float = 0.1
+    keep: bool = True
+    feather: float = 0.0
+    invert: bool = False
+
+
 @dataclass
 class CutState:
     """One cut node's values (plan 39 T3, `cut[.n].*`: params.declare_cuts),
@@ -243,6 +267,9 @@ class ViewState:
     # plan 39 T3: each cut node's values (`cut[.n].*`, declared from the
     # loadable patch's graph: params.declare_cuts) — cut name → its state
     cuts: dict[str, CutState] = field(default_factory=dict)
+    # plan 66: each keyed node's black is clear (`key.<node>.*`, declared from
+    # the loadable patch's graph `"keys"`: params.declare_keys) — node → its state
+    keys: dict[str, KeyState] = field(default_factory=dict)
     # plan 39 T4: each segment node's values (`segment[.n].*`, declared from
     # the loadable patch's graph: params.declare_segments) — segment name → its state
     segments: dict[str, SegmentState] = field(default_factory=dict)

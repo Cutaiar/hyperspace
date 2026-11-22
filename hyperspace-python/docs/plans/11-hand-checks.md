@@ -8874,25 +8874,27 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 ## EB. Black is clear (rows 902–913, 2026-11-22)
 
-Plan 66. Headless: `tests/test_media_key.py` (the key through the real fit pass against a numpy oracle, the off pass byte for byte the pass from before, the feather on the alpha alone and only when asked, the letterbox's edge, the params and an old patch landing every key off, `screen` against its formula). The look, the feel of the knobs and the cost on the rig are the hand checks'.
+Plan 66. Headless: `tests/test_black_is_clear.py` (the section's `keys`, the knobs, the build's `KeyNode`, the node menu's edit, MEDIA by mouse, both passes against a numpy oracle, an unkeyed channel byte for byte the pass from before, the feather, a keyed Test card over the scene, `screen`). The look, the feel of the knobs and the cost on the rig are the hand checks'.
 
 Setup: a clip with a black ground (fire, smoke, particles on black) in channel A; on GRAPH, `channel.a → composite.over`, `scene → composite.under`, the composite into All outputs, a shape in the scene.
 
-**699. Black is clear.** MEDIA, channel A: **key** on. *Pass:* the black goes; the fire is over the shape; the picture is unchanged where it is bright. Off again: the black rectangle is back. *Fail:* any change with the key off, or a dark halo round the fire with it on.
+**699. Black is clear on a channel.** MEDIA, channel A: **black is clear** on. *Pass:* the black goes; the fire is over the shape; the picture is unchanged where it is bright; GRAPH's menu on Channel A shows it checked. Off again: the black rectangle is back. *Fail:* any change with it off, or a dark halo round the fire with it on.
 
-**700. Level and softness by hand.** Level 0 → 0.2, then soft 0 → 0.5. *Pass:* level eats into the darks smoothly; soft 0 is a hard (aliased) edge, higher a gentler one; pure black stays clear throughout.
+**700. Level and softness by hand.** Level 0 → 0.2, then soft 0 → 0.5. *Pass:* level eats into the darks smoothly; soft 0 is a hard edge, higher a gentler one; pure black stays clear throughout.
 
 **701. Keep colour.** Keep colour off, then on, on smoke. *Pass:* on, the thin smoke stays as bright over the shape as it was over black; off, it dims at its edges. Say which the show wants by default.
 
-**702. Feather.** Feather 0 → 16 px on a hard-edged still. *Pass:* the edge softens, nothing shifts, and SYSTEM's line for `channel.a` rises a little only while the feather is above 0.
+**702. Feather.** Feather 0 → 16 px on a hard-edged still. *Pass:* the edge softens, nothing shifts, and SYSTEM's line for the node rises a little only while the feather is above 0.
 
-**703. The backdrop.** The `channel to backdrop` starter with the key on. *Pass:* the backdrop's black shows the desktop or ground; the backdrop fader still fades it.
+**703. The backdrop.** The `channel to backdrop` starter, the backdrop keyed from its menu. *Pass:* the backdrop's black shows the desktop or ground; the backdrop fader still fades it.
 
-**704. Laid screen.** The composite's menu → **laid screen**, the key off. *Pass:* the clip's black adds nothing, its brights lighten the shape and never clip to a flat white where add would.
+**704. Laid screen.** The composite's menu → **laid screen**, nothing keyed. *Pass:* the clip's black adds nothing, its brights lighten the shape and never clip to a flat white where add would.
 
-**705. A live feed.** A Syphon or NDI source and a camera in a dark room, key on. *Pass:* as 699, at the feed's rate, with no frame time change worth naming on SYSTEM.
+**705. A generator.** Add the Test card (and then the Mandelbrot) from the picker, `scene → testcard.image`, the card into the composite's `over`; its menu → **black is clear**. *Pass:* the shape shows between the card's lines (the Mandelbrot: through its black inside); the knobs are on its selection. *Fail:* the card still covers the shape.
 
-**706. An old patch.** Load a loadable patch saved before this branch that uses media. *Pass:* it looks exactly as it did, every key off; save it and load it on this build: the same.
+**706. An old patch.** Load a loadable patch saved before this branch. *Pass:* it looks exactly as it did, nothing keyed; save it: the file is unchanged.
+
+**707. The scene and an effect keyed.** Key the scene from its menu, over a channel in a composite (channel under, scene over), then an effect after the scene instead. *Pass:* the channel shows wherever the scene (then the effect) is dark; ⌘Z takes each key off in one step.
 
 ## What no test covers
 
