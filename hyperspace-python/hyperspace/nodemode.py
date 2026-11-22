@@ -203,19 +203,41 @@ def fill(params: Sequence[str], freedoms: Iterable[Sequence[str]],
     return Fit(slots, tuple(p for p in params if p in kept), tuple(todo[len(slots):]))
 
 
+# plan 86 (row 1061): a desk knob holds a dropdown as it holds a fader, a choice per
+# stretch of its throw (`Param.set_norm`), its ring the choice. Not one whose list is
+# asked each time (a list that changes moves every choice under the knob; today only
+# meta params have one), nor one with a single choice, which a knob could not move
+ENUM_MIN_CHOICES = 2
+
+
+def _knob_enum(p: Any) -> bool:
+    """Is enum `p` one a desk knob can hold: a fixed list of two choices or more?"""
+    return not callable(p.choices) and len(p.names) >= ENUM_MIN_CHOICES
+
+
 def fillable(reg: Any, ids: Iterable[str], *, routed: bool = False) -> list[str]:
     """Of a node's param ids (`ui_graph.node_params`), those a controller may
-    fill, in order: continuous, no alias, no meta param. `routed`: only those a
-    route can move (a pad's rows are routes, plan 53 §3), which a desk's are not."""
-    out = []
+    fill: no alias, no meta param; continuous, and then (a desk's) the dropdowns
+    a knob can hold (`_knob_enum`). Each run in `ids`' order, the dropdowns
+    after every continuous param, so they take only the freedoms the node's
+    continuous params leave and a map made before them is the same map.
+    `routed`: only those a route can move (a pad's rows are routes, plan 53 §3),
+    which a desk's are not; and no dropdown, since a pad's row is a push about
+    the base that comes back on release, and the base chase that would keep it
+    commits no discrete param (`Param.apply`): a stick could only flick one
+    while it is held (row 1062)."""
+    out, enums = [], []
     for pid in ids:
         p = reg.get(pid)
-        if p is None or p.alias or p.kind is not Kind.CONTINUOUS or meta_refusal(pid) is not None:
+        if p is None or p.alias or meta_refusal(pid) is not None:
             continue
         if routed and not p.modulatable:
             continue
-        out.append(pid)
-    return out
+        if p.kind is Kind.CONTINUOUS:
+            out.append(pid)
+        elif p.kind is Kind.ENUM and not routed and _knob_enum(p):
+            enums.append(pid)
+    return out + enums
 
 
 def enter_refusal(reg: Any, node: str | None, ids: Iterable[str],

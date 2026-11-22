@@ -8872,6 +8872,18 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 **678. A hand on c deep in.** At 10⁶× with **Steps** at 4096, a hand on **c drive x**. *Pass:* the picture keeps the frame rate while c moves (the reference is computed every frame c changes). *Fail:* a stutter: say at which Steps it starts (the bench's `ref ms`).
 
+## FG. The loader's units note and node mode's dropdowns (rows 1060–1062, 2026-11-22)
+
+Plan 86. Headless: `tests/test_retaper.py` (the note, end to end through a load and a save), `tests/test_nodemode.py` and `tests/test_node_desk.py` (the fill, a knob on a dropdown over a fake APC40). Hot reload is enough for `loadable` and `nodemode`; a restart is safe.
+
+**855. A hand-written patch says what it rescaled.** Copy a loadable patch with a route onto an effect's amount (Wobble's, or Acid's Bend), delete its `"units"` key, set that route's depth to 0.12, and open it. *Pass:* the strip says "no "units" marker, so read as a file from before the effect tapers: … rescaled" with "(+n more)" if it has other notes; the patch's notes list names the route, 0.12 and the new depth, and the marker to add. Save it and open it again: no note. Open a patch from the library (marked): no note. *Fail:* no note, a note on a marked file, or a depth that differs from what it was before this change.
+
+**856. A desk knob on a dropdown.** (APC40) Select a node with a dropdown and only a few continuous params (Wave: Along, Push and Shape after its faders; or an LFO: Shape and Sync), and put the desk into node mode on it. *Pass:* the continuous params are on the first knobs as before, the dropdowns on the knobs after them, labelled on the on-screen desk and drawn as node-mode cables; turning a dropdown's knob steps through its choices in the menu's order, the panel's dropdown follows, and the ring stands at the choice; turning it back returns; a dropdown already on a desk row keeps that row and fills no knob. *Fail:* a knob that skips a choice at the ends, a ring that drifts from the choice, a jump when the knob is first touched.
+
+**857. A patch pointed before keeps its map.** Open a patch saved with node mode on (the corpus has none; point one, save, quit, pull this change, open). *Pass:* every knob that held a continuous param holds the same one; only knobs that were empty may now hold a dropdown, and a patch-layer desk row on such a knob is under node mode until you leave. Say whether that last part is acceptable on the patches you play. *Fail:* a continuous param on another knob than before.
+
+**858. A pad and dropdowns (row 1062).** An answer, not a pass or fail. Point a pad at Wave and play: the sticks reach its faders and none of its dropdowns. Say whether a pad should reach dropdowns, and how: a pair stepping through them for good (B), or a stick flicking them with the base chase keeping the choice (C).
+
 ## What no test covers
 
 Only a person can settle these:

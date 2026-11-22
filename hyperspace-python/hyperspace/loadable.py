@@ -175,6 +175,8 @@ from .modifiers import Modifier
 from .palettecompat import palette_slice
 from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadable.* names
     CUT_GROUP,
+    DEPTH_TAPER,
+    DEPTH_UNIT,
     MATTE_GROUP,
     PAN_IDS,
     PATCH_GROUPS,
@@ -726,6 +728,21 @@ def dumps(doc: dict) -> str:
     return "{\n" + ",\n".join(parts) + "\n}\n"
 
 
+# plan 86 (row 1060): what a load says when a file has no depth-units marker and its
+# depths onto the effects' speed and amount params are rescaled as an old file's.
+# Two agents writing patches by hand met it on 2026-11-19 (0.12 read as 0.28)
+RETAPER_NOTE = (f'no "{UNITS_KEY}" marker, so read as a file from before the effect '
+                "tapers: {count} rescaled ({rows}). A save writes the marker; a file "
+                f'written by hand wants "{UNITS_KEY}": {{{{"{DEPTH_UNIT}": "{DEPTH_TAPER}"}}}}')
+
+
+def retaper_note(moved: list[str]) -> str:
+    """The note for the depths `params.retaper_depths` moved: every row, with its
+    old and new depth, since a hand-written file's author meant the old number."""
+    count = f"{len(moved)} depth" + ("s" if len(moved) != 1 else "")
+    return RETAPER_NOTE.format(count=count, rows="; ".join(moved))
+
+
 def echo_seconds(doc: dict) -> tuple[dict, list[str]]:
     """A loadable patch document with the look-back's per-frame ids read as 60 Hz
     frames and written in seconds (plan 14 WP6, `lookback.LEGACY`): its
@@ -997,12 +1014,16 @@ class LoadedPatch:
         notes += palette_notes
         # 0. and its depths onto the effects' speed and amount params along
         #    their tapers (wave 0 T1): a file from before measured them along
-        #    the linear range. Silent, as the pan is — each row's real-unit
-        #    reach is kept about its base (`params.retaper_depths`); a save
-        #    writes the marker (`UNITS`), and tools/retaper_routes.py
-        #    rewrites a library once. Measured against this meta controller's own effect
-        #    files (`self.fx`), the registry's when there is no state
-        doc, _ = retaper_depths(doc, self._effect_files())
+        #    the linear range. Each row's real-unit reach is kept about its
+        #    base (`params.retaper_depths`); a save writes the marker
+        #    (`UNITS`), and tools/retaper_routes.py rewrites a library once.
+        #    Measured against this meta controller's own effect files
+        #    (`self.fx`), the registry's when there is no state. Said (plan
+        #    86, row 1060): a file written by hand without the marker is read
+        #    as an old one, and its depths move under it
+        doc, retapered = retaper_depths(doc, self._effect_files())
+        if retapered:
+            notes.append(retaper_note(retapered))
         # 0. and its render graph (plan 26 A4): read, not yet landed. Plan
         #    36 T3 (W3): a `/7` is read as it is — no section is the empty
         #    frame, black, said; nothing is filled in. An older file is

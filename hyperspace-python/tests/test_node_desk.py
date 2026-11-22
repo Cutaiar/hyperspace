@@ -124,6 +124,56 @@ def test_a_knob_moves_the_nodes_param_and_its_ring_says_so(rig):
     assert rings and rings[-1] == 127
 
 
+def _dropdown(deck) -> str:
+    """A dropdown of `deck`'s patch a knob can hold, on no row of the table's."""
+    rows = {b.target for b in deck.table.bindings}
+    return next(p.id for p in deck.reg if p.kind is nodemode.Kind.ENUM and p.id not in rows
+                and nodemode.fillable(deck.reg, [p.id]) == [p.id] and len(p.names) >= 4)
+
+
+def test_a_knob_on_a_dropdown_picks_a_choice_per_stretch_and_its_ring_says_which(rig):
+    """Plan 86 (row 1061): a dropdown fills the knob after the node's continuous
+    params, and the knob's throw is its choices in order (`Param.set_norm`)."""
+    node, params = pick_node(rig.one, 1)
+    enum = _dropdown(rig.one)
+    make_small(rig.one, enum, params[0])        # (listed first: it fills after all the same)
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    rig.push()
+    rows = rig.nd1.rows()
+    assert [(b.source, b.target) for b in rows] == [(f"cc:0:{K1}", params[0]),
+                                                    (f"cc:0:{K2}", enum)]
+    assert rows[1].feedback == "ring" and rows[1].op == "abs"
+    p = rig.one.reg[enum]
+    last = len(p.names) - 1
+    mark = len(rig.r.out.sent)
+    rig.push(cc(K2, 127))
+    rig.push()
+    assert p.value == last
+    rig.push(cc(K2, 0))
+    rig.push()
+    assert p.value == 0
+    rig.push(cc(K2, round(127 * 2 / last)))
+    rig.push()
+    assert p.value == 2
+    rings = [m.value for m in rig.r.out.sent[mark:]
+             if m.type == "control_change" and m.control == K2]
+    assert rings and rings[-1] == round(127 * 2 / last)
+    rig.one.loaded_patch.leave_node_mode(1, "midi")
+
+
+def test_a_node_whose_continuous_params_fill_the_desk_leaves_its_dropdown_over(rig, monkeypatch):
+    """The dropdowns take only what the continuous params leave: a map made before
+    them is the same map, and a dropdown with no knob left is listed as over."""
+    node, params = pick_node(rig.one, 2)
+    enum = _dropdown(rig.one)
+    make_small(rig.one, params[0], enum, params[1])
+    monkeypatch.setattr(apc40, "degrees_of_freedom", lambda: [(f"cc:0:{K1}",), (f"cc:0:{K2}",)])
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert [b.target for b in rig.nd1.rows()] == [params[0], params[1]]
+    assert rig.nd1._follow(DESK).fit.over == (enum,)
+    rig.one.loaded_patch.leave_node_mode(1, "midi")
+
+
 def test_a_row_shadowed_comes_back_and_a_control_not_filled_keeps_its_row(rig):
     node, params = pick_node(rig.one)
     make_small(rig.one, *params[:2])
