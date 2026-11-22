@@ -139,6 +139,7 @@ from .graph import (
     IMAGE,
     MEDIA_CHANNELS,
     Delay,
+    Effect,
     Frame,
     Graph,
     Hands,
@@ -1010,6 +1011,43 @@ class PassTimer:
         """Node → median ms over the window, in the graph's order; empty
         until the first frame has been read back, and with no timer."""
         return {name: float(np.median(w)) for name, w in self._ms.items() if w}
+
+
+def gpu_made(graph: Graph, frame: Frame, timed) -> dict:
+    """Plan 84, the read side of the timer for GRAPH's **gpu cost** chip:
+    which of the frame's nodes made something, read from what the frame
+    already settled (`Graph.evaluate`'s rule, `Graph.pulled`, `timed` —
+    `Graph.timed_in`, the names the timer was handed). Nothing is timed,
+    drawn or read back here.
+
+    - ``gpu_ran``: the nodes that ran a timed pass this frame: their
+      medians are their cost;
+    - ``gpu_free``: the nodes that ran with no pass of their own (a switch,
+      a delay's read, a see-through geometry, the pattern): their time is
+      their consumer's, so they are neither a cost nor "made nothing";
+    - ``gpu_built``: every node of the frame's graph. A canvas node in none
+      of these was not built (unreached, row 349); one built but in neither
+      of the first two made nothing this frame — an effect switched off, a
+      branch behind a switch's unpicked input.
+
+    Empty sets when the frame's picks cannot be read (a frame that failed
+    before its graph ran): the chip then marks nothing as made."""
+    try:
+        pulled = graph.pulled(frame)
+    except Exception:  # noqa: BLE001 — a frame that failed: nothing said
+        return {"gpu_ran": frozenset(), "gpu_free": frozenset(), "gpu_built": frozenset()}
+    timed = set(timed)
+    ran: set[str] = set()
+    free: set[str] = set()
+    for node in graph.order:
+        if node.name not in pulled and (node.MAKES or isinstance(node, Effect)):
+            continue                                # (`evaluate` skips it)
+        if node.name in timed:
+            ran.add(node.name)
+        elif not isinstance(node, Effect):          # (an effect that ran no pass: off)
+            free.add(node.name)
+    return {"gpu_ran": frozenset(ran), "gpu_free": frozenset(free),
+            "gpu_built": frozenset(n.name for n in graph.order)}
 
 
 class _Timed:
@@ -1905,9 +1943,17 @@ class Renderer:
             graph.evaluate(frame)
             self._thumb_frame = frame       # plan 37 C1: the panel's thumbnails read it
         finally:
-            timer.end_frame(graph.timed_in(frame))
+            timed = graph.timed_in(frame)
+            timer.end_frame(timed)
             stats["gpu_ms"] = timer.medians()
             stats["gpu_note"] = timer.note
+            # plan 84: what each node made this frame, only while GRAPH's
+            # **gpu cost** chip asks (`gpu_watch`, set by the page each frame
+            # it is lit and cleared here, so a chip turned off — or a page no
+            # longer drawn — stops costing after one frame)
+            if getattr(self, "gpu_watch", False):
+                self.gpu_watch = False
+                stats.update(gpu_made(graph, frame, timed))
 
     def _poi_layer(self, s: ViewState, size: tuple[int, int], target, vp) -> None:
         """The poi's guide for this frame (plan 47), drawn once into its
