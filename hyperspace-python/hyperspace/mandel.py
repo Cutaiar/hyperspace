@@ -678,8 +678,8 @@ class SkipGate:
                 continue
             q, tiles, _ = item
             try:
-                self.flagged = float(q.samples) / tiles
-                self.on = self.flagged >= SKIP_MIN
+                share = float(q.samples) / tiles
+                self.flagged, self.on = share, share >= SKIP_MIN
             except Exception:  # noqa: BLE001
                 self.queries, self.on = False, True
             self.free.append(q)
