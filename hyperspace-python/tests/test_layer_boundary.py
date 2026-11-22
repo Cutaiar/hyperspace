@@ -482,13 +482,13 @@ def _mods(*names: str) -> set[str]:
 # what a patch is made of, and what draws one
 PATCH_MODULES = _mods(
     "patches", "loadable", "nodemode", "graph", "graphmigrate", "modgraph", "modifiers", "modbank",
-    "lfo", "envelope", "sequencer", "patterns", "fx", "ghost", "handmesh", "lookback", "masks", "view",
-    "field", "geometry", "glsl", "motion", "tapers", "palettecompat", "render", "media_tex",
-    "segment", "dream", "media")
+    "lfo", "envelope", "sequencer", "patterns", "fx", "mandel", "ghost", "handmesh", "lookback", "masks", "view",
+    "field", "geometry", "fractal", "fractal_gl", "shapeframe", "glsl", "motion", "tapers", "palettecompat", "render", "media_tex",
+    "segment", "dream", "media", "previews")
 # what is set for a performance or an install
 META_MODULES = _mods(
     "deck", "playlist", "players", "pointer", "app", "devices", "devicelist", "sharedfile", "displays", "hotplug", "control", "config", "placement",
-    "hotreload", "watchdog", "midiports", "midi", "apc40", "generic", "gamepad", "pads", "hands", "bridge",
+    "hotreload", "watchdog", "midiports", "midi", "apc40", "generic", "idle_lights", "gamepad", "pads", "hands", "bridge",
     "osc", "totem", "poi", "poi_guide", "overlay", "audio", "analysis", "analyzer", "bands",
     "tempo", "seq_page", "node_desk", "replay", "pinch", "pacing", "world", "grip")
 # one module holding both layers' classes, which an import cannot tell apart. The list is the

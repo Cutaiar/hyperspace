@@ -407,7 +407,7 @@ ORDER = [
     "router.modulate", "reg.apply",                  # the pass (the LFOs step inside it,
                                                      # plan 28 N0), then one commit
     "table.sinks", "bridge.send_values",             # devices.send: the sinks' rows (B3)
-    "view.integrate",
+    "view.integrate", "view.reroot",                 # the turn; a fractal's view re-rooted
     "world.home", "world.frame",                     # plan 59: the shape's home, puppets, physics
     "render.draw", "panel.draw",                     # the two windows
 ]
@@ -533,7 +533,7 @@ def test_a_raising_step_is_recorded_and_the_windows_still_draw():
     # K3 (row 578): the integrator is guarded on its own, so the turn, the
     # field's motion and the media path keep moving through it; and the
     # world (plan 59) after it, on its own too
-    assert log[-5:-2] == ["view.integrate", "world.home", "world.frame"]
+    assert log[-6:-2] == ["view.integrate", "view.reroot", "world.home", "world.frame"]
 
 
 def test_a_raising_world_step_is_recorded_and_the_windows_still_draw():

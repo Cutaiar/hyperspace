@@ -471,6 +471,9 @@ class RefusedDevice(Base):
 # ---- today's inputs as devices (plan 27 B2) ----
 
 MIDI_PROFILES = ("apc40", "generic")    # midi.PROFILES' names (midi is imported lazily)
+# `idle = true` animates the profile's own light set (idle_lights.SETS); a generic
+# desk knows no lights, so its entry names a set (`idle = "ddj-flx4"`)
+_IDLE_SETS = {"apc40": "apc40"}
 
 
 class MidiDevice(Base):
@@ -498,10 +501,18 @@ class MidiDevice(Base):
         if self.profile not in MIDI_PROFILES:
             raise ValueError(f"no MIDI profile {self.profile!r}; one of "
                              f"{', '.join(MIDI_PROFILES)}")
-        from . import midi
+        from . import idle_lights, midi
         e, c = self.entry, self.ctx
-        self.io = midi.MidiIO(self.reg, self.table, port=e.get("port"), profile=self.profile,
-                              learner=c.learn, role=self.role)
+        # a bad `idle` is this entry's error line, before any port opens
+        idle = idle_lights.from_entry(e.get("idle"), default_set=_IDLE_SETS.get(self.profile))
+        try:
+            self.io = midi.MidiIO(self.reg, self.table, port=e.get("port"),
+                                  profile=self.profile, learner=c.learn, role=self.role)
+        except Exception:
+            if idle is not None:
+                idle.close()        # its app watch's thread goes with it
+            raise
+        self.io.idle = idle
 
     def _primary(self) -> bool:
         table = self.table
@@ -569,7 +580,16 @@ class MidiDevice(Base):
             self.io.poll()
 
     def targets(self) -> list[tuple]:
-        return [(self.io, "midi", "MidiIO")] if self.io is not None else []
+        io = self.io
+        if io is None:
+            return []
+        out: list[tuple] = [(io, "midi", "MidiIO")]
+        idle = getattr(io, "idle", None)            # its idle animation and app watch, too
+        if idle is not None:
+            out.append((idle, "idle_lights", "IdleLights"))
+            if idle.watch is not None:
+                out.append((idle.watch, "idle_lights", "AppWatch"))
+        return out
 
 
 class PadDevice(Base):

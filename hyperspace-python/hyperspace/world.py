@@ -339,6 +339,15 @@ class WorldObject:
     home: Pose = field(default_factory=Pose)
     offset: Pose = field(default_factory=Pose)
     present: bool = True
+    # plan 64, part 2: False while the shape is a fractal the view is inside —
+    # not an object but the space: its home is the identity, its offset the
+    # space's flight (folded into the view, `fractal.fold_flight`, never drawn
+    # as an offset), and it is neither boxed nor given a shaped inertia
+    bounded: bool = True
+    # counts every rewrite of the offset that is not the physics' own step (a
+    # crossing, `World.reset`): what a fold of the flight read before it is
+    # no longer the same pose (`fractal.fold_flight`)
+    epoch: int = 0
 
     @property
     def pose(self) -> Pose:
@@ -505,6 +514,63 @@ class World:
         if oid in self.objects:
             self.objects[oid].home = pose
 
+    def to_space(self, oid: str, zoom: float, pan) -> None:
+        """Plan 64, part 2: the shape becomes the space the view is inside.
+        Its offset went into the view (`fractal.go_inside`), so the object
+        starts again at the identity, home and offset, unbounded; a body's
+        motion is the same rigid motion of what is drawn, taken about the
+        world's origin (`motion` there: v − ω × c, c the drawn centre it turned
+        about), unboxed, its inertia even (the space has no body to shape); a
+        joint holding it keeps hold of the same point (`rel` taken again)."""
+        obj = self.objects.get(oid)
+        if obj is None:
+            return
+        home = shape_home(zoom, pan)
+        c = home.apply(obj.offset.position)[:3]
+        b = self.bodies.get(oid)
+        if b is not None:
+            v = home.scale * b.velocity[:3]
+            b.velocity = np.r_[v - np.cross(b.spin_l, c), 0.0]
+            b.spin_r = b.spin_l.copy()
+            b.place, b.boxed, b.inertia = None, False, np.eye(3)
+        obj.home, obj.offset, obj.bounded = Pose(), Pose(), False
+        obj.epoch += 1
+        self._retake(oid)
+
+    def to_object(self, oid: str, offset, zoom: float, pan) -> None:
+        """Plan 64, part 2: the view came out; the shape is an object again,
+        `offset` (a 4×4 in the home's frame, `fractal.go_outside`) its offset
+        and the camera its home. A body's motion is re-referenced to its own
+        drawn centre and put in the home's units; a joint keeps hold."""
+        obj = self.objects.get(oid)
+        if obj is None:
+            return
+        m = np.asarray(offset, dtype=np.float64)
+        k = float(np.cbrt(abs(np.linalg.det(m[:3, :3]))))
+        q = quat_of(m[:3, :3] / k)
+        new = Pose(np.r_[m[:3, 3], 0.0], q, q, k)
+        home = shape_home(zoom, pan)
+        b = self.bodies.get(oid)
+        if b is not None:
+            u = obj.offset.position[:3]              # the flight's origin, drawn
+            c = home.apply(new.position)[:3]
+            v = b.velocity[:3] + np.cross(b.spin_l, c - u)
+            b.velocity = np.r_[v / home.scale, 0.0]
+            b.place = None
+        obj.home, obj.offset, obj.bounded = home, new, True
+        obj.epoch += 1
+        self._retake(oid)
+
+    def _retake(self, oid: str) -> None:
+        """A joint holding `oid` takes its hold again on the pose as it is now
+        written, the hand where it is: welded or sprung, it holds the same point."""
+        j = self.joints.get(oid)
+        if j is None or j.rel is None:
+            return
+        hand = self.objects.get(j.hand)
+        if hand is not None:
+            j.rel = hand.home.inverse().compose(self.objects[oid].pose)
+
     def offset_matrix(self, oid: str) -> np.ndarray | None:
         """The object's offset as a 3D model matrix, or None while it is the
         identity — so the renderer builds the matrix it always did, exactly."""
@@ -519,6 +585,7 @@ class World:
         hold again from home)."""
         for obj in self.objects.values():
             obj.offset = Pose()
+            obj.epoch += 1
         for b in self.bodies.values():
             b.still()
             b.inertia = np.eye(3)

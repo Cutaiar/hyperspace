@@ -73,6 +73,7 @@ from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
 from .control import Control
+from .fractal import FRACTALS as _FRACTALS
 from .geometry import SHAPES, geom, menu
 from .graph import (
     ALL_OUTPUTS,
@@ -2880,6 +2881,8 @@ class Panel:
         self._slider("view.lines_alpha", half)
         beside(strokes_w)
         self._check("view.screen_strokes")
+        if sh.name in _FRACTALS:
+            self._check("view.frac_additive")      # plan 64: a fractal's line order
         # the count, and Fit beside it: whole copies only, framed to the screen
         fit_w = imgui.calc_text_size("Fit").x + imgui.get_frame_height() + 2 * imgui.get_style(
             ).item_inner_spacing.x

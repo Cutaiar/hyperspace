@@ -139,8 +139,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import apc40, graphmigrate, graphview, modifiers, nodemode, patches, routing, undo
+from . import apc40, fractal, graphmigrate, graphview, modifiers, nodemode, patches, routing, undo
 from .fx import declare as declare_fx
+from .geometry import SHAPES
 from .ghost import GhostState
 from .ghost import prefix as ghost_prefix
 from .ghost import register as declare_ghost
@@ -246,6 +247,12 @@ TEMPLATE_RETIRED = graphmigrate.TEMPLATE_RETIRED
 # six `POSE_IDS` in radians — beside `values` (a phase moves every frame: it
 # is no base, so `values` stays the bases' snapshot)
 POSE_KEY = "pose"
+# plan 64 (row 889): where a view is inside its fractal — the cells it has gone
+# into, its depth, and inside its own turn and room placement
+# (`fractal.Dive.to_json`). Optional: written only while the view is inside a
+# fractal, so every other loadable patch saves byte for byte as it did; no
+# schema of its own (node mode's precedent, #377)
+DIVE_KEY = "dive"
 # what a load says of a pose it could not read (six numbers, by `POSE_IDS`)
 POSE_UNREAD = "pose: not six numbers, ignored — the turn is left spinning"
 # the registry groups (and lane schemes) a /2 file never names
@@ -1250,6 +1257,12 @@ class LoadedPatch:
             self.groups, self.group_high = held_groups, held_high
             self.node_mode = held_mode
             raise
+        # 2¼. where the view is inside its fractal (plan 64, row 889): the
+        #     file's, for the shape it landed on; none, the top — a dive means
+        #     something only under the camera it was made with
+        dive_note = self._land_dive(doc.get(DIVE_KEY))
+        if dive_note:
+            notes.append(dive_note)
         # 2½. the bins (plan 32): each channel opens what its slot names at
         #     the next frame's poll
         media = self.media
@@ -1405,6 +1418,10 @@ class LoadedPatch:
         groups = self.live_groups()
         if groups:
             doc[GROUPS_KEY] = groups
+        # plan 64 (row 889): a view inside its fractal writes where it is
+        dive = self._dive_part()
+        if dive is not None:
+            doc[DIVE_KEY] = dive
         # plan 57 (NM0): a loadable patch that points at nothing writes nothing
         if self.node_mode:
             doc[NODE_MODE_KEY] = self.node_mode.to_json()
@@ -1413,6 +1430,57 @@ class LoadedPatch:
         if media is not None:
             doc[MEDIA_KEY] = media.to_json()
         return doc
+
+    def _view_dive(self) -> tuple[Any, Any] | None:
+        """This deck's view and its dive (`fractal.Dive`, read by its fields: a
+        hot reload leaves the live one an older class); None with no view."""
+        view = getattr(self.reg, "view", None)
+        dive = getattr(view, "dive", None)
+        ok = isinstance(getattr(dive, "path", None), list) and hasattr(dive, "inside")
+        return (view, dive) if ok else None
+
+    def _dive_part(self) -> dict | None:
+        """This deck's view's dive as a loadable patch keeps it, None while the
+        view is not inside a fractal (plan 64, row 889)."""
+        vd = self._view_dive()
+        # (inside, or gone into a cell: a deck off air re-roots without the
+        # on-air crossing, so its dive has a path and no `inside` of its own)
+        if vd is None or not (vd[1].inside or vd[1].path):
+            return None
+        if fractal.spec_of(vd[0].shape) is None:
+            return None
+        return vd[1].to_json(SHAPES[int(vd[0].shape)].name)
+
+    def _land_dive(self, doc) -> str:
+        """The file's dive onto this deck's view (`fractal.Dive.from_json`): the
+        top when it names none; what was refused, said."""
+        vd = self._view_dive()
+        if vd is None:
+            return ""
+        view, dive = vd
+        # the shape drawn now, or the one this load landed (the param's base:
+        # a route may hold the live shape elsewhere) — a dive is saved for the
+        # shape drawn, and lands on whichever of the two it names
+        live = int(view.shape)
+        p = self.reg.get("view.shape")
+        landed = int(p.base) if p is not None else live
+        named = doc.get("shape") if isinstance(doc, dict) else None
+        if named is not None and fractal.spec_of(live) is not None and SHAPES[live].name == named:
+            said = dive.from_json(doc, named)
+            if dive.inside:
+                dive.shape = live
+            return said
+        if fractal.spec_of(landed) is None:
+            dive.reset()
+            return ""
+        said = dive.from_json(doc, SHAPES[landed].name)
+        if dive.inside and landed != live:
+            dive.reset()
+            return (f"the saved dive is for {SHAPES[landed].name}, but a route holds the "
+                    f"shape on {SHAPES[live].name}; starts at the top")
+        if dive.inside:
+            dive.shape = landed
+        return said
 
     def banks(self) -> dict:
         """The router's modulator banks by scheme (plan 31 B); none on a

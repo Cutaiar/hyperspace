@@ -111,7 +111,8 @@ import moderngl
 import numpy as np
 
 from . import field as _field_mod
-from . import poi
+from . import fractal as _fractal
+from . import fractal_gl, poi, shapeframe
 from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
     LAYOUT_GRID,
     LAYOUT_HEX,
@@ -120,7 +121,6 @@ from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
     field,
     inst_positions,
 )
-from .field import is_3d as is_3d_layout
 from .fx import SCREEN, FxChain, FxState
 from .geometry import (
     EYE_DISTANCE,
@@ -129,12 +129,7 @@ from .geometry import (
     EYE_NEAR,
     SCALE,
     eye_matrix,
-    face_triangles,
-    face_uvs,
-    geom,
     model_matrix,
-    shape_world,
-    turned_depth,
 )
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
@@ -165,8 +160,19 @@ from .graph import (
 from .lookback import Dreamer, DreamState, Lookback
 from .masks import MaskPasses
 from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
-from .outputs import Handoff, Presenter, PreviewTextures, Switches, View, capped, fit
+from .outputs import (
+    THUMB_PX,
+    Handoff,
+    Presenter,
+    PreviewTextures,
+    Switches,
+    View,
+    capped,
+    fit,
+    thumb_size,
+)
 from .patterns import MODES, SPEED
+from .previews import CARD_EFFECT, EffectPreviews
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
 
@@ -1066,9 +1072,19 @@ def thumb_source(frame: Frame, name: str, how: str,
       never asked here;
     - ``mask``: a matte or a segment (SM3): the mask this frame already
       made, at its own size (`graph.mask_made`), else None: a thumbnail
-      never makes one. The caller reads it as a mask (`PreviewTextures.put`)."""
+      never makes one. The caller reads it as a mask (`PreviewTextures.put`);
+    - ``card``: an effect whose thumbnail is switched to the test card
+      (`card_through`): never the frame's picture, and nothing of the
+      frame is pulled for it;
+    - ``unwired`` (plan 65): an effect or a copy whose picture reaches no
+      output, so the frame never built it (`graph.reaches`): its real input
+      put through it at a thumbnail's size when the frame made that input,
+      else the test card (`unwired_through`). An unbuilt effect asked for
+      ``card`` gets the card the same way."""
     g = frame.graph
     node = g.nodes.get(name) if g is not None else None
+    if how in ("card", UNWIRED_PIC) and node is None:
+        return unwired_through(frame, name, pulled, card=how == "card")
     if node is None:
         return None
     if how == "window":
@@ -1081,6 +1097,8 @@ def thumb_source(frame: Frame, name: str, how: str,
         return own[0] if own and isinstance(own[0], moderngl.Texture) else None
     if how == "mask":
         return mask_made(node, frame)
+    if how == "card":
+        return card_through(frame, node)
     if how in ("scene", "layer"):
         if how == "layer":
             layer = next((n for n in g.order if isinstance(n, HandsLayer)
@@ -1103,6 +1121,88 @@ def thumb_source(frame: Frame, name: str, how: str,
     if not node.reads(frame):
         return None
     return picture(frame, node)
+
+
+# the card is put through an effect at twice a thumbnail's size, so the
+# thumbnail's own downsample smooths what the pass made
+CARD_PX = 2 * THUMB_PX
+
+
+def card_through(frame: Frame, node) -> moderngl.Texture | None:
+    """The test card put through effect node `node`, as a small texture: what
+    its thumbnail shows while switched to the card (`graphview.CARD_PIC`).
+
+    The card is the `testcard` effect file's picture at the frame's size
+    (`Renderer.card`: its knobs are the graph's Test card's when it holds
+    one, else the file's defaults), so the pass is told the frame's size and a knob
+    in px — a cell, a split — is as big against the card as against the
+    picture. The pass runs once more for this, into a thumbnail-sized
+    texture, with the effect's values and clocks as the frame left them;
+    nothing of the frame is read, pulled or changed, and the outputs never
+    see the card. An effect that is off shows the card as it is, as it
+    passes its picture through. Its `aux` reads nothing here: what an aux
+    adds is the graph's, not the effect's own. None for a node that is no
+    effect, or with no `testcard` file to draw."""
+    r = frame.r
+    name = getattr(node, "effect", None)
+    chain = r.fx
+    if name is None or name not in chain.state.specs:
+        return None
+    card = r.card(frame.size, frame.t)
+    if card is None:
+        return None
+    if not chain.state.live(name) or not chain.ready(name):
+        return card
+    tex, fbo = r.card_out(thumb_size(frame.size, CARD_PX))
+    chain.run_one(name, card, fbo, frame.t, opaque=1)
+    return tex
+
+
+UNWIRED_PIC = "unwired"     # `graphview.UNWIRED_PIC`, the page's word (render imports no graphview)
+# plan 65: the unwired effects' thumbnails made at a frame's end at most (one
+# small pass each, round robin: the rest keep their last, `PreviewTextures.shade`)
+UNWIRED_PER_FRAME = 4
+
+
+def unwired_through(frame: Frame, name: str, pulled: frozenset[str] | None = None,
+                    card: bool = False) -> moderngl.Texture | None:
+    """Plan 65: the thumbnail of effect (or copy) `name`, which the frame did
+    not build because its picture reaches no output (`graph.reaches`, row
+    349): its input put through it, at a thumbnail's size (`CARD_PX`), with
+    its values and clocks as the frame left them.
+
+    The input is the picture wired into its `image` when the frame made
+    that node this frame (`Node.image`: nothing is painted or pulled for
+    it), else — no wire, an input that is itself unreached, or `card` — the
+    test card (`Renderer.card`, told the frame's size as `card_through`
+    is). An effect that is off shows its input as it is. The pass runs once
+    more, into the renderer's own small texture, at the frame's end: nothing
+    of the frame is changed, nothing reaches an output, and the node stays
+    unbuilt. None for a name that is no effect the state holds."""
+    r = frame.r
+    wiring = getattr(r, "wiring", None)
+    copies = {c.name: c.of for c in (getattr(wiring, "copies", None) or ())}
+    effect = copies.get(name, name)
+    chain = r.fx
+    if effect not in chain.state.specs:
+        return None
+    src, res = None, None
+    if not card:
+        feed = next((w.src for w in (getattr(wiring, "wires", None) or ())
+                     if w.node == name and w.port == "image"), None)
+        g = frame.graph
+        node = g.nodes.get(feed) if g is not None and feed else None
+        if node is not None and (pulled is None or feed in pulled):
+            src = node.image(frame)
+    if src is None:
+        src, res = r.card(frame.size, frame.t), frame.size
+        if src is None:
+            return None
+    if not chain.state.live(effect) or not chain.ready(effect):
+        return src
+    tex, fbo = r.card_out(thumb_size(res or tuple(src.size), CARD_PX))
+    chain.run_one(effect, src, fbo, frame.t, opaque=1, res=res)
+    return tex
 
 
 class Renderer:
@@ -1234,6 +1334,13 @@ class Renderer:
         # until then)
         self.thumbs = PreviewTextures(ctx)
         self._thumb_frame: Frame | None = None
+        # the test card at the frame's size (`card`), what it was drawn
+        # from, and the small textures the card is put through an effect
+        # into (`card_out`), by size
+        self._card: tuple | None = None
+        self._card_key: tuple | None = None
+        self._card_fx: FxChain | None = None     # the card's own chain, over the file
+        self._card_outs: dict[tuple[int, int], tuple] = {}
         self._view_now: ViewState | None = None    # the frame's (`_draw_frame`)
         # face program is assembled around the user-editable patterns.glsl
         self.pattern_error = ""
@@ -1347,11 +1454,21 @@ class Renderer:
         self._build_wire_programs()
         for res in olds:
             res.release()
+        # a fractal's GPU draw (plan 64): made again from fractal_gl as it is now
+        cells = getattr(self, "_cells", None)
+        if cells is not None:
+            cells.release()
+        self._cells = None
         self._build_face_program()
         # the faces' pictures are made again from the module as it is now
         # (app.py's reloader does not re-class them), rebuilt on next use. A
         # renderer from before the face target existed gets them here; one
         # from before plan 33 T7 lets its faces chain (`face_fx`) go
+        # plan 65: the effect previews are made again on the picker's next ask
+        # (from the module as it is now: none survives a reload half-made)
+        pv = self.__dict__.pop("previews", None)
+        if pv is not None:
+            pv.release()
         old_fx, old_pic = getattr(self, "face_fx", None), getattr(self, "face_pic", None)
         old_pat = getattr(self, "pattern_pic", None)
         self.__dict__.pop("face_fx", None)
@@ -1480,8 +1597,8 @@ class Renderer:
         try:
             src = PATTERNS_GLSL.read_text()
             self._patterns_mtime = self._shader_mtime()
-            prog = ctx.program(vertex_shader=FACE_VS,
-                               fragment_shader=_face_fragment(FACE_FS_HEAD, src, FACE_FS_TAIL))
+            face_fs = _face_fragment(FACE_FS_HEAD, src, FACE_FS_TAIL)
+            prog = ctx.program(vertex_shader=FACE_VS, fragment_shader=face_fs)
             made.append(prog)
             seed = ctx.program(vertex_shader=QUAD_VS,
                                fragment_shader=_face_fragment(SEED_FS_HEAD, src, SEED_FS_TAIL))
@@ -1504,6 +1621,7 @@ class Renderer:
             if res is not None:
                 res.release()
         self._face_prog, self._fvao, self._seed_prog, self._seed_vao = prog, fvao, seed, svao
+        self._face_fs = face_fs          # (a fractal's cells draw their faces with it too)
         prog["u_pic"].value = 1          # its own unit: the bitmap has 0
         self.pattern_error = ""
 
@@ -1915,6 +2033,7 @@ class Renderer:
                 pass
         self._wire()
         self._thumbnails()
+        self._make_previews()
 
     # ---- plan 37 C1: the GRAPH page's thumbnails ----
 
@@ -1925,6 +2044,59 @@ class Renderer:
         if th is None:
             th = self.thumbs = PreviewTextures(self.ctx)
         return th
+
+    def card(self, size: tuple[int, int], t: float) -> moderngl.Texture | None:
+        """The test card at `size` (`card_through`): the `testcard` effect
+        file's picture, drawn again only when the size, a knob or the file
+        changed. Its knobs are the graph's Test card's when the graph holds
+        one, else the file's defaults: the state holds only the effects the
+        graph names (`FxState.hold`), so the card is drawn by a chain of the
+        renderer's own over the file, and nothing of the graph's is touched.
+        Its lines are widened by the frame's size over the thumbnail's, so
+        Line is their width in the thumbnail's pixels and a 1-px line of a
+        1080p card is not lost in a 192-px picture; mipmapped, so the smaller
+        pass over it reads it smoothly. None when it cannot be drawn."""
+        st = self.fx.state
+        spec = (getattr(st, "files", None) or st.specs).get(CARD_EFFECT)
+        if spec is None:
+            return None
+        own = self._card_fx
+        if own is None or own.state.specs[CARD_EFFECT].source != spec.source:
+            own = self._card_fx = FxChain(self.ctx, FxState())
+            self._card_key = None
+        if CARD_EFFECT not in own.state.specs or not own.ready(CARD_EFFECT):
+            return None
+        knobs = st.values.get(CARD_EFFECT) or {}
+        vals = {q.key: knobs.get(q.key, q.default) for q in own.state.specs[CARD_EFFECT].params}
+        size = (max(int(size[0]), 1), max(int(size[1]), 1))
+        key = (size, tuple(vals.items()))
+        if self._card is not None and self._card_key == key:
+            return self._card[0]
+        if self._card is None or tuple(self._card[0].size) != size:
+            if self._card is not None:
+                for o in self._card[::-1]:
+                    o.release()
+            tex = self.ctx.texture(size, 4)
+            tex.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
+            self._card = (tex, self.ctx.framebuffer(color_attachments=[tex]))
+        tex, fbo = self._card
+        if "line" in vals:
+            vals["line"] = float(vals["line"]) * max(size) / max(thumb_size(size, THUMB_PX))
+        own.state.values[CARD_EFFECT].update(on=True, mix=1.0, blend=0, **vals)
+        own.run_one(CARD_EFFECT, self._blank, fbo, t, opaque=1, res=size)
+        tex.build_mipmaps()
+        self._card_key = key
+        return tex
+
+    def card_out(self, size: tuple[int, int]) -> tuple:
+        """(texture, framebuffer) of `size` for the card put through an
+        effect: one per size, each wanted thumbnail copied out of it
+        (`PreviewTextures.put`) before the next is painted into it."""
+        got = self._card_outs.get(size)
+        if got is None:
+            tex = self.ctx.texture(size, 4)
+            got = self._card_outs[size] = (tex, self.ctx.framebuffer(color_attachments=[tex]))
+        return got
 
     def _thumbnails(self) -> None:
         """The end of a frame (`_for_the_panel`): each node the GRAPH page
@@ -1959,6 +2131,7 @@ class Renderer:
             saved = {k: list(v) if isinstance(v, list) else v for k, v in frame.stats.items()}
             try:
                 pulled = frame.graph.pulled(frame) if frame.graph is not None else None
+                wanted = self._unwired_budget(wanted)
                 # (masks last: one a picture's repaint just made is free to show)
                 for name, how in sorted(wanted.items(), key=lambda kv: kv[1] == "mask"):
                     held = len(frame.data)
@@ -1982,6 +2155,38 @@ class Renderer:
             if th.count:
                 _flush()
         th.end_frame()
+
+    def _unwired_budget(self, wanted: dict[str, str]) -> dict[str, str]:
+        """Plan 65: `wanted` with at most `UNWIRED_PER_FRAME` of its unwired
+        effects (`UNWIRED_PIC`), round robin from after the last one made;
+        the others keep their last thumbnail until their turn."""
+        un = sorted(n for n, how in wanted.items() if how == UNWIRED_PIC)
+        if len(un) <= UNWIRED_PER_FRAME:
+            return wanted
+        last = getattr(self, "_unwired_last", "")
+        un.sort(key=lambda n: (n <= last, n))
+        keep = set(un[:UNWIRED_PER_FRAME])
+        self._unwired_last = un[UNWIRED_PER_FRAME - 1]
+        return {n: how for n, how in wanted.items() if how != UNWIRED_PIC or n in keep}
+
+    # ---- plan 65: the effect picker's previews ----
+
+    def effect_previews(self) -> EffectPreviews:
+        """The effect picker's previews (`previews.EffectPreviews`), made on
+        first use and empty until the picker asks: the page `want`s, this
+        renderer `make`s at its frame's end (`_for_the_panel`). Making it
+        makes no GL object, so the page may call this from its context."""
+        pv = getattr(self, "previews", None)
+        if pv is None:
+            pv = self.previews = EffectPreviews(self.fx.state, self.ctx)
+        return pv
+
+    def _make_previews(self) -> None:
+        """The previews the picker asked for since the last frame, inside
+        their budget (`EffectPreviews.make`: it never raises)."""
+        pv = getattr(self, "previews", None)
+        if pv is not None and pv.make():
+            _flush()
 
     # ---- the shape node's wireframe (GRAPH's side panel) ----
 
@@ -3201,7 +3406,13 @@ class Renderer:
         self.cover.fbo.use()
         ctx.viewport = (0, 0, *self.scene.size)
         ctx.clear(0.0, 0.0, 0.0, 0.0)
-        if self._face_verts and self._copies:
+        cells = getattr(self, "_cover_cells", None)
+        if cells is not None and self._copies:
+            # a fractal's solids on the GPU (plan 64): its own cover program
+            ctx.disable(moderngl.BLEND)
+            cells()
+            ctx.enable(moderngl.BLEND)
+        elif self._face_verts and self._copies:
             ctx.disable(moderngl.BLEND)
             # the scene pass's camera, as it drew those vertices
             vp, model = self._scene_mats
@@ -3253,17 +3464,6 @@ class Renderer:
         Plan 26 A3: `clear` False draws over what is bound — the scene node
         cleared it and drew the solid geometry (the hands) first, whose
         depth hides the shape behind them."""
-        g = geom(s.shape)
-        # a 3D shape is drawn with no W turn and cues on its depth toward
-        # the 3D camera; a 4D shape is turned to its body first, and with
-        # the 3D switch holding it (ViewState.held, set by integrate) by
-        # its 3D angles alone; a scene, each layer at its own
-        # (geometry.shape_world, plan 28's catalog)
-        P, w4, pd = shape_world(s.shape, s.ang, s.yaw, s.pitch, d4=s.depth4,
-                                flat=getattr(s, "held", False), body=getattr(s, "body", None))
-        # a scene's per-layer weights (geometry._scene_style), else None
-        st = g.get("style")
-
         # the camera: the shape's world transform and the eye, as the vertex
         # shaders take them (column-major). Two ways to place the copies:
         # a flat layout (or one copy) with Fit off is the field it always was — the
@@ -3274,25 +3474,35 @@ class Renderer:
         # the camera in them, the world transform the identity, the strokes
         # scaled per copy in the shaders (`_copies_of`)
         zoom = max(s.zoom, 1e-3)
-        legacy = not getattr(s, "inst_fit", False) and (
-            int(s.instances) <= 1 or not is_3d_layout(int(getattr(s, "inst_layout", 0))))
+        legacy = _field_mod.takes_offset(s)
         # plan 59: the world's offset on the shape object (home ∘ offset, the
         # home being zoom and pan), None while it is the identity — the matrix
         # of before, built exactly as before. Fit and the 3D lattices carry the
         # camera in each copy's row and take no offset (register row 851)
         world = getattr(self, "world", None)
-        off = world.offset_matrix("shape") if world is not None and legacy else None
+        off = None
+        if legacy:
+            obj = getattr(world, "objects", {}).get("shape") if world is not None else None
+            off = shapeframe.drawn_offset(
+                s, world.offset_matrix("shape") if world is not None else None,
+                getattr(obj, "bounded", True))
         model = model_matrix(zoom, s.pan, off) if legacy else model_matrix(1.0, (0.0, 0.0))
         if world is not None and hasattr(world, "box"):
             # plan 60: the box the rig holds the shape to, what the eye sees at
             # depth 0 — set from the scene drawn, as the poi's (`poi.box_for`)
             world.box = tuple(poi.box_for(w, h, getattr(s, "eye_fov", EYE_FOV),
                                           getattr(s, "eye_distance", EYE_DISTANCE)))
-        if off is not None:
-            # plan 60 (register row 856): a turned offset turns a 3D shape before
-            # the painter sort and the depth cue read its depth, so it sorts and
-            # shades by where it is now; a 4D shape's cue stays its w
-            pd = turned_depth(s.shape, P, pd, off)
+        # what the shape is this frame (plan 64, shapeframe.py): a fixed shape
+        # its cached geometry, turned — a 3D shape with no W turn, cueing on its
+        # depth toward the 3D camera; a 4D shape turned to its body first, and
+        # with the 3D switch holding it (ViewState.held) by its 3D angles alone
+        # —, a scene each layer at its own (plan 28's catalog), a fractal made
+        # for the frame (fractal.py). The offset turns a 3D shape's cue
+        # (plan 60, register row 856); a fractal culls by it
+        sf = shapeframe.frame(s, w, h, off)
+        g, P, w4, pd = sf.g, sf.P, sf.w4, sf.pd
+        # a scene's per-layer weights (geometry._scene_style), else None
+        st = sf.style
         vp = eye_matrix(w, h, getattr(s, "eye_fov", EYE_FOV),
                         getattr(s, "eye_distance", EYE_DISTANCE))
         mats = (np.asarray(vp, dtype="f4").T.tobytes(),
@@ -3302,7 +3512,12 @@ class Renderer:
         n_inst = max(0, int(s.instances))   # 0: the ground alone (returns below)
         t_m = self.now(t_now)
 
-        near, far = pd.min(), pd.max()
+        if sf.cue is not None:
+            # fixed ends (a fractal's: the octaves about the eye's distance),
+            # so a cell's weight does not move with what else is drawn
+            near, far = sf.cue
+        else:
+            near, far = pd.min(), pd.max()
         span = max(far - near, 1e-6)
         if span < DEPTH_FLOOR:
             # pd grows toward the eye, so `far` (pd.max) is the nearest
@@ -3317,8 +3532,9 @@ class Renderer:
         order = np.argsort(edepth, kind="stable")  # painter: far first
 
         t = (edepth[order] - near) / span
-        dens = clamp(340 / max(g["m"], 1), 0.42, 1)
-        heavy = g["m"] > 500
+        dens_m = sf.dens_m        # (a fractal's: a constant, fractal.DENS_M)
+        dens = clamp(340 / max(dens_m, 1), 0.42, 1)
+        heavy = dens_m > 500
         B = s.bright * dens
         alpha = np.clip((0.10 + 0.90 * t * t) * B, 0.015, 1)
 
@@ -3336,7 +3552,9 @@ class Renderer:
         # the shaders scale a stroke by its copy (field path, world space);
         # the legacy path scales it here, by the zoom, as before
         wsc = 0.0 if screen_strokes or legacy else 1.0
-        sz = 1.0 if screen_strokes or not legacy else zoom
+        # (a fractal's zoom is re-rooted as it grows — fractal.step — so its
+        # strokes take their weight from the depth cue alone: zoom_strokes)
+        sz = 1.0 if screen_strokes or not legacy or not sf.zoom_strokes else zoom
         wscale = clamp(0.75 + 0.35 * s.bright, 0.6, 1.35)
         width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale
         if st is not None:
@@ -3391,6 +3609,7 @@ class Renderer:
         # ---- face fills, under the wireframe (agent-validated prototype) ----
         self._face_verts = 0
         self._copies = 0
+        self._cover_cells = None
         if s.faces:
             self._maybe_reload_patterns()
         if n_inst == 0:
@@ -3418,8 +3637,13 @@ class Renderer:
             self.ctx.enable(moderngl.DEPTH_TEST)
         draws: list[tuple] = []        # (vao, vertices, program, the most alpha a fragment has)
         try:
-            if s.faces and self._face_prog is not None:
-                tris = face_triangles(s.shape)
+            if sf.walk is not None:
+                # a fractal on the GPU (plan 64, fractal_gl.py): its cells, one
+                # instance each, unsorted and additive
+                self._draw_cells(sf, s, w, h, dpr, inst, mats, blend, near, span, dens,
+                                 heavy, wscale, legacy, wsc, t_m, draws)
+            elif s.faces and self._face_prog is not None:
+                tris, tri_uv, tri_alpha = sf.faces()
                 if len(tris):
                     td = (pd[tris[:, 0]] + pd[tris[:, 1]] + pd[tris[:, 2]]) / 3.0
                     torder = np.argsort(td, kind="stable")
@@ -3430,7 +3654,11 @@ class Renderer:
                     to = tris[torder]
                     if st is not None:
                         fa = fa * st["f_alpha"][to[:, 3]]
-                    uv = face_uvs(s.shape).reshape(-1, 3, 2)[torder]
+                    if tri_alpha is not None:
+                        # each triangle's own weight (a fractal's solid: out as
+                        # it splits, in the fog)
+                        fa = fa * tri_alpha[torder]
+                    uv = tri_uv[torder]
                     fverts = np.empty((len(tris) * 3, 8), dtype=np.float32)
                     for corner in range(3):
                         fverts[corner::3, 0:3] = P[to[:, corner]]
@@ -3472,7 +3700,7 @@ class Renderer:
                     # on that clamp (patterns.glsl cannot exceed it)
                     draws.append((self._fvao, len(fverts), p, float(fa.max()) * 2.8))
 
-            if s.lines:
+            if s.lines and sf.walk is None:
                 eo = E[order]
                 m = g["m"]
                 rgb = st["e_rgb"][order] if st is not None else (1.0, 1.0, 1.0)
@@ -3492,7 +3720,7 @@ class Renderer:
                 self._lvao.render(moderngl.TRIANGLES, vertices=len(verts), instances=copies)
                 draws.append((self._lvao, len(verts), self._lines, float(alpha.max())))
 
-            if s.points and not g.get("curve"):   # a curve (plan 28) has no corners to dot
+            if s.points and not g.get("curve") and sf.walk is None:   # a curve (plan 28) has no corners to dot
                 tp = (pd - near) / span
                 order_p = np.argsort(pd, kind="stable")
                 # radius in framebuffer px (× dpr) at scale 1; POINT_VS scales
@@ -3542,6 +3770,100 @@ class Renderer:
                 fbo.depth_mask = True
                 fbo.use()
 
+    def _draw_cells(self, sf, s: ViewState, w: int, h: int, dpr: float, inst: np.ndarray,
+                    mats: tuple, blend: tuple, near: float, span: float, dens: float,
+                    heavy: bool, wscale: float, legacy: bool, wsc: float, t_m: float,
+                    draws: list) -> None:
+        """A fractal's cells on the GPU (plan 64, fractal_gl.py): the walk's
+        rows uploaded, each mesh drawn once per cell and per copy — the
+        faces, the lines, the dots, by the scene pass's own rules, which the
+        vertex shaders apply — blended additively and not sorted. Adds the
+        draws to `draws`, for the depth pass; the faces' cover is
+        `_cover_cells`. The CPU path (`fractal.geometry_of`, sorted) is the
+        oracle the shaders are tested against."""
+        cd = getattr(self, "_cells", None)
+        if cd is None:
+            cd = self._cells = fractal_gl.CellDraw(self.ctx, LINE_FS, POINT_FS, COVER_FS)
+        wk = sf.walk
+        spec = wk.spec
+        name = _fractal.name_of(spec)
+        cd.meshes(spec, name)
+        cd.upload(_fractal.instances(wk))
+        # colour adds up, unsorted; alpha composites as the pass's own blend
+        add = ((moderngl.SRC_ALPHA, moderngl.ONE) + tuple(blend[2:]) if len(blend) == 4
+               else (moderngl.SRC_ALPHA, moderngl.ONE, moderngl.SRC_ALPHA,
+                     moderngl.ONE_MINUS_SRC_ALPHA))
+        fractal_gl.blend(self.ctx, add)
+
+        put = fractal_gl.put
+
+        def setup(prog) -> None:
+            self._camera_uniforms(prog, mats, -1.0)
+            fractal_gl.view_uniforms(prog, wk, near, span)
+
+        try:
+            if s.faces and self._face_prog is not None:
+                fp = cd.face_program(getattr(self, "_face_fs", ""))
+                if fp is not None:
+                    setup(fp)
+                    self._face_uniforms(fp, s, t_m)
+                    if getattr(self, "_face_plain", False):
+                        put(fp, "u_mode", 0)
+                        put(fp, "u_bmp_on", 0)
+                    pic = getattr(self, "_pic", None)
+                    if pic is None:
+                        put(fp, "u_pic_on", 0)
+                    else:
+                        pic.use(location=1)
+                        screen = int(getattr(self.fx.state, "face_map", 0)) == SCREEN
+                        put(fp, "u_pic_on", 2 if screen else 1)
+                        put(fp, "u_pic_fb", tuple(float(x) for x in self.scene.size))
+                    nfaces = int(spec.tri_face.max()) + 1
+                    fdens = min(1.0, 24.0 / max(nfaces, 1))
+                    put(fp, "u_face", (float(s.bright), 0.35 + 0.65 * fdens))
+                    go = cd.draw(name, "faces", "faces", fp, inst)
+                    if go is not None:
+                        # the most a fill's vertex alpha can be, × 2.8 (draw_scene)
+                        top = float(wk.face_a.max()) * 0.065 * s.bright
+                        draws.append((None, 0, fp, top * 2.8, go))
+
+                        def cover(cp=cd.cover, rows=inst):
+                            vp, model = self._scene_mats
+                            put(cp, "u_vp", vp)
+                            put(cp, "u_model", model)
+                            fractal_gl.view_uniforms(cp, wk, near, span)
+                            cd.draw(name, "faces", "faces", cp, rows)
+                        self._cover_cells = cover
+            if s.lines:
+                lp = cd.lines
+                setup(lp)
+                put(lp, "u_size", (float(w), float(h)))
+                put(lp, "u_wscale", wsc)
+                put(lp, "u_stroke", (float(s.bright * dens), float(wscale),
+                                     float(s.lines_alpha), 1.0 if heavy else 0.0))
+                put(lp, "u_legacy", 1.0 if legacy else 0.0)
+                for mesh, kind in (("lines", "lines"), ("outline", "outline")):
+                    go = cd.draw(name, mesh, kind, lp, inst)
+                    if go is not None:
+                        draws.append((None, 0, lp, float(s.bright * dens) * s.lines_alpha, go))
+            if s.points:
+                pp = cd.points
+                setup(pp)
+                vpx = self.ctx.viewport
+                put(pp, "u_px", (float(max(vpx[2], 1)), float(max(vpx[3], 1))))
+                put(pp, "u_wscale", wsc)
+                pb = s.bright * clamp(dens * 1.5, 0.55, 1)
+                put(pp, "u_dot", (float(pb), float(s.points_alpha), float(dpr),
+                                  1.0 if heavy else 0.0))
+                put(pp, "u_legacy", 1.0 if legacy else 0.0)
+                put(pp, "u_rgb", tuple(float(x) for x in RED))
+                for mesh, kind in (("dots", "lines"), ("corners", "corners")):
+                    go = cd.draw(name, mesh, kind, pp, inst)
+                    if go is not None:
+                        draws.append((None, 0, pp, float(pb) * s.points_alpha, go))
+        finally:
+            fractal_gl.blend(self.ctx, blend)
+
     def _depth_pass(self, fbo: moderngl.Framebuffer, draws: list[tuple], mats: tuple,
                     blend: tuple, copies: int = 1) -> None:
         """The shape's depth, after its colour (plan 26 A2): the same draws
@@ -3558,12 +3880,16 @@ class Renderer:
         fbo.use()
         ctx.blend_func = moderngl.ZERO, moderngl.ONE
         try:
-            for vao, n, prog, _ in live:
+            for d in live:
+                vao, n, prog = d[:3]
                 prog["u_depth_alpha"].value = DEPTH_ALPHA
-                vao.render(moderngl.TRIANGLES, vertices=n, instances=copies)
+                if len(d) > 4:          # a draw of its own (the fractal's cells)
+                    d[4]()
+                else:
+                    vao.render(moderngl.TRIANGLES, vertices=n, instances=copies)
         finally:
-            for _, _, prog, _ in live:
-                prog["u_depth_alpha"].value = -1.0
+            for d in live:
+                d[2]["u_depth_alpha"].value = -1.0
             ctx.blend_func = blend
 
     @staticmethod

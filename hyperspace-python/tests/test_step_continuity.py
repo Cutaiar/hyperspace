@@ -100,6 +100,18 @@ def shipped() -> tuple[fx.FxState, Registry]:
 
 # ---------------------------------------------------------------- effects
 
+# choices that pick how an effect computes its picture, not what it shows: held
+# at their defaults here, since every setting of them is the same field (each
+# setting multiplies the passes this sweep runs). Plan 63's Mandelbrot: Size
+# (its lines; a no-op at this test's 320×200), Tier (float32 direct or
+# perturbation, the same picture to float32's error) and Skip black (the inside
+# filled without iterating) — `tests/test_mandel.py` holds each to the picture
+# (`test_how_it_computes_never_changes_what_it_shows`). Its own long-horizon
+# continuity — no clock read, drives that hold an hour, a remade reference that
+# never jumps the frame — is held there too ("continuity at long horizons").
+HOW = {"mandel": ("size", "tier", "skip")}
+
+
 def detent(r: Registry, state: fx.FxState, name: str, key: str) -> tuple[float, float]:
     """`key`'s value and one detent on, by the registry's own `Param.step`
     (the taper, log or linear, wrapped or not) — one down from the top,
@@ -154,7 +166,7 @@ def effect_report(ctx, state: fx.FxState, r: Registry, name: str,
         (src, _), (_, dst) = chain.pool((uv_flow.W, uv_flow.H))
         src.write(uv_flow.uv_source().tobytes())
         aux.write(uv_flow.uv_mirror().tobytes())
-        choices = [p for p in spec.params if p.choices]
+        choices = [p for p in spec.params if p.choices and p.key not in HOW.get(name, ())]
         for key in keys:
             # under every setting of the effect's choices (a knob may act
             # in one mode only: blend's key is the luma key's)

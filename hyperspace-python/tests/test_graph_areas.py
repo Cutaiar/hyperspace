@@ -21,6 +21,7 @@ fixture under tests/fixtures/presets — the APC40 as a real
 `devices.MidiDevice` over a stand-in adapter, the page drawn for real on
 `imgui_node_editor`. No loadable patch is edited or added."""
 
+import itertools
 import json
 from itertools import pairwise
 from pathlib import Path
@@ -253,37 +254,39 @@ def test_a_scene_picture_into_a_switch_runs_back_by_design(rig):
 
 
 def test_auto_layout_stacks_each_area_and_keeps_saved_positions(rig):
-    """Each area's nodes are stacked down its columns under its title, never
-    on one another; *other* is titled under the audio's last node; a node
-    with a saved position keeps it on the canvas and takes no room in its
-    column (the node under it moves up into it)."""
+    """Each area's title over one of its own columns, in a row over the
+    canvas (2026-11-19, the flow layout: two areas may share a column, so a
+    title whose column is taken moves right inside its area, else up a
+    row); the nodes stacked down their columns under the titles, never on
+    one another; a node with a saved position keeps it on the canvas and
+    the node under it is not moved into the gap."""
     st = load(rig, "party-trip")
     view = st["view"]
     lay = ui_graph.areas_of(st, view)
     assert set(lay.titles) == set(graphview.ORDER)
     drawn = [n for n in view.nodes if not n.idle]
+    assert all(xy[1] >= graphview.TITLE_H for nid, xy in lay.nodes.items()
+               if not view.node(nid).idle)
+    spots = set()
     for a, (tx, ty) in lay.titles.items():
+        assert ty <= 0 and (tx, ty) not in spots
+        spots.add((tx, ty))
         mine = [n for n in drawn if n.area == a]
         if not mine:                    # (plan 35 G: MEDIA's channels all idle: its line)
             continue
-        first = min(n.column for n in mine)
-        assert tx == first * graphview.COL_W
-        assert all(lay.nodes[n.id][1] >= ty + graphview.TITLE_H for n in mine
-                   if n.column == first)
+        assert tx / graphview.COL_W in {lay.cols[n.id] for n in mine}
     for col in {n.column for n in drawn}:
         here = sorted(((lay.nodes[n.id][1], n) for n in drawn if n.column == col),
                       key=lambda t: t[0])
         for (y0, n0), (y1, _) in pairwise(here):
             assert y1 >= y0 + graphview.height(n0, collapsed=True) + graphview.GAP
-    audio = [lay.nodes[n.id][1] for n in view.nodes if n.area == graphview.AUDIO]
-    assert lay.titles[graphview.OTHER][1] > max(audio)
     # a saved position wins — and the node it left is not moved into the gap
     # (2026-10-26: no layout runs on its own; only tidy lays out again)
-    below = next(n.id for n in drawn if n.column == view.node("render:shape").column
-                 and lay.nodes[n.id][1] > lay.nodes["render:shape"][1])
-    rig.lib.loaded_patch.layout["render:shape"] = [4000, 4000]
+    top, below = next((r.id, n.id) for r in drawn if r.kind == "render" for n in drawn
+                      if n.column == r.column and lay.nodes[n.id][1] > lay.nodes[r.id][1])
+    rig.lib.loaded_patch.layout[top] = [4000, 4000]
     frame(rig.panel, "graph")
-    assert st["applied"]["render:shape"] == (4000.0, 4000.0)
+    assert st["applied"][top] == (4000.0, 4000.0)
     assert st["applied"][below] == lay.nodes[below]
 
 
@@ -474,39 +477,63 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
                                       if isinstance(n.ref, G.Effect))
 
 
-def test_the_shader_chain_wraps_in_rows_of_four(rig):
-    """The app's whole chain, laid out in full (the effects' line open): the
-    effects take four columns, their depths in Z rows — every row left to
-    right, a render cable inside a row running right, one from a row's end
-    to the next row's start the only kind that runs back (`returns`); the
-    whole canvas about a dozen columns (plan 32 T10's media area one of
-    them, plan 35 G's look-back and outputs two more), not twenty-three."""
+def test_the_shader_chain_runs_left_to_right_and_never_wraps(rig):
+    """The app's whole chain, laid out in full (the effects' line open):
+    the flow layout (the owner, 2026-11-19: "this graph is read from left
+    to right") wraps nothing — every row 0, no cable a return but what is
+    kept for the next frame — every render cable runs right, the bands in
+    their order (the modulation left of the picture's makers, the makers
+    left of the effects, the effects left of the outputs), and no two
+    nodes on top of one another."""
     st = load(rig, "party-trip", real_graph())
     view = st["view"]
-    for opened in ((), (graphview.EFFECTS_AREA,)):
-        lay = graphview.layout(view, collapsed=lambda nid: True, idle_open=opened)
-        assert lay.spans[graphview.EFFECTS_AREA] <= graphview.SHADER_ROW
-        cols = 1 + max(lay.cols.values())
-        assert cols <= 13, (opened, cols)
     lay = graphview.layout(view, collapsed=lambda nid: True, idle_open=(graphview.EFFECTS_AREA,))
-    assert lay.spans[graphview.EFFECTS_AREA] == graphview.SHADER_ROW
-    assert max(lay.rows.values()) >= 2
+    assert set(lay.rows.values()) == {0}
     back = graphview.returns(view, lay)
-    assert back
     for c in view.cables:
-        if c.kind != "render":
-            continue
         a, b = graphview.node_of(view, c.src_port), graphview.node_of(view, c.dst_port)
-        if view.node(a).area == view.node(b).area == graphview.EFFECTS_AREA:
-            if lay.rows[a] == lay.rows[b]:
-                assert lay.cols[a] < lay.cols[b], c.id
-            else:
-                assert c.id in back and lay.rows[b] > lay.rows[a]
-    # each row starts under the tallest column of the one before
-    sh = [n for n in view.nodes if n.id in lay.cols and n.area == graphview.EFFECTS_AREA]
-    for r in range(1, max(lay.rows.values()) + 1):
-        above = max(lay.nodes[n.id][1] for n in sh if lay.rows[n.id] == r - 1)
-        assert all(lay.nodes[n.id][1] > above for n in sh if lay.rows[n.id] == r)
+        if c.kind == "render" and a in lay.cols and b in lay.cols and c.id not in back:
+            assert lay.cols[a] < lay.cols[b], c.id
+    band = {}
+    for nid, col in lay.cols.items():
+        band.setdefault(graphview.band_of(view.node(nid)), []).append(col)
+    bands = sorted(band)
+    for lo, hi in itertools.pairwise(bands):
+        assert max(band[lo]) < min(band[hi]), (lo, hi)
+    box = {nid: (x, y, x + ui_graph.NODE_W, y + graphview.height(view.node(nid), collapsed=True))
+           for nid, (x, y) in lay.nodes.items() if nid in lay.cols}
+    for (p, q), (r, t) in itertools.combinations(box.items(), 2):
+        assert not (q[0] < t[2] and t[0] < q[2] and q[1] < t[3] and t[1] < q[3]), (p, r)
+
+
+def _flowed(links, bands=None):
+    """`graphview.flow` over hand-made nodes named by `links`' ends, each
+    in the modulation (or its area in `bands`), every node 60 tall."""
+    names = list(dict.fromkeys(k for ab in links for k in ab))
+    nodes = [graphview.VNode(k, "lfo", k) for k in names]
+    for n in nodes:
+        n.area = (bands or {}).get(n.id, graphview.MODULATION)
+    return graphview.flow(nodes, dict.fromkeys(links, 1.0), lambda n: 60.0)
+
+
+def test_a_cable_past_a_column_is_given_room_there():
+    """a → b → c and a → c: the cable a → c passes b's column, and is
+    given a lane there — b sits off the straight line from a's pins to
+    c's, so the cable is not drawn behind it."""
+    cols, tops = _flowed([("a", "b"), ("b", "c"), ("a", "c")])
+    assert (cols["a"], cols["b"], cols["c"]) == (0, 1, 2)
+    pin = graphview.PIN_DY
+    mid = (tops["a"] + tops["c"]) / 2 + pin           # the cable, half way: b's column
+    assert not tops["b"] - graphview.LANE_H / 2 < mid < tops["b"] + 60.0 + graphview.LANE_H / 2
+
+
+def test_the_flow_uncrosses_two_cables():
+    """Two makers fed into two takers crosswise in view order: the order
+    down the second column follows the first, so the cables do not cross;
+    a node fed by nothing of its band sits just left of what it feeds."""
+    cols, tops = _flowed([("a1", "b2"), ("a2", "b1"), ("b1", "c"), ("b2", "c"), ("z", "c")])
+    assert (tops["a1"] < tops["a2"]) == (tops["b2"] < tops["b1"])
+    assert cols["z"] == cols["c"] - 1
 
 
 def test_the_modulation_has_its_own_depth(rig):
@@ -1113,3 +1140,93 @@ def test_a_loadable_landing_without_the_node_lets_it_go(rig):
     rig.lib.loaded_patch.new()                                 # shape → scene → output: no pattern
     frame(panel, "view")
     assert panel.graph_selected is None and panel.graph_selected_at > at
+
+
+# ---------------------------------------------------------------- a cable that runs back (2026-11-19)
+
+def test_a_sling_goes_round_the_short_way_and_clears_every_node():
+    """A cable from a node back to one left of it: under (or over) every
+    node across its run, whichever way is shorter, `BACK_CLEAR` clear —
+    its curve, as the widget draws it from the sling pins, never inside a
+    node it does not end at."""
+    src, dst = (700.0, 100.0, 937.0, 160.0), (0.0, 100.0, 237.0, 160.0)
+    tall_below = (350.0, 200.0, 587.0, 600.0)          # in the way below: go over
+    side, s = graphview.sling(src, dst, [src, dst, tall_below])
+    assert side == graphview.UP
+    curve = graphview.sling_curve((src[2] - 12, src[1]), (dst[0] + 12, dst[1]), side, s, 64)
+    for x, y in curve:
+        assert not (tall_below[0] < x < tall_below[2] and tall_below[1] < y < tall_below[3])
+    assert min(y for _, y in curve) <= 100.0 - graphview.BACK_CLEAR + 1.0
+    above = (350.0, -400.0, 587.0, 60.0)              # in the way above: go under
+    side, s = graphview.sling(src, dst, [src, dst, above])
+    assert side == graphview.DOWN and s >= graphview.BACK_MIN
+    curve = graphview.sling_curve((src[2] - 12, src[3]), (dst[0] + 12, dst[3]), side, s, 64)
+    assert max(y for _, y in curve) >= 160.0 + graphview.BACK_CLEAR - 1.0
+    assert not any(n[0] < x < n[2] and n[1] < y < n[3] for x, y in curve for n in (above,))
+
+
+def test_only_a_cable_whose_end_is_left_of_its_start_runs_back():
+    assert graphview.runs_back((500.0, 0.0), (100.0, 0.0))
+    assert graphview.runs_back((500.0, 0.0), (500.0, 300.0))          # straight below
+    assert not graphview.runs_back((500.0, 0.0), (600.0, 300.0))
+
+
+def test_the_page_draws_a_cable_that_runs_back_between_sling_pins(rig, monkeypatch):
+    """A render node dragged left of what feeds it: from the next frame its
+    cable is drawn between the two nodes' sling pins, pointing the way
+    round `sling` picks, its curve kept for a drop onto it — and the
+    anchors that hold the pins are never part of a selection."""
+    st = load(rig, "party-trip")
+    lay = rig.lib.loaded_patch.layout
+    lay["render:scene"] = [-2000, 0]                  # left of the shape that feeds it
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    links = []
+    real = ui_graph.ed.link
+    monkeypatch.setattr(ui_graph.ed, "link", lambda lid, a, b, *r: (
+        links.append((st["names"].get(lid.id()), st["names"].get(a.id()),
+                      st["names"].get(b.id()))), real(lid, a, b, *r))[1])
+    frame(rig.panel, "graph")
+    back = [x for x in links if x[1].startswith("back:")]
+    assert any(x[1].endswith(":out:render:shape") and x[2].endswith(":in:render:scene")
+               for x in back), back
+    assert all(cid[2:] in st["curves"] for cid, _, _ in back)
+    assert not any(n.startswith("back:") for n in ui_graph.selected_ids(st))
+
+
+def test_turbo_tidys_flames_rise_while_hovered_and_die_down_after():
+    """Hovered, the chip throws embers that rise and cool; a click throws
+    a burst; off it, no new ones are born and the last go out."""
+    from imgui_bundle import imgui
+    f = ui_graph.Flames()
+    lo, hi = imgui.ImVec2(100, 100), imgui.ImVec2(190, 122)
+    for _ in range(30):
+        f.step(lo, hi, True, 1 / 30)
+    assert f.embers and f.heat == 1.0
+    assert all(e[1] < hi.y for e in f.embers)                  # risen off its top
+    n = len(f.embers)
+    f.burst = ui_graph.FLAME_BURST
+    f.step(lo, hi, True, 1 / 30)
+    assert len(f.embers) >= n
+    for _ in range(60):
+        f.step(lo, hi, False, 1 / 30)
+    assert f.embers == [] and f.heat == 0.0
+    assert ui_graph.flame_rgb(0.0)[1] > ui_graph.flame_rgb(0.8)[1]  # white-hot, then red
+
+
+def test_a_drop_onto_a_cable_finds_a_sling_where_it_is_drawn():
+    """A cable drawn as a sling is a drop target along the sling, not along
+    the S the widget would have drawn (review of #463: a library patch
+    dragged onto a sling missed it)."""
+    c = graphview.VCable("w", "rout:a", "rin:b/image", graphview.IMAGE, kind="render")
+    view = graphview.View(nodes=[graphview.VNode("render:a", "render", "a"),
+                                 graphview.VNode("render:b", "render", "b")],
+                          cables=[c], pins={"rout:a": ("render:a", None),
+                                            "rin:b/image": ("render:b", None)})
+    pins = {"rout:a": (937.0, 117.0), "rin:b/image": (0.0, 117.0)}
+    sling = graphview.sling_curve((925.0, 160.0), (12.0, 160.0), graphview.DOWN, 60.0)
+    low = max(sling, key=lambda p: p[1])
+    s_mid = graphview.bezier(pins["rout:a"], pins["rin:b/image"])[8]
+    assert graphview.cable_near(view, pins, low, kinds=("render",), curves={"w": sling}) is c
+    assert graphview.cable_near(view, pins, s_mid, kinds=("render",), curves={"w": sling}) is None
+    assert graphview.cable_near(view, pins, s_mid, kinds=("render",)) is c   # (no sling: the S)

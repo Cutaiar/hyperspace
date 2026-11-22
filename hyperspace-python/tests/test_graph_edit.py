@@ -2710,7 +2710,8 @@ def test_a_group_made_taken_apart_and_remade_by_the_mouse(rig, monkeypatch):
     pairs = (*FRAME0, ("lookback", "acid.image"), ("acid", "wobble.image"),
              ("wobble", "output.all.image"))
     places = {"render:shape": [-800, 0], "render:scene": [-400, 0], "render:lookback": [0, 0],
-              "render:acid": [320, 0], "render:wobble": [640, 0], "render:output.all": [960, 0]}
+              "render:acid": [320, 0], "render:wobble": [640, 0], "render:output.all": [960, 0],
+              "render:hands": [-800, 900]}      # (out of the box drawn round the two)
     _gs, probe = _drag_rig(rig, monkeypatch, *pairs, layout=places, effects=("acid", "wobble"), on=("acid", "wobble"))
     st, pre = ui_graph._state(rig.panel), rig.lib.loaded_patch
     assert pre.groups == []

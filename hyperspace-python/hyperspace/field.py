@@ -64,6 +64,15 @@ _HEX_STEPS = ((1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1))   # axial (q, 
 _R3 = math.sqrt(3.0)
 
 
+
+def takes_offset(s) -> bool:
+    """Whether the scene pass composes the world's offset (plan 59) into the
+    shape's model matrix: one copy, or a flat field with Fit off (`legacy`
+    in `render.draw_scene`); Fit and the 3D lattices carry the camera in
+    each copy's row and take none (register row 851)."""
+    return not getattr(s, "inst_fit", False) and (
+        int(s.instances) <= 1 or not is_3d(int(getattr(s, "inst_layout", 0))))
+
 def is_3d(layout: int) -> bool:
     return int(layout) in LAYOUTS_3D
 

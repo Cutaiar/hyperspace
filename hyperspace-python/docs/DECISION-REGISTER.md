@@ -871,6 +871,36 @@ here; overturn → the change, then the same.
 | 869 | Plan 60: the grip publishes its own lanes, scheme `grip`: `grip:held` (1 while the clutch has the shape) and `grip:flying` (1 while a let-go shape still moves over 0.05 a second), both offered as gates and 0, not NaN, while the grip is on; `grip:speed` and `grip:spin`, the shape's own world speed over 4 units/s and angular speed over the 6 turns/s cap, 0–1, rest 0, reading on after a throw. Off: no feed, dormant. Published after the world's step, so a route reads the frame before's | 668 | (rec) — asked for by the kinetic-presets session: a comet's tail on the knot's own speed, not the hand's |
 | 870 | CI is for contracts, and as fast as it can be made: the fast tier is split by CI time over four runners beside a lint-and-types runner (`tools/ci_shard.py`, `tests/ci_durations.json`); the type ratchet's pyright runs in that job, not on a fast-tier worker; each shard warms pytest's assert cache in four processes first; the tests CI timed at 1 s or more are handed out first; apt packages come from a cache; `wait_green.py` polls every 5 s. A new `sweep` tier (content-library sweeps, soaks, finished migrations' old-way checks) leaves the fast tier and the merge gate and runs in `sweeps.yml`, on its own runner, when a PR touches what it walks and after each push to main | — | owner — 2026-11-10: "getting the CI tests down as low as possible is the main objective" |
 | 871 | T is GRAPH's tidy and 0 its fit, neither a row: T lays the canvas out again and 0 brings every node into view (`ui_graph.KEY`, `FIT_KEY`, the panel's own keys, as the player board's O). T leaves the overlay (the panel's toggle and the APC40's MASTER select keep it) and 0 the track restart (the AUDIO section keeps it); the old factory rows are dropped from a file that holds them (`routing.RETIRED_KEY_ROWS`). The tidy no longer frames every node: the zoom and the place being looked at stay as they are, and 0 is what frames | — | owner — 2026-11-11: T and 0, over the overlay's and the track restart's claim on them |
+| 882 | Plan 64: a fractal's frame is walked from the top each frame (`fractal.walk`), nothing about its cells kept between frames; the view re-roots into the cell under the middle of the screen as the zoom passes a level (`fractal.step`), `Dive.path` the only state, so the zoom stays in about [1.7, 4) and float32 never runs out | 682 | owner — 2026-11-18, decision 1: "Stateless and re-rooting stay" |
+| 883 | Plan 64: a fractal's cells are world geometry like every other shape's — placed through the shape's model matrix (camera.zoom and pan, the world's offset) and seen through the one eye — never screen-space copies; `field.py`'s instances (a 2D offset, a scale and an alpha after the projection) are not the model for them and are not used. The field's copies of a fractal are copies of the whole drawn shape, as of any shape | 684 | owner — 2026-11-18, decision 2: "World space is a hard requirement" |
+| 884 | Plan 64: `view.frac_additive` switches a fractal between sorted (off, the default: the CPU path, painter sorted as every shape) and additive (on: the GPU path, unsorted, colour `SRC_ALPHA, ONE`, alpha the pass's own blend). Not saved (`persist=False`) and not modulatable; in VIEW only on a fractal. The owner looked at the comparison and kept sorted as the default | 679, 680, 681 | owner — 2026-11-18, decision 3: "render it and let the owner look before anything depends on it"; 2026-11-19: "sorted as the default is the right move" |
+| 885 | Plan 64: `render.draw_scene` draws every shape through `shapeframe.frame(view, w, h, offset)` → `ShapeFrame`; a fixed shape, a scene and a fractal each have a provider. The fractal's four special cases are fields: the cue's fixed ends (`cue`), the stroke density's count (`dens_m`), whether a legacy stroke scales with camera.zoom (`zoom_strokes`), the frame's own triangles, uvs and weights (`faces()`). A pure refactor for every non-fractal shape: 240 offscreen frames over every shape, faces, copies, Fit, screen strokes and a world offset are byte-identical to before it | — | (rec) — the brief's "one shape interface" |
+| 886 | Plan 64: the GPU path uploads each fractal's meshes once and one row of six floats a cell a frame: its centre already in the view (zoom · (o @ M) + p, 4D, before the divide), its radius in the view and its alpha (`fractal.instances`). The big numbers cancel there, in float64, so the vertex shader only adds a cell-sized turn: within 5 × 10⁻⁶ of a cell's size of the CPU about 22 halvings in. The cull and the split stay on the CPU (`fractal.walk`), the one walk both paths draw. The field's copies are one draw each, the copy a uniform; the depth pass and the look-back's cover draw the same cells | 683, 688 | (rec) — the brief: "(4D centre, scale, alpha)", the cull and split on the CPU |
+| 887 | Plan 64, part 2 (`plans/64-depth-dependent-grab.md`). The cull and the depth cue read the offset drawn after the shape (`shapeframe.drawn_offset`), so a grabbed fractal culls where it is drawn. **Outside** (the shape fits the rig's box and the view has gone into no cell) the fist holds an object: the world's offset on the shape, drawn home ∘ offset, as plan 59. **Inside** (`fractal.wants_inside`: a projected corner of the whole shape past the box, or the view in a cell; back out within 90% of the box) it holds the space: the object's offset becomes the view's own (`Dive.turn`, a turn about the middle of the screen before the 4D divide, and `Dive.shift`, its room placement in world units), and the grip's flight of the space (the shape object's offset, home the identity) is folded into the view each frame (`fractal.fold_flight`): it turns about the middle of the screen and travels through the fractal's own space, before the 4D divide. Crossing in or out redraws nothing; a body's motion and a joint's hold are re-expressed (`World.to_space`, `to_object`); inside, the rig neither boxes the space nor shapes its inertia. Only ever inside does the view re-root, so an object is never re-rooted and nothing makes up for an offset across a re-root: the compensation first pushed for this row (a pan-and-depth solve, an offset rebase, a 4D drift) is gone. The off-air deck re-roots with no offset and draws the world's only while it is an object | 684, 685 | owner — 2026-11-19: a depth-dependent grab; "sane default behavior"; "dragging inside the fractal … is traveling through the 4D space of the fractal"; the margins and the grip's inside behaviour defaults, "subject to change" once played with |
+| 888 | Plan 64, a limit of decision 3: unsorted additive has no painter order, so where lines and faces overlap they brighten (a dense region goes white) and the red dots add into the white lines (pink, not red over white). The depth buffer is still written by the depth pass from fragments over `DEPTH_ALPHA`, so what is drawn after the shape is hidden behind it as before | 679, 680, 681 | (rec) |
+| 889 | Plan 64: a loadable patch saved while its view is inside a fractal writes `"dive": {"shape", "path", "z", "w", "turn", "shift"}` (`loadable.DIVE_KEY`, `fractal.Dive.to_json`); any other writes none, so it saves byte for byte as before. A load puts the dive back for the shape it names (`Dive.from_json`); a file with none, or one for another shape, starts at the top — a load always replaces the dive, which means something only under the camera it was made with. Validated whole: a cell that is not a whole number or not one of the fractal's, a path over 4096, a value that is not a real, finite number as written, or a turn that is not one is refused and said, the rest of the load landing. No schema bump (DECISIONS: node mode's precedent, #377): a build from before ignores the key and shows the top of the shape at the saved zoom. Each fractal's `centres` order is a file format now, held by a test | 682 | owner — 2026-11-19: "saving the dive is something that we do want to do. Optional loadable patch keys is the right move" |
+| 890 | Plan 64: `tools/fractal_bench.py` times, per fractal, at 0, 3, 8 and 16 levels in, faces off and on, sorted and additive: the walk, each path's CPU build, the whole `draw_scene` (the GPU waited on) and its GPU time (a timer query, as `PassTimer`). `tools/fractal_compare.py` makes the owner's sorted / additive comparison; `tools/fractal_grab_demo.py` a grabbed fractal dived into and flown through, each crossing's and re-root's jump measured. Cloud runs are Mesa's llvmpipe: their numbers mean nothing, and the rig's numbers are a hand check | 686, 687 | (rec) — the brief, §4 and §6 |
+| 891 | Plan 64: a restart after pulling — new fields on live objects (`ViewState.frac_additive`, `Dive.inside` / `turn` / `shift` / `flown`, `WorldObject.bounded`), a new param, two new modules (`shapeframe`, `fractal_gl`, in `hotreload.MODULES` after `fractal`) and new frame steps (`app._space`, `app._fly`). After it a hot reload drops the renderer's GPU path (`Renderer.on_reload` releases `_cells`), made again from `fractal_gl` on the next fractal frame; the face program is rebuilt with the faces' own fragment shader whenever `patterns.glsl` changes it (`CellDraw.face_program`) | — | (rec) — REVIEW.md, "Every frame, and hot reload" |
+| 892 | Plan 65: GRAPH's two effects ▸ submenus (the canvas picker's and a picture cable's insert ▸) are one row each, **effects…**, opening the effect picker; a click on a tile runs the very action the menu's row ran (`add_render` unwired where the menu opened, `insert_effect` on the cable). The rest of the menus are as they were | 689, 693 | (rec) — plan 65 §2 |
+| 893 | Plan 65: a preview is the test card through the effect at its file's defaults (a `@mix` 0 file at mix 1), the still at 0.6 s of its clock; the card, not the scene or the effect's input, so every tile is compared on one picture. An effect that reads its aux (Blend, Displace) has a known second picture wired in: a warm disc, bright at its centre (`previews.AUX_FS`) | 689 | (rec) — plan 65 §1 |
+| 894 | Plan 65: the loop is 24 frames over 2 s of the effect's clock at its default speed, made once a session and kept, played while the tile is hovered; a cut of the clock, not a cycle | 690 | (rec) — plan 65 §1 |
+| 895 | Plan 65: every preview pass runs at 960 × 540 told its true size and is shrunk through mipmaps into its 192 × 108 cell, so an effect that reads by the pixel draws as on stage; a px knob is then twice what it is against a 1080p frame | 690 | (rec) — plan 65 §1: telling a small picture it was 1080p made Edges draw nothing |
+| 896 | Plan 65: at most 3 preview passes a frame, at the frame's end after the thumbnails, stills first; every file kept once made — one 2.07 MB atlas a file, 58.1 MB for the 28 files, 65.0 MB with the card, the aux disc and the work picture; view state, never saved, let go on a reload of the renderer | 690, 696 | (rec) — plan 65 §1 |
+| 897 | Plan 65: the previews read the show's `FxState.files` (its hot reload): a file whose program source — the file, `_lib.glsl`, `_common.glsl` — changed is made again on the next ask, a file gone has its atlas freed, one that does not compile shows the plain card | 692 | (rec) — plan 65 §1 |
+| 898 | Plan 65: the picker's families are data: a file's `// @family <name>` (`EffectSpec.family`, parsed, declares nothing, written by no file yet), else its `@order` band from one table, `previews.ORDER_FAMILIES` (generators, distort, split, glow and texture, colour). The shader roundup writes `@family`. So is the aux port: every effect node had one, two files read it (Blend, Displace); GRAPH draws it only when the file's code calls `aux(` or `aux_luma(` (`fx.reads_aux`) or a saved wire goes into it | 693 | (rec) — plan 65 §2: the owner asked for a hook, not today's list |
+| 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
+| 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
+| 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
+| 872 | Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema | — | owner (2026-11-19, as recommended) |
+| 873 | Plan 63: every term a param (owner decision 1). Slice s lays the pixel's point q into the terms as c = mix(q, c, s), z₀ = mix(z₀, q, s): 0 the Mandelbrot set, 1 a Julia set. Power a whole number 2–8, an int param; a fractional p not built | 671 | owner (2026-11-18) — the mapping (rec) |
+| 874 | Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go | 669, 670 | owner (2026-11-19, as recommended): velocity, not displacement |
+| 875 | Plan 63: Size is a choice of 540, 810 or 1080 lines (owner decision 2), default 810; the pass renders at that many lines at the output's aspect and the chain's copy stretches it over the output (LINEAR); an output with no more lines is drawn straight into | 672, 673, 674 | owner (2026-11-18); the default 810 kept by the owner (2026-11-19, as recommended) until the bench and check 674 say otherwise |
+| 876 | Plan 63: the tiers (owner decision 3): float32 direct to 10⁴×, then perturbation (Tier forces either). Reference in float64 at the view's centre, RG32F 1024 wide; δ by the binomial theorem in Horner form; the rebase generalised to abs(z − Z₀) < abs(δ) for a start z₀ ≠ 0 (abs(Z + δ) < abs(δ) at Z₀ = 0) and when the reference runs out; recomputed only when a term changes or the point leaves the view | 677, 678 | owner (2026-11-18) — the details (rec) |
+| 877 | Plan 63: periodicity is Brent's doubling window with z within 5% of a pixel of the saved z; deep in on float32 it rarely fires, so the inside costs the full cap there unless the skip runs. The cardioid and period-2 bulb test only at p = 2, z₀ = 0, Slice 0, the inside black | 676 | (rec) |
+| 878 | Plan 63: Skip black is Mariani–Silver on 16×16 tiles in three passes (border pixels iterate, a tile pass reads each border, the picture fills flagged tiles), only where the set has no holes (p whole and z₀ = 0 on the Mandelbrot slice, or a pure Julia slice) and the inside black. Last frame's black tiles as a hint is not built: the GPU runs every tile at once and the border test always runs, so a hint could skip nothing | 673 | owner (2026-11-19, as recommended): the hint is dropped |
+| 879 | Plan 63: colour by steps (owner decision 5): the smooth count n + 1 − log_p log abs(z) with abs(z)² > 10⁴ the bail-out; Output steps is grey that rises over Cycle steps and falls over the next, so Palette's gradient wraps with no seam; Output ramp a built-in colour ramp; Inside coloured shows the periodicity time and turns the cardioid test and the skip off | 675, 676 | owner (2026-11-18) — the rise and fall (rec) |
+| 880 | Plan 63: Steps is a float log knob rounded to a whole cap (an integer log param cannot move one detent at a time); Zoom runs 0.5–10¹³, the float64 reference's reach, and a log param over six orders reads in three figures ("4.2e+07×") | — | (rec) |
+| 881 | Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes | — | owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before |
 
 "—": no hand check shows it; tests only.
 
@@ -15079,4 +15109,213 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **What.** The key **T** fires GRAPH's tidy and **0** its fit (every node in view, in what the pane leaves of the canvas — what a load does). Both are the panel's own keys (`ui_graph.KEY`, `FIT_KEY`, `_bare`), not rows: bare, nothing typed into, no popup — and each stands down for a row the owner learns onto it (`ui_graph._row_on_key`, as the player board's O). The factory rows that put T on `output.overlay` and 0 on `audio.restart` are gone from `routing.keymap`, and `remap_factory` drops those exact rows from a file that still holds them, with a note (`RETIRED_KEY_ROWS`); the overlay keeps the panel's toggle and the APC40's MASTER select, and the track restarts from the AUDIO section. And the tidy stops framing: it collapses, forgets and lays out as before, but asks for no fit — the zoom and the place being looked at are the owner's, so a tidy under them lays the nodes out where they sit; 0 is how every node is brought back into view.
 - **Answer.** owner — 2026-11-11: a key for the tidy, "and also make tidy not zoom me out to see all the nodes. I want to be able to press tidy and stay at the zoom that I'm currently at and my position in the graph view"; then "zero should reset the graph view to fit everything like switching a preset currently does". Told T was already the overlay's, the owner took it anyway; 0 goes the same way.
 - **Built.** `ui_graph.KEY`, `ui_graph.FIT_KEY`, `ui_graph._bare`, `ui_graph.tidy_pressed`, `ui_graph._row_on_key`, `ui_graph._tidy_key`, `ui_graph.tidy` (no `ask_fit`), `routing.RETIRED_KEY_ROWS`, `routing.keymap`, `ui.CHEATSHEET`, `hyperspace/bindings.default.json`; `tests/test_graph_legible.py::test_t_tidies_the_graph`, `::test_t_has_no_row_so_it_changes_nothing_on_the_output`, `::test_a_row_learned_onto_t_keeps_it`, `::test_zero_fits_every_node_into_view`, `tests/test_graph_fit.py::test_tidy_leaves_the_canvas_where_it_is`.
+- **Judge it.** No hand check.
+
+### 882. The fractals stay stateless and re-rooted
+
+- **What.** Plan 64: a fractal's frame is walked from the top each frame (`fractal.walk`), nothing about its cells kept between frames; the view re-roots into the cell under the middle of the screen as the zoom passes a level (`fractal.step`), `Dive.path` the only state, so the zoom stays in about [1.7, 4) and float32 never runs out.
+- **Answer.** owner — 2026-11-18, decision 1: "Stateless and re-rooting stay".
+- **Built.** `fractal.walk`, `fractal.step`, `Dive`; `tests/test_fractal.py::test_a_reroot_moves_nothing_in_the_world`, `::test_the_zoom_never_runs_out`.
+- **Judge it.** Hand checks 682.
+
+### 883. A fractal's cells are world geometry
+
+- **What.** Plan 64: a fractal's cells are world geometry like every other shape's — placed through the shape's model matrix (camera.zoom and pan, the world's offset) and seen through the one eye — never screen-space copies; `field.py`'s instances (a 2D offset, a scale and an alpha after the projection) are not the model for them and are not used. The field's copies of a fractal are copies of the whole drawn shape, as of any shape.
+- **Answer.** owner — 2026-11-18, decision 2: "World space is a hard requirement".
+- **Built.** `fractal_gl.FRAC_PLACE` (the cell placed and turned in the view, the 4D divide, then `u_model` and `u_vp`); `tests/test_fractal_gpu.py::test_the_gpu_places_every_corner_where_the_cpu_does`.
+- **Judge it.** Hand checks 684.
+
+### 884. Additive, unsorted: built and looked at; sorted stays the default
+
+- **What.** Plan 64: `view.frac_additive` switches a fractal between sorted (off, the default: the CPU path, painter sorted as every shape) and additive (on: the GPU path, unsorted, colour `SRC_ALPHA, ONE`, alpha the pass's own blend). Not saved (`persist=False`) and not modulatable; in VIEW only on a fractal. The owner looked at the comparison and kept sorted as the default.
+- **Answer.** owner — 2026-11-18, decision 3: "render it and let the owner look before anything depends on it"; 2026-11-19: "sorted as the default is the right move".
+- **Built.** `ViewState.frac_additive`, `params` `view.frac_additive`, `ui_view.spec`, `Panel._view_stock`, `shapeframe.Fractal.frame`, `Renderer._draw_cells`; `tests/test_fractal_gpu.py::test_an_additive_frame_draws_the_cells`, `::test_the_line_order_switch_leaves_a_fixed_shape_alone`; the comparison in `plans/assets/64-recursive-geometry/` (`tools/fractal_compare.py`).
+- **Judge it.** Hand checks 679, 680, 681.
+
+### 885. One shape interface
+
+- **What.** Plan 64: `render.draw_scene` draws every shape through `shapeframe.frame(view, w, h, offset)` → `ShapeFrame`; a fixed shape, a scene and a fractal each have a provider. The fractal's four special cases are fields: the cue's fixed ends (`cue`), the stroke density's count (`dens_m`), whether a legacy stroke scales with camera.zoom (`zoom_strokes`), the frame's own triangles, uvs and weights (`faces()`). A pure refactor for every non-fractal shape: 240 offscreen frames over every shape, faces, copies, Fit, screen strokes and a world offset are byte-identical to before it.
+- **Answer.** (rec) — the brief's "one shape interface".
+- **Built.** `shapeframe.py`, `Renderer.draw_scene`; `tests/test_fractal_gpu.py::test_the_provider_gives_a_fixed_shape_what_draw_scene_made` (every shape).
+- **Judge it.** No hand check.
+
+### 886. A cell's instance row: its centre in the view, its radius, its alpha
+
+- **What.** Plan 64: the GPU path uploads each fractal's meshes once and one row of six floats a cell a frame: its centre already in the view (zoom · (o @ M) + p, 4D, before the divide), its radius in the view and its alpha (`fractal.instances`). The big numbers cancel there, in float64, so the vertex shader only adds a cell-sized turn: within 5 × 10⁻⁶ of a cell's size of the CPU about 22 halvings in. The cull and the split stay on the CPU (`fractal.walk`), the one walk both paths draw. The field's copies are one draw each, the copy a uniform; the depth pass and the look-back's cover draw the same cells.
+- **Answer.** (rec) — the brief: "(4D centre, scale, alpha)", the cull and split on the CPU.
+- **Built.** `fractal.walk`, `fractal.Walk`, `fractal.instances`, `fractal_gl.CellDraw`, `Renderer._draw_cells`, `Renderer._depth_pass` (a draw of its own), `Renderer._draw_cover` (`_cover_cells`); `tests/test_fractal_gpu.py::test_the_instance_rows_of_a_known_dive`, `::test_an_additive_frame_draws_every_copy`.
+- **Judge it.** Hand checks 683, 688.
+
+### 887. What a grab holds: the object outside, the space inside
+
+- **What.** Plan 64, part 2 (`plans/64-depth-dependent-grab.md`). The cull and the depth cue read the offset drawn after the shape (`shapeframe.drawn_offset`), so a grabbed fractal culls where it is drawn. **Outside** (the shape fits the rig's box and the view has gone into no cell) the fist holds an object: the world's offset on the shape, drawn home ∘ offset, as plan 59. **Inside** (`fractal.wants_inside`: a projected corner of the whole shape past the box, or the view in a cell; back out within 90% of the box) it holds the space: the object's offset becomes the view's own (`Dive.turn`, a turn about the middle of the screen before the 4D divide, and `Dive.shift`, its room placement in world units), and the grip's flight of the space (the shape object's offset, home the identity) is folded into the view each frame (`fractal.fold_flight`): it turns about the middle of the screen and travels through the fractal's own space, before the 4D divide. Crossing in or out redraws nothing; a body's motion and a joint's hold are re-expressed (`World.to_space`, `to_object`); inside, the rig neither boxes the space nor shapes its inertia. Only ever inside does the view re-root, so an object is never re-rooted and nothing makes up for an offset across a re-root: the compensation first pushed for this row (a pan-and-depth solve, an offset rebase, a 4D drift) is gone. The off-air deck re-roots with no offset and draws the world's only while it is an object.
+- **Answer.** owner — 2026-11-19: a depth-dependent grab; "sane default behavior"; "dragging inside the fractal … is traveling through the 4D space of the fractal"; the margins and the grip's inside behaviour defaults, "subject to change" once played with.
+- **Built.** `fractal.wants_inside`, `drawn_corners`, `go_inside`, `go_outside`, `fold_flight`, `step`, `Dive`; `shapeframe.drawn_offset`; `world.WorldObject.bounded`, `World.to_space`, `World.to_object`; `grip.apply` (box and inertia for an object only); `app._space`, `app._reroot`, `app._fly`, `app._step_world`; `tests/test_fractal_grab.py` (nothing jumps in, down and out, every fractal × four offsets; an object never re-rooted; the box's edge; the flight inside, 3D and 4D; the crossing keeps the motion and the hold; no box or shaped inertia inside; Reset view and another shape), `tests/test_fractal_gpu.py::test_a_fractal_moved_off_screen_is_culled`, `::test_a_turned_fractal_is_culled_where_it_is_drawn`, `::test_the_cue_reads_the_offset`, `::test_draw_scene_hands_the_offset_to_the_fractal`; `tools/fractal_grab_demo.py`.
+- **Judge it.** Hand checks 684, 685.
+
+### 888. What additive gives up
+
+- **What.** Plan 64, a limit of decision 3: unsorted additive has no painter order, so where lines and faces overlap they brighten (a dense region goes white) and the red dots add into the white lines (pink, not red over white). The depth buffer is still written by the depth pass from fragments over `DEPTH_ALPHA`, so what is drawn after the shape is hidden behind it as before.
+- **Answer.** (rec).
+- **Built.** `Renderer._draw_cells`; the stills and videos in `plans/assets/64-recursive-geometry/`.
+- **Judge it.** Hand checks 679, 680, 681.
+
+### 889. The dive is saved: an optional key, keyed by the fractal's name
+
+- **What.** Plan 64: a loadable patch saved while its view is inside a fractal writes `"dive": {"shape", "path", "z", "w", "turn", "shift"}` (`loadable.DIVE_KEY`, `fractal.Dive.to_json`); any other writes none, so it saves byte for byte as before. A load puts the dive back for the shape it names (`Dive.from_json`); a file with none, or one for another shape, starts at the top — a load always replaces the dive, which means something only under the camera it was made with. Validated whole: a cell that is not a whole number or not one of the fractal's, a path over 4096, a value that is not a real, finite number as written, or a turn that is not one is refused and said, the rest of the load landing. No schema bump (DECISIONS: node mode's precedent, #377): a build from before ignores the key and shows the top of the shape at the saved zoom. Each fractal's `centres` order is a file format now, held by a test.
+- **Answer.** owner — 2026-11-19: "saving the dive is something that we do want to do. Optional loadable patch keys is the right move".
+- **Built.** `loadable.DIVE_KEY`, `LoadedPatch._dive_part`, `_land_dive`, `fractal.Dive.to_json`, `from_json`, `MAX_PATH`; `tests/test_fractal_grab.py::test_a_dive_round_trips_through_a_loadable_patch`, `::test_a_loadable_patch_from_before_starts_at_the_top`, `::test_a_loadable_patch_not_inside_writes_no_dive`, `::test_a_dive_that_cannot_land_is_refused_whole_and_said`, `::test_each_fractals_cells_keep_their_order`.
+- **Judge it.** Hand checks 682.
+
+### 890. The rig bench and the demo tools
+
+- **What.** Plan 64: `tools/fractal_bench.py` times, per fractal, at 0, 3, 8 and 16 levels in, faces off and on, sorted and additive: the walk, each path's CPU build, the whole `draw_scene` (the GPU waited on) and its GPU time (a timer query, as `PassTimer`). `tools/fractal_compare.py` makes the owner's sorted / additive comparison; `tools/fractal_grab_demo.py` a grabbed fractal dived into and flown through, each crossing's and re-root's jump measured. Cloud runs are Mesa's llvmpipe: their numbers mean nothing, and the rig's numbers are a hand check.
+- **Answer.** (rec) — the brief, §4 and §6.
+- **Built.** `tools/fractal_bench.py`, `tools/fractal_compare.py`, `tools/fractal_grab_demo.py`.
+- **Judge it.** Hand checks 686, 687.
+
+### 891. Restart, and the GPU path rebuilt on a reload
+
+- **What.** Plan 64: a restart after pulling — new fields on live objects (`ViewState.frac_additive`, `Dive.inside` / `turn` / `shift` / `flown`, `WorldObject.bounded`), a new param, two new modules (`shapeframe`, `fractal_gl`, in `hotreload.MODULES` after `fractal`) and new frame steps (`app._space`, `app._fly`). After it a hot reload drops the renderer's GPU path (`Renderer.on_reload` releases `_cells`), made again from `fractal_gl` on the next fractal frame; the face program is rebuilt with the faces' own fragment shader whenever `patterns.glsl` changes it (`CellDraw.face_program`).
+- **Answer.** (rec) — REVIEW.md, "Every frame, and hot reload".
+- **Built.** `hotreload.MODULES`, `Renderer.on_reload`, `fractal_gl.CellDraw.face_program`; `tests/test_layer_boundary.py::test_every_module_is_on_the_wall`.
+- **Judge it.** No hand check.
+
+### 892. The effect picker in place of the effects submenus
+
+- **What.** The canvas picker's **effects ▸ <file>** and a picture cable's **insert ▸ effects ▸ <file>** become **effects…**, which opens `ui_effect_picker`: a grid of the effects' previews by family, a search, the hovered tile's loop and tip. A pick calls the menu row's action, so the graph it lands is the menu's, unwired or spliced as before.
+- **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
+- **Built.** `ui_graph.render_picker` (`EFFECTS_GROUP`), `ui_graph._cable_menu`, `ui_graph.effect_picker`, `ui_graph.pick_effect`, `ui_effect_picker`; `tests/test_effect_picker.py::test_the_menus_have_one_effects_row_in_place_of_the_submenu`, `::test_a_tile_adds_what_the_menus_row_added`, `::test_insert_on_a_cable_splices_what_the_menus_row_spliced`.
+- **Judge it.** 689, 693.
+
+### 893. A preview is the test card through the effect, at its defaults
+
+- **What.** Each tile is the test card through that effect with every knob at the file's default, so tiles compare on one picture. A file that starts as a no-op (`@mix 0`: palette) is shown at mix 1. The still is 0.6 s into the effect's clock, since at phase 0 some effects are the plain card. A file that reads its aux is previewed with a known picture in it, a warm disc bright at its centre, so Blend lays it on and Displace bends the grid by it (the owner, 2026-11-19, asked for a known aux on these previews); their tiles carry an **aux** badge.
+- **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
+- **Built.** `previews.preview_values`, `previews.STILL_T`, `previews.card_values`, `previews.AUX_FS`, `EffectPreviews._aux_picture`; `tests/test_effect_previews.py::test_a_no_op_mix_is_shown_at_full_mix`, `::test_an_aux_effects_preview_has_the_known_aux_and_shows_it`.
+- **Judge it.** 689.
+
+### 894. A two-second loop, made once
+
+- **What.** Each file's loop is 24 frames over 2 s of its clock at its default speed (its phase and each `@clock` set as `FxState.advance` would have them), made once a session and kept, played while hovered. It jumps back at its end: an effect's motion has no period in general.
+- **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
+- **Built.** `previews.LOOP_FRAMES`, `LOOP_S`, `loop_t`, `EffectPreviews.picture`, `EffectPreviews._at`; `tests/test_effect_previews.py::test_the_loop_plays_its_frames_by_time`, `::test_a_loop_is_made_only_for_the_tile_asked`.
+- **Judge it.** 690.
+
+### 895. Made at a work size, shrunk into the tile
+
+- **What.** A pass over a small picture told it was the stage's size read between its pixels, and Edges drew nothing. Each pass is made at a work size, told the truth, and shrunk through mipmaps into its cell; a px knob is then twice what it would be at 1080p.
+- **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
+- **Built.** `previews.WORK_W`, `WORK_H`, `SHRINK`, `EffectPreviews._pass`; the contact sheet in `docs/plans/assets/65-effect-previews/sheet.png`.
+- **Judge it.** 690.
+
+### 896. Three passes a frame, every file kept
+
+- **What.** The picker wants its tiles each frame; the renderer makes at most three passes at its frame's end (`_for_the_panel`, after the thumbnails), the card and the stills before any loop. Every file's atlas is kept once made (2.07 MB each, 58.1 MB for the 28 files; 65.0 MB with the card, the aux disc and the work picture). Never saved; a reload of the renderer lets them go and they are made again on the next ask.
+- **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
+- **Built.** `previews.PASSES_PER_FRAME`, `EffectPreviews.make`, `bytes_kept`, `Renderer.effect_previews`, `Renderer._make_previews`, `Renderer.on_reload`; `tests/test_effect_previews.py::test_never_more_than_the_budget_a_frame_and_the_stills_first`, `::test_every_file_fits_in_the_memory_the_plan_states`, `::test_a_reload_of_the_renderer_lets_the_previews_go`.
+- **Judge it.** 690, 696.
+
+### 897. A changed file is made again
+
+- **What.** The cache reads the show's own `FxState.files`, which the chain's hot reload keeps current. A file whose program source changed (the file, `_lib.glsl`, `_common.glsl`) is forgotten and made again on the next ask; a file gone is freed; a file that does not compile shows the plain card and says why.
+- **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
+- **Built.** `EffectPreviews._sync`, `EffectPreviews.failed`; `tests/test_effect_previews.py::test_a_file_changed_on_disk_is_made_again_and_only_it`, `::test_the_shared_lib_changing_makes_every_file_again`, `::test_a_file_that_does_not_compile_shows_the_plain_card_and_says_why`.
+- **Judge it.** 692.
+
+### 898. Families, and the aux port, from the files
+
+- **What.** The picker groups by `previews.family_of`: a file's `@family` line, else the band its `@order` is in (`ORDER_FAMILIES`, one table). No file says `@family` yet; the shader roundup writes them. A family declares nothing, so it is outside `EffectSpec.signature`. The aux port is read from the files the same way: every effect node (and copy) had an `aux` port, and only Blend and Displace read it. GRAPH now draws it only when the file's code calls `aux(` or `aux_luma(` outside a comment (`fx.reads_aux`, `EffectSpec.aux`), or when a saved wire goes into it — that wire loads, is drawn and can be deleted. Nothing about the file format changes: the port still exists, it is only not offered where it does nothing.
+- **Answer.** (rec) — the builder's, plan 65 (2026-11-19); the aux port's, the owner's ask of 2026-11-19 ("for a lot of the effects, the auxiliary input doesn't really do anything").
+- **Built.** `fx.EffectSpec.family`, `fx.EffectSpec.aux`, `fx.reads_aux`, `fx._DIRECTIVE`, `graphview.aux_shown`, `previews.family_of`, `previews.families`, `previews.ORDER_FAMILIES`; `tests/test_effect_previews.py::test_a_files_family_is_its_at_family_else_its_order_band`, `::test_the_groups_come_from_the_files_in_family_order`, `::test_every_shipped_file_has_a_family_and_the_test_card_is_a_generator`, `::test_a_file_reads_aux_when_its_code_calls_it_and_not_in_a_comment`, `::test_on_this_build_only_blend_and_displace_read_their_aux`, `tests/test_aux_ports.py`.
+- **Judge it.** 693 (the aux port); the roundup's families will be judged with it.
+
+### 899. The search, and Enter
+
+- **What.** Every word typed must be in the label, the tip, the file name or the family. A tip can mention another effect's word ("wave" finds Prism and Oil slick by their tips), so Enter takes the first tile whose label answers before one whose tip does.
+- **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
+- **Built.** `previews.matches`, `ui_effect_picker.first_match`; `tests/test_effect_previews.py::test_the_search_filters_on_label_and_tip`, `tests/test_effect_picker.py::test_the_search_keeps_the_tiles_whose_label_or_tip_answer`, `::test_enter_takes_the_first_tile_the_search_leaves`, `::test_enter_prefers_a_label_to_a_tip`.
+- **Judge it.** 694.
+
+### 900. An unwired effect's thumbnail, beside the graph
+
+- **What.** Row 349 keeps an unreached node unbuilt (nothing hidden costs the frame; the canvas and the renderer agree on what is faint; no buffer for a parked node; the frame signatures). Its thumbnail is made beside the graph, as the test card chip's is: its input when the frame made that node, else the card, through it at a thumbnail's size on the renderer's chain into its own texture, at most 4 a frame. Off or under the bypass, it shows its input as it is.
+- **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
+- **Built.** `render.unwired_through`, `render.UNWIRED_PER_FRAME`, `Renderer._unwired_budget`, `render.thumb_source` (`unwired`), `graphview.UNWIRED_PIC`, `ui_graph.thumb_how`; `tests/test_unwired_thumbs.py`.
+- **Judge it.** 691.
+
+### 901. What the previews show at the defaults
+
+- **What.** The contact sheet shows about a quarter of the effects barely touching the card at their defaults (Blend and Displace no longer: they have a known aux). The plan builds the previews at the defaults, as asked; the owner and the shader roundup decide whether each file gets showcase values for its preview.
+- **Answer.** pending the owner.
+- **Built.** Nothing: a question. The options are in `docs/plans/65-effect-previews.md`, "What the previews show at the defaults".
+- **Judge it.** 689, by eye on the contact sheet and in the picker.
+### 872. The Mandelbrot is an effect file with a Python half
+
+- **What.** Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema.
+- **Answer.** owner (2026-11-19, as recommended).
+- **Built.** `fx.HOOKS`, `EffectSpec.hook`, `FxChain.run_one`, `FxChain.upscale`, `FxState.advance`, `mandel.run`, `mandel.advance`; `tests/test_mandel.py::test_the_file_declares_its_hook_and_a_wrong_hook_is_refused`, `::test_the_drives_run_only_while_the_effect_draws`.
+- **Judge it.** No hand check.
+
+### 873. Every term a param, laid by the Slice
+
+- **What.** Plan 63: every term a param (owner decision 1). Slice s lays the pixel's point q into the terms as c = mix(q, c, s), z₀ = mix(z₀, q, s): 0 the Mandelbrot set, 1 a Julia set. Power a whole number 2–8, an int param; a fractional p not built.
+- **Answer.** owner (2026-11-18) — the mapping (rec).
+- **Built.** `mandel.terms`, `mandel.glsl`'s `orbit`; `tests/test_mandel.py::test_the_direct_tier_is_its_float32_twin`, `::test_perturbation_in_float64_is_the_oracle`.
+- **Judge it.** 671.
+
+### 874. Zoom-scaled sensitivity as drives in the node
+
+- **What.** Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go.
+- **Answer.** owner (2026-11-19, as recommended): velocity, not displacement.
+- **Built.** `mandel.advance`, `mandel.DRIVES`; `tests/test_mandel.py::test_a_pan_moves_the_picture_the_same_on_screen_at_any_depth`, `::test_dive_doubles_and_every_drive_moves_by_the_view`, `::test_a_drive_at_rest_writes_nothing_and_a_term_stays_in_range`.
+- **Judge it.** 669, 670.
+
+### 875. Size: 540, 810, 1080 lines, then upscaled
+
+- **What.** Plan 63: Size is a choice of 540, 810 or 1080 lines (owner decision 2), default 810; the pass renders at that many lines at the output's aspect and the chain's copy stretches it over the output (LINEAR); an output with no more lines is drawn straight into.
+- **Answer.** owner (2026-11-18); the default 810 kept by the owner (2026-11-19, as recommended) until the bench and check 674 say otherwise.
+- **Built.** `mandel.render_size`, `mandel.run`, `FxChain.upscale`; `tests/test_mandel.py::test_the_size_renders_at_its_lines_and_upscales`.
+- **Judge it.** 672, 673, 674.
+
+### 876. The tiers and the reference
+
+- **What.** Plan 63: the tiers (owner decision 3): float32 direct to 10⁴×, then perturbation (Tier forces either). Reference in float64 at the view's centre, RG32F 1024 wide; δ by the binomial theorem in Horner form; the rebase generalised to |z − Z₀| < |δ| for a start z₀ ≠ 0 (|Z + δ| < |δ| at Z₀ = 0) and when the reference runs out; recomputed only when a term changes or the point leaves the view.
+- **Answer.** owner (2026-11-18) — the details (rec).
+- **Built.** `mandel.reference_orbit`, `binomial_delta`, `rebase`, `perturbed_counts`, `Reference`, `perturbs`; `tests/test_mandel.py::test_perturbation_in_float64_is_the_oracle`, `::test_without_the_rebase_a_reference_that_escapes_early_glitches`, `::test_the_reference_is_made_again_only_when_it_must_be`.
+- **Judge it.** 677, 678.
+
+### 877. Periodicity and the cardioid
+
+- **What.** Plan 63: periodicity is Brent's doubling window with z within 5% of a pixel of the saved z; deep in on float32 it rarely fires, so the inside costs the full cap there unless the skip runs. The cardioid and period-2 bulb test only at p = 2, z₀ = 0, Slice 0, the inside black.
+- **Answer.** (rec).
+- **Built.** `mandel.PERIOD_EPS`, `escape_counts(periodic_eps=…)`, `in_cardioid`; `tests/test_mandel.py::test_periodicity_stops_the_inside_early_and_agrees_with_the_oracle`, `::test_the_cardioid_test_never_calls_an_outside_point_inside`.
+- **Judge it.** 676.
+
+### 878. Skip black, and no hint
+
+- **What.** Plan 63: Skip black is Mariani–Silver on 16×16 tiles in three passes (border pixels iterate, a tile pass reads each border, the picture fills flagged tiles), only where the set has no holes (p whole and z₀ = 0 on the Mandelbrot slice, or a pure Julia slice) and the inside black. Last frame's black tiles as a hint is not built: the GPU runs every tile at once and the border test always runs, so a hint could skip nothing.
+- **Answer.** owner (2026-11-19, as recommended): the hint is dropped.
+- **Built.** `mandel.skip_valid`, `tile_flags`, `fill_tiles`, `TILES_FS`, `mandel.run`; `tests/test_mandel.py::test_a_tile_is_flagged_by_its_border_alone`, `::test_where_the_skip_may_run`, `::test_the_skip_fills_whole_tiles_and_moves_almost_nothing`.
+- **Judge it.** 673.
+
+### 879. Colour by steps
+
+- **What.** Plan 63: colour by steps (owner decision 5): the smooth count n + 1 − log_p log|z| with |z|² > 10⁴ the bail-out; Output steps is grey that rises over Cycle steps and falls over the next, so Palette's gradient wraps with no seam; Output ramp a built-in colour ramp; Inside coloured shows the periodicity time and turns the cardioid test and the skip off.
+- **Answer.** owner (2026-11-18) — the rise and fall (rec).
+- **Built.** `mandel.smooth`, `mandel.glsl`'s `rise`; `tests/test_mandel.py::test_the_smooth_count_is_continuous_where_the_whole_count_steps`, `::test_inside_black_coloured_and_the_ramp`.
+- **Judge it.** 675, 676.
+
+### 880. Steps and Zoom as knobs
+
+- **What.** Plan 63: Steps is a float log knob rounded to a whole cap (an integer log param cannot move one detent at a time); Zoom runs 0.5–10¹³, the float64 reference's reach, and a log param over six orders reads in three figures ("4.2e+07×").
+- **Answer.** (rec).
+- **Built.** `mandel.steps`, `fx._fmt`; `tests/test_mandel.py::test_the_zoom_reads_in_figures_and_a_power_of_ten`, `tests/test_step_continuity.py`.
+- **Judge it.** No hand check.
+
+### 881. Stage 5 not built
+
+- **What.** Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes.
+- **Answer.** owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before.
+- **Built.** Nothing.
 - **Judge it.** No hand check.
