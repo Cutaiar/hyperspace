@@ -162,6 +162,25 @@ the top: a load always replaces the dive.
   (a timer query, as `PassTimer` times a node). Cloud numbers mean nothing;
   hand check 686 runs it on the rig.
 
+### 2.7 The FRACTAL section (2026-11-20, rows 902–905)
+
+The owner couldn't find the fractal's controls: Additive was below VIEW's
+fold, and the rest were constants. Now a side-pane section, **fractal**
+(the sections menu), holds them:
+- the shape, how many levels in, inside or outside, and the zoom;
+- **Detail** (`view.frac_detail`): how small a cell splits on screen;
+- **Reach** (`view.frac_far`): how far into the shape cells are drawn;
+- **Near** (`view.frac_near`): how near the eye a cell comes before it
+  dissolves;
+- **Additive**, moved here from VIEW;
+- **To the top** (`view.frac_top`): out of every cell, the turn kept.
+
+Detail, Reach and Near are the look's own and routable. They are saved under an
+optional `"fractal"` key written only for a fractal look, so no other look's
+file changes. At 1, 0 and 0 a fractal draws as it did.
+
+![The FRACTAL section in use](assets/64-recursive-geometry/fractal-section.png)
+
 ## 3. Restart or hot reload
 
 **Restart.** There are new fields on live objects (`ViewState.frac_additive`,

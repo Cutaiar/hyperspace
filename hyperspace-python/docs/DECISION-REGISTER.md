@@ -891,6 +891,10 @@ here; overturn → the change, then the same.
 | 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
 | 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
 | 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
+| 902 | Plan 64: a side-pane section `fractal` (appended to `ui.PAGE_KEYS`, every saved slot kept) holds what controls a fractal: what it is and where the view is (levels in, inside or outside, the zoom), **Detail** (`view.frac_detail`, 0.35–3×: the split size's reciprocal), **Reach** (`view.frac_far`, −1.5 to +2 octaves on how far cells are drawn) and **Near** (`view.frac_near`, ±1 octave on how near the eye a cell dissolves), **Additive** (moved out of VIEW) and **To the top**. On another shape it says how to pick one. Detail, Reach and Near are the look's own and routable, saved under an optional loadable-patch key `"fractal": {"detail", "far", "near"}` (`loadable.FRACTAL_KEY`) written only while the look's shape is a fractal — every other look saves byte for byte as before — and read on load (the fractal's own, 1, 0 and 0, when absent; a value that is not a number refused, one out of range held to it, each said); in the dirty signature | 699, 700 | owner — 2026-11-20: "build the fractal section" (the recommendation of the day before: a section, a detail slider, the depth of field, a readout, a way back to the top) |
+| 903 | Plan 64: the reach a fractal is drawn to is never under 0.2 octaves and the near end never under 0.3, whatever the fractal's own plus the slider, so the cue's ends never cross and the fade never inverts | — | (rec) |
+| 904 | Plan 64: **To the top** (`view.frac_top`) leaves every cell at once — zoom 1, pan 0, the dive reset — as Reset view does for those, but leaves the shape's turn, the camera's yaw and pitch and the rotation phases alone: it answers "where am I in the fractal", not "reset everything". Inside, it brings the space home, as Reset view does (row 887) | 701 | (rec) |
+| 905 | Plan 64: `view.frac_additive` is drawn in the FRACTAL section, no longer in VIEW, where it sat below the fold and was missed. Its id and behaviour are unchanged; still not saved | 699 | (rec) — the owner, 2026-11-20: "i cannot find any of the controls used to control the recursive geometry" |
 | 872 | Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema | — | owner (2026-11-19, as recommended) |
 | 873 | Plan 63: every term a param (owner decision 1). Slice s lays the pixel's point q into the terms as c = mix(q, c, s), z₀ = mix(z₀, q, s): 0 the Mandelbrot set, 1 a Julia set. Power a whole number 2–8, an int param; a fractional p not built | 671 | owner (2026-11-18) — the mapping (rec) |
 | 874 | Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go | 669, 670 | owner (2026-11-19, as recommended): velocity, not displacement |
@@ -15399,3 +15403,30 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** (rec) — pending the owner.
 - **Built.** `ui_fx.strip`, `ui_fields.inline_pad`; `tests/test_control_widgets.py::test_the_strip_draws_no_slider_for_a_padded_param`.
 - **Judge it.** 823.
+### 902. A FRACTAL section, and a fractal's controls are the look's own
+
+- **What.** Plan 64: a side-pane section `fractal` (appended to `ui.PAGE_KEYS`, every saved slot kept) holds what controls a fractal: what it is and where the view is (levels in, inside or outside, the zoom), **Detail** (`view.frac_detail`, 0.35–3×: the split size's reciprocal), **Reach** (`view.frac_far`, −1.5 to +2 octaves on how far cells are drawn) and **Near** (`view.frac_near`, ±1 octave on how near the eye a cell dissolves), **Additive** (moved out of VIEW) and **To the top**. On another shape it says how to pick one. Detail, Reach and Near are the look's own and routable, saved under an optional loadable-patch key `"fractal": {"detail", "far", "near"}` (`loadable.FRACTAL_KEY`) written only while the look's shape is a fractal — every other look saves byte for byte as before — and read on load (the fractal's own, 1, 0 and 0, when absent; a value that is not a number refused, one out of range held to it, each said); in the dirty signature.
+- **Answer.** owner — 2026-11-20: "build the fractal section" (the recommendation of the day before: a section, a detail slider, the depth of field, a readout, a way back to the top).
+- **Built.** `ui_fractal.py`, `ui.PAGE_KEYS`, `ui_pane.SECTIONS`, `Panel._page_fractal`, `loadable.FRACTAL_KEY` (`_fractal_part`, `_land_fractal`), `params` (`view.frac_detail`, `view.frac_far`, `view.frac_near`, `view.frac_top`), `ViewState.frac_detail` / `frac_far` / `frac_near`, `fractal.walk`, `Walk.far` / `near`; `tests/test_ui_pane.py::test_the_fractal_section_draws_its_controls_inside_the_pane`, `tests/test_fractal_grab.py::test_detail_splits_cells_smaller`, `::test_reach_draws_deeper_and_near_lets_cells_come_closer`, `::test_the_gpu_reads_the_same_reach`, `::test_the_fractal_controls_are_the_looks_own`.
+- **Judge it.** Hand checks 699, 700.
+
+### 903. Reach and Near have floors
+
+- **What.** Plan 64: the reach a fractal is drawn to is never under 0.2 octaves and the near end never under 0.3, whatever the fractal's own plus the slider, so the cue's ends never cross and the fade never inverts.
+- **Answer.** (rec).
+- **Built.** `fractal.walk` (`oct_far`, `oct_near`); `tests/test_fractal_grab.py::test_reach_draws_deeper_and_near_lets_cells_come_closer`.
+- **Judge it.** No hand check.
+
+### 904. To the top keeps the turn
+
+- **What.** Plan 64: **To the top** (`view.frac_top`) leaves every cell at once — zoom 1, pan 0, the dive reset — as Reset view does for those, but leaves the shape's turn, the camera's yaw and pitch and the rotation phases alone: it answers "where am I in the fractal", not "reset everything". Inside, it brings the space home, as Reset view does (row 887).
+- **Answer.** (rec).
+- **Built.** `params` `view.frac_top`; `tests/test_fractal_grab.py::test_to_the_top_leaves_every_cell`.
+- **Judge it.** Hand checks 701.
+
+### 905. Additive moved to the FRACTAL section
+
+- **What.** Plan 64: `view.frac_additive` is drawn in the FRACTAL section, no longer in VIEW, where it sat below the fold and was missed. Its id and behaviour are unchanged; still not saved.
+- **Answer.** (rec) — the owner, 2026-11-20: "i cannot find any of the controls used to control the recursive geometry".
+- **Built.** `ui_fractal.py`, `ui_view.spec`, `Panel._view_stock`.
+- **Judge it.** Hand checks 699.

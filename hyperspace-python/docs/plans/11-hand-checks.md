@@ -8887,6 +8887,17 @@ Plan 82. Headless: `tests/test_control_widgets.py` (the parse, the shapes, the t
 **824. The volume.** Zoom burst's Burst. *Pass:* drag the square: the burst's centre moves; turn the third knob up: the halo grows and the smear reaches further; double-click the X knob: the centre returns to the middle. A saved patch with Zoom burst loads with its centre and amount as they were. *Fail:* a halo that doesn't follow Amount, or a value moved by a load.
 
 **825. Modulation on a pad.** Route an LFO onto Zoom burst's Centre X (and a hand onto Centre Y). *Pass:* a white dot moves with the lanes, a line from the red dot (where you set it) to it, the knobs' white ticks move, the readouts go red; drag the pad while it rides: the red dot moves, the white one rides about it. *Fail:* the red dot moving with the LFO, or no sign the lane is there.
+## EB. The FRACTAL section (rows 902–905, 2026-11-20)
+
+Plan 64. Headless: `tests/test_ui_pane.py::test_the_fractal_section_draws_its_controls_inside_the_pane` (every control drawn, inside the pane, at every layout) and `tests/test_fractal_grab.py` (Detail, Reach and Near change what is drawn, To the top, saved with the look). A restart after pulling (new fields on `ViewState`).
+
+Setup for all: the sections menu → **fractal**, VIEW's shape a fractal.
+
+**699. The section.** *Pass:* it says the shape, how many levels in, inside or outside, and the zoom, changing as you dive; Detail, Reach, Near, Additive and To the top are all there without scrolling; on a cube it says how to pick a fractal and shows no controls. *Fail:* a control missing, cut off, or a readout that doesn't follow the dive.
+
+**700. The controls, by eye.** A few levels into the Menger sponge and the 5-cell: drag **Detail** up and down, then **Reach**, then **Near**. *Pass:* Detail makes the cells split finer or coarser; Reach draws further into the shape or less; Near lets cells come closer before they dissolve, or fade sooner; none jumps or flickers, and the frame rate holds at the top of Detail on the rig. Save the look, load another and back: the three are as you left them. Say what ranges you want. *Fail:* a slider that does nothing, a jump, or a value not saved.
+
+**701. To the top.** Deep in, turned: press **To the top**. *Pass:* the whole shape, centred, at zoom 1, still turned as it was; a grabbed fractal comes home. *Fail:* a dive left behind, or the turn lost.
 
 ## What no test covers
 

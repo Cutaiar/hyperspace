@@ -1248,3 +1248,31 @@ def test_the_output_switches_are_left_alone_by_undo_loadables_and_shows(rig):
         assert (sw2.scene, sw2.hands, sw2.dim, sw1.flip_x) == (False, False, 0.3, True)
     assert r.undo.undo()                             # undoing a load does not move them either
     assert (sw2.scene, sw2.hands, sw2.dim, sw1.flip_x) == (False, False, 0.3, True)
+
+
+def test_a_fractal_setting_is_undone_and_a_load_puts_it_back(rig):
+    """Plan 64 (Devin's review of #466): Detail, Reach and Near are in the
+    undo history — an edit undoes, and undoing a load puts back the look's
+    settings the load replaced — though a loadable patch writes them under
+    its `fractal` key, not its values."""
+    from hyperspace.geometry import shape_index
+
+    reg = rig.reg
+    reg["view.shape"].set(shape_index("Menger sponge"))
+    settle(rig)
+    rig.undo.clear()
+    reg["view.frac_detail"].set(2.0)
+    settle(rig)
+    assert rig.undo.undo()
+    assert reg["view.frac_detail"].base == pytest.approx(1.0)
+    assert rig.undo.redo()
+    assert reg["view.frac_detail"].base == pytest.approx(2.0)
+    reg["view.frac_far"].set(0.75)
+    settle(rig)
+    reg["preset.load.4"].fire()                        # a look with no fractal settings
+    settle(rig)
+    assert reg["view.frac_detail"].base == pytest.approx(1.0)
+    assert reg["view.frac_far"].base == pytest.approx(0.0)
+    assert rig.undo.undo()
+    assert reg["view.frac_detail"].base == pytest.approx(2.0)
+    assert reg["view.frac_far"].base == pytest.approx(0.75)
