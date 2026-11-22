@@ -308,3 +308,38 @@ a **map**.
 7. **Time Displace on the branch**: hold it unmerged until P2 and P4 [Rec], or merge it now
    as a stopgap and rebuild it then? Merged, its knobs land in saved looks and become one
    more thing to migrate.
+
+## 7. The owner's second round (2026-11-22)
+
+Overrules §2–§6 where they differ.
+
+1. **History is a temporal vector of a generic type T, T matrix-like** (the owner: "history
+   (vector of bitmaps) is a narrow primitive"). Taken one step further, **a stack of T**: an
+   ordered vector of one kind, indexed by time *or* by position, read with a blend between
+   neighbours. T is a picture, a field or a mask; a number is a 1 × 1 matrix, so a lane's
+   past is a stack too.
+   - Makers: a look-back (T recorded over time), a file's decoded window (pictures, past and
+     future), a delay (depth 1), a bank of wired inputs (the wavetable), the shapes bank
+     (curves, §3.1).
+   - Readers, the same for every T: **at an index** (an echo; the switch as it is today), **at
+     a field of indices** (time displace; a wavetable morphing per pixel), **a weighted sum
+     over indices** (the trail; a weighted sum of a mask stack is a field: how often each
+     pixel passed).
+   - This answers Q5: the wavetable is a stack read at a position, not a node of its own,
+     and §3.6's switch position and shapes bank are two of its makers. Storage is §3.4's time
+     volume, its texture format by T (RGBA8 a picture, RG32F a field, R8 a mask).
+2. **A mask is a binary bitmap, a gate** (as plan 39). What cuts with one also says **what the
+   pixels that do not pass become**: transparent, one colour (`#ffaa2233`), or a second
+   picture wired in. The third is the composite's job, so cut and composite share one node
+   rather than competing.
+3. **Q3 (any knob takes a field)** asked again with its context: open.
+4. **Blending stays in the effects, as shared code.** Each effect is M → M′ → f(M, M′); f is
+   the same blend library a standalone Blend / Composite node runs, with one list (§3.5). The
+   list grows to the standard modes not supported today: darken, lighten, colour dodge and
+   burn, linear dodge and burn, overlay, soft, hard, vivid, linear and pin light,
+   difference, exclusion, subtract, divide, hue, saturation, colour, luminosity, and the
+   Porter–Duff operators (in, out, atop, xor). Saved `blend` indices stay readable: new
+   modes are appended.
+5. **Q5 (the wavetable)**: answered by 1, for the owner to confirm.
+6. **Q6 (the word)** asked again with its context: open.
+7. **Time Displace on this branch: hold.**
