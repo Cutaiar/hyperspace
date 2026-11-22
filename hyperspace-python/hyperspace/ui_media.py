@@ -713,6 +713,7 @@ def _selected(panel, st: dict, state) -> None:
             imgui.table_next_column()
             panel.half(f"media.{c}.{right}", right)
         imgui.end_table()
+    _key(panel, c, ch)
     sid = ch.bin[ch.index()]
     head = state.playhead(c)
     clock = f"{_mmss(head[0])} / {_mmss(head[1])}" if head is not None else ""
@@ -732,6 +733,33 @@ def _selected(panel, st: dict, state) -> None:
         imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
                         - ui._readout_width(clock))
         ui._readout(clock, ui.DIM)
+
+
+# plan 66: black is clear's knobs, two to a row under its switch while it is on
+KEY_ROWS = (("key_level", "level", "key_soft", "soft"),
+            ("key_measure", "measure", "key_feather", "feather"))
+
+
+def _key(panel, c: str, ch) -> None:
+    """Channel `c`'s black is clear (plan 66, `media.<c>.key*`): the switch,
+    and while it is on the level, softness, measure and feather two to a
+    row, then keep colour and invert. Nothing for a registry from before."""
+    pid = f"media.{c}.key"
+    if pid not in panel.reg:
+        return
+    panel._check(pid, "black is clear")
+    if not bool(getattr(ch, "key", False)):
+        return
+    if imgui.begin_table(f"##media.{c}.key", 2, imgui.TableFlags_.sizing_stretch_same):
+        for left, ll, right, rl in KEY_ROWS:
+            imgui.table_next_column()
+            panel.half(f"media.{c}.{left}", ll)
+            imgui.table_next_column()
+            panel.half(f"media.{c}.{right}", rl)
+        imgui.end_table()
+    panel._check(f"media.{c}.key_keep", "keep colour")
+    imgui.same_line()
+    panel._check(f"media.{c}.key_invert", "invert")
 
 
 def mixer_line(panel) -> tuple[str, bool]:

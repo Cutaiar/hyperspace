@@ -8872,6 +8872,28 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 **678. A hand on c deep in.** At 10⁶× with **Steps** at 4096, a hand on **c drive x**. *Pass:* the picture keeps the frame rate while c moves (the reference is computed every frame c changes). *Fail:* a stutter: say at which Steps it starts (the bench's `ref ms`).
 
+## EB. Black is clear (rows 902–913, 2026-11-22)
+
+Plan 66. Headless: `tests/test_media_key.py` (the key through the real fit pass against a numpy oracle, the off pass byte for byte the pass from before, the feather on the alpha alone and only when asked, the letterbox's edge, the params and an old patch landing every key off, `screen` against its formula). The look, the feel of the knobs and the cost on the rig are the hand checks'.
+
+Setup: a clip with a black ground (fire, smoke, particles on black) in channel A; on GRAPH, `channel.a → composite.over`, `scene → composite.under`, the composite into All outputs, a shape in the scene.
+
+**699. Black is clear.** MEDIA, channel A: **key** on. *Pass:* the black goes; the fire is over the shape; the picture is unchanged where it is bright. Off again: the black rectangle is back. *Fail:* any change with the key off, or a dark halo round the fire with it on.
+
+**700. Level and softness by hand.** Level 0 → 0.2, then soft 0 → 0.5. *Pass:* level eats into the darks smoothly; soft 0 is a hard (aliased) edge, higher a gentler one; pure black stays clear throughout.
+
+**701. Keep colour.** Keep colour off, then on, on smoke. *Pass:* on, the thin smoke stays as bright over the shape as it was over black; off, it dims at its edges. Say which the show wants by default.
+
+**702. Feather.** Feather 0 → 16 px on a hard-edged still. *Pass:* the edge softens, nothing shifts, and SYSTEM's line for `channel.a` rises a little only while the feather is above 0.
+
+**703. The backdrop.** The `channel to backdrop` starter with the key on. *Pass:* the backdrop's black shows the desktop or ground; the backdrop fader still fades it.
+
+**704. Laid screen.** The composite's menu → **laid screen**, the key off. *Pass:* the clip's black adds nothing, its brights lighten the shape and never clip to a flat white where add would.
+
+**705. A live feed.** A Syphon or NDI source and a camera in a dark room, key on. *Pass:* as 699, at the feed's rate, with no frame time change worth naming on SYSTEM.
+
+**706. An old patch.** Load a loadable patch saved before this branch that uses media. *Pass:* it looks exactly as it did, every key off; save it and load it on this build: the same.
+
 ## What no test covers
 
 Only a person can settle these:

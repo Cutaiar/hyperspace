@@ -53,6 +53,11 @@ from .transport import LOOPS, Transport
 CHANNELS = "abcdefgh"
 BIN = 16
 FITS = ("cover", "contain", "stretch")
+# plan 66: what "black is clear" measures a pixel's brightness by — the
+# largest of r, g, b, or Rec. 709 luma — by index (`media.<c>.key_measure`);
+# `media_tex.KEY_MEASURES` is the same (a test holds the two equal)
+KEY_MEASURES = ("peak", "luma")
+KEY_FEATHER = 32.0       # the most px the key's feather blurs by (masks.MAX_FEATHER)
 EMPTY = "empty"          # a bin entry with nothing in it: black
 FROZEN = "frozen"        # a live feed held at rate 0 (row 324)
 RECHECK_S = 1.0          # how often a channel asks the resolver about its id again
@@ -139,6 +144,15 @@ class Channel:
     loop: int = 0
     play_audio: bool = False   # plan 45 V2: the source's soundtrack into the mixer
     gain: float = 1.0          # …at this gain (linear; 1 is unity)
+    # plan 66: black is clear — a luma key in the fit pass (`media.<c>.key*`,
+    # `Renderer._media_fit`), off unless asked for: every saved look stays
+    key: bool = False          # the switch
+    key_measure: int = 0       # `KEY_MEASURES`: peak (max r, g, b), luma
+    key_level: float = 0.02    # at or below it a pixel is clear
+    key_soft: float = 0.1      # the ramp above it, to solid at level + soft
+    key_keep: bool = True      # keep colour: premultiplied rgb untouched, alpha from the ramp
+    key_feather: float = 0.0   # px, the ramp blurred (masks.py's blur)
+    key_invert: bool = False   # white is clear instead
     # runtime, never saved
     source: Source | None = field(default=None, repr=False, compare=False)
     transport: Transport | None = field(default=None, repr=False, compare=False)

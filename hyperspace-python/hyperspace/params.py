@@ -2613,6 +2613,36 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         r.continuous(f"media.{c}.gain", f"{c.upper()} gain", *_attr(ch, "gain"),
                      taper=tapers.T_MEDIA_GAIN, fmt=tapers.fmt_level, group=g,
                      tip="The channel's sound level, off to +6 dB; unity at the notch.")
+        # plan 66: black is clear — the channel's own transparency, worked
+        # out from its brightness in the fit pass (`Renderer._media_fit`);
+        # off by default, so every saved look stays as it was
+        r.toggle(f"media.{c}.key", f"{c.upper()} black is clear", *_attr(ch, "key"),
+                 group=g, tip="Black is clear: the picture's dark parts are transparent, "
+                              "so what is under it shows through. Off, the picture is "
+                              "opaque, as a video or a camera is.")
+        r.enum(f"media.{c}.key_measure", f"{c.upper()} key measure", *_attr(ch, "key_measure"),
+               list(media_channels.KEY_MEASURES), group=g,
+               tip="What counts as bright: peak, the largest of red, green and blue "
+                   "(a saturated colour stays); luma, the eye's brightness (a deep "
+                   "blue goes with the black).")
+        r.continuous(f"media.{c}.key_level", f"{c.upper()} key level", *_attr(ch, "key_level"),
+                     lo=0.0, hi=1.0, fmt=lambda v: f"level {v:.3f}", group=g,
+                     tip="At or below this brightness a pixel is clear.")
+        r.continuous(f"media.{c}.key_soft", f"{c.upper()} key softness", *_attr(ch, "key_soft"),
+                     lo=0.0, hi=1.0, fmt=lambda v: f"soft {v:.2f}", group=g,
+                     tip="How far above the level a pixel takes to become solid: 0 a "
+                         "hard edge, higher a gentler one. Pure black is always clear.")
+        r.toggle(f"media.{c}.key_keep", f"{c.upper()} keep colour", *_attr(ch, "key_keep"),
+                 group=g, tip="Keep colour: a dim glow stays as bright over what is under "
+                              "it (only the alpha comes from the brightness). Off, colour "
+                              "goes with alpha and the edges dim. Not used inverted.")
+        r.continuous(f"media.{c}.key_feather", f"{c.upper()} key feather",
+                     *_attr(ch, "key_feather"), lo=0.0, hi=media_channels.KEY_FEATHER,
+                     fmt=lambda v: f"feather {v:.0f} px", group=g,
+                     tip="Blurs the clear edge by this many pixels. Costs two passes "
+                         "more while above 0.")
+        r.toggle(f"media.{c}.key_invert", f"{c.upper()} key invert", *_attr(ch, "key_invert"),
+                 group=g, tip="White is clear instead of black.")
 
     # ---- the backdrop (plan 32 R, row 330): a picture under the scene ----
     # (which is the graph's wire into `backdrop.image`: plan 33 T7 retired

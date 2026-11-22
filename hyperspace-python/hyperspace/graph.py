@@ -194,8 +194,17 @@ PORT_TYPES = (IMAGE, MASK, GEOMETRY, VALUE)
 # scene on the projector and a clean layer on the glass
 HANDS_IN = ("layer", "scene")
 # how a layer is laid on: premultiplied over (today), added, or over but
-# hidden where the scene's visible surface is nearer (depth-aware)
-BLENDS = ("over", "add", "depth")
+# hidden where the scene's visible surface is nearer (depth-aware); plan 66:
+# or screened, `src + dst·(1 − src)` — black adds nothing, nothing passes
+# white. Appended, never inserted (a saved composite names its blend)
+BLENDS = ("over", "add", "depth", "screen")
+# what a blend says in words, after the layer it lays (over says nothing)
+BLEND_WORDS = {"over": "", "add": "added", "depth": "depth-aware", "screen": "screened"}
+
+
+def blend_words(blend: str) -> str:
+    """`blend`'s words (`BLEND_WORDS`): "" for over or one this build has not."""
+    return BLEND_WORDS.get(blend, "")
 # what the history captures: the scene (today), or the scene with the
 # hands' layer laid on (with the hands inside the scene, the scene holds
 # them already)
@@ -2950,8 +2959,8 @@ def layer_words(wiring: Wiring, layer: str | None = None) -> str:
     k = (split_instance(hands_of(layer))[1]
          if wire_node_kind(layer or "", wired=True) == "layer" else 1)
     words = _node_words(w, k)
-    if w.blend != "over":
-        words += " · depth-aware" if w.blend == "depth" else " · added"
+    if blend_words(w.blend):
+        words += " · " + blend_words(w.blend)
     return words
 
 
@@ -3064,8 +3073,8 @@ def graph_words(spec: GraphSpec | None, dormant: dict[str, str] | None = None) -
             continue
         where = "in the scene" if h.into == "scene" else "a layer"
         parts.append(f"hands {h.n} {where}" + (" as lines" if h.draw == "lines" else ""))
-    if w.blend != "over":
-        parts.append("laid " + ("depth-aware" if w.blend == "depth" else "added"))
+    if blend_words(w.blend):
+        parts.append("laid " + blend_words(w.blend))
     parts += [f"{f} ×{n}" for f, n in sorted(spec.effect_counts().items())]
     if w.history == "scene+hands":
         parts.append("history with the hands")
@@ -5723,7 +5732,7 @@ class Capture(Node):
 class Composite(Node):
     """`over` laid on `under` (`Renderer.lay`), premultiplied at `over`'s
     opacity (`ghost.alpha` for the hands' layer): `blend` "over" (today's
-    `Ghost.composite`), "add", or "depth" — over, but hidden where the
+    `Ghost.composite`), "add", "screen" (plan 66), or "depth" — over, but hidden where the
     image on the `depth` port (the scene) has a visible surface nearer the
     eye (`render.LAYER_DEPTH_BIAS`), so a separate hands layer can still
     go behind the shape. `under` None is the ground (the clear at the
