@@ -691,3 +691,16 @@ def test_a_fractal_setting_that_cannot_land_is_said(tmp_path, bad, said):
         fractal=bad)
     rig.loaded_patch.load("Odd")
     assert any(said in n for n in rig.loaded_patch.notes)
+
+
+def test_a_shape_export_carries_the_fractal_settings(tmp_path):
+    """Plan 64 (Devin's review of #466): *save as patch* reads the look's
+    parts; the fractal's settings are in them, so a spawned shape draws as
+    exported."""
+    rig = _rig(tmp_path)
+    reg = rig.reg
+    reg["view.shape"].set(geometry.shape_index("Menger sponge"))
+    reg["view.frac_detail"].set(2.0)
+    _spec, _table, values, _layout = rig.loaded_patch.parts()
+    assert values["view.frac_detail"] == pytest.approx(2.0)
+    assert "view.frac_far" in values and "view.frac_near" in values

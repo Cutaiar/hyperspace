@@ -2482,20 +2482,22 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
     # CPU (off, the default) or additive and unsorted on the GPU. Not saved
     # while the owner judges the look; a fractal's alone (fractal.py)
     # plan 64's fractal section (row 902): what a fractal draws, the look's own —
-    # saved under the loadable patch's optional `fractal` key, written only for a
-    # fractal (`loadable.FRACTAL_KEY`), so no other look's file changes
+    # persisted params, so undo, the dirty dot and a patch export hold them, but
+    # a loadable patch writes them under its optional `fractal` key, only for a
+    # fractal (`loadable.FRACTAL_KEY`), never in its values: no other look's
+    # file changes
     r.continuous("view.frac_detail", "Detail", *_attr(view, "frac_detail"), lo=0.35, hi=3.0,
-                 log=True, fmt=lambda v: f"{v:.2f}×", group=g, persist=False,
+                 log=True, fmt=lambda v: f"{v:.2f}×", group=g,
                  tip="A fractal only. How much detail it shows: higher splits each cell "
                      "smaller on screen, so more cells and more edges (up to the frame's "
                      "budget, then coarser); lower, fewer. 1 is the fractal's own.")
     r.continuous("view.frac_far", "Reach", *_attr(view, "frac_far"), lo=-1.5, hi=2.0,
-                 fmt=lambda v: f"{v:+.2f} oct", group=g, persist=False,
+                 fmt=lambda v: f"{v:+.2f} oct", group=g,
                  tip="A fractal only. How far into it cells are drawn, in octaves of "
                      "distance past its own reach: up, deeper and denser; down, only "
                      "what is near. 0 is the fractal's own.")
     r.continuous("view.frac_near", "Near", *_attr(view, "frac_near"), lo=-1.0, hi=1.0,
-                 fmt=lambda v: f"{v:+.2f} oct", group=g, persist=False,
+                 fmt=lambda v: f"{v:+.2f} oct", group=g,
                  tip="A fractal only. How near the eye a cell comes before it dissolves, in "
                      "octaves: up, cells pass closer; down, they fade sooner. 0 is the "
                      "fractal's own.")

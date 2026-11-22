@@ -260,6 +260,7 @@ DIVE_KEY = "dive"
 FRACTAL_KEY = "fractal"
 FRACTAL_IDS = {"detail": "view.frac_detail", "far": "view.frac_far", "near": "view.frac_near"}
 FRACTAL_OWN = {"detail": 1.0, "far": 0.0, "near": 0.0}
+FRACTAL_PIDS = frozenset(FRACTAL_IDS.values())
 # what a load says of a pose it could not read (six numbers, by `POSE_IDS`)
 POSE_UNREAD = "pose: not six numbers, ignored — the turn is left spinning"
 # the registry groups (and lane schemes) a /2 file never names
@@ -1547,8 +1548,9 @@ class LoadedPatch:
         """The loadable patch's `values`: every performance base but the modifiers'
         params, which their entries hold (so a file saved here loads on an
         older build with no unknown id)."""
+        # (plan 64: a fractal's settings are the `fractal` key's, `_fractal_part`)
         values = {k: v for k, v in self.reg.snapshot(part="patch").items()
-                  if not k.startswith(modifiers.PREFIX)}
+                  if not k.startswith(modifiers.PREFIX) and k not in FRACTAL_PIDS}
         return _grip_unless_used(values, getattr(self.reg, "grip", None))
 
     def _modifiers_part(self, name: str | None = None) -> dict:
