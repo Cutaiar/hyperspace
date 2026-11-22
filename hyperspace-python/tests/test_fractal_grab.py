@@ -94,6 +94,7 @@ def test_nothing_jumps_going_in_down_and_out(name, pose):
         h.view.zoom *= f
         if h.world.objects["shape"].bounded:
             h.world.home("shape", W.shape_home(h.view.zoom, h.view.pan))
+        fractal.centre(h.view, None, _drawn_off(h))     # (plan 81: the zoom about the middle)
         before = _drawn(h, X)
         inside, path = h.view.dive.inside, list(h.view.dive.path)
         last = h.view.dive.last

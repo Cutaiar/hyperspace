@@ -38,6 +38,7 @@
   "view.points_alpha": 1.0,
   "view.lines_alpha": 1.0,
   "view.screen_strokes": false,
+  "view.frac_dive": 0.0,
   "view.faces": true,
   "view.three_d": false,
   "view.cut_through": true,

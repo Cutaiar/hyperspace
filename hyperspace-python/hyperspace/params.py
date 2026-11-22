@@ -2486,6 +2486,16 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
              tip="A fractal only. Off: its lines and faces are sorted far to near on "
                  "the CPU, as every shape's are. On: its cells are drawn on the GPU, "
                  "unsorted, and add up where they overlap.")
+    # plan 81: a fractal's dive rate, levels a second (× 1 / ratio each),
+    # signed — a velocity on camera.zoom that `fractal.step` integrates and
+    # re-roots, so an LFO, a hand or a knob on it dives without end. Saved
+    # and routable, as any param; a fractal's alone
+    r.continuous("view.frac_dive", "Dive", *_attr(view, "frac_dive"), lo=-2.0, hi=2.0,
+                 fmt=lambda v: f"{v:+.2f} levels/s", group=g,
+                 tip="A fractal only. Dives in (up) or climbs out (down), in levels a "
+                     "second, about the middle of the screen, for as long as it is "
+                     "set: route an LFO, a hand or a knob to it. Climbing out stops at "
+                     "the whole shape. 0 holds still.")
     r.toggle("view.faces", "Faces", *_attr(view, "faces"), group=g,
              tip="Translucent fills on the true 2-faces, under the wireframe. "
                  "First build per shape takes a moment (extraction is cached).")

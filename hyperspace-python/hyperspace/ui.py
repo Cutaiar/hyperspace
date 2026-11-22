@@ -2882,6 +2882,7 @@ class Panel:
         beside(strokes_w)
         self._check("view.screen_strokes")
         if sh.name in _FRACTALS:
+            self._slider("view.frac_dive", imgui.get_content_region_avail().x)  # plan 81
             self._check("view.frac_additive")      # plan 64: a fractal's line order
         # the count, and Fit beside it: whole copies only, framed to the screen
         fit_w = imgui.calc_text_size("Fit").x + imgui.get_frame_height() + 2 * imgui.get_style(

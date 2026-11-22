@@ -65,6 +65,7 @@ def spec(panel) -> list:
     out += [[None], [("view.points_alpha", fh), ("view.lines_alpha", fh)],
             [("view.screen_strokes", rh)]]
     if fractal.spec_of(v.shape) is not None:
+        out.append([("view.frac_dive", fh)])          # plan 81: its dive rate
         out.append([("view.frac_additive", rh)])      # plan 64: a fractal's line order
     out += [[None], [("view.instances", fh, 2.0), ("view.inst_fit", fh, 1.0)]]
     if v.instances > 1:

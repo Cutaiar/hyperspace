@@ -901,6 +901,14 @@ here; overturn → the change, then the same.
 | 879 | Plan 63: colour by steps (owner decision 5): the smooth count n + 1 − log_p log abs(z) with abs(z)² > 10⁴ the bail-out; Output steps is grey that rises over Cycle steps and falls over the next, so Palette's gradient wraps with no seam; Output ramp a built-in colour ramp; Inside coloured shows the periodicity time and turns the cardioid test and the skip off | 675, 676 | owner (2026-11-18) — the rise and fall (rec) |
 | 880 | Plan 63: Steps is a float log knob rounded to a whole cap (an integer log param cannot move one detent at a time); Zoom runs 0.5–10¹³, the float64 reference's reach, and a log param over six orders reads in three figures ("4.2e+07×") | — | (rec) |
 | 881 | Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes | — | owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before |
+| 1010 | Plan 81, decision D4: inside a fractal, whatever changed camera.zoom or the turn since the last step (the view as it was left, `Dive.seen`) is applied about the middle of the screen (`fractal.centre`, `centred`), not about the rooted cell's middle; a pan made since is kept as a move on top, and with an offset drawn after the shape the middle is the point drawn there. Outside (an object, plan 64 part 2) nothing changes. A re-root still moves nothing, 3D and 4D, grabbed or not | 810, 813 | (rec) — D4, plan 66 §2's recommendation, written into the prompt: "zoom about the screen centre" |
+| 1011 | Plan 81: a fractal's dive rate, `view.frac_dive`, levels a second (× 1 / ratio each), −2 to +2, signed: a velocity on the zoom integrated in float64 by `fractal.step` (`dive_zoom`) and kept in its band by the re-root, so it never ends going in; going out it stops at the whole shape (zoom 1, path empty) and pulls no further. A fractal's own param in the `view` group (a level means nothing to any other shape, so not `camera.*`), persisted and modulatable, saved in a loadable patch's `values` like any param (an older file loads it at 0) | 810, 811, 814 | (rec) — the brief: "decide where it lives … record it as a register row" |
+| 1012 | Plan 81: what a dive settles onto (`fractal.SETTLE_ON`). Built: **"cell"**, the rooted cell's middle — the screen stays full and centred (as full as before or fuller: 0.82–1.00 of the screen's tiles drawn on), the view steering to each new cell's middle as it goes in. The alternative, **"point"**, the letter of D4: the fractal's point the eye sees at the middle, held there for good — the point stays put, but a point of a fractal has holes of every size beside it, and the screen is 0.05–0.67 drawn on (the sponge 0.54–0.67, the dust 0.05–0.24). Both re-root without a jump. Plan 81 §2.2 has the table and the videos | 812 | **pending the owner** — (rec) "cell" |
+| 1013 | Plan 81: a re-root goes into the child that holds the fractal's point nearest the middle of the screen (`fractal.nearest`, a search of the cells), not the child whose centre is nearest: a dive holding a point then keeps it in the rooted cell, and its nudge back onto the fractal reads the same cells every frame | — | (rec) |
+| 1014 | Plan 81: past `MAX_PATH` (4096) levels an endless dive lets its outermost go: they are never drawn (`ABOVE`) and the rooted cell is a copy of the whole shape, so no picture changes and a save still loads; climbing out stops at the whole shape 4096 levels up | — | (rec) |
+| 1015 | Plan 81: the dive rate is drawn in VIEW, beside Additive, on a fractal only (`ui_view.spec`, `Panel._view_stock`) — files outside plan 81's row, kept to a line each. The FRACTAL section (`claude/serene-davinci-cgtewx`, unmerged on 2026-11-22) takes it when it merges, as it takes Additive; nothing here duplicates that branch's Detail, Reach, Near or To the top | 810 | (rec) |
+| 1016 | Plan 81: a restart after pulling — new fields on live objects (`ViewState.frac_dive`, `Dive.seen`, `Dive.settled`), a new param, and `ViewState.reroot` / `app._reroot` take the frame's seconds. After it `fractal.py` hot-reloads as before; `SETTLE_ON` and `SETTLE` take effect on a reload | — | (rec) — REVIEW.md, "Every frame, and hot reload" |
+| 1017 | Plan 81: `tools/fractal_dive_demo.py` renders a fractal dive offscreen with a cross at the middle and how much of the screen is drawn on (an 8 × 8 grid of tiles): `--mode zoom` (camera.zoom grown, runs on `main` for a before) or `--mode rate` (the dive rate, either settle). The before/after pair and the alternative are in `plans/assets/81-fractal-dive/`. The settle's cost a frame is new: hand check 815 times it on the rig | 812, 815 | (rec) |
 
 "—": no hand check shows it; tests only.
 
@@ -15319,3 +15327,59 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before.
 - **Built.** Nothing.
 - **Judge it.** No hand check.
+
+### 1010. The zoom and the turn about the middle of the screen
+
+- **What.** Plan 81, decision D4: inside a fractal, whatever changed camera.zoom or the turn since the last step (the view as it was left, `Dive.seen`) is applied about the middle of the screen (`fractal.centre`, `centred`), not about the rooted cell's middle; a pan made since is kept as a move on top, and with an offset drawn after the shape the middle is the point drawn there. Outside (an object, plan 64 part 2) nothing changes. A re-root still moves nothing, 3D and 4D, grabbed or not.
+- **Answer.** (rec) — D4, plan 66 §2's recommendation, written into the prompt: "zoom about the screen centre".
+- **Built.** `fractal.centre`, `centred`, `_middle`, `Dive.seen`, `step`; `tests/test_fractal_dive.py::test_a_dive_stays_centred_and_never_jumps`, `::test_a_zoom_inside_is_about_the_middle`, `::test_a_pan_made_inside_is_kept`, `::test_a_drawn_offset_keeps_the_middle_where_it_is_drawn`, `::test_a_grabbed_view_dives_and_reroots_without_a_jump`; `tests/test_fractal_grab.py::test_nothing_jumps_going_in_down_and_out` and `tests/test_fractal.py::test_a_reroot_moves_nothing_in_the_world` (the zoom about the middle taken before "before").
+- **Judge it.** Hand checks 810, 813.
+
+### 1011. The dive rate, a fractal's own param
+
+- **What.** Plan 81: a fractal's dive rate, `view.frac_dive`, levels a second (× 1 / ratio each), −2 to +2, signed: a velocity on the zoom integrated in float64 by `fractal.step` (`dive_zoom`) and kept in its band by the re-root, so it never ends going in; going out it stops at the whole shape (zoom 1, path empty) and pulls no further. A fractal's own param in the `view` group (a level means nothing to any other shape, so not `camera.*`), persisted and modulatable, saved in a loadable patch's `values` like any param (an older file loads it at 0).
+- **Answer.** (rec) — the brief: "decide where it lives … record it as a register row".
+- **Built.** `params` (`view.frac_dive`), `ViewState.frac_dive`, `ViewState.reroot(dt)`, `app._reroot`, `fractal.dive_zoom`; `tests/test_fractal_dive.py::test_the_dive_runs_at_its_rate`, `::test_a_negative_rate_climbs_back_out_to_the_whole_shape`, `::test_a_rate_of_zero_holds_still`, `::test_the_dive_rate_is_a_param_a_route_drives`, `::test_the_dive_rate_saves_in_a_loadable_patch`, `::test_another_shape_ignores_the_rate`.
+- **Judge it.** Hand checks 810, 811, 814.
+
+### 1012. What a dive settles onto: the cell's middle, or one point
+
+- **What.** Plan 81: what a dive settles onto (`fractal.SETTLE_ON`). Built: **"cell"**, the rooted cell's middle — the screen stays full and centred (as full as before or fuller: 0.82–1.00 of the screen's tiles drawn on), the view steering to each new cell's middle as it goes in. The alternative, **"point"**, the letter of D4: the fractal's point the eye sees at the middle, held there for good — the point stays put, but a point of a fractal has holes of every size beside it, and the screen is 0.05–0.67 drawn on (the sponge 0.54–0.67, the dust 0.05–0.24). Both re-root without a jump. Plan 81 §2.2 has the table and the videos.
+- **Answer.** **pending the owner** — (rec) "cell".
+- **Built.** `fractal.SETTLE_ON`, `settle`, `seen_at_middle`, `nearest`, `Dive.settled`; `tests/test_fractal_dive.py::test_a_dive_holding_a_point_never_lets_it_leave_the_middle`, `::test_a_long_dive_of_hundreds_of_levels`, `::test_either_settle_dives_without_a_jump`; `tools/fractal_dive_demo.py`.
+- **Judge it.** Hand check 812.
+
+### 1013. A re-root goes into the cell that holds the nearest point
+
+- **What.** Plan 81: a re-root goes into the child that holds the fractal's point nearest the middle of the screen (`fractal.nearest`, a search of the cells), not the child whose centre is nearest: a dive holding a point then keeps it in the rooted cell, and its nudge back onto the fractal reads the same cells every frame.
+- **Answer.** (rec).
+- **Built.** `fractal.step` (`into`), `fractal.nearest`; `tests/test_fractal_dive.py::test_a_dive_holding_a_point_never_lets_it_leave_the_middle`.
+- **Judge it.** No hand check.
+
+### 1014. An endless dive keeps its path to the longest a file takes
+
+- **What.** Plan 81: past `MAX_PATH` (4096) levels an endless dive lets its outermost go: they are never drawn (`ABOVE`) and the rooted cell is a copy of the whole shape, so no picture changes and a save still loads; climbing out stops at the whole shape 4096 levels up.
+- **Answer.** (rec).
+- **Built.** `fractal.step`; `tests/test_fractal_dive.py::test_an_endless_dive_keeps_its_path_to_the_longest_a_file_takes`.
+- **Judge it.** No hand check.
+
+### 1015. The dive rate in VIEW until the FRACTAL section merges
+
+- **What.** Plan 81: the dive rate is drawn in VIEW, beside Additive, on a fractal only (`ui_view.spec`, `Panel._view_stock`) — files outside plan 81's row, kept to a line each. The FRACTAL section (`claude/serene-davinci-cgtewx`, unmerged on 2026-11-22) takes it when it merges, as it takes Additive; nothing here duplicates that branch's Detail, Reach, Near or To the top.
+- **Answer.** (rec).
+- **Built.** `ui_view.spec`, `Panel._view_stock`.
+- **Judge it.** Hand check 810.
+
+### 1016. Restart
+
+- **What.** Plan 81: a restart after pulling — new fields on live objects (`ViewState.frac_dive`, `Dive.seen`, `Dive.settled`), a new param, and `ViewState.reroot` / `app._reroot` take the frame's seconds. After it `fractal.py` hot-reloads as before; `SETTLE_ON` and `SETTLE` take effect on a reload.
+- **Answer.** (rec) — REVIEW.md, "Every frame, and hot reload".
+- **Built.** —
+- **Judge it.** No hand check.
+
+### 1017. The dive demo and its coverage
+
+- **What.** Plan 81: `tools/fractal_dive_demo.py` renders a fractal dive offscreen with a cross at the middle and how much of the screen is drawn on (an 8 × 8 grid of tiles): `--mode zoom` (camera.zoom grown, runs on `main` for a before) or `--mode rate` (the dive rate, either settle). The before/after pair and the alternative are in `plans/assets/81-fractal-dive/`. The settle's cost a frame is new: hand check 815 times it on the rig.
+- **Answer.** (rec).
+- **Built.** `tools/fractal_dive_demo.py`, `plans/assets/81-fractal-dive/`.
+- **Judge it.** Hand checks 812, 815.

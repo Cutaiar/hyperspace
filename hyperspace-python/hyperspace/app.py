@@ -1720,7 +1720,7 @@ def _shape_of(world) -> tuple[worlds.World, worlds.WorldObject] | None:
     return (world, obj) if obj is not None else None
 
 
-def _reroot(h: Host, reg) -> None:
+def _reroot(h: Host, reg, dt: float = 0.0) -> None:
     """The on-air view re-rooted (`ViewState.reroot`, `fractal.step`), told
     the offset drawn after the shape (`shapeframe.drawn_offset`) so the cell
     it takes is the one under the eye. Decks off air re-root with none."""
@@ -1732,7 +1732,7 @@ def _reroot(h: Host, reg) -> None:
                                           shape[1].bounded)
         else:
             off = shapeframe.drawn_offset(view)
-    view.reroot(reg, off)
+    view.reroot(reg, off, dt)
 
 
 def _fly(h: Host, reg) -> None:
@@ -1933,10 +1933,10 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # in or out (fractal.py): the same picture at a zoom that never runs out
     try:
         _space(h, reg)
-        _reroot(h, reg)
+        _reroot(h, reg, dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("view.reroot", e)
-    if said := _off_air(h, "reroot", lambda d: d.view.reroot(d.reg)):
+    if said := _off_air(h, "reroot", lambda d: d.view.reroot(d.reg, None, dt)):
         ok, reloader.runtime_error = False, said
     # the world (plan 59): the shape's home from this frame's params, the
     # puppets (the palms, read after HandsIO.poll), then the physics' fixed
