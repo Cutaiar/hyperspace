@@ -56,13 +56,37 @@ import numpy as np
 from .glsl import QUAD_VS
 
 VIEW = 3.0              # plane units top to bottom at zoom 1
+# plan 80 (row 1000): it paints the whole frame from nothing, so its graph node
+# draws with no picture wired into `image` (`graph.Effect.generates`)
+GENERATOR = True
 SIZES = (540, 810, 1080)     # the Size choice's lines (owner decision 2)
 PERTURB_AT = 1.0e4      # auto: float32 direct up to here, perturbation past it (decision 3)
 REF_W = 1024            # the reference texture's width (mandel.glsl's REF_W)
 BAIL = 1.0e4            # |z|² past this has escaped (mandel.glsl's BAIL)
 TILE = 16               # the skip's tile, px (mandel.glsl's TILE)
+BORDER = 64             # plan 80: a tile's slots in the packed border pass (its 60 border px)
+# plan 80 (row 1004): the skip turns itself off where it costs more than it
+# saves. Its pre-passes cost about a quarter of a picture (a tile's 60 border
+# pixels of 256, iterated again), and it saves the flagged tiles: under
+# SKIP_MIN of the tiles flagged it rests, and probes again every SKIP_PROBE
+# passes. The count is an occlusion query on the tiles pass, read SKIP_LAG
+# passes late so the CPU never waits on the GPU
+SKIP_MIN = 0.3
+SKIP_PROBE = 30
+SKIP_LAG = 3
 DIVE_DOUBLINGS = 4.0    # Dive at ±1: zoom doublings a second
 PERIOD_EPS = 0.05       # periodicity: z within this many pixels of a saved z is a cycle
+# plan 80 (row 1001): the coloured inside is how fast a point settles onto its
+# cycle, from the cycle's multiplier λ — the steps it takes to come SETTLE_K
+# times nearer, L·ln K / ln|λ_L| over a lag L the check found (`Settle`) — not
+# the step the periodicity check happened to catch it at, which hangs on a
+# pixel's size, Brent's window and float32's last bit (the flat bands, discs
+# and blocks deep in). K is what PERIOD_EPS is at zoom 1 and 810 lines.
+SETTLE_K = PERIOD_EPS * VIEW / 810
+# a lag is measured where z is back within this of the saved z (in the plane),
+# or within the periodicity's own tolerance when that is wider; each later one
+# overwrites the last, so the estimate is the one nearest the cycle
+SETTLE_NEAR = 1e-3
 TIERS = ("auto", "direct", "perturb")
 DRIVES = (("centre_x", "pan_x"), ("centre_y", "pan_y"),
           ("c_x", "c_drive_x"), ("c_y", "c_drive_y"),
@@ -109,12 +133,56 @@ def in_cardioid(c) -> np.ndarray:
     return (q * (q + x) <= 0.25 * y * y) | ((c.real + 1.0) ** 2 + y * y <= 0.0625)
 
 
+class Settle:
+    """How fast each inside point settles onto its cycle (plan 80, row 1001):
+    the shader's `settle` twin. Each step adds ln|f′(z)| = ln p + (p − 1)
+    ln|z| for the z the step starts from, so since the last save of the
+    periodicity check the sum is ln|λ_L|, λ_L the product of f′ over those L
+    steps. Where z is back near the saved z (`SETTLE_NEAR`), L is a multiple
+    of the cycle's period and λ_L = λ^(L/period), so L·ln K / ln|λ_L| — the
+    steps to come K = `SETTLE_K` times nearer — is the same whatever the
+    multiple: smooth across the plane, the same at any depth, at any
+    tolerance and in either tier. A sum that is not below 0 (not
+    contracting yet) or no lag found leaves the cap."""
+
+    def __init__(self, shape, p: int, iters: int, eps2: float | None):
+        self.lnp, self.p1, self.iters = math.log(p), p - 1, float(iters)
+        self.near2 = max(SETTLE_NEAR * SETTLE_NEAR, eps2 or 0.0)
+        self.lw = np.zeros(shape)
+        self.lag = np.zeros(shape)
+        self.est = np.full(shape, float(iters))
+
+    def step(self, live, z2) -> None:
+        """One step from z with |z|² `z2` (an array over `live`)."""
+        self.lw[live] += self.lnp + self.p1 * 0.5 * np.log(np.maximum(z2, 1e-30))
+        self.lag[live] += 1.0
+
+    def near(self, live, e2) -> None:
+        """z is |e|² from the saved z: where near, take the estimate."""
+        at = live & (e2 < self.near2)
+        lw = self.lw[at]
+        self.est[at] = np.where(lw < 0.0, np.minimum(self.lag[at] * math.log(SETTLE_K)
+                                                     / np.minimum(lw, -1e-30), self.iters),
+                                self.iters)
+
+    def save(self) -> None:
+        self.lw[:] = 0.0
+        self.lag[:] = 0.0
+
+    def counts(self, count, inside) -> np.ndarray:
+        return np.where(inside, self.est, count)
+
+
 def escape_counts(c, z0, p: int, iters: int, *, periodic_eps: float | None = None,
+                  settle: bool = False,
                   dtype=np.complex128) -> tuple[np.ndarray, np.ndarray]:
     """The direct iteration over arrays of c and z₀: (count, inside). count is
     the smooth count where a point escaped, else the step a cycle was caught
     at (`periodic_eps`: the shader's check, Brent's doubling window, |z −
-    saved| < eps) or `iters`. With no `periodic_eps` it is the plain oracle."""
+    saved| < eps) or `iters`. With no `periodic_eps` it is the plain oracle.
+    `settle` (plan 80, the coloured inside): an inside point's count is how
+    fast it settles (`Settle`) instead; the inside itself is still decided
+    by `periodic_eps`."""
     c = np.asarray(c, dtype=dtype)
     z = np.broadcast_to(np.asarray(z0, dtype=dtype), c.shape).copy()
     count = np.full(c.shape, float(iters))
@@ -123,7 +191,11 @@ def escape_counts(c, z0, p: int, iters: int, *, periodic_eps: float | None = Non
     saved = z.copy()
     lim, since = 8, 0
     eps2 = None if periodic_eps is None else periodic_eps * periodic_eps
+    st = Settle(c.shape, p, iters, eps2) if settle else None
+    r2 = z.real.astype(np.float64) ** 2 + z.imag.astype(np.float64) ** 2
     for n in range(iters):
+        if st is not None:
+            st.step(live, r2[live])
         zl = z[live]
         zl = zl ** p + c[live]
         z[live] = zl
@@ -133,20 +205,25 @@ def escape_counts(c, z0, p: int, iters: int, *, periodic_eps: float | None = Non
             count[out] = smooth(n, r2[out], p)
             inside[out] = False
             live &= ~out
-        if eps2 is not None:
+        if eps2 is not None or st is not None:
             d = z - saved
-            caught = live & ((d.real.astype(np.float64) ** 2 + d.imag.astype(np.float64) ** 2)
-                             < eps2)
-            if caught.any():
-                count[caught] = n
-                live &= ~caught
+            e2 = d.real.astype(np.float64) ** 2 + d.imag.astype(np.float64) ** 2
+            if st is not None:
+                st.near(live, e2)
+            if eps2 is not None:
+                caught = live & (e2 < eps2)
+                if caught.any():
+                    count[caught] = n
+                    live &= ~caught
             since += 1
             if since == lim:
                 saved = z.copy()
                 since, lim = 0, lim * 2
+                if st is not None:
+                    st.save()
         if not live.any():
             break
-    return count, inside
+    return (st.counts(count, inside) if st is not None else count), inside
 
 
 def reference_orbit(c: complex, z0: complex, p: int, iters: int) -> np.ndarray:
@@ -187,14 +264,16 @@ def rebase(z, d, Z0) -> np.ndarray:
 
 
 def perturbed_counts(ref: np.ndarray, dc, dz0, p: int, iters: int, *,
-                     periodic_eps: float | None = None, dtype=np.complex64,
+                     periodic_eps: float | None = None, settle: bool = False,
+                     dtype=np.complex64,
                      rebasing: bool = True) -> tuple[np.ndarray, np.ndarray, int]:
     """The perturbation tier over arrays of δc and δz₀ against the reference
     `ref` (`reference_orbit`), δ in `dtype` (float32 as the shader, or float64)
     and the reference read in it too: (count, inside, rebases) — the same
     counts as `escape_counts` at c_ref + δc, z₀_ref + δz₀. `rebasing` False
     (tests only) keeps the rule out but for the reference running out, to show
-    what it is for."""
+    what it is for. `settle`: as `escape_counts`'s, |z|² taken from the
+    reference value and δ."""
     R = ref.astype(dtype)
     last = len(ref) - 1
     dc = np.asarray(dc, dtype=dtype)
@@ -210,11 +289,15 @@ def perturbed_counts(ref: np.ndarray, dc, dz0, p: int, iters: int, *,
     live = np.ones(dc.shape, bool)
     lim, since, rebases = 8, 0, 0
     eps2 = None if periodic_eps is None else periodic_eps * periodic_eps
+    st = Settle(dc.shape, p, iters, eps2) if settle else None
     for n in range(iters):
         idx = np.flatnonzero(live)
         if idx.size == 0:
             break
         dl, ml = d.flat[idx], m.flat[idx]
+        if st is not None:
+            zs = R[ml] + dl
+            st.step(live, zs.real.astype(np.float64) ** 2 + zs.imag.astype(np.float64) ** 2)
         dl = binomial_delta(R[ml], dl, p) + dc.flat[idx]
         ml = ml + 1
         zl = R[ml] + dl
@@ -231,18 +314,23 @@ def perturbed_counts(ref: np.ndarray, dc, dz0, p: int, iters: int, *,
         count.flat[gone] = smooth(n, r2[out], p)
         inside.flat[gone] = False
         live.flat[gone] = False
-        if eps2 is not None:
+        if eps2 is not None or st is not None:
             Zm = R[m]
             e = (Zm - savedZ) + (d - savedD)
-            caught = live & ((e.real.astype(np.float64) ** 2 + e.imag.astype(np.float64) ** 2)
-                             < eps2)
-            count[caught] = n
-            live &= ~caught
+            e2 = e.real.astype(np.float64) ** 2 + e.imag.astype(np.float64) ** 2
+            if st is not None:
+                st.near(live, e2)
+            if eps2 is not None:
+                caught = live & (e2 < eps2)
+                count[caught] = n
+                live &= ~caught
             since += 1
             if since == lim:
                 savedZ, savedD = Zm.copy(), d.copy()
                 since, lim = 0, lim * 2
-    return count, inside, rebases
+                if st is not None:
+                    st.save()
+    return (st.counts(count, inside) if st is not None else count), inside, rebases
 
 
 def is_edge(w: int, h: int) -> np.ndarray:
@@ -252,6 +340,22 @@ def is_edge(w: int, h: int) -> np.ndarray:
     ex = (x % TILE == 0) | (x % TILE == TILE - 1) | (x == w - 1)
     ey = (y % TILE == 0) | (y % TILE == TILE - 1) | (y == h - 1)
     return ex[None, :] | ey[:, None]
+
+
+def border_slot(i: int) -> tuple[int, int]:
+    """Plan 80: slot `i` (0 … BORDER − 1) of a tile in the packed border
+    pass — its pixel (x, y) in the tile, before the clamp to the picture:
+    the bottom row, the top row, the left column, the right column, then
+    four spare slots on the first pixel (mandel.glsl's `border_px`)."""
+    if i < 16:
+        return i, 0
+    if i < 32:
+        return i - 16, TILE - 1
+    if i < 46:
+        return 0, i - 31
+    if i < 60:
+        return TILE - 1, i - 45
+    return 0, 0
 
 
 def tile_flags(inside: np.ndarray) -> np.ndarray:
@@ -312,10 +416,99 @@ def render_size(size: int, w: int, h: int) -> tuple[int, int]:
 
 # ---- the drives (FxState.advance) ----
 
+# plan 80 (row 1002): an off-screen term's drive. A pan of one view height a
+# second slides the whole picture by a screen a second; moving c on a Julia
+# slice (or z₀ on the Mandelbrot one) by the same amount can reshape it
+# hundreds of times over, since how fast the picture answers a term depends
+# on the term and where it sits, not on the zoom alone. So a term's rate is
+# the view height times its measured sensitivity R (`sensitivity`), the
+# rate at which it changes the picture as fast as a pan does, times
+# TERM_RATE; never faster than a pan (an unused term, R → ∞, keeps the
+# plan 63 rate). Pan and Dive are as plan 63 made them.
+TERM_RATE = 0.1         # an off-screen term at full throw: a tenth of a pan's change a
+                        # second (row 1002: tuned on the rig, check 802)
+SENS_GRID = (16, 9)     # the points across the view it is measured at
+SENS_STEPS = 192        # … iterated at most this far
+SENS_EVERY = 0.25       # seconds of a running drive between measurements
+SENS_SOON = 0.05        # … or this soon after the slice or the power moved
+SENS_EASE = 0.5         # s: a faster rate is eased into (a slower one is taken at once)
+_sens: dict[int, dict] = {}     # id(values) → the cache (a hot reload of this module
+                                # starts it again)
+
+
+def sensitivity(v: dict, w: int = SENS_GRID[0], h: int = SENS_GRID[1],
+                steps: int = SENS_STEPS) -> dict[str, float]:
+    """R for each term, c and z₀, under the values `v`: the change a pan
+    makes to the picture over the change the term makes, both per plane
+    unit — Σ|∂z/∂q|·g / Σ|∂z/∂term|·g over a grid of the view's points, g
+    = 1 / (|z| ln|z|) at the step a point escaped (how its smooth count, and
+    so its brightness, answers a change of z; an inside point, which stays
+    black, counts nothing). With q laid in by Slice s: ∂z/∂q = (1 − s)∂z/∂c
+    + s ∂z/∂z₀, ∂z/∂c_term = s ∂z/∂c, ∂z/∂z₀_term = (1 − s) ∂z/∂z₀. A term
+    the picture does not answer (unused, or nothing escaped) is inf."""
+    p, s = int(v["power"]), float(v["slice"])
+    q = complex(v["centre_x"], v["centre_y"]) + offsets(w, h, float(v["zoom"]))
+    c, z = terms(q, v)
+    c = np.broadcast_to(np.asarray(c, np.complex128), q.shape)
+    z = np.broadcast_to(np.asarray(z, np.complex128), q.shape).copy()
+    dc = np.zeros_like(z)
+    dz = np.ones_like(z)
+    live = np.ones(q.shape, bool)
+    out = np.zeros(q.shape, bool)
+    with np.errstate(all="ignore"):
+        for _ in range(min(steps, max(1, int(float(v["iters"]) + 0.5)))):
+            zl = z[live]
+            f1 = p * zl ** (p - 1)
+            dc[live] = f1 * dc[live] + 1.0
+            dz[live] = f1 * dz[live]
+            z[live] = zl ** p + c[live]
+            esc = live & (z.real ** 2 + z.imag ** 2 > BAIL)
+            out |= esc
+            live &= ~esc
+            if not live.any():
+                break
+        a = np.abs(z[out])
+        g = 1.0 / (a * np.log(np.maximum(a, 1.0001)))
+        screen = float(np.sum(np.abs((1.0 - s) * dc[out] + s * dz[out]) * g))
+        got = {}
+        for term, d in (("c", s * dc[out]), ("z0", (1.0 - s) * dz[out])):
+            moved = float(np.sum(np.abs(d) * g))
+            r = screen / moved if moved > 0.0 and math.isfinite(moved) else math.inf
+            got[term] = r if math.isfinite(r) else math.inf
+    return got
+
+
+def term_scale(v: dict, dt: float) -> dict[str, float]:
+    """Each term's drive rate as a share of the view height (`TERM_RATE` ×
+    R, at most 1), from the instance's cache: measured on a drive's first
+    frame, then every `SENS_EVERY` seconds one runs (`SENS_SOON` after the
+    slice or the power moved). Applied in log: a slower rate at once, a
+    faster one eased in over `SENS_EASE`, so a drive never lurches."""
+    got = _sens.get(id(v))
+    if got is None:
+        if len(_sens) > 64:       # instances come and go: keep the cache small
+            for k in list(_sens)[:-32]:
+                _sens.pop(k, None)
+        got = _sens[id(v)] = {"key": None, "t": math.inf, "want": {}, "now": {}}
+    key = (int(v["power"]), float(v["slice"]))
+    got["t"] += dt
+    if got["t"] >= (SENS_SOON if key != got["key"] else SENS_EVERY):
+        got["t"], got["key"] = 0.0, key
+        for term, r in sensitivity(v).items():
+            got["want"][term] = math.log(min(1.0, TERM_RATE * r)) if r > 0.0 else math.log(1e-6)
+    ease = 1.0 - math.exp(-max(dt, 0.0) / SENS_EASE)
+    for term, want in got["want"].items():
+        now = got["now"].get(term)
+        got["now"][term] = want if now is None or want <= now else now + ease * (want - now)
+    return {term: math.exp(got["now"][term]) for term in ("c", "z0")}
+
+
 def advance(spec, v: dict, dt: float) -> None:
-    """Each drive's rate into its term, in view heights a second, and Dive into
-    the zoom in doublings a second; clamped to each param's range. A rate at
-    0 writes nothing."""
+    """Each drive's rate into its term, and Dive into the zoom in doublings
+    a second; clamped to each param's range. Pan moves the centre in view
+    heights a second; a c or z₀ drive moves its term by the view height
+    times that term's measured scale (`term_scale`, plan 80). A rate at 0
+    writes nothing (and measures nothing)."""
     if dt <= 0.0:
         return
     rng = {p.key: (p.lo, p.hi) for p in spec.params}
@@ -324,11 +517,17 @@ def advance(spec, v: dict, dt: float) -> None:
         lo, hi = rng["zoom"]
         v["zoom"] = min(max(float(v["zoom"]) * 2.0 ** (DIVE_DOUBLINGS * dive * dt), lo), hi)
     h = view_height(v["zoom"])
+    scale = None
     for term, rate in DRIVES:
         r = float(v.get(rate, 0.0))
         if r:
+            k = 1.0
+            if not term.startswith("centre"):
+                if scale is None:
+                    scale = term_scale(v, dt)
+                k = scale["c" if term.startswith("c_") else "z0"]
             lo, hi = rng[term]
-            v[term] = min(max(float(v[term]) + r * h * dt, lo), hi)
+            v[term] = min(max(float(v[term]) + r * h * k * dt, lo), hi)
 
 
 # ---- the reference orbit ----
@@ -386,20 +585,15 @@ def terms_key(v: dict) -> tuple:
 
 TILES_FS = """
 #version 330
-uniform sampler2D u_border;   // the border pass: r 1 where a border pixel is inside
-uniform ivec2 u_size;         // the render target, px
+uniform sampler2D u_border;   // the packed border pass: 64 slots a tile along x, r 1 inside
 out vec4 f_color;
 void main() {
-    ivec2 o = ivec2(gl_FragCoord.xy) * 16;
-    ivec2 e = min(o + 15, u_size - 1);
+    ivec2 t = ivec2(gl_FragCoord.xy);
     float every = 1.0;
-    for (int x = o.x; x <= e.x; x++)
-        every = min(every, min(texelFetch(u_border, ivec2(x, o.y), 0).r,
-                           texelFetch(u_border, ivec2(x, e.y), 0).r));
-    for (int y = o.y; y <= e.y; y++)
-        every = min(every, min(texelFetch(u_border, ivec2(o.x, y), 0).r,
-                           texelFetch(u_border, ivec2(e.x, y), 0).r));
-    f_color = vec4(every, 0.0, 0.0, 1.0);
+    for (int i = 0; i < 64; i++)
+        every = min(every, texelFetch(u_border, ivec2(t.x * 64 + i, t.y), 0).r);
+    if (every < 0.5) discard;     // plan 80: only a flagged tile is drawn (and counted)
+    f_color = vec4(1.0, 0.0, 0.0, 1.0);
 }
 """
 
@@ -431,6 +625,69 @@ class Target:
 
 
 @dataclass
+class SkipGate:
+    """Whether the skip runs this pass (plan 80, row 1004): on while at
+    least `SKIP_MIN` of the tiles come back flagged; else resting, with one
+    pass in `SKIP_PROBE` run with it to look again. Each run of the tiles
+    pass is counted by a samples query (`issue`), read `SKIP_LAG` passes
+    later (`read`). A context with no samples queries keeps it on, as plan
+    63 had it."""
+
+    on: bool = True
+    rest: int = 0                     # passes since the last probe while off
+    pending: list = field(default_factory=list)       # [query, tiles, age]
+    free: list = field(default_factory=list)          # read queries, used again (moderngl
+                                                      # 5's Query has no release)
+    flagged: float | None = None      # the last share read back
+    queries: bool = True              # False once a query could not be made
+
+    def want(self) -> bool:
+        """Run the skip this pass?"""
+        if self.on:
+            return True
+        self.rest += 1
+        if self.rest >= SKIP_PROBE:
+            self.rest = 0
+            return True
+        return False
+
+    def issue(self, ctx: moderngl.Context, tiles: int):
+        """A samples query for this pass's tiles pass, or None."""
+        if not self.queries:
+            return None
+        try:
+            q = self.free.pop() if self.free else ctx.query(samples=True)
+        except Exception:  # noqa: BLE001 — no queries: the skip just stays on
+            self.queries = False
+            self.on = True
+            return None
+        self.pending.append([q, max(1, int(tiles)), 0])
+        return q
+
+    def read(self) -> None:
+        """Age the queries a pass; read those `SKIP_LAG` old."""
+        keep = []
+        for item in self.pending:
+            item[2] += 1
+            if item[2] <= SKIP_LAG:
+                keep.append(item)
+                continue
+            q, tiles, _ = item
+            try:
+                self.flagged = float(q.samples) / tiles
+                self.on = self.flagged >= SKIP_MIN
+            except Exception:  # noqa: BLE001
+                self.queries, self.on = False, True
+            self.free.append(q)
+        self.pending = keep
+
+    def release(self) -> None:
+        """Drop the queries (freed with the context: moderngl 5 has no
+        `Query.release`)."""
+        self.pending, self.free = [], []
+
+
+@dataclass
 class State:
     """One effect instance's GL objects on one chain."""
 
@@ -438,10 +695,11 @@ class State:
     low: Target = field(default_factory=Target)       # the Size's render target
     border: Target = field(default_factory=Target)    # the skip's first pass
     tiles: Target = field(default_factory=Target)     # one texel a tile
+    gate: SkipGate = field(default_factory=SkipGate)  # plan 80: the skip turns itself off
     stats: dict = field(default_factory=dict)         # the last pass's choices (tools, tests)
 
     def release(self) -> None:
-        for t in (self.ref, self.low, self.border, self.tiles):
+        for t in (self.ref, self.low, self.border, self.tiles, self.gate):
             t.release()
 
 
@@ -556,30 +814,40 @@ def run(chain, name: str, prog: moderngl.Program, vao: moderngl.VertexArray,
     _set(prog, "u_lines", int(h))
     _set(prog, "u_width", int(w))
     scaled = int((w, h) != tuple(src.size))
-    skip = skip_valid(v)
-    st.stats.update(size=(w, h), perturb=pert, skip=skip)
+    valid = skip_valid(v)
+    if valid:
+        st.gate.read()
+    skip = valid and st.gate.want()
+    st.stats.update(size=(w, h), perturb=pert, skip=skip, skip_valid=valid,
+                    flagged=st.gate.flagged)
     _set(prog, "u_tiles_on", 0)
     if skip:
         # the borders, flags only: the effect's own output, unblended
         mix, blend, opaque = (_get(prog, k) for k in ("u_mix", "u_blend", "u_opaque"))
-        fbo = st.border.at(ctx, (w, h), dtype="f1")
+        tw, th = -(-w // TILE), -(-h // TILE)
+        fbo = st.border.at(ctx, (tw * BORDER, th), dtype="f1")
         fbo.use()
         _set(prog, "u_pass", 1)
         _set(prog, "u_mix", 1.0)
         _set(prog, "u_blend", 0)
         _set(prog, "u_opaque", 1)
-        _set(prog, "u_scaled", scaled)
+        _set(prog, "u_scaled", 1)       # the packed target is no picture's size
         _set(prog, "u_origin", (0, 0))
         vao.render(moderngl.TRIANGLES, vertices=3)
         for k, x in (("u_mix", mix), ("u_blend", blend), ("u_opaque", opaque)):
             if x is not None:
                 _set(prog, k, x)
         tprog, tvao = gl.tiles(ctx)
-        tfbo = st.tiles.at(ctx, (-(-w // TILE), -(-h // TILE)), dtype="f1")
+        tfbo = st.tiles.at(ctx, (tw, th), dtype="f1")
         tfbo.use()
+        tfbo.clear(0.0, 0.0, 0.0, 1.0)
         _tex(st.border).use(location=0)
-        _set(tprog, "u_size", (w, h))
-        tvao.render(moderngl.TRIANGLES, vertices=3)
+        q = st.gate.issue(ctx, tw * th)
+        if q is not None:
+            with q:
+                tvao.render(moderngl.TRIANGLES, vertices=3)
+        else:
+            tvao.render(moderngl.TRIANGLES, vertices=3)
         _tex(st.tiles).use(location=3)
         _set(prog, "u_tiles", 3)
         _set(prog, "u_tiles_on", 1)

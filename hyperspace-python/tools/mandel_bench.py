@@ -8,6 +8,13 @@ view, render size and iteration cap. Run it on the M3 Max; anywhere else
   uv run python tools/mandel_bench.py --frames 60 --caps 256,1024,4096,16384
   uv run python tools/mandel_bench.py --only whole,deep --json bench.json
   uv run python tools/mandel_bench.py --quick            # a smoke run: 2 views, 1 cap
+  uv run python tools/mandel_bench.py --owner            # plan 80: the owner's rig cases
+
+`--owner` (plan 80) runs the cases the owner measured on the rig after plan
+63 — the seahorse at Size 810, Steps 2000: direct and perturbation at
+1.5e4, perturbation at 4e5 and 1e7, the skip on and off at 3e6, and the
+coloured inside at 1e6 and 9e6 (Steps 6000) — one line each with what the
+pass chose (the tier, whether the skip ran), beside plan 63's rig ms.
 
 Each line is one view at one Size (540, 810, 1080 lines) and one Steps cap:
 the pass (`FxChain.run_one`, what a graph Effect node runs) timed by the
@@ -59,6 +66,38 @@ VARIANTS = {"black": {"interior": 0, "skip": 0},
 
 DEFAULTS = dict(FxState().values["mandel"], on=True)
 
+# plan 80: the owner's rig cases (Size 810, Steps 2000, at the seahorse):
+# name, the values over the defaults, and plan 63's ms on the rig
+_SEA = {"centre_x": -0.743643887037151, "centre_y": 0.131825904205330,
+        "size": 1, "iters": 2000.0}
+OWNER = [
+    ("direct 1.5e4", {**_SEA, "zoom": 1.5e4, "tier": 1}, 4.0),
+    ("perturb 1.5e4", {**_SEA, "zoom": 1.5e4, "tier": 2}, 19.0),
+    ("perturb 4e5", {**_SEA, "zoom": 4e5}, 38.0),
+    ("perturb 1e7", {**_SEA, "zoom": 1e7}, 80.0),
+    ("skip on 3e6", {**_SEA, "zoom": 3e6, "skip": 0}, 72.0),
+    ("skip off 3e6", {**_SEA, "zoom": 3e6, "skip": 1}, 59.0),
+    ("coloured 1e6", {**_SEA, "zoom": 1e6, "interior": 1, "iters": 6000.0}, None),
+    ("coloured 9e6", {**_SEA, "zoom": 9e6, "interior": 1, "iters": 6000.0}, None),
+]
+
+
+def owner(ctx, chain, st, out, src, frames: int, rows: list) -> None:
+    """The owner's cases, one line each (`OWNER`)."""
+    head = f"{'case':15} {'tier':>8} {'skip':>5} {'ms':>8} {'plan 63':>8}"
+    print(head)
+    print("-" * len(head))
+    for name, view, was in OWNER:
+        ms = bench(ctx, chain, st, out, src, view, frames)
+        stats = chain.mandel.states["mandel"].stats if chain.mandel else {}
+        tier = "perturb" if stats.get("perturb") else "direct"
+        skip = "on" if stats.get("skip") else "off"
+        rows.append({"case": name, "tier": tier, "skip": skip == "on", "ms": ms,
+                     "plan63_rig_ms": was, "render": list(stats.get("size", ()))})
+        ms_s = "n/a" if ms is None else f"{ms:8.2f}"
+        was_s = "" if was is None else f"{was:8.0f}"
+        print(f"{name:15} {tier:>8} {skip:>5} {ms_s:>8} {was_s:>8}", flush=True)
+
 
 def bench(ctx, chain, st, out, src, view: dict, frames: int) -> float | None:
     """The median GPU ms of the pass over `frames` frames at `view` (over the
@@ -101,6 +140,8 @@ def main(argv=None) -> int:
     ap.add_argument("--variants", default=",".join(VARIANTS), help="variants, comma separated")
     ap.add_argument("--json", type=Path, help="also write the rows here")
     ap.add_argument("--quick", action="store_true", help="2 views, cap 256, black only")
+    ap.add_argument("--owner", action="store_true",
+                    help="plan 80: the owner's rig cases at the seahorse, Size 810, Steps 2000")
     a = ap.parse_args(argv)
     w, h = (int(x) for x in a.out.lower().split("x"))
     caps = [int(x) for x in a.caps.split(",") if x]
@@ -119,10 +160,14 @@ def main(argv=None) -> int:
     print(f"GPU: {renderer}   output {w}×{h}   {a.frames} frames a line, median GPU ms")
     if "Apple" not in renderer:
         print("(not the rig's GPU: these numbers say nothing about the show)")
-    rows = []
+    rows: list = []
+    if a.owner:
+        owner(ctx, chain, st, out, src, a.frames, rows)
+        views = []
     head = f"{'view':10} {'variant':9} {'size':>5} {'steps':>6} {'tier':>8} {'ms':>8} {'ref ms':>7}"
-    print(head)
-    print("-" * len(head))
+    if views:
+        print(head)
+        print("-" * len(head))
     for name in views:
         for cap in caps:
             r_ms = ref_ms(VIEWS[name], cap) if M.perturbs({**DEFAULTS, **VIEWS[name]}) else None

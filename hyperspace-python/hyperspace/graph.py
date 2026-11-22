@@ -5954,7 +5954,20 @@ class Effect(Node):
 
     def reads(self, frame: Frame) -> bool:
         src = self.inputs["image"]
-        return src is not None and src.reads(frame)
+        if src is None:
+            return self.generates(frame) and self.on(frame)
+        return src.reads(frame)
+
+    def generates(self, frame: Frame) -> bool:
+        """Plan 80: its file paints the whole frame from nothing — its
+        Python half says `GENERATOR` (the Mandelbrot, `mandel.py`) — so with
+        no picture wired into `image` it still draws, over transparent
+        black (`_pass`), where any other effect reads nothing."""
+        from . import fx      # here, not at the top: a hot reload of fx.py is seen
+
+        spec = frame.r.fx.state.specs.get(self.effect)
+        hook = fx.HOOKS.get(getattr(spec, "hook", "") or "") if spec is not None else None
+        return bool(getattr(hook, "GENERATOR", False))
 
     def run(self, frame: Frame) -> None:
         # plan 33 R: folded here only where something reads it at the
@@ -6080,6 +6093,15 @@ class Effect(Node):
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         src = self.inputs["image"]
         if src is None:
+            if not (self.generates(frame) and self.on(frame)):
+                return
+            # plan 80: a generator with nothing wired in still draws
+            readers = frame.graph.readers(self) if frame.graph is not None else 1
+            if self.name in frame.data or readers > 1:
+                self._make(frame, dst)
+                super().paint(frame, dst)
+                return
+            self._pass(frame, dst)
             return
         own = self.own_size(frame)
         if own is not None and tuple(own) != tuple(frame.size):
@@ -6153,7 +6175,11 @@ class Effect(Node):
         themselves before it)."""
         aux = self._aux(frame, dst)          # first: making it may take a spare
         tex, fbo = _spare(frame, dst)
-        self.inputs["image"].paint(frame, fbo)
+        src = self.inputs["image"]
+        if src is not None:
+            src.paint(frame, fbo)
+        else:                                # plan 80: a generator over nothing
+            fbo.clear(0.0, 0.0, 0.0, 0.0)
         kw = {"aux": aux} if aux is not None else {}
         kw.update({"opaque": 0} if self.see_through else self._opaque(frame))
         with frame.timed(self.name):
