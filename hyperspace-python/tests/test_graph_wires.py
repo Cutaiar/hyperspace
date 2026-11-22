@@ -43,6 +43,13 @@ WIRED = ("hands-glass-only", "wired-outputs")
 FILES = {"warp", "acid", "palette", "kaleido"}
 RUN = ("warp", "acid", "acid.2", "palette")
 
+def unrescaled(notes: list[str]) -> list[str]:
+    """A load's notes less plan 86's: a fixture from before the effect tapers has no
+    units marker, and its rescaled depths are said (`loadable.retaper_note`)."""
+    head = loadable.RETAPER_NOTE.partition("{count}")[0]
+    return [n for n in notes if not n.startswith(head)]
+
+
 
 def _fixture(slug: str) -> dict:
     return json.loads((FIXTURES / f"{slug}.json").read_text())
@@ -589,7 +596,7 @@ def test_the_fixtures_load_clean_through_a_scratch_library(tmp_path):
         dst = rig.home / "loadable" / f"{slug}.json"
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text((FIXTURES / f"{slug}.json").read_text())
-        assert rig.lib.load(LOADABLE, slug) == [] and rig.loaded_patch.notes == [], slug
+        assert rig.lib.load(LOADABLE, slug) == [] and unrescaled(rig.loaded_patch.notes) == [], slug
         assert not rig.lib.is_dirty(LOADABLE), slug
         assert doc["graph"]
         assert rig.loaded_patch.document(slug)[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()
