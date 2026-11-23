@@ -563,7 +563,7 @@ class MetaController:
     `mix` is the crossfader (`output.xfade`, `output.xfade_s`): `tick` runs a
     timed `crossfade` and follows the fader, and `parked` is the one list of decks
     off air, what `Host.off_air` reads. `fade_when_warm` is a fade a load asked for
-    (row 902): `tick` starts it once the deck off air has had its warm draw.
+    (row 1063): `tick` starts it once the deck off air has had its warm draw.
     `row_load` is where a bank verb from a row lands (each deck's `DeckInstall` asks
     it), and `bars_load` why it may not now."""
 
@@ -873,7 +873,7 @@ class MetaController:
 
     def fade_when_warm(self) -> None:
         """A timed `crossfade` as soon as the deck off air has had its warm draw (row
-        902): what a load that means to go on air asks for — the Edge's D-pad
+        1063): what a load that means to go on air asks for — the Edge's D-pad
         (`DeckInstall.fade_to`). The patch landed this very moment, so fading now
         would compile its shaders in the fade's first frame; `tick` starts it at the
         first frame after `Fade.warm` has drawn that deck (the playlist waits the same
@@ -916,7 +916,7 @@ class MetaController:
                 fn()
         if self.waiting and getattr(self.fade, "warm_deck", None) is None:
             self.waiting = False
-            self.crossfade()              # (row 902: the load's own fade, warm draw done)
+            self.crossfade()              # (row 1063: the load's own fade, warm draw done)
         run = self.timed
         if run is not None:
             if self.mix.xfade != run.wrote:

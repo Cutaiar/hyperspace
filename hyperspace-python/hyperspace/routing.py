@@ -1081,7 +1081,7 @@ NO_LAYOUT = PadLayout()
 
 def _layout_source(control: str, role: str) -> str:
     """A layout row's source: a face or shoulder button by its name (``pad:MENU``),
-    a D-pad direction by its control name (``hat.E`` → ``hat:E``, row 902), each
+    a D-pad direction by its control name (``hat.E`` → ``hat:E``, row 1063), each
     qualified with `role` as a table row is."""
     hat = control in HAT_NAMES
     head, addr = ("hat", control[len(HAT_PREFIX):]) if hat else ("pad", control)
