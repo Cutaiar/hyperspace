@@ -1480,7 +1480,7 @@ def _copy_paste(panel, st: dict, view: graphview.View) -> None:
         sel = _selection(st, view)
         n = sel[1] if sel is not None and sel[0] == "node" else None
         ref = getattr(n, "ref", None)
-        if not isinstance(ref, Effect):
+        if n is None or not isinstance(ref, Effect):
             _note(st, COPY_NOTHING)
             return
         st["clip"] = {"of": ref.effect, "nid": n.id}
