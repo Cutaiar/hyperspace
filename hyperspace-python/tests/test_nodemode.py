@@ -343,12 +343,14 @@ def test_a_dropdown_with_one_choice_or_a_list_asked_each_time_is_not_filled(app)
     assert nodemode.fillable(fake, ["t.one", "t.asked", "view.shape"]) == ["view.shape"]
 
 
-def test_a_node_of_only_dropdowns_lets_a_desk_in_and_refuses_a_pad_in_words(app):
+def test_a_node_of_only_dropdowns_lets_a_desk_and_a_pad_in(app):
+    """A pad fills a dropdown on a button (plan 86, row 1062), not on its sticks."""
     reg = app.reg
     ids = ["view.shape", "view.inst_layout"]
     assert nodemode.enter_refusal(reg, "render:view", ids) is None
-    assert nodemode.enter_refusal(reg, "render:view", ids, routed=True) == (
-        nodemode.NO_FILLABLE.format(node="view"))
+    assert nodemode.enter_refusal(reg, "render:view", ids, routed=True) is None
+    assert nodemode.fillable(reg, ids, routed=True) == []
+    assert nodemode.dropdowns(reg, ids) == ids
 
 
 def test_you_enter_with_a_node_selected_and_a_node_with_no_params_cannot(app):
