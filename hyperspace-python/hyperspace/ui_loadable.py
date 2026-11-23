@@ -55,6 +55,7 @@ from .library import (
     PATCHES,
     RETIRED_MODULES,
     LibraryError,
+    harmless,
 )
 
 LIST_POLL = 1.0      # seconds between re-listings of a group's loadable patches
@@ -204,12 +205,16 @@ def _said(panel, fn, *args):
 
 # ---- the name field: the strip while a save-as is being typed ----
 
-def _name_field(panel, key: str, commit, hint: str = "patch name") -> bool:
-    """Draw the inline name field for `key`; returns True while it is open."""
+def _name_field(panel, key: str, commit, hint: str = "patch name",
+                width: float | None = None) -> bool:
+    """Draw the inline name field for `key`; returns True while it is open. A
+    `commit` that returns False keeps it open (a refused name, to type another).
+    `width` is the field's own; None fills the row up to its **ok** and **×**."""
     st = _state(panel)
     if st["naming"] != key:
         return False
-    imgui.set_next_item_width(-(ui.chip_w("ok", "×") + imgui.get_style().item_spacing.x))
+    imgui.set_next_item_width(width if width is not None else
+                              -(ui.chip_w("ok", "×") + imgui.get_style().item_spacing.x))
     if st.pop("focus", False):          # the field takes the keyboard once, on open
         imgui.set_keyboard_focus_here()
     entered, st["buf"] = ui.input_text_with_hint(
@@ -225,8 +230,8 @@ def _name_field(panel, key: str, commit, hint: str = "patch name") -> bool:
         name = st["buf"].strip()
         if name:
             undo.by_hand(True)          # the field's own report: row 757
-            commit(name)
-            st["naming"] = None
+            if commit(name) is not False:
+                st["naming"] = None
     return True
 
 
@@ -280,7 +285,22 @@ SAVE_PARAM = "preset.save_new"   # the one action: START held on a pad, a learne
 SAVED_S = 4.0                    # how long the chip shows the new patch's name
 SAVE_AS_TIP = ("Save this deck as a new patch, in one press. It gets a fresh name grown from "
                "the loaded one (moo → moo 2), in the same folder, and takes the next empty pad. "
-               "It never writes over a patch. Right-click to learn it to a desk or pad button.")
+               "It never writes over a patch. Right-click to learn it to a desk or pad button. "
+               "▾ beside it: save under a name you type, or in a folder you pick.")
+MORE_ID = "graph.save_as.more"   # the ▾ beside it (plan 88)
+MORE = "▾"
+BY_NAME_ID = "graph.save_as.name"            # …its two items
+BY_NAME = "save as name…"
+AT_ID = "graph.save_as.location"
+AT = "save to location…"
+NAMING = "graph.save_as"         # `_state`'s naming key while the deck row's field is open
+FIELD_W = 200.0                  # that field, on the deck row
+BY_NAME_TIP = ("Type a name: the deck is saved as a new patch of that name in the loaded "
+               "patch's folder, and takes the next empty pad. A name already taken is "
+               "refused: nothing is written over.")
+AT_TIP = ("Pick a folder and a name in the file dialog. It opens in the loaded patch's "
+          "folder, else the library's patches folder; the patch must stay inside that "
+          "folder (subfolders and new folders are fine) so load… and the pads find it.")
 
 
 def save_as_label(panel, now: float | None = None) -> str:
@@ -311,11 +331,54 @@ def save_as(panel) -> str | None:
     return now
 
 
+def save_named(panel, name: str) -> str | None:
+    """Save the panel's deck as a new patch called `name` (folder-qualified:
+    `Install.save_named`, never over a file) and show it on the chip, as `save_as`
+    does. The name, or None when it was refused (why is on the footer)."""
+    lib = panel.library
+    if lib is None or not _guard(panel, lib.install.save_named, name):
+        return None
+    now = lib.current(LOADABLE)
+    invalidate(panel, LOADABLE)
+    _state(panel)["saved"] = (now, imgui.get_time())
+    return now
+
+
+def _name_in_folder(panel, typed: str) -> bool:
+    """The deck row's field committed: `typed` in the loaded patch's folder. A ``/``
+    typed is part of the name, never a folder: made ``" - "`` (`harmless`)."""
+    typed = harmless(typed)
+    folder, _ = panel.library.folder_of(LOADABLE, panel.library.current(LOADABLE))
+    return save_named(panel, f"{folder}/{typed}" if folder else typed) is not None
+
+
+def begin_save_by_name(panel) -> None:
+    """**save as name…**: the deck row's name field opens, holding the name one press
+    would give (moo 2), selected, so typing replaces it."""
+    lib = panel.library
+    if lib is None:
+        return
+    _begin_naming(panel, NAMING, lib.install.next_save_name().rsplit("/", 1)[-1])
+
+
+def save_as_w(panel) -> float:
+    """The room **save as** takes on the deck row: the chip and its ▾, or, while a
+    name is typed there, the field and its **ok** and **×**."""
+    sp = imgui.get_style().item_spacing.x
+    if _state(panel).get("naming") == NAMING:
+        return FIELD_W + sp + ui.chip_w("ok", "×")
+    return ui.chip_w(save_as_label(panel)) + 1 + ui.chip_w(MORE)
+
+
 def save_as_chip(panel) -> bool:
     """**save as** on GRAPH's deck row, beside **load…** (ui_browse): one press saves
     (`save_as`), and the chip reads "saved <name>", lit, for `SAVED_S`. Its menu is
-    `preset.save_new`'s, so Learn puts the same press on a desk or pad button. True when
-    pressed."""
+    `preset.save_new`'s, so Learn puts the same press on a desk or pad button. The ▾
+    joined to its right (plan 88) opens **save as name…** (`begin_save_by_name`: a
+    name field takes the chip's place) and **save to location…** (ui_browse's dialog
+    in save mode). True when the chip itself was pressed."""
+    if _name_field(panel, NAMING, lambda n: _name_in_folder(panel, n), width=FIELD_W):
+        return False
     words = save_as_label(panel)
     hit = ui.lit_chip(f"{words}##{SAVE_AS_ID}", words != SAVE_AS)
     p = panel.reg.get(SAVE_PARAM)
@@ -327,7 +390,30 @@ def save_as_chip(panel) -> bool:
         panel._learn_frame(p)
     if hit:
         save_as(panel)
+    _more(panel)
     return hit
+
+
+def _more(panel) -> None:
+    """The ▾ joined to **save as**, and its two items."""
+    from . import ui_browse  # (late: ui_browse calls back into this module)
+
+    imgui.same_line(0, 1)
+    open_ = imgui.is_popup_open(MORE_ID)
+    if ui.lit_chip(f"{MORE}##{MORE_ID}", open_ or ui_browse.is_saving(panel)):
+        imgui.open_popup(MORE_ID)
+    if imgui.is_item_hovered():
+        ui.tooltip("More ways to save: under a name you type, or in a folder you pick")
+    if imgui.begin_popup(MORE_ID):
+        if imgui.selectable(f"{BY_NAME}##{BY_NAME_ID}", False)[0]:
+            begin_save_by_name(panel)
+        if imgui.is_item_hovered():
+            ui.tooltip(BY_NAME_TIP)
+        if imgui.selectable(f"{AT}##{AT_ID}", False)[0]:
+            ui_browse.open_save(panel)
+        if imgui.is_item_hovered():
+            ui.tooltip(AT_TIP)
+        imgui.end_popup()
 
 
 def _on_deck(meta) -> str:

@@ -1724,7 +1724,7 @@ def _deck_row(panel, st: dict) -> None:
     _wrap_for(ui.chip_w(ui_browse.LABEL))
     ui_browse.chip(panel)
     # and beside it, saving this deck as a new patch in one press (plan 83)
-    _wrap_for(ui.chip_w(ui_loadable.save_as_label(panel)))
+    _wrap_for(ui_loadable.save_as_w(panel))
     ui_loadable.save_as_chip(panel)
     # and so is the playlist: its controls in a popup under its chip
     if getattr(panel, "playing", None) is not None:

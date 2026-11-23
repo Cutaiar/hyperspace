@@ -1339,23 +1339,83 @@ class Install:
         the desk reads as "nothing to confirm" (midi.py blinks no light)."""
         return self._save_new(None)
 
-    def _save_new(self, at: int | None) -> bool:
-        """`save_new` into slot `at`, or the next empty one when None."""
+    def save_named(self, name: str) -> bool:
+        """`save_new` under a name the person gave (plan 88: **save as name…** and
+        **save to location…** on GRAPH's deck row): `name` is folder-qualified
+        (``4-install-nov/distort/moo final``), its folder made when it is new. The
+        same save as `save_new` in every other way — the new patch becomes the loaded
+        one, takes the next empty pad, the show is written — and it never writes over
+        a file either: a name taken (`_taken`, the bank's names) or one that could
+        name no file (``../x``) is refused, with why in `bank_error` and on the
+        warning line. True when it was saved."""
+        name = "/".join(seg.strip() for seg in str(name).strip().split("/"))
+        lib = self.lib
+        key = lib._fold(LOADABLE, name) if name and not name.endswith("/") else None
+        if key is None:
+            return self._refuse(f"{name or 'an empty name'}: not a name a patch can have")
+        taken = self._taken_now()
+        if key in taken or self._on_disk(name) or self._bare_taken(name, taken):
+            return self._refuse(f"{name}: there is a patch of that name already — "
+                                "pick another, nothing is written over")
+        return self._save_new(None, name)
+
+    def _bare_taken(self, name: str, taken: set) -> bool:
+        """In a library not yet moved (`presets/` only) a folder is no part of a name
+        (`Library._prefix`): `set-a/intro` would be listed as `intro`, the name a pad
+        of `set-b/intro.json` already holds. Its leaf alone is then what must be free."""
+        lib = self.lib
+        if loadable_dir(lib.home).name != OLD_LOADABLE:
+            return False
+        return lib._fold(LOADABLE, split_name(name)[1]) in taken
+
+    def _on_disk(self, name: str) -> bool:
+        """Is the file a save of `name` would write already there, by the disk's own
+        rules: on a Mac's disk, which folds case, ``moo.JSON`` is ``moo.json``,
+        and the list (``*.json``) does not see it."""
+        try:
+            key = path_slug(name)
+        except LibraryError:
+            return False
+        lib = self.lib
+        folder, _, leaf = key.rpartition("/")
+        if folder:
+            folder = lib._folder_on_disk(folder) or folder
+        return (lib.group_dir(lib.home, LOADABLE) / folder / f"{leaf}.json").exists()
+
+    def next_save_name(self) -> str:
+        """The name `save_new` would give now: the loaded patch's grown (moo → moo 2),
+        in its folder; ``PATCH <n>`` at the top with nothing loaded."""
+        lib = self.lib
+        taken = self._taken_now()
+        folder, base = lib.folder_of(LOADABLE, lib.current(LOADABLE))
+        leaf = next_name(base, taken, key=lambda n: lib._fold(
+            LOADABLE, f"{folder}/{n}" if folder else n))
+        return f"{folder}/{leaf}" if folder else leaf
+
+    def _taken_now(self) -> set:
+        # stems as slugs: on a filesystem that folds case, `Trip-2.json`
+        # is the file a save of "TRIP 2" would write over
+        lib = self.lib
+        return lib._taken(LOADABLE) | {lib._fold(LOADABLE, n) for n in self.bank if n}
+
+    def _refuse(self, why: str) -> bool:
+        self.bank_error = f"patches: {why}"
+        self.lib.say(warning=self.bank_error)
+        return False
+
+    def _save_new(self, at: int | None, name: str | None = None) -> bool:
+        """`save_new` into slot `at`, or the next empty one when None; under `name`
+        (`save_named`, checked there), else the next name grown from the loaded one."""
         lib, loaded_patch = self.lib, self._loader()
         if lib.reg is None:
             return False
         if loaded_patch is None:
             self.bank_error = "patches: no patch loader"
             return False
-        # stems as slugs: on a filesystem that folds case, `Trip-2.json`
-        # is the file a save of "TRIP 2" would write over. Plan 48 row 587:
-        # the new loadable patch lands beside the loaded one — in its folder, the
-        # library's root for a top-level one or none loaded
-        taken = lib._taken(LOADABLE) | {lib._fold(LOADABLE, n) for n in self.bank if n}
-        folder, base = lib.folder_of(LOADABLE, lib.current(LOADABLE))
-        leaf = next_name(base, taken, key=lambda n: lib._fold(
-            LOADABLE, f"{folder}/{n}" if folder else n))
-        name = f"{folder}/{leaf}" if folder else leaf
+        # Plan 48 row 587: the new loadable patch lands beside the loaded one — in
+        # its folder, the library's root for a top-level one or none loaded
+        if name is None:
+            name = self.next_save_name()
         try:
             loaded_patch.save_as(name)
         except (LibraryError, OSError) as e:          # a full disk must not stop the show
@@ -2992,7 +3052,10 @@ class Library:
                 folder = key.rpartition("/")[0]
                 folder = self._folder_on_disk(folder) or folder
                 leaf = leaf.strip()
-                path = self.home / group / (f"{folder}/" if folder else "") / f"{slug(leaf)}.json"
+                # in the folder the list reads (`group_dir`): `presets/` in a library
+                # not yet moved, so a save never starts a `loadable/` that hides it
+                path = (self.group_dir(self.home, group) / (f"{folder}/" if folder else "")
+                        / f"{slug(leaf)}.json")
             doc["name"] = leaf
             name = f"{folder}/{leaf}" if folder else leaf
         elif path is None:

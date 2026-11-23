@@ -26,6 +26,16 @@ one). Where that fails — a wheel that does not export the symbol — the
 native dialog (portable_file_dialogs, as MEDIA's and AUDIO's) opens on the
 same folder and the pick is handled the same way.
 
+The same dialog saves too (plan 88): **save to location…** under **save as**'s ▾
+opens it in save mode (`open_save`) on the folder of the patch the panel's
+deck holds, else the patches' folder (on the owner's Mac, the library is in
+Google Drive, so that is ``My Drive/Hyperspace/loadable``). The folder picked
+is the patch's folder (a new one made in the dialog too) and the file name
+typed its name (`save_name`); a place outside the library's patches folder
+is refused in words, as a pick is, since no load, pad or list would find a
+patch there. The save is `Install.save_named`'s, which never writes over a
+file.
+
 `draw` runs every frame from `Panel._draw`: the dialog is a window of its
 own and must be drawn (and its answer taken) whatever GRAPH shows.
 `scrub` runs before the frame is rendered (app.py), for the reason it
@@ -45,6 +55,8 @@ from .library import LOADABLE, LibraryError, loadable_dir
 KEY = "hyperspace.patches"            # ImFileDialog's key for this dialog
 TITLE = "Load a patch off air"
 LABEL = "load…"
+SAVE_KEY = "hyperspace.patches.save"  # …and for its save mode
+SAVE_TITLE = "Save the deck as a new patch"
 FILTER = "Patches (*.json){.json},.*"
 SETUP = "_Z30ImFileDialogSetupTextureLoaderv"    # ImFileDialogSetupTextureLoader()
 TIP = ("Pick a patch from the library's folders: it loads on the deck off air, and the "
@@ -78,7 +90,7 @@ def _setup() -> bool:
 def _state(panel) -> dict:
     st = getattr(panel, "_browse", None)
     if st is None:
-        st = panel._browse = {"open": None, "native": None}
+        st = panel._browse = {"open": None, "native": None, "saving": False}
     return st
 
 
@@ -103,8 +115,19 @@ def start_dir(lib) -> Path:
 
 
 def is_open(panel) -> bool:
+    """A dialog is up, to load or to save."""
     st = _state(panel)
     return st["open"] is not None or st["native"] is not None
+
+
+def is_loading(panel) -> bool:
+    """The dialog that is up is **load…**'s (its chip is lit for it)."""
+    return is_open(panel) and not _state(panel).get("saving", False)
+
+
+def is_saving(panel) -> bool:
+    """The dialog that is up is **save to location…**'s."""
+    return is_open(panel) and _state(panel).get("saving", False)
 
 
 def open_patches(panel) -> None:
@@ -113,6 +136,7 @@ def open_patches(panel) -> None:
     lib, st = panel.library, _state(panel)
     if lib is None or is_open(panel):
         return
+    st["saving"] = False
     where = start_dir(_target(panel))
     if _setup():
         from imgui_bundle import im_file_dialog as ifd
@@ -135,6 +159,39 @@ def open_patches(panel) -> None:
         lib.say(warning=f"browse: no file dialog ({e})")
 
 
+def open_save(panel) -> None:
+    """Open the dialog in save mode (plan 88, the module docstring): on the folder
+    of the patch the panel's deck holds, else the patches' folder; the name the
+    one-press save would give is typed in for you. One at a time, as `open_patches`."""
+    lib, st = panel.library, _state(panel)
+    if lib is None or is_open(panel):
+        return
+    st["saving"] = True
+    where = start_dir(lib)
+    leaf = lib.install.next_save_name().rsplit("/", 1)[-1]
+    if _setup():
+        from imgui_bundle import im_file_dialog as ifd
+
+        fd = ifd.FileDialog.instance()
+        base = str(loadable_dir(lib.home))
+        if base not in [str(f) for f in fd.get_favorites()]:
+            fd.add_favorite(base)
+        try:
+            if fd.save(SAVE_KEY, SAVE_TITLE, FILTER, str(where)):
+                st["open"] = SAVE_KEY
+                return
+        except RuntimeError as e:           # an imgui assert, raised: the native one
+            _ifd.update(ok=False, why=str(e))
+    try:
+        from imgui_bundle import portable_file_dialogs as pfd
+
+        st["native"] = pfd.save_file(SAVE_TITLE, str(where / f"{leaf}.json"),
+                                     ["Patches", "*.json"])
+    except Exception as e:  # noqa: BLE001 — a dialog is best effort
+        st["saving"] = False
+        lib.say(warning=f"save: no file dialog ({e})")
+
+
 def draw(panel) -> None:
     """Each frame: draw the dialog while it is up, and take its answer."""
     st = _state(panel)
@@ -148,13 +205,22 @@ def draw(panel) -> None:
             st["open"] = None
             st["shut"] = True           # (`scrub` looks at this frame too)
             if picked:
-                take(panel, Path(picked))
+                _answer(panel, Path(picked))
     native = st["native"]
     if native is not None and native.ready():
         st["native"] = None
-        picked = native.result()
+        picked = native.result()        # a list from open_file, a str from save_file
+        if isinstance(picked, str):
+            picked = [picked] if picked else []
         if picked:
-            take(panel, Path(picked[0]))
+            _answer(panel, Path(picked[0]))
+
+
+def _answer(panel, path: Path) -> None:
+    if _state(panel).get("saving", False):
+        save_at(panel, path)
+    else:
+        take(panel, path)
 
 
 def scrub(panel, draw_data) -> int:
@@ -216,12 +282,49 @@ def take(panel, path: Path) -> str | None:
     return got
 
 
+def save_name(lib, path: Path) -> str | None:
+    """The patch name a file picked in the save dialog stands for: its folder under
+    the patches' folder and its file name less ``.json`` (``party/moo final``);
+    None for a place outside that folder."""
+    base = loadable_dir(lib.home)
+    path = Path(path)
+    stem = path.name[:-5] if path.name.lower().endswith(".json") else path.name
+    try:
+        rel = path.parent.resolve().relative_to(base.resolve())
+    except (ValueError, OSError):
+        return None
+    folder = rel.as_posix()
+    if not stem.strip():
+        return None
+    return stem if folder in ("", ".") else f"{folder}/{stem}"
+
+
+def save_at(panel, path: Path) -> str | None:
+    """Save the panel's deck as a new patch at `path`, picked in the save dialog
+    (`Install.save_named`: never over a file); the new name, or None with why on
+    the warning line."""
+    from . import ui_loadable
+
+    lib = panel.library
+    if Path(path).exists():             # a file picked to write over: never
+        lib.say(warning=f"{Path(path).name}: not saved — that file is there already; "
+                        "nothing is written over, so type a new name")
+        return None
+    name = save_name(lib, path)
+    if name is None:
+        lib.say(warning=f"{path}: not saved — a patch saves under the library's "
+                        f"patches folder, {loadable_dir(lib.home)}, where load… and "
+                        "the pads can find it")
+        return None
+    return ui_loadable.save_named(panel, name)
+
+
 def chip(panel) -> bool:
     """The **load…** chip on GRAPH's deck row; True when pressed (the dialog
     is then open). Lit while the dialog is up."""
     from . import ui
 
-    hit = ui.lit_chip(f"{LABEL}##graph.load", is_open(panel))
+    hit = ui.lit_chip(f"{LABEL}##graph.load", is_loading(panel))
     if imgui.is_item_hovered():
         ui.tooltip(TIP)
     if hit:
