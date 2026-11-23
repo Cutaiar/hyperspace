@@ -2457,8 +2457,12 @@ def main(argv: list[str] | None = None) -> None:
     panel.config_notes = cfg["notes"]
     # keys from every window (`hotplug.py` points them at what's open, as is the mouse)
     keys = Keys(render_win, ctrl_win, [w for w in _slot_windows(slots) if w is not render_win])
+    def on_drop(_win: Any, paths: Any) -> None:    # (pyGLFW passes the list of paths)
+        ui_media.DROPPED.extend(paths)
+
     for _w in (ctrl_win, render_win):       # a file dropped on either window → a media cell
-        glfw.set_drop_callback(_w, lambda _win, paths: ui_media.DROPPED.extend(paths))
+        # (pyGLFW's stub types the callback (window, int, str); it is called (window, paths))
+        glfw.set_drop_callback(_w, on_drop)  # pyright: ignore[reportArgumentType]
     mouse = Mouse(render_win, reg, s, slots[0].switches,          # the mouse: output 1 only
                   pointer=meta.pointer(MOUSE))
 
