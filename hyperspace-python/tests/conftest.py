@@ -326,6 +326,31 @@ def _library_home(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _no_imgui_ini(monkeypatch):
+    """Every imgui context a test makes keeps no ini file: it neither loads
+    an `imgui.ini` from the working directory nor writes one there. imgui's
+    default is `imgui.ini` in the cwd, so a test run (or the real app, or
+    `tools/app_driver.py`, run from `hyperspace-python/`) left the panel's
+    window layout there, and the next run's rig loaded it — a docked or
+    collapsed window then broke tests that read what the panel drew
+    (`test_dial`'s unplugged pad; the kit's RETRO row 70). Ignored by git,
+    so only a local tree ever failed, never CI's fresh checkout. An empty
+    filename is imgui's "no ini" (`None` crashes imgui_bundle)."""
+    try:
+        from imgui_bundle import imgui
+    except ImportError:          # a machine with no imgui_bundle: nothing to guard
+        return
+    made = imgui.create_context
+
+    def create_context(*args, **kwargs):
+        ctx = made(*args, **kwargs)
+        imgui.get_io().set_ini_filename("")
+        return ctx
+
+    monkeypatch.setattr(imgui, "create_context", create_context)
+
+
+@pytest.fixture(autouse=True)
 def _a_launch_waits_for_its_read(monkeypatch):
     """A launch waits `devicelist.LAUNCH_S` for the first read of the shared list, which a
     loaded machine can pass, and then says the library isn't answering, as it should (row
