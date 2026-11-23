@@ -136,6 +136,7 @@ from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .graph import (
     EMPTY,
     FACE_PIC,
+    FIELD,
     IMAGE,
     MEDIA_CHANNELS,
     Delay,
@@ -1110,6 +1111,8 @@ def thumb_source(frame: Frame, name: str, how: str,
         if scene is None:
             return None
         node = scene
+    if getattr(node, "OUTPUT", None) == FIELD:
+        return _field_thumb(frame, node)
     if getattr(node, "OUTPUT", None) != IMAGE:
         return None
     # (review: every kind — a composite, a delay, a resize, a copy behind a
@@ -1121,6 +1124,20 @@ def thumb_source(frame: Frame, name: str, how: str,
     if not node.reads(frame):
         return None
     return picture(frame, node)
+
+
+def _field_thumb(frame: Frame, node) -> moderngl.Texture | None:
+    """Plan 67 F1: a field node's thumbnail — the field this frame already
+    made, shown grey (`FxChain.show_field`) into a frame texture of its own;
+    None when the frame made none (a thumbnail never makes a field, as it
+    never makes a mask)."""
+    made = frame.data.get(node.name + getattr(node, "MADE", "#field"))
+    if made is None:
+        return None
+    tex, fbo = frame.r._frame_target(frame.key(node.name + "#thumb"), frame.size)
+    fbo.viewport = (0, 0, *frame.size)
+    frame.r.fx.show_field(made, fbo)
+    return tex
 
 
 # the card is put through an effect at twice a thumbnail's size, so the

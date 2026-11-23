@@ -131,6 +131,13 @@ T_SPEED = tapers.exp_signed(SPEED_UNITY, SPEED_SIDE)
 # doublings (200 detents) up to its hi — about hi / 1000 one step up
 AMOUNT_OCTAVES = 10
 RELOAD_EVERY = 30               # frames between mtime checks of the folder
+# plan 67 F1: the types an effect's ports and output carry — `graph.IMAGE`
+# and `graph.FIELD`, spelled here because this module imports no graph (a
+# test holds them equal); NONE is a port the file does not have
+PICTURE, FIELD, NONE = "image", "field", "none"
+FIELD_PORT = "field"            # the third port: a field an effect reads (unit 3)
+TAKES_PORTS = ("image", FIELD_PORT)
+FIELD_UNIT = 3                  # its texture unit (0 the input, 1 the aux, 2 a hook's)
 # plan 63: `// @hook <name>` — an effect with a Python half. The module runs
 # the pass (`run(chain, name, prog, vao, src, dst)`, every uniform of the
 # file set) and the effect's drives (`advance(spec, values, dt)`, while it
@@ -140,7 +147,8 @@ RELOAD_EVERY = 30               # frames between mtime checks of the folder
 HOOKS = {"mandel": mandel, "timedisplace": timedisplace}
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock|family|hook)\s+(.*?)\s*$")
+_DIRECTIVE = re.compile(
+    r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock|family|hook|makes|takes)\s+(.*?)\s*$")
 _CLOCK_UNIFORM = re.compile(r"^u_[a-z][a-z0-9_]*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
 _CHOICE = re.compile(
@@ -223,6 +231,13 @@ class EffectSpec:
     # draws an effect's aux port only when it does (or a saved wire goes
     # in); like `family`, it declares no param, so it is not in `signature`
     aux: bool = False
+    # plan 67 F1: what the file makes (`// @makes field`: a field, else a
+    # picture) and what its ports take where not a picture's (`// @takes
+    # <port> <type>`: `image` or the `field` port, `field` or `none`).
+    # `ports` reads them; the graph types the node's wires by them. Like
+    # `family`, they declare no param, so they are not in `signature`
+    makes: str = PICTURE
+    takes: dict[str, str] = field(default_factory=dict)
 
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
@@ -369,6 +384,42 @@ def reads_aux(source: str) -> bool:
     return bool(_AUX_CALL.search(code))
 
 
+def ports(spec: EffectSpec) -> tuple[str, dict[str, str]]:
+    """Plan 67 F1: (what effect file `spec` makes, port → type of the ports a
+    wire may go into). Every file has `image` and `aux` taking a picture, and
+    no `field` port; its `@takes` lines change those (`none`: no such port).
+    The aux port is offered whatever the file reads (plan 65 hides it on the
+    canvas only)."""
+    takes = {"image": PICTURE, "aux": PICTURE}
+    for port, typ in getattr(spec, "takes", {}).items():
+        if typ == NONE:
+            takes.pop(port, None)
+        else:
+            takes[port] = typ
+    return getattr(spec, "makes", PICTURE), takes
+
+
+# plan 67 F1: each shipped file's `ports`, by file name — kept by every
+# `FxState` that reads the shipped folder, read by the graph's wire checks
+# and builder (`ports_of`). Module-level, so it survives a reload of this
+# module: the dict is taken over, not made again
+_PORTS: dict[str, tuple[str, dict[str, str]]] = globals().get("_PORTS", {})
+
+
+def ports_of(file: str) -> tuple[str, dict[str, str]]:
+    """`ports` of shipped effect file `file` (a name, no instance mark): as the
+    last `FxState` of the shipped folder read it, else read from the folder now
+    (a graph read before any state, a test); a file not there is a picture's."""
+    got = _PORTS.get(file)
+    if got is None:
+        try:
+            got = ports(parse(file, (FX_DIR / f"{file}.glsl").read_text()))
+        except (OSError, SpecError):
+            return PICTURE, {"image": PICTURE, "aux": PICTURE}
+        _PORTS[file] = got
+    return got
+
+
 def parse(name: str, source: str) -> EffectSpec:
     """An effect file's text → its spec. Raises SpecError on a bad header."""
     if not _NAME.match(name):
@@ -396,6 +447,18 @@ def parse(name: str, source: str) -> EffectSpec:
                     spec.clocks.append(_parse_clock(name, n, val))
                 elif key == "family":
                     spec.family = val.strip().lower()
+                elif key == "makes":
+                    if val not in (PICTURE, FIELD):
+                        raise SpecError(f"{name}:{n}: @makes {val!r}: image or field")
+                    spec.makes = val
+                elif key == "takes":
+                    port, _, typ = val.partition(" ")
+                    typ = typ.strip()
+                    if port not in TAKES_PORTS or typ not in (PICTURE, FIELD, NONE):
+                        raise SpecError(f"{name}:{n}: @takes {val!r}: a port "
+                                        f"({' or '.join(TAKES_PORTS)}) and a type "
+                                        f"(image, field or none)")
+                    spec.takes[port] = typ
                 elif key == "hook":
                     if val not in HOOKS:
                         raise SpecError(f"{name}:{n}: @hook {val!r} is none of {sorted(HOOKS)}")
@@ -553,6 +616,9 @@ class FxState:
                 if last is not None:          # a broken edit keeps the last good spec
                     found[name] = last
         self.files = dict(found)
+        if Path(self.dir).resolve() == FX_DIR.resolve():
+            for name, spec in found.items():          # plan 67 F1: what the graph reads
+                _PORTS[name] = ports(spec)
         found = self._wanted(found)
         for name in set(self.specs) - set(found):
             changed.add(name)
@@ -899,6 +965,9 @@ uniform int u_opaque;      // 1 on an opaque ground (window, fullscreen): alpha 
 uniform sampler2D u_aux;   // plan 32 R: the second picture (unit 1), wired by `<effect>.aux`
 uniform int u_aux_on;      // 1 while one is wired; 0 and `aux(uv)` is transparent black
 uniform vec2 u_aux_size;   // its size, px (0, 0 with none)
+uniform sampler2D u_field; // plan 67 F1: the field on the `field` port (unit 3)
+uniform int u_field_on;    // 1 while one is wired; 0 and `field_port(uv)` is no field
+uniform int u_field_show;  // a field maker's pass into a target that is no field: shown grey
 uniform int u_scaled;      // 1 when u_src is not the target's size
 uniform ivec2 u_origin;    // the target rect's origin (gl_FragCoord is window-relative)
 in vec2 v_uv;
@@ -940,6 +1009,22 @@ void main() {
 }
 """
 
+# plan 67 F1: the tail of a file that makes a field (`@makes field`): what
+# `effect` returns is the field itself — no blend, no mix, no clamp, no
+# alpha rule (a field is signed and unbounded; its .a says scalar 0 or
+# vector 1, `as_scalar` / `as_vector`) — written raw into a float32 target,
+# or shown grey (`field_grey`) into any other: a preview, a thumbnail, the card
+FIELD_TAIL = """
+void main() {
+    vec4 v = effect(v_uv);
+    f_color = u_field_show != 0 ? vec4(field_grey(v), 1.0) : v;
+}
+"""
+
+# plan 67 F1: a field texture shown as a picture — the grey promotion
+# (`graph.FieldPicture`), one pass of the lib's `field_grey`
+SHOW_FIELD = "vec4 effect(vec2 uv) { return field_in(uv); }\n"
+
 # an effect with no program: its source across, 1:1 by texelFetch as
 # FS_TAIL's `here` reads it
 COPY_FS = """
@@ -956,13 +1041,22 @@ void main() {
 """
 
 
-def fragment_source(lib: str, effect: str, shared: str | None = None, clocks=()) -> str:
+def fragment_source(lib: str, effect: str, shared: str | None = None, clocks=(),
+                    makes: str = PICTURE) -> str:
     """The whole fragment shader of an effect: the head (with the file's
     `@clock` uniforms declared), the shared helpers, the lib, the file,
-    the tail."""
+    the tail — a field maker's own (plan 67 F1: `FIELD_TAIL`)."""
     shared = common() if shared is None else shared
+    tail = FIELD_TAIL if makes == FIELD else FS_TAIL
     return (f"{FS_HEAD}{clock_declarations(clocks)}#line 1 1\n{shared}\n#line 1 2\n{lib}\n"
-            f"#line 1 3\n{effect}\n#line 1 4\n{FS_TAIL}")
+            f"#line 1 3\n{effect}\n#line 1 4\n{tail}")
+
+
+def _is_field_target(dst: moderngl.Framebuffer) -> bool:
+    """Plan 67 F1: is `dst` a field's (a float32 colour target)? A field
+    maker's pass writes raw into one and shows grey into anything else."""
+    atts = getattr(dst, "color_attachments", ()) or ()
+    return bool(atts) and getattr(atts[0], "dtype", "f1") == "f4"
 
 
 class FxChain:
@@ -1063,6 +1157,11 @@ class FxChain:
         if gl is not None:
             gl.release()
             self.mandel = None
+        shown = getattr(self, "_show_field", None)     # plan 67 F1
+        if shown is not None:
+            shown[2].release()
+            shown[1].release()
+            self._show_field = None
 
     def _release_programs(self) -> None:
         """This chain's effect programs."""
@@ -1096,6 +1195,9 @@ class FxChain:
         self._set(prog, "u_aux", 1)
         self._set(prog, "u_aux_on", 0)
         self._set(prog, "u_aux_size", (0.0, 0.0))
+        self._set(prog, "u_field", FIELD_UNIT)        # plan 67 F1
+        self._set(prog, "u_field_on", 0)
+        self._set(prog, "u_field_show", 0)
         spec = st.specs[name]
         for p in spec.params:
             x = v[p.key]
@@ -1112,7 +1214,8 @@ class FxChain:
     def run_one(self, name: str, src: moderngl.Texture, dst: moderngl.Framebuffer,
                 t: float, opaque: int | None = None,
                 aux: moderngl.Texture | None = None,
-                res: tuple[int, int] | None = None) -> None:
+                res: tuple[int, int] | None = None,
+                field: moderngl.Texture | None = None) -> None:
         """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
         program over `src` into `dst`'s viewport, every uniform set, the
         clocks moved first (once per frame time,
@@ -1126,7 +1229,10 @@ class FxChain:
         reads transparent black. `res`: the size the pass is told its
         picture has (`u_res`) when that is not `src`'s — a generator painted
         over no picture of the size it draws at (the test card,
-        `render.card_through`)."""
+        `render.card_through`). `field` (plan 67 F1): the field on the
+        effect's `field` port, bound on unit 3 (`u_field_on` 1). A field
+        maker's pass (`@makes field`) writes its field raw into a float32
+        target and shows it grey into any other (`u_field_show`)."""
         self.state.advance_to(t)
         pv = self._program(name)
         ctx = self.ctx
@@ -1151,6 +1257,11 @@ class FxChain:
                 aux.use(location=1)
                 self._set(prog, "u_aux_on", 1)
                 self._set(prog, "u_aux_size", tuple(float(x) for x in aux.size))
+            if field is not None:
+                field.use(location=FIELD_UNIT)
+                self._set(prog, "u_field_on", 1)
+            if getattr(self.state.specs[name], "makes", PICTURE) == FIELD:
+                self._set(prog, "u_field_show", int(not _is_field_target(dst)))
             hook = HOOKS.get(getattr(self.state.specs[name], "hook", "") or "")
             if hook is not None:        # plan 63: the Python half runs the pass
                 hook.run(self, name, prog, vao, src, dst)
@@ -1158,6 +1269,32 @@ class FxChain:
             vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
             ctx.enable(moderngl.BLEND)
+
+    def show_field(self, tex: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
+        """Plan 67 F1: field texture `tex` as a picture into `dst`'s viewport —
+        the grey promotion (`field_grey`: a scalar grey about mid-grey, a vector
+        its x in red and y in green), read texel for texel, opaque."""
+        prog = getattr(self, "_show_field", None)
+        if prog is None or prog[0] != self.state.lib:
+            src = fragment_source(self.state.lib, SHOW_FIELD, self.state.common, (), FIELD)
+            p = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=src)
+            if prog is not None:
+                prog[2].release()
+                prog[1].release()
+            prog = self._show_field = (self.state.lib, p, self.ctx.vertex_array(p, []))
+        _, p, vao = prog
+        dst.use()
+        tex.use(location=0)
+        vp = tuple(dst.viewport)
+        for k, x in (("u_src", 0), ("u_field_show", 1), ("u_res", tuple(float(v) for v in vp[2:])),
+                     ("u_scaled", int(tuple(vp[2:]) != tuple(tex.size))),
+                     ("u_origin", (int(vp[0]), int(vp[1])))):
+            self._set(p, k, x)
+        self.ctx.disable(moderngl.BLEND)
+        try:
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            self.ctx.enable(moderngl.BLEND)
 
     def upscale(self, tex: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
         """`tex` stretched over `dst`'s viewport through its LINEAR sampler
@@ -1181,7 +1318,8 @@ class FxChain:
         spec = st.specs.get(name)
         if spec is None:
             return None
-        src = fragment_source(st.lib, spec.source, st.common, getattr(spec, "clocks", ()))
+        src = fragment_source(st.lib, spec.source, st.common, getattr(spec, "clocks", ()),
+                              getattr(spec, "makes", PICTURE))
         key = spec.name                 # the file: every instance of it runs one program (A4)
         have = self._progs.get(key)
         if (have is None or have[0] != src) and self._tried.get(key) != src:

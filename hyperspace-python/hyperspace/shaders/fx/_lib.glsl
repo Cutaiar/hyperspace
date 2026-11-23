@@ -223,3 +223,37 @@ float combine(float a, float b, int how) {
     if (how == 3) return max(a, b);
     return a + b;
 }
+
+// -- the field wire (plan 67 F1) ----------------------------------------------
+// A field travels as float32 RGBA at the frame's size: x (and y) its value,
+// .a 0 for a scalar field and 1 for a vector one. A file that makes one says
+// `// @makes field` and returns `as_scalar(x)` or `as_vector(v)` from
+// `effect`; one that reads one says `// @takes image field` (its input is a
+// field: `field_in`) or `// @takes field field` (a field beside its picture:
+// `field_port`). Read texel for texel: a field is never filtered.
+vec4 as_scalar(float x) { return vec4(x, 0.0, 0.0, 0.0); }
+vec4 as_vector(vec2 v) { return vec4(v, 0.0, 1.0); }
+
+// the field in sampler `s` at uv, its nearest texel
+vec4 field_at(sampler2D s, vec2 uv) {
+    ivec2 n = textureSize(s, 0);
+    return texelFetch(s, clamp(ivec2(uv * vec2(n)), ivec2(0), n - 1), 0);
+}
+
+// the field on the image port (a field op's input) and on the field port
+// (no field wired: 0, a scalar)
+vec4 field_in(vec2 uv) { return field_at(u_src, uv); }
+vec4 field_port(vec2 uv) { return u_field_on != 0 ? field_at(u_field, uv) : vec4(0.0); }
+
+// a field read as a vector: a vector field's pair; a scalar field pushes
+// along `dir` (radians) by its value
+vec2 field_vector(vec4 f, float dir) {
+    return f.a > 0.5 ? f.xy : f.x * vec2(cos(dir), sin(dir));
+}
+
+// a field shown as a picture, the grey promotion: a scalar grey about
+// mid-grey (−1 black, 1 white), a vector its x in red and y in green
+vec3 field_grey(vec4 f) {
+    vec3 c = f.a > 0.5 ? vec3(0.5 + 0.5 * f.xy, 0.5) : vec3(0.5 + 0.5 * f.x);
+    return clamp(c, 0.0, 1.0);
+}

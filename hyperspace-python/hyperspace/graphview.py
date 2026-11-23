@@ -155,7 +155,8 @@ from .routing import (
 # plan 26's image, geometry and mask)
 VALUE, TRIGGER = "value", "trigger"
 IMAGE, GEOMETRY, MASK = rgraph.IMAGE, rgraph.GEOMETRY, rgraph.MASK
-TYPES = (VALUE, TRIGGER, IMAGE, GEOMETRY, MASK)
+FIELD = rgraph.FIELD                     # plan 67 F1
+TYPES = (VALUE, TRIGGER, IMAGE, GEOMETRY, MASK, FIELD)
 
 KINDS = ("device", "source", "analyzer", "lfo", "env", "seq", "modifier", "macro", "group",
          "render", "output", "channel")
@@ -1011,15 +1012,22 @@ def kind_of(name: str) -> str | None:
     return None if kind in ("frame", "fx") else kind
 
 
-def _takes(kind: str | None) -> dict[str, str]:
-    """A canvas kind's input ports (`graph.WIRED_TAKES`; All outputs' are an output's)."""
+def _takes(kind: str | None, name: str | None = None) -> dict[str, str]:
+    """A canvas kind's input ports (`graph.WIRED_TAKES`; All outputs' are an
+    output's); with `name`, an effect's are its file's (plan 67 F1: a field
+    port, or no picture port on a field generator — `graph.effect_ports`)."""
+    if kind == "effect" and name:
+        return rgraph.effect_ports(name)[1]
     if kind == rgraph.ALL_OUTPUTS:
         kind = "output"
     return rgraph.WIRED_TAKES.get(kind or "", {})
 
 
-def _makes(kind: str | None) -> str | None:
-    """What a canvas kind puts out (`graph.WIRED_MAKES`; a cloud geometry)."""
+def _makes(kind: str | None, name: str | None = None) -> str | None:
+    """What a canvas kind puts out (`graph.WIRED_MAKES`; a cloud geometry);
+    with `name`, an effect's is its file's (plan 67 F1: a field maker's field)."""
+    if kind == "effect" and name:
+        return rgraph.effect_ports(name)[0]
     if kind == "cloud":
         return GEOMETRY
     return rgraph.WIRED_MAKES.get(kind or "")
@@ -1624,12 +1632,12 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                            thumb=thumb_of(name, r),
                            status=hover_of(name, slots, of=of,
                                            tip=_tip(reg, name) if kind == "effect" else "")))
-        for port, typ in _takes(kind).items():
+        for port, typ in _takes(kind, name).items():
             if port == rgraph.AUX and kind in ("effect", "copy") and not aux_shown(
                     reg, of or name, f"{name}.{port}" in aux_wired):
                 continue                        # plan 65: a file that reads no aux has no port
             add_port(n, VPort(f"rin:{name}/{port}", port, IN, typ))
-        made = _makes(kind)
+        made = _makes(kind, name)
         if made is not None:
             add_port(n, VPort(f"rout:{name}", made, OUT, made))
         if kind == rgraph.ALL_OUTPUTS:           # plan 36 T1: the bus's pins, one a port
@@ -1852,7 +1860,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 f"{lay} {D1_AFTER} {w.src}: what reads {w.src} reads it" if lay else "")
         # plan 39 T5 (W6): a cable whose maker makes a mask is a mask cable
         # (purple), whatever port takes it — promoted into a picture port too
-        typ = MASK if pin_type.get(src) == MASK else _takes(kind_of(w.node)).get(w.port, IMAGE)
+        # (plan 67 F1: and a field maker's a field cable, promoted or not)
+        typ = (pin_type[src] if pin_type.get(src) in (MASK, FIELD)
+               else _takes(kind_of(w.node), w.node).get(w.port, IMAGE))
         view.cables.append(VCable(cable_id(f"wire:{w.src}>{w.node}/{w.port}"), src, dst,
                                   typ, ref=w,
                                   kind="render", dormant=shut, off=shut, label=said))
@@ -2861,7 +2871,7 @@ def returns(view: View, lay: Layout) -> set[str]:
         wrapped = (a.area == b.area == EFFECTS_AREA
                    and lay.rows.get(b.id, 0) > lay.rows.get(a.id, 0))
         taken = (order.get(a.area, 0) > order.get(b.area, 0) and isinstance(b.ref, TAKEN_BACK)
-                 and c.type in (IMAGE, MASK))     # (plan 39 T5: a promoted mask too)
+                 and c.type in (IMAGE, MASK, FIELD))   # (plan 39 T5: a promoted mask too; plan 67 a field)
         if kept(c, b) or wrapped or taken:
             out.add(c.id)
     return out
@@ -3150,7 +3160,7 @@ def summary(n: VNode) -> list[str]:
     macro's knob)."""
     outs = [p for p in n.ports if p.direction == OUT]
     params = [p for p in n.ports if p.param is not None and p.direction == IN]
-    pics = [p for p in n.ports if p.type in (IMAGE, GEOMETRY, MASK)]
+    pics = [p for p in n.ports if p.type in RENDER_TYPES]
     patched = sum(p.patched for p in n.ports)
     lines: list[str]
     if n.kind in ("device", "source", "analyzer"):
@@ -3726,7 +3736,7 @@ def group_words(view: View, g: VGroup) -> list[str]:
     """A group's boundary in words (the side pane, the hover): its picture
     pins by type ("in: picture · out: picture"), then each row's cables as
     a bundle lists them ("cc:0:48 → fx.acid.2.speed")."""
-    noun = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask"}
+    noun = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask", FIELD: "field"}
     pics = [p for p in g.ports if p.type in RENDER_TYPES]
     lines = []
     if pics:
@@ -3772,7 +3782,7 @@ def kept_words(row: Any) -> str:
 
 # ---- plan 40 T3: a spawn's open pins, a patch's boundary in words ----
 
-PICTURE_NOUNS = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask"}
+PICTURE_NOUNS = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask", FIELD: "field"}
 OPEN_PIN = "{id} · open (was {was})"
 
 
@@ -3988,7 +3998,7 @@ def real_pin(view: View, pin: str) -> str:
 # looked up by name (`_render`; a plain-words refusal from them becomes a
 # `Refusal`). `RENDER_NOT_YET` is said only by an Edit without them.
 
-RENDER_TYPES = (IMAGE, GEOMETRY, MASK)
+RENDER_TYPES = (IMAGE, GEOMETRY, MASK, FIELD)
 RENDER_NOT_YET = "render cables: not yet"
 # the words a refusal says
 NOT_A_PORT = "not a port"
@@ -6480,7 +6490,7 @@ def _was_into(doc: dict, port: str, keep: str) -> str:
 def _picture_port(port: str) -> bool:
     """Whether `port` (`node.port`) takes a picture (not a depth, not geometry)."""
     node, _, p = port.rpartition(".")
-    return _takes(kind_of(node)).get(p) == IMAGE and p != rgraph.DEPTH_PORT
+    return _takes(kind_of(node), node).get(p) == IMAGE and p != rgraph.DEPTH_PORT
 
 
 def _started(edit: Edit, doc: dict, before: set[str], *order: str, label: str,
@@ -6558,7 +6568,7 @@ def picture_feeds(edit: Edit, name: str) -> list[tuple[str, str]] | None:
     copy of the section, since a menu asks every frame it is open."""
     kind = kind_of(name)
     ports = insert_ports(name)
-    if (kind is None or _makes(kind) != IMAGE or _bus_source(name)
+    if (kind is None or _makes(kind, name) != IMAGE or _bus_source(name)
             or (ports is not None and ports[1] != name)):
         return None
     spec = _spec(edit)
@@ -6906,7 +6916,7 @@ def _cable_ends(edit: Edit, cable) -> tuple[str | None, str | None, str | None]:
     if kind_of(d) is not None:
         return None, None, f"{d} is a node, not a port: a wire goes into {rgraph.WIRED_TO_WORDS}"
     w = rgraph.Wire(s, d)
-    if (_takes(kind_of(w.node)).get(w.port) != IMAGE or _makes(kind_of(s)) != IMAGE
+    if (_takes(kind_of(w.node), w.node).get(w.port) != IMAGE or _makes(kind_of(s), s) != IMAGE
             or rgraph.pin_node(s) is not None or w.port == rgraph.DEPTH_PORT):
         # (plan 36 T2: nor the scene's depth — a depth, not a picture)
         return None, None, NO_PICTURE_CABLE.format(wire=w)
@@ -7226,7 +7236,7 @@ def picture_sources(spec) -> list[str]:
     a page's picture combo may offer (plan 35 U). No geometry, no window,
     no `ground` (the combo's "nothing" says that)."""
     names = [n for n in frame_names(spec) if kind_of(n) in PICTURE_AREA
-             and _makes(kind_of(n)) == IMAGE]
+             and _makes(kind_of(n), n) == IMAGE]
     return sorted(names, key=lambda n: PICTURE_AREAS.index(PICTURE_AREA[kind_of(n)]))
 
 

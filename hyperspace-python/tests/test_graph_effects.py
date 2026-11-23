@@ -171,7 +171,9 @@ def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
     def every_one_wired(r):
         """Every effect in the run (by its file's @order), switched off."""
         st = r.fx.state
-        names = sorted(st.specs, key=lambda n: (st.specs[n].order, n))
+        # (plan 67 F1: the picture effects — a field maker takes no picture)
+        names = sorted((n for n, s in st.specs.items() if s.makes != "field"),
+                       key=lambda n: (st.specs[n].order, n))
         chain = ["frame", *names]
         r.wiring = wired_wiring(wired(r, {"wires": [{"from": a, "to": f"{b}.image"}
                                        for a, b in zip(chain, names)]
@@ -442,8 +444,9 @@ def test_the_value_port_type_exists_and_no_node_uses_it():
 
     from hyperspace import modgraph
 
-    assert G.VALUE == "value" and G.PORT_TYPES == (G.IMAGE, G.MASK, G.GEOMETRY, G.VALUE)
-    assert len(set(G.PORT_TYPES)) == 4
+    # (plan 67 F1: the field, a fifth)
+    assert G.VALUE == "value" and G.PORT_TYPES == (G.IMAGE, G.MASK, G.GEOMETRY, G.VALUE, G.FIELD)
+    assert len(set(G.PORT_TYPES)) == 5
     src = Path(G.__file__).read_text()
     doc = src[src.index('VALUE = "value"'):src.index("PORT_TYPES =")]
     assert "palette" in doc and "lights" in doc and "sample" in doc and "plan 29" in doc

@@ -181,3 +181,16 @@ from `threshold_soft`, so moving them changes their look and needs the owner's e
 fixed centres (Acid, Kaleidoscope …) take a point when they take a field.
 
 No look changed, so no field example yet (plan 67 §9.3): the first comes with Wave as a patch.
+
+## 8. Built: the field wire (F1, 2026-11-23)
+
+- **The type.** `graph.FIELD`, green on GRAPH: float32 RGBA at the frame's size, signed, .a 0
+  a scalar and 1 a vector. Files declare it: `// @makes field`, `// @takes <port> <type>`.
+- **The nodes.** A field maker is a `FieldEffect`, made once a frame into a float32 target that
+  every consumer reads; a picture port reads it as grey through one `FieldPicture`; Displace
+  reads it on its new third port, `field`.
+- **The files.** Measure (the measures and a point, value or direction), To field (a picture
+  read as a field). Displace with no field is byte for byte as before (the 1041 renders).
+- **The examples** (rule 9.3): `loadable/field-examples/` — rings lens, line shear, self bend.
+- **Not yet:** a field on any knob (P3), a field on a copy (a copy is still a picture effect's),
+  RG32F (half the memory), hiding Mix and Blend on a field maker's FX strip.

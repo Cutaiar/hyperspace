@@ -420,6 +420,20 @@ The owner's two sentences (2026-10-27), which the plan builds on:
 | **Plan 39 ran in parallel** with plans 37 and 38, each on its own branch. | `plans/37-38-39-orchestrator-prompt.md` | owner (decision 8); row 447 |
 | A segment's worker exists only on the program renderer; the hold's preview passes a person segment through. A held matte, cut or segment keeps its knobs for the projector. | `Renderer.segment_cfg`, `hold.HELD_GROUPS` | rows 484, 495, 496 |
 
+## Fields (plan 67)
+
+The owner's words (2026-11-22, after plan 66's questions): "Field is its own wire", and
+"the whole goal here is to enable us to hold the primitives in our head when we're jamming
+and be able to compose them together in novel ways." Plan 67 (`plans/67-primitives.md`) is
+the model; its roundup (`plans/67-roundup.md`) the effects measured against it.
+
+| Decision | Where | Who |
+|---|---|---|
+| **A field is its own wire** (`field`, green): a value or a pair at every pixel, float32 at the frame's size, signed, never premultiplied; .a 0 a scalar, 1 a vector. Made and taken by effect files that say so (`@makes field`, `@takes <port> field`). | `graph.FIELD`, `graph.FieldEffect`, `fx.ports_of`, `fx.FIELD_TAIL` | owner (2026-11-22); row 912 |
+| **A field may be wired where a picture is taken**: grey about the middle (a scalar), x in red and y in green (a vector). One way: a picture into a field port is refused in words naming To field, the converter. | `graph.FieldPicture`, `graph.PICTURE_INTO_FIELD`, `FxChain.show_field` | row 913 |
+| **The field pieces are written once** in `_lib.glsl` (point, measures, a signed picture read, the ops named as the modifiers), and no effect keeps its own copy. | `shaders/fx/_lib.glsl`, `tests/test_field_lib.py` | owner ("start the build with the shared field pieces"); row 911 |
+| **Every effect that changes for fields ships a field example** — a loadable patch and a short Markdown — in `loadable/field-examples/`, the one place patches are saved. | `loadable/field-examples/`, `tests/test_field_examples.py` | owner (2026-11-23) |
+
 ## Recursive geometry (plan 64)
 
 | Decision | Where | Who |

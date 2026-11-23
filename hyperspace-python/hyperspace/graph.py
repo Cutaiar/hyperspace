@@ -137,6 +137,7 @@ from typing import Any, ClassVar
 import moderngl
 import numpy as np
 
+from . import fx as _fx
 from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix
 from .lookback import MAX_ECHOES
 from .outputs import View
@@ -184,7 +185,16 @@ schema change:
 (`test_the_value_port_type_exists_and_no_node_uses_it`): `Node.__init__`
 type-checks a wired port, so the first node to declare one wires like
 any other."""
-PORT_TYPES = (IMAGE, MASK, GEOMETRY, VALUE)
+# plan 67 F1 (the owner, 2026-11-22: "Field is its own wire"): a value, or a
+# pair, at every pixel — float32 at the frame's size, signed, unbounded, never
+# premultiplied, its .a 0 for a scalar and 1 for a vector (`_lib.glsl`'s
+# `as_scalar` / `as_vector`). Made and taken by effect files that say so
+# (`// @makes field`, `// @takes <port> field`: `effect_ports`). Wired where a
+# picture is taken it reads as grey (`FieldPicture`), one way only: a picture
+# into a field port is refused, the converter is a To field (`tofield`)
+FIELD = "field"
+FIELD_PORT = "field"     # an effect's third port, the field it reads (`fx.FIELD_PORT`)
+PORT_TYPES = (IMAGE, MASK, GEOMETRY, VALUE, FIELD)
 
 # ---------------------------------------------------------------- the wiring
 
@@ -709,7 +719,15 @@ WIRE_TAKES: dict[str, dict[str, str]] = {
     # echo and the dream read the look-back, never a wire
     "delay": {"image": IMAGE}, "resize": {"image": IMAGE}, "echo": {}, "dream": {},
 }
-TYPE_WORDS = {IMAGE: "a picture", GEOMETRY: "geometry", MASK: "a mask", None: "nothing"}
+TYPE_WORDS = {IMAGE: "a picture", GEOMETRY: "geometry", MASK: "a mask", FIELD: "a field",
+              None: "nothing"}
+
+
+def effect_ports(name: str) -> tuple[str, dict[str, str]]:
+    """Plan 67 F1: (what effect instance `name` makes, port → type of the ports
+    a wire may go into), from its file (`fx.ports_of`: `acid.2` is `acid`'s).
+    A file not in this build is a picture effect's."""
+    return _fx.ports_of(split_instance(name)[0])
 WIRE_FROM_WORDS = ("scene, hands …, history, frame, pattern, an effect, a composite, "
                    "a switch, a delay, a resize, echo.1 …, dream or a channel (media.a …)")
 WIRE_TO_WORDS = ("output.1 … (image, hands, readout), history.image, fx.image, "
@@ -1863,6 +1881,7 @@ WIRED_FROM_WORDS = ("scene, scene.cover, scene.depth, shape, hands …, hands.la
 # plan 39 T2 (W1, decision 2): a picture into a mask port is refused with the
 # converter's name; the promotion runs the other way only
 PICTURE_INTO_MASK = "{src} makes a picture, {dst} takes a mask — put a matte between"
+PICTURE_INTO_FIELD = "{src} makes a picture, {dst} takes a field — put a To field (tofield) between"
 # plan 36 T4 (W4): the words for what the split took away
 CAPTURE_IS_IMAGE = ("{node}.capture is gone (plan 36): a look-back records what is wired "
                     "into {node}.image, and a composite lays its trail")
@@ -1906,6 +1925,8 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
     if kind == "output" and new_id(w.dst) != w.dst:
         return OLD_ID_IN_A_WIRED_FRAME.format(old=w.dst, new=new_id(w.dst))
     takes = WIRED_TAKES[kind]
+    if kind == "effect":
+        takes = effect_ports(node)[1]           # plan 67 F1: its file's ports
     if kind == "lookback" and port == "capture":
         # plan 36 T4: the look-back records its `image` — an old frame's
         # capture wire is read only by the migration that rewrites it
@@ -1926,6 +1947,8 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
     if src_kind == GROUND and kind != "output":
         return GROUND_ONLY_INTO_OUTPUTS
     makes, want = WIRED_MAKES[src_kind], takes[port]
+    if src_kind == "effect":
+        makes = effect_ports(w.src)[0]          # plan 67 F1: a field maker makes a field
     # plan 36 T2: a pin goes where its kind is taken, a depth port takes the
     # scene's depth alone, a layer's or a guide's hands a hands node
     if PINS.get(w.src) == "scene" and not (src_kind == "cover" and port == "cover") and not (
@@ -1940,8 +1963,11 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
         return GEOMETRY_INTO_SCENE.format(src=w.src)
     if makes == IMAGE and want == MASK:
         return PICTURE_INTO_MASK.format(src=w.src, dst=w.dst)
-    # plan 39 T2 (W1): a mask goes where a picture is taken — it reads as one
-    if makes != want and not (makes == MASK and want == IMAGE):
+    if makes == IMAGE and want == FIELD:
+        return PICTURE_INTO_FIELD.format(src=w.src, dst=w.dst)
+    # plan 39 T2 (W1): a mask goes where a picture is taken — it reads as one;
+    # plan 67 F1: so does a field, as grey
+    if makes != want and not (makes in (MASK, FIELD) and want == IMAGE):
         return f"{w.src} makes {TYPE_WORDS[makes]}, {w.dst} takes {TYPE_WORDS[want]}"
     for name, k in ((w.src, src_kind), (node, kind)):
         if k == "effect" and ctx.effects is not None and name not in ctx.effects:
@@ -5925,6 +5951,10 @@ class Effect(Node):
 
     def __init__(self, name: str, *, image: Node | None = None, node: str | None = None,
                  after: tuple[Node, ...] = (), placed: str | None = None):
+        # plan 67 F1: a file that reads a field has a third port, `field`
+        # (an instance's own ports, shadowing the class's: set, not declared)
+        if FIELD_PORT in effect_ports(name)[1]:
+            self.__dict__["INPUTS"] = {**Effect.INPUTS, FIELD_PORT: FIELD}
         super().__init__(node if node is not None else name, after, image=image)
         self.effect = name
         self.placed = placed          # D1: "after" / "into" when the loadable patch places it
@@ -6038,10 +6068,13 @@ class Effect(Node):
     def _one(self, frame: Frame, src: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
         """This effect's pass from texture `src` into `dst`, timed and
         counted; a layer's keeps its see-through ground."""
-        kw = {"opaque": 0} if self.see_through else self._opaque(frame)
+        kw: dict[str, Any] = {"opaque": 0} if self.see_through else self._opaque(frame)
         aux = self._aux(frame, dst)
         if aux is not None:
             kw["aux"] = aux
+        field = _field_of(self.inputs.get(FIELD_PORT), frame)
+        if field is not None:
+            kw["field"] = field                 # plan 67 F1: the field port
         with frame.timed(self.name):
             frame.r.fx.run_one(self.effect, src, dst, frame.t, **kw)
         frame.stats.setdefault("effects", []).append(self.name)
@@ -6159,6 +6192,152 @@ class Effect(Node):
         with frame.timed(self.name):
             frame.r.fx.run_one(self.effect, tex, dst, frame.t, **kw)
         frame.stats.setdefault("effects", []).append(self.name)
+
+
+def _field_of(node: Node | None, frame: Frame) -> moderngl.Texture | None:
+    """The field texture `node` made this frame (plan 67 F1), or None: no node,
+    or none made."""
+    return node.image(frame) if node is not None else None
+
+
+class FieldEffect(Effect):
+    """An effect instance whose file makes a field (plan 67 F1: `// @makes
+    field`): a generator (Measure, no input), a converter (To field, a picture
+    in) or an op (a field in). Its pass runs once a frame, when a consumer asks
+    (`image`), into a float32 target at the frame's size, raw (`fx.FIELD_TAIL`):
+    every consumer reads that one texture. It never paints into a picture: a
+    picture port reads it through its `FieldPicture` (the build's `_taken`).
+    Off — switched off, or a file that never compiled — it is its input field
+    where it takes one, else no field (0).
+
+    Its `image` port is always in `inputs` (None for a generator), so the walks
+    that follow an effect's input stop at it; which ports a wire may go into is
+    the file's (`effect_ports`)."""
+
+    OUTPUT = FIELD
+    MADE = "#field"
+
+    def __init__(self, name: str, *, image: Node | None = None, node: str | None = None,
+                 after: tuple[Node, ...] = ()):
+        takes = effect_ports(name)[1]
+        ports = {"image": takes.get("image", FIELD), "aux": IMAGE}
+        if FIELD_PORT in takes:
+            ports[FIELD_PORT] = FIELD
+        self.__dict__["INPUTS"] = ports        # (its own, shadowing the class's)
+        Node.__init__(self, node if node is not None else name, after, image=image)
+        self.effect = name
+        self.placed = "wire"
+
+    @property
+    def makes(self) -> bool:
+        return False                       # (it folds nothing: `Effect.makes`)
+
+    @property
+    def see_through(self) -> bool:
+        return False
+
+    def reads(self, frame: Frame) -> bool:
+        return True
+
+    def run(self, frame: Frame) -> None:
+        """Nothing: made when a consumer asks (`image`)."""
+
+    def alpha(self, frame: Frame) -> float:
+        return 1.0
+
+    def depth(self, frame: Frame) -> moderngl.Texture | None:
+        return None
+
+    def ghost(self, frame: Frame):
+        return frame.r.ghost
+
+    def own_size(self, frame: Frame) -> tuple[int, int] | None:
+        return None                            # a field is at the frame's size
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        """The field, made once a frame."""
+        key = self.name + self.MADE
+        if key in frame.data:
+            return frame.data[key]
+        src = self.inputs.get("image")
+        typ = self.INPUTS.get("image")
+        if not self.on(frame):
+            got = src.image(frame) if src is not None and typ == FIELD else None
+            if got is None:
+                got = self._zero(frame)
+            frame.data[key] = got
+            return got
+        tex, fbo = frame.r._frame_target(frame.key(key), frame.size, dtype="f4")
+        fbo.viewport = (0, 0, *frame.size)
+        held = frame.data.setdefault("fx#held", set())
+        pic = None
+        if src is not None:
+            pic = src.image(frame)
+            if pic is None:                    # a picture that paints: once into a spare
+                pic, spare = _spare(frame, fbo, hold=True)
+                held.add(id(pic))
+                src.paint(frame, spare)
+        kw: dict = {"opaque": 0, "res": tuple(frame.size)}
+        aux = self._aux(frame, fbo)
+        if aux is not None:
+            kw["aux"] = aux
+        field = _field_of(self.inputs.get(FIELD_PORT), frame)
+        if field is not None:
+            kw["field"] = field
+        with frame.timed(self.name):
+            frame.r.fx.run_one(self.effect, pic if pic is not None else frame.r._blank, fbo,
+                               frame.t, **kw)
+        frame.stats.setdefault("effects", []).append(self.name)
+        frame.data[key] = tex
+        return tex
+
+    def _zero(self, frame: Frame) -> moderngl.Texture:
+        """No field: 0 everywhere, a scalar, made once a frame."""
+        tex, fbo = frame.r._frame_target(frame.key(self.name + "#zero"), frame.size, dtype="f4")
+        fbo.clear(0.0, 0.0, 0.0, 0.0)
+        return tex
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        """Shown as a picture (a thumbnail, a stray reader): grey."""
+        frame.r.fx.show_field(self.image(frame), dst)
+
+    def fold(self, frame: Frame, tex: moderngl.Texture) -> moderngl.Texture:
+        return tex
+
+
+class FieldPicture(Node):
+    """A field read as a picture (plan 67 F1): what a field wired into a
+    picture port is to that port — the grey promotion (`fx.FxChain.show_field`:
+    a scalar grey about mid-grey, a vector its x in red and y in green), at the
+    consumer's size, opaque. One per field node a picture port reads, named
+    `<field>(picture)` (the build's `_taken`): the drawn wire is the field's,
+    as a mask's promotion is (`MaskPicture`). One way only: a picture into a
+    field port is refused (`PICTURE_INTO_FIELD`)."""
+
+    KIND = "field→picture"
+    INPUTS: ClassVar[dict[str, str]] = {"field": FIELD}
+    OUTPUT = IMAGE
+    TIMED = False
+
+    def __init__(self, name: str, field: Node | None = None, after: tuple[Node, ...] = ()):
+        super().__init__(name, after, field=field)
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        tex = _field_of(self.inputs["field"], frame)
+        if tex is not None:
+            frame.r.fx.show_field(tex, dst)
+            return
+        dst.use()
+        dst.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=dst.viewport)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        key = self.name + "#picture"
+        if key not in frame.data:
+            tex, fbo = frame.r._frame_target(frame.key(key), frame.size)
+            fbo.viewport = (0, 0, *frame.size)
+            self.paint(frame, fbo)
+            frame.data[key] = tex
+        return frame.data[key]
 
 
 class Copy(Effect):
@@ -6795,7 +6974,7 @@ class _Build:
         self.ends: list[Shown] = []
         self._ends: dict[int, Shown] = {}
         self._names: set[str] = set()
-        self._pictures: dict[int, MaskPicture] = {}  # plan 39 T2: each mask read as a picture
+        self._pictures: dict[int, Node] = {}  # plan 39 T2: each mask read as a picture (plan 67: or field)
 
     # ---- the wires
 
@@ -6844,15 +7023,18 @@ class _Build:
         """`src` as wire `w`'s port takes it (plan 39 T2, W1): a mask into a
         picture port is read through its one `MaskPicture`; anything else
         as it is."""
-        if src is None or src.OUTPUT != MASK:
+        if src is None or src.OUTPUT not in (MASK, FIELD):
             return src
         kind = _kind(w.node)
-        if WIRED_TAKES.get(kind, {}).get(w.port) != IMAGE:
+        takes = effect_ports(w.node)[1] if kind == "effect" else WIRED_TAKES.get(kind, {})
+        if takes.get(w.port) != IMAGE:
             return src
         got = self._pictures.get(id(src))
         if got is None:
-            got = self._pictures[id(src)] = self._keep(
-                MaskPicture(f"{src.name}(picture)", mask=src))
+            # (plan 67 F1: a field into a picture port reads as grey)
+            made = (MaskPicture(f"{src.name}(picture)", mask=src) if src.OUTPUT == MASK
+                    else FieldPicture(f"{src.name}(picture)", field=src))
+            got = self._pictures[id(src)] = self._keep(made)
         return got
 
     def _unique(self, name: str) -> str:
@@ -7026,6 +7208,14 @@ class _Build:
         if effect not in self.have:
             self.g.dormant[name] = f"{name} — no {effect} effect in this build"
             return src
+        if kind == "effect" and effect_ports(name)[0] == FIELD:
+            # plan 67 F1: a field maker; a generator takes no input
+            takes = effect_ports(name)[1]
+            if "image" in takes and src is None:
+                self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
+                return None
+            return self._keep(FieldEffect(name, image=src if "image" in takes else None,
+                                          node=self._unique(name)))
         if src is None:
             self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
             return None
@@ -7099,6 +7289,7 @@ class _Build:
             if src is not None:
                 writes.append(self._keep(DelayWrite(f"{d.name}(write)", d.name, image=src)))
         self._aux()
+        self._fields()
         # the run: All outputs' picture back through its effects (what
         # `frame.fx_on` asks, as of the pipelines' runs)
         run: list[Effect] = []
@@ -7210,6 +7401,21 @@ class _Build:
                 self.g.dormant[str(w)] = f"wire {w} — {w.node} feeds {w.src}: that makes a loop"
                 continue
             target.inputs[AUX] = src
+
+    def _fields(self) -> None:
+        """Plan 67 F1: each wire into an effect's `field` port on that port — a
+        source the effect feeds (a loop) is dormant, in words, as an aux's."""
+        for w in self.wires:
+            if w.port != FIELD_PORT or _kind(w.node) != "effect":
+                continue
+            target, src = self.made.get(w.node), self._taken(self.node(w.src), w)
+            if (not isinstance(target, Effect) or target not in self.built or src is None
+                    or FIELD_PORT not in target.INPUTS):
+                continue
+            if src is target or id(target) in _upstream(src):
+                self.g.dormant[str(w)] = f"wire {w} — {w.node} feeds {w.src}: that makes a loop"
+                continue
+            target.inputs[FIELD_PORT] = src
 
     def _split(self, layers: tuple[HandsLayer, ...]) -> None:
         """How each layer splits its guide out (`HandsLayer.split`): always

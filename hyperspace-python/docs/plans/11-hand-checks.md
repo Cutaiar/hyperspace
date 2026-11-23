@@ -8846,6 +8846,20 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## EC. The field wire (rows 911–914, 2026-11-23)
+
+Plan 67 F1. Headless: `tests/test_field_wire.py` (types, directives, the wire checks in words, the build, raw values, the grey, off, Displace by a field, the canvas's ports and cable, the thumbnail), `tests/test_field_lib.py`, `tests/test_field_examples.py`. Copy `loadable/field-examples/` into the library's `loadable/` first.
+
+**704. A field cable on the canvas.** (Mac, GRAPH) Load `field-examples/field-rings-lens`. *Pass:* Measure's cable into Displace's `field` port is green, distinct from the red picture cables and the purple masks, at the stage's distance; Measure's node has no picture input. *Fail:* a field cable you cannot tell from a picture cable.
+
+**705. A picture refused, in words.** Drag the scene's output onto Displace's `field` port. *Pass:* the drag goes red and the words name To field; drag it onto To field's input and To field onto `field`: it lands. *Fail:* a silent refusal, or a picture accepted into a field port.
+
+**706. Seeing a field.** Wire Measure straight into an output, and look at its thumbnail and its tile in the effect picker. *Pass:* grey about the middle — mid-grey where the field is 0, lighter where it is positive, darker negative; the direction field coloured (red across, green up). *Fail:* black, white, or a different picture in the three places.
+
+**707. The three examples on stage.** (Mac, a sub band playing) Each of `field-rings-lens`, `field-line-shear`, `field-self-bend`. *Pass:* each does what its Markdown says, with the sub band and the hand on the knobs it names; Amount 0 is the plain picture. Read each Markdown: is it enough to rebuild the patch from scratch? *Fail:* a patch that does not move, or a Markdown that names a knob that is not there.
+
+**708. What a field costs.** (Mac, 1080p outputs, SYSTEM page) `field-rings-lens`. *Pass:* no drop in the frame rate with two fields held. Note the numbers (row 912: a field held is 33 MB at 1080p). *Fail:* a cost that shows.
+
 ## EB. Time Displace (rows 902–910, 2026-11-22)
 
 Plan 66 stage 3a. Headless: `tests/test_time_displace.py` (Span 0 its input byte for byte; the flat field at a frame's age that frame; the blend and the nearer frame; the oldest past the ring; the line, rings and aux fields; Drift; nothing to read is its input; the renderer's rings in a real graph). For each check: a look-back on the graph with its capture wired (the scene), and Time Displace after the frame into an output.

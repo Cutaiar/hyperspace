@@ -533,3 +533,8 @@ re-recorded with the reason, as a format change asks.
 **P2 started 2026-11-23:** the shared field pieces are built in `_lib.glsl` and eight files
 moved onto them byte for byte ([roundup §7](67-roundup.md)). Next: the field wire (a texture
 pool, the grey promotion, the refusal in words), then Wave as a proven patch with its example.
+
+**F1 built 2026-11-23: the field wire** (roundup §8): `graph.FIELD`, field makers as
+`FieldEffect`, the grey promotion, the refusal naming To field, Measure and To field, Displace's
+field port, three field examples in `loadable/field-examples/`. Next: Wave as a proven patch
+(`measure → waveform → quantise → displace`), which needs the `waveform` op and Displace's Split.
