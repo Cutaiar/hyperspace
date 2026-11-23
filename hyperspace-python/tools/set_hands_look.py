@@ -125,7 +125,10 @@ def look(doc: dict) -> tuple[dict, list[str]]:
     """`doc` with every hands node's look set to `ghost.SHOW_LOOK`: (the
     document, one line per value that moved)."""
     out = copy.deepcopy(doc)
-    values = out.setdefault("values", {})
+    values = out.get("values")
+    if not isinstance(values, dict):
+        # (the app reads a missing or null `values` as none: `LoadedPatch.load_doc`)
+        values = out["values"] = {}
     moved = []
     for pre in hands_prefixes(out.get("graph")):
         for k, v in ghost.SHOW_LOOK.items():
@@ -146,8 +149,11 @@ def wire_layer(doc: dict, effects) -> tuple[dict, list[str]]:
         return doc, []
     wires = section.setdefault("wires", [])
     have = {(w.get("from"), w.get("to")) for w in wires if isinstance(w, dict)}
+    fed = any(dst == f"{LAYER}.hands" for _, dst in have)   # (another hands node may feed it)
     added = []
     for src, dst in STANDARD_WIRES:
+        if dst == f"{LAYER}.hands" and fed:
+            continue
         if (src, dst) not in have:
             wires.append({"from": src, "to": dst})
             added.append(f"{src} → {dst}")
@@ -179,8 +185,15 @@ def plan(path: Path, library: Path, effects, scratch: Path, *, file: str = "") -
     except (OSError, ValueError) as e:
         c.skipped = f"not read: {e}"
         return c
-    if not isinstance(doc, dict) or not str(doc.get("schema", "")).startswith(LOADABLE_SCHEMA):
+    from hyperspace.patches import LOADABLE_SHAPE, shape_of
+    if not isinstance(doc, dict) or shape_of(doc) != LOADABLE_SHAPE:
         c.skipped = "not a loadable patch"
+        return c
+    if not str(doc.get("schema", "")).startswith(LOADABLE_SCHEMA):
+        # (an older whole patch: the app migrates its graph on load, so its raw
+        # section is not what runs — migrate the library first, then run this)
+        c.skipped = (f"an older schema ({doc.get('schema')}): run tools/migrate_library.py "
+                     "first, then this")
         return c
     failed = (LibraryError, ValueError, KeyError, TypeError, OSError, RuntimeError)
     try:
@@ -188,11 +201,14 @@ def plan(path: Path, library: Path, effects, scratch: Path, *, file: str = "") -
     except failed as e:
         c.skipped = f"does not load: {e}"
         return c
-    out, c.values = look(doc)
     try:
+        out, c.values = look(doc)
         out, c.wires = wire_layer(out, effects)
     except GraphError as e:
         c.skipped = f"graph: {e}"
+        return c
+    except Exception as e:  # noqa: BLE001 — one odd file is named and left, never the run's end
+        c.skipped = f"not changed: {type(e).__name__}: {e}"
         return c
     if not c.changed:
         return c

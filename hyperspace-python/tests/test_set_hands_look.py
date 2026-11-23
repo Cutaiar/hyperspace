@@ -173,3 +173,52 @@ def test_the_loadable_folder_itself_names_the_library(tmp_path, capsys, monkeypa
     assert t.main([str(lib / "loadable")]) == 0
     out = capsys.readouterr().out
     assert "2025/dial.json" in out and "3 would be written (2 wired)" in out
+
+
+def test_a_null_values_patch_is_set_and_does_not_end_the_run(tmp_path, capsys, monkeypatch):
+    """Review of #459: the app reads `values: null` as none; so does the tool,
+    and a patch beside it is still visited."""
+    t = _tool()
+    lib = _library(tmp_path)
+    dial = _doc("dial")
+    dial["values"] = None
+    (lib / "loadable" / "2025" / "empty-values.json").write_text(json.dumps(dial, indent=1))
+    monkeypatch.setenv("HYPERSPACE_HOME", str(tmp_path / "home"))
+    assert t.main(["--library", str(lib)]) == 0
+    out = capsys.readouterr().out
+    assert "2025/empty-values.json" in out and "2025/dial.json" in out
+    assert "4 would be written" in out
+    doc, moved = t.look(dial)
+    assert doc["values"]["ghost.on"] is True and len(moved) == 4
+
+
+def test_a_layer_fed_by_another_hands_node_keeps_its_feed():
+    """Review of #459: `hands.2 → hands.layer.hands` stays the layer's one
+    feed; only the output wires are added."""
+    t = _tool()
+    from hyperspace.fx import FxState
+    doc = _doc("seq-demo")
+    doc["graph"]["nodes"].append({"kind": "hands", "instance": 2})
+    doc["graph"]["wires"] = [w for w in doc["graph"]["wires"]
+                             if not w["from"].startswith("hands")
+                             and not w["to"].startswith("hands")]
+    doc["graph"]["wires"].append({"from": "hands.2", "to": "hands.layer.hands"})
+    out, added = t.wire_layer(doc, set(FxState().files))
+    assert added == ["hands.layer → output.all.hands", "hands.layer → output.all.guide"]
+    feeds = [w["from"] for w in out["graph"]["wires"] if w["to"] == "hands.layer.hands"]
+    assert feeds == ["hands.2"]
+
+
+def test_an_older_whole_patch_is_named_for_the_migration_and_left(tmp_path):
+    """Review of #459: a legacy `hyperspace.preset` whole patch is a loadable
+    patch, but its raw graph is not what runs; the tool says to migrate first."""
+    t = _tool()
+    from hyperspace.fx import FxState
+    lib = tmp_path / "lib"
+    (lib / "presets").mkdir(parents=True)
+    src = ROOT / "tests" / "fixtures" / "presets" / "hands-glass-only.json"
+    path = lib / "presets" / "hands-glass-only.json"
+    path.write_bytes(src.read_bytes())
+    c = t.plan(path, lib, set(FxState().files), tmp_path / "scratch")
+    assert not c.changed and "older schema" in c.skipped and "migrate_library" in c.skipped
+    assert path.read_bytes() == src.read_bytes()

@@ -142,10 +142,9 @@ from typing import Any
 from . import apc40, fractal, graphmigrate, graphview, modifiers, nodemode, patches, routing, undo
 from .fx import declare as declare_fx
 from .geometry import SHAPES
-from .ghost import GhostState
+from .ghost import GhostState, show_look
 from .ghost import prefix as ghost_prefix
 from .ghost import register as declare_ghost
-from .ghost import show_look
 from .graph import (
     EMPTY,
     FRAME_KEY,

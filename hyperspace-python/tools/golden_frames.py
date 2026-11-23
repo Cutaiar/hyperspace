@@ -426,7 +426,11 @@ class Rig:
             own = Path(self._home.name) / "loadable"
             own.mkdir(parents=True, exist_ok=True)
             (own / f"{slug}.json").write_bytes(Path(source).read_bytes())
-        self.set_by_file = _value_ids(source)
+        # (plan 85: only a golden fixture's extra hands node is held at the neutral
+        # look — a library patch drawn here, `migrate_library`'s check with a show,
+        # keeps what its load gives it)
+        self.set_by_file = (_value_ids(source) if slug in FIXTURE_LOADABLES and library is None
+                            and not show else None)
         if library is not None:
             import shutil
 
@@ -458,7 +462,8 @@ class Rig:
             # where the file sets none; the goldens draw the neutral `GhostState()`
             pre, bare = pid.removesuffix(".on"), GhostState()
             for k in ("alpha", "style", "material"):
-                if f"{pre}.{k}" in reg and f"{pre}.{k}" not in self.set_by_file:
+                if (self.set_by_file is not None and f"{pre}.{k}" in reg
+                        and f"{pre}.{k}" not in self.set_by_file):
                     reg[f"{pre}.{k}"].set(getattr(bare, k))
         self.io = HandsIO(HandSettings.from_config({}), {"enabled": True},
                           source=FakeHands(lambda: self.t, hands == "present"),
