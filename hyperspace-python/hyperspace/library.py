@@ -376,10 +376,41 @@ def not_moved(root: Path) -> list[str]:
 _missing: set[Path] = set()
 
 
+# the library's name when config.toml names no [library] path (2026-11-23, the owner: "Google
+# Drive is the canonical location ... there should not be another place"): the home is no
+# library, so this is never a folder — nothing lists and every save is refused in words
+NO_LIBRARY = "(no [library] path set)"
+NO_LIBRARY_WORDS = ("no library set — not saved. Put [library] path = \"<the Google Drive "
+                    "Hyperspace folder>\" in {config}, then restart")
+
+
 def missing_text(path: Path) -> str:
-    """What a write into a missing shared library says (plan 25 D5)."""
+    """What a write into a missing shared library says (plan 25 D5), or into none at all."""
+    if path.name == NO_LIBRARY:
+        return NO_LIBRARY_WORDS.format(config=path.parent / "config.toml")
     return (f"shared library not found at {path} — not saved; fix [library] path or the "
             "folder, then restart")
+
+
+# the folders of library documents a machine home must not hold (2026-11-23): a home
+# that has one is a library left behind by a move, or by a launch with no [library] path —
+# never read while the library is elsewhere, and so a second place a patch seems to be
+LIBRARY_DIRS = ("loadable", "presets", "patches", "installs", "projects", "playlists")
+STRAY_WORDS = ("{home} still holds an old local library ({where}): it is not used. Quit, then "
+               "run tools/move_library.py \"{library}\" to fold it into the library")
+
+
+def strays(machine: Path) -> list[str]:
+    """`LIBRARY_DIRS` folders under `machine` that hold a document (any ``*.json`` not
+    hidden, every folder down): what `STRAY_WORDS` names. Launch only: this reads them."""
+    found = []
+    for name in LIBRARY_DIRS:
+        try:
+            if any(not p.name.startswith(".") for p in (machine / name).rglob("*.json")):
+                found.append(f"{name}/")
+        except OSError:
+            continue
+    return found
 
 
 def _refuse_missing(path: Path) -> None:
@@ -404,9 +435,11 @@ def ensure_home(root: Path | None = None, cwd: Path | None = None) -> Path:
     once per home per process: config.load and Library() both ask, and
     the first-run migration should not scan the working directory twice."""
     root = home() if root is None else root
-    if root in _ensured and installs_dir(root).is_dir():
+    if root in _ensured and root.is_dir():
         return root
-    installs_dir(root).mkdir(parents=True, exist_ok=True)
+    # the home itself, no library folder in it: those are made by the `Library` that is
+    # one (a machine home is no library, 2026-11-23)
+    root.mkdir(parents=True, exist_ok=True)
     for msg in migrate(root, cwd):
         print(msg, file=sys.stderr)
     _ensured.add(root)
@@ -2077,6 +2110,14 @@ class Library:
         # plan 57 §7a: said on the SYSTEM page, and on the footer at launch (app.py)
         where = not_moved(self.home) if self.missing is None else []
         self.not_moved = NOT_MOVED_WORDS.format(where=" and ".join(where)) if where else ""
+        # a machine home apart from the library that still holds library folders: said on
+        # the SYSTEM page and the footer at launch (app.py), never read
+        left = strays(self.machine) if self.machine != self.home else []
+        self.strays = (STRAY_WORDS.format(home=self.machine, where=", ".join(left),
+                                          library=("<the Google Drive Hyperspace folder>"
+                                                   if self.home.name == NO_LIBRARY
+                                                   else self.home))
+                       if left else "")
         self._open_default()
         self._mtimes = self._scan()
 

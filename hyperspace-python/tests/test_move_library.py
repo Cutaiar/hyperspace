@@ -133,3 +133,54 @@ def test_a_loadable_folder_is_copied_every_folder_down_hidden_ones_not(tmp_path)
     assert {"loadable/party/trip.json", "loadable/party/deep/c.json"} <= got
     assert not [k for k in got if ".hidden" in k or k.startswith("fx/sub")]
     assert (dest / "loadable" / "party" / "deep" / "c.json").read_text() == '{"name": "C"}'
+
+
+# ---------------------------------------------------------------- the home cleared (2026-11-23)
+
+def test_main_moves_the_copied_folders_out_of_the_home(tmp_path, capsys):
+    """The shared folder is the one place: after the copy, every folder the copy drew from
+    goes, whole, into HOME/old-local-library-<stamp>/ — nothing deleted, the machine
+    files, the trash and weights where they were, and the app finds no stray library."""
+    from hyperspace import library
+    home = a_home(tmp_path)
+    (home / "media").mkdir()
+    (home / "media" / "clip.json").write_text("{}")
+    dest = tmp_path / "shared"
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    archives = [p for p in home.iterdir() if p.name.startswith(ml.ARCHIVE)]
+    assert len(archives) == 1
+    archive = archives[0]
+    assert sorted(p.name for p in archive.iterdir()) == ["band", "fx", "installs", "loadable"]
+    assert (archive / "loadable" / "mine.json.bak-v2").read_text() == "a backup"   # all of it
+    for gone in ("loadable", "installs", "fx", "band"):
+        assert not (home / gone).exists()
+    for kept in ("config.toml", "bindings.json", "trash/loadable/old.20261004-011203.json",
+                 "weights/big.json", "bindings/show-a.json", "media/clip.json"):
+        assert (home / kept).is_file()
+    assert not (dest / "media").exists()
+    assert library.strays(home) == []
+    assert "moved       loadable/" in capsys.readouterr().out
+    # a second run finds nothing to copy, and never walks into the archive
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    assert "nothing to copy" in capsys.readouterr().out
+
+
+def test_a_conflict_says_where_yours_went(tmp_path, capsys):
+    home = a_home(tmp_path)
+    dest = tmp_path / "shared"
+    (dest / "loadable").mkdir(parents=True)
+    (dest / "loadable" / "mine.json").write_text('{"name": "MINE", "v": 2}')
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    out = capsys.readouterr().out
+    (archive,) = [p for p in home.iterdir() if p.name.startswith(ml.ARCHIVE)]
+    assert f"yours is now at {archive / 'loadable' / 'mine.json'}" in out
+    assert (archive / "loadable" / "mine.json").read_text() == '{"name": "MINE", "v": 1}'
+    assert (dest / "loadable" / "mine.json").read_text() == '{"name": "MINE", "v": 2}'
+
+
+def test_keep_and_dry_run_leave_the_home_as_it_was(tmp_path):
+    home = a_home(tmp_path)
+    before = snapshot(home)
+    assert ml.main([str(tmp_path / "a"), "--from", str(home), "--dry-run"]) == 0
+    assert ml.main([str(tmp_path / "b"), "--from", str(home), "--keep"]) == 0
+    assert snapshot(home) == before

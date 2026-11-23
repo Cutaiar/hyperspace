@@ -11,23 +11,32 @@ missing. Then add the two lines it prints to HOME's config.toml
 and start Hyperspace: the library is read and written in DEST from then on.
 
 It never overwrites: a file DEST already has is left alone — identical is
-``have``, different is ``KEPT THEIRS`` (yours stays in HOME, at the path it
+``have``, different is ``KEPT THEIRS`` (yours is kept, at the path it
 prints). The machine files (config.toml, bindings.json and its backups, hands.json,
-windows.json, last_show, logs, weights/), the trash, the legacy bindings/
-folder, backups, dot-files and ``.git`` stay behind — and so does a
+windows.json, last_show, logs, weights/, media/, media-cache/), the trash, the legacy
+bindings/ folder, backups, dot-files and ``.git`` stay behind — and so does a
 ``hidden.json`` from before 2026-10-28 (the library has no hidden loadable patches
-any more). Nothing in HOME is deleted or edited, and config.toml is never
-touched.
+any more).
+
+Then it clears HOME of the library (2026-11-23, the owner: the shared folder is the one
+place patches live): every folder it copied from is moved, whole, into
+``HOME/old-local-library-<date>-<time>/``, so nothing in HOME looks like a library and
+the app stops saying it holds one. Nothing is deleted — a ``KEPT THEIRS`` file is in
+there, at the path printed — and config.toml is never touched. ``--keep`` leaves HOME
+as it was. Quit Hyperspace on every Mac first.
 """
 from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent
 # folders of the home that are not the library (D3), or not to be copied
-SKIP_DIRS = {"weights", "trash", "bindings"}
+SKIP_DIRS = {"weights", "trash", "bindings", "media", "media-cache"}
+# where `clear` puts what was copied: HOME/old-local-library-<YYYYMMDD-HHMMSS>/
+ARCHIVE = "old-local-library-"
 
 
 def _library():
@@ -58,7 +67,8 @@ def files(root: Path) -> list[Path]:
     if not root.is_dir():
         return out
     for folder in sorted(p for p in root.iterdir() if p.is_dir()):
-        if folder.name in SKIP_DIRS or folder.name.startswith("."):
+        if (folder.name in SKIP_DIRS or folder.name.startswith(".")
+                or folder.name.startswith(ARCHIVE)):
             continue
         found = _walk(folder) if folder.name in ("loadable", "presets") else sorted(folder.glob("*.json"))
         for f in found:
@@ -99,16 +109,45 @@ def move(dest: Path, home: Path, *, dry_run: bool = False,
     return done
 
 
+def clear(home: Path, done: list[tuple[str, Path]], *, out=print) -> Path | None:
+    """Move every top-level folder `done` drew from out of `home`, whole, into one
+    ``ARCHIVE<stamp>/`` beside them; returns that folder (None: nothing to move).
+    Moves, never deletes; the folders' other files go with them."""
+    tops = sorted({rel.parts[0] for _, rel in done if len(rel.parts) > 1})
+    if not tops:
+        return None
+    archive = home / (ARCHIVE + time.strftime("%Y%m%d-%H%M%S"))
+    n = 1
+    while archive.exists():
+        n += 1
+        archive = home / (ARCHIVE + time.strftime("%Y%m%d-%H%M%S") + f"-{n}")
+    archive.mkdir()
+    for top in tops:
+        (home / top).rename(archive / top)
+        out(f"moved       {top}/ → {archive / top}")
+    for what, rel in done:
+        if what == "KEPT THEIRS":
+            out(f"KEPT THEIRS {rel} — yours is now at {archive / rel}")
+    return archive
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("dest", type=Path, help="the shared folder (created if missing)")
     ap.add_argument("--from", dest="home", type=Path, default=None,
                     help="the home to copy from (default: $HYPERSPACE_HOME, else ~/Hyperspace)")
     ap.add_argument("--dry-run", action="store_true", help="say what would happen, write nothing")
+    ap.add_argument("--keep", action="store_true",
+                    help="leave HOME's copy where it is (default: moved into "
+                         f"HOME/{ARCHIVE}<date>-<time>/)")
     a = ap.parse_args(argv)
     home = (a.home if a.home is not None else _home()).expanduser()
     dest = a.dest.expanduser().resolve()
     done = move(dest, home, dry_run=a.dry_run)
+    if not a.dry_run and not a.keep:
+        clear(home, done)
+    elif a.dry_run and not a.keep and done:
+        print(f"(then each folder above would be moved into {home / ARCHIVE}<date>-<time>/)")
     counts: dict[str, int] = {}
     for what, _ in done:
         counts[what] = counts.get(what, 0) + 1
