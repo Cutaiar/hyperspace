@@ -126,3 +126,63 @@ centres it, the volume's tapered Amount turns, a lane shows on the pad.
   scroll would change it while scrolling the pane (row 1027).
 - No Ctrl+click to type into a knob; the menu, learn and the pad do the rest.
 - Pads on VIEW or any page but the fx strip: plan 89's to use.
+
+## Open style questions — to settle by playing
+
+The owner's word (2026-11-23): merge it, and keep track of what may want a
+different look or feel once it has been played with. Each is a named
+constant or one function, so a change is small. Tick one off with the
+answer and the PR that made it.
+
+**The pad and the volume** (`ui_fields.pad`, `_square`)
+- [ ] Size: the square is 120–260 px (`ui.PAD_MIN`, `PAD_MAX`). Big enough
+  on the trackpad at the stage's distance? Should it grow past 260 in a
+  wide pane?
+- [ ] The dot: 10 px (`ui.PAD_DOT_R`), red with a white ring. Clear enough,
+  or wants to be bigger, or filled white?
+- [ ] The red crosshair through the dot, the quarter grid and the faint
+  neutral cross: helpful, or noise?
+- [ ] A click jumps the dot to the pointer (absolute). Or should a drag move
+  it from where it was (relative), as a trackpad cursor does?
+- [ ] The volume's Z as a halo about the dot (`halo`: 0.15 of the side at
+  full). Does it read as depth? Too big at high Amount?
+- [ ] Z by its knob only (row 1027). Wants a gesture on the pad itself
+  (⌥-drag, or a scroll that is not a pane scroll)?
+- [ ] The head is the label alone; each value is under its knob. Wants the
+  values back in the head?
+- [ ] Knobs beside the square, or under it in a narrow pane (`_knob_layout`,
+  `ui.KNOB_COL`): the right place?
+
+**The knobs** (`ui_fields.knob`)
+- [ ] Size: 36 px across (`ui.KNOB_R`). Easy to grab on the trackpad?
+- [ ] Throw: a vertical drag of 200 px for the whole range (`ui.KNOB_THROW`).
+  Too slow, too fast? Horizontal as well as vertical?
+- [ ] No typing into a knob (Ctrl+click). Wanted?
+- [ ] Words under a knob: the axis letter and its value. Enough, or the
+  param's name?
+
+**The faders** (`ui_fields.Shape`, `marks`, `_snap`)
+- [ ] The detent's pull: 6 px (`ui.DETENT_PX`). Felt, without grabbing a
+  value meant to be near it?
+- [ ] An effect's speed: snaps to its stop; its 1× notch is drawn but does
+  not snap. Should 1× snap as well?
+- [ ] The detent's notch is drawn as a taper's unity notch always was (above
+  and below the track). Wants to stand out more for a bipolar centre?
+- [ ] Ticks: under the track, 3 px (`ui.TICK_H`), no closer than 6 px
+  (`ui.TICK_GAP`), in a quieter grey (`ui.TICK`). Readable from the stage?
+  Through the track instead?
+- [ ] A tapered integer (VIEW's instance count) has no ticks: its detents
+  are not whole values. Wanted?
+
+**Which param is which** (`ui_fields.polarity`)
+- [ ] The Mandelbrot's c, z₀ and centre now fill from the left (row 1021):
+  mark them `bipolar` (plan 80's file)?
+- [ ] Any fader whose class looks wrong once played: add `bipolar` or
+  `unipolar` to its `@param` line. A unity multiplier the rule misses
+  would want a `unity` marker (row 1022).
+
+**Where else**
+- [ ] Pads on VIEW (the copies' amp and spacing?) and other pages: plan 89
+  builds on these widgets.
+- [ ] More pairs worth a pad among the effects: the shader roundup's call.
+
