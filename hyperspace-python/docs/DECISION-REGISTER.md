@@ -891,6 +891,12 @@ here; overturn → the change, then the same.
 | 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
 | 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
 | 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
+| 1040 | Plan 84: GRAPH's head has a **gpu cost** chip, off by default, page state only (never saved, never an undo step). Lit, every render node is marked by its GPU time: its border and ground up a black-to-white hot ramp, a badge on its top edge ("#1 · 2.10 ms" for the three costliest), and a line under the head with the frame's total over its timed nodes and its three costliest | 840, 841 | (rec) — pending the owner |
+| 1041 | Plan 84: a node's heat is its share of the frame's costliest node's time (the costliest white), not its percentile rank, so one 10 ms node among 0.1 ms ones draws one white node, not a gradient; ranks break ties by name | 841 | (rec) — pending the owner |
+| 1042 | Plan 84: the marks are `PassTimer`'s 60-frame medians eased with a 1 s time constant, the same at any frame rate; a node new to the timer starts at its own time | 842 | (rec) — pending the owner |
+| 1043 | Plan 84: a render node that made nothing this frame — not built (unreached, faint), or built and run for nothing (an effect switched off, a branch behind a switch's unpicked input) — says **made nothing**, not 0 ms; a node with no pass of its own (a switch, a delay's read, the pattern, a see-through geometry) has no mark, its time being its consumer's. What ran is what asked the timer for a query this frame, not what the timer lists (so a segment switched off made nothing); a delay's write and a look-back's capture count as their node's. A node timed inside another's query (an effect in a delay's write) reads 0: GL's one query at a time | 843 | (rec) — pending the owner |
+| 1044 | Plan 84: it costs nothing off. The page asks the renderer a frame at a time (`Renderer.gpu_watch`, cleared each frame, as `media_watch`); only then does the frame add what each node made (`render.gpu_made`, read from what the frame already settled). Nothing more is timed, drawn or read back on the GPU; off, the page pushes no style and draws no badge | 844 | (rec) — pending the owner |
+| 1045 | Plan 84's stretch, not built: thumbnails for unreached picture nodes other than effects. A switch could show its picked input for free; a composite, resize, delay, look-back or echo would each need a pass of its own beside the graph (or a history it does not hold), in `render.thumb_source`, outside the item's files. Options: (a) the switch only; (b) the switch and the composite (one lay pass at a thumbnail's size, under `UNWIRED_PER_FRAME`); (c) leave them as they are. Every option keeps them unbuilt (row 349) | — | **(c), the owner, 2026-11-23**: "I don't really mind if nodes outside of the hot render graph are not heatmapped" |
 | 902 | Plan 64: a side-pane section `fractal` (appended to `ui.PAGE_KEYS`, every saved slot kept) holds what controls a fractal: what it is and where the view is (levels in, inside or outside, the zoom), **Detail** (`view.frac_detail`, 0.35–3×: the split size's reciprocal), **Reach** (`view.frac_far`, −1.5 to +2 octaves on how far cells are drawn) and **Near** (`view.frac_near`, ±1 octave on how near the eye a cell dissolves), **Additive** (moved out of VIEW) and **To the top**. On another shape it says how to pick one. Detail, Reach and Near are the look's own and routable, saved under an optional loadable-patch key `"fractal": {"detail", "far", "near"}` (`loadable.FRACTAL_KEY`) written only while the look's shape is a fractal — every other look saves byte for byte as before — and read on load (the fractal's own, 1, 0 and 0, when absent; a value that is not a number refused, one out of range held to it, each said); in the dirty signature | 699, 700 | owner — 2026-11-20: "build the fractal section" (the recommendation of the day before: a section, a detail slider, the depth of field, a readout, a way back to the top) |
 | 903 | Plan 64: the reach a fractal is drawn to is never under 0.2 octaves and the near end never under 0.3, whatever the fractal's own plus the slider, so the cue's ends never cross and the fade never inverts | — | (rec) |
 | 904 | Plan 64: **To the top** (`view.frac_top`) leaves every cell at once — zoom 1, pan 0, the dive reset — as Reset view does for those, but leaves the shape's turn, the camera's yaw and pitch and the rotation phases alone: it answers "where am I in the fractal", not "reset everything". Inside, it brings the space home, as Reset view does (row 887) | 701 | (rec) |
@@ -15413,6 +15419,47 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** (rec) — pending the owner.
 - **Built.** `ui_fx.strip`, `ui_fields.inline_pad`; `tests/test_control_widgets.py::test_the_strip_draws_no_slider_for_a_padded_param`.
 - **Judge it.** 823.
+### 1040. The gpu cost chip
+
+- **What.** Hovering every node to find the bottleneck is how Rugged Doctor was found at the 60 FPS floor. A chip that marks every node at once, off by default so the canvas is as it was, and page state like **pictures · tint cables** (plan 37 C2, D3). The badge is drawn over the node, outside its layout, so lighting it moves nothing.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `ui_graph.COST_LABEL`, `_cost_chip`, `_cost_style`, `_cost_badge`, `cost_line`; `tests/test_gpu_cost.py::test_the_chip_is_off_by_default_and_last_on_the_head`, `::test_the_chip_reaches_neither_the_loadable_nor_the_show`, `::test_lit_it_asks_the_renderer_and_marks_the_render_nodes`, `::test_the_head_line_is_the_total_and_the_three_costliest`.
+- **Judge it.** 840, 841.
+
+### 1041. Heat is a share of the costliest
+
+- **What.** "Ranked within the frame": the costliest node is always white. A share keeps the gaps a percentile would hide — what matters on stage is which node to remove. The ramp is black, deep red, orange, yellow, white, every step brighter.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `ui_graph.rank_costs`, `heat_rgb`, `Cost`; `tests/test_gpu_cost.py::test_ranked_within_the_frame_by_share_of_the_costliest`, `::test_a_tie_is_ranked_by_name_so_it_never_swaps`, `::test_the_ramp_runs_black_to_white_always_brighter`.
+- **Judge it.** 841.
+
+### 1042. Eased over a second
+
+- **What.** The timer's median already rejects a spike; the page eases each median by 1 − e^(−dt/τ) a frame, τ = 1 s, so the marks hold still and two nodes of nearly one cost do not swap every frame.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `ui_graph.ease_costs`, `COST_TAU`; `tests/test_gpu_cost.py::test_a_step_settles_in_about_a_second`, `::test_the_easing_does_not_depend_on_the_frame_rate`, `::test_a_new_node_starts_at_its_time_not_from_zero`.
+- **Judge it.** 842.
+
+### 1043. Made nothing is not free
+
+- **What.** The timer counts a timed node that did not run as 0 that frame; an unbuilt node has no line at all. Both would read as cheap. The renderer says what each node made by `Graph.evaluate`'s own rule, and the page marks the rest **made nothing**.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `render.gpu_made`, `ui_graph.node_cost`, `NOTHING`; `tests/test_gpu_cost.py::test_each_kind_of_node_gets_its_mark`, `::test_asked_it_says_what_each_node_made_for_one_frame`, `::test_a_node_that_made_nothing_drops_out_and_comes_back_at_its_time`.
+- **Judge it.** 843.
+
+### 1044. Nothing when off
+
+- **What.** The brief: "it must cost nothing when off". The renderer's extra read runs only in a frame the page asked for; the times are the medians the renderer kept already.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `Renderer.gpu_watch` (read in `_draw_frame`), `ui_graph._costs`; `tests/test_gpu_cost.py::test_unasked_the_renderer_says_nothing_more`, `::test_the_outputs_are_the_same_bytes_asked_or_not`, `::test_off_it_asks_nothing_and_draws_nothing_extra`.
+- **Judge it.** 844.
+
+### 1045. Unwired thumbnails beyond effects: not built
+
+- **What.** Plan 65 made an unreached effect's thumbnail beside the graph. The other unreachable picture nodes need a pass of their own, or a history they do not hold, to be shown faithfully; their input in their place would be a picture the node does not make. The owner picks.
+- **Answer.** (c), the owner, 2026-11-23: "I don't really mind if nodes outside of the hot render graph are not heatmapped." They stay as they are: no thumbnail made for them, no mark beyond **made nothing**.
+- **Built.** Nothing: a question. `docs/plans/84-gpu-cost.md`, "Not built".
+- **Judge it.** —.
 ### 1050. The show look in code: BONES, PLAIN, 50%
 
 - **What.** The owner changed the show's ghost hands on 2026-11-18: on, BONES style, PLAIN material, 50% opacity. `ghost.SHOW_LOOK` holds it and `ghost.show_look(state)` applies it. The app applies it to the on-air renderer's hands at startup, to deck 2's sibling, and to every extra hands node's fresh state, so a new patch's values and **New patch** carry it. `GhostState()` keeps its neutral defaults: changing them broke 14 ghost and render tests in #459 and would move the goldens.

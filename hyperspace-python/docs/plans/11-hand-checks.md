@@ -8887,6 +8887,21 @@ Plan 82. Headless: `tests/test_control_widgets.py` (the parse, the shapes, the t
 **824. The volume.** Zoom burst's Burst. *Pass:* drag the square: the burst's centre moves; turn the third knob up: the halo grows and the smear reaches further; double-click the X knob: the centre returns to the middle. A saved patch with Zoom burst loads with its centre and amount as they were. *Fail:* a halo that doesn't follow Amount, or a value moved by a load.
 
 **825. Modulation on a pad.** Route an LFO onto Zoom burst's Centre X (and a hand onto Centre Y). *Pass:* a white dot moves with the lanes, a line from the red dot (where you set it) to it, the knobs' white ticks move, the readouts go red; drag the pad while it rides: the red dot moves, the white one rides about it. *Fail:* the red dot moving with the LFO, or no sign the lane is there.
+## FE. GRAPH: GPU cost at a glance (rows 1040–1045, 2026-11-22)
+
+Plan 84. Headless: `tests/test_gpu_cost.py` (the easing and the ranking, pure; each kind of node's mark; the renderer says what each node made only while asked, and the outputs are the same bytes; off, no push and no badge; the chip never saved). The screens were drawn on Mesa's software rasteriser, so every time in them means nothing; every check here is the rig's. Hot reload is enough.
+
+**840. Rugged Doctor at the floor.** (Mac, the rig, the show on the outputs) Load Rugged Doctor, open GRAPH and light **gpu cost**. *Pass:* one or two nodes glow white with "#1" and "#2" badges, and the line under the head names them with the frame's total; that total is near the frame's time on SYSTEM. Note the three costliest and their times here: they are the answer to plan 66 §3's first item. *Fail:* a total far from SYSTEM's, or a white node that removing does not speed up.
+
+**841. Read at the stage's distance.** (Mac, the panel on its display, stepped back to where you play from) Chip lit, the canvas at the zoom you use. *Pass:* you can tell the costliest node from across the room by its border alone, and read the badges at a normal zoom; every node's title is still legible on its tinted ground. *Fail:* a badge you have to lean in to read at the zoom you use, or a title lost on its ground.
+
+**842. Holds still, follows in a second.** Chip lit on a steady show. *Pass:* the badges' numbers drift by hundredths, no node's colour flickers and no two badges trade ranks back and forth. Then raise a costly effect's knob (Bloom's radius, a Blocks cell count): its mark follows within about a second. *Fail:* flicker, ranks swapping every frame, or a mark that takes several seconds.
+
+**843. Made nothing.** Chip lit. Switch a wired effect off (with no value cable on it, it goes onto its area's idle line: open the line to see it); flip a switch node to its other input; add an effect from the picker on no wire. *Pass:* each says **made nothing** with a grey border (the effect off, the branch behind the unpicked input, the faint new node), never "0.00 ms"; switch them back and each returns at its time. A switch, the pattern, the shape and the hands have no badge (their time is the scene's or their consumer's). *Fail:* a node that made nothing reading as cheap.
+
+**844. Off costs nothing.** (Mac, a heavy patch) SYSTEM's frame time with the chip never lit, then lit, then off again. *Pass:* off again is the same as never lit; lit costs no more than the noise. *Fail:* a frame-time step that stays after the chip is off.
+
+**845. Two decks.** Switch the panel to the deck off air, chip lit. *Pass:* the marks and the line are that deck's patch's (its own nodes and times); back on air, the on-air deck's. *Fail:* one deck's times on the other's nodes.
 ## FF. The hands' show look (rows 1050–1053, 2026-11-22)
 
 Plan 85. Headless: `tests/test_ghost.py` (the look's values, the bare state neutral) and `tests/test_set_hands_look.py` (the dry run, the backup, the writes, the wires, the load notes, a second run, the app-open refusal), on tmp copies of corpus patches. Nothing here was seen on the Mac. A restart after pulling.
