@@ -3114,7 +3114,7 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
                   group=g,
                   tip="Load the previous patch of the PATCHES section's list into the deck "
                       "off air, wrapping at the start. The room does not move.")
-        # the list walked *and* faded in (row 1075): the Edge's d-pad, "so the user of the
+        # the list walked *and* faded in (row 1099): the Edge's d-pad, "so the user of the
         # Edge can smoothly transition between patches". The one verb that moves the room
         # from a controller; no loadable patch's row reaches it either (row 700)
         r.trigger("preset.fade.next", "Fade into the next patch", lambda: bank.fade_to(1),

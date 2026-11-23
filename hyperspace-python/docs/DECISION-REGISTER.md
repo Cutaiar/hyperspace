@@ -890,7 +890,7 @@ here; overturn → the change, then the same.
 | 898 | Plan 65: the picker's families are data: a file's `// @family <name>` (`EffectSpec.family`, parsed, declares nothing, written by no file yet), else its `@order` band from one table, `previews.ORDER_FAMILIES` (generators, distort, split, glow and texture, colour). The shader roundup writes `@family`. So is the aux port: every effect node had one, two files read it (Blend, Displace); GRAPH draws it only when the file's code calls `aux(` or `aux_luma(` (`fx.reads_aux`) or a saved wire goes into it | 693 | (rec) — plan 65 §2: the owner asked for a hook, not today's list |
 | 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
 | 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
-| 1075 | The Edge's D-pad fades patches: ← / → load the patch one step from the one **on air** onto the deck off air and run the crossfader across on their own, over `output.xfade_s` (`preset.fade.next` / `prev`, `DeckInstall.fade_to`, `MetaController.fade_when_warm`). The Edge's own `Model.layout` alone, as its hold-to-save is (row 724): no other pad walks patches (row 723 stands for them). The fade starts at the first frame after the deck off air's warm draw, and a press is refused, said, while the crossfader is away from its ends | 868 | owner — 2026-11-22: "so the user of the Edge PS5 controller can smoothly transition between patches" |
+| 1099 | The Edge's D-pad fades patches: ← / → load the patch one step from the one **on air** onto the deck off air and run the crossfader across on their own, over `output.xfade_s` (`preset.fade.next` / `prev`, `DeckInstall.fade_to`, `MetaController.fade_when_warm`). The Edge's own `Model.layout` alone, as its hold-to-save is (row 724): no other pad walks patches (row 723 stands for them). The fade starts at the first frame after the deck off air's warm draw, and a press is refused, said, while the crossfader is away from its ends | 899 | owner — 2026-11-22: "so the user of the Edge PS5 controller can smoothly transition between patches" |
 | 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
 | 1040 | Plan 84: GRAPH's head has a **gpu cost** chip, off by default, page state only (never saved, never an undo step). Lit, every render node is marked by its GPU time: its border and ground up a black-to-white hot ramp, a badge on its top edge ("#1 · 2.10 ms" for the three costliest), and a line under the head with the frame's total over its timed nodes and its three costliest | 840, 841 | (rec) — pending the owner |
 | 1041 | Plan 84: a node's heat is its share of the frame's costliest node's time (the costliest white), not its percentile rank, so one 10 ms node among 0.1 ms ones draws one white node, not a gradient; ranks break ties by name | 841 | (rec) — pending the owner |
@@ -15390,7 +15390,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Built.** Nothing.
 - **Judge it.** No hand check.
 
-### 1075. The Edge's D-pad fades patches
+### 1099. The Edge's D-pad fades patches
 
 - **What.** Row 723 took the patch list off every pad's D-pad ("no swapping presets from a
   controller"), because a press swapped the live look in front of the room. The Edge gets it
@@ -15448,7 +15448,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
   `::test_a_pending_d_pad_fade_is_not_stomped_by_the_list`,
   `::test_a_playing_from_before_a_hot_reload_still_ticks`,
   `::test_a_pose_only_twin_loaded_over_the_cue_is_still_a_replacement`.
-- **Judge it.** 868, on the Edge at the rig: whether the fade reads as a transition and
+- **Judge it.** 899, on the Edge at the rig: whether the fade reads as a transition and
   whether `output.xfade_s` is the right length to reach for.
 - **Open.** `Fade.warm` draws the deck off air for the **first output only** (the render loop
   passes `first.switches`, one call site for every warm consumer), so an effect wired only to

@@ -214,7 +214,7 @@ def test_the_sweep_names_what_was_in_neither(rig):
     """Row 746's list: what `part_of` called None until now, by group."""
     groups = {p.group for p in per_deck(rig.one.reg)}
     assert groups == set(PER_DECK_META_GROUPS)
-    assert sum(p.group == "preset" for p in rig.one.reg) == 25   # + the two patch fades (row 1075)
+    assert sum(p.group == "preset" for p in rig.one.reg) == 25   # + the two patch fades (row 1099)
     assert [p.id for p in rig.one.reg if p.group == "deck"] == ["deck.chase"]
     assert all(layer_of(p) == "meta" and is_meta_id(p.id) for p in per_deck(rig.one.reg))
 

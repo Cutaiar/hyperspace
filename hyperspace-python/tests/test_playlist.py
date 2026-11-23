@@ -1040,7 +1040,7 @@ def test_a_dwell_typed_and_then_the_popup_dismissed_is_kept(tmp_path, monkeypatc
         assert p.playlist.entries[0].dwell_s == 90.0
 
 
-# ------------------------- a hand loads over the cue (row 1075, Devin on PR #475)
+# ------------------------- a hand loads over the cue (row 1099, Devin on PR #475)
 
 def test_a_hand_loading_over_the_cue_keeps_its_place_instead_of_skipping_it(air):
     """Every bank verb from a row lands on the deck off air, which during the lead time
@@ -1134,7 +1134,7 @@ def test_save_as_on_the_cued_deck_leaves_the_cue_alone(air):
 def test_a_pending_d_pad_fade_is_not_stomped_by_the_list(air):
     """The press loads and asks for a fade that waits on a warm draw, so for a tick the
     cued deck is neither on air nor mixing. The list must not reload its entry over the
-    patch the room is about to take (row 1075)."""
+    patch the room is about to take (row 1099)."""
     p = _on_real(air, ("party-tumble", 6.0, 0.0), ("party-wake", 6.0, 0.0))
     air.one.reg["playlist.play"].toggle()
     t = _lead(air, p, 100.0)

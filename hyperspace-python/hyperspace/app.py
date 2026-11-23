@@ -2421,7 +2421,7 @@ def main(argv: list[str] | None = None) -> None:
     meta = MetaController(deck, deck2, players, mix=mix)
     fade = Fade(deck, deck2, mix, ctx, dream=dream_io, pointer=meta.on_air_pointer)
     media.seat(meta)
-    meta.fade = fade                   # whose warm draw a load's own fade waits for (row 1075)
+    meta.fade = fade                   # whose warm draw a load's own fade waits for (row 1099)
     fade.said = lambda text: library.say(warning=text)    # a warm draw's failure, at once
     panel.fade = fade                  # the SYSTEM page's second GPU block
     panel.pointer = library.pointer = meta.panel_pointer
