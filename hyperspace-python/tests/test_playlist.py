@@ -17,6 +17,7 @@ from types import SimpleNamespace as NS
 import pytest
 from imgui_bundle import imgui
 from test_loadable import put
+from test_on_off_air import _bank
 from test_on_off_air import rig as on_off_air_rig
 from test_ui_pane import _st, _tall_driver
 from test_ui_shell import build_rig
@@ -1051,7 +1052,7 @@ def test_a_hand_loading_over_the_cue_keeps_its_place_instead_of_skipping_it(air)
     air.meta.tick(100.0, 0.05)
     assert p.armed is not None and p.armed_on is air.two       # entry 0 cued off air
     cued = air.two.loaded_patch.current
-    assert p.armed_name == cued, "the name the deck holds, not the entry's"
+    assert p.armed_loaded is not None, "what the deck landed, not the name it goes by"
 
     air.one.reg["preset.fade.next"].fire()                     # the Edge's D-pad, mid-lead
     assert air.two.loaded_patch.current != cued, "a hand loaded over the cue"
@@ -1060,7 +1061,7 @@ def test_a_hand_loading_over_the_cue_keeps_its_place_instead_of_skipping_it(air)
 
     assert p.armed is None and p.at is None, "nothing has aired from the list"
     assert p.next == 0, "entry 0 is still next, not skipped"
-    assert "a hand loaded over party-tumble" in air.lib.warning
+    assert "a hand loaded over party-tumble and took the room" in air.lib.warning
     assert "1 of 2" not in air.lib.status, "it must not claim the entry played"
 
     t = _run(air, t, 11.0)                                     # the hand's look gets its dwell
@@ -1078,3 +1079,99 @@ def test_the_cue_untouched_still_counts_as_played_when_a_hand_takes_the_fader(ai
     _run(air, 100.0, 0.5)
     assert p.at == 0 and p.next == 1, "the cue aired: it played"
     assert air.meta.on_air is air.two and air.two.loaded_patch.current == cued
+
+
+def _lead(air, p, t0: float) -> float:
+    """Run until the list has cued its next entry and is waiting out the lead time —
+    the window in which a hand can reach the deck off air. The clock, at the end."""
+    t = _run(air, t0, 0.2)                                     # the first entry airs
+    assert p.at is not None and p.armed is None
+    t = _run(air, t, (p.load_at - t) + 0.1)                    # into the lead window
+    assert p.armed is not None and p.fade_at > t, "cued, and not yet due"
+    return t
+
+
+def test_a_slot_load_that_never_airs_keeps_the_lists_own_deadline(air):
+    """A bank slot asks for no fade, so the room has not moved: the list must reload the
+    entry for its original turn, not postpone the show by a whole dwell (Devin on #475)."""
+    p = _on_real(air, ("party-tumble", 6.0, 0.0), ("party-wake", 6.0, 0.0))
+    _bank(air, "party-tumble", "party-acid")                   # `preset.load.1` is slot 1
+    air.one.reg["playlist.play"].toggle()
+    t = _lead(air, p, 100.0)
+    due, cued, on_air = p.fade_at, air.meta.off_air.loaded_patch.current, air.meta.on_air
+
+    air.one.reg["preset.load.1"].fire()                        # a slot, off air, no fade
+    assert air.meta.off_air.loaded_patch.current != cued, "the slot landed over the cue"
+    t = _run(air, t, 0.2)
+    assert air.meta.on_air is on_air, "nothing aired: the fader never moved"
+    assert p.fade_at == due, "the list keeps its own deadline"
+    assert "loaded over off air" in air.lib.warning and "on time" in air.lib.warning
+    assert air.meta.off_air.loaded_patch.current == cued, "the entry is reloaded for its turn"
+
+    _run(air, t, (due - t) + 0.5)
+    assert p.at == 1 and air.meta.on_air is not on_air, "it airs on schedule"
+
+
+def test_save_as_on_the_cued_deck_leaves_the_cue_alone(air):
+    """Save As renames a patch without loading one, so the cue is untouched and the
+    transition stays on time. A name-based guard dropped it (Devin on #475)."""
+    p = _on_real(air, ("party-tumble", 6.0, 0.0), ("party-wake", 6.0, 0.0))
+    air.one.reg["playlist.play"].toggle()
+    t = _lead(air, p, 100.0)
+    due, cued, on_air = p.fade_at, air.meta.off_air.loaded_patch.current, air.meta.on_air
+
+    air.meta.off_air.loaded_patch.save_as("party-wake-2")      # the cued deck, renamed
+    assert air.meta.off_air.loaded_patch.current != cued, "its name moved"
+    t = _run(air, t, 0.2)
+    assert p.armed is not None, "the cue is not lost: nothing was loaded over it"
+    assert p.fade_at == due and "loaded over" not in air.lib.warning
+
+    _run(air, t, (due - t) + 0.5)
+    assert p.at == 1 and air.meta.on_air is not on_air, "it airs on schedule"
+
+
+def test_a_pending_d_pad_fade_is_not_stomped_by_the_list(air):
+    """The press loads and asks for a fade that waits on a warm draw, so for a tick the
+    cued deck is neither on air nor mixing. The list must not reload its entry over the
+    patch the room is about to take (row 1063)."""
+    p = _on_real(air, ("party-tumble", 6.0, 0.0), ("party-wake", 6.0, 0.0))
+    air.one.reg["playlist.play"].toggle()
+    t = _lead(air, p, 100.0)
+
+    cued = air.meta.off_air.loaded_patch.current
+    air.meta.fade = NS(warm_deck=air.meta.off_air)              # its warm draw is still to come
+    air.meta.on_air.reg["preset.fade.prev"].fire()              # (…next is the cue itself)
+    pressed = air.meta.off_air.loaded_patch.current
+    assert pressed != cued, "the press landed a patch of its own over the cue"
+    air.meta.tick(t + 0.05, 0.05)                               # a tick with the fade pending
+    assert air.meta.waiting, "the fade is asked for and waiting"
+    assert p.armed is None and p.at == 0, "the cue is let go, the place kept"
+    # the tick after is the one that used to re-arm: `load_at` was left behind us, so the
+    # list reloaded its entry straight over the patch the press had just put there.
+    air.meta.tick(t + 0.10, 0.05)
+    assert air.meta.off_air.loaded_patch.current == pressed, "the list reloaded over the press"
+
+    air.meta.fade = NS(warm_deck=None)                          # the warm draw lands
+    t = _run(air, t + 0.10, 2.6)                                # the 2 s crossfade runs
+    assert air.meta.on_air.loaded_patch.current == pressed, "the press is what aired"
+    assert p.next == 1, "the cued entry is still next"
+
+
+def test_a_playing_from_before_a_hot_reload_still_ticks(air):
+    """`armed_loaded` is a class-level default: `hotreload` re-classes the live `Playing`
+    without running `__init__` again and backfills dataclass fields only, so an instance
+    armed before the field existed must still read it. The cue then finishes as normal and
+    the next `_arm` records it (Devin on #475)."""
+    p = _on_real(air, ("party-tumble", 6.0, 0.0), ("party-wake", 6.0, 0.0))
+    air.one.reg["playlist.play"].toggle()
+    t = _lead(air, p, 100.0)
+    assert "armed_loaded" in vars(p), "the instance holds its own once it has cued"
+    del vars(p)["armed_loaded"]                                # as a `Playing` from before it
+    assert p.armed_loaded is None, "the class's default stands in"
+
+    due = p.fade_at
+    t = _run(air, t, 0.2)                                      # must not raise, nor drop the cue
+    assert p.armed is not None and p.fade_at == due
+    _run(air, t, (due - t) + 0.5)
+    assert p.at == 1, "the cue played on time"
+    assert "armed_loaded" in vars(p) or p.armed is None, "the next arm records it again"

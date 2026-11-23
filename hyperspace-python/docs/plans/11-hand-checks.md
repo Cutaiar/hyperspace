@@ -8883,7 +8883,8 @@ Register row 1063, 2026-11-22. Headless: `tests/test_on_off_air.py` (the load, t
 5. Set GRAPH's fade seconds to 0, then to 10, and press →. *Pass:* a cut, then a ten-second blend. Say which length the show wants.
 6. Press the D-pad's ↑ and ↓. *Pass:* brightness, as on every pad.
 7. On a plain DualSense (or the Xbox pad), press ← and →. *Pass:* nothing happens to the patch.
-8. Start a playlist, and in the two seconds before one of its transitions press →. *Pass:* your patch airs and the footer says a hand loaded over the entry and it is still next; the entry then plays in its turn after a dwell, rather than being skipped. Say whether giving your look a whole dwell is the right length, or whether the list should pick up sooner.
+8. Start a playlist, and in the two seconds before one of its transitions press →. *Pass:* your patch airs and the footer says a hand loaded over the entry and took the room, and that it is still next; the entry then plays in its turn after a dwell, rather than being skipped. Say whether giving your look a whole dwell is the right length, or whether the list should pick up sooner.
+9. In that same window, press a filled bank slot instead and leave the fader alone. *Pass:* the room does not move, the footer says the entry was loaded over off air and is reloaded for its turn on time, and the playlist's transition happens when it was always going to — not a dwell later. Your slot's patch is written over off air, which row 707 allows.
 *Fail:* a snap with no fade, a stutter in the fade's first frame, a press that swaps what is on air, the room moving before the fade, or the playlist jumping an entry after you press.
 ## FG. The loader's units note and node mode's dropdowns (rows 1060–1062, 2026-11-22)
 

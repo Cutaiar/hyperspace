@@ -15380,18 +15380,26 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
   so the Edge's ← / → are no longer free for a pair or for node mode.
   A load that lands on the deck the **playlist** has cued takes that cue out from under it, and
   the list used to count the entry as played, because `_due` knew only which deck went on air.
-  The cue is let go **without advancing** instead, so the entry is still next and plays once
-  the hand's look has had a dwell of its own: a hand's move is the one thing the list gives
-  way to, and it keeps its place rather than skipping it. Found in review on PR #475; it was
-  never the D-pad's alone — every bank verb from a row lands off air (row 700), so a bank pad
-  pressed in the lead time did the same before this.
+  The cue is let go **without advancing** instead, so the entry is still next and the list
+  keeps its place rather than skipping it. Found in review on PR #475; it was never the
+  D-pad's alone — every bank verb from a row lands off air (row 700), so a bank pad pressed in
+  the lead time did the same before this. What it costs the clock turns on whether that load
+  reached the room: one that did (this fade, or a fader taken across) earns the hand's look a
+  dwell of its own before the list moves again, since a hand's move is the one thing the list
+  gives way to; one that only sat off air (a bank pad, a slot — those verbs ask for no fade)
+  has changed nothing the room can see, so the list keeps its own deadline and reloads the
+  entry for it, rather than postponing the show by a dwell per press. A fade asked for and
+  still waiting on its warm draw counts as reaching the room, or the list would reload its
+  entry straight over the patch a press had just put there. The cue is known by **what the
+  deck landed** (`LoadedPatch.loaded`), never the name it goes by: Save As renames a patch
+  without loading one, and a name called that untouched cue lost and postponed the show.
 - **Answer.** owner — 2026-11-22, asked for: the D-pad "doesn't just snap the new patch in",
   it "loads the next patch onto deck 2 and then triggers the fade between them".
 - **Built.** `library.Library.neighbour`, `library.Install.fade_to`, `library.DeckInstall.fade_to`,
   `deck.MetaController.fade_when_warm`, `.fading_words`, `.fade`, `.waiting`,
   `params` `preset.fade.next` / `preset.fade.prev`, `routing._layout_source`,
   `pads.models._EDGE_LAYOUT`, `ui.CHEATSHEET`, `playlist.Playing._cue_lost`, `._cue_taken`,
-  `.armed_name`; `tests/test_on_off_air.py::test_a_fade_verb_loads_off_air_and_steps_from_the_patch_on_air`,
+  `._landed_on`, `.armed_loaded` (class-level: a `Playing` from before a hot reload has it); `tests/test_on_off_air.py::test_a_fade_verb_loads_off_air_and_steps_from_the_patch_on_air`,
   `::test_a_fade_verb_from_either_deck_lands_off_air`,
   `::test_the_fade_waits_for_the_warm_draw_then_runs_the_fader_across`,
   `::test_press_after_press_goes_on_through_the_list`,
@@ -15399,7 +15407,11 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
   `::test_a_fade_verb_is_refused_between_the_ends_and_loads_nothing`,
   `::test_the_edges_d_pad_fades_the_list_and_no_other_pads_does`,
   `tests/test_playlist.py::test_a_hand_loading_over_the_cue_keeps_its_place_instead_of_skipping_it`,
-  `::test_the_cue_untouched_still_counts_as_played_when_a_hand_takes_the_fader`.
+  `::test_the_cue_untouched_still_counts_as_played_when_a_hand_takes_the_fader`,
+  `::test_a_slot_load_that_never_airs_keeps_the_lists_own_deadline`,
+  `::test_save_as_on_the_cued_deck_leaves_the_cue_alone`,
+  `::test_a_pending_d_pad_fade_is_not_stomped_by_the_list`,
+  `::test_a_playing_from_before_a_hot_reload_still_ticks`.
 - **Judge it.** 859, on the Edge at the rig: whether the fade reads as a transition and
   whether `output.xfade_s` is the right length to reach for.
 - **Open.** `Fade.warm` draws the deck off air for the **first output only** (the render loop
