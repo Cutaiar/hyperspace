@@ -73,7 +73,7 @@ def gl_error(e: Exception, names: dict[int, str]) -> str:
 
 # the file as shipped — what the post pass compiles against when the
 # user's edit does not. tests/test_fx.py holds it equal to the file.
-# plan 66, black is clear: the ramp every key pass shares (the media fit
+# plan 87, black is clear: the ramp every key pass shares (the media fit
 # pass, `media_tex.FIT_FS`, and any picture node's, `masks.KEY_FS`) — how
 # solid a pixel of straight colour `rgb` is: its brightness `m` (peak, the
 # largest of r, g, b; or Rec. 709 luma), `smoothstep(level, level + soft,

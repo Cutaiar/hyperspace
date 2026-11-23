@@ -17,7 +17,7 @@ target's viewport (`glsl.QUAD_VS`), premultiplied in and out:
   fitted into the consumer by cover as an own-sized node is.
 - `CUT_FS`, picture + mask → picture (T3's `cut`): where the mask passes
   the picture, elsewhere cut away to transparent black, by `amount`.
-- Plan 66 (black is clear): `KEY_FS`, a picture → the same picture with
+- Plan 87 (black is clear): `KEY_FS`, a picture → the same picture with
   its dark parts clear — any picture node a loadable patch's graph keys
   (`graph.KeyNode`), by the ramp every key shares (`glsl.KEY_RAMP`), its
   feather `BLUR_FS` over the ramp alone. A picture's own transparency,
@@ -189,7 +189,7 @@ void main() {
 """
 
 
-# plan 66, black is clear: a premultiplied picture keyed by the shared ramp
+# plan 87, black is clear: a premultiplied picture keyed by the shared ramp
 # (`glsl.KEY_RAMP`) of its straight colour. Keep colour leaves the colour as
 # it was and takes only the alpha down (not inverted); else colour and alpha
 # go together. `u_mode` 1 keys by the ramp here, 2 by `u_keymask` (the ramp
@@ -382,7 +382,7 @@ class MaskPasses:
         return out
 
     def key(self, src: moderngl.Texture, key, size: tuple[int, int], k) -> moderngl.Texture:
-        """Picture `src` keyed (plan 66, `KEY_FS`) into an RGBA target at
+        """Picture `src` keyed (plan 87, `KEY_FS`) into an RGBA target at
         `size` kept under frame key `key`, by `k` (a `media_tex.Key`-shaped
         value: measure, level, soft, keep, feather, invert): with a feather,
         the ramp alone first into a one-channel target `(key, "ramp")`,

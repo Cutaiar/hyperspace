@@ -1,8 +1,8 @@
-# Plan 66 — black is clear, on any picture node
+# Plan 87 — black is clear, on any picture node
 
 **Built** 2026-11-22 on `claude/hyperspace-luma-key-transparency-ysmbfq`.
-Register rows 902–913, hand checks 699–707 (group EB). No schema move.
-Row 902 is the owner's (2026-11-22); row 911 is open for the owner; the
+Register rows 1063–1074, hand checks 859–867 (group FH). No schema move.
+Rows 1063 (2026-11-22) and 1072 (2026-11-23) are the owner's; the
 rest are the build's, "(rec)", to keep or overturn.
 
 ## Why
@@ -24,7 +24,7 @@ say something simpler: *this picture's black is not there*.
 
 The first build put the key on the media channels only. The owner
 (2026-11-22): "this is supposed to apply to all bitmap outputting nodes,
-not just media nodes" — and chose how it is switched (row 902).
+not just media nodes" — and chose how it is switched (row 1063).
 
 ## What "alpha is not a mask" asks of this
 
@@ -46,12 +46,12 @@ stands.
 - `docs/DECISIONS.md`: "Media", "Masks are their own wire (plan 39)".
 - `docs/GLOSSARY.md`: no word changes; the panel says **black is clear**.
 - `REVIEW.md`: a saved key is a file format (`"keys"`, `key.<node>.*`,
-  row 903); what a build from before makes of a file this one writes (row
-  907); conversions at their edges (row 904's 0 and 1).
+  row 1064); what a build from before makes of a file this one writes (row
+  1068); conversions at their edges (row 1065's 0 and 1).
 
 ## What is built
 
-### 1. Which nodes are keyed: the graph's `"keys"` (owner, row 902)
+### 1. Which nodes are keyed: the graph's `"keys"` (owner, row 1063)
 
 A loadable patch's graph section gains one optional key, `"keys"`: the
 names of the picture nodes whose black is clear, sorted, written last and
@@ -73,7 +73,7 @@ MEDIA page's switch on a channel is the same edit on `channel.<c>`.
 It is the graph's, not a param: on and off is a graph edit, so it cannot
 be Learned or LFO'd (the knobs can). That was the owner's choice over a
 toggle param on every node, which would have put ~7 values per picture
-node in every save and a wrapper in every graph (row 902).
+node in every save and a wrapper in every graph (row 1063).
 
 ### 2. The knobs: `key.<node>.*`, while a node is keyed
 
@@ -98,7 +98,7 @@ with. The first build's `media.<c>.key*` never merged; they are gone.
 
 **The ramp** (`glsl.KEY_RAMP`, shared by both passes) is one-sided,
 `k = smoothstep(level, level + soft, m)` on the straight colour, so pure
-black is always fully clear (row 904).
+black is always fully clear (row 1065).
 
 ### 3. Where it runs
 
@@ -118,9 +118,9 @@ black is always fully clear (row 904).
 - **The feather**, either way: the ramp alone into a one-channel target,
   `MaskPasses.feather`, then the pass keys by it — two passes more, only
   while the feather is above 0. A channel's ramp is sampled clamped into
-  the picture, so its letterbox does not eat its edge (row 906).
+  the picture, so its letterbox does not eat its edge (row 1067).
 
-Not keyed, on purpose (row 908): the faces' raw channel texture (sampled
+Not keyed, on purpose (row 1069): the faces' raw channel texture (sampled
 outside the fit pass), the segment's CPU frame (a person is found in the
 picture as shot), the MEDIA page's previews.
 
@@ -131,15 +131,15 @@ composite's **laid screen**, and a hands node's `laid`. Premultiplied
 screen is `src + dst·(1 − src)` per channel — one blend function, rgb
 `(ONE, ONE_MINUS_SRC_COLOR)`, alpha as over — so black adds nothing and
 nothing passes white (add's fault on bright footage). The presenter's
-hands hand-off (`outputs`) lays it the same way. Words: "screened" (row 909).
+hands hand-off (`outputs`) lays it the same way. Words: "screened" (row 1070).
 
 ### 5. Generators
 
 Every effect is a picture node, so the Test card and the Mandelbrot —
 opaque by design — can be keyed like anything else. Plasma, Fractals and
 Glimmer already write alpha = the peak of their colour and need nothing
-(row 910). The one-step matte + cut starter the first build left open is
-not needed: the key reaches every picture (row 912).
+(row 1071). The one-step matte + cut starter the first build left open is
+not needed: the key reaches every picture (row 1073).
 
 ## What the pictures showed
 
@@ -148,11 +148,11 @@ Driven offscreen (the real renderer) and in the real app
 
 - At the ask's numbers (0.02, soft 0.1) a pixel is fully solid from 0.12
   up, so thin grey smoke (about 0.2) stays opaque and draws a dark band
-  over the shape. A level about 0.3 lets it through. Hand check 700.
+  over the shape. A level about 0.3 lets it through. Hand check 860.
 - With keep colour on, a pixel below the level keeps its colour at alpha
   0: over black it looks unchanged, over the shape it is added. Deep blue
   under luma does not "go" unless keep colour is off. As asked
-  ("premultiplied rgb untouched"); hand check 701.
+  ("premultiplied rgb untouched"); hand check 861.
 
 ## What does not change
 
@@ -161,7 +161,7 @@ Driven offscreen (the real renderer) and in the real app
   corpus loadable resaves byte for byte, unchanged. A channel nothing keys
   is the fit pass's old bytes (tested against the old shader), and a graph
   that keys nothing has no `KeyNode`.
-- **No schema** (row 907). A build from before reading a section with
+- **No schema** (row 1068). A build from before reading a section with
   `"keys"` refuses the section (`read_graph`: "no key 'keys'") and loads
   that patch black with the reason in its notes, as for a `screen`
   composite or any node kind it does not know. Only patches that use them
@@ -172,60 +172,60 @@ Driven offscreen (the real renderer) and in the real app
 ## Hot reload
 
 New fields on live objects (`ViewState.keys`, `Wiring.keys`,
-`GraphSpec.keys`, `MediaNode.keyed`): **restart** after pulling (row 913).
+`GraphSpec.keys`, `MediaNode.keyed`): **restart** after pulling (row 1074).
 
 ## Register rows
 
 | # | Decision | Check | Keep / overturn |
 |---|---|---|---|
-| 902 | Black is clear on **any picture node**, switched from the node's menu (and MEDIA for a channel) into the graph section's `"keys"`, its knobs then on the selection; channels on the same model. Not a toggle param on every node. A picture's own transparency, not a mask: row 440 kept | 699, 707 | **owner — 2026-11-22**: "this is supposed to apply to all bitmap outputting nodes, not just media nodes"; "Node menu, then knobs"; channels "Same model as every node" |
-| 903 | The knobs `key.<node>.level` 0.02, `soft` 0.1, `measure` (peak, luma), `feather` 0–32 px, `keep` on, `invert` off: declared while the node is keyed (group `key`), not under the node's own prefix; the panel's words "black is clear" | 699, 700 | (rec) |
-| 904 | One-sided ramp `smoothstep(level, level + soft, m)` on the straight colour (`glsl.KEY_RAMP`, one for both passes): pure black always clear; the matte's symmetric edge left as it is | 700 | (rec) |
-| 905 | Keep colour on: premultiplied colour untouched, alpha from the ramp; off: colour goes with alpha. Inverted, keep colour does not apply | 701 | (rec) |
-| 906 | A keyed node is read through a `KeyNode` (one pass); a channel is keyed in its fit pass (no pass more); the feather is the ramp alone blurred by `MaskPasses.feather`, two passes more only above 0 | 702 | (rec) |
-| 907 | Nothing keyed is the graph, the bytes and the save it was; `"keys"` is written only when there are any; no schema bump — a build from before refuses a section with `"keys"` or a `screen` composite in words (that patch black) | 706 | (rec) |
-| 908 | Not keyed: the faces' raw channel, the segment's CPU frame, the MEDIA previews | 703 | (rec) |
-| 909 | `screen` appended to `graph.BLENDS`: premultiplied `src + dst·(1 − src)`, one blend function; the composite's and a hands node's laid; "screened" | 704 | (rec) |
-| 910 | Generators: the Test card and the Mandelbrot are keyed like any node; Plasma, Fractals and Glimmer need nothing (alpha = peak) | 705 | (rec) |
-| 911 | Whether a node starts keyed when it is added (a channel, say, since most VJ footage is made on black), while every existing patch stays as it is | 699 | **pending the owner** |
-| 912 | The one-step matte + cut "black is clear" starter is not built: the key reaches every picture | — | (rec) |
-| 913 | A restart after pulling: `ViewState.keys`, `Wiring.keys`, `GraphSpec.keys` and `MediaNode.keyed` do not reach live objects by hot reload | — | (rec) |
+| 1063 | Black is clear on **any picture node**, switched from the node's menu (and MEDIA for a channel) into the graph section's `"keys"`, its knobs then on the selection; channels on the same model. Not a toggle param on every node. A picture's own transparency, not a mask: row 440 kept | 859, 867 | **owner — 2026-11-22**: "this is supposed to apply to all bitmap outputting nodes, not just media nodes"; "Node menu, then knobs"; channels "Same model as every node" |
+| 1064 | The knobs `key.<node>.level` 0.02, `soft` 0.1, `measure` (peak, luma), `feather` 0–32 px, `keep` on, `invert` off: declared while the node is keyed (group `key`), not under the node's own prefix; the panel's words "black is clear" | 859, 860 | (rec) |
+| 1065 | One-sided ramp `smoothstep(level, level + soft, m)` on the straight colour (`glsl.KEY_RAMP`, one for both passes): pure black always clear; the matte's symmetric edge left as it is | 860 | (rec) |
+| 1066 | Keep colour on: premultiplied colour untouched, alpha from the ramp; off: colour goes with alpha. Inverted, keep colour does not apply | 861 | (rec) |
+| 1067 | A keyed node is read through a `KeyNode` (one pass); a channel is keyed in its fit pass (no pass more); the feather is the ramp alone blurred by `MaskPasses.feather`, two passes more only above 0 | 862 | (rec) |
+| 1068 | Nothing keyed is the graph, the bytes and the save it was; `"keys"` is written only when there are any; no schema bump — a build from before refuses a section with `"keys"` or a `screen` composite in words (that patch black) | 866 | (rec) |
+| 1069 | Not keyed: the faces' raw channel, the segment's CPU frame, the MEDIA previews | 863 | (rec) |
+| 1070 | `screen` appended to `graph.BLENDS`: premultiplied `src + dst·(1 − src)`, one blend function; the composite's and a hands node's laid; "screened" | 864 | (rec) |
+| 1071 | Generators: the Test card and the Mandelbrot are keyed like any node; Plasma, Fractals and Glimmer need nothing (alpha = peak) | 865 | (rec) |
+| 1072 | A node is never keyed when it is added (a channel included): keying is always asked for, from the node's menu or MEDIA | 859 | **owner — 2026-11-23: "it doesnt have to spawn nodes with keying on" — a node is never keyed when added** |
+| 1073 | The one-step matte + cut "black is clear" starter is not built: the key reaches every picture | — | (rec) |
+| 1074 | A restart after pulling: `ViewState.keys`, `Wiring.keys`, `GraphSpec.keys` and `MediaNode.keyed` do not reach live objects by hot reload | — | (rec) |
 
-## Hand checks (group EB)
+## Hand checks (group FH)
 
 Setup: a clip with a black ground (fire, smoke, particles on black) in
 channel A; on GRAPH, `channel.a → composite.over`, `scene → composite.under`,
 the composite into All outputs, a shape in the scene.
 
-- **699. Black is clear on a channel.** MEDIA, channel A: **black is
+- **859. Black is clear on a channel.** MEDIA, channel A: **black is
   clear** on. *Pass:* the black goes; the fire is over the shape; the
   picture is unchanged where it is bright; GRAPH's menu on Channel A shows
   it checked. Off again: the black rectangle is back. *Fail:* any change
   with it off, or a dark halo round the fire with it on.
-- **700. Level and softness by hand.** Level 0 → 0.2, then soft 0 → 0.5.
+- **860. Level and softness by hand.** Level 0 → 0.2, then soft 0 → 0.5.
   *Pass:* level eats into the darks smoothly; soft 0 is a hard edge, higher
   a gentler one; pure black stays clear throughout.
-- **701. Keep colour.** Keep colour off, then on, on smoke. *Pass:* on, the
+- **861. Keep colour.** Keep colour off, then on, on smoke. *Pass:* on, the
   thin smoke stays as bright over the shape as it was over black; off, it
   dims at its edges. Say which the show wants by default.
-- **702. Feather.** Feather 0 → 16 px on a hard-edged still. *Pass:* the
+- **862. Feather.** Feather 0 → 16 px on a hard-edged still. *Pass:* the
   edge softens, nothing shifts, and SYSTEM's line for the node rises a
   little only while the feather is above 0.
-- **703. The backdrop.** The `channel to backdrop` starter, the backdrop
+- **863. The backdrop.** The `channel to backdrop` starter, the backdrop
   keyed from its menu. *Pass:* the backdrop's black shows the desktop or
   ground; the backdrop fader still fades it.
-- **704. Laid screen.** The composite's menu → **laid screen**, nothing
+- **864. Laid screen.** The composite's menu → **laid screen**, nothing
   keyed. *Pass:* the clip's black adds nothing, its brights lighten the
   shape and never clip to a flat white where add would.
-- **705. A generator.** Add the Test card (and then the Mandelbrot) from
+- **865. A generator.** Add the Test card (and then the Mandelbrot) from
   the picker, `scene → testcard.image`, the card into the composite's
   `over`; its menu → **black is clear**. *Pass:* the shape shows between
   the card's lines (the Mandelbrot: through its black inside); the knobs
   are on its selection. *Fail:* the card still covers the shape.
-- **706. An old patch.** Load a loadable patch saved before this branch.
+- **866. An old patch.** Load a loadable patch saved before this branch.
   *Pass:* it looks exactly as it did, nothing keyed; save it: the file is
   unchanged.
-- **707. The scene and an effect keyed.** Key the scene from its menu,
+- **867. The scene and an effect keyed.** Key the scene from its menu,
   over a channel in a composite (channel under, scene over), then an effect
   after the scene instead. *Pass:* the channel shows wherever the scene
   (then the effect) is dark; ⌘Z takes each key off in one step.

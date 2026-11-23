@@ -1,4 +1,4 @@
-"""Plan 66 — black is clear on any picture node: the graph section's `keys`
+"""Plan 87 — black is clear on any picture node: the graph section's `keys`
 (`GraphSpec.keys`, `Wiring.keys`), each keyed node built through a `KeyNode`
 (`masks.KEY_FS`) — a channel keyed in its own fit pass (`media_tex.FIT_FS`) —
 its knobs `key.<node>.*` declared while it is keyed (`params.declare_keys`);
@@ -23,7 +23,7 @@ from hyperspace.params import KEY_GROUP, Kind, Registry, declare_keys, is_key_id
 
 KNOBS = ("level", "soft", "measure", "feather", "keep", "invert")
 
-# the fit pass as it was before plan 66, word for word: a channel nothing
+# the fit pass as it was before plan 87, word for word: a channel nothing
 # keys must be its bytes (every saved look, every golden)
 FIT_BEFORE = """
 #version 330
@@ -342,7 +342,7 @@ def test_a_keyed_channel_matches_its_oracle(ctx, kw):
 
 
 def test_a_channel_nothing_keys_is_the_pass_from_before_byte_for_byte(ctx):
-    """No key (every patch before plan 66): exactly what the pass before
+    """No key (every patch before plan 87): exactly what the pass before
     wrote, on a random still with its own alpha, at an opacity, in each fit."""
     from hyperspace.glsl import QUAD_VS
     from hyperspace.media_tex import fit_scale

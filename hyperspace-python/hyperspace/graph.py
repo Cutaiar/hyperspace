@@ -195,11 +195,11 @@ PORT_TYPES = (IMAGE, MASK, GEOMETRY, VALUE)
 # scene on the projector and a clean layer on the glass
 HANDS_IN = ("layer", "scene")
 # how a layer is laid on: premultiplied over (today), added, or over but
-# hidden where the scene's visible surface is nearer (depth-aware); plan 66:
+# hidden where the scene's visible surface is nearer (depth-aware); plan 87:
 # or screened, `src + dst·(1 − src)` — black adds nothing, nothing passes
 # white. Appended, never inserted (a saved composite names its blend)
 BLENDS = ("over", "add", "depth", "screen")
-# plan 66, black is clear: the graph section's key naming the picture nodes
+# plan 87, black is clear: the graph section's key naming the picture nodes
 # whose dark parts are clear (`GraphSpec.keys`), written only when one is
 KEYS_KEY = "keys"
 KEY_NOT_A_NODE = "keys: {name!r} is not a node of the frame — dropped"
@@ -351,7 +351,7 @@ class Wiring:
     # (its entry's `laid`): how that layer is laid on at an output — any
     # other layer is laid over
     laid_on: int = 1
-    # plan 66: the picture nodes keyed, black is clear (`GraphSpec.keys`):
+    # plan 87: the picture nodes keyed, black is clear (`GraphSpec.keys`):
     # each built wrapped in a `KeyNode` (a channel keyed in its own fit pass)
     keys: tuple[str, ...] = ()
 
@@ -2277,7 +2277,7 @@ class GraphSpec:
     # plan 35 T3 (row 380): the hands entry `laid` sits on in a wired frame,
     # where any hands node may have a layer (1 outside one: the layer node's)
     laid_on: int = 1
-    # plan 66: the picture nodes keyed, black is clear (`"keys"`), sorted
+    # plan 87: the picture nodes keyed, black is clear (`"keys"`), sorted
     keys: tuple[str, ...] = ()
 
     @property
@@ -2462,7 +2462,7 @@ class GraphSpec:
             nodes.append(to() if to is not None else {"kind": kind, **dict(got)})
         # plan 35 F: a wired frame says so first
         head = {FRAME_KEY: WIRED_FRAME} if self.wired else {}
-        # plan 66: the keyed nodes last, and only when there are any (a
+        # plan 87: the keyed nodes last, and only when there are any (a
         # section with none is the bytes it was)
         tail = {KEYS_KEY: list(self.keys)} if self.keys else {}
         if not self.wires:                     # N4: a graph with no wires is D1's, short
@@ -2660,7 +2660,7 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
 
 
 def _read_keys(raw: Any, wired: bool, notes: list[str]) -> tuple[str, ...]:
-    """The section's `"keys"` (plan 66): the node names keyed, sorted, each
+    """The section's `"keys"` (plan 87): the node names keyed, sorted, each
     once. A list of anything else is refused (`GraphError`); a name that is
     no node of a wired frame is a note and dropped (the rest stands). An
     unwired (old) section keys nothing."""
@@ -3246,7 +3246,7 @@ class Frame:
 
     @property
     def keys(self) -> dict[str, Any]:
-        """Plan 66: each keyed node's black is clear this frame (node name →
+        """Plan 87: each keyed node's black is clear this frame (node name →
         its `view.KeyState`): the view state's (`ViewState.keys`, the
         `key.<node>.*` params') — a value, never a rebuild (getattr: a view
         state from before the key has none)."""
@@ -3974,7 +3974,7 @@ class MediaNode(Node):
         super().__init__(name, after)
         self.channel = channel
         self.alpha_of = alpha_of
-        # plan 66: the graph's name this channel is keyed under (black is
+        # plan 87: the graph's name this channel is keyed under (black is
         # clear, `Wiring.keys`) — keyed in its own fit pass, no pass more —
         # or None
         self.keyed: str | None = None
@@ -5786,7 +5786,7 @@ _KEY_DEFAULT = KeyState()
 
 
 class KeyNode(Node):
-    """Black is clear (plan 66) on any picture: `image`'s picture with its
+    """Black is clear (plan 87) on any picture: `image`'s picture with its
     dark parts transparent, by the node's knobs (`key.<of>.*`, `Frame.clear`),
     through `MaskPasses.key` into a frame texture of its own, once a frame.
     The build puts one after every node its graph keys (`Wiring.keys`) but
@@ -5830,7 +5830,7 @@ class KeyNode(Node):
 class Composite(Node):
     """`over` laid on `under` (`Renderer.lay`), premultiplied at `over`'s
     opacity (`ghost.alpha` for the hands' layer): `blend` "over" (today's
-    `Ghost.composite`), "add", "screen" (plan 66), or "depth" — over, but hidden where the
+    `Ghost.composite`), "add", "screen" (plan 87), or "depth" — over, but hidden where the
     image on the `depth` port (the scene) has a visible surface nearer the
     eye (`render.LAYER_DEPTH_BIAS`), so a separate hands layer can still
     go behind the shape. `under` None is the ground (the clear at the
@@ -7044,7 +7044,7 @@ class _Build:
         return got
 
     def _keyed(self, name: str, got: Node | None) -> Node | None:
-        """Plan 66: `got`, the node built for `name`, keyed when the wiring
+        """Plan 87: `got`, the node built for `name`, keyed when the wiring
         keys `name` (black is clear) and it makes a picture — a channel in
         its own fit pass (`MediaNode.keyed`), anything else read through a
         `KeyNode` its consumers read instead."""

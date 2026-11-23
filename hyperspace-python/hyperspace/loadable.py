@@ -494,7 +494,7 @@ class GraphSection:
         """The node instances `spec` declares (None: none), by kind — what a landing
         settles: ``fx`` (the effect instances that exist, `FxState.held`'s word),
         ``switch``, ``resize``, ``lookback``, and (plan 39 T2–T4) ``matte``, ``cut``,
-        ``segment``; (plan 66) ``key``, the nodes keyed."""
+        ``segment``; (plan 87) ``key``, the nodes keyed."""
         if spec is None:
             return {"fx": frozenset(), "switch": [], "resize": [], "lookback": [],
                     "matte": [], "cut": [], "segment": [], "key": []}
@@ -506,7 +506,7 @@ class GraphSection:
                 "matte": [m.name for m in spec.mattes],
                 "cut": [c.name for c in spec.cuts],
                 "segment": [x.name for x in spec.segments],
-                # plan 66: the nodes the graph keys (black is clear)
+                # plan 87: the nodes the graph keys (black is clear)
                 "key": list(getattr(spec, "keys", ()))}
 
     def _settle(self, spec: GraphSpec | None) -> None:
@@ -528,7 +528,7 @@ class GraphSection:
         declare_cuts(reg, names["cut"])
         # plan 39 T4: each segment's values, by its entry, as a cut's
         declare_segments(reg, names["segment"])
-        # plan 66: each keyed node's black is clear, by the section's `keys`
+        # plan 87: each keyed node's black is clear, by the section's `keys`
         declare_keys(reg, names["key"])
         # plan 36 T4: each extra look-back's own ring and trail, by its entry
         declare_lookbacks(reg, names["lookback"])

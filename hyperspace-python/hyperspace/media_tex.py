@@ -81,8 +81,8 @@ def fit_scale(fit: int, src: tuple[int, int], dst: tuple[int, int]) -> tuple[flo
     return (dw / (sw * k), dh / (sh * k))
 
 
-# the fit pass's key modes (`u_key`, plan 66): off (the pass as it was
-# before plan 66, the same arithmetic), keyed here, keyed by a feathered
+# the fit pass's key modes (`u_key`, plan 87): off (the pass as it was
+# before plan 87, the same arithmetic), keyed here, keyed by a feathered
 # ramp (`u_keymask`, read 1:1), and the ramp alone out (into a one-channel
 # target, for the feather)
 KEY_OFF, KEY_HERE, KEY_MASK, KEY_RAMP_OUT = range(4)
@@ -90,7 +90,7 @@ KEY_OFF, KEY_HERE, KEY_MASK, KEY_RAMP_OUT = range(4)
 # the fit pass (`Renderer._media_fit`): the channel's texture into a frame-
 # sized target, fitted, premultiplied — by its own alpha (a PNG's) and by
 # `u_alpha` (the backdrop's fader) — with the letterbox transparent black.
-# Plan 66, a keyed channel (black is clear): the shared ramp `k`
+# Plan 87, a keyed channel (black is clear): the shared ramp `k`
 # (`glsl.KEY_RAMP`, on the source's straight colour) multiplies the alpha;
 # keep colour leaves the premultiplied colour as it was (not inverted: a
 # bright pixel kept at alpha 0 would be added), else colour goes with
@@ -136,7 +136,7 @@ void main() {
 
 @dataclass(frozen=True)
 class Key:
-    """A keyed node's black is clear (plan 66, `key.<node>.*`,
+    """A keyed node's black is clear (plan 87, `key.<node>.*`,
     `view.KeyState`) as a key pass reads it, held to its ranges: `measure`
     an index into `view.KEY_MEASURES`, `level` and `soft` the ramp, `keep`
     keep colour, `feather` px, `invert`. Hashable: part of a frame cache key."""

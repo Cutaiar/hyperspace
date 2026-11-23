@@ -1938,7 +1938,7 @@ def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
-# ---- plan 66: black is clear, on any picture node ----
+# ---- plan 87: black is clear, on any picture node ----
 KEY_GROUP = "key"
 KEY_PREFIX = "key."
 KEY_FEATHER = MATTE_FEATHER         # the most px a key's feather blurs by (masks.MAX_FEATHER)
@@ -1971,7 +1971,7 @@ def key_ids(name: str) -> list[str]:
 
 def is_key_id(pid: str) -> bool:
     """Is `pid` a keyed node's knob — one that exists only while a loadable
-    patch's graph keys that node (plan 66)? A load sorts such ids against the
+    patch's graph keys that node (plan 87)? A load sorts such ids against the
     graph it lands, as it does a matte's."""
     return bool(_KEY_ID.fullmatch(pid))
 
@@ -1988,7 +1988,7 @@ def _key_state(r: Registry) -> dict[str, KeyState]:
 
 
 def declare_keys(r: Registry, names: Iterable[str]) -> list[str]:
-    """Black is clear's knobs (plan 66), as `declare_mattes` does the
+    """Black is clear's knobs (plan 87), as `declare_mattes` does the
     mattes': for each node `names` keys, `level` 0–1 (0.02), `soft` 0–1
     (0.1), `measure` (peak, luma), `feather` 0–32 px (0), `keep` (on) and
     `invert` (off) — group `key` (a patch group), modulatable — over a
@@ -2525,7 +2525,7 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.matte_state = mattes
-    # plan 66: the keyed nodes' black is clear likewise (`ViewState.keys`)
+    # plan 87: the keyed nodes' black is clear likewise (`ViewState.keys`)
     keys = getattr(view, "keys", None)
     if not isinstance(keys, dict):
         keys = {}

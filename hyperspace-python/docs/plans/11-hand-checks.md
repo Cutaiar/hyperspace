@@ -8872,29 +8872,29 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 **678. A hand on c deep in.** At 10⁶× with **Steps** at 4096, a hand on **c drive x**. *Pass:* the picture keeps the frame rate while c moves (the reference is computed every frame c changes). *Fail:* a stutter: say at which Steps it starts (the bench's `ref ms`).
 
-## EB. Black is clear (rows 902–913, 2026-11-22)
+## FH. Black is clear (rows 1063–1074, 2026-11-22)
 
-Plan 66. Headless: `tests/test_black_is_clear.py` (the section's `keys`, the knobs, the build's `KeyNode`, the node menu's edit, MEDIA by mouse, both passes against a numpy oracle, an unkeyed channel byte for byte the pass from before, the feather, a keyed Test card over the scene, `screen`). The look, the feel of the knobs and the cost on the rig are the hand checks'.
+Plan 87. Headless: `tests/test_black_is_clear.py` (the section's `keys`, the knobs, the build's `KeyNode`, the node menu's edit, MEDIA by mouse, both passes against a numpy oracle, an unkeyed channel byte for byte the pass from before, the feather, a keyed Test card over the scene, `screen`). The look, the feel of the knobs and the cost on the rig are the hand checks'.
 
 Setup: a clip with a black ground (fire, smoke, particles on black) in channel A; on GRAPH, `channel.a → composite.over`, `scene → composite.under`, the composite into All outputs, a shape in the scene.
 
-**699. Black is clear on a channel.** MEDIA, channel A: **black is clear** on. *Pass:* the black goes; the fire is over the shape; the picture is unchanged where it is bright; GRAPH's menu on Channel A shows it checked. Off again: the black rectangle is back. *Fail:* any change with it off, or a dark halo round the fire with it on.
+**859. Black is clear on a channel.** MEDIA, channel A: **black is clear** on. *Pass:* the black goes; the fire is over the shape; the picture is unchanged where it is bright; GRAPH's menu on Channel A shows it checked. Off again: the black rectangle is back. *Fail:* any change with it off, or a dark halo round the fire with it on.
 
-**700. Level and softness by hand.** Level 0 → 0.2, then soft 0 → 0.5. *Pass:* level eats into the darks smoothly; soft 0 is a hard edge, higher a gentler one; pure black stays clear throughout.
+**860. Level and softness by hand.** Level 0 → 0.2, then soft 0 → 0.5. *Pass:* level eats into the darks smoothly; soft 0 is a hard edge, higher a gentler one; pure black stays clear throughout.
 
-**701. Keep colour.** Keep colour off, then on, on smoke. *Pass:* on, the thin smoke stays as bright over the shape as it was over black; off, it dims at its edges. Say which the show wants by default.
+**861. Keep colour.** Keep colour off, then on, on smoke. *Pass:* on, the thin smoke stays as bright over the shape as it was over black; off, it dims at its edges. Say which the show wants by default.
 
-**702. Feather.** Feather 0 → 16 px on a hard-edged still. *Pass:* the edge softens, nothing shifts, and SYSTEM's line for the node rises a little only while the feather is above 0.
+**862. Feather.** Feather 0 → 16 px on a hard-edged still. *Pass:* the edge softens, nothing shifts, and SYSTEM's line for the node rises a little only while the feather is above 0.
 
-**703. The backdrop.** The `channel to backdrop` starter, the backdrop keyed from its menu. *Pass:* the backdrop's black shows the desktop or ground; the backdrop fader still fades it.
+**863. The backdrop.** The `channel to backdrop` starter, the backdrop keyed from its menu. *Pass:* the backdrop's black shows the desktop or ground; the backdrop fader still fades it.
 
-**704. Laid screen.** The composite's menu → **laid screen**, nothing keyed. *Pass:* the clip's black adds nothing, its brights lighten the shape and never clip to a flat white where add would.
+**864. Laid screen.** The composite's menu → **laid screen**, nothing keyed. *Pass:* the clip's black adds nothing, its brights lighten the shape and never clip to a flat white where add would.
 
-**705. A generator.** Add the Test card (and then the Mandelbrot) from the picker, `scene → testcard.image`, the card into the composite's `over`; its menu → **black is clear**. *Pass:* the shape shows between the card's lines (the Mandelbrot: through its black inside); the knobs are on its selection. *Fail:* the card still covers the shape.
+**865. A generator.** Add the Test card (and then the Mandelbrot) from the picker, `scene → testcard.image`, the card into the composite's `over`; its menu → **black is clear**. *Pass:* the shape shows between the card's lines (the Mandelbrot: through its black inside); the knobs are on its selection. *Fail:* the card still covers the shape.
 
-**706. An old patch.** Load a loadable patch saved before this branch. *Pass:* it looks exactly as it did, nothing keyed; save it: the file is unchanged.
+**866. An old patch.** Load a loadable patch saved before this branch. *Pass:* it looks exactly as it did, nothing keyed; save it: the file is unchanged.
 
-**707. The scene and an effect keyed.** Key the scene from its menu, over a channel in a composite (channel under, scene over), then an effect after the scene instead. *Pass:* the channel shows wherever the scene (then the effect) is dark; ⌘Z takes each key off in one step.
+**867. The scene and an effect keyed.** Key the scene from its menu, over a channel in a composite (channel under, scene over), then an effect after the scene instead. *Pass:* the channel shows wherever the scene (then the effect) is dark; ⌘Z takes each key off in one step.
 ## FB. An endless, centred fractal dive (rows 1010–1017, 2026-11-22)
 
 Plan 81. Headless: `tests/test_fractal_dive.py` (every fractal dived sixty levels at a fixed rate, and the sponge and the 5-cell three hundred: no re-root moves a point; the cell's middle stays near the screen's or, holding a point, the point never leaves it; a negative rate back to the whole shape; a grabbed shape dived into; the param routed, saved and loaded). The before/after pair and the alternative are in `plans/assets/81-fractal-dive/`, rendered offscreen on Mesa's software GL, not the rig. A restart after pulling.

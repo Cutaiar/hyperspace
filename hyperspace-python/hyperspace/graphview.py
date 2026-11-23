@@ -1092,7 +1092,7 @@ def param_ids(reg, nid: str, of: str = "") -> list[str]:
     # node's prefix starts so)
     ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))
            and (not p.id.startswith("dream.") or patches.dream_owner(p.id) == name)]
-    # plan 66: a keyed node's black is clear knobs (`key.<name>.*`) after its own
+    # plan 87: a keyed node's black is clear knobs (`key.<name>.*`) after its own
     keyed = f"key.{name}."
     ids += [p.id for p in reg if p.id.startswith(keyed)]
     return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
@@ -4209,7 +4209,7 @@ class Edit:
         return render_set(self, node, **settings)
 
     def set_key(self, node: str, on: bool) -> str | None:
-        """Plan 66: black is clear on picture node `node`, or off — the
+        """Plan 87: black is clear on picture node `node`, or off — the
         section's `keys` (`render_key`)."""
         return render_key(self, node, on)
 
@@ -7189,7 +7189,7 @@ KEY_NO_PICTURE = "{name} makes no picture: nothing to make clear"
 
 
 def keyable(name: str | None) -> bool:
-    """Whether graph node `name` makes a picture a key can clear (plan 66):
+    """Whether graph node `name` makes a picture a key can clear (plan 87):
     any node whose output is a picture but a window, All outputs, or a pin
     (a segment's `fg`: its node is keyed through the pin's picture)."""
     if not name:
@@ -7200,13 +7200,13 @@ def keyable(name: str | None) -> bool:
 
 
 def keyed(edit: Edit, name: str) -> bool:
-    """Whether the section keys node `name` (black is clear, plan 66)."""
+    """Whether the section keys node `name` (black is clear, plan 87)."""
     spec = _spec(edit)
     return spec is not None and name in getattr(spec, "keys", ())
 
 
 def render_key(edit: Edit, node: str, on: bool) -> str | None:
-    """Plan 66: black is clear on canvas node `node` (`render:<name>` or the
+    """Plan 87: black is clear on canvas node `node` (`render:<name>` or the
     name), or off — its name into or out of the section's `"keys"`, one undo
     step (`_land`). A node that makes no picture is refused in words."""
     name, why = spec_name(node, edit.render)

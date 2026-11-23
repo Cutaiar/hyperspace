@@ -4494,7 +4494,7 @@ def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | N
 
 def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
     """A render node's menu items: a hands node drawn solid or as lines, a
-    composite's blend, black is clear on any picture node (plan 66), a picture node's "add feedback after" (wave 0 E1:
+    composite's blend, black is clear on any picture node (plan 87), a picture node's "add feedback after" (wave 0 E1:
     `_feedback_after_menu`, `add_feedback_after`), delete."""
     e = render_edit(panel)
     name, _ = graphview.spec_name(n.id, e.render)
@@ -4508,7 +4508,7 @@ def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
             m.item(f"laid {how}", lambda how=how: _render_said(
                 panel, e, lambda e, how=how: e.set_node(name, blend=how)))
     if graphview.keyable(name):
-        # plan 66: black is clear on any picture node — its knobs then on
+        # plan 87: black is clear on any picture node — its knobs then on
         # the selection (`key.<name>.*`)
         on = graphview.keyed(e, name)
         m.item(KEY_ITEM, lambda: _render_said(panel, e, lambda e: e.set_key(name, not on)),
@@ -4521,7 +4521,7 @@ def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
 
 
 FEEDBACK_AFTER = "add feedback after"
-# plan 66: a picture node's menu item, and what it says
+# plan 87: a picture node's menu item, and what it says
 KEY_ITEM = "black is clear"
 KEY_TIP = ("This node's dark parts become transparent, so what is under it shows "
            "through. Its level, softness and the rest are on the selection.")

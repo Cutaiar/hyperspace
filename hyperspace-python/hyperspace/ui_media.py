@@ -735,16 +735,16 @@ def _selected(panel, st: dict, state) -> None:
         ui._readout(clock, ui.DIM)
 
 
-# the switch's id (plan 66), what a driver clicks
+# the switch's id (plan 87), what a driver clicks
 KEY_SWITCH = "media.{c}.key"
-# plan 66: black is clear's knobs (`key.channel.<c>.*`), two to a row under
+# plan 87: black is clear's knobs (`key.channel.<c>.*`), two to a row under
 # its switch while the channel is keyed
 KEY_ROWS = (("level", "level", "soft", "soft"), ("measure", "measure", "feather", "feather"))
 
 
 def keyed(panel, c: str) -> bool:
     """Whether the loaded patch's graph keys channel `c` (black is clear,
-    plan 66): its node's name in the section's `keys`. Read off the landed
+    plan 87): its node's name in the section's `keys`. Read off the landed
     spec, no copy: asked every frame the page is up."""
     spec = getattr(getattr(getattr(getattr(panel, "library", None), "loaded_patch", None),
                            "graph", None), "spec", None)
@@ -760,7 +760,7 @@ def set_keyed(panel, c: str, on: bool) -> str | None:
 
 
 def _key(panel, c: str) -> None:
-    """Channel `c`'s black is clear (plan 66): the switch — the same edit as
+    """Channel `c`'s black is clear (plan 87): the switch — the same edit as
     GRAPH's node menu, on `channel.<c>` — and while it is on its knobs, two
     to a row, then keep colour and invert."""
     on = keyed(panel, c)

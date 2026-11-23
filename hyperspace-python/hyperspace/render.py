@@ -2420,7 +2420,7 @@ class Renderer:
             now[key] = self._media_textures().texture(c, f)
         return now[key]
 
-    # plan 66: a keyed node's state as the fit pass's cache key reads it
+    # plan 87: a keyed node's state as the fit pass's cache key reads it
     # (`media_tex.key_of`: hashable, held to its ranges) — `graph.MediaNode`
     key_of = staticmethod(key_of)
 
@@ -2431,7 +2431,7 @@ class Renderer:
         texture of the renderer's (`_frame_target`, one per channel and
         alpha 1 or not), once a frame per (channel, size, alpha, fit, key).
         With no picture it is transparent black — a texture all the same,
-        so an `IMAGE` port always has one. Plan 66: `key` (a keyed channel
+        so an `IMAGE` port always has one. Plan 87: `key` (a keyed channel
         node's black is clear, `graph.MediaNode`) keys it in the same pass,
         into a target of its own; with a feather, the ramp alone first into
         a one-channel target, blurred by `MaskPasses.feather`, and the pass
@@ -2496,7 +2496,7 @@ class Renderer:
 
     def _key_ramp(self, c: str, src: moderngl.Texture, tkey, size: tuple[int, int], fit: int,
                   key) -> moderngl.Texture:
-        """Plan 66's feather: channel `c`'s ramp alone (`KEY_RAMP_OUT`) into a
+        """Plan 87's feather: channel `c`'s ramp alone (`KEY_RAMP_OUT`) into a
         one-channel target of `size` under `(tkey, "key")`, blurred by
         `key.feather` px (`MaskPasses.feather`, under `(tkey, "key/feather")`).
         Returns the blurred ramp, which the fit pass reads 1:1."""
@@ -2733,7 +2733,7 @@ class Renderer:
         """A layer (`tex`, premultiplied, frame-sized) into `target`'s
         `rect` at `alpha` (plan 26 A3, the Composite node's blend): "over"
         — `Ghost.composite`'s blend and arithmetic, the same bytes — "add",
-        "screen" (plan 66: `src + dst·(1 − src)` in colour, alpha as over),
+        "screen" (plan 87: `src + dst·(1 − src)` in colour, alpha as over),
         or "depth": over, hidden where `scene_depth` is nearer than the
         layer's own `depth` (`LAYER_FS`, `LAYER_DEPTH_BIAS`; plain over when
         either depth is missing). On an opaque ground the target's alpha is
