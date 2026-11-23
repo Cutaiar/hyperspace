@@ -138,7 +138,10 @@ from .graph import (
     FACE_PIC,
     IMAGE,
     MEDIA_CHANNELS,
+    Capture,
     Delay,
+    DelayWrite,
+    Effect,
     Frame,
     Graph,
     Hands,
@@ -151,6 +154,7 @@ from .graph import (
     bus_cuts_of,
     channel_into,
     cloud_roles,
+    generators_of,
     graph_key,
     mask_flip,
     mask_made,
@@ -949,6 +953,9 @@ class PassTimer:
         # frames ended, not yet read: (the frame's node names, its queries)
         self._pending: list[tuple[list[str], list[tuple[str, object]]]] = []
         self._ms: dict[str, list[float]] = {}
+        # plan 84: every name that asks this frame, while GRAPH's **gpu cost**
+        # chip is lit (`Renderer._draw_frame` sets it); None, nothing noted
+        self.watch: set[str] | None = None
         try:
             q = ctx.query(time=True)
             with q:
@@ -980,7 +987,15 @@ class PassTimer:
         """``with timer.time("scene"):`` — the node's GPU time, this frame.
         Plan 34 D: inside another node's query (a delay's write painting an
         effect, which times its own pass) it is a no-op — GL allows one
-        active per target, so the outer line holds the inner's time."""
+        active per target, so the outer line holds the inner's time.
+
+        Plan 84: while `watch` holds a set (GRAPH's **gpu cost** chip lit),
+        every name that asks is noted in it, timed or not — a pass inside
+        another's query ran too — so the chip knows what ran this frame,
+        not only what the timer lists (a segment switched off asks nothing)."""
+        watch = getattr(self, "watch", None)
+        if watch is not None:
+            watch.add(name)
         if not self.on or getattr(self, "_active", False):
             return _Timed(None)
         try:
@@ -1022,6 +1037,58 @@ class PassTimer:
         """Node → median ms over the window, in the graph's order; empty
         until the first frame has been read back, and with no timer."""
         return {name: float(np.median(w)) for name, w in self._ms.items() if w}
+
+
+def gpu_made(graph: Graph, frame: Frame, asked) -> dict:
+    """Plan 84, the read side of the timer for GRAPH's **gpu cost** chip:
+    which of the frame's nodes made something, from what the frame did.
+    `asked` is every name that asked the timer for a query this frame
+    (`PassTimer.watch`): a node that ran a pass. Nothing is timed, drawn or
+    read back here.
+
+    - ``gpu_ran``: the nodes that ran a pass this frame: their medians are
+      their cost;
+    - ``gpu_free``: the nodes the frame ran with no pass of their own (a
+      switch, a delay's read, the pattern, a see-through geometry —
+      `Graph.timed` does not list them): their time is their consumer's, so
+      they are neither a cost nor "made nothing";
+    - ``gpu_built``: every node of the frame's graph. A canvas node in none
+      of these was not built (unreached, row 349); one built but in neither
+      of the first two made nothing this frame — an effect switched off, a
+      segment switched off, a branch behind a switch's unpicked input;
+    - ``gpu_owner``: a pass timed under a name of its own that no canvas
+      node carries → the node it belongs to: a delay's write → its delay, a
+      look-back's capture → its look-back. The page adds its time to its
+      owner's.
+
+    Empty sets when the frame's picks cannot be read (a frame that failed
+    before its graph ran): the chip then marks nothing as made."""
+    owner: dict[str, str] = {}
+    for node in graph.order:
+        own = getattr(node, "delay", None) if isinstance(node, DelayWrite) else (
+            getattr(node, "lookback", None) if isinstance(node, Capture) else None)
+        if isinstance(own, str) and own != node.name:
+            owner[node.name] = own
+    try:
+        pulled = graph.pulled(frame)
+        listed = set(graph.timed)
+    except Exception:  # noqa: BLE001 — a frame that failed: nothing said
+        return {"gpu_ran": frozenset(), "gpu_free": frozenset(), "gpu_built": frozenset(),
+                "gpu_owner": owner}
+    asked = set(asked)
+    ran: set[str] = set()
+    free: set[str] = set()
+    for node in graph.order:
+        if node.name not in pulled and (node.MAKES or isinstance(node, Effect)):
+            continue                                # (`evaluate` skips it)
+        if node.name in asked:
+            ran.add(node.name)
+        elif node.name not in listed and not isinstance(node, Effect):
+            free.add(node.name)                     # (no pass of its own)
+    # an owner whose pass ran made something, though it times nothing itself
+    ran |= {owner[n] for n in ran if n in owner}
+    return {"gpu_ran": frozenset(ran), "gpu_free": frozenset(free - ran),
+            "gpu_built": frozenset(n.name for n in graph.order), "gpu_owner": owner}
 
 
 class _Timed:
@@ -1912,6 +1979,13 @@ class Renderer:
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
                       stats=stats, selects=selects, resizes=resizes)
         timer = self._pass_timer()
+        # plan 84: what each node runs this frame, only while GRAPH's **gpu
+        # cost** chip asks (`gpu_watch`, set by the page each frame it is lit
+        # and cleared here, so a chip turned off — or a page no longer drawn —
+        # stops costing after one frame)
+        watch = bool(getattr(self, "gpu_watch", False))
+        self.gpu_watch = False
+        timer.watch = set() if watch else None
         self._thumb_frame = None
         try:
             graph.evaluate(frame)
@@ -1920,6 +1994,9 @@ class Renderer:
             timer.end_frame(graph.timed_in(frame))
             stats["gpu_ms"] = timer.medians()
             stats["gpu_note"] = timer.note
+            asked, timer.watch = timer.watch, None
+            if asked is not None:
+                stats.update(gpu_made(graph, frame, asked))
 
     def _poi_layer(self, s: ViewState, size: tuple[int, int], target, vp) -> None:
         """The poi's guide for this frame (plan 47), drawn once into its
@@ -1985,13 +2062,16 @@ class Renderer:
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
         effects = frozenset(st.specs) if st is not None else frozenset()
+        # plan 80: the effects that draw with nothing wired in (`Effect.generates`)
+        gens = generators_of(st)
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
                 or getattr(graph, "bus_cuts", None) != bus_cuts
-                or frozenset(getattr(graph, "effects", ())) != effects):
+                or frozenset(getattr(graph, "effects", ())) != effects
+                or frozenset(getattr(graph, "generators", ())) != gens):
             graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
-                                              bus_cuts)
+                                              bus_cuts, tuple(sorted(gens)))
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does

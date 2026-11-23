@@ -8,6 +8,7 @@
 // @tip leaving an extruded trail. Position is how far along the path the drag has come,
 // @tip the knob to scrub or ride with an LFO. At 0 nothing has moved.
 // @clock u_flow_t flow
+// @pair u_offset_x u_offset_y "Offset"
 
 // Each cell of a grid can hold a root (Density says how many do, Jitter how
 // far from the cell's middle, Offset X and Y slide the grid over the

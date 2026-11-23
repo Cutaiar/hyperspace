@@ -49,6 +49,13 @@ PLACED = ("palette-hands", "palette-glass", "acid-scene")
 RUN = ("warp", "acid", "acid.2", "palette", "palette.2")
 FILES = {"warp", "acid", "palette", "kaleido"}
 
+def unrescaled(notes: list[str]) -> list[str]:
+    """A load's notes less plan 86's: a fixture from before the effect tapers has no
+    units marker, and its rescaled depths are said (`loadable.retaper_note`)."""
+    head = loadable.RETAPER_NOTE.partition("{count}")[0]
+    return [n for n in notes if not n.startswith(head)]
+
+
 
 def _run(placed=(), effects=RUN) -> tuple[str, ...]:
     """The run a loadable patch's wires give these effects (plan 33 R: the
@@ -221,7 +228,7 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text((FIXTURES / f"{slug}.json").read_text())
         missing = rig.lib.load(LOADABLE, slug)
-        assert missing == [] and rig.loaded_patch.notes == [] and rig.loaded_patch.migrated, slug
+        assert missing == [] and unrescaled(rig.loaded_patch.notes) == [] and rig.loaded_patch.migrated, slug
         assert stub.wiring.placed == () and stub.wiring.wired, slug
         (e,) = want[slug]
         assert any(w.dst == f"{e.name}.image" for w in stub.wiring.wires), slug

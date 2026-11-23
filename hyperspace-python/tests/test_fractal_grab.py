@@ -94,6 +94,7 @@ def test_nothing_jumps_going_in_down_and_out(name, pose):
         h.view.zoom *= f
         if h.world.objects["shape"].bounded:
             h.world.home("shape", W.shape_home(h.view.zoom, h.view.pan))
+        fractal.centre(h.view, None, _drawn_off(h))     # (plan 81: the zoom about the middle)
         before = _drawn(h, X)
         inside, path = h.view.dive.inside, list(h.view.dive.path)
         last = h.view.dive.last
@@ -582,3 +583,125 @@ def test_a_dive_saved_under_a_route_holding_another_fractal_comes_back(tmp_path)
     # the load's last step, with the route still holding the Menger sponge
     assert rig.loaded_patch._land_dive(doc["dive"]) == ""
     assert rig.view.shape == menger and rig.view.dive.path == path
+
+
+# ---- the FRACTAL section's controls (plan 64, rows 902-905)
+
+def _cells(**kw) -> int:
+    s = ViewState(shape=geometry.shape_index("Menger sponge"), yaw=0.45, pitch=0.3)
+    for k, v in kw.items():
+        setattr(s, k, v)
+    s.zoom = 2.5
+    wk = fractal.walk(fractal.spec_of(s.shape), s, WD, HT)
+    return len(wk.line_s)
+
+
+def test_detail_splits_cells_smaller():
+    """`view.frac_detail`: up, more cells split; down, fewer; 1, the
+    fractal's own (the walk as it was)."""
+    assert _cells(frac_detail=0.5) < _cells() < _cells(frac_detail=2.0)
+
+
+def test_reach_draws_deeper_and_near_lets_cells_come_closer():
+    s = ViewState(shape=geometry.shape_index("Sierpinski tetrahedron"), yaw=0.45, pitch=0.3)
+    s.zoom = 3.0
+    spec = fractal.spec_of(s.shape)
+    base = fractal.walk(spec, s, WD, HT)
+    s.frac_far = 1.5
+    deeper = fractal.walk(spec, s, WD, HT)
+    assert deeper.far == pytest.approx(base.far + 1.5) and deeper.cue[0] < base.cue[0]
+    assert len(deeper.line_s) >= len(base.line_s)
+    s.frac_far, s.frac_near = 0.0, 0.8
+    nearer = fractal.walk(spec, s, WD, HT)
+    assert nearer.near == pytest.approx(base.near + 0.8)
+    s.frac_far = -5.0                                 # held to a floor, never inside out
+    assert fractal.walk(spec, s, WD, HT).far == pytest.approx(0.2)
+
+
+def test_the_gpu_reads_the_same_reach():
+    """The cue's ends on the GPU are the walk's, the reach on them."""
+    s = ViewState(shape=geometry.shape_index("Menger sponge"), frac_far=1.0, zoom=2.0)
+    wk = fractal.walk(fractal.spec_of(s.shape), s, WD, HT)
+    assert wk.cue == (-wk.far, wk.top) and wk.far == pytest.approx(
+        fractal.spec_of(s.shape).far + 1.0)
+
+
+def test_to_the_top_leaves_every_cell():
+    from tests.test_fractal import _reg
+
+    s = ViewState(shape=geometry.shape_index("Sierpinski tetrahedron"), yaw=0.4, pitch=0.25)
+    reg = _reg(s)
+    for _ in range(40):
+        s.zoom *= 1.15
+        fractal.step(s, reg)
+    assert s.dive.path
+    yaw = s.yaw
+    reg["view.frac_top"].fire()
+    assert not s.dive.path and s.zoom == 1.0 and list(s.pan) == [0.0, 0.0] and s.yaw == yaw
+
+
+def test_the_fractal_controls_are_the_looks_own(tmp_path):
+    """Detail, Reach and Near are saved with the look, under its `fractal`
+    key (not in its values), and land with it; Additive is not saved."""
+    rig = _rig(tmp_path)
+    reg = rig.reg
+    reg["view.shape"].set(geometry.shape_index("Menger sponge"))
+    reg["view.frac_detail"].set(1.8)
+    reg["view.frac_far"].set(0.75)
+    reg["view.frac_near"].set(-0.25)
+    reg["view.frac_additive"].set(True)
+    doc = json.loads(rig.loaded_patch.save_as("Detailed").read_text())
+    assert doc["fractal"] == {"detail": 1.8, "far": 0.75, "near": -0.25, "dive": 0.0}  # (plan 81: Dive)
+    assert not any(k.startswith("view.frac_") for k in doc["values"])
+    reg["view.frac_detail"].set(1.0)
+    rig.loaded_patch.load("Detailed")
+    assert rig.view.frac_detail == pytest.approx(1.8) and rig.view.frac_far == pytest.approx(0.75)
+    assert rig.view.frac_near == pytest.approx(-0.25)
+
+
+def test_only_a_fractal_look_writes_the_fractal_key_and_a_look_without_it_draws_its_own(tmp_path):
+    """Every other look saves as before (no key); a look without the key
+    loads the fractal's own settings, whatever the last look had."""
+    from tests.test_loadable import put
+    rig = _rig(tmp_path)
+    reg = rig.reg
+    reg["view.shape"].set(3)
+    reg["view.frac_detail"].set(2.0)
+    assert "fractal" not in json.loads(rig.loaded_patch.save_as("Cube").read_text())
+    put(rig.home, "Old fractal", values={"view.shape": geometry.shape_index("Menger sponge")})
+    rig.loaded_patch.load("Old fractal")
+    assert (rig.view.frac_detail, rig.view.frac_far, rig.view.frac_near) == (1.0, 0.0, 0.0)
+
+
+def test_moving_a_fractal_setting_dirties_the_look(tmp_path):
+    rig = _rig(tmp_path)
+    reg = rig.reg
+    reg["view.shape"].set(geometry.shape_index("Menger sponge"))
+    rig.loaded_patch.save_as("Clean")
+    before = rig.loaded_patch.signature()
+    reg["view.frac_far"].set(1.0)
+    assert rig.loaded_patch.signature() != before
+
+
+@pytest.mark.parametrize(("bad", "said"), [({"detail": "lots"}, "would not read"),
+                                           ({"detail": 99.0}, "held to")])
+def test_a_fractal_setting_that_cannot_land_is_said(tmp_path, bad, said):
+    from tests.test_loadable import put
+    rig = _rig(tmp_path)
+    put(rig.home, "Odd", values={"view.shape": geometry.shape_index("Menger sponge")},
+        fractal=bad)
+    rig.loaded_patch.load("Odd")
+    assert any(said in n for n in rig.loaded_patch.notes)
+
+
+def test_a_shape_export_carries_the_fractal_settings(tmp_path):
+    """Plan 64 (Devin's review of #466): *save as patch* reads the look's
+    parts; the fractal's settings are in them, so a spawned shape draws as
+    exported."""
+    rig = _rig(tmp_path)
+    reg = rig.reg
+    reg["view.shape"].set(geometry.shape_index("Menger sponge"))
+    reg["view.frac_detail"].set(2.0)
+    _spec, _table, values, _layout = rig.loaded_patch.parts()
+    assert values["view.frac_detail"] == pytest.approx(2.0)
+    assert "view.frac_far" in values and "view.frac_near" in values

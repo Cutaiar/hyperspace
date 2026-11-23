@@ -272,6 +272,64 @@ def save_chip(panel, group: str, label: str, lit: bool, *, key: str | None = Non
     return hit
 
 
+# ---- save as, on GRAPH's deck row (plan 83): one press, a new patch ----
+
+SAVE_AS = "save as"
+SAVE_AS_ID = "graph.save_as"     # the chip's id, for `tests/ui_driver.py`
+SAVE_PARAM = "preset.save_new"   # the one action: START held on a pad, a learned button, this chip
+SAVED_S = 4.0                    # how long the chip shows the new patch's name
+SAVE_AS_TIP = ("Save this deck as a new patch, in one press. It gets a fresh name grown from "
+               "the loaded one (moo → moo 2), in the same folder, and takes the next empty pad. "
+               "It never writes over a patch. Right-click to learn it to a desk or pad button.")
+
+
+def save_as_label(panel, now: float | None = None) -> str:
+    """The chip's words: "save as", or for `SAVED_S` after a save "saved <its name>",
+    less its folder and elided."""
+    said = _state(panel).get("saved")
+    now = imgui.get_time() if now is None else now
+    if said is None or now - said[1] >= SAVED_S:
+        return SAVE_AS
+    return f"saved {_elide(said[0].rsplit('/', 1)[-1])}"
+
+
+def save_as(panel) -> str | None:
+    """Press `preset.save_new` on the panel's deck (`Install.save_new`: the live state
+    as a new loadable patch beside the loaded one, never over a file) and keep the new
+    name for the chip. Returns that name, or None when nothing was saved (the reason is
+    on the footer and under the bank)."""
+    lib, reg = panel.library, panel.reg
+    if lib is None or SAVE_PARAM not in reg:
+        return None
+    was = lib.current(LOADABLE)
+    reg[SAVE_PARAM].fire()
+    now = lib.current(LOADABLE)
+    if now is None or now == was:
+        return None
+    invalidate(panel, LOADABLE)
+    _state(panel)["saved"] = (now, imgui.get_time())
+    return now
+
+
+def save_as_chip(panel) -> bool:
+    """**save as** on GRAPH's deck row, beside **load…** (ui_browse): one press saves
+    (`save_as`), and the chip reads "saved <name>", lit, for `SAVED_S`. Its menu is
+    `preset.save_new`'s, so Learn puts the same press on a desk or pad button. True when
+    pressed."""
+    words = save_as_label(panel)
+    hit = ui.lit_chip(f"{words}##{SAVE_AS_ID}", words != SAVE_AS)
+    p = panel.reg.get(SAVE_PARAM)
+    if p is not None:
+        saved = _state(panel).get("saved")
+        tip = f"Saved {saved[0]}.\n\n{SAVE_AS_TIP}" if words != SAVE_AS and saved else SAVE_AS_TIP
+        panel._tip(p, tip)
+        panel._ctx(p, ".save_as")
+        panel._learn_frame(p)
+    if hit:
+        save_as(panel)
+    return hit
+
+
 def _on_deck(meta) -> str:
     """ "· deck 2 · off air", for a hover; "" with no meta controller."""
     return f"  ·  {meta.words(meta.panel)}" if meta is not None else ""

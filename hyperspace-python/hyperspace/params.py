@@ -324,6 +324,9 @@ class Param:
     _pos: float | None = field(default=None, repr=False)
     _chase: bool = field(default=False, repr=False)
     _trim: float = field(default=0.0, repr=False)
+    # how far `follow` has moved the base, normalized, all told (plan 81
+    # follow-up): what undo takes off the base to read what the user set
+    _drift: float = field(default=0.0, repr=False)
 
     def __post_init__(self):
         if self.alias:
@@ -564,18 +567,30 @@ class Param:
         modulates the param its base takes the move (in normalized units, so
         a tapered zoom's ratio holds), and the last value the param wrote is
         set to it, so its next `apply` adopts nothing twice — and a source
-        letting go restores a base that has the move in it."""
+        letting go restores a base that has the move in it.
+
+        How far the base moved is added to `_drift` (normalized): undo reads a
+        base less what `follow` moved it (`undo.own`), so a running dive makes
+        no step and runs no step on (plan 81 follow-up, register row 1018)."""
+        if self.kind is not Kind.CONTINUOUS:
+            self.put(v)
+            return
         old = self._norm_of(self.get())
+        was = self._norm_of(self.base)
         self.put(v)
-        if self._base is None or self.kind is not Kind.CONTINUOUS:
-            return
-        cur = self._norm_of(self.get())
-        if not (math.isfinite(cur) and math.isfinite(old)):
-            return
-        self._base += cur - old
-        self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
-        if self._last is not None:
-            self._last = cur
+        if self._base is not None:
+            cur = self._norm_of(self.get())
+            if math.isfinite(cur) and math.isfinite(old):
+                self._base += cur - old
+                self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
+                if self._last is not None:
+                    self._last = cur
+        now = self._norm_of(self.base)
+        if math.isfinite(now) and math.isfinite(was):
+            moved = now - was
+            if self.wrap:                       # the short way round
+                moved = (moved + 0.5) % 1.0 - 0.5
+            self._drift += moved
 
     def nudge(self, delta: float) -> float:
         """Add `delta` to the base, wrapped or clamped into range; returns
@@ -2582,6 +2597,46 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
     # plan 64 (register row 884): a fractal's lines and faces sorted on the
     # CPU (off, the default) or additive and unsorted on the GPU. Not saved
     # while the owner judges the look; a fractal's alone (fractal.py)
+    # plan 64's fractal section (row 902): what a fractal draws, the look's own —
+    # persisted params, so undo, the dirty dot and a patch export hold them, but
+    # a loadable patch writes them under its optional `fractal` key, only for a
+    # fractal (`loadable.FRACTAL_KEY`), never in its values: no other look's
+    # file changes
+    r.continuous("view.frac_detail", "Detail", *_attr(view, "frac_detail"), lo=0.35, hi=3.0,
+                 log=True, fmt=lambda v: f"{v:.2f}×", group=g,
+                 tip="A fractal only. How much detail it shows: higher splits each cell "
+                     "smaller on screen, so more cells and more edges (up to the frame's "
+                     "budget, then coarser); lower, fewer. 1 is the fractal's own.")
+    r.continuous("view.frac_far", "Reach", *_attr(view, "frac_far"), lo=-1.5, hi=2.0,
+                 fmt=lambda v: f"{v:+.2f} oct", group=g,
+                 tip="A fractal only. How far into it cells are drawn, in octaves of "
+                     "distance past its own reach: up, deeper and denser; down, only "
+                     "what is near. 0 is the fractal's own.")
+    r.continuous("view.frac_near", "Near", *_attr(view, "frac_near"), lo=-1.0, hi=1.0,
+                 fmt=lambda v: f"{v:+.2f} oct", group=g,
+                 tip="A fractal only. How near the eye a cell comes before it dissolves, in "
+                     "octaves: up, cells pass closer; down, they fade sooner. 0 is the "
+                     "fractal's own.")
+
+    # plan 81 (row 1011): a fractal's dive rate, levels a second (× 1 / ratio
+    # each), signed — a velocity on camera.zoom that `fractal.step` integrates
+    # and re-roots, so an LFO, a hand or a knob on it dives without end. Saved
+    # and routable as the section's others are (`loadable.FRACTAL_KEY`)
+    r.continuous("view.frac_dive", "Dive", *_attr(view, "frac_dive"), lo=-2.0, hi=2.0,
+                 fmt=lambda v: f"{v:+.2f} levels/s", group=g,
+                 tip="A fractal only. Dives in (up) or climbs out (down), in levels a "
+                     "second, about the middle of the screen, for as long as it is "
+                     "set: route an LFO, a hand or a knob to it. Climbing out stops at "
+                     "the whole shape. 0 holds still.")
+
+    def to_the_top() -> None:
+        # (as Reset view's zoom and pan, the turn left alone)
+        view.zoom, view.pan = 1.0, [0.0, 0.0]
+        view.dive.reset()
+
+    r.trigger("view.frac_top", "To the top", to_the_top, group=g,
+              tip="A fractal only. Out of every cell at once: the whole shape, centred, "
+                  "at zoom 1 — its turn kept.")
     r.toggle("view.frac_additive", "Additive", *_attr(view, "frac_additive"), group=g,
              persist=False, modulatable=False,
              tip="A fractal only. Off: its lines and faces are sorted far to near on "

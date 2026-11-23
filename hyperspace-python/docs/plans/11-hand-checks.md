@@ -8895,6 +8895,120 @@ Setup: a clip with a black ground (fire, smoke, particles on black) in channel A
 **706. An old patch.** Load a loadable patch saved before this branch. *Pass:* it looks exactly as it did, nothing keyed; save it: the file is unchanged.
 
 **707. The scene and an effect keyed.** Key the scene from its menu, over a channel in a composite (channel under, scene over), then an effect after the scene instead. *Pass:* the channel shows wherever the scene (then the effect) is dark; ⌘Z takes each key off in one step.
+## FB. An endless, centred fractal dive (rows 1010–1017, 2026-11-22)
+
+Plan 81. Headless: `tests/test_fractal_dive.py` (every fractal dived sixty levels at a fixed rate, and the sponge and the 5-cell three hundred: no re-root moves a point; the cell's middle stays near the screen's or, holding a point, the point never leaves it; a negative rate back to the whole shape; a grabbed shape dived into; the param routed, saved and loaded). The before/after pair and the alternative are in `plans/assets/81-fractal-dive/`, rendered offscreen on Mesa's software GL, not the rig. A restart after pulling.
+
+Setup for all: VIEW → shape **Menger sponge** (3D → Fractals); **Dive** is the first slider of the FRACTAL section, above **Detail**.
+
+**810. An endless dive.** **Dive** at +1 for two minutes, the shape turning. Then route an LFO to **Dive**, a saw, then a sine. *Pass:* it goes in and never stops; no jump at any level or at the saw's wrap; the picture stays full and centred on what it dives into, not sliding off to one side as before (`before.mp4` beside `after.mp4`). On the sine it dives in and climbs out smoothly. *Fail:* a jump, a stall, the screen half empty, or the picture creeping toward an edge.
+
+**811. Climbing out.** Deep in (a minute at +2), set **Dive** to −2, or a hand on it. *Pass:* it climbs out level by level to the whole shape, centred at zoom 1, and stops there however long the rate stays down. Back to +2 dives in again. *Fail:* a jump, a shape that comes back off centre, or one that keeps shrinking past zoom 1.
+
+**812. The cell's middle (row 1012, the owner's: "cell").** Dive at +1 into the sponge, the 5-cell and the Cantor dust. *Pass:* the screen stays full and centred on the middle of the cell it goes into, level after level; the steer from one cell's middle to the next reads as part of the dive, not a slide toward an edge. *Fail:* a jump, a half-empty screen, or a steer that reads as drift.
+
+**813. A pan and a grab during a dive.** Diving at +1, pan with the stick, then (the grip on, plan 60) grab inside and pull, turn, let go. *Pass:* the pan moves the view and stays moved; the grab moves the space as before (DZ 685); the dive goes on about the middle of the screen; nothing jumps. *Fail:* a pan the dive takes back, a jump at a re-root while held, or a dive that leaves the middle.
+
+**814. Saved with a dive rate.** **Dive** at +0.5 deep in, save the look, load another, load it again. *Pass:* it opens in the same cell (row 889) and goes on diving at once at +0.5. A look saved before plan 81 opens with **Dive** at 0, and a look that is not a fractal saves no dive at all (its file unchanged). *Fail:* the rate lost, or a dive that does not start.
+
+**815. The settle's cost on the rig.** The SYSTEM page's frame time, diving at +2 into the **Sierpinski 5-cell**, the **Cantor dust** and the sponge, faces off, at the show's output size, against the same fractal held still. *Pass:* the frame rate holds; note any spike at a level (a re-root searches the cells; a cloud machine put the worst frame at about 4 ms). *Fail:* a dropped frame at each level.
+## FG. The loader's units note and node mode's dropdowns (rows 1060–1062, 2026-11-22)
+
+Plan 86. Headless: `tests/test_retaper.py` (the note, end to end through a load and a save), `tests/test_nodemode.py` and `tests/test_node_desk.py` (the fill, a knob on a dropdown over a fake APC40), `tests/test_node_mode_pad.py` (a pad's dropdowns on its buttons, over a stand-in pad). Hot reload is enough for `loadable` and `nodemode`; a restart is safe.
+
+**855. A hand-written patch says what it rescaled.** Copy a loadable patch with a route onto an effect's amount (Wobble's, or Acid's Bend), delete its `"units"` key, set that route's depth to 0.12, and open it. *Pass:* the strip says "no "units" marker, so read as a file from before the effect tapers: … rescaled" with "(+n more)" if it has other notes; the patch's notes list names the route, 0.12 and the new depth, and the marker to add. Save it and open it again: no note. Open a patch from the library (marked): no note. *Fail:* no note, a note on a marked file, or a depth that differs from what it was before this change.
+
+**856. A desk knob on a dropdown.** (APC40) Select a node with dropdowns and only a few continuous params (an LFO: Shape and Sync after its faders; Wave has ten faders and four dropdowns, which also fits the desk), and put the desk into node mode on it. *Pass:* the continuous params are on the first knobs as before, the dropdowns on the knobs after them, labelled on the on-screen desk and drawn as node-mode cables; turning a dropdown's knob steps through its choices in the menu's order, the panel's dropdown follows, and the ring stands at the choice; turning it back returns; a dropdown already on a desk row keeps that row and fills no knob. *Fail:* a knob that skips a choice at the ends, a ring that drifts from the choice, a jump when the knob is first touched.
+
+**857. A patch pointed before keeps its map.** Open a patch saved with node mode on (the corpus has none; point one, save, quit, pull this change, open). *Pass:* every knob that held a continuous param holds the same one; only knobs that were empty may now hold a dropdown, and a patch-layer desk row on such a knob is under node mode until you leave. Say whether that last part is acceptable on the patches you play. *Fail:* a continuous param on another knob than before.
+
+**858. A pad cycles dropdowns on its buttons (row 1062).** (an Xbox pad, then a Joy-Con) Point the pad at Wave (or an LFO). *Pass:* the sticks and triggers hold its faders as before; its four dropdowns (Wave blend, along, push, shape) sit on the free buttons in order: on an Xbox pad Wave's ten faders take the sticks, triggers and four pairs (RB/LB among them), so the dropdowns start at the stick clicks; on a node with fewer faders they start at LB. Each is outlined in the pad window and drawn as a node-mode cable; each press of the first one moves Wave blend to its next choice, the last wrapping to the first, the panel's dropdown following, and it stays when you let go; Guide and any button with a row of its own (the chase, a save) do what they did. On a Joy-Con the dropdowns go on the buttons it has. *Fail:* a dropdown that springs back on release, skips a choice, or a button that lost its own job.
+## FA. Mandelbrot fixes (rows 1000–1007, 2026-11-22)
+
+Plan 80. Headless: `tests/test_mandel.py` (the unwired node through the real renderer; the settle colour against the float64 oracle and the GPU against its float32 twin; the measured drives; the packed border pass and the resting skip). The bench ran on this M3 Max, so its numbers are the rig's. Everything below is for the owner's eye and hand.
+
+Setup for all: on GRAPH, add the **Mandelbrot** effect and wire it into an output. Wire nothing into it. For colour, put a **Palette** in gradient mode after it, or set **Output** to ramp.
+
+**800. It draws with nothing wired in.** The Mandelbrot wired only into an output. *Pass:* the set shows at once, with no note; switching it off shows the ground; wiring `scene` into it changes nothing at mix 1. *Fail:* black, or a note that it reads nothing.
+
+**801. The coloured inside deep in.** **Inside** coloured, at the seahorse (Centre −0.743643887037151, 0.131825904205330): Zoom 1e6 and then 9e6, **Steps** 6000. Turn **Cycle** from 64 up to 1024. Then the whole set at Zoom 1, **Tier** direct. *Pass:* each minibrot and bulb shows smooth rings round its centre, finer toward its edge, with no flat grey fill, no rectangular blocks and no flat discs. The rings' spacing follows Cycle, and the whole set looks like the direct tier's. *Fail:* blocks, a flat fill where there were rings, or a seam where the tier changes. Note how slow-settling or unsettled points read: one flat colour, the cap's.
+
+**802. c on a Julia slice.** **Slice** 1, Zoom 1.7, c −0.8 + 0.156i (the owner's patch). Route a knob or a hand onto **c drive x** at depth 1. *Pass:* full throw moves the set fast but followably, about 0.07 of c a second here. Then zoom to 50× and the same: slower in c but about as lively on screen. *Fail:* it tears the set apart in a blink, or barely moves. Note the depth that feels right: TERM_RATE (0.1) is set from it.
+
+**803. z₀ on the Mandelbrot slice, and a tilt.** Slice 0 with a hand on **z₀ drive x**; then **Slice** 0.5 with hands on both drives. *Pass:* the set morphs at a pace like a pan, never in a blink, and pan and Dive feel as before. *Fail:* a lurch when a drive starts, or the rate jumping as you hold it.
+
+**804. The bench.** `uv run python tools/mandel_bench.py --owner`. *Pass:* GPU names the M3 Max, and the lines sit near this run's: direct 1.5e4 3.1 ms, perturbation 1.5e4 5.1, 4e5 9.3, 1e7 14.9, the skip at 3e6 12.8 on and 27.4 off, coloured 1e6 47 and 9e6 90. *Fail:* any line far above, or the skip slower on than off.
+
+**805. The skip rests and wakes.** SYSTEM page, the Mandelbrot's GPU line, **Skip black** on, the inside black. The whole set at Zoom 1, then Dive into the seahorse past 3e6. *Pass:* at Zoom 1 the line matches Skip black off. Past 3e6 it drops to about half of off within a moment of arriving, and the picture never changes as it switches. *Fail:* on costs more than off anywhere, or the inside flickers.
+
+**806. The tier switch after the rewrite.** Dive steadily from 1× through 10⁴× to 10⁸× into the seahorse valley, inside black and then coloured. *Pass:* no seam, flash or shift at 10⁴×. *Fail:* any of them.
+
+**807. Every power deep in.** **Power** 3, 5 and 8 at 10⁵×, on a boundary. *Pass:* the picture is detailed and steady, with no speckle or flat glitch regions, and the frame rate is near Power 2's. *Fail:* speckle, a wrong-looking set, or a large cost.
+## FC. Control widgets (rows 1020–1029, 2026-11-22)
+
+Plan 82. Headless: `tests/test_control_widgets.py` (the parse, the shapes, the ticks; a pad, a knob and a bipolar fader driven by `tests/ui_driver.py`). The pictures in `assets/82-control-widgets/` were made on Mesa's software rasteriser; nothing here was seen on the Mac. Hot reload carries it: no new module, no new field on a live object. While playing, note answers to the plan doc's open style questions (`82-control-widgets.md`, "Open style questions"): sizes, throws, the detent's pull, the ticks' look.
+
+**820. Bipolar faders.** (Mac, the trackpad) Open Kaleidoscope's strip. *Pass:* Swirl rests with its thumb in the middle and no fill; dragged right it fills red from the middle rightward, left leftward; dragged back near the middle it settles on 0.00 without fiddling; Ctrl+click and type 0.01: it stays 0.01. The effect's speed fills from its stop the same way. *Fail:* a fill from the left end, a detent you can't feel, or one that grabs a value you meant to set.
+
+**821. Unity faders.** Kaleidoscope's Zoom, Blocks' Aspect and Hue cycle's Saturation. *Pass:* each rests in the middle at 1, with a notch there; turned down it fills leftward from 1, up rightward; a drag near 1 lands on 1. Prism's Rim (rests at 1 but is no multiplier) fills from the left. Say if another fader wants a detent (row 1022). *Fail:* a unity fader filled from the left, or a notch away from 1.
+
+**822. Ticks.** Kaleidoscope's Segments (2–16), Zoom burst's Taps (4–32), Bloom's Taps (8–96) and Wave Table's Blades (1–5), in the side pane at its narrowest and widest. *Pass:* a tick a step under each track where they fit, evenly thinned where they don't, both ends ticked, never a smear; the thumb lands on a tick at every value. *Fail:* ticks that crowd into a grey bar, or a thumb between ticks.
+
+**823. A pad on a trackpad, at a distance.** (the rig's display, the stage's distance) Prism's Centre pad, then Wave's and Wave Table's Offset. *Pass:* the square reads at once as "the point on the screen"; a tap anywhere puts the dot there, a drag carries it, and the effect's centre follows on the output; ⇧ held moves it finely; you can see the dot without looking for it. Right-click each knob: Learn and the routes are there, one param each. *Fail:* a missed tap, a dot hidden under the finger's ring, a pad too small to aim on.
+
+**824. The volume.** Zoom burst's Burst. *Pass:* drag the square: the burst's centre moves; turn the third knob up: the halo grows and the smear reaches further; double-click the X knob: the centre returns to the middle. A saved patch with Zoom burst loads with its centre and amount as they were. *Fail:* a halo that doesn't follow Amount, or a value moved by a load.
+
+**825. Modulation on a pad.** Route an LFO onto Zoom burst's Centre X (and a hand onto Centre Y). *Pass:* a white dot moves with the lanes, a line from the red dot (where you set it) to it, the knobs' white ticks move, the readouts go red; drag the pad while it rides: the red dot moves, the white one rides about it. *Fail:* the red dot moving with the LFO, or no sign the lane is there.
+## FE. GRAPH: GPU cost at a glance (rows 1040–1045, 2026-11-22)
+
+Plan 84. Headless: `tests/test_gpu_cost.py` (the easing and the ranking, pure; each kind of node's mark; the renderer says what each node made only while asked, and the outputs are the same bytes; off, no push and no badge; the chip never saved). The screens were drawn on Mesa's software rasteriser, so every time in them means nothing; every check here is the rig's. Hot reload is enough.
+
+**840. Rugged Doctor at the floor.** (Mac, the rig, the show on the outputs) Load Rugged Doctor, open GRAPH and light **gpu cost**. *Pass:* one or two nodes glow white with "#1" and "#2" badges, and the line under the head names them with the frame's total; that total is near the frame's time on SYSTEM. Note the three costliest and their times here: they are the answer to plan 66 §3's first item. *Fail:* a total far from SYSTEM's, or a white node that removing does not speed up.
+
+**841. Read at the stage's distance.** (Mac, the panel on its display, stepped back to where you play from) Chip lit, the canvas at the zoom you use. *Pass:* you can tell the costliest node from across the room by its border alone, and read the badges at a normal zoom; every node's title is still legible on its tinted ground. *Fail:* a badge you have to lean in to read at the zoom you use, or a title lost on its ground.
+
+**842. Holds still, follows in a second.** Chip lit on a steady show. *Pass:* the badges' numbers drift by hundredths, no node's colour flickers and no two badges trade ranks back and forth. Then raise a costly effect's knob (Bloom's radius, a Blocks cell count): its mark follows within about a second. *Fail:* flicker, ranks swapping every frame, or a mark that takes several seconds.
+
+**843. Made nothing.** Chip lit. Switch a wired effect off (with no value cable on it, it goes onto its area's idle line: open the line to see it); flip a switch node to its other input; add an effect from the picker on no wire. *Pass:* each says **made nothing** with a grey border (the effect off, the branch behind the unpicked input, the faint new node), never "0.00 ms"; switch them back and each returns at its time. A switch, the pattern, the shape and the hands have no badge (their time is the scene's or their consumer's). *Fail:* a node that made nothing reading as cheap.
+
+**844. Off costs nothing.** (Mac, a heavy patch) SYSTEM's frame time with the chip never lit, then lit, then off again. *Pass:* off again is the same as never lit; lit costs no more than the noise. *Fail:* a frame-time step that stays after the chip is off.
+
+**845. Two decks.** Switch the panel to the deck off air, chip lit. *Pass:* the marks and the line are that deck's patch's (its own nodes and times); back on air, the on-air deck's. *Fail:* one deck's times on the other's nodes.
+## FF. The hands' show look (rows 1050–1053, 2026-11-22)
+
+Plan 85. Headless: `tests/test_ghost.py` (the look's values, the bare state neutral) and `tests/test_set_hands_look.py` (the dry run, the backup, the writes, the wires, the load notes, a second run, the app-open refusal), on tmp copies of corpus patches. Nothing here was seen on the Mac. A restart after pulling.
+
+**850. A new patch's hands.** (Mac, the tracker on) Launch, then **New patch**. *Pass:* both hands show as BONES, PLAIN, at half opacity; HANDS shows Ghost hands on, opacity 50%, style BONES, material PLAIN. Add a second hands node on GRAPH: its hands show the same. *Fail:* hands off, GLASS, or 35% / 60%.
+
+**851. The library run.** (Mac, Hyperspace closed on both Macs) `uv run python tools/set_hands_look.py`, then `uv run python tools/set_hands_look.py --apply`. *Pass:* the dry run lists every patch in every era folder and writes nothing; `--apply` prints a backup path first, and that folder holds the whole library; a second dry run says every patch is already the show look; Drive syncs the files to the other Mac. Note every "left:" line: an answer for the owner. *Fail:* a patch missing from the list, a write with no backup, or a second run with something to do.
+
+**852. A patch whose hands were unwired.** (Mac, after 851) Load a patch the run said it wired. *Pass:* the hands show on the outputs and the guide over them; GRAPH shows the hands layer lit, wired into All outputs' hands and guide; the rest of the patch looks as before. *Fail:* no hands, or a wire you don't expect.
+## FD. Save and load live (rows 1030–1035, 2026-11-22)
+
+Plan 83. Headless: `tests/test_save_live.py` (driven by the mouse: one click saves a new file in the loaded patch's folder that loads back equal, a second never overwrites, the name on the chip; a 40-entry playlist inside the screen, scrolled by the wheel, its row on air in view, its rows a trackpad's size). Nothing here was seen on the Mac. Hot reload is enough: no new field on a live object.
+
+**830. Save as in one press.** (Mac, the trackpad, a live set) On GRAPH, load a patch with **load…**, change something, then press **save as** beside it. *Pass:* one press; the chip reads "saved <name> 2" in red for a few seconds, then "save as" again; the footer names it and the pad it took; **load…** shows the new file beside the old one, and the old file is as it was. *Fail:* a dialog, a second click, a file written over, a name you can't read from where you stand.
+
+**831. In an era folder.** Load a patch from a folder such as `4-install-nov/distort/`, press **save as** twice. *Pass:* two new patches, `… 2` and `… 3`, in that same folder. *Fail:* a save at the library's top, or in another folder.
+
+**832. Learned to a button.** Right-click **save as** → Learn desk, press a desk button (or a pad button). Press it during a set. *Pass:* each press saves a new patch, as the chip does, and the footer says its name. *Fail:* no Learn in the menu, or a press that saves over a patch.
+
+**833. Nothing loaded.** Start a fresh deck (the PRESET strip's **new**) and press **save as**. *Pass:* a `PATCH <n>` at the library's top level. Say whether that is where you want it (row 1032). *Fail:* nothing saved, or an error.
+
+**834. A long playlist scrolls.** Make a playlist of forty entries (or open a long one) and open the **playlist** chip. *Pass:* the popup ends on the screen; the entries scroll under two fingers on the trackpad; every dwell field and × is easy to hit; the add list stays in view under them. *Fail:* rows off the bottom of the screen, or targets too small to hit at the rig.
+
+**835. The entry on air stays in view.** Play that list with short dwells (10 s), the popup open. *Pass:* each new entry on air is scrolled into the list's middle as it goes on, marked ▸ in white; scroll away by hand and the list stays put until the next entry goes on air. Close and reopen the popup: it opens on the entry on air. *Fail:* the playing row out of view, or the list fighting your scroll between advances.
+## EB. The FRACTAL section (rows 902–905, 2026-11-20)
+
+Plan 64. Headless: `tests/test_ui_pane.py::test_the_fractal_section_draws_its_controls_inside_the_pane` (every control drawn, inside the pane, at every layout) and `tests/test_fractal_grab.py` (Detail, Reach and Near change what is drawn, To the top, saved with the look). A restart after pulling (new fields on `ViewState`).
+
+Setup for all: the sections menu → **fractal**, VIEW's shape a fractal.
+
+**699. The section.** *Pass:* it says the shape, how many levels in, inside or outside, and the zoom, changing as you dive; Detail, Reach, Near, Additive and To the top are all there without scrolling; on a cube it says how to pick a fractal and shows no controls. *Fail:* a control missing, cut off, or a readout that doesn't follow the dive.
+
+**700. The controls, by eye.** A few levels into the Menger sponge and the 5-cell: drag **Detail** up and down, then **Reach**, then **Near**. *Pass:* Detail makes the cells split finer or coarser; Reach draws further into the shape or less; Near lets cells come closer before they dissolve, or fade sooner; none jumps or flickers, and the frame rate holds at the top of Detail on the rig. Save the look, load another and back: the three are as you left them. Say what ranges you want. *Fail:* a slider that does nothing, a jump, or a value not saved.
+
+**701. To the top.** Deep in, turned: press **To the top**. *Pass:* the whole shape, centred, at zoom 1, still turned as it was; a grabbed fractal comes home. *Fail:* a dive left behind, or the turn lost.
 
 ## What no test covers
 
