@@ -8893,6 +8893,21 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect and wire it into an outpu
 **806. The tier switch after the rewrite.** Dive steadily from 1× through 10⁴× to 10⁸× into the seahorse valley, inside black and then coloured. *Pass:* no seam, flash or shift at 10⁴×. *Fail:* any of them.
 
 **807. Every power deep in.** **Power** 3, 5 and 8 at 10⁵×, on a boundary. *Pass:* the picture is detailed and steady, with no speckle or flat glitch regions, and the frame rate is near Power 2's. *Fail:* speckle, a wrong-looking set, or a large cost.
+## FD. Save and load live (rows 1030–1035, 2026-11-22)
+
+Plan 83. Headless: `tests/test_save_live.py` (driven by the mouse: one click saves a new file in the loaded patch's folder that loads back equal, a second never overwrites, the name on the chip; a 40-entry playlist inside the screen, scrolled by the wheel, its row on air in view, its rows a trackpad's size). Nothing here was seen on the Mac. Hot reload is enough: no new field on a live object.
+
+**830. Save as in one press.** (Mac, the trackpad, a live set) On GRAPH, load a patch with **load…**, change something, then press **save as** beside it. *Pass:* one press; the chip reads "saved <name> 2" in red for a few seconds, then "save as" again; the footer names it and the pad it took; **load…** shows the new file beside the old one, and the old file is as it was. *Fail:* a dialog, a second click, a file written over, a name you can't read from where you stand.
+
+**831. In an era folder.** Load a patch from a folder such as `4-install-nov/distort/`, press **save as** twice. *Pass:* two new patches, `… 2` and `… 3`, in that same folder. *Fail:* a save at the library's top, or in another folder.
+
+**832. Learned to a button.** Right-click **save as** → Learn desk, press a desk button (or a pad button). Press it during a set. *Pass:* each press saves a new patch, as the chip does, and the footer says its name. *Fail:* no Learn in the menu, or a press that saves over a patch.
+
+**833. Nothing loaded.** Start a fresh deck (the PRESET strip's **new**) and press **save as**. *Pass:* a `PATCH <n>` at the library's top level. Say whether that is where you want it (row 1032). *Fail:* nothing saved, or an error.
+
+**834. A long playlist scrolls.** Make a playlist of forty entries (or open a long one) and open the **playlist** chip. *Pass:* the popup ends on the screen; the entries scroll under two fingers on the trackpad; every dwell field and × is easy to hit; the add list stays in view under them. *Fail:* rows off the bottom of the screen, or targets too small to hit at the rig.
+
+**835. The entry on air stays in view.** Play that list with short dwells (10 s), the popup open. *Pass:* each new entry on air is scrolled into the list's middle as it goes on, marked ▸ in white; scroll away by hand and the list stays put until the next entry goes on air. Close and reopen the popup: it opens on the entry on air. *Fail:* the playing row out of view, or the list fighting your scroll between advances.
 ## EB. The FRACTAL section (rows 902–905, 2026-11-20)
 
 Plan 64. Headless: `tests/test_ui_pane.py::test_the_fractal_section_draws_its_controls_inside_the_pane` (every control drawn, inside the pane, at every layout) and `tests/test_fractal_grab.py` (Detail, Reach and Near change what is drawn, To the top, saved with the look). A restart after pulling (new fields on `ViewState`).
