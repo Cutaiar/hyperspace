@@ -80,6 +80,15 @@ from .routing import Bindings, Router, Sources
 from .view import ViewState
 
 
+def _unseen(view) -> None:
+    """After an undo or redo restores the camera: the view's dive (plan 81)
+    takes it as it is on the next step, not as a zoom about the middle of the
+    screen since the view it last saw."""
+    d = getattr(view, "dive", None)
+    if d is not None:
+        d.seen = None
+
+
 def in_patch(p) -> bool:
     """Is `p` a param of the loadable patch, what a `Deck`'s undo stack watches (plan 44
     D5b)? A meta param is on the meta controller's stack (`meta_stack`)."""
@@ -308,7 +317,9 @@ class Deck:
         # macros are acted on. The meta params are on `meta_stack`'s
         marks = Marks(loaded_patch.lib)
         undo_obj = undos.Undo(reg, router.table, marks=marks, only=in_patch,
-                              on_restore=router.sync_macros,
+                              # (and the view's dive takes the restored camera
+                              # as it is, plan 81: not as a zoom about the middle)
+                              on_restore=lambda: (router.sync_macros(), _unseen(s)),
                               # the LFOs' membership (plan 31 B), read off the
                               # router at each step, so a re-classed router counts
                               banks=lambda: router._banks(),

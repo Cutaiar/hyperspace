@@ -332,6 +332,10 @@ class Dive:
     # only a zoom or a turn about it has moved the view since: a dive holds it
     # and settles no more. A pan, a flight, a crossing or a load clears it
     settled: bool = False
+    # plan 81: where the performer has put the cell's middle on the screen
+    # (world units, 4D): the pans and the flights made inside, kept as a
+    # framing the dive's settle onto the cell's middle leaves alone
+    frame: np.ndarray = field(default_factory=lambda: np.zeros(4))
 
     def reset(self) -> None:
         self.path.clear()
@@ -341,6 +345,7 @@ class Dive:
         self.flown_epoch, self.shape = -1, None
         self.seen = None
         self.settled = False
+        self.frame = np.zeros(4)
 
     def to_json(self, name: str) -> dict:
         """The dive as a loadable patch keeps it (`DIVE_KEY`, row 889)."""
@@ -559,6 +564,7 @@ def centre(s, reg=None, off=None, dt: float = 0.0) -> None:
     if seen is not None and (d.path or d.inside):
         if not np.array_equal(p0, seen[1]):
             d.settled = False        # a pan since: another point is under the middle
+            d.frame = _frame_of(d) + (p0 - seen[1])     # and the framing moves with it
         eye = (float(s.depth4), float(getattr(s, "eye_distance", EYE_DISTANCE)))
         p = centred(spec, d, seen, _middle(s, off, zoom0, p0), zoom, p, M, eye)
     if zoom == zoom0 and np.array_equal(p, p0):
@@ -605,8 +611,17 @@ def centred(spec: Fractal, d: Dive, seen: tuple, mid: np.ndarray, zoom: float,
     if zoom > z_was:
         t = settle(spec, d, zoom, q, M, mid, eye)
         f = 1.0 - (z_was / zoom) ** SETTLE
-        q = q + f * (mid - (zoom * (t @ M) + q))
+        # on the cell's middle, to where the performer framed it (`Dive.frame`)
+        at = mid + _frame_of(d) if SETTLE_ON == "cell" else mid
+        q = q + f * (at - (zoom * (t @ M) + q))
     return q
+
+
+def _frame_of(d) -> np.ndarray:
+    """The dive's framing (`Dive.frame`); none on a dive from before it (a
+    hot reload of an older class)."""
+    fr = getattr(d, "frame", None)
+    return np.zeros(4) if fr is None else np.asarray(fr, dtype=np.float64)
 
 
 def _settle_start(spec: Fractal, path: list[int], up: int = SETTLE_UP
@@ -853,6 +868,7 @@ def go_outside(s, reg) -> np.ndarray:
     off[:3, :3] = R
     off[:3, 3] = (np.asarray(d.shift) + R @ pxy - pxy) / zoom
     d.inside, d.turn, d.shift, d.flown = False, np.eye(3), np.zeros(3), None
+    d.frame = np.zeros(4)
     _land(s, reg, zoom, p0, zoom, p)
     return off
 
@@ -882,6 +898,7 @@ def fold_flight(s, reg, flight: np.ndarray, epoch: int = 0) -> None:
     p[:3] = R @ p0[:3] + u
     d.turn = R @ np.asarray(d.turn)
     d.shift = R @ np.asarray(d.shift)
+    d.frame = _frame_of(d) + (p - p0)            # a flight frames the dive as a pan does
     _land(s, reg, zoom, p0, zoom, p)
 
 def _smooth(x):

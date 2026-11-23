@@ -389,3 +389,61 @@ def test_a_drawn_offset_keeps_the_middle_where_it_is_drawn(point):
     mid = fractal._middle(s, off, s.zoom, _p(s))
     got = _q(s, _rooted(spec, x, path, s.dive.path))
     assert np.abs(got - mid).max() / s.zoom < 1e-4
+
+
+# ---- Devin's review (2026-11-23)
+
+def test_a_pan_made_during_a_dive_stays_made():
+    """Diving, a pan (or a flight) is kept as the performer's framing
+    (`Dive.frame`): the settle steers each new cell's middle to where the pan
+    put it, not back to the screen's middle — the dive never stops."""
+    a, b = _view("Menger sponge", frac_dive=1.0), _view("Menger sponge", frac_dive=1.0)
+    for _ in range(60):
+        _frame(a, 0.1)
+        _frame(b, 0.1)
+    a.pan[0] += 0.1                                  # one nudge of the stick, then let go
+    for _ in range(100):                             # ten levels on, still diving
+        _frame(a, 0.1)
+        _frame(b, 0.1)
+    assert a.dive.frame == pytest.approx([0.1, 0.0, 0.0, 0.0])
+    if a.dive.path == b.dive.path:                   # the same cells: the pan is all that differs
+        # (kept, not damped away: the zoom about the middle scales it a little
+        # over the level, as it does the settle's own lag)
+        d = _p(a)[:2] - _p(b)[:2]
+        assert 0.08 < d[0] < 0.3 and abs(d[1]) < 0.01, d
+    # and either way the cell's middle ends each level by the framing
+    late = []
+    for _ in range(100):
+        _frame(a, 0.1)
+        if a.zoom > 0.8 * fractal.Z_IN:
+            late.append(np.linalg.norm(_p(a)[:3] - a.dive.frame[:3]) / a.zoom)
+    assert late and max(late) < 0.45
+
+
+def test_a_camera_an_undo_restores_is_taken_as_it_is():
+    """An undo or redo writes zoom and pan back together; the deck's restore
+    (`deck._unseen`) has the dive take them as they are on the next step, not
+    as a zoom about the middle since the view it last saw."""
+    from hyperspace import deck
+    s = _view("Menger sponge", frac_dive=1.0)
+    for _ in range(35):
+        _frame(s, 0.1)
+    s.frac_dive = 0.0
+    _frame(s, 0.1)
+    zoom, pan, path = s.zoom, list(s.pan), list(s.dive.path)
+    s.zoom *= 1.05                                   # a gesture, within the cell
+    _frame(s, 1 / 60)
+    assert s.dive.path == path and s.pan != pan
+    s.zoom, s.pan = zoom, list(pan)                  # the undo's restore
+    deck._unseen(s)
+    _frame(s, 1 / 60)
+    assert (s.zoom, s.pan, s.dive.path) == (zoom, pan, path)
+
+
+def test_the_deck_undo_drops_the_dive_reference_on_a_restore(tmp_path):
+    """The real deck's undo (`Deck.build`) calls `_unseen` when it restores."""
+    from tests.test_undo import boot
+    r = boot(tmp_path / "home")
+    r.view.dive.seen = (1.0, np.zeros(4), np.eye(4))
+    r.undo.on_restore()
+    assert r.view.dive.seen is None

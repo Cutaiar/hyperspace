@@ -41,6 +41,15 @@ Making loadable patches from plan 64's fractals turned up two:
 Outside (the shape is an object, plan 64 part 2) nothing changed: the zoom
 is about the shape's own middle, as for every shape.
 
+- **A pan or a flight made during a dive stays made** (Devin's review,
+  2026-11-23). The performer's framing is kept apart from the settle
+  (`Dive.frame`, world units). The dive steers each new cell's middle to
+  where the pan put it, not back to the screen's middle. A climb out to the
+  top clears it.
+- **An undo or redo** writes zoom and pan back together. The deck's restore
+  (`deck._unseen`) drops the dive's reference (`Dive.seen`), so the next step
+  takes the restored camera as it is, not as a zoom about the middle.
+
 ### 2.2 What a dive settles onto (row 1012: "cell", the owner's)
 
 Zooming about the middle of the screen keeps the point under it in place.
@@ -179,6 +188,7 @@ Plan 81's row owns `fractal.py`, `view.py`'s `reroot` and
 - `app.py`: `_reroot` and the off-air reroot pass the frame's seconds;
 - `ui_fractal.py`: the slider, one row;
 - `loadable.py`: `"dive"` in `FRACTAL_IDS` / `FRACTAL_OWN`;
+- `deck.py`: the undo's restore also calls `_unseen`;
 - `tools/fractal_dive_demo.py`: the demo;
 - `tests/test_deck_fade.py` (a stand-in view's `reroot` takes the new
   arguments), `tests/test_graph_legible.py` (the shape node has 47 params)
