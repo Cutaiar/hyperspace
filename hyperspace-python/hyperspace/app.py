@@ -1688,11 +1688,13 @@ def _space(h: Host, reg) -> None:
     if shape is not None and shape[0].box is not None:
         box = shape[0].box
     if dive.inside:
-        # the zoom and turn since the last step taken about the middle now
-        # (plan 81, `fractal.centre`; the step's own call then moves nothing
-        # more): the wheel left that pivot to it, and a crossing out below
-        # would skip it
-        fractal.centre(view, reg, _drawn_off(h, view))
+        # a frame that crosses out takes the zoom and turn since the last step
+        # about the middle first (plan 81, `fractal.centre`: the wheel left
+        # that pivot to it, and the crossing would skip it). Only then: a frame
+        # that stays inside takes them once, with the dive rate's, in the step
+        off_d = _drawn_off(h, view)
+        if _crosses_out(view, box, off_d):
+            fractal.centre(view, reg, off_d)
         if shape is not None and shape[1].bounded:        # a load handed a dive in:
             shape[0].to_space(worlds.SHAPE, view.zoom, view.pan)   # a new look, still
             b = shape[0].bodies.get(worlds.SHAPE)
@@ -1712,6 +1714,21 @@ def _space(h: Host, reg) -> None:
         fractal.go_inside(view, reg, off)
         if shape is not None:
             shape[0].to_space(worlds.SHAPE, zoom, pan)
+
+
+def _crosses_out(view, box, off) -> bool:
+    """Would this frame's view, its zoom and turn taken about the middle
+    (`fractal.centre`), leave the inside of its fractal (`wants_inside`)?
+    Previewed on the view and put back as it was, moving nothing."""
+    d = view.dive
+    held = (view.zoom, list(view.pan), d.z, d.w, d.seen, d.settled,
+            np.array(getattr(d, "frame", np.zeros(4)), dtype=np.float64))
+    try:
+        fractal.centre(view, None, off)
+        return not fractal.wants_inside(view, box, shapeframe.drawn_offset(view))
+    finally:
+        view.zoom, view.pan[:] = held[0], held[1]
+        d.z, d.w, d.seen, d.settled, d.frame = held[2:]
 
 
 def _dive_of(view):

@@ -685,6 +685,9 @@ class Undo:
         if inner and not (load and not self._open.load):
             return
         self._flush()
+        # an action is pushed before it writes: the camera beside it is as it
+        # is now (a quiet frame's may be from before an open step's writes)
+        self._quiet = self._quiet_take()
         before = self._settled
         if load and self.marks is not None:
             before = replace(before, marks=self.marks.take())

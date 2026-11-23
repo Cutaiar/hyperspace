@@ -283,6 +283,17 @@ Devin's second review found three more, each fixed with a test:
   second call in the frame now moves nothing at all
   (`test_a_wheel_notch_that_takes_the_view_back_outside_holds_the_middle`).
 
+Devin's third review found two more, each fixed with a test:
+
+- **Two loads within the settle time:** the second's step held the camera
+  from before both. An action now takes the camera as it is when pushed
+  (`test_two_loads_within_the_settle_time_undo_one_at_a_time`).
+- **The early `centre` in `_space` split a frame's zoom** from the dive rate's,
+  so a zoom in that only slowed a climb still settled. `_space` now previews
+  the crossing (`app._crosses_out`) and takes the pivot early only on a
+  frame that crosses out
+  (`test_a_zoom_in_that_only_slows_a_climb_is_about_the_middle`).
+
 **Restart:** `Deck.build` wires the undo's `beside` once, at launch; `Dive.lives`
 is a new field.
 

@@ -911,3 +911,56 @@ def test_a_wheel_notch_that_takes_the_view_back_outside_holds_the_middle():
     # zoom out is (plan 64, `fractal.step`); the bug left the pan where it was
     ease = (s.zoom - fractal.Z_HOME) / (min(last, fractal.Z_IN) - fractal.Z_HOME)
     assert s.pan[0] == pytest.approx(x0 * s.zoom / z0 * min(max(ease, 0.0), 1.0), rel=1e-6)
+
+
+# ---- Devin's third review of #474 (2026-11-23)
+
+def test_two_loads_within_the_settle_time_undo_one_at_a_time(tmp_path):
+    """A second load before the first's step has settled: its step holds the
+    camera as the first load left it, not as it was before both."""
+    from tests.test_loadable import put
+    from tests.test_undo import frames, settle
+    r = _undo_rig(tmp_path)
+    r.reg["view.shape"].set(geometry.shape_index("Tesseract"))
+    r.reg["camera.zoom"].set(1.0)
+    settle(r)
+    for name, zoom in (("Two", 2.0), ("Three", 3.0)):
+        put(r.home, name, values={"view.shape": geometry.shape_index("Tesseract"),
+                                  "camera.zoom": zoom})
+    r.loaded_patch.load("Two")
+    frames(r, 6)                                     # well within SETTLE_S
+    r.loaded_patch.load("Three")
+    settle(r)
+    assert r.reg["camera.zoom"].base == pytest.approx(3.0)
+    r.undo.undo()
+    assert r.reg["camera.zoom"].base == pytest.approx(2.0)
+    r.undo.undo()
+    assert r.reg["camera.zoom"].base == pytest.approx(1.0)
+
+
+def test_a_zoom_in_that_only_slows_a_climb_is_about_the_middle():
+    """Dive at −1 with a zoom in each frame that slows the climb but does not
+    turn it: the frame's zoom is outward all told, so it is taken about the
+    middle and nothing settles — the point under the middle stays."""
+    from tests.test_fractal import _reg
+    s = _view("Menger sponge", frac_dive=1.0)
+    reg = _reg(s)
+    for _ in range(70):
+        _frame_reg(s, reg, 0.1)
+    reg["view.frac_dive"].set(0.0)
+    _frame_reg(s, reg, 0.1)
+    reg["camera.pan.x"].set(reg["camera.pan.x"].base + 0.05)    # the cell off the middle
+    _frame_reg(s, reg, 0.1)
+    while s.zoom < 0.9 * fractal.Z_IN:               # room to climb within the cell
+        reg["camera.zoom"].set(reg["camera.zoom"].base * 1.05)
+        _frame_reg(s, reg, 1 / 60)
+    spec = fractal.spec_of(s.shape)
+    x, path = _under_middle(s), list(s.dive.path)
+    reg["view.frac_dive"].set(-1.0)
+    for _ in range(30):
+        z0 = s.zoom
+        reg["camera.zoom"].set(reg["camera.zoom"].base * 1.015)  # slows the climb
+        _frame_reg(s, reg, 1 / 60)
+        assert s.zoom < z0                           # outward all told
+    assert s.dive.path == path
+    assert np.abs(_q(s, _rooted(spec, x, path, s.dive.path))).max() / s.zoom < 1e-9
