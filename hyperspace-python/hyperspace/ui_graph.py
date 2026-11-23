@@ -1558,7 +1558,11 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
             ui.tooltip(BESIDE_TIP)
     _wants_chip(panel)                      # plan 40 T4: N devices missing
     _tint_chip(st)                          # plan 37 C2 (D3)
-    _cost_chip(st)                          # plan 84: last among the chips
+    # plan 84: last among the chips — on the area chips' row when this one
+    # has no room for it (a narrow page), so the head grows no row
+    cost_later = not ui.beside(ui.chip_w(COST_LABEL))
+    if not cost_later:
+        _cost_chip(st)
     # the counts after the chips, cut to what is left of the line
     imgui.same_line()
     line = head_line(st, view)
@@ -1566,6 +1570,9 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if imgui.is_item_hovered():
         ui.tooltip(line)
     _area_chips(st)
+    if cost_later:
+        ui.beside(ui.chip_w(COST_LABEL))
+        _cost_chip(st)
     if st["cost"]:                          # plan 84: the frame's total and its costliest
         imgui.text(ui.fit_text(st.get("cost_line", ""), imgui.get_content_region_avail().x))
     for want in window_wants(panel):       # plan 44 D3: a window the meta controller lacks
@@ -1733,8 +1740,9 @@ def _tint_chip(st: dict) -> None:
 
 def _cost_chip(st: dict) -> None:
     """The head's **gpu cost** chip (plan 84): off by default; lit, every
-    render node is marked by its GPU time (`_costs`, `_cost_marks`)."""
-    imgui.same_line()
+    render node is marked by its GPU time (`_costs`, `_cost_style`, `_cost_badge`).
+    Placed by the caller (`_head`: beside the tint chip, else on the area
+    chips' row)."""
     if ui.lit_chip(COST_LABEL, st["cost"]):
         st["cost"] = not st["cost"]
     if imgui.is_item_hovered():
@@ -1757,6 +1765,18 @@ def ease_costs(prev: dict[str, float], ms: dict[str, float], ran, dt: float,
             continue
         old = prev.get(name)
         out[name] = float(v) if old is None else old + (float(v) - old) * k
+    return out
+
+
+def fold_owners(ms: dict[str, float], owner: dict[str, str]) -> dict[str, float]:
+    """Each pass timed under a name no canvas node carries added to the node
+    it belongs to (plan 84; `owner`, the frame's `gpu_owner`): a delay's
+    write to its delay, a look-back's capture to its look-back — so the
+    head's line never names a pass no badge shows."""
+    out: dict[str, float] = {}
+    for name, v in ms.items():
+        key = owner.get(name, name)
+        out[key] = out.get(key, 0.0) + float(v)
     return out
 
 
@@ -1844,17 +1864,20 @@ def _costs(panel, st: dict, view: graphview.View, dt: float) -> None:
     if not st["cost"]:
         if st["cost_ms"] or "cost_made" in st:
             st["cost_ms"] = {}
-            for k in ("cost_rank", "cost_made", "cost_line"):
+            for k in ("cost_rank", "cost_made", "cost_line", "cost_of"):
                 st.pop(k, None)
         return
     r = getattr(panel, "renderer", None)
     stats = getattr(r, "stats", None) or {}
     if r is not None:
         r.gpu_watch = True
+    if st.get("cost_of") != id(r):          # another deck's renderer: its own history
+        st["cost_of"], st["cost_ms"] = id(r), {}
     made = ({k: stats[k] for k in ("gpu_ran", "gpu_free", "gpu_built")}
             if "gpu_ran" in stats else None)
     st["cost_made"] = made
-    st["cost_ms"] = ease_costs(st["cost_ms"], stats.get("gpu_ms") or {},
+    ms = fold_owners(stats.get("gpu_ms") or {}, stats.get("gpu_owner") or {})
+    st["cost_ms"] = ease_costs(st["cost_ms"], ms,
                                made["gpu_ran"] if made is not None else None, dt)
     st["cost_rank"] = rank_costs(st["cost_ms"])
     labels = {thumb_name(n): n.label for n in view.nodes if n.kind in graphview.FRAME_VKINDS}

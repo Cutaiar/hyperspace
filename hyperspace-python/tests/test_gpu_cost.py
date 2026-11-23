@@ -200,8 +200,69 @@ def test_the_outputs_are_the_same_bytes_asked_or_not(ctx):
 def test_a_frame_whose_picks_cannot_be_read_marks_nothing_made():
     def boom(_frame):
         raise RuntimeError("no frame")
-    got = render.gpu_made(NS(pulled=boom, order=[]), None, [])
-    assert got == {"gpu_ran": frozenset(), "gpu_free": frozenset(), "gpu_built": frozenset()}
+    got = render.gpu_made(NS(pulled=boom, order=[], timed=[]), None, [])
+    assert got == {"gpu_ran": frozenset(), "gpu_free": frozenset(), "gpu_built": frozenset(),
+                   "gpu_owner": {}}
+
+
+def _graph(*nodes, timed=()):
+    """A stand-in graph: every node pulled, `timed` the names the timer lists."""
+    order = [NS(name=n, MAKES=False) for n in nodes]
+    return NS(order=order, pulled=lambda _f: frozenset(nodes), timed=list(timed))
+
+
+def test_a_listed_node_that_asked_for_no_query_made_nothing():
+    """Devin's finding on #470: a segment switched off is still in the timer's
+    list (its median 0) but runs no pass. What ran is what asked the timer,
+    not what the timer lists."""
+    got = render.gpu_made(_graph("scene", "segment.1", "switch", timed=("scene", "segment.1")),
+                          None, {"scene"})
+    assert got["gpu_ran"] == {"scene"}
+    assert "segment.1" not in got["gpu_ran"] and "segment.1" not in got["gpu_free"]
+    assert got["gpu_free"] == {"switch"}                # no pass of its own: not a cost
+    st = {"cost": True, "cost_ms": {}, "cost_rank": {}, "cost_made": got}
+    assert ui_graph.node_cost(st, _node("render:segment.1")) is ui_graph.NOTHING
+
+
+def test_the_timer_notes_every_name_that_asks_only_while_watched(ctx):
+    timer = render.PassTimer(ctx)
+    with timer.time("scene"):
+        pass
+    assert getattr(timer, "watch", None) is None        # unwatched: nothing noted
+    timer.watch = set()
+    with timer.time("scene"):
+        timer._active = True                            # a pass inside another's query
+        with timer.time("bloom"):
+            pass
+        timer._active = False
+    assert timer.watch == {"scene", "bloom"}            # the inner ran too
+    timer.watch = None
+    timer.end_frame(["scene"])
+
+
+def test_a_pass_under_a_name_of_its_own_is_its_owners():
+    """Devin's finding on #470: a delay's write and a look-back's capture are
+    timed under names no canvas node carries; their time is their node's."""
+    ms = {"delay(write)": 8.0, "scene": 1.0, "lookback": 0.5, "lookback(capture)": 0.25}
+    owner = {"delay(write)": "delay", "lookback(capture)": "lookback"}
+    assert ui_graph.fold_owners(ms, owner) == {"delay": 8.0, "scene": 1.0, "lookback": 0.75}
+    assert ui_graph.fold_owners(ms, {}) == ms
+
+
+def test_the_renderer_names_each_passes_owner(ctx):
+    from test_thumbnails import _renderer as stateful
+    from test_thumbnails import _views as two_views
+    r, views = stateful(ctx), two_views(ctx)
+    for t in (2.0, 2.1):
+        r.gpu_watch = True
+        r.draw_outputs(S, *SIZE, 1.0, views, t_now=t)
+    owner = r.stats["gpu_owner"]
+    writes = [n for n in r._graph.nodes if n.endswith("(write)")]
+    captures = [n for n in r._graph.nodes if n.endswith("(capture)")]
+    assert writes and captures
+    assert {owner[n] for n in writes} == {"delay"}
+    assert {owner[n] for n in captures} == {"lookback"}
+    assert "delay" in r.stats["gpu_ran"]                # its write ran: it made something
 
 
 # ---------------------------------------------------------------- the page
@@ -217,6 +278,31 @@ def test_the_chip_is_off_by_default_and_last_on_the_head(rig, monkeypatch):
     head = [x for x in labels if x.endswith("##graph")]
     assert head[-1] == ui_graph.COST_LABEL
     assert head.index(ui_graph.TINT_LABEL) < head.index(ui_graph.COST_LABEL)
+
+
+@pytest.mark.parametrize("width", [820, 540])
+def test_the_chip_stays_inside_a_narrow_page(rig, monkeypatch, width):
+    """Devin's finding on #470: on a narrow controls panel the head's row of
+    chips runs past the page's right edge; the chip takes a row of its own
+    (`ui.beside`) rather than a place nobody can click."""
+    from imgui_bundle import imgui
+    party(rig)
+    imgui.get_io().display_size = imgui.ImVec2(width, 820)
+    seen: list[tuple[float, float]] = []
+    lit = ui.lit_chip
+
+    def spy(label, on, *a, **k):
+        hit = lit(label, on, *a, **k)
+        if label == ui_graph.COST_LABEL:
+            right = imgui.get_window_pos().x + imgui.get_window_size().x
+            seen.append((imgui.get_item_rect_max().x, right))
+        return hit
+    monkeypatch.setattr(ui, "lit_chip", spy)
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    assert seen
+    for x1, right in seen:
+        assert x1 <= right, (x1, right)
 
 
 def test_off_it_asks_nothing_and_draws_nothing_extra(rig, monkeypatch):
@@ -271,6 +357,22 @@ def test_lit_it_asks_the_renderer_and_marks_the_render_nodes(rig, monkeypatch):
     badges.clear()
     frame(rig.panel, "graph")
     assert badges == [] and st["cost_ms"] == {} and r.gpu_watch is False
+
+
+def test_a_deck_switch_starts_the_easing_again(rig):
+    """Devin's finding on #470: the easing is the renderer's, not the page's —
+    another deck's renderer starts from its own times, not the last deck's."""
+    st = party(rig)
+    st["cost"] = True
+    a = NS(stats={"gpu_ms": {"scene": 20.0, "output.1": 1.0}})
+    b = NS(stats={"gpu_ms": {"scene": 1.0, "output.1": 2.0}})
+    rig.panel.renderer = a
+    frame(rig.panel, "graph")
+    assert st["cost_rank"]["scene"][0] == 1
+    rig.panel.renderer = b
+    frame(rig.panel, "graph")
+    assert st["cost_ms"] == {"scene": 1.0, "output.1": 2.0}
+    assert st["cost_rank"]["output.1"][0] == 1
 
 
 def test_the_chip_reaches_neither_the_loadable_nor_the_show(rig):

@@ -58,6 +58,16 @@ what the frame already settled (`Graph.pulled`, `Graph.timed_in`):
 | that the frame did not build: unreached, drawn faint (row 349) | **made nothing** |
 | not a node of the frame: the modulation side, the camera | none |
 
+"Ran" is what asked the timer for a query this frame (`PassTimer.watch`, a set kept only while the chip
+is lit), not the list of names the timer reports. A segment switched off is still on that list, with a
+median of 0, but runs no pass, so it says "made nothing". A pass inside another's query (an effect in a
+delay's write) asks too, so it counts as ran.
+
+A pass timed under a name no canvas node carries is added to the node it belongs to (`render.gpu_made`'s
+`gpu_owner`, `ui_graph.fold_owners`): a delay's write to its delay, a look-back's capture to its
+look-back. So the head's line never names a pass that no badge shows. The easing belongs to the renderer
+it reads: switching the panel to the other deck starts it again from that deck's times.
+
 A node that made nothing drops out of the easing and comes back at its own time. A node that ran but whose
 median has not been read back yet (the timer reads `LAG` = 3 frames late) shows no badge for those frames.
 
