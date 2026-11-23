@@ -606,7 +606,7 @@ def test_the_bank_adds_no_params(rig):
     """Plan 19 WP1's budget: a bank of twenty-four adds no param. The
     `preset` group is the 21 it was — select, a load and a save for each
     F-key, save-as, next, prev, home — the list's next / prev
-    (2026-10-14, the pad's B / X) and the list's two fades (row 1063, the
+    (2026-10-14, the pad's B / X) and the list's two fades (row 1075, the
     Edge's d-pad); slots 9–24 are choices of
     `preset.select`, which says which of them hold a loadable patch (`Param.has`,
     what a pad's "filled" light reads)."""

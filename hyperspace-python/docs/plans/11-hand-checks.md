@@ -8872,10 +8872,10 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 **678. A hand on c deep in.** At 10⁶× with **Steps** at 4096, a hand on **c drive x**. *Pass:* the picture keeps the frame rate while c moves (the reference is computed every frame c changes). *Fail:* a stutter: say at which Steps it starts (the bench's `ref ms`).
 
-## FH. Fading patches from the Edge (row 1063)
+## FI. Fading patches from the Edge (row 1075)
 
-Register row 1063, 2026-11-22. Headless: `tests/test_on_off_air.py` (the load, the step from the patch on air, the warm-draw wait, the refusal between the ends, the Edge's rows). Nothing tried on the pad.
-**859. The Edge's D-pad transitions.** (a DualSense Edge, the rig)
+Register row 1075, 2026-11-22. Headless: `tests/test_on_off_air.py` (the load, the step from the patch on air, the warm-draw wait, the refusal between the ends, the Edge's rows). Nothing tried on the pad.
+**868. The Edge's D-pad transitions.** (a DualSense Edge, the rig)
 1. With a patch on air, press the D-pad's →. *Pass:* the footer says the next patch loaded off air on the other deck and is fading in over the crossfader's seconds; the room crosses to it smoothly, with no flash or stall at the first frame.
 2. Press → three more times, waiting for each fade. *Pass:* each press goes one further through the PATCHES list, never back to the patch it came from.
 3. Press ← . *Pass:* it goes back one.

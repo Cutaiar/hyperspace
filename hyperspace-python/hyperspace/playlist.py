@@ -298,7 +298,7 @@ class Playing:
         self.waited = False
         if (taken := self._cue_lost()) is not None:
             # a fade asked for and waiting on its warm draw is the room already moving
-            # (`MetaController.waiting`, row 1063): the Edge's press must not be stomped
+            # (`MetaController.waiting`, row 1075): the Edge's press must not be stomped
             took = self.armed_on is meta.on_air or bool(getattr(meta, "waiting", False))
             self._cue_taken(taken, now, took)
             return
@@ -426,7 +426,7 @@ class Playing:
     def _cue_lost(self) -> Entry | None:
         """The armed entry a hand has loaded over on the deck it was cued onto, or None.
         Every bank verb from a row lands on the deck off air (`DeckInstall._landing`,
-        row 700) — a bank pad, a slot, the Edge's D-pad fade (row 1063) — and while the
+        row 700) — a bank pad, a slot, the Edge's D-pad fade (row 1075) — and while the
         fader sits at an end that deck is the cued one, so the load replaces the cue.
         `_due` would then see the cue's deck go on air and count the entry as played,
         when a hand's look aired instead.
