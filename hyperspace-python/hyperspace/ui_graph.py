@@ -267,6 +267,7 @@ from . import (
 from . import ui_effect_picker as fxpick
 from .bands import CEIL
 from .graph import Effect
+from .hands import panel as ui_hands
 from .groupwords import group_title
 from .learn import META_UNDO, PairAsk
 from .library import LibraryError
@@ -4760,6 +4761,9 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
             ui._micro("dials")
             panel._dials()
         return                                  # — the picture says what the port lines would
+    if n.id == f"render:{rgraph.wired_hands_name(1)}":     # the hands node IS the hands page: where they are,
+        ui_hands.body(panel, 1 / 60, strip=False)   # the pinches, the axes, calibration, the grip
+        return
     if _param_rows(panel, st, n):
         return
     for port in n.ports:
