@@ -125,11 +125,10 @@ def look(doc: dict) -> tuple[dict, list[str]]:
     """`doc` with every hands node's look set to `ghost.SHOW_LOOK`: (the
     document, one line per value that moved)."""
     out = copy.deepcopy(doc)
-    values = out.get("values")
-    if not isinstance(values, dict):
-        # (as `LoadedPatch.load_doc` reads it: missing or null is none, pairs a map;
-        # anything else raises, and `plan` names the file and leaves it)
-        values = out["values"] = dict(values or {})
+    raw = out.get("values")
+    # (read as `LoadedPatch.load_doc` reads it: missing or null is none, pairs a map;
+    # anything else raises, and `plan` names the file and leaves it)
+    values = raw if isinstance(raw, dict) else dict(raw or {})
     moved = []
     for pre in hands_prefixes(out.get("graph")):
         for k, v in ghost.SHOW_LOOK.items():
@@ -137,6 +136,10 @@ def look(doc: dict) -> tuple[dict, list[str]]:
             if key not in values or values[key] != v or type(values[key]) is not type(v):
                 moved.append(f"{key} {values.get(key, '(none)')!r} → {v!r}")
                 values[key] = v
+    # written back in the file's own shape: the load reads a pairs list and a map
+    # differently in places (`params.pan_world` converts only a map's pan)
+    out["values"] = ([[k, v] for k, v in values.items()] if isinstance(raw, list)
+                     else values)
     return out, moved
 
 
@@ -167,12 +170,26 @@ def wire_layer(doc: dict, effects) -> tuple[dict, list[str]]:
     return doc, added
 
 
-def loads(path: Path, scratch: Path, library: Path) -> list[str]:
-    """The app's load notes for loadable patch file `path` (raises what the
+def loads(path: Path, scratch: Path, library: Path) -> tuple[list[str], dict]:
+    """The app's load notes for loadable patch file `path`, and what it saves
+    from it less the hands' look and the graph (`landed`) — (raises what the
     load raises for one that does not load)."""
     from hyperspace import headless
-    _data, notes, _name = headless.resave(path, scratch, library=library)
-    return notes
+    data, notes, _name = headless.resave(path, scratch, library=library)
+    return notes, landed(json.loads(data))
+
+
+def landed(doc: dict) -> dict:
+    """A saved document less what this tool sets: every hands node's look
+    values and the graph section (whose wires it may add). What remains must
+    be the same before and after a change, or the change moved something else."""
+    out = {k: v for k, v in doc.items() if k != "graph"}
+    values = out.get("values")
+    if isinstance(values, dict):
+        out["values"] = {k: v for k, v in values.items()
+                         if not (k.startswith(ghost.GROUP + ".")
+                                 and k.rpartition(".")[2] in ghost.SHOW_LOOK)}
+    return out
 
 
 def plan(path: Path, library: Path, effects, scratch: Path, *, file: str = "") -> Change:
@@ -222,9 +239,13 @@ def plan(path: Path, library: Path, effects, scratch: Path, *, file: str = "") -
     except failed as e:
         c.skipped = f"does not load once changed: {e}"
         return c
-    if after != before:
+    if after[0] != before[0]:
         c.skipped = ("its load notes change: "
-                     + "; ".join(sorted(set(after) ^ set(before))))
+                     + "; ".join(sorted(set(after[0]) ^ set(before[0]))))
+    elif after[1] != before[1]:
+        moved = sorted(k for k in set(after[1]) | set(before[1])
+                       if after[1].get(k) != before[1].get(k))
+        c.skipped = f"the load lands something else differently ({', '.join(moved)})"
     return c
 
 

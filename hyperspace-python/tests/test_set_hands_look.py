@@ -224,12 +224,54 @@ def test_an_older_whole_patch_is_named_for_the_migration_and_left(tmp_path):
     assert path.read_bytes() == src.read_bytes()
 
 
-def test_values_as_pairs_keep_every_value():
+def test_values_as_pairs_keep_every_value_and_their_shape():
     """Review of #459: the app reads `values` given as pairs as a map; so does
-    the tool, and no other value is lost."""
+    the tool, no other value is lost, and they are written back as pairs (the
+    load converts an unmarked map's camera pan, never a pairs list's)."""
     t = _tool()
     doc = _doc("dial")
     doc["values"] = [["view.shape", 3], ["ghost.on", False]]
     out, moved = t.look(doc)
-    assert out["values"]["view.shape"] == 3 and out["values"]["ghost.on"] is True
-    assert len(moved) == 4
+    assert isinstance(out["values"], list)
+    got = dict(out["values"])
+    assert got["view.shape"] == 3 and got["ghost.on"] is True and len(moved) == 4
+
+
+def test_a_pairs_patch_lands_its_camera_as_it_did(tmp_path):
+    """Review of #459: a pairs patch with a camera pan and no units marker is
+    written, and lands the same pan and everything else as before."""
+    t = _tool()
+    from hyperspace.fx import FxState
+    lib = tmp_path / "lib"
+    (lib / "loadable").mkdir(parents=True)
+    doc = _doc("dial")
+    doc.pop("units", None)
+    pairs = [[k, v] for k, v in doc["values"].items()] + [["camera.pan.x", 3.0]]
+    doc["values"] = pairs
+    path = lib / "loadable" / "pairs.json"
+    path.write_text(json.dumps(doc, indent=1))
+    c = t.plan(path, lib, set(FxState().files), tmp_path / "scratch")
+    assert c.changed and not c.skipped, c.skipped
+    out = tmp_path / "out" / "pairs.json"
+    out.parent.mkdir()
+    out.write_text(c.text)
+    assert t.loads(out, tmp_path / "a", lib)[1] == t.loads(path, tmp_path / "b", lib)[1]
+
+
+def test_a_change_that_lands_something_else_is_not_written(tmp_path, monkeypatch):
+    """The guard behind the two above: if the changed file lands any value
+    other than the hands' look differently, the file is named and left."""
+    t = _tool()
+    from hyperspace.fx import FxState
+    lib = _library(tmp_path)
+    path = lib / "loadable" / "2025" / "dial.json"
+    real = t.look
+
+    def drifting(doc):
+        out, moved = real(doc)
+        out["values"]["view.bright"] = 0.123
+        return out, moved
+
+    monkeypatch.setattr(t, "look", drifting)
+    c = t.plan(path, lib, set(FxState().files), tmp_path / "scratch")
+    assert not c.changed and "lands something else differently" in c.skipped
