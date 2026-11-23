@@ -8872,6 +8872,15 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 **678. A hand on c deep in.** At 10⁶× with **Steps** at 4096, a hand on **c drive x**. *Pass:* the picture keeps the frame rate while c moves (the reference is computed every frame c changes). *Fail:* a stutter: say at which Steps it starts (the bench's `ref ms`).
 
+## FF. The hands' show look (rows 1050–1053, 2026-11-22)
+
+Plan 85. Headless: `tests/test_ghost.py` (the look's values, the bare state neutral) and `tests/test_set_hands_look.py` (the dry run, the backup, the writes, the wires, the load notes, a second run, the app-open refusal), on tmp copies of corpus patches. Nothing here was seen on the Mac. A restart after pulling.
+
+**850. A new patch's hands.** (Mac, the tracker on) Launch, then **New patch**. *Pass:* both hands show as BONES, PLAIN, at half opacity; HANDS shows Ghost hands on, opacity 50%, style BONES, material PLAIN. Add a second hands node on GRAPH: its hands show the same. *Fail:* hands off, GLASS, or 35% / 60%.
+
+**851. The library run.** (Mac, Hyperspace closed on both Macs) `uv run python tools/set_hands_look.py`, then `uv run python tools/set_hands_look.py --apply`. *Pass:* the dry run lists every patch in every era folder and writes nothing; `--apply` prints a backup path first, and that folder holds the whole library; a second dry run says every patch is already the show look; Drive syncs the files to the other Mac. Note every "left:" line: an answer for the owner. *Fail:* a patch missing from the list, a write with no backup, or a second run with something to do.
+
+**852. A patch whose hands were unwired.** (Mac, after 851) Load a patch the run said it wired. *Pass:* the hands show on the outputs and the guide over them; GRAPH shows the hands layer lit, wired into All outputs' hands and guide; the rest of the patch looks as before. *Fail:* no hands, or a wire you don't expect.
 ## FD. Save and load live (rows 1030–1035, 2026-11-22)
 
 Plan 83. Headless: `tests/test_save_live.py` (driven by the mouse: one click saves a new file in the loaded patch's folder that loads back equal, a second never overwrites, the name on the chip; a 40-entry playlist inside the screen, scrolled by the wheel, its row on air in view, its rows a trackpad's size). Nothing here was seen on the Mac. Hot reload is enough: no new field on a live object.
