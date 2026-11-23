@@ -562,12 +562,16 @@ class MetaController:
 
     `mix` is the crossfader (`output.xfade`, `output.xfade_s`): `tick` runs a
     timed `crossfade` and follows the fader, and `parked` is the one list of decks
-    off air, what `Host.off_air` reads. `row_load` is where a bank verb from a row
-    lands (each deck's `DeckInstall` asks it), and `bars_load` why it may not now."""
+    off air, what `Host.off_air` reads. `fade_when_warm` is a fade a load asked for
+    (row 902): `tick` starts it once the deck off air has had its warm draw.
+    `row_load` is where a bank verb from a row lands (each deck's `DeckInstall` asks
+    it), and `bars_load` why it may not now."""
 
     # (class-level: read by a meta controller from before a hot reload)
     timed: TimedFade | None = None
     playing: Any = None               # the playlist being played (`playlist.Playing`)
+    fade: Any = None                  # the one mix (`Fade`, app.main): whose warm draw `tick` waits for
+    waiting = False                   # a fade asked for, waiting for that warm draw (`fade_when_warm`)
     # role → where it is (`DeviceRegistry.presence`, app.main); None: always there
     presence: Callable[[str], str] | None = None
     relist = False                    # an undo changed who holds what: `tick` tells `on_players`
@@ -867,6 +871,23 @@ class MetaController:
         self.timed = TimedFade(self.mix.xfade, float(to),
                                self.mix.seconds if seconds is None else float(seconds))
 
+    def fade_when_warm(self) -> None:
+        """A timed `crossfade` as soon as the deck off air has had its warm draw (row
+        902): what a load that means to go on air asks for — the Edge's D-pad
+        (`DeckInstall.fade_to`). The patch landed this very moment, so fading now
+        would compile its shaders in the fade's first frame; `tick` starts it at the
+        first frame after `Fade.warm` has drawn that deck (the playlist waits the same
+        way). A warm draw that will not draw is said there and the fade runs anyway:
+        the room has been asked for it. With no `Fade` (a headless rig, a test), it
+        starts at the next `tick`."""
+        self.waiting = True
+
+    def fading_words(self, name: str) -> str:
+        """The status line after a load that fades itself in: what, where, and that the
+        room is on its way to it."""
+        return (f"{name} loaded off air on {self.deck_name(self.off_air)}; "
+                f"fading in over {self.mix.seconds:g} s")
+
     def fader_touched(self, u: float) -> bool:
         """The desk's fader at `u`, caught or not. A timed fade leaves it behind, so
         soft pickup would ignore a hand until it crossed the moving value: moved
@@ -893,6 +914,9 @@ class MetaController:
             self.relist = False
             for fn in self.on_players:
                 fn()
+        if self.waiting and getattr(self.fade, "warm_deck", None) is None:
+            self.waiting = False
+            self.crossfade()              # (row 902: the load's own fade, warm draw done)
         run = self.timed
         if run is not None:
             if self.mix.xfade != run.wrote:

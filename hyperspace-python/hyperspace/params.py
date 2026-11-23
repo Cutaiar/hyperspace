@@ -2958,6 +2958,20 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
                   group=g,
                   tip="Load the previous patch of the PATCHES section's list into the deck "
                       "off air, wrapping at the start. The room does not move.")
+        # the list walked *and* faded in (row 902): the Edge's d-pad, "so the user of the
+        # Edge can smoothly transition between patches". The one verb that moves the room
+        # from a controller; no loadable patch's row reaches it either (row 700)
+        r.trigger("preset.fade.next", "Fade into the next patch", lambda: bank.fade_to(1),
+                  group=g,
+                  tip="Load the patch after the one on air onto the deck off air and fade "
+                      "the room into it, over the crossfader's seconds (GRAPH's fade). "
+                      "The D-pad's → on a DualSense Edge. It waits while the crossfader "
+                      "is away from its ends or a fade is running.")
+        r.trigger("preset.fade.prev", "Fade into the previous patch", lambda: bank.fade_to(-1),
+                  group=g,
+                  tip="Load the patch before the one on air onto the deck off air and fade "
+                      "the room into it, over the crossfader's seconds. The D-pad's ← on a "
+                      "DualSense Edge.")
         # home (plan 15 WP2, decision 27): the show's startup loadable patch. Lit
         # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,

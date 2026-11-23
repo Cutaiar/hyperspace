@@ -128,8 +128,15 @@ _JOYCON_R_LAYOUT = (*_JOYCON_ROWS, ("MENU", "totem.reset", "fire", 1.0),
                     ("GUIDE", "totem.on", "toggle", 1.0),
                     ("RB", "deck.chase", "momentary", 1.0))
 # hold-to-save is the Edge's alone (row 724): "the controller Dylan will be
-# using for VJ-style setups"
-_EDGE_LAYOUT = (("MENU", "preset.save_new", "hold", 1.0),)
+# using for VJ-style setups". Row 902 puts the patch list back on its D-pad, for
+# that same reason and only on this pad: ← / → walk the list from the patch on air
+# onto the deck off air and fade the room into it (`preset.fade.*`), the one row
+# that moves the room from a controller. ↑ / ↓ stay the brightness the table gives
+# every pad. Named `hat.W` / `hat.E`: a layout row on a D-pad direction
+# (`routing._layout_source`)
+_EDGE_LAYOUT = (("MENU", "preset.save_new", "hold", 1.0),
+                ("hat.W", "preset.fade.prev", "fire", 1.0),
+                ("hat.E", "preset.fade.next", "fire", 1.0))
 _JOYCON_L_GLYPHS = {
     "S": "↓", "E": "→", "W": "←", "N": "↑", "LB": "L", "LT": "ZL", "LP": "SL", "RP": "SR",
     "VIEW": "−", "SHARE": "◉", "LSTICK": "L3",

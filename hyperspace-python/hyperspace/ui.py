@@ -811,6 +811,8 @@ CHEATSHEET = [
     ("pad BACK", "held: the base chase keeps what the sources moved"),
     ("LB / RB", "previous / next shape"),
     ("d-pad ↑ / ↓", "brightness"),
+    # row 902: the Edge's own layout, no other pad's
+    ("Edge d-pad ← / →", "patch list: load off air and fade the room into it"),
     ("sticks", "orbit · zoom ↕ 4D spin ↔ — click resets each"),
     ("LT / RT", "4D depth out / in"),
     # any control ↔ any MIDI message, through the registry (midi.py)

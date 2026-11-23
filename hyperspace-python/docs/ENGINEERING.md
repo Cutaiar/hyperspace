@@ -2275,6 +2275,17 @@ pad that has one, are free; Learn pad puts anything on them. Hold-to-save
 is the Edge's alone (register row 724). (2026-10-29: the walk left B / X, where a
 stray thumb threw the look away; speed left the pad.)
 
+**The Edge's D-pad fades patches** (register row 902), its own layout alone, as
+hold-to-save is: ← / → (`preset.fade.prev` / `preset.fade.next`) load the patch one
+step from the one **on air** in the PATCHES list onto the deck off air, then run the
+crossfader across on their own, over `output.xfade_s` — the one fade in the app, a
+press of GRAPH's **fade**. The step is from what the room sees, so press after press
+goes on through the list rather than back to where it came from, and the fade starts
+at the first frame after that deck's warm draw (`Fade.warm`), as the playlist's does.
+A press is refused, said, while the crossfader is away from its ends or a fade is
+running (`DeckInstall._landing`, as a bank pad's load is), and ↑ / ↓ stay the
+brightness every pad has. No other pad walks patches: row 723 stands for them.
+
 **The pad diagram** (`ui_pad.py`) draws that, live, instead of asking
 anyone to trust this table: the pad at the top of the desk's column —
 the switch is on the SYSTEM page, off at every launch — every control

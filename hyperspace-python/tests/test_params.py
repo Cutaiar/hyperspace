@@ -605,17 +605,19 @@ def test_a_non_finite_offset_never_poisons_a_base(rig):
 def test_the_bank_adds_no_params(rig):
     """Plan 19 WP1's budget: a bank of twenty-four adds no param. The
     `preset` group is the 21 it was — select, a load and a save for each
-    F-key, save-as, next, prev, home — and the list's next / prev
-    (2026-10-14, the pad's B / X); slots 9–24 are choices of
+    F-key, save-as, next, prev, home — the list's next / prev
+    (2026-10-14, the pad's B / X) and the list's two fades (row 902, the
+    Edge's d-pad); slots 9–24 are choices of
     `preset.select`, which says which of them hold a loadable patch (`Param.has`,
     what a pad's "filled" light reads)."""
     reg, _view, _control, _audio, bank = rig
     ids = [p.id for p in reg if p.group == "preset"]
-    assert len(ids) == 23 and ids == [
+    assert len(ids) == 25 and ids == [
         "preset.select",
         *[f"preset.{w}.{k}" for k in range(8) for w in ("load", "save")],
         "preset.save_new", "preset.next", "preset.prev",
-        "preset.list.next", "preset.list.prev", "preset.home"]
+        "preset.list.next", "preset.list.prev",
+        "preset.fade.next", "preset.fade.prev", "preset.home"]
     select = reg["preset.select"]
     assert len(select.names) == 24 == len(bank.bank)
     assert callable(select.has)

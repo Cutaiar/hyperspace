@@ -8872,6 +8872,19 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 **678. A hand on c deep in.** At 10⁶× with **Steps** at 4096, a hand on **c drive x**. *Pass:* the picture keeps the frame rate while c moves (the reference is computed every frame c changes). *Fail:* a stutter: say at which Steps it starts (the bench's `ref ms`).
 
+## EB. Fading patches from the Edge (row 902)
+
+Register row 902, 2026-11-22. Headless: `tests/test_on_off_air.py` (the load, the step from the patch on air, the warm-draw wait, the refusal between the ends, the Edge's rows). Nothing tried on the pad.
+**699. The Edge's D-pad transitions.** (a DualSense Edge, the rig)
+1. With a patch on air, press the D-pad's →. *Pass:* the footer says the next patch loaded off air on the other deck and is fading in over the crossfader's seconds; the room crosses to it smoothly, with no flash or stall at the first frame.
+2. Press → three more times, waiting for each fade. *Pass:* each press goes one further through the PATCHES list, never back to the patch it came from.
+3. Press ← . *Pass:* it goes back one.
+4. Press → while a fade is running. *Pass:* the footer says it is refused while the crossfader is away from its ends; the fade runs on untouched.
+5. Set GRAPH's fade seconds to 0, then to 10, and press →. *Pass:* a cut, then a ten-second blend. Say which length the show wants.
+6. Press the D-pad's ↑ and ↓. *Pass:* brightness, as on every pad.
+7. On a plain DualSense (or the Xbox pad), press ← and →. *Pass:* nothing happens to the patch.
+*Fail:* a snap with no fade, a stutter in the fade's first frame, a press that swaps what is on air, or the room moving before the fade.
+
 ## What no test covers
 
 Only a person can settle these:

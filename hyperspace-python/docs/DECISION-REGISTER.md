@@ -890,6 +890,7 @@ here; overturn → the change, then the same.
 | 898 | Plan 65: the picker's families are data: a file's `// @family <name>` (`EffectSpec.family`, parsed, declares nothing, written by no file yet), else its `@order` band from one table, `previews.ORDER_FAMILIES` (generators, distort, split, glow and texture, colour). The shader roundup writes `@family`. So is the aux port: every effect node had one, two files read it (Blend, Displace); GRAPH draws it only when the file's code calls `aux(` or `aux_luma(` (`fx.reads_aux`) or a saved wire goes into it | 693 | (rec) — plan 65 §2: the owner asked for a hook, not today's list |
 | 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
 | 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
+| 902 | The Edge's D-pad fades patches: ← / → load the patch one step from the one **on air** onto the deck off air and run the crossfader across on their own, over `output.xfade_s` (`preset.fade.next` / `prev`, `DeckInstall.fade_to`, `MetaController.fade_when_warm`). The Edge's own `Model.layout` alone, as its hold-to-save is (row 724): no other pad walks patches (row 723 stands for them). The fade starts at the first frame after the deck off air's warm draw, and a press is refused, said, while the crossfader is away from its ends | 699 | owner — 2026-11-22: "so the user of the Edge PS5 controller can smoothly transition between patches" |
 | 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
 | 872 | Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema | — | owner (2026-11-19, as recommended) |
 | 873 | Plan 63: every term a param (owner decision 1). Slice s lays the pixel's point q into the terms as c = mix(q, c, s), z₀ = mix(z₀, q, s): 0 the Mandelbrot set, 1 a Julia set. Power a whole number 2–8, an int param; a fractional p not built | 671 | owner (2026-11-18) — the mapping (rec) |
@@ -15319,3 +15320,34 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before.
 - **Built.** Nothing.
 - **Judge it.** No hand check.
+
+### 902. The Edge's D-pad fades patches
+
+- **What.** Row 723 took the patch list off every pad's D-pad ("no swapping presets from a
+  controller"), because a press swapped the live look in front of the room. The Edge gets it
+  back as a DJ's move instead of a cut: ← / → load the patch one step from the one **on air**
+  onto the deck off air — a pad's own road (`DeckInstall._landing`: refused, said, while the
+  crossfader is away from its ends or a fade is running) — and then the crossfader runs across
+  on its own, over `output.xfade_s`, the one fade in the app. The step is from what the room
+  sees, not from what the deck off air holds, so press after press goes on through the list
+  rather than back to where it came from. The fade waits for that deck's warm draw
+  (`Fade.warm`), as the playlist's does, so a patch's shaders compile before the first fade
+  frame and not in it. Two triggers of the `preset` group, so no patch's row can reach one
+  (row 746), on the Edge's `Model.layout` alone, as hold-to-save is (row 724): every other pad
+  is as row 723 left it, and the Edge's ↑ / ↓ stay the brightness every pad has. A layout row
+  may now name a D-pad direction (`hat.E`), which only face and shoulder buttons could before,
+  so the Edge's ← / → are no longer free for a pair or for node mode.
+- **Answer.** owner — 2026-11-22, asked for: the D-pad "doesn't just snap the new patch in",
+  it "loads the next patch onto deck 2 and then triggers the fade between them".
+- **Built.** `library.Library.neighbour`, `library.Install.fade_to`, `library.DeckInstall.fade_to`,
+  `deck.MetaController.fade_when_warm`, `.fading_words`, `.fade`, `.waiting`,
+  `params` `preset.fade.next` / `preset.fade.prev`, `routing._layout_source`,
+  `pads.models._EDGE_LAYOUT`, `ui.CHEATSHEET`; `tests/test_on_off_air.py::test_a_fade_verb_loads_off_air_and_steps_from_the_patch_on_air`,
+  `::test_a_fade_verb_from_either_deck_lands_off_air`,
+  `::test_the_fade_waits_for_the_warm_draw_then_runs_the_fader_across`,
+  `::test_press_after_press_goes_on_through_the_list`,
+  `::test_with_no_fade_object_the_fade_starts_at_the_next_tick`,
+  `::test_a_fade_verb_is_refused_between_the_ends_and_loads_nothing`,
+  `::test_the_edges_d_pad_fades_the_list_and_no_other_pads_does`.
+- **Judge it.** 699, on the Edge at the rig: whether the fade reads as a transition and
+  whether `output.xfade_s` is the right length to reach for.

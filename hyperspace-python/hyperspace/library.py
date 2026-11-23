@@ -1468,6 +1468,12 @@ class Install:
             lib.error = f"library: {e}"
             return None
 
+    def fade_to(self, step: int = 1) -> str | None:
+        """`preset.fade.next` / `prev` where there is one deck (a headless rig, a
+        test's panel): the walk alone, since there is nothing to fade into.
+        `DeckInstall.fade_to` is the real verb (row 902)."""
+        return self.walk(step)
+
     def load_startup(self) -> bool | None:
         """The project's startup loadable patch (D11), if it names one: a launch
         and a project load bring it up. A name with no file says so and
@@ -2946,14 +2952,24 @@ class Library:
         else:
             self.say(f"{group_word(group)}: {name}")
 
-    def _step(self, group: str, n: int) -> str | None:
+    def neighbour(self, group: str, cur: str | None, n: int) -> str | None:
+        """The name `n` steps from `cur` in the group's list (read from disk now),
+        wrapping at both ends; from a name not in it, the first (n > 0) or the last.
+        None when the list is empty. It loads nothing: `_step` walks from this
+        library's own loaded name, and the fade walks from another deck's
+        (`Install.fade_to`, row 902)."""
         names = self.list(group)
         if not names:
             return None
-        cur = self.current(group)
         k = (names.index(cur) + n) % len(names) if cur in names else (0 if n > 0 else -1)
-        self.load(group, names[k])
         return names[k]
+
+    def _step(self, group: str, n: int) -> str | None:
+        name = self.neighbour(group, self.current(group), n)
+        if name is None:
+            return None
+        self.load(group, name)
+        return name
 
     def next(self, group: str) -> str | None:
         return self._step(group, 1)
@@ -4036,6 +4052,38 @@ class DeckInstall(DeckInstallSlots, Install):
         name = Install.walk(where, step)
         if name:
             self._say_loaded(where)
+        return name
+
+    def fade_to(self, step: int = 1) -> str | None:
+        """Walk the patch list and **fade the room into it** (row 902, the Edge's
+        D-pad): the patch one step from the one **on air** loads onto the deck off
+        air, by a pad's own road (`_landing`: refused, said, while the crossfader is
+        between its ends), and the crossfader then runs across on its own, over
+        `output.xfade_s`, as soon as that deck has had its warm draw
+        (`MetaController.fade_when_warm`). The step is from what is on air, not from
+        what the deck off air holds, so a press after a fade goes on through the list
+        rather than back to where it came from. Returns the name loaded, None when
+        none was."""
+        if self.meta is None:                 # one deck: nothing to fade into
+            return Install.walk(self, step)
+        where = self._landing("the patch list")
+        if where is None:
+            return None
+        loaded_patch = where._loader()
+        if loaded_patch is None:
+            return None
+        on_air = getattr(getattr(self.meta.on_air, "loaded_patch", None), "current", None)
+        name = where.lib.neighbour(LOADABLE, on_air, step)
+        if name is None:
+            where.lib.say(warning="the patch list: it has nothing in it")
+            return None
+        try:
+            loaded_patch.load(name)
+        except LibraryError as e:                     # a bad file: said, never fatal
+            where.lib.error = f"library: {e}"
+            return None
+        self.meta.fade_when_warm()
+        where.lib.say(status=self.meta.fading_words(name))
         return name
 
     def home(self) -> bool | None:

@@ -981,6 +981,111 @@ def test_the_panels_own_load_on_air_is_the_intentional_one(rig):
     assert rig.two.loaded_patch.current == "TUMBLE" and rig.one.loaded_patch.current == "WAKE"
 
 
+# ------------------------------- the patch list, faded in from a pad (row 902)
+
+FADES = ["preset.fade.next", "preset.fade.prev"]
+
+
+def _warm(rig, warm_deck=None):
+    """A stand-in `Fade` as far as `MetaController.tick` reads one: whose warm draw
+    is still to come, if any."""
+    rig.meta.fade = NS(warm_deck=warm_deck)
+
+
+def test_a_fade_verb_loads_off_air_and_steps_from_the_patch_on_air(rig):
+    """Row 902: the step is from what the room sees, not from what the deck off air
+    holds, so a press after a fade goes on through the list."""
+    listing = rig.lib.list(LOADABLE)
+    on_air = rig.one.loaded_patch.lib.current(LOADABLE)
+    want = listing[(listing.index(on_air) + 1) % len(listing)]
+    assert rig.two.loaded_patch.lib.current(LOADABLE) != on_air, "the decks hold two looks"
+    theirs = _state(rig.one)
+    rig.one.reg["preset.fade.next"].fire()
+    assert rig.two.loaded_patch.lib.current(LOADABLE) == want
+    assert _state(rig.one) == theirs, "the room has not moved yet"
+    assert "fading in over 2 s" in rig.lib.status and "on deck 2" in rig.lib.status
+
+
+def test_a_fade_verb_from_either_deck_lands_off_air(rig):
+    for pressed in (rig.one, rig.two):
+        on_air = rig.meta.on_air.loaded_patch.lib.current(LOADABLE)
+        pressed.reg["preset.fade.prev"].fire()
+        listing = rig.lib.list(LOADABLE)
+        want = listing[(listing.index(on_air) - 1) % len(listing)]
+        assert rig.meta.off_air.loaded_patch.lib.current(LOADABLE) == want
+
+
+def test_the_fade_waits_for_the_warm_draw_then_runs_the_fader_across(rig):
+    """The patch landed this frame, so the fade starts at the first tick after
+    `Fade.warm` has drawn that deck — never in the same frame as the load."""
+    _warm(rig, warm_deck=rig.two)
+    rig.one.reg["output.xfade_s"].set(0.0)
+    rig.one.reg["preset.fade.next"].fire()
+    assert rig.meta.waiting and rig.meta.timed is None
+    rig.meta.tick(T, DT)
+    assert rig.meta.waiting and rig.meta.timed is None and rig.meta.on_air is rig.one
+    _warm(rig)                                   # the frame drew it
+    rig.meta.tick(T + DT, DT)
+    assert not rig.meta.waiting and rig.mix.xfade == 1.0 and rig.meta.on_air is rig.two
+
+
+def test_press_after_press_goes_on_through_the_list(rig):
+    """The point of stepping from what is on air (row 902): a second press, once the
+    first fade has landed, goes to the patch after it — never back to where it came
+    from, as stepping from the deck off air would."""
+    rig.one.reg["output.xfade_s"].set(0.0)
+    listing = rig.lib.list(LOADABLE)
+    at = listing.index(rig.one.loaded_patch.lib.current(LOADABLE))
+    seen = []
+    for k in range(1, 4):
+        rig.meta.off_air.reg["preset.fade.next"].fire()
+        rig.meta.tick(T + k, DT)                      # no `Fade`: it runs at once
+        assert rig.meta.timed is None, "a cut: it has landed"
+        seen.append(rig.meta.on_air.loaded_patch.lib.current(LOADABLE))
+    assert seen == [listing[(at + k) % len(listing)] for k in (1, 2, 3)]
+
+
+def test_with_no_fade_object_the_fade_starts_at_the_next_tick(rig):
+    """A headless rig has no `Fade` to warm: nothing to wait for."""
+    assert rig.meta.fade is None
+    rig.one.reg["output.xfade_s"].set(0.0)
+    rig.one.reg["preset.fade.next"].fire()
+    rig.meta.tick(T, DT)
+    assert rig.meta.on_air is rig.two and not rig.meta.waiting
+
+
+@pytest.mark.parametrize("verb", FADES)
+def test_a_fade_verb_is_refused_between_the_ends_and_loads_nothing(rig, verb):
+    rig.mix.xfade = 0.3
+    states = _state(rig.one), _state(rig.two)
+    rig.lib.warning = ""
+    rig.one.reg[verb].fire()
+    assert (_state(rig.one), _state(rig.two)) == states
+    assert "between its ends" in rig.lib.warning and "not loaded" in rig.lib.warning
+    assert not rig.meta.waiting
+
+
+def test_the_edges_d_pad_fades_the_list_and_no_other_pads_does(rig):
+    """The rows are the Edge model's own (`models._EDGE_LAYOUT`), so the same D-pad on a
+    DualSense walks nothing: that pad has no layout at all."""
+    edge = routing.layout_of(gamepad.models.MODELS["edge"])
+    rows = {b.source: (b.target, b.op) for b in edge.rows}
+    assert rows["hat:W"] == ("preset.fade.prev", "fire")
+    assert rows["hat:E"] == ("preset.fade.next", "fire")
+    assert edge.sources >= {"hat:W", "hat:E"}, "the table's own D-pad rows are not heard"
+    assert not routing.layout_of(gamepad.models.MODELS["dualsense"]).rows
+    from hyperspace.pads import models
+
+    on_air = rig.one.loaded_patch.lib.current(LOADABLE)
+    listing = rig.lib.list(LOADABLE)
+    pad = ScriptedPad()
+    pad.model = models.MODELS["edge"]
+    pad.frame(hat=gamepad.HAT_RIGHT)             # the real road: the D-pad's →
+    rig.one.router.pad(pad, now=1.0)
+    want = listing[(listing.index(on_air) + 1) % len(listing)]
+    assert rig.two.loaded_patch.lib.current(LOADABLE) == want and rig.meta.waiting
+
+
 def _library_verb(pid):
     """`preset.*`: the whole group is refused now (row 746), which replaced row 752's list."""
     return pid.startswith("preset.")
@@ -989,7 +1094,7 @@ def _library_verb(pid):
 # ------------------------------------------- no patch's row can press any `preset.*` (row 746)
 
 CARRIED = ["preset.select", "preset.next", "preset.prev", "preset.home", "preset.load.0",
-           "preset.list.next", "preset.list.prev"]
+           "preset.list.next", "preset.list.prev", *FADES]
 
 
 @pytest.mark.parametrize("verb", CARRIED)
