@@ -246,3 +246,25 @@ def test_backups_of_the_home_are_never_copied(tmp_path):
     assert ml.main([str(dest), "--from", str(home)]) == 0
     assert not [p for p in dest.iterdir() if "backup" in p.name]
     assert (home / "library-backup-20261123-120000" / "bindings.json").is_file()
+
+
+def test_an_old_show_behind_an_install_of_its_name_is_kept_back(tmp_path, capsys):
+    """Review of #480: ``projects/party.hyp.json`` and ``installs/party.json`` are one entry,
+    the install opened — so a show copied beside one (in the shared folder, or the home's
+    own) would never show: said as a conflict, and kept in the archive."""
+    home = a_home(tmp_path)
+    (home / "projects").mkdir()
+    (home / "projects" / "party.hyp.json").write_text('{"name": "party", "mine": 1}')
+    (home / "projects" / "mine.hyp.json").write_text('{"name": "mine"}')   # installs/mine.json
+    (home / "projects" / "solo.hyp.json").write_text('{"name": "solo"}')
+    dest = tmp_path / "shared"
+    (dest / "installs").mkdir(parents=True)
+    (dest / "installs" / "party.json").write_text('{"name": "party"}')
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    out = capsys.readouterr().out
+    assert not (dest / "projects" / "party.hyp.json").exists()
+    assert not (dest / "projects" / "mine.hyp.json").exists()
+    assert (dest / "projects" / "solo.hyp.json").is_file()
+    (archive,) = [p for p in home.iterdir() if p.name.startswith(ml.ARCHIVE)]
+    assert f"yours is now at {archive / 'projects' / 'party.hyp.json'}" in out
+    assert "installs/party.json is opened instead" in out

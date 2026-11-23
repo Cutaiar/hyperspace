@@ -108,6 +108,14 @@ def move(dest: Path, home: Path, *, dry_run: bool = False,
     for rel in files(home):
         src, dst = home / rel, dest / rel
         data = src.read_bytes()
+        # an old show is one entry with the install of its stem, which the app opens
+        # instead (`library.install_files`): copied beside one, it would never show
+        # (review of #480) — kept back like any other conflict
+        shadow = _install_of(rel)
+        if shadow is not None and ((dest / shadow).exists() or (home / shadow).exists()):
+            done.append(("KEPT THEIRS", rel))
+            out(f"KEPT THEIRS {rel} — {shadow} is opened instead; yours stays at {src}")
+            continue
         if dst.exists():
             if dst.read_bytes() == data:
                 done.append(("have", rel))
@@ -123,6 +131,16 @@ def move(dest: Path, home: Path, *, dry_run: bool = False,
         done.append(("copied", rel))
         out(f"copied      {rel}")
     return done
+
+
+def _install_of(rel: Path) -> Path | None:
+    """The install file an old show at `rel` (``projects/<stem>.hyp.json``) is one entry
+    with: ``installs/<stem>.json``; None for anything else."""
+    lib = _library()
+    if len(rel.parts) == 2 and rel.parts[0] == lib.PROJECTS and rel.name.endswith(
+            lib.PROJECT_SUFFIX):
+        return Path(lib.INSTALLS) / (lib.install_stem(rel.name) + lib.INSTALL_SUFFIX)
+    return None
 
 
 def clear(home: Path, done: list[tuple[str, Path]], *, out=print) -> Path | None:
