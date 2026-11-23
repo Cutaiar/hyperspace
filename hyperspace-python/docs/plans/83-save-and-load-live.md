@@ -23,7 +23,7 @@ checks 830–835, group FD. No file format changes: no new saved key, no new par
     as `PATCH <n>`;
   - it never writes over a file (the name is free among every file stem, listed name and pad);
   - the new patch becomes the loaded one, so a second press counts on;
-  - it takes the next empty pad (row 1031, pending).
+  - it takes the next empty pad (row 1031).
 - For 4 s the chip reads "saved moo 2", lit red; the full name is on its hover and on the footer.
 - The chip's right-click is `preset.save_new`'s menu, so **Learn** puts the same press on a desk or pad button.
   No new param was needed: `preset.save_new` was already learnable and never a patch's row (row 752).
