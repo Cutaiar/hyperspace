@@ -683,7 +683,11 @@ def _wired(ctx, pairs, values):
     r.ghost.state.on = False
     for name, v in values.items():
         r.fx.state.values[name].update(v)
-    spec = G.read_graph({"nodes": [], "wires": [{"from": a, "to": b} for a, b in pairs]},
+    # a wired frame, as every saved patch is now: no migration adds a wire
+    # (Devin's review of #471: without the marker the old frame's migration
+    # fed `scene` in, and the test never met the unwired case)
+    spec = G.read_graph({"frame": "wired", "nodes": [],
+                         "wires": [{"from": a, "to": b} for a, b in pairs]},
                         effects=set(r.fx.state.specs))
     assert not spec.notes, spec.notes
     r.wiring = wired_wiring(spec.wiring())
@@ -709,7 +713,10 @@ def test_with_nothing_wired_in_it_draws_the_whole_frame(ctx):
     r, s, vs = _wired(ctx, [("mandel", "output.1.image")], on)
     alone = _drawn(ctx, r, s, vs)
     assert alone.max() > 100, "the frame is black with nothing wired in"
-    r2, s2, vs2 = _wired(ctx, [("frame", "mandel.image"), ("mandel", "output.1.image")], on)
+    g = r._graph
+    assert "mandel" in g.nodes and g.nodes["mandel"].inputs["image"] is None
+    assert "mandel" not in g.dormant
+    r2, s2, vs2 = _wired(ctx, [("scene", "mandel.image"), ("mandel", "output.1.image")], on)
     fed = _drawn(ctx, r2, s2, vs2)
     assert np.abs(alone - fed).max() <= 2.0
     r3, s3, vs3 = _wired(ctx, [("acid", "output.1.image")], {"acid": {"on": True}})
@@ -1029,3 +1036,75 @@ def test_a_dive_wakes_a_resting_skip_at_once():
     assert not g.want(1.5e4)                  # less than a doubling: still resting
     assert g.want(3e4)                        # a doubling since it looked: probe now
     assert not g.want(3.5e4)
+
+
+# Devin's review of #471
+
+def test_a_drive_after_rest_measures_where_the_terms_are_now():
+    """Measure at c = 0.156i, let the drive rest, set c to −0.8 + 0.156i by
+    hand, start again: the first frame moves at the rate measured there,
+    not at the old one."""
+    spec = FxState().specs["mandel"]
+    v = values(**dict(JULIA, c_x=0.0, c_drive_x=1.0))
+    M.advance(spec, v, 1 / 60)                   # measured at c = 0.156i
+    v["c_drive_x"] = 0.0
+    M.advance(spec, v, 1 / 60)                   # at rest
+    v["c_x"], v["c_drive_x"] = -0.8, 1.0
+    x = v["c_x"]
+    M.advance(spec, v, 1 / 60)
+    fresh = values(**dict(JULIA, c_drive_x=1.0))
+    M.advance(spec, fresh, 1 / 60)
+    assert v["c_x"] - x == pytest.approx(fresh["c_x"] - JULIA["c_x"], rel=1e-9)
+
+
+def test_z0_at_zero_on_the_mandelbrot_slice_does_not_lurch():
+    """z₀ = 0 has a first derivative of 0 (z₁ = z₀² + c), which read as a
+    term the picture ignores and ran at a whole view a second: 15 frames at
+    full throw took z₀ to 0.75. A used term the measure cannot read starts
+    at `TERM_RATE` of the view; only an unused one keeps the full rate."""
+    spec = FxState().specs["mandel"]
+    v = values(z0_drive_x=1.0)
+    for _ in range(15):
+        M.advance(spec, v, 1 / 60)
+    h = M.view_height(v["zoom"])
+    assert 0.0 < v["z0_x"] <= M.TERM_RATE * h * 0.25 + 1e-12
+    r = M.sensitivity(values())
+    assert r["c"] == math.inf and math.isfinite(r["z0"])
+
+
+def test_every_gate_on_a_chain_shares_one_query_pool():
+    """A query once made lives as long as its context (moderngl 5 cannot
+    free one): a node dropped and added again uses the queries it made."""
+    gl = M.Gl()
+    ctx = _QCtx(5)
+    st = gl.state("mandel")
+    st.gate.issue(ctx, 10)
+    st.gate.issue(ctx, 10)
+    assert ctx.made == 2
+    gl.prune([])                              # a patch without it lands
+    assert len(gl.queries) == 2
+    again = gl.state("mandel")
+    again.gate.issue(ctx, 10)
+    again.gate.issue(ctx, 10)
+    gl.state("mandel.2").gate.issue(ctx, 10)
+    assert ctx.made == 3                      # two from the pool, one new
+
+
+def test_a_render_too_wide_for_the_packed_pass_runs_without_the_skip(ctx):
+    """5120×1080 at Size 1080 needs 320 tiles × 64 = 20 480 px across, over
+    a 16 384 px limit: the pass draws the picture without the skip rather
+    than fail its target."""
+    r = Rig(ctx, 160, 128)
+    try:
+        kw = {"iters": 400.0, "zoom": 1.0, "centre_x": -0.5, "skip": 0}
+        with_skip = r.steps(**kw)
+        assert r.stats["skip"]
+        r.chain.mandel.max_px = 10 * M.BORDER - 1     # one px short of 10 tiles
+        without = r.steps(**kw)
+        assert not r.stats["skip"] and not r.stats["skip_valid"]
+        assert mismatch(with_skip, without) < 0.01
+    finally:
+        r.release()
+    gl = M.Gl()
+    gl.max_px = 16384
+    assert gl.fits(None, 4096) and not gl.fits(None, 5120)

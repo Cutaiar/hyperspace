@@ -113,7 +113,7 @@ def bench(ctx, chain, st, out, src, view: dict, frames: int) -> float | None:
     v.update(view)
     t = 0.0
     if chain.mandel is not None and "mandel" in chain.mandel.states:
-        chain.mandel.states["mandel"].gate = M.SkipGate()
+        chain.mandel.states["mandel"].gate = M.SkipGate(free=chain.mandel.queries)
     for _ in range(M.SKIP_LAG + 2):
         chain.run_one("mandel", src, out, t, opaque=1)
         t += 1 / 60

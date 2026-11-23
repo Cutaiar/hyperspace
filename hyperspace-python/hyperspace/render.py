@@ -151,6 +151,7 @@ from .graph import (
     bus_cuts_of,
     channel_into,
     cloud_roles,
+    generators_of,
     graph_key,
     mask_flip,
     mask_made,
@@ -1973,13 +1974,16 @@ class Renderer:
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
         effects = frozenset(st.specs) if st is not None else frozenset()
+        # plan 80: the effects that draw with nothing wired in (`Effect.generates`)
+        gens = generators_of(st)
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
                 or getattr(graph, "bus_cuts", None) != bus_cuts
-                or frozenset(getattr(graph, "effects", ())) != effects):
+                or frozenset(getattr(graph, "effects", ())) != effects
+                or frozenset(getattr(graph, "generators", ())) != gens):
             graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
-                                              bus_cuts)
+                                              bus_cuts, tuple(sorted(gens)))
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does

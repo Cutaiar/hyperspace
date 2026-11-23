@@ -445,7 +445,12 @@ def sensitivity(v: dict, w: int = SENS_GRID[0], h: int = SENS_GRID[1],
     so its brightness, answers a change of z; an inside point, which stays
     black, counts nothing). With q laid in by Slice s: ∂z/∂q = (1 − s)∂z/∂c
     + s ∂z/∂z₀, ∂z/∂c_term = s ∂z/∂c, ∂z/∂z₀_term = (1 − s) ∂z/∂z₀. A term
-    the picture does not answer (unused, or nothing escaped) is inf."""
+    the slice does not use (c at Slice 0, z₀ at 1) is inf: its drive keeps
+    plan 63's rate. A used term the measure cannot read — nothing escaped,
+    or a first derivative of 0, as z₀ = 0 has (z₁ = z₀² + c: a step of z₀
+    moves the picture by its square) — is 1, so its drive starts at
+    `TERM_RATE` of the view and is measured again once it has moved
+    (Devin's review of #471: inf there lurched a fifth of a screen)."""
     p, s = int(v["power"]), float(v["slice"])
     q = complex(v["centre_x"], v["centre_y"]) + offsets(w, h, float(v["zoom"]))
     c, z = terms(q, v)
@@ -471,10 +476,13 @@ def sensitivity(v: dict, w: int = SENS_GRID[0], h: int = SENS_GRID[1],
         g = 1.0 / (a * np.log(np.maximum(a, 1.0001)))
         screen = float(np.sum(np.abs((1.0 - s) * dc[out] + s * dz[out]) * g))
         got = {}
-        for term, d in (("c", s * dc[out]), ("z0", (1.0 - s) * dz[out])):
-            moved = float(np.sum(np.abs(d) * g))
-            r = screen / moved if moved > 0.0 and math.isfinite(moved) else math.inf
-            got[term] = r if math.isfinite(r) else math.inf
+        for term, share, d in (("c", s, dc[out]), ("z0", 1.0 - s, dz[out])):
+            if share <= 0.0:
+                got[term] = math.inf                      # unused by this slice
+                continue
+            moved = float(np.sum(np.abs(share * d) * g))
+            r = screen / moved if moved > 0.0 and math.isfinite(moved) else math.nan
+            got[term] = r if math.isfinite(r) and r > 0.0 else 1.0
     return got
 
 
@@ -518,6 +526,11 @@ def advance(spec, v: dict, dt: float) -> None:
         v["zoom"] = min(max(float(v["zoom"]) * 2.0 ** (DIVE_DOUBLINGS * dive * dt), lo), hi)
     h = view_height(v["zoom"])
     scale = None
+    if not any(float(v.get(rate, 0.0)) for term, rate in DRIVES if not term.startswith("centre")):
+        # every term drive at rest: forget the measure, so the next start
+        # measures where the terms are then, not where they were (Devin's
+        # review of #471: a c set by hand while at rest kept the old rate)
+        _sens.pop(id(v), None)
     for term, rate in DRIVES:
         r = float(v.get(rate, 0.0))
         if r:
@@ -637,8 +650,11 @@ class SkipGate:
     rest: int = 0                     # passes since the last probe while off
     zoom: float = 1.0                 # the zoom it last looked at
     pending: list = field(default_factory=list)       # [query, tiles, age]
-    free: list = field(default_factory=list)          # read queries, used again (moderngl
-                                                      # 5's Query has no release)
+    # read queries, used again: moderngl 5's Query has no release, so a query
+    # once made lives as long as its context. `Gl.state` hands every gate on a
+    # chain the chain's one pool, and a gate let go returns its queries there
+    # (Devin's review of #471: a patch switched away and back made new ones)
+    free: list = field(default_factory=list)
     flagged: float | None = None      # the last share read back
     queries: bool = True              # False once a query could not be made
 
@@ -686,9 +702,10 @@ class SkipGate:
         self.pending = keep
 
     def release(self) -> None:
-        """Drop the queries (freed with the context: moderngl 5 has no
-        `Query.release`)."""
-        self.pending, self.free = [], []
+        """Return every query, read or not, to the pool (`free`, the chain's):
+        a later gate begins it again, which drops a result still pending."""
+        self.free.extend(q for q, _, _ in self.pending)
+        self.pending = []
 
 
 @dataclass
@@ -715,9 +732,28 @@ class Gl:
     states: dict[str, State] = field(default_factory=dict)
     tiles_prog: moderngl.Program | None = None
     tiles_vao: moderngl.VertexArray | None = None
+    queries: list = field(default_factory=list)       # plan 80: the skip gates' query pool
+    max_px: int = 0                                   # the context's largest target side
 
     def state(self, name: str) -> State:
-        return self.states.setdefault(name, State())
+        got = self.states.get(name)
+        if got is None:
+            got = self.states[name] = State(gate=SkipGate(free=self.queries))
+        return got
+
+    def fits(self, ctx: moderngl.Context, w: int) -> bool:
+        """Plan 80: whether the packed border pass (`BORDER` px a tile across)
+        fits a target this context can make, for a render `w` px wide — over
+        about 4096 px (an ultrawide output at Size 1080) it does not, and the
+        pass runs without the skip (Devin's review of #471)."""
+        if not self.max_px:
+            info = getattr(ctx, "info", {}) or {}
+            sides = [int(info.get("GL_MAX_TEXTURE_SIZE", 0) or 0)]
+            dims = info.get("GL_MAX_VIEWPORT_DIMS")
+            if dims:
+                sides.append(int(min(dims)))
+            self.max_px = min((x for x in sides if x > 0), default=8192)
+        return -(-w // TILE) * BORDER <= self.max_px
 
     def prune(self, names) -> None:
         """Release every instance's objects that is not among `names` (a
@@ -818,7 +854,7 @@ def run(chain, name: str, prog: moderngl.Program, vao: moderngl.VertexArray,
     _set(prog, "u_lines", int(h))
     _set(prog, "u_width", int(w))
     scaled = int((w, h) != tuple(src.size))
-    valid = skip_valid(v)
+    valid = skip_valid(v) and gl.fits(ctx, w)
     if valid:
         st.gate.read()
     skip = valid and st.gate.want(float(v["zoom"]))

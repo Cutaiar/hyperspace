@@ -15342,7 +15342,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 - **What.** Plan 80: the owner's report — with nothing wired into `mandel.image` the frame was black, with no note, though the node paints the whole frame and ignores its input. `graph.Effect.reads` and `paint` returned at once with no input. Now an effect whose Python half says `GENERATOR = True` (`mandel.py`) reads and paints with no input: `_pass` clears its input texture to transparent black and runs the pass. With a wire in, nothing changes; an ordinary effect with no input still reads nothing.
 - **Answer.** owner (2026-11-22): accepted, the `graph.py` change included. `graph.py` is outside plan 80's files; the change is these three methods and `generates`.
-- **Built.** `mandel.GENERATOR`, `graph.Effect.generates`; `tests/test_mandel.py::test_with_nothing_wired_in_it_draws_the_whole_frame`, `::test_with_nothing_wired_in_and_switched_off_it_draws_nothing`.
+- **Built.** `mandel.GENERATOR`, `graph.is_generator`, `generators_of`, `Effect.generates`, and `build_graph(generators=…)`: the graph builder keeps a generator with no wire in, where it made every such effect dormant (Devin's review of #471 found the first build fixed only drawing, and its test met the old frame's migration, which wires `scene` in; the test is a wired frame now). The renderer passes the set and keys its cached graph on it (`render.py`, four lines, also outside plan 80's files); `tests/test_mandel.py::test_with_nothing_wired_in_it_draws_the_whole_frame`, `::test_with_nothing_wired_in_and_switched_off_it_draws_nothing`.
 - **Judge it.** 800.
 
 ### 1001. The coloured inside is how fast a point settles
@@ -15370,7 +15370,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 - **What.** Plan 80: forced on against off, the skip paid only where at least a third of the tiles were flagged: seahorse 3e6× and 1e7× at 0.7–1.0 flagged, 0.24–0.52× the cost. Elsewhere it cost 1.0–2.3×: the whole set at 7.5 % flagged (the cardioid test already makes its inside cheap), Julia, the elephant valley, filaments. So it rests under `SKIP_MIN` = 30 % flagged. The count is a samples query on the tiles pass, which now discards unflagged tiles over a cleared target, read `SKIP_LAG` = 3 passes late so the CPU never waits. Resting, it probes every 30 passes, and at once when the zoom has moved a doubling since it last looked. A context with no samples queries keeps plan 63's behaviour.
 - **Answer.** (rec) — pending the owner.
-- **Built.** `mandel.SkipGate`, `SKIP_MIN`, `SKIP_PROBE`, `SKIP_LAG`, `State.gate`, the `flagged` and `skip_valid` stats; `tests/test_mandel.py::test_the_skip_rests_where_few_tiles_are_flagged_and_looks_again`, `::test_a_dive_wakes_a_resting_skip_at_once`, `::test_a_context_with_no_queries_keeps_the_skip_on`, `::test_on_the_gpu_the_skip_turns_itself_off_and_the_picture_stays`.
+- **Built.** `mandel.SkipGate`, `SKIP_MIN`, `SKIP_PROBE`, `SKIP_LAG`, `State.gate`, one query pool a chain (`Gl.queries`: moderngl 5 cannot free a query), the packed pass only where it fits the context (`Gl.fits`: over about 4096 px across it runs without the skip), the `flagged` and `skip_valid` stats; `tests/test_mandel.py::test_the_skip_rests_where_few_tiles_are_flagged_and_looks_again`, `::test_a_dive_wakes_a_resting_skip_at_once`, `::test_a_context_with_no_queries_keeps_the_skip_on`, `::test_on_the_gpu_the_skip_turns_itself_off_and_the_picture_stays`.
 - **Judge it.** 805.
 
 ### 1005. Series approximation not built
