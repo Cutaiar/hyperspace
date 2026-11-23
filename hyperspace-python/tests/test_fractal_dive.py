@@ -440,13 +440,22 @@ def test_a_camera_an_undo_restores_is_taken_as_it_is():
     assert (s.zoom, s.pan, s.dive.path) == (zoom, pan, path)
 
 
-def test_the_deck_undo_drops_the_dive_reference_on_a_restore(tmp_path):
-    """The real deck's undo (`Deck.build`) calls `_unseen` when it restores."""
+def test_the_deck_undo_drops_the_dive_reference_on_a_restore_from_another_dive(tmp_path):
+    """The real deck's undo (`Deck.build`, `deck.DiveFrame`): a restore that
+    writes the camera from another dive's life has the dive take it as it is
+    (`_unseen`); within one, it keeps the zoom it saw, so a restored zoom is
+    taken about the middle of the screen, as the edit it undoes was."""
+    from hyperspace import deck
     from tests.test_undo import boot
     r = boot(tmp_path / "home")
-    r.view.dive.seen = (1.0, np.zeros(4), np.eye(4))
-    r.undo.on_restore()
-    assert r.view.dive.seen is None
+    beside = r.undo.beside
+    assert isinstance(beside, deck.DiveFrame)
+    d = r.view.dive
+    d.seen = (1.0, np.zeros(4), np.eye(4))
+    beside.put({"frame": (0.0,) * 4, "lives": d.lives}, kept=True)
+    assert d.seen is not None and d.seen[0] == 1.0
+    beside.put({"frame": (0.0,) * 4, "lives": d.lives - 1}, kept=False)
+    assert d.seen is None
 
 
 # ---- plan 81 follow-up: the framing, off air, saved, and undo (rows 1018–1019)
@@ -708,3 +717,120 @@ def test_an_unrelated_undo_leaves_the_framing(tmp_path):
     r.undo.undo()
     _run(r, 30)
     assert r.view.dive.frame[0] == pytest.approx(0.1)
+
+
+# ---- Devin's review of #474 (2026-11-23)
+
+def _frame_reg(s, reg, dt: float) -> None:
+    reg.apply()
+    s.integrate(dt)
+    app._space(SimpleNamespace(view=s, world=None), None)
+    s.reroot(reg, None, dt)
+
+
+def test_undoing_a_load_puts_the_camera_back_as_it_was(tmp_path):
+    """A load replaces the dive (another life): undoing it puts the camera
+    back as it was, not with the loaded dive's motion carried onto it."""
+    from tests.test_loadable import put
+    from tests.test_undo import settle
+    r = _undo_rig(tmp_path)
+    r.reg["view.shape"].set(geometry.shape_index("Tesseract"))
+    r.reg["camera.zoom"].set(1.0)
+    r.reg["camera.pan.x"].set(0.0)
+    settle(r)
+    zoom, pan = r.reg["camera.zoom"].base, r.reg["camera.pan.x"].base
+    put(r.home, "Sponge", values={"view.shape": geometry.shape_index("Menger sponge"),
+                                  "camera.zoom": 1.0},
+        fractal={"detail": 1.0, "far": 0.0, "near": 0.0, "dive": 1.0})
+    r.loaded_patch.load("Sponge")
+    _run(r, 180)                                     # three levels in, past re-roots
+    assert len(r.view.dive.path) >= 2
+    r.undo.undo()
+    assert r.reg["view.shape"].base == geometry.shape_index("Tesseract")
+    assert r.reg["camera.zoom"].base == pytest.approx(zoom)
+    assert r.reg["camera.pan.x"].base == pytest.approx(pan, abs=1e-12)
+
+
+def test_undoing_a_zoom_in_a_paused_dive_puts_the_cell_back(tmp_path):
+    """A zoom edit in a paused dive is taken about the middle (the cell's
+    place moves with it); its undo takes the zoom back about the middle too,
+    so the cell lands where it was, and a redo where the edit had it."""
+    r = _undo_rig(tmp_path)
+    r.reg["view.frac_dive"].set(1.0)
+    _run(r, 70)
+    r.reg["view.frac_dive"].set(0.0)
+    _run(r, 60)
+    s = r.view
+    zoom, p, path = s.zoom, _p(s), list(s.dive.path)
+    z = r.reg["camera.zoom"]
+    z.set(z.base * 1.05)
+    _run(r, 60)
+    assert s.dive.path == path and not np.allclose(_p(s), p)
+    zoom1, p1 = s.zoom, _p(s)
+    r.undo.undo()
+    _run(r, 5)
+    assert s.dive.path == path
+    assert s.zoom == pytest.approx(zoom, rel=1e-9)
+    assert np.allclose(_p(s), p, atol=1e-9 * s.zoom), _p(s) - p
+    assert not s.dive.frame.any()
+    r.undo.redo()
+    _run(r, 5)
+    assert s.zoom == pytest.approx(zoom1, rel=1e-9)
+    assert np.allclose(_p(s), p1, atol=1e-6 * s.zoom), _p(s) - p1
+
+
+def test_a_wheel_zoom_at_the_middle_inside_a_dive_is_about_the_middle():
+    """Inside a dive the step takes a zoom about the middle of the screen; the
+    wheel at the middle adds no pan of its own, so the point under the middle
+    stays and no framing is made."""
+    from tests.test_fractal import _reg
+    s = _view("Menger sponge", frac_dive=1.0)
+    reg = _reg(s)
+    for _ in range(70):
+        _frame_reg(s, reg, 0.1)
+    reg["view.frac_dive"].set(0.0)
+    _frame_reg(s, reg, 0.1)
+    reg["camera.pan.x"].set(reg["camera.pan.x"].base + 0.05)    # the cell off the middle
+    _frame_reg(s, reg, 0.1)
+    fr = s.dive.frame.copy()
+    spec = fractal.spec_of(s.shape)
+    x, path = _under_middle(s), list(s.dive.path)
+    assert fractal.about_middle(s)
+    app._zoom_about(reg["camera.zoom"], reg["camera.pan.x"], reg["camera.pan.y"], s,
+                    -1.0, WD / 2, HT / 2, WD, HT)               # a notch out, at the middle
+    _frame_reg(s, reg, 1 / 60)
+    assert s.dive.path == path
+    assert np.allclose(s.dive.frame, fr, atol=1e-12)
+    assert np.abs(_q(s, _rooted(spec, x, path, s.dive.path))).max() / s.zoom < 1e-9
+
+
+def test_a_wheel_zoom_outside_a_fractal_is_about_the_cursor_as_before():
+    from tests.test_fractal import _reg
+    s = ViewState(shape=geometry.shape_index("Tesseract"), zoom=1.3, pan=[0.2, 0.1])
+    reg = _reg(s)
+    assert not fractal.about_middle(s)
+    app._zoom_about(reg["camera.zoom"], reg["camera.pan.x"], reg["camera.pan.y"], s,
+                    -1.0, WD / 2, HT / 2, WD, HT)
+    reg.apply()
+    f = s.zoom / 1.3
+    assert s.pan == pytest.approx([0.2 * f, 0.1 * f])
+
+
+def test_an_off_air_dive_centres_where_its_room_placement_draws_it():
+    """A loaded dive with a room placement (`Dive.shift`) dived off air
+    (`app._reroot_off_air`) goes as the same dive on air with no world."""
+    def loaded() -> ViewState:
+        s = _view("Menger sponge", frac_dive=1.0)
+        doc = fractal.Dive(path=[3, 7], inside=True).to_json("Menger sponge")
+        doc["shift"] = [0.5, -0.2, 0.0]
+        assert s.dive.from_json(doc, "Menger sponge") == ""
+        s.dive.shape = int(s.shape)
+        return s
+    a, b = loaded(), loaded()
+    for _ in range(120):
+        a.integrate(0.1)
+        b.integrate(0.1)
+        app._reroot(SimpleNamespace(view=a, world=None), None, 0.1)
+        app._reroot_off_air(SimpleNamespace(view=b, reg=None), 0.1)
+    assert a.dive.path == b.dive.path and len(a.dive.path) > 5
+    assert np.allclose(_p(a), _p(b), atol=1e-12) and a.zoom == b.zoom

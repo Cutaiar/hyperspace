@@ -308,7 +308,9 @@ class Undo:
     `put`, for the status; and `heard`, what ⌘Z last said over the board, for its line.
     `beside` (optional: `deck.DiveFrame`, row 1018) is state the camera's bases
     carry with them that no param holds: `ids`, the params it goes with; `take()`
-    to hold; `put(doc)`, called when a restore writes any of `ids`.
+    to hold; `continues(then, now)`, whether the follows made between two takes
+    are to be kept on a restore (else bases go back as they were);
+    `put(doc, kept)`, called when a restore writes any of `ids`.
     """
 
     only = None      # on the class: a live `Undo` from before a hot reload has it
@@ -409,6 +411,15 @@ class Undo:
                 _rows([b for b in table.bindings if b.layer == "preset"]),
                 _macros(table), self._tag(), self._mods(), self._bank_ids(),
                 _rows(self._table_rows()), self._moves_doc())
+
+    def _follows_kept(self, then: State, now) -> bool:
+        """Are the follows made since `then` to be kept on a restore to it
+        (`beside.continues`; with no `beside`, always)? Not across a load or
+        another dive: those bases go back exactly as they were."""
+        beside = getattr(self, "beside", None)
+        if beside is None:
+            return True
+        return bool(beside.continues(getattr(then, "beside", None), now))
 
     def _beside_take(self):
         beside = getattr(self, "beside", None)
@@ -724,11 +735,12 @@ class Undo:
         apart = then.tag != now.tag
         ids, left = [], False
         dt, dn = getattr(then, "drift", None) or {}, getattr(now, "drift", None) or {}
+        kept = self._follows_kept(then, getattr(now, "beside", None))
         for pid, v in then.bases.items():
             if pid not in now.bases:
                 continue
             a, b = dt.get(pid, 0.0), dn.get(pid, 0.0)
-            if (_same(v, now.bases[pid]) if a == b
+            if (_same(v, now.bases[pid]) if a == b or not kept
                     else _same_own(self.reg.get(pid), v, a, now.bases[pid], b)):
                 continue
             if apart and self._is_tagged(pid):
@@ -815,6 +827,7 @@ class Undo:
             on_tag = state.tag == self._tag()
             left = False
             drift = getattr(state, "drift", None) or {}
+            kept = self._follows_kept(state, self._beside_take())
             wrote: set[str] = set()
             for _ in range(PASSES):
                 todo = {}
@@ -823,7 +836,7 @@ class Undo:
                         continue
                     v = state.bases[p.id]
                     then = drift.get(p.id, 0.0)
-                    if (_same(p.base, v) if then == _drift(p)
+                    if (_same(p.base, v) if then == _drift(p) or not kept
                             else _same_own(p, v, then, p.base, _drift(p))):
                         continue
                     if not on_tag and self._is_tagged(p.id):
@@ -831,7 +844,8 @@ class Undo:
                         continue
                     # (with the follows made since: an undo keeps the dive's
                     # progress and takes back only what the user set)
-                    v = own(p, v, then)
+                    if kept:
+                        v = own(p, v, then)
                     todo[p.id] = list(v) if isinstance(v, list) else v
                 if not todo:
                     break
@@ -840,9 +854,8 @@ class Undo:
             # 5½. what lives beside the camera (row 1018: the dive's framing),
             #     with it: only when this restore wrote the camera
             beside = getattr(self, "beside", None)
-            if (beside is not None and getattr(state, "beside", None) is not None
-                    and wrote.intersection(beside.ids)):
-                beside.put(state.beside)
+            if beside is not None and wrote.intersection(beside.ids):
+                beside.put(getattr(state, "beside", None), kept)
             # 6. the macros' bases are acted on: nothing re-lands next frame
             if self.on_restore is not None:
                 self.on_restore()

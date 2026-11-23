@@ -1531,6 +1531,11 @@ def _zoom_about(zoom, pan_x, pan_y, view, wheel: float, x: float, y: float,
     # world (on the plane through the origin, where a unit is `unit` px)
     unit = _px_per_unit(view, w, h)
     cx, cy = view.pan[0], view.pan[1]
+    if fractal.about_middle(view):
+        # inside a fractal the step takes the zoom about the middle of the
+        # screen itself (plan 81, `fractal.centre`): the wheel adds only the
+        # move from the middle to the cursor, or the two pivots stack
+        cx = cy = 0.0
     pan_x.nudge((cx - (x - w / 2) / unit) * (factor - 1))
     pan_y.nudge((cy - (y - h / 2) / unit) * (factor - 1))
 
@@ -1735,6 +1740,16 @@ def _reroot(h: Host, reg, dt: float = 0.0) -> None:
     view.reroot(reg, off, dt)
 
 
+def _reroot_off_air(d, dt: float = 0.0) -> None:
+    """A deck off air re-rooted: no world of its own, but the room placement
+    its dive carries (`Dive.shift`, a loaded dive's) is drawn all the same
+    (`shapeframe.drawn_offset`), so the dive centres where it is drawn."""
+    view = d.view
+    off = (shapeframe.drawn_offset(view)
+           if _dive_of(view) is not None and field_mod.takes_offset(view) else None)
+    view.reroot(d.reg, off, dt)
+
+
 def _fly(h: Host, reg) -> None:
     """Plan 64, part 2: inside a fractal, what the grip and its physics did to
     the space this frame (the shape object's offset, world units) folded into
@@ -1936,7 +1951,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         _reroot(h, reg, dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("view.reroot", e)
-    if said := _off_air(h, "reroot", lambda d: d.view.reroot(d.reg, None, dt)):
+    if said := _off_air(h, "reroot", lambda d: _reroot_off_air(d, dt)):
         ok, reloader.runtime_error = False, said
     # the world (plan 59): the shape's home from this frame's params, the
     # puppets (the palms, read after HandsIO.poll), then the physics' fixed

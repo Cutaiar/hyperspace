@@ -336,6 +336,10 @@ class Dive:
     # (world units, 4D): the pans and the flights made inside, kept as a
     # framing the dive's settle onto the cell's middle leaves alone
     frame: np.ndarray = field(default_factory=lambda: np.zeros(4))
+    # plan 81 follow-up: how many times this dive has started over (`reset`:
+    # a load, another shape, the top). Undo puts the dive's own motion back on
+    # a restored camera only within one life (`deck.DiveFrame`, row 1018)
+    lives: int = 0
 
     def reset(self) -> None:
         self.path.clear()
@@ -346,6 +350,7 @@ class Dive:
         self.seen = None
         self.settled = False
         self.frame = np.zeros(4)
+        self.lives = getattr(self, "lives", 0) + 1
 
     def to_json(self, name: str) -> dict:
         """The dive as a loadable patch keeps it (`DIVE_KEY`, row 889)."""
@@ -587,6 +592,15 @@ def centre(s, reg=None, off=None, dt: float = 0.0) -> None:
         d.seen = (zoom, p.copy(), M)
         return
     _land(s, reg, zoom0, p0, zoom, p, keep=True)
+
+
+def about_middle(s) -> bool:
+    """Will the next step take a zoom or turn about the middle of the screen
+    (`centre`): a fractal's view, inside it or in a cell, with a view seen?
+    The wheel's own pivot then leaves the middle to `centre` (app._zoom_about)."""
+    d = getattr(s, "dive", None)
+    return (d is not None and spec_of(s.shape) is not None and d.shape == int(s.shape)
+            and getattr(d, "seen", None) is not None and bool(d.path or d.inside))
 
 
 def _middle(s, off, zoom: float, p: np.ndarray) -> np.ndarray:

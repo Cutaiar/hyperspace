@@ -247,7 +247,28 @@ Five fixes after the review, each with a test in `tests/test_fractal_dive.py`:
    modulation on camera.zoom, was not taken: it would change what a saved
    dive holds and how every route on camera.zoom rides.
 
-**Restart:** `Deck.build` wires the undo's `beside` once, at launch.
+Devin's review of #474 found four more, each fixed with a test:
+
+- **Undoing a load** carried the loaded dive's motion onto the old camera.
+  `Dive.lives` (bumped by every `reset`) marks a dive's life; undo keeps the
+  follows only within one, and only while the dive runs or has re-rooted
+  since (`deck.DiveFrame.continues`). Otherwise the camera goes back exactly
+  (`test_undoing_a_load_puts_the_camera_back_as_it_was`,
+  `test_undoing_a_zoom_in_a_paused_dive_puts_the_cell_back`).
+- **A restore cleared the dive's reference** (`_unseen` on every restore), so a
+  zoom undone in a running dive left the cell where the zoom had put it. Now
+  `DiveFrame.put` keeps the reference's zoom when the follows are kept, so the
+  restored zoom is taken about the middle, as the edit was; the whole camera
+  is taken as it is otherwise.
+- **The wheel's pivot stacked on `centre`'s** inside a dive. The wheel now adds
+  only the move from the middle to the cursor there (`fractal.about_middle`)
+  (`test_a_wheel_zoom_at_the_middle_inside_a_dive_is_about_the_middle`).
+- **Off air, the re-root ignored a loaded dive's room placement.**
+  `app._reroot_off_air` passes `shapeframe.drawn_offset`
+  (`test_an_off_air_dive_centres_where_its_room_placement_draws_it`).
+
+**Restart:** `Deck.build` wires the undo's `beside` once, at launch; `Dive.lives`
+is a new field.
 
 ## 8. Open
 

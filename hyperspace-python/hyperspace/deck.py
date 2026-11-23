@@ -94,9 +94,10 @@ def _unseen(view) -> None:
 class DiveFrame:
     """What an undo step holds beside the camera (`undo.Undo`'s `beside`, plan
     81 follow-up, row 1018): the view's dive framing (`fractal.Dive.frame`),
-    the pans made inside a fractal, which no param holds. Put back only when a
-    restore writes the camera, so an undone pan takes its framing with it and
-    an unrelated edit leaves the framing alone."""
+    the pans made inside a fractal, which no param holds, and which life of the
+    dive it was (`Dive.lives`). Put back only when a restore writes the camera,
+    so an undone pan takes its framing with it and an unrelated edit leaves the
+    framing alone."""
 
     ids = ("camera.zoom", "camera.pan.x", "camera.pan.y")
 
@@ -104,13 +105,47 @@ class DiveFrame:
         self.view = view
 
     def take(self):
-        fr = getattr(getattr(self.view, "dive", None), "frame", None)
-        return None if fr is None else tuple(float(x) for x in fr)
-
-    def put(self, doc) -> None:
         d = getattr(self.view, "dive", None)
-        if d is not None and doc is not None and len(doc) == 4:
-            d.frame = np.array(doc, dtype=np.float64)
+        fr = getattr(d, "frame", None)
+        if fr is None:
+            return None
+        path = getattr(d, "path", [])
+        return {"frame": tuple(float(x) for x in fr), "lives": getattr(d, "lives", 0),
+                # (the rooted cell, cheaply: how deep and its last few levels)
+                "cell": (len(path), tuple(path[-8:])),
+                "diving": bool(getattr(self.view, "frac_dive", 0.0))}
+
+    @staticmethod
+    def continues(then, now) -> bool:
+        """Are the follows made between `then` and `now` the dive's own motion,
+        to keep on a restore? Only within one dive (`lives`): across a load,
+        another shape or the top a restore puts the camera back as it was. And
+        not while the dive stands still in the same cell: there the follows
+        were the edit's own (the zoom about the middle and its settle), the
+        camera then and now are in one frame, and it goes back exactly."""
+        if not (isinstance(then, dict) and isinstance(now, dict)
+                and then.get("lives") == now.get("lives")):
+            return False
+        return bool(now.get("diving")) or then.get("cell") != now.get("cell")
+
+    def put(self, doc, kept: bool = False) -> None:
+        """The framing back, and the dive told how to read the camera the
+        restore wrote: `kept` (the same dive, the follows since kept), a
+        restored zoom or turn is taken about the middle of the screen, as the
+        edit it undoes was — so the cell lands back where it was — and a
+        restored pan as it is; otherwise the whole camera as it is (`_unseen`)."""
+        d = getattr(self.view, "dive", None)
+        if d is None:
+            return
+        fr = doc.get("frame") if isinstance(doc, dict) else None
+        if fr is not None and len(fr) == 4:
+            d.frame = np.array(fr, dtype=np.float64)
+        seen = getattr(d, "seen", None)
+        if not kept or seen is None:
+            _unseen(self.view)
+            return
+        p = np.array([float(self.view.pan[0]), -float(self.view.pan[1]), d.z, d.w])
+        d.seen = (seen[0], p, seen[2])
 
 
 def in_patch(p) -> bool:
@@ -341,10 +376,9 @@ class Deck:
         # macros are acted on. The meta params are on `meta_stack`'s
         marks = Marks(loaded_patch.lib)
         undo_obj = undos.Undo(reg, router.table, marks=marks, only=in_patch,
-                              # (and the view's dive takes the restored camera
-                              # as it is, plan 81: not as a zoom about the middle)
-                              on_restore=lambda: (router.sync_macros(), _unseen(s)),
-                              # and its framing goes with the camera (row 1018)
+                              on_restore=router.sync_macros,
+                              # the dive's framing goes with the camera, and the
+                              # dive is told how to take a restored camera (row 1018)
                               beside=DiveFrame(s),
                               # the LFOs' membership (plan 31 B), read off the
                               # router at each step, so a re-classed router counts
