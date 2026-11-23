@@ -2461,6 +2461,8 @@ def main(argv: list[str] | None = None) -> None:
         ui_media.DROPPED.extend(paths)
 
     for _w in (ctrl_win, render_win):       # a file dropped on either window → a media cell
+        if _w is None:                      # (no display shows output 1)
+            continue
         # (pyGLFW's stub types the callback (window, int, str); it is called (window, paths))
         glfw.set_drop_callback(_w, on_drop)  # pyright: ignore[reportArgumentType]
     mouse = Mouse(render_win, reg, s, slots[0].switches,          # the mouse: output 1 only
