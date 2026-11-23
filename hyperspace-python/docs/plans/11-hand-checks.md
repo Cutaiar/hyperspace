@@ -8872,6 +8872,21 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 **678. A hand on c deep in.** At 10⁶× with **Steps** at 4096, a hand on **c drive x**. *Pass:* the picture keeps the frame rate while c moves (the reference is computed every frame c changes). *Fail:* a stutter: say at which Steps it starts (the bench's `ref ms`).
 
+## FC. Control widgets (rows 1020–1029, 2026-11-22)
+
+Plan 82. Headless: `tests/test_control_widgets.py` (the parse, the shapes, the ticks; a pad, a knob and a bipolar fader driven by `tests/ui_driver.py`). The pictures in `assets/82-control-widgets/` were made on Mesa's software rasteriser; nothing here was seen on the Mac. Hot reload carries it: no new module, no new field on a live object. While playing, note answers to the plan doc's open style questions (`82-control-widgets.md`, "Open style questions"): sizes, throws, the detent's pull, the ticks' look.
+
+**820. Bipolar faders.** (Mac, the trackpad) Open Kaleidoscope's strip. *Pass:* Swirl rests with its thumb in the middle and no fill; dragged right it fills red from the middle rightward, left leftward; dragged back near the middle it settles on 0.00 without fiddling; Ctrl+click and type 0.01: it stays 0.01. The effect's speed fills from its stop the same way. *Fail:* a fill from the left end, a detent you can't feel, or one that grabs a value you meant to set.
+
+**821. Unity faders.** Kaleidoscope's Zoom, Blocks' Aspect and Hue cycle's Saturation. *Pass:* each rests in the middle at 1, with a notch there; turned down it fills leftward from 1, up rightward; a drag near 1 lands on 1. Prism's Rim (rests at 1 but is no multiplier) fills from the left. Say if another fader wants a detent (row 1022). *Fail:* a unity fader filled from the left, or a notch away from 1.
+
+**822. Ticks.** Kaleidoscope's Segments (2–16), Zoom burst's Taps (4–32), Bloom's Taps (8–96) and Wave Table's Blades (1–5), in the side pane at its narrowest and widest. *Pass:* a tick a step under each track where they fit, evenly thinned where they don't, both ends ticked, never a smear; the thumb lands on a tick at every value. *Fail:* ticks that crowd into a grey bar, or a thumb between ticks.
+
+**823. A pad on a trackpad, at a distance.** (the rig's display, the stage's distance) Prism's Centre pad, then Wave's and Wave Table's Offset. *Pass:* the square reads at once as "the point on the screen"; a tap anywhere puts the dot there, a drag carries it, and the effect's centre follows on the output; ⇧ held moves it finely; you can see the dot without looking for it. Right-click each knob: Learn and the routes are there, one param each. *Fail:* a missed tap, a dot hidden under the finger's ring, a pad too small to aim on.
+
+**824. The volume.** Zoom burst's Burst. *Pass:* drag the square: the burst's centre moves; turn the third knob up: the halo grows and the smear reaches further; double-click the X knob: the centre returns to the middle. A saved patch with Zoom burst loads with its centre and amount as they were. *Fail:* a halo that doesn't follow Amount, or a value moved by a load.
+
+**825. Modulation on a pad.** Route an LFO onto Zoom burst's Centre X (and a hand onto Centre Y). *Pass:* a white dot moves with the lanes, a line from the red dot (where you set it) to it, the knobs' white ticks move, the readouts go red; drag the pad while it rides: the red dot moves, the white one rides about it. *Fail:* the red dot moving with the LFO, or no sign the lane is there.
 ## FE. GRAPH: GPU cost at a glance (rows 1040–1045, 2026-11-22)
 
 Plan 84. Headless: `tests/test_gpu_cost.py` (the easing and the ranking, pure; each kind of node's mark; the renderer says what each node made only while asked, and the outputs are the same bytes; off, no push and no badge; the chip never saved). The screens were drawn on Mesa's software rasteriser, so every time in them means nothing; every check here is the rig's. Hot reload is enough.
