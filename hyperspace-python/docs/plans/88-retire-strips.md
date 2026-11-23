@@ -19,7 +19,8 @@ Module presets are reached from strips and nowhere else (`lib.load(group, …)` 
 | fx | patch | (a) already retired | plan 40 D6 |
 | band | shared meta | (c) stays | a scene is a band **layout** (`Library.on_layout` → `control.apply_layout`, the band count) and `on_load` → `control.scene_loaded`; the install corpus names `Balanced`; scenes are code data (`scenes/band/`) with no other picker |
 | loadable | kind | (c) stays | the loadable patches' strip, not a module |
-| hands, grip | shared meta / patch | not touched | another session (plan 85) |
+| hands | shared meta | retired by its own commit (`f631530`) | another session; listed in `RETIRED_MODULES` here too |
+| grip | patch | not touched | its strip is the hands node's, another session's |
 
 (b), "retired but an override key wanted first": none. Every retired group's defaults are the build's fresh values, which a loadable patch already overrides by carrying the value; nothing needed a new key. When a patch wants a non-default for a group with no values of its own to write, that is a new key in that patch's JSON, a later plan.
 
@@ -34,4 +35,4 @@ Module presets are reached from strips and nowhere else (`lib.load(group, …)` 
 
 ## Left, and why
 
-`band` (above). `hands`, `grip` (other session). The strip code stays: `band`, `loadable` and `hands` still use it, and the library API (`save_as`, `load`, `list`) still works for a retired group so files stay readable.
+`band` (above) and `grip` (other session). The strip code stays: `band`, `loadable` and `grip` still use it, and the library API (`save_as`, `load`, `list`) still works for a retired group so files stay readable.
