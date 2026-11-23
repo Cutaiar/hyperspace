@@ -44,18 +44,18 @@ float when(vec2 uv) {
     if (u_shape == 4) {
         x = aux_luma(uv);
     } else if (u_shape == 0) {
-        vec2 g = vec2(cos(u_angle), sin(u_angle));
-        // the frame's extent along g, so the ramp spans it edge to edge
-        x = dot(p, g) / (abs(g.x) * asp + abs(g.y)) + 0.5;
+        Measure m = measure_line(p, u_angle);
+        // the frame's extent along it, so the ramp spans it edge to edge
+        x = m.x / (abs(m.g.x) * asp + abs(m.g.y)) + 0.5;
     } else {
-        vec2 q = p - vec2(u_cx * 0.5 * asp, u_cy * 0.5);
-        x = u_shape == 1 ? length(q) / (0.5 * sqrt(asp * asp + 1.0))
-                         : atan(q.y, q.x) / TAU + 0.5;
+        vec2 q = from_point(uv, u_cx, u_cy);
+        x = u_shape == 1 ? measure_rings(q).x / (0.5 * sqrt(asp * asp + 1.0))
+                         : measure_spokes(q).x + 0.5;
     }
     x = clamp(x, 0.0, 0.99999);
     float f = fract(x * float(u_repeat) - u_drift_t);
     if (u_flip == 1) f = 1.0 - f;
-    if (u_steps > 0) f = floor(f * float(u_steps) + 0.5) / float(u_steps);
+    f = quantise(f, u_steps);
     return f;
 }
 

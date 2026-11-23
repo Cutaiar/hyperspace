@@ -140,3 +140,86 @@ vec4 pushed(vec2 uv, vec2 d, float split) {
     vec4 R = src(uv + o * (1.0 + split)), G = src(uv + o), B = src(uv + o * (1.0 - split));
     return vec4(R.r, G.g, B.b, max(R.a, max(G.a, B.a)));
 }
+
+// ---- fields: the shared pieces (plan 67 P2) ---------------------------------
+// A field is a value (or a pair) at every pixel. These are the primitives the
+// field nodes are built from (plan 67 §3), written once, so an effect file that
+// still computes its field inline calls the same code and agrees with the
+// patch that replaces it to the bit. Units: frame heights for distance (the
+// frame's height is 1, `centred`), turns for an angle round a point, radians
+// for an Angle knob, as every file already reads it.
+
+// -- point: a Centre X / Centre Y pair (−1 … 1: the left or bottom edge … the
+// right or top) as a place in centred coordinates
+vec2 point_at(float cx, float cy) { return vec2(cx * 0.5 * u_res.x / u_res.y, cy * 0.5); }
+
+// this pixel seen from that point, in frame heights
+vec2 from_point(vec2 uv, float cx, float cy) { return centred(uv) - point_at(cx, cy); }
+
+// -- measure: what is counted across the frame (DISTORTION.md's first
+// question). `x` is the measure, `g` the unit direction it grows in (0 where
+// it has none: the centre of rings and spokes)
+struct Measure { float x; vec2 g; };
+
+// distance along the direction `angle` (radians, 0 across), in frame heights
+Measure measure_line(vec2 p, float angle) {
+    vec2 g = vec2(cos(angle), sin(angle));
+    return Measure(dot(p, g), g);
+}
+
+// distance from p's origin, in frame heights; it grows outward
+Measure measure_rings(vec2 p) {
+    float r = length(p);
+    return Measure(r, r > 1e-5 ? p / r : vec2(0.0));
+}
+
+// the angle round p's origin, in turns, −½ … ½ (0 across to the right, ½ the
+// seam on the left); it grows anticlockwise
+Measure measure_spokes(vec2 p) {
+    Measure m = measure_rings(p);
+    return Measure(atan(p.y, p.x) / TAU, vec2(-m.g.y, m.g.x));
+}
+
+// a cell's place along a rule over a grid of cells `id` (Blocks): rows,
+// columns, the diagonal, square rings from the middle, or random; `spread` is
+// how far out of step one cell is with the next (random: × 64, so 1 is
+// thoroughly shuffled and 0 every cell in step)
+float measure_cells(vec2 id, int rule, float spread) {
+    if (rule == 0) return id.y * spread;
+    if (rule == 1) return id.x * spread;
+    if (rule == 2) return (id.x + id.y) * spread;
+    if (rule == 3) return max(abs(id.x), abs(id.y)) * spread;
+    return hash21(id + 64.5) * 64.0 * spread;
+}
+
+// -- picture: a picture read as a field. `luma`, `peak` and `reach` (above)
+// read it unsigned; these read it signed about mid-grey, premultiplied, so
+// a see-through pixel (and an unwired aux) is 0 — Displace's convention
+float read_signed(float v, float alpha) { return (v - 0.5 * alpha) * 2.0; }
+vec2 read_signed(vec2 v, float alpha) { return (v - 0.5 * alpha) * 2.0; }
+
+// -- ops (plan 67 §3.2: the modifiers' names) --------------------------------
+
+// x flattened to `steps` levels each side of 0 (steps ≤ 0: x as it is)
+float quantise(float x, int steps) {
+    return steps > 0 ? floor(x * float(steps) + 0.5) / float(steps) : x;
+}
+
+// a soft key: 0 below key − soft, 1 above key + soft, a ramp between
+// (soft 0: a hard step at the key)
+float threshold_soft(float x, float key, float soft) {
+    return clamp((x - key + soft) / max(2.0 * soft, 1e-4), 0.0, 1.0);
+}
+
+// x from in_lo … in_hi onto out_lo … out_hi, straight, unclamped
+float remap(float x, float in_lo, float in_hi, float out_lo, float out_hi) {
+    return out_lo + (x - in_lo) / (in_hi - in_lo) * (out_hi - out_lo);
+}
+
+// two fields into one: 0 add, 1 multiply, 2 min, 3 max
+float combine(float a, float b, int how) {
+    if (how == 1) return a * b;
+    if (how == 2) return min(a, b);
+    if (how == 3) return max(a, b);
+    return a + b;
+}

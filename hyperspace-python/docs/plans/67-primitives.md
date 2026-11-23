@@ -529,3 +529,7 @@ re-recorded with the reason, as a format change asks.
 11. **The detail above**: whole counts per turn; a rate step landing where the pictures
     agree; texture clocks left on the wall clock; the jog as `fx.<n>.phase`, "Position";
     Stamp Trail's "Position" relabelled "Drag". Confirm or change.
+
+**P2 started 2026-11-23:** the shared field pieces are built in `_lib.glsl` and eight files
+moved onto them byte for byte ([roundup §7](67-roundup.md)). Next: the field wire (a texture
+pool, the grey promotion, the refusal in words), then Wave as a proven patch with its example.

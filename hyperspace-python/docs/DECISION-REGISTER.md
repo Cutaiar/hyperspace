@@ -900,6 +900,7 @@ here; overturn → the change, then the same.
 | 908 | Plan 66, open: stage 2's reach. Keep `wave.glsl` and `blocks.glsl` and add patches proven byte-identical, or retire them with a migration; Shake stays its file (not one field) | — | **pending the owner** (Q3; rec: keep) |
 | 909 | Plan 66, open: memory for the past at full size (a texture-array ring: 265 MB for 32 frames at 1080p) and the look-ahead window for files (128 MB a channel at half its size) | 703 | **pending the owner** (Q5, Q6) |
 | 910 | Plan 66, open: the wavetable — a render node for pictures and fields, a modifier for curves — and the existing "Wave Table" renamed: label **Stamp Trail** now, `fx.wavetable.*` → `fx.stamptrail.*` in the next format-lane migration | — | **pending the owner** (Q7) |
+| 911 | Plan 67 P2: the shared field pieces in `_lib.glsl` — `point_at`, `from_point`, `Measure` with `measure_line` / `rings` / `spokes` / `cells`, `read_signed`, `quantise`, `threshold_soft`, `remap`, `combine`; units frame heights and turns. Wave, Blocks, Displace, Blend, Prism, Zoom burst, Time Displace and Oil slick moved onto them byte for byte | — | (rec) — plan 67 roundup §7 |
 | 872 | Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema | — | owner (2026-11-19, as recommended) |
 | 873 | Plan 63: every term a param (owner decision 1). Slice s lays the pixel's point q into the terms as c = mix(q, c, s), z₀ = mix(z₀, q, s): 0 the Mandelbrot set, 1 a Julia set. Power a whole number 2–8, an int param; a fractional p not built | 671 | owner (2026-11-18) — the mapping (rec) |
 | 874 | Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go | 669, 670 | owner (2026-11-19, as recommended): velocity, not displacement |
@@ -15321,6 +15322,13 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** pending the owner.
 - **Built.** Nothing.
 - **Judge it.** No hand check.
+
+### 911. The shared field pieces
+
+- **What.** Plan 67 P2's first step: one section of `_lib.glsl` holds the field primitives every effect and every field node to come uses — a point (`point_at`, `from_point`), the measures (`measure_line`, `measure_rings`, `measure_spokes`, `measure_cells`, each returning the measure and the direction it grows), a picture read signed about mid-grey (`read_signed`), and the ops named as the modifiers are (`quantise`, `threshold_soft`, `remap`, `combine`). Eight files that carried a private copy now call them, byte for byte (1041 renders before and after). Not moved: the gradients (they need a texture), Bloom's knee and Edges' threshold (other curves: a change of look), Hue cycle (to be retired).
+- **Answer.** (rec) — the builder's, plan 67 (2026-11-23), on the owner's "start the build with the shared field pieces".
+- **Built.** `shaders/fx/_lib.glsl`; `tests/test_field_lib.py`.
+- **Judge it.** No hand check: no picture changed.
 
 ### 872. The Mandelbrot is an effect file with a Python half
 

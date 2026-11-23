@@ -14,9 +14,10 @@ uniform float u_angle;   // @param 0 6.2832 0 "Angle" Luma mode: the direction a
 
 vec4 effect(vec2 uv) {
     vec4 a = aux(uv);
+    // the aux read as a field about mid-grey, and the push, are _lib.glsl's
+    // (plan 67 P2): `read_signed`, `pushed` (frame heights, x with the aspect)
     vec2 d = u_mode == 0
-        ? (luma(a.rgb) - 0.5 * a.a) * 2.0 * vec2(cos(u_angle), sin(u_angle))
-        : (a.rg - 0.5 * a.a) * 2.0;
-    // frame heights → uv: x runs with the aspect
-    return src(uv + d * u_amount * vec2(u_res.y / u_res.x, 1.0));
+        ? read_signed(luma(a.rgb), a.a) * vec2(cos(u_angle), sin(u_angle))
+        : read_signed(a.rg, a.a);
+    return pushed(uv, d * u_amount, 0.0);
 }

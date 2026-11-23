@@ -149,3 +149,35 @@ when §3.9 lands; its field example (`loadable/field-examples/hue-cycle`) is tha
 saved files use it (`presets/kinetic/kinetic-comet`, `kinetic-tunnel`; the corpus's `dial`,
 `hands-pinch`, `party-acid`, `party-trip`), so the retirement is a migration in the lane:
 each `huecycle` node rewritten as the Palette patch, its look proven by the golden frames.
+
+## 7. Built: the shared field pieces (P2's first step, 2026-11-23)
+
+`shaders/fx/_lib.glsl`, a new section "fields: the shared pieces", every effect's program:
+
+| Piece | What | Replaces |
+| --- | --- | --- |
+| `point_at(cx, cy)`, `from_point(uv, cx, cy)` | a Centre X / Y pair as a place in frame heights; this pixel seen from it | the centre spelled out in Wave, Prism, Zoom burst, Time Displace |
+| `Measure` (`x`, `g`) | a measure and the unit direction it grows in | — |
+| `measure_line(p, angle)` | distance along an angle, frame heights | Wave's and Time Displace's lines |
+| `measure_rings(p)` | distance from the point, frame heights; outward | Wave, Prism, Time Displace, Oil slick |
+| `measure_spokes(p)` | the angle round the point, turns (−½ … ½); anticlockwise | Wave, Time Displace |
+| `measure_cells(id, rule, spread)` | a cell's place along a rule (rows, columns, diagonal, rings, random) | Blocks |
+| `read_signed(v, alpha)` | a picture read as a signed field about mid-grey, premultiplied | Displace |
+| `quantise(x, steps)` | steps each side of 0 | Wave's and Time Displace's Steps |
+| `threshold_soft(x, key, soft)` | the soft key | Blend's luma key |
+| `remap`, `combine` | in → out ranges; add, multiply, min, max | — (for the field nodes) |
+
+**Moved onto them, byte for byte:** Wave, Blocks, Displace, Blend, Prism, Zoom burst, Time
+Displace, Oil slick. Proof: 1041 renders — every choice, three values of every knob, every
+pair of choices, three times, an aux picture, and for Time Displace a filled ring — before
+and after, every byte equal (Mesa's llvmpipe). Hue cycle is left as it is (to be retired).
+`tests/test_field_lib.py` holds each piece to a numpy oracle on the GPU, and holds that no
+file spells out a centre, the soft key or the cell rule again.
+
+**Not yet moved, and why:** Grow's and Edges' gradients differentiate a function, not a
+texture (GLSL has no function values), so `gradient` arrives with the field wire, over a
+texture; Bloom's knee is a smoothstep and Edges' threshold a straight ramp — different curves
+from `threshold_soft`, so moving them changes their look and needs the owner's eye; the
+fixed centres (Acid, Kaleidoscope …) take a point when they take a field.
+
+No look changed, so no field example yet (plan 67 §9.3): the first comes with Wave as a patch.

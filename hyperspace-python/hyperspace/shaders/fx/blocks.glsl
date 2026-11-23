@@ -34,12 +34,9 @@ vec4 effect(vec2 uv) {
     vec2 ax = abs(dir.x) >= abs(dir.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
     float along = dot(id, ax);
     if (u_action == 5) id -= ax * (along - floor(along * 0.5));
-    float c;                                            // the block's place along the rule
-    if (u_rule == 0) c = id.y * u_spread;
-    else if (u_rule == 1) c = id.x * u_spread;
-    else if (u_rule == 2) c = (id.x + id.y) * u_spread;
-    else if (u_rule == 3) c = max(abs(id.x), abs(id.y)) * u_spread;
-    else c = hash21(id + 64.5) * 64.0 * u_spread;      // Spread 0: every block in step
+    // the block's place along the rule: _lib.glsl's `measure_cells` (plan 67
+    // P2); Spread 0 is every block in step, random included
+    float c = measure_cells(id, u_rule, u_spread);
     // a quarter cycle on: at rest (Drift 0) a sine sits on its crest, not its zero
     float a = wave(u_shape, c - u_drift_t + 0.25) * u_amount;
     vec2 dl;                                            // how far it reads, in cells
