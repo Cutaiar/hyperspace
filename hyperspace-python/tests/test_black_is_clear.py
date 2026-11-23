@@ -295,6 +295,59 @@ def test_an_effects_key_toggles_are_checkboxes(monkeypatch):
     assert kinds["key.fade.level"] == kinds["key.fade.measure"] == "row"
 
 
+def test_the_keyed_walk_through_switches_asks_each_switch_once(monkeypatch):
+    """Review of #479 (third pass): a keyed channel into seven stages of
+    eight-input switches, each stage feeding every input of the next — the
+    walk asks each switch once (a path search asked the last 8⁶ times)."""
+    nodes, wires = [], []
+    src = "channel.a"
+    for k in range(1, 8):
+        sw = "switch" if k == 1 else f"switch.{k}"
+        nodes.append({"kind": "switch"} if k == 1 else {"kind": "switch", "instance": k})
+        wires += [(src, f"{sw}.in{i}") for i in range(1, 9)]
+        src = sw
+    wires.append((src, "output.all.image"))
+    asked: dict[str, int] = {}
+    real = G._Build.laid_over
+
+    def counted(self, name, seen=frozenset()):
+        if not seen:
+            asked[name] = asked.get(name, 0) + 1
+        return real(self, name, seen)
+
+    monkeypatch.setattr(G._Build, "laid_over", counted)
+    g = _built(["channel.a"], tuple(wires), nodes)
+    (a,) = [n for n in g.order if isinstance(n, G.MediaNode)]
+    assert a.keyed == "channel.a" and not a.keeps_alpha
+    assert max(asked.values()) <= 2 and len(asked) <= 10, asked
+
+
+def test_an_opaque_pick_over_a_keyed_under_covers_its_holes(ctx):
+    """Review of #479 (third pass): keyed channel A under a composite and on a
+    switch into its over, the switch picking solid red B; that composite over
+    solid blue C. Red covers A's clear holes (the over adds its coverage),
+    so no blue bleeds through: red, never magenta."""
+    from test_media_render import _draw, _rgba
+
+    from hyperspace.graphmigrate import wired_wiring
+    half = _rgba(16, 9, (0, 0, 0), (255, 255, 255))           # black top, white bottom
+    m = _media(a=Still(half), b=Still(_rgba(16, 9, (255, 0, 0))),
+               c=Still(_rgba(16, 9, (0, 0, 255))))
+    for c in "abc":
+        m.channels[c].fit = 2
+    r = _renderer(ctx, m)
+    nodes = [{"kind": "composite"}, {"kind": "composite", "instance": 2}, {"kind": "switch"}]
+    wires = (("channel.a", "composite.under"), ("channel.a", "switch.in1"),
+             ("channel.b", "switch.in2"), ("switch", "composite.over"),
+             ("composite", "composite.2.over"), ("channel.c", "composite.2.under"),
+             ("composite.2", "output.all.image"))
+    r.wiring = wired_wiring(G.read_graph(_section(["channel.a"], wires, nodes)).wiring())
+    s = view.ViewState(lines=False, points=False, faces=False, switch={"switch": 2})
+    (pic,) = _draw(ctx, r, s, size=(96, 64), frames=2)
+    red = (pic[..., 0] > 200) & (pic[..., 1] < 60) & (pic[..., 2] < 60)
+    assert red.mean() > 0.95, red.mean()
+
+
 # ---------------------------------------------------------------- the patch
 
 @pytest.fixture()

@@ -5921,9 +5921,12 @@ class Composite(Node):
             if tex is None:
                 return
             with frame.timed(self.name):
-                # (plan 87: on a keyed picture's holes the over adds its coverage)
+                # (plan 87: on a keyed picture's holes — the backdrop's keyed
+                # channel, or an `under` painted keeping its alpha — the over
+                # adds its coverage)
+                holes = self.keeps_alpha or (under is not None and under.keeps_alpha)
                 lay(frame, self.blend, over, self.inputs["depth"], dst, (0, 0, *size),
-                    r.fx.opaque and not self.keeps_alpha)
+                    r.fx.opaque and not holes)
         except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
             r._hands_failed(e, frame.target, frame.vp)
 
@@ -7067,15 +7070,23 @@ class _Build:
         key.keeps_alpha = self._keeps(name)
         return key
 
-    def _keeps(self, name: str, seen: frozenset[str] = frozenset()) -> bool:
+    def _keeps(self, name: str) -> bool:
         """Plan 87: whether keyed node `name`'s picture is laid over another —
         `laid_over`, or through a switch that is (a switch paints its pick
         straight into its consumer). Asked of keyed nodes alone, so no
-        unkeyed picture changes how it paints."""
-        if self.laid_over(name):
-            return True
-        return any(self._keeps(w.node, seen | {w.node}) for w in self.wires
-                   if w.src == name and w.node not in seen and _kind(w.node) == "switch")
+        unkeyed picture changes how it paints. A search by node, each switch
+        asked once however many wires reach it (review of #479: a path
+        search was exponential in a reconverging chain of switches)."""
+        todo, seen = [name], {name}
+        while todo:
+            at = todo.pop()
+            if self.laid_over(at):
+                return True
+            for w in self.wires:
+                if w.src == at and w.node not in seen and _kind(w.node) == "switch":
+                    seen.add(w.node)
+                    todo.append(w.node)
+        return False
 
     def _make(self, name: str) -> Node | None:
         kind = _kind(name)
