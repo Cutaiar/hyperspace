@@ -255,6 +255,7 @@ from . import (
     ui_browse,
     ui_fx,
     ui_kit,
+    ui_loadable,
     ui_menu,
     ui_pad,
     ui_pane,
@@ -1654,7 +1655,8 @@ def _wrap_for(width: float) -> None:
 def _deck_row(panel, st: dict) -> None:
     """The head's first line (plan 44 D5d): which `Deck` the panel is on, the same
     words as the window's title, red off air, a click for the other; then **load…**
-    (a patch from the library onto the deck off air, ui_browse), **playlist** (its
+    (a patch from the library onto the deck off air, ui_browse), **save as** (this
+    deck as a new patch, one press, ui_loadable), **playlist** (its
     controls in a popup, ui_playlist) and the two verbs,
     "copy on air to off air" and the crossfade, by hand and timed. Nothing with
     no meta controller (a panel from a test). A click moves the panel at the page's end
@@ -1671,6 +1673,9 @@ def _deck_row(panel, st: dict) -> None:
     # choosing a patch to load is the meta controller's: onto the deck off air
     _wrap_for(ui.chip_w(ui_browse.LABEL))
     ui_browse.chip(panel)
+    # and beside it, saving this deck as a new patch in one press (plan 83)
+    _wrap_for(ui.chip_w(ui_loadable.save_as_label(panel)))
+    ui_loadable.save_as_chip(panel)
     # and so is the playlist: its controls in a popup under its chip
     if getattr(panel, "playing", None) is not None:
         _wrap_for(ui.chip_w(ui_playlist.label(panel.playing)))
