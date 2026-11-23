@@ -3,13 +3,19 @@
 23 whole-frame patches (`hyperspace.loadable/11`) for trying the three
 distortion effects: Shake, Wave and Blocks (`docs/DISTORTION.md` has every
 knob). They are not part of the app (nothing ships with it). Copy them
-into a `distort/` folder of their own under the library's `loadable/`,
+into a `distort/` folder of their own in the library's `loadable/`,
 never loose into `loadable/` itself, and they appear in the list as
-`distort/<name>`:
+`distort/<name>`.
+
+The library is the folder `[library] path` names in
+`~/Hyperspace/config.toml` (the shared Drive folder), not `~/Hyperspace`:
+the app never lists patches there. From `hyperspace-python/`, this asks
+the app's own config where that is, and copies nothing when no library
+is set:
 
 ```bash
-mkdir -p ~/Hyperspace/loadable/distort
-cp loadable/distort/*.json ~/Hyperspace/loadable/distort/
+LOADABLE=$(uv run python -c 'import sys; from pathlib import Path; from hyperspace import config, library; p = config.load()["library"]["path"]; print(library.loadable_dir(Path(p))) if p else sys.exit("no [library] path in ~/Hyperspace/config.toml: nowhere to copy")') &&
+  mkdir -p "$LOADABLE/distort" && cp loadable/distort/*.json "$LOADABLE/distort/"
 ```
 
 Every one draws the Celestial tesseract with plaid faces through one
