@@ -265,9 +265,10 @@ like the rename above. The SYSTEM page shows both.
                             # of the camera, relative to this file; "" = the camera
 
     [library]               # where the loadable patches live (plan 25)
-    path = ""               # "" = the home above, as always. Otherwise a folder —
-                            # typically a cloud-synced one (Dropbox, iCloud Drive,
-                            # Syncthing…) shared with whoever you trade loadable patches with.
+    path = ""               # the one place patches live: a folder, typically the
+                            # cloud-synced one (Google Drive) shared with whoever you
+                            # trade loadable patches with. "" is no library — never the
+                            # home: nothing lists and every save is refused until it is set.
                             # It holds the library: presets/, projects/, the module
                             # groups (fx/, dream/, band/…) and trash/.
                             # Machine files stay in the home: this config.toml,
@@ -278,7 +279,8 @@ like the rename above. The SYSTEM page shows both.
                             # so, the SYSTEM page shows it in red, every save is
                             # refused and nothing lists — fix the folder
                             # (or the path) and restart. tools/move_library.py copies
-                            # an existing library into it.
+                            # a library left in the home into it, then moves the home's
+                            # copy aside (old-local-library-<date>/).
 """
 
 from __future__ import annotations
@@ -320,7 +322,7 @@ DEFAULTS: dict = {
     # Its section is not here: load() fills it from hands/core.py's DEFAULTS,
     # the one table (every key documented there), read at call time so this
     # module imports no adapter
-    # library.py: [library] path, the library root (plan 25); "" = the home.
+    # library.py: [library] path, the library root (plan 25); "" = no library (never the home).
     # load() resolves it to an absolute path
     "library": {"path": ""},
 }

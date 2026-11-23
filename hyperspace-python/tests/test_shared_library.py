@@ -228,3 +228,60 @@ def test_two_files_of_one_name_neither_canonical_both_list(tmp_path):
              "values": {}}))
     idx = rig.lib._index("camera")
     assert idx["Wide"] == folder / "a-copy.json" and idx["b-copy"] == folder / "b-copy.json"
+
+
+# ---------------------------------------------------------------- one place (2026-11-23)
+
+def test_no_library_path_is_no_library_and_the_home_gets_nothing(tmp_path):
+    """No [library] path: the library is `NO_LIBRARY` under the home — never a folder, so
+    nothing lists, every save is refused in words that name config.toml, and the home
+    gets no library folder."""
+    home = tmp_path / "home"
+    home.mkdir()
+    rig = make(home / library.NO_LIBRARY, machine=home)
+    assert rig.lib.missing == home / library.NO_LIBRARY
+    assert "no library set" in rig.lib.warning and str(home / "config.toml") in rig.lib.warning
+    assert rig.lib.list(LOADABLE) == []
+    with pytest.raises(LibraryError, match="no library set — not saved"):
+        rig.loaded_patch.save_as("HI FREK")
+    with pytest.raises(LibraryError, match="no library set"):
+        rig.lib.install.save("mine")
+    assert sorted(p.name for p in home.iterdir() if p.is_dir()) == []
+    assert not (home / library.NO_LIBRARY).exists()
+
+
+def test_a_home_that_still_holds_a_library_says_so(tmp_path):
+    """A machine home apart from the library with library folders in it: `strays` names
+    them and the words say how to fold them in; machine folders are never named."""
+    home, lib_root = tmp_path / "home", tmp_path / "Drive"
+    for d in ("loadable/party", "installs", "trash/loadable", "weights", "media", "patches"):
+        (home / d).mkdir(parents=True)
+    (home / "loadable" / "party" / "trip.json").write_text("{}")
+    (home / "installs" / "mine.json").write_text("{}")
+    (home / "trash" / "loadable" / "x.20261101-010101.json").write_text("{}")
+    (home / "weights" / "w.json").write_text("{}")
+    (home / "patches" / ".hidden.json").write_text("{}")
+    lib_root.mkdir()
+    assert library.strays(home) == ["loadable/", "installs/"]
+    lib = Library(lib_root, machine=home, period=0.0)
+    assert "loadable/, installs/" in lib.strays and str(lib_root) in lib.strays
+    assert "move_library.py" in lib.strays
+    assert Library(lib_root, machine=lib_root, period=0.0).strays == ""
+
+
+def test_ensure_home_makes_the_home_and_no_library_in_it(tmp_path):
+    home = tmp_path / "fresh"
+    assert library.ensure_home(home, cwd=tmp_path) == home
+    assert home.is_dir() and list(home.iterdir()) == []
+
+
+def test_strays_name_no_folder_when_there_is_no_library(tmp_path):
+    """Review of #480: with no library (none set, config.toml unread, the folder gone) the
+    words name no destination — the tool would fill a folder that is not the library."""
+    home = tmp_path / "home"
+    (home / "loadable").mkdir(parents=True)
+    (home / "loadable" / "trip.json").write_text("{}")
+    for name in (library.NO_LIBRARY, "(config.toml did not read)", "Gone"):
+        lib = Library(home / name, machine=home, period=0.0)
+        assert lib.missing is not None and "loadable/" in lib.strays
+        assert name not in lib.strays and "Fix [library] path" in lib.strays
