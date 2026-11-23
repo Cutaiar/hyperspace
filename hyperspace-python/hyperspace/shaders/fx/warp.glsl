@@ -7,7 +7,7 @@
 // @tip the edges, so the centre stays readable while the rim swims.
 // @clock u_drift_t drift*scale
 
-uniform float u_amount;  // @param 0 2 0.2 amount "Amount" Noita's distortion amount — 0.2 on the first trip stage, 0.5 heavily tripping, ~1 with the stages stacked.
+uniform float u_amount;  // @param 0 2 0.2 amount "Amount" No unit of its own: at 1 a pixel near a corner moves a few percent of the frame (at most about a seventh), less toward the centre and none at it, and past 0.67 the frame is also zoomed in 10%. Noita's stages: 0.2 the first, 0.5 heavily tripping, ~1 stacked.
 uniform float u_scale;   // @param 0.5 16 3 log "Scale" Noise cells across the frame's height: low is a slow heave, high a fine ripple. The field still slides the same screens a second; a step re-zooms it about the centre.
 uniform float u_drift;   // @param 0 8 1 "Drift" How fast the noise field slides under the frame (Noita's rate at 1); a step changes the speed, never where the field is.
 

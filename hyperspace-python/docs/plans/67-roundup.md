@@ -41,7 +41,7 @@ Takes / makes: **P** picture, **F** field, **L** lane (a clock counts: every fil
 | **Oil slick** | P → P | noise bands + rings (scalar) → thin-film colour | noise; rings from a fixed centre; a colour ramp (`film`); **`haze`, a second copy of `reach`**; "Ground" | multiplies the picture by the ramp | `measure (noise + rings) → colour ramp`, combined (multiply) with the picture |
 | **Edges** | P → P | the picture's luma → its **gradient** (Sobel) → length → threshold | a picture → field read; a gradient; a **threshold**; colour by direction (HSV) | — | `picture (luma) → gradient → length → threshold → colour ramp` |
 | **Trip colour** | P → P | the picture's peak, pulsed (scalar), on green only | a picture read; grain (`u_time`) | one channel only | `picture (peak) → remap` on a channel knob (§3.9) |
-| **Hue cycle** | P → P | a diagonal or rings from a fixed centre (scalar) | a measure (line, rings); an HSV colouring | hue in **turns** (Palette's in degrees) | **Hue rotate with a field on its hue knob** (§3.9) — the clearest case |
+| **Hue cycle** | P → P | a diagonal or rings from a fixed centre (scalar) | a measure (line, rings); an HSV colouring | hue in **turns** (Palette's in degrees) | **retired into Palette** [Rec, §6]: an LFO on Hue turn is its turning, and Spread is a field on Hue turn (§3.9) |
 | **Blend** | P + P aux → P | the aux's luma, keyed (luma key mode) | **the blend library** (5 modes); a **key** (luma key) | its modes are not `@blend`'s | the composite (§3.5, §7.4); the key → `picture → threshold → mask` |
 | **Grain** | P → P | cell noise per frame (scalar), toned by luma | noise cells; a tone curve; **quantise** with Bayer dither; "Ground" (a different meaning) | — | `measure (cells, per frame) → remap → combine (add)`; `quantise` as its own op |
 | **Fade** | P → P | — | — | a level: `combine (multiply)` by a constant | stays, or becomes `combine` with a lane |
@@ -92,10 +92,23 @@ keep their names, so the picker still shows a Wave and a Bloom.
 
 ## 4. Quirks that are not a copy
 
-- **"Amount" moves pixels in six units.** Frame heights (Wave, Blocks, Shake, Grow,
-  Displace), uv (Wobble), "Noita units" (Trip warp), half-percents
-  of the frame (Double vision), px (Deconverge), a fraction of the distance (Zoom burst).
-  Plan 67 rule 3: **frame heights** for every offset. Saved values convert in the lane.
+- **"Amount" moves pixels in six units.** Kept as they are for now (the owner, 2026-11-23):
+  labelled per effect instead, below, and in each knob's tip on the panel (the four tips
+  that did not say were rewritten; a tip is not saved). Unifying them on frame heights
+  (plan 67 rule 3) is a later format-lane move.
+
+  | Effect | Knob | Unit | What that means |
+  | --- | --- | --- | --- |
+  | Wave, Blocks (shift), Shake, Grow, Displace | Amount | frame heights | 0.1 moves a pixel a tenth of the frame's height, the same distance across as up |
+  | Blocks (zoom, stretch, bulge, turn, swap) | Amount | doublings, quarter turns, trades | per its Action (DISTORTION.md) |
+  | Acid | Bend / Twist | frame heights / radians | Twist: the roll at full swing |
+  | Prism | Amount / Tilt | frame heights at the frame's edge / px | |
+  | Wobble | Amount | a share of the frame | 0.01: 1% of its width across, 1% of its height up and down: on a wide frame a push across is longer than one up |
+  | Double vision | Amount | half-percents of the frame | 1: 0.5% of its width across and its height up and down |
+  | Trip warp | Amount | none of its own | at 1, a few percent of the frame near a corner (at most about a seventh), none at the centre; past 0.67 also a 10% zoom |
+  | Deconverge | Amount / Radial | px / a share of the distance from the centre | |
+  | Zoom burst | Amount | a share of the distance to the centre | 0.1: a pixel smears a tenth of the way in |
+  | Time Displace | Span | seconds | |
 - **Hue is in degrees on Palette and the dream, in turns on Hue cycle.** One unit (the
   owner's call; degrees is what the panel already reads elsewhere).
 - **Time.** Twenty files move: nine by `@clock` (the rule since 2026-11-02), the rest by
@@ -118,3 +131,21 @@ keep their names, so the picker still shows a Wave and a Bloom.
 3. **One patch proven**: Wave as `measure → waveform → quantise → displace`, byte for byte
    against `wave.glsl` on all its saved looks — the proof that rule 5 costs nothing.
 4. **Units and names** (§4, plan 67 P1) ride one format-lane move.
+
+## 6. Hue cycle and Palette (the owner: "if it is completely covered by one Palette and one LFO, get rid of it")
+
+Checked against both files [V]:
+
+| Hue cycle | Palette (Compress) |
+| --- | --- |
+| Its clock turns every hue (Paint 0, Spread 0) | Hue from 0, Hue to 360 (the whole wheel: the map is the identity), an LFO (saw) on **Hue turn**: the same rotation |
+| Paint 1: the frame's brightness in the cycling colour, `peak × hsv(h, 0.85, 1)` | Hue from = Hue to (a slice of zero width) on the LFO, Sat from = Sat to = 0.85, Val 0 … 1: `hsv(h, 0.85, peak)`, the same pixels |
+| Paint between: a mix of the two | two Palettes, or one at its Mix |
+| Sat | Sat from / Sat to |
+| **Spread**: the hue banded across the frame (a diagonal, or rings) | **not covered today**; covered once a knob takes a field: `measure (line or rings) → Hue turn` |
+
+So it is covered but for Spread, and Spread is exactly plan 67 §3.9. [Rec] Retire Hue cycle
+when §3.9 lands; its field example (`field-examples/hue-cycle`) is that Palette patch. Six
+saved files use it (`presets/kinetic/kinetic-comet`, `kinetic-tunnel`; the corpus's `dial`,
+`hands-pinch`, `party-acid`, `party-trip`), so the retirement is a migration in the lane:
+each `huecycle` node rewritten as the Palette patch, its look proven by the golden frames.

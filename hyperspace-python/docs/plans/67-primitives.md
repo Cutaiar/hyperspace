@@ -368,3 +368,81 @@ Every question of §6 is now answered but Q4's follow-on (the blend list is §7.
 roundup's table, can start.
 
 **P0 started 2026-11-23:** the roundup's table is [`67-roundup.md`](67-roundup.md).
+
+## 9. The owner's fourth round (2026-11-23): motion, blending, examples
+
+### 9.1 Motion: a position, not a speed
+
+The owner: the private `speed` multiplier "has become unwieldy … it's not tempo-synced and
+it's not even synchronized with the other effects." Instead:
+
+- **Each effect has a `pos`, drawn as a jog wheel**, not a `speed` fader. Nothing moves
+  until something turns it, so a new effect lands still.
+- **Beside the jog, an LFO picker**: a chip (or a short menu) that maps one of the LFO
+  bank's onto that jog in one click, the way the faces node's input chips (`+ SUB` …,
+  `ui_patterns.suggest`) put an analyzer lane on an input. One slow, tempo-synced master
+  LFO (a saw) can then turn every effect's jog, so their motion is in phase.
+- **The cable carries a phase offset.** [V] It does not today: a route has a depth
+  (`value`), a scale, a gate, a rest and a motion, and an LFO has its own `phase` knob, but
+  nothing offsets a cable. An optional `offset` key on a position route (wrapping), so two
+  jogs on one LFO can sit a quarter turn apart. An optional key: no bump.
+
+**The one decision inside it.** An effect's own rates (Wave's Drift, Shake's Rate, the
+other `@clock`s) were integrated over time so that a knob step never jumps the picture
+(DECISIONS, "No shader multiplies time by a param", K4). Driven by a position, there are two
+ways to keep that:
+
+| | A. Rates per turn (absolute) | B. The jog drives the clocks (relative) |
+| --- | --- | --- |
+| What a rate means | waves (shakes, cycles) per turn of `pos` | as today, × how far `pos` moved this frame |
+| Phase alignment | **exact**: one LFO, one picture, every time; offsets hold | lost: each effect integrates from where it was, and drifts apart after a knob step |
+| A rate knob step | jumps the picture by Δrate × pos, at most one turn's worth, never growing with time (K4's rule holds: the step is the same size an hour in) | never jumps |
+| A seamless loop when `pos` wraps | only for a whole number of cycles per turn: rates become whole numbers (or snap to them) | always |
+
+[Rec] **A**: it is the one that composes — the reason for the change is phase alignment, and
+a tempo-synced loop wants whole cycles per bar anyway. Q8.
+
+**Saved looks** carry `fx.<n>.speed` and move at it. [Rec] the migration gives each such
+effect what it had: a route from a free-running source at that speed onto its jog (a
+**free** choice in the picker, a rate of its own, off by default, so the LFO bank is not used
+up by old looks). Q9.
+
+### 9.2 Blending: what the Blend node is
+
+[V] The Blend effect's modes (over, multiply, screen, difference, luma key) and `@blend`'s
+(mix, add, screen, multiply) are **not** one list with a subset: they share two words and
+differ in the rest, written twice. And they do different jobs:
+
+- an effect's `blend` lays its own result back on its input: f(M, T(M)), one picture;
+- Blend lays a **second** picture (its aux) on its input: f(M, A), two pictures.
+
+The graph already has a node for "two pictures meet": **Composite** (`under`, `over`: over,
+add, depth). So Blend is a second Composite with another list, and the luma key a copy of
+the key (§3.11). [Rec] **Composite is where two pictures meet**, with the one blend library
+and a mask port (§7.2, what the cut pixels become); Blend is retired into it. Every effect
+keeps `mix` and `blend` for f(M, T(M)), from the same library.
+
+**Not every effect reading an aux to blend** (the owner's other option): it would make every
+effect a two-picture node that also composites, competing with Composite in every file.
+An effect's second input stays typed data it *reads* (Displace's field, Time Displace's
+stack; §3.7), never a second picture it lays on. One rule to hold in the head: **one picture
+through an effect; two pictures meet at a composite.** Q10.
+
+### 9.3 The examples: a deliverable of every change
+
+Every effect that changes for fields ships a **field example**: a loadable patch and a short
+Markdown beside it, saying what the effect does, how the fields in it are wired, and what to
+try. Brief, to the point, easy to scan.
+
+- In the repository at `presets/field-examples/<effect>.json` + `<effect>.md` (as
+  `presets/distort/` is), and in the shared library's **field examples** folder on the Drive,
+  copied there when the change merges (the cloud session cannot reach the Drive).
+- A change is not done until its example loads, renders the picture the Markdown describes
+  (a test, as `tests/test_distort_presets.py` does for `distort/`), and its Markdown names
+  only knobs and wires that exist.
+
+### 9.4 New questions
+
+8. **Rates per turn (A) or the jog driving the clocks (B)?** [Rec] A.
+9. **Old looks' speed** becomes a free-running source on the jog? [Rec] yes.
+10. **Blend retired into Composite**, Composite taking the one library and a mask? [Rec] yes.
