@@ -447,3 +447,264 @@ def test_the_deck_undo_drops_the_dive_reference_on_a_restore(tmp_path):
     r.view.dive.seen = (1.0, np.zeros(4), np.eye(4))
     r.undo.on_restore()
     assert r.view.dive.seen is None
+
+
+# ---- plan 81 follow-up: the framing, off air, saved, and undo (rows 1018–1019)
+
+def _diving(name: str = "Menger sponge", frames: int = 60, rate: float = 1.0) -> ViewState:
+    s = _view(name, frac_dive=rate)
+    for _ in range(frames):
+        _frame(s, 0.1)
+    assert s.dive.path
+    return s
+
+
+def _turn(R: np.ndarray, u=(0.0, 0.0, 0.0)) -> np.ndarray:
+    F = np.eye(4)
+    F[:3, :3], F[:3, 3] = R, u
+    return F
+
+
+def test_a_flight_that_only_turns_leaves_no_framing():
+    """A grab that only turns the space, the rooted cell off the middle: the
+    turn is about the middle of the screen, which a pan is not — the framing
+    stays none (it was the cell's offset turned, read as a pan), and the dive
+    after it still lands each cell's middle on the screen's."""
+    s = _diving()
+    s.pan[0], s.pan[1] = s.pan[0] + 0.3, s.pan[1] - 0.2      # the cell well off the middle
+    fractal.centre(s, None, None, 0.0)
+    s.dive.frame = np.zeros(4)
+    fractal.fold_flight(s, None, np.eye(4), epoch=1)            # (the first fold reads the pose)
+    R = W.rot3(W.qexp([0.0, 0.0, 0.6]))
+    fractal.fold_flight(s, None, _turn(R), epoch=1)
+    assert np.allclose(s.dive.frame, 0.0, atol=1e-12), s.dive.frame
+    late = []
+    for _ in range(100):
+        _frame(s, 0.1)
+        if s.zoom > 0.8 * fractal.Z_IN:
+            late.append(np.linalg.norm(_p(s)[:3]) / s.zoom)
+    assert np.allclose(s.dive.frame, 0.0, atol=1e-12)
+    assert late and max(late) < 0.45
+
+
+def test_a_flight_moves_its_framing_rigidly():
+    """A turn and a move with a framing already made: the framing's point (the
+    cell's middle, at mid + frame) goes where the flight takes it — turned
+    about the middle and moved — and w, which a flight does not reach, stays."""
+    s = _diving()
+    fr = np.array([0.12, -0.05, 0.03, 0.02])
+    s.dive.frame = fr.copy()
+    fractal.fold_flight(s, None, np.eye(4), epoch=1)
+    R, u = W.rot3(W.qexp([0.2, -0.4, 0.3])), np.array([0.05, 0.1, -0.02])
+    fractal.fold_flight(s, None, _turn(R, u), epoch=1)
+    want = fr.copy()
+    want[:3] = R @ fr[:3] + u
+    assert np.allclose(s.dive.frame, want, atol=1e-12)
+
+
+def _off_air(s, dt: float = 0.1) -> None:
+    """A frame of a deck off air: no crossing (`app._space`), the re-root only."""
+    s.integrate(dt)
+    s.reroot(None, None, dt)
+
+
+def test_an_off_air_climb_out_drops_the_framing():
+    """Off air nothing runs `go_outside`, so the step drops the framing once
+    the view has climbed out and eased home, as on air: a second dive with no
+    pan is centred, not framed by the first dive's pan."""
+    s = _view("Menger sponge", frac_dive=2.0)
+    for _ in range(80):
+        _off_air(s)
+    assert s.dive.path and not s.dive.inside
+    s.pan[0] += 0.1
+    for _ in range(20):
+        _off_air(s)
+    assert s.dive.frame[0] == pytest.approx(0.1)
+    s.frac_dive = -2.0
+    for _ in range(250):
+        _off_air(s)
+    assert not s.dive.path and s.zoom == pytest.approx(fractal.Z_HOME)
+    assert not s.dive.frame.any()
+    s.frac_dive = 2.0                                # dived again, no pan
+    late = []
+    for _ in range(150):
+        _off_air(s)
+        if len(s.dive.path) > 10 and s.zoom > 0.8 * fractal.Z_IN:
+            late.append(np.linalg.norm(_p(s)[:3]) / s.zoom)
+    assert not s.dive.frame.any()
+    assert late and max(late) < 0.45, max(late)
+
+
+def test_a_climb_on_air_and_off_air_ends_the_same():
+    """The same dive, pan and climb on air and off: both end with no framing."""
+    a, b = _view("Menger sponge", frac_dive=2.0), _view("Menger sponge", frac_dive=2.0)
+    for _ in range(60):
+        _frame(a, 0.1)
+        _off_air(b)
+    a.pan[0] += 0.1
+    b.pan[0] += 0.1
+    a.frac_dive = b.frac_dive = -2.0
+    for _ in range(250):
+        _frame(a, 0.1)
+        _off_air(b)
+    assert not a.dive.frame.any() and not b.dive.frame.any()
+
+
+def test_a_saved_dive_keeps_its_framing(tmp_path):
+    """A loadable patch keeps the framing (`frame`, optional, row 1019): saved
+    mid-dive and loaded, the dive resumes framed — past the first frame,
+    which takes the loaded view as it is — and goes on framed."""
+    from tests.test_fractal_grab import _rig
+    rig = _rig(tmp_path)
+    reg, view = rig.reg, rig.view
+    reg["view.shape"].set(geometry.shape_index("Menger sponge"))
+    view.dive.reset()
+    view.zoom = 1.3
+
+    def frame(dt: float = 0.1) -> None:
+        reg.apply()
+        view.integrate(dt)
+        app._space(SimpleNamespace(view=view, world=None), None)
+        view.reroot(reg, None, dt)
+
+    reg["view.frac_dive"].set(1.0)
+    for _ in range(60):
+        frame()
+    reg["camera.pan.x"].set(reg["camera.pan.x"].base + 0.1)
+    for _ in range(5):
+        frame()
+    fr = view.dive.frame.copy()
+    assert fr[0] == pytest.approx(0.1)
+    doc = json.loads(rig.loaded_patch.save_as("Framed").read_text())
+    assert doc["dive"]["frame"] == pytest.approx(list(fr))
+    rig.reg["camera.reset"].fire()
+    assert not view.dive.frame.any()
+    rig.loaded_patch.load("Framed")
+    assert np.allclose(view.dive.frame, fr)
+    for _ in range(3):                               # past the first frame
+        frame()
+    assert np.allclose(view.dive.frame, fr)
+    late = []
+    for _ in range(100):                             # ten levels on, framed still
+        frame()
+        if view.zoom > 0.8 * fractal.Z_IN:
+            late.append(np.linalg.norm(_p(view)[:3] - fr[:3]) / view.zoom)
+    assert np.allclose(view.dive.frame, fr)
+    assert late and max(late) < 0.45
+
+
+def test_a_dive_with_no_framing_saves_as_before():
+    """No framing: no `frame` key, so a dive saved before reads unchanged."""
+    d = fractal.Dive(path=[1, 2], inside=True)
+    assert "frame" not in d.to_json("Menger sponge")
+    d.frame = np.array([0.1, 0.0, 0.0, 0.0])
+    doc = d.to_json("Menger sponge")
+    assert doc["frame"] == [0.1, 0.0, 0.0, 0.0]
+    e = fractal.Dive()
+    assert e.from_json(doc, "Menger sponge") == "" and np.allclose(e.frame, d.frame)
+    del doc["frame"]
+    assert e.from_json(doc, "Menger sponge") == "" and not e.frame.any()
+
+
+@pytest.mark.parametrize("bad", [[0.1, 0.0, 0.0], "near", [0.1, "x", 0.0, 0.0],
+                                 [0.1, True, 0.0, 0.0], [1e13, 0.0, 0.0, 0.0]])
+def test_a_framing_that_cannot_land_refuses_the_dive_whole(bad):
+    """As `shift`: a framing that is not four finite numbers refuses the dive."""
+    doc = fractal.Dive(path=[1, 2], inside=True).to_json("Menger sponge")
+    doc["frame"] = bad
+    e = fractal.Dive()
+    assert e.from_json(doc, "Menger sponge") and not e.path and not e.frame.any()
+
+
+# ---- undo while a dive runs (the real deck's undo, `Deck.build`)
+
+def _undo_rig(tmp_path):
+    from tests.test_undo import boot, settle
+    r = boot(tmp_path / "home")
+    r.reg["view.shape"].set(geometry.shape_index("Menger sponge"))
+    r.view.dive.reset()
+    settle(r)
+    return r
+
+
+def _run(r, n: int) -> None:
+    """`n` frames in app.frame's order, the dive's step last."""
+    from tests.test_undo import DT, frames
+    for _ in range(n):
+        frames(r)
+        app._space(SimpleNamespace(view=r.view, world=None), None)
+        r.view.reroot(r.reg, None, DT)
+
+
+def test_two_edits_during_a_dive_are_two_steps(tmp_path):
+    """A dive at a constant rate writes camera.zoom's base every frame
+    (`Param.follow`), which the watcher does not count (row 1018): two slider
+    edits a second apart are two steps, and undoing the second takes back that
+    one alone — and does not yank the dive back to where it stood."""
+    r = _undo_rig(tmp_path)
+    r.reg["view.frac_dive"].set(1.0)
+    _run(r, 60)
+    n = len(r.undo.stack)
+    detail = r.reg["view.frac_detail"]
+    d0 = detail.base
+    detail.set(d0 + 0.2)
+    _run(r, 60)                                      # a second on, still diving
+    detail.set(d0 + 0.4)
+    _run(r, 60)
+    assert len(r.undo.stack) == n + 2, [s.label for s in r.undo.stack]
+    assert r.undo.stack[-1].label.startswith("Detail")
+    path = list(r.view.dive.path)
+    zoom = r.view.zoom
+    r.undo.undo()
+    assert detail.base == pytest.approx(d0 + 0.2)
+    assert r.view.dive.path == path and r.view.zoom == pytest.approx(zoom)
+    _run(r, 30)                                      # and the dive goes on from there
+    assert len(r.view.dive.path) > len(path)
+    r.undo.undo()
+    assert detail.base == pytest.approx(d0)
+
+
+def test_a_running_dive_makes_no_step(tmp_path):
+    r = _undo_rig(tmp_path)
+    r.reg["view.frac_dive"].set(1.5)
+    _run(r, 60)
+    n = len(r.undo.stack)
+    _run(r, 120)
+    assert len(r.view.dive.path) >= 4
+    assert len(r.undo.stack) == n and r.undo._open is None
+
+
+def test_undoing_a_pan_takes_its_framing_back(tmp_path):
+    """An undo writes the camera's bases back, and the dive's framing with
+    them (`deck.DiveFrame`, row 1018): an undone pan's framing does not come
+    back once the dive resumes; a redo brings it back."""
+    r = _undo_rig(tmp_path)
+    r.reg["view.frac_dive"].set(1.0)
+    _run(r, 60)
+    pan = r.reg["camera.pan.x"]
+    pan.set(pan.base + 0.1)
+    _run(r, 60)
+    assert r.view.dive.frame[0] == pytest.approx(0.1)
+    assert r.undo.stack[-1].label.startswith("Pan X")
+    r.undo.undo()
+    _run(r, 60)
+    assert not r.view.dive.frame.any(), r.view.dive.frame
+    r.undo.redo()
+    _run(r, 5)
+    assert r.view.dive.frame[0] == pytest.approx(0.1)
+
+
+def test_an_unrelated_undo_leaves_the_framing(tmp_path):
+    """An undo that writes no camera param leaves the framing as it is."""
+    r = _undo_rig(tmp_path)
+    r.reg["view.frac_dive"].set(1.0)
+    _run(r, 60)
+    pan = r.reg["camera.pan.x"]
+    pan.set(pan.base + 0.1)
+    _run(r, 60)
+    detail = r.reg["view.frac_detail"]
+    detail.set(detail.base + 0.3)
+    _run(r, 60)
+    r.undo.undo()
+    _run(r, 30)
+    assert r.view.dive.frame[0] == pytest.approx(0.1)

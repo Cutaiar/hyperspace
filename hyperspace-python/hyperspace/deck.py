@@ -64,6 +64,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
+import numpy as np
+
 from . import envelope, geometry, grip, lfo, poi, sequencer, tempo, totem
 from . import undo as undos
 from .fx import FxState
@@ -87,6 +89,28 @@ def _unseen(view) -> None:
     d = getattr(view, "dive", None)
     if d is not None:
         d.seen = None
+
+
+class DiveFrame:
+    """What an undo step holds beside the camera (`undo.Undo`'s `beside`, plan
+    81 follow-up, row 1018): the view's dive framing (`fractal.Dive.frame`),
+    the pans made inside a fractal, which no param holds. Put back only when a
+    restore writes the camera, so an undone pan takes its framing with it and
+    an unrelated edit leaves the framing alone."""
+
+    ids = ("camera.zoom", "camera.pan.x", "camera.pan.y")
+
+    def __init__(self, view):
+        self.view = view
+
+    def take(self):
+        fr = getattr(getattr(self.view, "dive", None), "frame", None)
+        return None if fr is None else tuple(float(x) for x in fr)
+
+    def put(self, doc) -> None:
+        d = getattr(self.view, "dive", None)
+        if d is not None and doc is not None and len(doc) == 4:
+            d.frame = np.array(doc, dtype=np.float64)
 
 
 def in_patch(p) -> bool:
@@ -320,6 +344,8 @@ class Deck:
                               # (and the view's dive takes the restored camera
                               # as it is, plan 81: not as a zoom about the middle)
                               on_restore=lambda: (router.sync_macros(), _unseen(s)),
+                              # and its framing goes with the camera (row 1018)
+                              beside=DiveFrame(s),
                               # the LFOs' membership (plan 31 B), read off the
                               # router at each step, so a re-classed router counts
                               banks=lambda: router._banks(),

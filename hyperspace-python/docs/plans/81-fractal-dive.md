@@ -2,7 +2,7 @@
 
 **Status: built (2026-11-22); the owner chose "cell" (row 1012, 2026-11-23).**
 Wave 1 of the post-install wave (`plans/66-post-install` on its branch, §1 row
-81). Register rows 1010–1017; hand checks 810–815, group FB. Read with
+81). Register rows 1010–1019 (1018–1019 the follow-up, §7); hand checks 810–815, group FB. Read with
 [plan 64](64-recursive-geometry.md) and [its part 2](64-depth-dependent-grab.md).
 
 ## 1. The two problems
@@ -211,7 +211,45 @@ changes no picture, and it isn't saved for a look that isn't a fractal. A golden
 hot-reloads as before. The settle constants (`SETTLE_ON`, `SETTLE`) take
 effect on a reload.
 
-## 7. Open
+## 7. Follow-up: the framing and undo (rows 1018–1019)
+
+Five fixes after the review, each with a test in `tests/test_fractal_dive.py`:
+
+1. **A grab that only turns leaves no framing.** `fold_flight` moved the
+   framing by how far the flight moved p, so a turn of an off-centre cell
+   read as a pan. The framing now moves rigidly, as the flight moves the
+   point it frames: `frame[:3] = R · frame[:3] + u`, w left
+   (`test_a_flight_that_only_turns_leaves_no_framing`,
+   `test_a_flight_moves_its_framing_rigidly`).
+2. **An off-air climb drops the framing.** Off air nothing runs
+   `app._space`, so `go_outside` never cleared it. `fractal.step` now drops
+   it once the path is empty and the view has eased home (zoom ≤ `Z_HOME`),
+   on air and off air alike (`test_an_off_air_climb_out_drops_the_framing`,
+   `test_a_climb_on_air_and_off_air_ends_the_same`).
+3. **A saved dive keeps its framing.** `Dive.to_json` writes an optional
+   `"frame"` (four finite numbers) when there is one; `from_json` checks it
+   as it checks `shift` and reads none from a file without it. No schema bump
+   (plan 64's optional-key precedent, row 889)
+   (`test_a_saved_dive_keeps_its_framing`, `test_a_dive_with_no_framing_saves_as_before`,
+   `test_a_framing_that_cannot_land_refuses_the_dive_whole`).
+4. **Undoing a pan takes its framing back.** An undo step holds the framing
+   beside the camera (`deck.DiveFrame`, `Undo(beside=)`), put back only when
+   the restore writes camera.zoom or camera.pan
+   (`test_undoing_a_pan_takes_its_framing_back`,
+   `test_an_unrelated_undo_leaves_the_framing`).
+5. **A running dive no longer merges undo steps** (option (a), row 1018,
+   pending the owner). `Param.follow` keeps how far it has moved a base
+   (`_drift`), and undo reads a base less that, so the dive's writes neither
+   open a step nor keep one open. A restore puts back what the user set with
+   the follows since put on (`undo.own`), so an undo does not yank the dive
+   back (`test_two_edits_during_a_dive_are_two_steps`,
+   `test_a_running_dive_makes_no_step`). Option (b), the dive as a
+   modulation on camera.zoom, was not taken: it would change what a saved
+   dive holds and how every route on camera.zoom rides.
+
+**Restart:** `Deck.build` wires the undo's `beside` once, at launch.
+
+## 8. Open
 
 - The cost of the settle on the rig (hand check 815). In a cloud session
   `fractal.step` takes a median 0.3 ms and up to about 4 ms on a re-root

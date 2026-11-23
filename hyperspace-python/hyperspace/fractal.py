@@ -349,10 +349,17 @@ class Dive:
 
     def to_json(self, name: str) -> dict:
         """The dive as a loadable patch keeps it (`DIVE_KEY`, row 889)."""
-        return {"shape": name, "path": [int(k) for k in self.path],
-                "z": float(self.z), "w": float(self.w),
-                "turn": [float(x) for x in np.asarray(self.turn).ravel()],
-                "shift": [float(x) for x in np.asarray(self.shift).ravel()]}
+        doc = {"shape": name, "path": [int(k) for k in self.path],
+               "z": float(self.z), "w": float(self.w),
+               "turn": [float(x) for x in np.asarray(self.turn).ravel()],
+               "shift": [float(x) for x in np.asarray(self.shift).ravel()]}
+        fr = _frame_of(self)
+        if fr.any():
+            # plan 81: the performer's framing (`frame`), an optional key (plan
+            # 64's precedent): written only when there is one, so a dive with
+            # none saves as before, and a file without it reads none
+            doc["frame"] = [float(x) for x in fr.ravel()]
+        return doc
 
     def from_json(self, doc, name: str) -> str:
         """This view's dive from a loadable patch's key, for the shape `name`:
@@ -368,25 +375,29 @@ class Dive:
         path = doc.get("path", [])
         z, w = doc.get("z", 0.0), doc.get("w", 0.0)
         turn_, shift_ = doc.get("turn", list(np.eye(3).ravel())), doc.get("shift", [0.0] * 3)
+        frame_ = doc.get("frame", [0.0] * 4)
         # as written: whole numbers for the cells, real numbers for the rest
         if (not isinstance(path, list) or not all(_whole(k) for k in path)
                 or not all(_real(x) for x in (z, w))
                 or not isinstance(turn_, list) or len(turn_) != 9
                 or not isinstance(shift_, list) or len(shift_) != 3
-                or not all(_real(x) for x in (*turn_, *shift_))):
+                or not isinstance(frame_, list) or len(frame_) != 4
+                or not all(_real(x) for x in (*turn_, *shift_, *frame_))):
             return "the saved dive would not read; starts at the top"
         path = [int(k) for k in path]
         z, w = float(z), float(w)
         T = np.asarray(turn_, dtype=np.float64).reshape(3, 3)
         sh = np.asarray(shift_, dtype=np.float64)
+        fr = np.asarray(frame_, dtype=np.float64)
         n = len(spec.centres)
         if (len(path) > MAX_PATH or any(not 0 <= k < n for k in path)
-                or not all(math.isfinite(x) and abs(x) < 1e12 for x in (z, w, *T.ravel(), *sh))
+                or not all(math.isfinite(x) and abs(x) < 1e12
+                           for x in (z, w, *T.ravel(), *sh, *fr))
                 or not np.allclose(T @ T.T, np.eye(3), atol=1e-6)
                 or np.linalg.det(T) <= 0.0):
             return "the saved dive is not one this fractal can take; starts at the top"
         self.path[:] = path
-        self.z, self.w, self.turn, self.shift = z, w, T, sh
+        self.z, self.w, self.turn, self.shift, self.frame = z, w, T, sh, fr
         self.inside = True
         return ""
 
@@ -487,6 +498,11 @@ def step(s, reg=None, off=None, dt: float = 0.0) -> None:
         # there by Z_HOME
         f = (zoom - Z_HOME) / (min(d.last, Z_IN) - Z_HOME)
         p = p * min(max(f, 0.0), 1.0)
+    if not d.path and zoom <= Z_HOME and _frame_of(d).any():
+        # climbed out and eased home: the framing was the dive's, and goes
+        # with it — as `go_outside` drops it on air, where off air (a deck
+        # that never runs `app._space`) nothing else would
+        d.frame = np.zeros(4)
     if len(d.path) > MAX_PATH:
         # an endless dive: the outermost levels are never drawn (`ABOVE`), and
         # the cell the view stands in is a copy of the whole shape, so letting
@@ -898,7 +914,12 @@ def fold_flight(s, reg, flight: np.ndarray, epoch: int = 0) -> None:
     p[:3] = R @ p0[:3] + u
     d.turn = R @ np.asarray(d.turn)
     d.shift = R @ np.asarray(d.shift)
-    d.frame = _frame_of(d) + (p - p0)            # a flight frames the dive as a pan does
+    # a flight frames the dive as a pan does, rigidly: the cell's middle the
+    # framing puts at mid + frame goes where the flight takes it, so a turn
+    # alone about the middle turns the framing and adds no pan to it
+    fr = _frame_of(d).copy()
+    fr[:3] = R @ fr[:3] + u
+    d.frame = fr
     _land(s, reg, zoom, p0, zoom, p)
 
 def _smooth(x):

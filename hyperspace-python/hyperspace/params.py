@@ -322,6 +322,9 @@ class Param:
     _pos: float | None = field(default=None, repr=False)
     _chase: bool = field(default=False, repr=False)
     _trim: float = field(default=0.0, repr=False)
+    # how far `follow` has moved the base, normalized, all told (plan 81
+    # follow-up): what undo takes off the base to read what the user set
+    _drift: float = field(default=0.0, repr=False)
 
     def __post_init__(self):
         if self.alias:
@@ -562,18 +565,30 @@ class Param:
         modulates the param its base takes the move (in normalized units, so
         a tapered zoom's ratio holds), and the last value the param wrote is
         set to it, so its next `apply` adopts nothing twice — and a source
-        letting go restores a base that has the move in it."""
+        letting go restores a base that has the move in it.
+
+        How far the base moved is added to `_drift` (normalized): undo reads a
+        base less what `follow` moved it (`undo.own`), so a running dive makes
+        no step and runs no step on (plan 81 follow-up, register row 1018)."""
+        if self.kind is not Kind.CONTINUOUS:
+            self.put(v)
+            return
         old = self._norm_of(self.get())
+        was = self._norm_of(self.base)
         self.put(v)
-        if self._base is None or self.kind is not Kind.CONTINUOUS:
-            return
-        cur = self._norm_of(self.get())
-        if not (math.isfinite(cur) and math.isfinite(old)):
-            return
-        self._base += cur - old
-        self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
-        if self._last is not None:
-            self._last = cur
+        if self._base is not None:
+            cur = self._norm_of(self.get())
+            if math.isfinite(cur) and math.isfinite(old):
+                self._base += cur - old
+                self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
+                if self._last is not None:
+                    self._last = cur
+        now = self._norm_of(self.base)
+        if math.isfinite(now) and math.isfinite(was):
+            moved = now - was
+            if self.wrap:                       # the short way round
+                moved = (moved + 0.5) % 1.0 - 0.5
+            self._drift += moved
 
     def nudge(self, delta: float) -> float:
         """Add `delta` to the base, wrapped or clamped into range; returns
