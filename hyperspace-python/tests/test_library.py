@@ -160,7 +160,7 @@ def test_macros_are_patch_state(rig, tmp_path):
     which live in the loadable patch). The live table keeps them too until plan
     13 WP5 (test_routing)."""
     lib, reg = rig.lib, rig.reg
-    assert "macro" not in lib.groups() and "view" in lib.groups()
+    assert "macro" not in lib.groups() and "band" in lib.groups() and "view" not in lib.groups()
     m = reg["macro.2"]
     m.set_value(0.3)
     lib.install.save_slot(0)
@@ -607,6 +607,34 @@ def test_project_save_load_new(rig, tmp_path):
     assert doc["modules"]["band"]["name"] == "Mine" and "band.0.atk" in doc["modules"]["band"]["values"]
 
 
+def test_an_old_show_naming_a_retired_module_still_loads_and_drops_it(rig, tmp_path):
+    """Plan 88: `master`, `output`, `tempo` (shared meta groups with no strip now) may still
+    be named in an old show's `modules`, by name or as an inline copy. The load ignores them
+    (the show's `session` holds the live values), says nothing wrong, and the next save drops
+    the reference."""
+    lib, reg = rig.lib, rig.reg
+    p = tmp_path / "installs" / "old.json"
+    p.write_text(json.dumps({
+        "schema": "hyperspace.install/1", "name": "Old", "bank": [], "tuning": {"master.gain": 1.5},
+        "modules": {"master": "Loud", "output": {"name": "X", "values": {"output.dim": 0.5}},
+                    "band": "Balanced"}}))
+    lib.install.load(p)                                      # never raises
+    assert reg["master.gain"].value == 1.5
+    assert lib.current("master") is None and lib.current("output") is None
+    doc = json.loads(lib.install.save().read_text())
+    assert set(doc["modules"]) == {"band"}                  # master, output: dropped
+
+
+def test_the_retired_modules_have_no_strip_and_the_kept_ones_do(rig):
+    from hyperspace.library import RETIRED_MODULES
+    groups = set(rig.lib.groups())
+    assert not groups & set(RETIRED_MODULES)
+    assert {"band", "hands", "grip", "loadable"} - set(RETIRED_MODULES) == {"band", "hands", "grip", "loadable"}
+    # a library's own old file in a retired group is kept on disk, only unlisted
+    rig.lib.save_as("view", "Mine")
+    assert rig.lib.list("view") == ["Mine"] and "view" not in rig.lib.groups()
+
+
 def test_project_unknown_ids_and_a_short_bank(rig, tmp_path):
     p = tmp_path / "installs" / "odd.json"
     p.write_text(json.dumps({"schema": "hyperspace.project/2", "name": "Odd",
@@ -819,7 +847,7 @@ def test_the_trash_is_no_group_and_is_never_watched(rig, tmp_path):
     reg["view.bright"].set_value(2.0)
     lib.overwrite("view")
     (kept,) = trash(tmp_path, "view")
-    assert library.TRASH not in lib.groups() and "view" in lib.groups()
+    assert library.TRASH not in lib.groups() and "view" not in lib.groups()
     assert lib.list("view") == ["Keeper"] and lib.list(library.TRASH) == []
     assert lib.path_of("view", kept.stem) is None
     lib.poll(now=1.0)

@@ -69,13 +69,13 @@ OUT_W = 150.0         # a folded strip's output bar
 def page(panel, dt: float) -> None:
     clock, lfos = getattr(panel, "clock", None), getattr(panel, "lfos", None)
     have = clock is not None and lfos is not None and f"{TEMPO_GROUP}.bpm" in panel.reg
-    panel._section("tempo", TEMPO_GROUP if have else None, note="B tap · ⇧B trigger")
+    panel._section("tempo", note="B tap · ⇧B trigger")
     if not have:
         imgui.text_disabled("no clock — app.py wires tempo.py and lfo.py")
         return
     _clock_strip(panel, clock)
     imgui.spacing()
-    panel._section("lfos", LFO_GROUP, note="rest 0.5 · every knob ownable")
+    panel._section("lfos", note="rest 0.5 · every knob ownable")
     ids = lfos.ids()
     if not ids:                       # every LFO removed: only the way back
         _add_chip(panel, lfos)

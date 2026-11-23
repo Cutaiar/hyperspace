@@ -39,12 +39,12 @@ def page(panel, dt: float) -> None:
         panel._view_stock(dt)
         return
     panel._view_hero()
-    panel._section("view", "view")
+    panel._section("view")
     panel._shape_combo()
     k = ui_kit.begin(panel)
     with ui_kit.mod("uictx").chrome(k):
         ui_fields.form(panel, k, spec(panel), lambda key, r: _cell(panel, k, key, r))
-    panel._section("rotation", "rot")
+    panel._section("rotation")
     with ui_kit.mod("uictx").chrome(k):
         ui_fields.form(panel, k, rates_spec(),
                        lambda key, r: ui_fields.slider(panel, k, key, r, label=key[-2:]))

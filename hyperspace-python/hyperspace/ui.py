@@ -17,8 +17,8 @@ Unbind.
 The surface is GRAPH, always drawn, with a side pane that shows one view
 at a time (ui_pane.py, plan 49): the selection's details, or a section,
 each a page's body, one per registry group or two, and a block in it
-whose group the library knows carries its preset strip (ui_loadable.py)
-under the title. `ui.page` is the view: what the pane's chips, a key row,
+whose group still has a module strip (the band, plan 88) carries it
+(ui_loadable.py) under the title; every other group has none. `ui.page` is the view: what the pane's chips, a key row,
 a pad or ⌘[ / ⌘] bring up (`PAGE_KEYS`, `Panel.go_page`). A modulated param
 draws its *base* as the handle and a white ghost bar at the *effective*
 value (params.py: `base` vs `eff_norm`), so the setting stays where the
@@ -2114,10 +2114,11 @@ class Panel:
             if chip(f"clear##{pid}"):
                 p.set("")
 
-    # ---- sections: a title, the group's preset strip, a rule ----
+    # ---- sections: a title, a rule (and the band's or hands' strip: plan 88) ----
 
     def _section(self, title: str, group: str | None = None, note: str | None = None) -> None:
-        """Header of a section. `group` draws the library's strip for it; a
+        """Header of a section. `group` draws the library's strip for it (none for a retired module,
+        `library.RETIRED_MODULES`: the title and rule only); a
         section whose params are saved by another group says so in `note`."""
         _micro(title, TEXT)
         if note:
@@ -2486,7 +2487,7 @@ class Panel:
 
     def _page_output(self, dt: float) -> None:
         """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""
-        self._section("output", "output", note="G click-through")
+        self._section("output", note="G click-through")
         if self.output is None or "output.overlay" not in self.reg:
             imgui.text_disabled("no render window attached")
             return
@@ -2860,7 +2861,7 @@ class Panel:
         v = self.view
         sh = SHAPES[v.shape]
         self._view_hero()
-        self._section("view", "view")
+        self._section("view")
         self._shape_combo()
         self._fader("view.bright")
         self._fader("view.speed")
@@ -2935,7 +2936,7 @@ class Panel:
         # two to a row, so the field's row above has room on the page. The
         # cell says only the plane (the section and the tooltip say "rate"):
         # a driven rate reads `base → effective`, which needs the width
-        self._section("rotation", "rot")
+        self._section("rotation")
         if imgui.begin_table("##rot.rate", 2, imgui.TableFlags_.sizing_stretch_same):
             for name in PLANES:
                 imgui.table_next_column()
@@ -2972,7 +2973,7 @@ class Panel:
 
     def _camera_stock(self, dt: float) -> None:
         """CAMERA as the stock widgets draw it: the section without the kit."""
-        self._section("camera", "camera")
+        self._section("camera")
         self._row("camera.zoom")
         self._row("camera.yaw")
         self._row("camera.pitch")
@@ -3060,7 +3061,7 @@ class Panel:
         imgui.spacing()
 
         # the level into the analyser: what every band sees
-        self._section("master", "master")
+        self._section("master")
         self._fader("master.gain")
         self._fader("master.dyn")
         self._fader("master.trim")

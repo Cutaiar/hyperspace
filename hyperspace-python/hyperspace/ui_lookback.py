@@ -4,7 +4,7 @@ nodes they are (plan 36 T4; redrawn by plan 49 stage 2).
 The owner, 2026-11-02, on the page's old split into look-back / dream /
 "both": "a horrid representation of what's going on there". Since plan 36
 they are two nodes on GRAPH, each picture in → picture out, and the page
-draws them so, top to bottom under one preset strip for the dream group:
+draws them so, top to bottom (no module strip since plan 88):
 
   LOOK-BACK   picture in → trail out. Its head says how far back the
               trail reaches; then what it records (a combo of the graph's
@@ -97,7 +97,7 @@ def page(panel, dt: float) -> None:
     spec = _spec(panel)
     drawn = _drawn(panel, spec)
 
-    panel._section("look-back · dream", "dream", note=_worker_note(dr))
+    panel._section("look-back · dream", note=_worker_note(dr))
     if getattr(lb, "error", ""):
         imgui.text_colored(ui.WARN, f"GLSL: {lb.error} — on the shipped helpers")
 

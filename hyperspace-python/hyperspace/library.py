@@ -304,14 +304,23 @@ def read_positions(value: Any) -> tuple[dict[str, list[float]], int]:
 # if it has one, else the values its objects were built with
 DEFAULT_NAMES = {"band": "Balanced"}
 
-# the groups whose module presets are retired outright (plan 40 T5, D6:
-# "It is not a useful representation of shaders anymore"): no strip, no
-# entry in `groups()`, no default loadable patch — `defaults` is the fresh values
-# even where an old `<library>/fx/default.json` survives. Their params are
-# untouched: the effects are the graph's (the FX page, D10, stays)
-# plan 40 T5: `fx`; 2026-11-23: `hands` — nobody used a hands setup (no patch or preset
-# names one); the feel keeps its defaults and a patch that wants other ones says so itself
-RETIRED_MODULES = ("fx", "hands")
+# the groups whose module presets are retired (plan 40 T5, D6 for `fx`: "It is not a useful
+# representation of shaders anymore"; plan 88 for the rest, the owner, 2026-11-23: nobody
+# knows how to use the strips, sane defaults replace them and a patch that wants to differ
+# carries an override key in its own JSON): no strip, no entry in `groups()`, no default
+# loadable patch — `defaults` is the fresh values even where an old `<library>/<group>/default.json`
+# survives — and no `modules.<group>` reference in a show (read and ignored, the next save
+# drops it; the show's `session` holds the live values, so nothing is lost). Their params are
+# untouched, and every loadable patch still saves them. Files an old library keeps under
+# `patches/<group>/` stay on disk, unlisted. Still stripped: `band` (a scene's layout and
+# its `scene_loaded` hook, plan 88 §c), `loadable` (a document kind, not a module), and the
+# hands node's `grip` (`hands` was retired by its own session, 2026-11-23: no setup was ever named)
+# of those, the groups whose old files `tools/migrate_library.py` deletes (D6: "nothing
+# converted"); every other retired group's files are moved into `patches/<group>/` like any
+# (the user's own saves, kept, only unlisted)
+DELETED_MODULES = ("fx",)
+RETIRED_MODULES = ("fx", "view", "rot", "camera", "pattern", "dream", "lfo", "env", "seq",
+                   "tempo", "master", "output", "hands")
 
 # working-directory files that move into the library home on first run
 MIGRATED_FILES = ("config.toml", "midi_map.json")
@@ -1137,7 +1146,7 @@ class Install:
         for group, ref in self.modules.items():
             if (group in lib._kinds or group not in SHARED_META_GROUPS
                     or group in RETIRED_MODULES):
-                continue          # a loadable patch's, a document kind's, or a retired module's
+                continue                              # a loadable patch's, a document kind's, or retired (plan 88: ignored)
             if isinstance(ref, dict):                 # inline copy of a loadable patch
                 name, doc = str(ref.get("name") or ""), dict(ref)
             else:                                     # by name in the library
@@ -1597,7 +1606,7 @@ class Install:
         for group, cur in lib._current.items():
             if (cur is None or group in lib._kinds or group not in SHARED_META_GROUPS
                     or group in RETIRED_MODULES):
-                continue                              # a loadable patch's label, or a kind's
+                continue                              # a loadable patch's label, a kind's, or a retired module's
             if lib.path_of(group, cur) is not None:
                 self.modules[group] = cur
             else:                                     # not in any library: keep a copy
