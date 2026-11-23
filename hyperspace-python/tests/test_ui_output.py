@@ -163,7 +163,7 @@ def test_picking_a_picture_wires_the_output(tmp_path):
 
 def test_through_writes_the_wiring(tmp_path):
     """`set_through(e, 2, True)` lands `through_wires(…, 2)` — the
-    composite and the copies of the run into the window's picture, `ground`
+    composite and a slot of each effect of the run (plan 89) into the window's picture, `ground`
     on its hands, one undo step; `False` takes them and their wires away,
     the section its former `to_json()` again. Plan 36 T1: a picture picked
     while through is that one wire — the chain stays, faint."""
@@ -191,7 +191,10 @@ def test_through_writes_the_wiring(tmp_path):
     assert sorted(map(str, got["wires"])) == sorted(map(str, [
         *(x for x in thru["wires"] if x["to"] != "output.2.image"),
         {"from": "scene", "to": "output.2.image"}]))
-    assert {"composite.2", "copy"} <= graphview.unreached(gs.spec)
+    assert "composite.2" in graphview.unreached(gs.spec)
+    # (plan 89: acid's slot 2 reaches nothing; acid's node, reached by its own
+    # slot, is drawn as it was)
+    assert "acid.slot.2" not in G.reaches(gs.spec) and "acid" not in graphview.unreached(gs.spec)
     # refused in words: a window with its own picture, a frame laying no hands
     why = graphview.set_through(e, 2, True)
     assert why == graphview.THROUGH_OWN_PICTURE.format(label="Output 2", src="Scene")

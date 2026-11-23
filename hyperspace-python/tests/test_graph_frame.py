@@ -2,7 +2,7 @@
 
 `graph.build_graph` builds a wired frame from its wires alone — nothing
 unreached, one end (`Shown`) per picture, the mutes read per window each
-frame and never a rebuild, copies (`Copy`) with their originals' knobs and
+frame and never a rebuild, an effect's slots (`Slot`, plan 89) with its knobs and
 a hands mute reaching into a through chain (plan 36 T1: the stand-down
 is gone). `graphmigrate.
 frame_wires` / `output_wires` write today's frame (`default_graph` from
@@ -162,9 +162,9 @@ def test_the_wired_section_reads_as_a_wired_frame():
 # ---------------------------------------------------------------- output_wires
 
 ACID = {"wires": wires_of([("frame", "acid.image"), ("acid", "fx.image")])}
-THROUGH = [{"kind": "composite"}, {"kind": "copy", "of": "acid"},
+THROUGH = [{"kind": "composite"}, {"kind": "effect", "file": "acid", "slots": 2},
            w("lookback", "composite.under"), w("hands.layer", "composite.over"),
-           w("composite", "copy.image"), w("copy", "output.N.image"),
+           w("composite", "acid.slot.2.image"), w("acid.slot.2", "output.N.image"),
            w("ground", "output.N.hands")]
 STATES = {
     (True, True, False): [],
@@ -181,7 +181,8 @@ STATES = {
 
 
 def _for(n: int, got: list[dict]) -> list[dict]:
-    return [{k: v.replace("output.N.", f"output.{n}.") for k, v in e.items()} for e in got]
+    return [{k: v.replace("output.N.", f"output.{n}.") if isinstance(v, str) else v
+             for k, v in e.items()} for e in got]
 
 
 @pytest.mark.parametrize("state", sorted(STATES))
@@ -207,7 +208,7 @@ def test_two_throughs_take_their_own_instances():
     got = M.output_wires(G.read_graph(sec, placements=True), 3,
                          M.Shows(scene=False, through=True))
     assert got[:2] == [{"kind": "composite", "instance": 2},
-                       {"kind": "copy", "of": "acid", "instance": 2}]
+                       {"kind": "effect", "file": "acid", "slots": 3}]
     assert G.read_graph(M.with_output_wires(sec, 3, M.Shows(scene=False, through=True)),
                         placements=True).notes == ()
 
@@ -324,9 +325,9 @@ def test_the_capture_runs_once_after_every_end():
     assert all(cap in out.after for out in g.outputs)
 
 
-def test_a_copy_reads_its_originals_knobs():
-    c = G.Copy("copy", "acid")
-    assert c.effect == "acid" and c.name == "copy" and c.placed == "wire"
+def test_a_slot_reads_its_effects_knobs():
+    c = G.Slot("acid.slot.2", "acid")
+    assert c.effect == "acid" and c.name == "acid.slot.2" and c.placed == "wire"
 
 
 def test_one_end_for_two_outputs_of_one_picture_is_built_once():
@@ -454,10 +455,10 @@ def test_one_end_for_two_outputs_of_one_picture(ctx, rig):
 STAND = wired(("shape", "scene.geometry"), ("scene", "acid.image"),
               ("acid", "output.all.image"), ("hands.layer", "output.all.hands"),
               ("hands.layer", "output.all.guide"), ("scene", "composite.under"),
-              ("hands.layer", "composite.over"), ("composite", "copy.image"),
-              ("copy", "output.2.image"), ("ground", "output.2.hands"),
+              ("hands.layer", "composite.over"), ("composite", "acid.slot.2.image"),
+              ("acid.slot.2", "output.2.image"), ("ground", "output.2.hands"),
               ("hands", "hands.layer.hands"),          # plan 36 T2: the layer's hands, a wire
-              nodes=[{"kind": "composite"}, {"kind": "copy", "of": "acid"}])
+              nodes=[{"kind": "composite"}, {"kind": "effect", "file": "acid", "slots": 2}])
 
 
 def _acid(rig, on: bool) -> None:
@@ -466,28 +467,28 @@ def _acid(rig, on: bool) -> None:
     rig.reg["fx.acid.mix"].set(1.0)
 
 
-def test_a_copy_reads_its_originals_knobs_when_drawn(ctx, rig):
-    """With `fx.acid.on` off both `acid` and its copy read through (no
-    pass); on, each runs its own pass."""
+def test_a_slot_reads_its_effects_knobs_when_drawn(ctx, rig):
+    """With `fx.acid.on` off both of `acid`'s slots read through (no
+    pass); on, each runs its own pass (plan 89)."""
     _land(rig, STAND)
     _acid(rig, False)
     _draw(ctx, rig, [Switches(), Switches()], frames=1)
-    assert not ({"acid", "copy"} & set(rig.renderer.stats["effects"]))
+    assert not ({"acid", "acid.slot.2"} & set(rig.renderer.stats["effects"]))
     _acid(rig, True)
     _draw(ctx, rig, [Switches(), Switches()], frames=1)
-    assert {"acid", "copy"} <= set(rig.renderer.stats["effects"])
+    assert {"acid", "acid.slot.2"} <= set(rig.renderer.stats["effects"])
     _acid(rig, False)
 
 
-def test_a_copy_chain_shows_as_wired(ctx, rig):
-    """Plan 36 T1: output 2's picture is a copy of acid over the look-back
+def test_a_slot_chain_shows_as_wired(ctx, rig):
+    """Plan 36 T1: output 2's picture is acid's slot 2 over the look-back
     with the hands laid on, and that is what it shows every frame — acid
     off or on, a hand drawn or not: no stand-down swaps its end."""
     _land(rig, STAND)
     for on in (False, True):
         _acid(rig, on)
         _draw(ctx, rig, [Switches(), Switches()], frames=1)
-        assert rig.renderer.stats["routes"][1] == ("shown(copy)", False), on
+        assert rig.renderer.stats["routes"][1] == ("shown(acid.slot.2)", False), on
     _acid(rig, False)
 
 
@@ -499,10 +500,11 @@ def test_a_hands_mute_reaches_into_a_through_chain(ctx, rig):
     muted) draws pixel for pixel window 3 (the same chain with nothing
     over, its hands and guide `ground`); unmuted, window 2 has its hands."""
     sec = copy.deepcopy(STAND)
-    sec["nodes"] += [{"kind": "composite", "instance": 2}, {"kind": "copy", "instance": 2,
-                                                            "of": "acid"}]
-    sec["wires"] += wires_of([("scene", "composite.2.under"), ("composite.2", "copy.2.image"),
-                              ("copy.2", "output.3.image"), ("ground", "output.3.hands"),
+    sec["nodes"] = [{**e, "slots": 3} if e.get("kind") == "effect" else e
+                    for e in sec["nodes"]] + [{"kind": "composite", "instance": 2}]
+    sec["wires"] += wires_of([("scene", "composite.2.under"),
+                              ("composite.2", "acid.slot.3.image"),
+                              ("acid.slot.3", "output.3.image"), ("ground", "output.3.hands"),
                               ("ground", "output.3.guide")])
     _land(rig, sec)
     _acid(rig, True)

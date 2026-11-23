@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/11",
+ "schema": "hyperspace.loadable/12",
  "name": "distort-blocks-rings",
  "note": "Cells turning in a wave that runs out from the middle in square rings. The sub band pushes Amount. The right hand's height brings in the colour split; the left hand's height moves how far each ring lags the last.",
  "graph": {

@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/11",
+ "schema": "hyperspace.loadable/12",
  "name": "hands-orbit",
  "note": "Two hands on the camera: the right hand orbits (sideways turns, fingers up tips), the left pans (sideways, reaching in) and zooms (height).",
  "graph": {"frame": "wired",

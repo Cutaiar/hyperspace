@@ -163,9 +163,10 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     _every_file(rig)
     view = build(rig, g)
     names = {n.id for n in view.nodes}
-    # (plan 35 T4: output 2's hands through are a copy of each effect over a
-    # composite, `copy` …; plan 35 G: no end nor `fx` is drawn — none is a node)
-    assert {"render:shape", "render:acid", "render:copy", "render:lookback",
+    # (plan 35 T4: output 2's hands through are a slot of each effect over a
+    # composite, plan 89 — on the effect's own node; plan 35 G: no end nor
+    # `fx` is drawn — none is a node)
+    assert {"render:shape", "render:acid", "render:lookback",
             "render:output.1", "render:output.2", "render:output.all",
             "render:camera"} <= names
     assert not {n for n in names if n.startswith(("render:shown", "render:history"))}

@@ -167,7 +167,7 @@ def test_an_old_loadable_opened_with_an_old_show_takes_its_look_and_cuts_end_to_
     assert rig.lib.current("dream") is None                   # no module label
     assert not rig.lib.is_dirty("loadable")
     doc = pre.document("OLD")
-    assert doc["schema"] == "hyperspace.loadable/11" and "modules" not in doc
+    assert doc["schema"] == "hyperspace.loadable/12" and "modules" not in doc
     assert doc[loadable.BUS_KEY] == {"cut": [CUT.to_json()]}
     assert doc["values"]["ghost.alpha"] == 0.25 and "ghost.mirror" not in doc["values"]
     # the show saved: /3, the meta controller, kept as /2 beside it
@@ -252,7 +252,7 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     out = capsys.readouterr().out
     assert {p: p.read_bytes() for p in lib.rglob("*") if p.is_file()} == tree
     assert "1 bus cut(s) into every loadable patch: output.all.image → output.2.image" in out
-    assert "would rewrite 2 as /11, leave 1 untouched (already /11)" in out
+    assert "would rewrite 2 as /12, leave 1 untouched (already /12)" in out
     assert "show rig.hyp.json → installs/rig.json" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     out = capsys.readouterr().out
@@ -260,7 +260,7 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     assert len(backups) == 1
     for rel in ("loadable/old.json", "loadable/party/deep.json"):
         doc = json.loads((lib / rel).read_text())
-        assert doc["schema"] == "hyperspace.loadable/11", rel
+        assert doc["schema"] == "hyperspace.loadable/12", rel
         assert doc["bus"] == {"cut": [CUT.to_json()]}, rel
         assert {k: doc["values"][k] for k in LOOK} == LOOK, rel
         assert "modules" not in doc and "ghost.mirror" not in doc["values"], rel
@@ -270,16 +270,16 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     doc = json.loads((lib / "installs" / "rig.json").read_text())
     assert doc["schema"] == "hyperspace.install/1" and "rig" not in doc
     assert doc["tuning"] == {"tempo.bpm": 128.0, "ghost.mirror": True}
-    assert "rewrote 2 as /11" in out and "wrote 1 install file(s)" in out
+    assert "rewrote 2 as /12" in out and "wrote 1 install file(s)" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     assert "nothing to do" in capsys.readouterr().out
 
 
 def test_a_newer_file_is_refused_as_an_older_build_refuses_a_ten(tmp_path):
-    """The two-Macs rule, as this build sees it: a `/12`, a `/4` show and an install `/2` are
-    refused, as a build from before refuses an `/11`; the words say what to do."""
+    """The two-Macs rule, as this build sees it: a `/13`, a `/4` show and an install `/2` are
+    refused, as a build from before refuses a `/12`; the words say what to do."""
     from hyperspace.library import Install, Library, LibraryError, migrate_doc
-    assert loadable.VERSIONS[-1] == 11
+    assert loadable.VERSIONS[-1] == 12                    # (plan 89)
     with pytest.raises(LibraryError, match="newer than this build"):
         migrate_doc({"schema": "hyperspace.project/4"}, "hyperspace.project")
     lib = Library(tmp_path)

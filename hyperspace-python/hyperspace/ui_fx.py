@@ -119,7 +119,7 @@ def groups(spec) -> list[tuple[str, list[str]]]:
             kind, port = kind_of(w.node), w.port
             if w.node in seen:
                 continue
-            if kind in ("effect", "switch", "composite", "copy") and port != "aux":
+            if kind in ("effect", "switch", "composite", "slot") and port != "aux":
                 for end, d in follow(w.node, seen | {w.node}).items():
                     got[end] = min(got.get(end, d + 1), d + 1)
                 continue

@@ -33,7 +33,8 @@ this one read the same rows, so an edit on either is on both next frame.
 - ``render`` / ``output`` — the wired frame's nodes (plan 35 G): one per
   name the loadable patch's section says, by an entry or a wire's end, in the
   owner's ids (``render:<id>``: ``render:scene``, ``render:hands.layer``,
-  ``render:lookback``, ``render:acid.2``, ``render:copy`` …), titled in the
+  ``render:lookback``, ``render:acid.2`` …; plan 89: an effect's slots
+  are its own node's ports), titled in the
   owner's words (`label_of`, `LABELS`) and hovered by what each is
   (`hover_of`, `HOVERS`), their ports a wired frame's (`graph.WIRED_TAKES`,
   ``rin:lookback/capture``) and, as input ports, the params of the node
@@ -96,7 +97,7 @@ effect or composite made of the media alone, `media_made`; plan 34's
 delays) → *scene* (the shape, the hands, their layers and guides, a
 cloud, the camera, the scene that draws them, the backdrop) →
 *look-back* (the look-back, its echoes, the dream) → *effects* (the
-effects, the copies, the composites, a resize) → *outputs* (All outputs,
+effects (an effect's slots on its node), the composites, a resize) → *outputs* (All outputs,
 then each window). Every wire runs right but the effects' wrapped rows,
 a scene picture taken back into a switch, and what is kept for the next
 frame — into `lookback.capture`, into a delay (`returns`). `AREA` is the one table (`area_of`);
@@ -794,7 +795,7 @@ LABELS: dict[str, str] = {
     "guide": "Hands guide", "cloud": "Point cloud", "camera": "Camera",
     "backdrop": "Backdrop", "lookback": "Look-back", "pattern": "Faces pattern",
     "channel": "Channel", "composite": "Composite", "switch": "Switch", "delay": "Delay",
-    "resize": "Resize", "echo": "Echo", "dream": "Dream", "copy": "copy of",
+    "resize": "Resize", "echo": "Echo", "dream": "Dream", "slot": "slot",
     "matte": "Matte", "cut": "Cut", "segment": "Segment",
     "output": "Output", rgraph.ALL_OUTPUTS: "All outputs", rgraph.GROUND: "Ground",
 }
@@ -815,7 +816,7 @@ HOVERS: dict[str, str] = {
                 "layer."),
     "channel": "A clip, still or live feed.",
     "effect": "An effect: its knobs, on the picture wired into its image.",
-    "copy": "The same effect, with its knobs, on another picture.",
+    "slot": "One more picture through the same effect, with its knobs.",
     "composite": "Lays one picture over another.",
     "switch": "Picks one of eight.",
     "delay": "Last frame's picture.",
@@ -937,7 +938,11 @@ NO_CABLE_STARTER = "{label} starts from no cable: pick it from the canvas's star
 IN_ALREADY = "{label} is in the graph already"
 NOTHING_TO_DELETE = "nothing to delete: {what} has no wires"
 NO_SUCH_WIRE = "{wire}: no such wire"
-NO_SUCH_COPY = "copy of {of}: no such effect instance in the graph"
+NO_SUCH_EFFECT = "{of}: no such effect instance in the graph"
+SLOTS_FULL = "{of} has {most} slots already: the most one effect has"
+SLOT_ADDED = ("{label} slot {k} added: wire a picture into {name}.image, and {name} out — "
+              "the same knobs")
+SLOT_DROPPED = "{label} slot {k} removed"
 
 
 # plan 37 C1 (P1, the one table): how each canvas kind's thumbnail is
@@ -958,8 +963,8 @@ MASK_PIC = "mask"
 # through it (`render.card_through`). The page asks with this word; no kind
 # has it in `THUMBS`, and a node's own `thumb` stays "picture"
 CARD_PIC = "card"
-CARD_KINDS = ("effect", "copy")         # the kinds whose thumbnail has the chip
-# plan 65: an effect (or copy) that reaches nothing (`unreached`, faint) is
+CARD_KINDS = ("effect",)                # the kinds whose thumbnail has the chip
+# plan 65: an effect that reaches nothing (`unreached`, faint) is
 # never built, so it made no picture: its thumbnail is its input — else the
 # test card — put through it at a thumbnail's size (`render.unwired_through`)
 UNWIRED_PIC = "unwired"
@@ -968,7 +973,7 @@ THUMBS: dict[str, str] = {
     "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
     "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,
     "lookback": PICTURE, "echo": PICTURE, "dream": PICTURE, "effect": PICTURE,
-    "copy": PICTURE, "layer": PICTURE, "guide": PICTURE,
+    "layer": PICTURE, "guide": PICTURE,
     # plan 39 at the plan 37 merge: a cut is its picture. SM3 (row 777): a
     # matte's is its mask, and a segment's its matte (fg, bg are its pins)
     "cut": PICTURE, "matte": MASK_PIC, "segment": MASK_PIC,
@@ -1041,10 +1046,10 @@ def _slot_name(slots, n: int) -> str:
     return ""
 
 
-def label_of(name: str, slots=(), *, of: str = "") -> str:
+def label_of(name: str, slots=()) -> str:
     """Node `name`'s title on the canvas (V, `LABELS`): `hands.2` "Hands 2",
     `channel.a` "Channel A", `hands.2.layer` "Hands layer 2", `echo.3` "Echo
-    3", `copy.2` of `acid` "copy of acid (2)", an effect its instance name
+    3", an effect's slot `acid.slot.2` "acid slot 2" (plan 89), an effect its instance name
     with the dot a space ("acid 2"), a window its config name (`slots`: the
     outputs, each with `n` and `name`, or {n: name}), else "Output N"."""
     kind = kind_of(name)
@@ -1055,10 +1060,9 @@ def label_of(name: str, slots=(), *, of: str = "") -> str:
         return _slot_name(slots, n) or f"{LABELS['output']} {n}"
     if kind == "effect":
         return name.replace(".", " ")
-    if kind == "copy":
-        n = rgraph.split_instance(name)[1]
-        what = f"{LABELS['copy']} {of}" if of else "copy"
-        return what if n == 1 else f"{what} ({n})"
+    if kind == "slot":
+        effect, k = rgraph.split_slot(name)
+        return f"{effect.replace('.', ' ')} {LABELS['slot']} {k}"
     if kind == "channel":
         return f"{LABELS['channel']} {name.partition('.')[2].upper()}"
     if kind in ("layer", "guide"):
@@ -1073,27 +1077,26 @@ def label_of(name: str, slots=(), *, of: str = "") -> str:
 DREAM_SHARE = "(its own knobs)"
 
 
-def params_of(name: str, of: str = "") -> str:
+def params_of(name: str) -> str:
     """The prefix node `name`'s params are found by (V2: `graph.
-    param_prefix` — params keep their ids); a copy's knobs are its
-    original's (`fx.<of>`)."""
+    param_prefix` — params keep their ids); an effect's slot's knobs are
+    its effect's (`fx.<effect>`, plan 89)."""
     kind = kind_of(name)
-    if kind == "copy" and of:
-        return f"fx.{of}"
+    if kind == "slot":
+        return f"fx.{rgraph.effect_of(name)}"
     if kind in (rgraph.ALL_OUTPUTS, "cloud", None):
         return name
     return rgraph.param_prefix(name)
 
 
-def param_ids(reg, nid: str, of: str = "") -> list[str]:
-    """The registry ids under canvas node `nid`: the ids with `params_of`'s prefix
-    (`of`: what a copy draws again; its knobs are its original's), the continuous
+def param_ids(reg, nid: str) -> list[str]:
+    """The registry ids under canvas node `nid`: the ids with `params_of`'s prefix, the continuous
     ones first and then the rest, each run in registry order; an alias left out.
     [] for a node with no param (a device's, a lane's). A scan of the registry, so
     asked when something moves, never per frame. The panel's selection and node
     mode's rows both read this, so a node has one list of params."""
     name = nid.partition(":")[2] if nid.startswith("render:") else nid
-    pre = params_of(name, of)
+    pre = params_of(name)
     head = pre + "."
     # (wave 3 P2: `dream.*` is a look-back's and the dream's, by key; no other
     # node's prefix starts so)
@@ -1105,17 +1108,17 @@ def param_ids(reg, nid: str, of: str = "") -> list[str]:
     return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
 
 
-def _params_said(name: str, of: str = "") -> str:
+def _params_said(name: str) -> str:
     """A node's params' prefix for its hover and side head, where it differs
     from its id; `dream.*`, split between the look-back and the dream (wave 3
     P2), says each has only its share of it."""
-    pre = params_of(name, of)
+    pre = params_of(name)
     if pre == "dream":
         return f" · params dream.* {DREAM_SHARE}"
     return "" if pre == name else f" · params {pre}.*"
 
 
-def hover_of(name: str, slots=(), *, of: str = "", tip: str = "") -> str:
+def hover_of(name: str, slots=(), *, tip: str = "") -> str:
     """Node `name`'s hover (V, `HOVERS`): what it is in one line (an
     effect's own `@tip`, when its file has one), then its id and its params'
     prefix (`_params_said`) — "… · id lookback · params dream.* (its own
@@ -1123,7 +1126,7 @@ def hover_of(name: str, slots=(), *, of: str = "", tip: str = "") -> str:
     kind = kind_of(name)
     text = tip if kind == "effect" and tip else HOVERS.get(kind or "", "")
     out = f"{text} · id {name}" if text else f"id {name}"
-    return out + _params_said(name, of)
+    return out + _params_said(name)
 
 
 def side_head(n: VNode) -> str:
@@ -1131,8 +1134,7 @@ def side_head(n: VNode) -> str:
     differs, its params' prefix — "Look-back · lookback · params dream.* (its
     own knobs)"."""
     name = n.id.partition(":")[2]
-    of = getattr(n.ref, "effect", "") if kind_of(name) == "copy" else ""
-    return f"{n.label} · {name}" + _params_said(name, of)
+    return f"{n.label} · {name}" + _params_said(name)
 
 
 def _tip(reg, name: str) -> str:
@@ -1160,6 +1162,20 @@ def aux_shown(reg, effect: str, wired: bool = False) -> bool:
     return spec is None or bool(getattr(spec, "aux", True))
 
 
+def canvas_node(name: Any) -> Any:
+    """The canvas node a wire's end is drawn on: a pin's node (`scene.depth`
+    → `scene`, plan 36 T2), an effect's slot's effect (`acid.slot.2` →
+    `acid`, plan 89: one node, one set of knobs), else the name itself."""
+    return rgraph.pin_node(name) or rgraph.effect_of(name)
+
+
+def slot_names(spec, effect: str) -> list[str]:
+    """Effect instance `effect`'s slots past the first that section `spec`
+    declares (plan 89), in order: the ports its node draws besides its own."""
+    at = next((e for e in (getattr(spec, "effects", None) or ()) if e.name == effect), None)
+    return [x.name for x in at.slot_list()] if at is not None else []
+
+
 ECHO_PINS = 4      # plan 36 T4: the echo pins a look-back always draws (echo.1 … echo.4)
 
 
@@ -1177,7 +1193,8 @@ def frame_names(spec) -> list[str]:
     entries' (the hands, the effects, then the rest as read), then each
     wire's ends (`ground` too, R13: drawn so its wires are seen) — with the hands node each
     layer or guide is of just before it (the hands' params are on that
-    node). Plan 36 T2: a pin (`scene.cover`) is its node's."""
+    node). Plan 36 T2: a pin (`scene.cover`) is its node's; plan 89: an
+    effect's slot its effect's."""
     if spec is None:
         return []
     raw: list[str] = [rgraph.wired_hands_name(h.n) for h in spec.hands]
@@ -1189,7 +1206,7 @@ def frame_names(spec) -> list[str]:
     for w in spec.all_wires():
         raw += [w.src, w.node]
     out: list[str] = []
-    for name in dict.fromkeys(rgraph.pin_node(x) or x for x in raw):
+    for name in dict.fromkeys(canvas_node(x) for x in raw):
         kind = kind_of(name)
         if kind is None:
             continue
@@ -1214,11 +1231,13 @@ def unreached(spec) -> frozenset[str]:
         return frozenset()
     got = set(rgraph.reaches(spec)) | {e.name for e in spec.effects if e.placed}
     if getattr(spec, "wired", False):
-        # (R15: an effect or a copy no wire feeds reads nothing — never built,
-        # faint, its outs kept)
+        # (R15: an effect or its slot no wire feeds reads nothing — never
+        # built, faint, its outs kept; plan 89: an effect's node is drawn
+        # reached while any of its slots is)
         fed = {w.node for w in spec.all_wires() if w.port == "image"}
-        got -= {n for n in got if kind_of(n) in ("effect", "copy") and n not in fed
+        got -= {n for n in got if kind_of(n) in ("effect", "slot") and n not in fed
                 and n not in {e.name for e in spec.effects if e.placed}}
+        got |= {rgraph.effect_of(n) for n in got if kind_of(n) == "slot"}
         return frozenset(n for n in frame_names(spec) if n not in got
                          and kind_of(n) not in ("output", rgraph.ALL_OUTPUTS, rgraph.GROUND))
     names = {e.name for e in spec.effects} | {s.name for s in spec.switches}
@@ -1246,7 +1265,7 @@ FRAME_CLASS: dict[str, type] = {
     "layer": rgraph.HandsLayer, "guide": rgraph.Readout, "cloud": rgraph.PointCloud,
     "backdrop": rgraph.BackdropNode, "lookback": rgraph.History,
     "pattern": rgraph.PatternNode, "channel": rgraph.MediaNode, "effect": rgraph.Effect,
-    "copy": rgraph.Copy, "composite": rgraph.Composite, "switch": rgraph.SwitchNode,
+    "composite": rgraph.Composite, "switch": rgraph.SwitchNode,
     "delay": rgraph.Delay, "resize": rgraph.ResizeNode, "echo": rgraph.EchoNode,
     "matte": rgraph.MatteNode, "cut": rgraph.CutNode, "segment": rgraph.SegmentNode,
     "dream": rgraph.DreamNode, "output": rgraph.Output, rgraph.ALL_OUTPUTS: rgraph.Output,
@@ -1257,17 +1276,15 @@ FRAME_CLASS: dict[str, type] = {
 def _stand_in(name: str, spec=None) -> rgraph.Node | None:
     """A render node of kind `name`'s for the canvas to draw where the
     renderer built none (unreached, or not reached this frame): never built
-    into a graph, never run. Every kind of a wired frame has one; a copy's
-    `of` and a composite's blend are the section's (`spec`)."""
+    into a graph, never run. Every kind of a wired frame has one (an
+    effect's slot is no node: its effect's); a composite's blend is the
+    section's (`spec`)."""
     kind = kind_of(name)
     if kind is None:
         return None
     rest = name.partition(".")[2]
     if kind == "effect":
         return rgraph.Effect(name, node=name)
-    if kind == "copy":
-        of = next((c.of for c in (getattr(spec, "copies", ()) or ()) if c.name == name), "")
-        return rgraph.Copy(name, of)
     if kind == "composite":
         c = next((c for c in (spec.composites() if spec is not None else ()) if c.name == name),
                  None)
@@ -1281,7 +1298,7 @@ def _stand_in(name: str, spec=None) -> rgraph.Node | None:
         return rgraph.EchoNode(name, got[1], lookback=got[0]) if got is not None else None
     if kind in ("output", rgraph.ALL_OUTPUTS):
         return rgraph.Output(name, int(rest) - 1 if rest.isdecimal() else -1)
-    if kind == CAMERA:
+    if kind in (CAMERA, "slot"):
         return None
     r = FRAME_CLASS[kind](name)
     if kind in STAND_IN_SAID:                        # plan 39 T5: its body line, in words
@@ -1326,9 +1343,9 @@ def _built(rnodes: Iterable[rgraph.Node]) -> dict[str, rgraph.Node]:
     name — each only when it is of its kind's class (`FRAME_CLASS`)."""
     out: dict[str, rgraph.Node] = {}
     for r in rnodes:
-        if isinstance(r, rgraph.Copy):
-            name = r.name
-        elif isinstance(r, rgraph.Effect):
+        if isinstance(r, rgraph.Slot):
+            continue                    # (plan 89: a slot is drawn on its effect's node)
+        if isinstance(r, rgraph.Effect):
             name = r.effect
         elif isinstance(r, rgraph.MediaNode):
             name = rgraph.channel_name(r.channel)
@@ -1336,8 +1353,6 @@ def _built(rnodes: Iterable[rgraph.Node]) -> dict[str, rgraph.Node]:
             name = r.name
         cls = FRAME_CLASS.get(kind_of(name) or "")
         if cls is None or not isinstance(r, cls) or name in out:
-            continue
-        if cls is rgraph.Effect and isinstance(r, rgraph.Copy):
             continue
         out[name] = r
     return out
@@ -1354,10 +1369,14 @@ def frame_of(spec, render_graph=None):
         return spec
     wiring = getattr(render_graph, "wiring", None) if spec is None else None
     if wiring is not None and getattr(wiring, "wired", False):
+        most: dict[str, int] = {}
+        for x in wiring.slots:                     # plan 89: each effect's slots
+            most[x.effect] = max(most.get(x.effect, 1), x.k)
+        effects = tuple(rgraph.EffectAt(*rgraph.split_instance(e), slots=k)
+                        for e, k in sorted(most.items()))
         return rgraph.GraphSpec(
             hands=tuple(wiring.nodes()), laid=wiring.blend, laid_on=wiring.laid_on,
-            others=(*(("composite", c) for c in wiring.composites),
-                                       *(("copy", c) for c in wiring.copies)),
+            effects=effects, others=tuple(("composite", c) for c in wiring.composites),
             wires=tuple(wiring.wires), wired=True)
     return rgraph.read_graph({rgraph.FRAME_KEY: rgraph.WIRED_FRAME})
 
@@ -1592,7 +1611,6 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     rnodes = list(render_graph.order) if render_graph is not None else []
     frame = frame_of(spec, render_graph)
     built = _built(rnodes)
-    copies = {c.name: c.of for c in frame.copies}
     # the canvas's names: the eight channels always (plan 32 T10: what a
     # wire starts from), the meta controller's clouds, the section's names, All outputs
     # and every window the renderer drew (and any a wire names)
@@ -1629,19 +1647,23 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         kind = kind_of(name)
         vkind = ("channel" if kind == "channel" else
                  "output" if kind in ("output", rgraph.ALL_OUTPUTS) else "render")
-        of = copies.get(name, "")
-        n = add_node(VNode(f"render:{name}", vkind, label_of(name, slots, of=of), ref=r,
+        n = add_node(VNode(f"render:{name}", vkind, label_of(name, slots), ref=r,
                            thumb=thumb_of(name, r),
-                           status=hover_of(name, slots, of=of,
+                           status=hover_of(name, slots,
                                            tip=_tip(reg, name) if kind == "effect" else "")))
-        for port, typ in _takes(kind).items():
-            if port == rgraph.AUX and kind in ("effect", "copy") and not aux_shown(
-                    reg, of or name, f"{name}.{port}" in aux_wired):
-                continue                        # plan 65: a file that reads no aux has no port
-            add_port(n, VPort(f"rin:{name}/{port}", port, IN, typ))
-        made = _makes(kind)
-        if made is not None:
-            add_port(n, VPort(f"rout:{name}", made, OUT, made))
+        # plan 89: an effect draws one row of ports per slot — its own, then
+        # `acid.slot.2`'s (`image 2`, `aux 2` in, `2` out) — on its one node
+        for slot in [name, *(slot_names(frame, name) if kind == "effect" else ())]:
+            k = rgraph.split_slot(slot)[1]
+            tail = f" {k}" if k > 1 else ""
+            for port, typ in _takes(kind).items():
+                if port == rgraph.AUX and kind == "effect" and not aux_shown(
+                        reg, name, f"{slot}.{port}" in aux_wired):
+                    continue                    # plan 65: a file that reads no aux has no port
+                add_port(n, VPort(f"rin:{slot}/{port}", port + tail, IN, typ))
+            made = _makes(kind)
+            if made is not None:
+                add_port(n, VPort(f"rout:{slot}", made + tail, OUT, made))
         if kind == rgraph.ALL_OUTPUTS:           # plan 36 T1: the bus's pins, one a port
             for port in rgraph.BUS_PORTS:
                 add_port(n, VPort(f"rout:{name}.{port}", port, OUT, IMAGE))
@@ -1786,9 +1808,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         for b in h.rows:
             src = row_pin(b)[0]
             p = reg.get(b.target)
-            # onto the node pointed at: a copy's knobs live on its original, and the pane
-            # says the copy's name, so the copy gets a port of its own for this row
-            # (a pad's row is a route, so it lands where a route does)
+            # onto the node pointed at: where a param's port sits on another node
+            # (a frame node's knobs owned elsewhere), the node pointed at gets a port
+            # of its own for this row (a pad's row is a route, so it lands where a
+            # route does)
             dst = f"{MOD if b.op in MOD_OPS else BASE}:{b.target}"
             at = nodes.get(h.node or "")
             if at is not None and view.pins.get(dst, ("",))[0] != h.node:
@@ -2184,8 +2207,7 @@ AREA: dict[str, str] = {
     "PointCloud": SCENE_AREA, "Scene": SCENE_AREA, "BackdropNode": SCENE_AREA,
     # the look-back: the ring's pictures
     "History": LOOKBACK_AREA, "EchoNode": LOOKBACK_AREA, "DreamNode": LOOKBACK_AREA,
-    # the effects and what lays or crops a picture between them (a copy is
-    # an `Effect`: found by its base class)
+    # the effects and what lays or crops a picture between them
     "Effect": EFFECTS_AREA, "Composite": EFFECTS_AREA, "ResizeNode": EFFECTS_AREA,
     # the windows and All outputs
     "Output": OUTPUTS_AREA, "GroundNode": OUTPUTS_AREA,
@@ -2258,7 +2280,7 @@ def laid_areas(view: View) -> dict[str, str]:
     that are laid where their consumers are instead, so no cable runs back
     across areas — by node id, the area each is laid in.
 
-    An effect, copy, composite or resize (a node of the frame `area_of`
+    An effect, composite or resize (a node of the frame `area_of`
     gives the effects) whose consumers sit left of the effects is laid in
     the leftmost of their areas that is not left of what feeds it: with
     one consumer area that is D5's rule (`acid-scene`'s acid.2, between
@@ -3485,8 +3507,8 @@ UPDATED_PATCH = "updated patch {name}"
 PATCH_NEEDS_NAME = "a patch needs a name"
 PATCH_EXISTS = "a patch named {name} exists — Update patch, or another name"
 # plan 50: a group holds any node the loadable patch saves; the save is where what a
-# patch cannot carry (the camera, a lane envelope, a copy without its
-# original; wave 3 P1: the frame's kinds it now can) is refused
+# patch cannot carry (the camera, a lane envelope; wave 3 P1: the frame's
+# kinds it now can) is refused
 SAVE_REFUSED = "{name} not saved as a patch: {why}"
 FIXTURE_KINDS = patches.FIXTURE_KINDS   # always there: the meta controller's own nodes (one list, plan 50)
 # …and the look's one camera (plan 43 C2: the camera is the loadable patch's, not
@@ -3664,8 +3686,8 @@ def _boundary(view: View, g: VGroup, mem) -> None:
             continue
         side = None
         if c.kind == NODE_MODE:
-            # by where it lands, not whose param it is: a copy's knobs are its original's,
-            # and the cable lands on the copy (`NODE_PIN`)
+            # by where it lands, not whose param it is: the cable lands on the node
+            # pointed at (`NODE_PIN`)
             hit = view.owner(c.dst_port)
             if c.ref is not None and hit is not None and any(n is hit[0] for n in g.members):
                 side = patches.CONTROL
@@ -3694,7 +3716,7 @@ def _boundary(view: View, g: VGroup, mem) -> None:
         else:                       # a control row, or a host lane / macro onto a member
             hit = view.owner(c.dst_port)
             param = hit[1].param if hit is not None and hit[1] is not None else None
-            # (a `NODE_PIN` stands for itself: it is a copy's, the param's stub its original's)
+            # (a `NODE_PIN` stands for itself: the node pointed at's, the param's stub its owner's)
             own = c.dst_port.startswith(f"{NODE_PIN}:")
             key = f"param:{param}" if param and not own else c.dst_port
             name = (hit[1].name if hit is not None and hit[1] is not None else c.dst_port)
@@ -4146,7 +4168,7 @@ class Edit:
         """The picker (plan 35 G, `picker`): a frame node (once each), a
         hands node, an effect (R25: the file itself when nothing in the
         section holds it, else the lowest free instance, switched on), a
-        copy of an instance (`file`), a composite, a switch, plan 34's
+        slot on an instance (`file`, plan 89: `add_slot`), a composite, a switch, plan 34's
         delay, resize, echo (`file`: its index) and dream — each on no wire
         (unreached, faint, until one is wired). The new node's name is
         `added`."""
@@ -4210,6 +4232,11 @@ class Edit:
         return render_drop(self, node)
 
     remove_render_node = drop_node          # N3's name for it (`remove_node`)
+
+    def slots_on(self, effect: str) -> list[str]:
+        """Effect instance `effect`'s slots past the first, as the landed
+        section declares them (plan 89: an effect's menu lists them)."""
+        return slot_names(_spec(self), effect)
 
     def set_node(self, node: str, **settings) -> str | None:
         """A node's setting: a hands node's `draw`, a composite's `blend`."""
@@ -5114,7 +5141,7 @@ class Edit:
 
         def on_them(p: Mapping) -> bool:
             at = p.get("to") or p.get("from") or ""
-            return (rgraph.pin_node(at) or at) in names or at.rpartition(".")[0] in names
+            return canvas_node(at) in names or canvas_node(at.rpartition(".")[0]) in names
 
         for g in list(groups):
             if cids & set(g.get("nodes", ())):
@@ -5413,10 +5440,10 @@ class Edit:
                 continue
             taking = False
             if "to" in p:
-                node = rgraph.pin_node(was) or was
+                node = canvas_node(was)
                 w = {"from": was, "to": p["to"]}
             else:
-                node = was.rpartition(".")[0]
+                node = canvas_node(was.rpartition(".")[0])
                 w = {"from": p["from"], "to": was}
                 if was in into and was not in rgraph.MANY_PORTS:
                     if not take_over or was in landed:
@@ -5762,7 +5789,7 @@ PICKER_GROUP: dict[str, str] = {
     "channel": "media", "segment": "media",
     "matte": "masks", "cut": "masks",
     "effect": "effects",
-    "copy": "copy of",
+    "slot": "slot on",
 }
 PICKER_GROUPS = tuple(dict.fromkeys(PICKER_GROUP.values()))
 # the frame kinds the picker adds once each (a second add says so): drawn
@@ -5788,8 +5815,8 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     (2026-10-31: channel a … channel h, each the channel's letter as its
     file — picking one makes nothing, the channels always exist; then
     plan 39's segment); masks ▸ (plan 39's matte and cut); every
-    effect file this build has; and a copy of each effect instance in the
-    section."""
+    effect file this build has; and (plan 89) one more slot on each effect
+    instance in the section."""
     gs = edit.graph
     files = gs.files() if gs is not None and hasattr(gs, "files") else None
     spec = _spec(edit)
@@ -5809,7 +5836,7 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     out += [("channel", c, f"channel {c}") for c in rgraph.MEDIA_CHANNELS]
     out += [("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut")]
     out += [("effect", f, f) for f in sorted(files or ())]
-    out += [("copy", name, f"copy of {name}") for name in _instances(spec)]
+    out += [("slot", name, f"slot on {name}") for name in _instances(spec)]
     return out
 
 
@@ -5833,7 +5860,7 @@ def picked_name(kind: str, file: str | None) -> str:
 
 def _instances(spec) -> list[str]:
     """The effect instances section `spec` holds (by an entry or a wire),
-    sorted: what a copy may draw again."""
+    sorted: what may take another slot (plan 89)."""
     return sorted(n for n in frame_names(spec) if kind_of(n) == "effect") if spec else []
 
 
@@ -6018,7 +6045,7 @@ def _node_name(e: dict) -> str | None:
     if kind == "echo":
         return f"echo.{e.get('index')}"
     # (`lookback` and `dream` may be declared again: `lookback.2`)
-    if kind in ("composite", "switch", "delay", "resize", "copy", "matte", "cut", "segment",
+    if kind in ("composite", "switch", "delay", "resize", "matte", "cut", "segment",
                 "lookback", "dream"):
         return kind if n == 1 else f"{kind}.{n}"
     if kind in rgraph.FRAME_KINDS:
@@ -6030,7 +6057,7 @@ def _named(doc: dict) -> set[str]:
     """Every name section `doc` says: its entries' and its wires' ends."""
     out = {x for x in map(_node_name, doc.get("nodes", [])) if x}
     for x in doc.get("wires", []):
-        out |= {rgraph.pin_node(x["from"]) or x["from"], x["to"].rpartition(".")[0]}
+        out |= {canvas_node(x["from"]), canvas_node(x["to"].rpartition(".")[0])}
     return out
 
 
@@ -6042,7 +6069,7 @@ def _keep_declared(doc: dict, names: Iterable[str]) -> None:
     kind keep theirs or need none."""
     named = _named(doc)
     # (plan 36 T2: a pin is its node's name: `scene.cover` names the scene)
-    for name in dict.fromkeys(rgraph.pin_node(n) or n for n in names):
+    for name in dict.fromkeys(canvas_node(n) for n in names):
         if name in named:
             continue
         kind = kind_of(name)
@@ -6259,7 +6286,7 @@ def _ordinal(k: int) -> str:
 
 def _next(spec, kind: str) -> int:
     """The next instance of a declared kind (`composite`, `switch`, `delay`,
-    `resize`, `copy`) in section `spec`: one past the highest."""
+    `resize`) in section `spec`: one past the highest."""
     return max([got.n for k, got in (spec.others if spec is not None else ()) if k == kind],
                default=0) + 1
 
@@ -6318,7 +6345,9 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
         name = edit.added = rgraph.wired_hands_name(n)
         return _land(edit, doc, f"add {name}", f"{label_of(name)} added: wire it into "
                                                "scene.geometry, or add its layer")
-    if kind in ("effect", "copy", "switch", "composite", "delay", "resize", *ADD_SAID):
+    if kind == "slot":
+        return add_slot(edit, file or "")
+    if kind in ("effect", "switch", "composite", "delay", "resize", *ADD_SAID):
         got = _new_node(edit, spec, doc, kind, file, **settings)
         if isinstance(got, str):
             return got
@@ -6626,8 +6655,10 @@ def render_channel_switch(edit: Edit, port: str) -> str | None:
 
 def _touches(x: dict, names: set[str]) -> bool:
     # (plan 36 T2: a wire from a node's pin — `scene.cover` — touches the node)
-    return (x["from"] in names or rgraph.pin_node(x["from"]) in names
-            or x["to"].rpartition(".")[0] in names)
+    # (plan 89: and a wire of an effect's slot touches the effect)
+    node = x["to"].rpartition(".")[0]
+    return (x["from"] in names or canvas_node(x["from"]) in names
+            or node in names or canvas_node(node) in names)
 
 
 # ---- any picture node onto a picture cable, out of its place (2026-11-01) ----
@@ -6646,7 +6677,7 @@ def _touches(x: dict, names: set[str]) -> bool:
 # "" for the node itself, else `<node>.<pin>`). A kind not here never
 # splices (`drop_refusal` says why).
 INSERT_PORTS: dict[str, tuple[tuple[str, ...], str]] = {
-    "effect": (("image",), ""), "copy": (("image",), ""), "delay": (("image",), ""),
+    "effect": (("image",), ""), "slot": (("image",), ""), "delay": (("image",), ""),
     "resize": (("image",), ""), "dream": (("image",), ""), "lookback": (("image",), ""),
     "cut": (("image",), ""), "segment": (("image",), "fg"),
     "composite": (("under", "over"), ""), "switch": (rgraph.SWITCH_PORTS, ""),
@@ -6866,7 +6897,7 @@ def _said_onto(doc: dict, name: str, s: str, d: str, inlet: str | None,
 def _splice_replaced(name: str, s: str, d: str, replacing: Iterable[str]) -> str | None:
     """A splice onto a cable of the very node the spawn replaces (wave 3 P2)
     would wire the patch to what it took out: refused, in words."""
-    ends = {rgraph.pin_node(s) or s, d.rpartition(".")[0]} & set(replacing)
+    ends = {canvas_node(s), canvas_node(d.rpartition(".")[0])} & set(replacing)
     return SPLICE_REPLACED.format(name=name, node=min(ends)) if ends else None
 
 
@@ -6940,7 +6971,7 @@ def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
               **settings) -> tuple[str, str] | str:
     """A new node of `kind` appended to `doc["nodes"]`, unwired: (its name,
     what adding it says) — or why not, in words (a single-instance kind
-    the section has, no such effect file, no such instance to copy)."""
+    the section has, no such effect file)."""
     if kind in (*ONCE, "dream"):
         if kind in _named(doc):
             return IN_ALREADY.format(label=label_of(kind))
@@ -6957,13 +6988,6 @@ def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
         doc["nodes"].append(_effect_entry(file, n))
         name = rgraph.instance_name(file, n)
         return name, f"{name} added: its params are fx.{name}.*"
-    if kind == "copy":
-        if not file or file not in _instances(spec):
-            return NO_SUCH_COPY.format(of=file)
-        c = rgraph.CopyAt(_next(spec, "copy"), file)
-        doc["nodes"].append(c.to_json())
-        return c.name, (f"{label_of(c.name, of=file)} added: wire a picture into {c.name}.image "
-                        f"— it draws {file} again there, with its knobs")
     if kind == "switch":
         sw = rgraph.SwitchAt(_next(spec, "switch"))
         doc["nodes"].append(sw.to_json())
@@ -7080,11 +7104,119 @@ def _take_out(doc: dict, names: set[str]) -> list[dict]:
     return gone
 
 
+# ---- an effect's slots (plan 89: what a copy node was, made part of its effect) ----
+
+def _slot_entry(doc: dict, effect: str) -> dict:
+    """Effect instance `effect`'s entry in section `doc`, added (R21's
+    form) when only its wires named it — the entry its `slots` is said on."""
+    file, n = rgraph.split_instance(effect)
+    for e in doc.get("nodes", []):
+        if _entry_name(e) == effect:
+            return e
+    e = _effect_entry(file, n)
+    doc["nodes"].append(e)
+    return e
+
+
+def _slots_in(doc: dict, effect: str) -> int:
+    e = next((e for e in doc.get("nodes", []) if _entry_name(e) == effect), None)
+    k = e.get("slots", 1) if e is not None else 1
+    return k if isinstance(k, int) and not isinstance(k, bool) else 1
+
+
+def drop_slots(doc: dict, names: Iterable[str]) -> list[str]:
+    """Slots `names` (`acid.slot.2` …) out of section `doc` (plan 89): each
+    lifted (`_lift`: what fed its picture goes on to what it fed), its other
+    wires gone, and each effect's later slots numbered down to close the gap
+    (`acid.slot.3` is `acid.slot.2` now, its wires with it), its entry's
+    `slots` one down per slot gone. Returns the ports left fed by nothing."""
+    lost: list[str] = []
+    by_effect: dict[str, list[int]] = {}
+    for name in names:
+        got = rgraph.slot_of(name)
+        if got is not None:
+            by_effect.setdefault(got[0], []).append(got[1])
+    for effect, ks in by_effect.items():
+        have = _slots_in(doc, effect)
+        for k in sorted(set(ks), reverse=True):
+            if k > have:
+                continue
+            name = rgraph.slot_name(effect, k)
+            lost += _lift(doc, name)
+            doc["wires"] = [x for x in doc.get("wires", []) if not _touches(x, {name})]
+            # the later slots one down, their wires with them
+            ren = {rgraph.slot_name(effect, j): rgraph.slot_name(effect, j - 1)
+                   for j in range(k + 1, have + 1)}
+            for x in doc.get("wires", []):
+                if x["from"] in ren:
+                    x["from"] = ren[x["from"]]
+                node, _, port = x["to"].rpartition(".")
+                if node in ren:
+                    x["to"] = f"{ren[node]}.{port}"
+            if isinstance(doc.get(rgraph.KEYS_KEY), list):
+                doc[rgraph.KEYS_KEY] = [ren.get(n, n) for n in doc[rgraph.KEYS_KEY]
+                                        if n != name]
+            have -= 1
+            e = _slot_entry(doc, effect)
+            if have > 1:
+                e["slots"] = have
+                continue
+            e.pop("slots", None)
+            if set(e) == {"kind", "file"} and any(
+                    effect in (x["from"], x["to"].rpartition(".")[0])
+                    for x in doc.get("wires", [])):
+                # (an instance 1 its wires name needs no entry: the one its
+                # slots were said on goes with the last of them, so a slot
+                # added and taken off leaves the section as it was)
+                doc["nodes"] = [x for x in doc["nodes"] if x is not e]
+    return lost
+
+
+def add_slot(edit: Edit, effect: str) -> str | None:
+    """One more slot on effect instance `effect` (plan 89, the picker's
+    "slot on ▸" and an effect's menu; ⌘V of a copied effect): its entry's
+    `slots` one up, the new slot unwired — `acid.slot.2.image` in,
+    `acid.slot.2` out, the same knobs. One undo step. Refused in words: no
+    such instance in the section, or `graph.MAX_SLOTS` already."""
+    spec = _spec(edit)
+    if not effect or effect not in _instances(spec):
+        return NO_SUCH_EFFECT.format(of=effect)
+    doc = _with_frame(_doc(edit))
+    k = _slots_in(doc, effect) + 1
+    if k > rgraph.MAX_SLOTS:
+        return SLOTS_FULL.format(of=effect, most=rgraph.MAX_SLOTS)
+    _slot_entry(doc, effect)["slots"] = k
+    edit.placed = ()
+    edit.added = ""            # (no new node: the effect's own stays where it is)
+    name = rgraph.slot_name(effect, k)
+    return _land(edit, doc, f"add {name}",
+                 SLOT_ADDED.format(label=label_of(effect), k=k, name=name))
+
+
+def drop_slot(edit: Edit, slot: str) -> str | None:
+    """Slot `slot` (`acid.slot.2`) off its effect (plan 89, an effect's menu):
+    `drop_slots`, one undo step. Slot 1 is the effect itself (deleting it
+    is the node's delete)."""
+    got = rgraph.slot_of(slot)
+    if got is None:
+        return f"{slot}: no slot of an effect (slot 1 is the effect: delete the node)"
+    doc = _doc(edit)
+    if got[1] > _slots_in(doc, got[0]):
+        return f"{slot}: {got[0]} has no slot {got[1]}"
+    ends = [n for x in doc.get("wires", []) for n in (x["from"], x["to"].rpartition(".")[0])]
+    lost = drop_slots(doc, [slot])
+    _keep_declared(doc, [n for n in ends if rgraph.effect_of(n) != got[0]])
+    said = SLOT_DROPPED.format(label=label_of(got[0]), k=got[1])
+    if lost:
+        said += f"; {', '.join(lost)} fed by nothing now"
+    return _land(edit, doc, f"remove {slot}", said)
+
+
 def render_drop(edit: Edit, node: str) -> str | None:
     """Plan 35 G: any node of the section goes — its entry and every wire
-    touching it, one undo step (an effect or a copy lifted first, so the
+    touching it, one undo step (an effect and its slots lifted first, so the
     chain closes over it; a hands node with its layer and its guide, its
-    params kept in the registry; R16, an effect with its copies; R18, the
+    params kept in the registry; R16, an effect with its slots; R18, the
     backdrop like an effect — what its `scene` port took goes on to what it
     fed, and the note says so). A window
     is the meta controller's: its wires go, and it shows its ground (`OUTPUT_UNWIRED`,
@@ -7120,17 +7252,18 @@ def render_drop(edit: Edit, node: str) -> str | None:
         for w in bus:
             bus_cuts = bus_cuts.cutting(w)
         return _land(edit, doc, f"unwire {name}", said, bus_cuts=bus_cuts if bus else None)
-    label = label_of(name, slots, of=next((c.of for c in getattr(_spec(edit), "copies", ())
-                                           if c.name == name), ""))
+    if kind == "slot":
+        return drop_slot(edit, name)          # plan 89: a slot's pin is its effect's
+    label = label_of(name, slots)
     before = copy.deepcopy(doc)
     names = {name}
     if kind == "hands":
         names |= {f"{name}.layer", f"{name}.guide"}
-    # R16: an effect's copies go with it (a copy of nothing is no node), in
-    # the same landing — each lifted, so its chain closes over it too
-    mine = ([_node_name(e) for e in doc.get("nodes", [])
-             if e.get("kind") == "copy" and e.get("of") == name] if kind == "effect" else [])
-    for x in ([name, *mine] if kind in ("effect", "copy") else ()):
+    # R16: an effect's slots go with it (plan 89: they are its node), in the
+    # same landing — each lifted, so its chain closes over it too
+    mine = ([rgraph.slot_name(name, k) for k in range(2, _slots_in(doc, name) + 1)]
+            if kind == "effect" else [])
+    for x in ([name, *mine] if kind == "effect" else ()):
         _lift(doc, x)
     names |= set(mine)
     # R18 (final review): the backdrop lifted as an effect is — the picture
@@ -7150,8 +7283,8 @@ def render_drop(edit: Edit, node: str) -> str | None:
         return f"{label} is not in the patch's graph"
     _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])
                          if n not in names])
-    also = ("" if not mine else ", and its copy" if len(mine) == 1
-            else f", and its {len(mine)} copies")
+    also = ("" if not mine else ", and its slot 2" if len(mine) == 1
+            else f", and its slots 2 … {len(mine) + 1}")
     if joined:
         what = "the scene" if joined[0]["from"] == "scene" else label_of(joined[0]["from"], slots)
         to = ", ".join(dict.fromkeys(label_of(x["to"].rpartition(".")[0], slots)
@@ -7257,7 +7390,7 @@ PICTURE_AREA: dict[str, str] = {
     "channel": MEDIA, "pattern": MEDIA, "switch": MEDIA, "delay": MEDIA,
     "scene": SCENE_AREA, "layer": SCENE_AREA, "guide": SCENE_AREA, "backdrop": SCENE_AREA,
     "lookback": LOOKBACK_AREA, "echo": LOOKBACK_AREA, "dream": LOOKBACK_AREA,
-    "effect": EFFECTS_AREA, "copy": EFFECTS_AREA, "composite": EFFECTS_AREA,
+    "effect": EFFECTS_AREA, "slot": EFFECTS_AREA, "composite": EFFECTS_AREA,
     "resize": EFFECTS_AREA,
 }
 PICTURE_AREAS = (MEDIA, SCENE_AREA, LOOKBACK_AREA, EFFECTS_AREA)
@@ -7292,9 +7425,11 @@ def picture_sources(spec) -> list[str]:
     (`frame_names`: its entries and its wires' ends), in area order —
     MEDIA, SCENE, LOOK-BACK, EFFECTS — and section order within one: what
     a page's picture combo may offer (plan 35 U). No geometry, no window,
-    no `ground` (the combo's "nothing" says that)."""
-    names = [n for n in frame_names(spec) if kind_of(n) in PICTURE_AREA
-             and _makes(kind_of(n)) == IMAGE]
+    no `ground` (the combo's "nothing" says that). Plan 89: an effect's
+    slots past the first right after it, each its own picture."""
+    names = [x for n in frame_names(spec) if kind_of(n) in PICTURE_AREA
+             and _makes(kind_of(n)) == IMAGE
+             for x in (n, *(slot_names(spec, n) if kind_of(n) == "effect" else ()))]
     return sorted(names, key=lambda n: PICTURE_AREAS.index(PICTURE_AREA[kind_of(n)]))
 
 
@@ -7346,11 +7481,10 @@ def picture_now(spec, port: str, bus_cuts=None) -> str:
 
 def picture_label(spec, name: str, slots=()) -> str:
     """A combo item's words: "as All outputs" and "nothing" as they are,
-    a node by its title (`label_of`; a copy with what it copies)."""
+    a node by its title (`label_of`; an effect's slot "acid slot 2")."""
     if name in (AS_ALL, NOTHING):
         return name
-    of = next((c.of for c in (getattr(spec, "copies", None) or ()) if c.name == name), "")
-    return label_of(name, slots, of=of)
+    return label_of(name, slots)
 
 
 def is_through(spec, n: int, bus_cuts=None) -> bool:
@@ -7362,9 +7496,11 @@ def is_through(spec, n: int, bus_cuts=None) -> bool:
 
 def _drop_through(doc: dict, n: int) -> bool:
     """Window `n`'s "hands through the effects" taken out of section `doc`
-    (the inverse of `graphmigrate.through_wires`, plan 36 T1): the wire into its picture, the chain of copies back to the
+    (the inverse of `graphmigrate.through_wires`, plan 36 T1): the wire into
+    its picture, the chain of slots back to the
     composite and the composite — each that nothing else reads, with its
-    entry and its wires — and the `ground` the through put on its hands
+    entry (a slot: its effect's `slots` one down, `drop_slots`) and its
+    wires — and the `ground` the through put on its hands
     port, so the layer is laid over again. A through over nothing (the
     scene off) leaves `ground` on the picture port. False: not through."""
     wires = doc.get("wires", [])
@@ -7372,7 +7508,7 @@ def _drop_through(doc: dict, n: int) -> bool:
     port = f"output.{n}."
     chain: list[str] = []
     src = into.get(port + "image")
-    while kind_of(src) == "copy" and src not in chain:
+    while kind_of(src) == "slot" and src not in chain:
         chain.append(src)
         src = into.get(f"{src}.image")
     if kind_of(src) != "composite" or kind_of(into.get(f"{src}.over")) != "layer":
@@ -7390,6 +7526,8 @@ def _drop_through(doc: dict, n: int) -> bool:
     dropped = [x for x in wires if x not in left]
     doc["wires"] = left
     doc["nodes"] = [e for e in doc.get("nodes", []) if _node_name(e) not in gone]
+    # plan 89: a slot gone is its effect's `slots` one down (its wires went above)
+    drop_slots(doc, [x for x in gone if kind_of(x) == "slot"])
     if under is None:
         doc["wires"].append({"from": rgraph.GROUND, "to": port + "image"})
     _keep_declared(doc, [x["from"] for x in dropped if x["from"] not in gone])
@@ -7456,10 +7594,10 @@ def set_through(edit: Edit, n: int, on: bool) -> str | None:
     carried toggle), as wiring — the wires it names and nothing else (plan
     36 T1: no `_Wiring._put` rule): on, `graphmigrate.through_wires` — a
     composite laying All outputs' hands layer on its picture's head and a
-    copy of each effect of its run, into `output.n.image` (with the
+    new slot of each effect of its run (plan 89), into `output.n.image` (with the
     window's picture `ground`, the hands alone through), and `ground` into
     `output.n.hands` (the layer goes through, not over again); off, those
-    wires and the composite and copies only they use (`_drop_through`).
+    wires and the composite and slots only they use (`_drop_through`).
     The guide port is never touched. One undo step each. Refused in words:
     All outputs laying no hands layer (R11), a window with a picture of
     its own."""
@@ -7479,9 +7617,13 @@ def set_through(edit: Edit, n: int, on: bool) -> str | None:
     why = through_refusal(spec, n, getattr(edit, "slots", ()), bus_cuts)
     if why is not None:
         return why
-    got = graphmigrate.through_wires(spec, n, bus_cuts)
+    try:
+        got = graphmigrate.through_wires(spec, n, bus_cuts)
+    except ValueError as e:                 # (plan 89: an effect at its most slots)
+        return str(e)
     port = f"output.{n}."
-    doc["nodes"] += [x for x in got if "kind" in x]
+    doc["nodes"] = graphmigrate.merge_entries(doc.get("nodes", []),
+                                              [x for x in got if "kind" in x])
     doc["wires"] = [x for x in doc.get("wires", [])
                     if x["to"] not in (port + "image", port + "hands")]
     doc["wires"] += [x for x in got if "kind" not in x]

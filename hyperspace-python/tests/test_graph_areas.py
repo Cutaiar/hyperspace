@@ -213,8 +213,9 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     assert "render:lookback" not in area
     tracer = {n.id: n.area for n in load(rig, "party-tracer")["view"].nodes}
     assert tracer["render:lookback"] == graphview.LOOKBACK_AREA
-    assert {area[k] for k in ("render:acid", "render:palette", "render:copy",
+    assert {area[k] for k in ("render:acid", "render:palette",
                               "render:composite")} == {graphview.EFFECTS_AREA}
+    assert "render:copy" not in area                    # (plan 89: acid's slot, on acid)
     assert {area[k] for k in ("render:output.all", "render:output.1", "render:output.2",
                               "group:output")} == {graphview.OUTPUTS_AREA}
     assert {area[k] for k in ("group:preset", "group:ui", "group:desk",
@@ -303,15 +304,16 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     st["tidy"] = True
     frame(rig.panel, "graph")
     # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off)
-    # twice — and the eight media channels, their bins empty (plan 32 T10:
+    # — once each since plan 89 (their through slots on their own nodes,
+    # no copies) — and the eight media channels, their bins empty (plan 32 T10:
     # the channels' params on their own nodes); plan 35 G: the backdrop's
     # group node too (no backdrop in the section: it idles like any group);
     # plan 36 T4: one more, the frame drawing no look-back (its params' node idles);
     # plan 60: the grip's group node, the grip off
-    assert sum(n.idle for n in view.nodes) == 27
+    assert sum(n.idle for n in view.nodes) == 25
     k = len({n.area for n in view.nodes if not n.idle})
-    assert st["said"] == (f"laid out {len(view.nodes) - 27} nodes in {k} areas, every one "
-                          "collapsed · 27 idle off the canvas")
+    assert st["said"] == (f"laid out {len(view.nodes) - 25} nodes in {k} areas, every one "
+                          "collapsed · 25 idle off the canvas")
     assert st["idle_open"] == set() and st["open"] == set() and rig.lib.loaded_patch.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)
@@ -769,7 +771,6 @@ def test_the_areas_run_by_primitive(rig):
                       (G.BackdropNode("backdrop"), graphview.SCENE_AREA),
                       (G.EchoNode("echo.2", 2), graphview.LOOKBACK_AREA),
                       (G.DreamNode("dream"), graphview.LOOKBACK_AREA),
-                      (G.Copy("copy", "acid"), graphview.EFFECTS_AREA),
                       (G.Composite("composite"), graphview.EFFECTS_AREA),
                       (G.SwitchNode("switch"), graphview.MEDIA),
                       (G.Delay("delay"), graphview.MEDIA),

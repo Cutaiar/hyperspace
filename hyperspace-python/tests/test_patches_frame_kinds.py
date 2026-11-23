@@ -159,7 +159,7 @@ def test_a_frame_kinds_values_lift_and_keep_their_ids():
 def test_a_dream_and_a_composite_lift_as_a_patch():
     doc = cut()
     assert patches.check(doc) == []
-    assert doc["schema"] == "hyperspace.patch/2"       # no schema moved
+    assert doc["schema"] == patches.SCHEMA == "hyperspace.patch/3"   # (plan 89's, no other)
     assert {e["kind"] for e in doc["nodes"]} == {"dream", "composite"}
     assert doc["wires"] == [{"from": "dream", "to": "composite.over"}]
     assert {(p["id"], p["was"]) for p in doc["ports"]} == {

@@ -48,20 +48,20 @@ def _tool():
 
 # ---------------------------------------------------------------- the ladder and the shape
 
-def test_the_one_ladder_reads_every_fragment_as_its_patch_2():
+def test_the_one_ladder_reads_every_fragment_as_its_newest():
     old = copy.deepcopy(OLD_MODULE)
     new = patches.forward(old)
     assert old == OLD_MODULE                                   # the input is never changed
-    assert new == {"schema": "hyperspace.patch/2", "name": "OLD",
+    assert new == {"schema": "hyperspace.patch/3", "name": "OLD",
                    "note": "a module patch from before plan 50", "group": "dream",
                    "values": {"dream.mix": 0.25, "dream.echoes": 12}}
     one = json.loads(ACID_WASH.read_text())
     assert one["schema"] == "hyperspace.patch/1"
     two = patches.forward(one)
-    assert two == {**one, "schema": "hyperspace.patch/2"}
-    assert patches.forward(two) == two                        # /2 is a fixed point
+    assert two == {**one, "schema": "hyperspace.patch/3"}     # (plan 89: no copy to move)
+    assert patches.forward(two) == two                        # /3 is a fixed point
     assert patches.check(one) == [] and patches.check(two) == []
-    for bad, words in (({"schema": "hyperspace.patch/3"}, "newer than this build"),
+    for bad, words in (({"schema": "hyperspace.patch/4"}, "newer than this build"),
                        ({"schema": "hyperspace.preset/10"}, "is not a hyperspace.patch"),
                        ({"schema": "hyperspace.preset/2", "group": "dream"}, "newer"),
                        ({"name": "no schema"}, "is not a hyperspace.patch")):
@@ -96,7 +96,8 @@ def test_the_corpus_is_in_the_one_shape():
     for path in sorted((CORPUS / "patches" / "dream").glob("*.json")):
         doc = json.loads(path.read_text())
         assert doc["schema"] == "hyperspace.patch/2" and doc["group"] == "dream", path.name
-        assert patches.check(doc) == [] and patches.forward(doc) == doc
+        assert patches.check(doc) == [] and patches.forward(doc) == {
+            **doc, "schema": patches.SCHEMA}               # (plan 89: /3 moves no group's values)
     assert not (CORPUS / "dream").exists()
     for path in sorted((CORPUS / "loadable").glob("*.json")):
         assert b'"modules"' not in path.read_bytes(), path.name
@@ -104,19 +105,21 @@ def test_the_corpus_is_in_the_one_shape():
 
 def test_the_loadables_ladder_is_one_function_the_load_reads_through():
     """A whole loadable patch's steps (`seven`, `nine`, `ten`) are one function,
-    `graphmigrate.forward`, which the load runs: an `/11` passes untouched,
-    a `/2` comes out `/7`-shaped and said."""
+    `graphmigrate.forward`, which the load runs: an `/11` with no copy comes
+    out as it was but for its schema (plan 89's `/12`), a `/2` `/7`-shaped
+    and said."""
     import inspect
 
     from hyperspace import graphmigrate, loadable
     assert "graphmigrate.forward(" in inspect.getsource(loadable.LoadedPatch.load_doc)
     new = json.loads((CORPUS / "loadable" / "party-trip.json").read_text())
     fwd = graphmigrate.forward(copy.deepcopy(new), {})
-    assert fwd.doc == new and fwd.notes == () and fwd.migrated == ""
+    assert fwd.doc == {**new, "schema": graphmigrate.TWELVE_SCHEMA}
+    assert fwd.notes == () and fwd.migrated == ""
     old = json.loads((ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
                       / "party-trip.json").read_text())
     fwd = graphmigrate.forward(old, {})
-    assert fwd.migrated.startswith(f"{old['schema']} migrated to hyperspace.loadable/11")
+    assert fwd.migrated.startswith(f"{old['schema']} migrated to hyperspace.loadable/12")
     assert "modules" not in fwd.doc and "desk_template" not in fwd.doc
 
 
@@ -126,6 +129,8 @@ def test_a_corpus_loadable_round_trips_byte_for_byte_through_the_one_loader(tmp_
     for k, name in enumerate(("party-trip", "party-noita", "seq-demo")):
         data = (CORPUS / "loadable" / f"{name}.json").read_bytes()
         again, notes, _ = headless.resave(CORPUS / "loadable" / f"{name}.json", tmp_path / str(k))
+        # (plan 89: an `/11` with no copy resaves as itself but for the schema)
+        data = data.replace(b'"hyperspace.loadable/11"', b'"hyperspace.loadable/12"')
         assert again == data and notes == [], name
 
 
@@ -145,7 +150,7 @@ def test_a_module_preset_lives_and_loads_as_a_patch_of_its_group(tmp_path):
     path = lib.save_as("dream", "WAKE LOUD")
     assert path == tmp_path / PATCHES / "dream" / "wake-loud.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.patch/2" and doc["group"] == "dream"
+    assert doc["schema"] == "hyperspace.patch/3" and doc["group"] == "dream"
     assert doc["values"]["dream.mix"] == pytest.approx(0.9)
     assert set(doc) == {"schema", "name", "group", "values"}
     assert lib.list(PATCHES) == []
@@ -167,7 +172,7 @@ def test_an_old_module_preset_in_its_folder_opens_end_to_end(tmp_path):
     # a re-save writes it in today's words, where it was
     path = app.lib.overwrite("dream")
     assert path == folder / "old.json"
-    assert json.loads(path.read_text())["schema"] == "hyperspace.patch/2"
+    assert json.loads(path.read_text())["schema"] == "hyperspace.patch/3"
 
 
 def test_an_old_patch_1_reads_as_its_2_through_the_library(tmp_path):
@@ -175,7 +180,7 @@ def test_an_old_patch_1_reads_as_its_2_through_the_library(tmp_path):
     shutil.copy(ACID_WASH, tmp_path / PATCHES / "acid-wash.json")
     app = headless.make_app(tmp_path)
     doc = app.lib.read_patch("acid-wash")
-    assert doc["schema"] == "hyperspace.patch/2"
+    assert doc["schema"] == "hyperspace.patch/3"
     host = patches.Host.of(app.loaded_patch.graph.spec, app.router.table, app.loaded_patch.banks())
     landing = patches.spawn(doc, host)
     assert {e.get("file") for e in landing.nodes if e.get("kind") == "effect"} == {
@@ -218,10 +223,10 @@ def test_the_tool_moves_module_presets_and_patch_1_into_the_shape(tmp_path):
     assert [p.name for p in (root / "dream").iterdir()] == [".tmp.json"]   # (not emptied)
     assert (root / "fx" / "wobbly.json").is_file()
     wide = json.loads((root / PATCHES / "camera" / "wide.json").read_text())
-    assert wide == {"schema": "hyperspace.patch/2", "name": "Wide", "group": "camera",
+    assert wide == {"schema": "hyperspace.patch/3", "name": "Wide", "group": "camera",
                     "values": {"camera.zoom": 0.7}, "units": {"camera.pan": "world"}}
     acid = json.loads((root / PATCHES / "acid-wash.json").read_text())
-    assert acid["schema"] == "hyperspace.patch/2"
+    assert acid["schema"] == "hyperspace.patch/3"
     assert tool.group_plan(root) == ([], ["fx/wobbly.json: a retired group's — deleted"])
     # and the app opens what the step wrote
     app = headless.make_app(root)
@@ -238,14 +243,14 @@ def test_the_tool_dry_run_writes_nothing_and_apply_backs_up_first(tmp_path, monk
     before = sorted(p.relative_to(root).as_posix() for p in root.rglob("*"))
     assert tool.main(["--library", str(root)]) == 0
     out = capsys.readouterr().out
-    assert "patches to write as hyperspace.patch/2: 3" in out
+    assert "patches to write as hyperspace.patch/3: 3" in out
     assert "dream/old.json → patches/dream/old.json" in out
     assert sorted(p.relative_to(root).as_posix() for p in root.rglob("*")) == before
     assert tool.main(["--library", str(root), "--apply"]) == 0
     out = capsys.readouterr().out
     (backup,) = [p for p in machine.iterdir() if p.name.startswith(tool.BACKUP_PREFIX)]
     assert (backup / "dream" / "old.json").read_text() == json.dumps(OLD_MODULE)
-    assert "wrote 3 patch(es) as hyperspace.patch/2" in out
+    assert "wrote 3 patch(es) as hyperspace.patch/3" in out
     assert (root / PATCHES / "dream" / "old.json").is_file()
 
 

@@ -229,8 +229,9 @@ LAYER      lookback(cover)   the faces' mask, only while the look-back occludes
 BACKDROP   backdrop   the scene over `backdrop.image` at `backdrop.alpha` (plan 35: `grounded` merged)
 HISTORY    lookback   the age-weighted trail of its `image`, alone (plan 36; the echoes' clock);
                       dream (plan 36) is its own node: its `image` in, the dreamed picture out
-EFFECT     acid … palette, copy …   one node per wired effect instance, and a `copy` for an
-                      instance drawn on another picture; on, its pass over its input into a
+EFFECT     acid … palette, acid.slot.2 …   one node per wired effect instance, and a pass
+                      per slot past the first (plan 89: the instance on another picture, the
+                      one set of knobs); on, its pass over its input into a
                       pool texture or its consumer; off, its input read through
 MASK       matte, segment   (plan 39) a one-channel mask at its maker's size: matte from a picture
                       (luma, alpha, chroma); segment from its worker's model, a frame or two
@@ -239,7 +240,7 @@ MASK       matte, segment   (plan 39) a one-channel mask at its maker's size: ma
                       where it passes, black elsewhere) by an untimed `<mask>(picture)` node
 SHOWN      shown(src) one per distinct picture an output shows → the window itself when it is
                       the picture's only consumer at the frame size, else a frame texture
-                      [a copy chain over a hands composite stands down to its originals
+                      [a slot chain over a hands composite stands down to its effects
                        while it bends nothing: Shown.fallback]
 HISTORY    lookback(capture)   the ring takes what is wired to `lookback.capture`, exactly
                       once, after every Shown, every delay's write and every output's
@@ -384,10 +385,12 @@ or to `lookback.capture`). The frame's own nodes are ordinary: `shape`,
 `scene` (its `geometry` port takes the shape, the hands and the clouds the
 meta controller lists, in wire order), `backdrop` (`scene` over `image`), `pattern`,
 `lookback` (`image`, `capture`, `occluder`), `hands[.n]` with its
-`.layer` and `.guide`, `channel.<c>`, effects and their `copy`, and the
+`.layer` and `.guide`, `channel.<c>`, effects and their slots (plan 89:
+`acid.slot.2`, declared by the effect's `"slots"`, drawn as ports of its one
+node — the copy node is gone), and the
 outputs. `frame`, `fx`, `grounded`, `capture` and `cover` are not nodes of
 the section, and there are no pipelines: the old per-pipeline run is wires
-and copies. **`Shown`** is the one internal end: one per distinct picture
+and slots. **`Shown`** is the one internal end: one per distinct picture
 an output shows, carrying the direct paint into a window, the stand-down
 (`Shown.fallback`, `Output.settle`) and the count of users per frame
 through the mutes. **An output** shows its own `image`, `hands` and `guide`
@@ -1317,7 +1320,7 @@ address it is. Everything that reaches the host loadable patch's graph is a
 derived from the rows, a member lane onto a host param, a host lane onto a
 member, a member macro's base subscriber on a host param, a modifier input
 read from a host lane. A patch holds only what can exist twice (effects,
-composites, switches, delays, resizes, copies, extra hands, mattes, cuts,
+composites, switches, delays, resizes, extra hands, mattes, cuts,
 segments, modifiers, voices, macros); the frame's singletons, the outputs,
 the camera, the clouds, a media channel and the sequencer are refused in
 words. It never carries a host param's value (D5). `patches.select` is the
@@ -1564,7 +1567,7 @@ a picture is drawn as that picture, collapsed or expanded: a thumbnail in a
   - for an output, its window: output 1 is the page's existing `Preview`,
     outputs 2–4 are their `Handoff.frame`;
   - for a matte or a segment, its mask in grey (row 777);
-  - for an effect or a copy that reaches nothing (faint, never built:
+  - for an effect that reaches nothing (faint, never built:
     row 349), its input — else the test card — put through it at a
     thumbnail's size beside the graph, at most `UNWIRED_PER_FRAME` a frame
     (`render.unwired_through`, plan 65, row 900).

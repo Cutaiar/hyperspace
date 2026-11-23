@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/11",
+ "schema": "hyperspace.loadable/12",
  "name": "distort-blocks-shift",
  "note": "The frame in 48 px cells, each sliding by its own number. The sub band pushes Amount. The right hand's height brings in the colour split; the left hand's height moves the cell size.",
  "graph": {

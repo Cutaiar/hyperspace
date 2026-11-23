@@ -9012,6 +9012,16 @@ Plan 88. Headless: `tests/test_save_live.py` (the ▾ joined to **save as** and 
 
 **872. Outside, and over a file.** In that dialog, save to the Desktop; then again on an existing patch's file (say yes to "Replace?"). *Pass:* both refused on the footer, nothing written. *Fail:* a file outside the library, or a patch written over.
 
+## FJ. An effect's slots, no copy node (rows 1081–1086, 2026-11-23)
+
+Plan 89. Headless: `tests/test_effect_slots.py` (the migration, the ladder, a fragment, three slots of one effect drawn on GL), `tests/test_graph_edit.py` (add, remove, close up, delete), the goldens (every through golden recorded with copies draws byte for byte through slots).
+
+**873. One node, one set of knobs.** (Mac, the trackpad) On GRAPH, right-click an effect → **add slot**. *Pass:* the effect's node grows a second row of ports (`image 2`, `aux 2`, `2` out); wire a picture into `image 2` and `2` into a window: that window shows the effect on that picture; selecting the node shows one set of controls, and turning a knob bends both pictures at once. *Fail:* a second node, an empty side panel, or a knob that bends one picture only.
+
+**874. Remove and paste.** With three slots wired, the effect's menu → **remove slot 2**. *Pass:* what fed slot 2 now feeds what it fed; slot 3's cables are now on slot 2's ports; ⌘Z puts it back. Then ⌘C on the effect and ⌘V: a fourth row of ports on the same node. *Fail:* a cable lost, or a new node from ⌘V.
+
+**875. An old library.** Open a patch saved before this build with a "hands through the effects" window or a copy node. *Pass:* the strip says it was migrated to `/12`; the window draws as before (compare with the other Mac before it updates); the effect's node carries the slot; save and reopen: the same. Then, on the Mac the goldens were recorded on, `uv run pytest -m golden tests/test_golden_frames.py` (the container that built this draws on llvmpipe, where the byte-for-byte golden test skips). *Pass:* every golden byte for byte. *Fail:* a missing picture, a dropped wire, a copy node on the canvas, or a golden that moved.
+
 ## EB. The FRACTAL section (rows 902–905, 2026-11-20)
 
 Plan 64. Headless: `tests/test_ui_pane.py::test_the_fractal_section_draws_its_controls_inside_the_pane` (every control drawn, inside the pane, at every layout) and `tests/test_fractal_grab.py` (Detail, Reach and Near change what is drawn, To the top, saved with the look). A restart after pulling (new fields on `ViewState`).

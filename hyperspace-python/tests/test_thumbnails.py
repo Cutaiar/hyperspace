@@ -125,9 +125,10 @@ def test_a_thumbnails_size_is_its_long_side_at_the_pictures_aspect():
 
 def test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none():
     # (plan 39's segment pins `fg`/`bg` are ports of the one segment node,
-    # never a canvas node of their own, as the scene's depth pin is)
+    # never a canvas node of their own, as the scene's depth pin is; plan
+    # 89's effect slots are ports of the effect's one node too)
     for kind, made in G.WIRED_MAKES.items():
-        if made == G.IMAGE and kind not in (G.GROUND, G.DEPTH_PORT, *G.SEGMENT_PINS):
+        if made == G.IMAGE and kind not in (G.GROUND, G.DEPTH_PORT, "slot", *G.SEGMENT_PINS):
             assert graphview.THUMBS[kind] == graphview.PICTURE, kind
     # SM3: a matte makes a mask and a segment's own output is its matte: in grey
     assert graphview.thumb_of("matte", G.MatteNode("matte")) == graphview.MASK_PIC
