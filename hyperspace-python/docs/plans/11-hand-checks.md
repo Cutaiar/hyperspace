@@ -8874,7 +8874,7 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 ## FC. Control widgets (rows 1020–1029, 2026-11-22)
 
-Plan 82. Headless: `tests/test_control_widgets.py` (the parse, the shapes, the ticks; a pad, a knob and a bipolar fader driven by `tests/ui_driver.py`). The pictures in `assets/82-control-widgets/` were made on Mesa's software rasteriser; nothing here was seen on the Mac. Hot reload carries it: no new module, no new field on a live object.
+Plan 82. Headless: `tests/test_control_widgets.py` (the parse, the shapes, the ticks; a pad, a knob and a bipolar fader driven by `tests/ui_driver.py`). The pictures in `assets/82-control-widgets/` were made on Mesa's software rasteriser; nothing here was seen on the Mac. Hot reload carries it: no new module, no new field on a live object. While playing, note answers to the plan doc's open style questions (`82-control-widgets.md`, "Open style questions"): sizes, throws, the detent's pull, the ticks' look.
 
 **820. Bipolar faders.** (Mac, the trackpad) Open Kaleidoscope's strip. *Pass:* Swirl rests with its thumb in the middle and no fill; dragged right it fills red from the middle rightward, left leftward; dragged back near the middle it settles on 0.00 without fiddling; Ctrl+click and type 0.01: it stays 0.01. The effect's speed fills from its stop the same way. *Fail:* a fill from the left end, a detent you can't feel, or one that grabs a value you meant to set.
 
