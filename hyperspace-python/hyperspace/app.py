@@ -1688,6 +1688,11 @@ def _space(h: Host, reg) -> None:
     if shape is not None and shape[0].box is not None:
         box = shape[0].box
     if dive.inside:
+        # the zoom and turn since the last step taken about the middle now
+        # (plan 81, `fractal.centre`; the step's own call then moves nothing
+        # more): the wheel left that pivot to it, and a crossing out below
+        # would skip it
+        fractal.centre(view, reg, _drawn_off(h, view))
         if shape is not None and shape[1].bounded:        # a load handed a dive in:
             shape[0].to_space(worlds.SHAPE, view.zoom, view.pan)   # a new look, still
             b = shape[0].bodies.get(worlds.SHAPE)
@@ -1729,15 +1734,20 @@ def _reroot(h: Host, reg, dt: float = 0.0) -> None:
     """The on-air view re-rooted (`ViewState.reroot`, `fractal.step`), told
     the offset drawn after the shape (`shapeframe.drawn_offset`) so the cell
     it takes is the one under the eye. Decks off air re-root with none."""
-    view, off = h.view, None
-    if _dive_of(view) is not None and field_mod.takes_offset(view):
-        shape = _shape_of(h.world)
-        if shape is not None:
-            off = shapeframe.drawn_offset(view, shape[0].offset_matrix(worlds.SHAPE),
-                                          shape[1].bounded)
-        else:
-            off = shapeframe.drawn_offset(view)
-    view.reroot(reg, off, dt)
+    view = h.view
+    view.reroot(reg, _drawn_off(h, view), dt)
+
+
+def _drawn_off(h: Host, view):
+    """The offset drawn after the shape (`shapeframe.drawn_offset`), for the
+    dive's middle of the screen; None for a view with no dive or no offset."""
+    if _dive_of(view) is None or not field_mod.takes_offset(view):
+        return None
+    shape = _shape_of(h.world)
+    if shape is not None:
+        return shapeframe.drawn_offset(view, shape[0].offset_matrix(worlds.SHAPE),
+                                       shape[1].bounded)
+    return shapeframe.drawn_offset(view)
 
 
 def _reroot_off_air(d, dt: float = 0.0) -> None:

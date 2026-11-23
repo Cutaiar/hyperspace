@@ -352,7 +352,7 @@ class Undo:
         self._watched: list = []          # …the watched ones among them
         self._ids: tuple = ()             # …and their ids
         self._lands = self._read_lands()  # what is landed, as of the last quiet frame
-        self._quiet = self._beside_take()
+        self._quiet = self._quiet_take()
         self._fp = self._fingerprint()
         self._settled = self._take()
 
@@ -424,6 +424,22 @@ class Undo:
     def _beside_take(self):
         beside = getattr(self, "beside", None)
         return beside.take() if beside is not None else None
+
+    def _quiet_take(self):
+        """`beside` and the bases it goes with (`beside.ids`: the camera's),
+        each with its drift, as of this frame — what a step that begins on
+        the next one holds of them. The settled state's are as old as the
+        last step: a running dive has moved them since without a step, and a
+        restore to them in another frame of the dive would jump."""
+        beside = getattr(self, "beside", None)
+        if beside is None:
+            return None
+        cam = {}
+        for pid in beside.ids:
+            p = self.reg.get(pid)
+            if p is not None and self._watches(p):
+                cam[pid] = (p.base, _drift(p))
+        return beside.take(), cam
 
     def _moves_doc(self):
         return self.moves.doc() if self.moves is not None else None
@@ -528,7 +544,7 @@ class Undo:
             return
         if self._open is None:
             self._lands = self._read_lands()
-            self._quiet = self._beside_take()
+            self._quiet = self._quiet_take()
         # quiet this frame: an open step closes once the settle time has passed
         if (self._open is not None and self._open is not self._kept
                 and now - self._changed_at >= SETTLE_S):
@@ -570,10 +586,22 @@ class Undo:
         nothing and must not cost the redo."""
         self._open = step
         step.then = self._then()
-        if getattr(self, "beside", None) is not None:
-            # what lives beside the camera as of the last quiet frame: the
-            # settled state's may be older, and a dive moves it between steps
-            step.before = replace(step.before, beside=self._quiet)
+        quiet = getattr(self, "_quiet", None)
+        if getattr(self, "beside", None) is not None and quiet is not None:
+            # what lives beside the camera, and the camera itself, as of the
+            # last quiet frame (`_quiet_take`): one frame of the dive, where a
+            # restore can put them back as they were
+            side, cam = quiet
+            before = step.before
+            bases, drift = dict(before.bases), dict(getattr(before, "drift", None) or {})
+            for pid, (v, d) in cam.items():
+                if pid in bases:
+                    bases[pid] = list(v) if isinstance(v, list) else v
+                    if d:
+                        drift[pid] = d
+                    else:
+                        drift.pop(pid, None)
+            step.before = replace(before, bases=bases, drift=drift, beside=side)
         self._opens = _begun_on(self)
         self.stack.append(step)
         del self.stack[:-LIMIT]
@@ -700,7 +728,7 @@ class Undo:
             self._fp = self._fingerprint()
             self._settled = self._take()
             self._lands = self._read_lands()
-            self._quiet = self._beside_take()
+            self._quiet = self._quiet_take()
             self._absorb = ABSORB_FRAMES
             return True
         self._say(none)

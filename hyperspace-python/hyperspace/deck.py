@@ -144,8 +144,9 @@ class DiveFrame:
         if not kept or seen is None:
             _unseen(self.view)
             return
-        p = np.array([float(self.view.pan[0]), -float(self.view.pan[1]), d.z, d.w])
-        d.seen = (seen[0], p, seen[2])
+        # (the pan as it lands: a route on it writes the object at the next
+        # `apply`, so the dive takes it then — `fractal.centre`, p None)
+        d.seen = (seen[0], None, seen[2])
 
 
 def in_patch(p) -> bool:

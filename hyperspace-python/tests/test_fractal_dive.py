@@ -573,7 +573,7 @@ def test_a_saved_dive_keeps_its_framing(tmp_path):
     def frame(dt: float = 0.1) -> None:
         reg.apply()
         view.integrate(dt)
-        app._space(SimpleNamespace(view=view, world=None), None)
+        app._space(SimpleNamespace(view=view, world=None), reg)
         view.reroot(reg, None, dt)
 
     reg["view.frac_dive"].set(1.0)
@@ -641,7 +641,7 @@ def _run(r, n: int) -> None:
     from tests.test_undo import DT, frames
     for _ in range(n):
         frames(r)
-        app._space(SimpleNamespace(view=r.view, world=None), None)
+        app._space(SimpleNamespace(view=r.view, world=None), r.reg)
         r.view.reroot(r.reg, None, DT)
 
 
@@ -724,7 +724,7 @@ def test_an_unrelated_undo_leaves_the_framing(tmp_path):
 def _frame_reg(s, reg, dt: float) -> None:
     reg.apply()
     s.integrate(dt)
-    app._space(SimpleNamespace(view=s, world=None), None)
+    app._space(SimpleNamespace(view=s, world=None), reg)
     s.reroot(reg, None, dt)
 
 
@@ -834,3 +834,80 @@ def test_an_off_air_dive_centres_where_its_room_placement_draws_it():
         app._reroot_off_air(SimpleNamespace(view=b, reg=None), 0.1)
     assert a.dive.path == b.dive.path and len(a.dive.path) > 5
     assert np.allclose(_p(a), _p(b), atol=1e-12) and a.zoom == b.zoom
+
+
+# ---- Devin's second review of #474 (2026-11-23)
+
+def test_undoing_a_pause_resumes_from_the_paused_view(tmp_path):
+    """Dive at +1 for a while, paused in the cell it is in, the pause undone:
+    the rate comes back and the camera stays where the pause left it (to a
+    frame's motion), not where the last step before the dive had it."""
+    r = _undo_rig(tmp_path)
+    rate = r.reg["view.frac_dive"]
+    rate.set(1.0)
+    _run(r, 60)                                      # (that edit's step closes)
+    _run(r, 180)                                     # three levels on
+    rate.set(0.0)
+    _run(r, 60)
+    s = r.view
+    zoom, p, path = s.zoom, _p(s), list(s.dive.path)
+    r.undo.undo()
+    assert rate.base == pytest.approx(1.0)
+    assert s.dive.path == path
+    assert s.zoom == pytest.approx(zoom, rel=0.05)
+    assert np.allclose(_p(s), p, atol=0.05 * s.zoom), (_p(s), p)
+
+
+def test_undoing_a_pan_with_a_route_on_it_leaves_no_framing(tmp_path, monkeypatch):
+    """A steady route on Pan X (its effective pan lands at the next `apply`):
+    an undone pan takes its framing back, and the route's offset is not read
+    as a pan the other way once it lands."""
+    r = _undo_rig(tmp_path)
+    pan = r.reg["camera.pan.x"]
+    feed = r.router.modulate
+
+    def modulate(*a, **k):
+        feed(*a, **k)
+        pan.modulate(0.01)                           # a steady offset, every frame
+    monkeypatch.setattr(r.router, "modulate", modulate)
+    r.reg["view.frac_dive"].set(1.0)
+    _run(r, 60)
+    pan.set(pan.base + 0.1)
+    _run(r, 60)
+    assert r.view.dive.frame[0] == pytest.approx(0.1, abs=1e-6)
+    r.undo.undo()
+    _run(r, 60)
+    assert np.allclose(r.view.dive.frame, 0.0, atol=1e-6), r.view.dive.frame
+    r.undo.redo()
+    _run(r, 60)
+    assert r.view.dive.frame[0] == pytest.approx(0.1, abs=1e-6)
+
+
+def test_a_wheel_notch_that_takes_the_view_back_outside_holds_the_middle():
+    """Inside at the top, panned, a notch out that makes the shape fit the box
+    again: the middle's pivot the wheel left to the step is taken before the
+    crossing out, so the pan scales with the zoom as about the middle."""
+    from hyperspace import poi
+    from tests.test_fractal import _reg
+    s = _view("Menger sponge", zoom=1.0, pan=[0.2, 0.0])
+    reg = _reg(s)
+    h = SimpleNamespace(view=s, world=None)
+    while not s.dive.inside:                         # in: too big for the box
+        reg["camera.zoom"].set(reg["camera.zoom"].base * 1.03)
+        _frame_reg(s, reg, 1 / 60)
+    assert not s.dive.path
+    out = 0
+    while s.dive.inside and out < 200:               # notches out until it fits again
+        z0, x0, last = s.zoom, s.pan[0], s.dive.last
+        app._zoom_about(reg["camera.zoom"], reg["camera.pan.x"], reg["camera.pan.y"], s,
+                        -0.2, WD / 2, HT / 2, WD, HT)
+        reg.apply()
+        s.integrate(1 / 60)
+        app._space(h, reg)
+        s.reroot(reg, None, 1 / 60)
+        out += 1
+    assert not s.dive.inside and poi.DEFAULT_BOX is not None
+    # about the middle (× zoom ratio), then eased home as at the top any
+    # zoom out is (plan 64, `fractal.step`); the bug left the pan where it was
+    ease = (s.zoom - fractal.Z_HOME) / (min(last, fractal.Z_IN) - fractal.Z_HOME)
+    assert s.pan[0] == pytest.approx(x0 * s.zoom / z0 * min(max(ease, 0.0), 1.0), rel=1e-6)

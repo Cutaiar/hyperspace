@@ -582,6 +582,14 @@ def centre(s, reg=None, off=None, dt: float = 0.0) -> None:
     p = p0.copy()
     zoom = dive_zoom(spec, d, zoom0, float(getattr(s, "frac_dive", 0.0)), dt)
     seen = getattr(d, "seen", None)
+    if seen is not None and seen[1] is None:
+        # an undo restored the camera within this dive (`deck.DiveFrame.put`):
+        # its pan as it has landed, no pan of the performer's; its zoom and
+        # turn are still taken about the middle, as the edit it undid was
+        seen = d.seen = (seen[0], p0.copy(), seen[2])
+    if (seen is not None and zoom == seen[0] and np.array_equal(p0, seen[1])
+            and np.array_equal(M, seen[2])):
+        return                       # nothing since (a second call this frame)
     if seen is not None and (d.path or d.inside):
         if not np.array_equal(p0, seen[1]):
             d.settled = False        # a pan since: another point is under the middle

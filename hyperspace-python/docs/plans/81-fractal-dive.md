@@ -267,6 +267,22 @@ Devin's review of #474 found four more, each fixed with a test:
   `app._reroot_off_air` passes `shapeframe.drawn_offset`
   (`test_an_off_air_dive_centres_where_its_room_placement_draws_it`).
 
+Devin's second review found three more, each fixed with a test:
+
+- **Undoing a pause jumped the camera.** A step held the framing from the last
+  quiet frame but the camera's bases from the last closed step, which a
+  running dive had left far behind. The camera's bases and drift are now
+  taken on the same quiet frame (`Undo._quiet_take`)
+  (`test_undoing_a_pause_resumes_from_the_paused_view`).
+- **A route on the pan made an undone pan's framing come back reversed.** The
+  restore read the pan before `apply` landed it. The dive now takes the
+  restored pan at its next step (`Dive.seen` with no p)
+  (`test_undoing_a_pan_with_a_route_on_it_leaves_no_framing`).
+- **The wheel notch that takes the view back outside lost the middle's
+  pivot.** `app._space` runs `fractal.centre` before deciding a crossing; a
+  second call in the frame now moves nothing at all
+  (`test_a_wheel_notch_that_takes_the_view_back_outside_holds_the_middle`).
+
 **Restart:** `Deck.build` wires the undo's `beside` once, at launch; `Dive.lives`
 is a new field.
 
