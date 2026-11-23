@@ -512,7 +512,7 @@ def step(s, reg=None, off=None, dt: float = 0.0) -> None:
 # fractal has holes of every size beside it (the sponge's tunnels, the dust's
 # gaps), and a dive into one point frames them. The old dive looked full
 # because its zoom was about a cell's middle, off the screen's; "cell" keeps
-# that, with the middle on the screen's (row 1012, the owner's to choose).
+# that, with the middle on the screen's (row 1012: the owner chose "cell").
 
 
 # how fast a dive settles onto what it dives into: (zoom before / zoom after)

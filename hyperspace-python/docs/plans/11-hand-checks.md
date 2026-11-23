@@ -8882,7 +8882,7 @@ Setup for all: VIEW → shape **Menger sponge** (3D → Fractals); **Dive** is t
 
 **811. Climbing out.** Deep in (a minute at +2), set **Dive** to −2, or a hand on it. *Pass:* it climbs out level by level to the whole shape, centred at zoom 1, and stops there however long the rate stays down. Back to +2 dives in again. *Fail:* a jump, a shape that comes back off centre, or one that keeps shrinking past zoom 1.
 
-**812. Cell or point (row 1012, yours to choose).** Watch `after.mp4` beside `after-point.mp4`. Then on the rig: dive at +1 into the sponge, the 5-cell and the Cantor dust; set `SETTLE_ON = "point"` near the top of `fractal.py`'s plan 81 block, save (a hot reload), and dive again. *Pass:* say which you want. "cell" keeps the screen full and steers to each cell's middle; "point" holds one point under the cross for good, framing the holes beside it. *Fail:* either one jumps.
+**812. The cell's middle (row 1012, the owner's: "cell").** Dive at +1 into the sponge, the 5-cell and the Cantor dust. *Pass:* the screen stays full and centred on the middle of the cell it goes into, level after level; the steer from one cell's middle to the next reads as part of the dive, not a slide toward an edge. *Fail:* a jump, a half-empty screen, or a steer that reads as drift.
 
 **813. A pan and a grab during a dive.** Diving at +1, pan with the stick, then (the grip on, plan 60) grab inside and pull, turn, let go. *Pass:* the pan moves the view and stays moved; the grab moves the space as before (DZ 685); the dive goes on about the middle of the screen; nothing jumps. *Fail:* a pan the dive takes back, a jump at a re-root while held, or a dive that leaves the middle.
 

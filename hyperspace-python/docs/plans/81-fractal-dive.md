@@ -1,6 +1,6 @@
 # Plan 81: an endless, centred fractal dive
 
-**Status: built (2026-11-22), one owner decision pending (row 1012).**
+**Status: built (2026-11-22); the owner chose "cell" (row 1012, 2026-11-23).**
 Wave 1 of the post-install wave (`plans/66-post-install` on its branch, §1 row
 81). Register rows 1010–1017; hand checks 810–815, group FB. Read with
 [plan 64](64-recursive-geometry.md) and [its part 2](64-depth-dependent-grab.md).
@@ -41,7 +41,7 @@ Making loadable patches from plan 64's fractals turned up two:
 Outside (the shape is an object, plan 64 part 2) nothing changed: the zoom
 is about the shape's own middle, as for every shape.
 
-### 2.2 What a dive settles onto (row 1012, pending the owner)
+### 2.2 What a dive settles onto (row 1012: "cell", the owner's)
 
 Zooming about the middle of the screen keeps the point under it in place.
 **A point of a fractal has holes of every size beside it.** The sponge's
@@ -203,7 +203,6 @@ effect on a reload.
 
 ## 7. Open
 
-- **Row 1012:** `"cell"` or `"point"` (§2.2). Hand check 812.
 - The cost of the settle on the rig (hand check 815). In a cloud session
   `fractal.step` takes a median 0.3 ms and up to about 4 ms on a re-root
   frame of the 5-cell or the dust. The rig is faster, but it is new work
