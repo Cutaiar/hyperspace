@@ -5963,7 +5963,7 @@ class Effect(Node):
         Python half says `GENERATOR` (the Mandelbrot, `mandel.py`) — so with
         no picture wired into `image` it still draws, over transparent
         black (`_pass`), where any other effect reads nothing."""
-        from . import fx      # here, not at the top: a hot reload of fx.py is seen
+        from . import fx  # here, not at the top: a hot reload of fx.py is seen
 
         spec = frame.r.fx.state.specs.get(self.effect)
         hook = fx.HOOKS.get(getattr(spec, "hook", "") or "") if spec is not None else None

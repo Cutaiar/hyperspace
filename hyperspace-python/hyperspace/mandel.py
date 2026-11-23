@@ -841,7 +841,7 @@ def run(chain, name: str, prog: moderngl.Program, vao: moderngl.VertexArray,
         for k, x in (("u_mix", mix), ("u_blend", blend), ("u_opaque", opaque)):
             if x is not None:
                 _set(prog, k, x)
-        tprog, tvao = gl.tiles(ctx)
+        _tprog, tvao = gl.tiles(ctx)
         tfbo = st.tiles.at(ctx, (tw, th), dtype="f1")
         tfbo.use()
         tfbo.clear(0.0, 0.0, 0.0, 1.0)

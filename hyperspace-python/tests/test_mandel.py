@@ -808,7 +808,7 @@ def test_the_gpu_coloured_inside_is_its_float32_twin_deep_in(rig):
     off = M.offsets(W, H, zoom)
     eps = M.view_height(zoom) / H * M.PERIOD_EPS
     ref = M.reference_orbit(SEA, 0j, 2, iters)
-    n, ins, _ = M.perturbed_counts(ref, off, 0, 2, iters, periodic_eps=eps, settle=True)
+    n, _, _ = M.perturbed_counts(ref, off, 0, 2, iters, periodic_eps=eps, settle=True)
     n0, i0 = M.escape_counts(SEA + off, 0j, 2, iters, periodic_eps=eps, settle=True)
     assert i0.mean() > 0.3
     got = np.where(got < 0, 0.0, got)           # rig.steps reads a count of 0 as -1
@@ -845,7 +845,8 @@ def _held(v, rate_key, seconds=1.0, fps=60):
     return v
 
 
-JULIA = dict(slice=1.0, centre_x=0.0, centre_y=0.0, zoom=1.7, c_x=-0.8, c_y=0.156, iters=300.0)
+JULIA = {"slice": 1.0, "centre_x": 0.0, "centre_y": 0.0, "zoom": 1.7, "c_x": -0.8, "c_y": 0.156,
+         "iters": 300.0}
 
 
 def test_c_on_a_julia_slice_is_slowed_to_what_the_picture_takes():
