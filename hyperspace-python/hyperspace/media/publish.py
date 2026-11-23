@@ -31,10 +31,13 @@ was sent for `RATE_S`, so a stalled publisher never reads as live."""
 
 from __future__ import annotations
 
+import json
+import socket
 import sys
 import threading
 import time
 from fractions import Fraction
+from pathlib import Path
 from typing import Protocol
 
 import numpy as np
@@ -333,3 +336,117 @@ def close_all(slots) -> None:
     for sl in slots or ():
         for p in getattr(sl, "publishers", None) or ():
             live._quiet(p.close)
+
+
+# ---- NDI out from the panel (2026-11-22): the loop between two Macs closed
+#
+# An output's NDI sender can be turned on and off while the app runs (MEDIA
+# ▸ Live, "Send over NDI"): the panel asks (`ask_ndi`), the frame takes the
+# ask with the render context current (`take_ask`, from `app._draw_render`).
+# What this Mac chose is kept in `<home>/publish.here.json` — this Mac's
+# alone, never the library's, so each Mac's choice is its own — and stands
+# over config.toml's `ndi` at the next launch (`apply_here`). A publish-only
+# output keeps config.toml's word: it is drawn only for what that gives it.
+
+HERE = "publish.here.json"
+
+
+def machine_name() -> str:
+    """This Mac's short network name ("Dans-MacBook-Pro"), "hyperspace" with none."""
+    return socket.gethostname().split(".")[0].strip() or "hyperspace"
+
+
+def default_ndi_name(n: int) -> str:
+    """The sender name an output gets when it is turned on from the panel:
+    the Mac's name in it, so the other Mac's list says whose picture it is
+    (`ndi:<Mac> out 1`) and two Macs never send one name."""
+    return f"{machine_name()} out {n}"
+
+
+def load_here(home) -> dict[int, str]:
+    """Output number → NDI sender name ("" = off), as this Mac last chose;
+    {} with no file, or one that will not read."""
+    if home is None:
+        return {}
+    try:
+        raw = json.loads((Path(home) / HERE).read_text())
+    except (OSError, ValueError):
+        return {}
+    ndi = raw.get("ndi") if isinstance(raw, dict) else None
+    if not isinstance(ndi, dict):
+        return {}
+    return {int(k): v for k, v in ndi.items() if str(k).isdigit() and isinstance(v, str)}
+
+
+def save_here(home, chosen: dict[int, str]) -> None:
+    """`chosen` into this Mac's file, whole (a temp file, then a rename)."""
+    p = Path(home) / HERE
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"ndi": {str(k): v for k, v in sorted(chosen.items())}},
+                              indent=2) + "\n")
+    tmp.replace(p)
+
+
+def apply_here(slots, here: dict[int, str]) -> None:
+    """At launch, before the publishers open: this Mac's choice over the
+    config's, for each output the panel may ask for (`can_ask`)."""
+    for sl in slots or ():
+        if sl.n in here and can_ask(sl):
+            sl.ndi = here[sl.n]
+
+
+def can_ask(slot) -> bool:
+    """An output the panel may turn NDI on and off for: one with a window."""
+    return not slot.publish_only
+
+
+def ndi_of(slot) -> str:
+    """The name `slot` sends (or is about to send) over NDI, "" for none."""
+    asked = getattr(slot, "ndi_asked", None)
+    return asked if asked is not None else slot.ndi
+
+
+def ask_ndi(slot, on: bool, home=None, slots=None) -> str:
+    """Ask for `slot`'s NDI sender on or off; the next frame makes it so.
+    With `home`, this Mac's file is written on the pool (never the asking
+    thread), with every output of `slots` as it now stands. The name it
+    will send under ("" = off)."""
+    if not can_ask(slot):
+        return slot.ndi
+    name = (ndi_of(slot) or default_ndi_name(slot.n)) if on else ""
+    slot.ndi_asked = name
+    if home is not None:
+        chosen = {sl.n: ndi_of(sl) for sl in (slots or (slot,)) if can_ask(sl)}
+        pool.submit(save_here, home, chosen)
+    return name
+
+
+def take_ask(slot, ctx, make_tap, notes: list | None = None, make_ndi=None) -> bool:
+    """The panel's ask for `slot`, carried out — on the frame, with `ctx`
+    (the render context) current: its NDI sender closed or made (by
+    `make_ndi(name, ctx)`, `NdiOut` by default). A window with publishers
+    gets a tap (`make_tap(ctx)`); one left with none frees its tap. True
+    when there was an ask."""
+    want = getattr(slot, "ndi_asked", None)
+    if want is None:
+        return False
+    slot.ndi_asked = None
+    keep = []
+    for p in slot.publishers:
+        if p.kind == "ndi" and p.name != want:
+            live._quiet(p.close)
+        else:
+            keep.append(p)
+    if want and not any(p.kind == "ndi" for p in keep):
+        p = (make_ndi or NdiOut)(want, ctx)
+        if notes is not None and hasattr(p, "notes"):
+            p.notes = notes
+        keep.append(p)
+    slot.ndi, slot.publishers = want, keep
+    if not slot.publish_only:
+        if keep and slot.tap is None:
+            slot.tap = make_tap(ctx)
+        elif not keep and slot.tap is not None:
+            live._quiet(slot.tap.release)
+            slot.tap = None
+    return True

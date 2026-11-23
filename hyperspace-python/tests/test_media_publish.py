@@ -467,6 +467,27 @@ def test_ndi_out_loopback(ctx):
         tex.release()
 
 
+def test_ndi_turned_on_and_off_from_the_panel_on_a_real_context(ctx):
+    """2026-11-22: the panel's ask made so on the render context — a real
+    sender and tap, then both gone — and the frame publishes through them."""
+    pytest.importorskip("cyndilib")
+    sl = Slot(1)
+    publish.ask_ndi(sl, True)
+    assert publish.take_ask(sl, ctx, Offscreen)
+    (out,) = sl.publishers
+    assert isinstance(out, publish.NdiOut) and isinstance(sl.tap, Offscreen)
+    tex = ctx.texture((64, 36), 4)
+    try:
+        for n in range(3):
+            out.publish(tex, n / 30)
+        assert not out.status.startswith("error"), out.status
+    finally:
+        publish.ask_ndi(sl, False)
+        publish.take_ask(sl, ctx, Offscreen)
+        tex.release()
+    assert sl.publishers == [] and sl.tap is None and out._thread is None
+
+
 # (last in the file: it makes a window's context current; the module's
 # standalone context is made current again at its end)
 def test_syphon_out_loopback(ctx):

@@ -160,6 +160,19 @@ def test_live_feeds_and_this_mac_are_their_own_tabs(rig):
     assert [i.sid for i in ui_media.items(rig.panel, 2)] == ["camera:FaceTime HD Camera"]
 
 
+def test_the_live_tab_draws_find_ndi_and_send_output_chips(rig):
+    """2026-11-22: under the Live list, Find NDI and a Send chip per
+    windowed output — drawn, and with no output asked for until clicked."""
+    from hyperspace.outputs import Slot
+    attach(rig, FakeFolder())
+    rig.panel.devices = NS(media_feeds=dict, store=NS(raw=[], is_on=lambda role: True))
+    rig.panel.outputs = [Slot(1), Slot(2, window=False, ndi="td")]
+    page_state(rig)["tab"] = 2
+    page_frame(rig.panel, "media")
+    page_frame(rig.panel, "media")
+    assert rig.panel.outputs[0].ndi_asked is None and not ui_media.ndi_listening(rig.panel)
+
+
 def test_copy_to_shared_says_where_it_landed(rig):
     folder = FakeFolder([entry("local:b.png")])
     attach(rig, folder)
