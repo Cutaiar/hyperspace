@@ -260,7 +260,7 @@ depends on this; it is recorded so nobody re-asks it.
 
 ### 3.14 One meaning for "field" [V]
 
-"Field" means four things today: the instance layout (`field.py`, `ui_fields.py`), Wave
+"Field" means four things today: the instance layout (`field.py`), Wave
 Table's **Field** knob (grass, noodles or curls), Grow's **Field** knob, and — added by plan
 66's branch — Time Displace's **Field** knob. The glossary needs one meaning before the
 wire uses the word (plan 66 Q2): rename the instance layout (**lattice**, the brief's
@@ -343,3 +343,26 @@ Overrules §2–§6 where they differ.
 5. **Q5 (the wavetable)**: answered by 1, for the owner to confirm.
 6. **Q6 (the word)** asked again with its context: open.
 7. **Time Displace on this branch: hold.**
+
+## 8. The owner's third round (2026-11-23)
+
+1. **Any knob takes a field** (Q3): yes, as §3.9 — about its value, never replacing it;
+   choices, loop counts and `@clock` rates refuse one in words.
+2. **The stack is confirmed** (Q5, §7.1): history and the wavetable are one primitive, a
+   stack of T read at an index, at a field of indices, or summed over them.
+3. **The word is "field"** (Q6). The copy layout is renamed the **lattice** (the owner:
+   "lattice or structure"; lattice taken because the 3D layouts already are lattices and
+   "structure" is the structure audit's word). What it reaches [V], none of it saved:
+   - `field.py` → `lattice.py` (imported by `render.py`, `ui_view.py`, `app.py`), with
+     `hotreload.MODULES` and the import wall's lists;
+   - the panel's labels "Field motion", "Field amp", "Field rate", "Field depth"
+     (`view.inst_*` keep their ids);
+   - Grow's and Wave Table's "Field" knob labels (stored as `mode`): "Growth" and "Paths"
+     [rec];
+   - prose: ARCHITECTURE, ENGINEERING, the glossary.
+   `ui_fields.py` (the panel's form fields) is code only and no performer reads it; renamed
+   with the rest if the builder of P1 wants the word clean in code too.
+4. **Time Displace: hold** (unchanged).
+
+Every question of §6 is now answered but Q4's follow-on (the blend list is §7.4). P0, the
+roundup's table, can start.

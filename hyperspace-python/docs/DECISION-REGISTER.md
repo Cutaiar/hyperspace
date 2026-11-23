@@ -896,7 +896,7 @@ here; overturn → the change, then the same.
 | 904 | Plan 66: a time between two of the ring's frames blends them by time (Between blend) or takes the nearer (nearest); between now and the newest frame it blends its own input, so Span 0 and a field of 0 are its input byte for byte; Span is an amount (0 … 8 s, zero-safe log taper) | 701 | (rec) — plan 66 §5 |
 | 905 | Plan 66: a time older than the ring holds reads its oldest frame (the ring holds 32 × `dream.gap`: about 1 s at the default, 8 s at the most); no ring of that number, an empty one or one being remade reads its input | 702 | (rec) — plan 66 §5 |
 | 906 | Plan 66, open: is a field its own wire (`field`, RG32F, signed; a one-way grey promotion into picture ports; a `picture` converter) or a picture read by convention, as Displace's aux is | — | owner (2026-11-22): its own wire; plan 67 makes it a texture (§3.13) |
-| 907 | Plan 66, open: the word. "Field" is the instance field today (`field.py`, `ui_fields.py`); the new wire as **field** and the copies' layout renamed with SEM, or the new thing a **map** | — | **pending the owner** (Q2) |
+| 907 | Plan 66: the word. The new wire is a **field**; the copies' layout (`field.py`, the panel's "Field motion / amp / rate / depth") is renamed the **lattice**, and Grow's and Wave Table's "Field" knobs are relabelled. No saved id holds the word (`view.inst_*`, `fx.grow.mode`, `fx.wavetable.mode`): labels, code and prose only | — | owner (2026-11-23) |
 | 908 | Plan 66, open: stage 2's reach. Keep `wave.glsl` and `blocks.glsl` and add patches proven byte-identical, or retire them with a migration; Shake stays its file (not one field) | — | **pending the owner** (Q3; rec: keep) |
 | 909 | Plan 66, open: memory for the past at full size (a texture-array ring: 265 MB for 32 frames at 1080p) and the look-ahead window for files (128 MB a channel at half its size) | 703 | **pending the owner** (Q5, Q6) |
 | 910 | Plan 66, open: the wavetable — a render node for pictures and fields, a modifier for curves — and the existing "Wave Table" renamed: label **Stamp Trail** now, `fx.wavetable.*` → `fx.stamptrail.*` in the next format-lane migration | — | **pending the owner** (Q7) |
@@ -15296,8 +15296,8 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 ### 907. The word "field"
 
-- **What.** Plan 66 Q2. `field.py` is the instance field (where each copy sits), `ui_fields.py` its panel. The glossary is signed and renames ride SEM. Either the new wire is **field** and the copies' layout is renamed in prose now and in code with SEM, or the new thing is a **map**.
-- **Answer.** pending the owner.
+- **What.** Plan 66 Q2. `field.py` is the instance field (where each copy sits). The glossary is signed and renames ride SEM. Either the new wire is **field** and the copies' layout is renamed, or the new thing is a **map**. Found since: no saved id holds the word — the layout's params are `view.inst_*` (their labels say "Field motion", "Field amp", "Field rate", "Field depth"), and Grow's and Wave Table's "Field" knobs are stored as `mode` — so the rename is labels, code and prose, not a format move. (`ui_fields.py` is the panel's form fields, another sense, in code only.)
+- **Answer.** owner (2026-11-23): "call it field, rename copy layout to lattice or structure". Lattice taken [rec]: the 3D layouts are lattices already, and "structure" is the structure audit's word (`AUDIT-STRUCTURE-2026-10.md`).
 - **Built.** Nothing.
 - **Judge it.** No hand check.
 

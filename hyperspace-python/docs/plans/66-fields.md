@@ -52,7 +52,8 @@ first question (§8, Q1).
 - **A hooked effect** (plan 63, `// @hook mandel`): an effect file whose Python half runs
   its pass. No schema move: "a new effect file bumps no schema".
 - **"Field" is taken.** `field.py` is the instance field (where each copy of the shape
-  sits), and `ui_fields.py` its panel. See Q2.
+  sits). (`ui_fields.py` is something else: the panel's form fields, a param drawn as a
+  control.) See Q2, answered 2026-11-23: the copy layout becomes the **lattice**.
 - **The "Wave Table" effect** (`wavetable.glsl`) stamps the picture along paths; it is not
   a wavetable. Its ids are `fx.wavetable.*`. No corpus file uses it.
 
@@ -247,7 +248,8 @@ T3 and T4 are measured before they are built. W2 can go any time; W1 rides the l
    crossings clamp them, half-float rounds an offset, and stage 2's byte-for-byte identity
    needs float32. The convention is cheaper, and stage 2 would then be "within a level",
    not identical. (Row 906.)
-2. **The word.** "Field" is the instance field today (`field.py`, `ui_fields.py`, "the
+2. **Answered (owner, 2026-11-23): the new wire is a field; the copy layout is renamed the
+   lattice.** The question was: "Field" is the instance field today (`field.py`, "the
    field" in prose for the copies' layout). The glossary is signed and renames ride SEM.
    [Rec] **field** for the new wire, and the instance field becomes **the copies' layout**
    in prose, its modules renamed when SEM next runs; or call the new thing a **map**
