@@ -292,7 +292,10 @@ Devin's third review found two more, each fixed with a test:
   so a zoom in that only slowed a climb still settled. `_space` now previews
   the crossing (`app._crosses_out`) and takes the pivot early only on a
   frame that crosses out
-  (`test_a_zoom_in_that_only_slows_a_climb_is_about_the_middle`).
+  (`test_a_zoom_in_that_only_slows_a_climb_is_about_the_middle`). That one
+  verdict, on the centred pose, also decides the crossing itself, so an orbit
+  where only the uncentred pose fits stays inside (Devin's fourth review,
+  `test_a_crossing_out_goes_by_the_centred_pose`).
 
 **Restart:** `Deck.build` wires the undo's `beside` once, at launch; `Dive.lives`
 is a new field.

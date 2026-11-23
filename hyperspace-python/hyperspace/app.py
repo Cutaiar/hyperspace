@@ -1692,15 +1692,17 @@ def _space(h: Host, reg) -> None:
         # about the middle first (plan 81, `fractal.centre`: the wheel left
         # that pivot to it, and the crossing would skip it). Only then: a frame
         # that stays inside takes them once, with the dive rate's, in the step
+        # The one verdict, on the centred pose, decides the crossing below too
         off_d = _drawn_off(h, view)
-        if _crosses_out(view, box, off_d):
+        out = _crosses_out(view, box, off_d)
+        if out:
             fractal.centre(view, reg, off_d)
         if shape is not None and shape[1].bounded:        # a load handed a dive in:
             shape[0].to_space(worlds.SHAPE, view.zoom, view.pan)   # a new look, still
             b = shape[0].bodies.get(worlds.SHAPE)
             if b is not None:
                 b.still()
-        if not fractal.wants_inside(view, box, shapeframe.drawn_offset(view)):
+        if out:
             off = fractal.go_outside(view, reg)
             if shape is not None:
                 shape[0].to_object(worlds.SHAPE, off, view.zoom, view.pan)

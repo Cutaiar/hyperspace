@@ -964,3 +964,25 @@ def test_a_zoom_in_that_only_slows_a_climb_is_about_the_middle():
         assert s.zoom < z0                           # outward all told
     assert s.dive.path == path
     assert np.abs(_q(s, _rooted(spec, x, path, s.dive.path))).max() / s.zoom < 1e-9
+
+
+# ---- Devin's fourth review of #474 (2026-11-23)
+
+def test_a_crossing_out_goes_by_the_centred_pose(monkeypatch):
+    """At the top, a turn since the last step (an orbit) moves the pan about
+    the middle. Whether the view crosses out goes by that centred pose alone:
+    where only the uncentred one would fit, the view stays inside."""
+    from tests.test_fractal import _reg
+    s = _view("Menger sponge", zoom=1.0, pan=[0.2, 0.0])
+    reg = _reg(s)
+    h = SimpleNamespace(view=s, world=None)
+    while not s.dive.inside:
+        reg["camera.zoom"].set(reg["camera.zoom"].base * 1.03)
+        _frame_reg(s, reg, 1 / 60)
+    assert not s.dive.path and fractal.about_middle(s)
+    s.yaw += 0.2                                     # an orbit frame: the pivot is pending
+    raw = list(s.pan)
+    # the uncentred pose fits the box (wants out), the centred one does not
+    monkeypatch.setattr(fractal, "wants_inside", lambda v, box, off=None: list(v.pan) != raw)
+    app._space(h, reg)
+    assert s.dive.inside
