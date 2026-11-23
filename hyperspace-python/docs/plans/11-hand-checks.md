@@ -8872,6 +8872,27 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 **678. A hand on c deep in.** At 10⁶× with **Steps** at 4096, a hand on **c drive x**. *Pass:* the picture keeps the frame rate while c moves (the reference is computed every frame c changes). *Fail:* a stutter: say at which Steps it starts (the bench's `ref ms`).
 
+## FA. Mandelbrot fixes (rows 1000–1007, 2026-11-22)
+
+Plan 80. Headless: `tests/test_mandel.py` (the unwired node through the real renderer; the settle colour against the float64 oracle and the GPU against its float32 twin; the measured drives; the packed border pass and the resting skip). The bench ran on this M3 Max, so its numbers are the rig's. Everything below is for the owner's eye and hand.
+
+Setup for all: on GRAPH, add the **Mandelbrot** effect and wire it into an output. Wire nothing into it. For colour, put a **Palette** in gradient mode after it, or set **Output** to ramp.
+
+**800. It draws with nothing wired in.** The Mandelbrot wired only into an output. *Pass:* the set shows at once, with no note; switching it off shows the ground; wiring `scene` into it changes nothing at mix 1. *Fail:* black, or a note that it reads nothing.
+
+**801. The coloured inside deep in.** **Inside** coloured, at the seahorse (Centre −0.743643887037151, 0.131825904205330): Zoom 1e6 and then 9e6, **Steps** 6000. Turn **Cycle** from 64 up to 1024. Then the whole set at Zoom 1, **Tier** direct. *Pass:* each minibrot and bulb shows smooth rings round its centre, finer toward its edge, with no flat grey fill, no rectangular blocks and no flat discs. The rings' spacing follows Cycle, and the whole set looks like the direct tier's. *Fail:* blocks, a flat fill where there were rings, or a seam where the tier changes. Note how slow-settling or unsettled points read: one flat colour, the cap's.
+
+**802. c on a Julia slice.** **Slice** 1, Zoom 1.7, c −0.8 + 0.156i (the owner's patch). Route a knob or a hand onto **c drive x** at depth 1. *Pass:* full throw moves the set fast but followably, about 0.07 of c a second here. Then zoom to 50× and the same: slower in c but about as lively on screen. *Fail:* it tears the set apart in a blink, or barely moves. Note the depth that feels right: TERM_RATE (0.1) is set from it.
+
+**803. z₀ on the Mandelbrot slice, and a tilt.** Slice 0 with a hand on **z₀ drive x**; then **Slice** 0.5 with hands on both drives. *Pass:* the set morphs at a pace like a pan, never in a blink, and pan and Dive feel as before. *Fail:* a lurch when a drive starts, or the rate jumping as you hold it.
+
+**804. The bench.** `uv run python tools/mandel_bench.py --owner`. *Pass:* GPU names the M3 Max, and the lines sit near this run's: direct 1.5e4 3.1 ms, perturbation 1.5e4 5.1, 4e5 9.3, 1e7 14.9, the skip at 3e6 12.8 on and 27.4 off, coloured 1e6 47 and 9e6 90. *Fail:* any line far above, or the skip slower on than off.
+
+**805. The skip rests and wakes.** SYSTEM page, the Mandelbrot's GPU line, **Skip black** on, the inside black. The whole set at Zoom 1, then Dive into the seahorse past 3e6. *Pass:* at Zoom 1 the line matches Skip black off. Past 3e6 it drops to about half of off within a moment of arriving, and the picture never changes as it switches. *Fail:* on costs more than off anywhere, or the inside flickers.
+
+**806. The tier switch after the rewrite.** Dive steadily from 1× through 10⁴× to 10⁸× into the seahorse valley, inside black and then coloured. *Pass:* no seam, flash or shift at 10⁴×. *Fail:* any of them.
+
+**807. Every power deep in.** **Power** 3, 5 and 8 at 10⁵×, on a boundary. *Pass:* the picture is detailed and steady, with no speckle or flat glitch regions, and the frame rate is near Power 2's. *Fail:* speckle, a wrong-looking set, or a large cost.
 ## FC. Control widgets (rows 1020–1029, 2026-11-22)
 
 Plan 82. Headless: `tests/test_control_widgets.py` (the parse, the shapes, the ticks; a pad, a knob and a bipolar fader driven by `tests/ui_driver.py`). The pictures in `assets/82-control-widgets/` were made on Mesa's software rasteriser; nothing here was seen on the Mac. Hot reload carries it: no new module, no new field on a live object. While playing, note answers to the plan doc's open style questions (`82-control-widgets.md`, "Open style questions"): sizes, throws, the detent's pull, the ticks' look.
