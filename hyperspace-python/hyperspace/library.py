@@ -1339,23 +1339,59 @@ class Install:
         the desk reads as "nothing to confirm" (midi.py blinks no light)."""
         return self._save_new(None)
 
-    def _save_new(self, at: int | None) -> bool:
-        """`save_new` into slot `at`, or the next empty one when None."""
+    def save_named(self, name: str) -> bool:
+        """`save_new` under a name the person gave (plan 88: **save as name…** and
+        **save to location…** on GRAPH's deck row): `name` is folder-qualified
+        (``4-install-nov/distort/moo final``), its folder made when it is new. The
+        same save as `save_new` in every other way — the new patch becomes the loaded
+        one, takes the next empty pad, the show is written — and it never writes over
+        a file either: a name taken (`_taken`, the bank's names) or one that could
+        name no file (``../x``) is refused, with why in `bank_error` and on the
+        warning line. True when it was saved."""
+        name = "/".join(seg.strip() for seg in str(name).strip().split("/"))
+        lib = self.lib
+        key = lib._fold(LOADABLE, name) if name and not name.endswith("/") else None
+        if key is None:
+            return self._refuse(f"{name or 'an empty name'}: not a name a patch can have")
+        if key in self._taken_now():
+            return self._refuse(f"{name}: there is a patch of that name already — "
+                                "pick another, nothing is written over")
+        return self._save_new(None, name)
+
+    def next_save_name(self) -> str:
+        """The name `save_new` would give now: the loaded patch's grown (moo → moo 2),
+        in its folder; ``PATCH <n>`` at the top with nothing loaded."""
+        lib = self.lib
+        taken = self._taken_now()
+        folder, base = lib.folder_of(LOADABLE, lib.current(LOADABLE))
+        leaf = next_name(base, taken, key=lambda n: lib._fold(
+            LOADABLE, f"{folder}/{n}" if folder else n))
+        return f"{folder}/{leaf}" if folder else leaf
+
+    def _taken_now(self) -> set:
+        # stems as slugs: on a filesystem that folds case, `Trip-2.json`
+        # is the file a save of "TRIP 2" would write over
+        lib = self.lib
+        return lib._taken(LOADABLE) | {lib._fold(LOADABLE, n) for n in self.bank if n}
+
+    def _refuse(self, why: str) -> bool:
+        self.bank_error = f"patches: {why}"
+        self.lib.say(warning=self.bank_error)
+        return False
+
+    def _save_new(self, at: int | None, name: str | None = None) -> bool:
+        """`save_new` into slot `at`, or the next empty one when None; under `name`
+        (`save_named`, checked there), else the next name grown from the loaded one."""
         lib, loaded_patch = self.lib, self._loader()
         if lib.reg is None:
             return False
         if loaded_patch is None:
             self.bank_error = "patches: no patch loader"
             return False
-        # stems as slugs: on a filesystem that folds case, `Trip-2.json`
-        # is the file a save of "TRIP 2" would write over. Plan 48 row 587:
-        # the new loadable patch lands beside the loaded one — in its folder, the
-        # library's root for a top-level one or none loaded
-        taken = lib._taken(LOADABLE) | {lib._fold(LOADABLE, n) for n in self.bank if n}
-        folder, base = lib.folder_of(LOADABLE, lib.current(LOADABLE))
-        leaf = next_name(base, taken, key=lambda n: lib._fold(
-            LOADABLE, f"{folder}/{n}" if folder else n))
-        name = f"{folder}/{leaf}" if folder else leaf
+        # Plan 48 row 587: the new loadable patch lands beside the loaded one — in
+        # its folder, the library's root for a top-level one or none loaded
+        if name is None:
+            name = self.next_save_name()
         try:
             loaded_patch.save_as(name)
         except (LibraryError, OSError) as e:          # a full disk must not stop the show
