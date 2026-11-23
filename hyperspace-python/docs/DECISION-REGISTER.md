@@ -915,6 +915,16 @@ here; overturn → the change, then the same.
 | 1027 | Plan 82: the pad sets X and Y where it is pressed (Y up), ⇧ a tenth from where they were, and once ⇧ joins a drag it stays relative until let go (no jump); each knob a vertical drag, 200 px a throw, ⇧ a tenth, a double-click to its detent; Z by its knob only (no scroll over the pad); no typing into a knob | 823, 824 | (rec) — pending the owner |
 | 1028 | Plan 82: a lane on a pad shows as a white dot (and halo) where the lanes have it, a line from the bases' dot, and a white tick on each knob; the pad's head is its label alone, each knob's base under it and its effective value on a second line, both inside its column | 825 | (rec) — pending the owner |
 | 1029 | Plan 82: `ui_fx.strip` (outside the row's files) draws a pad at its first param's place instead of its sliders, pads resolved before the strip packs its rows (`ui_fx.pad_rows`); without the kit the sliders stay | 823 | (rec) — pending the owner |
+| 1050 | Plan 85: the show look in code is on, BONES, PLAIN, 50% (`ghost.SHOW_LOOK`; #459 had BONES in GLASS at 35%, the 2026-11-15 look). The app sets the on-air renderer's hands state to it at startup, deck 2's sibling gets one, and every extra hands node's state starts from it (`GraphSection.land`), so New patch carries it. `GhostState()` stays the neutral draw (off, HANDS, PLAIN, 60%) the ghost and render tests and the goldens measure | 850 | owner — 2026-11-18 |
+| 1051 | Plan 85: `tools/set_hands_look.py` sets the library's patches to the show look: every loadable patch under `loadable/` and `presets/`, every folder down (the era folders), as `migrate_library.loadable_files` lists them; `ghost.*` and each extra hands node's `ghost.<n>.*` `on`, `alpha`, `style`, `material` set, `guide`, `tethers`, the room's `mirror`, routes and desk rows untouched. A dry run by default; `--apply` refuses while the app is open on this Mac, backs the whole library up to `<home>/library-backup-<stamp>/` first, and writes atomically in the app's layout (`loadable.dumps`). A file that is no loadable patch or does not load is named and left | 851 | owner — 2026-11-23: accepted as built |
+| 1052 | Plan 85: a hands layer that reaches no output (`graph.reaches`) gets the standard wires, each only where missing: `hands → hands.layer.hands`, `hands.layer → output.all.hands`, `hands.layer → output.all.guide` (as #459's 2026-11-15 run did for 20 presets). A layer that reaches an output any other way is left as wired. Each changed patch is loaded again from what would be written; one whose load notes change is named and not written | 851, 852 | owner — 2026-11-23: accepted as built |
+| 1053 | Plan 85: the test corpus (`tests/corpus/loadable`) is not set to the show look: it keeps the neutral hands, so no golden frame moves; the tool is never run on it but on tmp copies in its tests. The golden rig holds an extra hands node a fixture sets no values for (`hands-glass-only`'s `ghost.2`) at `GhostState()`'s look, as it already holds its `on` | — | owner — 2026-11-23: accepted as built |
+| 1030 | Plan 83: **save as** sits on GRAPH's deck row beside **load…** and presses `preset.save_new`, the one action START held on a pad and a learned button press: the deck the panel is on, saved as a new loadable patch named from the loaded one (moo → moo 2) in that patch's folder, never over a file. No new param: the chip's right-click is that param's menu, so Learn puts the same press on a desk or pad button | 830, 831, 832 | owner (2026-11-23, as recommended) |
+| 1031 | Plan 83: the chip's save takes the next empty pad, as `preset.save_new` always has (a full bank saves to the list and says so); a save from the panel that left the pads alone would be a second action with the same words | 830 | owner (2026-11-23, as recommended) |
+| 1032 | Plan 83: with nothing loaded, save as writes at the library's top level, named `PATCH <n>` as the pad's hold names | 833 | owner (2026-11-23, as recommended) |
+| 1033 | Plan 83: after a save the chip reads "saved <name>" (its folder left off, elided), lit, for 4 s (`ui_loadable.SAVED_S`); the full name on its hover and on the footer. A pad's or a learned button's press says it on the footer only | 830 | owner (2026-11-23, as recommended) |
+| 1034 | Plan 83: the playlist's entries are a list of their own that scrolls, as tall as the screen leaves under the popup (never under three rows), with the add list under it always in view; each entry is one row 34 px tall (`ui_playlist.ROW_H`): its place and name, its dwell, a square × | 834 | owner (2026-11-23, as recommended) |
+| 1035 | Plan 83: the entry on air is scrolled to the list's middle when the popup opens and each time it changes; between, a hand's scroll is left where it put the list | 835 | owner (2026-11-23, as recommended) |
 
 "—": no hand check shows it; tests only.
 
@@ -15403,6 +15413,74 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** (rec) — pending the owner.
 - **Built.** `ui_fx.strip`, `ui_fields.inline_pad`; `tests/test_control_widgets.py::test_the_strip_draws_no_slider_for_a_padded_param`.
 - **Judge it.** 823.
+### 1050. The show look in code: BONES, PLAIN, 50%
+
+- **What.** The owner changed the show's ghost hands on 2026-11-18: on, BONES style, PLAIN material, 50% opacity. `ghost.SHOW_LOOK` holds it and `ghost.show_look(state)` applies it. The app applies it to the on-air renderer's hands at startup, to deck 2's sibling, and to every extra hands node's fresh state, so a new patch's values and **New patch** carry it. `GhostState()` keeps its neutral defaults: changing them broke 14 ghost and render tests in #459 and would move the goldens.
+- **Answer.** owner — 2026-11-18 (supersedes #459's GLASS at 35%, 2026-11-15).
+- **Built.** `ghost.SHOW_LOOK`, `ghost.show_look`; `app.main` (two calls), `loadable.GraphSection.land`; `tests/test_ghost.py::test_the_show_look_is_bones_in_plain_on_at_50_and_the_bare_state_stays_neutral`.
+- **Judge it.** 850.
+
+### 1051. A tool sets the library's patches to the show look
+
+- **What.** A patch's hands look is the patch's values (plan 44 D3), so changing the code default changes no saved patch. `tools/set_hands_look.py` walks the library's loadable patches every folder down, sets each hands node's `on`, `alpha`, `style` and `material` to `SHOW_LOOK`, and leaves everything else. A dry run by default; `--apply` backs up the whole library first (`migrate_library.backup`) and refuses while the app is open on this Mac. A second run finds nothing to do.
+- **Answer.** owner — 2026-11-23: accepted as built (the recommendation).
+- **Built.** `tools/set_hands_look.py`; `tests/test_set_hands_look.py`.
+- **Judge it.** 851.
+
+### 1052. An unwired hands layer gets the standard wires
+
+- **What.** The 2026-11-15 run found 20 presets whose hands layer reached no output, so the look did nothing there; it wired them by hand. The tool does the same: a layer outside `graph.reaches` gets `hands → hands.layer.hands`, `hands.layer → output.all.hands` and `hands.layer → output.all.guide`, each only where missing. A layer reaching an output another way is left as it is. Each patch is loaded again from what would be written; one whose load notes change is not written.
+- **Answer.** owner — 2026-11-23: accepted as built (the recommendation).
+- **Built.** `set_hands_look.wire_layer`, `set_hands_look.plan`.
+- **Judge it.** 851, 852.
+
+### 1053. The test corpus keeps the neutral hands
+
+- **What.** The corpus is what the goldens draw. Setting it to the show look would turn the hands on in every corpus golden, and only the M3 Max can re-record those. So the corpus keeps the neutral look and the tool is tested on tmp copies.
+- **Answer.** owner — 2026-11-23: accepted as built (the recommendation).
+- **Built.** Nothing in the corpus; `tests/test_set_hands_look.py` copies it. `tools/golden_frames.py`: the rig sets an extra hands node's `alpha`, `style` and `material` to `GhostState()`'s where the file sets none, so `hands-glass-only` draws its second node as it was recorded.
+- **Judge it.** No hand check.
+### 1030. Save as beside load…, one action
+
+- **What.** Plan 83: **save as** sits on GRAPH's deck row beside **load…** and presses `preset.save_new`, the one action START held on a pad and a learned button press: the deck the panel is on, saved as a new loadable patch named from the loaded one (moo → moo 2) in that patch's folder, never over a file. No new param: the chip's right-click is that param's menu, so Learn puts the same press on a desk or pad button.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_loadable.save_as_chip`, `save_as`, `ui_graph._deck_row`; `tests/test_save_live.py::test_one_click_saves_a_new_patch_in_its_folder_that_loads_back_equal`, `::test_a_second_click_never_overwrites`, `::test_it_is_the_learnable_action_a_pad_presses`.
+- **Judge it.** 830, 831, 832.
+
+### 1031. Save as takes the next empty pad
+
+- **What.** Plan 83: the chip's save takes the next empty pad, as `preset.save_new` always has (a full bank saves to the list and says so); a save from the panel that left the pads alone would be a second action with the same words.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `library.Install.save_new` (unchanged); `tests/test_save_live.py::test_one_click_saves_a_new_patch_in_its_folder_that_loads_back_equal`.
+- **Judge it.** 830.
+
+### 1032. Save as with nothing loaded
+
+- **What.** Plan 83: with nothing loaded, save as writes at the library's top level, named `PATCH <n>` as the pad's hold names.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `library.Install._save_new` (unchanged); `tests/test_save_live.py::test_with_nothing_loaded_it_saves_at_the_top_named_as_the_pads_hold_names`.
+- **Judge it.** 833.
+
+### 1033. The new name, for a moment
+
+- **What.** Plan 83: after a save the chip reads "saved <name>" (its folder left off, elided), lit, for 4 s (`ui_loadable.SAVED_S`); the full name on its hover and on the footer. A pad's or a learned button's press says it on the footer only.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_loadable.save_as_label`, `SAVED_S`; `tests/test_save_live.py::test_one_click_saves_a_new_patch_in_its_folder_that_loads_back_equal`, `::test_nothing_saved_shows_no_name`.
+- **Judge it.** 830.
+
+### 1034. The playlist's entries scroll
+
+- **What.** Plan 83: the playlist's entries are a list of their own that scrolls, as tall as the screen leaves under the popup (never under three rows), with the add list under it always in view; each entry is one row 34 px tall (`ui_playlist.ROW_H`): its place and name, its dwell, a square ×.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_playlist._entries`, `_row`, `_room`; `tests/test_save_live.py::test_forty_entries_stay_on_screen_and_the_playing_row_is_in_view`, `::test_a_click_on_a_row_far_down_lands_on_that_row`.
+- **Judge it.** 834.
+
+### 1035. The entry on air stays in view
+
+- **What.** Plan 83: the entry on air is scrolled to the list's middle when the popup opens and each time it changes; between, a hand's scroll is left where it put the list.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_playlist._entries`, `popup`; `tests/test_save_live.py::test_the_list_scrolls_under_the_wheel_and_follows_the_look_on_air`.
+- **Judge it.** 835.
 ### 902. A FRACTAL section, and a fractal's controls are the look's own
 
 - **What.** Plan 64: a side-pane section `fractal` (appended to `ui.PAGE_KEYS`, every saved slot kept) holds what controls a fractal: what it is and where the view is (levels in, inside or outside, the zoom), **Detail** (`view.frac_detail`, 0.35–3×: the split size's reciprocal), **Reach** (`view.frac_far`, −1.5 to +2 octaves on how far cells are drawn) and **Near** (`view.frac_near`, ±1 octave on how near the eye a cell dissolves), **Additive** (moved out of VIEW) and **To the top**. On another shape it says how to pick one. Detail, Reach and Near are the look's own and routable, saved under an optional loadable-patch key `"fractal": {"detail", "far", "near"}` (`loadable.FRACTAL_KEY`) written only while the look's shape is a fractal — every other look saves byte for byte as before — and read on load (the fractal's own, 1, 0 and 0, when absent; a value that is not a number refused, one out of range held to it, each said); in the dirty signature.

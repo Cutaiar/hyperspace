@@ -426,6 +426,11 @@ class Rig:
             own = Path(self._home.name) / "loadable"
             own.mkdir(parents=True, exist_ok=True)
             (own / f"{slug}.json").write_bytes(Path(source).read_bytes())
+        # (plan 85: only a golden fixture's extra hands node is held at the neutral
+        # look — a library patch drawn here, `migrate_library`'s check with a show,
+        # keeps what its load gives it)
+        self.set_by_file = (_value_ids(source) if slug in FIXTURE_LOADABLES and library is None
+                            and not show else None)
         if library is not None:
             import shutil
 
@@ -453,6 +458,13 @@ class Rig:
         # declares one, so no other golden sees this
         for pid in [p.id for p in reg if re.fullmatch(r"ghost\.[0-9]+\.on", p.id)]:
             reg[pid].set(True)
+            # plan 85: an extra hands node starts at the show look (`ghost.SHOW_LOOK`)
+            # where the file sets none; the goldens draw the neutral `GhostState()`
+            pre, bare = pid.removesuffix(".on"), GhostState()
+            for k in ("alpha", "style", "material"):
+                if (self.set_by_file is not None and f"{pre}.{k}" in reg
+                        and f"{pre}.{k}" not in self.set_by_file):
+                    reg[f"{pre}.{k}"].set(getattr(bare, k))
         self.io = HandsIO(HandSettings.from_config({}), {"enabled": True},
                           source=FakeHands(lambda: self.t, hands == "present"),
                           out=NullOut(), clock=lambda: self.t)
@@ -895,6 +907,15 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
     finally:
         rig.close()
         _PARK.use()        # never free a bound framebuffer (see test_outputs.today)
+
+
+def _value_ids(source) -> set[str]:
+    """The ids loadable patch file `source` sets in its ``values`` (none for none)."""
+    try:
+        vals = json.loads(Path(source).read_text()).get("values") if source else None
+    except (OSError, ValueError, AttributeError):
+        return set()
+    return set(vals) if isinstance(vals, dict) else set()
 
 
 def picture(source: Path, *, slug: str = "picture", library: Path | None = None,

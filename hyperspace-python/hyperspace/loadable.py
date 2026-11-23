@@ -142,7 +142,7 @@ from typing import Any
 from . import apc40, fractal, graphmigrate, graphview, modifiers, nodemode, patches, routing, undo
 from .fx import declare as declare_fx
 from .geometry import SHAPES
-from .ghost import GhostState
+from .ghost import GhostState, show_look
 from .ghost import prefix as ghost_prefix
 from .ghost import register as declare_ghost
 from .graph import (
@@ -475,7 +475,7 @@ class GraphSection:
         for name in sorted(self.declared - set(want)):
             reg.remove_prefix(name + ".")
         for name, n in want.items():
-            declare_ghost(reg, self.states.setdefault(name, GhostState()), n)
+            declare_ghost(reg, self.states.setdefault(name, show_look()), n)
         self.declared = set(want)
         self._settle(spec)
         self.spec, self.doc = spec, copy.deepcopy(doc)
