@@ -5921,8 +5921,9 @@ class Composite(Node):
             if tex is None:
                 return
             with frame.timed(self.name):
+                # (plan 87: on a keyed picture's holes the over adds its coverage)
                 lay(frame, self.blend, over, self.inputs["depth"], dst, (0, 0, *size),
-                    r.fx.opaque)
+                    r.fx.opaque and not self.keeps_alpha)
         except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
             r._hands_failed(e, frame.target, frame.vp)
 
@@ -7060,11 +7061,21 @@ class _Build:
             return got
         if isinstance(got, MediaNode):
             got.keyed = name
-            got.keeps_alpha = self.laid_over(name)
+            got.keeps_alpha = self._keeps(name)
             return got
         key = self._keep(KeyNode(f"{name}(key)", name, image=got))
-        key.keeps_alpha = self.laid_over(name)
+        key.keeps_alpha = self._keeps(name)
         return key
+
+    def _keeps(self, name: str, seen: frozenset[str] = frozenset()) -> bool:
+        """Plan 87: whether keyed node `name`'s picture is laid over another —
+        `laid_over`, or through a switch that is (a switch paints its pick
+        straight into its consumer). Asked of keyed nodes alone, so no
+        unkeyed picture changes how it paints."""
+        if self.laid_over(name):
+            return True
+        return any(self._keeps(w.node, seen | {w.node}) for w in self.wires
+                   if w.src == name and w.node not in seen and _kind(w.node) == "switch")
 
     def _make(self, name: str) -> Node | None:
         kind = _kind(name)
@@ -7111,12 +7122,16 @@ class _Build:
                 # a channel straight in: the plan 32 backdrop, node for node
                 media = MediaNode(channel_name(self.back_channel), self.back_channel,
                                   alpha_of="backdrop_alpha")
-                if channel_name(self.back_channel) in getattr(self.wiring, "keys", ()):
+                keyed = channel_name(self.back_channel) in getattr(self.wiring, "keys", ())
+                if keyed:
                     # plan 87: keyed, its black shows the ground under it
                     media.keyed = channel_name(self.back_channel)
                     media.keeps_alpha = True
                 under = self._keep(media)
-                return self._keep(Composite(BACKDROP, blend="over", over=over, under=under))
+                back = Composite(BACKDROP, blend="over", over=over, under=under)
+                # (and the scene laid on it adds its own coverage over the holes)
+                back.keeps_alpha = keyed
+                return self._keep(back)
             wired = self._one("backdrop.image") is not None
             return self._keep(Composite(BACKDROP, blend="over", over=over,
                                         under=self._from("backdrop.image"),

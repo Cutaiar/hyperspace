@@ -241,6 +241,60 @@ def test_the_selection_shows_a_keyed_nodes_knobs(tmp_path):
         assert not any(n.id == "group:key" for n in view.nodes)
 
 
+def test_a_keyed_picture_through_a_switch_keeps_its_alpha():
+    """Review of #479 (second pass): a keyed channel picked by a switch into
+    Fade laid over another picture keeps its alpha (a switch paints its pick
+    straight in); not laid over, it paints as ever."""
+    nodes = [{"kind": "switch"}, {"kind": "composite"}, {"kind": "effect", "file": "fade"}]
+    over = (("channel.a", "switch.in1"), ("switch", "fade.image"), ("fade", "composite.over"),
+            ("channel.b", "composite.under"), ("composite", "output.all.image"))
+    g = _built(["channel.a"], over, nodes, effects=("fade",))
+    (a,) = [n for n in g.order if isinstance(n, G.MediaNode) and n.channel == "a"]
+    assert a.keyed == "channel.a" and a.keeps_alpha
+    straight = (("channel.a", "switch.in1"), ("switch", "output.all.image"))
+    g = _built(["channel.a"], straight, [{"kind": "switch"}])
+    (a,) = [n for n in g.order if isinstance(n, G.MediaNode)]
+    assert a.keyed == "channel.a" and not a.keeps_alpha
+
+
+def test_a_keyed_backdrop_lays_its_scene_with_coverage():
+    """Review of #479 (second pass): the backdrop over a keyed channel lays
+    its scene adding the scene's coverage over the channel's clear holes;
+    an unkeyed backdrop lays it as it always did."""
+    wires = (("shape", "scene.geometry"), ("scene", "backdrop.scene"),
+             ("channel.a", "backdrop.image"), ("backdrop", "output.all.image"))
+    for keys, want in ((["channel.a"], True), (None, False)):
+        g = _built(keys, wires, [{"kind": "backdrop"}])
+        (back,) = [n for n in g.order if isinstance(n, G.Composite)]
+        assert back.keeps_alpha is want, keys
+
+
+def test_an_effects_key_toggles_are_checkboxes(monkeypatch):
+    """Review of #479 (second pass): under an effect's strip, keep colour and
+    invert are drawn as checkboxes (`ui_graph._param_row`), never sliders —
+    a slider's write refuses a toggle."""
+    from types import SimpleNamespace
+
+    from hyperspace import ui, ui_graph
+    from hyperspace.params import Registry
+    reg = Registry()
+    declare_keys(reg, ["fade"])
+    drawn: list[tuple[str, str]] = []
+    panel = SimpleNamespace(
+        reg=reg, _real=lambda p: p,
+        _row=lambda pid, **k: drawn.append(("row", pid)),
+        _check=lambda pid, **k: drawn.append(("check", pid)),
+        _label_cell=lambda *a, **k: None, _ctx_label=lambda *a, **k: None)
+    monkeypatch.setattr(ui_graph.imgui, "separator", lambda: None)
+    monkeypatch.setattr(ui, "_micro", lambda *a, **k: None)
+    ports = [SimpleNamespace(id=f"pin:{pid}", param=pid) for pid in key_ids("fade")]
+    ports.append(SimpleNamespace(id="pin:fx.fade.level", param=None))     # not a key knob
+    ui_graph._key_rows(panel, SimpleNamespace(ports=ports))
+    kinds = {pid: how for how, pid in drawn}
+    assert kinds["key.fade.keep"] == kinds["key.fade.invert"] == "check"
+    assert kinds["key.fade.level"] == kinds["key.fade.measure"] == "row"
+
+
 # ---------------------------------------------------------------- the patch
 
 @pytest.fixture()

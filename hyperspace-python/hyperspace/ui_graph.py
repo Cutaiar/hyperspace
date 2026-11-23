@@ -4876,14 +4876,15 @@ def _key_rows(panel, n: graphview.VNode) -> None:
     """Plan 87: a keyed effect's black is clear knobs (`key.<name>.*`) under
     its strip, which shows only the effect file's own params; a node of any
     other kind has them among its rows (`graphview.OWNERS`)."""
-    pids = [p.id for p in n.ports if p.param is not None and p.group == KEY_GROUP]
-    pids = [pid for pid in dict.fromkeys(pids) if pid in panel.reg]
+    pids = [p.param for p in n.ports if p.param is not None]
+    pids = [pid for pid in dict.fromkeys(pids)
+            if pid in panel.reg and panel.reg[pid].group == KEY_GROUP]
     if not pids:
         return
     imgui.separator()
     ui._micro(KEY_ITEM)
     for pid in pids:
-        panel._row(pid)
+        _param_row(panel, pid)          # (a toggle its checkbox, as on any node)
 
 
 def _param_rows(panel, st: dict, n: graphview.VNode) -> bool:
