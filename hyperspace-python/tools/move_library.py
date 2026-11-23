@@ -35,6 +35,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent.parent
 # folders of the home that are not the library (D3), or not to be copied
 SKIP_DIRS = {"weights", "trash", "bindings", "media", "media-cache"}
+# the folders copied every folder down, as the app lists them
+DEEP_DIRS = ("loadable", "presets", "patches")
 # where `clear` puts what was copied: HOME/old-local-library-<YYYYMMDD-HHMMSS>/
 ARCHIVE = "old-local-library-"
 
@@ -70,7 +72,9 @@ def files(root: Path) -> list[Path]:
         if (folder.name in SKIP_DIRS or folder.name.startswith(".")
                 or folder.name.startswith(ARCHIVE)):
             continue
-        found = _walk(folder) if folder.name in ("loadable", "presets") else sorted(folder.glob("*.json"))
+        # every folder down where the app reads every folder down: the loadable patches
+        # (plan 48) and the patches, whose groups' are in ``patches/<group>/`` (plan 50)
+        found = _walk(folder) if folder.name in DEEP_DIRS else sorted(folder.glob("*.json"))
         for f in found:
             if f.name.startswith(".") or ".bak-" in f.name or not f.is_file():
                 continue
@@ -86,6 +90,14 @@ def move(dest: Path, home: Path, *, dry_run: bool = False,
         raise SystemExit(f"move_library: {home} is not a folder")
     if dest.resolve() == home.resolve():
         raise SystemExit("move_library: DEST is HOME — nothing to move")
+    # a home in the old layout (`presets/`, `projects/`): copied as it is, its presets would
+    # sit in a folder a moved library never reads (`library.loadable_dir`) — so the one
+    # migration goes first (review of #480)
+    old = _library().not_moved(home)
+    if old:
+        raise SystemExit(f"move_library: {home} still has files in {' and '.join(old)} (the "
+                         "old layout): quit Hyperspace, run tools/migrate_library.py --library "
+                         f'"{home}" --apply, then run this again. Nothing was copied')
     done: list[tuple[str, Path]] = []
     if not dry_run:
         dest.mkdir(parents=True, exist_ok=True)

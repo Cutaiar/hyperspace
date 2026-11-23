@@ -7,6 +7,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 
 spec = importlib.util.spec_from_file_location("move_library", ROOT / "tools" / "move_library.py")
@@ -184,3 +186,34 @@ def test_keep_and_dry_run_leave_the_home_as_it_was(tmp_path):
     assert ml.main([str(tmp_path / "a"), "--from", str(home), "--dry-run"]) == 0
     assert ml.main([str(tmp_path / "b"), "--from", str(home), "--keep"]) == 0
     assert snapshot(home) == before
+
+
+def test_group_patches_are_copied_before_their_folder_is_cleared(tmp_path):
+    """Review of #480: a patch of one group sits in ``patches/<group>/`` (plan 50) — copied,
+    in a mixed folder and in one of group patches alone, before the folder goes aside."""
+    for only_groups in (False, True):
+        home = a_home(tmp_path / str(only_groups))
+        (home / "patches" / "camera").mkdir(parents=True)
+        (home / "patches" / "camera" / "wide.json").write_text('{"name": "Wide"}')
+        if not only_groups:
+            (home / "patches" / "glow.json").write_text('{"name": "Glow"}')
+        dest = home.parent / "shared"
+        assert ml.main([str(dest), "--from", str(home)]) == 0
+        assert (dest / "patches" / "camera" / "wide.json").read_text() == '{"name": "Wide"}'
+        assert (dest / "patches" / "glow.json").is_file() != only_groups
+        assert not (home / "patches").exists()
+
+
+def test_an_old_layout_home_is_refused_and_left_alone(tmp_path):
+    """Review of #480: `presets/` copied into a library that reads `loadable/` would never
+    show — the tool says to run the one migration first and touches nothing."""
+    home = a_home(tmp_path)
+    (home / "presets").mkdir()
+    (home / "presets" / "trip.json").write_text('{"name": "TRIP"}')
+    before = snapshot(home)
+    dest = tmp_path / "shared"
+    (dest / "loadable").mkdir(parents=True)
+    with pytest.raises(SystemExit, match="migrate_library.py"):
+        ml.main([str(dest), "--from", str(home)])
+    assert snapshot(home) == before
+    assert list((dest / "loadable").iterdir()) == []

@@ -273,3 +273,15 @@ def test_ensure_home_makes_the_home_and_no_library_in_it(tmp_path):
     home = tmp_path / "fresh"
     assert library.ensure_home(home, cwd=tmp_path) == home
     assert home.is_dir() and list(home.iterdir()) == []
+
+
+def test_strays_name_no_folder_when_there_is_no_library(tmp_path):
+    """Review of #480: with no library (none set, config.toml unread, the folder gone) the
+    words name no destination — the tool would fill a folder that is not the library."""
+    home = tmp_path / "home"
+    (home / "loadable").mkdir(parents=True)
+    (home / "loadable" / "trip.json").write_text("{}")
+    for name in (library.NO_LIBRARY, "(config.toml did not read)", "Gone"):
+        lib = Library(home / name, machine=home, period=0.0)
+        assert lib.missing is not None and "loadable/" in lib.strays
+        assert name not in lib.strays and "Fix [library] path" in lib.strays

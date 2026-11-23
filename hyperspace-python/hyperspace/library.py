@@ -398,6 +398,11 @@ def missing_text(path: Path) -> str:
 LIBRARY_DIRS = ("loadable", "presets", "patches", "installs", "projects", "playlists")
 STRAY_WORDS = ("{home} still holds an old local library ({where}): it is not used. Quit, then "
                "run tools/move_library.py \"{library}\" to fold it into the library")
+# …and with no library to fold it into (none set, config.toml unread, the folder gone): no
+# command naming a folder that is not the library, which the tool would fill (review of #480)
+STRAY_NO_LIBRARY_WORDS = ("{home} still holds an old local library ({where}): it is not used. "
+                          "Fix [library] path in config.toml and restart first, then run "
+                          "tools/move_library.py with that folder")
 
 
 def strays(machine: Path) -> list[str]:
@@ -2113,10 +2118,8 @@ class Library:
         # a machine home apart from the library that still holds library folders: said on
         # the SYSTEM page and the footer at launch (app.py), never read
         left = strays(self.machine) if self.machine != self.home else []
-        self.strays = (STRAY_WORDS.format(home=self.machine, where=", ".join(left),
-                                          library=("<the Google Drive Hyperspace folder>"
-                                                   if self.home.name == NO_LIBRARY
-                                                   else self.home))
+        words = STRAY_WORDS if self.missing is None else STRAY_NO_LIBRARY_WORDS
+        self.strays = (words.format(home=self.machine, where=", ".join(left), library=self.home)
                        if left else "")
         self._open_default()
         self._mtimes = self._scan()
