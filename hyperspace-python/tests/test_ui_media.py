@@ -346,3 +346,39 @@ def test_a_big_library_costs_what_is_in_view(rig, tmp_path, monkeypatch):
     assert len(decodes) <= len(seen)                 # one per row that was drawn, once
     assert max(handed) <= ui_media.UPLOADS and max(made) <= UI_UPLOADS
     assert st["listing"][1] is listing               # not rebuilt: the scan stood still
+
+
+# ---- drop and paste ----
+
+def _pngs(tmp_path, n):
+    from PIL import Image
+    out = []
+    for k in range(n):
+        p = tmp_path / f"p{k}.png"
+        Image.new("RGB", (4, 4)).save(p)
+        out.append(str(p))
+    return out
+
+
+def test_dropped_files_fill_the_selected_channels_next_empty_cells_and_cue_the_last(rig, tmp_path):
+    folder = FakeFolder()
+    state = attach(rig, folder)
+    ui_media._state(rig.panel)["sel"] = "b"
+    state.assign("b", 0, "file:/old.png")
+    (tmp_path / "notes.txt").write_text("x")
+    ui_media.DROPPED[:] = [*_pngs(tmp_path, 2), str(tmp_path / "notes.txt")]
+    ui_media.poll_intake(rig.panel)
+    assert [s for s in state.channels["b"].bin[:3]] == ["file:/old.png", folder.added[0], folder.added[1]]
+    assert len(folder.added) == 2                    # the text file was left out
+    assert rig.reg["media.b.slot"].base == 2.0 or state.channels["b"].slot == 2.0
+    assert ui_media.DROPPED == []
+
+
+def test_a_full_channel_overflows_into_the_next(rig, tmp_path):
+    folder = FakeFolder()
+    state = attach(rig, folder)
+    for i in range(BIN):
+        state.assign("a", i, f"file:/x{i}.png")
+    ui_media.intake(rig.panel, _pngs(tmp_path, 1))
+    assert state.channels["b"].bin[0] == folder.added[0]
+    assert ui_media._state(rig.panel)["sel"] == "b"

@@ -97,6 +97,7 @@ from . import (
     tempo,
     totem,
     ui_browse,
+    ui_media,
 )
 from . import field as field_mod
 from . import ghost as ghosts
@@ -1807,6 +1808,11 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # does — a section, or the selection with the node it showed; they claim
     # [ and ]'s edge the same way, so brightness (the table's bare [ ]) never
     # hears them
+    # ⌘V pastes the clipboard's picture into the selected channel's next empty
+    # cell; a file dropped on a window goes the same road (ui_media.intake)
+    if keys.super() and keys.pressed(glfw.KEY_V):
+        ui_media.paste(h.panel)
+    ui_media.poll_intake(h.panel)
     hist = getattr(h.panel, "history", None)    # (a panel from before a hot reload)
     if hist is not None:
         hist.note(view_of(h.panel))             # however the view changed since
@@ -2451,6 +2457,8 @@ def main(argv: list[str] | None = None) -> None:
     panel.config_notes = cfg["notes"]
     # keys from every window (`hotplug.py` points them at what's open, as is the mouse)
     keys = Keys(render_win, ctrl_win, [w for w in _slot_windows(slots) if w is not render_win])
+    for _w in (ctrl_win, render_win):       # a file dropped on either window → a media cell
+        glfw.set_drop_callback(_w, lambda _win, paths: ui_media.DROPPED.extend(paths))
     mouse = Mouse(render_win, reg, s, slots[0].switches,          # the mouse: output 1 only
                   pointer=meta.pointer(MOUSE))
 
