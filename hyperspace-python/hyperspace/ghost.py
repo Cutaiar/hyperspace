@@ -119,6 +119,23 @@ class GhostState:
     material: int = 0       # MATERIALS: what it is made of (PLAIN, the look it had)
 
 
+# The show's ghost hands (owner, 2026-11-18, plan 85; was BONES in GLASS at
+# 35% on 2026-11-15): on, BONES in PLAIN at 50% — what every library preset
+# carries (tools/set_hands_look.py). `GhostState()` stays the neutral draw the
+# tests measure; the app starts each hands node's state from this
+# (`show_look`), so a new patch's fresh values are the show's.
+SHOW_LOOK = {"on": True, "alpha": 0.5, "style": STYLES.index("BONES"),
+             "material": MATERIALS.index("PLAIN")}
+
+
+def show_look(state: GhostState | None = None) -> GhostState:
+    """`state` (a new one when None) set to SHOW_LOOK, and returned."""
+    st = state if state is not None else GhostState()
+    for k, v in SHOW_LOOK.items():
+        setattr(st, k, v)
+    return st
+
+
 def prefix(n: int = 1) -> str:
     """The n-th hands node's id prefix, by the naming rule (plan 26 A0/A4,
     ENGINEERING §2): `ghost`, then `ghost.2`, … — same group, so an extra

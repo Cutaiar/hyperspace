@@ -409,6 +409,31 @@ TINT_TIP = ("Lit: each picture cable's red leans by the colour of the picture it
             "with the patch or the install")
 TINT_SPAN = 20.0 / 360.0
 TINT_FULL = 0.25
+# plan 84: the head's **gpu cost** chip, off by default, page state only (never
+# the loadable patch's or the show's). Lit, every render node is marked by its
+# GPU time per frame: its border and ground lean from black toward a hot white by
+# its share of the costliest node's time (`heat_rgb`), a badge above it says its
+# time ("#1 · 2.10 ms" for the three costliest), and a node that made nothing
+# this frame says so instead of reading as free; the head says the frame's total
+# and its three costliest. The times are the SYSTEM page's rolling medians
+# (`render.PassTimer`), eased over `COST_TAU` seconds so the marks hold still
+# (`ease_costs`, `rank_costs`). Off, the renderer is not asked (`gpu_watch`) and
+# nothing is drawn: it costs nothing
+COST_LABEL = "gpu cost##graph"
+COST_TIP = ("Lit: every render node marked by its GPU time per frame — the costliest "
+            "glows white, the cheap ones stay dark; its time on a badge above it, and "
+            "the frame's total with the three costliest on the line under the head. "
+            "A node that made nothing this frame says so. Eased over about a second. "
+            "A view setting: not saved")
+COST_TAU = 1.0              # seconds: how slowly a node's mark follows its time
+COST_TOP = 3                # the costliest nodes the head names
+COST_FILL = 0.55            # how far a node's ground goes up the ramp at the costliest
+COST_BORDER = (1.5, 4.0)    # its border's width, cheapest to costliest (canvas units)
+COST_BADGE_H = 22.0         # the badge's height above the node (canvas units)
+COST_NOTHING = "made nothing"
+COST_FAINT = imgui.ImVec4(0.55, 0.55, 0.58, 0.9)     # "made nothing": a grey badge
+COST_INK_DARK = imgui.ImVec4(0.05, 0.05, 0.05, 1.0)  # a badge's words on a light ground
+COST_INK_LIGHT = imgui.ImVec4(0.95, 0.95, 0.95, 1.0)  # … and on a dark one
 
 
 # ---------------------------------------------------------------- state and context
@@ -444,6 +469,8 @@ def _state(panel) -> dict:
     # never saved, not an undo step
     st.setdefault("revealed", set())
     st.setdefault("tint", False)            # plan 37 C2 (D3): plain red until lit
+    st.setdefault("cost", False)            # plan 84: no gpu cost marks until lit
+    st.setdefault("cost_ms", {})            # … each node's eased time, while lit
     st.setdefault("thumb_hover", None)      # the node whose thumbnail the pointer is on
     # the effects whose thumbnail shows the test card through them, not their
     # picture (`card_shown`, the "card" chip on the thumbnail), by their
@@ -1001,6 +1028,7 @@ def page(panel, dt: float) -> None:
         ui_pane.show(panel, ui_pane.SELECTION)  # a click on the canvas: what it picked, shown
     publish(panel, st, sel)
     share(panel, st, sel)
+    _costs(panel, st, view, dt)                 # plan 84: the gpu cost marks, only while lit
     # plan 49: the pane is always on, so its chip is too (on a narrow page)
     with _dimmed(panel):
         _head(panel, st, view, True)
@@ -1530,7 +1558,12 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
         if imgui.is_item_hovered():
             ui.tooltip(BESIDE_TIP)
     _wants_chip(panel)                      # plan 40 T4: N devices missing
-    _tint_chip(st)                          # plan 37 C2 (D3): last among the chips
+    _tint_chip(st)                          # plan 37 C2 (D3)
+    # plan 84: last among the chips — on the area chips' row when this one
+    # has no room for it (a narrow page), so the head grows no row
+    cost_later = not ui.beside(ui.chip_w(COST_LABEL))
+    if not cost_later:
+        _cost_chip(st)
     # the counts after the chips, cut to what is left of the line
     imgui.same_line()
     line = head_line(st, view)
@@ -1538,6 +1571,11 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if imgui.is_item_hovered():
         ui.tooltip(line)
     _area_chips(st)
+    if cost_later:
+        ui.beside(ui.chip_w(COST_LABEL))
+        _cost_chip(st)
+    if st["cost"]:                          # plan 84: the frame's total and its costliest
+        imgui.text(ui.fit_text(st.get("cost_line", ""), imgui.get_content_region_avail().x))
     for want in window_wants(panel):       # plan 44 D3: a window the meta controller lacks
         imgui.text_colored(ui.WARN, want)
     if st["note"]:
@@ -1701,6 +1739,219 @@ def _tint_chip(st: dict) -> None:
         st["tint"] = not st["tint"]
     if imgui.is_item_hovered():
         ui.tooltip(TINT_TIP)
+
+
+# ---------------------------------------------------------------- plan 84: gpu cost at a glance
+
+def _cost_chip(st: dict) -> None:
+    """The head's **gpu cost** chip (plan 84): off by default; lit, every
+    render node is marked by its GPU time (`_costs`, `_cost_style`, `_cost_badge`).
+    Placed by the caller (`_head`: beside the tint chip, else on the area
+    chips' row)."""
+    if ui.lit_chip(COST_LABEL, st["cost"]):
+        st["cost"] = not st["cost"]
+    if imgui.is_item_hovered():
+        ui.tooltip(COST_TIP)
+
+
+def ease_costs(prev: dict[str, float], ms: dict[str, float], ran, dt: float,
+               tau: float = COST_TAU) -> dict[str, float]:
+    """Each node's time, eased (plan 84): `prev` (last frame's, ms) moved
+    toward this frame's median `ms` by 1 − e^(−dt/tau), so a mark settles in
+    about `tau` seconds whatever the frame rate and a ranking does not flicker
+    between two nodes of nearly one cost. A node new to the timer starts at its
+    time (not from 0, which would rank it cheap for a second). A node not in
+    `ran` (this frame's `gpu_ran`; None, not yet known: every node counts) made
+    nothing this frame and drops out — it is not a node of no cost."""
+    k = 1.0 - math.exp(-dt / tau) if tau > 0 and dt > 0 else (1.0 if tau <= 0 else 0.0)
+    out: dict[str, float] = {}
+    for name, v in ms.items():
+        if ran is not None and name not in ran:
+            continue
+        old = prev.get(name)
+        out[name] = float(v) if old is None else old + (float(v) - old) * k
+    return out
+
+
+def fold_owners(ms: dict[str, float], owner: dict[str, str]) -> dict[str, float]:
+    """Each pass timed under a name no canvas node carries added to the node
+    it belongs to (plan 84; `owner`, the frame's `gpu_owner`): a delay's
+    write to its delay, a look-back's capture to its look-back — so the
+    head's line never names a pass no badge shows."""
+    out: dict[str, float] = {}
+    for name, v in ms.items():
+        key = owner.get(name, name)
+        out[key] = out.get(key, 0.0) + float(v)
+    return out
+
+
+def rank_costs(ms: dict[str, float]) -> dict[str, tuple[int, float]]:
+    """Node → (rank, heat) within the frame (plan 84): rank 1 the costliest
+    (ties by name, so a tie never swaps), heat its time over the costliest's
+    (0…1: the costliest is 1, a node of no time 0; every 0 with nothing
+    costing)."""
+    order = sorted(ms.items(), key=lambda kv: (-kv[1], kv[0]))
+    top = order[0][1] if order else 0.0
+    return {name: (i + 1, (v / top) if top > 0 else 0.0) for i, (name, v) in enumerate(order)}
+
+
+def heat_rgb(k: float) -> tuple[float, float, float]:
+    """A heat 0…1 as a colour on a hot ramp (plan 84): black, through deep
+    red, orange and yellow, to white — every step brighter than the last, so
+    it reads as black-to-white for someone who cannot tell red from green."""
+    k = max(0.0, min(1.0, float(k)))
+    return (min(1.0, 3.0 * k), max(0.0, min(1.0, 3.0 * k - 1.0)), max(0.0, min(1.0, 3.0 * k - 2.0)))
+
+
+def cost_line(ms: dict[str, float], labels: dict[str, str], note: str = "",
+              top: int = COST_TOP) -> str:
+    """The head's line while the chip is lit (plan 84): the frame's total GPU
+    time over its timed nodes and its `top` costliest by label, as
+    "gpu 4.20 ms in nodes · Blocks 2.10 · Bloom 0.90 · scene 0.60"; the
+    timer's `note` when it has no times (a context with no timer queries)."""
+    if not ms:
+        return f"gpu: {note}" if note else "gpu: measuring…"
+    ranked = sorted(ms.items(), key=lambda kv: (-kv[1], kv[0]))[:top]
+    names = "  ·  ".join(f"{labels.get(n, n)} {v:.2f}" for n, v in ranked)
+    return f"gpu {sum(ms.values()):.2f} ms in nodes  ·  {names}"
+
+
+@dataclasses.dataclass(frozen=True)
+class Cost:
+    """A render node's mark this frame (plan 84): its eased time (`ms`, None
+    when it made nothing this frame), its `rank` (1 the costliest, 0 for
+    nothing) and its `heat` (0…1, its share of the costliest's time)."""
+
+    ms: float | None
+    rank: int = 0
+    heat: float = 0.0
+
+    @property
+    def words(self) -> str:
+        if self.ms is None:
+            return COST_NOTHING
+        head = f"#{self.rank} · " if 0 < self.rank <= COST_TOP else ""
+        return f"{head}{self.ms:.2f} ms"
+
+
+NOTHING = Cost(None)
+
+
+def node_cost(st: dict, n: graphview.VNode) -> Cost | None:
+    """Canvas node `n`'s gpu cost mark (plan 84), or None for none: the chip
+    off, a node that is not the frame's (the modulation side), one with no
+    pass of its own (`gpu_free`: its time is its consumer's), one the frame
+    has not reported on yet. A node with a time is its `Cost`; a render node
+    the frame did not build (faint, unreached) or built but ran nothing for
+    (an effect switched off, a branch behind a switch's unpicked input) is
+    `NOTHING`."""
+    if not st.get("cost") or n.kind not in graphview.FRAME_VKINDS:
+        return None
+    name = thumb_name(n)
+    got = st.get("cost_rank", {}).get(name)
+    if got is not None:
+        return Cost(st["cost_ms"][name], *got)
+    made = st.get("cost_made")
+    if made is None:
+        return None
+    if name not in made["gpu_built"]:
+        return NOTHING if n.faint else None
+    if name in made["gpu_ran"] or name in made["gpu_free"]:
+        return None                     # (ran: its median not read back yet)
+    return NOTHING
+
+
+def _costs(panel, st: dict, view: graphview.View, dt: float) -> None:
+    """Once a frame (plan 84): while the chip is lit, ask the renderer to say
+    what each node made (`Renderer.gpu_watch`, `render.gpu_made`) and ease
+    and rank the timer's medians (`ease_costs`, `rank_costs`), and the head's
+    line; off, forget them — no renderer flag, nothing eased, nothing drawn."""
+    if not st["cost"]:
+        if st["cost_ms"] or "cost_made" in st:
+            st["cost_ms"] = {}
+            for k in ("cost_rank", "cost_made", "cost_line", "cost_of"):
+                st.pop(k, None)
+        return
+    r = getattr(panel, "renderer", None)
+    stats = getattr(r, "stats", None) or {}
+    if r is not None:
+        r.gpu_watch = True
+    if st.get("cost_of") != id(r):          # another deck's renderer: its own history
+        st["cost_of"], st["cost_ms"] = id(r), {}
+    made = ({k: stats[k] for k in ("gpu_ran", "gpu_free", "gpu_built")}
+            if "gpu_ran" in stats else None)
+    st["cost_made"] = made
+    ms = fold_owners(stats.get("gpu_ms") or {}, stats.get("gpu_owner") or {})
+    st["cost_ms"] = ease_costs(st["cost_ms"], ms,
+                               made["gpu_ran"] if made is not None else None, dt)
+    st["cost_rank"] = rank_costs(st["cost_ms"])
+    labels = {thumb_name(n): n.label for n in view.nodes if n.kind in graphview.FRAME_VKINDS}
+    st["cost_line"] = cost_line(st["cost_ms"], labels, stats.get("gpu_note", ""))
+
+
+@contextmanager
+def _cost_style(st: dict, n: graphview.VNode):
+    """Node `n` drawn with its gpu cost (plan 84): its ground leant up the
+    hot ramp by its heat (at most `COST_FILL` of the way, so its words stay
+    legible) and its border the ramp's colour, wider the costlier; a node
+    that made nothing a thin grey border. Nothing pushed with the chip off."""
+    c = node_cost(st, n)
+    if c is None:
+        yield
+        return
+    if c.ms is None:
+        ed.push_style_color(ed.StyleColor.node_border, COST_FAINT)
+        ed.push_style_var(ed.StyleVar.node_border_width, COST_BORDER[0])
+        try:
+            yield
+        finally:
+            ed.pop_style_var()
+            ed.pop_style_color()
+        return
+    bg = ed.get_style().color_(ed.StyleColor.node_bg)
+    hot = heat_rgb(c.heat * COST_FILL)
+    k = c.heat
+    ground = imgui.ImVec4(bg.x + (hot[0] - bg.x) * k, bg.y + (hot[1] - bg.y) * k,
+                          bg.z + (hot[2] - bg.z) * k, max(bg.w, 0.9))
+    ed.push_style_color(ed.StyleColor.node_bg, ground)
+    ed.push_style_color(ed.StyleColor.node_border, imgui.ImVec4(*heat_rgb(max(c.heat, 0.15)), 1.0))
+    ed.push_style_var(ed.StyleVar.node_border_width,
+                      COST_BORDER[0] + (COST_BORDER[1] - COST_BORDER[0]) * c.heat)
+    try:
+        yield
+    finally:
+        ed.pop_style_var()
+        ed.pop_style_color(2)
+
+
+def _cost_badge(st: dict, n: graphview.VNode) -> None:
+    """Node `n`'s gpu cost badge (plan 84), just drawn: its time ("#1 ·
+    2.10 ms") or "made nothing" on a small pill sitting on its top edge,
+    right-aligned, on the canvas's draw list — over the node, never in its
+    layout, so lighting the chip moves nothing."""
+    c = node_cost(st, n)
+    if c is None:
+        return
+    k = ed.NodeId(_id(st, "n:" + n.id))
+    p, sz = ed.get_node_position(k), ed.get_node_size(k)
+    words = c.words
+    size = imgui.calc_text_size(words)
+    pad = 6.0
+    w, h = size.x + 2 * pad, max(COST_BADGE_H, size.y + 4)
+    x1 = p.x + max(float(sz.x), NODE_W) - 8.0
+    y0 = p.y - h * 0.6
+    a, b = imgui.ImVec2(x1 - w, y0), imgui.ImVec2(x1, y0 + h)
+    if c.ms is None:
+        ground, ink = imgui.ImVec4(0.12, 0.12, 0.13, 0.95), COST_FAINT
+    else:
+        rgb = heat_rgb(max(c.heat, 0.15))
+        ground = imgui.ImVec4(*rgb, 1.0)
+        ink = COST_INK_DARK if sum(rgb) > 1.2 else COST_INK_LIGHT
+    dl = imgui.get_window_draw_list()
+    dl.add_rect_filled(a, b, ui.u32(ground), h * 0.5)
+    if c.ms is None:
+        dl.add_rect(a, b, ui.u32(COST_FAINT), h * 0.5, 1.0)
+    dl.add_text(imgui.ImVec2(a.x + pad, a.y + (h - size.y) * 0.5), ui.u32(ink), words)
 
 
 def tint(hue: float, strength: float) -> tuple[float, float, float]:
@@ -2017,15 +2268,23 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     # 2026-11-01: a pin's place is this frame's or nothing — a pin not drawn
     # (a collapsed node's port) is never a drop target 300 units off the wire
     st["pin_xy"] = {}
+    st["cost_drawn"] = set()
     for n in view.nodes:
         if drawn_node(st, n):
-            _node(st, n, drawn)
+            with _cost_style(st, n):    # plan 84: nothing pushed with the chip off
+                _node(st, n, drawn)
+            if st["cost"]:
+                st["cost_drawn"].add(n.id)
     _back_pins(st, view, drawn)         # 2026-11-19: the slings' ends
     for g in view.groups:               # plan 40 T2: a folded group's node, an open one's title
         if g.open:
             _region_title(panel, st, g)
         else:
             _group_node(panel, st, view, g, drawn)
+    if st["cost"]:                      # plan 84: the badges, over the nodes just drawn
+        for n in view.nodes:
+            if n.id in st["cost_drawn"]:
+                _cost_badge(st, n)
     _want_thumbs(st, view)              # plan 37 C1: after the nodes, their sizes known
     if st["thumbs"] is not None and hasattr(st["thumbs"], "want_hues"):
         # plan 37 C2: the hues while the switch is lit, none from the frame it goes off
