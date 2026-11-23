@@ -1353,10 +1353,20 @@ class Install:
         key = lib._fold(LOADABLE, name) if name and not name.endswith("/") else None
         if key is None:
             return self._refuse(f"{name or 'an empty name'}: not a name a patch can have")
-        if key in self._taken_now() or self._on_disk(name):
+        taken = self._taken_now()
+        if key in taken or self._on_disk(name) or self._bare_taken(name, taken):
             return self._refuse(f"{name}: there is a patch of that name already — "
                                 "pick another, nothing is written over")
         return self._save_new(None, name)
+
+    def _bare_taken(self, name: str, taken: set) -> bool:
+        """In a library not yet moved (`presets/` only) a folder is no part of a name
+        (`Library._prefix`): `set-a/intro` would be listed as `intro`, the name a pad
+        of `set-b/intro.json` already holds. Its leaf alone is then what must be free."""
+        lib = self.lib
+        if loadable_dir(lib.home).name != OLD_LOADABLE:
+            return False
+        return lib._fold(LOADABLE, split_name(name)[1]) in taken
 
     def _on_disk(self, name: str) -> bool:
         """Is the file a save of `name` would write already there, by the disk's own

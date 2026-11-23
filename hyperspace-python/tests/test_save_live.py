@@ -294,6 +294,26 @@ def test_a_library_not_yet_moved_saves_into_presets(tmp_path):
         assert not (lib.home / "loadable").exists()
 
 
+def test_a_library_not_yet_moved_refuses_a_name_another_folder_holds(tmp_path):
+    """Review of #481: in `presets/` a folder is no part of a name, so `set-a/intro`
+    beside `set-b/intro` would be a second `intro`, and the pad for the first could
+    load the second. Refused; the pad still loads its own file."""
+    from hyperspace import ui_browse
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        lib.loaded_patch.save_as("set-b/intro")
+        (lib.home / "loadable").rename(lib.home / "presets")
+        mine = lib.home / "presets" / "set-b" / "intro.json"
+        lib.install.bank[0] = "intro"
+        assert lib.path_of(LOADABLE, "intro", loose=True) == mine
+        (lib.home / "presets" / "set-a").mkdir()
+        assert ui_browse.save_at(r.panel, lib.home / "presets" / "set-a" / "intro.json") is None
+        assert not lib.install.save_named("set-a/Intro")
+        assert "already" in lib.warning
+        assert not (lib.home / "presets" / "set-a" / "intro.json").exists()
+        assert lib.path_of(LOADABLE, "intro", loose=True) == mine
+
+
 def test_one_press_still_saves_beside_the_arrow(tmp_path, monkeypatch):
     with build_rig(tmp_path) as r:
         lib = r.panel.library
