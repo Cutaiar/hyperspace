@@ -1637,11 +1637,10 @@ class LoadedPatch:
     def _pointable(self, held: set[str] | None = None) -> set[str]:
         """Plan 57: the canvas ids node mode may point at: what a group may name
         (`held`, `_held_canvas`), and the nodes with params every loadable patch has
-        and no group holds: the sequencer, the eight channels (the camera's params are the
-        shape's and the scene's since 2026-11-23, which a patch's section holds). A node
+        and no group holds: the camera, the sequencer, the eight channels. A node
         with no params here is `nodemode.enter_refusal`'s."""
         return (self._held_canvas() if held is None else held) | {
-            graphview.SEQ,
+            f"render:{graphview.CAMERA}", graphview.SEQ,
             *(f"render:{channel_name(c)}" for c in MEDIA_CHANNELS)}
 
     @property
