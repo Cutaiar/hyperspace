@@ -8883,6 +8883,17 @@ Plan 86. Headless: `tests/test_retaper.py` (the note, end to end through a load 
 **857. A patch pointed before keeps its map.** Open a patch saved with node mode on (the corpus has none; point one, save, quit, pull this change, open). *Pass:* every knob that held a continuous param holds the same one; only knobs that were empty may now hold a dropdown, and a patch-layer desk row on such a knob is under node mode until you leave. Say whether that last part is acceptable on the patches you play. *Fail:* a continuous param on another knob than before.
 
 **858. A pad and dropdowns (row 1062).** An answer, not a pass or fail. Point a pad at Wave and play: the sticks reach its faders and none of its dropdowns. Say whether a pad should reach dropdowns, and how: a pair stepping through them for good (B), or a stick flicking them with the base chase keeping the choice (C).
+## EB. The FRACTAL section (rows 902–905, 2026-11-20)
+
+Plan 64. Headless: `tests/test_ui_pane.py::test_the_fractal_section_draws_its_controls_inside_the_pane` (every control drawn, inside the pane, at every layout) and `tests/test_fractal_grab.py` (Detail, Reach and Near change what is drawn, To the top, saved with the look). A restart after pulling (new fields on `ViewState`).
+
+Setup for all: the sections menu → **fractal**, VIEW's shape a fractal.
+
+**699. The section.** *Pass:* it says the shape, how many levels in, inside or outside, and the zoom, changing as you dive; Detail, Reach, Near, Additive and To the top are all there without scrolling; on a cube it says how to pick a fractal and shows no controls. *Fail:* a control missing, cut off, or a readout that doesn't follow the dive.
+
+**700. The controls, by eye.** A few levels into the Menger sponge and the 5-cell: drag **Detail** up and down, then **Reach**, then **Near**. *Pass:* Detail makes the cells split finer or coarser; Reach draws further into the shape or less; Near lets cells come closer before they dissolve, or fade sooner; none jumps or flickers, and the frame rate holds at the top of Detail on the rig. Save the look, load another and back: the three are as you left them. Say what ranges you want. *Fail:* a slider that does nothing, a jump, or a value not saved.
+
+**701. To the top.** Deep in, turned: press **To the top**. *Pass:* the whole shape, centred, at zoom 1, still turned as it was; a grabbed fractal comes home. *Fail:* a dive left behind, or the turn lost.
 
 ## What no test covers
 
