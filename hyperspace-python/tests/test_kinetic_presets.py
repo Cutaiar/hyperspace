@@ -1,4 +1,4 @@
-"""The kinetic presets (`presets/kinetic/`) open cleanly.
+"""The kinetic presets (`loadable/kinetic/`) open cleanly.
 
 They are files for the owner's library, not part of the app (nothing ships:
 DECISIONS "One tier"), so nothing else reads them. Each must land through the
@@ -16,7 +16,7 @@ import pytest
 
 from hyperspace import headless, library
 
-KINETIC = Path(__file__).resolve().parents[1] / "presets" / "kinetic"
+KINETIC = Path(__file__).resolve().parents[1] / "loadable" / "kinetic"
 FILES = sorted(KINETIC.glob("*.json"))
 
 

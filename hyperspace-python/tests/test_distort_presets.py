@@ -1,4 +1,4 @@
-"""The distortion patches (`presets/distort/`) open cleanly.
+"""The distortion patches (`loadable/distort/`) open cleanly.
 
 They are files for the owner's library, not part of the app (nothing ships:
 DECISIONS "One tier"), so nothing else reads them. Each must land through the
@@ -16,7 +16,7 @@ import pytest
 
 from hyperspace import headless, library
 
-DISTORT = Path(__file__).resolve().parents[1] / "presets" / "distort"
+DISTORT = Path(__file__).resolve().parents[1] / "loadable" / "distort"
 FILES = sorted(DISTORT.glob("*.json"))
 
 

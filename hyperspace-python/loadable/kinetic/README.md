@@ -6,7 +6,7 @@ of the app (nothing ships with it). Copy the ones you want into the
 library's `loadable/` folder and they appear in the list:
 
 ```bash
-cp presets/kinetic/*.json ~/Hyperspace/loadable/
+cp loadable/kinetic/*.json ~/Hyperspace/loadable/
 ```
 
 Each has the default APC40 patch layer (no `desk` key) and the six audio

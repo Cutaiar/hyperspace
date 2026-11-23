@@ -6,7 +6,7 @@ knob). They are not part of the app (nothing ships with it). Copy them
 into the library's `loadable/` folder and they appear in the list:
 
 ```bash
-cp presets/distort/*.json ~/Hyperspace/loadable/
+cp loadable/distort/*.json ~/Hyperspace/loadable/
 ```
 
 Every one draws the Celestial tesseract with plaid faces through one
