@@ -35,6 +35,10 @@ None should move, though one would have without a fix:
 - `GhostState()`'s defaults are unchanged and the corpus isn't rewritten, so every corpus golden draws the hands as before.
 - **`hands-glass-only`** (a fixture) has a second hands node and sets no `ghost.2.*` values. Since #459, an extra hands node's state starts from the show look, so that node would draw BONES at 50% instead of HANDS at 60%. #459 alone would have moved this golden too, with GLASS at 35%. The golden rig already forces `ghost.<n>.on` on, standing in for the meta controller. It now also sets that node's `alpha`, `style` and `material` to `GhostState()`'s values wherever the file sets none (`tools/golden_frames.py`, outside this plan's files; a minimal change). Checked on Mesa: the rig's `ghost.2.*` read 0.6, HANDS, PLAIN, as on `main`.
 
+## Owner answers
+
+Rows 1051–1053 accepted as built by the owner on 2026-11-23.
+
 ## Not done
 
 - The tool was never run on a real library (the brief).
