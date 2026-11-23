@@ -366,3 +366,5 @@ Overrules §2–§6 where they differ.
 
 Every question of §6 is now answered but Q4's follow-on (the blend list is §7.4). P0, the
 roundup's table, can start.
+
+**P0 started 2026-11-23:** the roundup's table is [`67-roundup.md`](67-roundup.md).
