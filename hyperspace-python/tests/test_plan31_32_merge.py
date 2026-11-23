@@ -156,8 +156,8 @@ def test_a_media_value_is_saved_wherever_it_stands(app):
     reg, lib = app.reg, app.lib
     build = reg["view.media_alpha"].value
     reg["view.media_alpha"].set(0.5)
-    lib.save_as("view", "default")                 # the view group's default module
-    assert lib.defaults("view")["view.media_alpha"] == pytest.approx(0.5)
+    lib.save_as("view", "default")                 # (retired, plan 88: no longer the group's default)
+    assert lib.defaults("view")["view.media_alpha"] == pytest.approx(build)
     doc = app.loaded_patch.document("x")
     assert doc["schema"] == V6 and doc["values"]["view.media_alpha"] == pytest.approx(0.5)
     reg["view.media_alpha"].set(build)

@@ -506,7 +506,8 @@ def test_an_old_camera_default_fills_a_loadable_at_its_converted_pan(tmp_path):
     rig = boot(tmp_path)
     _old_module(rig.lib, "default")
     rig.lib._defaults.clear()
-    assert rig.lib.defaults("camera")["camera.pan.x"] == pytest.approx(190.0 / 324.0)
+    # plan 88: the camera strip is retired, so an old default.json is no default any more
+    assert rig.lib.defaults("camera")["camera.pan.x"] != pytest.approx(190.0 / 324.0)
     doc = json.loads((FIXTURES / "pan-px.json").read_text())
     for pid in ("camera.pan.x", "camera.pan.y"):
         del doc["values"][pid]

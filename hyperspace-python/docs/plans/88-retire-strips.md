@@ -15,7 +15,7 @@ Module presets are reached from strips and nowhere else (`lib.load(group, …)` 
 | view, rot, camera, pattern, dream | patch | (a) retired | values live in every loadable patch; no label saved (D3); nothing else loads them |
 | lfo, env | patch | (a) retired | same; the LFO bank's size is a patch value |
 | seq | patch | (a) retired, flagged | row 509 made "pattern slots" `seq` module presets; the owner's call supersedes it. A saved pattern is still in every patch that carries it, and as a patch of nodes on GRAPH |
-| tempo, master, output | shared meta | (a) retired | the show's `session` holds the values; `modules.<group>` ignored on load, dropped on save |
+| tempo, master, output | shared meta | (a) retired | the show's `session` holds the values; `modules.<group>` ignored on load, kept on save |
 | fx | patch | (a) already retired | plan 40 D6 |
 | band | shared meta | (c) stays | a scene is a band **layout** (`Library.on_layout` → `control.apply_layout`, the band count) and `on_load` → `control.scene_loaded`; the install corpus names `Balanced`; scenes are code data (`scenes/band/`) with no other picker |
 | loadable | kind | (c) stays | the loadable patches' strip, not a module |
@@ -27,7 +27,7 @@ Module presets are reached from strips and nowhere else (`lib.load(group, …)` 
 ## What was built
 
 - `library.RETIRED_MODULES` gains the eleven groups. Effects: `strip` returns early (already), `groups()` omits them, `default_name` is None so `defaults` is the build's fresh values even over an old `<library>/<group>/default.json`.
-- Show load ignores a retired group's `modules` entry, by name or inline; show save drops it. No error, no note.
+- Show load ignores a retired group's `modules` entry, by name or inline; a show save carries it through untouched (review of #483: an inline copy may be the only one). No error, no note.
 - `library.DELETED_MODULES = ("fx",)`: `tools/migrate_library.py` still deletes only the fx files (D6); every other retired group's saved module files are moved into `patches/<group>/` like any, kept and unlisted. Without this the tool would have deleted users' saves.
 - The retired `_section(title, group)` calls lose the group argument; `ui_patterns` loses its `ui_loadable.strip` call.
 - Dirty dots and per-section reset were drawn only by the strip, so both go with it. A section's values are still undoable (undo), a loadable patch's own dot compares the whole look, and the desk's reset rows are untouched. Per-section reset to defaults is the one thing lost; say so if the owner wants it back as a plain "reset" chip.

@@ -309,8 +309,7 @@ DEFAULT_NAMES = {"band": "Balanced"}
 # knows how to use the strips, sane defaults replace them and a patch that wants to differ
 # carries an override key in its own JSON): no strip, no entry in `groups()`, no default
 # loadable patch — `defaults` is the fresh values even where an old `<library>/<group>/default.json`
-# survives — and no `modules.<group>` reference in a show (read and ignored, the next save
-# drops it; the show's `session` holds the live values, so nothing is lost). Their params are
+# survives — and no `modules.<group>` reference in a show (read and ignored, a save carries it through; the show's `session` holds the live values, so nothing is lost). Their params are
 # untouched, and every loadable patch still saves them. Files an old library keeps under
 # `patches/<group>/` stay on disk, unlisted. Still stripped: `band` (a scene's layout and
 # its `scene_loaded` hook, plan 88 §c), `loadable` (a document kind, not a module), and the
@@ -1602,7 +1601,9 @@ class Install:
         elif self.path is None:
             self.path = self.path_for(self.name)
         self.session = {**self._held_back(), **lib.reg.snapshot(part="shared_meta")}
-        self.modules = {}
+        # a retired group's reference (plan 88) is no strip's to write, but a file written by an
+        # older build may hold the only copy of an inline module: carried through untouched
+        self.modules = {g: ref for g, ref in held[3].items() if g in RETIRED_MODULES}
         for group, cur in lib._current.items():
             if (cur is None or group in lib._kinds or group not in SHARED_META_GROUPS
                     or group in RETIRED_MODULES):
