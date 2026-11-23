@@ -47,8 +47,11 @@ stick has no ring to catch and a pad's rows are routes: each is a `push` about t
 `PAD_DEPTH`, with the pad's own feel, so a stick at rest moves nothing and the look comes back on
 release (NQ5). `Router` runs them while the pad is on this `Deck` (`routed`), and that is also how
 the camera job stands down (`Router.claimed`) and a Joy-Con's stick stays heard
-(`PadDevice.quiet_stick`). Its freedoms are its axes, then its natural pairs (plan 56); a lone
-button has no lane for a route to read, so it fills nothing. A control an enabled row reads, or
+(`PadDevice.quiet_stick`). Its freedoms are its axes, then its natural pairs (plan 56), for its
+continuous params; a lone button has no lane for a route to read. **Its dropdowns** (plan 86, row
+1062, the owner's) go on the buttons those left, bumpers first (`PAD_BUTTONS`), one a button, each
+a `toggle` row that `Router.pad` fires (`pressed`): a press the next choice, kept, as a desk's knob
+keeps its. A control an enabled row reads, or
 gates on, or a modifier reads, or one the model's own layout holds (`routing.layout_of`), is no
 freedom: node mode takes no button that does something (NQ6), and it needs no hold on any. Desks
 fill first and pads in list order, each leaving what an earlier one filled, so a pad pointed second
@@ -59,6 +62,7 @@ the last model it read (`DeviceRegistry.pad_model`).
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -73,6 +77,16 @@ PAD_KIND = "gamepad"           # ...and of a pad (`PadDevice.kind`)
 # knob, so the stick must reach the param (row 820)
 PAD_DEPTH = 1.0
 PAD_SCHEMES = ("axis", "pad", "hat", PAIR_SCHEME)   # what can hold a freedom of a pad's
+# plan 86 (row 1062, the owner, 2026-11-23): "pads should just use their toggle buttons
+# (bumpers, stick clicks, maybe even the middle buttons, or even the dpad or other button
+# cluster) to toggle / cycle between dropdown options". So a pad's dropdowns go on the
+# buttons its sticks, triggers and pairs left, in that order, one dropdown a button, each
+# press the next choice, wrapping (`routing.act`: `toggle` on an enum cycles). Not GUIDE,
+# the system's button. A press is an edit, as a desk's knob is: it stays
+PAD_BUTTONS = ("pad:LB", "pad:RB", "pad:LSTICK", "pad:RSTICK",
+               "pad:VIEW", "pad:MENU", "pad:SHARE", "pad:LP", "pad:RP", "pad:LFN", "pad:RFN",
+               "pad:TOUCH", "hat:N", "hat:E", "hat:S", "hat:W", "pad:N", "pad:E", "pad:S", "pad:W")
+CYCLE_OP = "toggle"
 
 NOT_FIRST = "{role} is player {player}'s second desk: a patch points at a player's first"
 NOT_FIRST_PAD = ("{role} is not player {player}'s pad in hand: a patch points at a player's "
@@ -112,6 +126,16 @@ def pad_freedoms(model) -> list[tuple[str, ...]]:
     from . import gamepad
     return [f for f in gamepad.degrees_of_freedom(model)
             if len(f) == 2 or f[0].startswith("axis:")]
+
+
+def pad_buttons(model, taken: Collection[str] = ()) -> list[tuple[str, ...]]:
+    """The buttons a pad's dropdowns may fill, in `PAD_BUTTONS`' order, each one freedom:
+    those `model` has and its layout leaves (`gamepad.degrees_of_freedom`, a pair split
+    into its poles), less `taken` (unqualified sources: ``pad:LB``, ``hat:N``)."""
+    from . import gamepad
+    have = {src for f in gamepad.degrees_of_freedom(model) for src in f
+            if not src.startswith("axis:")}
+    return [(src,) for src in PAD_BUTTONS if src in have and src not in taken]
 
 
 def _reads(bare: str) -> tuple[str, ...]:
@@ -299,11 +323,16 @@ class NodeDesk:
                 and b.target in wanted]
 
     def _pad_free(self, pad, model) -> list[tuple[str, ...]]:
-        """The freedoms of `pad` nothing holds: not a control this pad's enabled row reads,
-        wherever it aims (`fill`'s rule: one stick never moves two things by accident), nor one
-        a row gates on or a modifier reads, which moving it would also drive, nor one the model's
-        own layout holds. This table's rows, not the file's: the meta controller's buttons are
-        in it too, so node mode never takes one."""
+        """The freedoms of `pad` nothing holds (`_pad_held`)."""
+        held = self._pad_held(pad, model)
+        return [f for f in pad_freedoms(model) if not held.intersection(f)]
+
+    def _pad_held(self, pad, model) -> set[str]:
+        """The controls of `pad` something holds, as unqualified sources: a control this
+        pad's enabled row reads, wherever it aims (`fill`'s rule: one stick never moves two
+        things by accident), one a row gates on or a modifier reads, which moving it would
+        also drive, and one the model's own layout holds. This table's rows, not the file's:
+        the meta controller's buttons are in it too, so node mode never takes one."""
         t, q = self.deck.table, pad.qualifier
         held = set(layout_of(model).sources)
         addresses: list[str] = []
@@ -318,7 +347,7 @@ class NodeDesk:
             probe = Binding(a, "")
             if probe.scheme in PAD_SCHEMES and t.pad_serves(q, probe):
                 held.update(_reads(probe.bare))
-        return [f for f in pad_freedoms(model) if not held.intersection(f)]
+        return held
 
     def _filled_before(self, role: str) -> tuple[str, ...]:
         """The params the controllers that fill ahead of `role` hold, wherever they are: a
@@ -339,6 +368,19 @@ class NodeDesk:
             source = _pad_source(slot.sources, pad.qualifier)
             b = keep.get((source, slot.param))
             out.append(b if b is not None else Row(source, slot.param, "push", PAD_DEPTH,
+                                                   words=reg[slot.param].label or slot.param))
+        return out
+
+    def _button_rows(self, pad, fit: nodemode.Fit, had: list[Binding]) -> list[Binding]:
+        """The rows of `fit` on a pad's buttons (row 1062): each a `toggle`, a press the
+        dropdown's next choice. Kept while it says the same, as `_pad_rows`."""
+        reg = self.deck.reg
+        keep = {(b.source, b.target): b for b in had}
+        out: list[Binding] = []
+        for slot in fit.slots:
+            source = _address(slot.sources[0], pad.qualifier)
+            b = keep.get((source, slot.param))
+            out.append(b if b is not None else Row(source, slot.param, CYCLE_OP,
                                                    words=reg[slot.param].label or slot.param))
         return out
 
@@ -368,16 +410,38 @@ class NodeDesk:
         now.key, now.node, now.player = key, node, player
         fit, rows = nodemode.Fit(), []
         if node is not None and pad:
-            params = nodemode.fillable(deck.reg, self.params_of(node), routed=True)
-            wanted = set(params)
-            fit = nodemode.fill(params, self._pad_free(dev, model),
-                                [*self._kept(wanted), *(("", p) for p in before)])
-            rows = self._pad_rows(dev, fit, now.rows)
+            ids = self.params_of(node)
+            params = nodemode.fillable(deck.reg, ids, routed=True)
+            held = self._pad_held(dev, model)
+            ahead = [("", p) for p in before]
+            fit = nodemode.fill(params, [f for f in pad_freedoms(model) if not held.intersection(f)],
+                                [*self._kept(set(params)), *ahead])
+            # row 1062: the dropdowns on the buttons the sticks, triggers and pairs left
+            drops = nodemode.dropdowns(deck.reg, ids)
+            used = {src for slot in fit.slots for src in slot.sources}
+            cycles = nodemode.fill(drops, pad_buttons(model, held | used),
+                                   [*self._kept(set(drops)), *ahead])
+            rows = [*self._pad_rows(dev, fit, now.rows),
+                    *self._button_rows(dev, cycles, now.rows)]
+            fit = nodemode.Fit(fit.slots + cycles.slots, fit.kept + cycles.kept,
+                               fit.over + cycles.over)
         elif node is not None:
             freedoms = freedoms_of(self._profile(role))
-            params = nodemode.fillable(deck.reg, self.params_of(node))
+            ids = self.params_of(node)
+            drops = nodemode.dropdowns(deck.reg, ids)
+            # the continuous params fill as they did before dropdowns did, so a saved map
+            # never moves: a patch-layer row on a dropdown reserves no knob from them
+            # (plan 86, review of #468). The dropdowns then take what is left, where a
+            # knob that still holds a dropdown's own row stays that row's
+            params = [p for p in nodemode.fillable(deck.reg, ids) if p not in drops]
             wanted = set(params)
             fit = nodemode.fill(params, self._free(role, wanted, freedoms), self._kept(wanted))
+            used = {src for slot in fit.slots for src in slot.sources}
+            left = [f for f in self._free(role, wanted | set(drops), freedoms)
+                    if not used.intersection(f)]
+            cycles = nodemode.fill(drops, left, self._kept(set(drops)))
+            fit = nodemode.Fit(fit.slots + cycles.slots, fit.kept + cycles.kept,
+                               fit.over + cycles.over)
             rows = self._rows_of(role, fit, now.rows)
         if [(b.source, b.target) for b in rows] != [(b.source, b.target) for b in now.rows]:
             now.serial += 1
@@ -430,6 +494,17 @@ class NodeDesk:
         saved route on it does."""
         if not self.deck.loaded_patch.node_mode:
             return []
+        return [b for b in self._pad_now() if b.op != CYCLE_OP]
+
+    def pressed(self) -> list[Binding]:
+        """The button rows `Router.pad` fires, read each frame: each pad's on this `Deck`
+        that cycle a dropdown (row 1062). A press acts (`routing.act`) as a table row's."""
+        if not self.deck.loaded_patch.node_mode:
+            return []
+        return [b for b in self._pad_now() if b.op == CYCLE_OP]
+
+    def _pad_now(self) -> list[Binding]:
+        """Every row of each pad on this `Deck`."""
         out: list[Binding] = []
         for d in self._pads():
             if self.is_first(d.role) and self.on_here(d.role):

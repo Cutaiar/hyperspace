@@ -23,13 +23,19 @@ helpers every effect can call)::
                                     the band its @order sits in (`previews`)
     // @hook   mandel               (plan 63) a Python half: `HOOKS` names the
                                     module that runs the pass and its drives
+    // @pair   u_cx u_cy "Centre"   (plan 82) two params drawn as one XY pad
+    // @volume u_cx u_cy u_amount "Burst"   …three as an XYZ volume
     uniform float u_amount;  // @param 0 2 0.5 "Amount" tooltip text…
     uniform float u_scale;   // @param 0.5 12 3 log "Scale" …
     uniform int   u_count;   // @param 2 16 6 "Count" …    (int uniform → integer param)
     vec4 effect(vec2 uv) { return src(uv + …); }
 
-``@param lo hi default [log] [wrap] [amount] "Label" tip`` — the uniform
-name without its ``u_`` is the id suffix. ``amount`` (wave 0 T1) marks a
+``@param lo hi default [log] [wrap] [amount] [bipolar|unipolar] "Label" tip`` —
+the uniform name without its ``u_`` is the id suffix. ``bipolar`` and
+``unipolar`` (plan 82) say how the panel draws the fader, and nothing else:
+bipolar fills from its zero with a detent there, unipolar from the left.
+Neither said, the panel infers it (`ui_fields.shape_of`: a range across 0
+with a 0 default is bipolar). ``amount`` (wave 0 T1) marks a
 param whose range is 0 … hi with a meaningful zero — how much of the
 effect there is — and puts it on the zero-safe log taper
 (`amount_taper`: position 0 is off, then ten doublings up to hi), so a
@@ -139,7 +145,11 @@ RELOAD_EVERY = 30               # frames between mtime checks of the folder
 HOOKS = {"mandel": mandel}
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock|family|hook)\s+(.*?)\s*$")
+_DIRECTIVE = re.compile(
+    r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock|family|hook|pair|volume)\s+(.*?)\s*$")
+# plan 82: `@pair u_a u_b "Label"`, `@volume u_a u_b u_c "Label"`
+_PAD = re.compile(r"^(?P<uniforms>(?:u_\w+\s+){2,3})\"(?P<label>[^\"]+)\"\s*$")
+POLARITIES = ("bipolar", "unipolar")
 _CLOCK_UNIFORM = re.compile(r"^u_[a-z][a-z0-9_]*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
 _CHOICE = re.compile(
@@ -147,7 +157,7 @@ _CHOICE = re.compile(
 )
 _PARAM = re.compile(
     r"^(?P<nums>(?:[-+]?[\d.]+(?:[eE][-+]?\d+)?\s+){3})"
-    r"(?P<flags>(?:(?:log|wrap|amount)\s+)*)\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
+    r"(?P<flags>(?:(?:log|wrap|amount|bipolar|unipolar)\s+)*)\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
 )
 
 
@@ -179,6 +189,21 @@ class ParamSpec:
     tip: str = ""
     choices: tuple[str, ...] = ()   # a discrete choice's names (`@param choice`): an enum
     amount: bool = False            # 0 … hi on the zero-safe log taper (wave 0 T1)
+    # plan 82: `bipolar` or `unipolar` as the line says it, "" when it says
+    # neither (the panel infers it, `ui_fields.shape_of`). Drawing only: it
+    # declares nothing, so it is not in `EffectSpec.signature`
+    polarity: str = ""
+
+
+@dataclass(frozen=True)
+class PadSpec:
+    """One `@pair` or `@volume` line (plan 82): two or three of the file's
+    continuous params drawn as one control — an XY pad, or an XYZ volume
+    whose third is the depth. Each param stays its own: its id, its routes,
+    its learn and its place in a save are as they were without the line."""
+
+    keys: tuple[str, ...]   # the params' keys, x then y (then z)
+    label: str
 
 
 @dataclass(frozen=True)
@@ -222,6 +247,9 @@ class EffectSpec:
     # draws an effect's aux port only when it does (or a saved wire goes
     # in); like `family`, it declares no param, so it is not in `signature`
     aux: bool = False
+    # plan 82: the `@pair` and `@volume` lines, in file order. Drawing
+    # only, like `family`: not in `signature`
+    pads: list[PadSpec] = field(default_factory=list)
 
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
@@ -399,6 +427,8 @@ def parse(name: str, source: str) -> EffectSpec:
                     if val not in HOOKS:
                         raise SpecError(f"{name}:{n}: @hook {val!r} is none of {sorted(HOOKS)}")
                     spec.hook = val
+                elif key in ("pair", "volume"):
+                    spec.pads.append(_parse_pad(name, n, key, val))
             except SpecError:
                 raise                       # already says what is wrong
             except ValueError as e:
@@ -438,6 +468,8 @@ def parse(name: str, source: str) -> EffectSpec:
             raise SpecError(f"{name}:{n}: u_{key} needs lo < hi")
         if "log" in flags and lo <= 0:
             raise SpecError(f"{name}:{n}: u_{key} is log, so lo must be > 0")
+        if "bipolar" in flags and "unipolar" in flags:
+            raise SpecError(f"{name}:{n}: u_{key} is bipolar or unipolar, not both")
         if "amount" in flags and (lo != 0 or typ != "float" or "log" in flags
                                   or "wrap" in flags):
             raise SpecError(f"{name}:{n}: u_{key} is an amount, so it is a float from lo 0, "
@@ -447,12 +479,49 @@ def parse(name: str, source: str) -> EffectSpec:
             key=key, uniform=uniform, label=pm["label"], lo=lo, hi=hi,
             default=min(max(default, lo), hi), integer=typ == "int", log="log" in flags,
             wrap="wrap" in flags, tip=pm["tip"].strip(), amount="amount" in flags,
+            polarity=next((f for f in flags if f in POLARITIES), ""),
         ))
     if not re.search(r"\bvec4\s+effect\s*\(", source):
         raise SpecError(f"{name}: no 'vec4 effect(vec2 uv)'")
     _check_clocks(name, spec)
+    _check_pads(name, spec)
     spec.aux = reads_aux(source)
     return spec
+
+
+def _parse_pad(name: str, n: int, key: str, val: str) -> PadSpec:
+    """`@pair u_a u_b "Label"` or `@volume u_a u_b u_c "Label"` → its spec;
+    whether the uniforms are the file's params is `_check_pads`'s, once
+    every line is read."""
+    want = 2 if key == "pair" else 3
+    m = _PAD.match(val)
+    uniforms = m["uniforms"].split() if m else []
+    if m is None or len(uniforms) != want:
+        raise SpecError(f'{name}:{n}: @{key} wants {want} uniforms then "Label"'
+                        f' (u_x u_y{" u_z" if want == 3 else ""} "Centre")')
+    if len(set(uniforms)) != want:
+        raise SpecError(f"{name}:{n}: @{key} names a uniform twice")
+    return PadSpec(keys=tuple(u[2:] for u in uniforms), label=m["label"])
+
+
+def _check_pads(name: str, spec: EffectSpec) -> None:
+    """Every `@pair` and `@volume` names the file's own continuous params
+    (no choice), and a param is on one pad at most."""
+    plain = {p.key for p in spec.params if not p.choices}
+    seen: set[str] = set()
+    for pad in spec.pads:
+        for k in pad.keys:
+            if k not in plain:
+                raise SpecError(f"{name}: @pair/@volume {pad.label!r} — u_{k} is no continuous "
+                                "@param of this file")
+            if k in seen:
+                raise SpecError(f"{name}: @pair/@volume {pad.label!r} — u_{k} is on another pad")
+            seen.add(k)
+
+
+def pad_of(spec: EffectSpec, key: str) -> PadSpec | None:
+    """The `@pair` or `@volume` that draws `key`, or None (plan 82)."""
+    return next((p for p in getattr(spec, "pads", ()) if key in p.keys), None)
 
 
 class FxState:

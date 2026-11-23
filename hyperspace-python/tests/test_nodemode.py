@@ -11,6 +11,7 @@ from hyperspace import gamepad, graphview, headless, loadable, nodemode, routing
 from hyperspace.library import LibraryError, Marks
 from hyperspace.nodemode import NodeMode, Slot, fill
 from hyperspace.pads import models
+from hyperspace.params import Param
 
 CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "loadable").glob("*.json"))
 ENTRY = {"player": 2, "controller": "gamepad", "node": "macro.1"}
@@ -311,21 +312,52 @@ def test_a_meta_param_is_never_filled(app):
         nodemode.ONLY_META.format(node="out"))
 
 
-def test_only_a_continuous_param_with_no_alias_is_filled(app):
+def test_a_desk_fills_continuous_params_then_dropdowns_and_a_pad_only_continuous(app):
+    """Plan 86 (rows 1061, 1062): no alias and no meta param, ever. A desk fills
+    the continuous params and then the dropdowns a knob can hold, after every
+    continuous one, so a map made before dropdowns filled is the same map; a pad's
+    rows are routes, and only continuous, modulatable params."""
     reg = app.reg
     ids = [p.id for p in reg]
     got = nodemode.fillable(reg, ids)
-    assert got and all(reg[p].kind is nodemode.Kind.CONTINUOUS and not reg[p].alias for p in got)
-    assert all(routing.meta_refusal(p) is None for p in got)
-    assert set(nodemode.fillable(reg, ids, routed=True)) <= set(got)
-    assert all(reg[p].modulatable for p in nodemode.fillable(reg, ids, routed=True))
+    assert got and all(not reg[p].alias and routing.meta_refusal(p) is None for p in got)
+    kinds = [reg[p].kind for p in got]
+    assert set(kinds) == {nodemode.Kind.CONTINUOUS, nodemode.Kind.ENUM}
+    first_enum = kinds.index(nodemode.Kind.ENUM)
+    assert all(k is nodemode.Kind.ENUM for k in kinds[first_enum:])
+    assert got[:first_enum] == [p for p in ids if p in set(got[:first_enum])]
+    assert all(len(reg[p].names) >= 2 and not callable(reg[p].choices) for p in got[first_enum:])
+    padded = nodemode.fillable(reg, ids, routed=True)
+    assert set(padded) <= set(got[:first_enum])
+    assert all(reg[p].modulatable for p in padded)
+
+
+def test_a_dropdown_with_one_choice_or_a_list_asked_each_time_is_not_filled(app):
+    reg = app.reg
+    shape = reg["view.shape"]
+    assert nodemode.fillable(reg, ["view.shape"]) == ["view.shape"]
+    assert nodemode.fillable(reg, ["view.shape"], routed=True) == []
+    one = Param("t.one", "one", nodemode.Kind.ENUM, choices=["only"])
+    asked = Param("t.asked", "asked", nodemode.Kind.ENUM, choices=lambda: ["a", "b"])
+    fake = {"t.one": one, "t.asked": asked, "view.shape": shape}
+    assert nodemode.fillable(fake, ["t.one", "t.asked", "view.shape"]) == ["view.shape"]
+
+
+def test_a_node_of_only_dropdowns_lets_a_desk_and_a_pad_in(app):
+    """A pad fills a dropdown on a button (plan 86, row 1062), not on its sticks."""
+    reg = app.reg
+    ids = ["view.shape", "view.inst_layout"]
+    assert nodemode.enter_refusal(reg, "render:view", ids) is None
+    assert nodemode.enter_refusal(reg, "render:view", ids, routed=True) is None
+    assert nodemode.fillable(reg, ids, routed=True) == []
+    assert nodemode.dropdowns(reg, ids) == ids
 
 
 def test_you_enter_with_a_node_selected_and_a_node_with_no_params_cannot(app):
     reg = app.reg
     assert nodemode.enter_refusal(reg, None, []) == nodemode.NO_NODE
     assert nodemode.enter_refusal(reg, "render:acid", []) == nodemode.NO_PARAMS.format(node="acid")
-    discrete = next(p.id for p in reg if p.kind is not nodemode.Kind.CONTINUOUS
+    discrete = next(p.id for p in reg if p.kind is nodemode.Kind.TOGGLE
                     and routing.meta_refusal(p.id) is None)
     mixed = ["master.gain", discrete]                       # not only the meta one's fault
     assert nodemode.enter_refusal(reg, "render:acid", mixed) == (

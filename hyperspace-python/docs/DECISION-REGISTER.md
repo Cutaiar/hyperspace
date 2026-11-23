@@ -891,6 +891,12 @@ here; overturn → the change, then the same.
 | 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
 | 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
 | 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
+| 1040 | Plan 84: GRAPH's head has a **gpu cost** chip, off by default, page state only (never saved, never an undo step). Lit, every render node is marked by its GPU time: its border and ground up a black-to-white hot ramp, a badge on its top edge ("#1 · 2.10 ms" for the three costliest), and a line under the head with the frame's total over its timed nodes and its three costliest | 840, 841 | (rec) — pending the owner |
+| 1041 | Plan 84: a node's heat is its share of the frame's costliest node's time (the costliest white), not its percentile rank, so one 10 ms node among 0.1 ms ones draws one white node, not a gradient; ranks break ties by name | 841 | (rec) — pending the owner |
+| 1042 | Plan 84: the marks are `PassTimer`'s 60-frame medians eased with a 1 s time constant, the same at any frame rate; a node new to the timer starts at its own time | 842 | (rec) — pending the owner |
+| 1043 | Plan 84: a render node that made nothing this frame — not built (unreached, faint), or built and run for nothing (an effect switched off, a branch behind a switch's unpicked input) — says **made nothing**, not 0 ms; a node with no pass of its own (a switch, a delay's read, the pattern, a see-through geometry) has no mark, its time being its consumer's. What ran is what asked the timer for a query this frame, not what the timer lists (so a segment switched off made nothing); a delay's write and a look-back's capture count as their node's. A node timed inside another's query (an effect in a delay's write) reads 0: GL's one query at a time | 843 | (rec) — pending the owner |
+| 1044 | Plan 84: it costs nothing off. The page asks the renderer a frame at a time (`Renderer.gpu_watch`, cleared each frame, as `media_watch`); only then does the frame add what each node made (`render.gpu_made`, read from what the frame already settled). Nothing more is timed, drawn or read back on the GPU; off, the page pushes no style and draws no badge | 844 | (rec) — pending the owner |
+| 1045 | Plan 84's stretch, not built: thumbnails for unreached picture nodes other than effects. A switch could show its picked input for free; a composite, resize, delay, look-back or echo would each need a pass of its own beside the graph (or a history it does not hold), in `render.thumb_source`, outside the item's files. Options: (a) the switch only; (b) the switch and the composite (one lay pass at a thumbnail's size, under `UNWIRED_PER_FRAME`); (c) leave them as they are. Every option keeps them unbuilt (row 349) | — | **(c), the owner, 2026-11-23**: "I don't really mind if nodes outside of the hot render graph are not heatmapped" |
 | 902 | Plan 64: a side-pane section `fractal` (appended to `ui.PAGE_KEYS`, every saved slot kept) holds what controls a fractal: what it is and where the view is (levels in, inside or outside, the zoom), **Detail** (`view.frac_detail`, 0.35–3×: the split size's reciprocal), **Reach** (`view.frac_far`, −1.5 to +2 octaves on how far cells are drawn) and **Near** (`view.frac_near`, ±1 octave on how near the eye a cell dissolves), **Additive** (moved out of VIEW) and **To the top**. On another shape it says how to pick one. Detail, Reach and Near are the look's own and routable, saved under an optional loadable-patch key `"fractal": {"detail", "far", "near"}` (`loadable.FRACTAL_KEY`) written only while the look's shape is a fractal — every other look saves byte for byte as before — and read on load (the fractal's own, 1, 0 and 0, when absent; a value that is not a number refused, one out of range held to it, each said); in the dirty signature | 699, 700 | owner — 2026-11-20: "build the fractal section" (the recommendation of the day before: a section, a detail slider, the depth of field, a readout, a way back to the top) |
 | 903 | Plan 64: the reach a fractal is drawn to is never under 0.2 octaves and the near end never under 0.3, whatever the fractal's own plus the slider, so the cue's ends never cross and the fade never inverts | — | (rec) |
 | 904 | Plan 64: **To the top** (`view.frac_top`) leaves every cell at once — zoom 1, pan 0, the dive reset — as Reset view does for those, but leaves the shape's turn, the camera's yaw and pitch and the rotation phases alone: it answers "where am I in the fractal", not "reset everything". Inside, it brings the space home, as Reset view does (row 887) | 701 | (rec) |
@@ -913,6 +919,27 @@ here; overturn → the change, then the same.
 | 1015 | Plan 81: the dive rate is **Dive**, the first slider of the FRACTAL section (`ui_fractal.spec`, `SLIDERS`; the section merged from #466 while plan 81 was built), above Detail; nothing duplicates the section's Detail, Reach, Near or To the top | 810 | (rec) |
 | 1016 | Plan 81: a restart after pulling — new fields on live objects (`ViewState.frac_dive`, `Dive.seen`, `Dive.settled`), a new param, and `ViewState.reroot` / `app._reroot` take the frame's seconds. After it `fractal.py` hot-reloads as before; `SETTLE_ON` and `SETTLE` take effect on a reload | — | (rec) — REVIEW.md, "Every frame, and hot reload" |
 | 1017 | Plan 81: `tools/fractal_dive_demo.py` renders a fractal dive offscreen with a cross at the middle and how much of the screen is drawn on (an 8 × 8 grid of tiles): `--mode zoom` (camera.zoom grown, runs on `main` for a before) or `--mode rate` (the dive rate, either settle). The before/after pair and the alternative are in `plans/assets/81-fractal-dive/`. The settle's cost a frame is new: hand check 815 times it on the rig | 812, 815 | (rec) |
+| 1060 | Plan 86: a loadable patch with no depth-units marker (`"units": {"fx.depth": "taper"}`) is still read as a file from before the effect tapers and its depths onto the effects' speed and amount params rescaled (`params.retaper_depths`, unchanged: old files depend on it), and the load now says so in one note naming every row with its old and new depth and the marker a hand-written file wants | 855 | (rec) — pending the owner |
+| 1061 | Plan 86: node mode on a desk fills a node's dropdowns (enum params with a fixed list of two choices or more) after every continuous param, each an `abs` knob row whose throw is the choices in order (`Param.set_norm`), its ring the choice. A map made before is the same map; a dropdown takes only a knob the continuous params left. No schema, no saved row | 856, 857 | (rec) — pending the owner |
+| 1062 | Plan 86: a pad in node mode puts a node's dropdowns on its buttons. Its continuous params keep the sticks, triggers and pairs (pushes); each dropdown then takes one free button, bumpers, stick clicks, View, Menu, Share, back and Fn, the D-pad, the face (never Guide, a button a row reads, or one the model's layout holds), a `toggle` row: a press the next choice, wrapping, kept | 858 | **owner (2026-11-23)**: "pads should just use their toggle buttons (bumpers, stick clicks, maybe even the middle buttons, or even the dpad or other button cluster) to toggle/ cycle between dropdown options"; faders before dropdowns on the bumpers, owner (2026-11-23); the rest of the order and the buttons left out (rec) |
+| 1000 | Plan 80: an effect whose Python half says `GENERATOR` (the Mandelbrot) draws with nothing wired into its `image`, over transparent black; `graph.Effect.generates`. Every other effect with no input still reads nothing. A change to `graph.py`, outside plan 80's files, kept to `Effect.reads`, `paint` and `_pass` | 800 | owner — 2026-11-22: accepted, the `graph.py` change included |
+| 1001 | Plan 80: Inside coloured is how fast a point settles onto its cycle — L·ln K / ln abs(λ_L) from the sum of ln abs(f′(z)) over a lag L the periodicity check found, K = what 5 % of a pixel is at zoom 1 and 810 lines — not the step the check caught it at. That step hung on a pixel-sized tolerance (deep in, most of the inside never settled before the cap: flat grey), Brent's window (bands, discs) and float32's last bit after a rebase (blocks). The inside/outside decision is unchanged | 801 | (rec) — pending the owner |
+| 1002 | Plan 80: a c or z₀ drive moves its term by the view height × min(1, TERM_RATE × R), R the term's measured sensitivity (how much a pan changes the picture over how much the term does, per plane unit, on a 16×9 grid of the view), measured every 0.25 s a drive runs, a faster rate eased in over 0.5 s and a slower one taken at once. TERM_RATE 0.1, to be tuned on the rig. Pan and Dive unchanged; an unused term keeps plan 63's rate | 802, 803 | (rec) — pending the owner |
+| 1003 | Plan 80: the perturbation loop fetches the reference once a step (Zₘ carried), p = 2 takes (2Z + δ)·δ and other powers walk Z's powers up with no array, texel coordinates by mask and shift; the skip's border pass is packed, 64 slots a tile along x, so every pixel of it iterates a border pixel | 804, 807 | (rec) |
+| 1004 | Plan 80: Skip black turns itself off where under 30 % of tiles are flagged (counted by a samples query on the tiles pass, read three passes late), probing again every 30 passes or at once when the zoom has moved a doubling. On by the old rule where it may run | 805 | (rec) — pending the owner |
+| 1005 | Plan 80: series approximation (skip the first iterations for the whole screen) is not built: a stretch, left for a later plan | — | (rec) |
+| 1006 | Plan 80: `tools/mandel_bench.py --owner` runs the owner's rig cases (the seahorse, Size 810, Steps 2000: direct and perturbation at 1.5e4, 4e5, 1e7, the skip on and off at 3e6, the coloured inside at 1e6 and 9e6), each line a steady state with the skip's gate reset and settled | 804 | (rec) |
+| 1007 | Plan 80, open: the Test card is also a generator (it draws a card whatever comes in), so it could say so too and draw with no wire in. Not done: its file and its Python are not plan 80's | — | **pending the owner** |
+| 1020 | Plan 82: one abstraction (`ui_fields.Shape`, `shape_of`) draws every continuous fader — unipolar (fill from the left), bipolar (from 0, a detent there), unity (a multiplier: from 1, a detent there), and steps as ticks; the kit slider, the stock fallback (`Panel._origin`) and the pad's knobs read it | 820, 821 | (rec) — pending the owner |
+| 1021 | Plan 82: bipolar is inferred for a range across 0 with a 0 default — or no default to read (a param that is not an effect's: VIEW's rates, the camera), as they filled from 0 before. A range across 0 with another default is unipolar: the Mandelbrot's c, z₀ and centre now fill from the left. An effect line can say `bipolar` or `unipolar` | 820 | (rec) — pending the owner |
+| 1022 | Plan 82: unity (detent at 1) is inferred for a default of 1 in the middle of its range, linear (lo + hi = 2) or log (lo · hi = 1): Kaleidoscope's zoom, Blocks' aspect, Hue cycle's saturation. Prism's rim, Deconverge's amount, the drifts are not. No `unity` marker on `@param` | 821 | (rec) — pending the owner |
+| 1023 | Plan 82: a drag within 6 px (`ui.DETENT_PX`) of a bipolar or unity detent lands on it; a typed value and a ⇧ fine drag are never moved; a taper's unity notch (speed 1×) is drawn, not snapped | 820 | (rec) — pending the owner |
+| 1024 | Plan 82: ticks on an integer param with no taper, one a step down to 6 px apart (`ui.TICK_GAP`), then every 2nd, 4th, 5th, 10th … whole value, both ends always | 822 | (rec) — pending the owner |
+| 1025 | Plan 82: `// @pair u_x u_y "Label"` and `// @volume u_x u_y u_z "Label"` name the file's own continuous params, each on one pad at most; drawing only, not in `EffectSpec.signature`; no param renamed or re-keyed | 823 | (rec) — pending the owner |
+| 1026 | Plan 82, D3 as built: Prism and Wave a Centre pair, Wave Table an Offset pair, Zoom burst a Burst volume (cx, cy, amount) and no pair beside it, since a param is on one pad | 823, 824 | (rec) — pending the owner |
+| 1027 | Plan 82: the pad sets X and Y where it is pressed (Y up), ⇧ a tenth from where they were, and once ⇧ joins a drag it stays relative until let go (no jump); each knob a vertical drag, 200 px a throw, ⇧ a tenth, a double-click to its detent; Z by its knob only (no scroll over the pad); no typing into a knob | 823, 824 | (rec) — pending the owner |
+| 1028 | Plan 82: a lane on a pad shows as a white dot (and halo) where the lanes have it, a line from the bases' dot, and a white tick on each knob; the pad's head is its label alone, each knob's base under it and its effective value on a second line, both inside its column | 825 | (rec) — pending the owner |
+| 1029 | Plan 82: `ui_fx.strip` (outside the row's files) draws a pad at its first param's place instead of its sliders, pads resolved before the strip packs its rows (`ui_fx.pad_rows`); without the kit the sliders stay | 823 | (rec) — pending the owner |
 | 1050 | Plan 85: the show look in code is on, BONES, PLAIN, 50% (`ghost.SHOW_LOOK`; #459 had BONES in GLASS at 35%, the 2026-11-15 look). The app sets the on-air renderer's hands state to it at startup, deck 2's sibling gets one, and every extra hands node's state starts from it (`GraphSection.land`), so New patch carries it. `GhostState()` stays the neutral draw (off, HANDS, PLAIN, 60%) the ghost and render tests and the goldens measure | 850 | owner — 2026-11-18 |
 | 1051 | Plan 85: `tools/set_hands_look.py` sets the library's patches to the show look: every loadable patch under `loadable/` and `presets/`, every folder down (the era folders), as `migrate_library.loadable_files` lists them; `ghost.*` and each extra hands node's `ghost.<n>.*` `on`, `alpha`, `style`, `material` set, `guide`, `tethers`, the room's `mirror`, routes and desk rows untouched. A dry run by default; `--apply` refuses while the app is open on this Mac, backs the whole library up to `<home>/library-backup-<stamp>/` first, and writes atomically in the app's layout (`loadable.dumps`). A file that is no loadable patch or does not load is named and left | 851 | owner — 2026-11-23: accepted as built |
 | 1052 | Plan 85: a hands layer that reaches no output (`graph.reaches`) gets the standard wires, each only where missing: `hands → hands.layer.hands`, `hands.layer → output.all.hands`, `hands.layer → output.all.guide` (as #459's 2026-11-15 run did for 20 presets). A layer that reaches an output any other way is left as wired. Each changed patch is loaded again from what would be written; one whose load notes change is named and not written | 851, 852 | owner — 2026-11-23: accepted as built |
@@ -15397,6 +15424,194 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** (rec).
 - **Built.** `tools/fractal_dive_demo.py`, `plans/assets/81-fractal-dive/`.
 - **Judge it.** Hand checks 812, 815.
+### 1060. A load says when it rescales a file with no units marker
+
+- **What.** Plan 86. A loadable patch whose `units` has no `"fx.depth": "taper"` is read as a file from before wave 0 T1: every route, desk row and macro base subscriber onto an effect's `speed` or `amount` param has its depth moved from the linear range onto the taper, about its base (`params.retaper_depths`). That is right for an old file and wrong for one written by hand today: two agents writing patches on 2026-11-19 wrote a push of 0.12 and got 0.28, and 0.25 became 0.8, with nothing said. The rescale is unchanged, since every old file depends on it. The load now adds one note, `loadable.RETAPER_NOTE`: how many depths moved, each row as `params.retaper_depths` already listed it (`routes lfo:1 → fx.acid.speed: push 0.12 → 0.28 about 0.5`), and the marker a hand-written file wants. The strip shows the first note with "(+n more)" as for every load; the panel's notes list shows it whole. A save writes the marker, so the saved file loads with nothing to say. **On an old library file** (one `tools/retaper_routes.py` has not rewritten) the strip now shows this note where it showed "migrated … save to keep it", since `_warn` puts a load's first note before the migration line; the note also says a save writes the marker. Three tests that loaded pre-taper fixtures and expected no notes now set this one aside (`test_graph_placement.py`, `test_graph_wires.py`, `test_plan36_seven.py`).
+- **Answer.** (rec) — the builder's, plan 86 (2026-11-22); pending the owner.
+- **Built.** `loadable.retaper_note`, `loadable.RETAPER_NOTE`, `LoadedPatch.load_doc`; `tests/test_retaper.py::test_a_file_written_without_the_marker_says_which_depths_it_rescaled`, `::test_an_old_loadable_loads_as_the_tool_rewrites_it` (now expects the note).
+- **Judge it.** 855.
+
+### 1061. Node mode on a desk fills dropdowns
+
+- **What.** Plan 86. Why node mode filled no dropdown: `nodemode.fillable` kept `Kind.CONTINUOUS` only, a filter carried over from plan 53's latch page (§2, "Filter"), which named no reason for leaving enums out. Nothing on a desk's road needs it: an `abs` row on an enum already lands a choice by position (`Param.set_norm`: `round(u × (n − 1))`), its ring is the choice's norm, soft pickup and the ring's re-base work on that norm, and FINE and the knob slew already skip a discrete param (`MidiIO._apply`). A desk knob learned onto a dropdown is this row today (`Learn.learn_control` writes `abs` whatever the kind). So a desk now fills, after every continuous param of the node, each dropdown with a fixed list of two choices or more: a choice per stretch of the knob's throw. Not one whose list is asked each time (`choices` a callable: a list that changes moves every choice under the knob; all three such params are meta and never filled anyway), and not one with a single choice. Order: `graphview.param_ids` already lists continuous params first; `fillable` keeps that order itself, so the dropdowns take only the knobs the continuous params leave and every map made before is the same map. **What changes for a saved patch:** a knob node mode left empty may now hold a dropdown, and a patch-layer desk row on that knob is then shadowed while node mode points there, as for any filled knob (`NodeDesk._free`). A dropdown already on any row stays out of the fill, as any mapped param does. The continuous params fill first against exactly the knobs they had before (a patch-layer row on a dropdown reserves none of them: review of #468, which found a saved dropdown row on K1 moving every fader a knob along); the dropdowns then take the knobs left, where a knob still holding a dropdown's own row stays that row's. No schema, no saved row, no graph change: a node-mode cable to a dropdown is drawn as to any param.
+- **What doesn't line up underneath** (the owner asked). The program holds two ideas of a dropdown. The panel, a desk's knob and its ring read it as a position on a line, a fader with detents (`set_norm`, `norm`). The modulation layer reads it as a state: a route lands it through `_snap` with a deadband, and the base chase's ledger (`Param._commit`) is kept for continuous params only, so a route can move a dropdown but nothing can leave one moved. A desk edits the base, so it sits on the first idea and is clean. A pad's node-mode rows were all routes, so they sat on the second; the owner's answer puts a pad's dropdowns on its buttons, as edits, on the first (row 1062). Also: a knob makes a list ordinal. For an ordered list (an LFO's sync, a size, Wave Table's profile) a sweep reads; for `view.shape`'s 109 shapes it is a walk through unrelated shapes, about one per knob detent.
+- **Answer.** (rec) — the builder's, plan 86 (2026-11-22); pending the owner.
+- **Built.** `nodemode.fillable`, `nodemode._knob_enum`, `nodemode.ENUM_MIN_CHOICES`; `tests/test_nodemode.py::test_a_desk_fills_continuous_params_then_dropdowns_and_a_pad_only_continuous`, `::test_a_dropdown_with_one_choice_or_a_list_asked_each_time_is_not_filled`; `tests/test_node_desk.py::test_a_knob_on_a_dropdown_picks_a_choice_per_stretch_and_its_ring_says_which`, `::test_a_node_whose_continuous_params_fill_the_desk_leaves_its_dropdown_over`, `::test_a_saved_row_on_a_dropdown_moves_no_continuous_param_off_its_knob`, `::test_a_knob_left_free_that_holds_a_dropdowns_row_stays_that_rows`.
+- **Judge it.** 856, 857.
+
+### 1062. A pad in node mode cycles dropdowns on its buttons
+
+- **What.** Plan 86, asked and answered. A pad's node-mode rows were all `push` routes about the base at `PAD_DEPTH` (plan 53 NQ5): a stick at rest moves nothing and the look comes back on release; the base chase (plan 52) keeps a move. A dropdown fits that badly: a push lands it (`Param.apply` snaps with `MOD_DEADBAND`), but the chase never commits one (`_commit` runs in the continuous branch only), so a stick could flick a dropdown while held and never leave it. The options put to the owner were A, no dropdowns on a pad; B, a pair steps one, an edit; C, teach the chase to commit a dropdown.
+- **Answer.** owner (2026-11-23): "pads should just use their toggle buttons (bumpers, stick clicks, maybe even the middle buttons, or even the dpad or other button cluster) to toggle/ cycle between dropdown options". So B's kind of row, an edit, on lone buttons. The order, and what is left out, are the builder's (rec).
+- **Built.** The continuous params fill as before: the sticks and triggers, then the natural pairs, as pushes. The node's dropdowns (`nodemode.dropdowns`: a fixed list of two choices or more, no alias, no meta param; a route need not move it, since a press is no route) then fill the buttons left, one dropdown a button, in `node_desk.PAD_BUTTONS`' order: LB, RB, the stick clicks, View, Menu, Share, the back buttons and Fn buttons where the model has them, the touchpad's click, the D-pad (N, E, S, W), then the face (N, E, S, W). A pair the continuous params left is two buttons here; a pair they took is not, so on a node with many faders (Wave's ten, on an Xbox pad) RB/LB hold a fader pair and the dropdowns start at the stick clicks. Faders first keeps every map made before; the owner, 2026-11-23: "bumpers for faders is okay". Never Guide (the system's button), a button an enabled row reads, gates on or a modifier reads, or one the model's own layout holds (`NodeDesk._pad_held`, the rule the sticks already had). Each is a `toggle` row (`node_desk.CYCLE_OP`): `routing.act` cycles an enum, so a press is the next choice and the last wraps to the first. A press is an edit of the base, kept, as a desk knob's is; the modulators on that dropdown rest while the pad points, as for any filled param (row 711). The rows are in no file and no `bindings`: `NodeDesk.pressed` lists them, `Bindings.node_buttons` hands them to `Router.pad`, which fires them beside the table's own rows; `routed` (the pushes `Router` runs) leaves them out. A dropdown with no free button is listed as over (`Fit.too_many`), and a node of only dropdowns now lets a pad in. GRAPH draws each as a node-mode cable that shows its param's value, as a desk knob's does; the pad window outlines the button.
+- **Also.** `routing.py` (`NodeRows.pressed`, `Bindings.node_buttons`, two lines in `Router.pad`) and `node_desk.py` are outside plan 86's row; the change in each is the least that carries it.
+- **Built in.** `node_desk.PAD_BUTTONS`, `CYCLE_OP`, `pad_buttons`, `NodeDesk._pad_held`, `_button_rows`, `pressed`; `nodemode.dropdowns`; `routing.Bindings.node_buttons`, `Router.pad`; `tests/test_node_mode_pad.py::test_a_pads_dropdowns_go_on_its_bumpers_then_its_stick_clicks`, `::test_a_press_cycles_the_dropdown_and_the_choice_stays`, `::test_when_the_pairs_hold_continuous_params_the_dropdowns_go_to_the_stick_clicks`, `::test_no_dropdown_takes_a_button_a_row_reads_or_guide`, `::test_a_joycon_cycles_on_the_buttons_it_has`; `tests/test_nodemode.py::test_a_node_of_only_dropdowns_lets_a_desk_and_a_pad_in`.
+- **Judge it.** 858.
+
+### 1000. A generator draws with nothing wired in
+
+- **What.** Plan 80: the owner's report — with nothing wired into `mandel.image` the frame was black, with no note, though the node paints the whole frame and ignores its input. `graph.Effect.reads` and `paint` returned at once with no input. Now an effect whose Python half says `GENERATOR = True` (`mandel.py`) reads and paints with no input: `_pass` clears its input texture to transparent black and runs the pass. With a wire in, nothing changes; an ordinary effect with no input still reads nothing.
+- **Answer.** owner (2026-11-22): accepted, the `graph.py` change included. `graph.py` is outside plan 80's files; the change is these three methods and `generates`.
+- **Built.** `mandel.GENERATOR`, `graph.is_generator`, `generators_of`, `Effect.generates`, and `build_graph(generators=…)`: the graph builder keeps a generator with no wire in, where it made every such effect dormant (Devin's review of #471 found the first build fixed only drawing, and its test met the old frame's migration, which wires `scene` in; the test is a wired frame now). The renderer passes the set and keys its cached graph on it (`render.py`, four lines, also outside plan 80's files); `tests/test_mandel.py::test_with_nothing_wired_in_it_draws_the_whole_frame`, `::test_with_nothing_wired_in_and_switched_off_it_draws_nothing`.
+- **Judge it.** 800.
+
+### 1001. The coloured inside is how fast a point settles
+
+- **What.** Plan 80: at the seahorse, 9e6×, Steps 6000, the inside was flat grey with rectangular blocks; at 1e6×, odd flat bands and discs. The cause was the colour rule, mixed with float32 after a rebase. The colour was the step at which the periodicity check caught a point, with a tolerance of 5 % of a pixel. Deep in, that tolerance is so small that even the float64 oracle leaves 81 % of the inside at the cap at 9e6× (the flat grey), with eight values in all. What it does catch is quantised by Brent's doubling window (the bands and discs). In float32, after a rebase, a catch needs the last bit to repeat (the blocks: 19 % of catch steps off the oracle). The fix colours by the cycle's multiplier: the sum of ln abs(f′(z)) = ln p + (p − 1) ln abs(z) since the last save gives ln abs(λ_L) wherever z is back within 10⁻³ of the saved z. L·ln K / ln abs(λ_L) is then the steps to come K times nearer, the same whatever multiple of the period L is. It is smooth, the same at any depth or tolerance, and barely moved by float32. Each later lag overwrites the last; no lag, or no contraction, leaves the cap. Whether a point is inside is decided as before.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `mandel.Settle`, `SETTLE_K`, `SETTLE_NEAR`, `escape_counts(settle=True)`, `perturbed_counts(settle=True)`, `mandel.glsl`'s `settled`; `tests/test_mandel.py::test_the_coloured_inside_under_perturbation_is_the_float64_oracle`, `::test_settling_is_the_multiplier_not_the_tolerance`, `::test_the_gpu_coloured_inside_is_its_float32_twin_deep_in`, `::test_the_coloured_inside_in_the_direct_tier_is_the_oracle`, `::test_the_shader_holds_the_settle_constants`.
+- **Judge it.** 801.
+
+### 1002. An off-screen term's drive answers the picture
+
+- **What.** Plan 80: on a Julia slice at zoom 1.7, a view height is 1.8 units of c, and 0.03 of c tears the set apart, so routes on the c drive needed depths near 0.01. A term's effect on the picture does not follow the zoom. Across eight Julia views, the step of c that changes the picture as much as a pan was 3·10⁻⁵ to 20 view heights. So a term's drive is measured: R = Σ abs(∂z/∂q)·g / Σ abs(∂z/∂term)·g over a 16×9 grid of the view, iterated to 192 steps, g = 1/(abs(z) ln abs(z)) at escape (how a point's smooth count, and so its brightness, answers a change of z). R predicted the measured ratio within about ×2 at most views; plain view height was off by up to five orders. The rate is the view height × min(1, 0.1 × R). It is measured on a drive's first frame, then every 0.25 s while one runs (0.05 s after Slice or Power moves). A faster rate is eased in over 0.5 s and a slower one taken at once. At the owner's view, a second at full throw now moves c by 0.067, where plan 63 moved it 1.765. Pan and Dive are unchanged, and a term the picture does not use (c at Slice 0) keeps plan 63's rate.
+- **Answer.** (rec) — pending the owner: TERM_RATE 0.1 is a first value for the rig (check 802).
+- **Built.** `mandel.sensitivity`, `term_scale`, `advance`, `TERM_RATE`, `SENS_*`; `tests/test_mandel.py::test_c_on_a_julia_slice_is_slowed_to_what_the_picture_takes`, `::test_the_measured_scale_follows_the_picture_across_views`, `::test_an_unused_term_and_pan_keep_their_rates_and_the_rate_never_jumps`, `::test_dive_doubles_and_every_drive_moves_by_the_view`.
+- **Judge it.** 802, 803.
+
+### 1003. The perturbation loop and the packed border pass
+
+- **What.** Plan 80: the perturbation loop fetched the reference twice a step, at m and m + 1. Zₘ is now carried from the step before. `binomial_delta` kept Z's powers in a dynamically indexed array; p = 2 now takes its closed form (2Z + δ)·δ (Horner's one step, the same sum), and other powers walk Z's powers up as the coefficients walk down. Texel coordinates use `& 1023` and `>> 10`. The skip's border pass ran at full size and returned off the border. Every SIMD group of a 16×16 tile meets its first or last column, so the pass cost nearly a whole picture, which is why the skip made perturbation slower. It is now packed: 64 slots a tile along x, each pixel iterating one border pixel (`border_px`, `mandel.border_slot`). On this M3 Max, Size 810, Steps 2000, 1080p out: perturbation at 1.5e4 19.7 → 5.1 ms, 4e5 36.9 → 9.3, 1e7 81.1 → 14.9, and the skip at 3e6 75.8 → 12.8 ms on, 60.7 → 27.4 off.
+- **Answer.** (rec).
+- **Built.** `mandel.glsl`'s `orbit`, `binomial_delta`, `ref_at`, `border_px`; `mandel.BORDER`, `border_slot`, `TILES_FS`, `run`; `tests/test_mandel.py::test_the_packed_border_slots_are_a_tiles_border`, `::test_the_skip_with_the_packed_pass_flags_what_the_rule_flags`, `::test_the_binomial_without_an_array_is_the_difference_for_every_power`.
+- **Judge it.** 804, 807.
+
+### 1004. The skip rests where it costs more
+
+- **What.** Plan 80: forced on against off, the skip paid only where at least a third of the tiles were flagged: seahorse 3e6× and 1e7× at 0.7–1.0 flagged, 0.24–0.52× the cost. Elsewhere it cost 1.0–2.3×: the whole set at 7.5 % flagged (the cardioid test already makes its inside cheap), Julia, the elephant valley, filaments. So it rests under `SKIP_MIN` = 30 % flagged. The count is a samples query on the tiles pass, which now discards unflagged tiles over a cleared target, read `SKIP_LAG` = 3 passes late so the CPU never waits. Resting, it probes every 30 passes, and at once when the zoom has moved a doubling since it last looked. A context with no samples queries keeps plan 63's behaviour.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `mandel.SkipGate`, `SKIP_MIN`, `SKIP_PROBE`, `SKIP_LAG`, `State.gate`, one query pool a chain (`Gl.queries`: moderngl 5 cannot free a query), the packed pass only where it fits the context (`Gl.fits`: over about 4096 px across it runs without the skip), the `flagged` and `skip_valid` stats; `tests/test_mandel.py::test_the_skip_rests_where_few_tiles_are_flagged_and_looks_again`, `::test_a_dive_wakes_a_resting_skip_at_once`, `::test_a_context_with_no_queries_keeps_the_skip_on`, `::test_on_the_gpu_the_skip_turns_itself_off_and_the_picture_stays`.
+- **Judge it.** 805.
+
+### 1005. Series approximation not built
+
+- **What.** Plan 80: series approximation, skipping the first iterations for the whole screen with a polynomial in δc, was in scope as a stretch. It is not built. After 1003 the owner's deepest case runs in about 15 ms; the inside running to the cap is what is left, and series approximation would cut the shared early steps of every pixel.
+- **Answer.** (rec).
+- **Built.** Nothing.
+- **Judge it.** No hand check.
+
+### 1006. The bench's owner cases
+
+- **What.** Plan 80: `tools/mandel_bench.py --owner` runs the cases the owner measured after plan 63, one line each with the tier and whether the skip ran, beside plan 63's rig ms. Every line resets the skip's gate and runs it a few passes untimed first, so a line is the steady state at its view and nothing carries from the line before.
+- **Answer.** (rec).
+- **Built.** `tools/mandel_bench.py` (`OWNER`, `owner`, `bench`); `tests/test_mandel.py::test_the_rig_bench_runs_and_prints_a_line_a_size`.
+- **Judge it.** 804.
+
+### 1007. The Test card as a generator
+
+- **What.** Plan 80, open: the Test card also paints a picture whatever comes in. With a Python half, or a header line saying the same, it could draw with no wire in too. Not done: `testcard.glsl` and `fx.py`'s parse are not plan 80's files. The recommendation is an `@generator` header line read by `fx.py`, replacing `GENERATOR` on the module, once plan 82 (which owns `fx.py`'s directive parse) has merged.
+- **Answer.** **pending the owner**.
+- **Built.** Nothing.
+### 1020. One shape for every fader
+
+- **What.** Plan 82: `ui_fields.Shape` (`shape_of`) says how a continuous param's fader is drawn: unipolar (filled from the left), bipolar (from 0, with a detent there), unity (a multiplier, from 1, with a detent there), and an integer range's ticks. The kit slider, the stock fallback (`Panel._origin`) and the pad's knobs and crosshair all read it.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields.Shape`, `shape_of`, `marks`; `tests/test_control_widgets.py::test_shapes_of_the_effects_params`.
+- **Judge it.** 820, 821.
+
+### 1021. Bipolar, inferred
+
+- **What.** Plan 82: a range across 0 with a 0 default is bipolar; so is one with no default to read (a param that is not an effect's own: VIEW's rates, the camera's yaw), which filled from 0 before. A range across 0 with another default is unipolar — the Mandelbrot's c, z₀ and centre now fill from the left. An effect's `@param` line can say `bipolar` or `unipolar` (`fx.ParamSpec.polarity`).
+- **Answer.** (rec) — pending the owner. If the Mandelbrot's terms should fill from 0, plan 80 adds `bipolar` to their lines.
+- **Built.** `ui_fields.polarity`, `fx.POLARITIES`; `tests/test_control_widgets.py::test_polarity_is_inferred_from_the_range_and_the_default`, `::test_a_param_line_may_say_its_polarity`.
+- **Judge it.** 820.
+
+### 1022. Unity, inferred
+
+- **What.** Plan 82: a default of 1 in the middle of its range — linear (lo + hi = 2) or log (lo · hi = 1) — is a unity multiplier with a detent at 1: Kaleidoscope's zoom, Blocks' aspect, Hue cycle's saturation. A 1 elsewhere in the range (Prism's rim 0…3, Deconverge's amount, the drifts) is no neutral. There is no `unity` marker.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields.polarity`; the same tests.
+- **Judge it.** 821.
+
+### 1023. The detent
+
+- **What.** Plan 82: a drag that lands within `ui.DETENT_PX` (6 px) of a bipolar or unity detent lands on it. A typed value (Ctrl+click) and a ⇧ fine drag are never moved. A taper's unity notch (an effect's speed at 1×) is drawn but not snapped; its stop, in the middle, is the detent.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields._snap`; `tests/test_control_widgets.py::test_a_bipolar_fader_rests_centred_and_a_drag_near_centre_lands_on_zero`.
+- **Judge it.** 820.
+
+### 1024. Ticks
+
+- **What.** Plan 82: an integer param with no taper draws a tick under its track a step, down to `ui.TICK_GAP` (6 px) apart; past that every 2nd, 4th, 5th, 10th … whole value (the first stride that leaves the gap), both ends always, an inner tick too near an end left out.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields.ticks`; `tests/test_control_widgets.py::test_ticks_one_a_step_while_they_fit`, `::test_ticks_thin_and_never_crowd`, `::test_a_stepped_fader_draws_its_ticks`.
+- **Judge it.** 822.
+
+### 1025. `@pair` and `@volume`
+
+- **What.** Plan 82: `// @pair u_x u_y "Label"` and `// @volume u_x u_y u_z "Label"` in an effect file name two or three of the file's own continuous params (no choice), each on one pad at most. Drawing only: not in `EffectSpec.signature`, no param renamed or re-keyed, so saved patches, routes and learn are as they were.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `fx.PadSpec`, `_parse_pad`, `_check_pads`, `pad_of`; `tests/test_control_widgets.py::test_pair_and_volume_lines_name_the_files_own_params`, `::test_a_bad_pad_line_says_why`.
+- **Judge it.** 823.
+
+### 1026. D3 as built
+
+- **What.** Plan 82: Prism and Wave carry `@pair u_cx u_cy "Centre"`, Wave Table `@pair u_offset_x u_offset_y "Offset"`, Zoom burst `@volume u_cx u_cy u_amount "Burst"` — and no pair beside its volume, since a param is on one pad and the volume is the pair plus Amount.
+- **Answer.** (rec) — pending the owner (D3 as recommended).
+- **Built.** The four files; `tests/test_control_widgets.py::test_the_four_files_carry_their_pads_and_no_param_moved`.
+- **Judge it.** 823, 824.
+
+### 1027. How a pad and a knob move
+
+- **What.** Plan 82: the square sets X and Y where it is pressed and dragged, Y up; ⇧ held moves a tenth as far, from where they were, and once ⇧ has joined a drag it stays relative until the button comes up — letting go of ⇧ makes the move whole again, never a jump to the pointer. A knob's and a pad's drag keeps its own unrounded value, so a slow drag over a taper's detents adds up. A knob turns by a vertical drag, `ui.KNOB_THROW` (200 px) a full throw, ⇧ a tenth; a double-click returns it to its detent. A volume's Z is its knob alone: no scroll over the pad, since a trackpad's scroll would change it while scrolling the pane. No typing into a knob.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields._square`, `knob`, `_write_norm`; `tests/test_control_widgets.py::test_a_drag_on_the_pad_sets_both_params`, `::test_a_knob_turns_one_axis_and_a_double_click_centres_it`.
+- **Judge it.** 823, 824.
+
+### 1028. Modulation on a pad
+
+- **What.** Plan 82: while a lane rides an axis, the pad draws a white dot where the lanes have it now, a line to it from the bases' dot, a white halo for a volume's Z, and each knob a white tick with its readout red: its base on one line, `→ effective` on the next, each cut to the knob's column. The pad's head is its label alone; each knob says its value under it.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields._square`, `knob`; `tests/test_control_widgets.py::test_the_pad_shows_a_lane_riding_it`.
+- **Judge it.** 825.
+
+### 1029. The strip draws the pad
+
+- **What.** Plan 82: `ui_fx.strip`, outside the row's files, draws a pad at its first param's place in place of its sliders — the one place an effect's params are drawn. Pads are resolved before the strip packs its rows (`pad_rows`), so a pad over keys it would pack (`sat_lo`, `sat_hi`) is still a pad. Without the kit the sliders stay.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fx.strip`, `ui_fields.inline_pad`; `tests/test_control_widgets.py::test_the_strip_draws_no_slider_for_a_padded_param`.
+- **Judge it.** 823.
+### 1040. The gpu cost chip
+
+- **What.** Hovering every node to find the bottleneck is how Rugged Doctor was found at the 60 FPS floor. A chip that marks every node at once, off by default so the canvas is as it was, and page state like **pictures · tint cables** (plan 37 C2, D3). The badge is drawn over the node, outside its layout, so lighting it moves nothing.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `ui_graph.COST_LABEL`, `_cost_chip`, `_cost_style`, `_cost_badge`, `cost_line`; `tests/test_gpu_cost.py::test_the_chip_is_off_by_default_and_last_on_the_head`, `::test_the_chip_reaches_neither_the_loadable_nor_the_show`, `::test_lit_it_asks_the_renderer_and_marks_the_render_nodes`, `::test_the_head_line_is_the_total_and_the_three_costliest`.
+- **Judge it.** 840, 841.
+
+### 1041. Heat is a share of the costliest
+
+- **What.** "Ranked within the frame": the costliest node is always white. A share keeps the gaps a percentile would hide — what matters on stage is which node to remove. The ramp is black, deep red, orange, yellow, white, every step brighter.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `ui_graph.rank_costs`, `heat_rgb`, `Cost`; `tests/test_gpu_cost.py::test_ranked_within_the_frame_by_share_of_the_costliest`, `::test_a_tie_is_ranked_by_name_so_it_never_swaps`, `::test_the_ramp_runs_black_to_white_always_brighter`.
+- **Judge it.** 841.
+
+### 1042. Eased over a second
+
+- **What.** The timer's median already rejects a spike; the page eases each median by 1 − e^(−dt/τ) a frame, τ = 1 s, so the marks hold still and two nodes of nearly one cost do not swap every frame.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `ui_graph.ease_costs`, `COST_TAU`; `tests/test_gpu_cost.py::test_a_step_settles_in_about_a_second`, `::test_the_easing_does_not_depend_on_the_frame_rate`, `::test_a_new_node_starts_at_its_time_not_from_zero`.
+- **Judge it.** 842.
+
+### 1043. Made nothing is not free
+
+- **What.** The timer counts a timed node that did not run as 0 that frame; an unbuilt node has no line at all. Both would read as cheap. The renderer says what each node made by `Graph.evaluate`'s own rule, and the page marks the rest **made nothing**.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `render.gpu_made`, `ui_graph.node_cost`, `NOTHING`; `tests/test_gpu_cost.py::test_each_kind_of_node_gets_its_mark`, `::test_asked_it_says_what_each_node_made_for_one_frame`, `::test_a_node_that_made_nothing_drops_out_and_comes_back_at_its_time`.
+- **Judge it.** 843.
+
+### 1044. Nothing when off
+
+- **What.** The brief: "it must cost nothing when off". The renderer's extra read runs only in a frame the page asked for; the times are the medians the renderer kept already.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `Renderer.gpu_watch` (read in `_draw_frame`), `ui_graph._costs`; `tests/test_gpu_cost.py::test_unasked_the_renderer_says_nothing_more`, `::test_the_outputs_are_the_same_bytes_asked_or_not`, `::test_off_it_asks_nothing_and_draws_nothing_extra`.
+- **Judge it.** 844.
+
+### 1045. Unwired thumbnails beyond effects: not built
+
+- **What.** Plan 65 made an unreached effect's thumbnail beside the graph. The other unreachable picture nodes need a pass of their own, or a history they do not hold, to be shown faithfully; their input in their place would be a picture the node does not make. The owner picks.
+- **Answer.** (c), the owner, 2026-11-23: "I don't really mind if nodes outside of the hot render graph are not heatmapped." They stay as they are: no thumbnail made for them, no mark beyond **made nothing**.
+- **Built.** Nothing: a question. `docs/plans/84-gpu-cost.md`, "Not built".
+- **Judge it.** —.
 ### 1050. The show look in code: BONES, PLAIN, 50%
 
 - **What.** The owner changed the show's ghost hands on 2026-11-18: on, BONES style, PLAIN material, 50% opacity. `ghost.SHOW_LOOK` holds it and `ghost.show_look(state)` applies it. The app applies it to the on-air renderer's hands at startup, to deck 2's sibling, and to every extra hands node's fresh state, so a new patch's values and **New patch** carry it. `GhostState()` keeps its neutral defaults: changing them broke 14 ghost and render tests in #459 and would move the goldens.
