@@ -8872,6 +8872,23 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 **678. A hand on c deep in.** At 10⁶× with **Steps** at 4096, a hand on **c drive x**. *Pass:* the picture keeps the frame rate while c moves (the reference is computed every frame c changes). *Fail:* a stutter: say at which Steps it starts (the bench's `ref ms`).
 
+## FB. An endless, centred fractal dive (rows 1010–1017, 2026-11-22)
+
+Plan 81. Headless: `tests/test_fractal_dive.py` (every fractal dived sixty levels at a fixed rate, and the sponge and the 5-cell three hundred: no re-root moves a point; the cell's middle stays near the screen's or, holding a point, the point never leaves it; a negative rate back to the whole shape; a grabbed shape dived into; the param routed, saved and loaded). The before/after pair and the alternative are in `plans/assets/81-fractal-dive/`, rendered offscreen on Mesa's software GL, not the rig. A restart after pulling.
+
+Setup for all: VIEW → shape **Menger sponge** (3D → Fractals); **Dive** is the first slider of the FRACTAL section, above **Detail**.
+
+**810. An endless dive.** **Dive** at +1 for two minutes, the shape turning. Then route an LFO to **Dive**, a saw, then a sine. *Pass:* it goes in and never stops; no jump at any level or at the saw's wrap; the picture stays full and centred on what it dives into, not sliding off to one side as before (`before.mp4` beside `after.mp4`). On the sine it dives in and climbs out smoothly. *Fail:* a jump, a stall, the screen half empty, or the picture creeping toward an edge.
+
+**811. Climbing out.** Deep in (a minute at +2), set **Dive** to −2, or a hand on it. *Pass:* it climbs out level by level to the whole shape, centred at zoom 1, and stops there however long the rate stays down. Back to +2 dives in again. *Fail:* a jump, a shape that comes back off centre, or one that keeps shrinking past zoom 1.
+
+**812. The cell's middle (row 1012, the owner's: "cell").** Dive at +1 into the sponge, the 5-cell and the Cantor dust. *Pass:* the screen stays full and centred on the middle of the cell it goes into, level after level; the steer from one cell's middle to the next reads as part of the dive, not a slide toward an edge. *Fail:* a jump, a half-empty screen, or a steer that reads as drift.
+
+**813. A pan and a grab during a dive.** Diving at +1, pan with the stick, then (the grip on, plan 60) grab inside and pull, turn, let go. *Pass:* the pan moves the view and stays moved; the grab moves the space as before (DZ 685); the dive goes on about the middle of the screen; nothing jumps. *Fail:* a pan the dive takes back, a jump at a re-root while held, or a dive that leaves the middle.
+
+**814. Saved with a dive rate.** **Dive** at +0.5 deep in, save the look, load another, load it again. *Pass:* it opens in the same cell (row 889) and goes on diving at once at +0.5. A look saved before plan 81 opens with **Dive** at 0, and a look that is not a fractal saves no dive at all (its file unchanged). *Fail:* the rate lost, or a dive that does not start.
+
+**815. The settle's cost on the rig.** The SYSTEM page's frame time, diving at +2 into the **Sierpinski 5-cell**, the **Cantor dust** and the sponge, faces off, at the show's output size, against the same fractal held still. *Pass:* the frame rate holds; note any spike at a level (a re-root searches the cells; a cloud machine put the worst frame at about 4 ms). *Fail:* a dropped frame at each level.
 ## FG. The loader's units note and node mode's dropdowns (rows 1060–1062, 2026-11-22)
 
 Plan 86. Headless: `tests/test_retaper.py` (the note, end to end through a load and a save), `tests/test_nodemode.py` and `tests/test_node_desk.py` (the fill, a knob on a dropdown over a fake APC40), `tests/test_node_mode_pad.py` (a pad's dropdowns on its buttons, over a stand-in pad). Hot reload is enough for `loadable` and `nodemode`; a restart is safe.

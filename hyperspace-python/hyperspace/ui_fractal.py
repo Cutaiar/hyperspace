@@ -4,6 +4,8 @@ the view is inside it.
 - what the shape is and where the view is: how many cells in, whether the
   fist holds the shape (outside) or the space (inside, plan 64 part 2), the
   zoom;
+- **Dive** (`view.frac_dive`, plan 81): a dive rate in levels a second,
+  signed — it dives for good, or climbs out to the whole shape;
 - **Detail** (`view.frac_detail`), **Reach** (`view.frac_far`) and **Near**
   (`view.frac_near`): how small a cell splits on screen, how far into the
   shape cells are drawn and how near the eye before they dissolve — the
@@ -22,7 +24,7 @@ from imgui_bundle import imgui
 from . import fractal, ui, ui_fields, ui_kit
 from .geometry import SHAPES
 
-SLIDERS = ("view.frac_detail", "view.frac_far", "view.frac_near")
+SLIDERS = ("view.frac_dive", "view.frac_detail", "view.frac_far", "view.frac_near")
 
 
 def lines(view) -> list[str]:
@@ -42,7 +44,8 @@ def lines(view) -> list[str]:
 
 def spec() -> list:
     fh, rh = ui_fields.slider_h(), ui.FIELD_ROW_H
-    return [[("view.frac_detail", fh)], [("view.frac_far", fh), ("view.frac_near", fh)],
+    return [[("view.frac_dive", fh)],                       # plan 81
+            [("view.frac_detail", fh)], [("view.frac_far", fh), ("view.frac_near", fh)],
             [None], [("view.frac_additive", rh), ("view.frac_top", rh)]]
 
 

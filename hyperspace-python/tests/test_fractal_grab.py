@@ -94,6 +94,7 @@ def test_nothing_jumps_going_in_down_and_out(name, pose):
         h.view.zoom *= f
         if h.world.objects["shape"].bounded:
             h.world.home("shape", W.shape_home(h.view.zoom, h.view.pan))
+        fractal.centre(h.view, None, _drawn_off(h))     # (plan 81: the zoom about the middle)
         before = _drawn(h, X)
         inside, path = h.view.dive.inside, list(h.view.dive.path)
         last = h.view.dive.last
@@ -650,7 +651,7 @@ def test_the_fractal_controls_are_the_looks_own(tmp_path):
     reg["view.frac_near"].set(-0.25)
     reg["view.frac_additive"].set(True)
     doc = json.loads(rig.loaded_patch.save_as("Detailed").read_text())
-    assert doc["fractal"] == {"detail": 1.8, "far": 0.75, "near": -0.25}
+    assert doc["fractal"] == {"detail": 1.8, "far": 0.75, "near": -0.25, "dive": 0.0}  # (plan 81: Dive)
     assert not any(k.startswith("view.frac_") for k in doc["values"])
     reg["view.frac_detail"].set(1.0)
     rig.loaded_patch.load("Detailed")
