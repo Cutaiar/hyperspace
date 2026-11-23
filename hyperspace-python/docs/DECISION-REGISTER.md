@@ -15378,20 +15378,35 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
   is as row 723 left it, and the Edge's ↑ / ↓ stay the brightness every pad has. A layout row
   may now name a D-pad direction (`hat.E`), which only face and shoulder buttons could before,
   so the Edge's ← / → are no longer free for a pair or for node mode.
+  A load that lands on the deck the **playlist** has cued takes that cue out from under it, and
+  the list used to count the entry as played, because `_due` knew only which deck went on air.
+  The cue is let go **without advancing** instead, so the entry is still next and plays once
+  the hand's look has had a dwell of its own: a hand's move is the one thing the list gives
+  way to, and it keeps its place rather than skipping it. Found in review on PR #475; it was
+  never the D-pad's alone — every bank verb from a row lands off air (row 700), so a bank pad
+  pressed in the lead time did the same before this.
 - **Answer.** owner — 2026-11-22, asked for: the D-pad "doesn't just snap the new patch in",
   it "loads the next patch onto deck 2 and then triggers the fade between them".
 - **Built.** `library.Library.neighbour`, `library.Install.fade_to`, `library.DeckInstall.fade_to`,
   `deck.MetaController.fade_when_warm`, `.fading_words`, `.fade`, `.waiting`,
   `params` `preset.fade.next` / `preset.fade.prev`, `routing._layout_source`,
-  `pads.models._EDGE_LAYOUT`, `ui.CHEATSHEET`; `tests/test_on_off_air.py::test_a_fade_verb_loads_off_air_and_steps_from_the_patch_on_air`,
+  `pads.models._EDGE_LAYOUT`, `ui.CHEATSHEET`, `playlist.Playing._cue_lost`, `._cue_taken`,
+  `.armed_name`; `tests/test_on_off_air.py::test_a_fade_verb_loads_off_air_and_steps_from_the_patch_on_air`,
   `::test_a_fade_verb_from_either_deck_lands_off_air`,
   `::test_the_fade_waits_for_the_warm_draw_then_runs_the_fader_across`,
   `::test_press_after_press_goes_on_through_the_list`,
   `::test_with_no_fade_object_the_fade_starts_at_the_next_tick`,
   `::test_a_fade_verb_is_refused_between_the_ends_and_loads_nothing`,
-  `::test_the_edges_d_pad_fades_the_list_and_no_other_pads_does`.
+  `::test_the_edges_d_pad_fades_the_list_and_no_other_pads_does`,
+  `tests/test_playlist.py::test_a_hand_loading_over_the_cue_keeps_its_place_instead_of_skipping_it`,
+  `::test_the_cue_untouched_still_counts_as_played_when_a_hand_takes_the_fader`.
 - **Judge it.** 859, on the Edge at the rig: whether the fade reads as a transition and
   whether `output.xfade_s` is the right length to reach for.
+- **Open.** `Fade.warm` draws the deck off air for the **first output only** (the render loop
+  passes `first.switches`, one call site for every warm consumer), so an effect wired only to
+  a later output compiles in the fade's first blended frame. Raised in review on PR #475;
+  pre-existing and not the D-pad's — the playlist's own transitions warm exactly the same way.
+  Judging it needs a two-output rig by eye, so it is its own piece of work.
 ### 1060. A load says when it rescales a file with no units marker
 
 - **What.** Plan 86. A loadable patch whose `units` has no `"fx.depth": "taper"` is read as a file from before wave 0 T1: every route, desk row and macro base subscriber onto an effect's `speed` or `amount` param has its depth moved from the linear range onto the taper, about its base (`params.retaper_depths`). That is right for an old file and wrong for one written by hand today: two agents writing patches on 2026-11-19 wrote a push of 0.12 and got 0.28, and 0.25 became 0.8, with nothing said. The rescale is unchanged, since every old file depends on it. The load now adds one note, `loadable.RETAPER_NOTE`: how many depths moved, each row as `params.retaper_depths` already listed it (`routes lfo:1 → fx.acid.speed: push 0.12 → 0.28 about 0.5`), and the marker a hand-written file wants. The strip shows the first note with "(+n more)" as for every load; the panel's notes list shows it whole. A save writes the marker, so the saved file loads with nothing to say. **On an old library file** (one `tools/retaper_routes.py` has not rewritten) the strip now shows this note where it showed "migrated … save to keep it", since `_warn` puts a load's first note before the migration line; the note also says a save writes the marker. Three tests that loaded pre-taper fixtures and expected no notes now set this one aside (`test_graph_placement.py`, `test_graph_wires.py`, `test_plan36_seven.py`).

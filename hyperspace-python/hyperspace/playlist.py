@@ -166,7 +166,8 @@ class Playing:
         self.next = 0                   # the entry to load next (`_arm` wraps it)
         self.armed: Entry | None = None  # the entry loaded and not yet on air…
         self.armed_at = 0               # …its place…
-        self.armed_on = None            # …and its deck
+        self.armed_on = None            # …and its deck…
+        self.armed_name: str | None = None  # …and the name that deck then held (`_cue_lost`)
         self.fails = 0                  # entries in a row that would not load or draw
         self.lost = False               # a whole pass would not play: said once, tried again
         self.stepping = False           # a step asked for and not yet on air
@@ -290,6 +291,9 @@ class Playing:
                 self.lib.say("playlist: waiting for the crossfader to reach an end")
             return
         self.waited = False
+        if (taken := self._cue_lost()) is not None:
+            self._cue_taken(taken, now)
+            return
         if self.armed is not None and self.armed_on is meta.on_air:
             self._played(now)           # a hand took the fader across to it
             return
@@ -360,6 +364,9 @@ class Playing:
             why = self._load(entries[k].loadable)
             if why is None:
                 self.armed, self.armed_at, self.armed_on = entries[k], k, self.meta.off_air
+                # the loaded name, not the entry's: a file called `party-tumble` loads as
+                # `TUMBLE`, so only what the deck itself says can be compared later.
+                self.armed_name = getattr(getattr(self.armed_on, "loaded_patch", None), "current", None)
                 return
             if self._failed(k, entries[k].loadable, why, now):
                 return
@@ -398,11 +405,37 @@ class Playing:
         self.lost, self.fails, self.armed = True, 0, None
         self.load_at = self.fade_at = now + dwell
 
+    def _cue_lost(self) -> Entry | None:
+        """The armed entry a hand has loaded over on the deck it was cued onto, or None.
+        Every bank verb from a row lands on the deck off air (`DeckInstall._landing`,
+        row 700) — a bank pad, a slot, the Edge's D-pad fade (row 1063) — and while the
+        fader sits at an end that deck is the cued one, so the load replaces the cue.
+        `_due` would then see the cue's deck go on air and count the entry as played,
+        when a hand's look aired instead. Compared by the name the deck itself holds,
+        never the entry's: a file called `party-tumble` loads as `TUMBLE`. A deck that
+        does not say (a stand-in) is never lost."""
+        if self.armed is None or self.armed_name is None:
+            return None
+        held = getattr(getattr(self.armed_on, "loaded_patch", None), "current", None)
+        return self.armed if held is not None and held != self.armed_name else None
+
+    def _cue_taken(self, entry: Entry, now: float) -> None:
+        """The cue was loaded over: let it go **without advancing**, so the entry is still
+        next and plays once this look has had a dwell of its own. A hand's move is the
+        one thing the list gives way to; it keeps its place rather than skipping it."""
+        self.armed, self.armed_name = None, None
+        pl = self.playlist
+        if pl is not None:              # (always, by here: `_due` runs over an open list)
+            self.lib.say(warning=f"playlist {pl.name}: a hand loaded over "
+                                 f"{entry.loadable}; it is still next")
+        self.fade_at = now + entry.dwell_s
+        self.load_at = self.fade_at - LEAD_S
+
     def _played(self, now: float) -> None:
         """The armed entry is on air, or on its way: its dwell runs from now."""
         entry, k, total = self.armed, self.armed_at, len(self.playlist.entries)
         self.at, self.armed, self.next, self.fails = k, None, k + 1, 0
-        self.lost, self.stepping = False, False
+        self.lost, self.stepping, self.armed_name = False, False, None
         self.fade_at = now + entry.dwell_s
         self.load_at = self.fade_at - LEAD_S
         self.lib.say(f"playlist {self.playlist.name}: {entry.loadable}, "

@@ -981,7 +981,7 @@ def test_the_panels_own_load_on_air_is_the_intentional_one(rig):
     assert rig.two.loaded_patch.current == "TUMBLE" and rig.one.loaded_patch.current == "WAKE"
 
 
-# ------------------------------- the patch list, faded in from a pad (row 902)
+# ------------------------------- the patch list, faded in from a pad (row 1063)
 
 FADES = ["preset.fade.next", "preset.fade.prev"]
 
@@ -1030,7 +1030,7 @@ def test_the_fade_waits_for_the_warm_draw_then_runs_the_fader_across(rig):
 
 
 def test_press_after_press_goes_on_through_the_list(rig):
-    """The point of stepping from what is on air (row 902): a second press, once the
+    """The point of stepping from what is on air (row 1063): a second press, once the
     first fade has landed, goes to the patch after it — never back to where it came
     from, as stepping from the deck off air would."""
     rig.one.reg["output.xfade_s"].set(0.0)

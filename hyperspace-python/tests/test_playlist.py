@@ -1036,3 +1036,45 @@ def test_a_dwell_typed_and_then_the_popup_dismissed_is_kept(tmp_path, monkeypatc
         assert "playlist.pick" not in d.rects
         assert [e.dwell_s for e in playlist.read(r.panel.library, "cart").entries] == [90.0, 60.0]
         assert p.playlist.entries[0].dwell_s == 90.0
+
+
+# ------------------------- a hand loads over the cue (row 1063, Devin on PR #475)
+
+def test_a_hand_loading_over_the_cue_keeps_its_place_instead_of_skipping_it(air):
+    """Every bank verb from a row lands on the deck off air, which during the lead time
+    is the deck the playlist has cued. Replacing the cue there used to count the entry
+    as played: `_due` saw its deck go on air and advanced. The entry has not aired, so
+    the list keeps its place and plays it next."""
+    p = _on_real(air, ("party-tumble", 10.0, 0.0), ("party-wake", 10.0, 0.0))
+    air.one.reg["output.xfade_s"].set(0.0)                     # the D-pad's fade: a cut, for speed
+    air.one.reg["playlist.play"].toggle()
+    air.meta.tick(100.0, 0.05)
+    assert p.armed is not None and p.armed_on is air.two       # entry 0 cued off air
+    cued = air.two.loaded_patch.current
+    assert p.armed_name == cued, "the name the deck holds, not the entry's"
+
+    air.one.reg["preset.fade.next"].fire()                     # the Edge's D-pad, mid-lead
+    assert air.two.loaded_patch.current != cued, "a hand loaded over the cue"
+    t = _run(air, 100.0, 0.5)                                  # its cut goes through
+    assert air.meta.on_air is air.two
+
+    assert p.armed is None and p.at is None, "nothing has aired from the list"
+    assert p.next == 0, "entry 0 is still next, not skipped"
+    assert "a hand loaded over party-tumble" in air.lib.warning
+    assert "1 of 2" not in air.lib.status, "it must not claim the entry played"
+
+    t = _run(air, t, 11.0)                                     # the hand's look gets its dwell
+    assert p.at == 0 and air.one.loaded_patch.current == cued, "entry 0 plays, in its turn"
+
+
+def test_the_cue_untouched_still_counts_as_played_when_a_hand_takes_the_fader(air):
+    """The guard must not fire on the move it was never about: the cue's own patch
+    aired, so the entry played (the line `_due` already had)."""
+    p = _on_real(air, ("party-tumble", 10.0, 0.0), ("party-wake", 10.0, 0.0))
+    air.one.reg["playlist.play"].toggle()
+    air.meta.tick(100.0, 0.05)
+    cued = air.two.loaded_patch.current
+    air.mix.xfade = 1.0                                        # a hand takes it across
+    _run(air, 100.0, 0.5)
+    assert p.at == 0 and p.next == 1, "the cue aired: it played"
+    assert air.meta.on_air is air.two and air.two.loaded_patch.current == cued
