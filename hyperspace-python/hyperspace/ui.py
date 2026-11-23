@@ -93,6 +93,7 @@ from .graph import (
 )
 from .groupwords import group_title
 from .hands import panel as ui_hands
+from .library import NO_LIBRARY
 from .media import publish
 from .params import PLANES, Kind, Param, Registry, build_registry, dial_id, part_of
 from .pointer import Through, deck_number
@@ -3134,7 +3135,10 @@ class Panel:
         root = lib.home
         machine = getattr(lib, "machine", root)
         missing = getattr(lib, "missing", None)
-        if missing is not None:
+        if missing is not None and missing.name == NO_LIBRARY:
+            lines = [(("library: none set — saves are off (put [library] path in "
+                       "config.toml, then restart)"), True)]
+        elif missing is not None:
             lines = [((f"library: {missing} — not found, saves are off "
                       "(restart once it is there)"), True)]
         else:
@@ -3142,6 +3146,9 @@ class Panel:
             said = getattr(lib, "not_moved", "")
             if said:
                 lines.append((said, True))
+        said = getattr(lib, "strays", "")
+        if said:
+            lines.append((said, True))
         if machine != root:
             lines.append((f"machine: {machine}", False))
         return lines
@@ -3156,7 +3163,7 @@ class Panel:
                 tooltip(
                     "this machine's own files: config.toml, bindings.json, windows.json, "
                     "hands.json, last_show, logs" if text.startswith("machine:") else
-                    "patches and installs as JSON ([library] path, else $HYPERSPACE_HOME); "
+                    "patches and installs as JSON, in the [library] path folder alone; "
                     "edit a file and the app follows")
 
     def gpu_lines(self) -> list[str]:

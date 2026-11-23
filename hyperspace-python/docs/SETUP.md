@@ -345,7 +345,10 @@ what it shows. Details and the per-output switches are
 ## Share presets with someone
 
 Two people (or two Macs) can have the same presets: whatever either saves
-shows up on the other. A fresh library is empty: the app starts on a blank preset and an unsaved show called `untitled`, and the shared folder holds the owner's own presets. The presets live in a cloud-synced folder; each
+shows up on the other. The shared folder is the **only** place presets are
+saved: with no `[library] path` in `~/Hyperspace/config.toml` the app has no
+library at all — it lists nothing and refuses every save, saying so in red —
+and it never saves a preset into `~/Hyperspace`. A fresh library is empty: the app starts on a blank preset and an unsaved show called `untitled`, and the shared folder holds the owner's own presets. The presets live in a cloud-synced folder; each
 Mac's own settings stay in its home (`~/Hyperspace`).
 
 What is shared, in the library folder: `presets/`, `projects/` (shows),
@@ -364,10 +367,14 @@ that an older build refuses.
    example `Dropbox/Hyperspace`). On iCloud, mark it "Keep Downloaded";
    on Dropbox, "Available offline". Evicted files are invisible to the
    app.
-2. Quit Hyperspace. Run
+2. Quit Hyperspace on both Macs. Run
    `uv run python tools/move_library.py ~/Dropbox/Hyperspace` (whoever
    goes second keeps their own copy of any same-named preset, and the
-   tool says which).
+   tool says which). It then moves the home's copy aside, into
+   `~/Hyperspace/old-local-library-<date>-<time>/`, so `~/Hyperspace`
+   holds no library (`--keep` leaves it; nothing is ever deleted). If
+   SYSTEM ever says `~/Hyperspace` "still holds an old local library", run
+   this again.
 3. Add the printed `[library]` lines to `~/Hyperspace/config.toml`, then
    start Hyperspace.
 4. If a "conflicted copy" preset shows up, load both, keep one, and

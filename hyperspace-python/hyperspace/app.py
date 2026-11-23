@@ -115,7 +115,7 @@ from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hotplug import Hotplug
 from .hotreload import HotReloader
 from .learn import Learn
-from .library import Library
+from .library import NO_LIBRARY, Library
 from .library import home as library_home
 from .media import pool as media_pool
 from .media import proxy as media_proxy
@@ -2218,11 +2218,16 @@ def main(argv: list[str] | None = None) -> None:
     lp = cfg.get("library", {}).get("path", "")
     lib_root, unknown = sharedfile.library_root(lp, bool(cfg.get("error")), home / DISPLAYS_COPY,
                                                 home, DISPLAYS_FILE)
+    # No [library] path is no library (2026-11-23): the home is never one, so nothing
+    # lists and every save is refused in words until config.toml names the Drive folder
     library = (Library(home / CONFIG_UNREAD, machine=home) if unknown
-               else Library() if lib_root == home else Library(lib_root, machine=home))
-    if library.not_moved:
-        print(f"library: {library.not_moved}", file=sys.stderr)
-        library.say(warning=library.not_moved)
+               else Library(home / NO_LIBRARY, machine=home) if lib_root == home
+               else Library(lib_root, machine=home))
+    # (with no library its own refusal, said by `Library`, stays the footer's line)
+    for said in (library.strays if library.missing is None else "", library.not_moved):
+        if said:
+            print(f"library: {said}", file=sys.stderr)
+            library.say(warning=said)
     # the media folder and the eight channels (plan 32): the channels'
     # params are declared over this one `MediaState`, the loadable patch's bins are
     # its, and the renderer reads its frames

@@ -9012,6 +9012,20 @@ Plan 83. Headless: `tests/test_save_live.py` (driven by the mouse: one click sav
 **834. A long playlist scrolls.** Make a playlist of forty entries (or open a long one) and open the **playlist** chip. *Pass:* the popup ends on the screen; the entries scroll under two fingers on the trackpad; every dwell field and × is easy to hit; the add list stays in view under them. *Fail:* rows off the bottom of the screen, or targets too small to hit at the rig.
 
 **835. The entry on air stays in view.** Play that list with short dwells (10 s), the popup open. *Pass:* each new entry on air is scrolled into the list's middle as it goes on, marked ▸ in white; scroll away by hand and the list stays put until the next entry goes on air. Close and reopen the popup: it opens on the entry on air. *Fail:* the playing row out of view, or the list fighting your scroll between advances.
+## FI. Save as ▾: by name and to a place (rows 1075–1080, 2026-11-23)
+
+Plan 88. Headless: `tests/test_save_live.py` (the ▾ joined to **save as** and its two items, by the mouse; a typed name saved in the loaded patch's folder that loads back equal and takes a pad; a taken name refused with the field still open; the dialog's place mapped to a name, a new folder, a place outside the library and a file already there refused; the native save dialog asked on the loaded patch's folder). The app was driven under Xvfb (the menu, the field, a save). ImFileDialog's save mode was not seen: on the Mac it is.
+
+**868. The ▾.** (Mac, the trackpad) On GRAPH, beside **save as**, press ▾. *Pass:* a small menu: **save as name…**, **save to location…**; press **save as** itself: one press saves as before (row 1030), and its right-click still has Learn. *Fail:* the menu on the chip itself, or one press no longer saving.
+
+**869. Save as name.** Load a patch in a folder, ▾ → **save as name…**, type `closing look`, Enter. *Pass:* the field shows `moo 2` selected and your typing replaces it; the chip reads "saved closing look"; **load…** shows it in the loaded patch's folder; it took the next empty pad. Esc or × closes the field without saving. *Fail:* the field elsewhere than the deck row, a save in another folder.
+
+**870. A taken name.** ▾ → **save as name…**, type the loaded patch's own name, Enter. *Pass:* the footer says it is taken; the field stays open; the old file is as it was. *Fail:* a file written over or the field closing.
+
+**871. Save to location.** ▾ → **save to location…**. *Pass:* the file dialog opens in the loaded patch's folder (with nothing loaded: `My Drive/Hyperspace/loadable`); step into another era folder or make a new one, type a name, save: the patch is there, loaded, on a pad, and the chip names it. *Fail:* the dialog opening somewhere outside the library, or the save landing elsewhere than picked.
+
+**872. Outside, and over a file.** In that dialog, save to the Desktop; then again on an existing patch's file (say yes to "Replace?"). *Pass:* both refused on the footer, nothing written. *Fail:* a file outside the library, or a patch written over.
+
 ## EB. The FRACTAL section (rows 902–905, 2026-11-20)
 
 Plan 64. Headless: `tests/test_ui_pane.py::test_the_fractal_section_draws_its_controls_inside_the_pane` (every control drawn, inside the pane, at every layout) and `tests/test_fractal_grab.py` (Detail, Reach and Near change what is drawn, To the top, saved with the look). A restart after pulling (new fields on `ViewState`).

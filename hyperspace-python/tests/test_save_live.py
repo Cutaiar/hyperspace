@@ -131,6 +131,200 @@ def test_nothing_saved_shows_no_name(tmp_path, monkeypatch):
         assert ui_loadable.save_as_label(r.panel) == "save as"
 
 
+# ------------------------------------------------------------------ save as ▾ (plan 88)
+
+def test_the_more_arrow_sits_on_the_chip_and_opens_two_ways_to_save(tmp_path, monkeypatch):
+    with build_rig(tmp_path) as r:
+        r.panel.meta = _stand_in_meta(r)
+        d = _graph(r, monkeypatch)
+        d.run(d.wait(2))
+        chip, more = d.rect(ui_loadable.SAVE_AS_ID), d.rect(ui_loadable.MORE_ID)
+        assert 0 <= more[0] - chip[2] <= 2 and abs(more[1] - chip[1]) < 1    # joined, on its line
+        assert ui_loadable.BY_NAME_ID not in d.rects
+        d.run(d.click(ui_loadable.MORE_ID, frames=2), d.wait(1))
+        assert ui_loadable.BY_NAME_ID in d.rects and ui_loadable.AT_ID in d.rects
+
+
+def test_save_as_name_types_a_name_into_the_loaded_patchs_folder(tmp_path, monkeypatch):
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        lib.loaded_patch.save_as(f"{FOLDER}/moo")
+        r.panel.meta = _stand_in_meta(r)
+        d = _graph(r, monkeypatch)
+        d.run(d.wait(2), d.click(ui_loadable.MORE_ID, frames=2), d.wait(1),
+              d.click(ui_loadable.BY_NAME_ID, frames=2), d.wait(2))
+        assert _st_naming(r) == ui_loadable.NAMING
+        assert lib.install.next_save_name() == f"{FOLDER}/moo 2"
+        assert ui_loadable._state(r.panel)["buf"] == "moo 2"     # one press's name, to type over
+        r.reg["view.bright"].set(0.41)
+        want = _values(r.reg)
+        d.run(d.type("closing look"), d.key(imgui.Key.enter), d.wait(2))
+        assert _st_naming(r) is None
+        assert lib.current(LOADABLE) == f"{FOLDER}/closing look"
+        assert lib.path_of(LOADABLE, f"{FOLDER}/closing look").parent == lib.home / "loadable" / FOLDER
+        assert f"{FOLDER}/closing look" in lib.install.bank               # it took a pad
+        assert ui_loadable.save_as_label(r.panel) == "saved closing look"
+        r.reg["view.bright"].set(0.9)
+        lib.load(LOADABLE, f"{FOLDER}/closing look")
+        assert _values(r.reg) == want
+
+
+def test_save_as_name_refuses_a_taken_name_and_stays_open(tmp_path, monkeypatch):
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        lib.loaded_patch.save_as(f"{FOLDER}/moo")
+        moo = (lib.home / "loadable" / FOLDER / "moo.json").read_text()
+        r.panel.meta = _stand_in_meta(r)
+        d = _graph(r, monkeypatch)
+        d.run(d.wait(2))
+        ui_loadable.begin_save_by_name(r.panel)
+        d.run(d.wait(2), d.key(imgui.Key.a, d.ctrl), d.type("MOO"), d.key(imgui.Key.enter), d.wait(2))
+        assert _st_naming(r) == ui_loadable.NAMING                     # still open, to type another
+        assert "already" in lib.warning
+        assert (lib.home / "loadable" / FOLDER / "moo.json").read_text() == moo
+        assert lib.current(LOADABLE) == f"{FOLDER}/moo"
+        d.run(d.key(imgui.Key.escape), d.wait(2))
+        assert _st_naming(r) is None
+
+
+def _st_naming(r):
+    return ui_loadable._state(r.panel).get("naming")
+
+
+def test_save_to_location_names_from_the_folder_and_file_picked(tmp_path):
+    from hyperspace import ui_browse
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        base = lib.home / "loadable"
+        assert ui_browse.save_name(lib, base / "top.json") == "top"
+        assert ui_browse.save_name(lib, base / "party" / "deep" / "Last One.json") == "party/deep/Last One"
+        assert ui_browse.save_name(lib, base / "plain") == "plain"           # no suffix typed
+        assert ui_browse.save_name(lib, tmp_path / "Desktop" / "x.json") is None
+        assert ui_browse.save_name(lib, base.parent / "installs" / "x.json") is None
+        # a new folder made in the dialog: saved there, loaded, on a pad
+        (base / "new era").mkdir(parents=True)
+        assert ui_browse.save_at(r.panel, base / "new era" / "opener.json") == "new era/opener"
+        assert lib.current(LOADABLE) == "new era/opener"
+        assert lib.path_of(LOADABLE, "new era/opener").parent == base / "new era"
+        assert "new era/opener" in lib.install.bank
+
+
+def test_save_to_location_refuses_outside_the_library_and_over_a_file(tmp_path):
+    from hyperspace import ui_browse
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        lib.loaded_patch.save_as("moo")
+        before = set((tmp_path).rglob("*.json"))
+        assert ui_browse.save_at(r.panel, tmp_path / "Desktop" / "x.json") is None
+        assert "patches folder" in lib.warning
+        moo = lib.path_of(LOADABLE, "moo")
+        text = moo.read_text()
+        assert ui_browse.save_at(r.panel, moo) is None                  # the dialog's "Replace?"
+        assert "already" in lib.warning and moo.read_text() == text
+        assert set((tmp_path).rglob("*.json")) == before
+
+
+def test_the_save_dialog_opens_on_the_loaded_patchs_folder(tmp_path, monkeypatch):
+    """No ImFileDialog headless: the native one is asked, where the loaded patch is,
+    with the one-press name typed in; its answer saves there."""
+    from hyperspace import ui_browse
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        lib.loaded_patch.save_as(f"{FOLDER}/moo")
+        asked = {}
+
+        class Dialog:
+            def __init__(self, title, default_path, filters):
+                asked["at"] = default_path
+
+            def ready(self):
+                return True
+
+            def result(self):
+                return str(lib.home / "loadable" / FOLDER / "picked.json")
+
+        from imgui_bundle import portable_file_dialogs as pfd
+        monkeypatch.setattr(ui_browse, "_setup", lambda: False)
+        monkeypatch.setattr(pfd, "save_file", Dialog)
+        ui_browse.open_save(r.panel)
+        assert asked["at"] == str(lib.home / "loadable" / FOLDER / "moo 2.json")
+        assert ui_browse.is_saving(r.panel) and not ui_browse.is_loading(r.panel)
+        ui_browse.draw(r.panel)
+        assert not ui_browse.is_open(r.panel)
+        assert lib.current(LOADABLE) == f"{FOLDER}/picked"
+
+
+def test_a_slash_typed_in_the_name_is_part_of_the_name_not_a_folder(tmp_path):
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        lib.loaded_patch.save_as(f"{FOLDER}/moo")
+        assert ui_loadable._name_in_folder(r.panel, "AC/DC")
+        assert lib.current(LOADABLE) == f"{FOLDER}/AC - DC"
+        assert lib.path_of(LOADABLE, f"{FOLDER}/AC - DC").parent == lib.home / "loadable" / FOLDER
+
+
+def test_a_named_save_refuses_a_file_on_disk_the_list_does_not_see(tmp_path, monkeypatch):
+    """A Mac's disk folds case: ``moo-2.JSON`` is the file ``moo-2.json`` would be, and the
+    list (``*.json``) misses it. Simulated: the list sees nothing, the file is there."""
+    with build_rig(tmp_path) as r:
+        lib, bank = r.panel.library, r.panel.library.install
+        lib.loaded_patch.save_as(f"{FOLDER}/moo")
+        there = lib.home / "loadable" / FOLDER / "unseen.json"
+        there.write_text("not a patch the list knows")
+        monkeypatch.setattr(lib, "_taken", lambda group: set())
+        assert not bank.save_named(f"{FOLDER}/Unseen")
+        assert there.read_text() == "not a patch the list knows"
+        assert bank.save_named(f"{FOLDER}/seen")                     # a free name still saves
+
+
+def test_a_library_not_yet_moved_saves_into_presets(tmp_path):
+    """A library with ``presets/`` and no ``loadable/`` (plan 57): a new name is written
+    in ``presets/``, so no ``loadable/`` starts and hides the patches already there."""
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        lib.loaded_patch.save_as("era/opener")
+        (lib.home / "loadable").rename(lib.home / "presets")
+        from hyperspace import ui_browse
+        got = ui_browse.save_at(r.panel, lib.home / "presets" / "era" / "final.json")
+        assert got == "era/final"
+        assert not (lib.home / "loadable").exists()
+        assert (lib.home / "presets" / "era" / "final.json").is_file()
+        assert lib.path_of(LOADABLE, "era/opener") is not None           # the old one still found
+        assert lib.install.save_named("era/by name")
+        assert not (lib.home / "loadable").exists()
+
+
+def test_a_library_not_yet_moved_refuses_a_name_another_folder_holds(tmp_path):
+    """Review of #481: in `presets/` a folder is no part of a name, so `set-a/intro`
+    beside `set-b/intro` would be a second `intro`, and the pad for the first could
+    load the second. Refused; the pad still loads its own file."""
+    from hyperspace import ui_browse
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        lib.loaded_patch.save_as("set-b/intro")
+        (lib.home / "loadable").rename(lib.home / "presets")
+        mine = lib.home / "presets" / "set-b" / "intro.json"
+        lib.install.bank[0] = "intro"
+        assert lib.path_of(LOADABLE, "intro", loose=True) == mine
+        (lib.home / "presets" / "set-a").mkdir()
+        assert ui_browse.save_at(r.panel, lib.home / "presets" / "set-a" / "intro.json") is None
+        assert not lib.install.save_named("set-a/Intro")
+        assert "already" in lib.warning
+        assert not (lib.home / "presets" / "set-a" / "intro.json").exists()
+        assert lib.path_of(LOADABLE, "intro", loose=True) == mine
+
+
+def test_one_press_still_saves_beside_the_arrow(tmp_path, monkeypatch):
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        lib.loaded_patch.save_as("moo")
+        r.panel.meta = _stand_in_meta(r)
+        d = _graph(r, monkeypatch)
+        d.run(d.wait(2), d.click(ui_loadable.SAVE_AS_ID, frames=2))
+        assert lib.current(LOADABLE) == "moo 2"
+        assert ui_loadable.BY_NAME_ID not in d.rects                     # no menu on the chip
+
+
 # ------------------------------------------------------------------ the playlist scrolls
 
 class _Meta:

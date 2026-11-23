@@ -7,6 +7,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 
 spec = importlib.util.spec_from_file_location("move_library", ROOT / "tools" / "move_library.py")
@@ -133,3 +135,136 @@ def test_a_loadable_folder_is_copied_every_folder_down_hidden_ones_not(tmp_path)
     assert {"loadable/party/trip.json", "loadable/party/deep/c.json"} <= got
     assert not [k for k in got if ".hidden" in k or k.startswith("fx/sub")]
     assert (dest / "loadable" / "party" / "deep" / "c.json").read_text() == '{"name": "C"}'
+
+
+# ---------------------------------------------------------------- the home cleared (2026-11-23)
+
+def test_main_moves_the_copied_folders_out_of_the_home(tmp_path, capsys):
+    """The shared folder is the one place: after the copy, every folder the copy drew from
+    goes, whole, into HOME/old-local-library-<stamp>/ — nothing deleted, the machine
+    files, the trash and weights where they were, and the app finds no stray library."""
+    from hyperspace import library
+    home = a_home(tmp_path)
+    (home / "media").mkdir()
+    (home / "media" / "clip.json").write_text("{}")
+    dest = tmp_path / "shared"
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    archives = [p for p in home.iterdir() if p.name.startswith(ml.ARCHIVE)]
+    assert len(archives) == 1
+    archive = archives[0]
+    assert sorted(p.name for p in archive.iterdir()) == ["band", "fx", "installs", "loadable"]
+    assert (archive / "loadable" / "mine.json.bak-v2").read_text() == "a backup"   # all of it
+    for gone in ("loadable", "installs", "fx", "band"):
+        assert not (home / gone).exists()
+    for kept in ("config.toml", "bindings.json", "trash/loadable/old.20261004-011203.json",
+                 "weights/big.json", "bindings/show-a.json", "media/clip.json"):
+        assert (home / kept).is_file()
+    assert not (dest / "media").exists()
+    assert library.strays(home) == []
+    assert "moved       loadable/" in capsys.readouterr().out
+    # a second run finds nothing to copy, and never walks into the archive
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    assert "nothing to copy" in capsys.readouterr().out
+
+
+def test_a_conflict_says_where_yours_went(tmp_path, capsys):
+    home = a_home(tmp_path)
+    dest = tmp_path / "shared"
+    (dest / "loadable").mkdir(parents=True)
+    (dest / "loadable" / "mine.json").write_text('{"name": "MINE", "v": 2}')
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    out = capsys.readouterr().out
+    (archive,) = [p for p in home.iterdir() if p.name.startswith(ml.ARCHIVE)]
+    assert f"yours is now at {archive / 'loadable' / 'mine.json'}" in out
+    assert (archive / "loadable" / "mine.json").read_text() == '{"name": "MINE", "v": 1}'
+    assert (dest / "loadable" / "mine.json").read_text() == '{"name": "MINE", "v": 2}'
+
+
+def test_keep_and_dry_run_leave_the_home_as_it_was(tmp_path):
+    home = a_home(tmp_path)
+    before = snapshot(home)
+    assert ml.main([str(tmp_path / "a"), "--from", str(home), "--dry-run"]) == 0
+    assert ml.main([str(tmp_path / "b"), "--from", str(home), "--keep"]) == 0
+    assert snapshot(home) == before
+
+
+def test_group_patches_are_copied_before_their_folder_is_cleared(tmp_path):
+    """Review of #480: a patch of one group sits in ``patches/<group>/`` (plan 50) — copied,
+    in a mixed folder and in one of group patches alone, before the folder goes aside."""
+    for only_groups in (False, True):
+        home = a_home(tmp_path / str(only_groups))
+        (home / "patches" / "camera").mkdir(parents=True)
+        (home / "patches" / "camera" / "wide.json").write_text('{"name": "Wide"}')
+        if not only_groups:
+            (home / "patches" / "glow.json").write_text('{"name": "Glow"}')
+        dest = home.parent / "shared"
+        assert ml.main([str(dest), "--from", str(home)]) == 0
+        assert (dest / "patches" / "camera" / "wide.json").read_text() == '{"name": "Wide"}'
+        assert (dest / "patches" / "glow.json").is_file() != only_groups
+        assert not (home / "patches").exists()
+
+
+def test_an_old_layout_home_is_refused_and_left_alone(tmp_path):
+    """Review of #480: `presets/` copied into a library that reads `loadable/` would never
+    show — the tool says to run the one migration first and touches nothing."""
+    home = a_home(tmp_path)
+    (home / "presets").mkdir()
+    (home / "presets" / "trip.json").write_text('{"name": "TRIP"}')
+    before = snapshot(home)
+    dest = tmp_path / "shared"
+    (dest / "loadable").mkdir(parents=True)
+    with pytest.raises(SystemExit, match="migrate_library.py"):
+        ml.main([str(dest), "--from", str(home)])
+    assert snapshot(home) == before
+    assert list((dest / "loadable").iterdir()) == []
+
+
+def test_shows_and_a_hidden_presets_cache_are_no_old_layout(tmp_path):
+    """Review of #480: only loadable patches in ``presets/`` stop the copy — a ``projects/``
+    show is read from either folder, and a hidden cache or a backup is no patch."""
+    home = a_home(tmp_path)
+    (home / "projects").mkdir()
+    (home / "projects" / "party.hyp.json").write_text('{"name": "party"}')
+    (home / "presets" / ".cache").mkdir(parents=True)
+    (home / "presets" / ".cache" / "entry.json").write_text("{}")
+    (home / "presets" / "x.json.bak-v2").write_text("{}")
+    dest = tmp_path / "shared"
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    assert (dest / "projects" / "party.hyp.json").is_file()
+    assert (dest / "loadable" / "hi-frek.json").is_file()
+
+
+def test_backups_of_the_home_are_never_copied(tmp_path):
+    """Review of #480: migrate_library.py's ``library-backup-<stamp>/`` holds the home's
+    machine files (bindings.json, windows.json) — never copied into the shared folder."""
+    home = a_home(tmp_path)
+    for b in ("library-backup-20261123-120000", "presets-backup-1"):
+        (home / b / "loadable").mkdir(parents=True)
+        (home / b / "bindings.json").write_text("{}")
+        (home / b / "loadable" / "old.json").write_text("{}")
+    dest = tmp_path / "shared"
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    assert not [p for p in dest.iterdir() if "backup" in p.name]
+    assert (home / "library-backup-20261123-120000" / "bindings.json").is_file()
+
+
+def test_an_old_show_behind_an_install_of_its_name_is_kept_back(tmp_path, capsys):
+    """Review of #480: ``projects/party.hyp.json`` and ``installs/party.json`` are one entry,
+    the install opened — so a show copied beside one (in the shared folder, or the home's
+    own) would never show: said as a conflict, and kept in the archive."""
+    home = a_home(tmp_path)
+    (home / "projects").mkdir()
+    (home / "projects" / "party.hyp.json").write_text('{"name": "party", "mine": 1}')
+    (home / "projects" / "mine.hyp.json").write_text('{"name": "mine"}')   # installs/mine.json
+    (home / "projects" / "solo.hyp.json").write_text('{"name": "solo"}')
+    dest = tmp_path / "shared"
+    (dest / "installs").mkdir(parents=True)
+    (dest / "installs" / "party.json").write_text('{"name": "party"}')
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    out = capsys.readouterr().out
+    assert not (dest / "projects" / "party.hyp.json").exists()
+    assert not (dest / "projects" / "mine.hyp.json").exists()
+    assert (dest / "projects" / "solo.hyp.json").is_file()
+    (archive,) = [p for p in home.iterdir() if p.name.startswith(ml.ARCHIVE)]
+    assert f"yours is now at {archive / 'projects' / 'party.hyp.json'}" in out
+    assert "installs/party.json is opened instead" in out

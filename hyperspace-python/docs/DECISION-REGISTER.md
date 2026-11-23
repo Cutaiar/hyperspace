@@ -937,6 +937,12 @@ here; overturn → the change, then the same.
 | 1072 | Plan 87: a node is never keyed when it is added (a channel included): keying is always asked for, from the node's menu or MEDIA | 859 | **owner — 2026-11-23: "it doesnt have to spawn nodes with keying on" — a node is never keyed when added** |
 | 1073 | Plan 87: the one-step matte + cut "black is clear" starter is not built: the key reaches every picture | — | (rec) |
 | 1074 | Plan 87: a restart after pulling: `ViewState.keys`, `Wiring.keys`, `GraphSpec.keys` and `MediaNode.keyed` do not reach live objects by hot reload | — | (rec) |
+| 1075 | Plan 88: **save as** on GRAPH's deck row gets a ▾ joined to its right (`ui_loadable.MORE_ID`) opening **save as name…** and **save to location…**; the chip itself is unchanged: one press is `preset.save_new`, and its right-click is still that param's menu, so Learn is unchanged | 868 | owner (2026-11-23, as recommended) |
+| 1076 | Plan 88: **save as name…** puts a name field in the chip's place on the deck row, holding the name one press would give (moo 2), selected; the name typed is saved in the loaded patch's folder by `Install.save_named`, which is `save_new` under that name: it becomes the loaded patch and takes the next empty pad | 869 | owner (2026-11-23, as recommended) |
+| 1077 | Plan 88: a name already taken (any file stem, listed name or pad, compared as the library folds names) or one that could name no file is refused, on the footer, and the field stays open to type another; nothing is ever written over, from the field or the dialog | 870, 872 | owner (2026-11-23, as recommended) |
+| 1078 | Plan 88: **save to location…** opens **load…**'s file dialog (ImFileDialog, else the native one) in save mode, on the loaded patch's folder, else the library's patches folder. On the owner's Mac the library is in Google Drive by `config.toml`, so that is `My Drive/Hyperspace/loadable`; no Drive path is in the code | 871 | owner (2026-11-23, as recommended) |
+| 1079 | Plan 88: the dialog's place must be under the library's patches folder (any subfolder, a new one made in the dialog too); anywhere else is refused in words, since no load, pad or list would find a patch there. No export copy | 872 | owner (2026-11-23, as recommended) |
+| 1080 | Plan 88: in the dialog, the file name typed (less `.json`) is the patch's name and the folder its folder; the file is written under that name's slug, as every save is (`Closing Look` → `closing-look.json`) | 871 | owner (2026-11-23, as recommended) |
 | 1000 | Plan 80: an effect whose Python half says `GENERATOR` (the Mandelbrot) draws with nothing wired into its `image`, over transparent black; `graph.Effect.generates`. Every other effect with no input still reads nothing. A change to `graph.py`, outside plan 80's files, kept to `Effect.reads`, `paint` and `_pass` | 800 | owner — 2026-11-22: accepted, the `graph.py` change included |
 | 1001 | Plan 80: Inside coloured is how fast a point settles onto its cycle — L·ln K / ln abs(λ_L) from the sum of ln abs(f′(z)) over a lag L the periodicity check found, K = what 5 % of a pixel is at zoom 1 and 810 lines — not the step the check caught it at. That step hung on a pixel-sized tolerance (deep in, most of the inside never settled before the cap: flat grey), Brent's window (bands, discs) and float32's last bit after a rebase (blocks). The inside/outside decision is unchanged | 801 | (rec) — pending the owner |
 | 1002 | Plan 80: a c or z₀ drive moves its term by the view height × min(1, TERM_RATE × R), R the term's measured sensitivity (how much a pan changes the picture over how much the term does, per plane unit, on a 16×9 grid of the view), measured every 0.25 s a drive runs, a faster rate eased in over 0.5 s and a slower one taken at once. TERM_RATE 0.1, to be tuned on the rig. Pan and Dive unchanged; an unused term keeps plan 63's rate | 802, 803 | (rec) — pending the owner |
@@ -15885,3 +15891,45 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
 - **Built.** —
 - **Judge it.** No hand check.
+
+### 1075. Save as gets a ▾
+
+- **What.** Plan 88: **save as** on GRAPH's deck row gets a ▾ joined to its right (`ui_loadable.MORE_ID`) opening **save as name…** and **save to location…**; the chip itself is unchanged: one press is `preset.save_new`, and its right-click is still that param's menu, so Learn is unchanged.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_loadable.save_as_chip`, `_more`, `save_as_w`, `ui_graph._deck_row`; `tests/test_save_live.py::test_the_more_arrow_sits_on_the_chip_and_opens_two_ways_to_save`, `::test_one_press_still_saves_beside_the_arrow`.
+- **Judge it.** 868.
+
+### 1076. Save as name…
+
+- **What.** Plan 88: **save as name…** puts a name field in the chip's place on the deck row, holding the name one press would give (moo 2), selected; the name typed is saved in the loaded patch's folder by `Install.save_named`, which is `save_new` under that name: it becomes the loaded patch and takes the next empty pad.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `library.Install.save_named`, `next_save_name`, `_save_new(at, name)`; `ui_loadable.begin_save_by_name`, `save_named`; `tests/test_save_live.py::test_save_as_name_types_a_name_into_the_loaded_patchs_folder`.
+- **Judge it.** 869.
+
+### 1077. A taken name is refused
+
+- **What.** Plan 88: a name already taken (any file stem, listed name or pad, compared as the library folds names) or one that could name no file is refused, on the footer, and the field stays open to type another; nothing is ever written over, from the field or the dialog.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `library.Install.save_named`, `ui_loadable._name_field` (a commit that returns False keeps it open); `tests/test_save_live.py::test_save_as_name_refuses_a_taken_name_and_stays_open`, `::test_save_to_location_refuses_outside_the_library_and_over_a_file`.
+- **Judge it.** 870, 872.
+
+### 1078. Save to location…
+
+- **What.** Plan 88: **save to location…** opens **load…**'s file dialog (ImFileDialog, else the native one) in save mode, on the loaded patch's folder, else the library's patches folder. On the owner's Mac the library is in Google Drive by `config.toml`, so that is `My Drive/Hyperspace/loadable`; no Drive path is in the code.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_browse.open_save`, `save_at`, `is_saving`; `tests/test_save_live.py::test_the_save_dialog_opens_on_the_loaded_patchs_folder`.
+- **Judge it.** 871.
+
+### 1079. Only inside the library
+
+- **What.** Plan 88: the dialog's place must be under the library's patches folder (any subfolder, a new one made in the dialog too); anywhere else is refused in words, since no load, pad or list would find a patch there. No export copy.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_browse.save_name`, `save_at`; `tests/test_save_live.py::test_save_to_location_names_from_the_folder_and_file_picked`, `::test_save_to_location_refuses_outside_the_library_and_over_a_file`.
+- **Judge it.** 872.
+
+### 1080. The file name is the patch's name
+
+- **What.** Plan 88: in the dialog, the file name typed (less `.json`) is the patch's name and the folder its folder; the file is written under that name's slug, as every save is (`Closing Look` → `closing-look.json`).
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_browse.save_name`; `tests/test_save_live.py::test_save_to_location_names_from_the_folder_and_file_picked`.
+- **Judge it.** 871.
