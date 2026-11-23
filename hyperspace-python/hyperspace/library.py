@@ -1353,10 +1353,24 @@ class Install:
         key = lib._fold(LOADABLE, name) if name and not name.endswith("/") else None
         if key is None:
             return self._refuse(f"{name or 'an empty name'}: not a name a patch can have")
-        if key in self._taken_now():
+        if key in self._taken_now() or self._on_disk(name):
             return self._refuse(f"{name}: there is a patch of that name already — "
                                 "pick another, nothing is written over")
         return self._save_new(None, name)
+
+    def _on_disk(self, name: str) -> bool:
+        """Is the file a save of `name` would write already there, by the disk's own
+        rules: on a Mac's disk, which folds case, ``moo.JSON`` is ``moo.json``,
+        and the list (``*.json``) does not see it."""
+        try:
+            key = path_slug(name)
+        except LibraryError:
+            return False
+        lib = self.lib
+        folder, _, leaf = key.rpartition("/")
+        if folder:
+            folder = lib._folder_on_disk(folder) or folder
+        return (lib.group_dir(lib.home, LOADABLE) / folder / f"{leaf}.json").exists()
 
     def next_save_name(self) -> str:
         """The name `save_new` would give now: the loaded patch's grown (moo → moo 2),
@@ -3028,7 +3042,10 @@ class Library:
                 folder = key.rpartition("/")[0]
                 folder = self._folder_on_disk(folder) or folder
                 leaf = leaf.strip()
-                path = self.home / group / (f"{folder}/" if folder else "") / f"{slug(leaf)}.json"
+                # in the folder the list reads (`group_dir`): `presets/` in a library
+                # not yet moved, so a save never starts a `loadable/` that hides it
+                path = (self.group_dir(self.home, group) / (f"{folder}/" if folder else "")
+                        / f"{slug(leaf)}.json")
             doc["name"] = leaf
             name = f"{folder}/{leaf}" if folder else leaf
         elif path is None:

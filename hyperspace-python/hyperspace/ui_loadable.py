@@ -55,6 +55,7 @@ from .library import (
     PATCHES,
     RETIRED_MODULES,
     LibraryError,
+    harmless,
 )
 
 LIST_POLL = 1.0      # seconds between re-listings of a group's loadable patches
@@ -344,7 +345,9 @@ def save_named(panel, name: str) -> str | None:
 
 
 def _name_in_folder(panel, typed: str) -> bool:
-    """The deck row's field committed: `typed` in the loaded patch's folder."""
+    """The deck row's field committed: `typed` in the loaded patch's folder. A ``/``
+    typed is part of the name, never a folder: made ``" - "`` (`harmless`)."""
+    typed = harmless(typed)
     folder, _ = panel.library.folder_of(LOADABLE, panel.library.current(LOADABLE))
     return save_named(panel, f"{folder}/{typed}" if folder else typed) is not None
 

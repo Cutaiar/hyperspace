@@ -254,6 +254,46 @@ def test_the_save_dialog_opens_on_the_loaded_patchs_folder(tmp_path, monkeypatch
         assert lib.current(LOADABLE) == f"{FOLDER}/picked"
 
 
+def test_a_slash_typed_in_the_name_is_part_of_the_name_not_a_folder(tmp_path):
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        lib.loaded_patch.save_as(f"{FOLDER}/moo")
+        assert ui_loadable._name_in_folder(r.panel, "AC/DC")
+        assert lib.current(LOADABLE) == f"{FOLDER}/AC - DC"
+        assert lib.path_of(LOADABLE, f"{FOLDER}/AC - DC").parent == lib.home / "loadable" / FOLDER
+
+
+def test_a_named_save_refuses_a_file_on_disk_the_list_does_not_see(tmp_path, monkeypatch):
+    """A Mac's disk folds case: ``moo-2.JSON`` is the file ``moo-2.json`` would be, and the
+    list (``*.json``) misses it. Simulated: the list sees nothing, the file is there."""
+    with build_rig(tmp_path) as r:
+        lib, bank = r.panel.library, r.panel.library.install
+        lib.loaded_patch.save_as(f"{FOLDER}/moo")
+        there = lib.home / "loadable" / FOLDER / "unseen.json"
+        there.write_text("not a patch the list knows")
+        monkeypatch.setattr(lib, "_taken", lambda group: set())
+        assert not bank.save_named(f"{FOLDER}/Unseen")
+        assert there.read_text() == "not a patch the list knows"
+        assert bank.save_named(f"{FOLDER}/seen")                     # a free name still saves
+
+
+def test_a_library_not_yet_moved_saves_into_presets(tmp_path):
+    """A library with ``presets/`` and no ``loadable/`` (plan 57): a new name is written
+    in ``presets/``, so no ``loadable/`` starts and hides the patches already there."""
+    with build_rig(tmp_path) as r:
+        lib = r.panel.library
+        lib.loaded_patch.save_as("era/opener")
+        (lib.home / "loadable").rename(lib.home / "presets")
+        from hyperspace import ui_browse
+        got = ui_browse.save_at(r.panel, lib.home / "presets" / "era" / "final.json")
+        assert got == "era/final"
+        assert not (lib.home / "loadable").exists()
+        assert (lib.home / "presets" / "era" / "final.json").is_file()
+        assert lib.path_of(LOADABLE, "era/opener") is not None           # the old one still found
+        assert lib.install.save_named("era/by name")
+        assert not (lib.home / "loadable").exists()
+
+
 def test_one_press_still_saves_beside_the_arrow(tmp_path, monkeypatch):
     with build_rig(tmp_path) as r:
         lib = r.panel.library

@@ -32,6 +32,15 @@ Two more ways to save, behind a dropdown arrow joined to it:
 - **Only inside the library** (row 1079): a place outside the patches folder is refused in words. A patch there
   would be found by no load, pad or list.
 
+## Review fixes (Devin, on the PR)
+
+- A library not yet moved (`presets/` only): a new name is written in `presets/`, by `group_dir`, never in a new
+  `loadable/` that would hide every patch already there. This was true of every new-name save before this plan
+  too (one press, the strips' **as…**). Its folders stay no part of a name there (review of #444).
+- `save_named` also asks the disk (`Install._on_disk`): on a Mac's case-folding disk `moo.JSON`, which the
+  list does not see, is the file `moo.json` would be. The dialog refuses a picked file that is already there.
+- A `/` typed in the name field is part of the name (`harmless`: `AC/DC` → `AC - DC`), never a folder.
+
 ## Files
 
 `library.py` (`Install.save_named`, `next_save_name`; `_save_new` takes a name), `ui_loadable.py` (the ▾, the

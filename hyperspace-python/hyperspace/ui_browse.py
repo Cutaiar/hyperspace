@@ -306,6 +306,10 @@ def save_at(panel, path: Path) -> str | None:
     from . import ui_loadable
 
     lib = panel.library
+    if Path(path).exists():             # a file picked to write over: never
+        lib.say(warning=f"{Path(path).name}: not saved — that file is there already; "
+                        "nothing is written over, so type a new name")
+        return None
     name = save_name(lib, path)
     if name is None:
         lib.say(warning=f"{path}: not saved — a patch saves under the library's "
