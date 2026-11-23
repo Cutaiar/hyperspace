@@ -5049,8 +5049,6 @@ def home_page(n: graphview.VNode):
     # plan 35 G: by the wired frame's ids — `render:camera` (was `render:eye`),
     # a channel `render:channel.<c>`, All outputs the OUTPUT page with no
     # window picked, a copy FX with its original selected (`Copy.effect`)
-    if n.id == f"render:{graphview.CAMERA}":
-        return ("camera", None)
     if n.id == f"render:{rgraph.ALL_OUTPUTS}":
         return ("output", None)
     if isinstance(r, rgraph.MediaNode):
