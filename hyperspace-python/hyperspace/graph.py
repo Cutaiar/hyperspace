@@ -6106,7 +6106,17 @@ class Effect(Node):
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         src = self.inputs["image"]
         if src is None:
-            if not (self.generates(frame) and self.on(frame)):
+            if not self.generates(frame):
+                return
+            if not self.on(frame):
+                # plan 80: a generator off, with nothing wired in, has no
+                # picture to read through: its consumer gets the ground, not
+                # whatever its target held last (Devin's review of #471)
+                x, y, w, h = dst.viewport
+                rect = (int(x), int(y), int(w), int(h))
+                dst.use()
+                frame.ctx.viewport = rect
+                frame.ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=rect)
                 return
             # plan 80: a generator with nothing wired in still draws
             readers = frame.graph.readers(self) if frame.graph is not None else 1

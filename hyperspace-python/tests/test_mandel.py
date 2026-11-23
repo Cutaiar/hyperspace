@@ -670,7 +670,7 @@ def test_it_says_it_is_a_generator_and_an_ordinary_effect_does_not():
     assert not FxState().specs["acid"].hook
 
 
-def _wired(ctx, pairs, values):
+def _wired(ctx, pairs, values, flip=False):
     from test_graph_faces import _fbo
 
     from hyperspace import graph as G
@@ -691,7 +691,7 @@ def _wired(ctx, pairs, values):
                         effects=set(r.fx.state.specs))
     assert not spec.notes, spec.notes
     r.wiring = wired_wiring(spec.wiring())
-    views = [View(Switches(), (96, 64), target=_fbo(ctx, 96, 64))]
+    views = [View(Switches(flip_x=flip), (96, 64), target=_fbo(ctx, 96, 64))]
     return r, ViewState(lines=False, points=False, faces=False), views
 
 
@@ -1108,3 +1108,16 @@ def test_a_render_too_wide_for_the_packed_pass_runs_without_the_skip(ctx):
     gl = M.Gl()
     gl.max_px = 16384
     assert gl.fits(None, 4096) and not gl.fits(None, 5120)
+
+
+@pytest.mark.parametrize("flip", [False, True], ids=["direct", "flipped"])
+def test_switched_off_after_drawing_unwired_it_leaves_the_ground(ctx, flip):
+    """Devin's review of #471: an unwired Mandelbrot drawn, then switched
+    off with the wiring as it was, left its last picture on the output —
+    its paint wrote nothing. Off, it clears to the ground, on a direct
+    output and on a flipped one (the cached-texture path)."""
+    r, s, vs = _wired(ctx, [("mandel", "output.1.image")],
+                      {"mandel": {"on": True, "iters": 64.0, "output": 1}}, flip=flip)
+    assert _drawn(ctx, r, s, vs).max() > 100
+    r.fx.state.values["mandel"]["on"] = False
+    assert _drawn(ctx, r, s, vs).max() < 5
