@@ -166,8 +166,8 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     # (plan 35 T4: output 2's hands through are a copy of each effect over a
     # composite, `copy` …; plan 35 G: no end nor `fx` is drawn — none is a node)
     assert {"render:shape", "render:acid", "render:copy", "render:lookback",
-            "render:output.1", "render:output.2", "render:output.all",
-            "render:camera"} <= names
+            "render:output.1", "render:output.2", "render:output.all"} <= names
+    assert "render:camera" not in names      # (2026-11-23: no node of its own: see below)
     assert not {n for n in names if n.startswith(("render:shown", "render:history"))}
     assert owner_of(view, "view.bright") == "render:shape"
     rot = next(p.id for p in rig.reg if p.group == "rot" and p.modulatable)
@@ -177,7 +177,9 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     assert owner_of(view, "fx.mix") == "group:fx"            # (no pipeline end to own it)
     assert owner_of(view, "dream.fade") == "render:lookback"
     assert owner_of(view, "dream.mix") == "group:dream"      # (P2: the dream's; none here)
-    assert owner_of(view, "camera.zoom") == "render:camera"
+    assert owner_of(view, "camera.zoom") == "render:shape"   # (its world pose: not a camera)
+    assert owner_of(view, "eye.fov") == "render:scene"       # (the eye its geometries are seen through)
+    assert owner_of(view, "eye.distance") == "render:scene"
     assert owner_of(view, "ghost.alpha") == "render:hands"
     assert owner_of(view, out1) == "render:output.1"
     assert owner_of(view, "lfo.1.depth") == "lfo.1"
@@ -186,7 +188,8 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     # no render graph: the same params fall to their groups' nodes
     bare = build(rig)
     assert owner_of(bare, "view.bright") == "group:view"
-    assert owner_of(bare, "camera.zoom") == "render:camera"
+    assert owner_of(bare, "camera.zoom") == "group:camera"
+    assert owner_of(bare, "eye.fov") == "group:eye"
     # every param port has a base and a mod stub
     port = view.owner("mod:view.bright")[1]
     assert port.pins[:2] == ("base:view.bright", "mod:view.bright")
@@ -386,7 +389,7 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     x = {nid: xy[0] for nid, xy in pos.items()}
     # N9: the areas' columns, not the kinds' — the analyzer and the tempo
     # are the audio's; an LFO, a modifier and a macro the modulation's
-    col = [x["source:key"], x[graphview.ANALYZER], x["lfo.1"], x["render:camera"],
+    col = [x["source:key"], x[graphview.ANALYZER], x["lfo.1"],
            x["render:scene"], x["render:lookback"], x["render:output.all"]]
     # review round 1: lfo-breathe has the acid off and no cable on it: idle, at
     # the effects' idle line, and a through wire from where the run starts
@@ -520,13 +523,13 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     assert not rig.lib.is_dirty("loadable")
 
     def move():
-        ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:render:camera")), imgui.ImVec2(700, 50))
+        ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:render:scene")), imgui.ImVec2(700, 50))
         ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:lfo.1")), imgui.ImVec2(30, 640))
         ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:analyzer")), imgui.ImVec2(40, 20))
     _in_editor(rig, move)
     frame(rig.panel, "graph")
     # N9: lfo.2 is idle, not drawn
-    assert rig.lib.loaded_patch.layout == {"render:camera": [700, 50], "lfo.1": [30, 640]}
+    assert rig.lib.loaded_patch.layout == {"render:scene": [700, 50], "lfo.1": [30, 640]}
     assert rig.lib.install.layout == {"analyzer": [40, 20]}
     assert rig.lib.is_dirty("loadable")
     # tidy forgets them both

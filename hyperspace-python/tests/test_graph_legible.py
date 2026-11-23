@@ -313,9 +313,9 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     frame(rig.panel, "graph")
     assert st["said"] == ui_graph.ALREADY_TIDY
     ui_graph.toggle_open(st, "render:shape")
-    rig.lib.loaded_patch.layout["render:camera"] = [900, 40]
+    rig.lib.loaded_patch.layout["render:scene"] = [900, 40]
     frame(rig.panel, "graph")
-    assert st["applied"]["render:camera"] == (900.0, 40.0)
+    assert st["applied"]["render:scene"] == (900.0, 40.0)
     st["tidy"] = True
     frame(rig.panel, "graph")
     idle = sum(n.idle for n in view.nodes)               # N9: the areas' words
@@ -326,7 +326,7 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     auto = ui_graph.layout_of(st, view)
     assert all(st["applied"][n.id] == auto[n.id] for n in view.nodes
                if not n.idle)                           # N9: an idle node is not placed
-    assert st["applied"]["render:camera"] != (900.0, 40.0)
+    assert st["applied"]["render:scene"] != (900.0, 40.0)
 
 
 def test_t_tidies_the_graph(rig):
@@ -669,13 +669,13 @@ def test_a_dormant_bundle_draws_faint_and_a_live_one_moves_without_a_rebuild(
     view, wiring = st["view"], st["wiring"]
     dormant = next(b for b in st["bundles"].values() if b.dormant)
     assert links[ui_graph._id(st, "c:" + dormant.id)][0] == pytest.approx(ui_graph.DORMANT_ALPHA)
-    lfo = st["bundles"]["bundle:lfo.1>render:camera"]
+    lfo = st["bundles"]["bundle:lfo.1>render:shape"]
     assert not lfo.dormant and lfo.live == pytest.approx(0.3)
     assert links[ui_graph._id(st, "c:" + lfo.id)][0] == 1.0
     router.feed("lfo", [0.8, 0.0, 0.0, 0.0])
     frame(rig.panel, "graph")
     assert st["view"] is view and st["wiring"] is wiring
-    assert st["bundles"]["bundle:lfo.1>render:camera"].live == pytest.approx(0.8)
+    assert st["bundles"]["bundle:lfo.1>render:shape"].live == pytest.approx(0.8)
 
 
 def test_a_bundles_menu_and_a_nodes_learn_menu_draw(rig, monkeypatch):
@@ -963,7 +963,7 @@ def test_every_nodes_side_panel_draws(rig):
     assert len(drawn) > 40
     assert {"render:copy", "render:backdrop", "render:pattern", "render:hands.guide",
             "render:lookback", "render:dream", "render:delay", "render:resize",
-            "render:output.all", "render:camera"} <= set(drawn)
+            "render:output.all", "render:scene"} <= set(drawn)
     for nid in drawn:
         pick(rig, st, nid)
 
