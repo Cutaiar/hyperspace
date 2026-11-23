@@ -41,6 +41,13 @@ TODAY = [("shape", "scene.geometry"), ("scene", "output.all.image"),
          ("hands.layer", "output.all.hands"), ("hands.layer", "output.all.guide"),
          ("pattern", "shape.faces"), ("hands", "hands.layer.hands")]
 
+def unrescaled(notes: list[str]) -> list[str]:
+    """A load's notes less plan 86's: a fixture from before the effect tapers has no
+    units marker, and its rescaled depths are said (`loadable.retaper_note`)."""
+    head = loadable.RETAPER_NOTE.partition("{count}")[0]
+    return [n for n in notes if not n.startswith(head)]
+
+
 
 def _views(n: int = 2) -> list[View]:
     return [View(Switches(), SIZE) for _ in range(n)]
@@ -229,8 +236,10 @@ def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
     doc = json.loads((FIXTURES / "acid-scene.json").read_text())
     app = _app_with(tmp_path, "acid-scene", doc)
     said = M.MIGRATED_NOTE.format(old="hyperspace.preset/2", new=SAVED)
-    assert app.loaded_patch.migrated == said and app.loaded_patch.notes == []     # (not a problem)
-    assert app.lib.warning == f"{app.lib.warning.split()[0]} acid-scene: {said}"              # (the strip says it)
+    assert app.loaded_patch.migrated == said and unrescaled(app.loaded_patch.notes) == []     # (not a problem; plan 86: an old file's depths said)
+    # (the strip says a load's first note before the migration line, `_warn`: this
+    # fixture is from before the effect tapers, so its rescaled depths, plan 86)
+    assert app.lib.warning == f"{app.lib.warning.split()[0]} acid-scene: {app.loaded_patch.notes[0]}"
     assert app.loaded_patch.document("acid-scene")["schema"] == SAVED
 
 

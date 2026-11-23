@@ -288,6 +288,95 @@ def test_too_many_is_listed_not_paged(rig):
 # ---------------------------------------------------------------- what a row does
 
 
+# ---------------------------------------------------------------- row 1062: dropdowns on buttons
+
+
+def dropdowns_for(deck, n=3) -> list[str]:
+    """Dropdowns no row of `deck` touches, for a node to hold (plan 86)."""
+    used = {b.target for b in deck.table.bindings}
+    out = nodemode.dropdowns(deck.reg, [p.id for p in deck.reg if p.id not in used
+                                        and not p.id.startswith(("view.", "ghost.", "pad."))])
+    out = [pid for pid in out if len(deck.reg[pid].names) >= 3]
+    assert len(out) >= n
+    return out[:n]
+
+
+def test_a_pads_dropdowns_go_on_its_bumpers_then_its_stick_clicks(tmp_path):
+    """The owner, 2026-11-23: bumpers, stick clicks, the middle buttons, then the D-pad
+    and the face. After the continuous params, which keep the sticks and the pairs."""
+    p = _rig(tmp_path, MODELS["xbox"])
+    clear_buttons(p.one)
+    cont = params_for(p.one, 1)
+    drops = dropdowns_for(p.one, 3)
+    point(p, *drops, *cont)                     # (listed first: they fill after all the same)
+    got = [(b.source, b.target, b.op) for b in rows(p)]
+    assert got[0] == ("axis:LX", cont[0], "push")
+    assert got[1:] == [("pad:LB", drops[0], node_desk.CYCLE_OP),
+                       ("pad:RB", drops[1], node_desk.CYCLE_OP),
+                       ("pad:LSTICK", drops[2], node_desk.CYCLE_OP)]
+    t = p.one.table
+    assert [b.target for b in t.node_routes()] == cont
+    assert [b.target for b in t.node_buttons()] == drops
+    assert not any(b.target in drops for b in t.bindings)       # never in the file
+    undo.install(None)
+
+
+def test_a_press_cycles_the_dropdown_and_the_choice_stays(tmp_path):
+    p = _rig(tmp_path, MODELS["xbox"])
+    clear_buttons(p.one)
+    drop = dropdowns_for(p.one, 1)[0]
+    point(p, drop)
+    assert [(b.source, b.target) for b in rows(p)] == [("pad:LB", drop)]
+    q = p.one.reg[drop]
+    q.set(0)
+    n = len(q.names)
+    for want in [*range(1, n), 0]:              # each press the next choice, wrapping
+        step(p, held=(gamepad.LB,))
+        assert q.value == want
+        for _ in range(3):                      # held, then let go: it stays
+            step(p, held=(gamepad.LB,))
+        step(p)
+        assert q.value == want
+    undo.install(None)
+
+
+def test_when_the_pairs_hold_continuous_params_the_dropdowns_go_to_the_stick_clicks(tmp_path):
+    p = _rig(tmp_path, MODELS["xbox"])
+    clear_buttons(p.one)
+    n_cont = len(node_desk.pad_freedoms(MODELS["xbox"]))      # every stick, trigger and pair
+    cont = params_for(p.one, n_cont)
+    drops = dropdowns_for(p.one, 2)
+    point(p, *cont, *drops)
+    buttons = [(b.source, b.target) for b in rows(p) if b.op == node_desk.CYCLE_OP]
+    assert buttons == [("pad:LSTICK", drops[0]), ("pad:RSTICK", drops[1])]
+    undo.install(None)
+
+
+def test_no_dropdown_takes_a_button_a_row_reads_or_guide(rig):
+    """The factory table's rows keep their buttons; the system's button is never one."""
+    held = {s for b in rig.one.table.bindings if b.enabled and b.scheme in ("pad", "hat")
+            for s in nodemode.own_sources(b.source)}
+    drops = dropdowns_for(rig.one, 3)
+    point(rig, *drops)
+    got = {s for b in rows(rig) if b.op == node_desk.CYCLE_OP
+           for s in nodemode.own_sources(b.source)}
+    assert got and not got & held and "pad:GUIDE" not in got
+    assert all(s in node_desk.PAD_BUTTONS for s in got)
+
+
+def test_a_joycon_cycles_on_the_buttons_it_has(tmp_path):
+    m = MODELS["joycon-r"]
+    p = _rig(tmp_path, m)
+    clear_buttons(p.one)
+    drops = dropdowns_for(p.one, 2)
+    point(p, *drops)
+    have = {src for f in gamepad.degrees_of_freedom(m) for src in f}
+    sources = [b.source for b in rows(p)]
+    assert len(sources) == 2 and all(src in have for src in sources)
+    assert not set(sources) & set(layout_of(m).sources)
+    undo.install(None)
+
+
 def test_a_stick_at_rest_moves_nothing_when_the_mode_goes_up(rig):
     pids = params_for(rig.one, 6)
     for i, pid in enumerate(pids):
