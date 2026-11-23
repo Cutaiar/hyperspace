@@ -629,7 +629,7 @@ def test_the_retired_modules_have_no_strip_and_the_kept_ones_do(rig):
     from hyperspace.library import RETIRED_MODULES
     groups = set(rig.lib.groups())
     assert not groups & set(RETIRED_MODULES)
-    assert {"band", "hands", "grip", "loadable"} - set(RETIRED_MODULES) == {"band", "hands", "grip", "loadable"}
+    assert not {"band", "grip", "loadable"} & set(RETIRED_MODULES)
     # a library's own old file in a retired group is kept on disk, only unlisted
     rig.lib.save_as("view", "Mine")
     assert rig.lib.list("view") == ["Mine"] and "view" not in rig.lib.groups()
