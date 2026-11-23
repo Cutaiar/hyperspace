@@ -5874,6 +5874,23 @@ def _spare(frame: Frame, dst: moderngl.Framebuffer | None, hold: bool = False
     return tex, fbo
 
 
+def is_generator(spec) -> bool:
+    """Plan 80: whether effect spec `spec` paints the whole frame from
+    nothing — its Python half (`fx.HOOKS`) says `GENERATOR` (the
+    Mandelbrot) — so it is built and drawn with no wire into its image."""
+    from . import fx  # here, not at the top: a hot reload of fx.py is seen
+
+    hook = fx.HOOKS.get(getattr(spec, "hook", "") or "") if spec is not None else None
+    return bool(getattr(hook, "GENERATOR", False))
+
+
+def generators_of(state) -> frozenset[str]:
+    """Plan 80: the effect instances of `state` (an `FxState`, or None)
+    that are generators (`is_generator`): `build_graph`'s `generators`."""
+    specs = getattr(state, "specs", None) or {}
+    return frozenset(n for n, spec in specs.items() if is_generator(spec))
+
+
 class Effect(Node):
     """One effect instance as an image node (plan 30 D0): one effect file's
     program (`fx.FxChain`) over its input. `effect` is the instance's name
@@ -5954,7 +5971,16 @@ class Effect(Node):
 
     def reads(self, frame: Frame) -> bool:
         src = self.inputs["image"]
-        return src is not None and src.reads(frame)
+        if src is None:
+            return self.generates(frame) and self.on(frame)
+        return src.reads(frame)
+
+    def generates(self, frame: Frame) -> bool:
+        """Plan 80: its file paints the whole frame from nothing — its
+        Python half says `GENERATOR` (the Mandelbrot, `mandel.py`) — so with
+        no picture wired into `image` it still draws, over transparent
+        black (`_pass`), where any other effect reads nothing."""
+        return is_generator(frame.r.fx.state.specs.get(self.effect))
 
     def run(self, frame: Frame) -> None:
         # plan 33 R: folded here only where something reads it at the
@@ -6080,6 +6106,27 @@ class Effect(Node):
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         src = self.inputs["image"]
         if src is None:
+            if not self.generates(frame):
+                return
+            if not self.on(frame):
+                # plan 80: a generator off, with nothing wired in, has no
+                # picture to read through: its consumer gets the ground, not
+                # whatever its target held last (Devin's review of #471); a
+                # see-through ground where it is laid over another picture
+                x, y, w, h = dst.viewport
+                rect = (int(x), int(y), int(w), int(h))
+                dst.use()
+                frame.ctx.viewport = rect
+                frame.ctx.clear(0.0, 0.0, 0.0, 0.0 if self.see_through else frame.bg_alpha,
+                                viewport=rect)
+                return
+            # plan 80: a generator with nothing wired in still draws
+            readers = frame.graph.readers(self) if frame.graph is not None else 1
+            if self.name in frame.data or readers > 1:
+                self._make(frame, dst)
+                super().paint(frame, dst)
+                return
+            self._pass(frame, dst)
             return
         own = self.own_size(frame)
         if own is not None and tuple(own) != tuple(frame.size):
@@ -6153,7 +6200,11 @@ class Effect(Node):
         themselves before it)."""
         aux = self._aux(frame, dst)          # first: making it may take a spare
         tex, fbo = _spare(frame, dst)
-        self.inputs["image"].paint(frame, fbo)
+        src = self.inputs["image"]
+        if src is not None:
+            src.paint(frame, fbo)
+        else:                                # plan 80: a generator over nothing
+            fbo.clear(0.0, 0.0, 0.0, 0.0)
         kw = {"aux": aux} if aux is not None else {}
         kw.update({"opaque": 0} if self.see_through else self._opaque(frame))
         with frame.timed(self.name):
@@ -6412,6 +6463,7 @@ class Graph:
         self.order: list[Node] = []
         self.clouds: tuple[str, ...] = ()        # the cloud roles the default graph drew (A4b)
         self.effects: tuple[str, ...] = ()       # the effect instances of its runs (D0)
+        self.generators: tuple[str, ...] = ()    # plan 80: those built with no input (`Effect.generates`)
         self.dormant: dict[str, str] = {}        # D1: placed effect → why it has no node
         # the entries of `dormant` written while the graph ran (an output's
         # folds skipped this frame: `Output.run`), taken out again before
@@ -6633,7 +6685,8 @@ def _upstream(node: Node) -> set[int]:
 # ---------------------------------------------------------------- the wired frame (plan 35 B)
 
 def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[str, ...] = (),
-                effects: tuple[str, ...] = (), bus_cuts: BusCuts | None = None) -> Graph:
+                effects: tuple[str, ...] = (), bus_cuts: BusCuts | None = None,
+                generators: tuple[str, ...] = ()) -> Graph:
     """A wired frame as a graph (plan 35 B, rows 372 and 379): only what the
     wires reach (`reaches`: a path to an output's port, All outputs', or
     the look-back's capture) is built — `{"frame": "wired"}` alone is the
@@ -6677,6 +6730,9 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     g = Graph(graph_key(views), wiring)
     g.clouds = tuple(clouds)
     g.effects = tuple(effects)
+    # plan 80: the effects that paint the whole frame from nothing
+    # (`Effect.generates`): one with no wire into its image is still built
+    g.generators = tuple(generators)
     g.bus_cuts = bus_cuts if bus_cuts is not None else BusCuts()
     _Build(g, wiring, len(views), g.bus_cuts).build()
     return g
@@ -6760,6 +6816,7 @@ class _Build:
         self.g, self.wiring, self.count = g, wiring, count
         self.bus_cuts = bus_cuts if bus_cuts is not None else BusCuts()     # plan 36 T1: the bus cables
         self.have = set(g.effects)
+        self.generators = set(g.generators)
         wires = tuple(getattr(wiring, "wires", ()))
         # plan 35 T4: a wire into an output this rig has not open (`output.3`
         # with two windows) reaches nothing — what only it shows is not
@@ -7026,7 +7083,7 @@ class _Build:
         if effect not in self.have:
             self.g.dormant[name] = f"{name} — no {effect} effect in this build"
             return src
-        if src is None:
+        if src is None and effect not in self.generators:
             self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
             return None
         if kind == "copy":

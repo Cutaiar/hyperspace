@@ -254,6 +254,10 @@ def test_a_pan_moves_the_picture_the_same_on_screen_at_any_depth():
 
 
 def test_dive_doubles_and_every_drive_moves_by_the_view():
+    """Dive doubles; on the Mandelbrot slice c is unused (R → ∞), so its
+    drive keeps plan 63's rate, one view height a second; z₀ there is an
+    off-screen term, moved by the view times its measured scale (plan 80),
+    never faster than the view."""
     spec = FxState().specs["mandel"]
     v = values(zoom=1e3, dive=0.25, c_drive_y=-1.0, z0_drive_x=0.5)
     c_y, z0_x = v["c_y"], v["z0_x"]
@@ -261,7 +265,7 @@ def test_dive_doubles_and_every_drive_moves_by_the_view():
     assert v["zoom"] == pytest.approx(2e3)
     h = M.view_height(2e3)
     assert v["c_y"] == pytest.approx(c_y - h)
-    assert v["z0_x"] == pytest.approx(z0_x + 0.5 * h)
+    assert 0.0 < v["z0_x"] - z0_x <= 0.5 * h * (1 + 1e-9)
 
 
 def test_a_drive_at_rest_writes_nothing_and_a_term_stays_in_range():
@@ -652,3 +656,468 @@ def test_a_reload_of_fx_drops_them_too(rig):
     assert rig.chain.mandel is None and st.border.tex is None
     rig.shot()
     assert rig.chain.mandel is not None
+
+
+# ---------------------------------------------------------------- plan 80
+
+# 1. With nothing wired in, it draws (row 1000)
+
+def test_it_says_it_is_a_generator_and_an_ordinary_effect_does_not():
+    from hyperspace import fx
+
+    assert M.GENERATOR is True
+    assert fx.HOOKS[FxState().specs["mandel"].hook] is M
+    assert not FxState().specs["acid"].hook
+
+
+def _wired(ctx, pairs, values, flip=False):
+    from test_graph_faces import _fbo
+
+    from hyperspace import graph as G
+    from hyperspace.graphmigrate import wired_wiring
+    from hyperspace.outputs import Switches, View
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+
+    r = Renderer(ctx)
+    r.ghost.state.on = False
+    for name, v in values.items():
+        r.fx.state.values[name].update(v)
+    # a wired frame, as every saved patch is now: no migration adds a wire
+    # (Devin's review of #471: without the marker the old frame's migration
+    # fed `scene` in, and the test never met the unwired case)
+    spec = G.read_graph({"frame": "wired", "nodes": [],
+                         "wires": [{"from": a, "to": b} for a, b in pairs]},
+                        effects=set(r.fx.state.specs))
+    assert not spec.notes, spec.notes
+    r.wiring = wired_wiring(spec.wiring())
+    views = [View(Switches(flip_x=flip), (96, 64), target=_fbo(ctx, 96, 64))]
+    return r, ViewState(lines=False, points=False, faces=False), views
+
+
+def _drawn(ctx, r, s, views):
+    from test_graph_faces import _px
+
+    r.draw_outputs(s, 96, 64, 1.0, views, t_now=1.0)
+    assert ctx.error == "GL_NO_ERROR"
+    return _px(views[0].target)[..., :3].astype(float)
+
+
+def test_with_nothing_wired_in_it_draws_the_whole_frame(ctx):
+    """The owner's report: mandel → output.1 with nothing into mandel.image
+    was black, with no note. It paints the whole frame from nothing, so it
+    draws — the same picture as with a picture wired in (at mix 1 that
+    picture is not seen) — and an ordinary effect with no input still reads
+    nothing."""
+    on = {"mandel": {"on": True, "iters": 64.0, "output": 1}}
+    r, s, vs = _wired(ctx, [("mandel", "output.1.image")], on)
+    alone = _drawn(ctx, r, s, vs)
+    assert alone.max() > 100, "the frame is black with nothing wired in"
+    g = r._graph
+    assert "mandel" in g.nodes and g.nodes["mandel"].inputs["image"] is None
+    assert "mandel" not in g.dormant
+    r2, s2, vs2 = _wired(ctx, [("scene", "mandel.image"), ("mandel", "output.1.image")], on)
+    fed = _drawn(ctx, r2, s2, vs2)
+    assert np.abs(alone - fed).max() <= 2.0
+    r3, s3, vs3 = _wired(ctx, [("acid", "output.1.image")], {"acid": {"on": True}})
+    assert _drawn(ctx, r3, s3, vs3).max() < 5
+
+
+def test_with_nothing_wired_in_and_switched_off_it_draws_nothing(ctx):
+    r, s, vs = _wired(ctx, [("mandel", "output.1.image")],
+                      {"mandel": {"on": False, "iters": 64.0, "output": 1}})
+    assert _drawn(ctx, r, s, vs).max() < 5
+
+
+# 2. The coloured inside is how fast a point settles (row 1001)
+
+def apart(a, b, rel=0.02) -> float:
+    """The share of pixels whose counts differ by more than a step and more
+    than `rel` of the count: a settle count is smooth and runs to thousands,
+    so float32's last bits move it by a fraction of a step at 1474.87 and by
+    a few steps at 6000 — neither is a different colour."""
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    return float(np.mean(np.abs(a - b) > np.maximum(1.0, rel * np.abs(a))))
+
+SEA = complex(-0.743643887037151, 0.131825904205330)
+
+
+def _settle_counts(zoom, iters, w=40, h=24):
+    off = M.offsets(w, h, zoom)
+    eps = M.view_height(zoom) / h * M.PERIOD_EPS
+    ref = M.reference_orbit(SEA, 0j, 2, iters)
+    oracle = M.escape_counts(SEA + off, 0j, 2, iters, periodic_eps=eps, settle=True)
+    f32 = M.perturbed_counts(ref, off, 0, 2, iters, periodic_eps=eps, settle=True)[:2]
+    old = M.escape_counts(SEA + off, 0j, 2, iters, periodic_eps=eps)
+    return oracle, f32, old
+
+
+@pytest.mark.parametrize("zoom", [1e6, 9e6])
+def test_the_coloured_inside_under_perturbation_is_the_float64_oracle(zoom):
+    """The owner's views: the seahorse at 1e6 and 9e6, Steps 6000. The cause
+    of the flat grey, the blocks and the odd bands was the colour rule, not
+    the rebase alone: the step the periodicity check caught a point at
+    hangs on a tolerance of 5 % of a pixel, so deep in most of the inside
+    never settles that close before the cap even in float64 (the flat grey
+    — the old rule's oracle, below), and what does is quantised by Brent's
+    window (bands, discs) and, in float32 after a rebase, by the last bit
+    (blocks). How fast a point settles, from its cycle's multiplier
+    (`Settle`), is smooth, and float32 perturbation gives the float64
+    oracle's."""
+    (n0, i0), (n1, i1), (old, old_in) = _settle_counts(zoom, 6000)
+    both = i0 & i1
+    assert both.mean() > 0.3                        # there is an inside to colour
+    assert np.mean(i0 != i1) < 0.01
+    assert apart(np.where(both, n0, 0), np.where(both, n1, 0)) < 0.03
+    # the old rule: a handful of values (bands), and at 9e6 most of the inside
+    # at the cap (the flat grey); the new: a spread of values to colour by
+    # (what is still at the cap is a ring slower than 6000 steps, or an
+    # outside point still running there)
+    assert np.unique(old[old_in]).size < 30
+    assert np.unique(np.round(n0[i0])).size > 3 * np.unique(old[old_in]).size
+    if zoom > 5e6:
+        assert np.mean(old[old_in] == 6000) > 0.8
+
+
+def test_settling_is_the_multiplier_not_the_tolerance():
+    """Inside the main cardioid c's fixed point has multiplier λ = 1 −
+    √(1 − 4c); the settle count is ln K / ln|λ| whatever the periodicity's
+    tolerance: 0 at the nucleus, slower toward the edge."""
+    c = np.array([0.0 + 0j, 0.1 + 0.1j, -0.3 + 0.2j, 0.2 + 0.0j])
+    lam = np.abs(1 - np.sqrt(1 - 4 * c))
+    want = np.array([math.log(M.SETTLE_K) / math.log(x) if x > 0 else 0.0 for x in lam])
+    for eps in (1e-4, 1e-8, 1e-12):
+        n, ins = M.escape_counts(c, 0j, 2, 4000, periodic_eps=eps, settle=True)
+        assert ins.all()
+        assert n == pytest.approx(want, abs=0.6)
+
+
+def test_the_shader_holds_the_settle_constants():
+    import re
+    from pathlib import Path
+
+    text = (Path(M.__file__).parent / "shaders" / "fx" / "mandel.glsl").read_text()
+    ln = float(re.search(r"LN_SETTLE_K = (-?[\d.e+-]+);", text).group(1))
+    near = float(re.search(r"SETTLE_NEAR = ([\d.e+-]+);", text).group(1))
+    assert ln == pytest.approx(math.log(M.SETTLE_K), rel=1e-12)
+    assert near == M.SETTLE_NEAR
+    assert f"BORDER = {M.BORDER};" in text
+
+
+def test_the_gpu_coloured_inside_is_its_float32_twin_deep_in(rig):
+    """The pass at the seahorse, 1e6, the inside coloured: the GPU against
+    numpy's float32 perturbation with the same rule, and the float64
+    oracle."""
+    zoom, iters = 1e6, 3000
+    got = rig.steps(centre_x=SEA.real, centre_y=SEA.imag, zoom=zoom, iters=float(iters),
+                    interior=1, tier=2)
+    assert rig.stats["perturb"]
+    off = M.offsets(W, H, zoom)
+    eps = M.view_height(zoom) / H * M.PERIOD_EPS
+    ref = M.reference_orbit(SEA, 0j, 2, iters)
+    n, _, _ = M.perturbed_counts(ref, off, 0, 2, iters, periodic_eps=eps, settle=True)
+    n0, i0 = M.escape_counts(SEA + off, 0j, 2, iters, periodic_eps=eps, settle=True)
+    assert i0.mean() > 0.3
+    got = np.where(got < 0, 0.0, got)           # rig.steps reads a count of 0 as -1
+    assert apart(got, n) < 0.05
+    assert apart(got, n0) < 0.08
+
+
+def test_the_coloured_inside_in_the_direct_tier_is_the_oracle(rig):
+    got = rig.steps(centre_x=-0.5, centre_y=0.0, zoom=1.0, iters=600.0, interior=1, skip=1)
+    assert not rig.stats["perturb"]
+    q = complex(-0.5, 0.0) + M.offsets(W, H, 1.0)
+    n0, _ = M.escape_counts(q, 0j, 2, 600, periodic_eps=M.view_height(1.0) / H * M.PERIOD_EPS,
+                            settle=True)
+    got = np.where(got < 0, 0.0, got)
+    assert apart(got, n0) < 0.05
+
+
+# 3. An off-screen term's drive answers the picture, not the zoom alone (row 1002)
+
+def _brightness_change(v, key, delta, w=64, h=36, it=300):
+    def pic(vv):
+        q = complex(vv["centre_x"], vv["centre_y"]) + M.offsets(w, h, vv["zoom"])
+        c, z = M.terms(q, vv)
+        n, ins = M.escape_counts(c, z, int(vv["power"]), it)
+        return np.where(ins, 0.0, 1 - np.abs(1 - np.mod(n / 64.0, 2.0)))
+    return float(np.mean(np.abs(pic({**v, key: v[key] + delta}) - pic(v))))
+
+
+def _held(v, rate_key, seconds=1.0, fps=60):
+    spec = FxState().specs["mandel"]
+    v = dict(v, **{rate_key: 1.0})
+    for _ in range(int(seconds * fps)):
+        M.advance(spec, v, 1 / fps)
+    return v
+
+
+JULIA = {"slice": 1.0, "centre_x": 0.0, "centre_y": 0.0, "zoom": 1.7, "c_x": -0.8, "c_y": 0.156,
+         "iters": 300.0}
+
+
+def test_c_on_a_julia_slice_is_slowed_to_what_the_picture_takes():
+    """The owner's view: a Julia slice at zoom 1.7, where a view height is
+    1.8 units of c and 0.03 of c tears the set apart. A second of the c
+    drive at full throw used to move c by 1.8; now by its measured share,
+    well under a tenth of the view — and that second changes the picture
+    within ×10 of a quarter-second of pan, where plan 63's rate changed it
+    many times as much."""
+    v = values(**JULIA)
+    h = M.view_height(1.7)
+    moved = _held(v, "c_drive_x")["c_x"] - v["c_x"]
+    assert 0.0 < moved < 0.1 * h
+    pan = _brightness_change(v, "centre_x", 0.25 * h)
+    term = _brightness_change(v, "c_x", moved)
+    assert pan / 10 < term < pan * 10, (term, pan)
+
+
+def test_the_measured_scale_follows_the_picture_across_views():
+    """R (`sensitivity`) against the picture: a step of R·d in c changes it
+    about as much as a pan of d, over Julia views where plan 63's rate (the
+    view height, for both) was off by orders of magnitude."""
+    for cx, cy, zoom, cen in [(-0.1, 0.65, 20.0, (0.3, 0.1)), (0.285, 0.01, 300.0, (0.31, 0.12)),
+                              (-0.4, 0.6, 20.0, (0.3, 0.1))]:
+        v = values(slice=1.0, c_x=cx, c_y=cy, zoom=zoom, centre_x=cen[0], centre_y=cen[1],
+                   iters=400.0)
+        r = M.sensitivity(v)["c"]
+        d = 0.01 * M.view_height(zoom)
+        assert r < 1.0
+        pan = _brightness_change(v, "centre_x", d)
+        term = _brightness_change(v, "c_x", r * d)
+        assert pan / 6 < term < pan * 6, (cx, cy, zoom, term, pan)
+
+
+def test_an_unused_term_and_pan_keep_their_rates_and_the_rate_never_jumps():
+    spec = FxState().specs["mandel"]
+    h = M.view_height(1.7)
+    v = values(**dict(JULIA, slice=0.0, centre_x=-0.5, c_drive_x=1.0))   # c is the screen
+    before = v["c_x"]
+    M.advance(spec, v, 0.5)
+    assert v["c_x"] - before == pytest.approx(0.5 * h)          # unused: plan 63's rate
+    j = values(**JULIA)
+    p = dict(j, pan_x=1.0)
+    M.advance(spec, p, 0.5)
+    assert p["centre_x"] == pytest.approx(0.5 * h)              # pan as it was
+    j = dict(j, c_drive_x=1.0)
+    steps = []
+    for _ in range(120):
+        x = j["c_x"]
+        M.advance(spec, j, 1 / 60)
+        steps.append(j["c_x"] - x)
+    steps = np.array(steps)
+    assert (steps > 0).all()
+    assert (steps[1:] / steps[:-1]).max() < 2.0                 # eased: no jump
+
+
+# 4. Cost: the packed border pass, and the skip that rests (rows 1003, 1004)
+
+def test_the_packed_border_slots_are_a_tiles_border():
+    for w, h in [(16, 16), (40, 24), (33, 17)]:
+        edge = M.is_edge(w, h)
+        th, tw = -(-h // M.TILE), -(-w // M.TILE)
+        for ty in range(th):
+            for tx in range(tw):
+                got = set()
+                for i in range(M.BORDER):
+                    x, y = M.border_slot(i)
+                    got.add((min(tx * M.TILE + x, w - 1), min(ty * M.TILE + y, h - 1)))
+                part = edge[ty * M.TILE:(ty + 1) * M.TILE, tx * M.TILE:(tx + 1) * M.TILE]
+                ys, xs = np.nonzero(part)
+                want = {(tx * M.TILE + int(x), ty * M.TILE + int(y)) for x, y in zip(xs, ys)}
+                assert got == want, (w, h, tx, ty)
+
+
+def test_the_skip_with_the_packed_pass_flags_what_the_rule_flags(ctx):
+    r = Rig(ctx, 160, 128)
+    try:
+        r.steps(skip=0, iters=400.0, zoom=1.0, centre_x=-0.5)
+        assert r.stats["skip"]
+        st = r.chain.mandel.states["mandel"]
+        flags = np.frombuffer(st.tiles.tex.read(), np.uint8).reshape(8, 10, 4)[..., 0] > 127
+        q = complex(-0.5, 0.0) + M.offsets(160, 128, 1.0)
+        _, ins = M.escape_counts(q, 0j, 2, 400,
+                                 periodic_eps=M.view_height(1.0) / 128 * M.PERIOD_EPS)
+        want = M.tile_flags(ins)
+        assert want.any() and np.mean(flags != want) < 0.03
+    finally:
+        r.release()
+
+
+class _QCtx:
+    """A context whose queries count what `n` says when read (a query is
+    used again once read, as on the GPU)."""
+
+    def __init__(self, n):
+        self.n, self.made = n, 0
+
+    def query(self, samples=False):
+        self.made += 1
+        ctx = self
+
+        class Q:
+            @property
+            def samples(self):
+                return ctx.n
+
+        return Q()
+
+
+def test_the_skip_rests_where_few_tiles_are_flagged_and_looks_again():
+    g = M.SkipGate()
+    ctx = _QCtx(5)                            # 5 % flagged
+    assert g.want()
+    g.issue(ctx, 100)
+    for _ in range(M.SKIP_LAG):
+        g.read()
+        assert g.on                           # not read yet: the CPU never waits
+    g.read()
+    assert not g.on and g.flagged == pytest.approx(0.05)
+    runs = [g.want() for _ in range(2 * M.SKIP_PROBE)]
+    assert sum(runs) == 2                     # one probe every SKIP_PROBE passes
+    ctx.n = 80
+    g.issue(ctx, 100)
+    assert ctx.made == 1                      # the read query is used again
+    for _ in range(M.SKIP_LAG + 1):
+        g.read()
+    assert g.on and g.flagged == pytest.approx(0.8)
+
+
+def test_a_context_with_no_queries_keeps_the_skip_on():
+    class NoQ:
+        def query(self, samples=False):
+            raise RuntimeError("no queries")
+
+    g = M.SkipGate()
+    assert g.issue(NoQ(), 10) is None
+    assert g.on and not g.queries and g.want()
+
+
+def test_on_the_gpu_the_skip_turns_itself_off_and_the_picture_stays(ctx):
+    """The whole set at zoom 1: the cardioid test makes its inside cheap and
+    under SKIP_MIN of the tiles are flagged, so after SKIP_LAG passes the
+    skip rests — and the picture is the same either way."""
+    r = Rig(ctx, 160, 128)
+    try:
+        kw = {"iters": 400.0, "zoom": 1.0, "centre_x": -0.5, "skip": 0}
+        first = r.steps(**kw)
+        assert r.stats["skip"]
+        for _ in range(M.SKIP_LAG + 1):
+            r.steps(**kw)
+        assert r.stats["skip_valid"] and not r.stats["skip"]
+        assert r.stats["flagged"] < M.SKIP_MIN
+        assert mismatch(first, r.steps(**kw)) < 0.01
+    finally:
+        r.release()
+
+
+def test_the_binomial_without_an_array_is_the_difference_for_every_power(rig):
+    """p = 2's closed form and the walked powers for the rest, through the
+    pass deep in: each power against its float32 twin."""
+    for p in (2, 3, 5):
+        zoom = 3e5
+        q = complex(-0.1, 0.85) if p > 2 else SEA
+        got = rig.steps(centre_x=q.real, centre_y=q.imag, zoom=zoom, iters=300.0, power=p,
+                        skip=1, tier=2)
+        ref = M.reference_orbit(q, 0j, p, 300)
+        n, ins, _ = M.perturbed_counts(ref, M.offsets(W, H, zoom), 0, p, 300,
+                                       periodic_eps=M.view_height(zoom) / H * M.PERIOD_EPS)
+        assert mismatch(got, counts(n, ins)) < 0.05, p
+
+
+def test_a_dive_wakes_a_resting_skip_at_once():
+    g = M.SkipGate()
+    ctx = _QCtx(5)
+    assert g.want(1e4)
+    g.issue(ctx, 100)
+    for _ in range(M.SKIP_LAG + 1):
+        g.read()
+    assert not g.on
+    assert not g.want(1.5e4)                  # less than a doubling: still resting
+    assert g.want(3e4)                        # a doubling since it looked: probe now
+    assert not g.want(3.5e4)
+
+
+# Devin's review of #471
+
+def test_a_drive_after_rest_measures_where_the_terms_are_now():
+    """Measure at c = 0.156i, let the drive rest, set c to −0.8 + 0.156i by
+    hand, start again: the first frame moves at the rate measured there,
+    not at the old one."""
+    spec = FxState().specs["mandel"]
+    v = values(**dict(JULIA, c_x=0.0, c_drive_x=1.0))
+    M.advance(spec, v, 1 / 60)                   # measured at c = 0.156i
+    v["c_drive_x"] = 0.0
+    M.advance(spec, v, 1 / 60)                   # at rest
+    v["c_x"], v["c_drive_x"] = -0.8, 1.0
+    x = v["c_x"]
+    M.advance(spec, v, 1 / 60)
+    fresh = values(**dict(JULIA, c_drive_x=1.0))
+    M.advance(spec, fresh, 1 / 60)
+    assert v["c_x"] - x == pytest.approx(fresh["c_x"] - JULIA["c_x"], rel=1e-9)
+
+
+def test_z0_at_zero_on_the_mandelbrot_slice_does_not_lurch():
+    """z₀ = 0 has a first derivative of 0 (z₁ = z₀² + c), which read as a
+    term the picture ignores and ran at a whole view a second: 15 frames at
+    full throw took z₀ to 0.75. A used term the measure cannot read starts
+    at `TERM_RATE` of the view; only an unused one keeps the full rate."""
+    spec = FxState().specs["mandel"]
+    v = values(z0_drive_x=1.0)
+    for _ in range(15):
+        M.advance(spec, v, 1 / 60)
+    h = M.view_height(v["zoom"])
+    assert 0.0 < v["z0_x"] <= M.TERM_RATE * h * 0.25 + 1e-12
+    r = M.sensitivity(values())
+    assert r["c"] == math.inf and math.isfinite(r["z0"])
+
+
+def test_every_gate_on_a_chain_shares_one_query_pool():
+    """A query once made lives as long as its context (moderngl 5 cannot
+    free one): a node dropped and added again uses the queries it made."""
+    gl = M.Gl()
+    ctx = _QCtx(5)
+    st = gl.state("mandel")
+    st.gate.issue(ctx, 10)
+    st.gate.issue(ctx, 10)
+    assert ctx.made == 2
+    gl.prune([])                              # a patch without it lands
+    assert len(gl.queries) == 2
+    again = gl.state("mandel")
+    again.gate.issue(ctx, 10)
+    again.gate.issue(ctx, 10)
+    gl.state("mandel.2").gate.issue(ctx, 10)
+    assert ctx.made == 3                      # two from the pool, one new
+
+
+def test_a_render_too_wide_for_the_packed_pass_runs_without_the_skip(ctx):
+    """5120×1080 at Size 1080 needs 320 tiles × 64 = 20 480 px across, over
+    a 16 384 px limit: the pass draws the picture without the skip rather
+    than fail its target."""
+    r = Rig(ctx, 160, 128)
+    try:
+        kw = {"iters": 400.0, "zoom": 1.0, "centre_x": -0.5, "skip": 0}
+        with_skip = r.steps(**kw)
+        assert r.stats["skip"]
+        r.chain.mandel.max_px = 10 * M.BORDER - 1     # one px short of 10 tiles
+        without = r.steps(**kw)
+        assert not r.stats["skip"] and not r.stats["skip_valid"]
+        assert mismatch(with_skip, without) < 0.01
+    finally:
+        r.release()
+    gl = M.Gl()
+    gl.max_px = 16384
+    assert gl.fits(None, 4096) and not gl.fits(None, 5120)
+
+
+@pytest.mark.parametrize("flip", [False, True], ids=["direct", "flipped"])
+def test_switched_off_after_drawing_unwired_it_leaves_the_ground(ctx, flip):
+    """Devin's review of #471: an unwired Mandelbrot drawn, then switched
+    off with the wiring as it was, left its last picture on the output —
+    its paint wrote nothing. Off, it clears to the ground, on a direct
+    output and on a flipped one (the cached-texture path)."""
+    r, s, vs = _wired(ctx, [("mandel", "output.1.image")],
+                      {"mandel": {"on": True, "iters": 64.0, "output": 1}}, flip=flip)
+    assert _drawn(ctx, r, s, vs).max() > 100
+    r.fx.state.values["mandel"]["on"] = False
+    assert _drawn(ctx, r, s, vs).max() < 5
