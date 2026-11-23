@@ -3,10 +3,13 @@
 23 whole-frame patches (`hyperspace.loadable/11`) for trying the three
 distortion effects: Shake, Wave and Blocks (`docs/DISTORTION.md` has every
 knob). They are not part of the app (nothing ships with it). Copy them
-into the library's `loadable/` folder and they appear in the list:
+into a `distort/` folder of their own under the library's `loadable/`,
+never loose into `loadable/` itself, and they appear in the list as
+`distort/<name>`:
 
 ```bash
-cp loadable/distort/*.json ~/Hyperspace/loadable/
+mkdir -p ~/Hyperspace/loadable/distort
+cp loadable/distort/*.json ~/Hyperspace/loadable/distort/
 ```
 
 Every one draws the Celestial tesseract with plaid faces through one

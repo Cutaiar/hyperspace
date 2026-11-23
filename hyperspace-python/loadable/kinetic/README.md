@@ -2,11 +2,14 @@
 
 Six whole-frame presets (`hyperspace.loadable/11`) played with the body:
 the Ultraleap hands first, a gamepad or Joy-Con second. They are not part
-of the app (nothing ships with it). Copy the ones you want into the
-library's `loadable/` folder and they appear in the list:
+of the app (nothing ships with it). Copy the ones you want into a
+`kinetic/` folder of their own under the library's `loadable/`, never
+loose into `loadable/` itself, and they appear in the list as
+`kinetic/<name>`:
 
 ```bash
-cp loadable/kinetic/*.json ~/Hyperspace/loadable/
+mkdir -p ~/Hyperspace/loadable/kinetic
+cp loadable/kinetic/*.json ~/Hyperspace/loadable/kinetic/
 ```
 
 Each has the default APC40 patch layer (no `desk` key) and the six audio

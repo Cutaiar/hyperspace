@@ -3,7 +3,8 @@
 They are files for the owner's library, not part of the app (nothing ships:
 DECISIONS "One tier"), so nothing else reads them. Each must land through the
 library's own load with no unknown id and no note: a route dropped at load is
-a gesture that does nothing on stage.
+a gesture that does nothing on stage. Each is opened from where its README
+copies it: the library's `loadable/kinetic/`, by its folder-qualified name.
 """
 
 from __future__ import annotations
@@ -38,11 +39,11 @@ def test_only_comet_turns_the_grip_on(tmp_path):
 def test_a_kinetic_preset_opens_with_no_note(path, tmp_path):
     doc = json.loads(path.read_text())
     assert doc["name"] == path.stem
-    folder = tmp_path / library.LOADABLE
+    folder = tmp_path / library.LOADABLE / "kinetic"
     folder.mkdir(parents=True)
     shutil.copy(path, folder / path.name)
     app = headless.make_app(tmp_path)
-    missing = app.loaded_patch.load(path.stem)
+    missing = app.loaded_patch.load(f"kinetic/{path.stem}")
     assert missing == []
     assert not app.lib.warning
     live = {(b.source, b.target) for b in app.router.table.routes()}
