@@ -414,10 +414,14 @@ class Playing:
 
     @staticmethod
     def _landed_on(deck) -> Any:
-        """What a deck's loaded patch last **landed**: the signature a load or a save
-        produced (`loadable.LoadedPatch.loaded`, one element of its `landing`). None
-        from a deck that does not say, which a stand-in does not."""
-        return getattr(getattr(deck, "loaded_patch", None), "loaded", None)
+        """How a cue is known on the deck it was put on: how many patches have been
+        applied there (`loadable.LoadedPatch.loads`) and what the last landing
+        produced (`.loaded`). Neither mark alone is enough — `_cue_lost` says why.
+        None from a deck that does not say, which a stand-in does not."""
+        patch = getattr(deck, "loaded_patch", None)
+        if patch is None or not hasattr(patch, "loaded"):
+            return None
+        return (getattr(patch, "loads", None), patch.loaded)
 
     def _cue_lost(self) -> Entry | None:
         """The armed entry a hand has loaded over on the deck it was cued onto, or None.
@@ -427,14 +431,21 @@ class Playing:
         `_due` would then see the cue's deck go on air and count the entry as played,
         when a hand's look aired instead.
 
-        What landed there, never the **name** it goes by: Save As renames a patch
-        without loading one (`Library.save_as` lands a fresh signature over the same
-        look), so a name would call an untouched cue lost and postpone the show, and an
-        entry's own name is a third spelling again (`party-tumble` loads as `TUMBLE`).
-        A landing that is the same object is the common tick and costs nothing; one that
-        is equal in value is that rename, or the same patch loaded again, and neither
-        has taken the cue. A hand's edits land nothing, so twiddling the deck off air
-        leaves the cue alone (row 707 writes over it anyway)."""
+        Known by `_landed_on`'s pair — the count of patches applied there and the last
+        landing — and either moving is enough. The **count** moves when, and only when,
+        a patch is loaded, which is what rules out the two cheaper marks: a *name*
+        would call an untouched cue lost, since Save As renames a patch without loading
+        one and would postpone the show; the landing's *signature* would miss a real
+        replacement, since it is the dirty dot's and so leaves out the pose a load
+        applies, and two patches saved from one look at different turns compare alike.
+        The **landing** catches what no load counted: a reset, or a new patch. Neither
+        moves for a hand's edits, so twiddling the deck off air leaves the cue alone
+        (row 707 writes over it anyway), and an entry's own name is a third spelling
+        again (`party-tumble` loads as `TUMBLE`) that nothing compares against.
+
+        Loading the very same patch over the cue does count as taking it, since the
+        count moved. That costs a reload and nothing else: the list keeps its deadline
+        for a load that never aired, so the entry still airs when it always would."""
         if self.armed is None or self.armed_loaded is None:
             return None
         held = self._landed_on(self.armed_on)

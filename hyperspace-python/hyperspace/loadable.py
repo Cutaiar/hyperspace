@@ -848,6 +848,12 @@ class LoadedPatch:
     # on the class: a `LoadedPatch` from before a hot reload has them
     landing: tuple = (None, None, None)
     bus: BusCuts = BusCuts()
+    # patches applied to this deck, counted (row 1063): the one mark that moves when
+    # a patch is **loaded** and not when one is saved, renamed or edited. `landing`
+    # cannot stand in — Save As lands a fresh one over the same look — and nor can
+    # its signature, which is the dirty dot's and so leaves out the pose a load
+    # applies (`POSE_IDS`), making two patches that differ only in their turn alike.
+    loads: int = 0
 
     def __init__(self, lib, reg, router):
         self.reg, self.router = reg, router
@@ -1360,6 +1366,7 @@ class LoadedPatch:
         # 7. the notes, for the panel
         self.notes = notes
         self.migrated = migrated            # plan 36 T3: the one-way migration's word
+        self.loads += 1                     # (row 1063: a patch landed here, pose and all)
         self._warn(str(doc.get("name") or (path.stem if path else "patch")))
         return unknown
 

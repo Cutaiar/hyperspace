@@ -23,8 +23,9 @@ from test_ui_pane import _st, _tall_driver
 from test_ui_shell import build_rig
 
 from hyperspace import app, hotreload, playlist, ui_pane, ui_players, ui_playlist, undo
-from hyperspace.library import PLAYLISTS, Library, LibraryError, group_folder
-from hyperspace.params import is_shared_meta_id, part_of
+from hyperspace.library import LOADABLE, PLAYLISTS, Library, LibraryError, group_folder
+from hyperspace.loadable import POSE_UNREAD
+from hyperspace.params import POSE_IDS, is_shared_meta_id, part_of
 from hyperspace.playlist import LEAD_S, Entry, Playing, Playlist
 from hyperspace.render import SceneTarget
 from hyperspace.routing import meta_refusal
@@ -1175,3 +1176,33 @@ def test_a_playing_from_before_a_hot_reload_still_ticks(air):
     _run(air, t, (due - t) + 0.5)
     assert p.at == 1, "the cue played on time"
     assert "armed_loaded" in vars(p) or p.armed is None, "the next arm records it again"
+
+
+def test_a_pose_only_twin_loaded_over_the_cue_is_still_a_replacement(air):
+    """Two patches saved from one look at different turns share a dirty-state signature,
+    since the dot leaves out the pose a load applies. The count of patches applied is
+    what sees the swap, so the cue is not counted as played (Devin on #475)."""
+    twin = dict(air.lib.read(LOADABLE, "party-tumble"))        # the cued entry, turned
+    twin.pop("name", None)
+    twin["pose"] = {pid: 0.3 * (k + 1) for k, pid in enumerate(POSE_IDS)}
+    put(air.lib.home, "tumble-side", **twin)
+
+    p = _on_real(air, ("party-wake", 6.0, 0.0), ("party-tumble", 6.0, 0.0))
+    air.one.reg["playlist.play"].toggle()
+    t = _lead(air, p, 100.0)
+    patch = air.meta.off_air.loaded_patch
+    assert p.armed is not None and p.armed.loadable == "party-tumble"
+    before, counted = patch.loaded, patch.loads
+
+    patch.load("tumble-side")                                  # a hand's load: the twin
+    assert POSE_UNREAD not in patch.notes, "the twin's pose is a real one"
+    assert patch.loaded == before, "the signature cannot tell the two apart"
+    assert patch.loads == counted + 1, "but a patch was applied here"
+
+    due = p.fade_at
+    t = _run(air, t, 0.2)
+    assert p.at == 0 and p.next == 1, "the cued entry is not counted as played"
+    assert "loaded over off air" in air.lib.warning, "the swap was seen"
+    assert p.fade_at == due, "and the list keeps its deadline: nothing aired"
+    _run(air, t, (due - t) + 0.5)
+    assert p.at == 1, "the entry airs in its turn"

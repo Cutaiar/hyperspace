@@ -15400,16 +15400,23 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
   has changed nothing the room can see, so the list keeps its own deadline and reloads the
   entry for it, rather than postponing the show by a dwell per press. A fade asked for and
   still waiting on its warm draw counts as reaching the room, or the list would reload its
-  entry straight over the patch a press had just put there. The cue is known by **what the
-  deck landed** (`LoadedPatch.loaded`), never the name it goes by: Save As renames a patch
-  without loading one, and a name called that untouched cue lost and postponed the show.
+  entry straight over the patch a press had just put there. The cue is known by **how many patches have
+  been applied to that deck** (`LoadedPatch.loads`) and what its last landing produced,
+  either moving being enough. The count is the mark that moves when, and only when, a patch
+  is loaded, which is what rules out the two cheaper marks: a name called an untouched cue
+  lost, since Save As renames a patch without loading one, and so postponed the show; the
+  landing's signature missed a real replacement, since it is the dirty dot's and leaves out
+  the pose a load applies, so two patches saved from one look at different turns compare
+  alike. The landing catches what no load counted — a reset, a new patch — and neither mark
+  moves for a hand's edits, so twiddling the deck off air leaves the cue alone (row 707).
 - **Answer.** owner — 2026-11-22, asked for: the D-pad "doesn't just snap the new patch in",
   it "loads the next patch onto deck 2 and then triggers the fade between them".
 - **Built.** `library.Library.neighbour`, `library.Install.fade_to`, `library.DeckInstall.fade_to`,
   `deck.MetaController.fade_when_warm`, `.fading_words`, `.fade`, `.waiting`,
   `params` `preset.fade.next` / `preset.fade.prev`, `routing._layout_source`,
   `pads.models._EDGE_LAYOUT`, `ui.CHEATSHEET`, `playlist.Playing._cue_lost`, `._cue_taken`,
-  `._landed_on`, `.armed_loaded` (class-level: a `Playing` from before a hot reload has it); `tests/test_on_off_air.py::test_a_fade_verb_loads_off_air_and_steps_from_the_patch_on_air`,
+  `._landed_on`, `.armed_loaded` (class-level: a `Playing` from before a hot reload has it),
+  `loadable.LoadedPatch.loads`; `tests/test_on_off_air.py::test_a_fade_verb_loads_off_air_and_steps_from_the_patch_on_air`,
   `::test_a_fade_verb_from_either_deck_lands_off_air`,
   `::test_the_fade_waits_for_the_warm_draw_then_runs_the_fader_across`,
   `::test_press_after_press_goes_on_through_the_list`,
@@ -15421,7 +15428,8 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
   `::test_a_slot_load_that_never_airs_keeps_the_lists_own_deadline`,
   `::test_save_as_on_the_cued_deck_leaves_the_cue_alone`,
   `::test_a_pending_d_pad_fade_is_not_stomped_by_the_list`,
-  `::test_a_playing_from_before_a_hot_reload_still_ticks`.
+  `::test_a_playing_from_before_a_hot_reload_still_ticks`,
+  `::test_a_pose_only_twin_loaded_over_the_cue_is_still_a_replacement`.
 - **Judge it.** 859, on the Edge at the rig: whether the fade reads as a transition and
   whether `output.xfade_s` is the right length to reach for.
 - **Open.** `Fade.warm` draws the deck off air for the **first output only** (the render loop
