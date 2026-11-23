@@ -145,7 +145,7 @@ Checked against both files [V]:
 | **Spread**: the hue banded across the frame (a diagonal, or rings) | **not covered today**; covered once a knob takes a field: `measure (line or rings) → Hue turn` |
 
 So it is covered but for Spread, and Spread is exactly plan 67 §3.9. [Rec] Retire Hue cycle
-when §3.9 lands; its field example (`field-examples/hue-cycle`) is that Palette patch. Six
+when §3.9 lands; its field example (`loadable/field-examples/hue-cycle`) is that Palette patch. Six
 saved files use it (`presets/kinetic/kinetic-comet`, `kinetic-tunnel`; the corpus's `dial`,
 `hands-pinch`, `party-acid`, `party-trip`), so the retirement is a migration in the lane:
 each `huecycle` node rewritten as the Palette patch, its look proven by the golden frames.

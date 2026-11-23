@@ -434,9 +434,12 @@ Every effect that changes for fields ships a **field example**: a loadable patch
 Markdown beside it, saying what the effect does, how the fields in it are wired, and what to
 try. Brief, to the point, easy to scan.
 
-- In the repository at `presets/field-examples/<effect>.json` + `<effect>.md` (as
-  `presets/distort/` is), and in the shared library's **field examples** folder on the Drive,
-  copied there when the change merges (the cloud session cannot reach the Drive).
+- **Where: `loadable/field-examples/`** in the library on the Drive — the owner, 2026-11-23:
+  "loadable is the SINGLE canonical location to save patches." The repository keeps the
+  source at the same path, `hyperspace-python/loadable/field-examples/<effect>.json` +
+  `<effect>.md`, so the copy is one folder onto its twin (the cloud session cannot reach the
+  Drive; a person copies it when the change merges). Not under the repository's `presets/`,
+  which is the old word (the glossary's FQ4).
 - A change is not done until its example loads, renders the picture the Markdown describes
   (a test, as `tests/test_distort_presets.py` does for `distort/`), and its Markdown names
   only knobs and wires that exist.
@@ -446,3 +449,83 @@ try. Brief, to the point, easy to scan.
 8. **Rates per turn (A) or the jog driving the clocks (B)?** [Rec] A.
 9. **Old looks' speed** becomes a free-running source on the jog? [Rec] yes.
 10. **Blend retired into Composite**, Composite taking the one library and a mask? [Rec] yes.
+
+## 10. The owner's fifth round (2026-11-23)
+
+Decided:
+
+- **Motion is A: rates per turn** (below, in detail, for the owner to confirm the detail).
+- **Blend is retired into Composite** (§9.2): Composite takes the one blend library and a
+  mask; every effect keeps `mix` and `blend` from the same library.
+- **Hue cycle is retired into Palette + fields** (roundup §6), once a knob takes a field.
+- **Examples go in `loadable/field-examples/`** on the Drive; `loadable/` is the single
+  canonical place a patch is saved (§9.3, corrected).
+
+### 10.1 Rates per turn, in detail
+
+**A turn.** Each effect gets one position knob, its jog, running 0 … 1 and wrapping: one
+**turn**. Something turns it — an LFO saw from the bank is the usual thing, one turn per LFO
+cycle (a bar, four bars, a beat), a hand on the jog is another. Nothing turning it: the
+effect is still.
+
+**A rate becomes a count per turn.** Every knob that today says "… a second" — Wave's and
+Blocks' Drift (waves passing a second), Shake's Rate (shakes a second), Trip warp's and Oil
+slick's Drift, Grow's and Wave Table's Flow, Trip colour's Pulse — becomes "… a turn": a
+whole number, signed (minus runs it backwards). The shader reads `count × position`.
+
+*Example.* A master LFO, a saw, one cycle a bar at 120 bpm: a turn is 2 s. Wave with Drift
+**2 a turn** moves two wavelengths a bar, one a second. Shake with Rate **24 a turn** shakes
+12 times a second, on the beat grid: six shakes a beat. Blocks with Drift **1 a turn** cycles
+once a bar. All three are wired to the same LFO, so at every bar line each is back at its
+starting picture, and every bar looks the same as the last.
+
+**Why whole numbers.** When the position wraps from 1 back to 0, the picture must not jump.
+Every motion in these files repeats with period 1 in its count (a wave one wavelength on, a
+shake one shake on, a cell number one cycle on), so `count × 1` lands where `count × 0` does
+only when the count is whole. Drift 2.5 a turn would jump half a wavelength at every bar
+line. So the knobs snap to whole numbers.
+
+**How slow and how fast.** The slowest is 1 a turn; slower comes from a longer turn (an LFO
+over 4 or 16 bars). The fastest is the knob's top (Shake: 1 … 128 a turn). Speed is no longer
+a knob of the effect: it is how fast its turn goes, chosen once, for every effect on that LFO.
+
+**Phase.** At position 0 every effect is at its own zero (the picture it shows unmoved). Two
+effects on one LFO keep their relation for ever. A **cable offset** (§9.1) moves one by a
+share of a turn: Wave a quarter turn behind Blocks, on every bar.
+
+**A rate knob step does not jump.** Changed while the turn runs, the count would jump the
+picture by `(new − old) × position` cycles. Instead the new count **lands at the next point
+where the old and new pictures agree**: where `(new − old) × position` is whole. A step of 1
+lands at the next wrap; a step of 4 at the next quarter turn; the knob shows the new value at
+once and its ring says "waiting". Nothing ever jumps, and the effects stay in phase. (A hand
+or an LFO sweeping a rate is therefore stepped: a rate is a musical choice here, not a
+gesture. A gesture belongs on a knob that is not a rate — Amount, Waves, Cell.)
+
+**Not every clock turns.** Grain's shutter (a new field of grain every frame), Glimmer's
+twinkle and Trip colour's flicker are texture, not rhythm: they stay on the wall clock and
+have no jog. The roundup marks each file's clocks as **turned** or **texture** [Rec].
+
+**The files without a rate knob** (Plasma, Acid, Kaleidoscope, Wobble, Double vision,
+Deconverge, Prism's tilt, Fractals, Hue cycle) move by `u_phase` times constants written in
+the file — Plasma's 1.3, 0.9, 0.7 and 1.1, Acid's T / 143, T / 256 and T / 200. Those never
+repeat. Each becomes whole counts per turn, chosen to keep its look (Plasma: 1, 1, 1 and 2,
+say), so its motion loops on the turn. Its still pictures are the same; its motion is close,
+not identical.
+
+**The id.** The jog cannot be `fx.<n>.pos`: Wave Table already saves `fx.wavetable.pos`, its
+"Position" (how far each stamp has been dragged). [Rec] the jog is **`fx.<n>.phase`**,
+labelled **Position**, and Stamp Trail's knob is relabelled **Drag** (its id stays).
+
+**Old looks.** A saved look carries `fx.<n>.speed` and rates a second. Each effect that moved
+gets a **free** source on its jog (§9.1, Q9): a turn of 1 s × its old speed, and its rate as
+a count of that turn — `drift × 1 s`, which is whole only by luck. [Rec] the migration rounds
+it and says so in the load's note; a look whose motion must be exact keeps a free turn whose
+length makes the count whole (Drift 0.5 a second → a 2 s turn, 1 a turn). Still frames are
+unchanged; the golden frames, drawn at fixed times, move where a rate rounds — each is
+re-recorded with the reason, as a format change asks.
+
+### 10.2 New questions
+
+11. **The detail above**: whole counts per turn; a rate step landing where the pictures
+    agree; texture clocks left on the wall clock; the jog as `fx.<n>.phase`, "Position";
+    Stamp Trail's "Position" relabelled "Drag". Confirm or change.
