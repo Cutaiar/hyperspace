@@ -270,7 +270,7 @@ from .graph import Effect
 from .groupwords import group_title
 from .learn import META_UNDO, PairAsk
 from .library import LibraryError
-from .params import Kind
+from .params import KEY_GROUP, Kind
 from .routing import PAIR_SCHEME, Binding, base_refusal, is_macro, row_words
 from .view import RED as RED_RGB
 
@@ -328,6 +328,9 @@ TITLE_SCREEN = 18.0      # px: what it stays on screen while the canvas is zoome
 TITLE_FLOOR = 12.0       # px: never smaller on screen (review round 1); a short word if need be
 TITLE_GAP = 16.0         # canvas units kept clear before the next title on its row
 THROUGH_ALPHA = 0.5      # a through wire over off effects: drawn, but plainly not a cable
+COPY_NOTHING = "nothing to copy: select an effect, or a copy of one, then ⌘C"
+PASTE_NOTHING = "nothing copied yet: select an effect and press ⌘C"
+COPIED = "{of} copied: ⌘V adds a copy of it, with its knobs"
 THROUGH_NO_DELETE = ("a through wire stands for off effects: turn one on (FX) or open the "
                      "off effects line to edit its cables")
 AREA_TIP = "Frame the canvas on this area's boxes (a click on its title does the same)" 
@@ -1449,6 +1452,53 @@ def tidy_pressed(panel) -> bool:
     return _bare(imgui.Key.t, panel, KEY)
 
 
+def _chord(key) -> bool:
+    """⌘ or Ctrl with `key`, pressed this frame, and nothing else wants it:
+    no text field being typed in, no control active, no popup open, the
+    canvas focused."""
+    io = imgui.get_io()
+    return (imgui.is_key_pressed(key, False)
+            and (io.key_super or io.key_ctrl)
+            and not (io.key_alt or io.key_shift)
+            and not io.want_text_input
+            and not imgui.is_any_item_active()
+            and not _menu_up()
+            and imgui.is_window_focused())
+
+
+def _copy_paste(panel, st: dict, view: graphview.View) -> None:
+    """⌘C / ⌘V on the canvas, for a node that can have copies (an effect, or
+    a copy of one): ⌘C holds the effect instance it draws (`st["clip"]`),
+    ⌘V adds a copy of it (`Edit.add_node("copy", of)`: the same effect with
+    its knobs, on another picture — unwired until a picture is) just under
+    the node last copied or pasted, one undo step, and selects it. Any
+    other selection says what can be copied."""
+    copy, paste = _chord(imgui.Key.c), _chord(imgui.Key.v)
+    if not (copy or paste):
+        return
+    if copy:
+        sel = _selection(st, view)
+        n = sel[1] if sel is not None and sel[0] == "node" else None
+        ref = getattr(n, "ref", None)
+        if n is None or not isinstance(ref, Effect):
+            _note(st, COPY_NOTHING)
+            return
+        st["clip"] = {"of": ref.effect, "nid": n.id}
+        _note(st, None)
+        st["said"] = COPIED.format(of=ref.effect)
+        return
+    clip = st.get("clip")
+    if not clip:
+        _note(st, PASTE_NOTHING)
+        return
+    at = node_below(st, clip["nid"])
+    e = render_edit(panel)
+    why = add_render(panel, e, "copy", clip["of"], at)
+    if why is None and e.added:
+        clip["nid"] = f"render:{e.added}"       # the next paste lands under this one
+        select_node(panel, e.added)
+
+
 def _tidy_key(panel, st: dict) -> None:
     """T asks for the tidy the head's chip asks for (`_place` does it next
     frame); 0 asks for the fit a load asks for (`ask_fit`: every node in
@@ -2336,6 +2386,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     _title_click(st)
     _create(panel, st, view)
     _delete_key()
+    _copy_paste(panel, st, view)        # ⌘C / ⌘V: a copy of the selected effect
     _tidy_key(panel, st)                # T and 0: the tidy and the fit, from the keyboard
     _delete(panel, st, view)
     _menus(panel, st, view)
@@ -4494,7 +4545,7 @@ def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | N
 
 def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
     """A render node's menu items: a hands node drawn solid or as lines, a
-    composite's blend, a picture node's "add feedback after" (wave 0 E1:
+    composite's blend, black is clear on any picture node (plan 87), a picture node's "add feedback after" (wave 0 E1:
     `_feedback_after_menu`, `add_feedback_after`), delete."""
     e = render_edit(panel)
     name, _ = graphview.spec_name(n.id, e.render)
@@ -4507,6 +4558,12 @@ def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
         for how in rgraph.BLENDS:
             m.item(f"laid {how}", lambda how=how: _render_said(
                 panel, e, lambda e, how=how: e.set_node(name, blend=how)))
+    if graphview.keyable(name):
+        # plan 87: black is clear on any picture node — its knobs then on
+        # the selection (`key.<name>.*`)
+        on = graphview.keyed(e, name)
+        m.item(KEY_ITEM, lambda: _render_said(panel, e, lambda e: e.set_key(name, not on)),
+               checked=on, tip=KEY_TIP)
     feeds = graphview.picture_feeds(e, name) if name else None   # (the spec's wires, no copy)
     if feeds is not None:
         _feedback_after_menu(panel, name, feeds, m)
@@ -4515,6 +4572,10 @@ def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
 
 
 FEEDBACK_AFTER = "add feedback after"
+# plan 87: a picture node's menu item, and what it says
+KEY_ITEM = "black is clear"
+KEY_TIP = ("This node's dark parts become transparent, so what is under it shows "
+           "through. Its level, softness and the rest are on the selection.")
 
 
 def _feedback_after_menu(panel, name: str, feeds: list[tuple[str, str]],
@@ -4670,6 +4731,7 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
     node_mode_block(panel, n)
     if isinstance(n.ref, Effect):
         ui_fx.strip(panel, n.ref.effect)
+        _key_rows(panel, n)
         return
     m = router.table.modifier(n.id) if router is not None and n.kind == "modifier" else None
     if m is not None:                           # plan 28 N7: the MODIFIERS strip's editor
@@ -4859,6 +4921,21 @@ def side_groups(panel, n: graphview.VNode) -> list[tuple[str, list[str]]]:
         groups.setdefault(port.group, []).append(port)
     return [(g, [p.param for p in sorted(ports, key=lambda p: not p.patched)])
             for g, ports in groups.items()]
+
+
+def _key_rows(panel, n: graphview.VNode) -> None:
+    """Plan 87: a keyed effect's black is clear knobs (`key.<name>.*`) under
+    its strip, which shows only the effect file's own params; a node of any
+    other kind has them among its rows (`graphview.OWNERS`)."""
+    pids = [p.param for p in n.ports if p.param is not None]
+    pids = [pid for pid in dict.fromkeys(pids)
+            if pid in panel.reg and panel.reg[pid].group == KEY_GROUP]
+    if not pids:
+        return
+    imgui.separator()
+    ui._micro(KEY_ITEM)
+    for pid in pids:
+        _param_row(panel, pid)          # (a toggle its checkbox, as on any node)
 
 
 def _param_rows(panel, st: dict, n: graphview.VNode) -> bool:

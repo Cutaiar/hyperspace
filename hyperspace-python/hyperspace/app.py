@@ -97,6 +97,7 @@ from . import (
     tempo,
     totem,
     ui_browse,
+    ui_media,
 )
 from . import field as field_mod
 from . import ghost as ghosts
@@ -1089,6 +1090,10 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
     page asked for it."""
     first = slots[0]
     glfw.make_context_current(root.win)
+    # the panel's NDI on/off asks (MEDIA ▸ Live), made so with the render context current
+    for sl in slots:
+        if sl.ndi_asked is not None:
+            publish.take_ask(sl, ctx, Offscreen)
     # the frame target, bound explicitly every frame: the renderer draws into
     # whatever is bound, and a frame that once left another offscreen
     # framebuffer bound froze the picture with no error (plan 14 WP1).
@@ -1851,6 +1856,11 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # does — a section, or the selection with the node it showed; they claim
     # [ and ]'s edge the same way, so brightness (the table's bare [ ]) never
     # hears them
+    # ⌘V pastes the clipboard's picture into the selected channel's next empty
+    # cell; a file dropped on a window goes the same road (ui_media.intake)
+    if keys.super() and keys.pressed(glfw.KEY_V):
+        ui_media.paste(h.panel)
+    ui_media.poll_intake(h.panel)
     hist = getattr(h.panel, "history", None)    # (a panel from before a hot reload)
     if hist is not None:
         hist.note(view_of(h.panel))             # however the view changed since
@@ -2168,7 +2178,10 @@ def main(argv: list[str] | None = None) -> None:
     # each output: a presenter on its own context, none waiting yet
     _open_presenters(slots, root_win, notes=cfg.setdefault("notes", []))
     root.pacer.choose(_slot_windows(slots), root_win)
-    # the outputs published out (plan 32 T9), the root's context current
+    # the outputs published out (plan 32 T9), the root's context current; this Mac's
+    # NDI choice from the panel (publish.here.json) over config.toml's
+    if not args.laptop:
+        publish.apply_here(slots, publish.load_here(home))
     _open_publishers(slots, ctx, cfg.setdefault("notes", []))
 
     # the control side: imgui on the control window's context. Its swap
@@ -2298,6 +2311,7 @@ def main(argv: list[str] | None = None) -> None:
         panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
         panel.output = output
         panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
+        panel.publish_home = None if args.laptop else home   # MEDIA ▸ Live's NDI out, this Mac's
         if display_list is not None:           # …and a row per display (SC2)
             panel.displays = Running(display_list, lambda: placement.screens(glfw), slots,
                                      opened_of(slots, want.control if want is not None else None))
@@ -2496,6 +2510,14 @@ def main(argv: list[str] | None = None) -> None:
     panel.config_notes = cfg["notes"]
     # keys from every window (`hotplug.py` points them at what's open, as is the mouse)
     keys = Keys(render_win, ctrl_win, [w for w in _slot_windows(slots) if w is not render_win])
+    def on_drop(_win: Any, paths: Any) -> None:    # (pyGLFW passes the list of paths)
+        ui_media.DROPPED.extend(paths)
+
+    for _w in (ctrl_win, render_win):       # a file dropped on either window → a media cell
+        if _w is None:                      # (no display shows output 1)
+            continue
+        # (pyGLFW's stub types the callback (window, int, str); it is called (window, paths))
+        glfw.set_drop_callback(_w, on_drop)  # pyright: ignore[reportArgumentType]
     mouse = Mouse(render_win, reg, s, slots[0].switches,          # the mouse: output 1 only
                   pointer=meta.pointer(MOUSE))
 

@@ -17,6 +17,11 @@ target's viewport (`glsl.QUAD_VS`), premultiplied in and out:
   fitted into the consumer by cover as an own-sized node is.
 - `CUT_FS`, picture + mask → picture (T3's `cut`): where the mask passes
   the picture, elsewhere cut away to transparent black, by `amount`.
+- Plan 87 (black is clear): `KEY_FS`, a picture → the same picture with
+  its dark parts clear — any picture node a loadable patch's graph keys
+  (`graph.KeyNode`), by the ramp every key shares (`glsl.KEY_RAMP`), its
+  feather `BLUR_FS` over the ramp alone. A picture's own transparency,
+  not a mask: no mask is made or read.
 - Plan 39 T4 (`segment`): `MOTION_FS` and `LEARN_FS`, motion mode's
   background model — the mask where the picture differs from the
   background it has learnt, and the background learning the picture;
@@ -45,7 +50,7 @@ from collections.abc import Callable
 import moderngl
 import numpy as np
 
-from .glsl import QUAD_VS
+from .glsl import KEY_RAMP, QUAD_VS
 
 # the sources `MATTE_FS` reads (`u_from`), in `view.MATTE_FROM`'s order
 LUMA, ALPHA, CHROMA = 0, 1, 2
@@ -184,6 +189,36 @@ void main() {
 """
 
 
+# plan 87, black is clear: a premultiplied picture keyed by the shared ramp
+# (`glsl.KEY_RAMP`) of its straight colour. Keep colour leaves the colour as
+# it was and takes only the alpha down (not inverted); else colour and alpha
+# go together. `u_mode` 1 keys by the ramp here, 2 by `u_keymask` (the ramp
+# feathered, at the target's size, read 1:1), 3 writes the ramp alone (into
+# a one-channel target). The picture is read 1:1 when it is the target's size
+KEY_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_src;
+uniform sampler2D u_keymask;
+uniform int u_mode;
+uniform int u_scaled;      // 1 when u_src is not the target's size
+uniform ivec2 u_origin;    // the target rect's origin (gl_FragCoord is window-relative)
+out vec4 f_color;
+""" + KEY_RAMP + """
+void main() {
+    vec4 c = u_scaled != 0 ? texture(u_src, v_uv)
+                           : texelFetch(u_src, ivec2(gl_FragCoord.xy) - u_origin, 0);
+    vec3 rgb = c.a > 0.0 ? clamp(c.rgb / c.a, 0.0, 1.0) : vec3(0.0);
+    if (u_mode == 3) {
+        f_color = vec4(key_ramp(rgb), 0.0, 0.0, 1.0);
+        return;
+    }
+    float k = u_mode == 2 ? texelFetch(u_keymask, ivec2(gl_FragCoord.xy) - u_origin, 0).r
+                          : key_ramp(rgb);
+    f_color = (u_keep != 0 && u_invert == 0) ? vec4(c.rgb, c.a * k) : c * k;
+}
+"""
+
 # plan 39 T4 (W4, motion mode): the mask where the picture differs from the
 # background model — `d` the largest channel's difference (premultiplied,
 # alpha included), the mask `smoothstep(sense − soft, sense + soft, d)`;
@@ -264,7 +299,7 @@ class MaskPasses:
         self._progs: dict[str, tuple[moderngl.Program, moderngl.VertexArray]] = {}
         for name, fs in (("matte", MATTE_FS), ("blur", BLUR_FS), ("promote", PROMOTE_FS),
                          ("cut", CUT_FS), ("motion", MOTION_FS), ("learn", LEARN_FS),
-                         ("down", DOWN_FS)):
+                         ("down", DOWN_FS), ("key", KEY_FS)):
             prog = ctx.program(vertex_shader=QUAD_VS, fragment_shader=fs)
             try:
                 vao = ctx.vertex_array(prog, [])
@@ -344,6 +379,31 @@ class MaskPasses:
                   u_radius=radius)
         self._run("blur", fbo, rect, (half,), u_src=0, u_step=(0.0, 1.0 / size[1]),
                   u_radius=radius)
+        return out
+
+    def key(self, src: moderngl.Texture, key, size: tuple[int, int], k) -> moderngl.Texture:
+        """Picture `src` keyed (plan 87, `KEY_FS`) into an RGBA target at
+        `size` kept under frame key `key`, by `k` (a `media_tex.Key`-shaped
+        value: measure, level, soft, keep, feather, invert): with a feather,
+        the ramp alone first into a one-channel target `(key, "ramp")`,
+        blurred by `feather` (`(key, "ramp/feather")`), and the pass keys by
+        that. `src` is read 1:1 when it is `size`, else stretched. Returns
+        the keyed picture."""
+        size = (int(size[0]), int(size[1]))
+        rect = (0, 0, *size)
+        uniforms = {"u_src": 0, "u_keymask": 1 if k.feather > 0.0 else 0,
+                    "u_scaled": int(tuple(src.size) != size), "u_origin": (0, 0),
+                    "u_measure": int(k.measure), "u_level": float(k.level),
+                    "u_soft": float(k.soft), "u_keep": int(bool(k.keep)),
+                    "u_invert": int(bool(k.invert))}
+        out, fbo = self.frame_target(key, size)
+        if k.feather > 0.0:
+            ramp, rfbo = self.frame_target((key, "ramp"), size, components=1)
+            self._run("key", rfbo, rect, (src,), **uniforms, u_mode=3)
+            mask = self.feather(ramp, (key, "ramp/feather"), k.feather)
+            self._run("key", fbo, rect, (src, mask), **uniforms, u_mode=2)
+        else:
+            self._run("key", fbo, rect, (src,), **uniforms, u_mode=1)
         return out
 
     def motion(self, src: moderngl.Texture, bg: moderngl.Texture | None,

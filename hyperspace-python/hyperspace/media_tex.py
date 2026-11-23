@@ -56,6 +56,8 @@ from typing import Any
 import moderngl
 import numpy as np
 
+from .glsl import KEY_RAMP
+
 TEX_2D, TEX_RECT = 0x0DE1, 0x84F5      # = media.frame's (a GPU frame's `tex_target`)
 PREVIEW_W = 320                        # the widest a MEDIA page preview is uploaded
 WRAPPERS = 32                          # GPU frames' wrappers kept, every channel's together
@@ -79,9 +81,21 @@ def fit_scale(fit: int, src: tuple[int, int], dst: tuple[int, int]) -> tuple[flo
     return (dw / (sw * k), dh / (sh * k))
 
 
+# the fit pass's key modes (`u_key`, plan 87): off (the pass as it was
+# before plan 87, the same arithmetic), keyed here, keyed by a feathered
+# ramp (`u_keymask`, read 1:1), and the ramp alone out (into a one-channel
+# target, for the feather)
+KEY_OFF, KEY_HERE, KEY_MASK, KEY_RAMP_OUT = range(4)
+
 # the fit pass (`Renderer._media_fit`): the channel's texture into a frame-
 # sized target, fitted, premultiplied — by its own alpha (a PNG's) and by
-# `u_alpha` (the backdrop's fader) — with the letterbox transparent black
+# `u_alpha` (the backdrop's fader) — with the letterbox transparent black.
+# Plan 87, a keyed channel (black is clear): the shared ramp `k`
+# (`glsl.KEY_RAMP`, on the source's straight colour) multiplies the alpha;
+# keep colour leaves the premultiplied colour as it was (not inverted: a
+# bright pixel kept at alpha 0 would be added), else colour goes with
+# alpha. `KEY_RAMP_OUT` writes `k` alone, sampled clamped into the picture (so
+# a feather does not eat its edge at the letterbox)
 FIT_FS = """
 #version 330
 in vec2 v_uv;
@@ -89,18 +103,61 @@ uniform sampler2D u_src;
 uniform vec2 u_scale;      // frame uv → picture uv, about the centre (fit_scale)
 uniform int u_flip;        // the texture's first row is the picture's top (an upload)
 uniform float u_alpha;
+uniform int u_key;         // KEY_OFF, KEY_HERE, KEY_MASK, KEY_RAMP_OUT
+uniform sampler2D u_keymask;   // KEY_MASK: the feathered ramp, at the target's size
 out vec4 f_color;
+""" + KEY_RAMP + """
 void main() {
     vec2 uv = 0.5 + (v_uv - 0.5) * u_scale;
+    if (u_key == 3) {
+        uv = clamp(uv, vec2(0.0), vec2(1.0));
+        if (u_flip != 0) uv.y = 1.0 - uv.y;
+        f_color = vec4(key_ramp(texture(u_src, uv).rgb), 0.0, 0.0, 1.0);
+        return;
+    }
     if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
         f_color = vec4(0.0);
         return;
     }
     if (u_flip != 0) uv.y = 1.0 - uv.y;
     vec4 c = texture(u_src, uv);
-    f_color = vec4(c.rgb * c.a, c.a) * u_alpha;
+    if (u_key == 0) {
+        f_color = vec4(c.rgb * c.a, c.a) * u_alpha;
+        return;
+    }
+    float k = u_key == 2 ? texelFetch(u_keymask, ivec2(gl_FragCoord.xy), 0).r
+                         : key_ramp(c.rgb);
+    float cover = c.a * k;
+    vec3 rgb = c.rgb * ((u_keep != 0 && u_invert == 0) ? c.a : cover);
+    f_color = vec4(rgb, cover) * u_alpha;
 }
 """
+
+
+@dataclass(frozen=True)
+class Key:
+    """A keyed node's black is clear (plan 87, `key.<node>.*`,
+    `view.KeyState`) as a key pass reads it, held to its ranges: `measure`
+    an index into `view.KEY_MEASURES`, `level` and `soft` the ramp, `keep`
+    keep colour, `feather` px, `invert`. Hashable: part of a frame cache key."""
+
+    measure: int = 0
+    level: float = 0.02
+    soft: float = 0.1
+    keep: bool = True
+    feather: float = 0.0
+    invert: bool = False
+
+
+def key_of(state: Any) -> Key:
+    """`state` (a `view.KeyState`, or None for the defaults) as a `Key`, read
+    by `getattr` so a state from before a hot reload still reads."""
+    return Key(measure=int(getattr(state, "measure", 0) or 0),
+               level=min(max(float(getattr(state, "level", 0.02)), 0.0), 1.0),
+               soft=min(max(float(getattr(state, "soft", 0.1)), 0.0), 1.0),
+               keep=bool(getattr(state, "keep", True)),
+               feather=max(float(getattr(state, "feather", 0.0)), 0.0),
+               invert=bool(getattr(state, "invert", False)))
 
 
 @dataclass

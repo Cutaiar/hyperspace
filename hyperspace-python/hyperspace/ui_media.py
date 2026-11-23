@@ -56,8 +56,8 @@ from dataclasses import dataclass
 from imgui_bundle import imgui
 
 from . import ui, undo
-from .graph import source_into, wire_node_kind
-from .media import pool
+from .graph import channel_name, source_into, wire_node_kind
+from .media import pool, publish
 from .media.adapters import VIDEO_EXT
 from .media.channels import BIN, CHANNELS, EMPTY
 from .media.live import HOLD_S
@@ -285,6 +285,83 @@ def _library(panel, st: dict, rows_shown: int = LIST_ROWS) -> None:
                 _row(panel, st, rows[k])
         clip.end()
     imgui.end_child()
+    if st["tab"] == 2:
+        _ndi_row(panel, st)
+
+
+# ---- NDI both ways (2026-11-22): the other Mac's picture as a live feed ----
+
+NDI_ENTRY = {"role": "ndi", "kind": "ndi", "enabled": True}
+
+
+def _ndi_role(panel) -> str | None:
+    """The role of the device list's NDI entry, None with none."""
+    store = getattr(getattr(panel, "devices", None), "store", None)
+    for e in getattr(store, "raw", ()) or ():
+        if e.get("kind") == "ndi":
+            return str(e.get("role", ""))
+    return None
+
+
+def ndi_listening(panel) -> bool:
+    """Does this Mac look for NDI senders (an `ndi` entry, on here)?"""
+    role = _ndi_role(panel)
+    store = getattr(getattr(panel, "devices", None), "store", None)
+    return role is not None and store is not None and store.is_on(role)
+
+
+def listen_ndi(panel, on: bool) -> str:
+    """Look for NDI senders on this Mac, or stop: the shared device list
+    gets an `ndi` entry the first time (both Macs then have it), and it is
+    turned on or off here alone. What to say."""
+    regs = getattr(panel, "devices", None)
+    store = getattr(regs, "store", None)
+    if regs is None or store is None:
+        return "no device list"
+    role = _ndi_role(panel)
+    if role is None:
+        if not on:
+            return ""
+        role = store.adopt(dict(NDI_ENTRY))
+    store.set_here(role, on)
+    regs.relist()
+    return ("looking for NDI senders — they list here as ndi:<name>" if on
+            else "stopped looking for NDI senders")
+
+
+def send_ndi(panel, slot, on: bool) -> str:
+    """`slot`'s picture over NDI, or not (the next frame makes it so); what to say."""
+    name = publish.ask_ndi(slot, on, getattr(panel, "publish_home", None),
+                           getattr(panel, "outputs", None))
+    return (f"output {slot.n} sending over NDI as \"{name}\"" if name
+            else f"output {slot.n} not sent over NDI")
+
+
+def _ndi_row(panel, st: dict) -> None:
+    """Under the Live list: Find NDI (this Mac lists the other's senders)
+    and Send output N (this Mac's outputs as NDI senders)."""
+    on = ndi_listening(panel)
+    if ui.lit_chip("Find NDI##media.ndi.find", on):
+        st["said"] = listen_ndi(panel, not on)
+    if imgui.is_item_hovered():
+        ui.tooltip("Look for NDI senders on the network — the other Mac's outputs, "
+                   "Resolume, TouchDesigner. Each lists above as ndi:<name>: pick it, "
+                   "then click a bin cell. The entry goes in the device list both Macs "
+                   "share; on and off is this Mac's.")
+    for sl in getattr(panel, "outputs", None) or ():
+        if not publish.can_ask(sl):
+            continue
+        name = publish.ndi_of(sl)
+        imgui.same_line()
+        if ui.lit_chip(f"Send output {sl.n}##media.ndi.send{sl.n}", bool(name)):
+            st["said"] = send_ndi(panel, sl, not name)
+        if imgui.is_item_hovered():
+            pub = next((p for p in sl.publishers if p.kind == "ndi"), None)
+            ui.tooltip((f"Sending as \"{name}\" — the other Mac finds it as ndi:{name}\n"
+                        + (publish.line(pub) if pub is not None else "starting…"))
+                       if name else
+                       f"Send output {sl.n} over NDI as \"{publish.default_ndi_name(sl.n)}\", "
+                       "for the other Mac (Find NDI there). This Mac remembers it.")
 
 
 def _fit_note(title: str, text: str) -> str:
@@ -300,7 +377,8 @@ def _empty_words(panel, tab: int) -> str:
     if _state(panel)["search"]:
         return "nothing matches"
     if tab == 2:
-        return "no live feeds — Syphon, NDI and cameras in the device list show here"
+        return ("no live feeds — Find NDI below for the other Mac's; Syphon and cameras "
+                "in the device list show here")
     if folder_of(panel) is None:
         return "no media folder"
     if tab == 0 and getattr(folder_of(panel), "shared", None) is None:
@@ -486,6 +564,105 @@ def _poll_jobs(panel, st: dict) -> None:
             st["said"] = f"copy failed: {e}"
         else:
             st["said"] = f"copied to {new}"
+
+
+# ---- drop and paste (a file onto the window, an image from the clipboard) ----
+
+MEDIA_EXT = frozenset(STILL_EXT) | frozenset(VIDEO_EXT)
+DROPPED: list[str] = []      # paths the windows' drop callback leaves for the frame loop
+
+
+def media_paths(paths) -> list[str]:
+    """The picture and clip files among `paths` (a still or a video the
+    channels open), in order; anything else a drop carried is left out."""
+    return [str(p) for p in paths
+            if os.path.splitext(str(p))[1].lower() in MEDIA_EXT and os.path.isfile(p)]
+
+
+def _free_cells(state, first: str):
+    """Every empty bin cell as (channel, index): the selected channel's
+    first, then the others in order."""
+    order = [first, *(c for c in CHANNELS if c != first)]
+    return [(c, i) for c in order for i, sid in enumerate(state.channels[c].bin) if sid is None]
+
+
+def intake(panel, paths) -> str:
+    """Files dropped on the window: each into the next empty cell of the
+    selected channel (then the next channel with room), the channel's slot
+    cued on the last one — so its `channel.<c>` node on GRAPH has the
+    picture, and is no longer an idle empty channel. One undo step. Returns
+    what it said (also on the MEDIA page's line)."""
+    st = _state(panel)
+    state, folder = media_of(panel), folder_of(panel)
+    files = media_paths(paths)
+    if state is None or folder is None:
+        return ""
+    if not files:
+        st["said"] = "nothing to add: drop a picture or a clip"
+        return st["said"]
+    cells = _free_cells(state, st["sel"] if st["sel"] in CHANNELS else "a")
+    put = list(zip(cells, files))
+    if not put:
+        st["said"] = "every channel's bin is full: empty a cell first"
+        return st["said"]
+    sids = [folder.add_file(f) for _, f in put]
+    undo.push(f"drop {_name(sids[0])}" + (f" and {len(sids) - 1} more" if len(sids) > 1 else ""),
+              load=True)
+    for ((c, i), _f), sid in zip(put, sids):
+        state.assign(c, i, sid)
+    (c, i) = put[-1][0]
+    slot = panel.reg.get(f"media.{c}.slot")
+    if slot is not None:
+        panel._real(slot).set_value(float(i))
+    st["sel"] = c
+    st["said"] = (f"{_name(sids[0])} → {c.upper()} {put[0][0][1] + 1}"
+                  + (f" and {len(sids) - 1} more" if len(sids) > 1 else "")
+                  + (f" ({len(files) - len(put)} left out: no room)" if len(files) > len(put) else ""))
+    return st["said"]
+
+
+def _clipboard_job(local_dir) -> list[str]:
+    """On the pool: the clipboard's files, or its image written as a PNG
+    in the local media folder. [] when it holds neither."""
+    from PIL import ImageGrab
+    got = ImageGrab.grabclipboard()
+    if got is None:
+        return []
+    if isinstance(got, list):
+        return [str(p) for p in got]
+    import time
+    out = os.path.join(str(local_dir), time.strftime("pasted-%Y%m%d-%H%M%S.png"))
+    got.save(out)
+    return [out]
+
+
+def paste(panel) -> None:
+    """⌘V: read the clipboard on the pool (it can shell out) — `poll_intake`
+    takes what it found."""
+    st, folder = _state(panel), folder_of(panel)
+    if folder is None or st.get("paste") is not None:
+        return
+    st["paste"] = pool.submit(_clipboard_job, folder.local)
+
+
+def poll_intake(panel) -> None:
+    """Once a frame: the drop callback's paths and a finished paste go in."""
+    st = _state(panel)
+    if DROPPED:
+        paths, DROPPED[:] = list(DROPPED), []
+        intake(panel, paths)
+    fut = st.get("paste")
+    if fut is not None and fut.done():
+        st["paste"] = None
+        try:
+            got = fut.result()
+        except Exception as e:  # noqa: BLE001 — no clipboard reader here is said, never raised
+            st["said"] = f"paste: the clipboard could not be read ({type(e).__name__})"
+        else:
+            if got:
+                intake(panel, got)
+            else:
+                st["said"] = "paste: the clipboard holds no picture"
 
 
 def copy_to_shared(panel) -> None:
@@ -713,6 +890,7 @@ def _selected(panel, st: dict, state) -> None:
             imgui.table_next_column()
             panel.half(f"media.{c}.{right}", right)
         imgui.end_table()
+    _key(panel, c)
     sid = ch.bin[ch.index()]
     head = state.playhead(c)
     clock = f"{_mmss(head[0])} / {_mmss(head[1])}" if head is not None else ""
@@ -732,6 +910,56 @@ def _selected(panel, st: dict, state) -> None:
         imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
                         - ui._readout_width(clock))
         ui._readout(clock, ui.DIM)
+
+
+# the switch's id (plan 87), what a driver clicks
+KEY_SWITCH = "media.{c}.key"
+# plan 87: black is clear's knobs (`key.channel.<c>.*`), two to a row under
+# its switch while the channel is keyed
+KEY_ROWS = (("level", "level", "soft", "soft"), ("measure", "measure", "feather", "feather"))
+
+
+def keyed(panel, c: str) -> bool:
+    """Whether the loaded patch's graph keys channel `c` (black is clear,
+    plan 87): its node's name in the section's `keys`. Read off the landed
+    spec, no copy: asked every frame the page is up."""
+    spec = getattr(getattr(getattr(getattr(panel, "library", None), "loaded_patch", None),
+                           "graph", None), "spec", None)
+    return channel_name(c) in getattr(spec, "keys", ())
+
+
+def set_keyed(panel, c: str, on: bool) -> str | None:
+    """Black is clear on channel `c`, or off: GRAPH's edit on its node
+    (`graphview.Edit.set_key`), one undo step. The refusal, or None."""
+    from . import ui_graph  # (the page's edits are GRAPH's; imported late: a cycle)
+    return ui_graph._render_said(panel, ui_graph.render_edit(panel),
+                                 lambda e: e.set_key(channel_name(c), on))
+
+
+def _key(panel, c: str) -> None:
+    """Channel `c`'s black is clear (plan 87): the switch — the same edit as
+    GRAPH's node menu, on `channel.<c>` — and while it is on its knobs, two
+    to a row, then keep colour and invert."""
+    on = keyed(panel, c)
+    changed, want = imgui.checkbox(f"black is clear##{KEY_SWITCH.format(c=c)}", on)
+    if imgui.is_item_hovered():
+        ui.tooltip("This channel's dark parts become transparent wherever it is wired, "
+                   "so what is under it shows through (GRAPH: the node's menu, the same).")
+    if changed and want != on:
+        set_keyed(panel, c, want)
+    pre = f"key.{channel_name(c)}."
+    if not on or f"{pre}level" not in panel.reg:
+        return
+    if imgui.begin_table(f"##media.{c}.key", 2, imgui.TableFlags_.sizing_stretch_same):
+        for left, ll, right, rl in KEY_ROWS:
+            imgui.table_next_column()
+            panel.half(pre + left, ll)
+            imgui.table_next_column()
+            panel.half(pre + right, rl)
+        imgui.end_table()
+    panel._check(pre + "keep", "keep colour")
+    imgui.same_line()
+    panel._check(pre + "invert", "invert")
 
 
 def mixer_line(panel) -> tuple[str, bool]:
