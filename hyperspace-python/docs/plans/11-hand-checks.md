@@ -8883,6 +8883,66 @@ Plan 86. Headless: `tests/test_retaper.py` (the note, end to end through a load 
 **857. A patch pointed before keeps its map.** Open a patch saved with node mode on (the corpus has none; point one, save, quit, pull this change, open). *Pass:* every knob that held a continuous param holds the same one; only knobs that were empty may now hold a dropdown, and a patch-layer desk row on such a knob is under node mode until you leave. Say whether that last part is acceptable on the patches you play. *Fail:* a continuous param on another knob than before.
 
 **858. A pad cycles dropdowns on its buttons (row 1062).** (an Xbox pad, then a Joy-Con) Point the pad at Wave (or an LFO). *Pass:* the sticks and triggers hold its faders as before; its four dropdowns (Wave blend, along, push, shape) sit on the free buttons in order: on an Xbox pad Wave's ten faders take the sticks, triggers and four pairs (RB/LB among them), so the dropdowns start at the stick clicks; on a node with fewer faders they start at LB. Each is outlined in the pad window and drawn as a node-mode cable; each press of the first one moves Wave blend to its next choice, the last wrapping to the first, the panel's dropdown following, and it stays when you let go; Guide and any button with a row of its own (the chase, a save) do what they did. On a Joy-Con the dropdowns go on the buttons it has. Say whether the bumpers should go to dropdowns before a fader pair takes them (row 1062: today the faders fill first, so maps made before stay the same). *Fail:* a dropdown that springs back on release, skips a choice, or a button that lost its own job.
+## FA. Mandelbrot fixes (rows 1000–1007, 2026-11-22)
+
+Plan 80. Headless: `tests/test_mandel.py` (the unwired node through the real renderer; the settle colour against the float64 oracle and the GPU against its float32 twin; the measured drives; the packed border pass and the resting skip). The bench ran on this M3 Max, so its numbers are the rig's. Everything below is for the owner's eye and hand.
+
+Setup for all: on GRAPH, add the **Mandelbrot** effect and wire it into an output. Wire nothing into it. For colour, put a **Palette** in gradient mode after it, or set **Output** to ramp.
+
+**800. It draws with nothing wired in.** The Mandelbrot wired only into an output. *Pass:* the set shows at once, with no note; switching it off shows the ground; wiring `scene` into it changes nothing at mix 1. *Fail:* black, or a note that it reads nothing.
+
+**801. The coloured inside deep in.** **Inside** coloured, at the seahorse (Centre −0.743643887037151, 0.131825904205330): Zoom 1e6 and then 9e6, **Steps** 6000. Turn **Cycle** from 64 up to 1024. Then the whole set at Zoom 1, **Tier** direct. *Pass:* each minibrot and bulb shows smooth rings round its centre, finer toward its edge, with no flat grey fill, no rectangular blocks and no flat discs. The rings' spacing follows Cycle, and the whole set looks like the direct tier's. *Fail:* blocks, a flat fill where there were rings, or a seam where the tier changes. Note how slow-settling or unsettled points read: one flat colour, the cap's.
+
+**802. c on a Julia slice.** **Slice** 1, Zoom 1.7, c −0.8 + 0.156i (the owner's patch). Route a knob or a hand onto **c drive x** at depth 1. *Pass:* full throw moves the set fast but followably, about 0.07 of c a second here. Then zoom to 50× and the same: slower in c but about as lively on screen. *Fail:* it tears the set apart in a blink, or barely moves. Note the depth that feels right: TERM_RATE (0.1) is set from it.
+
+**803. z₀ on the Mandelbrot slice, and a tilt.** Slice 0 with a hand on **z₀ drive x**; then **Slice** 0.5 with hands on both drives. *Pass:* the set morphs at a pace like a pan, never in a blink, and pan and Dive feel as before. *Fail:* a lurch when a drive starts, or the rate jumping as you hold it.
+
+**804. The bench.** `uv run python tools/mandel_bench.py --owner`. *Pass:* GPU names the M3 Max, and the lines sit near this run's: direct 1.5e4 3.1 ms, perturbation 1.5e4 5.1, 4e5 9.3, 1e7 14.9, the skip at 3e6 12.8 on and 27.4 off, coloured 1e6 47 and 9e6 90. *Fail:* any line far above, or the skip slower on than off.
+
+**805. The skip rests and wakes.** SYSTEM page, the Mandelbrot's GPU line, **Skip black** on, the inside black. The whole set at Zoom 1, then Dive into the seahorse past 3e6. *Pass:* at Zoom 1 the line matches Skip black off. Past 3e6 it drops to about half of off within a moment of arriving, and the picture never changes as it switches. *Fail:* on costs more than off anywhere, or the inside flickers.
+
+**806. The tier switch after the rewrite.** Dive steadily from 1× through 10⁴× to 10⁸× into the seahorse valley, inside black and then coloured. *Pass:* no seam, flash or shift at 10⁴×. *Fail:* any of them.
+
+**807. Every power deep in.** **Power** 3, 5 and 8 at 10⁵×, on a boundary. *Pass:* the picture is detailed and steady, with no speckle or flat glitch regions, and the frame rate is near Power 2's. *Fail:* speckle, a wrong-looking set, or a large cost.
+## FC. Control widgets (rows 1020–1029, 2026-11-22)
+
+Plan 82. Headless: `tests/test_control_widgets.py` (the parse, the shapes, the ticks; a pad, a knob and a bipolar fader driven by `tests/ui_driver.py`). The pictures in `assets/82-control-widgets/` were made on Mesa's software rasteriser; nothing here was seen on the Mac. Hot reload carries it: no new module, no new field on a live object. While playing, note answers to the plan doc's open style questions (`82-control-widgets.md`, "Open style questions"): sizes, throws, the detent's pull, the ticks' look.
+
+**820. Bipolar faders.** (Mac, the trackpad) Open Kaleidoscope's strip. *Pass:* Swirl rests with its thumb in the middle and no fill; dragged right it fills red from the middle rightward, left leftward; dragged back near the middle it settles on 0.00 without fiddling; Ctrl+click and type 0.01: it stays 0.01. The effect's speed fills from its stop the same way. *Fail:* a fill from the left end, a detent you can't feel, or one that grabs a value you meant to set.
+
+**821. Unity faders.** Kaleidoscope's Zoom, Blocks' Aspect and Hue cycle's Saturation. *Pass:* each rests in the middle at 1, with a notch there; turned down it fills leftward from 1, up rightward; a drag near 1 lands on 1. Prism's Rim (rests at 1 but is no multiplier) fills from the left. Say if another fader wants a detent (row 1022). *Fail:* a unity fader filled from the left, or a notch away from 1.
+
+**822. Ticks.** Kaleidoscope's Segments (2–16), Zoom burst's Taps (4–32), Bloom's Taps (8–96) and Wave Table's Blades (1–5), in the side pane at its narrowest and widest. *Pass:* a tick a step under each track where they fit, evenly thinned where they don't, both ends ticked, never a smear; the thumb lands on a tick at every value. *Fail:* ticks that crowd into a grey bar, or a thumb between ticks.
+
+**823. A pad on a trackpad, at a distance.** (the rig's display, the stage's distance) Prism's Centre pad, then Wave's and Wave Table's Offset. *Pass:* the square reads at once as "the point on the screen"; a tap anywhere puts the dot there, a drag carries it, and the effect's centre follows on the output; ⇧ held moves it finely; you can see the dot without looking for it. Right-click each knob: Learn and the routes are there, one param each. *Fail:* a missed tap, a dot hidden under the finger's ring, a pad too small to aim on.
+
+**824. The volume.** Zoom burst's Burst. *Pass:* drag the square: the burst's centre moves; turn the third knob up: the halo grows and the smear reaches further; double-click the X knob: the centre returns to the middle. A saved patch with Zoom burst loads with its centre and amount as they were. *Fail:* a halo that doesn't follow Amount, or a value moved by a load.
+
+**825. Modulation on a pad.** Route an LFO onto Zoom burst's Centre X (and a hand onto Centre Y). *Pass:* a white dot moves with the lanes, a line from the red dot (where you set it) to it, the knobs' white ticks move, the readouts go red; drag the pad while it rides: the red dot moves, the white one rides about it. *Fail:* the red dot moving with the LFO, or no sign the lane is there.
+## FE. GRAPH: GPU cost at a glance (rows 1040–1045, 2026-11-22)
+
+Plan 84. Headless: `tests/test_gpu_cost.py` (the easing and the ranking, pure; each kind of node's mark; the renderer says what each node made only while asked, and the outputs are the same bytes; off, no push and no badge; the chip never saved). The screens were drawn on Mesa's software rasteriser, so every time in them means nothing; every check here is the rig's. Hot reload is enough.
+
+**840. Rugged Doctor at the floor.** (Mac, the rig, the show on the outputs) Load Rugged Doctor, open GRAPH and light **gpu cost**. *Pass:* one or two nodes glow white with "#1" and "#2" badges, and the line under the head names them with the frame's total; that total is near the frame's time on SYSTEM. Note the three costliest and their times here: they are the answer to plan 66 §3's first item. *Fail:* a total far from SYSTEM's, or a white node that removing does not speed up.
+
+**841. Read at the stage's distance.** (Mac, the panel on its display, stepped back to where you play from) Chip lit, the canvas at the zoom you use. *Pass:* you can tell the costliest node from across the room by its border alone, and read the badges at a normal zoom; every node's title is still legible on its tinted ground. *Fail:* a badge you have to lean in to read at the zoom you use, or a title lost on its ground.
+
+**842. Holds still, follows in a second.** Chip lit on a steady show. *Pass:* the badges' numbers drift by hundredths, no node's colour flickers and no two badges trade ranks back and forth. Then raise a costly effect's knob (Bloom's radius, a Blocks cell count): its mark follows within about a second. *Fail:* flicker, ranks swapping every frame, or a mark that takes several seconds.
+
+**843. Made nothing.** Chip lit. Switch a wired effect off (with no value cable on it, it goes onto its area's idle line: open the line to see it); flip a switch node to its other input; add an effect from the picker on no wire. *Pass:* each says **made nothing** with a grey border (the effect off, the branch behind the unpicked input, the faint new node), never "0.00 ms"; switch them back and each returns at its time. A switch, the pattern, the shape and the hands have no badge (their time is the scene's or their consumer's). *Fail:* a node that made nothing reading as cheap.
+
+**844. Off costs nothing.** (Mac, a heavy patch) SYSTEM's frame time with the chip never lit, then lit, then off again. *Pass:* off again is the same as never lit; lit costs no more than the noise. *Fail:* a frame-time step that stays after the chip is off.
+
+**845. Two decks.** Switch the panel to the deck off air, chip lit. *Pass:* the marks and the line are that deck's patch's (its own nodes and times); back on air, the on-air deck's. *Fail:* one deck's times on the other's nodes.
+## FF. The hands' show look (rows 1050–1053, 2026-11-22)
+
+Plan 85. Headless: `tests/test_ghost.py` (the look's values, the bare state neutral) and `tests/test_set_hands_look.py` (the dry run, the backup, the writes, the wires, the load notes, a second run, the app-open refusal), on tmp copies of corpus patches. Nothing here was seen on the Mac. A restart after pulling.
+
+**850. A new patch's hands.** (Mac, the tracker on) Launch, then **New patch**. *Pass:* both hands show as BONES, PLAIN, at half opacity; HANDS shows Ghost hands on, opacity 50%, style BONES, material PLAIN. Add a second hands node on GRAPH: its hands show the same. *Fail:* hands off, GLASS, or 35% / 60%.
+
+**851. The library run.** (Mac, Hyperspace closed on both Macs) `uv run python tools/set_hands_look.py`, then `uv run python tools/set_hands_look.py --apply`. *Pass:* the dry run lists every patch in every era folder and writes nothing; `--apply` prints a backup path first, and that folder holds the whole library; a second dry run says every patch is already the show look; Drive syncs the files to the other Mac. Note every "left:" line: an answer for the owner. *Fail:* a patch missing from the list, a write with no backup, or a second run with something to do.
+
+**852. A patch whose hands were unwired.** (Mac, after 851) Load a patch the run said it wired. *Pass:* the hands show on the outputs and the guide over them; GRAPH shows the hands layer lit, wired into All outputs' hands and guide; the rest of the patch looks as before. *Fail:* no hands, or a wire you don't expect.
 ## FD. Save and load live (rows 1030–1035, 2026-11-22)
 
 Plan 83. Headless: `tests/test_save_live.py` (driven by the mouse: one click saves a new file in the loaded patch's folder that loads back equal, a second never overwrites, the name on the chip; a 40-entry playlist inside the screen, scrolled by the wheel, its row on air in view, its rows a trackpad's size). Nothing here was seen on the Mac. Hot reload is enough: no new field on a live object.
