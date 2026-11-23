@@ -912,9 +912,9 @@ here; overturn → the change, then the same.
 | 1024 | Plan 82: ticks on an integer param with no taper, one a step down to 6 px apart (`ui.TICK_GAP`), then every 2nd, 4th, 5th, 10th … whole value, both ends always | 822 | (rec) — pending the owner |
 | 1025 | Plan 82: `// @pair u_x u_y "Label"` and `// @volume u_x u_y u_z "Label"` name the file's own continuous params, each on one pad at most; drawing only, not in `EffectSpec.signature`; no param renamed or re-keyed | 823 | (rec) — pending the owner |
 | 1026 | Plan 82, D3 as built: Prism and Wave a Centre pair, Wave Table an Offset pair, Zoom burst a Burst volume (cx, cy, amount) and no pair beside it, since a param is on one pad | 823, 824 | (rec) — pending the owner |
-| 1027 | Plan 82: the pad sets X and Y where it is pressed (Y up), ⇧ a tenth from where they were; each knob a vertical drag, 200 px a throw, ⇧ a tenth, a double-click to its detent; Z by its knob only (no scroll over the pad); no typing into a knob | 823, 824 | (rec) — pending the owner |
-| 1028 | Plan 82: a lane on a pad shows as a white dot (and halo) where the lanes have it, a line from the bases' dot, and a white tick on each knob; the pad's head is its label alone, the values under the knobs | 825 | (rec) — pending the owner |
-| 1029 | Plan 82: `ui_fx.strip` (outside the row's files) draws a pad at its first param's place instead of its sliders; without the kit the sliders stay | 823 | (rec) — pending the owner |
+| 1027 | Plan 82: the pad sets X and Y where it is pressed (Y up), ⇧ a tenth from where they were, and once ⇧ joins a drag it stays relative until let go (no jump); each knob a vertical drag, 200 px a throw, ⇧ a tenth, a double-click to its detent; Z by its knob only (no scroll over the pad); no typing into a knob | 823, 824 | (rec) — pending the owner |
+| 1028 | Plan 82: a lane on a pad shows as a white dot (and halo) where the lanes have it, a line from the bases' dot, and a white tick on each knob; the pad's head is its label alone, each knob's base under it and its effective value on a second line, both inside its column | 825 | (rec) — pending the owner |
+| 1029 | Plan 82: `ui_fx.strip` (outside the row's files) draws a pad at its first param's place instead of its sliders, pads resolved before the strip packs its rows (`ui_fx.pad_rows`); without the kit the sliders stay | 823 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -15385,21 +15385,21 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 ### 1027. How a pad and a knob move
 
-- **What.** Plan 82: the square sets X and Y where it is pressed and dragged, Y up; ⇧ held moves a tenth as far, from where they were. A knob turns by a vertical drag, `ui.KNOB_THROW` (200 px) a full throw, ⇧ a tenth; a double-click returns it to its detent. A volume's Z is its knob alone: no scroll over the pad, since a trackpad's scroll would change it while scrolling the pane. No typing into a knob.
+- **What.** Plan 82: the square sets X and Y where it is pressed and dragged, Y up; ⇧ held moves a tenth as far, from where they were, and once ⇧ has joined a drag it stays relative until the button comes up — letting go of ⇧ makes the move whole again, never a jump to the pointer. A knob's and a pad's drag keeps its own unrounded value, so a slow drag over a taper's detents adds up. A knob turns by a vertical drag, `ui.KNOB_THROW` (200 px) a full throw, ⇧ a tenth; a double-click returns it to its detent. A volume's Z is its knob alone: no scroll over the pad, since a trackpad's scroll would change it while scrolling the pane. No typing into a knob.
 - **Answer.** (rec) — pending the owner.
 - **Built.** `ui_fields._square`, `knob`, `_write_norm`; `tests/test_control_widgets.py::test_a_drag_on_the_pad_sets_both_params`, `::test_a_knob_turns_one_axis_and_a_double_click_centres_it`.
 - **Judge it.** 823, 824.
 
 ### 1028. Modulation on a pad
 
-- **What.** Plan 82: while a lane rides an axis, the pad draws a white dot where the lanes have it now, a line to it from the bases' dot, a white halo for a volume's Z, and each knob a white tick with its readout red. The pad's head is its label alone; each knob says its value under it.
+- **What.** Plan 82: while a lane rides an axis, the pad draws a white dot where the lanes have it now, a line to it from the bases' dot, a white halo for a volume's Z, and each knob a white tick with its readout red: its base on one line, `→ effective` on the next, each cut to the knob's column. The pad's head is its label alone; each knob says its value under it.
 - **Answer.** (rec) — pending the owner.
 - **Built.** `ui_fields._square`, `knob`; `tests/test_control_widgets.py::test_the_pad_shows_a_lane_riding_it`.
 - **Judge it.** 825.
 
 ### 1029. The strip draws the pad
 
-- **What.** Plan 82: `ui_fx.strip`, outside the row's files, draws a pad at its first param's place in place of its sliders — the one place an effect's params are drawn. Without the kit the sliders stay.
+- **What.** Plan 82: `ui_fx.strip`, outside the row's files, draws a pad at its first param's place in place of its sliders — the one place an effect's params are drawn. Pads are resolved before the strip packs its rows (`pad_rows`), so a pad over keys it would pack (`sat_lo`, `sat_hi`) is still a pad. Without the kit the sliders stay.
 - **Answer.** (rec) — pending the owner.
 - **Built.** `ui_fx.strip`, `ui_fields.inline_pad`; `tests/test_control_widgets.py::test_the_strip_draws_no_slider_for_a_padded_param`.
 - **Judge it.** 823.

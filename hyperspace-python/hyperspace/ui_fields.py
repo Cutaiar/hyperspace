@@ -407,6 +407,22 @@ def _write_norm(p, t: float) -> bool:
     return True
 
 
+def _held(panel, key: str, active: bool, start):
+    """The unrounded state of the drag on item `key` (a pad's or a knob's):
+    started from `start()` (the throw fractions it moves) on the frame it
+    is pressed, kept while it is held, gone once it is let go — so a slow
+    drag over a taper's detents adds up, rather than rounding back to the
+    detent it began on every frame. None while `key` is not held."""
+    store = panel.__dict__.setdefault("_kit_held", {})
+    if not active:
+        store.pop(key, None)
+        return None
+    got = store.get(key)
+    if got is None:
+        got = store[key] = {"t": list(start()), "fine": False}
+    return got
+
+
 def _knob_layout(w: float, n: int) -> tuple[float, bool]:
     """The square's side in a pad `w` wide with `n` knobs, and whether the
     knobs stand in a column beside it (else in a row under it)."""
@@ -417,8 +433,9 @@ def _knob_layout(w: float, n: int) -> tuple[float, bool]:
 
 
 def knob_h() -> float:
-    """A knob with its label and readout under it."""
-    return 2 * ui.KNOB_R + PAD_LABEL_GAP + head_h()
+    """A knob with its readout under it: two lines, its letter and value,
+    and under them where a lane rides it the effective value (`knob`)."""
+    return 2 * ui.KNOB_R + PAD_LABEL_GAP + 2 * head_h()
 
 
 def pad_h(w: float, n: int) -> float:
@@ -454,7 +471,8 @@ def pad(panel, k, pids, label: str, rect) -> dict:
         else:
             cell = w / len(pids)
             kx, ky = x + i * cell + (cell - kw) / 2, top + side + T.SPACE[3]
-        out[a.id] = knob(panel, k, a, p, kx, ky, "xyz"[i])    # its tooltip names it in full
+        room = ui.KNOB_COL if beside else w / len(pids)
+        out[a.id] = knob(panel, k, a, p, kx, ky, "xyz"[i], room)   # its tooltip names it in full
     return out
 
 
@@ -473,16 +491,22 @@ def _square(panel, k, acts, ps, x, y, side, label) -> None:
         ui.tooltip(f"{label}: x {acts[0].label}, y {acts[1].label}"
                    + (f", z (the halo) {acts[2].label}" if len(acts) > 2 else "")
                    + f"\ndrag to set x and y together\n{ui.FINE_TIP}")
-    if active and not _dim(panel):
+    st = _held(panel, f"pad.{acts[0].id}", active and not _dim(panel), lambda: (px.norm, py.norm))
+    if st is not None:
         io = imgui.get_io()
-        if io.key_shift:                    # fine: relative, a tenth of the pointer's move
-            tx = px.norm + io.mouse_delta.x / side * ui.FINE
-            ty = py.norm - io.mouse_delta.y / side * ui.FINE
+        st["fine"] = st["fine"] or io.key_shift
+        if st["fine"]:
+            # relative from the moment ⇧ joins until the button comes up, a
+            # tenth while it is held and whole once it is let go — never a
+            # jump to the pointer (as `Panel._fine` keeps a slider's drag)
+            rate = ui.FINE if io.key_shift else 1.0
+            st["t"][0] = min(max(st["t"][0] + io.mouse_delta.x / side * rate, 0.0), 1.0)
+            st["t"][1] = min(max(st["t"][1] - io.mouse_delta.y / side * rate, 0.0), 1.0)
         else:
             m = imgui.get_mouse_pos()
-            tx, ty = (m.x - x) / side, 1.0 - (m.y - y) / side
-        moved = _write_norm(px, tx)
-        moved = _write_norm(py, ty) or moved
+            st["t"] = [(m.x - x) / side, 1.0 - (m.y - y) / side]
+        moved = _write_norm(px, st["t"][0])
+        moved = _write_norm(py, st["t"][1]) or moved
         if moved:
             undo.by_hand(True)
     # the ground, a frame, the neutral cross and the quarters
@@ -531,7 +555,7 @@ def _square(panel, k, acts, ps, x, y, side, label) -> None:
 KNOB_SWEEP = 1.5 * math.pi     # radians the knob turns over its throw, the gap at the bottom
 
 
-def knob(panel, k, a, p, x, y, words: str):
+def knob(panel, k, a, p, x, y, words: str, room: float | None = None):
     """A small knob for param `a` (reading and writing `p`) at (x, y): a
     vertical drag turns it, a full throw over `ui.KNOB_THROW` px (⇧ held, a
     tenth); a double-click returns it to its detent. Its arc fills from
@@ -548,11 +572,13 @@ def knob(panel, k, a, p, x, y, words: str):
     rect = (imgui.get_item_rect_min(), imgui.get_item_rect_max())
     if not _dim(panel):
         moved = False
-        if active:
+        st = _held(panel, f"knob.{a.id}", active, lambda: (p.norm,))
+        if st is not None:
             io = imgui.get_io()
             dt = -io.mouse_delta.y / ui.KNOB_THROW * (ui.FINE if io.key_shift else 1.0)
             if dt:
-                moved = _write_norm(p, p.norm + dt)
+                st["t"][0] = min(max(st["t"][0] + dt, 0.0), 1.0)
+                moved = _write_norm(p, st["t"][0])
         if hovered and imgui.is_mouse_double_clicked(0) and shape.detent is not None:
             moved = _write_norm(p, shape.detent) or moved
         if moved:
@@ -591,18 +617,33 @@ def knob(panel, k, a, p, x, y, words: str):
                     ui.u32(ui.GHOST), 3.0)
         panel.ghosts += 1
     hh = head_h()
-    value = panel._mod_text(p) if p.modulated else p.text()
+    # the readout, each line inside the knob's column `room`: its letter and
+    # the base, then — a lane riding it — "→ effective" on a line of its own
+    # (`base → effective` on one line ran past the column, row 1028)
+    room = ui.KNOB_COL if room is None else room
+    col = ui.RED if p.modulated else ui.TEXT
+    value = p.text()
     ty = y + 2 * r + PAD_LABEL_GAP
     lw = ui._micro_width(words)
     vw = ui._readout_width(value)
-    if lw + vw + 4 <= ui.KNOB_COL:          # side by side, centred under the knob
+    if lw + vw + 4 <= room:                 # side by side, centred under the knob
         x0 = cx - (lw + 4 + vw) / 2
         text(dl, x0, ty, hh, words, "micro", ui.FONT_MICRO, ui.DIM)
-        text(dl, x0 + lw + 4, ty, hh, value, "num", ui.FONT_NUM,
-             ui.RED if p.modulated else ui.TEXT)
+        text(dl, x0 + lw + 4, ty, hh, value, "num", ui.FONT_NUM, col)
     else:
-        text(dl, cx - vw / 2, ty, hh, value, "num", ui.FONT_NUM, ui.RED if p.modulated else ui.TEXT)
+        _centred(dl, cx, ty, hh, value, room, col)
+    if p.modulated:
+        _centred(dl, cx, ty + hh, hh, f"→ {panel._eff_text(p)}", room, col)
     return rect
+
+
+def _centred(dl, cx: float, y: float, h: float, s: str, room: float, col) -> None:
+    """`s` in the readout face centred on `cx`, cut to `room` px."""
+    imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
+    s = ui.fit_text(s, room)
+    w = imgui.calc_text_size(s).x
+    imgui.pop_font()
+    text(dl, cx - w / 2, y, h, s, "num", ui.FONT_NUM, col)
 
 
 def inline_pad(panel, pids, label: str) -> dict:

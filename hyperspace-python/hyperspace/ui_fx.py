@@ -362,16 +362,13 @@ def strip(panel, sel: str) -> None:
     mode = fx.values[sel].get("mode", 0)
     labels = {p.key: p.label.lower() for p in spec.params}
     choices = {p.key for p in spec.params if p.choices}
-    padded: set[str] = set()                # plan 82: a @pair's or @volume's keys, drawn once
-    for label, keys in strip_rows(sel, [p.key for p in spec.params if f"{pre}.{p.key}" in r],
-                                  mode):
-        pad = pad_of(spec, keys[0]) if len(keys) == 1 else None
-        if pad is not None and ui_kit.ready() and all(f"{pre}.{k}" in r for k in pad.keys):
-            if keys[0] not in padded:       # at its first key's place: the square and its knobs
-                padded.update(pad.keys)
-                for pid, rr in ui_fields.inline_pad(panel, [f"{pre}.{k}" for k in pad.keys],
-                                                    pad.label).items():
-                    rects[pid] = rr
+    for label, keys in pad_rows(spec, sel, [p.key for p in spec.params if f"{pre}.{p.key}" in r],
+                                mode, ui_kit.ready()):
+        pad = pad_of(spec, keys[0])
+        if pad is not None and tuple(keys) == pad.keys:   # plan 82: the square and its knobs
+            for pid, rr in ui_fields.inline_pad(panel, [f"{pre}.{k}" for k in keys],
+                                                pad.label).items():
+                rects[pid] = rr
             continue
         if len(keys) == 1 and keys[0] in choices:
             # a discrete choice (plan 30 N8, `@param choice`): a picker
@@ -471,6 +468,35 @@ def _hue_bar(v: dict) -> None:
                            imgui.ImVec2(x0 + (i + 1) * seg, pos.y + HUE_BAR_H),
                            imgui.get_color_u32(imgui.ImVec4(r, g, b, 1.0)))
     imgui.dummy(imgui.ImVec2(1.0, HUE_BAR_H))
+
+
+def pad_rows(spec, name: str, keys: list[str], mode: int = 0, pads: bool = True
+             ) -> list[tuple[str, list[str]]]:
+    """`strip_rows` with plan 82's pads resolved first: a `@pair` or
+    `@volume` whose keys are all shown is one row of its keys, at its first
+    key's place, and only the keys between pads are packed — so a pad over
+    two keys `strip_rows` would pack together (`sat_lo`, `sat_hi`) is still
+    a pad. Without `pads` (no kit) it is `strip_rows` exactly."""
+    if not pads:
+        return strip_rows(name, keys, mode)
+    hide = HIDDEN_BY_MODE.get(name.partition(".")[0], {}).get(1 if mode else 0, ())
+    keys = [k for k in keys if not k.startswith(hide)]
+    shown = set(keys)
+    rows: list[tuple[str, list[str]]] = []
+    run: list[str] = []
+    done: set[str] = set()
+    for k in keys:
+        pad = pad_of(spec, k)
+        if pad is None or not shown.issuperset(pad.keys):
+            run.append(k)
+            continue
+        if k in done:
+            continue
+        rows += strip_rows(name, run, mode)
+        run = []
+        done.update(pad.keys)
+        rows.append((pad.label.lower(), list(pad.keys)))
+    return rows + strip_rows(name, run, mode)
 
 
 def strip_rows(name: str, keys: list[str], mode: int = 0) -> list[tuple[str, list[str]]]:

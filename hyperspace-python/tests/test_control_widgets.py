@@ -236,3 +236,81 @@ def test_the_strip_draws_no_slider_for_a_padded_param(tmp_path, monkeypatch):
         # the knob is an invisible button, not a slider row of its own
         kx0, _ky0, kx1, _ky1 = d.rect("fx.wavetable.offset_x")
         assert kx1 - kx0 == pytest.approx(2 * ui.KNOB_R)
+
+
+# ---- the review's four (Devin, 2026-11-23) ----
+
+def test_a_slow_fine_drag_on_a_tapered_knob_adds_up(tmp_path, monkeypatch):
+    """A ⇧-drag a few px a frame on Zoom burst's Amount (a 200-detent taper):
+    each frame's move is under half a detent, and together they cross several."""
+    with strip(tmp_path, monkeypatch, "zoomblur") as (r, d, _st):
+        amt = r.reg["fx.zoomblur.amount"]
+        pos = amt.position()
+        x, y = d.centre("fx.zoomblur.amount")
+        io = imgui.get_io()
+        d.run(d.move((x, y)), d.press(True))
+        io.add_key_event(imgui.Key.mod_shift, True)
+        for i in range(1, 21):                       # 2 px a frame: 0.1 of a detent each
+            d.run(d.move((x, y - 2 * i)))
+        io.add_key_event(imgui.Key.mod_shift, False)
+        d.run(d.press(False), d.park())
+        assert amt.position() - pos == pytest.approx(4, abs=1)
+
+
+def test_letting_go_of_shift_mid_drag_does_not_jump_the_pad(tmp_path, monkeypatch):
+    with strip(tmp_path, monkeypatch, "prism") as (r, d, _st):
+        cx = r.reg["fx.prism.cx"]
+        x0, y0, x1, y1 = d.rect("pad.fx.prism.cx")
+        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+        io = imgui.get_io()
+        d.run(d.move((mx, my)), d.press(True))
+        assert cx.value == pytest.approx(0.0, abs=0.02)
+        io.add_key_event(imgui.Key.mod_shift, True)
+        d.run(d.move((mx + (x1 - x0) / 4, my), 4))   # a quarter across, fine: a tenth of it
+        fine = cx.value
+        assert fine == pytest.approx(0.05, abs=0.01)
+        io.add_key_event(imgui.Key.mod_shift, False)
+        d.run(d.wait(3))                             # ⇧ up, the pointer still
+        assert cx.value == pytest.approx(fine)
+        d.run(d.press(False), d.park())
+        assert cx.value == pytest.approx(fine)
+
+
+def test_a_pad_over_keys_the_strip_packs_is_still_a_pad():
+    from hyperspace import ui_fx
+    spec = parse("t", '// @pair u_sat_lo u_sat_hi "Saturation"\n'
+                 'uniform float u_amount; // @param 0 1 0 "Amount"\n'
+                 'uniform float u_sat_lo; // @param 0 1 0 "Sat lo"\n'
+                 'uniform float u_sat_hi; // @param 0 1 1 "Sat hi"\n'
+                 'uniform float u_val_lo; // @param 0 1 0 "Val lo"\n'
+                 'uniform float u_val_hi; // @param 0 1 1 "Val hi"\n' + HEAD)
+    keys = [p.key for p in spec.params]
+    assert ui_fx.pad_rows(spec, "t", keys) == [
+        ("amount", ["amount"]), ("saturation", ["sat_lo", "sat_hi"]), ("val", ["val_lo", "val_hi"])]
+    # without the kit the strip's rows are as before: the pair packed
+    assert ui_fx.pad_rows(spec, "t", keys, pads=False) == ui_fx.strip_rows("t", keys)
+
+
+def test_a_ridden_knobs_readout_stays_in_its_column(tmp_path, monkeypatch):
+    """`base → effective` at its widest (−0.50 → −0.25) is two lines, each
+    inside the knob's column, never past the pane."""
+    drawn = []
+    real = ui_fields.text
+
+    def rec(dl, x, y, h, s, font, size, col):
+        w = real(dl, x, y, h, s, font, size, col)
+        drawn.append((s, x, x + w))
+        return w
+    monkeypatch.setattr(ui_fields, "text", rec)
+    with strip(tmp_path, monkeypatch, "prism") as (r, d, _st):
+        p = r.reg["fx.prism.cx"]
+        p.set_value(-0.5)
+        p.modulate(0.125)                            # a lane's offset: −0.50 → −0.25
+        drawn.clear()
+        d.run(d.wait(1))
+        kx0, _ky0, kx1, _ky1 = d.rect("fx.prism.cx")
+        cx = (kx0 + kx1) / 2
+        lines = [t for t in drawn if "→" in t[0] or t[0] == "-0.50"]
+        assert any(t[0].startswith("→") for t in lines), drawn
+        for _s, a, b in lines:
+            assert cx - ui.KNOB_COL / 2 - 1 <= a and b <= cx + ui.KNOB_COL / 2 + 1
