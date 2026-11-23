@@ -427,6 +427,12 @@ def _resize_owner(pid: str, ctx: _Ctx) -> str | None:
     return pid.rpartition(".")[0] or None
 
 
+def _key_owner(pid: str, ctx: _Ctx) -> str | None:
+    # plan 87: `key.<node>.<knob>`, black is clear's knobs, on the node keyed
+    name = pid.removeprefix("key.").rpartition(".")[0]
+    return name or None
+
+
 # a param's group → the canvas node that owns it: a node id, or a rule
 # over the param id (an instance's number, an effect's name). Plan 35 V2:
 # the ids are the wired frame's, the params keep theirs (`graph.
@@ -462,6 +468,7 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "eye": CAMERA,
     "output": _output_owner,
     "media": _media_owner,
+    "key": _key_owner,
 }
 
 
@@ -1092,6 +1099,9 @@ def param_ids(reg, nid: str, of: str = "") -> list[str]:
     # node's prefix starts so)
     ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))
            and (not p.id.startswith("dream.") or patches.dream_owner(p.id) == name)]
+    # plan 87: a keyed node's black is clear knobs (`key.<name>.*`) after its own
+    keyed = f"key.{name}."
+    ids += [p.id for p in reg if p.id.startswith(keyed)]
     return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
 
 
@@ -4205,6 +4215,11 @@ class Edit:
         """A node's setting: a hands node's `draw`, a composite's `blend`."""
         return render_set(self, node, **settings)
 
+    def set_key(self, node: str, on: bool) -> str | None:
+        """Plan 87: black is clear on picture node `node`, or off — the
+        section's `keys` (`render_key`)."""
+        return render_key(self, node, on)
+
     # ---- what a pin is ----
 
     def _port(self, pin: str) -> VPort | None:
@@ -5158,6 +5173,14 @@ class Edit:
         gone = _take_out(doc, set(replacing))
         doc["nodes"] = [*doc.get("nodes", []), *copy.deepcopy(list(landing.nodes))]
         doc["wires"] = [*doc.get("wires", []), *copy.deepcopy(list(landing.wires))]
+        # plan 87: the patch's keyed members join the host's (a node it
+        # replaces is keyed as the patch says)
+        keyed = (set(doc.get(rgraph.KEYS_KEY, ())) - set(replacing)) | set(
+            getattr(landing, "keys", ()))
+        if keyed:
+            doc[rgraph.KEYS_KEY] = sorted(keyed)
+        else:
+            doc.pop(rgraph.KEYS_KEY, None)
         _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])
                              if n not in replacing])
         ends = None
@@ -7173,6 +7196,51 @@ def render_set(edit: Edit, node: str, **settings) -> str | None:
                 return _land(edit, doc, f"{name} {blend}", f"{name} laid {blend}")
         return f"no {name} node in this graph"
     return f"{name} has no setting here"
+
+
+KEY_ON_SAID = "{label}: black is clear"
+KEY_OFF_SAID = "{label}: opaque again"
+KEY_NO_PICTURE = "{name} makes no picture: nothing to make clear"
+
+
+def keyable(name: str | None) -> bool:
+    """Whether graph node `name` makes a picture a key can clear (plan 87):
+    any node whose output is a picture but a window, All outputs, or a pin
+    (a segment's `fg`: its node is keyed through the pin's picture)."""
+    if not name:
+        return False
+    kind = kind_of(name)
+    return (kind is not None and kind not in (rgraph.ALL_OUTPUTS, "output")
+            and _makes(kind) == IMAGE)
+
+
+def keyed(edit: Edit, name: str) -> bool:
+    """Whether the section keys node `name` (black is clear, plan 87)."""
+    spec = _spec(edit)
+    return spec is not None and name in getattr(spec, "keys", ())
+
+
+def render_key(edit: Edit, node: str, on: bool) -> str | None:
+    """Plan 87: black is clear on canvas node `node` (`render:<name>` or the
+    name), or off — its name into or out of the section's `"keys"`, one undo
+    step (`_land`). A node that makes no picture is refused in words."""
+    name, why = spec_name(node, edit.render)
+    if name is None:
+        return why
+    if not keyable(name):
+        return KEY_NO_PICTURE.format(name=name)
+    doc = _doc(edit)
+    keys = set(doc.get(rgraph.KEYS_KEY, ()))
+    if on:
+        keys.add(name)
+    else:
+        keys.discard(name)
+    if keys:
+        doc[rgraph.KEYS_KEY] = sorted(keys)
+    else:
+        doc.pop(rgraph.KEYS_KEY, None)
+    said = (KEY_ON_SAID if on else KEY_OFF_SAID).format(label=label_of(name))
+    return _land(edit, doc, f"{name} {'clear' if on else 'opaque'}", said)
 
 
 # ---- plan 35 T6 (U): the OUTPUT and LOOKBACK pages as views of the wires.

@@ -142,7 +142,7 @@ class Handoff:
     factor: float = 1.0
     bg_alpha: float = 1.0
     flip: tuple[bool, bool] = (False, False)   # plan 23 WP1: steps 2–4 mirrored in `rect`
-    blend: str = "over"                        # plan 26 A3: step 3's blend, "over" or "add"
+    blend: str = "over"                        # plan 26 A3: step 3's blend, "over", "add" or "screen" (plan 87)
     mix: moderngl.Texture | None = None        # plan 44 D4: step 4½
     mix_k: float = 0.0
     # SC2: `mix` is mirrored as it was drawn; a further display of this output with
@@ -1115,13 +1115,16 @@ class Presenter:
                 prog["u_k"].value = 1.0
                 prog["u_opaque"].value = int(opaque)
                 vao.render(moderngl.TRIANGLES, vertices=3)
-            add = getattr(ho, "blend", "over") == "add"
-            for layer, plus in ((ho.hands, add), (ho.readout, False)):          # 3, 4
+            # the hands' blend (plan 87: screen too); the readout is over
+            how = getattr(ho, "blend", "over")
+            for layer, laid in ((ho.hands, how), (ho.readout, "over")):         # 3, 4
                 if layer is None or rect[2] <= 0 or rect[3] <= 0:
                     continue
                 ctx.viewport = rect
                 ctx.enable(moderngl.BLEND)
-                rgb = moderngl.ONE if plus else moderngl.ONE_MINUS_SRC_ALPHA
+                rgb = (moderngl.ONE if laid == "add" else
+                       moderngl.ONE_MINUS_SRC_COLOR if laid == "screen" else
+                       moderngl.ONE_MINUS_SRC_ALPHA)
                 ctx.blend_func = ((moderngl.ONE, rgb, moderngl.ZERO, moderngl.ONE) if opaque else
                                   (moderngl.ONE, rgb, moderngl.ONE,
                                    moderngl.ONE_MINUS_SRC_ALPHA))

@@ -56,7 +56,7 @@ from dataclasses import dataclass
 from imgui_bundle import imgui
 
 from . import ui, undo
-from .graph import source_into, wire_node_kind
+from .graph import channel_name, source_into, wire_node_kind
 from .media import pool, publish
 from .media.adapters import VIDEO_EXT
 from .media.channels import BIN, CHANNELS, EMPTY
@@ -890,6 +890,7 @@ def _selected(panel, st: dict, state) -> None:
             imgui.table_next_column()
             panel.half(f"media.{c}.{right}", right)
         imgui.end_table()
+    _key(panel, c)
     sid = ch.bin[ch.index()]
     head = state.playhead(c)
     clock = f"{_mmss(head[0])} / {_mmss(head[1])}" if head is not None else ""
@@ -909,6 +910,56 @@ def _selected(panel, st: dict, state) -> None:
         imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
                         - ui._readout_width(clock))
         ui._readout(clock, ui.DIM)
+
+
+# the switch's id (plan 87), what a driver clicks
+KEY_SWITCH = "media.{c}.key"
+# plan 87: black is clear's knobs (`key.channel.<c>.*`), two to a row under
+# its switch while the channel is keyed
+KEY_ROWS = (("level", "level", "soft", "soft"), ("measure", "measure", "feather", "feather"))
+
+
+def keyed(panel, c: str) -> bool:
+    """Whether the loaded patch's graph keys channel `c` (black is clear,
+    plan 87): its node's name in the section's `keys`. Read off the landed
+    spec, no copy: asked every frame the page is up."""
+    spec = getattr(getattr(getattr(getattr(panel, "library", None), "loaded_patch", None),
+                           "graph", None), "spec", None)
+    return channel_name(c) in getattr(spec, "keys", ())
+
+
+def set_keyed(panel, c: str, on: bool) -> str | None:
+    """Black is clear on channel `c`, or off: GRAPH's edit on its node
+    (`graphview.Edit.set_key`), one undo step. The refusal, or None."""
+    from . import ui_graph  # (the page's edits are GRAPH's; imported late: a cycle)
+    return ui_graph._render_said(panel, ui_graph.render_edit(panel),
+                                 lambda e: e.set_key(channel_name(c), on))
+
+
+def _key(panel, c: str) -> None:
+    """Channel `c`'s black is clear (plan 87): the switch — the same edit as
+    GRAPH's node menu, on `channel.<c>` — and while it is on its knobs, two
+    to a row, then keep colour and invert."""
+    on = keyed(panel, c)
+    changed, want = imgui.checkbox(f"black is clear##{KEY_SWITCH.format(c=c)}", on)
+    if imgui.is_item_hovered():
+        ui.tooltip("This channel's dark parts become transparent wherever it is wired, "
+                   "so what is under it shows through (GRAPH: the node's menu, the same).")
+    if changed and want != on:
+        set_keyed(panel, c, want)
+    pre = f"key.{channel_name(c)}."
+    if not on or f"{pre}level" not in panel.reg:
+        return
+    if imgui.begin_table(f"##media.{c}.key", 2, imgui.TableFlags_.sizing_stretch_same):
+        for left, ll, right, rl in KEY_ROWS:
+            imgui.table_next_column()
+            panel.half(pre + left, ll)
+            imgui.table_next_column()
+            panel.half(pre + right, rl)
+        imgui.end_table()
+    panel._check(pre + "keep", "keep colour")
+    imgui.same_line()
+    panel._check(pre + "invert", "invert")
 
 
 def mixer_line(panel) -> tuple[str, bool]:

@@ -163,7 +163,19 @@ from .graph import (
 )
 from .lookback import Dreamer, DreamState, Lookback
 from .masks import MaskPasses
-from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
+from .media_tex import (
+    COVER,
+    FIT_FS,
+    KEY_HERE,
+    KEY_MASK,
+    KEY_OFF,
+    KEY_RAMP_OUT,
+    Key,
+    MediaTextures,
+    UiTextures,
+    fit_scale,
+    key_of,
+)
 from .outputs import (
     THUMB_PX,
     Handoff,
@@ -2408,48 +2420,91 @@ class Renderer:
             now[key] = self._media_textures().texture(c, f)
         return now[key]
 
-    def _media_fit(self, c: str, size: tuple[int, int],
-                   alpha: float = 1.0) -> moderngl.Texture | None:
+    # plan 87: a keyed node's state as the fit pass's cache key reads it
+    # (`media_tex.key_of`: hashable, held to its ranges) — `graph.MediaNode`
+    key_of = staticmethod(key_of)
+
+    def _media_fit(self, c: str, size: tuple[int, int], alpha: float = 1.0,
+                   key: Key | None = None) -> moderngl.Texture | None:
         """Channel `c` fitted to a frame of `size` (`media.<c>.fit`: cover,
         contain, stretch), premultiplied by `alpha`: one pass into a
         texture of the renderer's (`_frame_target`, one per channel and
-        alpha 1 or not), once a frame per (channel, size, alpha, fit). With
-        no picture it is transparent black — a texture all the same, so an
-        `IMAGE` port always has one. Leaves its target bound."""
+        alpha 1 or not), once a frame per (channel, size, alpha, fit, key).
+        With no picture it is transparent black — a texture all the same,
+        so an `IMAGE` port always has one. Plan 87: `key` (a keyed channel
+        node's black is clear, `graph.MediaNode`) keys it in the same pass,
+        into a target of its own; with a feather, the ramp alone first into
+        a one-channel target, blurred by `MaskPasses.feather`, and the pass
+        reads that. Leaves its target bound."""
         ch = getattr(getattr(self, "media", None), "channels", {}).get(c)
         fit = int(getattr(ch, "fit", 0) or 0)
         size = (int(size[0]), int(size[1]))
         alpha = min(max(float(alpha), 0.0), 1.0)
         now = self._media_frame_now()
-        key = ("fit", c, size, alpha, fit)
-        if key in now:
-            return now[key]
+        cache = ("fit", c, size, alpha, fit, key)
+        if cache in now:
+            return now[cache]
         src = self.media_texture(c)
         # (plan 33 R: fitted at another size than the frame's — a branch on
         # the faces — it is a target of its own, `(name, size)`)
         name = f"media.{c}" if alpha >= 1.0 else f"media.{c}@alpha"
+        if key is not None:
+            name += "@key"
         at = getattr(self, "_frame_size", None)
-        out, fbo = self._frame_target(name if at is None or size == tuple(at)
-                                      else (name, size), size)
+        tkey = name if at is None or size == tuple(at) else (name, size)
+        mask = None
+        if src is not None and alpha > 0.0 and key is not None and key.feather > 0.0:
+            mask = self._key_ramp(c, src, tkey, size, fit, key)
+        out, fbo = self._frame_target(tkey, size)
         ctx = self.ctx
         fbo.use()
         ctx.viewport = (0, 0, *size)
         if src is None or alpha <= 0.0:
             ctx.clear(0.0, 0.0, 0.0, 0.0)
         else:
-            prog, vao = self._fit_program()
-            ctx.disable(moderngl.BLEND)
-            try:
-                src.use(location=0)
-                prog["u_src"].value = 0
-                prog["u_scale"].value = fit_scale(fit, tuple(src.size), size)
-                prog["u_flip"].value = int(self._media_textures().flipped(c))
-                prog["u_alpha"].value = alpha
-                vao.render(moderngl.TRIANGLES, vertices=3)
-            finally:
-                ctx.enable(moderngl.BLEND)
-        now[key] = out
+            mode = KEY_OFF if key is None else (KEY_HERE if mask is None else KEY_MASK)
+            self._fit_pass(c, src, size, fit, alpha, key, mode, mask)
+        now[cache] = out
         return out
+
+    def _fit_pass(self, c: str, src: moderngl.Texture, size: tuple[int, int], fit: int,
+                  alpha: float, key, mode: int, mask: moderngl.Texture | None = None) -> None:
+        """One fit pass (`FIT_FS`) of channel `c`'s texture `src` into the
+        bound target's `size`, blending off: key `mode` (`media_tex.KEY_*`)
+        with `key`'s values (none read while it is `KEY_OFF`), `mask` the
+        feathered ramp `KEY_MASK` reads."""
+        prog, vao = self._fit_program()
+        ctx = self.ctx
+        uniforms: dict[str, Any] = {
+            "u_src": 0, "u_scale": fit_scale(fit, tuple(src.size), size),
+            "u_flip": int(self._media_textures().flipped(c)), "u_alpha": alpha,
+            "u_key": int(mode), "u_keymask": 1 if mask is not None else 0}
+        if mode != KEY_OFF:
+            uniforms.update(u_measure=int(key.measure), u_level=float(key.level),
+                            u_soft=float(key.soft), u_keep=int(key.keep),
+                            u_invert=int(key.invert))
+        ctx.disable(moderngl.BLEND)
+        try:
+            src.use(location=0)
+            if mask is not None:
+                mask.use(location=1)
+            for name, value in uniforms.items():
+                prog[name].value = value
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            ctx.enable(moderngl.BLEND)
+
+    def _key_ramp(self, c: str, src: moderngl.Texture, tkey, size: tuple[int, int], fit: int,
+                  key) -> moderngl.Texture:
+        """Plan 87's feather: channel `c`'s ramp alone (`KEY_RAMP_OUT`) into a
+        one-channel target of `size` under `(tkey, "key")`, blurred by
+        `key.feather` px (`MaskPasses.feather`, under `(tkey, "key/feather")`).
+        Returns the blurred ramp, which the fit pass reads 1:1."""
+        ramp, rfbo = self._frame_target((tkey, "key"), size, components=1)
+        rfbo.use()
+        self.ctx.viewport = (0, 0, *size)
+        self._fit_pass(c, src, size, fit, 1.0, key, KEY_RAMP_OUT)
+        return self.mask_passes().feather(ramp, (tkey, "key/feather"), key.feather)
 
     def _fit_program(self) -> tuple[moderngl.Program, moderngl.VertexArray]:
         """The fit pass's program (`media_tex.FIT_FS`), built on first use."""
@@ -2580,7 +2635,7 @@ class Renderer:
                                        if after else None), readout=readout,
                                 alpha=float(gh.state.alpha), factor=factor,
                                 bg_alpha=float(v.bg_alpha), flip=flip,
-                                blend="add" if blend == "add" else "over",
+                                blend=blend if blend in ("add", "screen") else "over",
                                 mix=getattr(v, "mix", None),
                                 mix_k=float(getattr(v, "mix_k", 0.0)))
             if v.target is None:
@@ -2678,6 +2733,7 @@ class Renderer:
         """A layer (`tex`, premultiplied, frame-sized) into `target`'s
         `rect` at `alpha` (plan 26 A3, the Composite node's blend): "over"
         — `Ghost.composite`'s blend and arithmetic, the same bytes — "add",
+        "screen" (plan 87: `src + dst·(1 − src)` in colour, alpha as over),
         or "depth": over, hidden where `scene_depth` is nearer than the
         layer's own `depth` (`LAYER_FS`, `LAYER_DEPTH_BIAS`; plain over when
         either depth is missing). On an opaque ground the target's alpha is
@@ -2697,6 +2753,10 @@ class Renderer:
             if blend == "add":
                 ctx.blend_func = ((one, one, moderngl.ZERO, one) if opaque else
                                   (one, one, one, inv))
+            elif blend == "screen":
+                inv_c = moderngl.ONE_MINUS_SRC_COLOR
+                ctx.blend_func = ((one, inv_c, moderngl.ZERO, one) if opaque else
+                                  (one, inv_c, one, inv))
             else:
                 ctx.blend_func = ((one, inv, moderngl.ZERO, one) if opaque else
                                   (one, inv, one, inv))

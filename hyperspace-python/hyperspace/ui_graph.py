@@ -270,7 +270,7 @@ from .graph import Effect
 from .groupwords import group_title
 from .learn import META_UNDO, PairAsk
 from .library import LibraryError
-from .params import Kind
+from .params import KEY_GROUP, Kind
 from .routing import PAIR_SCHEME, Binding, base_refusal, is_macro, row_words
 from .view import RED as RED_RGB
 
@@ -4545,7 +4545,7 @@ def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | N
 
 def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
     """A render node's menu items: a hands node drawn solid or as lines, a
-    composite's blend, a picture node's "add feedback after" (wave 0 E1:
+    composite's blend, black is clear on any picture node (plan 87), a picture node's "add feedback after" (wave 0 E1:
     `_feedback_after_menu`, `add_feedback_after`), delete."""
     e = render_edit(panel)
     name, _ = graphview.spec_name(n.id, e.render)
@@ -4558,6 +4558,12 @@ def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
         for how in rgraph.BLENDS:
             m.item(f"laid {how}", lambda how=how: _render_said(
                 panel, e, lambda e, how=how: e.set_node(name, blend=how)))
+    if graphview.keyable(name):
+        # plan 87: black is clear on any picture node — its knobs then on
+        # the selection (`key.<name>.*`)
+        on = graphview.keyed(e, name)
+        m.item(KEY_ITEM, lambda: _render_said(panel, e, lambda e: e.set_key(name, not on)),
+               checked=on, tip=KEY_TIP)
     feeds = graphview.picture_feeds(e, name) if name else None   # (the spec's wires, no copy)
     if feeds is not None:
         _feedback_after_menu(panel, name, feeds, m)
@@ -4566,6 +4572,10 @@ def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
 
 
 FEEDBACK_AFTER = "add feedback after"
+# plan 87: a picture node's menu item, and what it says
+KEY_ITEM = "black is clear"
+KEY_TIP = ("This node's dark parts become transparent, so what is under it shows "
+           "through. Its level, softness and the rest are on the selection.")
 
 
 def _feedback_after_menu(panel, name: str, feeds: list[tuple[str, str]],
@@ -4721,6 +4731,7 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
     node_mode_block(panel, n)
     if isinstance(n.ref, Effect):
         ui_fx.strip(panel, n.ref.effect)
+        _key_rows(panel, n)
         return
     m = router.table.modifier(n.id) if router is not None and n.kind == "modifier" else None
     if m is not None:                           # plan 28 N7: the MODIFIERS strip's editor
@@ -4910,6 +4921,21 @@ def side_groups(panel, n: graphview.VNode) -> list[tuple[str, list[str]]]:
         groups.setdefault(port.group, []).append(port)
     return [(g, [p.param for p in sorted(ports, key=lambda p: not p.patched)])
             for g, ports in groups.items()]
+
+
+def _key_rows(panel, n: graphview.VNode) -> None:
+    """Plan 87: a keyed effect's black is clear knobs (`key.<name>.*`) under
+    its strip, which shows only the effect file's own params; a node of any
+    other kind has them among its rows (`graphview.OWNERS`)."""
+    pids = [p.param for p in n.ports if p.param is not None]
+    pids = [pid for pid in dict.fromkeys(pids)
+            if pid in panel.reg and panel.reg[pid].group == KEY_GROUP]
+    if not pids:
+        return
+    imgui.separator()
+    ui._micro(KEY_ITEM)
+    for pid in pids:
+        _param_row(panel, pid)          # (a toggle its checkbox, as on any node)
 
 
 def _param_rows(panel, st: dict, n: graphview.VNode) -> bool:

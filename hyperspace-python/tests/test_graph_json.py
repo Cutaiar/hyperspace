@@ -114,7 +114,7 @@ def test_a_graph_section_reads_and_writes_itself_plainly():
     ({"nodes": [{"kind": "teapot"}]}, "unknown node kind 'teapot'"),
     ({"nodes": [{"kind": "hands", "into": "sky"}]}, "into 'sky'"),
     ({"nodes": [{"kind": "hands", "draw": "dots"}]}, "draw 'dots'"),
-    ({"nodes": [{"kind": "hands", "laid": "screen"}]}, "laid 'screen'"),
+    ({"nodes": [{"kind": "hands", "laid": "multiply"}]}, "laid 'multiply'"),
     ({"nodes": [{"kind": "hands", "alpha": 0.5}]}, "no key 'alpha'"),
     ({"nodes": [{"kind": "hands", "instance": 0}]}, "instance 0"),
     ({"nodes": [{"kind": "hands", "instance": 2}]}, "one hands node makes the layer"),
