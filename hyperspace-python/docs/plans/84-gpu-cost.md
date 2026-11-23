@@ -101,7 +101,7 @@ unreached are not built here (row 1045), for these reasons:
 
   Faking them with their input would put a picture on the canvas that the node would not make.
 - **The change belongs in `render.thumb_source`**, outside this item's files. I didn't build half of it
-  there; row 1045 lists the options.
+  there. Row 1045 lists the options; the owner chose (c), leave them (2026-11-23).
 
 All of these would stay unbuilt, as row 349 says, and count against `UNWIRED_PER_FRAME`.
 
