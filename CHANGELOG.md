@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-20
+## v1.3 — 2026-11-22
 
 ### Panel
 
@@ -23,6 +23,7 @@
 - The side pane is drawn with a new measured kit (dkit, after shadcn/ui): icon tabs for the views, list rows whose actions show on hover, CAMERA, VIEW, every param slider and switch, chips and GRAPH's header; `HYPERSPACE_KIT=0` draws it all as before (#446)
 - Ctrl-C in the terminal quits the app as Esc or Q do: no traceback, the audio and devices are closed and the window spots saved; a second Ctrl-C more than 2 s later quits at once (#456)
 - Nudge chips each open their own popup, and a patch strip's save chip no longer covers ▶ in a narrow pane (#414)
+- Sliders show what they hold: a centred value (−1…+1) fills from 0 and a multiplier from 1, each with a detent a drag snaps to within 6 px, and a whole-number one (Taps, Segments) has a tick per step; the pad's knobs read the same (#469)
 
 ### Displays
 
@@ -37,6 +38,7 @@
 - F1–F8, Home, next / prev and the preset list, from keys or pads, always load into the off-air deck, and are refused in words while the fader is between its ends or a timed fade runs; the panel's own load still lands on the deck it shows (#380)
 - You can always tell the decks apart: the deck off air is framed in red with an ON AIR inset; the loaded look's strip ("deck 2 · off air"), the desk diagram's header ("the desk plays deck 1"), ROUTING's desk section, the window title and SYSTEM's GPU line all say which is which (#380, #393)
 - Playlists for installs: the **playlist** chip on GRAPH's deck row opens a list of looks, each played for its own dwell in seconds, fading between them — choose or make a list, play / stop, back / on, add a look; the chip is lit while a list plays, and lists live in `<library>/playlists/` (#392, #400, #445)
+- The playlist popup scrolls: a long list stays on screen, one 34 px row an entry, with the look on air kept in view and "add a look" always below (#467)
 - A fade between decks or a window resize no longer leaks about 16 MB each, which would have ended a long-running install within days (#400)
 
 ### Players
@@ -55,6 +57,7 @@
 ### Presets
 
 - Load a patch from GRAPH's deck row: **load…** opens a file browser on `loadable/` and loads the pick onto the off-air deck; the side pane's folder tree and the strip's ◀ ▶ are gone (#349, #444)
+- **save as**, beside **load…** on GRAPH's deck row, saves the deck's look in one press as a new patch next to the one loaded (moo → moo 2), never over a file; Learn puts the same press on a desk or pad button (#467)
 - A patch or folder moved or renamed in Finder is followed: the loaded patch and every install keep pointing at it, and unsaved edits stay (#444)
 - Six kinetic presets to copy into `<library>/loadable/`, played with the hands, a pad or a Joy-Con: `kinetic-clay`, `-comet`, `-tunnel`, `-looking-glass`, `-wand` and `-finger-drums`, in `presets/kinetic/` with a gesture table each (#448)
 - A preset now holds the hands' look, the clouds' look and the bus cuts; presets move to `/10` and shows to `/3`, migrated with a backup (#351)
@@ -99,6 +102,7 @@
 - Tidy (the chip, now **Turbo Tidy**, with flames on hover) lays GRAPH out left to right by signal flow — controllers and audio, then modulation, picture makers, effects, outputs — with about half the cable crossings; a cable that runs backward is drawn as a sling under (or over) the nodes it spans, and a tidied graph is wider and taller than before (#463)
 - Adding an effect opens **effects…**, a picker of tiles grouped by family: each shows the effect over a test card and plays its loop on hover, search finds by name or tip and Enter takes the first match; it replaces the effects ▸ submenu in the add menu and a cable's insert ▸ (#461)
 - An effect that isn't wired yet still shows a thumbnail, through its input or the test card, and only effects that read a second picture (Blend, Displace) have an `aux` port; a saved aux wire still loads (#461)
+- A **gpu cost** chip on GRAPH's head marks every render node by its GPU time: the costlier, the brighter, with a badge ("#1 · 2.10 ms" for the top three) and the frame's total under the head; a node that drew nothing says "made nothing"; off by default and costs nothing when off (#470)
 
 ### Effects
 
@@ -107,12 +111,15 @@
 - New **Wave Table** effect: a disc of the picture at each root is dragged along grass, noodle or curl paths into an extruded tube; scrub or LFO `fx.wavetable.pos` — at 0 the frame is untouched (#406)
 - Three distortion effects that move the picture's pixels: **Shake** moves the whole frame (buzz, orbit, punch or jolt, with Smear and Split), **Wave** lays one waveform across it along lines, rings or spokes, and **Blocks** cuts it into cells that shift, zoom, stretch, turn, bulge or swap — every Amount is untouched at 0, so a lane, hand or pad fades it in; 23 ready patches in `presets/distort/` play them (#458)
 - New **Mandelbrot** effect, a live Mandelbrot / Julia generator to explore by hand or controller: every term of z → z^p + c is a knob (Centre, Zoom to 10¹³×, z₀, c, Slice, Power 2–8, Steps); Pan, Dive and the drives move the picture as far at any depth, Size (540 / 810 / 1080 lines) sets its cost, and it feeds Palette's gradient or a built-in ramp (#462)
+- Mandelbrot draws with nothing wired in, its coloured inside is smooth rings at any depth instead of flat grey and blocks, the c and z₀ drives are no longer far too fast off the screen's axis, and a deep zoom costs about a quarter of what it did (15 ms instead of 81 at 10⁷× on the M3 Max) (#471)
+- XY pads: Prism and Wave get a Centre pad, Wave Table an Offset pad and Zoom burst a Burst volume (the third value a halo); click or drag the point, ⇧ for fine, and each axis keeps its own knob for routes and Learn; saved patches are unchanged (#469)
 
 ### Shapes
 
 - Nine fractals to zoom into forever with the same detail at every depth: the Sierpinski tetrahedron and 5-cell, the octahedron and icosahedron flakes, the Menger sponge, and Cantor dust and the Vicsek cross in 3D and 4D; VIEW's **Additive** switch draws one on the GPU, unsorted and glowing, instead of sorted (#460)
 - A fist grabs a fractal as an object from outside; once you're inside it, the fist holds the space and moving it flies you through the fractal's 4D space, with no jump at any depth (#460)
 - A patch saves where you are inside a fractal (its dive) and loading it takes you back; a broken saved dive is refused with a note and the rest of the patch still loads (#460)
+- A **fractal** section (in **sections ▾**) holds a fractal's controls: where you are, **Detail**, **Reach**, **Near**, **Additive** (moved from VIEW) and **To the top**; Detail, Reach and Near are saved in a fractal patch (#466)
 
 ### Media
 
@@ -132,6 +139,7 @@
 - Ghost hands land where they're tracked: each finger starts at its tracked knuckle (the pinky was up to 15 mm off), and a short wrist cuff replaces the stray forearms (#449)
 - A new **BONES** ghost style draws the hand's 27 bones; SKIN is gone, as it couldn't hold a frame at any projector size (#449)
 - `ghost.material` beside the style: PLAIN, BONE, GLASS or EMBER, with GLASS letting the scene show through and the guide always drawn plain (#449, #450)
+- The ghost hands' show look is on, BONES, PLAIN, at 50 %, and a new hands node starts from it; `tools/set_hands_look.py` sets the library's patches to it (a dry run unless `--apply`, which backs the library up first) (#459)
 
 ### For developers
 
@@ -161,6 +169,8 @@
 - `shapeframe.py` draws every shape through one provider (`Fixed`, `Scene`, `Fractal`), byte-identical for every non-fractal frame; `fractal_gl.py` instances a fractal's cells on the GPU; `tools/fractal_compare.py`, `tools/fractal_grab_demo.py` and `tools/fractal_bench.py` (#460)
 - An effect file can hand its pass to Python with `// @hook <module>`: `mandel.py` holds Mandelbrot's float64 reference orbit, perturbation and tile pre-passes; `tools/mandel_bench.py` times it on the rig (#462)
 - `previews.py` draws each effect's still and loop off the show's chain, `fx.reads_aux` decides the aux port and a `// @family` directive groups the picker; `tools/effect_previews.py` writes stills, GIFs and a contact sheet (#461); the tidy is `graphview.flow` and `graphview.sling`, tuned beside `BANDS` (#463)
+- `ui_fields.Shape` / `shape_of` / `polarity` draw every fader, with `bipolar` / `unipolar` on a `@param` line and `// @pair` / `// @volume` directives (`fx.PadSpec`) for pads (#469); `Renderer.gpu_watch`, `PassTimer.watch` and `ui_graph.rank_costs` / `ease_costs` / `fold_owners` back the gpu cost chip (#470)
+- `mandel.GENERATOR` and `graph.Effect.generates` let a hooked effect draw with no input, and `tools/mandel_bench.py --owner` runs the owner's cases (#471); `ui_fractal.py` and the optional `"fractal"` patch key (`loadable.FRACTAL_PIDS`, no schema bump) (#466); `ui_loadable.save_as_chip` (#467); `ghost.SHOW_LOOK` (#459)
 
 ## v1.2 — 2026-11-02
 
