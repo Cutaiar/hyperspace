@@ -2353,6 +2353,7 @@ class NodeRows(Protocol):
     def holding(self) -> frozenset[str]: ...
     def away(self, b: Binding, role: str | None = None) -> bool | None: ...
     def routed(self) -> list[Binding]: ...
+    def pressed(self) -> list[Binding]: ...
 
 
 class Bindings:
@@ -2921,6 +2922,14 @@ class Bindings:
         joins them where it reads those."""
         nd = self.node_desk
         return nd.routed() if nd is not None else []
+
+    def node_buttons(self) -> list[Binding]:
+        """The pad button rows node mode fires on this deck (plan 86, row 1062,
+        `NodeDesk.pressed`): each cycles a dropdown. Never in `bindings`, so not in the
+        file or the undo; `Router.pad` hears them beside the table's."""
+        nd = self.node_desk
+        pressed = getattr(nd, "pressed", None)      # (a NodeDesk from before a hot reload)
+        return pressed() if pressed is not None else []
 
     def node_held(self) -> frozenset[str]:
         """The params a desk in node mode holds on this deck (`NodeDesk.holding`)."""
@@ -3710,7 +3719,9 @@ class Router:
                 if b.op == "step" and b.enabled and self.table.pad_serves(role, b):
                     self._pair_step(pad, b, skip)
         layout = layout_of(getattr(pad, "model", None), role)
-        table_rows = self.table.of("pad", "hat")
+        # plan 86 (row 1062): node mode's buttons, each cycling a dropdown, beside the table's
+        node = getattr(self.table, "node_buttons", None)    # (a `Router` may be handed a shim)
+        table_rows = (*self.table.of("pad", "hat"), *(node() if node is not None else ()))
         n_table = len(table_rows)
         rows = (*table_rows, *layout.rows)
         if down_now:                         # a row gone or off under a held button

@@ -662,11 +662,15 @@ class Walk:
     face_o: np.ndarray
     face_a: np.ndarray
     off: np.ndarray | None = None
+    # how far and how near it is drawn, octaves: the fractal's own `far` and
+    # `near` with the view's reach (`view.frac_far`, `view.frac_near`) on them
+    far: float = CUE_FAR
+    near: float = CUE_GONE
 
     @property
     def cue(self) -> tuple[float, float]:
         """The depth cue's fixed ends (render.draw_scene's near and far)."""
-        return (-self.spec.far, self.top)
+        return (-self.far, self.top)
 
     def place(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Points X of the shape (n, 4), in its own frame, to what the scene
@@ -690,7 +694,7 @@ class Walk:
         if self.off is not None:
             world = _offset_world(world, self.off, p, zoom)
         range_ = np.sqrt(world[:, 0] ** 2 + world[:, 1] ** 2 + (self.dist - world[:, 2]) ** 2)
-        pd = np.clip(-np.log2(np.maximum(range_, 1e-9) / self.dist), -self.spec.far, self.top)
+        pd = np.clip(-np.log2(np.maximum(range_, 1e-9) / self.dist), -self.far, self.top)
         return P, np.maximum(rho, self.w_gone), pd, along
 
 
@@ -727,9 +731,12 @@ def walk(spec: Fractal, s, w: int, h: int, off=None) -> Walk:
     tx, ty = (tan * aspect, tan) if aspect >= 1.0 else (tan, tan / aspect)
     nx, ny = math.hypot(1.0, tx), math.hypot(1.0, ty)
     px = min(w, h) / 2.0 / tan                      # px a unit spans at distance 1
-    far = min(dist * 2.0 ** spec.far, EYE_FAR)
-    gone = dist * 2.0 ** -spec.near
-    top = min(CUE_NEAR, 0.4 * spec.near)            # the cue's near end: full weight
+    # the view's own reach on the fractal's (the fractal section, plan 64)
+    oct_far = max(spec.far + float(getattr(s, "frac_far", 0.0)), 0.2)
+    oct_near = max(spec.near + float(getattr(s, "frac_near", 0.0)), 0.3)
+    far = min(dist * 2.0 ** oct_far, EYE_FAR)
+    gone = dist * 2.0 ** -oct_near
+    top = min(CUE_NEAR, 0.4 * oct_near)             # the cue's near end: full weight
     r = spec.ratio
     # the offset's own scale (a Pose's), on a cell's reach
     k_off = 1.0 if off is None else float(np.cbrt(abs(np.linalg.det(np.asarray(off)[:3, :3]))))
@@ -748,7 +755,7 @@ def walk(spec: Fractal, s, w: int, h: int, off=None) -> Walk:
     bare = not spec.outline and up == len(d.path)
 
     faces = bool(getattr(s, "faces", False))
-    split = spec.split * min(w, h)
+    split = spec.split / max(float(getattr(s, "frac_detail", 1.0)), 1e-3) * min(w, h)
     grow = 1.0 / r - 1.0                            # a split is all in by a child's own
     most = BUDGET // max(len(spec.new_E), 1)
     while True:
@@ -782,8 +789,8 @@ def walk(spec: Fractal, s, w: int, h: int, off=None) -> Walk:
             # what a split adds comes in over the next factor of 1 / ratio in
             # size, and goes out over the far end of the cue
             cue = -np.log2(np.maximum(range_, 1e-9) / dist)
-            fog = (_smooth((cue + spec.far) / (FOG * (top + spec.far)))
-                   * _smooth((spec.near - cue) / (spec.near - top)))
+            fog = (_smooth((cue + oct_far) / (FOG * (top + oct_far)))
+                   * _smooth((oct_near - cue) / (oct_near - top)))
             grown = np.where(go, _smooth((size - split) / (split * grow)), 0.0)
             if first:
                 grown = np.ones(1)
@@ -819,7 +826,7 @@ def walk(spec: Fractal, s, w: int, h: int, off=None) -> Walk:
     return Walk(spec, M, p, zoom, d4, dist, w_gone, w_near, w_far, w_lost, top, faces,
                 whole, scale, origin, cat(got_s, (0,)), cat(got_o, (0, 4)), cat(got_a, (0,)),
                 cat(f_s, (0,)), cat(f_o, (0, 4)), cat(f_a, (0,)),
-                None if off is None else np.asarray(off, dtype=np.float64))
+                None if off is None else np.asarray(off, dtype=np.float64), oct_far, oct_near)
 
 
 def frame(spec: Fractal, s, w: int, h: int, off=None

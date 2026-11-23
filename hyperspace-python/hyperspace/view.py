@@ -165,6 +165,13 @@ class ViewState:
     # its cells go to the GPU, one instance each, and blend unsorted
     # (fractal_gl.py). Not saved: a look for the owner to judge (row 884)
     frac_additive: bool = False
+    # plan 64's fractal section: how much detail a fractal shows (× its split
+    # size's reciprocal: 2 splits a cell at half the size on screen), and how
+    # far and how near its cells are drawn (octaves added to the fractal's own
+    # reach, `Fractal.far` / `Fractal.near`). The look's own: saved, routable
+    frac_detail: float = 1.0
+    frac_far: float = 0.0
+    frac_near: float = 0.0
     playing: bool = True
     planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)

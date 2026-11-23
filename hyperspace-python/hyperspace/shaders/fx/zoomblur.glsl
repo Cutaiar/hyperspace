@@ -5,6 +5,7 @@
 // @tip light shoots outward from that point and brightens as it spreads. Amount is how
 // @tip far the smear reaches; the centre is where the burst sits — put a hand's x and
 // @tip z on Centre X / Y and the burst follows the hand across the box.
+// @volume u_cx u_cy u_amount "Burst"
 
 uniform float u_amount; // @param 0 1 0.1 amount "Amount" How far each pixel smears toward the centre, as a fraction of its distance.
 uniform float u_cx;     // @param -1 1 0 "Centre X" Where the burst sits: −1 the left edge … +1 the right (frame heights from the middle).

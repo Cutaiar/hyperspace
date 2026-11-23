@@ -142,7 +142,7 @@ from typing import Any
 from . import apc40, fractal, graphmigrate, graphview, modifiers, nodemode, patches, routing, undo
 from .fx import declare as declare_fx
 from .geometry import SHAPES
-from .ghost import GhostState
+from .ghost import GhostState, show_look
 from .ghost import prefix as ghost_prefix
 from .ghost import register as declare_ghost
 from .graph import (
@@ -175,6 +175,8 @@ from .modifiers import Modifier
 from .palettecompat import palette_slice
 from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadable.* names
     CUT_GROUP,
+    DEPTH_TAPER,
+    DEPTH_UNIT,
     MATTE_GROUP,
     PAN_IDS,
     PATCH_GROUPS,
@@ -252,6 +254,15 @@ POSE_KEY = "pose"
 # fractal, so every other loadable patch saves byte for byte as it did; no
 # schema of its own (node mode's precedent, #377)
 DIVE_KEY = "dive"
+# plan 64 (row 902): a fractal's own settings — the FRACTAL section's Detail,
+# Reach and Near (`view.frac_detail`, `view.frac_far`, `view.frac_near`),
+# `{"detail", "far", "near"}`. Optional: written only while the look's shape
+# is a fractal, so every other look saves byte for byte as before; a load with
+# none sets the fractal's own (1, 0, 0)
+FRACTAL_KEY = "fractal"
+FRACTAL_IDS = {"detail": "view.frac_detail", "far": "view.frac_far", "near": "view.frac_near"}
+FRACTAL_OWN = {"detail": 1.0, "far": 0.0, "near": 0.0}
+FRACTAL_PIDS = frozenset(FRACTAL_IDS.values())
 # what a load says of a pose it could not read (six numbers, by `POSE_IDS`)
 POSE_UNREAD = "pose: not six numbers, ignored — the turn is left spinning"
 # the registry groups (and lane schemes) a /2 file never names
@@ -466,7 +477,7 @@ class GraphSection:
         for name in sorted(self.declared - set(want)):
             reg.remove_prefix(name + ".")
         for name, n in want.items():
-            declare_ghost(reg, self.states.setdefault(name, GhostState()), n)
+            declare_ghost(reg, self.states.setdefault(name, show_look()), n)
         self.declared = set(want)
         self._settle(spec)
         self.spec, self.doc = spec, copy.deepcopy(doc)
@@ -724,6 +735,21 @@ def dumps(doc: dict) -> str:
             text = json.dumps(v)
         parts.append(f" {json.dumps(key)}: {text}")
     return "{\n" + ",\n".join(parts) + "\n}\n"
+
+
+# plan 86 (row 1060): what a load says when a file has no depth-units marker and its
+# depths onto the effects' speed and amount params are rescaled as an old file's.
+# Two agents writing patches by hand met it on 2026-11-19 (0.12 read as 0.28)
+RETAPER_NOTE = (f'no "{UNITS_KEY}" marker, so read as a file from before the effect '
+                "tapers: {count} rescaled ({rows}). A save writes the marker; a file "
+                f'written by hand wants "{UNITS_KEY}": {{{{"{DEPTH_UNIT}": "{DEPTH_TAPER}"}}}}')
+
+
+def retaper_note(moved: list[str]) -> str:
+    """The note for the depths `params.retaper_depths` moved: every row, with its
+    old and new depth, since a hand-written file's author meant the old number."""
+    count = f"{len(moved)} depth" + ("s" if len(moved) != 1 else "")
+    return RETAPER_NOTE.format(count=count, rows="; ".join(moved))
 
 
 def echo_seconds(doc: dict) -> tuple[dict, list[str]]:
@@ -997,12 +1023,16 @@ class LoadedPatch:
         notes += palette_notes
         # 0. and its depths onto the effects' speed and amount params along
         #    their tapers (wave 0 T1): a file from before measured them along
-        #    the linear range. Silent, as the pan is — each row's real-unit
-        #    reach is kept about its base (`params.retaper_depths`); a save
-        #    writes the marker (`UNITS`), and tools/retaper_routes.py
-        #    rewrites a library once. Measured against this meta controller's own effect
-        #    files (`self.fx`), the registry's when there is no state
-        doc, _ = retaper_depths(doc, self._effect_files())
+        #    the linear range. Each row's real-unit reach is kept about its
+        #    base (`params.retaper_depths`); a save writes the marker
+        #    (`UNITS`), and tools/retaper_routes.py rewrites a library once.
+        #    Measured against this meta controller's own effect files
+        #    (`self.fx`), the registry's when there is no state. Said (plan
+        #    86, row 1060): a file written by hand without the marker is read
+        #    as an old one, and its depths move under it
+        doc, retapered = retaper_depths(doc, self._effect_files())
+        if retapered:
+            notes.append(retaper_note(retapered))
         # 0. and its render graph (plan 26 A4): read, not yet landed. Plan
         #    36 T3 (W3): a `/7` is read as it is — no section is the empty
         #    frame, black, said; nothing is filled in. An older file is
@@ -1262,6 +1292,7 @@ class LoadedPatch:
         dive_note = self._land_dive(doc.get(DIVE_KEY))
         if dive_note:
             notes.append(dive_note)
+        notes += self._land_fractal(doc.get(FRACTAL_KEY))
         # 2½. the bins (plan 32): each channel opens what its slot names at
         #     the next frame's poll
         media = self.media
@@ -1421,6 +1452,9 @@ class LoadedPatch:
         dive = self._dive_part()
         if dive is not None:
             doc[DIVE_KEY] = dive
+        frac = self._fractal_part()
+        if frac is not None:
+            doc[FRACTAL_KEY] = frac
         # plan 57 (NM0): a loadable patch that points at nothing writes nothing
         if self.node_mode:
             doc[NODE_MODE_KEY] = self.node_mode.to_json()
@@ -1429,6 +1463,40 @@ class LoadedPatch:
         if media is not None:
             doc[MEDIA_KEY] = media.to_json()
         return doc
+
+    def _fractal_part(self) -> dict | None:
+        """The FRACTAL section's settings as a loadable patch keeps them, None
+        while the look's shape (the param's base) is not a fractal (row 902)."""
+        reg = self.reg
+        p = reg.get("view.shape")
+        if p is None or fractal.spec_of(int(p.base)) is None:
+            return None
+        if not all(pid in reg for pid in FRACTAL_IDS.values()):
+            return None
+        return {k: round(float(reg[pid].base), 6) for k, pid in FRACTAL_IDS.items()}
+
+    def _land_fractal(self, doc) -> list[str]:
+        """The file's fractal settings onto this deck's params, the fractal's
+        own where it names none — a look without the key draws as it always
+        did. A value that is not a number is refused and one outside its range
+        held to it, each said."""
+        reg = self.reg
+        if not all(pid in reg for pid in FRACTAL_IDS.values()):
+            return []
+        doc = doc if isinstance(doc, dict) else {}
+        notes = []
+        for k, pid in FRACTAL_IDS.items():
+            v = doc.get(k, FRACTAL_OWN[k])
+            if (isinstance(v, bool) or not isinstance(v, (int, float))
+                    or not math.isfinite(v)):
+                notes.append(f"the fractal's {k} would not read; its own instead")
+                v = FRACTAL_OWN[k]
+            p = reg[pid]
+            held = min(max(float(v), float(p.lo)), float(p.hi))
+            if held != float(v):
+                notes.append(f"the fractal's {k} {v} held to {held:g}, its range's end")
+            p.set(held)
+        return notes
 
     def _view_dive(self) -> tuple[Any, Any] | None:
         """This deck's view and its dive (`fractal.Dive`, read by its fields: a
@@ -1501,8 +1569,9 @@ class LoadedPatch:
         """The loadable patch's `values`: every performance base but the modifiers'
         params, which their entries hold (so a file saved here loads on an
         older build with no unknown id)."""
+        # (plan 64: a fractal's settings are the `fractal` key's, `_fractal_part`)
         values = {k: v for k, v in self.reg.snapshot(part="patch").items()
-                  if not k.startswith(modifiers.PREFIX)}
+                  if not k.startswith(modifiers.PREFIX) and k not in FRACTAL_PIDS}
         return _grip_unless_used(values, getattr(self.reg, "grip", None))
 
     def _modifiers_part(self, name: str | None = None) -> dict:
@@ -1680,7 +1749,9 @@ class LoadedPatch:
                 # plan 44 D3: a bus cable cut or joined on GRAPH
                 json.dumps(self.bus.to_json(), sort_keys=True),
                 # plan 57: a controller pointed at another node (NM1: an edit)
-                self.node_mode)
+                self.node_mode,
+                # plan 64: the FRACTAL section's settings, while the shape is one
+                json.dumps(self._fractal_part(), sort_keys=True))
 
     # ---- internals ----
 

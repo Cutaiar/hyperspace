@@ -107,7 +107,8 @@ def test_the_tint_switch_is_off_by_default_and_on_the_head_last(rig, monkeypatch
                         labels.append(label) or lit(label, on, *a, **k))
     frame(rig.panel, "graph")
     head = [x for x in labels if x.endswith("##graph")]
-    assert head[-1] == ui_graph.TINT_LABEL          # after every chip today's head has
+    # after every chip today's head has but plan 84's gpu cost, which follows it
+    assert head[-2:] == [ui_graph.TINT_LABEL, ui_graph.COST_LABEL]
     assert head.index("output behind##graph") < head.index(ui_graph.TINT_LABEL)
     # off: every picture cable plain red
     assert ui_graph.cable_tints(st, st["view"]) == {}
