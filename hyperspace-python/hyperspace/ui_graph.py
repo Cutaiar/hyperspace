@@ -328,6 +328,9 @@ TITLE_SCREEN = 18.0      # px: what it stays on screen while the canvas is zoome
 TITLE_FLOOR = 12.0       # px: never smaller on screen (review round 1); a short word if need be
 TITLE_GAP = 16.0         # canvas units kept clear before the next title on its row
 THROUGH_ALPHA = 0.5      # a through wire over off effects: drawn, but plainly not a cable
+COPY_NOTHING = "nothing to copy: select an effect, or a copy of one, then ⌘C"
+PASTE_NOTHING = "nothing copied yet: select an effect and press ⌘C"
+COPIED = "{of} copied: ⌘V adds a copy of it, with its knobs"
 THROUGH_NO_DELETE = ("a through wire stands for off effects: turn one on (FX) or open the "
                      "off effects line to edit its cables")
 AREA_TIP = "Frame the canvas on this area's boxes (a click on its title does the same)" 
@@ -1449,6 +1452,53 @@ def tidy_pressed(panel) -> bool:
     return _bare(imgui.Key.t, panel, KEY)
 
 
+def _chord(key) -> bool:
+    """⌘ or Ctrl with `key`, pressed this frame, and nothing else wants it:
+    no text field being typed in, no control active, no popup open, the
+    canvas focused."""
+    io = imgui.get_io()
+    return (imgui.is_key_pressed(key, False)
+            and (io.key_super or io.key_ctrl)
+            and not (io.key_alt or io.key_shift)
+            and not io.want_text_input
+            and not imgui.is_any_item_active()
+            and not _menu_up()
+            and imgui.is_window_focused())
+
+
+def _copy_paste(panel, st: dict, view: graphview.View) -> None:
+    """⌘C / ⌘V on the canvas, for a node that can have copies (an effect, or
+    a copy of one): ⌘C holds the effect instance it draws (`st["clip"]`),
+    ⌘V adds a copy of it (`Edit.add_node("copy", of)`: the same effect with
+    its knobs, on another picture — unwired until a picture is) just under
+    the node last copied or pasted, one undo step, and selects it. Any
+    other selection says what can be copied."""
+    copy, paste = _chord(imgui.Key.c), _chord(imgui.Key.v)
+    if not (copy or paste):
+        return
+    if copy:
+        sel = _selection(st, view)
+        n = sel[1] if sel is not None and sel[0] == "node" else None
+        ref = getattr(n, "ref", None)
+        if n is None or not isinstance(ref, Effect):
+            _note(st, COPY_NOTHING)
+            return
+        st["clip"] = {"of": ref.effect, "nid": n.id}
+        _note(st, None)
+        st["said"] = COPIED.format(of=ref.effect)
+        return
+    clip = st.get("clip")
+    if not clip:
+        _note(st, PASTE_NOTHING)
+        return
+    at = node_below(st, clip["nid"])
+    e = render_edit(panel)
+    why = add_render(panel, e, "copy", clip["of"], at)
+    if why is None and e.added:
+        clip["nid"] = f"render:{e.added}"       # the next paste lands under this one
+        select_node(panel, e.added)
+
+
 def _tidy_key(panel, st: dict) -> None:
     """T asks for the tidy the head's chip asks for (`_place` does it next
     frame); 0 asks for the fit a load asks for (`ask_fit`: every node in
@@ -2336,6 +2386,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     _title_click(st)
     _create(panel, st, view)
     _delete_key()
+    _copy_paste(panel, st, view)        # ⌘C / ⌘V: a copy of the selected effect
     _tidy_key(panel, st)                # T and 0: the tidy and the fit, from the keyboard
     _delete(panel, st, view)
     _menus(panel, st, view)

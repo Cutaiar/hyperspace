@@ -566,6 +566,105 @@ def _poll_jobs(panel, st: dict) -> None:
             st["said"] = f"copied to {new}"
 
 
+# ---- drop and paste (a file onto the window, an image from the clipboard) ----
+
+MEDIA_EXT = frozenset(STILL_EXT) | frozenset(VIDEO_EXT)
+DROPPED: list[str] = []      # paths the windows' drop callback leaves for the frame loop
+
+
+def media_paths(paths) -> list[str]:
+    """The picture and clip files among `paths` (a still or a video the
+    channels open), in order; anything else a drop carried is left out."""
+    return [str(p) for p in paths
+            if os.path.splitext(str(p))[1].lower() in MEDIA_EXT and os.path.isfile(p)]
+
+
+def _free_cells(state, first: str):
+    """Every empty bin cell as (channel, index): the selected channel's
+    first, then the others in order."""
+    order = [first, *(c for c in CHANNELS if c != first)]
+    return [(c, i) for c in order for i, sid in enumerate(state.channels[c].bin) if sid is None]
+
+
+def intake(panel, paths) -> str:
+    """Files dropped on the window: each into the next empty cell of the
+    selected channel (then the next channel with room), the channel's slot
+    cued on the last one — so its `channel.<c>` node on GRAPH has the
+    picture, and is no longer an idle empty channel. One undo step. Returns
+    what it said (also on the MEDIA page's line)."""
+    st = _state(panel)
+    state, folder = media_of(panel), folder_of(panel)
+    files = media_paths(paths)
+    if state is None or folder is None:
+        return ""
+    if not files:
+        st["said"] = "nothing to add: drop a picture or a clip"
+        return st["said"]
+    cells = _free_cells(state, st["sel"] if st["sel"] in CHANNELS else "a")
+    put = list(zip(cells, files))
+    if not put:
+        st["said"] = "every channel's bin is full: empty a cell first"
+        return st["said"]
+    sids = [folder.add_file(f) for _, f in put]
+    undo.push(f"drop {_name(sids[0])}" + (f" and {len(sids) - 1} more" if len(sids) > 1 else ""),
+              load=True)
+    for ((c, i), _f), sid in zip(put, sids):
+        state.assign(c, i, sid)
+    (c, i) = put[-1][0]
+    slot = panel.reg.get(f"media.{c}.slot")
+    if slot is not None:
+        panel._real(slot).set_value(float(i))
+    st["sel"] = c
+    st["said"] = (f"{_name(sids[0])} → {c.upper()} {put[0][0][1] + 1}"
+                  + (f" and {len(sids) - 1} more" if len(sids) > 1 else "")
+                  + (f" ({len(files) - len(put)} left out: no room)" if len(files) > len(put) else ""))
+    return st["said"]
+
+
+def _clipboard_job(local_dir) -> list[str]:
+    """On the pool: the clipboard's files, or its image written as a PNG
+    in the local media folder. [] when it holds neither."""
+    from PIL import ImageGrab
+    got = ImageGrab.grabclipboard()
+    if got is None:
+        return []
+    if isinstance(got, list):
+        return [str(p) for p in got]
+    import time
+    out = os.path.join(str(local_dir), time.strftime("pasted-%Y%m%d-%H%M%S.png"))
+    got.save(out)
+    return [out]
+
+
+def paste(panel) -> None:
+    """⌘V: read the clipboard on the pool (it can shell out) — `poll_intake`
+    takes what it found."""
+    st, folder = _state(panel), folder_of(panel)
+    if folder is None or st.get("paste") is not None:
+        return
+    st["paste"] = pool.submit(_clipboard_job, folder.local)
+
+
+def poll_intake(panel) -> None:
+    """Once a frame: the drop callback's paths and a finished paste go in."""
+    st = _state(panel)
+    if DROPPED:
+        paths, DROPPED[:] = list(DROPPED), []
+        intake(panel, paths)
+    fut = st.get("paste")
+    if fut is not None and fut.done():
+        st["paste"] = None
+        try:
+            got = fut.result()
+        except Exception as e:  # noqa: BLE001 — no clipboard reader here is said, never raised
+            st["said"] = f"paste: the clipboard could not be read ({type(e).__name__})"
+        else:
+            if got:
+                intake(panel, got)
+            else:
+                st["said"] = "paste: the clipboard holds no picture"
+
+
 def copy_to_shared(panel) -> None:
     """The picked file copied into the shared folder on the pool
     (`MediaFolder.copy_to_shared`); said when it lands."""
