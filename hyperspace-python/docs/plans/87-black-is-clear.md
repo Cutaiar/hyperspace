@@ -141,6 +141,32 @@ Glimmer already write alpha = the peak of their colour and need nothing
 (row 1071). The one-step matte + cut starter the first build left open is
 not needed: the key reaches every picture (row 1073).
 
+## Review of #479 (Devin, 2026-11-23)
+
+Six findings, each real, each fixed with a test that fails without it
+(`tests/test_black_is_clear.py`):
+
+- **A channel straight into the backdrop** is made apart from the channel's
+  node (the backdrop's fader in its fit pass) and was never keyed: it is
+  keyed when the channel is, keeping its alpha over the ground.
+- **A keyed Blend or Displace lost its aux**: the aux wire is joined to the
+  effect under its `KeyNode`.
+- **A keyed node in a hands through-chain broke the window's hands mute**:
+  the mute's walk reads through a `KeyNode` as through an effect.
+- **A keyed picture painted into an effect's input was made opaque** on an
+  opaque window (`Node.paint`): a keyed node laid over another picture
+  keeps its alpha (`Node.keeps_alpha`, set by the build on keyed nodes
+  only — every other node paints as it did); the window's end makes it
+  opaque.
+- **The knobs were not on the selection**: `graphview.OWNERS` puts
+  `key.<node>.*` on the keyed node (a stray `group:key` box was drawn
+  instead), and an effect's selection shows them under its strip.
+- **Save as patch dropped the key**: a fragment carries `"keys"` (its keyed
+  members, renamed, written only when there are any) and the members'
+  `key.<node>.*` values; a spawn lands them keyed in the host. A build from
+  before refuses a patch file with `"keys"` in words, as any key it does
+  not know; both Macs run one build.
+
 ## What the pictures showed
 
 Driven offscreen (the real renderer) and in the real app

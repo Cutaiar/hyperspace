@@ -427,6 +427,12 @@ def _resize_owner(pid: str, ctx: _Ctx) -> str | None:
     return pid.rpartition(".")[0] or None
 
 
+def _key_owner(pid: str, ctx: _Ctx) -> str | None:
+    # plan 87: `key.<node>.<knob>`, black is clear's knobs, on the node keyed
+    name = pid.removeprefix("key.").rpartition(".")[0]
+    return name or None
+
+
 # a param's group → the canvas node that owns it: a node id, or a rule
 # over the param id (an instance's number, an effect's name). Plan 35 V2:
 # the ids are the wired frame's, the params keep theirs (`graph.
@@ -462,6 +468,7 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "eye": CAMERA,
     "output": _output_owner,
     "media": _media_owner,
+    "key": _key_owner,
 }
 
 
@@ -5166,6 +5173,14 @@ class Edit:
         gone = _take_out(doc, set(replacing))
         doc["nodes"] = [*doc.get("nodes", []), *copy.deepcopy(list(landing.nodes))]
         doc["wires"] = [*doc.get("wires", []), *copy.deepcopy(list(landing.wires))]
+        # plan 87: the patch's keyed members join the host's (a node it
+        # replaces is keyed as the patch says)
+        keyed = (set(doc.get(rgraph.KEYS_KEY, ())) - set(replacing)) | set(
+            getattr(landing, "keys", ()))
+        if keyed:
+            doc[rgraph.KEYS_KEY] = sorted(keyed)
+        else:
+            doc.pop(rgraph.KEYS_KEY, None)
         _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])
                              if n not in replacing])
         ends = None

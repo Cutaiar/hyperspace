@@ -3359,6 +3359,12 @@ class Node:
     # words, set in `run` by a node that has any (a delay's "last frame's ·
     # 960×600 half-float") — GRAPH's summary reads it
     said: str = ""
+    # plan 87: a keyed picture laid over another keeps its alpha when it is
+    # painted into a consumer (an effect's input, a backdrop's ground), on an
+    # opaque window too — the window's own end makes it opaque. Set by the
+    # build on a keyed node alone (`_Build._keyed`): every other node paints
+    # as it did
+    keeps_alpha: bool = False
 
     def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
         unknown = set(inputs) - set(self.INPUTS)
@@ -3431,7 +3437,8 @@ class Node:
         if tex is None:
             return
         rect = tuple(dst.viewport)
-        frame.r._show(dst, rect, rect, tex, frame.size, frame.bg_alpha >= 1.0, frame.bg_alpha)
+        opaque = frame.bg_alpha >= 1.0 and not self.keeps_alpha
+        frame.r._show(dst, rect, rect, tex, frame.size, opaque, frame.bg_alpha)
 
     def __repr__(self) -> str:
         wired = ", ".join(f"{p}={n.name if n else None}" for p, n in self.inputs.items())
@@ -6072,7 +6079,7 @@ class Effect(Node):
         if self.laid_over:
             return True
         src = self.inputs["image"]
-        while isinstance(src, Effect):
+        while isinstance(src, (Effect, KeyNode)):     # (plan 87: a keyed layer is a layer)
             src = src.inputs["image"]
         return src is not None and src.KIND == "layer"
 
@@ -7051,10 +7058,13 @@ class _Build:
         if (got is None or name not in getattr(self.wiring, "keys", ())
                 or got.OUTPUT != IMAGE or isinstance(got, KeyNode)):
             return got
-        if isinstance(got, MediaNode) and got.alpha_of is None:
+        if isinstance(got, MediaNode):
             got.keyed = name
+            got.keeps_alpha = self.laid_over(name)
             return got
-        return self._keep(KeyNode(f"{name}(key)", name, image=got))
+        key = self._keep(KeyNode(f"{name}(key)", name, image=got))
+        key.keeps_alpha = self.laid_over(name)
+        return key
 
     def _make(self, name: str) -> Node | None:
         kind = _kind(name)
@@ -7099,8 +7109,13 @@ class _Build:
             over = self._from("backdrop.scene")
             if self.back_channel:
                 # a channel straight in: the plan 32 backdrop, node for node
-                under = self._keep(MediaNode(channel_name(self.back_channel), self.back_channel,
-                                             alpha_of="backdrop_alpha"))
+                media = MediaNode(channel_name(self.back_channel), self.back_channel,
+                                  alpha_of="backdrop_alpha")
+                if channel_name(self.back_channel) in getattr(self.wiring, "keys", ()):
+                    # plan 87: keyed, its black shows the ground under it
+                    media.keyed = channel_name(self.back_channel)
+                    media.keeps_alpha = True
+                under = self._keep(media)
                 return self._keep(Composite(BACKDROP, blend="over", over=over, under=under))
             wired = self._one("backdrop.image") is not None
             return self._keep(Composite(BACKDROP, blend="over", over=over,
@@ -7233,10 +7248,14 @@ class _Build:
         chains: dict[int, tuple[Composite, set[int], set[int]]] = {}
         for i, p in enumerate(ports):
             n, mine = p["image"], set()
-            while isinstance(n, Effect):
+            # (plan 87: a keyed node's `KeyNode` is part of its chain, as an effect)
+            while isinstance(n, (Effect, KeyNode)):
                 mine.add(id(n))
                 n = n.inputs["image"]
-            if isinstance(n, Composite) and isinstance(n.inputs["over"], HandsLayer):
+            over = n.inputs["over"] if isinstance(n, Composite) else None
+            if isinstance(over, KeyNode):            # (a keyed layer is still the hands')
+                over = over.inputs["image"]
+            if isinstance(n, Composite) and isinstance(over, HandsLayer):
                 got = chains.setdefault(id(n), (n, set(), set()))
                 got[1].add(i)
                 got[2].update(mine)
@@ -7381,6 +7400,8 @@ class _Build:
             if w.port != AUX or _kind(w.node) not in ("effect", "copy"):
                 continue
             target, src = self.made.get(w.node), self._taken(self.node(w.src), w)
+            if isinstance(target, KeyNode):          # plan 87: keyed, its aux is the effect's
+                target = target.inputs["image"]
             if not isinstance(target, Effect) or target not in self.built or src is None:
                 continue
             if src is target or id(target) in _upstream(src):

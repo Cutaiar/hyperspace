@@ -118,10 +118,10 @@ def test_screen_is_appended_to_the_blends():
 
 # ---------------------------------------------------------------- the build
 
-def _built(keys, wires, nodes=()):
+def _built(keys, wires, nodes=(), effects=()):
     from hyperspace.outputs import Switches, View
     spec = G.read_graph(_section(keys, wires, nodes))
-    return G.build_graph([View(Switches(), (64, 48))], spec.wiring())
+    return G.build_graph([View(Switches(), (64, 48))], spec.wiring(), effects=effects)
 
 
 def test_a_keyed_node_is_read_through_its_key_by_every_consumer():
@@ -146,6 +146,99 @@ def test_a_keyed_channel_is_keyed_in_its_own_fit_pass():
     assert [m.keyed for m in media] == ["channel.a"]
     assert not any(isinstance(n, G.KeyNode) for n in g.order)
     assert [m.keyed for m in _built(None, wires).order if isinstance(m, G.MediaNode)] == [None]
+
+
+def test_a_channel_straight_into_the_backdrop_is_keyed_too():
+    """Review of #479: the backdrop's own channel node (made apart from the
+    channel's, the backdrop's fader in its fit pass) is keyed when the
+    channel is, and keeps its alpha over the ground."""
+    wires = (("shape", "scene.geometry"), ("scene", "backdrop.scene"),
+             ("channel.a", "backdrop.image"), ("backdrop", "output.all.image"))
+    g = _built(["channel.a"], wires, [{"kind": "backdrop"}])
+    (media,) = [n for n in g.order if isinstance(n, G.MediaNode)]
+    assert media.alpha_of == "backdrop_alpha" and media.keyed == "channel.a"
+    assert media.keeps_alpha
+    (plain,) = [n for n in _built(None, wires, [{"kind": "backdrop"}]).order
+                if isinstance(n, G.MediaNode)]
+    assert plain.keyed is None and not plain.keeps_alpha
+
+
+def test_a_keyed_effect_keeps_its_aux():
+    """Review of #479: Blend keyed still reads its aux picture."""
+    wires = (("scene", "blend.image"), ("channel.a", "blend.aux"),
+             ("blend", "output.all.image"))
+    nodes = [{"kind": "effect", "file": "blend"}]
+    for keys in (None, ["blend"]):
+        g = _built(keys, wires, nodes, effects=("blend",))
+        (blend,) = [n for n in g.order if isinstance(n, G.Effect)]
+        assert isinstance(blend.inputs[G.AUX], G.MediaNode), keys
+
+
+def test_a_keyed_chain_still_mutes_its_hands():
+    """Review of #479: a hands layer laid over the scene by a composite into
+    one output, the composite (then the layer) keyed — the output's hands
+    mute still reaches the composite, as unkeyed."""
+    from hyperspace.outputs import Switches, View
+    wires = (("hands", "hands.layer.hands"), ("shape", "scene.geometry"),
+             ("scene", "composite.under"), ("hands.layer", "composite.over"),
+             ("composite", "output.1.image"))
+    nodes = [{"kind": "composite"}, {"kind": "layer"}]
+    for keys in (None, ["composite"], ["hands.layer"], ["composite", "hands.layer"]):
+        spec = G.read_graph(_section(keys, wires, nodes))
+        g = G.build_graph([View(Switches(), (64, 48))], spec.wiring())
+        (comp,) = [n for n in g.order if isinstance(n, G.Composite)]
+        assert comp.mute_hands == (0,), keys
+
+
+def test_a_keyed_node_saved_as_a_patch_spawns_keyed():
+    """Review of #479: save as patch carries a keyed member and its knobs,
+    renamed, and a spawn lands them keyed in the host."""
+    from hyperspace.patches import Host, read, spawn
+    from hyperspace.routing import Bindings
+    doc = _section(["composite.2"], (("scene", "composite.2.under"),
+                                     ("composite.2", "output.all.image")),
+                   [{"kind": "composite", "instance": 2}])
+    spec = G.read_graph(doc)
+    values = {"key.composite.2.level": 0.25, "key.composite.2.keep": False, "view.bright": 1}
+    got, refused = patches_lift(spec, Bindings([]), values, {}, ["render:composite.2"])
+    assert refused == [] and got["keys"] == ["composite"]
+    assert got["values"] == {"key.composite.keep": False, "key.composite.level": 0.25}
+    assert read(got).keys == ("composite",)
+    landing = spawn(got, Host(names=frozenset({"composite", "scene"})))
+    assert landing.keys == ("composite.2",)
+    assert landing.values == {"key.composite.2.keep": False, "key.composite.2.level": 0.25}
+    plain, _ = patches_lift(G.read_graph(_section(None, (("scene", "composite.2.under"),),
+                                                  [{"kind": "composite", "instance": 2}])),
+                            Bindings([]), {}, {}, ["render:composite.2"])
+    assert "keys" not in plain and read(plain).keys == ()
+
+
+def patches_lift(*a):
+    from hyperspace import patches
+    return patches.lift(*a)
+
+
+def test_the_selection_shows_a_keyed_nodes_knobs(tmp_path):
+    """Review of #479: a keyed scene's and a keyed effect's knobs are on
+    their own canvas nodes (`graphview.OWNERS`), and no node of their own
+    appears for them."""
+    from test_ui_shell import build_rig, frame
+
+    from hyperspace import ui_graph
+
+    with build_rig(tmp_path) as r:
+        panel = r.panel
+        panel.library.loaded_patch.new((0.0, 0.0))
+        e = ui_graph.render_edit(panel)
+        assert e.insert_effect(("scene", "output.all.image"), "fade") is None
+        assert e.set_key("scene", True) is None and e.set_key("fade", True) is None
+        for _ in range(2):
+            frame(panel, "graph")
+        view = ui_graph._state(panel)["view"]
+        for node in ("scene", "fade"):
+            ports = {p.param for p in view.node(f"render:{node}").ports if p.param}
+            assert set(key_ids(node)) <= ports, node
+        assert not any(n.id == "group:key" for n in view.nodes)
 
 
 # ---------------------------------------------------------------- the patch
@@ -500,3 +593,35 @@ def test_a_screen_lay_is_premultiplied_screen(ctx):
     added = _lay(ctx, "add", under, over, True)
     assert added[1, 2] == 255 and _lay(ctx, "screen", under, over, True)[1, 2] == 255
     assert _lay(ctx, "screen", under, over, True)[1, 0] < added[1, 0]
+
+
+def test_a_keyed_picture_keeps_its_alpha_through_an_effect(ctx):
+    """Review of #479: a keyed Test card through Fade (level 1, which keeps
+    alpha) laid over a red channel on an opaque window: the channel shows
+    where the card is black — the key is not made opaque when the card is
+    painted into Fade's input."""
+    from test_media_render import _draw, _rgba
+
+    from hyperspace.graphmigrate import wired_wiring
+    r = _renderer(ctx, _media(a=Still(_rgba(16, 9))))
+    r.media.channels["a"].fit = 2
+    for f in ("testcard", "fade"):
+        r.fx.state.values[f].update(on=True, mix=1.0)
+    assert not r.fx.compile_all()
+    nodes = [{"kind": "composite"}, {"kind": "effect", "file": "testcard"},
+             {"kind": "effect", "file": "fade"}]
+    wires = (("channel.a", "composite.under"), ("channel.a", "testcard.image"),
+             ("testcard", "fade.image"), ("fade", "composite.over"),
+             ("composite", "output.all.image"))
+
+    def red(keys):
+        r.wiring = wired_wiring(G.read_graph(_section(keys, wires, nodes)).wiring())
+        # (level 0.2: the card's dark-grey ground, ~0.08, all clear)
+        s = view.ViewState(lines=False, points=False, faces=False,
+                           keys={"testcard": view.KeyState(level=0.2)})
+        (pic,) = _draw(ctx, r, s, size=(96, 64), frames=2)
+        return ((pic[..., 0] > 200) & (pic[..., 1] < 60) & (pic[..., 2] < 60)).mean()
+
+    assert red(None) < 0.05                       # the card covers the channel
+    assert red(["testcard"]) > 0.3                # keyed: the channel shows through
+
