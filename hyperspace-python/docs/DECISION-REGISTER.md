@@ -913,6 +913,10 @@ here; overturn → the change, then the same.
 | 1015 | Plan 81: the dive rate is **Dive**, the first slider of the FRACTAL section (`ui_fractal.spec`, `SLIDERS`; the section merged from #466 while plan 81 was built), above Detail; nothing duplicates the section's Detail, Reach, Near or To the top | 810 | (rec) |
 | 1016 | Plan 81: a restart after pulling — new fields on live objects (`ViewState.frac_dive`, `Dive.seen`, `Dive.settled`), a new param, and `ViewState.reroot` / `app._reroot` take the frame's seconds. After it `fractal.py` hot-reloads as before; `SETTLE_ON` and `SETTLE` take effect on a reload | — | (rec) — REVIEW.md, "Every frame, and hot reload" |
 | 1017 | Plan 81: `tools/fractal_dive_demo.py` renders a fractal dive offscreen with a cross at the middle and how much of the screen is drawn on (an 8 × 8 grid of tiles): `--mode zoom` (camera.zoom grown, runs on `main` for a before) or `--mode rate` (the dive rate, either settle). The before/after pair and the alternative are in `plans/assets/81-fractal-dive/`. The settle's cost a frame is new: hand check 815 times it on the rig | 812, 815 | (rec) |
+| 1050 | Plan 85: the show look in code is on, BONES, PLAIN, 50% (`ghost.SHOW_LOOK`; #459 had BONES in GLASS at 35%, the 2026-11-15 look). The app sets the on-air renderer's hands state to it at startup, deck 2's sibling gets one, and every extra hands node's state starts from it (`GraphSection.land`), so New patch carries it. `GhostState()` stays the neutral draw (off, HANDS, PLAIN, 60%) the ghost and render tests and the goldens measure | 850 | owner — 2026-11-18 |
+| 1051 | Plan 85: `tools/set_hands_look.py` sets the library's patches to the show look: every loadable patch under `loadable/` and `presets/`, every folder down (the era folders), as `migrate_library.loadable_files` lists them; `ghost.*` and each extra hands node's `ghost.<n>.*` `on`, `alpha`, `style`, `material` set, `guide`, `tethers`, the room's `mirror`, routes and desk rows untouched. A dry run by default; `--apply` refuses while the app is open on this Mac, backs the whole library up to `<home>/library-backup-<stamp>/` first, and writes atomically in the app's layout (`loadable.dumps`). A file that is no loadable patch or does not load is named and left | 851 | owner — 2026-11-23: accepted as built |
+| 1052 | Plan 85: a hands layer that reaches no output (`graph.reaches`) gets the standard wires, each only where missing: `hands → hands.layer.hands`, `hands.layer → output.all.hands`, `hands.layer → output.all.guide` (as #459's 2026-11-15 run did for 20 presets). A layer that reaches an output any other way is left as wired. Each changed patch is loaded again from what would be written; one whose load notes change is named and not written | 851, 852 | owner — 2026-11-23: accepted as built |
+| 1053 | Plan 85: the test corpus (`tests/corpus/loadable`) is not set to the show look: it keeps the neutral hands, so no golden frame moves; the tool is never run on it but on tmp copies in its tests. The golden rig holds an extra hands node a fixture sets no values for (`hands-glass-only`'s `ghost.2`) at `GhostState()`'s look, as it already holds its `on` | — | owner — 2026-11-23: accepted as built |
 | 1030 | Plan 83: **save as** sits on GRAPH's deck row beside **load…** and presses `preset.save_new`, the one action START held on a pad and a learned button press: the deck the panel is on, saved as a new loadable patch named from the loaded one (moo → moo 2) in that patch's folder, never over a file. No new param: the chip's right-click is that param's menu, so Learn puts the same press on a desk or pad button | 830, 831, 832 | owner (2026-11-23, as recommended) |
 | 1031 | Plan 83: the chip's save takes the next empty pad, as `preset.save_new` always has (a full bank saves to the list and says so); a save from the panel that left the pads alone would be a second action with the same words | 830 | owner (2026-11-23, as recommended) |
 | 1032 | Plan 83: with nothing loaded, save as writes at the library's top level, named `PATCH <n>` as the pad's hold names | 833 | owner (2026-11-23, as recommended) |
@@ -15393,6 +15397,33 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** (rec).
 - **Built.** `tools/fractal_dive_demo.py`, `plans/assets/81-fractal-dive/`.
 - **Judge it.** Hand checks 812, 815.
+### 1050. The show look in code: BONES, PLAIN, 50%
+
+- **What.** The owner changed the show's ghost hands on 2026-11-18: on, BONES style, PLAIN material, 50% opacity. `ghost.SHOW_LOOK` holds it and `ghost.show_look(state)` applies it. The app applies it to the on-air renderer's hands at startup, to deck 2's sibling, and to every extra hands node's fresh state, so a new patch's values and **New patch** carry it. `GhostState()` keeps its neutral defaults: changing them broke 14 ghost and render tests in #459 and would move the goldens.
+- **Answer.** owner — 2026-11-18 (supersedes #459's GLASS at 35%, 2026-11-15).
+- **Built.** `ghost.SHOW_LOOK`, `ghost.show_look`; `app.main` (two calls), `loadable.GraphSection.land`; `tests/test_ghost.py::test_the_show_look_is_bones_in_plain_on_at_50_and_the_bare_state_stays_neutral`.
+- **Judge it.** 850.
+
+### 1051. A tool sets the library's patches to the show look
+
+- **What.** A patch's hands look is the patch's values (plan 44 D3), so changing the code default changes no saved patch. `tools/set_hands_look.py` walks the library's loadable patches every folder down, sets each hands node's `on`, `alpha`, `style` and `material` to `SHOW_LOOK`, and leaves everything else. A dry run by default; `--apply` backs up the whole library first (`migrate_library.backup`) and refuses while the app is open on this Mac. A second run finds nothing to do.
+- **Answer.** owner — 2026-11-23: accepted as built (the recommendation).
+- **Built.** `tools/set_hands_look.py`; `tests/test_set_hands_look.py`.
+- **Judge it.** 851.
+
+### 1052. An unwired hands layer gets the standard wires
+
+- **What.** The 2026-11-15 run found 20 presets whose hands layer reached no output, so the look did nothing there; it wired them by hand. The tool does the same: a layer outside `graph.reaches` gets `hands → hands.layer.hands`, `hands.layer → output.all.hands` and `hands.layer → output.all.guide`, each only where missing. A layer reaching an output another way is left as it is. Each patch is loaded again from what would be written; one whose load notes change is not written.
+- **Answer.** owner — 2026-11-23: accepted as built (the recommendation).
+- **Built.** `set_hands_look.wire_layer`, `set_hands_look.plan`.
+- **Judge it.** 851, 852.
+
+### 1053. The test corpus keeps the neutral hands
+
+- **What.** The corpus is what the goldens draw. Setting it to the show look would turn the hands on in every corpus golden, and only the M3 Max can re-record those. So the corpus keeps the neutral look and the tool is tested on tmp copies.
+- **Answer.** owner — 2026-11-23: accepted as built (the recommendation).
+- **Built.** Nothing in the corpus; `tests/test_set_hands_look.py` copies it. `tools/golden_frames.py`: the rig sets an extra hands node's `alpha`, `style` and `material` to `GhostState()`'s where the file sets none, so `hands-glass-only` draws its second node as it was recorded.
+- **Judge it.** No hand check.
 ### 1030. Save as beside load…, one action
 
 - **What.** Plan 83: **save as** sits on GRAPH's deck row beside **load…** and presses `preset.save_new`, the one action START held on a pad and a learned button press: the deck the panel is on, saved as a new loadable patch named from the loaded one (moo → moo 2) in that patch's folder, never over a file. No new param: the chip's right-click is that param's menu, so Learn puts the same press on a desk or pad button.

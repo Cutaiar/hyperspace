@@ -2116,6 +2116,7 @@ def main(argv: list[str] | None = None) -> None:
     glfw.swap_interval(0)
     ctx = moderngl.create_context()
     renderer = Renderer(ctx)
+    ghosts.show_look(renderer.ghost.state)   # the show's ghost hands, before a registry reads them
     # the world objects (plan 59): one world, the renderers' (deck 2's is a sibling)
     world = worlds.World.default()
     renderer.world = world
@@ -2339,7 +2340,7 @@ def main(argv: list[str] | None = None) -> None:
     # controller, no page, no undo, no file. Built now, not on a fade's first
     # frame: compiling its shaders then would stall the room (rec, row 648)
     glfw.make_context_current(root_win)
-    renderer2 = renderer.sibling()
+    renderer2 = renderer.sibling(ghost=ghosts.show_look())
     glfw.make_context_current(ctrl_win)
     renderer2.segment_cfg = renderer.segment_cfg
     # the meta controller's wires, on both (plan 44 D5c): either deck can be on air

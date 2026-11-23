@@ -8889,6 +8889,15 @@ Setup for all: VIEW → shape **Menger sponge** (3D → Fractals); **Dive** is t
 **814. Saved with a dive rate.** **Dive** at +0.5 deep in, save the look, load another, load it again. *Pass:* it opens in the same cell (row 889) and goes on diving at once at +0.5. A look saved before plan 81 opens with **Dive** at 0, and a look that is not a fractal saves no dive at all (its file unchanged). *Fail:* the rate lost, or a dive that does not start.
 
 **815. The settle's cost on the rig.** The SYSTEM page's frame time, diving at +2 into the **Sierpinski 5-cell**, the **Cantor dust** and the sponge, faces off, at the show's output size, against the same fractal held still. *Pass:* the frame rate holds; note any spike at a level (a re-root searches the cells; a cloud machine put the worst frame at about 4 ms). *Fail:* a dropped frame at each level.
+## FF. The hands' show look (rows 1050–1053, 2026-11-22)
+
+Plan 85. Headless: `tests/test_ghost.py` (the look's values, the bare state neutral) and `tests/test_set_hands_look.py` (the dry run, the backup, the writes, the wires, the load notes, a second run, the app-open refusal), on tmp copies of corpus patches. Nothing here was seen on the Mac. A restart after pulling.
+
+**850. A new patch's hands.** (Mac, the tracker on) Launch, then **New patch**. *Pass:* both hands show as BONES, PLAIN, at half opacity; HANDS shows Ghost hands on, opacity 50%, style BONES, material PLAIN. Add a second hands node on GRAPH: its hands show the same. *Fail:* hands off, GLASS, or 35% / 60%.
+
+**851. The library run.** (Mac, Hyperspace closed on both Macs) `uv run python tools/set_hands_look.py`, then `uv run python tools/set_hands_look.py --apply`. *Pass:* the dry run lists every patch in every era folder and writes nothing; `--apply` prints a backup path first, and that folder holds the whole library; a second dry run says every patch is already the show look; Drive syncs the files to the other Mac. Note every "left:" line: an answer for the owner. *Fail:* a patch missing from the list, a write with no backup, or a second run with something to do.
+
+**852. A patch whose hands were unwired.** (Mac, after 851) Load a patch the run said it wired. *Pass:* the hands show on the outputs and the guide over them; GRAPH shows the hands layer lit, wired into All outputs' hands and guide; the rest of the patch looks as before. *Fail:* no hands, or a wire you don't expect.
 ## FD. Save and load live (rows 1030–1035, 2026-11-22)
 
 Plan 83. Headless: `tests/test_save_live.py` (driven by the mouse: one click saves a new file in the loaded patch's folder that loads back equal, a second never overwrites, the name on the chip; a 40-entry playlist inside the screen, scrolled by the wheel, its row on air in view, its rows a trackpad's size). Nothing here was seen on the Mac. Hot reload is enough: no new field on a live object.
