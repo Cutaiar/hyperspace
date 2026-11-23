@@ -1054,6 +1054,7 @@ class Panel:
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
         self.media = None     # set by app.py (app.MediaIO): the MEDIA page's folder and channels
         self.canvas_tap = None   # set by app.py (outputs.CanvasTap): the GRAPH canvas as `panel:graph`
+        self.publish_home: Any = None   # set by app.py: where MEDIA ▸ Live's NDI out choice is kept
         self.canvas_px = None    # GRAPH's canvas this frame (ui_graph.page), else None
         self.dialog_error = ""   # why the file dialog would not open (`open_file_dialog`)
         self.router = None    # set by app.py (routing.Router); else found via midi's table

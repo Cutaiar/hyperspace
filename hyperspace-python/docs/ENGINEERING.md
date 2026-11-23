@@ -1719,6 +1719,18 @@ as built.
   on a later output makes it publish-only (no window). Output 1 always
   has a window. One SYSTEM line per publisher: `ndi out <name> — 60 fps,
   readback 4.0 ms`, in the warning colour with the error on a failure.
+- **One Mac's output in the other's graph** (2026-11-22), from the panel,
+  no config edit, no restart. On the sending Mac: MEDIA ▸ Live ▸ **Send
+  output 1** — an NDI sender named `<this Mac> out 1` opens on the next
+  frame (`publish.ask_ndi` → `take_ask` in `app._draw_render`); the choice
+  is this Mac's own, in `<home>/publish.here.json`, and stands over
+  config.toml's `ndi` at the next launch. A publish-only output keeps
+  config.toml's word. On the receiving Mac: MEDIA ▸ Live ▸ **Find NDI** —
+  puts a `kind = "ndi"` entry in the device list both Macs share (once),
+  on for this Mac; `ndi:<other Mac> out 1` lists within a second or two.
+  Pick it, click a channel's bin cell, and the channel's node on GRAPH is
+  the other Mac's picture — wire it like any media. Both Macs on one
+  wired router: ~100 Mb/s at 1080p.
 - **The GRAPH canvas as a source** (2026-11-02). The MEDIA page's Live
   tab lists `panel:graph` without a `[[devices]]` entry: the node
   editor's view — output 1 behind it, the faded ground, the grid, the

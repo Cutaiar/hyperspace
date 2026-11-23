@@ -57,7 +57,7 @@ from imgui_bundle import imgui
 
 from . import ui, undo
 from .graph import source_into, wire_node_kind
-from .media import pool
+from .media import pool, publish
 from .media.adapters import VIDEO_EXT
 from .media.channels import BIN, CHANNELS, EMPTY
 from .media.live import HOLD_S
@@ -285,6 +285,83 @@ def _library(panel, st: dict, rows_shown: int = LIST_ROWS) -> None:
                 _row(panel, st, rows[k])
         clip.end()
     imgui.end_child()
+    if st["tab"] == 2:
+        _ndi_row(panel, st)
+
+
+# ---- NDI both ways (2026-11-22): the other Mac's picture as a live feed ----
+
+NDI_ENTRY = {"role": "ndi", "kind": "ndi", "enabled": True}
+
+
+def _ndi_role(panel) -> str | None:
+    """The role of the device list's NDI entry, None with none."""
+    store = getattr(getattr(panel, "devices", None), "store", None)
+    for e in getattr(store, "raw", ()) or ():
+        if e.get("kind") == "ndi":
+            return str(e.get("role", ""))
+    return None
+
+
+def ndi_listening(panel) -> bool:
+    """Does this Mac look for NDI senders (an `ndi` entry, on here)?"""
+    role = _ndi_role(panel)
+    store = getattr(getattr(panel, "devices", None), "store", None)
+    return role is not None and store is not None and store.is_on(role)
+
+
+def listen_ndi(panel, on: bool) -> str:
+    """Look for NDI senders on this Mac, or stop: the shared device list
+    gets an `ndi` entry the first time (both Macs then have it), and it is
+    turned on or off here alone. What to say."""
+    regs = getattr(panel, "devices", None)
+    store = getattr(regs, "store", None)
+    if regs is None or store is None:
+        return "no device list"
+    role = _ndi_role(panel)
+    if role is None:
+        if not on:
+            return ""
+        role = store.adopt(dict(NDI_ENTRY))
+    store.set_here(role, on)
+    regs.relist()
+    return ("looking for NDI senders — they list here as ndi:<name>" if on
+            else "stopped looking for NDI senders")
+
+
+def send_ndi(panel, slot, on: bool) -> str:
+    """`slot`'s picture over NDI, or not (the next frame makes it so); what to say."""
+    name = publish.ask_ndi(slot, on, getattr(panel, "publish_home", None),
+                           getattr(panel, "outputs", None))
+    return (f"output {slot.n} sending over NDI as \"{name}\"" if name
+            else f"output {slot.n} not sent over NDI")
+
+
+def _ndi_row(panel, st: dict) -> None:
+    """Under the Live list: Find NDI (this Mac lists the other's senders)
+    and Send output N (this Mac's outputs as NDI senders)."""
+    on = ndi_listening(panel)
+    if ui.lit_chip("Find NDI##media.ndi.find", on):
+        st["said"] = listen_ndi(panel, not on)
+    if imgui.is_item_hovered():
+        ui.tooltip("Look for NDI senders on the network — the other Mac's outputs, "
+                   "Resolume, TouchDesigner. Each lists above as ndi:<name>: pick it, "
+                   "then click a bin cell. The entry goes in the device list both Macs "
+                   "share; on and off is this Mac's.")
+    for sl in getattr(panel, "outputs", None) or ():
+        if not publish.can_ask(sl):
+            continue
+        name = publish.ndi_of(sl)
+        imgui.same_line()
+        if ui.lit_chip(f"Send output {sl.n}##media.ndi.send{sl.n}", bool(name)):
+            st["said"] = send_ndi(panel, sl, not name)
+        if imgui.is_item_hovered():
+            pub = next((p for p in sl.publishers if p.kind == "ndi"), None)
+            ui.tooltip((f"Sending as \"{name}\" — the other Mac finds it as ndi:{name}\n"
+                        + (publish.line(pub) if pub is not None else "starting…"))
+                       if name else
+                       f"Send output {sl.n} over NDI as \"{publish.default_ndi_name(sl.n)}\", "
+                       "for the other Mac (Find NDI there). This Mac remembers it.")
 
 
 def _fit_note(title: str, text: str) -> str:
@@ -300,7 +377,8 @@ def _empty_words(panel, tab: int) -> str:
     if _state(panel)["search"]:
         return "nothing matches"
     if tab == 2:
-        return "no live feeds — Syphon, NDI and cameras in the device list show here"
+        return ("no live feeds — Find NDI below for the other Mac's; Syphon and cameras "
+                "in the device list show here")
     if folder_of(panel) is None:
         return "no media folder"
     if tab == 0 and getattr(folder_of(panel), "shared", None) is None:

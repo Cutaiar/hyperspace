@@ -268,6 +268,7 @@ class Slot:
     window: bool = True
     syphon: str = ""
     ndi: str = ""
+    ndi_asked: str | None = None    # the panel's ask, taken by the next frame (publish.take_ask)
     publishers: list = field(default_factory=list)
     offscreen: Any = None
     tap: Any = None
