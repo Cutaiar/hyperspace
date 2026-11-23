@@ -127,8 +127,9 @@ def look(doc: dict) -> tuple[dict, list[str]]:
     out = copy.deepcopy(doc)
     values = out.get("values")
     if not isinstance(values, dict):
-        # (the app reads a missing or null `values` as none: `LoadedPatch.load_doc`)
-        values = out["values"] = {}
+        # (as `LoadedPatch.load_doc` reads it: missing or null is none, pairs a map;
+        # anything else raises, and `plan` names the file and leaves it)
+        values = out["values"] = dict(values or {})
     moved = []
     for pre in hands_prefixes(out.get("graph")):
         for k, v in ghost.SHOW_LOOK.items():

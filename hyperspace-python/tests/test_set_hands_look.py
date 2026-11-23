@@ -222,3 +222,14 @@ def test_an_older_whole_patch_is_named_for_the_migration_and_left(tmp_path):
     c = t.plan(path, lib, set(FxState().files), tmp_path / "scratch")
     assert not c.changed and "older schema" in c.skipped and "migrate_library" in c.skipped
     assert path.read_bytes() == src.read_bytes()
+
+
+def test_values_as_pairs_keep_every_value():
+    """Review of #459: the app reads `values` given as pairs as a map; so does
+    the tool, and no other value is lost."""
+    t = _tool()
+    doc = _doc("dial")
+    doc["values"] = [["view.shape", 3], ["ghost.on", False]]
+    out, moved = t.look(doc)
+    assert out["values"]["view.shape"] == 3 and out["values"]["ghost.on"] is True
+    assert len(moved) == 4
