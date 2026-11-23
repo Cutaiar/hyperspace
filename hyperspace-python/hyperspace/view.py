@@ -172,6 +172,11 @@ class ViewState:
     frac_detail: float = 1.0
     frac_far: float = 0.0
     frac_near: float = 0.0
+    # plan 81: a fractal's dive, in levels a second (× 1 / ratio each), signed:
+    # a velocity on the zoom, integrated by `fractal.step`, so a route on it
+    # dives without end and a negative one climbs back out to the whole shape.
+    # The look's own: saved and routable (`view.frac_dive`)
+    frac_dive: float = 0.0
     playing: bool = True
     planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)
@@ -305,14 +310,16 @@ class ViewState:
             if self.planes[p]:
                 self.ang[p] += dt * self.speed * RATE[p] * self.rate[p]
 
-    def reroot(self, reg=None, off=None) -> None:
+    def reroot(self, reg=None, off=None, dt: float = 0.0) -> None:
         """A self-similar shape's view, re-rooted once the zoom has gone a
         level in or out (`fractal.step`): the same picture, at a zoom that
-        never runs out. Once a frame, after `integrate`; `reg` takes the move
+        never runs out, zoomed and turned about the middle of the screen
+        (plan 81). Once a frame, after `integrate`; `reg` takes the move
         onto the camera params' bases; `off`, the offset drawn after the
-        shape (`shapeframe.drawn_offset`), read for the cell under the eye.
+        shape (`shapeframe.drawn_offset`), read for the cell under the eye;
+        `dt`, the frame's seconds, for the dive rate (`frac_dive`).
         Nothing for any other shape."""
-        fractal.step(self, reg, off)
+        fractal.step(self, reg, off, dt)
 
     def pose(self) -> list[float]:
         """The spin's pose as six plane angles, each in (−π, π] — what a

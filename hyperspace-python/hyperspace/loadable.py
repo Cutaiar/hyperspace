@@ -255,13 +255,15 @@ POSE_KEY = "pose"
 # schema of its own (node mode's precedent, #377)
 DIVE_KEY = "dive"
 # plan 64 (row 902): a fractal's own settings — the FRACTAL section's Detail,
-# Reach and Near (`view.frac_detail`, `view.frac_far`, `view.frac_near`),
-# `{"detail", "far", "near"}`. Optional: written only while the look's shape
-# is a fractal, so every other look saves byte for byte as before; a load with
-# none sets the fractal's own (1, 0, 0)
+# Reach and Near (`view.frac_detail`, `view.frac_far`, `view.frac_near`), and
+# plan 81's Dive (`view.frac_dive`, row 1011), `{"detail", "far", "near",
+# "dive"}`. Optional: written only while the look's shape is a fractal, so
+# every other look saves byte for byte as before; a load with none — or a key
+# from before plan 81, with no "dive" — sets the fractal's own (1, 0, 0, 0)
 FRACTAL_KEY = "fractal"
-FRACTAL_IDS = {"detail": "view.frac_detail", "far": "view.frac_far", "near": "view.frac_near"}
-FRACTAL_OWN = {"detail": 1.0, "far": 0.0, "near": 0.0}
+FRACTAL_IDS = {"detail": "view.frac_detail", "far": "view.frac_far", "near": "view.frac_near",
+               "dive": "view.frac_dive"}
+FRACTAL_OWN = {"detail": 1.0, "far": 0.0, "near": 0.0, "dive": 0.0}
 FRACTAL_PIDS = frozenset(FRACTAL_IDS.values())
 # what a load says of a pose it could not read (six numbers, by `POSE_IDS`)
 POSE_UNREAD = "pose: not six numbers, ignored — the turn is left spinning"
