@@ -427,9 +427,21 @@ class NodeDesk:
                                fit.over + cycles.over)
         elif node is not None:
             freedoms = freedoms_of(self._profile(role))
-            params = nodemode.fillable(deck.reg, self.params_of(node))
+            ids = self.params_of(node)
+            drops = nodemode.dropdowns(deck.reg, ids)
+            # the continuous params fill as they did before dropdowns did, so a saved map
+            # never moves: a patch-layer row on a dropdown reserves no knob from them
+            # (plan 86, review of #468). The dropdowns then take what is left, where a
+            # knob that still holds a dropdown's own row stays that row's
+            params = [p for p in nodemode.fillable(deck.reg, ids) if p not in drops]
             wanted = set(params)
             fit = nodemode.fill(params, self._free(role, wanted, freedoms), self._kept(wanted))
+            used = {src for slot in fit.slots for src in slot.sources}
+            left = [f for f in self._free(role, wanted | set(drops), freedoms)
+                    if not used.intersection(f)]
+            cycles = nodemode.fill(drops, left, self._kept(set(drops)))
+            fit = nodemode.Fit(fit.slots + cycles.slots, fit.kept + cycles.kept,
+                               fit.over + cycles.over)
             rows = self._rows_of(role, fit, now.rows)
         if [(b.source, b.target) for b in rows] != [(b.source, b.target) for b in now.rows]:
             now.serial += 1

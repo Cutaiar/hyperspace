@@ -174,6 +174,39 @@ def test_a_node_whose_continuous_params_fill_the_desk_leaves_its_dropdown_over(r
     rig.one.loaded_patch.leave_node_mode(1, "midi")
 
 
+def test_a_saved_row_on_a_dropdown_moves_no_continuous_param_off_its_knob(rig):
+    """Review of #468: a patch-layer row on K1 aimed at the node's dropdown reserved K1
+    once dropdowns filled, and moved every continuous param a knob along. They fill as
+    before dropdowns did (the row on K1 under node mode, as any patch-layer row there);
+    a dropdown that has a row keeps out of the fill."""
+    node, params = pick_node(rig.one, 2)
+    enum = _dropdown(rig.one)
+    make_small(rig.one, params[0], params[1], enum)
+    saved = Binding(f"cc:0:{K1}", enum, "abs", layer="preset")
+    rig.one.table.bindings.append(saved)
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert [(b.source, b.target) for b in rig.nd1.rows()] == [(f"cc:0:{K1}", params[0]),
+                                                              (f"cc:0:{K2}", params[1])]
+    assert rig.nd1._follow(DESK).fit.kept == (enum,)
+    rig.one.loaded_patch.leave_node_mode(1, "midi")
+
+
+def test_a_knob_left_free_that_holds_a_dropdowns_row_stays_that_rows(rig, monkeypatch):
+    """With a knob to spare, another dropdown does not take the one a saved row holds."""
+    node, params = pick_node(rig.one, 1)
+    rows = {b.target for b in rig.one.table.bindings}
+    enums = [p.id for p in rig.one.reg if p.kind is nodemode.Kind.ENUM and p.id not in rows
+             and nodemode.dropdowns(rig.one.reg, [p.id]) == [p.id]][:2]
+    make_small(rig.one, params[0], *enums)
+    monkeypatch.setattr(apc40, "degrees_of_freedom",
+                        lambda: [(f"cc:0:{K1}",), (f"cc:0:{K2}",), (f"cc:0:{K3}",)])
+    rig.one.table.bindings.append(Binding(f"cc:0:{K2}", enums[0], "abs", layer="preset"))
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert [(b.source, b.target) for b in rig.nd1.rows()] == [(f"cc:0:{K1}", params[0]),
+                                                              (f"cc:0:{K3}", enums[1])]
+    rig.one.loaded_patch.leave_node_mode(1, "midi")
+
+
 def test_a_row_shadowed_comes_back_and_a_control_not_filled_keeps_its_row(rig):
     node, params = pick_node(rig.one)
     make_small(rig.one, *params[:2])
