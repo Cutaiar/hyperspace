@@ -217,3 +217,32 @@ def test_an_old_layout_home_is_refused_and_left_alone(tmp_path):
         ml.main([str(dest), "--from", str(home)])
     assert snapshot(home) == before
     assert list((dest / "loadable").iterdir()) == []
+
+
+def test_shows_and_a_hidden_presets_cache_are_no_old_layout(tmp_path):
+    """Review of #480: only loadable patches in ``presets/`` stop the copy — a ``projects/``
+    show is read from either folder, and a hidden cache or a backup is no patch."""
+    home = a_home(tmp_path)
+    (home / "projects").mkdir()
+    (home / "projects" / "party.hyp.json").write_text('{"name": "party"}')
+    (home / "presets" / ".cache").mkdir(parents=True)
+    (home / "presets" / ".cache" / "entry.json").write_text("{}")
+    (home / "presets" / "x.json.bak-v2").write_text("{}")
+    dest = tmp_path / "shared"
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    assert (dest / "projects" / "party.hyp.json").is_file()
+    assert (dest / "loadable" / "hi-frek.json").is_file()
+
+
+def test_backups_of_the_home_are_never_copied(tmp_path):
+    """Review of #480: migrate_library.py's ``library-backup-<stamp>/`` holds the home's
+    machine files (bindings.json, windows.json) — never copied into the shared folder."""
+    home = a_home(tmp_path)
+    for b in ("library-backup-20261123-120000", "presets-backup-1"):
+        (home / b / "loadable").mkdir(parents=True)
+        (home / b / "bindings.json").write_text("{}")
+        (home / b / "loadable" / "old.json").write_text("{}")
+    dest = tmp_path / "shared"
+    assert ml.main([str(dest), "--from", str(home)]) == 0
+    assert not [p for p in dest.iterdir() if "backup" in p.name]
+    assert (home / "library-backup-20261123-120000" / "bindings.json").is_file()

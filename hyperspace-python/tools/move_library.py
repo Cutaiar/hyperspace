@@ -39,6 +39,9 @@ SKIP_DIRS = {"weights", "trash", "bindings", "media", "media-cache"}
 DEEP_DIRS = ("loadable", "presets", "patches")
 # where `clear` puts what was copied: HOME/old-local-library-<YYYYMMDD-HHMMSS>/
 ARCHIVE = "old-local-library-"
+# folders of copies, never the library: `clear`'s archive, migrate_library.py's backup of
+# the whole home (machine files among them, review of #480) and a hand-made presets backup
+SKIP_PREFIXES = (ARCHIVE, "library-backup-", "presets-backup-")
 
 
 def _library():
@@ -69,8 +72,7 @@ def files(root: Path) -> list[Path]:
     if not root.is_dir():
         return out
     for folder in sorted(p for p in root.iterdir() if p.is_dir()):
-        if (folder.name in SKIP_DIRS or folder.name.startswith(".")
-                or folder.name.startswith(ARCHIVE)):
+        if folder.name in SKIP_DIRS or folder.name.startswith((".", *SKIP_PREFIXES)):
             continue
         # every folder down where the app reads every folder down: the loadable patches
         # (plan 48) and the patches, whose groups' are in ``patches/<group>/`` (plan 50)
@@ -90,12 +92,14 @@ def move(dest: Path, home: Path, *, dry_run: bool = False,
         raise SystemExit(f"move_library: {home} is not a folder")
     if dest.resolve() == home.resolve():
         raise SystemExit("move_library: DEST is HOME — nothing to move")
-    # a home in the old layout (`presets/`, `projects/`): copied as it is, its presets would
-    # sit in a folder a moved library never reads (`library.loadable_dir`) — so the one
-    # migration goes first (review of #480)
-    old = _library().not_moved(home)
+    # loadable patches still in the old `presets/`: copied as they are, they would sit in a
+    # folder a library with `loadable/` never reads (`library.loadable_dir`) — so the one
+    # migration goes first (review of #480). Counted as `files` copies them (hidden folders,
+    # backups and dot-files are not patches); `projects/` shows need no such step, being
+    # read from either folder (`library.install_files`)
+    old = [rel for rel in files(home) if rel.parts[0] == "presets"]
     if old:
-        raise SystemExit(f"move_library: {home} still has files in {' and '.join(old)} (the "
+        raise SystemExit(f"move_library: {home} still has loadable patches in presets/ (the "
                          "old layout): quit Hyperspace, run tools/migrate_library.py --library "
                          f'"{home}" --apply, then run this again. Nothing was copied')
     done: list[tuple[str, Path]] = []
