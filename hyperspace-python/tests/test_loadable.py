@@ -608,6 +608,8 @@ def test_a_loadable_round_trips(rig):
     # every performance base, the media family's too — and no retired id
     # (plan 33 T7: the wires say them; row 394: nothing writes them back)
     snap = rig.reg.snapshot(part="patch")
+    # (plan 64, row 902: but a fractal's settings, which are its `fractal` key's)
+    snap = {k: v for k, v in snap.items() if k not in loadable.FRACTAL_PIDS}
     assert doc["values"] == snap
     from hyperspace.graphmigrate import retired
     assert not [k for k in doc["values"] if retired(k)]
