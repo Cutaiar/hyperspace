@@ -80,6 +80,16 @@ a `band.*` value is put back only when the tag is the same as when the
 state was taken — a strip's values never land on another band. A load
 step carries the layout in its marks and puts it back first.
 
+**A move written another way** (plan 81 follow-up, row 1018): a fractal's dive
+writes camera.zoom's and camera.pan's bases every frame it runs
+(`Param.follow`: a re-root, the dive rate, the settle) — the same picture, not
+an edit. The watcher reads a base less what `follow` moved it (`_drift`), so
+a running dive makes no step and keeps none open: two edits a second apart
+are two steps. A restore puts back what the user set and keeps the follows
+made since, so an undo never yanks the dive back to where it stood. A step
+also holds what lives beside the camera (`beside`: the dive's framing,
+`Dive.frame`), put back only when a restore writes the camera.
+
 The modulator banks (plan 31 B: the LFOs) are not that: adding or
 removing an LFO is a step, pushed by the panel's chip like a modifier's.
 Each state holds every bank's ids beside the modifiers, and a restore
@@ -164,6 +174,46 @@ def alike(a, b) -> bool:
     return _same(a, b)
 
 
+def _drift(p) -> float:
+    """How far `Param.follow` has moved `p`'s base, normalized (0: never;
+    `getattr`: a param from before a hot reload, or a stand-in)."""
+    return getattr(p, "_drift", 0.0)
+
+
+def _base_of(p):
+    """A base as the fingerprint reads it: the base, with what `follow` moved
+    it beside it when it has (`_same_own` compares the two forms)."""
+    d = getattr(p, "_drift", 0.0)
+    return (p.base, d) if d else p.base
+
+
+def _same_own(p, a, da: float, b, db: float) -> bool:
+    """Two bases of `p` with `da` and `db` of `follow` in them: the same once
+    the follows are taken off (normalized, the units `follow` moves in)."""
+    if da == db:
+        return _same(a, b)
+    if p is None:
+        return False
+    try:
+        x, y = p._norm_of(a) - da, p._norm_of(b) - db
+    except Exception:  # noqa: BLE001 — a base that will not read: not the same
+        return False
+    if getattr(p, "wrap", False):
+        x, y = x % 1.0, y % 1.0
+    return math.isclose(x, y, rel_tol=REL_TOL, abs_tol=ABS_TOL)
+
+
+def own(p, v, then: float):
+    """`v`, a base of `p` taken with `then` of `follow` in it, with the follows
+    made since put on: what a restore writes, so it keeps them."""
+    d = _drift(p)
+    if d == then:
+        return v
+    u = p._norm_of(v) + d - then
+    u = u % 1.0 if getattr(p, "wrap", False) else min(max(u, 0.0), 1.0)
+    return p._value_of_norm(u)
+
+
 def _number(v) -> bool:
     return isinstance(v, int | float) and not isinstance(v, bool)
 
@@ -205,6 +255,10 @@ class State:
     trims: Any = None
     rows: tuple = ()          # the meta controller's rows (`deck.MetaRows`, plan 44 D5b)
     moves: Any = None         # who holds what and who is where (`Undo.moves`, row 740)
+    # plan 81 follow-up (row 1018): how far `Param.follow` had moved each base
+    # then, those it had moved; and what lives beside the camera (`beside`)
+    drift: Any = None
+    beside: Any = None
 
 
 @dataclass
@@ -252,6 +306,11 @@ class Undo:
     `refuses(doc, then)`, the words why it may not go back now (else None, and the step
     stays where it is, as under the latch); `trouble()`, what went wrong in the last
     `put`, for the status; and `heard`, what ⌘Z last said over the board, for its line.
+    `beside` (optional: `deck.DiveFrame`, row 1018) is state the camera's bases
+    carry with them that no param holds: `ids`, the params it goes with; `take()`
+    to hold; `continues(then, now)`, whether the follows made between two takes
+    are to be kept on a restore (else bases go back as they were);
+    `put(doc, kept)`, called when a restore writes any of `ids`.
     """
 
     only = None      # on the class: a live `Undo` from before a hot reload has it
@@ -259,11 +318,15 @@ class Undo:
     latched = False  # …and these: ⌘Z refuses here until a new push (row 753)
     called = "here"  # how the refusal names this stack ("on deck 2"; `MetaController`)
     _opens = False   # the open step began on focus: when it lands it opens the latch
+    beside: Any = None    # …and these (row 1018)
+    _quiet: Any = None    # `beside.take()` as of the last quiet frame
 
     def __init__(self, reg, table, *, marks=None, tag=None, tagged=("band.",),
-                 on_restore=None, banks=None, only=None, called=None, moves=None):
+                 on_restore=None, banks=None, only=None, called=None, moves=None,
+                 beside=None):
         self.reg, self.table = reg, table
         self.moves = moves
+        self.beside = beside
         if called is not None:
             self.called = called
         try:
@@ -289,6 +352,7 @@ class Undo:
         self._watched: list = []          # …the watched ones among them
         self._ids: tuple = ()             # …and their ids
         self._lands = self._read_lands()  # what is landed, as of the last quiet frame
+        self._quiet = self._quiet_take()
         self._fp = self._fingerprint()
         self._settled = self._take()
 
@@ -343,10 +407,39 @@ class Undo:
         returns, without asking every row whether it is a MIDI row)."""
         ps = self._params()
         table = self.table
-        return (self._ids, tuple([p.base for p in ps]), _rows(table.routes()),
+        return (self._ids, tuple([_base_of(p) for p in ps]), _rows(table.routes()),
                 _rows([b for b in table.bindings if b.layer == "preset"]),
                 _macros(table), self._tag(), self._mods(), self._bank_ids(),
                 _rows(self._table_rows()), self._moves_doc())
+
+    def _follows_kept(self, then: State, now) -> bool:
+        """Are the follows made since `then` to be kept on a restore to it
+        (`beside.continues`; with no `beside`, always)? Not across a load or
+        another dive: those bases go back exactly as they were."""
+        beside = getattr(self, "beside", None)
+        if beside is None:
+            return True
+        return bool(beside.continues(getattr(then, "beside", None), now))
+
+    def _beside_take(self):
+        beside = getattr(self, "beside", None)
+        return beside.take() if beside is not None else None
+
+    def _quiet_take(self):
+        """`beside` and the bases it goes with (`beside.ids`: the camera's),
+        each with its drift, as of this frame — what a step that begins on
+        the next one holds of them. The settled state's are as old as the
+        last step: a running dive has moved them since without a step, and a
+        restore to them in another frame of the dive would jump."""
+        beside = getattr(self, "beside", None)
+        if beside is None:
+            return None
+        cam = {}
+        for pid in beside.ids:
+            p = self.reg.get(pid)
+            if p is not None and self._watches(p):
+                cam[pid] = (p.base, _drift(p))
+        return beside.take(), cam
 
     def _moves_doc(self):
         return self.moves.doc() if self.moves is not None else None
@@ -367,14 +460,26 @@ class Undo:
                 return False
         return None
 
-    @staticmethod
-    def _same_fp(a: tuple, b: tuple) -> bool:
-        """Equal, or equal but for float pairs within the tolerance."""
+    def _same_fp(self, a: tuple, b: tuple) -> bool:
+        """Equal, or equal but for float pairs within the tolerance, and bases
+        that differ only by what `Param.follow` moved them (`_base_of`)."""
         if a == b:
             return True
         if a[0] != b[0] or a[2:6] != b[2:6] or a[8:] != b[8:] or not alike(a[6:8], b[6:8]):
             return False
-        return all(x is y or _same(x, y) for x, y in zip(a[1], b[1], strict=True))
+        ps = None
+        for i, (x, y) in enumerate(zip(a[1], b[1], strict=True)):
+            if x is y or _same(x, y):
+                continue
+            if not (isinstance(x, tuple) or isinstance(y, tuple)):
+                return False
+            if ps is None:
+                ps = {p.id: p for p in self._watched}
+            (vx, dx), (vy, dy) = (x if isinstance(x, tuple) else (x, 0.0),
+                                  y if isinstance(y, tuple) else (y, 0.0))
+            if not _same_own(ps.get(a[0][i]), vx, dx, vy, dy):
+                return False
+        return True
 
     def _take(self, marks: bool = False) -> State:
         """The state as it is now; `marks`: with what is loaded."""
@@ -390,7 +495,9 @@ class Undo:
                      modifiers=self._mods(), banks=self._bank_ids(),
                      trims={p.id: t for p in self._params() if (t := p._trim)},
                      rows=tuple(replace(b) for b in self._table_rows()),
-                     moves=self._moves_doc())
+                     moves=self._moves_doc(),
+                     drift={p.id: d for p in self._params() if (d := _drift(p))},
+                     beside=self._beside_take())
 
     def _read_lands(self):
         lands = getattr(self.marks, "lands", None)
@@ -437,6 +544,7 @@ class Undo:
             return
         if self._open is None:
             self._lands = self._read_lands()
+            self._quiet = self._quiet_take()
         # quiet this frame: an open step closes once the settle time has passed
         if (self._open is not None and self._open is not self._kept
                 and now - self._changed_at >= SETTLE_S):
@@ -478,6 +586,22 @@ class Undo:
         nothing and must not cost the redo."""
         self._open = step
         step.then = self._then()
+        quiet = getattr(self, "_quiet", None)
+        if getattr(self, "beside", None) is not None and quiet is not None:
+            # what lives beside the camera, and the camera itself, as of the
+            # last quiet frame (`_quiet_take`): one frame of the dive, where a
+            # restore can put them back as they were
+            side, cam = quiet
+            before = step.before
+            bases, drift = dict(before.bases), dict(getattr(before, "drift", None) or {})
+            for pid, (v, d) in cam.items():
+                if pid in bases:
+                    bases[pid] = list(v) if isinstance(v, list) else v
+                    if d:
+                        drift[pid] = d
+                    else:
+                        drift.pop(pid, None)
+            step.before = replace(before, bases=bases, drift=drift, beside=side)
         self._opens = _begun_on(self)
         self.stack.append(step)
         del self.stack[:-LIMIT]
@@ -561,6 +685,9 @@ class Undo:
         if inner and not (load and not self._open.load):
             return
         self._flush()
+        # an action is pushed before it writes: the camera beside it is as it
+        # is now (a quiet frame's may be from before an open step's writes)
+        self._quiet = self._quiet_take()
         before = self._settled
         if load and self.marks is not None:
             before = replace(before, marks=self.marks.take())
@@ -604,6 +731,7 @@ class Undo:
             self._fp = self._fingerprint()
             self._settled = self._take()
             self._lands = self._read_lands()
+            self._quiet = self._quiet_take()
             self._absorb = ABSORB_FRAMES
             return True
         self._say(none)
@@ -637,8 +765,14 @@ class Undo:
         out because the two states are on different tags."""
         apart = then.tag != now.tag
         ids, left = [], False
+        dt, dn = getattr(then, "drift", None) or {}, getattr(now, "drift", None) or {}
+        kept = self._follows_kept(then, getattr(now, "beside", None))
         for pid, v in then.bases.items():
-            if pid not in now.bases or _same(v, now.bases[pid]):
+            if pid not in now.bases:
+                continue
+            a, b = dt.get(pid, 0.0), dn.get(pid, 0.0)
+            if (_same(v, now.bases[pid]) if a == b or not kept
+                    else _same_own(self.reg.get(pid), v, a, now.bases[pid], b)):
                 continue
             if apart and self._is_tagged(pid):
                 left = left or tagged
@@ -723,21 +857,36 @@ class Undo:
             #    setter's side effect (a scene landing) moved others
             on_tag = state.tag == self._tag()
             left = False
+            drift = getattr(state, "drift", None) or {}
+            kept = self._follows_kept(state, self._beside_take())
+            wrote: set[str] = set()
             for _ in range(PASSES):
                 todo = {}
                 for p in reg:
                     if p.id not in state.bases or not self._watches(p):
                         continue
                     v = state.bases[p.id]
-                    if _same(p.base, v):
+                    then = drift.get(p.id, 0.0)
+                    if (_same(p.base, v) if then == _drift(p) or not kept
+                            else _same_own(p, v, then, p.base, _drift(p))):
                         continue
                     if not on_tag and self._is_tagged(p.id):
                         left = True
                         continue
+                    # (with the follows made since: an undo keeps the dive's
+                    # progress and takes back only what the user set)
+                    if kept:
+                        v = own(p, v, then)
                     todo[p.id] = list(v) if isinstance(v, list) else v
                 if not todo:
                     break
+                wrote.update(todo)
                 reg.restore(todo, trims=state.trims)
+            # 5½. what lives beside the camera (row 1018: the dive's framing),
+            #     with it: only when this restore wrote the camera
+            beside = getattr(self, "beside", None)
+            if beside is not None and wrote.intersection(beside.ids):
+                beside.put(getattr(state, "beside", None), kept)
             # 6. the macros' bases are acted on: nothing re-lands next frame
             if self.on_restore is not None:
                 self.on_restore()
@@ -778,7 +927,13 @@ class Undo:
             p = self.reg.get(pid)
             if p is None:
                 return pid
-            return f"{p.label} {self._text(p, then.bases[pid])} → {self._text(p, now.bases[pid])}"
+            was, v = then.bases[pid], now.bases[pid]
+            d0 = (getattr(then, "drift", None) or {}).get(pid, 0.0)
+            d1 = (getattr(now, "drift", None) or {}).get(pid, 0.0)
+            if d0 != d1:
+                # (the user's change alone: the follows made since taken off)
+                v = own(_Drift(p, d0), v, d1)
+            return f"{p.label} {self._text(p, was)} → {self._text(p, v)}"
         if ids and not parts:
             groups = {getattr(self.reg.get(pid), "group", "") for pid in ids}
             if len(groups) == 1:
@@ -787,6 +942,16 @@ class Undo:
             return ", ".join(parts)
         n = len(ids) + len(parts)
         return f"{n} changes" if n else "the analyzer's layout"
+
+
+class _Drift:
+    """`p` read as if `follow` had moved it `drift` (for `own` in a label)."""
+
+    def __init__(self, p, drift: float):
+        self._p, self._drift = p, drift
+
+    def __getattr__(self, name):
+        return getattr(self._p, name)
 
 
 # ---- the installed instance: what every push site and the two triggers reach ----

@@ -72,6 +72,7 @@ def test_a_reroot_moves_nothing_in_the_world(name):
         both = {tuple(r) for r in before} & {tuple(r) for r in after}
         assert len(both) >= len(before) - len(f.V) and len(both) >= len(after) - len(f.V)
         s.zoom /= f.ratio
+        fractal.centre(s)            # (the zoom about the middle: plan 81, not a re-root)
         before = _world(s)
 
 
