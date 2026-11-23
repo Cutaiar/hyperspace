@@ -362,9 +362,10 @@ def strip(panel, sel: str) -> None:
     mode = fx.values[sel].get("mode", 0)
     labels = {p.key: p.label.lower() for p in spec.params}
     choices = {p.key for p in spec.params if p.choices}
+    pads = ui_kit.ready()                   # plan 82: no kit, no pads — its sliders, packed as before
     for label, keys in pad_rows(spec, sel, [p.key for p in spec.params if f"{pre}.{p.key}" in r],
-                                mode, ui_kit.ready()):
-        pad = pad_of(spec, keys[0])
+                                mode, pads):
+        pad = pad_of(spec, keys[0]) if pads else None
         if pad is not None and tuple(keys) == pad.keys:   # plan 82: the square and its knobs
             for pid, rr in ui_fields.inline_pad(panel, [f"{pre}.{k}" for k in keys],
                                                 pad.label).items():

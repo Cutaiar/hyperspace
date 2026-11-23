@@ -23,10 +23,11 @@ HEAD = "vec4 effect(vec2 uv) { return src(uv); }\n"
 
 
 @contextmanager
-def strip(tmp_path, monkeypatch, sel: str):
-    """The real panel over a live FxState, effect `sel`'s strip open in
-    the fx section, a Driver recording every control."""
-    st = FxState()
+def strip(tmp_path, monkeypatch, sel: str, fx_dir=None):
+    """The real panel over a live FxState (the shipped effects, or
+    `fx_dir`'s), effect `sel`'s strip open in the fx section, a Driver
+    recording every control."""
+    st = FxState() if fx_dir is None else FxState(fx_dir)
     stand_in = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""),
                                lookback=SimpleNamespace(state=DreamState()))
     with build_rig(tmp_path, renderer=stand_in) as r:
@@ -314,3 +315,39 @@ def test_a_ridden_knobs_readout_stays_in_its_column(tmp_path, monkeypatch):
         assert any(t[0].startswith("→") for t in lines), drawn
         for _s, a, b in lines:
             assert cx - ui.KNOB_COL / 2 - 1 <= a and b <= cx + ui.KNOB_COL / 2 + 1
+
+
+def test_a_double_click_held_into_a_drag_moves_from_the_detent(tmp_path, monkeypatch):
+    with strip(tmp_path, monkeypatch, "prism") as (r, d, _st):
+        cx = r.reg["fx.prism.cx"]
+        cx.set_value(0.6)
+        d.run(d.wait(1))
+        x, y = d.centre("fx.prism.cx")
+        d.run(d.click((x, y)), d.press(True))       # the second press, held
+        assert cx.value == 0.0
+        d.run(d.move((x, y - 2)), d.press(False), d.park())
+        assert cx.value == pytest.approx(0.02, abs=0.005)    # 2 px of a 200 px throw over −1…1
+
+
+def test_without_the_kit_a_packed_pad_is_its_sliders(tmp_path, monkeypatch):
+    """No kit: a pad over keys the strip packs (`sat_lo`, `sat_hi`) is the
+    packed row of sliders it always was — never a pad."""
+    import shutil
+
+    from hyperspace import ui_kit
+    src = fx.FX_DIR
+    dst = tmp_path / "fx"
+    dst.mkdir()
+    for f in ("_lib.glsl", "prism.glsl"):
+        shutil.copy(src / f, dst / f)
+    (dst / "packed.glsl").write_text(
+        '// @label Packed\n// @pair u_sat_lo u_sat_hi "Saturation"\n'
+        'uniform float u_sat_lo; // @param 0 1 0 "Sat lo"\n'
+        'uniform float u_sat_hi; // @param 0 1 1 "Sat hi"\n' + HEAD)
+    pads = []
+    monkeypatch.setattr(ui_fields, "inline_pad", lambda *a, **k: pads.append(a) or {})
+    monkeypatch.setattr(ui_kit, "ready", lambda: False)
+    with strip(tmp_path / "home", monkeypatch, "packed", fx_dir=dst) as (_r, d, st):
+        assert not st.errors
+        assert not pads
+        assert "fx.packed.sat_lo" in d.rects and "fx.packed.sat_hi" in d.rects

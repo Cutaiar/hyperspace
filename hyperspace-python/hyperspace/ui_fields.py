@@ -581,6 +581,8 @@ def knob(panel, k, a, p, x, y, words: str, room: float | None = None):
                 moved = _write_norm(p, st["t"][0])
         if hovered and imgui.is_mouse_double_clicked(0) and shape.detent is not None:
             moved = _write_norm(p, shape.detent) or moved
+            if st is not None:              # the second press held on into a drag: from the detent
+                st["t"][0] = shape.detent
         if moved:
             undo.by_hand(True)
     panel._tip(a)
