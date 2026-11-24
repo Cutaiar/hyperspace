@@ -1214,10 +1214,12 @@ def crossing(spec: G.GraphSpec | None, render: Iterable[str]
 
 def wire_type(w: G.Wire, where: str) -> str:
     """The type a crossing wire carries at the region's edge: an inlet's the
-    member port's (`WIRED_TAKES`), an outlet's the member's make."""
+    member port's, an outlet's the member's make — by the same lookup the
+    wire checks use (`graph.takes_of`, `graph.makes_of`), so a field crossing
+    the edge is saved a field (an effect's or a slot's `field`, a field maker's out)."""
     if where == INTO:
-        return G.WIRED_TAKES.get(_kind(w.node) or "", {}).get(w.port, G.IMAGE)
-    return G.WIRED_MAKES.get(_kind(w.src) or "") or G.IMAGE
+        return G.takes_of(w.node, _kind(w.node)).get(w.port, G.IMAGE)
+    return G.makes_of(w.src, _kind(w.src)) or G.IMAGE
 
 
 def touches(members: _Members, source: Any, target: Any) -> bool:
