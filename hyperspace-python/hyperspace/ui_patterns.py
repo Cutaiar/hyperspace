@@ -45,7 +45,7 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import learn, patterns, ui, ui_loadable, ui_routing, undo
+from . import learn, patterns, ui, ui_routing, undo
 from .patterns import INPUTS, MODES, N_INPUTS
 from .routing import PATTERN_DEPTH
 
@@ -217,8 +217,7 @@ def _about(panel, p, mode: int) -> None:
 # ---- the inputs ----
 
 def _inputs(panel, mode: int) -> None:
-    """The section header ("all neutral" at its right end, the group's
-    preset strip under it) and a row per input."""
+    """The section header ("all neutral" at its right end) and a row per input."""
     sp = imgui.get_style().item_spacing.x
     avail = imgui.get_content_region_avail().x
     left = imgui.get_cursor_pos_x()
@@ -230,7 +229,6 @@ def _inputs(panel, mode: int) -> None:
         neutral_all(panel)
     if imgui.is_item_hovered():
         ui.tooltip(ALL_NEUTRAL_TIP)
-    ui_loadable.strip(panel, "pattern")
     imgui.separator()
     imgui.dummy(imgui.ImVec2(0, 1))
     top = imgui.get_cursor_screen_pos()

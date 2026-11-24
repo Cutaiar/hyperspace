@@ -102,14 +102,13 @@ OFF_S, ON_S, MUTED_S, PLAY_S = "off", "on", "muted", "play"
 def page(panel, dt: float) -> None:
     seq, envs = getattr(panel, "seq", None), getattr(panel, "envs", None)
     have = seq is not None and envs is not None and f"{SEQ_GROUP}.run" in panel.reg
-    panel._section("seq", SEQ_GROUP if have else None,
-                   note="click a step · right-click Learn")
+    panel._section("seq", note="click a step · right-click Learn")
     if not have:
         imgui.text_disabled("no sequencer — app.py wires sequencer.py and envelope.py")
         return
     _transport(panel, seq)
     _grid(panel, seq, envs)
-    panel._section("envelopes", ENV_GROUP, note="lanes 1–5 fire env 1–5")
+    panel._section("envelopes", note="lanes 1–5 fire env 1–5")
     sel = open_env(panel, seq, envs)
     ids = envs.ids()
     k = ids.index(sel) if sel in ids else len(ids)

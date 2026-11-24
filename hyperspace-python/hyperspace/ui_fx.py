@@ -185,7 +185,7 @@ def _spec(panel):
 def page(panel, dt: float) -> None:
     chain = getattr(panel.renderer, "fx", None)
     fx = _state(panel)
-    panel._section("effects", "fx", note=f"shaders/{FX_DIR.name}/*.glsl · live")
+    panel._section("effects", note=f"shaders/{FX_DIR.name}/*.glsl · live")
     panel._check("fx.on")
     imgui.same_line()
     panel._slider("fx.mix")

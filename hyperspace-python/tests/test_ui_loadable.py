@@ -293,7 +293,7 @@ def test_a_module_strip_does_not_overlap(rig, monkeypatch, width):  # noqa: F811
     panel, lib = rig.panel, rig.lib
     monkeypatch.setattr(ui_loadable, "dirty", lambda *a, **k: True)
     groups = [g for g in lib.groups() if g not in lib.kinds and g not in RETIRED_MODULES]
-    assert "view" in groups and "pattern" in groups
+    assert "band" in groups and "view" not in groups and "pattern" not in groups
     modules = groups
     groups = [*modules, LOADABLE]
     imgui.new_frame()

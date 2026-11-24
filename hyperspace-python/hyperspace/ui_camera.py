@@ -28,7 +28,7 @@ def page(panel, dt: float) -> None:
     if not ui_kit.ready():
         panel._camera_stock(dt)
         return
-    panel._section("camera", "camera")
+    panel._section("camera")
     k = ui_kit.begin(panel)
     with ui_kit.mod("uictx").chrome(k):
         draw(panel, k)

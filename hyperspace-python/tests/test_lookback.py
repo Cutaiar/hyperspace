@@ -979,16 +979,17 @@ def test_the_dream_module_presets_load(tmp_path):
     seed(tmp_path, "dream")
     lib = Library(tmp_path, period=0.0)
     lib.attach(reg)
-    assert "dream" in lib.groups()
+    # plan 88: the dream strip is retired — the files stay readable and loadable through the
+    # library, but the group is unlisted and its default is the build's fresh state
+    assert "dream" not in lib.groups()
     assert lib.list("dream") == ["default", "tracer-only", "wake"]
-    assert lib.default_name("dream") == "default"
+    assert lib.default_name("dream") is None
     assert lib.load("dream", "tracer-only") == []
     # (plan 36 T4: echoes alone — the dream off; the look-back is the graph's)
     assert not d.on and d.echoes == 8 and d.mix == 0.0 and d.echo_mix > 0
     assert lib.load("dream", "default") == []
     assert not d.on and d.echoes == 8 and d.mix == pytest.approx(0.7)
     # the default loadable patch is the fresh state: loading it leaves nothing dirty
-    assert not lib.is_dirty("dream")
     fresh = DreamState()
     for pid, v in lib.read("dream", "default")["values"].items():
         attr = pid.split(".", 1)[1]

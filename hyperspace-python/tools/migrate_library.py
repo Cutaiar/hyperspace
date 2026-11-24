@@ -588,11 +588,11 @@ def group_plan(library: Path) -> tuple[list[tuple[Path, Path, bytes]], list[str]
     ``group`` key: `patches.forward`), and every ``patch/1`` under
     ``<library>/patches/`` as its ``/2`` in place. Returns ((from, to, the
     bytes), the words for what is left: a file that will not read, a
-    retired group's (`library.RETIRED_MODULES`: never read, left as it is),
+    retired group's (`library.DELETED_MODULES`: never read, left as it is),
     a destination already holding other bytes). A dot-file and a backup are
     left out, as everywhere."""
     from hyperspace import patches
-    from hyperspace.library import RETIRED_MODULES, _json_text
+    from hyperspace.library import DELETED_MODULES, _json_text
     todo: list[tuple[Path, Path, bytes]] = []
     said: list[str] = []
     if not library.is_dir():
@@ -607,7 +607,7 @@ def group_plan(library: Path) -> tuple[list[tuple[Path, Path, bytes]], list[str]
             if doc is None or doc.get("schema") != "hyperspace.preset/1":
                 said.append(f"{folder.name}/{path.name}: not a module preset — left as it is")
                 continue
-            if folder.name in RETIRED_MODULES:
+            if folder.name in DELETED_MODULES:
                 said.append(f"{folder.name}/{path.name}: a retired group's — deleted")
                 continue
             doc.setdefault(patches.GROUP_KEY, folder.name)
