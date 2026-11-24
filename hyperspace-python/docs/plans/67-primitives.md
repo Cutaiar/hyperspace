@@ -610,6 +610,14 @@ lattice rename (§8.3), fields at 0.75k and 0.5k upscaled (a later session, row 
   one rule. The FX page still shows Mix and Blend on a field maker (they do nothing there); a copy
   of a field maker is a picture effect's copy; a field is RGBA32F (33 MB at 1080p, owner: fine).
 
+**Fixed 2026-11-24, after the owner's test on the rig.** The field examples moved nothing: the merge of
+`main`'s plan 80 added `Effect._pass`, the pass an effect in All outputs' run paints by, and it never
+bound the field (only `_one` did), so Displace wired into `output.all` read none — while the tests,
+wired into `output.1`, passed. Both passes now take their keywords from one place (`Effect._kw`), and
+`tests/test_field_wire.py::test_a_field_reaches_displace_in_all_outputs_run` holds it. GRAPH also said
+Measure "reaches nothing" (its R15 rule: no wire into `image`); a file that takes no picture is exempt
+now. **Test fields on `output.all`, the way patches are wired, not only on `output.<n>`.**
+
 ## 14. Blocks as a patch (2026-11-24)
 
 Built: **Cell action** (a field op: Action, Amount, Angle), Measure's cells drawn on Blocks'

@@ -1234,9 +1234,12 @@ def unreached(spec) -> frozenset[str]:
     if getattr(spec, "wired", False):
         # (R15: an effect or a copy no wire feeds reads nothing — never built,
         # faint, its outs kept)
+        # (plan 67 F1: a file that takes no picture — a field generator,
+        # Measure — is fed by nothing by design, and reaches what it feeds)
         fed = {w.node for w in spec.all_wires() if w.port == "image"}
         got -= {n for n in got if kind_of(n) in ("effect", "copy") and n not in fed
-                and n not in {e.name for e in spec.effects if e.placed}}
+                and n not in {e.name for e in spec.effects if e.placed}
+                and not (kind_of(n) == "effect" and "image" not in rgraph.effect_ports(n)[1])}
         return frozenset(n for n in frame_names(spec) if n not in got
                          and kind_of(n) not in ("output", rgraph.ALL_OUTPUTS, rgraph.GROUND))
     names = {e.name for e in spec.effects} | {s.name for s in spec.switches}
