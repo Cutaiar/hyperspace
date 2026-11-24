@@ -16,11 +16,14 @@ when it is the machine home (never a library).
 It never overwrites (as ``tools/move_library.py``, D8): a file the library already
 has is left alone — identical is ``have``, different is ``KEPT THEIRS``: the
 library's own, perhaps edited and saved since the last copy, is kept and this
-repo's is not copied. Quit Hyperspace first or not: the app follows new files.
+repo's is not copied. A patch lands whole or not at all (a temp file, then a
+link that refuses a taken name), so a failed copy leaves nothing half-written
+for the next run to keep. Quit Hyperspace first or not: the app follows new files.
 """
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -59,6 +62,46 @@ def destination() -> Path:
     return library.loadable_dir(root)
 
 
+def _write_all(fh, data: bytes) -> None:
+    fh.write(data)
+
+
+def _publish(target: Path, data: bytes) -> bool:
+    """Put `data` at `target` whole or not at all, never over a file already
+    there: True when written, False when `target` was there. As the library
+    writes (`library._write_text`, `library._move`): the bytes go to a dot-named
+    temp file beside it — no ``*.json``, so neither the library nor a cloud
+    client lists it — then a hard link, which refuses a name that is taken.
+    Where the disk makes no links (a cloud mount), an exclusive create of
+    `target`, removed again if its write fails. OSError on a failure, with
+    neither file left behind."""
+    tmp = target.parent / f".{target.name}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "xb") as fh:
+            _write_all(fh, data)
+        try:
+            os.link(tmp, target)
+            return True
+        except FileExistsError:
+            return False
+        except OSError:
+            pass                                    # no links here: the exclusive copy
+    finally:
+        tmp.unlink(missing_ok=True)
+    created = False
+    try:
+        with open(target, "xb") as fh:
+            created = True
+            _write_all(fh, data)
+    except BaseException as e:
+        if not created and isinstance(e, FileExistsError):
+            return False                            # there before us: left alone
+        if created:
+            target.unlink(missing_ok=True)          # ours, half-written: never left
+        raise
+    return True
+
+
 def copy(name: str, out=print) -> list[tuple[str, str]]:
     """Copy set `name` in; one ("copied" | "have" | "KEPT THEIRS", file) per patch."""
     src = SETS / name
@@ -71,11 +114,12 @@ def copy(name: str, out=print) -> list[tuple[str, str]]:
     for f in files:
         target, data = dest / f.name, f.read_bytes()
         try:
-            with open(target, "xb") as fh:       # never replaces a file already there
-                fh.write(data)
-            what = "copied"
-        except FileExistsError:
-            what = "have" if target.read_bytes() == data else "KEPT THEIRS"
+            copied = _publish(target, data)
+        except OSError as e:
+            raise SystemExit(f"{f.name}: {e} — not copied, and nothing half-written left "
+                             f"in {dest}; run again") from e
+        what = ("copied" if copied else "have" if target.read_bytes() == data
+                else "KEPT THEIRS")
         done.append((what, f.name))
         if what == "KEPT THEIRS":
             out(f"KEPT THEIRS {f.name} — the library's differs and is kept; "
