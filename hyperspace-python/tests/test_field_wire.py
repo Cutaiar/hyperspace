@@ -275,3 +275,46 @@ def test_a_field_nodes_thumbnail_is_its_grey(ctx):
     w, h = tex.size
     px = np.frombuffer(tex.read(), np.uint8).reshape(h, w, 4)
     assert abs(int(px[h // 2, w // 2, 0]) - 128) <= 6 and int(px[1, 1, 0]) > 190
+
+
+def test_a_field_reaches_displace_in_all_outputs_run(ctx):
+    """Displace wired into `output.all.image` is in All outputs' run, where it
+    paints by `Effect._pass` (plan 80) rather than `_one`: the field must reach
+    it there too. The merge of plan 80 once left it out of that path, so on the
+    rig the field examples (all wired to `output.all`) moved nothing while these
+    tests, wired to `output.1`, passed (the owner, 2026-11-24)."""
+    from test_graph_faces import _faces, _px
+
+    from hyperspace.render import Renderer
+
+    section = wired(("scene", "displace.image"), ("measure", "displace.field"),
+                    ("displace", "output.all.image"))
+    shots = []
+    for amount in (0.0, 0.15):
+        r = Renderer(ctx)
+        r.ghost.state.on = False
+        r.wiring = _spec(section).wiring()
+        r.fx.state.values["measure"].update(on=True, along=1, out=1)
+        r.fx.state.values["displace"].update(on=True, amount=amount)
+        vs = _views(ctx, 1)
+        r.draw_outputs(_faces(), 160, 120, 1.0, vs, t_now=2.0)
+        assert ctx.error == "GL_NO_ERROR"
+        assert r.stats["effects"] == ["measure", "displace"]
+        shots.append(_px(vs[0].target).astype(int))
+    assert shots[0][..., :3].max() > 30                       # a picture, not black
+    assert (np.abs(shots[1] - shots[0]).max(axis=2) > 20).mean() > 0.05
+
+
+def test_a_field_generator_wired_into_a_reader_reaches():
+    """GRAPH's `unreached`: an effect no wire feeds reads nothing (R15) — but a
+    field generator takes no picture by design, so Measure wired into
+    Displace's field port reaches, is drawn lit, and its thumbnail is its
+    field, not the test card (the owner's screenshot, 2026-11-24, said
+    "reaches nothing"). Unwired, it reaches nothing as before."""
+    from hyperspace import graphview
+
+    spec = _spec(wired(("scene", "displace.image"), ("measure", "displace.field"),
+                       ("displace", "output.all.image")))
+    assert "measure" not in graphview.unreached(spec)
+    alone = _spec(wired(("scene", "displace.image"), ("displace", "output.all.image")))
+    assert "measure" in graphview.unreached(alone)

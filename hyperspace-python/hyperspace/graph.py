@@ -6212,16 +6212,25 @@ class Effect(Node):
     def _one(self, frame: Frame, src: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
         """This effect's pass from texture `src` into `dst`, timed and
         counted; a layer's keeps its see-through ground."""
+        kw = self._kw(frame, dst, self._aux(frame, dst))
+        with frame.timed(self.name):
+            frame.r.fx.run_one(self.effect, src, dst, frame.t, **kw)
+        frame.stats.setdefault("effects", []).append(self.name)
+
+    def _kw(self, frame: Frame, dst: moderngl.Framebuffer,
+            aux: moderngl.Texture | None) -> dict[str, Any]:
+        """`run_one`'s keywords for this effect's pass into `dst`, the one
+        place both passes (`_one`, `_pass`) take them from: its ground, its
+        aux, and (plan 67 F1) the field on its field port — the merge with
+        plan 80's `_pass` once left the field out of that path, so Displace
+        in All outputs' run moved nothing (`tests/test_field_wire.py`)."""
         kw: dict[str, Any] = {"opaque": 0} if self.see_through else self._opaque(frame)
-        aux = self._aux(frame, dst)
         if aux is not None:
             kw["aux"] = aux
         field = _field_of(self.inputs.get(FIELD_PORT), frame)
         if field is not None:
-            kw["field"] = field                 # plan 67 F1: the field port
-        with frame.timed(self.name):
-            frame.r.fx.run_one(self.effect, src, dst, frame.t, **kw)
-        frame.stats.setdefault("effects", []).append(self.name)
+            kw["field"] = field
+        return kw
 
     @staticmethod
     def _opaque(frame: Frame) -> dict:
@@ -6350,14 +6359,14 @@ class Effect(Node):
         the pass alone (queries never nest: the input's own nodes time
         themselves before it)."""
         aux = self._aux(frame, dst)          # first: making it may take a spare
+        # (and the field: making one may paint its own input into a spare)
+        kw = self._kw(frame, dst, aux)
         tex, fbo = _spare(frame, dst)
         src = self.inputs["image"]
         if src is not None:
             src.paint(frame, fbo)
         else:                                # plan 80: a generator over nothing
             fbo.clear(0.0, 0.0, 0.0, 0.0)
-        kw = {"aux": aux} if aux is not None else {}
-        kw.update({"opaque": 0} if self.see_through else self._opaque(frame))
         with frame.timed(self.name):
             frame.r.fx.run_one(self.effect, tex, dst, frame.t, **kw)
         frame.stats.setdefault("effects", []).append(self.name)
