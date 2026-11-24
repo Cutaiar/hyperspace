@@ -12,6 +12,7 @@ opens through the library's own load.
 | `field-rings-lens` | Point → Rings (direction) → Displace: a lens |
 | `field-line-shear` | Line (value) → Displace along its angle: a shear |
 | `field-self-bend` | To field (the scene's brightness) → Displace: the picture bends itself |
+| `field-wave` | Wave taken apart: Point → Rings → Waveform, × a second Rings' direction (Combine) → Displace |
 
 A **field** is a number (or a pair) at every pixel: green cables on GRAPH, grey
 when shown as a picture.
