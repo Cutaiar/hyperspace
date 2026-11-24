@@ -124,13 +124,13 @@
       "source": "hand:left.y",
       "target": "fx.cells.scale",
       "op": "push",
-      "value": -0.4
+      "value": -0.2154
     },
     {
       "source": "hand:left.y",
       "target": "fx.cells.2.scale",
       "op": "push",
-      "value": -0.4
+      "value": -0.2154
     },
     {
       "source": "lane:0",
