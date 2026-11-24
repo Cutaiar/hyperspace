@@ -2,12 +2,25 @@
 
 Six whole-frame presets (`hyperspace.loadable/11`) played with the body:
 the Ultraleap hands first, a gamepad or Joy-Con second. They are not part
-of the app (nothing ships with it). Copy the ones you want into the
-library's `loadable/` folder and they appear in the list:
+of the app (nothing ships with it). Copy them into a `kinetic/`
+folder of their own in the library's `loadable/`, never loose into
+`loadable/` itself, and they appear in the list as
+`kinetic/<name>`.
+
+The library is the folder `[library] path` names in
+`~/Hyperspace/config.toml` (the shared Drive folder), not `~/Hyperspace`:
+the app never lists patches there. From `hyperspace-python/`:
 
 ```bash
-cp presets/kinetic/*.json ~/Hyperspace/loadable/
+uv run python tools/copy_patches.py kinetic
 ```
+
+It reads `[library] path` as the app does, and copies nothing when none is
+set, when the folder it names is not there (it is never created), or when
+it is `~/Hyperspace` itself. It never overwrites: a patch the library
+already has is left alone, and one that differs from this repo's (edited
+and saved since) is listed as `KEPT THEIRS`. To take this repo's version
+of one, delete or rename the library's first.
 
 Each has the default APC40 patch layer (no `desk` key) and the six audio
 lanes on the six rotation planes, as the corpus presets do. The ghost hands
@@ -15,7 +28,7 @@ are on at 35%, so a player sees where their hands are. A stick with no
 route keeps its usual job: the left orbits, the right zooms.
 
 `tests/test_kinetic_presets.py` opens each through the library's own load
-and fails on any note or dropped route.
+and fails on any note or dropped route, and runs the command above.
 
 ## The grip is each preset's own
 
