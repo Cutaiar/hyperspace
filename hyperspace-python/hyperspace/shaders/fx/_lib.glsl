@@ -140,3 +140,148 @@ vec4 pushed(vec2 uv, vec2 d, float split) {
     vec4 R = src(uv + o * (1.0 + split)), G = src(uv + o), B = src(uv + o * (1.0 - split));
     return vec4(R.r, G.g, B.b, max(R.a, max(G.a, B.a)));
 }
+
+// ---- fields: the shared pieces (plan 67 P2) ---------------------------------
+// A field is a value (or a pair) at every pixel. These are the primitives the
+// field nodes are built from (plan 67 §3), written once, so an effect file that
+// still computes its field inline calls the same code and agrees with the
+// patch that replaces it to the bit. Units: frame heights for distance (the
+// frame's height is 1, `centred`), turns for an angle round a point, radians
+// for an Angle knob, as every file already reads it.
+
+// -- point: a Centre X / Centre Y pair (−1 … 1: the left or bottom edge … the
+// right or top) as a place in centred coordinates
+vec2 point_at(float cx, float cy) { return vec2(cx * 0.5 * u_res.x / u_res.y, cy * 0.5); }
+
+// this pixel seen from that point, in frame heights
+vec2 from_point(vec2 uv, float cx, float cy) { return centred(uv) - point_at(cx, cy); }
+
+// -- measure: what is counted across the frame (DISTORTION.md's first
+// question). `x` is the measure, `g` the unit direction it grows in (0 where
+// it has none: the centre of rings and spokes)
+struct Measure { float x; vec2 g; };
+
+// distance along the direction `angle` (radians, 0 across), in frame heights
+Measure measure_line(vec2 p, float angle) {
+    vec2 g = vec2(cos(angle), sin(angle));
+    return Measure(dot(p, g), g);
+}
+
+// distance from p's origin, in frame heights; it grows outward
+Measure measure_rings(vec2 p) {
+    float r = length(p);
+    return Measure(r, r > 1e-5 ? p / r : vec2(0.0));
+}
+
+// the angle round p's origin, in turns, −½ … ½ (0 across to the right, ½ the
+// seam on the left); it grows anticlockwise
+Measure measure_spokes(vec2 p) {
+    Measure m = measure_rings(p);
+    return Measure(atan(p.y, p.x) / TAU, vec2(-m.g.y, m.g.x));
+}
+
+// a cell's place along a rule over a grid of cells `id` (Blocks): rows,
+// columns, the diagonal, square rings from the middle, or random; `spread` is
+// how far out of step one cell is with the next (random: × 64, so 1 is
+// thoroughly shuffled and 0 every cell in step)
+float measure_cells(vec2 id, int rule, float spread) {
+    if (rule == 0) return id.y * spread;
+    if (rule == 1) return id.x * spread;
+    if (rule == 2) return (id.x + id.y) * spread;
+    if (rule == 3) return max(abs(id.x), abs(id.y)) * spread;
+    return hash21(id + 64.5) * 64.0 * spread;
+}
+
+// -- cells: a grid over grid coordinates q (a cell a unit, a cell's corner at
+// each whole q). `id` is the pixel's block (`group` cells on a side share
+// one), `l` its place in its cell, −½ … ½ (Blocks, Measure's cells)
+struct Cell { vec2 id; vec2 l; };
+Cell cell_of(vec2 q, int group) { return Cell(floor(floor(q) / float(group)), fract(q) - 0.5); }
+
+// blocks paired off along `ax` (across or up), so a pair shares one number
+// (Blocks' swap): `id` becomes the pair's; +1 in its first block, −1 its second
+float cell_pair(inout vec2 id, vec2 ax) {
+    float along = dot(id, ax);
+    id -= ax * (along - floor(along * 0.5));
+    return 1.0 - 2.0 * mod(along, 2.0);
+}
+
+// -- picture: a picture read as a field. `luma`, `peak` and `reach` (above)
+// read it unsigned; these read it signed about mid-grey, premultiplied, so
+// a see-through pixel (and an unwired aux) is 0 — Displace's convention
+float read_signed(float v, float alpha) { return (v - 0.5 * alpha) * 2.0; }
+vec2 read_signed(vec2 v, float alpha) { return (v - 0.5 * alpha) * 2.0; }
+
+// -- ops (plan 67 §3.2: the modifiers' names) --------------------------------
+
+// x flattened to `steps` levels each side of 0 (steps ≤ 0: x as it is)
+float quantise(float x, int steps) {
+    return steps > 0 ? floor(x * float(steps) + 0.5) / float(steps) : x;
+}
+
+// a soft key: 0 below key − soft, 1 above key + soft, a ramp between
+// (soft 0: a hard step at the key)
+float threshold_soft(float x, float key, float soft) {
+    return clamp((x - key + soft) / max(2.0 * soft, 1e-4), 0.0, 1.0);
+}
+
+// x from in_lo … in_hi onto out_lo … out_hi, straight, unclamped
+float remap(float x, float in_lo, float in_hi, float out_lo, float out_hi) {
+    return out_lo + (x - in_lo) / (in_hi - in_lo) * (out_hi - out_lo);
+}
+
+// two fields into one: 0 add, 1 multiply, 2 min, 3 max
+float combine(float a, float b, int how) {
+    if (how == 1) return a * b;
+    if (how == 2) return min(a, b);
+    if (how == 3) return max(a, b);
+    return a + b;
+}
+
+// -- the field wire (plan 67 F1) ----------------------------------------------
+// A field travels as float32 RGBA at the frame's size: x (and y) its value,
+// .a 0 for a scalar field and 1 for a vector one. A file that makes one says
+// `// @makes field` and returns `as_scalar(x)` or `as_vector(v)` from
+// `effect`; one that reads one says `// @takes image field` (its input is a
+// field: `field_in`) or `// @takes field field` (a field beside its picture:
+// `field_port`). Read texel for texel: a field is never filtered.
+vec4 as_scalar(float x) { return vec4(x, 0.0, 0.0, 0.0); }
+vec4 as_vector(vec2 v) { return vec4(v, 0.0, 1.0); }
+
+// the field in sampler `s` at uv, its nearest texel
+vec4 field_at(sampler2D s, vec2 uv) {
+    ivec2 n = textureSize(s, 0);
+    return texelFetch(s, clamp(ivec2(uv * vec2(n)), ivec2(0), n - 1), 0);
+}
+
+// the field on the image port (a field op's input) and on the field port
+// (no field wired: 0, a scalar)
+vec4 field_in(vec2 uv) { return field_at(u_src, uv); }
+vec4 field_port(vec2 uv) { return u_field_on != 0 ? field_at(u_field, uv) : vec4(0.0); }
+
+// the point a measure counts from (plan 67 §15): a Point's field on the
+// field port (this pixel's offset from it, frame heights), or with none the
+// frame's middle — `centred`, as `from_point(uv, 0, 0)` is to the bit
+vec2 from_field_point(vec2 uv) { return u_field_on != 0 ? field_port(uv).xy : centred(uv); }
+
+// a measure as a field node writes it: value, its count × scale with its
+// direction riding in y and z; direction, the way with the count in z; across,
+// that way a quarter turn on (Line, Rings, Spokes; Wave's patch reads these)
+vec4 measure_out(Measure m, int out_, float scale) {
+    if (out_ == 2) return vec4(-m.g.y, m.g.x, m.x, 1.0);
+    if (out_ == 1) return vec4(m.g, m.x, 1.0);
+    return vec4(m.x * scale, m.g, 0.0);
+}
+
+// a field read as a vector: a vector field's pair; a scalar field pushes
+// along `dir` (radians) by its value
+vec2 field_vector(vec4 f, float dir) {
+    return f.a > 0.5 ? f.xy : f.x * vec2(cos(dir), sin(dir));
+}
+
+// a field shown as a picture, the grey promotion: a scalar grey about
+// mid-grey (−1 black, 1 white), a vector its x in red and y in green
+vec3 field_grey(vec4 f) {
+    vec3 c = f.a > 0.5 ? vec3(0.5 + 0.5 * f.xy, 0.5) : vec3(0.5 + 0.5 * f.x);
+    return clamp(c, 0.0, 1.0);
+}

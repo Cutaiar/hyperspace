@@ -28,11 +28,11 @@ vec3 spectrum(float t) {
 }
 
 vec4 effect(vec2 uv) {
-    vec2 c = vec2(u_cx * 0.5 * u_res.x / u_res.y, u_cy * 0.5);
     vec2 p = centred(uv);
-    vec2 d = p - c;
-    float r = length(d);
-    vec2 dir = r > 1e-5 ? d / r : vec2(0.0);
+    // radial from the point: _lib.glsl's field pieces (plan 67 P2)
+    Measure m = measure_rings(from_point(uv, u_cx, u_cy));
+    float r = m.x;
+    vec2 dir = m.g;
     // the dispersion at this pixel: out along the radius, grown by the rim
     // (r / 0.5 is 1 at the top and bottom edges), plus the straight tilt
     vec2 split = dir * (u_amount * pow(clamp(r / 0.5, 0.0, 1.0), u_rim))

@@ -8846,6 +8846,29 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## FN. Measure taken apart, a Point (rows 1104, 1106–1109, 2026-11-24)
+
+Plan 67 §15. Headless: `tests/test_field_wire.py`, `tests/test_wave_patch.py`, `tests/test_blocks_patch.py`, `tests/test_field_examples.py` (every example's nodes reach, on the canvas and the FX pane). The examples are in the Drive library's `loadable/field-examples/`.
+
+**889. One Point, many measures.** (Mac, GRAPH) Load `field-examples/field-rings-lens`. *Pass:* Point → Rings → Displace, all lit, green cables; Rings' knobs are Scale and Out only, and each changes the picture. Right-click the canvas, add a Spokes, wire the same Point into its `field` and Spokes into a second Displace on another output: drag Point's X and both move together. Add a Cells: every knob (Scale, Aspect, Group, Rule, Spread, Pairs) changes its thumbnail; Out place shows a small red-green ramp in every cell. *Fail:* a knob that does nothing, a node drawn faint while wired.
+
+**890. Nothing reaches nothing.** (Mac) Load each of the five `field-examples`, and open the FX section with each field node selected. *Pass:* no node says "reaches nothing"; each sits under Run. *Fail:* any field node faint, or "it reaches nothing — wire it on graph".
+
+## FL. The field wire (rows 1096–1100, 1102, 2026-11-23)
+
+Plan 67 F1. Headless: `tests/test_field_wire.py` (types, directives, the wire checks in words, the build, raw values, the grey, off, Displace by a field, the canvas's ports and cable, the thumbnail), `tests/test_field_lib.py`, `tests/test_field_examples.py`. The examples are in the Drive library's `loadable/field-examples/`.
+
+**881. A field cable on the canvas.** (Mac, GRAPH) Load `field-examples/field-rings-lens`. *Pass:* Measure's cable into Displace's `field` port is green, distinct from the red picture cables and the purple masks, at the stage's distance; Measure's node has no picture input. *Fail:* a field cable you cannot tell from a picture cable.
+
+**882. A picture refused, in words.** Drag the scene's output onto Displace's `field` port. *Pass:* the drag goes red and the words name To field; drag it onto To field's input and To field onto `field`: it lands. *Fail:* a silent refusal, or a picture accepted into a field port.
+
+**883. Seeing a field.** Wire Measure straight into an output, and look at its thumbnail and its tile in the effect picker. *Pass:* grey about the middle — mid-grey where the field is 0, lighter where it is positive, darker negative; the direction field coloured (red across, green up). *Fail:* black, white, or a different picture in the three places.
+
+**884. The three examples on stage.** (Mac, a sub band playing) Each of `field-rings-lens`, `field-line-shear`, `field-self-bend`. *Pass:* each does what its Markdown says, with the sub band and the hand on the knobs it names; Amount 0 is the plain picture. Read each Markdown: is it enough to rebuild the patch from scratch? *Fail:* a patch that does not move, or a Markdown that names a knob that is not there.
+
+**885. What a field costs.** (Mac, 1080p outputs, SYSTEM page) `field-rings-lens`. *Pass:* no drop in the frame rate with two fields held. Note the numbers (row 1097: a field held is 33 MB at 1080p). *Fail:* a cost that shows.
+
+
 ## DY. The Mandelbrot (rows 872–881, 2026-11-19)
 
 Plan 63. Headless: `tests/test_mandel.py` (the maths against a float64 oracle, the shader against its float32 twin, the drives, the reference's lifetime, the tiles, the sizes). Frame times off the rig mean nothing, so every check here is the rig's. A restart after pulling (`FxChain.mandel` is a new field on a live object, and `mandel` a new module).

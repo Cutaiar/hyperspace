@@ -53,7 +53,9 @@ WIRED = sorted(p.stem for p in FIXTURES.glob("*.json")
 FREE = ("branch-two-sizes", "media-chain-backdrop", "media-chain-faces", "switch-faces")
 # every effect file, by its @order: the chain an old loadable patch with every one
 # on lands as (plan 33 T7: `names()` is by name — there is no stack)
-REAL = tuple(sorted(FxState().specs, key=lambda n: (FxState().specs[n].order, n)))
+# (plan 67 F1: the picture effects — a field maker takes no picture to chain)
+REAL = tuple(sorted((n for n, s in FxState().specs.items() if s.makes != "field"),
+                    key=lambda n: (FxState().specs[n].order, n)))
 CONCERNS = (graphview.AUDIO, graphview.SCENE_AREA, graphview.LOOKBACK_AREA, graphview.EFFECTS_AREA,
             graphview.OUTPUTS_AREA)
 

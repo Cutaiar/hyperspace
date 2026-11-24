@@ -942,6 +942,17 @@ here; overturn → the change, then the same.
 | 1078 | Plan 88: **save to location…** opens **load…**'s file dialog (ImFileDialog, else the native one) in save mode, on the loaded patch's folder, else the library's patches folder. On the owner's Mac the library is in Google Drive by `config.toml`, so that is `My Drive/Hyperspace/loadable`; no Drive path is in the code | 871 | owner (2026-11-23, as recommended) |
 | 1079 | Plan 88: the dialog's place must be under the library's patches folder (any subfolder, a new one made in the dialog too); anywhere else is refused in words, since no load, pad or list would find a patch there. No export copy | 872 | owner (2026-11-23, as recommended) |
 | 1080 | Plan 88: in the dialog, the file name typed (less `.json`) is the patch's name and the folder its folder; the file is written under that name's slug, as every save is (`Closing Look` → `closing-look.json`) | 871 | owner (2026-11-23, as recommended) |
+| 1096 | Plan 67 P2: the shared field pieces in `_lib.glsl` — `point_at`, `from_point`, `Measure` with `measure_line` / `rings` / `spokes` / `cells`, `read_signed`, `quantise`, `threshold_soft`, `remap`, `combine`; units frame heights and turns. Wave, Blocks, Displace, Blend, Prism, Zoom burst, Time Displace and Oil slick moved onto them byte for byte | — | (rec) — plan 67 roundup §7 |
+| 1097 | Plan 67 F1: the field wire — float32 RGBA at the frame's size (33 MB a field held at 1080p; RG32F would halve it), .a 0 scalar / 1 vector; `@makes field` and `@takes <port> field` (or `none`); a field maker a `FieldEffect` made once a frame, raw (`FIELD_TAIL`); an effect that reads one has a third port, `field`, on texture unit 3; the aux stays a picture | 881, 885 | owner (2026-11-22): its own wire; the rest (rec) — plan 67 roundup §8 |
+| 1098 | Plan 67 F1: a field into a picture port is promoted to grey (`FieldPicture`: a scalar grey about mid-grey, a vector x red, y green); a field pass into any target that is no float32 one shows the same grey (previews, the card, thumbnails); a picture into a field port is refused naming To field; a field is no mask | 882, 883 | (rec) — plan 67 roundup §8 |
+| 1099 | Plan 67 F1: the first field files — Measure (line, rings, spokes, cells, noise; value or direction; no input), To field (luma, peak or red/green; signed about mid-grey or unsigned) — and Displace's field port (a vector field by its pair, a scalar along Angle; with one wired its aux is not read), byte for byte without one; three field examples | 884 | (rec) — plan 67 roundup §8 |
+| 1100 | Plan 67: Waveform (`wave()` over a field: Waves, Shape, Round free or whole, Drift a `@clock`, Steps) and Combine (add, multiply, min, max; a vector with a scalar takes it in each component) as field ops; Measure's Out gains across; Displace gains Split; a Measure's field carries its other half (the direction, or the value) in its spare channels | 889 | (rec) — plan 67 §12 |
+| 1102 | Plan 67: a field stays float32 RGBA (33 MB at 1080p), not RG32F (16.6 MB: the scalar-or-vector flag and the spare half go) nor half floats (16.6 MB as RGBA16F: an offset off by up to a quarter pixel, a count past 32 stepping in 1/32 of a wave) — until memory bites; a per-field precision choice later | 885 | owner (2026-11-24): four channels at 1080p are fine for now; fields at 0.75k and 0.5k, upscaled, are a follow-up session |
+| 1104 | Plan 67: a cell's geometry rides on Measure's cells field instead of being worked out again: Out value carries the cell's size (frame heights) in y and z, Out direction is the pixel's place in its cell (frame heights) with its side of a pair × Group in z; Measure gains Aspect, Group and Pairs (none, across, up) and Scale reaches 512; Waveform passes what rides with its input on. So Cell action (Action, Amount, Angle) has no grid knobs of its own | 889 | (rec) — plan 67 §14; §13 left it to this session |
+| 1106 | Plan 67: Waveform gains Phase (turns, an LFO's word), saved as `fx.waveform.start`: `u_phase` is every file's clock and `fx.<n>.phase` the position jog of §10.1. 0 leaves Wave's patch as it was (`x − t + 0` is `x − t`) | 889 | (rec) |
+| 1107 | Plan 67 §15: Measure split into Line, Rings, Spokes, Cells and Noise, each with only the knobs it uses; Centre X / Y replaced by a **Point** node, a vector field of each pixel's offset from it, read on each measure's field port (none: the middle). Wired to a Point, every mode is Measure's bit for bit (158 cases); with none, the middle is `centred`, an ulp or so from `from_point(uv, 0, 0)`. Measure was never on `main`; the five field examples move | 889 | owner (2026-11-24) |
+| 1108 | Plan 67 §15: Cells' Out place is the place in the cell in **cell units** (−½ … ½), not frame heights, so it shows on the canvas (the owner's "anything but value does nothing"); Cell action scales it by the cell's size that rides with the number, as before, to the bit | 889 | (rec) |
+| 1109 | Plan 67: the FX pane's "reaches nothing" followed picture wires only, so every field node before a field port said it (the owner's screenshot, 2026-11-24); it follows the field port now, held on every field example. The saved-look proofs of Wave and Blocks looked in `presets/distort`, which `main`'s #482 moved: they skipped in silence and now fail if they find too few. `tools/app_driver.py` gives its app a library (`<home>/library`; #480) | 890 | (rec) — bugs |
 | 1081 | Plan 89: an effect node has discrete slots — several pictures wired into one effect node, each slot its own `image` / `aux` in and its own picture out, each processed separately with the one shared set of knobs; the separate `copy` node is gone, and clicking the effect shows its one set of controls | 873 | owner (2026-11-23) |
 | 1082 | Plan 89: slot 1 is the effect's own name; slot k is `<effect>.slot.<k>` (`acid.slot.2`, `acid.2.slot.3`), declared by the effect's entry `"slots": n` (written above 1 only), 1 … 8 (`graph.MAX_SLOTS`, a switch's eight); a wire naming an undeclared slot is a note | 873 | (rec) |
 | 1083 | Plan 89: the migration — a section's copies of one effect, lowest copy instance first, become its next slots; wire ends and `keys` renamed; an entry added for an instance only wires named; a copy of no effect the section holds, or past the eighth slot, dropped with its wires and said; a copy's GRAPH place and group membership dropped (its effect's node has its own) | 875 | (rec) |
@@ -15302,7 +15313,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 - **What.** The picker groups by `previews.family_of`: a file's `@family` line, else the band its `@order` is in (`ORDER_FAMILIES`, one table). No file says `@family` yet; the shader roundup writes them. A family declares nothing, so it is outside `EffectSpec.signature`. The aux port is read from the files the same way: every effect node (and copy) had an `aux` port, and only Blend and Displace read it. GRAPH now draws it only when the file's code calls `aux(` or `aux_luma(` outside a comment (`fx.reads_aux`, `EffectSpec.aux`), or when a saved wire goes into it — that wire loads, is drawn and can be deleted. Nothing about the file format changes: the port still exists, it is only not offered where it does nothing.
 - **Answer.** (rec) — the builder's, plan 65 (2026-11-19); the aux port's, the owner's ask of 2026-11-19 ("for a lot of the effects, the auxiliary input doesn't really do anything").
-- **Built.** `fx.EffectSpec.family`, `fx.EffectSpec.aux`, `fx.reads_aux`, `fx._DIRECTIVE`, `graphview.aux_shown`, `previews.family_of`, `previews.families`, `previews.ORDER_FAMILIES`; `tests/test_effect_previews.py::test_a_files_family_is_its_at_family_else_its_order_band`, `::test_the_groups_come_from_the_files_in_family_order`, `::test_every_shipped_file_has_a_family_and_the_test_card_is_a_generator`, `::test_a_file_reads_aux_when_its_code_calls_it_and_not_in_a_comment`, `::test_on_this_build_only_blend_and_displace_read_their_aux`, `tests/test_aux_ports.py`.
+- **Built.** `fx.EffectSpec.family`, `fx.EffectSpec.aux`, `fx.reads_aux`, `fx._DIRECTIVE`, `graphview.aux_shown`, `previews.family_of`, `previews.families`, `previews.ORDER_FAMILIES`; `tests/test_effect_previews.py::test_a_files_family_is_its_at_family_else_its_order_band`, `::test_the_groups_come_from_the_files_in_family_order`, `::test_every_shipped_file_has_a_family_and_the_test_card_is_a_generator`, `::test_a_file_reads_aux_when_its_code_calls_it_and_not_in_a_comment`, `::test_on_this_build_the_files_that_read_their_aux`, `tests/test_aux_ports.py`.
 - **Judge it.** 693 (the aux port); the roundup's families will be judged with it.
 
 ### 899. The search, and Enter
@@ -15325,6 +15336,83 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** pending the owner.
 - **Built.** Nothing: a question. The options are in `docs/plans/65-effect-previews.md`, "What the previews show at the defaults".
 - **Judge it.** 689, by eye on the contact sheet and in the picker.
+### 1097. The field wire
+
+- **What.** Plan 67 F1, on the owner's "Field is its own wire": a fifth port type, `graph.FIELD`, drawn green. A field is float32 RGBA at the frame's size, signed, never premultiplied; its .a says scalar (0) or vector (1) (`as_scalar`, `as_vector` in `_lib.glsl`). Effect files declare it: `// @makes field` (the file's pass writes the field raw through `fx.FIELD_TAIL`: no blend, no mix, no clamp, no alpha rule) and `// @takes <port> <type>` (`image` or the new `field` port; `image`, `field` or `none`). `fx.ports_of` reads a file's ports (kept by every `FxState` of the shipped folder, so a reload keeps it); `graph.effect_ports` types an effect's wires by them, on the canvas too (`graphview._takes` / `_makes` with a name). A field maker is a `graph.FieldEffect`: made once a frame, when asked, into a float32 frame target every consumer reads; off, it is its input field, else 0. An effect that reads a field has a third port, `field`, bound on unit 3 (`field_port(uv)`). Memory: 33 MB a field held at 1920 × 1080 (RGBA; RG32F would halve it, a later step).
+- **Answer.** owner (2026-11-22): its own wire; the representation (rec) — the builder's, plan 67 (2026-11-23).
+- **Built.** `graph.FIELD`, `FIELD_PORT`, `effect_ports`, `FieldEffect`, `Effect` (its field port), `_Build._fields`, `fx.ports`, `ports_of`, `FIELD_TAIL`, `run_one(field=)`, `_lib.glsl` "the field wire"; `tests/test_field_wire.py`.
+- **Judge it.** 881, 885.
+
+### 1098. A field shown, and refused
+
+- **What.** A field wired into a picture port reads as grey — a scalar grey about mid-grey (−1 black, +1 white), a vector its x in red and y in green — through one `graph.FieldPicture` per field node, as a mask's promotion (row 441). A field maker's pass into any target that is no float32 one shows the same grey (`u_field_show`), so the effect previews, the test card on its thumbnail and an unwired thumbnail show it with no code of their own; a built field node's thumbnail is the field the frame made, grey (`render._field_thumb`), never made for the thumbnail. A picture into a field port is refused: "scene makes a picture, displace.field takes a field — put a To field (tofield) between". A field into a mask port is refused as any other type.
+- **Answer.** (rec) — the builder's, plan 67 (2026-11-23).
+- **Built.** `graph.FieldPicture`, `PICTURE_INTO_FIELD`, `FxChain.show_field`, `render._field_thumb`; `tests/test_field_wire.py::test_the_promoted_field_is_grey_about_the_middle`, `::test_into_a_target_that_is_no_field_it_shows_grey`, `::test_a_wire_a_field_cannot_take_is_refused_in_words`, `::test_a_field_nodes_thumbnail_is_its_grey`.
+- **Judge it.** 882, 883.
+
+### 1099. Measure, To field, Displace's field port, the examples
+
+- **What.** The first field files. **Measure** (`measure.glsl`, no input): along a line, rings, spokes, cells by rule or noise, from a point (Centre X/Y), at a Scale; Out value (a scalar) or direction (the unit way it grows, a vector). **To field** (`tofield.glsl`): a picture's luma, peak or red/green, signed about mid-grey (Displace's old reading) or unsigned. **Displace** takes a field on its new `field` port: a vector field by its pair, a scalar along its Angle, × Amount in frame heights; with a field wired its aux is not read; without one it is the same bytes as before (1041 renders). Three field examples in `loadable/field-examples/` (rings lens, line shear, self bend), each a patch and a Markdown, opened by the library's own load in `tests/test_field_examples.py`. Known: the FX page still shows Mix and Blend on a field maker, which do nothing there (a field has no blend) — to go with the motion work's strip changes.
+- **Answer.** (rec) — the builder's, plan 67 (2026-11-23).
+- **Built.** `shaders/fx/measure.glsl`, `tofield.glsl`, `displace.glsl`; `loadable/field-examples/`; `tests/test_field_wire.py`, `tests/test_field_examples.py`.
+- **Judge it.** 884.
+
+### 1100. Waveform and Combine
+
+- **What.** Two field ops. **Waveform** (`waveform.glsl`): a field in, `wave(shape, x × Waves − drift)` out, quantised by Steps — DISTORTION.md's second question as a node; Round whole rounds Waves to a whole number and repeats noise after it, for spokes. **Combine** (`combine.glsl`): two fields (input and the field port) added, multiplied, the lesser or the greater; scalar with vector scales or offsets each component. Measure's Out gains **across** (its direction a quarter turn on: Wave's slide). Displace gains **Split** (`pushed`'s colour split, 0 by default: no saved look moves). A Measure's field carries the other half of what it measured in its spare channels (a value its direction, a direction its value) — nothing reads them yet; it makes a shader work out the two together, as Wave does.
+- **Answer.** (rec) — the builder's, plan 67 (2026-11-24), on the owner's "go ahead with Wave as a patch".
+- **Built.** `shaders/fx/waveform.glsl`, `combine.glsl`, `measure.glsl`, `displace.glsl`.
+- **Judge it.** 889.
+
+### 1102. A field's storage: four float32 channels, for now
+
+- **What.** The owner asked (2026-11-24) what two channels instead of four would cost, and why not 16-bit floats. Four float32 (RGBA32F): 33 MB a field held at 1920 × 1080. Two (RG32F): 16.6 MB, but the fourth channel is the scalar-or-vector flag (it would travel beside the texture, a uniform every consumer is handed) and the third the spare half a Measure carries (row 1100). Half floats (RGBA16F, also 16.6 MB; RG16F 8.3 MB): 11 bits of precision — an offset of 0.3 rounds to the nearest 1/8192 (a quarter pixel at 1080p: no byte-for-byte patch), and a count above 32 steps by 1/32 (Wave at 64 waves: its phase in 32 visible steps a wavelength). Recommended: four float32 until memory bites (three or four fields held: 100–130 MB on unified memory); later a per-field precision choice for smooth, small fields.
+- **Answer.** owner (2026-11-24): "four channels at 1080p is fine for now, we can add .75k and .5k fields and upscale them later on as a follow up work session." So: RGBA32F stays; a field made at 810 or 540 lines and upscaled to its consumer (as the Mandelbrot's Size does, `mandel.SIZES`) is its own later session.
+- **Built.** Nothing new: row 1097's storage.
+- **Judge it.** 885 (what the fields cost on the Mac).
+
+### 1104. A cell's geometry rides on the Measure's fields
+
+- **What.** Cell action needs the cell's number through a waveform, the place in the cell, the cell's size and the side of a pair. Rather than give it Cell, Aspect and Group knobs of its own (a second grid to keep in step), a cells Measure carries them: Out value the cell's size (frame heights) in y and z beside the number; Out direction the pixel's place in its cell (frame heights) with its side of a pair × Group in z. Waveform passes on what rides with its input. Measure gains Aspect, Group and Pairs (none, across, up); Scale reaches 512. Measure's cells direction and across, empty before, change meaning (6 renders of the sweep); nothing else of Measure's moves.
+- **Answer.** (rec) — plan 67 §14; §13 left the choice to this session.
+- **Built.** `measure.glsl`, `waveform.glsl`, `cellaction.glsl`.
+- **Judge it.** 889.
+
+### 1106. Waveform's Phase
+
+- **What.** Blocks' wave starts a quarter cycle on, so Waveform gains Phase (turns, 0 … 1, wrap — an LFO's word), saved as `fx.waveform.start`: `u_phase` is every file's clock and `fx.<n>.phase` the position jog of plan 67 §10.1. At 0 the arithmetic is Wave's patch's as before (`x − t + 0` is `x − t`).
+- **Answer.** (rec).
+- **Built.** `waveform.glsl`.
+- **Judge it.** 889.
+
+### 1107. One measure per node, and a Point
+
+- **What.** The owner on the rig (2026-11-24): Measure's knobs only did something in some combinations of Along and Out (Rule, Spread, Aspect, Group and Pairs for cells; Angle for the line; direction for noise) — "a pretty significant anti-pattern" — and Centre X / Y "should be our primitive". Measure becomes five nodes, each with only its knobs: **Line** (Scale, Angle, Out), **Rings** (Scale, Out), **Spokes** (Scale, Out), **Cells** (Scale, Aspect, Group, Rule, Spread, Pairs, Out value or place), **Noise** (Scale). **Point** (X, Y) makes a vector field, each pixel's offset from it in frame heights; every measure reads one on its `field` port (`_lib.glsl`'s `from_field_point`; none wired: the frame's middle). Proof: Measure's float output over 316 settings saved before, each new node after — every setting with a Point wired bit for bit; at the middle with none, within 5e-6 (`centred` against `from_point(uv, 0, 0)`, which a compiler fuses differently). Wave's patch always wires a Point (`tests/wavepatch.py`), so it stays as equal to `wave.glsl` as before.
+- **Answer.** owner (2026-11-24): "split into nodes", "Point makes a field", sharp edges before Trip warp.
+- **Built.** `shaders/fx/point.glsl`, `line.glsl`, `rings.glsl`, `spokes.glsl`, `cells.glsl`, `noise.glsl`; `measure.glsl` removed; the field examples.
+- **Judge it.** 889.
+
+### 1108. Cells' place in cell units
+
+- **What.** Out place was the place in the cell in frame heights — a cell of 48 px at 1080p is ±0.02, grey on the canvas and nothing through Displace at its default Amount. It is −½ … ½ now; Cell action multiplies it by the cell's size, which rides with the number. Same arithmetic as before, moved: Blocks' patch is unchanged.
+- **Answer.** (rec).
+- **Built.** `cells.glsl`, `cellaction.glsl`.
+- **Judge it.** 889.
+
+### 1109. Three silent failures
+
+- **What.** (1) `ui_fx.groups` followed picture wires only, so any node whose path ends in a field port was "reaches nothing — wire it on graph" on the FX pane while lit on the canvas; it follows the field port. (2) `main`'s #482 moved the distort patches to `loadable/distort/`; the saved-look proofs of Wave and Blocks then found none and skipped; they look there and fail if they find fewer than five. (3) `main`'s #480 made no `[library] path` no library, so `tools/app_driver.py` drove an app that could load nothing; its corpus goes into `<home>/library`, which its config names.
+- **Answer.** (rec) — bugs.
+- **Built.** `ui_fx.py`, `tests/test_field_examples.py`, `tests/test_wave_patch.py`, `tests/test_blocks_patch.py`, `tools/app_driver.py`.
+- **Judge it.** 890.
+
+### 1096. The shared field pieces
+
+- **What.** Plan 67 P2's first step: one section of `_lib.glsl` holds the field primitives every effect and every field node to come uses — a point (`point_at`, `from_point`), the measures (`measure_line`, `measure_rings`, `measure_spokes`, `measure_cells`, each returning the measure and the direction it grows), a picture read signed about mid-grey (`read_signed`), and the ops named as the modifiers are (`quantise`, `threshold_soft`, `remap`, `combine`). Eight files that carried a private copy now call them, byte for byte (1041 renders before and after). Not moved: the gradients (they need a texture), Bloom's knee and Edges' threshold (other curves: a change of look), Hue cycle (to be retired).
+- **Answer.** (rec) — the builder's, plan 67 (2026-11-23), on the owner's "start the build with the shared field pieces".
+- **Built.** `shaders/fx/_lib.glsl`; `tests/test_field_lib.py`.
+- **Judge it.** No hand check: no picture changed.
+
 ### 872. The Mandelbrot is an effect file with a Python half
 
 - **What.** Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema.

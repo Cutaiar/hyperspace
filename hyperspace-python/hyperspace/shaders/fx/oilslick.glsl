@@ -57,7 +57,7 @@ vec4 effect(vec2 uv) {
     // the film is dragged about by a slow current rather than scrolled
     vec2 flow = perlin2(pos * 0.45 + vec2(u_drift_t * 0.25, u_drift_t * -0.17));
     float d = (perlin(pos + flow * 2.0) * 2.0 + perlin(pos * 2.3 - flow) * 0.8) * u_bands
-            + length(p) * 2.0 * u_rings;
+            + measure_rings(p).x * 2.0 * u_rings;
     vec3 f = film(d);
     // what comes through the film is tinted by it: a see-through pixel is
     // still see-through, so the shape keeps its own shape

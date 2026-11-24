@@ -25,21 +25,19 @@ uniform float u_split;  // @param 0 1 0 "Split" Parts the colours along each cel
 
 vec4 effect(vec2 uv) {
     vec2 cs = vec2(u_cell * u_aspect, u_cell);          // a cell, px
-    vec2 q = (uv - 0.5) * u_res / cs + 0.5;             // a cell sits on the frame's centre
-    vec2 l = fract(q) - 0.5;                            // this pixel within its cell, −½ … ½
-    vec2 id = floor(floor(q) / float(u_group));         // its block
+    // a cell sits on the frame's centre; `l` this pixel within its cell, −½ … ½,
+    // `id` its block: _lib.glsl's `cell_of` (plan 67, as Measure's cells)
+    Cell k = cell_of((uv - 0.5) * u_res / cs + 0.5, u_group);
+    vec2 l = k.l, id = k.id;
     vec2 dir = vec2(cos(u_angle), sin(u_angle));
     // swap: blocks pair off along whichever of across and up the angle is
     // nearer, and the pair shares one number, so the two agree to trade
     vec2 ax = abs(dir.x) >= abs(dir.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-    float along = dot(id, ax);
-    if (u_action == 5) id -= ax * (along - floor(along * 0.5));
-    float c;                                            // the block's place along the rule
-    if (u_rule == 0) c = id.y * u_spread;
-    else if (u_rule == 1) c = id.x * u_spread;
-    else if (u_rule == 2) c = (id.x + id.y) * u_spread;
-    else if (u_rule == 3) c = max(abs(id.x), abs(id.y)) * u_spread;
-    else c = hash21(id + 64.5) * 64.0 * u_spread;      // Spread 0: every block in step
+    float first = 0.0;                                  // +1 the pair's first block, −1 its second
+    if (u_action == 5) first = cell_pair(id, ax);
+    // the block's place along the rule: _lib.glsl's `measure_cells` (plan 67
+    // P2); Spread 0 is every block in step, random included
+    float c = measure_cells(id, u_rule, u_spread);
     // a quarter cycle on: at rest (Drift 0) a sine sits on its crest, not its zero
     float a = wave(u_shape, c - u_drift_t + 0.25) * u_amount;
     vec2 dl;                                            // how far it reads, in cells
@@ -64,7 +62,6 @@ vec4 effect(vec2 uv) {
         // is a trade, an even one is none. Each block of a pair reads the
         // other, so every cell is shown once
         float n = floor(0.5 * (a + u_amount) + 0.5);
-        float first = 1.0 - 2.0 * mod(along, 2.0);      // +1 the pair's first block, −1 its second
         dl = mod(n, 2.0) > 0.5 ? ax * first * float(u_group) : vec2(0.0);
     } else {
         dl = dir * a;
