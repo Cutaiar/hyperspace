@@ -1110,6 +1110,8 @@ def param_ids(reg, nid: str, of: str = "") -> list[str]:
     # plan 87: a keyed node's black is clear knobs (`key.<name>.*`) after its own
     keyed = f"key.{name}."
     ids += [p.id for p in reg if p.id.startswith(keyed)]
+    if name == "scene":         # the eye is the first scene's (`_eye_owner`): it was the camera
+        ids += [p.id for p in reg if not p.alias and p.id.startswith("eye.")]   # node's, which
     return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
 
 

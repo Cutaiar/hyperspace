@@ -1127,3 +1127,13 @@ def test_no_file_means_the_editors_own_start(monkeypatch):
         raise OSError("disk full")
     monkeypatch.setattr(ui_graph.tempfile, "mkstemp", refused)
     assert ui_graph.start_view(1.6) == ""
+
+
+def test_the_eye_is_pointable_on_the_scene_as_it_was_on_the_camera_node(rig):
+    """Node mode asks `param_ids`: the camera node's `eye.*` moved to the scene with
+    the node's removal, so a controller can still be pointed at the fov and the distance."""
+    ids = graphview.param_ids(rig.reg, "render:scene")
+    assert {"eye.fov", "eye.distance"} <= set(ids)
+    assert not any(i.startswith("eye.") for i in graphview.param_ids(rig.reg, "render:shape"))
+    from hyperspace import nodemode
+    assert nodemode.fillable(rig.reg, ids)

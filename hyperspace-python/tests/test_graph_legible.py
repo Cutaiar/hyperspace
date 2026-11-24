@@ -1286,3 +1286,18 @@ def test_the_hands_node_draws_the_hands_page_as_its_selection(rig, monkeypatch):
     calls.clear()
     pick(rig, st, "render:output.2")
     assert calls == []
+
+
+def test_undo_over_the_hands_mirror_button_goes_by_the_hands_stack(rig):
+    """The axis editor's `mirror` is a plain button, not a param widget: hovered in the
+    GRAPH selection (whose section is no meta one) ⌘Z must still go by the hands' (meta)
+    stack — it copies `hands.*` params, not a patch's."""
+    from test_ui_pane import _tall_driver
+
+    from hyperspace import ui as ui_mod
+    st = party(rig)
+    pick(rig, st, "render:hands")
+    d = _tall_driver(rig, None)
+    d.record(lambda o, n, v: setattr(o, n, v))
+    d.run(d.wait(3), d.move("mirror", frames=3))
+    assert ui_mod.Panel.in_meta_section(rig.panel) is True

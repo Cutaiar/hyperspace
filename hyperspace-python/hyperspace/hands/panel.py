@@ -754,6 +754,7 @@ def _editor(panel, io, settings, k: int) -> None:
     if ui.small_button("mirror"):
         mirror(settings, a.name)
     if imgui.is_item_hovered():
+        panel._param_under = panel.reg[f"{p}.deadzone"]    # ⌘Z goes by the hands' (meta) stack
         ui.tooltip("Copy this axis's feel (not its MIDI out) to the same axis "
                           "on the other hand.")
     if io is not None:
