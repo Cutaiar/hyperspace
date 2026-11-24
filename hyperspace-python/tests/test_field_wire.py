@@ -450,3 +450,25 @@ def test_a_fields_range_is_its_largest_magnitude_not_a_samples(ctx):
     assert chain.field_range(tex) == pytest.approx(0.5, abs=1e-6)
     tex.release()
     chain.release()
+
+
+def test_field_thumbnails_measure_their_range_per_frame_not_per_thumbnail(ctx, monkeypatch):
+    """`_thumb_gain` reads a field back (a stall) every `FIELD_RANGE_EVERY`
+    frames. Counted per thumbnail, two field nodes measured each other every
+    15 frames, seven every four: a stall nearly every frame (field-wave-slow).
+    Counted per frame, each field is measured once per `FIELD_RANGE_EVERY`."""
+    from hyperspace import render
+
+    section = wired(("scene", "displace.image"), ("rings", "displace.field"),
+                    ("displace", "output.1.image"), ("spokes", "output.2.image"),
+                    nodes=("rings", "spokes", "displace"))
+    r = _rig(ctx, section, {**ON, "spokes": {"on": True}})
+    calls = []
+    real = r.fx.field_range
+    monkeypatch.setattr(r.fx, "field_range", lambda tex: calls.append(1) or real(tex))
+    frames = render.FIELD_RANGE_EVERY + 1
+    for _ in range(frames):
+        r.thumbs.want({"rings": "picture", "spokes": "picture"})
+        _draw(ctx, r)
+    assert set(r._field_gains) == {"rings", "spokes"}
+    assert len(calls) == 2 * 2      # each: first seen, then once FIELD_RANGE_EVERY on
