@@ -127,3 +127,25 @@ def test_a_failed_write_leaves_nothing_and_a_retry_installs_it(tmp_path, monkeyp
     assert "KEPT THEIRS" not in done.values()
     for f in FILES:
         assert (landed / f.name).read_bytes() == f.read_bytes()
+
+
+def test_a_rerun_into_a_folder_it_may_not_write_still_says_what_it_has(tmp_path, monkeypatch):
+    """The set already there and the folder read-only (a viewer's share of the
+    Drive): nothing needs writing, so nothing is staged, and every patch is `have`.
+    (The container runs as root, which chmod does not stop: the refusal is a
+    stand-in for the write.)"""
+    drive, machine = _library(tmp_path)
+    machine.mkdir()
+    (machine / "config.toml").write_text(f'[library]\npath = "{drive}"\n')
+    monkeypatch.setenv("HYPERSPACE_HOME", str(machine))
+    tool = _tool()
+    tool.copy("kinetic", out=lambda _s: None)
+    real_open = open
+
+    def read_only(path, mode="r", *a, **k):
+        if any(c in mode for c in "wxa"):
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_open(path, mode, *a, **k)
+    monkeypatch.setattr("builtins.open", read_only)
+    done = tool.copy("kinetic", out=lambda _s: None)
+    assert [w for w, _ in done] == ["have"] * len(FILES)

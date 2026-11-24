@@ -74,7 +74,10 @@ def _publish(target: Path, data: bytes) -> bool:
     client lists it — then a hard link, which refuses a name that is taken.
     Where the disk makes no links (a cloud mount), an exclusive create of
     `target`, removed again if its write fails. OSError on a failure, with
-    neither file left behind."""
+    neither file left behind. A taken name is left before anything is staged,
+    so a re-run into a library it may not write still says what it has."""
+    if os.path.lexists(target):
+        return False
     tmp = target.parent / f".{target.name}.{os.getpid()}.tmp"
     try:
         with open(tmp, "xb") as fh:
