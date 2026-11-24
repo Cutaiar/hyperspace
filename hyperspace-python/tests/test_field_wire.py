@@ -426,3 +426,27 @@ def test_a_small_fields_thumbnail_fills_its_grey(ctx):
     assert abs(int(px[h // 2, w // 2, 0]) - 128) <= 6 and int(px[1, 1, 0]) > 230
     made = r._field_gains["rings"]
     assert 10.0 < made[1] < 40.0                     # 1 / the corner's ~0.06
+
+
+def test_a_fields_range_is_its_largest_magnitude_not_a_samples(ctx):
+    """`FxChain.field_range` reduces every texel of the field, so a field
+    repeating at the sample's spacing is not read at its zero crossings alone
+    (Devin's review of #492: a 27-wave sine down 1080 lines read at its
+    crossings gave a twelve-fold gain and a thumbnail of stripes)."""
+    w, h = 1920, 1080
+    y = (np.arange(h) + 0.5) / h
+    rows = np.sin(2 * np.pi * 27 * y)           # 27 waves: a sample a wave
+    f = np.zeros((h, w, 4), np.float32)
+    f[..., 0] = rows[:, None]
+    tex = ctx.texture((w, h), 4, f.tobytes(), dtype="f4")
+    chain = FxChain(ctx, FxState())
+    assert chain.field_range(tex) == pytest.approx(float(np.abs(rows).max()), abs=1e-6)
+    f[..., 0] *= 0.01
+    f[..., 1] = 0.5                           # a scalar's y rides along: not counted
+    tex.write(f.tobytes())
+    assert chain.field_range(tex) == pytest.approx(0.01 * float(np.abs(rows).max()), abs=1e-6)
+    f[..., 3] = 1.0                           # a vector: its y counts
+    tex.write(f.tobytes())
+    assert chain.field_range(tex) == pytest.approx(0.5, abs=1e-6)
+    tex.release()
+    chain.release()

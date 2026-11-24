@@ -1093,7 +1093,28 @@ void main() {
 # (`graph.FieldPicture`), one pass of the lib's `field_grey`
 SHOW_FIELD = ("uniform float u_gain;   // a thumbnail's: the field scaled to its own range\n"
               "vec4 effect(vec2 uv) { vec4 f = field_in(uv); return vec4(f.xyz * u_gain, f.a); }\n")
-FIELD_SAMPLE = (48, 27)      # `field_range`'s sample of a field, texel for texel
+FIELD_SAMPLE = (48, 27)      # `field_range`'s reduction of a field: one texel a region
+# its reduction pass: each texel the largest magnitude over its region of the
+# field (a vector's x and y, a scalar's x), every texel of the region read
+FIELD_MAX = """
+#version 330
+uniform sampler2D u_src;
+uniform ivec2 u_step;
+out vec4 f_color;
+void main() {
+    ivec2 n = textureSize(u_src, 0);
+    ivec2 o = ivec2(gl_FragCoord.xy) * u_step;
+    float m = 0.0;
+    for (int j = 0; j < u_step.y; j++)
+        for (int i = 0; i < u_step.x; i++) {
+            ivec2 at = o + ivec2(i, j);
+            if (at.x >= n.x || at.y >= n.y) continue;
+            vec4 v = texelFetch(u_src, at, 0);
+            m = max(m, v.a > 0.5 ? max(abs(v.x), abs(v.y)) : abs(v.x));
+        }
+    f_color = vec4(m);
+}
+"""
 
 # an effect with no program: its source across, 1:1 by texelFetch as
 # FS_TAIL's `here` reads it
@@ -1368,22 +1389,33 @@ class FxChain:
             self.ctx.enable(moderngl.BLEND)
 
     def field_range(self, tex: moderngl.Texture) -> float:
-        """The largest magnitude field texture `tex` holds, over a small
-        sample of its texels (`FIELD_SAMPLE`: a few kilobytes read back, not
-        the field) — what a thumbnail scales by, so a field of small values
-        (a cell's push, a measure at a small Scale) shows its shape, not
-        mid-grey. A vector's x and y, a scalar's x; 0 for an empty field."""
+        """The largest magnitude field texture `tex` holds — what a thumbnail
+        scales by, so a field of small values (a cell's push, a measure at a
+        small Scale) shows its shape, not mid-grey. Reduced on the GPU: each of
+        `FIELD_SAMPLE`'s texels is the largest magnitude over its whole region
+        of the field (`FIELD_MAX`; a vector's x and y, a scalar's x), so a
+        field repeating at the sample's spacing is not read at its zero
+        crossings alone (Devin's review of #492); a few kilobytes read back.
+        0 for an empty field."""
         got = getattr(self, "_field_sample", None)
         if got is None:
             t = self.ctx.texture(FIELD_SAMPLE, 4, dtype="f4")
-            got = self._field_sample = (t, self.ctx.framebuffer(color_attachments=[t]))
-        _, fbo = got
+            p = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=FIELD_MAX)
+            got = self._field_sample = (t, self.ctx.framebuffer(color_attachments=[t]), p,
+                                        self.ctx.vertex_array(p, []))
+        _, fbo, p, vao = got
+        fbo.use()
         fbo.viewport = (0, 0, *FIELD_SAMPLE)
-        self.show_field(tex, fbo, raw=True)
-        v = np.frombuffer(fbo.read(components=4, dtype="f4"), np.float32).reshape(-1, 4)
-        vec = v[:, 3] > 0.5
-        mags = np.where(vec, np.maximum(np.abs(v[:, 0]), np.abs(v[:, 1])), np.abs(v[:, 0]))
-        m = float(np.nanmax(mags)) if mags.size else 0.0
+        tex.use(location=0)
+        self._set(p, "u_src", 0)
+        self._set(p, "u_step", tuple(-(-n // k) for n, k in zip(tex.size, FIELD_SAMPLE, strict=True)))
+        self.ctx.disable(moderngl.BLEND)
+        try:
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            self.ctx.enable(moderngl.BLEND)
+        v = np.frombuffer(fbo.read(components=4, dtype="f4"), np.float32)
+        m = float(np.nanmax(v[0::4])) if v.size else 0.0
         return m if np.isfinite(m) else 0.0
 
     def upscale(self, tex: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
