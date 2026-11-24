@@ -87,12 +87,12 @@ uses it.
 | Action | `shift` · `zoom` · `stretch` (one way; low numbers pull a line into streaks) · `turn` · `bulge` (a lens inside the cell's inscribed circle, still at its rim, so cells stay joined) · `swap` (blocks pair off and each pair trades places: every cell is shown once, none twice) |
 | Angle, Split | The way shift and stretch go, and whether swap trades across or up and down; the colour split |
 
-**As a patch** (plan 67 §14): `measure (cells) → waveform → cell action ←
-measure.2 (cells, direction) → displace`, the field example `field-blocks`. Cell,
-Aspect, Group, Rule, Spread go to both Measures (Cell as cells to a frame height:
+**As a patch** (plan 67 §14, §15): `cells → waveform → cell action ← cells.2
+(Out place) → displace`, the field example `field-blocks`. Cell,
+Aspect, Group, Rule, Spread go to both Cells (Cell as cells to a frame height:
 the frame's height ÷ Cell); Shape and Drift to Waveform, its Phase a quarter turn;
 Action, Amount and Angle to Cell action; Split to Displace, Amount 0.5. Wave's is
-`measure → waveform → combine ← measure.2 → displace` (`field-wave`).
+`point → rings → waveform → combine ← rings.2 → displace` (`field-wave`; Line or Spokes for Wave's other Alongs).
 
 ## Time Displace (`timedisplace.glsl`, plan 66)
 

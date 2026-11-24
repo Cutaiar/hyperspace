@@ -650,3 +650,30 @@ taper (`params.retaper_depths`), so a wider range moves every saved route on it 
 in the format lane. Recommendation: leave it until a migration runs for another reason.
 
 **Next** (§13): Trip warp as a patch, then any knob takes a field.
+
+## 15. Measure taken apart, and a Point (2026-11-24, the owner on the rig)
+
+The owner tested the field examples on the Mac: the FX pane said Measure, Waveform and Combine
+"reach nothing"; Measure's knobs only did something in some combinations ("a pretty significant
+anti-pattern"); Centre X / Y "should be our primitive"; and "you're probably not testing the app
+and looking at the graph view". Answered (row 1101): **split Measure into nodes**, **a Point makes a
+field**, sharp edges first.
+
+- **Point** (X, Y) makes a vector field: each pixel's offset from it, frame heights. **Line**,
+  **Rings**, **Spokes**, **Cells** and **Noise** each have only their knobs and read a Point on
+  their `field` port (none: the middle). One Point moves every measure wired to it.
+- Proven against Measure's own output, 316 settings: bit for bit wherever a Point is wired; at the
+  middle with none, within 5e-6. Wave's patch always wires a Point, so it is unchanged.
+- **Cells' Out place** is in cell units, −½ … ½ (row 1102): visible, and Displace-able at the
+  default Amount. Cell action multiplies by the cell's size riding with the number.
+- **The bugs** (row 1103): the FX pane's walk ignored field ports; the saved-look proofs skipped
+  in silence since `main` moved the distort patches; the app driver had no library since #480.
+- **How it was checked this time:** the real app, driven offscreen (`tools/app_driver.py`), every
+  example loaded and GRAPH captured; what the canvas and the FX pane mark unreached printed beside
+  the pictures. **Check GRAPH and the FX pane in the app for every field change, not only renders.**
+
+**Still sharp, next:** a small field shows near grey (Cell action's push; any measure at a small
+Scale) — the grey promotion is ±1, and a thumbnail could scale to the field's own range; a field op
+with nothing in its input is faint with words about reaching, where "wire a field into its input"
+is what it needs; then Trip warp (§13 item 2) and any knob takes a field (item 3).
+

@@ -213,3 +213,10 @@ Measures' fields, so Cell action has no grid knobs (plan 67 §14, row 1098). Equ
 moved onto `_lib.glsl`'s `cell_of` and `cell_pair` byte for byte, so the grid is one piece
 that Blocks and Measure share; Glimmer, Wave Table, Grain and Fractals keep their own cells for
 now (§2).
+
+## 11. Measure taken apart (2026-11-24)
+
+The roundup's `measure (…)` is five nodes now — Line, Rings, Spokes, Cells, Noise — and `point` one
+more, a field every measure reads (plan 67 §15, row 1101). Where §1 says `measure (cells)` read
+Cells; `measure (noise)`, Noise; `point → …`, a Point wired into the measure's `field` port.
+

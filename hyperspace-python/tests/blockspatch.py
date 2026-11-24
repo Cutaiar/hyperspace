@@ -2,9 +2,9 @@
 (`tests/test_blocks_patch.py`) and the field example use, and the one the
 format lane's migration will use when `blocks.glsl` retires.
 
-    measure   (cells, a value: the cell's number, its size riding along)
+    cells   (a value: the cell's number, its size riding along)
         ─▶ waveform (Shape, Drift, Phase ¼) ─▶ cell action.image
-    measure.2 (cells, direction: the pixel's place in its cell) ─▶ cell action.field
+    cells.2 (Out place: the pixel's place in its cell) ─▶ cell action.field
     cell action (Action, Amount, Angle) ─▶ displace.field (Amount 0.5, Split)
 
 Cell action's push is in half frame heights, so Displace at its top Amount
@@ -12,20 +12,21 @@ Cell action's push is in half frame heights, so Displace at its top Amount
 
 Blocks' Cell is in pixels and a Measure counts cells to a frame height, so the
 mapping takes the height of the frame it draws: the patch is Blocks at that
-size (at another, Blocks keeps its pixels and the patch its share of the frame)."""
+size (at another, Blocks keeps its pixels and the patch its share of the frame).
+Blocks' grid sits on the frame's middle, so no Point is wired."""
 
 from __future__ import annotations
 
 import math
 
-NODES = [{"kind": "effect", "file": "measure"},
-         {"kind": "effect", "file": "measure", "instance": 2},
+NODES = [{"kind": "effect", "file": "cells"},
+         {"kind": "effect", "file": "cells", "instance": 2},
          {"kind": "effect", "file": "waveform"},
          {"kind": "effect", "file": "cellaction"},
          {"kind": "effect", "file": "displace"}]
-WIRES = [{"from": "measure", "to": "waveform.image"},
+WIRES = [{"from": "cells", "to": "waveform.image"},
          {"from": "waveform", "to": "cellaction.image"},
-         {"from": "measure.2", "to": "cellaction.field"},
+         {"from": "cells.2", "to": "cellaction.field"},
          {"from": "cellaction", "to": "displace.field"}]
 
 
@@ -41,12 +42,11 @@ def blocks_patch(v: dict, height: int) -> dict[str, dict]:
     """Blocks' values (`fx.blocks.<key>` without the prefix), drawn `height`
     pixels high → each node's."""
     on = v.get("on", True)
-    grid = {"along": 3, "scale": height / v["cell"], "aspect": v["aspect"], "group": v["group"],
-            "rule": v["rule"], "spread": v["spread"], "pairs": pairs(v), "cx": 0.0, "cy": 0.0,
-            "on": on}
+    grid = {"scale": height / v["cell"], "aspect": v["aspect"], "group": v["group"],
+            "rule": v["rule"], "spread": v["spread"], "pairs": pairs(v), "on": on}
     return {
-        "measure": {**grid, "out": 0},
-        "measure.2": {**grid, "out": 1},
+        "cells": {**grid, "out": 0},
+        "cells.2": {**grid, "out": 1},
         # a quarter cycle on: at rest a sine sits on its crest (blocks.glsl)
         "waveform": {"waves": 1.0, "shape": v["shape"], "round": 0, "drift": v["drift"],
                      "start": 0.25, "steps": 0, "speed": v["speed"], "on": on},

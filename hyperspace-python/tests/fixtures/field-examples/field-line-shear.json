@@ -1,7 +1,7 @@
 {
   "schema": "hyperspace.loadable/11",
   "name": "field-line-shear",
-  "note": "Measure's line, as a value, grows across the frame; Displace pushes each pixel up by it, so the left of the picture drops and the right rises: a shear. The sub band pushes Amount; the left hand's height turns the line.",
+  "note": "A Line, as a value, grows across the frame; Displace pushes each pixel up by it, so the left of the picture drops and the right rises: a shear. The sub band pushes Amount; the left hand's height turns the line.",
   "graph": {
     "frame": "wired",
     "nodes": [
@@ -11,7 +11,7 @@
       },
       {
         "kind": "effect",
-        "file": "measure"
+        "file": "line"
       },
       {
         "kind": "effect",
@@ -32,7 +32,7 @@
         "to": "displace.image"
       },
       {
-        "from": "measure",
+        "from": "line",
         "to": "displace.field"
       },
       {
@@ -62,13 +62,12 @@
     "view.speed": 0.3,
     "view.bright": 1.35,
     "camera.zoom": 1.5,
-    "fx.measure.on": true,
-    "fx.measure.along": 0,
-    "fx.measure.out": 0,
-    "fx.measure.scale": 1.0,
     "fx.displace.on": true,
     "fx.displace.amount": 0.02,
-    "fx.displace.angle": 1.5708
+    "fx.displace.angle": 1.5708,
+    "fx.line.on": true,
+    "fx.line.out": 0,
+    "fx.line.scale": 1.0
   },
   "routes": [
     {
@@ -79,7 +78,7 @@
     },
     {
       "source": "hand:left.y",
-      "target": "fx.measure.angle",
+      "target": "fx.line.angle",
       "op": "push",
       "value": 0.5
     },

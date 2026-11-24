@@ -1,5 +1,5 @@
 """Plan 67, rule 5 ("a convenience is a patch, not a fork"): Blocks is
-`measure (cells) → waveform → cell action ← measure.2 → displace`, and that
+`cells → waveform → cell action ← cells.2 → displace`, and that
 patch draws every Blocks look as `blocks.glsl` does — so Blocks can be taken
 apart and rebuilt from primitives, and the file stays for speed (one pass
 instead of five) and for saved looks, which it keeps drawing byte for byte.
@@ -93,14 +93,14 @@ def test_every_blocks_look_is_the_patch_up_to_rounding(ctx):
         bst.values["blocks"].update(on=True, mix=1.0, **look)
         v = dict(bst.values["blocks"])
         pst = FxState()
-        pst.set_instances({"measure": 2})
+        pst.set_instances({"cells": 2})
         for name, vals in blocks_patch(v, H).items():
             pst.values[name].update(vals)
         bch, pch = FxChain(ctx, bst), FxChain(ctx, pst)
         for t in TIMES:
             bch.run_one("blocks", src, a, t, opaque=1)
-            pch.run_one("measure", src, fields["number"], t, opaque=1, res=(W, H))
-            pch.run_one("measure.2", src, fields["place"], t, opaque=1, res=(W, H))
+            pch.run_one("cells", src, fields["number"], t, opaque=1, res=(W, H))
+            pch.run_one("cells.2", src, fields["place"], t, opaque=1, res=(W, H))
             pch.run_one("waveform", fields["number"].color_attachments[0], fields["wave"], t,
                         opaque=1)
             pch.run_one("cellaction", fields["wave"].color_attachments[0], fields["push"], t,
@@ -121,7 +121,7 @@ def test_every_blocks_look_is_the_patch_up_to_rounding(ctx):
     assert len(differ) <= total // 8, f"{len(differ)} of {total} not byte for byte: {differ[:5]}"
 
 
-DISTORT = Path(__file__).resolve().parents[1] / "presets" / "distort"
+DISTORT = Path(__file__).resolve().parents[1] / "loadable" / "distort"   # (main's #482 moved them)
 SAVED = sorted(p for p in DISTORT.glob("*.json")
                if any(k.startswith("fx.blocks.") for k in json.loads(p.read_text())["values"]))
 
@@ -168,9 +168,15 @@ def test_a_saved_blocks_look_draws_the_same_as_its_patch(ctx, path):
                   {"blocks": v})
     patch = frames(NODES, [*WIRES, {"from": "scene", "to": "displace.image"},
                            {"from": "displace", "to": "output.1.image"}],
-                   blocks_patch(v, 120), instances={"measure": 2})
+                   blocks_patch(v, 120), instances={"cells": 2})
     edges = on_edges(v, 160, 120)
     for k, (a, b) in enumerate(zip(file, patch, strict=True)):
         d = np.where(edges, 0, np.abs(a.astype(int) - b).max(axis=2))
         assert d.max() <= 1 and (d > 0).sum() <= d.size // 200, (
             path.stem, k, int(d.max()), int((d > 0).sum()))
+
+
+def test_the_saved_looks_are_found():
+    """An empty list skips every saved look in silence (the move of the
+    distort patches did, once)."""
+    assert len(SAVED) >= 5, DISTORT

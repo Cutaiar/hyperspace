@@ -3,7 +3,7 @@
 A field is a value, or a pair, at every pixel: float32 at the frame's size,
 signed and unbounded, its .a 0 for a scalar and 1 for a vector. Effect files
 make and take one by saying so (`// @makes field`, `// @takes <port> field`);
-the first are Measure (a generator, no input) and To field (picture → field),
+the first were Measure — now Point, Line, Rings, Spokes, Cells and Noise (generators, no input; plan 67 §15) — and To field (picture → field),
 and Displace reads one on its new `field` port. What is held here:
 
 - the types and the directives: `graph.FIELD` is `fx.FIELD`; each file's ports;
@@ -37,14 +37,14 @@ moderngl = pytest.importorskip("moderngl")
 W, H = 64, 48
 
 
-def wired(*pairs, nodes=("measure", "displace")):
+def wired(*pairs, nodes=("rings", "displace")):
     return {"frame": "wired", "nodes": [{"kind": "effect", "file": n} for n in nodes],
             "wires": [{"from": "shape", "to": "scene.geometry"},
                       *({"from": a, "to": b} for a, b in pairs)]}
 
 
-BASIC = wired(("scene", "displace.image"), ("measure", "displace.field"),
-              ("displace", "output.1.image"), ("measure", "output.2.image"))
+BASIC = wired(("scene", "displace.image"), ("rings", "displace.field"),
+              ("displace", "output.1.image"), ("rings", "output.2.image"))
 
 
 def _spec(section):
@@ -60,7 +60,7 @@ def test_the_field_type_is_one_word_in_both_modules():
 
 
 def test_each_file_says_what_its_ports_carry():
-    assert ports_of("measure") == ("field", {"aux": "image"})          # a generator: no input
+    assert ports_of("rings") == ("field", {"aux": "image", "field": "field"})   # no input; a point
     assert ports_of("tofield") == ("field", {"image": "image", "aux": "image"})
     assert ports_of("displace") == ("image", {"image": "image", "aux": "image", "field": "field"})
     assert ports_of("wave") == ("image", {"image": "image", "aux": "image"})
@@ -87,20 +87,20 @@ def test_a_field_goes_into_a_field_port_and_into_a_picture_port():
 @pytest.mark.parametrize("pair, said", [
     (("scene", "displace.field"),
      "scene makes a picture, displace.field takes a field — put a To field (tofield) between"),
-    (("scene", "measure.image"), "measure has no port 'image'"),
-    (("measure", "wave.field"), "wave has no port 'field'"),
+    (("scene", "rings.image"), "rings has no port 'image'"),
+    (("rings", "wave.field"), "wave has no port 'field'"),
 ])
 def test_a_wire_a_field_cannot_take_is_refused_in_words(pair, said):
-    spec = _spec(wired(pair, nodes=("measure", "displace", "wave")))
+    spec = _spec(wired(pair, nodes=("rings", "displace", "wave")))
     assert any(said in n for n in spec.notes), spec.notes
 
 
 def test_a_field_is_no_mask():
-    section = wired(("scene", "cut.image"), ("measure", "cut.mask"), ("cut", "output.1.image"),
-                    nodes=("measure",))
+    section = wired(("scene", "cut.image"), ("rings", "cut.mask"), ("cut", "output.1.image"),
+                    nodes=("rings",))
     section["nodes"].append({"kind": "cut"})
     spec = _spec(section)
-    assert any("measure makes a field, cut.mask takes a mask" in n for n in spec.notes), spec.notes
+    assert any("rings makes a field, cut.mask takes a mask" in n for n in spec.notes), spec.notes
 
 
 # ---------------------------------------------------------------- the build
@@ -125,7 +125,7 @@ def _rig(ctx, section, values):
     return r
 
 
-ON = {"measure": {"on": True, "along": 1}, "displace": {"on": True, "mix": 1.0, "amount": 0.1}}
+ON = {"rings": {"on": True}, "displace": {"on": True, "mix": 1.0, "amount": 0.1}}
 
 
 def _draw(ctx, r, n=2):
@@ -141,12 +141,12 @@ def test_the_build_makes_the_field_once_and_promotes_it_for_a_picture_port(ctx):
     r = _rig(ctx, BASIC, ON)
     _draw(ctx, r)
     g = r._graph
-    m, d = g.nodes["measure"], g.nodes["displace"]
+    m, d = g.nodes["rings"], g.nodes["displace"]
     assert isinstance(m, G.FieldEffect) and m.OUTPUT == G.FIELD
     assert isinstance(d, G.Effect) and d.inputs["field"] is m and d.INPUTS["field"] == G.FIELD
-    pic = g.nodes["measure(picture)"]
+    pic = g.nodes["rings(picture)"]
     assert isinstance(pic, G.FieldPicture) and pic.inputs["field"] is m
-    assert r.stats["effects"].count("measure") == 1          # once, for both readers
+    assert r.stats["effects"].count("rings") == 1          # once, for both readers
     assert not g.dormant
 
 
@@ -167,7 +167,7 @@ def test_displace_moves_the_picture_by_the_field_and_not_without_it(ctx):
     still = _rig(ctx, BASIC, {**ON, "displace": {**ON["displace"], "amount": 0.0}})
     plain, _ = _draw(ctx, still)
     assert np.abs(moved.astype(int) - plain.astype(int)).max() > 30
-    off = _rig(ctx, BASIC, {**ON, "measure": {"on": False}})   # off: no field, nothing moves
+    off = _rig(ctx, BASIC, {**ON, "rings": {"on": False}})   # off: no field, nothing moves
     same, grey = _draw(ctx, off)
     assert np.array_equal(same, plain)
     assert np.all(np.abs(grey[..., :3].astype(int) - 128) <= 1)
@@ -191,19 +191,19 @@ def _pass(ctx, name, values, picture=None, dtype="f4", field=None):
 
 
 def test_a_field_is_raw_signed_and_unbounded(ctx):
-    got, _ = _pass(ctx, "measure", {"along": 0, "scale": 4.0})   # the line, across, × 4
+    got, _ = _pass(ctx, "line", {"scale": 4.0})   # the line, across, × 4
     x = ((np.arange(W) + 0.5) / W - 0.5) * (W / H) * 4.0
     assert np.allclose(got[H // 2, :, 0], x, atol=1e-4)
     assert got[..., 0].min() < -2.0 and got[..., 0].max() > 2.0
     assert np.all(got[..., 3] == 0.0)                              # a scalar
-    vec, _ = _pass(ctx, "measure", {"along": 0, "out": 1, "angle": 0.0})
+    vec, _ = _pass(ctx, "line", {"out": 1, "angle": 0.0})
     assert np.allclose(vec[..., 0], 1.0) and np.allclose(vec[..., 1], 0.0, atol=1e-6)
     assert np.all(vec[..., 3] == 1.0)                              # a vector
 
 
 def test_into_a_target_that_is_no_field_it_shows_grey(ctx):
     """A preview, a thumbnail's card: the same pass into RGBA8 is the grey."""
-    got, _ = _pass(ctx, "measure", {"along": 0, "scale": 1.0}, dtype="f1")
+    got, _ = _pass(ctx, "line", {"scale": 1.0}, dtype="f1")
     row = got[H // 2, :, 0].astype(int)
     assert np.all(np.diff(row) >= 0) and row[0] < 60 and row[-1] > 195
     assert np.all(got[..., 0] == got[..., 1]) and np.all(got[..., 3] == 255)
@@ -227,7 +227,7 @@ def test_displace_pushes_a_column_by_a_constant_vector_field(ctx):
     """A vector field (1, 0) everywhere, Amount 0.25: the picture is read a
     quarter of a frame height to the right, so a white column moves left by
     that many pixels."""
-    _, field = _pass(ctx, "measure", {"along": 0, "out": 1, "angle": 0.0})
+    _, field = _pass(ctx, "line", {"out": 1, "angle": 0.0})
     pic = np.zeros((H, W, 4), np.uint8)
     pic[..., 3] = 255
     pic[:, W // 2, :3] = 255
@@ -251,26 +251,26 @@ def test_the_canvas_draws_a_field_maker_and_a_field_cable(tmp_path):
     assert not spec.notes, spec.notes
     g = G.build_graph(views(Switches(), Switches()), spec.wiring())
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
-    m = view.node("render:measure")
+    m = view.node("render:rings")
     ins = {p.name for p in m.ports if p.direction == graphview.IN}
     outs = [p for p in m.ports if p.direction == graphview.OUT]
     assert "image" not in ins and outs and outs[0].type == graphview.FIELD
     d = view.node("render:displace")
     assert any(p.name == "field" and p.type == graphview.FIELD for p in d.ports)
-    into = {c.dst_port: c.type for c in view.cables if c.src_port == "rout:measure"}
+    into = {c.dst_port: c.type for c in view.cables if c.src_port == "rout:rings"}
     assert into["rin:displace/field"] == graphview.FIELD
     assert into["rin:output.2/image"] == graphview.FIELD           # promoted, still a field cable
 
 
 def test_a_field_nodes_thumbnail_is_its_grey(ctx):
-    """The page wants Measure's thumbnail: it is the field the frame made, grey
+    """The page wants Rings' thumbnail: it is the field the frame made, grey
     (rings: mid-grey at the centre, lighter at the corners), never made for it."""
     r = _rig(ctx, BASIC, ON)
     _draw(ctx, r)
-    r.thumbs.want({"measure": "picture"})
+    r.thumbs.want({"rings": "picture"})
     _draw(ctx, r)
     assert not r.thumbs.error and r.thumbs.count >= 1
-    tex = r.thumbs.get("measure")
+    tex = r.thumbs.get("rings")
     assert tex is not None
     w, h = tex.size
     px = np.frombuffer(tex.read(), np.uint8).reshape(h, w, 4)
@@ -287,19 +287,19 @@ def test_a_field_reaches_displace_in_all_outputs_run(ctx):
 
     from hyperspace.render import Renderer
 
-    section = wired(("scene", "displace.image"), ("measure", "displace.field"),
+    section = wired(("scene", "displace.image"), ("rings", "displace.field"),
                     ("displace", "output.all.image"))
     shots = []
     for amount in (0.0, 0.15):
         r = Renderer(ctx)
         r.ghost.state.on = False
         r.wiring = _spec(section).wiring()
-        r.fx.state.values["measure"].update(on=True, along=1, out=1)
+        r.fx.state.values["rings"].update(on=True, out=1)
         r.fx.state.values["displace"].update(on=True, amount=amount)
         vs = _views(ctx, 1)
         r.draw_outputs(_faces(), 160, 120, 1.0, vs, t_now=2.0)
         assert ctx.error == "GL_NO_ERROR"
-        assert r.stats["effects"] == ["measure", "displace"]
+        assert r.stats["effects"] == ["rings", "displace"]
         shots.append(_px(vs[0].target).astype(int))
     assert shots[0][..., :3].max() > 30                       # a picture, not black
     assert (np.abs(shots[1] - shots[0]).max(axis=2) > 20).mean() > 0.05
@@ -307,14 +307,14 @@ def test_a_field_reaches_displace_in_all_outputs_run(ctx):
 
 def test_a_field_generator_wired_into_a_reader_reaches():
     """GRAPH's `unreached`: an effect no wire feeds reads nothing (R15) — but a
-    field generator takes no picture by design, so Measure wired into
+    field generator takes no picture by design, so Rings wired into
     Displace's field port reaches, is drawn lit, and its thumbnail is its
     field, not the test card (the owner's screenshot, 2026-11-24, said
     "reaches nothing"). Unwired, it reaches nothing as before."""
     from hyperspace import graphview
 
-    spec = _spec(wired(("scene", "displace.image"), ("measure", "displace.field"),
+    spec = _spec(wired(("scene", "displace.image"), ("rings", "displace.field"),
                        ("displace", "output.all.image")))
-    assert "measure" not in graphview.unreached(spec)
+    assert "rings" not in graphview.unreached(spec)
     alone = _spec(wired(("scene", "displace.image"), ("displace", "output.all.image")))
-    assert "measure" in graphview.unreached(alone)
+    assert "rings" in graphview.unreached(alone)

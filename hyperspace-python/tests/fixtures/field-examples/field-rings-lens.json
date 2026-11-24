@@ -1,7 +1,7 @@
 {
   "schema": "hyperspace.loadable/11",
   "name": "field-rings-lens",
-  "note": "Measure's rings, as a direction, push every pixel out from the centre: a lens. The sub band pumps Displace's Amount; the right hand's height moves the centre across.",
+  "note": "Rings, as a direction, push every pixel out from a Point: a lens. The sub band pumps Displace's Amount; the right hand's height moves the Point across.",
   "graph": {
     "frame": "wired",
     "nodes": [
@@ -11,7 +11,11 @@
       },
       {
         "kind": "effect",
-        "file": "measure"
+        "file": "point"
+      },
+      {
+        "kind": "effect",
+        "file": "rings"
       },
       {
         "kind": "effect",
@@ -32,7 +36,11 @@
         "to": "displace.image"
       },
       {
-        "from": "measure",
+        "from": "point",
+        "to": "rings.field"
+      },
+      {
+        "from": "rings",
         "to": "displace.field"
       },
       {
@@ -62,11 +70,11 @@
     "view.speed": 0.3,
     "view.bright": 1.35,
     "camera.zoom": 1.5,
-    "fx.measure.on": true,
-    "fx.measure.along": 1,
-    "fx.measure.out": 1,
     "fx.displace.on": true,
-    "fx.displace.amount": 0.01
+    "fx.displace.amount": 0.01,
+    "fx.rings.on": true,
+    "fx.rings.out": 1,
+    "fx.point.on": true
   },
   "routes": [
     {
@@ -77,7 +85,7 @@
     },
     {
       "source": "hand:right.y",
-      "target": "fx.measure.cx",
+      "target": "fx.point.x",
       "op": "push",
       "value": 0.8
     },

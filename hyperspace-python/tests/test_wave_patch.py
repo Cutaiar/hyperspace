@@ -1,5 +1,5 @@
 """Plan 67, rule 5 ("a convenience is a patch, not a fork"): Wave is
-`measure → waveform → combine ← measure.2 → displace`, and that patch draws
+`point → line/rings/spokes → waveform → combine ← its .2 → displace`, and that patch draws
 every Wave look as `wave.glsl` does — so a Wave can be taken apart and rebuilt
 from primitives, and the file stays for speed (one pass instead of five) and
 for saved looks, which it keeps drawing byte for byte.
@@ -34,7 +34,7 @@ import pytest
 from hyperspace.fx import FxChain, FxState
 
 sys.path.insert(0, str(Path(__file__).parent))
-from wavepatch import NODES, WIRES, wave_patch
+from wavepatch import ALONG, nodes, wave_patch, wires
 
 moderngl = pytest.importorskip("moderngl")
 
@@ -83,7 +83,7 @@ def test_every_wave_look_is_the_patch_up_to_rounding(ctx):
     # framebuffer and making another leaves GL_INVALID_OPERATION on Mesa for
     # the next pass — a driver's, not this test's)
     fields = {k: ctx.framebuffer(color_attachments=[_tex(ctx)])
-              for k in ("value", "way", "wave", "push")}
+              for k in ("point", "value", "way", "wave", "push")}
     a = ctx.framebuffer(color_attachments=[_tex(ctx, "f1")])
     b = ctx.framebuffer(color_attachments=[_tex(ctx, "f1")])
     for look in looks:
@@ -91,14 +91,17 @@ def test_every_wave_look_is_the_patch_up_to_rounding(ctx):
         wst.values["wave"].update(on=True, mix=1.0, **look)
         v = dict(wst.values["wave"])
         pst = FxState()
-        pst.set_instances({"measure": 2})
+        m = ALONG[v["along"]]
+        pst.set_instances({m: 2})
         for name, vals in wave_patch(v).items():
             pst.values[name].update(vals)
         wch, pch = FxChain(ctx, wst), FxChain(ctx, pst)
         for t in TIMES:
             wch.run_one("wave", src, a, t, opaque=1)
-            pch.run_one("measure", src, fields["value"], t, opaque=1, res=(W, H))
-            pch.run_one("measure.2", src, fields["way"], t, opaque=1, res=(W, H))
+            pt = fields["point"].color_attachments[0]
+            pch.run_one("point", src, fields["point"], t, opaque=1, res=(W, H))
+            pch.run_one(m, src, fields["value"], t, opaque=1, res=(W, H), field=pt)
+            pch.run_one(f"{m}.2", src, fields["way"], t, opaque=1, res=(W, H), field=pt)
             pch.run_one("waveform", fields["value"].color_attachments[0], fields["wave"], t,
                         opaque=1)
             pch.run_one("combine", fields["way"].color_attachments[0], fields["push"], t,
@@ -123,7 +126,7 @@ def test_every_wave_look_is_the_patch_up_to_rounding(ctx):
     assert len(differ) <= total // 10, f"{len(differ)} of {total} not byte for byte: {differ[:5]}"
 
 
-DISTORT = Path(__file__).resolve().parents[1] / "presets" / "distort"
+DISTORT = Path(__file__).resolve().parents[1] / "loadable" / "distort"   # (main's #482 moved them)
 SAVED = sorted(p for p in DISTORT.glob("*.json")
                if any(k.startswith("fx.wave.") for k in json.loads(p.read_text())["values"])
                and "shake" not in p.stem and "blocks" not in p.stem and "all-three" not in p.stem)
@@ -168,9 +171,9 @@ def test_a_saved_wave_look_draws_the_same_as_its_patch(ctx, path):
     file = frames([{"kind": "effect", "file": "wave"}],
                   [{"from": "scene", "to": "wave.image"}, {"from": "wave", "to": "output.1.image"}],
                   {"wave": v})
-    patch = frames(NODES, [*WIRES, {"from": "scene", "to": "displace.image"},
+    patch = frames(nodes(v), [*wires(v), {"from": "scene", "to": "displace.image"},
                            {"from": "displace", "to": "output.1.image"}],
-                   wave_patch(v), instances={"measure": 2})
+                   wave_patch(v), instances={ALONG[v["along"]]: 2})
     for k, (a, b) in enumerate(zip(file, patch, strict=True)):
         d = np.abs(a.astype(int) - b).max(axis=2)
         hard = v["shape"] in (2, 3) or v["steps"] > 0
@@ -178,3 +181,9 @@ def test_a_saved_wave_look_draws_the_same_as_its_patch(ctx, path):
             assert (d > 0).sum() <= d.size // 100, (path.stem, k, int(d.max()), int((d > 0).sum()))
         else:
             assert np.array_equal(a, b), (path.stem, k, int(d.max()), int((d > 0).sum()))
+
+
+def test_the_saved_looks_are_found():
+    """An empty list skips every saved look in silence (the move of the
+    distort patches did, once)."""
+    assert len(SAVED) >= 5, DISTORT

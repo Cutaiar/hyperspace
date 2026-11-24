@@ -259,6 +259,20 @@ vec4 field_at(sampler2D s, vec2 uv) {
 vec4 field_in(vec2 uv) { return field_at(u_src, uv); }
 vec4 field_port(vec2 uv) { return u_field_on != 0 ? field_at(u_field, uv) : vec4(0.0); }
 
+// the point a measure counts from (plan 67 §15): a Point's field on the
+// field port (this pixel's offset from it, frame heights), or with none the
+// frame's middle — `centred`, as `from_point(uv, 0, 0)` is to the bit
+vec2 from_field_point(vec2 uv) { return u_field_on != 0 ? field_port(uv).xy : centred(uv); }
+
+// a measure as a field node writes it: value, its count × scale with its
+// direction riding in y and z; direction, the way with the count in z; across,
+// that way a quarter turn on (Line, Rings, Spokes; Wave's patch reads these)
+vec4 measure_out(Measure m, int out_, float scale) {
+    if (out_ == 2) return vec4(-m.g.y, m.g.x, m.x, 1.0);
+    if (out_ == 1) return vec4(m.g, m.x, 1.0);
+    return vec4(m.x * scale, m.g, 0.0);
+}
+
 // a field read as a vector: a vector field's pair; a scalar field pushes
 // along `dir` (radians) by its value
 vec2 field_vector(vec4 f, float dir) {

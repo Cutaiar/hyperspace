@@ -1,7 +1,7 @@
 {
   "schema": "hyperspace.loadable/11",
   "name": "field-wave",
-  "note": "Wave taken apart: rings from the centre (Measure) counted in waves and laid with a sine (Waveform), times the way out from the centre (a second Measure, Combine), squeezing the picture in and out like ripples in a pond (Displace, its colours parted by Split): the picture of distort-wave-ripple. The sub band pushes Amount; the right hand's height brings in the split; the left hand's height, how many rings.",
+  "note": "Wave taken apart: rings from a Point (Rings) counted in waves and laid with a sine (Waveform), times the way out from the centre (a second Rings, Combine), squeezing the picture in and out like ripples in a pond (Displace, its colours parted by Split): the picture of distort-wave-ripple. The sub band pushes Amount; the right hand's height brings in the split; the left hand's height, how many rings.",
   "graph": {
     "frame": "wired",
     "nodes": [
@@ -11,11 +11,15 @@
       },
       {
         "kind": "effect",
-        "file": "measure"
+        "file": "point"
       },
       {
         "kind": "effect",
-        "file": "measure",
+        "file": "rings"
+      },
+      {
+        "kind": "effect",
+        "file": "rings",
         "instance": 2
       },
       {
@@ -45,11 +49,19 @@
         "to": "displace.image"
       },
       {
-        "from": "measure",
+        "from": "point",
+        "to": "rings.field"
+      },
+      {
+        "from": "point",
+        "to": "rings.2.field"
+      },
+      {
+        "from": "rings",
         "to": "waveform.image"
       },
       {
-        "from": "measure.2",
+        "from": "rings.2",
         "to": "combine.image"
       },
       {
@@ -87,20 +99,17 @@
     "view.speed": 0.3,
     "view.bright": 1.35,
     "camera.zoom": 1.5,
-    "fx.measure.along": 1,
-    "fx.measure.angle": 1.5708,
-    "fx.measure.on": true,
-    "fx.measure.2.along": 1,
-    "fx.measure.2.angle": 1.5708,
-    "fx.measure.2.on": true,
-    "fx.measure.2.out": 1,
     "fx.waveform.waves": 5.0,
     "fx.waveform.drift": 1.0,
     "fx.waveform.on": true,
     "fx.combine.on": true,
     "fx.displace.amount": 0.03,
     "fx.displace.split": 0.8,
-    "fx.displace.on": true
+    "fx.displace.on": true,
+    "fx.rings.on": true,
+    "fx.rings.2.on": true,
+    "fx.rings.2.out": 1,
+    "fx.point.on": true
   },
   "routes": [
     {

@@ -23,7 +23,7 @@ vec4 effect(vec2 uv) {
     vec4 w = field_in(uv), k = field_port(uv);
     float a = w.x * u_amount;
     vec2 cs = w.yz;                                     // a cell, frame heights (rides with the number)
-    vec2 at = k.xy;                                     // this pixel's place in its cell, frame heights
+    vec2 at = k.xy * cs;                                // this pixel's place in its cell, frame heights
     vec2 dir = vec2(cos(u_angle), sin(u_angle));
     vec2 d;
     if (u_action == 1) {

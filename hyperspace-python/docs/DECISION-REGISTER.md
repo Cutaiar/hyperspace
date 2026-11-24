@@ -962,6 +962,9 @@ here; overturn → the change, then the same.
 | 1098 | Plan 67: a cell's geometry rides on Measure's cells field instead of being worked out again: Out value carries the cell's size (frame heights) in y and z, Out direction is the pixel's place in its cell (frame heights) with its side of a pair × Group in z; Measure gains Aspect, Group and Pairs (none, across, up) and Scale reaches 512; Waveform passes what rides with its input on. So Cell action (Action, Amount, Angle) has no grid knobs of its own | 884 | (rec) — plan 67 §14; §13 left it to this session |
 | 1099 | Plan 67: Cell action's push is in **half** frame heights, read by Displace at its top Amount (0.5), so the push is exact (×2 then ×½). Widening Displace's Amount to 1 would be cleaner, but saved route depths are measured along the knob's taper (`params.retaper_depths`), so a wider range is a format-lane migration of every route on `fx.displace.amount` (the Drive's `field-wave` among them) | 885 | **pending the owner** (rec: keep half frame heights until a migration has another reason to run) |
 | 1100 | Plan 67: Waveform gains Phase (turns, an LFO's word), saved as `fx.waveform.start`: `u_phase` is every file's clock and `fx.<n>.phase` the position jog of §10.1. 0 leaves Wave's patch as it was (`x − t + 0` is `x − t`) | 884 | (rec) |
+| 1101 | Plan 67 §15: Measure split into Line, Rings, Spokes, Cells and Noise, each with only the knobs it uses; Centre X / Y replaced by a **Point** node, a vector field of each pixel's offset from it, read on each measure's field port (none: the middle). Wired to a Point, every mode is Measure's bit for bit (158 cases); with none, the middle is `centred`, an ulp or so from `from_point(uv, 0, 0)`. Measure was never on `main`; the five field examples move | 886 | owner (2026-11-24) |
+| 1102 | Plan 67 §15: Cells' Out place is the place in the cell in **cell units** (−½ … ½), not frame heights, so it shows on the canvas (the owner's "anything but value does nothing"); Cell action scales it by the cell's size that rides with the number, as before, to the bit | 886 | (rec) |
+| 1103 | Plan 67: the FX pane's "reaches nothing" followed picture wires only, so every field node before a field port said it (the owner's screenshot, 2026-11-24); it follows the field port now, held on every field example. The saved-look proofs of Wave and Blocks looked in `presets/distort`, which `main`'s #482 moved: they skipped in silence and now fail if they find too few. `tools/app_driver.py` gives its app a library (`<home>/library`; #480) | 887 | (rec) — bugs |
 | 1000 | Plan 80: an effect whose Python half says `GENERATOR` (the Mandelbrot) draws with nothing wired into its `image`, over transparent black; `graph.Effect.generates`. Every other effect with no input still reads nothing. A change to `graph.py`, outside plan 80's files, kept to `Effect.reads`, `paint` and `_pass` | 800 | owner — 2026-11-22: accepted, the `graph.py` change included |
 | 1001 | Plan 80: Inside coloured is how fast a point settles onto its cycle — L·ln K / ln abs(λ_L) from the sum of ln abs(f′(z)) over a lag L the periodicity check found, K = what 5 % of a pixel is at zoom 1 and 810 lines — not the step the check caught it at. That step hung on a pixel-sized tolerance (deep in, most of the inside never settled before the cap: flat grey), Brent's window (bands, discs) and float32's last bit after a rebase (blocks). The inside/outside decision is unchanged | 801 | (rec) — pending the owner |
 | 1002 | Plan 80: a c or z₀ drive moves its term by the view height × min(1, TERM_RATE × R), R the term's measured sensitivity (how much a pan changes the picture over how much the term does, per plane unit, on a 16×9 grid of the view), measured every 0.25 s a drive runs, a faster rate eased in over 0.5 s and a slower one taken at once. TERM_RATE 0.1, to be tuned on the rig. Pan and Dive unchanged; an unused term keeps plan 63's rate | 802, 803 | (rec) — pending the owner |
@@ -15471,6 +15474,27 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** (rec).
 - **Built.** `waveform.glsl`.
 - **Judge it.** 884.
+
+### 1101. One measure per node, and a Point
+
+- **What.** The owner on the rig (2026-11-24): Measure's knobs only did something in some combinations of Along and Out (Rule, Spread, Aspect, Group and Pairs for cells; Angle for the line; direction for noise) — "a pretty significant anti-pattern" — and Centre X / Y "should be our primitive". Measure becomes five nodes, each with only its knobs: **Line** (Scale, Angle, Out), **Rings** (Scale, Out), **Spokes** (Scale, Out), **Cells** (Scale, Aspect, Group, Rule, Spread, Pairs, Out value or place), **Noise** (Scale). **Point** (X, Y) makes a vector field, each pixel's offset from it in frame heights; every measure reads one on its `field` port (`_lib.glsl`'s `from_field_point`; none wired: the frame's middle). Proof: Measure's float output over 316 settings saved before, each new node after — every setting with a Point wired bit for bit; at the middle with none, within 5e-6 (`centred` against `from_point(uv, 0, 0)`, which a compiler fuses differently). Wave's patch always wires a Point (`tests/wavepatch.py`), so it stays as equal to `wave.glsl` as before.
+- **Answer.** owner (2026-11-24): "split into nodes", "Point makes a field", sharp edges before Trip warp.
+- **Built.** `shaders/fx/point.glsl`, `line.glsl`, `rings.glsl`, `spokes.glsl`, `cells.glsl`, `noise.glsl`; `measure.glsl` removed; the field examples.
+- **Judge it.** 886.
+
+### 1102. Cells' place in cell units
+
+- **What.** Out place was the place in the cell in frame heights — a cell of 48 px at 1080p is ±0.02, grey on the canvas and nothing through Displace at its default Amount. It is −½ … ½ now; Cell action multiplies it by the cell's size, which rides with the number. Same arithmetic as before, moved: Blocks' patch is unchanged.
+- **Answer.** (rec).
+- **Built.** `cells.glsl`, `cellaction.glsl`.
+- **Judge it.** 886.
+
+### 1103. Three silent failures
+
+- **What.** (1) `ui_fx.groups` followed picture wires only, so any node whose path ends in a field port was "reaches nothing — wire it on graph" on the FX pane while lit on the canvas; it follows the field port. (2) `main`'s #482 moved the distort patches to `loadable/distort/`; the saved-look proofs of Wave and Blocks then found none and skipped; they look there and fail if they find fewer than five. (3) `main`'s #480 made no `[library] path` no library, so `tools/app_driver.py` drove an app that could load nothing; its corpus goes into `<home>/library`, which its config names.
+- **Answer.** (rec) — bugs.
+- **Built.** `ui_fx.py`, `tests/test_field_examples.py`, `tests/test_wave_patch.py`, `tests/test_blocks_patch.py`, `tools/app_driver.py`.
+- **Judge it.** 887.
 
 ### 1090. The shared field pieces
 

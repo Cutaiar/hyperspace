@@ -8846,6 +8846,14 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## FM. Measure taken apart, a Point (rows 1101–1103, 2026-11-24)
+
+Plan 67 §15. Headless: `tests/test_field_wire.py`, `tests/test_wave_patch.py`, `tests/test_blocks_patch.py`, `tests/test_field_examples.py` (every example's nodes reach, on the canvas and the FX pane). The examples are in the Drive library's `loadable/field-examples/`.
+
+**886. One Point, many measures.** (Mac, GRAPH) Load `field-examples/field-rings-lens`. *Pass:* Point → Rings → Displace, all lit, green cables; Rings' knobs are Scale and Out only, and each changes the picture. Right-click the canvas, add a Spokes, wire the same Point into its `field` and Spokes into a second Displace on another output: drag Point's X and both move together. Add a Cells: every knob (Scale, Aspect, Group, Rule, Spread, Pairs) changes its thumbnail; Out place shows a small red-green ramp in every cell. *Fail:* a knob that does nothing, a node drawn faint while wired.
+
+**887. Nothing reaches nothing.** (Mac) Load each of the five `field-examples`, and open the FX section with each field node selected. *Pass:* no node says "reaches nothing"; each sits under Run. *Fail:* any field node faint, or "it reaches nothing — wire it on graph".
+
 ## FL. Blocks taken apart (rows 1097–1100, 2026-11-24)
 
 Plan 67 §14. Headless: `tests/test_blocks_patch.py` (every Blocks choice and pair, three times, one pass per node; every saved Blocks look through the renderer), `tests/test_field_examples.py` (`field-blocks` opens with no note, its routes live), `tools/fx_sweep.py` (Blocks byte for byte on the shared cell pieces). The example is in the Drive library's `loadable/field-examples/`.
