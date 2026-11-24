@@ -267,8 +267,8 @@ from . import (
 from . import ui_effect_picker as fxpick
 from .bands import CEIL
 from .graph import Effect
-from .hands import panel as ui_hands
 from .groupwords import group_title
+from .hands import panel as ui_hands
 from .learn import META_UNDO, PairAsk
 from .library import LibraryError
 from .params import KEY_GROUP, Kind
