@@ -956,6 +956,9 @@ here; overturn → the change, then the same.
 | 1107 | Plan 67 §15: Measure split into Line, Rings, Spokes, Cells and Noise, each with only the knobs it uses; Centre X / Y replaced by a **Point** node, a vector field of each pixel's offset from it, read on each measure's field port (none: the middle). Wired to a Point, every mode is Measure's bit for bit (158 cases); with none, the middle is `centred`, an ulp or so from `from_point(uv, 0, 0)`. Measure was never on `main`; the five field examples move | 889 | owner (2026-11-24) |
 | 1108 | Plan 67 §15: Cells' Out place is the place in the cell in **cell units** (−½ … ½), not frame heights, so it shows on the canvas (the owner's "anything but value does nothing"); Cell action scales it by the cell's size that rides with the number, as before, to the bit | 889 | (rec) |
 | 1109 | Plan 67: the FX pane's "reaches nothing" followed picture wires only, so every field node before a field port said it (the owner's screenshot, 2026-11-24); it follows the field port now, held on every field example. The saved-look proofs of Wave and Blocks looked in `presets/distort`, which `main`'s #482 moved: they skipped in silence and now fail if they find too few. `tools/app_driver.py` gives its app a library (`<home>/library`; #480) | 890 | (rec) — bugs |
+| 1110 | Plan 67: Trip warp as a patch — `noise (flow) × rings → scale`, `point → scale.2`, `combine.2 (add) → displace` — **near, not equal**: warp.glsl counts in fractions of the frame's width and height, the field nodes in frame heights, so the patch's calm middle is round (the file's an oval fitted to the frame) and its swim as long across as up; equal on the frame's axes, up to about a quarter more up and down toward the corners; the zoom is the file's; Amount 0 the picture byte for byte. warp.glsl stays and draws every saved look as before | 891 | owner (2026-11-24): "near patch, keep file" |
+| 1111 | Plan 67: Noise gains Out flow (warp.glsl's two drifting octaves as a vector) and Drift (a `@clock`, drift × scale, as Trip warp's); Drift 0 leaves Out value as it was | 891 | (rec) |
+| 1112 | Plan 67 §3.2: Scale, the lane modifier `scale` as a field op — × then + (−4 … 4, −1 … 1), on a scalar's value or a vector's x and y, what rides along untouched; no clamp (a field is signed) | 891 | (rec) |
 | 1081 | Plan 89: an effect node has discrete slots — several pictures wired into one effect node, each slot its own `image` / `aux` in and its own picture out, each processed separately with the one shared set of knobs; the separate `copy` node is gone, and clicking the effect shows its one set of controls | 873 | owner (2026-11-23) |
 | 1082 | Plan 89: slot 1 is the effect's own name; slot k is `<effect>.slot.<k>` (`acid.slot.2`, `acid.2.slot.3`), declared by the effect's entry `"slots": n` (written above 1 only), 1 … 8 (`graph.MAX_SLOTS`, a switch's eight); a wire naming an undeclared slot is a note | 873 | (rec) |
 | 1083 | Plan 89: the migration — a section's copies of one effect, lowest copy instance first, become its next slots; wire ends and `keys` renamed; an entry added for an instance only wires named; a copy of no effect the section holds, or past the eighth slot, dropped with its wires and said; a copy's GRAPH place and group membership dropped (its effect's node has its own) | 875 | (rec) |
@@ -15429,6 +15432,27 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** (rec) — bugs.
 - **Built.** `ui_fx.py`, `tests/test_field_examples.py`, `tests/test_wave_patch.py`, `tests/test_blocks_patch.py`, `tools/app_driver.py`.
 - **Judge it.** 890.
+
+### 1110. Trip warp as a patch, near
+
+- **What.** `tests/trippatch.py` maps any Trip warp look onto eight nodes: Noise (Out flow, Scale, Drift, its speed), Rings (the distance from the middle), Combine (multiply), Scale (× 0.4 Amount), Point and Scale.2 (× −0.2 min(1, 1.5 Amount): the zoom), Combine.2 (add), Displace (Amount 0.5, the Scales doubled for it). An exact patch needs the field nodes to count in fractions of the frame's width and height as warp.glsl does; they count in frame heights (plan 67 rule 3). So the patch is near: `tests/test_trip_patch.py` holds that its push is, to float32, `(uv − ½)(s − 1) + flow × 0.2 Amount × r × (H/W, 1)` (r in frame heights; the file's r is `length(uv − ½)`), that Amount 0 is the picture in both, and that a smooth picture is within `2 × Amount + 0.1` levels on average (1.7 at Amount 1).
+- **Answer.** owner (2026-11-24), asked between a near patch, changing warp.glsl to frame heights (every saved look shifts), and a frame-fraction unit on Rings and Displace: "near patch, keep file".
+- **Built.** `tests/trippatch.py`, `tests/test_trip_patch.py`, `loadable/field-examples/field-trip.json` + `.md`.
+- **Judge it.** 891.
+
+### 1111. Noise's flow and Drift
+
+- **What.** Out flow: `perlin2(p × Scale + t × 0.1) + perlin2(p × 3 Scale + t × 0.05 + 7)`, a vector, warp.glsl's; Out value one octave as before, now drifting too. Drift is a `@clock` at drift × scale (Trip warp's), 0 by default, so a Noise saved before draws the same.
+- **Answer.** (rec).
+- **Built.** `shaders/fx/noise.glsl`.
+- **Judge it.** 891.
+
+### 1112. Scale, a field op
+
+- **What.** Plan 67 §3.2 names the field ops after the lane modifiers: `scale` multiplies then adds (× −4 … 4, + −1 … 1). On a field it acts on a scalar's value or a vector's x and y, leaving what rides along (a cell's size) as it is; no clamp, a field being signed.
+- **Answer.** (rec).
+- **Built.** `shaders/fx/scale.glsl`.
+- **Judge it.** 891.
 
 ### 1096. The shared field pieces
 
