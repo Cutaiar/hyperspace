@@ -8846,6 +8846,12 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## FO. Trip warp taken apart (rows 1110–1112, 2026-11-24)
+
+Plan 67 §16. Headless: `tests/test_trip_patch.py` (the push is the formula; Amount 0 the picture; how near), `tests/test_field_examples.py` (`field-trip` opens with no note). The example is in the Drive library's `loadable/field-examples/`.
+
+**891. Trip warp taken apart.** (Mac, 1080p outputs) Load `party-noita`, then `field-examples/field-trip`, side by side if two decks are free. *Pass:* the same swimming rim and calm middle, the same zoom; the right hand deepens the swim, its depth changes the noise's size, the left hand its drift. Toward the corners the patch may swim a little more up and down (row 1110). Move the Point: the calm middle stays where it was (Rings is not wired to it) — wire the Point into Rings' `field` and it moves. *Fail:* a picture that differs at a glance in the middle third, or a frame rate that drops with the eight passes.
+
 ## FN. Measure taken apart, a Point (rows 1104, 1106–1109, 2026-11-24)
 
 Plan 67 §15. Headless: `tests/test_field_wire.py`, `tests/test_wave_patch.py`, `tests/test_blocks_patch.py`, `tests/test_field_examples.py` (every example's nodes reach, on the canvas and the FX pane). The examples are in the Drive library's `loadable/field-examples/`.

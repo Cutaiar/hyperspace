@@ -1,0 +1,201 @@
+{
+  "schema": "hyperspace.loadable/11",
+  "name": "field-trip",
+  "note": "Trip warp taken apart: two octaves of drifting noise (Noise, Out flow) weighted by the distance from the middle (Rings, Combine), plus a 10% zoom (a Point scaled), push the frame so its rim swims while the middle holds (Displace): near the picture of party-noita's Trip warp. The right hand's height deepens the swim; its depth, the size of the noise; the left hand's height, how fast it drifts.",
+  "graph": {
+    "frame": "wired",
+    "nodes": [
+      {
+        "kind": "hands",
+        "laid": "over"
+      },
+      {
+        "kind": "effect",
+        "file": "point"
+      },
+      {
+        "kind": "effect",
+        "file": "noise"
+      },
+      {
+        "kind": "effect",
+        "file": "rings"
+      },
+      {
+        "kind": "effect",
+        "file": "combine"
+      },
+      {
+        "kind": "effect",
+        "file": "scale"
+      },
+      {
+        "kind": "effect",
+        "file": "scale",
+        "instance": 2
+      },
+      {
+        "kind": "effect",
+        "file": "combine",
+        "instance": 2
+      },
+      {
+        "kind": "effect",
+        "file": "displace"
+      }
+    ],
+    "wires": [
+      {
+        "from": "shape",
+        "to": "scene.geometry"
+      },
+      {
+        "from": "pattern",
+        "to": "shape.faces"
+      },
+      {
+        "from": "scene",
+        "to": "displace.image"
+      },
+      {
+        "from": "noise",
+        "to": "combine.image"
+      },
+      {
+        "from": "rings",
+        "to": "combine.field"
+      },
+      {
+        "from": "combine",
+        "to": "scale.image"
+      },
+      {
+        "from": "point",
+        "to": "scale.2.image"
+      },
+      {
+        "from": "scale",
+        "to": "combine.2.image"
+      },
+      {
+        "from": "scale.2",
+        "to": "combine.2.field"
+      },
+      {
+        "from": "combine.2",
+        "to": "displace.field"
+      },
+      {
+        "from": "displace",
+        "to": "output.all.image"
+      },
+      {
+        "from": "hands",
+        "to": "hands.layer.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.guide"
+      }
+    ]
+  },
+  "values": {
+    "ghost.on": true,
+    "ghost.alpha": 0.35,
+    "view.shape": 55,
+    "view.faces": true,
+    "view.pattern": 2,
+    "view.speed": 0.3,
+    "view.bright": 1.35,
+    "camera.zoom": 1.5,
+    "fx.point.on": true,
+    "fx.noise.out": 1,
+    "fx.noise.scale": 3.0,
+    "fx.noise.drift": 1.0,
+    "fx.noise.on": true,
+    "fx.rings.on": true,
+    "fx.combine.on": true,
+    "fx.scale.mul": 0.36,
+    "fx.scale.on": true,
+    "fx.scale.2.mul": -0.2,
+    "fx.scale.2.on": true,
+    "fx.combine.2.how": 0,
+    "fx.combine.2.on": true,
+    "fx.displace.amount": 0.5,
+    "fx.displace.on": true
+  },
+  "routes": [
+    {
+      "source": "hand:right.y",
+      "target": "fx.scale.mul",
+      "op": "push",
+      "value": 0.05
+    },
+    {
+      "source": "hand:right.z",
+      "target": "fx.noise.scale",
+      "op": "push",
+      "value": -0.2
+    },
+    {
+      "source": "hand:left.y",
+      "target": "fx.noise.drift",
+      "op": "push",
+      "value": 0.4
+    },
+    {
+      "source": "lane:0",
+      "target": "rot.rate.ZW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:1",
+      "target": "rot.rate.XW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:2",
+      "target": "rot.rate.YW",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:3",
+      "target": "rot.rate.XY",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:4",
+      "target": "rot.rate.XZ",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:5",
+      "target": "rot.rate.YZ",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    }
+  ],
+  "macros": {},
+  "units": {
+    "camera.pan": "world",
+    "fx.depth": "taper"
+  },
+  "media": {
+    "channels": {}
+  }
+}

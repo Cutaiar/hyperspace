@@ -220,3 +220,9 @@ The roundup's `measure (…)` is five nodes now — Line, Rings, Spokes, Cells, 
 more, a field every measure reads (plan 67 §15, row 1107). Where §1 says `measure (cells)` read
 Cells; `measure (noise)`, Noise; `point → …`, a Point wired into the measure's `field` port.
 
+## 12. Trip warp, near (2026-11-24)
+
+The "Becomes" for Trip warp, `measure (noise, vector) × point → displace`, as built: Noise's Out
+flow × Rings, a Point scaled for the zoom, added, into Displace — near, not equal, by the owner's
+choice (plan 67 §16, row 1110): Trip warp's unit is the frame's width and height.
+

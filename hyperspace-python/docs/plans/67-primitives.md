@@ -677,3 +677,15 @@ Scale) — the grey promotion is ±1, and a thumbnail could scale to the field's
 with nothing in its input is faint with words about reaching, where "wire a field into its input"
 is what it needs; then Trip warp (§13 item 2) and any knob takes a field (item 3).
 
+## 16. Trip warp as a patch, near (2026-11-24)
+
+warp.glsl counts in fractions of the frame's width and height; the field nodes count in frame
+heights (rule 3), so no patch of them equals it. Asked, the owner chose **a near patch, the file
+kept** (row 1110) over changing warp.glsl's look or adding a frame-fraction unit to Rings and
+Displace. Built: Noise's **Out flow** and **Drift** (row 1111), **Scale** (the lane modifier as a
+field op, row 1112), and Trip warp as `noise (flow) × rings → scale`, `point → scale.2`, added
+→ Displace (`tests/trippatch.py`, the example `field-trip`). The push is held to its formula;
+the zoom is the file's; the swim differs off the frame's axes, up to about a quarter.
+
+**Next** (§13): any knob takes a field, then Hue cycle retired into Palette + fields.
+
