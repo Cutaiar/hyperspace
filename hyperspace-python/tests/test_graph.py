@@ -228,8 +228,8 @@ def test_ports_are_typed_and_the_graph_checks_its_wiring():
     # an input left None is allowed (the ground under a composite)
     c = G.Composite("c", under=None, over=scene)
     assert c.inputs == {"under": None, "over": scene, "depth": None} and c.deps() == [scene]
-    with pytest.raises(ValueError, match="blend 'screen'"):
-        G.Composite("c", blend="screen", over=scene)
+    with pytest.raises(ValueError, match="blend 'multiply'"):
+        G.Composite("c", blend="multiply", over=scene)
     # a scene takes any number of geometries, one port each
     two = G.Scene("two", geometries=[G.Hands("h"), G.Shape("s")])
     assert list(two.inputs) == ["geometry", "geometry.2"]

@@ -97,6 +97,7 @@ from . import (
     tempo,
     totem,
     ui_browse,
+    ui_media,
 )
 from . import field as field_mod
 from . import ghost as ghosts
@@ -114,7 +115,7 @@ from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hotplug import Hotplug
 from .hotreload import HotReloader
 from .learn import Learn
-from .library import Library
+from .library import NO_LIBRARY, Library
 from .library import home as library_home
 from .media import pool as media_pool
 from .media import proxy as media_proxy
@@ -1089,6 +1090,10 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
     page asked for it."""
     first = slots[0]
     glfw.make_context_current(root.win)
+    # the panel's NDI on/off asks (MEDIA ▸ Live), made so with the render context current
+    for sl in slots:
+        if sl.ndi_asked is not None:
+            publish.take_ask(sl, ctx, Offscreen)
     # the frame target, bound explicitly every frame: the renderer draws into
     # whatever is bound, and a frame that once left another offscreen
     # framebuffer bound froze the picture with no error (plan 14 WP1).
@@ -1531,6 +1536,11 @@ def _zoom_about(zoom, pan_x, pan_y, view, wheel: float, x: float, y: float,
     # world (on the plane through the origin, where a unit is `unit` px)
     unit = _px_per_unit(view, w, h)
     cx, cy = view.pan[0], view.pan[1]
+    if fractal.about_middle(view):
+        # inside a fractal the step takes the zoom about the middle of the
+        # screen itself (plan 81, `fractal.centre`): the wheel adds only the
+        # move from the middle to the cursor, or the two pivots stack
+        cx = cy = 0.0
     pan_x.nudge((cx - (x - w / 2) / unit) * (factor - 1))
     pan_y.nudge((cy - (y - h / 2) / unit) * (factor - 1))
 
@@ -1683,12 +1693,21 @@ def _space(h: Host, reg) -> None:
     if shape is not None and shape[0].box is not None:
         box = shape[0].box
     if dive.inside:
+        # a frame that crosses out takes the zoom and turn since the last step
+        # about the middle first (plan 81, `fractal.centre`: the wheel left
+        # that pivot to it, and the crossing would skip it). Only then: a frame
+        # that stays inside takes them once, with the dive rate's, in the step
+        # The one verdict, on the centred pose, decides the crossing below too
+        off_d = _drawn_off(h, view)
+        out = _crosses_out(view, box, off_d)
+        if out:
+            fractal.centre(view, reg, off_d)
         if shape is not None and shape[1].bounded:        # a load handed a dive in:
             shape[0].to_space(worlds.SHAPE, view.zoom, view.pan)   # a new look, still
             b = shape[0].bodies.get(worlds.SHAPE)
             if b is not None:
                 b.still()
-        if not fractal.wants_inside(view, box, shapeframe.drawn_offset(view)):
+        if out:
             off = fractal.go_outside(view, reg)
             if shape is not None:
                 shape[0].to_object(worlds.SHAPE, off, view.zoom, view.pan)
@@ -1702,6 +1721,21 @@ def _space(h: Host, reg) -> None:
         fractal.go_inside(view, reg, off)
         if shape is not None:
             shape[0].to_space(worlds.SHAPE, zoom, pan)
+
+
+def _crosses_out(view, box, off) -> bool:
+    """Would this frame's view, its zoom and turn taken about the middle
+    (`fractal.centre`), leave the inside of its fractal (`wants_inside`)?
+    Previewed on the view and put back as it was, moving nothing."""
+    d = view.dive
+    held = (view.zoom, list(view.pan), d.z, d.w, d.seen, d.settled,
+            np.array(getattr(d, "frame", np.zeros(4)), dtype=np.float64))
+    try:
+        fractal.centre(view, None, off)
+        return not fractal.wants_inside(view, box, shapeframe.drawn_offset(view))
+    finally:
+        view.zoom, view.pan[:] = held[0], held[1]
+        d.z, d.w, d.seen, d.settled, d.frame = held[2:]
 
 
 def _dive_of(view):
@@ -1720,19 +1754,34 @@ def _shape_of(world) -> tuple[worlds.World, worlds.WorldObject] | None:
     return (world, obj) if obj is not None else None
 
 
-def _reroot(h: Host, reg) -> None:
+def _reroot(h: Host, reg, dt: float = 0.0) -> None:
     """The on-air view re-rooted (`ViewState.reroot`, `fractal.step`), told
     the offset drawn after the shape (`shapeframe.drawn_offset`) so the cell
     it takes is the one under the eye. Decks off air re-root with none."""
-    view, off = h.view, None
-    if _dive_of(view) is not None and field_mod.takes_offset(view):
-        shape = _shape_of(h.world)
-        if shape is not None:
-            off = shapeframe.drawn_offset(view, shape[0].offset_matrix(worlds.SHAPE),
-                                          shape[1].bounded)
-        else:
-            off = shapeframe.drawn_offset(view)
-    view.reroot(reg, off)
+    view = h.view
+    view.reroot(reg, _drawn_off(h, view), dt)
+
+
+def _drawn_off(h: Host, view):
+    """The offset drawn after the shape (`shapeframe.drawn_offset`), for the
+    dive's middle of the screen; None for a view with no dive or no offset."""
+    if _dive_of(view) is None or not field_mod.takes_offset(view):
+        return None
+    shape = _shape_of(h.world)
+    if shape is not None:
+        return shapeframe.drawn_offset(view, shape[0].offset_matrix(worlds.SHAPE),
+                                       shape[1].bounded)
+    return shapeframe.drawn_offset(view)
+
+
+def _reroot_off_air(d, dt: float = 0.0) -> None:
+    """A deck off air re-rooted: no world of its own, but the room placement
+    its dive carries (`Dive.shift`, a loaded dive's) is drawn all the same
+    (`shapeframe.drawn_offset`), so the dive centres where it is drawn."""
+    view = d.view
+    off = (shapeframe.drawn_offset(view)
+           if _dive_of(view) is not None and field_mod.takes_offset(view) else None)
+    view.reroot(d.reg, off, dt)
 
 
 def _fly(h: Host, reg) -> None:
@@ -1807,6 +1856,11 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # does — a section, or the selection with the node it showed; they claim
     # [ and ]'s edge the same way, so brightness (the table's bare [ ]) never
     # hears them
+    # ⌘V pastes the clipboard's picture into the selected channel's next empty
+    # cell; a file dropped on a window goes the same road (ui_media.intake)
+    if keys.super() and keys.pressed(glfw.KEY_V):
+        ui_media.paste(h.panel)
+    ui_media.poll_intake(h.panel)
     hist = getattr(h.panel, "history", None)    # (a panel from before a hot reload)
     if hist is not None:
         hist.note(view_of(h.panel))             # however the view changed since
@@ -1933,10 +1987,10 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # in or out (fractal.py): the same picture at a zoom that never runs out
     try:
         _space(h, reg)
-        _reroot(h, reg)
+        _reroot(h, reg, dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("view.reroot", e)
-    if said := _off_air(h, "reroot", lambda d: d.view.reroot(d.reg)):
+    if said := _off_air(h, "reroot", lambda d: _reroot_off_air(d, dt)):
         ok, reloader.runtime_error = False, said
     # the world (plan 59): the shape's home from this frame's params, the
     # puppets (the palms, read after HandsIO.poll), then the physics' fixed
@@ -2116,6 +2170,7 @@ def main(argv: list[str] | None = None) -> None:
     glfw.swap_interval(0)
     ctx = moderngl.create_context()
     renderer = Renderer(ctx)
+    ghosts.show_look(renderer.ghost.state)   # the show's ghost hands, before a registry reads them
     # the world objects (plan 59): one world, the renderers' (deck 2's is a sibling)
     world = worlds.World.default()
     renderer.world = world
@@ -2123,7 +2178,10 @@ def main(argv: list[str] | None = None) -> None:
     # each output: a presenter on its own context, none waiting yet
     _open_presenters(slots, root_win, notes=cfg.setdefault("notes", []))
     root.pacer.choose(_slot_windows(slots), root_win)
-    # the outputs published out (plan 32 T9), the root's context current
+    # the outputs published out (plan 32 T9), the root's context current; this Mac's
+    # NDI choice from the panel (publish.here.json) over config.toml's
+    if not args.laptop:
+        publish.apply_here(slots, publish.load_here(home))
     _open_publishers(slots, ctx, cfg.setdefault("notes", []))
 
     # the control side: imgui on the control window's context. Its swap
@@ -2160,11 +2218,16 @@ def main(argv: list[str] | None = None) -> None:
     lp = cfg.get("library", {}).get("path", "")
     lib_root, unknown = sharedfile.library_root(lp, bool(cfg.get("error")), home / DISPLAYS_COPY,
                                                 home, DISPLAYS_FILE)
+    # No [library] path is no library (2026-11-23): the home is never one, so nothing
+    # lists and every save is refused in words until config.toml names the Drive folder
     library = (Library(home / CONFIG_UNREAD, machine=home) if unknown
-               else Library() if lib_root == home else Library(lib_root, machine=home))
-    if library.not_moved:
-        print(f"library: {library.not_moved}", file=sys.stderr)
-        library.say(warning=library.not_moved)
+               else Library(home / NO_LIBRARY, machine=home) if lib_root == home
+               else Library(lib_root, machine=home))
+    # (with no library its own refusal, said by `Library`, stays the footer's line)
+    for said in (library.strays if library.missing is None else "", library.not_moved):
+        if said:
+            print(f"library: {said}", file=sys.stderr)
+            library.say(warning=said)
     # the media folder and the eight channels (plan 32): the channels'
     # params are declared over this one `MediaState`, the loadable patch's bins are
     # its, and the renderer reads its frames
@@ -2253,6 +2316,7 @@ def main(argv: list[str] | None = None) -> None:
         panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
         panel.output = output
         panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
+        panel.publish_home = None if args.laptop else home   # MEDIA ▸ Live's NDI out, this Mac's
         if display_list is not None:           # …and a row per display (SC2)
             panel.displays = Running(display_list, lambda: placement.screens(glfw), slots,
                                      opened_of(slots, want.control if want is not None else None))
@@ -2339,7 +2403,7 @@ def main(argv: list[str] | None = None) -> None:
     # controller, no page, no undo, no file. Built now, not on a fade's first
     # frame: compiling its shaders then would stall the room (rec, row 648)
     glfw.make_context_current(root_win)
-    renderer2 = renderer.sibling()
+    renderer2 = renderer.sibling(ghost=ghosts.show_look())
     glfw.make_context_current(ctrl_win)
     renderer2.segment_cfg = renderer.segment_cfg
     # the meta controller's wires, on both (plan 44 D5c): either deck can be on air
@@ -2450,6 +2514,14 @@ def main(argv: list[str] | None = None) -> None:
     panel.config_notes = cfg["notes"]
     # keys from every window (`hotplug.py` points them at what's open, as is the mouse)
     keys = Keys(render_win, ctrl_win, [w for w in _slot_windows(slots) if w is not render_win])
+    def on_drop(_win: Any, paths: Any) -> None:    # (pyGLFW passes the list of paths)
+        ui_media.DROPPED.extend(paths)
+
+    for _w in (ctrl_win, render_win):       # a file dropped on either window → a media cell
+        if _w is None:                      # (no display shows output 1)
+            continue
+        # (pyGLFW's stub types the callback (window, int, str); it is called (window, paths))
+        glfw.set_drop_callback(_w, on_drop)  # pyright: ignore[reportArgumentType]
     mouse = Mouse(render_win, reg, s, slots[0].switches,          # the mouse: output 1 only
                   pointer=meta.pointer(MOUSE))
 

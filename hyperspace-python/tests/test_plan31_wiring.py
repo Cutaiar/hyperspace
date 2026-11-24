@@ -508,6 +508,8 @@ def test_an_untouched_loadable_saves_as_6_with_every_value(app, tmp_path):
     # (plan 60, row 859: and the grip, at its defaults, is left out)
     assert doc["values"] == {k: v for k, v in every.items() if not k.startswith("mod.")
                              and not k.startswith("grip.")
+                             # (plan 64, row 902: a fractal's settings are its `fractal` key's)
+                             and k not in loadable.FRACTAL_PIDS
                              and M.effect_of(k) in (None, *held)}
     assert "seq.run" not in doc["values"] and _new_ids(doc)
     path = app.loaded_patch.save_as("plain")

@@ -46,8 +46,8 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import ui
-from .fx import FACE_MAPS, FX_DIR, PER_FACE
+from . import ui, ui_fields, ui_kit
+from .fx import FACE_MAPS, FX_DIR, PER_FACE, pad_of
 from .graph import _PICTURE_PORTS, run_back, run_of, wire_node_kind
 
 # the groups `groups` makes, as their headers say them
@@ -362,8 +362,15 @@ def strip(panel, sel: str) -> None:
     mode = fx.values[sel].get("mode", 0)
     labels = {p.key: p.label.lower() for p in spec.params}
     choices = {p.key for p in spec.params if p.choices}
-    for label, keys in strip_rows(sel, [p.key for p in spec.params if f"{pre}.{p.key}" in r],
-                                  mode):
+    pads = ui_kit.ready()                   # plan 82: no kit, no pads — its sliders, packed as before
+    for label, keys in pad_rows(spec, sel, [p.key for p in spec.params if f"{pre}.{p.key}" in r],
+                                mode, pads):
+        pad = pad_of(spec, keys[0]) if pads else None
+        if pad is not None and tuple(keys) == pad.keys:   # plan 82: the square and its knobs
+            for pid, rr in ui_fields.inline_pad(panel, [f"{pre}.{k}" for k in keys],
+                                                pad.label).items():
+                rects[pid] = rr
+            continue
         if len(keys) == 1 and keys[0] in choices:
             # a discrete choice (plan 30 N8, `@param choice`): a picker
             panel._label_cell(labels[keys[0]])
@@ -462,6 +469,35 @@ def _hue_bar(v: dict) -> None:
                            imgui.ImVec2(x0 + (i + 1) * seg, pos.y + HUE_BAR_H),
                            imgui.get_color_u32(imgui.ImVec4(r, g, b, 1.0)))
     imgui.dummy(imgui.ImVec2(1.0, HUE_BAR_H))
+
+
+def pad_rows(spec, name: str, keys: list[str], mode: int = 0, pads: bool = True
+             ) -> list[tuple[str, list[str]]]:
+    """`strip_rows` with plan 82's pads resolved first: a `@pair` or
+    `@volume` whose keys are all shown is one row of its keys, at its first
+    key's place, and only the keys between pads are packed — so a pad over
+    two keys `strip_rows` would pack together (`sat_lo`, `sat_hi`) is still
+    a pad. Without `pads` (no kit) it is `strip_rows` exactly."""
+    if not pads:
+        return strip_rows(name, keys, mode)
+    hide = HIDDEN_BY_MODE.get(name.partition(".")[0], {}).get(1 if mode else 0, ())
+    keys = [k for k in keys if not k.startswith(hide)]
+    shown = set(keys)
+    rows: list[tuple[str, list[str]]] = []
+    run: list[str] = []
+    done: set[str] = set()
+    for k in keys:
+        pad = pad_of(spec, k)
+        if pad is None or not shown.issuperset(pad.keys):
+            run.append(k)
+            continue
+        if k in done:
+            continue
+        rows += strip_rows(name, run, mode)
+        run = []
+        done.update(pad.keys)
+        rows.append((pad.label.lower(), list(pad.keys)))
+    return rows + strip_rows(name, run, mode)
 
 
 def strip_rows(name: str, keys: list[str], mode: int = 0) -> list[tuple[str, list[str]]]:

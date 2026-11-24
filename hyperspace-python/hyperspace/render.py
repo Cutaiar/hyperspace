@@ -139,7 +139,10 @@ from .graph import (
     FIELD,
     IMAGE,
     MEDIA_CHANNELS,
+    Capture,
     Delay,
+    DelayWrite,
+    Effect,
     Frame,
     Graph,
     Hands,
@@ -152,6 +155,7 @@ from .graph import (
     bus_cuts_of,
     channel_into,
     cloud_roles,
+    generators_of,
     graph_key,
     mask_flip,
     mask_made,
@@ -160,7 +164,19 @@ from .graph import (
 )
 from .lookback import Dreamer, DreamState, Lookback
 from .masks import MaskPasses
-from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
+from .media_tex import (
+    COVER,
+    FIT_FS,
+    KEY_HERE,
+    KEY_MASK,
+    KEY_OFF,
+    KEY_RAMP_OUT,
+    Key,
+    MediaTextures,
+    UiTextures,
+    fit_scale,
+    key_of,
+)
 from .outputs import (
     THUMB_PX,
     Handoff,
@@ -938,6 +954,9 @@ class PassTimer:
         # frames ended, not yet read: (the frame's node names, its queries)
         self._pending: list[tuple[list[str], list[tuple[str, object]]]] = []
         self._ms: dict[str, list[float]] = {}
+        # plan 84: every name that asks this frame, while GRAPH's **gpu cost**
+        # chip is lit (`Renderer._draw_frame` sets it); None, nothing noted
+        self.watch: set[str] | None = None
         try:
             q = ctx.query(time=True)
             with q:
@@ -969,7 +988,15 @@ class PassTimer:
         """``with timer.time("scene"):`` — the node's GPU time, this frame.
         Plan 34 D: inside another node's query (a delay's write painting an
         effect, which times its own pass) it is a no-op — GL allows one
-        active per target, so the outer line holds the inner's time."""
+        active per target, so the outer line holds the inner's time.
+
+        Plan 84: while `watch` holds a set (GRAPH's **gpu cost** chip lit),
+        every name that asks is noted in it, timed or not — a pass inside
+        another's query ran too — so the chip knows what ran this frame,
+        not only what the timer lists (a segment switched off asks nothing)."""
+        watch = getattr(self, "watch", None)
+        if watch is not None:
+            watch.add(name)
         if not self.on or getattr(self, "_active", False):
             return _Timed(None)
         try:
@@ -1011,6 +1038,58 @@ class PassTimer:
         """Node → median ms over the window, in the graph's order; empty
         until the first frame has been read back, and with no timer."""
         return {name: float(np.median(w)) for name, w in self._ms.items() if w}
+
+
+def gpu_made(graph: Graph, frame: Frame, asked) -> dict:
+    """Plan 84, the read side of the timer for GRAPH's **gpu cost** chip:
+    which of the frame's nodes made something, from what the frame did.
+    `asked` is every name that asked the timer for a query this frame
+    (`PassTimer.watch`): a node that ran a pass. Nothing is timed, drawn or
+    read back here.
+
+    - ``gpu_ran``: the nodes that ran a pass this frame: their medians are
+      their cost;
+    - ``gpu_free``: the nodes the frame ran with no pass of their own (a
+      switch, a delay's read, the pattern, a see-through geometry —
+      `Graph.timed` does not list them): their time is their consumer's, so
+      they are neither a cost nor "made nothing";
+    - ``gpu_built``: every node of the frame's graph. A canvas node in none
+      of these was not built (unreached, row 349); one built but in neither
+      of the first two made nothing this frame — an effect switched off, a
+      segment switched off, a branch behind a switch's unpicked input;
+    - ``gpu_owner``: a pass timed under a name of its own that no canvas
+      node carries → the node it belongs to: a delay's write → its delay, a
+      look-back's capture → its look-back. The page adds its time to its
+      owner's.
+
+    Empty sets when the frame's picks cannot be read (a frame that failed
+    before its graph ran): the chip then marks nothing as made."""
+    owner: dict[str, str] = {}
+    for node in graph.order:
+        own = getattr(node, "delay", None) if isinstance(node, DelayWrite) else (
+            getattr(node, "lookback", None) if isinstance(node, Capture) else None)
+        if isinstance(own, str) and own != node.name:
+            owner[node.name] = own
+    try:
+        pulled = graph.pulled(frame)
+        listed = set(graph.timed)
+    except Exception:  # noqa: BLE001 — a frame that failed: nothing said
+        return {"gpu_ran": frozenset(), "gpu_free": frozenset(), "gpu_built": frozenset(),
+                "gpu_owner": owner}
+    asked = set(asked)
+    ran: set[str] = set()
+    free: set[str] = set()
+    for node in graph.order:
+        if node.name not in pulled and (node.MAKES or isinstance(node, Effect)):
+            continue                                # (`evaluate` skips it)
+        if node.name in asked:
+            ran.add(node.name)
+        elif node.name not in listed and not isinstance(node, Effect):
+            free.add(node.name)                     # (no pass of its own)
+    # an owner whose pass ran made something, though it times nothing itself
+    ran |= {owner[n] for n in ran if n in owner}
+    return {"gpu_ran": frozenset(ran), "gpu_free": frozenset(free - ran),
+            "gpu_built": frozenset(n.name for n in graph.order), "gpu_owner": owner}
 
 
 class _Timed:
@@ -1918,6 +1997,13 @@ class Renderer:
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
                       stats=stats, selects=selects, resizes=resizes)
         timer = self._pass_timer()
+        # plan 84: what each node runs this frame, only while GRAPH's **gpu
+        # cost** chip asks (`gpu_watch`, set by the page each frame it is lit
+        # and cleared here, so a chip turned off — or a page no longer drawn —
+        # stops costing after one frame)
+        watch = bool(getattr(self, "gpu_watch", False))
+        self.gpu_watch = False
+        timer.watch = set() if watch else None
         self._thumb_frame = None
         try:
             graph.evaluate(frame)
@@ -1926,6 +2012,9 @@ class Renderer:
             timer.end_frame(graph.timed_in(frame))
             stats["gpu_ms"] = timer.medians()
             stats["gpu_note"] = timer.note
+            asked, timer.watch = timer.watch, None
+            if asked is not None:
+                stats.update(gpu_made(graph, frame, asked))
 
     def _poi_layer(self, s: ViewState, size: tuple[int, int], target, vp) -> None:
         """The poi's guide for this frame (plan 47), drawn once into its
@@ -1991,13 +2080,16 @@ class Renderer:
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
         effects = frozenset(st.specs) if st is not None else frozenset()
+        # plan 80: the effects that draw with nothing wired in (`Effect.generates`)
+        gens = generators_of(st)
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
                 or getattr(graph, "bus_cuts", None) != bus_cuts
-                or frozenset(getattr(graph, "effects", ())) != effects):
+                or frozenset(getattr(graph, "effects", ())) != effects
+                or frozenset(getattr(graph, "generators", ())) != gens):
             graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
-                                              bus_cuts)
+                                              bus_cuts, tuple(sorted(gens)))
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
@@ -2346,48 +2438,91 @@ class Renderer:
             now[key] = self._media_textures().texture(c, f)
         return now[key]
 
-    def _media_fit(self, c: str, size: tuple[int, int],
-                   alpha: float = 1.0) -> moderngl.Texture | None:
+    # plan 87: a keyed node's state as the fit pass's cache key reads it
+    # (`media_tex.key_of`: hashable, held to its ranges) — `graph.MediaNode`
+    key_of = staticmethod(key_of)
+
+    def _media_fit(self, c: str, size: tuple[int, int], alpha: float = 1.0,
+                   key: Key | None = None) -> moderngl.Texture | None:
         """Channel `c` fitted to a frame of `size` (`media.<c>.fit`: cover,
         contain, stretch), premultiplied by `alpha`: one pass into a
         texture of the renderer's (`_frame_target`, one per channel and
-        alpha 1 or not), once a frame per (channel, size, alpha, fit). With
-        no picture it is transparent black — a texture all the same, so an
-        `IMAGE` port always has one. Leaves its target bound."""
+        alpha 1 or not), once a frame per (channel, size, alpha, fit, key).
+        With no picture it is transparent black — a texture all the same,
+        so an `IMAGE` port always has one. Plan 87: `key` (a keyed channel
+        node's black is clear, `graph.MediaNode`) keys it in the same pass,
+        into a target of its own; with a feather, the ramp alone first into
+        a one-channel target, blurred by `MaskPasses.feather`, and the pass
+        reads that. Leaves its target bound."""
         ch = getattr(getattr(self, "media", None), "channels", {}).get(c)
         fit = int(getattr(ch, "fit", 0) or 0)
         size = (int(size[0]), int(size[1]))
         alpha = min(max(float(alpha), 0.0), 1.0)
         now = self._media_frame_now()
-        key = ("fit", c, size, alpha, fit)
-        if key in now:
-            return now[key]
+        cache = ("fit", c, size, alpha, fit, key)
+        if cache in now:
+            return now[cache]
         src = self.media_texture(c)
         # (plan 33 R: fitted at another size than the frame's — a branch on
         # the faces — it is a target of its own, `(name, size)`)
         name = f"media.{c}" if alpha >= 1.0 else f"media.{c}@alpha"
+        if key is not None:
+            name += "@key"
         at = getattr(self, "_frame_size", None)
-        out, fbo = self._frame_target(name if at is None or size == tuple(at)
-                                      else (name, size), size)
+        tkey = name if at is None or size == tuple(at) else (name, size)
+        mask = None
+        if src is not None and alpha > 0.0 and key is not None and key.feather > 0.0:
+            mask = self._key_ramp(c, src, tkey, size, fit, key)
+        out, fbo = self._frame_target(tkey, size)
         ctx = self.ctx
         fbo.use()
         ctx.viewport = (0, 0, *size)
         if src is None or alpha <= 0.0:
             ctx.clear(0.0, 0.0, 0.0, 0.0)
         else:
-            prog, vao = self._fit_program()
-            ctx.disable(moderngl.BLEND)
-            try:
-                src.use(location=0)
-                prog["u_src"].value = 0
-                prog["u_scale"].value = fit_scale(fit, tuple(src.size), size)
-                prog["u_flip"].value = int(self._media_textures().flipped(c))
-                prog["u_alpha"].value = alpha
-                vao.render(moderngl.TRIANGLES, vertices=3)
-            finally:
-                ctx.enable(moderngl.BLEND)
-        now[key] = out
+            mode = KEY_OFF if key is None else (KEY_HERE if mask is None else KEY_MASK)
+            self._fit_pass(c, src, size, fit, alpha, key, mode, mask)
+        now[cache] = out
         return out
+
+    def _fit_pass(self, c: str, src: moderngl.Texture, size: tuple[int, int], fit: int,
+                  alpha: float, key, mode: int, mask: moderngl.Texture | None = None) -> None:
+        """One fit pass (`FIT_FS`) of channel `c`'s texture `src` into the
+        bound target's `size`, blending off: key `mode` (`media_tex.KEY_*`)
+        with `key`'s values (none read while it is `KEY_OFF`), `mask` the
+        feathered ramp `KEY_MASK` reads."""
+        prog, vao = self._fit_program()
+        ctx = self.ctx
+        uniforms: dict[str, Any] = {
+            "u_src": 0, "u_scale": fit_scale(fit, tuple(src.size), size),
+            "u_flip": int(self._media_textures().flipped(c)), "u_alpha": alpha,
+            "u_key": int(mode), "u_keymask": 1 if mask is not None else 0}
+        if mode != KEY_OFF:
+            uniforms.update(u_measure=int(key.measure), u_level=float(key.level),
+                            u_soft=float(key.soft), u_keep=int(key.keep),
+                            u_invert=int(key.invert))
+        ctx.disable(moderngl.BLEND)
+        try:
+            src.use(location=0)
+            if mask is not None:
+                mask.use(location=1)
+            for name, value in uniforms.items():
+                prog[name].value = value
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            ctx.enable(moderngl.BLEND)
+
+    def _key_ramp(self, c: str, src: moderngl.Texture, tkey, size: tuple[int, int], fit: int,
+                  key) -> moderngl.Texture:
+        """Plan 87's feather: channel `c`'s ramp alone (`KEY_RAMP_OUT`) into a
+        one-channel target of `size` under `(tkey, "key")`, blurred by
+        `key.feather` px (`MaskPasses.feather`, under `(tkey, "key/feather")`).
+        Returns the blurred ramp, which the fit pass reads 1:1."""
+        ramp, rfbo = self._frame_target((tkey, "key"), size, components=1)
+        rfbo.use()
+        self.ctx.viewport = (0, 0, *size)
+        self._fit_pass(c, src, size, fit, 1.0, key, KEY_RAMP_OUT)
+        return self.mask_passes().feather(ramp, (tkey, "key/feather"), key.feather)
 
     def _fit_program(self) -> tuple[moderngl.Program, moderngl.VertexArray]:
         """The fit pass's program (`media_tex.FIT_FS`), built on first use."""
@@ -2518,7 +2653,7 @@ class Renderer:
                                        if after else None), readout=readout,
                                 alpha=float(gh.state.alpha), factor=factor,
                                 bg_alpha=float(v.bg_alpha), flip=flip,
-                                blend="add" if blend == "add" else "over",
+                                blend=blend if blend in ("add", "screen") else "over",
                                 mix=getattr(v, "mix", None),
                                 mix_k=float(getattr(v, "mix_k", 0.0)))
             if v.target is None:
@@ -2616,6 +2751,7 @@ class Renderer:
         """A layer (`tex`, premultiplied, frame-sized) into `target`'s
         `rect` at `alpha` (plan 26 A3, the Composite node's blend): "over"
         — `Ghost.composite`'s blend and arithmetic, the same bytes — "add",
+        "screen" (plan 87: `src + dst·(1 − src)` in colour, alpha as over),
         or "depth": over, hidden where `scene_depth` is nearer than the
         layer's own `depth` (`LAYER_FS`, `LAYER_DEPTH_BIAS`; plain over when
         either depth is missing). On an opaque ground the target's alpha is
@@ -2635,6 +2771,10 @@ class Renderer:
             if blend == "add":
                 ctx.blend_func = ((one, one, moderngl.ZERO, one) if opaque else
                                   (one, one, one, inv))
+            elif blend == "screen":
+                inv_c = moderngl.ONE_MINUS_SRC_COLOR
+                ctx.blend_func = ((one, inv_c, moderngl.ZERO, one) if opaque else
+                                  (one, inv_c, one, inv))
             else:
                 ctx.blend_func = ((one, inv, moderngl.ZERO, one) if opaque else
                                   (one, inv, one, inv))

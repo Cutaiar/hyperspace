@@ -12,7 +12,7 @@ The owner, 2026-11-22, after plan 66's questions:
 > together in novel ways. When primitives compete / have esoteric quirks / don't interface
 > with each other, you end up with a pile of disjoint bitmaps stacked on top of each other."
 
-And the decision that started it: **a field is its own wire** (owner, 2026-11-22; row 906).
+And the decision that started it: **a field is its own wire** (owner, 2026-11-22; row 1085).
 
 Two sessions answered the owner's question separately — plan 66's builder and the session
 that wrote plan 66's brief — and agreed on the diagnosis. This doc merges them; where an
@@ -544,13 +544,13 @@ field port, three field examples in `loadable/field-examples/`. Next: Wave as a 
 Built: **Waveform** and **Combine** (field ops), Measure's Out **across**, Displace's **Split**,
 and Wave as `measure → waveform`, `measure.2 → combine`, `combine → displace`
 (`tests/wavepatch.py`), its field example `loadable/field-examples/field-wave`. Equal to
-`wave.glsl` up to the compiler's rounding (row 916): every field bit for bit; a smooth wave's
+`wave.glsl` up to the compiler's rounding (row 1095): every field bit for bit; a smooth wave's
 saved looks byte for byte; a hard wave's edges a pixel apart at most 1 % of the time. GLSL
 lets a compiler reorder a chain of multiplies inside one program and not across two, so
 "byte for byte across a program boundary" is a promise the language does not make; the
 files stay for the saved looks and for speed (one pass, not five).
 
-**The owner's questions of 2026-11-24** (row 917): a field stays four float32 channels (33 MB at
+**The owner's questions of 2026-11-24** (row 1096): a field stays four float32 channels (33 MB at
 1080p). Two would halve it and lose the scalar-or-vector flag and the spare half; half floats
 would halve it too and round an offset to a quarter pixel and a large count to 1/32 of a wave.
 A per-field precision choice is the later step, for smooth fields.
@@ -558,7 +558,7 @@ A per-field precision choice is the later step, for smooth fields.
 **Testing it locally** (the Mac): `git checkout ccr-956dc2aa-r1kaqe`, `cd hyperspace-python &&
 uv sync`, `uv run pytest tests/test_field_wire.py tests/test_field_lib.py
 tests/test_field_examples.py tests/test_wave_patch.py`, copy `loadable/field-examples/` into the
-library's `loadable/`, restart (`uv run hyperspace`), hand checks 704–709.
+library's `loadable/`, restart (`uv run hyperspace`), hand checks 878–883.
 
 **The owner, 2026-11-24:** four channels at 1080p are fine for now. Fields made at 0.75k and
-0.5k (810 and 540 lines) and upscaled are a follow-up session (row 917).
+0.5k (810 and 540 lines) and upscaled are a follow-up session (row 1096).

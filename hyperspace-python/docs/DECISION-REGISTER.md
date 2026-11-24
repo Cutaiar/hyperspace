@@ -891,22 +891,16 @@ here; overturn → the change, then the same.
 | 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
 | 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
 | 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
-| 902 | Plan 66: Time Displace is an effect file with a Python half (`shaders/fx/timedisplace.glsl`, `// @hook timedisplace`, `hyperspace/timedisplace.py`), not a graph node kind: no schema move; its look-back is a knob (**Look-back** 1 … 8: `lookback`, `lookback.<n>`), read through the renderer's rings handed to its chain (`FxChain.rings`) | 699, 703 | (rec) — plan 66 §5, Q8 |
-| 903 | Plan 66: until fields are a wire, Time Displace carries its own field, 0 … 1 of Span: line (the slit-scan, along Angle), rings, spokes, flat (an echo), aux (the aux picture's brightness: black now, white Span ago); Repeat, Drift (a `@clock`), Steps, Flip | 699, 700 | (rec) — plan 66 §5, Q4 |
-| 904 | Plan 66: a time between two of the ring's frames blends them by time (Between blend) or takes the nearer (nearest); between now and the newest frame it blends its own input, so Span 0 and a field of 0 are its input byte for byte; Span is an amount (0 … 8 s, zero-safe log taper) | 701 | (rec) — plan 66 §5 |
-| 905 | Plan 66: a time older than the ring holds reads its oldest frame (the ring holds 32 × `dream.gap`: about 1 s at the default, 8 s at the most); no ring of that number, an empty one or one being remade reads its input | 702 | (rec) — plan 66 §5 |
-| 906 | Plan 66, open: is a field its own wire (`field`, RG32F, signed; a one-way grey promotion into picture ports; a `picture` converter) or a picture read by convention, as Displace's aux is | — | owner (2026-11-22): its own wire; plan 67 makes it a texture (§3.13) |
-| 907 | Plan 66: the word. The new wire is a **field**; the copies' layout (`field.py`, the panel's "Field motion / amp / rate / depth") is renamed the **lattice**, and Grow's and Wave Table's "Field" knobs are relabelled. No saved id holds the word (`view.inst_*`, `fx.grow.mode`, `fx.wavetable.mode`): labels, code and prose only | — | owner (2026-11-23) |
-| 908 | Plan 66, open: stage 2's reach. Keep `wave.glsl` and `blocks.glsl` and add patches proven byte-identical, or retire them with a migration; Shake stays its file (not one field) | — | **pending the owner** (Q3; rec: keep) |
-| 909 | Plan 66, open: memory for the past at full size (a texture-array ring: 265 MB for 32 frames at 1080p) and the look-ahead window for files (128 MB a channel at half its size) | 703 | **pending the owner** (Q5, Q6) |
-| 910 | Plan 66, open: the wavetable — a render node for pictures and fields, a modifier for curves — and the existing "Wave Table" renamed: label **Stamp Trail** now, `fx.wavetable.*` → `fx.stamptrail.*` in the next format-lane migration | — | **pending the owner** (Q7) |
-| 911 | Plan 67 P2: the shared field pieces in `_lib.glsl` — `point_at`, `from_point`, `Measure` with `measure_line` / `rings` / `spokes` / `cells`, `read_signed`, `quantise`, `threshold_soft`, `remap`, `combine`; units frame heights and turns. Wave, Blocks, Displace, Blend, Prism, Zoom burst, Time Displace and Oil slick moved onto them byte for byte | — | (rec) — plan 67 roundup §7 |
-| 912 | Plan 67 F1: the field wire — float32 RGBA at the frame's size (33 MB a field held at 1080p; RG32F would halve it), .a 0 scalar / 1 vector; `@makes field` and `@takes <port> field` (or `none`); a field maker a `FieldEffect` made once a frame, raw (`FIELD_TAIL`); an effect that reads one has a third port, `field`, on texture unit 3; the aux stays a picture | 704, 708 | owner (2026-11-22): its own wire; the rest (rec) — plan 67 roundup §8 |
-| 913 | Plan 67 F1: a field into a picture port is promoted to grey (`FieldPicture`: a scalar grey about mid-grey, a vector x red, y green); a field pass into any target that is no float32 one shows the same grey (previews, the card, thumbnails); a picture into a field port is refused naming To field; a field is no mask | 705, 706 | (rec) — plan 67 roundup §8 |
-| 914 | Plan 67 F1: the first field files — Measure (line, rings, spokes, cells, noise; value or direction; no input), To field (luma, peak or red/green; signed about mid-grey or unsigned) — and Displace's field port (a vector field by its pair, a scalar along Angle; with one wired its aux is not read), byte for byte without one; three field examples | 707 | (rec) — plan 67 roundup §8 |
-| 915 | Plan 67: Waveform (`wave()` over a field: Waves, Shape, Round free or whole, Drift a `@clock`, Steps) and Combine (add, multiply, min, max; a vector with a scalar takes it in each component) as field ops; Measure's Out gains across; Displace gains Split; a Measure's field carries its other half (the direction, or the value) in its spare channels | 709 | (rec) — plan 67 §12 |
-| 916 | Plan 67: Wave as a patch (`measure → waveform`, `measure.2 → combine`, `combine → displace`), equal to `wave.glsl` up to the compiler's rounding — every field bit for bit; a smooth wave's picture byte for byte on every saved look, at most one level on one pixel in a thousand elsewhere; a hard wave (square, saw, Steps) at most one pixel in a hundred, on its edges. `wave.glsl` stays and draws every saved look as before | 709 | (rec) — plan 67 §12 |
-| 917 | Plan 67: a field stays float32 RGBA (33 MB at 1080p), not RG32F (16.6 MB: the scalar-or-vector flag and the spare half go) nor half floats (16.6 MB as RGBA16F: an offset off by up to a quarter pixel, a count past 32 stepping in 1/32 of a wave) — until memory bites; a per-field precision choice later | 708 | owner (2026-11-24): four channels at 1080p are fine for now; fields at 0.75k and 0.5k, upscaled, are a follow-up session |
+| 1040 | Plan 84: GRAPH's head has a **gpu cost** chip, off by default, page state only (never saved, never an undo step). Lit, every render node is marked by its GPU time: its border and ground up a black-to-white hot ramp, a badge on its top edge ("#1 · 2.10 ms" for the three costliest), and a line under the head with the frame's total over its timed nodes and its three costliest | 840, 841 | (rec) — pending the owner |
+| 1041 | Plan 84: a node's heat is its share of the frame's costliest node's time (the costliest white), not its percentile rank, so one 10 ms node among 0.1 ms ones draws one white node, not a gradient; ranks break ties by name | 841 | (rec) — pending the owner |
+| 1042 | Plan 84: the marks are `PassTimer`'s 60-frame medians eased with a 1 s time constant, the same at any frame rate; a node new to the timer starts at its own time | 842 | (rec) — pending the owner |
+| 1043 | Plan 84: a render node that made nothing this frame — not built (unreached, faint), or built and run for nothing (an effect switched off, a branch behind a switch's unpicked input) — says **made nothing**, not 0 ms; a node with no pass of its own (a switch, a delay's read, the pattern, a see-through geometry) has no mark, its time being its consumer's. What ran is what asked the timer for a query this frame, not what the timer lists (so a segment switched off made nothing); a delay's write and a look-back's capture count as their node's. A node timed inside another's query (an effect in a delay's write) reads 0: GL's one query at a time | 843 | (rec) — pending the owner |
+| 1044 | Plan 84: it costs nothing off. The page asks the renderer a frame at a time (`Renderer.gpu_watch`, cleared each frame, as `media_watch`); only then does the frame add what each node made (`render.gpu_made`, read from what the frame already settled). Nothing more is timed, drawn or read back on the GPU; off, the page pushes no style and draws no badge | 844 | (rec) — pending the owner |
+| 1045 | Plan 84's stretch, not built: thumbnails for unreached picture nodes other than effects. A switch could show its picked input for free; a composite, resize, delay, look-back or echo would each need a pass of its own beside the graph (or a history it does not hold), in `render.thumb_source`, outside the item's files. Options: (a) the switch only; (b) the switch and the composite (one lay pass at a thumbnail's size, under `UNWIRED_PER_FRAME`); (c) leave them as they are. Every option keeps them unbuilt (row 349) | — | **(c), the owner, 2026-11-23**: "I don't really mind if nodes outside of the hot render graph are not heatmapped" |
+| 902 | Plan 64: a side-pane section `fractal` (appended to `ui.PAGE_KEYS`, every saved slot kept) holds what controls a fractal: what it is and where the view is (levels in, inside or outside, the zoom), **Detail** (`view.frac_detail`, 0.35–3×: the split size's reciprocal), **Reach** (`view.frac_far`, −1.5 to +2 octaves on how far cells are drawn) and **Near** (`view.frac_near`, ±1 octave on how near the eye a cell dissolves), **Additive** (moved out of VIEW) and **To the top**. On another shape it says how to pick one. Detail, Reach and Near are the look's own and routable, saved under an optional loadable-patch key `"fractal": {"detail", "far", "near"}` (`loadable.FRACTAL_KEY`) written only while the look's shape is a fractal — every other look saves byte for byte as before — and read on load (the fractal's own, 1, 0 and 0, when absent; a value that is not a number refused, one out of range held to it, each said); in the dirty signature | 699, 700 | owner — 2026-11-20: "build the fractal section" (the recommendation of the day before: a section, a detail slider, the depth of field, a readout, a way back to the top) |
+| 903 | Plan 64: the reach a fractal is drawn to is never under 0.2 octaves and the near end never under 0.3, whatever the fractal's own plus the slider, so the cue's ends never cross and the fade never inverts | — | (rec) |
+| 904 | Plan 64: **To the top** (`view.frac_top`) leaves every cell at once — zoom 1, pan 0, the dive reset — as Reset view does for those, but leaves the shape's turn, the camera's yaw and pitch and the rotation phases alone: it answers "where am I in the fractal", not "reset everything". Inside, it brings the space home, as Reset view does (row 887) | 701 | (rec) |
+| 905 | Plan 64: `view.frac_additive` is drawn in the FRACTAL section, no longer in VIEW, where it sat below the fold and was missed. Its id and behaviour are unchanged; still not saved | 699 | (rec) — the owner, 2026-11-20: "i cannot find any of the controls used to control the recursive geometry" |
 | 872 | Plan 63: the Mandelbrot is an effect file, `shaders/fx/mandel.glsl`, with a Python half, `hyperspace/mandel.py`, named by a new header line `// @hook <name>` (`fx.HOOKS`): `FxChain.run_one` hands it the pass once every uniform is set, `FxState.advance` its values while it draws. Not a picture node: an effect's params, strip, routes, saves, GRAPH picker and hot reload come with the file, and a new effect file bumps no schema | — | owner (2026-11-19, as recommended) |
 | 873 | Plan 63: every term a param (owner decision 1). Slice s lays the pixel's point q into the terms as c = mix(q, c, s), z₀ = mix(z₀, q, s): 0 the Mandelbrot set, 1 a Julia set. Power a whole number 2–8, an int param; a fractional p not built | 671 | owner (2026-11-18) — the mapping (rec) |
 | 874 | Plan 63: the zoom-scaled sensitivity (owner decision 4) lives in the node as drives — Pan x/y, Dive, c and z₀ drives — rates in view heights a second (Dive in doublings, four at full throw) integrated in float64 into the terms while the effect draws; not a route modifier, which cannot read the view, nor a route's `scale`, since the width is not a param. Velocity, not displacement: a displacement fold jumps back when a clutch lets go | 669, 670 | owner (2026-11-19, as recommended): velocity, not displacement |
@@ -917,6 +911,81 @@ here; overturn → the change, then the same.
 | 879 | Plan 63: colour by steps (owner decision 5): the smooth count n + 1 − log_p log abs(z) with abs(z)² > 10⁴ the bail-out; Output steps is grey that rises over Cycle steps and falls over the next, so Palette's gradient wraps with no seam; Output ramp a built-in colour ramp; Inside coloured shows the periodicity time and turns the cardioid test and the skip off | 675, 676 | owner (2026-11-18) — the rise and fall (rec) |
 | 880 | Plan 63: Steps is a float log knob rounded to a whole cap (an integer log param cannot move one detent at a time); Zoom runs 0.5–10¹³, the float64 reference's reach, and a log param over six orders reads in three figures ("4.2e+07×") | — | (rec) |
 | 881 | Plan 63's stage 5 is not built: the deep tier past ~10¹³× (an arbitrary-precision reference, which needs `mpmath` as a direct dependency — it is only transitive in `uv.lock`), floatexp δ past 10³⁸×, and the endless loop at a Misiurewicz point with Newton tracking as p changes | — | owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before |
+| 1010 | Plan 81, decision D4: inside a fractal, whatever changed camera.zoom or the turn since the last step (the view as it was left, `Dive.seen`) is applied about the middle of the screen (`fractal.centre`, `centred`), not about the rooted cell's middle; a pan made since is kept as a move on top — and, diving, as the performer's framing (`Dive.frame`), which the settle leaves alone — and with an offset drawn after the shape the middle is the point drawn there. An undo or redo of the camera drops the reference (`deck._unseen`). Outside (an object, plan 64 part 2) nothing changes. A re-root still moves nothing, 3D and 4D, grabbed or not | 810, 813 | (rec) — D4, plan 66 §2's recommendation, written into the prompt: "zoom about the screen centre" |
+| 1011 | Plan 81: a fractal's dive rate, `view.frac_dive`, levels a second (× 1 / ratio each), −2 to +2, signed: a velocity on the zoom integrated in float64 by `fractal.step` (`dive_zoom`) and kept in its band by the re-root, so it never ends going in; going out it stops at the whole shape (zoom 1, path empty) and pulls no further. A fractal's own param in the `view` group (a level means nothing to any other shape, so not `camera.*`), persisted and modulatable, and saved as the FRACTAL section's others are (row 902): `"dive"` under the loadable patch's optional `fractal` key, written only for a fractal, so no other look's file changes (a file with none, or a key from before plan 81, loads it at 0) | 810, 811, 814 | (rec) — the brief: "decide where it lives … record it as a register row" |
+| 1012 | Plan 81: what a dive settles onto (`fractal.SETTLE_ON`). Built: **"cell"**, the rooted cell's middle — the screen stays full and centred (as full as before or fuller: 0.82–1.00 of the screen's tiles drawn on), the view steering to each new cell's middle as it goes in. The alternative, **"point"**, the letter of D4: the fractal's point the eye sees at the middle, held there for good — the point stays put, but a point of a fractal has holes of every size beside it, and the screen is 0.05–0.67 drawn on (the sponge 0.54–0.67, the dust 0.05–0.24). Both re-root without a jump. Plan 81 §2.2 has the table and the videos | 812 | owner — 2026-11-23: "go with cell" |
+| 1013 | Plan 81: a re-root goes into the child that holds the fractal's point nearest the middle of the screen (`fractal.nearest`, a search of the cells), not the child whose centre is nearest: a dive holding a point then keeps it in the rooted cell, and its nudge back onto the fractal reads the same cells every frame | — | (rec) |
+| 1014 | Plan 81: past `MAX_PATH` (4096) levels an endless dive lets its outermost go: they are never drawn (`ABOVE`) and the rooted cell is a copy of the whole shape, so no picture changes and a save still loads; climbing out stops at the whole shape 4096 levels up | — | (rec) |
+| 1015 | Plan 81: the dive rate is **Dive**, the first slider of the FRACTAL section (`ui_fractal.spec`, `SLIDERS`; the section merged from #466 while plan 81 was built), above Detail; nothing duplicates the section's Detail, Reach, Near or To the top | 810 | (rec) |
+| 1016 | Plan 81: a restart after pulling — new fields on live objects (`ViewState.frac_dive`, `Dive.seen`, `Dive.settled`), a new param, and `ViewState.reroot` / `app._reroot` take the frame's seconds. After it `fractal.py` hot-reloads as before; `SETTLE_ON` and `SETTLE` take effect on a reload | — | (rec) — REVIEW.md, "Every frame, and hot reload" |
+| 1017 | Plan 81: `tools/fractal_dive_demo.py` renders a fractal dive offscreen with a cross at the middle and how much of the screen is drawn on (an 8 × 8 grid of tiles): `--mode zoom` (camera.zoom grown, runs on `main` for a before) or `--mode rate` (the dive rate, either settle). The before/after pair and the alternative are in `plans/assets/81-fractal-dive/`. The settle's cost a frame is new: hand check 815 times it on the rig | 812, 815 | (rec) |
+| 1018 | Plan 81 follow-up: a running dive and undo. Built: option (a) — `Param.follow` adds how far it moved a base to `_drift` (normalized), and undo reads a base less that (`undo._base_of`, `_same_own`), so the dive's frame-by-frame writes of camera.zoom and camera.pan (a re-root, the rate, the settle) neither open a step nor keep one open: two slider edits a second apart during a dive are two steps. A restore writes what the user set with the follows made since put on (`undo.own`), so an undo never yanks the dive back to where it stood — but only while those follows were the dive's own motion (`deck.DiveFrame.continues`): within one dive (`Dive.lives`, bumped by every reset: a load, another shape, the top) and while it is running or has re-rooted since; a load's undo, or an undo in a paused dive in the same cell, puts the camera back exactly. A step also holds the dive's framing (`Dive.frame`) beside the camera (`deck.DiveFrame`, `Undo(beside=)`), put back only when the restore writes camera.zoom or camera.pan, so an undone pan takes its framing with it and an unrelated undo leaves it; a restored zoom within a running dive is then taken about the middle of the screen, as the edit was (the dive's reference keeps its zoom, and takes the pan at the next step, once a route on it has landed), and otherwise the camera as it is. A step takes the camera's bases and drift on the same quiet frame as the framing (`Undo._quiet_take`), so a restore to them is to one frame of the dive (undoing a pause resumes from the paused view); an action (`push`) takes them as they are when it is pushed, before its writes. Not built: (b), the dive driving the zoom as a modulation rather than a base write — it would change what a save of a dive holds (the zoom it was at) and every route on camera.zoom | — | (rec) — pending the owner |
+| 1019 | Plan 81 follow-up: the framing (`Dive.frame`) is the performer's for one dive. A flight moves it rigidly (`fold_flight`: frame[:3] = R · frame[:3] + u, w left), so a grab that only turns the space adds no pan to it. It goes once the view has climbed out and eased home (`fractal.step`: path empty, zoom ≤ `Z_HOME`), on air and off air alike (off air nothing runs `go_outside`). A loadable patch keeps it under the dive's key as an optional `"frame"` (four finite numbers, refused whole as `shift` is; written only when there is one, so a dive with none saves as before and an older file reads none) — no schema bump, plan 64's optional-key precedent (row 889) | — | (rec) |
+| 1060 | Plan 86: a loadable patch with no depth-units marker (`"units": {"fx.depth": "taper"}`) is still read as a file from before the effect tapers and its depths onto the effects' speed and amount params rescaled (`params.retaper_depths`, unchanged: old files depend on it), and the load now says so in one note naming every row with its old and new depth and the marker a hand-written file wants | 855 | (rec) — pending the owner |
+| 1061 | Plan 86: node mode on a desk fills a node's dropdowns (enum params with a fixed list of two choices or more) after every continuous param, each an `abs` knob row whose throw is the choices in order (`Param.set_norm`), its ring the choice. A map made before is the same map; a dropdown takes only a knob the continuous params left. No schema, no saved row | 856, 857 | (rec) — pending the owner |
+| 1062 | Plan 86: a pad in node mode puts a node's dropdowns on its buttons. Its continuous params keep the sticks, triggers and pairs (pushes); each dropdown then takes one free button, bumpers, stick clicks, View, Menu, Share, back and Fn, the D-pad, the face (never Guide, a button a row reads, or one the model's layout holds), a `toggle` row: a press the next choice, wrapping, kept | 858 | **owner (2026-11-23)**: "pads should just use their toggle buttons (bumpers, stick clicks, maybe even the middle buttons, or even the dpad or other button cluster) to toggle/ cycle between dropdown options"; faders before dropdowns on the bumpers, owner (2026-11-23); the rest of the order and the buttons left out (rec) |
+| 1063 | Plan 87: black is clear on **any picture node**, switched from the node's menu (and MEDIA for a channel) into the graph section's `"keys"`, its knobs then on the selection; channels on the same model. Not a toggle param on every node. A picture's own transparency, not a mask: row 440 kept | 859, 867 | **owner — 2026-11-22**: "this is supposed to apply to all bitmap outputting nodes, not just media nodes"; "Node menu, then knobs"; channels "Same model as every node" |
+| 1064 | Plan 87: the knobs `key.<node>.level` 0.02, `soft` 0.1, `measure` (peak, luma), `feather` 0–32 px, `keep` on, `invert` off: declared while the node is keyed (group `key`), not under the node's own prefix; the panel's words "black is clear" | 859, 860 | (rec) |
+| 1065 | Plan 87: one-sided ramp `smoothstep(level, level + soft, m)` on the straight colour (`glsl.KEY_RAMP`, one for both passes): pure black always clear; the matte's symmetric edge left as it is | 860 | (rec) |
+| 1066 | Plan 87: keep colour on: premultiplied colour untouched, alpha from the ramp; off: colour goes with alpha. Inverted, keep colour does not apply | 861 | (rec) |
+| 1067 | Plan 87: a keyed node is read through a `KeyNode` (one pass); a channel is keyed in its fit pass (no pass more); the feather is the ramp alone blurred by `MaskPasses.feather`, two passes more only above 0 | 862 | (rec) |
+| 1068 | Plan 87: nothing keyed is the graph, the bytes and the save it was; `"keys"` is written only when there are any; no schema bump — a build from before refuses a section with `"keys"` or a `screen` composite in words (that patch black) | 866 | (rec) |
+| 1069 | Plan 87: not keyed: the faces' raw channel, the segment's CPU frame, the MEDIA previews | 863 | (rec) |
+| 1070 | Plan 87: `screen` appended to `graph.BLENDS`: premultiplied `src + dst·(1 − src)`, one blend function; the composite's and a hands node's laid; "screened" | 864 | (rec) |
+| 1071 | Plan 87: generators: the Test card and the Mandelbrot are keyed like any node; Plasma, Fractals and Glimmer need nothing (alpha = peak) | 865 | (rec) |
+| 1072 | Plan 87: a node is never keyed when it is added (a channel included): keying is always asked for, from the node's menu or MEDIA | 859 | **owner — 2026-11-23: "it doesnt have to spawn nodes with keying on" — a node is never keyed when added** |
+| 1073 | Plan 87: the one-step matte + cut "black is clear" starter is not built: the key reaches every picture | — | (rec) |
+| 1074 | Plan 87: a restart after pulling: `ViewState.keys`, `Wiring.keys`, `GraphSpec.keys` and `MediaNode.keyed` do not reach live objects by hot reload | — | (rec) |
+| 1075 | Plan 88: **save as** on GRAPH's deck row gets a ▾ joined to its right (`ui_loadable.MORE_ID`) opening **save as name…** and **save to location…**; the chip itself is unchanged: one press is `preset.save_new`, and its right-click is still that param's menu, so Learn is unchanged | 868 | owner (2026-11-23, as recommended) |
+| 1076 | Plan 88: **save as name…** puts a name field in the chip's place on the deck row, holding the name one press would give (moo 2), selected; the name typed is saved in the loaded patch's folder by `Install.save_named`, which is `save_new` under that name: it becomes the loaded patch and takes the next empty pad | 869 | owner (2026-11-23, as recommended) |
+| 1077 | Plan 88: a name already taken (any file stem, listed name or pad, compared as the library folds names) or one that could name no file is refused, on the footer, and the field stays open to type another; nothing is ever written over, from the field or the dialog | 870, 872 | owner (2026-11-23, as recommended) |
+| 1078 | Plan 88: **save to location…** opens **load…**'s file dialog (ImFileDialog, else the native one) in save mode, on the loaded patch's folder, else the library's patches folder. On the owner's Mac the library is in Google Drive by `config.toml`, so that is `My Drive/Hyperspace/loadable`; no Drive path is in the code | 871 | owner (2026-11-23, as recommended) |
+| 1079 | Plan 88: the dialog's place must be under the library's patches folder (any subfolder, a new one made in the dialog too); anywhere else is refused in words, since no load, pad or list would find a patch there. No export copy | 872 | owner (2026-11-23, as recommended) |
+| 1080 | Plan 88: in the dialog, the file name typed (less `.json`) is the patch's name and the folder its folder; the file is written under that name's slug, as every save is (`Closing Look` → `closing-look.json`) | 871 | owner (2026-11-23, as recommended) |
+| 1081 | Plan 66: Time Displace is an effect file with a Python half (`shaders/fx/timedisplace.glsl`, `// @hook timedisplace`, `hyperspace/timedisplace.py`), not a graph node kind: no schema move; its look-back is a knob (**Look-back** 1 … 8: `lookback`, `lookback.<n>`), read through the renderer's rings handed to its chain (`FxChain.rings`) | 873, 877 | (rec) — plan 66 §5, Q8 |
+| 1082 | Plan 66: until fields are a wire, Time Displace carries its own field, 0 … 1 of Span: line (the slit-scan, along Angle), rings, spokes, flat (an echo), aux (the aux picture's brightness: black now, white Span ago); Repeat, Drift (a `@clock`), Steps, Flip | 873, 874 | (rec) — plan 66 §5, Q4 |
+| 1083 | Plan 66: a time between two of the ring's frames blends them by time (Between blend) or takes the nearer (nearest); between now and the newest frame it blends its own input, so Span 0 and a field of 0 are its input byte for byte; Span is an amount (0 … 8 s, zero-safe log taper) | 875 | (rec) — plan 66 §5 |
+| 1084 | Plan 66: a time older than the ring holds reads its oldest frame (the ring holds 32 × `dream.gap`: about 1 s at the default, 8 s at the most); no ring of that number, an empty one or one being remade reads its input | 876 | (rec) — plan 66 §5 |
+| 1085 | Plan 66, open: is a field its own wire (`field`, RG32F, signed; a one-way grey promotion into picture ports; a `picture` converter) or a picture read by convention, as Displace's aux is | — | owner (2026-11-22): its own wire; plan 67 makes it a texture (§3.13) |
+| 1086 | Plan 66: the word. The new wire is a **field**; the copies' layout (`field.py`, the panel's "Field motion / amp / rate / depth") is renamed the **lattice**, and Grow's and Wave Table's "Field" knobs are relabelled. No saved id holds the word (`view.inst_*`, `fx.grow.mode`, `fx.wavetable.mode`): labels, code and prose only | — | owner (2026-11-23) |
+| 1087 | Plan 66, open: stage 2's reach. Keep `wave.glsl` and `blocks.glsl` and add patches proven byte-identical, or retire them with a migration; Shake stays its file (not one field) | — | **pending the owner** (Q3; rec: keep) |
+| 1088 | Plan 66, open: memory for the past at full size (a texture-array ring: 265 MB for 32 frames at 1080p) and the look-ahead window for files (128 MB a channel at half its size) | 877 | **pending the owner** (Q5, Q6) |
+| 1089 | Plan 66, open: the wavetable — a render node for pictures and fields, a modifier for curves — and the existing "Wave Table" renamed: label **Stamp Trail** now, `fx.wavetable.*` → `fx.stamptrail.*` in the next format-lane migration | — | **pending the owner** (Q7) |
+| 1090 | Plan 67 P2: the shared field pieces in `_lib.glsl` — `point_at`, `from_point`, `Measure` with `measure_line` / `rings` / `spokes` / `cells`, `read_signed`, `quantise`, `threshold_soft`, `remap`, `combine`; units frame heights and turns. Wave, Blocks, Displace, Blend, Prism, Zoom burst, Time Displace and Oil slick moved onto them byte for byte | — | (rec) — plan 67 roundup §7 |
+| 1091 | Plan 67 F1: the field wire — float32 RGBA at the frame's size (33 MB a field held at 1080p; RG32F would halve it), .a 0 scalar / 1 vector; `@makes field` and `@takes <port> field` (or `none`); a field maker a `FieldEffect` made once a frame, raw (`FIELD_TAIL`); an effect that reads one has a third port, `field`, on texture unit 3; the aux stays a picture | 878, 882 | owner (2026-11-22): its own wire; the rest (rec) — plan 67 roundup §8 |
+| 1092 | Plan 67 F1: a field into a picture port is promoted to grey (`FieldPicture`: a scalar grey about mid-grey, a vector x red, y green); a field pass into any target that is no float32 one shows the same grey (previews, the card, thumbnails); a picture into a field port is refused naming To field; a field is no mask | 879, 880 | (rec) — plan 67 roundup §8 |
+| 1093 | Plan 67 F1: the first field files — Measure (line, rings, spokes, cells, noise; value or direction; no input), To field (luma, peak or red/green; signed about mid-grey or unsigned) — and Displace's field port (a vector field by its pair, a scalar along Angle; with one wired its aux is not read), byte for byte without one; three field examples | 881 | (rec) — plan 67 roundup §8 |
+| 1094 | Plan 67: Waveform (`wave()` over a field: Waves, Shape, Round free or whole, Drift a `@clock`, Steps) and Combine (add, multiply, min, max; a vector with a scalar takes it in each component) as field ops; Measure's Out gains across; Displace gains Split; a Measure's field carries its other half (the direction, or the value) in its spare channels | 883 | (rec) — plan 67 §12 |
+| 1095 | Plan 67: Wave as a patch (`measure → waveform`, `measure.2 → combine`, `combine → displace`), equal to `wave.glsl` up to the compiler's rounding — every field bit for bit; a smooth wave's picture byte for byte on every saved look, at most one level on one pixel in a thousand elsewhere; a hard wave (square, saw, Steps) at most one pixel in a hundred, on its edges. `wave.glsl` stays and draws every saved look as before | 883 | (rec) — plan 67 §12 |
+| 1096 | Plan 67: a field stays float32 RGBA (33 MB at 1080p), not RG32F (16.6 MB: the scalar-or-vector flag and the spare half go) nor half floats (16.6 MB as RGBA16F: an offset off by up to a quarter pixel, a count past 32 stepping in 1/32 of a wave) — until memory bites; a per-field precision choice later | 882 | owner (2026-11-24): four channels at 1080p are fine for now; fields at 0.75k and 0.5k, upscaled, are a follow-up session |
+| 1000 | Plan 80: an effect whose Python half says `GENERATOR` (the Mandelbrot) draws with nothing wired into its `image`, over transparent black; `graph.Effect.generates`. Every other effect with no input still reads nothing. A change to `graph.py`, outside plan 80's files, kept to `Effect.reads`, `paint` and `_pass` | 800 | owner — 2026-11-22: accepted, the `graph.py` change included |
+| 1001 | Plan 80: Inside coloured is how fast a point settles onto its cycle — L·ln K / ln abs(λ_L) from the sum of ln abs(f′(z)) over a lag L the periodicity check found, K = what 5 % of a pixel is at zoom 1 and 810 lines — not the step the check caught it at. That step hung on a pixel-sized tolerance (deep in, most of the inside never settled before the cap: flat grey), Brent's window (bands, discs) and float32's last bit after a rebase (blocks). The inside/outside decision is unchanged | 801 | (rec) — pending the owner |
+| 1002 | Plan 80: a c or z₀ drive moves its term by the view height × min(1, TERM_RATE × R), R the term's measured sensitivity (how much a pan changes the picture over how much the term does, per plane unit, on a 16×9 grid of the view), measured every 0.25 s a drive runs, a faster rate eased in over 0.5 s and a slower one taken at once. TERM_RATE 0.1, to be tuned on the rig. Pan and Dive unchanged; an unused term keeps plan 63's rate | 802, 803 | (rec) — pending the owner |
+| 1003 | Plan 80: the perturbation loop fetches the reference once a step (Zₘ carried), p = 2 takes (2Z + δ)·δ and other powers walk Z's powers up with no array, texel coordinates by mask and shift; the skip's border pass is packed, 64 slots a tile along x, so every pixel of it iterates a border pixel | 804, 807 | (rec) |
+| 1004 | Plan 80: Skip black turns itself off where under 30 % of tiles are flagged (counted by a samples query on the tiles pass, read three passes late), probing again every 30 passes or at once when the zoom has moved a doubling. On by the old rule where it may run | 805 | (rec) — pending the owner |
+| 1005 | Plan 80: series approximation (skip the first iterations for the whole screen) is not built: a stretch, left for a later plan | — | (rec) |
+| 1006 | Plan 80: `tools/mandel_bench.py --owner` runs the owner's rig cases (the seahorse, Size 810, Steps 2000: direct and perturbation at 1.5e4, 4e5, 1e7, the skip on and off at 3e6, the coloured inside at 1e6 and 9e6), each line a steady state with the skip's gate reset and settled | 804 | (rec) |
+| 1007 | Plan 80, open: the Test card is also a generator (it draws a card whatever comes in), so it could say so too and draw with no wire in. Not done: its file and its Python are not plan 80's | — | **pending the owner** |
+| 1020 | Plan 82: one abstraction (`ui_fields.Shape`, `shape_of`) draws every continuous fader — unipolar (fill from the left), bipolar (from 0, a detent there), unity (a multiplier: from 1, a detent there), and steps as ticks; the kit slider, the stock fallback (`Panel._origin`) and the pad's knobs read it | 820, 821 | (rec) — pending the owner |
+| 1021 | Plan 82: bipolar is inferred for a range across 0 with a 0 default — or no default to read (a param that is not an effect's: VIEW's rates, the camera), as they filled from 0 before. A range across 0 with another default is unipolar: the Mandelbrot's c, z₀ and centre now fill from the left. An effect line can say `bipolar` or `unipolar` | 820 | (rec) — pending the owner |
+| 1022 | Plan 82: unity (detent at 1) is inferred for a default of 1 in the middle of its range, linear (lo + hi = 2) or log (lo · hi = 1): Kaleidoscope's zoom, Blocks' aspect, Hue cycle's saturation. Prism's rim, Deconverge's amount, the drifts are not. No `unity` marker on `@param` | 821 | (rec) — pending the owner |
+| 1023 | Plan 82: a drag within 6 px (`ui.DETENT_PX`) of a bipolar or unity detent lands on it; a typed value and a ⇧ fine drag are never moved; a taper's unity notch (speed 1×) is drawn, not snapped | 820 | (rec) — pending the owner |
+| 1024 | Plan 82: ticks on an integer param with no taper, one a step down to 6 px apart (`ui.TICK_GAP`), then every 2nd, 4th, 5th, 10th … whole value, both ends always | 822 | (rec) — pending the owner |
+| 1025 | Plan 82: `// @pair u_x u_y "Label"` and `// @volume u_x u_y u_z "Label"` name the file's own continuous params, each on one pad at most; drawing only, not in `EffectSpec.signature`; no param renamed or re-keyed | 823 | (rec) — pending the owner |
+| 1026 | Plan 82, D3 as built: Prism and Wave a Centre pair, Wave Table an Offset pair, Zoom burst a Burst volume (cx, cy, amount) and no pair beside it, since a param is on one pad | 823, 824 | (rec) — pending the owner |
+| 1027 | Plan 82: the pad sets X and Y where it is pressed (Y up), ⇧ a tenth from where they were, and once ⇧ joins a drag it stays relative until let go (no jump); each knob a vertical drag, 200 px a throw, ⇧ a tenth, a double-click to its detent; Z by its knob only (no scroll over the pad); no typing into a knob | 823, 824 | (rec) — pending the owner |
+| 1028 | Plan 82: a lane on a pad shows as a white dot (and halo) where the lanes have it, a line from the bases' dot, and a white tick on each knob; the pad's head is its label alone, each knob's base under it and its effective value on a second line, both inside its column | 825 | (rec) — pending the owner |
+| 1029 | Plan 82: `ui_fx.strip` (outside the row's files) draws a pad at its first param's place instead of its sliders, pads resolved before the strip packs its rows (`ui_fx.pad_rows`); without the kit the sliders stay | 823 | (rec) — pending the owner |
+| 1050 | Plan 85: the show look in code is on, BONES, PLAIN, 50% (`ghost.SHOW_LOOK`; #459 had BONES in GLASS at 35%, the 2026-11-15 look). The app sets the on-air renderer's hands state to it at startup, deck 2's sibling gets one, and every extra hands node's state starts from it (`GraphSection.land`), so New patch carries it. `GhostState()` stays the neutral draw (off, HANDS, PLAIN, 60%) the ghost and render tests and the goldens measure | 850 | owner — 2026-11-18 |
+| 1051 | Plan 85: `tools/set_hands_look.py` sets the library's patches to the show look: every loadable patch under `loadable/` and `presets/`, every folder down (the era folders), as `migrate_library.loadable_files` lists them; `ghost.*` and each extra hands node's `ghost.<n>.*` `on`, `alpha`, `style`, `material` set, `guide`, `tethers`, the room's `mirror`, routes and desk rows untouched. A dry run by default; `--apply` refuses while the app is open on this Mac, backs the whole library up to `<home>/library-backup-<stamp>/` first, and writes atomically in the app's layout (`loadable.dumps`). A file that is no loadable patch or does not load is named and left | 851 | owner — 2026-11-23: accepted as built |
+| 1052 | Plan 85: a hands layer that reaches no output (`graph.reaches`) gets the standard wires, each only where missing: `hands → hands.layer.hands`, `hands.layer → output.all.hands`, `hands.layer → output.all.guide` (as #459's 2026-11-15 run did for 20 presets). A layer that reaches an output any other way is left as wired. Each changed patch is loaded again from what would be written; one whose load notes change is named and not written | 851, 852 | owner — 2026-11-23: accepted as built |
+| 1053 | Plan 85: the test corpus (`tests/corpus/loadable`) is not set to the show look: it keeps the neutral hands, so no golden frame moves; the tool is never run on it but on tmp copies in its tests. The golden rig holds an extra hands node a fixture sets no values for (`hands-glass-only`'s `ghost.2`) at `GhostState()`'s look, as it already holds its `on` | — | owner — 2026-11-23: accepted as built |
+| 1030 | Plan 83: **save as** sits on GRAPH's deck row beside **load…** and presses `preset.save_new`, the one action START held on a pad and a learned button press: the deck the panel is on, saved as a new loadable patch named from the loaded one (moo → moo 2) in that patch's folder, never over a file. No new param: the chip's right-click is that param's menu, so Learn puts the same press on a desk or pad button | 830, 831, 832 | owner (2026-11-23, as recommended) |
+| 1031 | Plan 83: the chip's save takes the next empty pad, as `preset.save_new` always has (a full bank saves to the list and says so); a save from the panel that left the pads alone would be a second action with the same words | 830 | owner (2026-11-23, as recommended) |
+| 1032 | Plan 83: with nothing loaded, save as writes at the library's top level, named `PATCH <n>` as the pad's hold names | 833 | owner (2026-11-23, as recommended) |
+| 1033 | Plan 83: after a save the chip reads "saved <name>" (its folder left off, elided), lit, for 4 s (`ui_loadable.SAVED_S`); the full name on its hover and on the footer. A pad's or a learned button's press says it on the footer only | 830 | owner (2026-11-23, as recommended) |
+| 1034 | Plan 83: the playlist's entries are a list of their own that scrolls, as tall as the screen leaves under the popup (never under three rows), with the add list under it always in view; each entry is one row 34 px tall (`ui_playlist.ROW_H`): its place and name, its dwell, a square × | 834 | owner (2026-11-23, as recommended) |
+| 1035 | Plan 83: the entry on air is scrolled to the list's middle when the popup opens and each time it changes; between, a hand's scroll is left where it put the list | 835 | owner (2026-11-23, as recommended) |
 
 "—": no hand check shows it; tests only.
 
@@ -15266,112 +15335,112 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** pending the owner.
 - **Built.** Nothing: a question. The options are in `docs/plans/65-effect-previews.md`, "What the previews show at the defaults".
 - **Judge it.** 689, by eye on the contact sheet and in the picker.
-### 902. Time Displace is an effect with a Python half
+### 1081. Time Displace is an effect with a Python half
 
 - **What.** Plan 66 stage 3a: each pixel reads a look-back's past at `now − field × Span`. An effect file with a Python half, as the Mandelbrot is (row 872): `timedisplace.glsl` says `// @hook timedisplace`, and `timedisplace.run` binds the ring's atlas on unit 2 and uploads every frame the ring holds, newest first (`Lookback.frames`: not only the `echoes` the trail composites). The renderer hands its chain its rings (`FxChain.rings` is `Renderer.rings`); a chain of its own (the previews', the card's) has none and shows its input. The other way was a graph node kind like the echo, its look-back a wire: a new node kind is a format move.
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22); Q8 asks the owner to keep it.
 - **Built.** `shaders/fx/timedisplace.glsl`, `timedisplace.run`, `ring_of`, `frames_of`, `ring_name`, `Lookback.frames`, `FxChain.rings`, `fx.HOOKS`; `tests/test_time_displace.py::test_the_renderer_hands_its_chain_its_rings`, `::test_in_a_graph_it_reads_the_look_back_that_graph_records`.
-- **Judge it.** 699, 703.
+- **Judge it.** 873, 877.
 
-### 903. Its own field, until fields are a wire
+### 1082. Its own field, until fields are a wire
 
 - **What.** Field: line (a ramp across the frame along Angle, edge to edge: the slit-scan), rings (from Centre out to the far corner), spokes (round it), flat (every pixel Span ago: the echo node's constant field), aux (the brightness of the picture in its aux: black now, white Span ago; one-sided, since the live ring has no future). Repeat lays the ramp that many times; Drift sweeps it (`@clock u_drift_t`); Steps flattens it into bands; Flip turns it end for end. Displace reads mid-grey as zero instead; a field wire (stage 3b) would carry signed time.
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
 - **Built.** `timedisplace.glsl`'s `when`; `tests/test_time_displace.py::test_a_line_is_the_slit_scan_now_at_one_edge_the_past_at_the_other`, `::test_rings_run_from_now_at_the_centre`, `::test_the_aux_brightness_is_the_field`, `::test_steps_and_nearest_make_hard_bands`, `::test_drift_sweeps_the_ramp`.
-- **Judge it.** 699, 700.
+- **Judge it.** 873, 874.
 
-### 904. Between frames, and Span 0
+### 1083. Between frames, and Span 0
 
 - **What.** A pixel whose time falls between two of the ring's frames blends them by time, or (Between nearest) takes the nearer: hard bands. Between now and the newest frame it blends its own input with that frame, so a field of 0 is its input, sharp, and Span 0 is the picture again, byte for byte. Span is an `amount` param, 0 … 8 s (32 frames at the largest gap).
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
 - **Built.** `timedisplace.glsl`'s `effect`; `tests/test_time_displace.py::test_span_zero_is_its_input_byte_for_byte`, `::test_between_two_frames_it_blends_by_time_or_takes_the_nearer`, `::test_between_now_and_the_newest_frame_it_blends_its_input`, `::test_the_flat_field_at_a_frames_age_shows_that_frame`.
-- **Judge it.** 701.
+- **Judge it.** 875.
 
-### 905. Past the ring, and nothing to read
+### 1084. Past the ring, and nothing to read
 
 - **What.** A time older than the oldest frame reads the oldest. The ring holds 32 frames one `dream.gap` apart (1/30 s by default: about a second; 8 s at 0.25 s), so reaching further back means a coarser gap; Span's tip says so. With no look-back of that number in the graph, a ring that holds nothing, or one about to be made again for a `dream.res` change, the pass is its input. Its past is the ring's: 8-bit, at `dream.res` on the short side (Q5 asks for a full-size ring).
 - **Answer.** (rec) — the builder's, plan 66 (2026-11-22).
 - **Built.** `timedisplace.frames_of`; `tests/test_time_displace.py::test_older_than_the_ring_holds_is_its_oldest`, `::test_with_nothing_to_read_it_is_its_input`, `::test_a_ring_being_remade_reads_nothing`.
-- **Judge it.** 702.
+- **Judge it.** 876.
 
-### 906. Is a field its own wire
+### 1085. Is a field its own wire
 
 - **What.** Plan 66 Q1. Its own wire, as a mask is (plan 39): two float32 channels, signed and unbounded, at the frame's size; into a picture port it reads as grey (Displace's mid-grey convention), one way; a picture becomes one only through the `picture` generator. Or a picture read by convention: no graph change, fields ride the half-float pool about mid-grey, clamped at every 8-bit crossing, and stage 2 is "within a level", not byte for byte.
 - **Answer.** owner (2026-11-22): "Field is its own wire", with the ask that the primitives stop overlapping and competing — plan 67 (`docs/plans/67-primitives.md`) is the model that answers it, and makes a field a texture (§3.13).
 - **Built.** Nothing.
 - **Judge it.** No hand check.
 
-### 907. The word "field"
+### 1086. The word "field"
 
 - **What.** Plan 66 Q2. `field.py` is the instance field (where each copy sits). The glossary is signed and renames ride SEM. Either the new wire is **field** and the copies' layout is renamed, or the new thing is a **map**. Found since: no saved id holds the word — the layout's params are `view.inst_*` (their labels say "Field motion", "Field amp", "Field rate", "Field depth"), and Grow's and Wave Table's "Field" knobs are stored as `mode` — so the rename is labels, code and prose, not a format move. (`ui_fields.py` is the panel's form fields, another sense, in code only.)
 - **Answer.** owner (2026-11-23): "call it field, rename copy layout to lattice or structure". Lattice taken [rec]: the 3D layouts are lattices already, and "structure" is the structure audit's word (`AUDIT-STRUCTURE-2026-10.md`).
 - **Built.** Nothing.
 - **Judge it.** No hand check.
 
-### 908. Stage 2's reach
+### 1087. Stage 2's reach
 
 - **What.** Plan 66 Q3. Wave and Blocks are pure offset fields, so each can be a generator and Displace with the same bytes (a float32 field read at the texel centre, the same `pushed`). Shake is not one field: Smear averages eight phases and Split reads three. Keep the files and add the patches proven identical, or retire the files with a migration in the format lane.
 - **Answer.** pending the owner. Recommended: keep the files now.
 - **Built.** Nothing.
 - **Judge it.** No hand check.
 
-### 909. Memory for the past and the future
+### 1088. Memory for the past and the future
 
 - **What.** Plan 66 Q5 and Q6. A full-size look-back ring needs a texture array (the atlas is capped by the largest texture): 32 × 1920 × 1080 × 4 = 265 MB, 64 frames 530 MB. The look-ahead for a file channel is a decoded window around the playhead: 2 s at 30 fps is 498 MB at 1080p, 124 MB at 960 × 540. Recommended: measure first; a 128 MB budget a channel at half its size.
 - **Answer.** pending the owner.
 - **Built.** Nothing.
-- **Judge it.** 703 (what the ring's size looks like today).
+- **Judge it.** 877 (what the ring's size looks like today).
 
-### 910. The wavetable, and Stamp Trail
+### 1089. The wavetable, and Stamp Trail
 
 - **What.** Plan 66 Q7. A wavetable is a bank of entries of one kind and a Position that crossfades the two neighbours: a render node (a switch that blends, only two inputs built) for pictures and fields, a modifier for curves. The existing "Wave Table" effect stamps the picture along paths; renamed **Stamp Trail**: the label now (not saved), the file and `fx.wavetable.*` ids in the next format-lane migration with a backup and an end-to-end test.
 - **Answer.** pending the owner.
 - **Built.** Nothing.
 - **Judge it.** No hand check.
 
-### 912. The field wire
+### 1091. The field wire
 
 - **What.** Plan 67 F1, on the owner's "Field is its own wire": a fifth port type, `graph.FIELD`, drawn green. A field is float32 RGBA at the frame's size, signed, never premultiplied; its .a says scalar (0) or vector (1) (`as_scalar`, `as_vector` in `_lib.glsl`). Effect files declare it: `// @makes field` (the file's pass writes the field raw through `fx.FIELD_TAIL`: no blend, no mix, no clamp, no alpha rule) and `// @takes <port> <type>` (`image` or the new `field` port; `image`, `field` or `none`). `fx.ports_of` reads a file's ports (kept by every `FxState` of the shipped folder, so a reload keeps it); `graph.effect_ports` types an effect's wires by them, on the canvas too (`graphview._takes` / `_makes` with a name). A field maker is a `graph.FieldEffect`: made once a frame, when asked, into a float32 frame target every consumer reads; off, it is its input field, else 0. An effect that reads a field has a third port, `field`, bound on unit 3 (`field_port(uv)`). Memory: 33 MB a field held at 1920 × 1080 (RGBA; RG32F would halve it, a later step).
 - **Answer.** owner (2026-11-22): its own wire; the representation (rec) — the builder's, plan 67 (2026-11-23).
 - **Built.** `graph.FIELD`, `FIELD_PORT`, `effect_ports`, `FieldEffect`, `Effect` (its field port), `_Build._fields`, `fx.ports`, `ports_of`, `FIELD_TAIL`, `run_one(field=)`, `_lib.glsl` "the field wire"; `tests/test_field_wire.py`.
-- **Judge it.** 704, 708.
+- **Judge it.** 878, 882.
 
-### 913. A field shown, and refused
+### 1092. A field shown, and refused
 
 - **What.** A field wired into a picture port reads as grey — a scalar grey about mid-grey (−1 black, +1 white), a vector its x in red and y in green — through one `graph.FieldPicture` per field node, as a mask's promotion (row 441). A field maker's pass into any target that is no float32 one shows the same grey (`u_field_show`), so the effect previews, the test card on its thumbnail and an unwired thumbnail show it with no code of their own; a built field node's thumbnail is the field the frame made, grey (`render._field_thumb`), never made for the thumbnail. A picture into a field port is refused: "scene makes a picture, displace.field takes a field — put a To field (tofield) between". A field into a mask port is refused as any other type.
 - **Answer.** (rec) — the builder's, plan 67 (2026-11-23).
 - **Built.** `graph.FieldPicture`, `PICTURE_INTO_FIELD`, `FxChain.show_field`, `render._field_thumb`; `tests/test_field_wire.py::test_the_promoted_field_is_grey_about_the_middle`, `::test_into_a_target_that_is_no_field_it_shows_grey`, `::test_a_wire_a_field_cannot_take_is_refused_in_words`, `::test_a_field_nodes_thumbnail_is_its_grey`.
-- **Judge it.** 705, 706.
+- **Judge it.** 879, 880.
 
-### 914. Measure, To field, Displace's field port, the examples
+### 1093. Measure, To field, Displace's field port, the examples
 
 - **What.** The first field files. **Measure** (`measure.glsl`, no input): along a line, rings, spokes, cells by rule or noise, from a point (Centre X/Y), at a Scale; Out value (a scalar) or direction (the unit way it grows, a vector). **To field** (`tofield.glsl`): a picture's luma, peak or red/green, signed about mid-grey (Displace's old reading) or unsigned. **Displace** takes a field on its new `field` port: a vector field by its pair, a scalar along its Angle, × Amount in frame heights; with a field wired its aux is not read; without one it is the same bytes as before (1041 renders). Three field examples in `loadable/field-examples/` (rings lens, line shear, self bend), each a patch and a Markdown, opened by the library's own load in `tests/test_field_examples.py`. Known: the FX page still shows Mix and Blend on a field maker, which do nothing there (a field has no blend) — to go with the motion work's strip changes.
 - **Answer.** (rec) — the builder's, plan 67 (2026-11-23).
 - **Built.** `shaders/fx/measure.glsl`, `tofield.glsl`, `displace.glsl`; `loadable/field-examples/`; `tests/test_field_wire.py`, `tests/test_field_examples.py`.
-- **Judge it.** 707.
+- **Judge it.** 881.
 
-### 915. Waveform and Combine
+### 1094. Waveform and Combine
 
 - **What.** Two field ops. **Waveform** (`waveform.glsl`): a field in, `wave(shape, x × Waves − drift)` out, quantised by Steps — DISTORTION.md's second question as a node; Round whole rounds Waves to a whole number and repeats noise after it, for spokes. **Combine** (`combine.glsl`): two fields (input and the field port) added, multiplied, the lesser or the greater; scalar with vector scales or offsets each component. Measure's Out gains **across** (its direction a quarter turn on: Wave's slide). Displace gains **Split** (`pushed`'s colour split, 0 by default: no saved look moves). A Measure's field carries the other half of what it measured in its spare channels (a value its direction, a direction its value) — nothing reads them yet; it makes a shader work out the two together, as Wave does.
 - **Answer.** (rec) — the builder's, plan 67 (2026-11-24), on the owner's "go ahead with Wave as a patch".
 - **Built.** `shaders/fx/waveform.glsl`, `combine.glsl`, `measure.glsl`, `displace.glsl`.
-- **Judge it.** 709.
+- **Judge it.** 883.
 
-### 916. Wave as a patch, and how equal
+### 1095. Wave as a patch, and how equal
 
 - **What.** `tests/wavepatch.py` maps any Wave look onto five nodes: Measure (Along, value), Waveform (Waves, Shape, Round whole for spokes, Drift, Steps, its speed), Measure.2 (Along, Out direction for squeeze or across for slide), Combine (multiply), Displace (Amount, Split, Mix, Blend). Every field of the patch is bit for bit what `wave.glsl` computes inside itself. The picture is not always: Wave multiplies direction × wave × Amount × aspect in one expression, and a GLSL compiler may reorder that chain (Mesa's does; GLSL 3.30 has no `precise`), where Displace multiplies a stored field — a sample one ulp apart. Measured on Mesa: 184 of 198 looks (every choice, every pair, three times) byte for byte, the rest one level on one or two pixels; through the real renderer, every saved smooth Wave look in `presets/distort/` byte for byte; a hard waveform (square, saw, Steps) puts a pixel exactly on a slab's edge on the other side — at most 1 % of pixels (31 of 6144 at worst, spokes × square). `wave.glsl` stays and draws every saved look as it did; the patch is for composing. The Mac's compiler is the hand check.
 - **Answer.** (rec) — the builder's, plan 67 (2026-11-24).
 - **Built.** `tests/wavepatch.py`, `tests/test_wave_patch.py`, `loadable/field-examples/field-wave.json` + `.md`.
-- **Judge it.** 709.
+- **Judge it.** 883.
 
-### 917. A field's storage: four float32 channels, for now
+### 1096. A field's storage: four float32 channels, for now
 
-- **What.** The owner asked (2026-11-24) what two channels instead of four would cost, and why not 16-bit floats. Four float32 (RGBA32F): 33 MB a field held at 1920 × 1080. Two (RG32F): 16.6 MB, but the fourth channel is the scalar-or-vector flag (it would travel beside the texture, a uniform every consumer is handed) and the third the spare half a Measure carries (row 915). Half floats (RGBA16F, also 16.6 MB; RG16F 8.3 MB): 11 bits of precision — an offset of 0.3 rounds to the nearest 1/8192 (a quarter pixel at 1080p: no byte-for-byte patch), and a count above 32 steps by 1/32 (Wave at 64 waves: its phase in 32 visible steps a wavelength). Recommended: four float32 until memory bites (three or four fields held: 100–130 MB on unified memory); later a per-field precision choice for smooth, small fields.
+- **What.** The owner asked (2026-11-24) what two channels instead of four would cost, and why not 16-bit floats. Four float32 (RGBA32F): 33 MB a field held at 1920 × 1080. Two (RG32F): 16.6 MB, but the fourth channel is the scalar-or-vector flag (it would travel beside the texture, a uniform every consumer is handed) and the third the spare half a Measure carries (row 1094). Half floats (RGBA16F, also 16.6 MB; RG16F 8.3 MB): 11 bits of precision — an offset of 0.3 rounds to the nearest 1/8192 (a quarter pixel at 1080p: no byte-for-byte patch), and a count above 32 steps by 1/32 (Wave at 64 waves: its phase in 32 visible steps a wavelength). Recommended: four float32 until memory bites (three or four fields held: 100–130 MB on unified memory); later a per-field precision choice for smooth, small fields.
 - **Answer.** owner (2026-11-24): "four channels at 1080p is fine for now, we can add .75k and .5k fields and upscale them later on as a follow up work session." So: RGBA32F stays; a field made at 810 or 540 lines and upscaled to its consumer (as the Mandelbrot's Size does, `mandel.SIZES`) is its own later session.
-- **Built.** Nothing new: row 912's storage.
-- **Judge it.** 708 (what the fields cost on the Mac).
+- **Built.** Nothing new: row 1091's storage.
+- **Judge it.** 882 (what the fields cost on the Mac).
 
-### 911. The shared field pieces
+### 1090. The shared field pieces
 
 - **What.** Plan 67 P2's first step: one section of `_lib.glsl` holds the field primitives every effect and every field node to come uses — a point (`point_at`, `from_point`), the measures (`measure_line`, `measure_rings`, `measure_spokes`, `measure_cells`, each returning the measure and the direction it grows), a picture read signed about mid-grey (`read_signed`), and the ops named as the modifiers are (`quantise`, `threshold_soft`, `remap`, `combine`). Eight files that carried a private copy now call them, byte for byte (1041 renders before and after). Not moved: the gradients (they need a texture), Bloom's knee and Edges' threshold (other curves: a change of look), Hue cycle (to be retired).
 - **Answer.** (rec) — the builder's, plan 67 (2026-11-23), on the owner's "start the build with the shared field pieces".
@@ -15447,3 +15516,482 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** owner (2026-11-19, as recommended): `mpmath` becomes a direct dependency when the deep tier is built, not before.
 - **Built.** Nothing.
 - **Judge it.** No hand check.
+
+### 1010. The zoom and the turn about the middle of the screen
+
+- **What.** Plan 81, decision D4: inside a fractal, whatever changed camera.zoom or the turn since the last step (the view as it was left, `Dive.seen`) is applied about the middle of the screen (`fractal.centre`, `centred`), not about the rooted cell's middle; a pan made since is kept as a move on top — and, diving, as the performer's framing (`Dive.frame`), which the settle leaves alone — and with an offset drawn after the shape the middle is the point drawn there. An undo or redo of the camera drops the reference (`deck._unseen`). Outside (an object, plan 64 part 2) nothing changes. A re-root still moves nothing, 3D and 4D, grabbed or not.
+- **Answer.** (rec) — D4, plan 66 §2's recommendation, written into the prompt: "zoom about the screen centre".
+- **Built.** `fractal.centre`, `centred`, `_middle`, `Dive.seen`, `step`; `tests/test_fractal_dive.py::test_a_dive_stays_centred_and_never_jumps`, `::test_a_zoom_inside_is_about_the_middle`, `::test_a_pan_made_inside_is_kept`, `::test_a_drawn_offset_keeps_the_middle_where_it_is_drawn`, `::test_a_grabbed_view_dives_and_reroots_without_a_jump`; `tests/test_fractal_grab.py::test_nothing_jumps_going_in_down_and_out` and `tests/test_fractal.py::test_a_reroot_moves_nothing_in_the_world` (the zoom about the middle taken before "before").
+- **Judge it.** Hand checks 810, 813.
+
+### 1011. The dive rate, a fractal's own param
+
+- **What.** Plan 81: a fractal's dive rate, `view.frac_dive`, levels a second (× 1 / ratio each), −2 to +2, signed: a velocity on the zoom integrated in float64 by `fractal.step` (`dive_zoom`) and kept in its band by the re-root, so it never ends going in; going out it stops at the whole shape (zoom 1, path empty) and pulls no further. A fractal's own param in the `view` group (a level means nothing to any other shape, so not `camera.*`), persisted and modulatable, and saved as the FRACTAL section's others are (row 902): `"dive"` under the loadable patch's optional `fractal` key, written only for a fractal, so no other look's file changes (a file with none, or a key from before plan 81, loads it at 0).
+- **Answer.** (rec) — the brief: "decide where it lives … record it as a register row".
+- **Built.** `params` (`view.frac_dive`), `ViewState.frac_dive`, `ViewState.reroot(dt)`, `app._reroot`, `fractal.dive_zoom`, `loadable.FRACTAL_IDS`; `tests/test_fractal_dive.py::test_the_dive_runs_at_its_rate`, `::test_a_negative_rate_climbs_back_out_to_the_whole_shape`, `::test_a_rate_of_zero_holds_still`, `::test_the_dive_rate_is_a_param_a_route_drives`, `::test_the_dive_rate_saves_in_a_loadable_patch`, `::test_another_shape_ignores_the_rate`.
+- **Judge it.** Hand checks 810, 811, 814.
+
+### 1012. What a dive settles onto: the cell's middle, or one point
+
+- **What.** Plan 81: what a dive settles onto (`fractal.SETTLE_ON`). Built: **"cell"**, the rooted cell's middle — the screen stays full and centred (as full as before or fuller: 0.82–1.00 of the screen's tiles drawn on), the view steering to each new cell's middle as it goes in. The alternative, **"point"**, the letter of D4: the fractal's point the eye sees at the middle, held there for good — the point stays put, but a point of a fractal has holes of every size beside it, and the screen is 0.05–0.67 drawn on (the sponge 0.54–0.67, the dust 0.05–0.24). Both re-root without a jump. Plan 81 §2.2 has the table and the videos.
+- **Answer.** owner — 2026-11-23: "go with cell". "point" stays in the code as the alternative.
+- **Built.** `fractal.SETTLE_ON`, `settle`, `seen_at_middle`, `nearest`, `Dive.settled`; `tests/test_fractal_dive.py::test_a_dive_holding_a_point_never_lets_it_leave_the_middle`, `::test_a_long_dive_of_hundreds_of_levels`, `::test_either_settle_dives_without_a_jump`; `tools/fractal_dive_demo.py`.
+- **Judge it.** Hand check 812.
+
+### 1013. A re-root goes into the cell that holds the nearest point
+
+- **What.** Plan 81: a re-root goes into the child that holds the fractal's point nearest the middle of the screen (`fractal.nearest`, a search of the cells), not the child whose centre is nearest: a dive holding a point then keeps it in the rooted cell, and its nudge back onto the fractal reads the same cells every frame.
+- **Answer.** (rec).
+- **Built.** `fractal.step` (`into`), `fractal.nearest`; `tests/test_fractal_dive.py::test_a_dive_holding_a_point_never_lets_it_leave_the_middle`.
+- **Judge it.** No hand check.
+
+### 1014. An endless dive keeps its path to the longest a file takes
+
+- **What.** Plan 81: past `MAX_PATH` (4096) levels an endless dive lets its outermost go: they are never drawn (`ABOVE`) and the rooted cell is a copy of the whole shape, so no picture changes and a save still loads; climbing out stops at the whole shape 4096 levels up.
+- **Answer.** (rec).
+- **Built.** `fractal.step`; `tests/test_fractal_dive.py::test_an_endless_dive_keeps_its_path_to_the_longest_a_file_takes`.
+- **Judge it.** No hand check.
+
+### 1015. Dive in the FRACTAL section
+
+- **What.** Plan 81: the dive rate is **Dive**, the first slider of the FRACTAL section (`ui_fractal.spec`, `SLIDERS`; the section merged from #466 while plan 81 was built), above Detail; nothing duplicates the section's Detail, Reach, Near or To the top.
+- **Answer.** (rec).
+- **Built.** `ui_fractal.spec`, `ui_fractal.SLIDERS`.
+- **Judge it.** Hand check 810.
+
+### 1016. Restart
+
+- **What.** Plan 81: a restart after pulling — new fields on live objects (`ViewState.frac_dive`, `Dive.seen`, `Dive.settled`), a new param, and `ViewState.reroot` / `app._reroot` take the frame's seconds. After it `fractal.py` hot-reloads as before; `SETTLE_ON` and `SETTLE` take effect on a reload.
+- **Answer.** (rec) — REVIEW.md, "Every frame, and hot reload".
+- **Built.** —
+- **Judge it.** No hand check.
+
+### 1017. The dive demo and its coverage
+
+- **What.** Plan 81: `tools/fractal_dive_demo.py` renders a fractal dive offscreen with a cross at the middle and how much of the screen is drawn on (an 8 × 8 grid of tiles): `--mode zoom` (camera.zoom grown, runs on `main` for a before) or `--mode rate` (the dive rate, either settle). The before/after pair and the alternative are in `plans/assets/81-fractal-dive/`. The settle's cost a frame is new: hand check 815 times it on the rig.
+- **Answer.** (rec).
+- **Built.** `tools/fractal_dive_demo.py`, `plans/assets/81-fractal-dive/`.
+- **Judge it.** Hand checks 812, 815.
+
+### 1018. A running dive and undo
+
+- **What.** Plan 81 follow-up: while Dive is non-zero, `fractal.step` writes camera.zoom's and camera.pan's bases every frame (`Param.follow`), so undo's watcher never saw `SETTLE_S` of quiet and two slider edits a second apart became one step. Two ways out: (a) undo ignores base changes made only by `follow` and keeps the dive's progress on a restore; (b) the dive drives the zoom as a modulation, not a base write.
+- **Answer.** (rec) — pending the owner: (a). (b) would change what a saved dive holds (the zoom it was at) and how every route on camera.zoom rides.
+- **Built.** `Param.follow` adds how far it moved a base to `_drift` (normalized); undo reads a base less that (`undo._base_of`, `_same_own`) and a restore writes what the user set with the follows since put on (`undo.own`), so an undo never yanks the dive back. A step also holds the dive's framing beside the camera (`deck.DiveFrame`, `Undo(beside=)`), put back only when a restore writes camera.zoom or camera.pan. `tests/test_fractal_dive.py::test_two_edits_during_a_dive_are_two_steps`, `::test_a_running_dive_makes_no_step`, `::test_undoing_a_pan_takes_its_framing_back`, `::test_an_unrelated_undo_leaves_the_framing`, `::test_undoing_a_load_puts_the_camera_back_as_it_was`, `::test_undoing_a_zoom_in_a_paused_dive_puts_the_cell_back`, `::test_undoing_a_pause_resumes_from_the_paused_view`, `::test_undoing_a_pan_with_a_route_on_it_leaves_no_framing`.
+- **Judge it.** On the rig: Dive at +1, two slider edits a second apart, ⌘Z twice.
+
+### 1019. The framing is one dive's
+
+- **What.** Plan 81 follow-up: `Dive.frame` was moved by a grab's whole displacement (a turn alone read as a pan), kept off air after a climb out (nothing ran `go_outside`), and lost by a save.
+- **Answer.** (rec).
+- **Built.** `fold_flight` moves the framing rigidly (`frame[:3] = R · frame[:3] + u`, w left); `fractal.step` drops it once the path is empty and the zoom is at or below `Z_HOME`; `Dive.to_json` writes an optional `"frame"` (four finite numbers) when there is one and `from_json` checks it as `shift` — no schema bump, row 889's optional-key precedent. Inside a dive the wheel leaves the zoom's pivot to `centre` and adds only the move from the middle to the cursor (`fractal.about_middle`, `app._zoom_about`), so a wheel at the middle makes no framing, and on a frame that crosses out (previewed, `app._crosses_out`) `app._space` takes that pivot (`fractal.centre`) first, so the notch that brings the view out is about the middle too, while a frame that stays inside takes its zoom once, with the dive rate's, in the step; a deck off air re-roots with the room placement its dive draws (`app._reroot_off_air`). `tests/test_fractal_dive.py` (plan 81 §7).
+- **Judge it.** On the rig: a grab that only turns the space mid-dive adds no pan; a framed dive saved and loaded resumes framed.
+### 1060. A load says when it rescales a file with no units marker
+
+- **What.** Plan 86. A loadable patch whose `units` has no `"fx.depth": "taper"` is read as a file from before wave 0 T1: every route, desk row and macro base subscriber onto an effect's `speed` or `amount` param has its depth moved from the linear range onto the taper, about its base (`params.retaper_depths`). That is right for an old file and wrong for one written by hand today: two agents writing patches on 2026-11-19 wrote a push of 0.12 and got 0.28, and 0.25 became 0.8, with nothing said. The rescale is unchanged, since every old file depends on it. The load now adds one note, `loadable.RETAPER_NOTE`: how many depths moved, each row as `params.retaper_depths` already listed it (`routes lfo:1 → fx.acid.speed: push 0.12 → 0.28 about 0.5`), and the marker a hand-written file wants. The strip shows the first note with "(+n more)" as for every load; the panel's notes list shows it whole. A save writes the marker, so the saved file loads with nothing to say. **On an old library file** (one `tools/retaper_routes.py` has not rewritten) the strip now shows this note where it showed "migrated … save to keep it", since `_warn` puts a load's first note before the migration line; the note also says a save writes the marker. Three tests that loaded pre-taper fixtures and expected no notes now set this one aside (`test_graph_placement.py`, `test_graph_wires.py`, `test_plan36_seven.py`).
+- **Answer.** (rec) — the builder's, plan 86 (2026-11-22); pending the owner.
+- **Built.** `loadable.retaper_note`, `loadable.RETAPER_NOTE`, `LoadedPatch.load_doc`; `tests/test_retaper.py::test_a_file_written_without_the_marker_says_which_depths_it_rescaled`, `::test_an_old_loadable_loads_as_the_tool_rewrites_it` (now expects the note).
+- **Judge it.** 855.
+
+### 1061. Node mode on a desk fills dropdowns
+
+- **What.** Plan 86. Why node mode filled no dropdown: `nodemode.fillable` kept `Kind.CONTINUOUS` only, a filter carried over from plan 53's latch page (§2, "Filter"), which named no reason for leaving enums out. Nothing on a desk's road needs it: an `abs` row on an enum already lands a choice by position (`Param.set_norm`: `round(u × (n − 1))`), its ring is the choice's norm, soft pickup and the ring's re-base work on that norm, and FINE and the knob slew already skip a discrete param (`MidiIO._apply`). A desk knob learned onto a dropdown is this row today (`Learn.learn_control` writes `abs` whatever the kind). So a desk now fills, after every continuous param of the node, each dropdown with a fixed list of two choices or more: a choice per stretch of the knob's throw. Not one whose list is asked each time (`choices` a callable: a list that changes moves every choice under the knob; all three such params are meta and never filled anyway), and not one with a single choice. Order: `graphview.param_ids` already lists continuous params first; `fillable` keeps that order itself, so the dropdowns take only the knobs the continuous params leave and every map made before is the same map. **What changes for a saved patch:** a knob node mode left empty may now hold a dropdown, and a patch-layer desk row on that knob is then shadowed while node mode points there, as for any filled knob (`NodeDesk._free`). A dropdown already on any row stays out of the fill, as any mapped param does. The continuous params fill first against exactly the knobs they had before (a patch-layer row on a dropdown reserves none of them: review of #468, which found a saved dropdown row on K1 moving every fader a knob along); the dropdowns then take the knobs left, where a knob still holding a dropdown's own row stays that row's. No schema, no saved row, no graph change: a node-mode cable to a dropdown is drawn as to any param.
+- **What doesn't line up underneath** (the owner asked). The program holds two ideas of a dropdown. The panel, a desk's knob and its ring read it as a position on a line, a fader with detents (`set_norm`, `norm`). The modulation layer reads it as a state: a route lands it through `_snap` with a deadband, and the base chase's ledger (`Param._commit`) is kept for continuous params only, so a route can move a dropdown but nothing can leave one moved. A desk edits the base, so it sits on the first idea and is clean. A pad's node-mode rows were all routes, so they sat on the second; the owner's answer puts a pad's dropdowns on its buttons, as edits, on the first (row 1062). Also: a knob makes a list ordinal. For an ordered list (an LFO's sync, a size, Wave Table's profile) a sweep reads; for `view.shape`'s 109 shapes it is a walk through unrelated shapes, about one per knob detent.
+- **Answer.** (rec) — the builder's, plan 86 (2026-11-22); pending the owner.
+- **Built.** `nodemode.fillable`, `nodemode._knob_enum`, `nodemode.ENUM_MIN_CHOICES`; `tests/test_nodemode.py::test_a_desk_fills_continuous_params_then_dropdowns_and_a_pad_only_continuous`, `::test_a_dropdown_with_one_choice_or_a_list_asked_each_time_is_not_filled`; `tests/test_node_desk.py::test_a_knob_on_a_dropdown_picks_a_choice_per_stretch_and_its_ring_says_which`, `::test_a_node_whose_continuous_params_fill_the_desk_leaves_its_dropdown_over`, `::test_a_saved_row_on_a_dropdown_moves_no_continuous_param_off_its_knob`, `::test_a_knob_left_free_that_holds_a_dropdowns_row_stays_that_rows`.
+- **Judge it.** 856, 857.
+
+### 1062. A pad in node mode cycles dropdowns on its buttons
+
+- **What.** Plan 86, asked and answered. A pad's node-mode rows were all `push` routes about the base at `PAD_DEPTH` (plan 53 NQ5): a stick at rest moves nothing and the look comes back on release; the base chase (plan 52) keeps a move. A dropdown fits that badly: a push lands it (`Param.apply` snaps with `MOD_DEADBAND`), but the chase never commits one (`_commit` runs in the continuous branch only), so a stick could flick a dropdown while held and never leave it. The options put to the owner were A, no dropdowns on a pad; B, a pair steps one, an edit; C, teach the chase to commit a dropdown.
+- **Answer.** owner (2026-11-23): "pads should just use their toggle buttons (bumpers, stick clicks, maybe even the middle buttons, or even the dpad or other button cluster) to toggle/ cycle between dropdown options". So B's kind of row, an edit, on lone buttons. The order, and what is left out, are the builder's (rec).
+- **Built.** The continuous params fill as before: the sticks and triggers, then the natural pairs, as pushes. The node's dropdowns (`nodemode.dropdowns`: a fixed list of two choices or more, no alias, no meta param; a route need not move it, since a press is no route) then fill the buttons left, one dropdown a button, in `node_desk.PAD_BUTTONS`' order: LB, RB, the stick clicks, View, Menu, Share, the back buttons and Fn buttons where the model has them, the touchpad's click, the D-pad (N, E, S, W), then the face (N, E, S, W). A pair the continuous params left is two buttons here; a pair they took is not, so on a node with many faders (Wave's ten, on an Xbox pad) RB/LB hold a fader pair and the dropdowns start at the stick clicks. Faders first keeps every map made before; the owner, 2026-11-23: "bumpers for faders is okay". Never Guide (the system's button), a button an enabled row reads, gates on or a modifier reads, or one the model's own layout holds (`NodeDesk._pad_held`, the rule the sticks already had). Each is a `toggle` row (`node_desk.CYCLE_OP`): `routing.act` cycles an enum, so a press is the next choice and the last wraps to the first. A press is an edit of the base, kept, as a desk knob's is; the modulators on that dropdown rest while the pad points, as for any filled param (row 711). The rows are in no file and no `bindings`: `NodeDesk.pressed` lists them, `Bindings.node_buttons` hands them to `Router.pad`, which fires them beside the table's own rows; `routed` (the pushes `Router` runs) leaves them out. A dropdown with no free button is listed as over (`Fit.too_many`), and a node of only dropdowns now lets a pad in. GRAPH draws each as a node-mode cable that shows its param's value, as a desk knob's does; the pad window outlines the button.
+- **Also.** `routing.py` (`NodeRows.pressed`, `Bindings.node_buttons`, two lines in `Router.pad`) and `node_desk.py` are outside plan 86's row; the change in each is the least that carries it.
+- **Built in.** `node_desk.PAD_BUTTONS`, `CYCLE_OP`, `pad_buttons`, `NodeDesk._pad_held`, `_button_rows`, `pressed`; `nodemode.dropdowns`; `routing.Bindings.node_buttons`, `Router.pad`; `tests/test_node_mode_pad.py::test_a_pads_dropdowns_go_on_its_bumpers_then_its_stick_clicks`, `::test_a_press_cycles_the_dropdown_and_the_choice_stays`, `::test_when_the_pairs_hold_continuous_params_the_dropdowns_go_to_the_stick_clicks`, `::test_no_dropdown_takes_a_button_a_row_reads_or_guide`, `::test_a_joycon_cycles_on_the_buttons_it_has`; `tests/test_nodemode.py::test_a_node_of_only_dropdowns_lets_a_desk_and_a_pad_in`.
+- **Judge it.** 858.
+
+### 1000. A generator draws with nothing wired in
+
+- **What.** Plan 80: the owner's report — with nothing wired into `mandel.image` the frame was black, with no note, though the node paints the whole frame and ignores its input. `graph.Effect.reads` and `paint` returned at once with no input. Now an effect whose Python half says `GENERATOR = True` (`mandel.py`) reads and paints with no input: `_pass` clears its input texture to transparent black and runs the pass. With a wire in, nothing changes; an ordinary effect with no input still reads nothing.
+- **Answer.** owner (2026-11-22): accepted, the `graph.py` change included. `graph.py` is outside plan 80's files; the change is these three methods and `generates`.
+- **Built.** `mandel.GENERATOR`, `graph.is_generator`, `generators_of`, `Effect.generates`, and `build_graph(generators=…)`: the graph builder keeps a generator with no wire in, where it made every such effect dormant (Devin's review of #471 found the first build fixed only drawing, and its test met the old frame's migration, which wires `scene` in; the test is a wired frame now). The renderer passes the set and keys its cached graph on it (`render.py`, four lines, also outside plan 80's files); `tests/test_mandel.py::test_with_nothing_wired_in_it_draws_the_whole_frame`, `::test_with_nothing_wired_in_and_switched_off_it_draws_nothing`.
+- **Judge it.** 800.
+
+### 1001. The coloured inside is how fast a point settles
+
+- **What.** Plan 80: at the seahorse, 9e6×, Steps 6000, the inside was flat grey with rectangular blocks; at 1e6×, odd flat bands and discs. The cause was the colour rule, mixed with float32 after a rebase. The colour was the step at which the periodicity check caught a point, with a tolerance of 5 % of a pixel. Deep in, that tolerance is so small that even the float64 oracle leaves 81 % of the inside at the cap at 9e6× (the flat grey), with eight values in all. What it does catch is quantised by Brent's doubling window (the bands and discs). In float32, after a rebase, a catch needs the last bit to repeat (the blocks: 19 % of catch steps off the oracle). The fix colours by the cycle's multiplier: the sum of ln abs(f′(z)) = ln p + (p − 1) ln abs(z) since the last save gives ln abs(λ_L) wherever z is back within 10⁻³ of the saved z. L·ln K / ln abs(λ_L) is then the steps to come K times nearer, the same whatever multiple of the period L is. It is smooth, the same at any depth or tolerance, and barely moved by float32. Each later lag overwrites the last; no lag, or no contraction, leaves the cap. Whether a point is inside is decided as before.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `mandel.Settle`, `SETTLE_K`, `SETTLE_NEAR`, `escape_counts(settle=True)`, `perturbed_counts(settle=True)`, `mandel.glsl`'s `settled`; `tests/test_mandel.py::test_the_coloured_inside_under_perturbation_is_the_float64_oracle`, `::test_settling_is_the_multiplier_not_the_tolerance`, `::test_the_gpu_coloured_inside_is_its_float32_twin_deep_in`, `::test_the_coloured_inside_in_the_direct_tier_is_the_oracle`, `::test_the_shader_holds_the_settle_constants`.
+- **Judge it.** 801.
+
+### 1002. An off-screen term's drive answers the picture
+
+- **What.** Plan 80: on a Julia slice at zoom 1.7, a view height is 1.8 units of c, and 0.03 of c tears the set apart, so routes on the c drive needed depths near 0.01. A term's effect on the picture does not follow the zoom. Across eight Julia views, the step of c that changes the picture as much as a pan was 3·10⁻⁵ to 20 view heights. So a term's drive is measured: R = Σ abs(∂z/∂q)·g / Σ abs(∂z/∂term)·g over a 16×9 grid of the view, iterated to 192 steps, g = 1/(abs(z) ln abs(z)) at escape (how a point's smooth count, and so its brightness, answers a change of z). R predicted the measured ratio within about ×2 at most views; plain view height was off by up to five orders. The rate is the view height × min(1, 0.1 × R). It is measured on a drive's first frame, then every 0.25 s while one runs (0.05 s after Slice or Power moves). A faster rate is eased in over 0.5 s and a slower one taken at once. At the owner's view, a second at full throw now moves c by 0.067, where plan 63 moved it 1.765. Pan and Dive are unchanged, and a term the picture does not use (c at Slice 0) keeps plan 63's rate.
+- **Answer.** (rec) — pending the owner: TERM_RATE 0.1 is a first value for the rig (check 802).
+- **Built.** `mandel.sensitivity`, `term_scale`, `advance`, `TERM_RATE`, `SENS_*`; `tests/test_mandel.py::test_c_on_a_julia_slice_is_slowed_to_what_the_picture_takes`, `::test_the_measured_scale_follows_the_picture_across_views`, `::test_an_unused_term_and_pan_keep_their_rates_and_the_rate_never_jumps`, `::test_dive_doubles_and_every_drive_moves_by_the_view`.
+- **Judge it.** 802, 803.
+
+### 1003. The perturbation loop and the packed border pass
+
+- **What.** Plan 80: the perturbation loop fetched the reference twice a step, at m and m + 1. Zₘ is now carried from the step before. `binomial_delta` kept Z's powers in a dynamically indexed array; p = 2 now takes its closed form (2Z + δ)·δ (Horner's one step, the same sum), and other powers walk Z's powers up as the coefficients walk down. Texel coordinates use `& 1023` and `>> 10`. The skip's border pass ran at full size and returned off the border. Every SIMD group of a 16×16 tile meets its first or last column, so the pass cost nearly a whole picture, which is why the skip made perturbation slower. It is now packed: 64 slots a tile along x, each pixel iterating one border pixel (`border_px`, `mandel.border_slot`). On this M3 Max, Size 810, Steps 2000, 1080p out: perturbation at 1.5e4 19.7 → 5.1 ms, 4e5 36.9 → 9.3, 1e7 81.1 → 14.9, and the skip at 3e6 75.8 → 12.8 ms on, 60.7 → 27.4 off.
+- **Answer.** (rec).
+- **Built.** `mandel.glsl`'s `orbit`, `binomial_delta`, `ref_at`, `border_px`; `mandel.BORDER`, `border_slot`, `TILES_FS`, `run`; `tests/test_mandel.py::test_the_packed_border_slots_are_a_tiles_border`, `::test_the_skip_with_the_packed_pass_flags_what_the_rule_flags`, `::test_the_binomial_without_an_array_is_the_difference_for_every_power`.
+- **Judge it.** 804, 807.
+
+### 1004. The skip rests where it costs more
+
+- **What.** Plan 80: forced on against off, the skip paid only where at least a third of the tiles were flagged: seahorse 3e6× and 1e7× at 0.7–1.0 flagged, 0.24–0.52× the cost. Elsewhere it cost 1.0–2.3×: the whole set at 7.5 % flagged (the cardioid test already makes its inside cheap), Julia, the elephant valley, filaments. So it rests under `SKIP_MIN` = 30 % flagged. The count is a samples query on the tiles pass, which now discards unflagged tiles over a cleared target, read `SKIP_LAG` = 3 passes late so the CPU never waits. Resting, it probes every 30 passes, and at once when the zoom has moved a doubling since it last looked. A context with no samples queries keeps plan 63's behaviour.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `mandel.SkipGate`, `SKIP_MIN`, `SKIP_PROBE`, `SKIP_LAG`, `State.gate`, one query pool a chain (`Gl.queries`: moderngl 5 cannot free a query), the packed pass only where it fits the context (`Gl.fits`: over about 4096 px across it runs without the skip), the `flagged` and `skip_valid` stats; `tests/test_mandel.py::test_the_skip_rests_where_few_tiles_are_flagged_and_looks_again`, `::test_a_dive_wakes_a_resting_skip_at_once`, `::test_a_context_with_no_queries_keeps_the_skip_on`, `::test_on_the_gpu_the_skip_turns_itself_off_and_the_picture_stays`.
+- **Judge it.** 805.
+
+### 1005. Series approximation not built
+
+- **What.** Plan 80: series approximation, skipping the first iterations for the whole screen with a polynomial in δc, was in scope as a stretch. It is not built. After 1003 the owner's deepest case runs in about 15 ms; the inside running to the cap is what is left, and series approximation would cut the shared early steps of every pixel.
+- **Answer.** (rec).
+- **Built.** Nothing.
+- **Judge it.** No hand check.
+
+### 1006. The bench's owner cases
+
+- **What.** Plan 80: `tools/mandel_bench.py --owner` runs the cases the owner measured after plan 63, one line each with the tier and whether the skip ran, beside plan 63's rig ms. Every line resets the skip's gate and runs it a few passes untimed first, so a line is the steady state at its view and nothing carries from the line before.
+- **Answer.** (rec).
+- **Built.** `tools/mandel_bench.py` (`OWNER`, `owner`, `bench`); `tests/test_mandel.py::test_the_rig_bench_runs_and_prints_a_line_a_size`.
+- **Judge it.** 804.
+
+### 1007. The Test card as a generator
+
+- **What.** Plan 80, open: the Test card also paints a picture whatever comes in. With a Python half, or a header line saying the same, it could draw with no wire in too. Not done: `testcard.glsl` and `fx.py`'s parse are not plan 80's files. The recommendation is an `@generator` header line read by `fx.py`, replacing `GENERATOR` on the module, once plan 82 (which owns `fx.py`'s directive parse) has merged.
+- **Answer.** **pending the owner**.
+- **Built.** Nothing.
+### 1020. One shape for every fader
+
+- **What.** Plan 82: `ui_fields.Shape` (`shape_of`) says how a continuous param's fader is drawn: unipolar (filled from the left), bipolar (from 0, with a detent there), unity (a multiplier, from 1, with a detent there), and an integer range's ticks. The kit slider, the stock fallback (`Panel._origin`) and the pad's knobs and crosshair all read it.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields.Shape`, `shape_of`, `marks`; `tests/test_control_widgets.py::test_shapes_of_the_effects_params`.
+- **Judge it.** 820, 821.
+
+### 1021. Bipolar, inferred
+
+- **What.** Plan 82: a range across 0 with a 0 default is bipolar; so is one with no default to read (a param that is not an effect's own: VIEW's rates, the camera's yaw), which filled from 0 before. A range across 0 with another default is unipolar — the Mandelbrot's c, z₀ and centre now fill from the left. An effect's `@param` line can say `bipolar` or `unipolar` (`fx.ParamSpec.polarity`).
+- **Answer.** (rec) — pending the owner. If the Mandelbrot's terms should fill from 0, plan 80 adds `bipolar` to their lines.
+- **Built.** `ui_fields.polarity`, `fx.POLARITIES`; `tests/test_control_widgets.py::test_polarity_is_inferred_from_the_range_and_the_default`, `::test_a_param_line_may_say_its_polarity`.
+- **Judge it.** 820.
+
+### 1022. Unity, inferred
+
+- **What.** Plan 82: a default of 1 in the middle of its range — linear (lo + hi = 2) or log (lo · hi = 1) — is a unity multiplier with a detent at 1: Kaleidoscope's zoom, Blocks' aspect, Hue cycle's saturation. A 1 elsewhere in the range (Prism's rim 0…3, Deconverge's amount, the drifts) is no neutral. There is no `unity` marker.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields.polarity`; the same tests.
+- **Judge it.** 821.
+
+### 1023. The detent
+
+- **What.** Plan 82: a drag that lands within `ui.DETENT_PX` (6 px) of a bipolar or unity detent lands on it. A typed value (Ctrl+click) and a ⇧ fine drag are never moved. A taper's unity notch (an effect's speed at 1×) is drawn but not snapped; its stop, in the middle, is the detent.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields._snap`; `tests/test_control_widgets.py::test_a_bipolar_fader_rests_centred_and_a_drag_near_centre_lands_on_zero`.
+- **Judge it.** 820.
+
+### 1024. Ticks
+
+- **What.** Plan 82: an integer param with no taper draws a tick under its track a step, down to `ui.TICK_GAP` (6 px) apart; past that every 2nd, 4th, 5th, 10th … whole value (the first stride that leaves the gap), both ends always, an inner tick too near an end left out.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields.ticks`; `tests/test_control_widgets.py::test_ticks_one_a_step_while_they_fit`, `::test_ticks_thin_and_never_crowd`, `::test_a_stepped_fader_draws_its_ticks`.
+- **Judge it.** 822.
+
+### 1025. `@pair` and `@volume`
+
+- **What.** Plan 82: `// @pair u_x u_y "Label"` and `// @volume u_x u_y u_z "Label"` in an effect file name two or three of the file's own continuous params (no choice), each on one pad at most. Drawing only: not in `EffectSpec.signature`, no param renamed or re-keyed, so saved patches, routes and learn are as they were.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `fx.PadSpec`, `_parse_pad`, `_check_pads`, `pad_of`; `tests/test_control_widgets.py::test_pair_and_volume_lines_name_the_files_own_params`, `::test_a_bad_pad_line_says_why`.
+- **Judge it.** 823.
+
+### 1026. D3 as built
+
+- **What.** Plan 82: Prism and Wave carry `@pair u_cx u_cy "Centre"`, Wave Table `@pair u_offset_x u_offset_y "Offset"`, Zoom burst `@volume u_cx u_cy u_amount "Burst"` — and no pair beside its volume, since a param is on one pad and the volume is the pair plus Amount.
+- **Answer.** (rec) — pending the owner (D3 as recommended).
+- **Built.** The four files; `tests/test_control_widgets.py::test_the_four_files_carry_their_pads_and_no_param_moved`.
+- **Judge it.** 823, 824.
+
+### 1027. How a pad and a knob move
+
+- **What.** Plan 82: the square sets X and Y where it is pressed and dragged, Y up; ⇧ held moves a tenth as far, from where they were, and once ⇧ has joined a drag it stays relative until the button comes up — letting go of ⇧ makes the move whole again, never a jump to the pointer. A knob's and a pad's drag keeps its own unrounded value, so a slow drag over a taper's detents adds up. A knob turns by a vertical drag, `ui.KNOB_THROW` (200 px) a full throw, ⇧ a tenth; a double-click returns it to its detent. A volume's Z is its knob alone: no scroll over the pad, since a trackpad's scroll would change it while scrolling the pane. No typing into a knob.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields._square`, `knob`, `_write_norm`; `tests/test_control_widgets.py::test_a_drag_on_the_pad_sets_both_params`, `::test_a_knob_turns_one_axis_and_a_double_click_centres_it`.
+- **Judge it.** 823, 824.
+
+### 1028. Modulation on a pad
+
+- **What.** Plan 82: while a lane rides an axis, the pad draws a white dot where the lanes have it now, a line to it from the bases' dot, a white halo for a volume's Z, and each knob a white tick with its readout red: its base on one line, `→ effective` on the next, each cut to the knob's column. The pad's head is its label alone; each knob says its value under it.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fields._square`, `knob`; `tests/test_control_widgets.py::test_the_pad_shows_a_lane_riding_it`.
+- **Judge it.** 825.
+
+### 1029. The strip draws the pad
+
+- **What.** Plan 82: `ui_fx.strip`, outside the row's files, draws a pad at its first param's place in place of its sliders — the one place an effect's params are drawn. Pads are resolved before the strip packs its rows (`pad_rows`), so a pad over keys it would pack (`sat_lo`, `sat_hi`) is still a pad. Without the kit the sliders stay.
+- **Answer.** (rec) — pending the owner.
+- **Built.** `ui_fx.strip`, `ui_fields.inline_pad`; `tests/test_control_widgets.py::test_the_strip_draws_no_slider_for_a_padded_param`.
+- **Judge it.** 823.
+### 1040. The gpu cost chip
+
+- **What.** Hovering every node to find the bottleneck is how Rugged Doctor was found at the 60 FPS floor. A chip that marks every node at once, off by default so the canvas is as it was, and page state like **pictures · tint cables** (plan 37 C2, D3). The badge is drawn over the node, outside its layout, so lighting it moves nothing.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `ui_graph.COST_LABEL`, `_cost_chip`, `_cost_style`, `_cost_badge`, `cost_line`; `tests/test_gpu_cost.py::test_the_chip_is_off_by_default_and_last_on_the_head`, `::test_the_chip_reaches_neither_the_loadable_nor_the_show`, `::test_lit_it_asks_the_renderer_and_marks_the_render_nodes`, `::test_the_head_line_is_the_total_and_the_three_costliest`.
+- **Judge it.** 840, 841.
+
+### 1041. Heat is a share of the costliest
+
+- **What.** "Ranked within the frame": the costliest node is always white. A share keeps the gaps a percentile would hide — what matters on stage is which node to remove. The ramp is black, deep red, orange, yellow, white, every step brighter.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `ui_graph.rank_costs`, `heat_rgb`, `Cost`; `tests/test_gpu_cost.py::test_ranked_within_the_frame_by_share_of_the_costliest`, `::test_a_tie_is_ranked_by_name_so_it_never_swaps`, `::test_the_ramp_runs_black_to_white_always_brighter`.
+- **Judge it.** 841.
+
+### 1042. Eased over a second
+
+- **What.** The timer's median already rejects a spike; the page eases each median by 1 − e^(−dt/τ) a frame, τ = 1 s, so the marks hold still and two nodes of nearly one cost do not swap every frame.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `ui_graph.ease_costs`, `COST_TAU`; `tests/test_gpu_cost.py::test_a_step_settles_in_about_a_second`, `::test_the_easing_does_not_depend_on_the_frame_rate`, `::test_a_new_node_starts_at_its_time_not_from_zero`.
+- **Judge it.** 842.
+
+### 1043. Made nothing is not free
+
+- **What.** The timer counts a timed node that did not run as 0 that frame; an unbuilt node has no line at all. Both would read as cheap. The renderer says what each node made by `Graph.evaluate`'s own rule, and the page marks the rest **made nothing**.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `render.gpu_made`, `ui_graph.node_cost`, `NOTHING`; `tests/test_gpu_cost.py::test_each_kind_of_node_gets_its_mark`, `::test_asked_it_says_what_each_node_made_for_one_frame`, `::test_a_node_that_made_nothing_drops_out_and_comes_back_at_its_time`.
+- **Judge it.** 843.
+
+### 1044. Nothing when off
+
+- **What.** The brief: "it must cost nothing when off". The renderer's extra read runs only in a frame the page asked for; the times are the medians the renderer kept already.
+- **Answer.** (rec) — the builder's, plan 84 (2026-11-22); pending the owner.
+- **Built.** `Renderer.gpu_watch` (read in `_draw_frame`), `ui_graph._costs`; `tests/test_gpu_cost.py::test_unasked_the_renderer_says_nothing_more`, `::test_the_outputs_are_the_same_bytes_asked_or_not`, `::test_off_it_asks_nothing_and_draws_nothing_extra`.
+- **Judge it.** 844.
+
+### 1045. Unwired thumbnails beyond effects: not built
+
+- **What.** Plan 65 made an unreached effect's thumbnail beside the graph. The other unreachable picture nodes need a pass of their own, or a history they do not hold, to be shown faithfully; their input in their place would be a picture the node does not make. The owner picks.
+- **Answer.** (c), the owner, 2026-11-23: "I don't really mind if nodes outside of the hot render graph are not heatmapped." They stay as they are: no thumbnail made for them, no mark beyond **made nothing**.
+- **Built.** Nothing: a question. `docs/plans/84-gpu-cost.md`, "Not built".
+- **Judge it.** —.
+### 1050. The show look in code: BONES, PLAIN, 50%
+
+- **What.** The owner changed the show's ghost hands on 2026-11-18: on, BONES style, PLAIN material, 50% opacity. `ghost.SHOW_LOOK` holds it and `ghost.show_look(state)` applies it. The app applies it to the on-air renderer's hands at startup, to deck 2's sibling, and to every extra hands node's fresh state, so a new patch's values and **New patch** carry it. `GhostState()` keeps its neutral defaults: changing them broke 14 ghost and render tests in #459 and would move the goldens.
+- **Answer.** owner — 2026-11-18 (supersedes #459's GLASS at 35%, 2026-11-15).
+- **Built.** `ghost.SHOW_LOOK`, `ghost.show_look`; `app.main` (two calls), `loadable.GraphSection.land`; `tests/test_ghost.py::test_the_show_look_is_bones_in_plain_on_at_50_and_the_bare_state_stays_neutral`.
+- **Judge it.** 850.
+
+### 1051. A tool sets the library's patches to the show look
+
+- **What.** A patch's hands look is the patch's values (plan 44 D3), so changing the code default changes no saved patch. `tools/set_hands_look.py` walks the library's loadable patches every folder down, sets each hands node's `on`, `alpha`, `style` and `material` to `SHOW_LOOK`, and leaves everything else. A dry run by default; `--apply` backs up the whole library first (`migrate_library.backup`) and refuses while the app is open on this Mac. A second run finds nothing to do.
+- **Answer.** owner — 2026-11-23: accepted as built (the recommendation).
+- **Built.** `tools/set_hands_look.py`; `tests/test_set_hands_look.py`.
+- **Judge it.** 851.
+
+### 1052. An unwired hands layer gets the standard wires
+
+- **What.** The 2026-11-15 run found 20 presets whose hands layer reached no output, so the look did nothing there; it wired them by hand. The tool does the same: a layer outside `graph.reaches` gets `hands → hands.layer.hands`, `hands.layer → output.all.hands` and `hands.layer → output.all.guide`, each only where missing. A layer reaching an output another way is left as it is. Each patch is loaded again from what would be written; one whose load notes change is not written.
+- **Answer.** owner — 2026-11-23: accepted as built (the recommendation).
+- **Built.** `set_hands_look.wire_layer`, `set_hands_look.plan`.
+- **Judge it.** 851, 852.
+
+### 1053. The test corpus keeps the neutral hands
+
+- **What.** The corpus is what the goldens draw. Setting it to the show look would turn the hands on in every corpus golden, and only the M3 Max can re-record those. So the corpus keeps the neutral look and the tool is tested on tmp copies.
+- **Answer.** owner — 2026-11-23: accepted as built (the recommendation).
+- **Built.** Nothing in the corpus; `tests/test_set_hands_look.py` copies it. `tools/golden_frames.py`: the rig sets an extra hands node's `alpha`, `style` and `material` to `GhostState()`'s where the file sets none, so `hands-glass-only` draws its second node as it was recorded.
+- **Judge it.** No hand check.
+### 1030. Save as beside load…, one action
+
+- **What.** Plan 83: **save as** sits on GRAPH's deck row beside **load…** and presses `preset.save_new`, the one action START held on a pad and a learned button press: the deck the panel is on, saved as a new loadable patch named from the loaded one (moo → moo 2) in that patch's folder, never over a file. No new param: the chip's right-click is that param's menu, so Learn puts the same press on a desk or pad button.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_loadable.save_as_chip`, `save_as`, `ui_graph._deck_row`; `tests/test_save_live.py::test_one_click_saves_a_new_patch_in_its_folder_that_loads_back_equal`, `::test_a_second_click_never_overwrites`, `::test_it_is_the_learnable_action_a_pad_presses`.
+- **Judge it.** 830, 831, 832.
+
+### 1031. Save as takes the next empty pad
+
+- **What.** Plan 83: the chip's save takes the next empty pad, as `preset.save_new` always has (a full bank saves to the list and says so); a save from the panel that left the pads alone would be a second action with the same words.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `library.Install.save_new` (unchanged); `tests/test_save_live.py::test_one_click_saves_a_new_patch_in_its_folder_that_loads_back_equal`.
+- **Judge it.** 830.
+
+### 1032. Save as with nothing loaded
+
+- **What.** Plan 83: with nothing loaded, save as writes at the library's top level, named `PATCH <n>` as the pad's hold names.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `library.Install._save_new` (unchanged); `tests/test_save_live.py::test_with_nothing_loaded_it_saves_at_the_top_named_as_the_pads_hold_names`.
+- **Judge it.** 833.
+
+### 1033. The new name, for a moment
+
+- **What.** Plan 83: after a save the chip reads "saved <name>" (its folder left off, elided), lit, for 4 s (`ui_loadable.SAVED_S`); the full name on its hover and on the footer. A pad's or a learned button's press says it on the footer only.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_loadable.save_as_label`, `SAVED_S`; `tests/test_save_live.py::test_one_click_saves_a_new_patch_in_its_folder_that_loads_back_equal`, `::test_nothing_saved_shows_no_name`.
+- **Judge it.** 830.
+
+### 1034. The playlist's entries scroll
+
+- **What.** Plan 83: the playlist's entries are a list of their own that scrolls, as tall as the screen leaves under the popup (never under three rows), with the add list under it always in view; each entry is one row 34 px tall (`ui_playlist.ROW_H`): its place and name, its dwell, a square ×.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_playlist._entries`, `_row`, `_room`; `tests/test_save_live.py::test_forty_entries_stay_on_screen_and_the_playing_row_is_in_view`, `::test_a_click_on_a_row_far_down_lands_on_that_row`.
+- **Judge it.** 834.
+
+### 1035. The entry on air stays in view
+
+- **What.** Plan 83: the entry on air is scrolled to the list's middle when the popup opens and each time it changes; between, a hand's scroll is left where it put the list.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_playlist._entries`, `popup`; `tests/test_save_live.py::test_the_list_scrolls_under_the_wheel_and_follows_the_look_on_air`.
+- **Judge it.** 835.
+### 902. A FRACTAL section, and a fractal's controls are the look's own
+
+- **What.** Plan 64: a side-pane section `fractal` (appended to `ui.PAGE_KEYS`, every saved slot kept) holds what controls a fractal: what it is and where the view is (levels in, inside or outside, the zoom), **Detail** (`view.frac_detail`, 0.35–3×: the split size's reciprocal), **Reach** (`view.frac_far`, −1.5 to +2 octaves on how far cells are drawn) and **Near** (`view.frac_near`, ±1 octave on how near the eye a cell dissolves), **Additive** (moved out of VIEW) and **To the top**. On another shape it says how to pick one. Detail, Reach and Near are the look's own and routable, saved under an optional loadable-patch key `"fractal": {"detail", "far", "near"}` (`loadable.FRACTAL_KEY`) written only while the look's shape is a fractal — every other look saves byte for byte as before — and read on load (the fractal's own, 1, 0 and 0, when absent; a value that is not a number refused, one out of range held to it, each said); in the dirty signature.
+- **Answer.** owner — 2026-11-20: "build the fractal section" (the recommendation of the day before: a section, a detail slider, the depth of field, a readout, a way back to the top).
+- **Built.** `ui_fractal.py`, `ui.PAGE_KEYS`, `ui_pane.SECTIONS`, `Panel._page_fractal`, `loadable.FRACTAL_KEY` (`_fractal_part`, `_land_fractal`), `params` (`view.frac_detail`, `view.frac_far`, `view.frac_near`, `view.frac_top`), `ViewState.frac_detail` / `frac_far` / `frac_near`, `fractal.walk`, `Walk.far` / `near`; `tests/test_ui_pane.py::test_the_fractal_section_draws_its_controls_inside_the_pane`, `tests/test_fractal_grab.py::test_detail_splits_cells_smaller`, `::test_reach_draws_deeper_and_near_lets_cells_come_closer`, `::test_the_gpu_reads_the_same_reach`, `::test_the_fractal_controls_are_the_looks_own`.
+- **Judge it.** Hand checks 699, 700.
+
+### 903. Reach and Near have floors
+
+- **What.** Plan 64: the reach a fractal is drawn to is never under 0.2 octaves and the near end never under 0.3, whatever the fractal's own plus the slider, so the cue's ends never cross and the fade never inverts.
+- **Answer.** (rec).
+- **Built.** `fractal.walk` (`oct_far`, `oct_near`); `tests/test_fractal_grab.py::test_reach_draws_deeper_and_near_lets_cells_come_closer`.
+- **Judge it.** No hand check.
+
+### 904. To the top keeps the turn
+
+- **What.** Plan 64: **To the top** (`view.frac_top`) leaves every cell at once — zoom 1, pan 0, the dive reset — as Reset view does for those, but leaves the shape's turn, the camera's yaw and pitch and the rotation phases alone: it answers "where am I in the fractal", not "reset everything". Inside, it brings the space home, as Reset view does (row 887).
+- **Answer.** (rec).
+- **Built.** `params` `view.frac_top`; `tests/test_fractal_grab.py::test_to_the_top_leaves_every_cell`.
+- **Judge it.** Hand checks 701.
+
+### 905. Additive moved to the FRACTAL section
+
+- **What.** Plan 64: `view.frac_additive` is drawn in the FRACTAL section, no longer in VIEW, where it sat below the fold and was missed. Its id and behaviour are unchanged; still not saved.
+- **Answer.** (rec) — the owner, 2026-11-20: "i cannot find any of the controls used to control the recursive geometry".
+- **Built.** `ui_fractal.py`, `ui_view.spec`, `Panel._view_stock`.
+- **Judge it.** Hand checks 699.
+
+### 1063. Black is clear on any picture node, switched from its menu
+
+- **What.** Plan 87: The owner (2026-11-22), after the first build keyed only the media channels: "this is supposed to apply to all bitmap outputting nodes, not just media nodes". Any node that makes a picture is keyed by naming it in the graph section's `"keys"`, switched from its GRAPH menu (**black is clear**, checked while on) and, for a channel, from MEDIA (the same edit); its knobs are then on its selection. The other option was a toggle param on every picture node (Learnable on/off, but ~7 values per picture node in every save and a wrapper in every graph). Channels are on the same model. A picture's own transparency, not a mask: row 440 kept.
+- **Answer.** owner — 2026-11-22: "Node menu, then knobs"; channels "Same model as every node".
+- **Built.** `GraphSpec.keys`, `Wiring.keys`, `graphview.render_key`, `keyable`, `ui_graph.render_node_menu` (`KEY_ITEM`), `ui_media._key`; `tests/test_black_is_clear.py::test_the_node_menu_keys_a_node_in_one_undo_step`, `::test_black_is_clear_on_the_media_page_by_the_mouse`.
+- **Judge it.** 859, 867.
+
+### 1064. The knobs, and their ids
+
+- **What.** Plan 87: `key.<node>.level` 0.02, `soft` 0.1, `measure` (peak, luma), `feather` 0–32 px, `keep` on, `invert` off, declared while the node is keyed (group `key`, as a matte's are) and dropped with it. Not under the node's own prefix: an effect's `fx.<name>.*` are its file's uniforms. Each id is now a file format.
+- **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
+- **Built.** `params.declare_keys`, `key_ids`, `is_key_id`, `view.KeyState`; `tests/test_black_is_clear.py::test_the_knobs_are_declared_while_a_node_is_keyed`.
+- **Judge it.** 859, 860.
+
+### 1065. A one-sided ramp
+
+- **What.** Plan 87: `k = smoothstep(level, level + soft, m)` on the straight colour (a hard step at soft 0), one GLSL function for both passes, so pure black is always fully clear. The matte's symmetric edge (`key ± soft`) would let 35 % of pure black through at these numbers; it is left as it is for the matte.
+- **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
+- **Built.** `glsl.KEY_RAMP`; `tests/test_black_is_clear.py::test_a_keyed_channel_matches_its_oracle`, `::test_any_picture_keyed_matches_its_oracle`.
+- **Judge it.** 860.
+
+### 1066. Keep colour
+
+- **What.** Plan 87: On (the default): the premultiplied colour is left as it was and only alpha comes from the ramp, so a dim glow stays as bright over what is under it. Off: colour goes with alpha, as matte → cut gives. Inverted, keep colour does not apply. A pixel below the level keeps its colour at alpha 0: added over what is under it.
+- **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
+- **Built.** `masks.KEY_FS`, `media_tex.FIT_FS`; the oracle tests.
+- **Judge it.** 861.
+
+### 1067. Where it runs
+
+- **What.** Plan 87: Any picture but a channel is read by its consumers through a `graph.KeyNode` (one pass, `MaskPasses.key`); a channel is keyed inside its own fit pass (no pass more, into `media.<c>@key`). The feather is the ramp alone into a one-channel target blurred by `MaskPasses.feather`: two passes more, only above 0; a channel's ramp is sampled clamped into the picture, so a letterbox does not eat its edge.
+- **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
+- **Built.** `graph.KeyNode`, `_Build._keyed`, `MediaNode.keyed`, `Renderer._media_fit`, `_key_ramp`; `tests/test_black_is_clear.py::test_a_keyed_node_is_read_through_its_key_by_every_consumer`, `::test_a_keyed_channel_is_keyed_in_its_own_fit_pass`, `::test_the_feather_blurs_the_alpha_alone_and_only_when_asked`, `::test_a_keyed_effect_lets_the_scene_through_its_black`.
+- **Judge it.** 862.
+
+### 1068. Nothing keyed is what it was; no schema
+
+- **What.** Plan 87: A section without `"keys"` keys nothing, declares no knob and saves without the key, so every saved patch and the corpus resave byte for byte; an unkeyed channel is the fit pass's old bytes; a graph keying nothing builds no `KeyNode`. No schema bump: a build from before refuses a section with `"keys"` (or a `screen` composite) in words and loads that patch black; only patches that use them are affected, and both Macs run one build.
+- **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
+- **Built.** `tests/test_black_is_clear.py::test_a_channel_nothing_keys_is_the_pass_from_before_byte_for_byte`, `::test_a_patch_from_before_keys_nothing_and_saves_the_same`; the corpus round trips unchanged.
+- **Judge it.** 866.
+
+### 1069. What is not keyed
+
+- **What.** Plan 87: The faces' raw channel texture (sampled outside the fit pass), the segment's CPU frame (a person is found in the picture as shot), the MEDIA page's previews (what the source is).
+- **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
+- **Built.** Nothing: they read what they read.
+- **Judge it.** 863.
+
+### 1070. `screen` on the composite
+
+- **What.** Plan 87: Appended to `graph.BLENDS`: premultiplied `src + dst·(1 − src)` in colour, alpha as over (left alone on an opaque ground), one blend function `(ONE, ONE_MINUS_SRC_COLOR)`. A composite's **laid screen** and a hands node's `laid`, the presenter's hand-off too. Black adds nothing and nothing passes white. "screened" (`graph.blend_words`).
+- **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
+- **Built.** `graph.BLENDS`, `blend_words`, `Renderer.lay`, `outputs`; `tests/test_black_is_clear.py::test_a_screen_lay_is_premultiplied_screen`.
+- **Judge it.** 864.
+
+### 1071. Generators
+
+- **What.** Plan 87: Every effect is a picture node, so the Test card and the Mandelbrot (opaque by design) are keyed like any node; Plasma, Fractals and Glimmer already write alpha = the peak of their colour and need nothing.
+- **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
+- **Built.** `tests/test_black_is_clear.py::test_a_keyed_effect_lets_the_scene_through_its_black`.
+- **Judge it.** 865.
+
+### 1072. No node starts keyed
+
+- **What.** Plan 87: Every existing patch stays as it is whatever is chosen. The question is whether a node starts keyed when it is added — a channel, say, since most VJ footage is made on black. For: one click fewer for the common case. Against: a camera or a photo is opaque by nature, and a picture that turns see-through by itself surprises.
+- **Answer.** owner — 2026-11-23: "it doesnt have to spawn nodes with keying on" — a node is never keyed when added.
+- **Built.** Nothing keyed until asked: a new node, and a new patch, key nothing.
+- **Judge it.** 859.
+
+### 1073. No matte + cut starter
+
+- **What.** Plan 87: The first build left open a one-step starter (a new matte and cut on a cable) for pictures the channel key did not reach. The key now reaches every picture, so it is not built.
+- **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
+- **Built.** Nothing.
+- **Judge it.** No hand check.
+
+### 1074. Restart after pulling
+
+- **What.** Plan 87: `ViewState.keys`, `Wiring.keys`, `GraphSpec.keys` and `MediaNode.keyed` are new fields on live objects; hot reload does not give them to the objects already made.
+- **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
+- **Built.** —
+- **Judge it.** No hand check.
+
+### 1075. Save as gets a ▾
+
+- **What.** Plan 88: **save as** on GRAPH's deck row gets a ▾ joined to its right (`ui_loadable.MORE_ID`) opening **save as name…** and **save to location…**; the chip itself is unchanged: one press is `preset.save_new`, and its right-click is still that param's menu, so Learn is unchanged.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_loadable.save_as_chip`, `_more`, `save_as_w`, `ui_graph._deck_row`; `tests/test_save_live.py::test_the_more_arrow_sits_on_the_chip_and_opens_two_ways_to_save`, `::test_one_press_still_saves_beside_the_arrow`.
+- **Judge it.** 868.
+
+### 1076. Save as name…
+
+- **What.** Plan 88: **save as name…** puts a name field in the chip's place on the deck row, holding the name one press would give (moo 2), selected; the name typed is saved in the loaded patch's folder by `Install.save_named`, which is `save_new` under that name: it becomes the loaded patch and takes the next empty pad.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `library.Install.save_named`, `next_save_name`, `_save_new(at, name)`; `ui_loadable.begin_save_by_name`, `save_named`; `tests/test_save_live.py::test_save_as_name_types_a_name_into_the_loaded_patchs_folder`.
+- **Judge it.** 869.
+
+### 1077. A taken name is refused
+
+- **What.** Plan 88: a name already taken (any file stem, listed name or pad, compared as the library folds names) or one that could name no file is refused, on the footer, and the field stays open to type another; nothing is ever written over, from the field or the dialog.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `library.Install.save_named`, `ui_loadable._name_field` (a commit that returns False keeps it open); `tests/test_save_live.py::test_save_as_name_refuses_a_taken_name_and_stays_open`, `::test_save_to_location_refuses_outside_the_library_and_over_a_file`.
+- **Judge it.** 870, 872.
+
+### 1078. Save to location…
+
+- **What.** Plan 88: **save to location…** opens **load…**'s file dialog (ImFileDialog, else the native one) in save mode, on the loaded patch's folder, else the library's patches folder. On the owner's Mac the library is in Google Drive by `config.toml`, so that is `My Drive/Hyperspace/loadable`; no Drive path is in the code.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_browse.open_save`, `save_at`, `is_saving`; `tests/test_save_live.py::test_the_save_dialog_opens_on_the_loaded_patchs_folder`.
+- **Judge it.** 871.
+
+### 1079. Only inside the library
+
+- **What.** Plan 88: the dialog's place must be under the library's patches folder (any subfolder, a new one made in the dialog too); anywhere else is refused in words, since no load, pad or list would find a patch there. No export copy.
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_browse.save_name`, `save_at`; `tests/test_save_live.py::test_save_to_location_names_from_the_folder_and_file_picked`, `::test_save_to_location_refuses_outside_the_library_and_over_a_file`.
+- **Judge it.** 872.
+
+### 1080. The file name is the patch's name
+
+- **What.** Plan 88: in the dialog, the file name typed (less `.json`) is the patch's name and the folder its folder; the file is written under that name's slug, as every save is (`Closing Look` → `closing-look.json`).
+- **Answer.** owner (2026-11-23, as recommended).
+- **Built.** `ui_browse.save_name`; `tests/test_save_live.py::test_save_to_location_names_from_the_folder_and_file_picked`.
+- **Judge it.** 871.

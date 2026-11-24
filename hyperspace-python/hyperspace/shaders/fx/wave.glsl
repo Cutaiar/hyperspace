@@ -10,6 +10,7 @@
 // @tip slipping past each other, rings twisting — and squeeze carries them along it, so
 // @tip the picture bunches up and stretches out like a spring. Shape is the waveform;
 // @tip Steps flattens it into slabs. Wobble is two fixed sines; this is one wave you aim.
+// @pair u_cx u_cy "Centre"
 
 uniform float u_amount; // @param 0 0.5 0.03 amount "Amount" How far the crest pushes, in frame heights.
 uniform float u_waves;  // @param 0.25 64 3 log "Waves" Waves in one frame height (spokes: waves in one turn, to the nearest whole one).

@@ -200,5 +200,5 @@ No look changed, so no field example yet (plan 67 §9.3): the first comes with W
 The roundup's "Becomes" for Wave, `measure → waveform → quantise → displace`, as built: the
 quantise is Waveform's Steps, and the push's way is a second Measure (Out direction, or across
 for slide) multiplied in by Combine — five nodes. Proven equal up to rounding (plan 67 §12,
-register 916). The next rows of §1 to take apart reuse these: Blocks (`measure (cells)` →
+register 1095). The next rows of §1 to take apart reuse these: Blocks (`measure (cells)` →
 Waveform → an action), Trip warp (`measure (noise)` → Displace), Hue cycle (a field on a knob).

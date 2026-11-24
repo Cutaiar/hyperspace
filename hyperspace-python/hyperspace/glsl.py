@@ -73,6 +73,28 @@ def gl_error(e: Exception, names: dict[int, str]) -> str:
 
 # the file as shipped — what the post pass compiles against when the
 # user's edit does not. tests/test_fx.py holds it equal to the file.
+# plan 87, black is clear: the ramp every key pass shares (the media fit
+# pass, `media_tex.FIT_FS`, and any picture node's, `masks.KEY_FS`) — how
+# solid a pixel of straight colour `rgb` is: its brightness `m` (peak, the
+# largest of r, g, b; or Rec. 709 luma), `smoothstep(level, level + soft,
+# m)` — one-sided, so pure black is always clear; a hard step at soft 0 —
+# and `1 − k` inverted. Its uniforms are the caller's to declare
+KEY_RAMP = """
+uniform int u_measure;     // view.KEY_MEASURES: 0 peak, 1 luma
+uniform float u_level;
+uniform float u_soft;
+uniform int u_keep;
+uniform int u_invert;
+float key_ramp(vec3 rgb) {
+    float m = u_measure == 1 ? dot(rgb, vec3(0.2126, 0.7152, 0.0722))
+                             : max(rgb.r, max(rgb.g, rgb.b));
+    float k = u_soft > 0.0 ? smoothstep(u_level, u_level + u_soft, m)
+                           : (m > u_level ? 1.0 : 0.0);
+    return u_invert != 0 ? 1.0 - k : k;
+}
+"""
+
+
 FALLBACK = """\
 // Helpers shared by every shader — the face patterns (patterns.glsl), every
 // effect in fx/ (after this comes fx/_lib.glsl) and the look-back's post

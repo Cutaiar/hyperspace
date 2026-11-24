@@ -18,16 +18,26 @@ modulation dot (`_mod_dot`) and a picked desk control (`_ctx_pick`, through
 - `switch`: a TOGGLE — its label, the kit's Switch at the row's end;
 - `select`: an ENUM — the kit's Select, its rows the param's names;
 - `toggles`: TOGGLEs side by side as one joined group, lit while on;
-- `button`: a TRIGGER — the kit's Button.
+- `button`: a TRIGGER — the kit's Button;
+- `pad`: two or three CONTINUOUS params as one XY pad (an XYZ volume with a
+  third), a knob for each (plan 82).
+
+Every CONTINUOUS fader is drawn by its `Shape` (plan 82): unipolar, filled
+from the left; bipolar, filled from its zero with a detent there; unity, a
+multiplier filled from its 1 with a detent there; and a stepped (integer)
+one with a tick per step, thinned where they would crowd.
 
 A rectangle is (x, y, w, h) in screen pixels, as `ui_kit.block` gives one.
 """
 
 from __future__ import annotations
 
+import math
+from dataclasses import dataclass
+
 from imgui_bundle import imgui
 
-from . import ui, ui_kit, undo
+from . import fx, ui, ui_kit, undo
 from .params import Kind
 
 SELECT_SIZE = "sm"       # 28 tall, as `ui.FIELD_ROW_H`
@@ -165,10 +175,15 @@ def _slider(panel, k, a, p, x, y, w, h, box=None) -> bool:
     imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, (h - ui.FONT_NUM) / 2))
     imgui.push_style_var(imgui.StyleVar_.grab_min_size, thumb)
     imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
+    shape = shape_of(panel, p)
+    # Ctrl+click: a typed value is not snapped. Last frame's answer, read
+    # before the slider writes this frame's: Enter ends the text entry on
+    # the frame the value lands
+    typed = bool(k.texting.get(a.id, False))
     try:
         changed, nv = I.slider(k, a.id, x, y, w, h, value, lo, hi, fine=False,
                                disabled=_dim(panel), fmt=shown, flags=flags, frac=t0,
-                               origin=panel._origin(p), box=box is not None)
+                               origin=shape.origin, box=box is not None)
     finally:
         imgui.pop_font()
         imgui.pop_style_var(2)
@@ -186,14 +201,10 @@ def _slider(panel, k, a, p, x, y, w, h, box=None) -> bool:
     panel._ctx(a)
     panel._learn_frame(a)
     cy = y + h / 2
-    if box is not None:
-        pass                                # (a value box: no notch, no ghost on a track)
-    elif p.taper is not None and p.taper.unity is not None and steps:
-        nx = x + thumb / 2 + span * p.taper.unity / steps
-        col = ui.u32(ui.FAINT)
-        th = tbl["track_h"] / 2
-        k.dl.add_line(imgui.ImVec2(nx, cy - th - ui.FIELD_NOTCH - 3), imgui.ImVec2(nx, cy - th - ui.FIELD_NOTCH), col, 1.5)
-        k.dl.add_line(imgui.ImVec2(nx, cy + th + ui.FIELD_NOTCH), imgui.ImVec2(nx, cy + th + ui.FIELD_NOTCH + 3), col, 1.5)
+    if box is None:                         # (a value box: no marks, no ghost on a track)
+        marks(k.dl, shape, x + thumb / 2, span, cy, tbl["track_h"] / 2)
+    if changed and not own and not typed:
+        nv = _snap(p, shape, nv, span)      # a drag near a detent lands on it
     if p.modulated:                         # the effective value: a white tick on the track
         gx = x + thumb / 2 + span * min(max(p.eff_norm, 0.0), 1.0)
         k.dl.add_rect_filled(imgui.ImVec2(gx - 1.5, cy - 5), imgui.ImVec2(gx + 1.5, cy + 5),
@@ -212,6 +223,441 @@ def _slider(panel, k, a, p, x, y, w, h, box=None) -> bool:
     else:
         p.set_value(nv)
     return True
+
+
+# ---------------------------------------------------------------- shapes (plan 82)
+#
+# One abstraction draws every continuous fader: what kind of quantity it is
+# says where its fill starts, where its detent is, and whether it has steps.
+
+UNIPOLAR, BIPOLAR, UNITY = "unipolar", "bipolar", "unity"
+TICK_STRIDES = (1, 2, 4, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000)
+
+
+@dataclass(frozen=True)
+class Shape:
+    """How a CONTINUOUS param's fader is drawn (plan 82).
+
+    - `polarity`: UNIPOLAR (0..1-like, rests at 0 or the top: filled from
+      the left), BIPOLAR (symmetric, neutral at 0: filled from the centre,
+      a detent there) or UNITY (a multiplier neutral at 1: filled from 1, a
+      detent there);
+    - `origin`: the throw fraction the fill starts from;
+    - `detent`: the throw fraction a drag snaps to (None: no detent), and
+      `neutral` the value there — or, on a taper, the position;
+    - `notches`: throw fractions marked above and below the track: the
+      detent, and a taper's unity (an effect's speed at 1×);
+    - `lo`, `hi`: a stepped (integer) param's whole range, ticked; 0, 0 for
+      one without steps."""
+
+    polarity: str = UNIPOLAR
+    origin: float = 0.0
+    detent: float | None = None
+    neutral: float | None = None
+    notches: tuple[float, ...] = ()
+    lo: int = 0
+    hi: int = 0
+
+
+def _spec_of(panel, p):
+    """The effect file's `@param` behind `p` (`fx.ParamSpec`), or None for
+    a param that is not an effect's own uniform."""
+    if not p.id.startswith("fx."):
+        return None
+    files = getattr(getattr(panel.reg, "fx_state", None), "files", None)
+    got = fx.param_of(p.id, files) if files else None
+    if got is None:
+        return None
+    spec, key = got
+    return next((q for q in spec.params if q.key == key), None)
+
+
+def polarity(lo: float, hi: float, log: bool, default: float | None, said: str = "") -> str:
+    """A continuous range's class: `said` when the effect file says it
+    (`bipolar` / `unipolar` on its `@param` line); else BIPOLAR for a range
+    across 0 whose default is 0 (or unknown: a param that is no effect's
+    has none to read, and its fill started at 0 before plan 82); UNITY for
+    a multiplier whose default is 1 in the middle of its range — linear
+    about 1 (lo + hi = 2: Hue cycle's saturation) or log about 1 (lo · hi
+    = 1: Kaleidoscope's zoom, Blocks' aspect); else UNIPOLAR."""
+    if said in (BIPOLAR, UNIPOLAR):
+        return said
+    if not log and lo < 0 < hi and (default is None or default == 0):
+        return BIPOLAR
+    if default == 1 and lo < 1 < hi and (math.isclose(lo * hi, 1.0) if log
+                                          else math.isclose(lo + hi, 2.0)):
+        return UNITY
+    return UNIPOLAR
+
+
+def shape_of(panel, p) -> Shape:
+    """`p`'s `Shape`, from its range, its taper, and — for an effect's own
+    param — its file's `@param` line (its default and any marker)."""
+    spec = _spec_of(panel, p)
+    log = bool(p.log or (p.taper is not None and p.taper.log and p.lo > 0))
+    pol = polarity(p.lo, p.hi, log, None if spec is None else spec.default,
+                   "" if spec is None else spec.polarity)
+    steps = p.taper.steps if p.taper is not None else 0
+    lo = hi = 0
+    if p.integer and p.taper is None:
+        lo, hi = int(p.lo), int(p.hi)
+    detent = neutral = None
+    if pol != UNIPOLAR:
+        neutral = 0.0 if pol == BIPOLAR else 1.0
+        if not p.lo < neutral < p.hi:        # said bipolar on a range off zero: its middle
+            neutral = (p.lo + p.hi) / 2
+        try:
+            detent = min(max(float(p._norm_of(neutral)), 0.0), 1.0)
+        except Exception:  # noqa: BLE001 — a taper that cannot place it: no detent
+            detent = None
+        if detent is not None and steps:
+            neutral = round(detent * steps)  # a taper snaps to a position
+            detent = neutral / steps
+        if detent is None:
+            neutral = None
+    notches = () if detent is None else (detent,)
+    if p.taper is not None and p.taper.unity is not None and steps:
+        u = p.taper.unity / steps
+        if detent is None or abs(u - detent) > 1e-9:
+            notches += (u,)
+    return Shape(polarity=pol, origin=0.0 if detent is None else detent, detent=detent,
+                 neutral=neutral, notches=notches, lo=lo, hi=hi)
+
+
+def ticks(lo: int, hi: int, span: float, gap: float | None = None) -> list[float]:
+    """The throw fractions of a stepped range's ticks, `lo`…`hi` over
+    `span` px: one per step while they are `gap` (`ui.TICK_GAP`) apart or
+    more; past that every 2nd, 4th, 5th, 10th … whole value — the first
+    stride that leaves the gap — and both ends always, an inner tick too
+    close to an end left out."""
+    gap = ui.TICK_GAP if gap is None else gap
+    n = hi - lo
+    if n <= 0 or span <= 0:
+        return []
+    step = span / n
+    stride = next((s for s in TICK_STRIDES if step * s >= gap), None)
+    if stride is None:
+        return [0.0, 1.0]
+    first = -(-lo // stride) * stride       # the first multiple of the stride at or above lo
+    inner = [(v - lo) / n for v in range(first, hi + 1, stride)
+             if (v - lo) * step >= gap and (hi - v) * step >= gap]
+    return [0.0, *inner, 1.0]
+
+
+def marks(dl, shape: Shape, x0: float, span: float, cy: float, half: float) -> None:
+    """A fader's marks over its throw (`x0`, `span` px; the track `half`
+    tall each side of `cy`): a notch above and below at each of the
+    shape's notches, and a stepped param's ticks under the track."""
+    col = ui.u32(ui.FAINT)
+    for t in shape.notches:
+        nx = x0 + span * t
+        dl.add_line(imgui.ImVec2(nx, cy - half - ui.FIELD_NOTCH - 3),
+                    imgui.ImVec2(nx, cy - half - ui.FIELD_NOTCH), col, 1.5)
+        dl.add_line(imgui.ImVec2(nx, cy + half + ui.FIELD_NOTCH),
+                    imgui.ImVec2(nx, cy + half + ui.FIELD_NOTCH + 3), col, 1.5)
+    if shape.hi > shape.lo:
+        tc = ui.u32(ui.TICK)
+        y0 = cy + half + ui.FIELD_NOTCH
+        for t in ticks(shape.lo, shape.hi, span):
+            tx = round(x0 + span * t) + 0.5
+            dl.add_line(imgui.ImVec2(tx, y0), imgui.ImVec2(tx, y0 + ui.TICK_H), tc, 1.0)
+
+
+def _snap(p, shape: Shape, nv: float, span: float) -> float:
+    """A dragged fader's new value `nv` (a taper's position) moved onto
+    the shape's detent when it lands within `ui.DETENT_PX` of it."""
+    if shape.detent is None or shape.neutral is None or span <= 0:
+        return nv
+    try:
+        t = nv / p.taper.steps if p.taper is not None else float(p._norm_of(nv))
+    except Exception:  # noqa: BLE001 — a value the param cannot place
+        return nv
+    return shape.neutral if abs(t - shape.detent) * span <= ui.DETENT_PX else nv
+
+
+# ---------------------------------------------------------------- pads (plan 82)
+#
+# An XY pad replaces a pair of sliders (`@pair` in an effect file), an XYZ
+# volume a triple (`@volume`): a square a click or a drag sets X and Y on,
+# the depth drawn as a halo about the dot, and a knob per axis. Each param
+# keeps its own id, routes and learn: the knob is the param's control (its
+# `##<id>`, menu, learn frame and tooltip); the square writes the bases, as
+# a slider does. Modelled on the X/Y pads of Harmor and FL Studio.
+
+PAD_LABEL_GAP = 4.0       # px between a knob and its words under it
+
+
+def _write_norm(p, t: float) -> bool:
+    """Write throw fraction `t` (0..1) to `p`'s base as its slider would:
+    a taper's detent, an integer's whole value, else the range's own
+    (log) mapping. True when the base moved."""
+    t = min(max(float(t), 0.0), 1.0)
+    if p.taper is not None:
+        pos = round(t * p.taper.steps)
+        if pos == p.position():
+            return False
+        p.set_position(pos)
+        return True
+    v = p._value_of_norm(t)
+    if p.integer:
+        v = round(v)
+    if v == p.base:
+        return False
+    p.set_value(v)
+    return True
+
+
+def _held(panel, key: str, active: bool, start):
+    """The unrounded state of the drag on item `key` (a pad's or a knob's):
+    started from `start()` (the throw fractions it moves) on the frame it
+    is pressed, kept while it is held, gone once it is let go — so a slow
+    drag over a taper's detents adds up, rather than rounding back to the
+    detent it began on every frame. None while `key` is not held."""
+    store = panel.__dict__.setdefault("_kit_held", {})
+    if not active:
+        store.pop(key, None)
+        return None
+    got = store.get(key)
+    if got is None:
+        got = store[key] = {"t": list(start()), "fine": False}
+    return got
+
+
+def _knob_layout(w: float, n: int) -> tuple[float, bool]:
+    """The square's side in a pad `w` wide with `n` knobs, and whether the
+    knobs stand in a column beside it (else in a row under it)."""
+    T = _m("tokens")
+    if w - ui.KNOB_COL - T.SPACE[3] >= ui.PAD_MIN:
+        return min(w - ui.KNOB_COL - T.SPACE[3], ui.PAD_MAX), True
+    return min(w, ui.PAD_MAX), False
+
+
+def knob_h() -> float:
+    """A knob with its readout under it: two lines, its letter and value,
+    and under them where a lane rides it the effective value (`knob`)."""
+    return 2 * ui.KNOB_R + PAD_LABEL_GAP + 2 * head_h()
+
+
+def pad_h(w: float, n: int) -> float:
+    """A pad's height `w` wide with `n` (2 or 3) params: its header, the
+    square, and the knobs under it where they do not fit beside."""
+    T = _m("tokens")
+    side, beside = _knob_layout(w, n)
+    body = max(side, n * knob_h() + (n - 1) * T.SPACE[2]) if beside else side + T.SPACE[3] + knob_h()
+    return head_h() + T.SPACE[1] + body
+
+
+def pad(panel, k, pids, label: str, rect) -> dict:
+    """Two params (an XY pad) or three (an XYZ volume) in `rect`: a header
+    (the pad's label), the square, and a knob per axis, its value under it.
+    Returns {param id: (its knob's min, max)} for a caller that frames them
+    again (`ui_fx._relearn_frame`)."""
+    T = _m("tokens")
+    x, y, w, _h = rect
+    acts = [panel.reg[pid] for pid in pids]
+    ps = [panel._real(a) for a in acts]
+    hh = head_h()
+    # the head is the label alone: each knob says its value under it
+    text(k.dl, x, y, hh, ui.fit_micro(label, w), "micro", ui.FONT_MICRO, ui.DIM)
+    top = y + hh + T.SPACE[1]
+    side, beside = _knob_layout(w, len(pids))
+    _square(panel, k, acts, ps, x, top, side, label)
+    out = {}
+    kw = 2 * ui.KNOB_R
+    for i, (a, p) in enumerate(zip(acts, ps)):
+        if beside:
+            kx = x + side + T.SPACE[3] + (w - side - T.SPACE[3] - kw) / 2
+            ky = top + i * (knob_h() + T.SPACE[2])
+        else:
+            cell = w / len(pids)
+            kx, ky = x + i * cell + (cell - kw) / 2, top + side + T.SPACE[3]
+        room = ui.KNOB_COL if beside else w / len(pids)
+        out[a.id] = knob(panel, k, a, p, kx, ky, "xyz"[i], room)   # its tooltip names it in full
+    return out
+
+
+def _square(panel, k, acts, ps, x, y, side, label) -> None:
+    """The pad's square: X right, Y up, a click or a drag sets both bases
+    at the pointer (⇧ held: a tenth of the drag, from where they were); the
+    dot at the bases, the effective values a white dot while a lane rides
+    either, and a volume's depth a halo about each."""
+    dl = k.dl
+    px, py = ps[0], ps[1]
+    shapes = [shape_of(panel, p) for p in ps]
+    imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
+    imgui.invisible_button(f"##pad.{acts[0].id}", imgui.ImVec2(side, side))
+    active, hovered = imgui.is_item_active(), imgui.is_item_hovered()
+    if hovered:
+        ui.tooltip(f"{label}: x {acts[0].label}, y {acts[1].label}"
+                   + (f", z (the halo) {acts[2].label}" if len(acts) > 2 else "")
+                   + f"\ndrag to set x and y together\n{ui.FINE_TIP}")
+    st = _held(panel, f"pad.{acts[0].id}", active and not _dim(panel), lambda: (px.norm, py.norm))
+    if st is not None:
+        io = imgui.get_io()
+        st["fine"] = st["fine"] or io.key_shift
+        if st["fine"]:
+            # relative from the moment ⇧ joins until the button comes up, a
+            # tenth while it is held and whole once it is let go — never a
+            # jump to the pointer (as `Panel._fine` keeps a slider's drag)
+            rate = ui.FINE if io.key_shift else 1.0
+            st["t"][0] = min(max(st["t"][0] + io.mouse_delta.x / side * rate, 0.0), 1.0)
+            st["t"][1] = min(max(st["t"][1] - io.mouse_delta.y / side * rate, 0.0), 1.0)
+        else:
+            m = imgui.get_mouse_pos()
+            st["t"] = [(m.x - x) / side, 1.0 - (m.y - y) / side]
+        moved = _write_norm(px, st["t"][0])
+        moved = _write_norm(py, st["t"][1]) or moved
+        if moved:
+            undo.by_hand(True)
+    # the ground, a frame, the neutral cross and the quarters
+    r0, r1 = imgui.ImVec2(x, y), imgui.ImVec2(x + side, y + side)
+    dl.add_rect_filled(r0, r1, ui.u32(ui.PAD_BG), ui.ROUND)
+    dl.add_rect(r0, r1, ui.u32(ui.RED if active else ui.LINE), ui.ROUND, 1.5 if active else 1.0)
+    for q in (0.25, 0.75):
+        c = ui.u32(ui.LINE)
+        dl.add_line(imgui.ImVec2(x + side * q, y + 2), imgui.ImVec2(x + side * q, y + side - 2), c, 1.0)
+        dl.add_line(imgui.ImVec2(x + 2, y + side * q), imgui.ImVec2(x + side - 2, y + side * q), c, 1.0)
+    nx = shapes[0].detent if shapes[0].detent is not None else 0.5
+    ny = shapes[1].detent if shapes[1].detent is not None else 0.5
+    c = ui.u32(ui.FAINT)
+    dl.add_line(imgui.ImVec2(x + side * nx, y + 2), imgui.ImVec2(x + side * nx, y + side - 2), c, 1.0)
+    dl.add_line(imgui.ImVec2(x + 2, y + side * (1 - ny)), imgui.ImVec2(x + side - 2, y + side * (1 - ny)),
+                c, 1.0)
+
+    def at(tx, ty):
+        return imgui.ImVec2(x + side * min(max(tx, 0.0), 1.0), y + side * (1 - min(max(ty, 0.0), 1.0)))
+
+    def halo(t):                            # a volume's depth: a ring about the dot
+        return ui.PAD_DOT_R + 4 + t * side * 0.15
+
+    dot = at(px.norm, py.norm)
+    # the crosshair through the dot, the value fill's red
+    fill = ui.u32(ui.FILL)
+    dl.add_line(imgui.ImVec2(dot.x, y + 1), imgui.ImVec2(dot.x, y + side - 1), fill, 2.0)
+    dl.add_line(imgui.ImVec2(x + 1, dot.y), imgui.ImVec2(x + side - 1, dot.y), fill, 2.0)
+    dl.push_clip_rect(r0, r1, True)
+    if len(ps) > 2:
+        dl.add_circle_filled(dot, halo(ps[2].norm), ui.u32(ui.FILL), 48)
+        dl.add_circle(dot, halo(ps[2].norm), ui.u32(ui.RED), 48, 1.5)
+    if any(p.modulated for p in ps):        # where the lanes have it now
+        g = at(px.eff_norm, py.eff_norm)
+        dl.add_line(dot, g, ui.u32(ui.GHOST), 1.5)
+        if len(ps) > 2:
+            dl.add_circle(g, halo(ps[2].eff_norm), ui.u32(ui.GHOST), 48, 1.5)
+        dl.add_circle_filled(g, ui.PAD_DOT_R * 0.6, ui.u32(ui.GHOST), 24)
+        panel.ghosts += 1
+    dl.pop_clip_rect()
+    dl.add_circle_filled(dot, ui.PAD_DOT_R, ui.u32(ui.RED), 32)
+    dl.add_circle(dot, ui.PAD_DOT_R + (3 if active or hovered else 1.5),
+                  ui.u32(ui.TEXT), 32, 2.0 if active or hovered else 1.5)
+
+
+KNOB_SWEEP = 1.5 * math.pi     # radians the knob turns over its throw, the gap at the bottom
+
+
+def knob(panel, k, a, p, x, y, words: str, room: float | None = None):
+    """A small knob for param `a` (reading and writing `p`) at (x, y): a
+    vertical drag turns it, a full throw over `ui.KNOB_THROW` px (⇧ held, a
+    tenth); a double-click returns it to its detent. Its arc fills from
+    the shape's origin; a lane's effective value is a white tick. Its
+    words — `words`, its value — under it. It is the param's control: its
+    `##<id>` (the driver finds it), menu, learn frame and tooltip. Returns
+    its rect."""
+    r = ui.KNOB_R
+    cx, cy = x + r, y + r
+    shape = shape_of(panel, p)
+    imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
+    imgui.invisible_button(f"##{a.id}", imgui.ImVec2(2 * r, 2 * r))
+    active, hovered = imgui.is_item_active(), imgui.is_item_hovered()
+    rect = (imgui.get_item_rect_min(), imgui.get_item_rect_max())
+    if not _dim(panel):
+        moved = False
+        st = _held(panel, f"knob.{a.id}", active, lambda: (p.norm,))
+        if st is not None:
+            io = imgui.get_io()
+            dt = -io.mouse_delta.y / ui.KNOB_THROW * (ui.FINE if io.key_shift else 1.0)
+            if dt:
+                st["t"][0] = min(max(st["t"][0] + dt, 0.0), 1.0)
+                moved = _write_norm(p, st["t"][0])
+        if hovered and imgui.is_mouse_double_clicked(0) and shape.detent is not None:
+            moved = _write_norm(p, shape.detent) or moved
+            if st is not None:              # the second press held on into a drag: from the detent
+                st["t"][0] = shape.detent
+        if moved:
+            undo.by_hand(True)
+    panel._tip(a)
+    panel._ctx(a)
+    panel._learn_frame(a)
+    dl = k.dl
+    start = math.pi / 2 + (2 * math.pi - KNOB_SWEEP) / 2     # bottom-left, clockwise
+
+    def ang(t):
+        return start + KNOB_SWEEP * min(max(t, 0.0), 1.0)
+
+    ring = r - 3
+    dl.path_arc_to(imgui.ImVec2(cx, cy), ring, ang(0), ang(1), 40)
+    dl.path_stroke(ui.u32(ui.LINE), thickness=4.0)
+    a0, a1 = sorted((ang(shape.origin), ang(p.norm)))
+    if a1 - a0 > 1e-3:
+        dl.path_arc_to(imgui.ImVec2(cx, cy), ring, a0, a1, 40)
+        dl.path_stroke(ui.u32(ui.RED), thickness=4.0)
+    for t in shape.notches:                 # a detent: a tick outside the ring
+        u = ang(t)
+        dl.add_line(imgui.ImVec2(cx + math.cos(u) * (r + 1), cy + math.sin(u) * (r + 1)),
+                    imgui.ImVec2(cx + math.cos(u) * (r + 4), cy + math.sin(u) * (r + 4)),
+                    ui.u32(ui.FAINT), 1.5)
+    u = ang(p.norm)
+    dl.add_circle_filled(imgui.ImVec2(cx, cy), ring - 5,
+                         ui.u32(ui.LINE if not (active or hovered) else ui.FAINT), 24)
+    dl.add_line(imgui.ImVec2(cx + math.cos(u) * 3, cy + math.sin(u) * 3),
+                imgui.ImVec2(cx + math.cos(u) * (ring - 1), cy + math.sin(u) * (ring - 1)),
+                ui.u32(ui.TEXT), 2.5)
+    if p.modulated:
+        g = ang(p.eff_norm)
+        dl.add_line(imgui.ImVec2(cx + math.cos(g) * (ring - 4), cy + math.sin(g) * (ring - 4)),
+                    imgui.ImVec2(cx + math.cos(g) * (ring + 3), cy + math.sin(g) * (ring + 3)),
+                    ui.u32(ui.GHOST), 3.0)
+        panel.ghosts += 1
+    hh = head_h()
+    # the readout, each line inside the knob's column `room`: its letter and
+    # the base, then — a lane riding it — "→ effective" on a line of its own
+    # (`base → effective` on one line ran past the column, row 1028)
+    room = ui.KNOB_COL if room is None else room
+    col = ui.RED if p.modulated else ui.TEXT
+    value = p.text()
+    ty = y + 2 * r + PAD_LABEL_GAP
+    lw = ui._micro_width(words)
+    vw = ui._readout_width(value)
+    if lw + vw + 4 <= room:                 # side by side, centred under the knob
+        x0 = cx - (lw + 4 + vw) / 2
+        text(dl, x0, ty, hh, words, "micro", ui.FONT_MICRO, ui.DIM)
+        text(dl, x0 + lw + 4, ty, hh, value, "num", ui.FONT_NUM, col)
+    else:
+        _centred(dl, cx, ty, hh, value, room, col)
+    if p.modulated:
+        _centred(dl, cx, ty + hh, hh, f"→ {panel._eff_text(p)}", room, col)
+    return rect
+
+
+def _centred(dl, cx: float, y: float, h: float, s: str, room: float, col) -> None:
+    """`s` in the readout face centred on `cx`, cut to `room` px."""
+    imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
+    s = ui.fit_text(s, room)
+    w = imgui.calc_text_size(s).x
+    imgui.pop_font()
+    text(dl, cx - w / 2, y, h, s, "num", ui.FONT_NUM, col)
+
+
+def inline_pad(panel, pids, label: str) -> dict:
+    """`pad` the full width at the cursor, in imgui's flow (the fx strip's
+    row for a `@pair` or `@volume`). Its knobs' rects, by param id."""
+    k = ui_kit.begin(panel)
+    x, y, w, _ = ui_kit.block(0.0)
+    h = pad_h(w, len(pids))
+    with _m("uictx").chrome(k):
+        rects = pad(panel, k, list(pids), label, (x, y, w, h))
+    ui_kit.end_block((x, y, w, h))
+    return rects
 
 
 # ---------------------------------------------------------------- toggles

@@ -102,6 +102,7 @@ from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
 from .tapers import clamp as _clamp
 from .view import (
+    KEY_MEASURES,
     MATTE_FEATHER,
     MATTE_FROM,
     RESIZE_ASPECTS,
@@ -113,6 +114,7 @@ from .view import (
     SEGMENT_MODES,
     SEGMENT_QUALITY,
     CutState,
+    KeyState,
     MatteState,
     ResizeState,
     SegmentState,
@@ -172,7 +174,7 @@ F_KEYS = 8
 # changes what its own `axis:L.*` / `axis:R.*` routes do. The pad's feel (`desk.pad.*`)
 # is about the hardware, and stays the meta controller's
 PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
-                      "backdrop", "switch", "resize", "matte", "cut", "segment", "ghost",
+                      "backdrop", "switch", "resize", "matte", "cut", "segment", "key", "ghost",
                       "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "mod")
 # `grip` (plan 60, the hand rig): a patch's own, each deck's — the owner, 2026-11-10,
 # testing it: "this really should be per preset". The on-air deck's acts on the one world
@@ -322,6 +324,9 @@ class Param:
     _pos: float | None = field(default=None, repr=False)
     _chase: bool = field(default=False, repr=False)
     _trim: float = field(default=0.0, repr=False)
+    # how far `follow` has moved the base, normalized, all told (plan 81
+    # follow-up): what undo takes off the base to read what the user set
+    _drift: float = field(default=0.0, repr=False)
 
     def __post_init__(self):
         if self.alias:
@@ -562,18 +567,30 @@ class Param:
         modulates the param its base takes the move (in normalized units, so
         a tapered zoom's ratio holds), and the last value the param wrote is
         set to it, so its next `apply` adopts nothing twice — and a source
-        letting go restores a base that has the move in it."""
+        letting go restores a base that has the move in it.
+
+        How far the base moved is added to `_drift` (normalized): undo reads a
+        base less what `follow` moved it (`undo.own`), so a running dive makes
+        no step and runs no step on (plan 81 follow-up, register row 1018)."""
+        if self.kind is not Kind.CONTINUOUS:
+            self.put(v)
+            return
         old = self._norm_of(self.get())
+        was = self._norm_of(self.base)
         self.put(v)
-        if self._base is None or self.kind is not Kind.CONTINUOUS:
-            return
-        cur = self._norm_of(self.get())
-        if not (math.isfinite(cur) and math.isfinite(old)):
-            return
-        self._base += cur - old
-        self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
-        if self._last is not None:
-            self._last = cur
+        if self._base is not None:
+            cur = self._norm_of(self.get())
+            if math.isfinite(cur) and math.isfinite(old):
+                self._base += cur - old
+                self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
+                if self._last is not None:
+                    self._last = cur
+        now = self._norm_of(self.base)
+        if math.isfinite(now) and math.isfinite(was):
+            moved = now - was
+            if self.wrap:                       # the short way round
+                moved = (moved + 0.5) % 1.0 - 0.5
+            self._drift += moved
 
     def nudge(self, delta: float) -> float:
         """Add `delta` to the base, wrapped or clamped into range; returns
@@ -1921,6 +1938,96 @@ def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 87: black is clear, on any picture node ----
+KEY_GROUP = "key"
+KEY_PREFIX = "key."
+KEY_FEATHER = MATTE_FEATHER         # the most px a key's feather blurs by (masks.MAX_FEATHER)
+# `key.<node>.<k>`: the knobs of a node the loadable patch's graph keys
+# (`"keys"`), in the panel's order
+_KEY_KEYS = ("level", "soft", "measure", "feather", "keep", "invert")
+_KEY_ID = re.compile(r"key\.(.+)\.(" + "|".join(_KEY_KEYS) + ")")
+_KEY_WORDS = {"level": "clear level", "soft": "clear softness", "measure": "clear measure",
+              "feather": "clear feather", "keep": "keep colour", "invert": "white is clear"}
+_KEY_TIPS = {
+    "level": "Black is clear on {name}: at or below this brightness a pixel is clear.",
+    "soft": "How far above the level a pixel of {name} takes to become solid: 0 a hard "
+            "edge, higher a gentler one. Pure black is always clear.",
+    "measure": "What counts as bright in {name}: peak, the largest of red, green and blue "
+               "(a saturated colour stays); luma, the eye's brightness (a deep blue goes "
+               "with the black).",
+    "feather": "Blurs {name}'s clear edge by this many pixels. Two passes more while "
+               "above 0.",
+    "keep": "Keep colour: a dim glow in {name} stays as bright over what is under it "
+            "(only the alpha comes from the brightness). Off, colour goes with alpha and "
+            "the edges dim. Not used with white is clear.",
+    "invert": "{name}'s white is clear instead of its black.",
+}
+
+
+def key_ids(name: str) -> list[str]:
+    """Keyed node `name`'s knobs (`scene` → `key.scene.level` …), in order."""
+    return [f"{KEY_PREFIX}{name}.{k}" for k in _KEY_KEYS]
+
+
+def is_key_id(pid: str) -> bool:
+    """Is `pid` a keyed node's knob — one that exists only while a loadable
+    patch's graph keys that node (plan 87)? A load sorts such ids against the
+    graph it lands, as it does a matte's."""
+    return bool(_KEY_ID.fullmatch(pid))
+
+
+def _key_state(r: Registry) -> dict[str, KeyState]:
+    """The states the key params write, node name → `KeyState`: the view
+    state's (`ViewState.keys`), kept by `build_registry` as `r.key_state`; a
+    dict of the registry's own for one built without a view (as `_cut_state`)."""
+    state = getattr(r, "key_state", None)
+    if not isinstance(state, dict):
+        state = {}
+        vars(r)["key_state"] = state    # (a field the registry does not declare)
+    return state
+
+
+def declare_keys(r: Registry, names: Iterable[str]) -> list[str]:
+    """Black is clear's knobs (plan 87), as `declare_mattes` does the
+    mattes': for each node `names` keys, `level` 0–1 (0.02), `soft` 0–1
+    (0.1), `measure` (peak, luma), `feather` 0–32 px (0), `keep` (on) and
+    `invert` (off) — group `key` (a patch group), modulatable — over a
+    `KeyState` made when first declared and kept while the name stays;
+    those of every node no longer keyed dropped, with their states. Returns
+    the ids that appeared or went."""
+    state = _key_state(r)
+    want = {n: key_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == KEY_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        if st is None:
+            st = state[name] = KeyState()
+        for pid, key in zip(ids, _KEY_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {_KEY_WORDS[key]}"
+            tip = _KEY_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key == "measure":
+                r.enum(pid, label, *got, list(KEY_MEASURES), group=KEY_GROUP, tip=tip)
+            elif key in ("keep", "invert"):
+                r.toggle(pid, label, *got, group=KEY_GROUP, tip=tip)
+            elif key == "feather":
+                r.continuous(pid, label, *got, lo=0.0, hi=KEY_FEATHER, group=KEY_GROUP,
+                             fmt=lambda v: f"{v:.0f} px", tip=tip)
+            else:
+                r.continuous(pid, label, *got, lo=0.0, hi=1.0, group=KEY_GROUP,
+                             fmt=lambda v: f"{v:.3f}", tip=tip)
+            changed.append(pid)
+    return changed
+
+
 # ---- plan 39 T4: the segments' values ----
 SEGMENT_GROUP = "segment"
 _SEGMENT_KEYS = ("mode", "quality", "feather", "smooth", "on", "sense", "learn")
@@ -2418,6 +2525,15 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.matte_state = mattes
+    # plan 87: the keyed nodes' black is clear likewise (`ViewState.keys`)
+    keys = getattr(view, "keys", None)
+    if not isinstance(keys, dict):
+        keys = {}
+        try:
+            view.keys = keys
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    vars(r)["key_state"] = keys       # (as `_key_state`)
     # plan 39 T3: the cuts' values likewise (`ViewState.cuts`)
     cuts = getattr(view, "cuts", None)
     if not isinstance(cuts, dict):
@@ -2481,6 +2597,46 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
     # plan 64 (register row 884): a fractal's lines and faces sorted on the
     # CPU (off, the default) or additive and unsorted on the GPU. Not saved
     # while the owner judges the look; a fractal's alone (fractal.py)
+    # plan 64's fractal section (row 902): what a fractal draws, the look's own —
+    # persisted params, so undo, the dirty dot and a patch export hold them, but
+    # a loadable patch writes them under its optional `fractal` key, only for a
+    # fractal (`loadable.FRACTAL_KEY`), never in its values: no other look's
+    # file changes
+    r.continuous("view.frac_detail", "Detail", *_attr(view, "frac_detail"), lo=0.35, hi=3.0,
+                 log=True, fmt=lambda v: f"{v:.2f}×", group=g,
+                 tip="A fractal only. How much detail it shows: higher splits each cell "
+                     "smaller on screen, so more cells and more edges (up to the frame's "
+                     "budget, then coarser); lower, fewer. 1 is the fractal's own.")
+    r.continuous("view.frac_far", "Reach", *_attr(view, "frac_far"), lo=-1.5, hi=2.0,
+                 fmt=lambda v: f"{v:+.2f} oct", group=g,
+                 tip="A fractal only. How far into it cells are drawn, in octaves of "
+                     "distance past its own reach: up, deeper and denser; down, only "
+                     "what is near. 0 is the fractal's own.")
+    r.continuous("view.frac_near", "Near", *_attr(view, "frac_near"), lo=-1.0, hi=1.0,
+                 fmt=lambda v: f"{v:+.2f} oct", group=g,
+                 tip="A fractal only. How near the eye a cell comes before it dissolves, in "
+                     "octaves: up, cells pass closer; down, they fade sooner. 0 is the "
+                     "fractal's own.")
+
+    # plan 81 (row 1011): a fractal's dive rate, levels a second (× 1 / ratio
+    # each), signed — a velocity on camera.zoom that `fractal.step` integrates
+    # and re-roots, so an LFO, a hand or a knob on it dives without end. Saved
+    # and routable as the section's others are (`loadable.FRACTAL_KEY`)
+    r.continuous("view.frac_dive", "Dive", *_attr(view, "frac_dive"), lo=-2.0, hi=2.0,
+                 fmt=lambda v: f"{v:+.2f} levels/s", group=g,
+                 tip="A fractal only. Dives in (up) or climbs out (down), in levels a "
+                     "second, about the middle of the screen, for as long as it is "
+                     "set: route an LFO, a hand or a knob to it. Climbing out stops at "
+                     "the whole shape. 0 holds still.")
+
+    def to_the_top() -> None:
+        # (as Reset view's zoom and pan, the turn left alone)
+        view.zoom, view.pan = 1.0, [0.0, 0.0]
+        view.dive.reset()
+
+    r.trigger("view.frac_top", "To the top", to_the_top, group=g,
+              tip="A fractal only. Out of every cell at once: the whole shape, centred, "
+                  "at zoom 1 — its turn kept.")
     r.toggle("view.frac_additive", "Additive", *_attr(view, "frac_additive"), group=g,
              persist=False, modulatable=False,
              tip="A fractal only. Off: its lines and faces are sorted far to near on "

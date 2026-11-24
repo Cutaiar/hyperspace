@@ -376,10 +376,46 @@ def not_moved(root: Path) -> list[str]:
 _missing: set[Path] = set()
 
 
+# the library's name when config.toml names no [library] path (2026-11-23, the owner: "Google
+# Drive is the canonical location ... there should not be another place"): the home is no
+# library, so this is never a folder — nothing lists and every save is refused in words
+NO_LIBRARY = "(no [library] path set)"
+NO_LIBRARY_WORDS = ("no library set — not saved. Put [library] path = \"<the Google Drive "
+                    "Hyperspace folder>\" in {config}, then restart")
+
+
 def missing_text(path: Path) -> str:
-    """What a write into a missing shared library says (plan 25 D5)."""
+    """What a write into a missing shared library says (plan 25 D5), or into none at all."""
+    if path.name == NO_LIBRARY:
+        return NO_LIBRARY_WORDS.format(config=path.parent / "config.toml")
     return (f"shared library not found at {path} — not saved; fix [library] path or the "
             "folder, then restart")
+
+
+# the folders of library documents a machine home must not hold (2026-11-23): a home
+# that has one is a library left behind by a move, or by a launch with no [library] path —
+# never read while the library is elsewhere, and so a second place a patch seems to be
+LIBRARY_DIRS = ("loadable", "presets", "patches", "installs", "projects", "playlists")
+STRAY_WORDS = ("{home} still holds an old local library ({where}): it is not used. Quit, then "
+               "run tools/move_library.py \"{library}\" to fold it into the library")
+# …and with no library to fold it into (none set, config.toml unread, the folder gone): no
+# command naming a folder that is not the library, which the tool would fill (review of #480)
+STRAY_NO_LIBRARY_WORDS = ("{home} still holds an old local library ({where}): it is not used. "
+                          "Fix [library] path in config.toml and restart first, then run "
+                          "tools/move_library.py with that folder")
+
+
+def strays(machine: Path) -> list[str]:
+    """`LIBRARY_DIRS` folders under `machine` that hold a document (any ``*.json`` not
+    hidden, every folder down): what `STRAY_WORDS` names. Launch only: this reads them."""
+    found = []
+    for name in LIBRARY_DIRS:
+        try:
+            if any(not p.name.startswith(".") for p in (machine / name).rglob("*.json")):
+                found.append(f"{name}/")
+        except OSError:
+            continue
+    return found
 
 
 def _refuse_missing(path: Path) -> None:
@@ -404,9 +440,11 @@ def ensure_home(root: Path | None = None, cwd: Path | None = None) -> Path:
     once per home per process: config.load and Library() both ask, and
     the first-run migration should not scan the working directory twice."""
     root = home() if root is None else root
-    if root in _ensured and installs_dir(root).is_dir():
+    if root in _ensured and root.is_dir():
         return root
-    installs_dir(root).mkdir(parents=True, exist_ok=True)
+    # the home itself, no library folder in it: those are made by the `Library` that is
+    # one (a machine home is no library, 2026-11-23)
+    root.mkdir(parents=True, exist_ok=True)
     for msg in migrate(root, cwd):
         print(msg, file=sys.stderr)
     _ensured.add(root)
@@ -1339,23 +1377,83 @@ class Install:
         the desk reads as "nothing to confirm" (midi.py blinks no light)."""
         return self._save_new(None)
 
-    def _save_new(self, at: int | None) -> bool:
-        """`save_new` into slot `at`, or the next empty one when None."""
+    def save_named(self, name: str) -> bool:
+        """`save_new` under a name the person gave (plan 88: **save as name…** and
+        **save to location…** on GRAPH's deck row): `name` is folder-qualified
+        (``4-install-nov/distort/moo final``), its folder made when it is new. The
+        same save as `save_new` in every other way — the new patch becomes the loaded
+        one, takes the next empty pad, the show is written — and it never writes over
+        a file either: a name taken (`_taken`, the bank's names) or one that could
+        name no file (``../x``) is refused, with why in `bank_error` and on the
+        warning line. True when it was saved."""
+        name = "/".join(seg.strip() for seg in str(name).strip().split("/"))
+        lib = self.lib
+        key = lib._fold(LOADABLE, name) if name and not name.endswith("/") else None
+        if key is None:
+            return self._refuse(f"{name or 'an empty name'}: not a name a patch can have")
+        taken = self._taken_now()
+        if key in taken or self._on_disk(name) or self._bare_taken(name, taken):
+            return self._refuse(f"{name}: there is a patch of that name already — "
+                                "pick another, nothing is written over")
+        return self._save_new(None, name)
+
+    def _bare_taken(self, name: str, taken: set) -> bool:
+        """In a library not yet moved (`presets/` only) a folder is no part of a name
+        (`Library._prefix`): `set-a/intro` would be listed as `intro`, the name a pad
+        of `set-b/intro.json` already holds. Its leaf alone is then what must be free."""
+        lib = self.lib
+        if loadable_dir(lib.home).name != OLD_LOADABLE:
+            return False
+        return lib._fold(LOADABLE, split_name(name)[1]) in taken
+
+    def _on_disk(self, name: str) -> bool:
+        """Is the file a save of `name` would write already there, by the disk's own
+        rules: on a Mac's disk, which folds case, ``moo.JSON`` is ``moo.json``,
+        and the list (``*.json``) does not see it."""
+        try:
+            key = path_slug(name)
+        except LibraryError:
+            return False
+        lib = self.lib
+        folder, _, leaf = key.rpartition("/")
+        if folder:
+            folder = lib._folder_on_disk(folder) or folder
+        return (lib.group_dir(lib.home, LOADABLE) / folder / f"{leaf}.json").exists()
+
+    def next_save_name(self) -> str:
+        """The name `save_new` would give now: the loaded patch's grown (moo → moo 2),
+        in its folder; ``PATCH <n>`` at the top with nothing loaded."""
+        lib = self.lib
+        taken = self._taken_now()
+        folder, base = lib.folder_of(LOADABLE, lib.current(LOADABLE))
+        leaf = next_name(base, taken, key=lambda n: lib._fold(
+            LOADABLE, f"{folder}/{n}" if folder else n))
+        return f"{folder}/{leaf}" if folder else leaf
+
+    def _taken_now(self) -> set:
+        # stems as slugs: on a filesystem that folds case, `Trip-2.json`
+        # is the file a save of "TRIP 2" would write over
+        lib = self.lib
+        return lib._taken(LOADABLE) | {lib._fold(LOADABLE, n) for n in self.bank if n}
+
+    def _refuse(self, why: str) -> bool:
+        self.bank_error = f"patches: {why}"
+        self.lib.say(warning=self.bank_error)
+        return False
+
+    def _save_new(self, at: int | None, name: str | None = None) -> bool:
+        """`save_new` into slot `at`, or the next empty one when None; under `name`
+        (`save_named`, checked there), else the next name grown from the loaded one."""
         lib, loaded_patch = self.lib, self._loader()
         if lib.reg is None:
             return False
         if loaded_patch is None:
             self.bank_error = "patches: no patch loader"
             return False
-        # stems as slugs: on a filesystem that folds case, `Trip-2.json`
-        # is the file a save of "TRIP 2" would write over. Plan 48 row 587:
-        # the new loadable patch lands beside the loaded one — in its folder, the
-        # library's root for a top-level one or none loaded
-        taken = lib._taken(LOADABLE) | {lib._fold(LOADABLE, n) for n in self.bank if n}
-        folder, base = lib.folder_of(LOADABLE, lib.current(LOADABLE))
-        leaf = next_name(base, taken, key=lambda n: lib._fold(
-            LOADABLE, f"{folder}/{n}" if folder else n))
-        name = f"{folder}/{leaf}" if folder else leaf
+        # Plan 48 row 587: the new loadable patch lands beside the loaded one — in
+        # its folder, the library's root for a top-level one or none loaded
+        if name is None:
+            name = self.next_save_name()
         try:
             loaded_patch.save_as(name)
         except (LibraryError, OSError) as e:          # a full disk must not stop the show
@@ -2077,6 +2175,12 @@ class Library:
         # plan 57 §7a: said on the SYSTEM page, and on the footer at launch (app.py)
         where = not_moved(self.home) if self.missing is None else []
         self.not_moved = NOT_MOVED_WORDS.format(where=" and ".join(where)) if where else ""
+        # a machine home apart from the library that still holds library folders: said on
+        # the SYSTEM page and the footer at launch (app.py), never read
+        left = strays(self.machine) if self.machine != self.home else []
+        words = STRAY_WORDS if self.missing is None else STRAY_NO_LIBRARY_WORDS
+        self.strays = (words.format(home=self.machine, where=", ".join(left), library=self.home)
+                       if left else "")
         self._open_default()
         self._mtimes = self._scan()
 
@@ -2992,7 +3096,10 @@ class Library:
                 folder = key.rpartition("/")[0]
                 folder = self._folder_on_disk(folder) or folder
                 leaf = leaf.strip()
-                path = self.home / group / (f"{folder}/" if folder else "") / f"{slug(leaf)}.json"
+                # in the folder the list reads (`group_dir`): `presets/` in a library
+                # not yet moved, so a save never starts a `loadable/` that hides it
+                path = (self.group_dir(self.home, group) / (f"{folder}/" if folder else "")
+                        / f"{slug(leaf)}.json")
             doc["name"] = leaf
             name = f"{folder}/{leaf}" if folder else leaf
         elif path is None:

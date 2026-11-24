@@ -51,6 +51,7 @@ from . import (
     ui_displays,
     ui_feel,
     ui_fields,
+    ui_fractal,
     ui_graph,
     ui_kit,
     ui_lfo,
@@ -73,7 +74,6 @@ from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
 from .control import Control
-from .fractal import FRACTALS as _FRACTALS
 from .geometry import SHAPES, geom, menu
 from .graph import (
     ALL_OUTPUTS,
@@ -93,6 +93,7 @@ from .graph import (
 )
 from .groupwords import group_title
 from .hands import panel as ui_hands
+from .library import NO_LIBRARY
 from .media import publish
 from .params import PLANES, Kind, Param, Registry, build_registry, dial_id, part_of
 from .pointer import Through, deck_number
@@ -130,6 +131,24 @@ SLIDER_MIN = 60.0   # a slider sharing a row in a narrow pane is never thinner
 FIELD_SLIDER_H = 20.0
 FIELD_ROW_H = 28.0
 FIELD_NOTCH = 3.0
+# plan 82, the faders' shapes (`ui_fields.Shape`): a stepped control's ticks
+# are never closer than TICK_GAP (thinned past it), TICK_H tall under the
+# track; a drag within DETENT_PX of a bipolar or unity detent lands on it
+TICK_GAP = 6.0
+TICK_H = 3.0
+DETENT_PX = 6.0
+TICK = imgui.ImVec4(0.58, 0.58, 0.61, 0.55)     # a step's tick: FAINT, quieter
+# plan 82, the XY pad and XYZ volume (`ui_fields.pad`): its square is
+# PAD_MAX at most and PAD_MIN at least across, its dot PAD_DOT_R (a
+# trackpad's target on stage); a knob per axis KNOB_R, a full throw
+# KNOB_THROW px of vertical drag
+PAD_MAX = 260.0
+PAD_MIN = 120.0
+PAD_DOT_R = 10.0
+KNOB_R = 18.0
+KNOB_COL = 84.0     # the column a knob and its words under it stand in ("z 0.100" fits)
+KNOB_THROW = 200.0
+PAD_BG = imgui.ImVec4(1, 1, 1, 0.045)           # the pad's ground, a shade over the panel's
 LABEL_GAP = 12   # px between a label cell's text room and its control (Panel._label_cell)
 SCENE_COMBO_MIN = 100   # px; the analyzer's scene combo keeps this beside its label and Reset all
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
@@ -845,7 +864,8 @@ META_SECTIONS = ("output", "audio", "analyzer", "hands")
 VIDEO_SOUND_REACHES = "Off air reacts to on air's video sound."
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-             "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist"]
+             "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist",
+             "fractal"]
 
 
 View = tuple[int, "str | None"]     # (a PAGE_KEYS index, the node selected in the selection view)
@@ -1035,6 +1055,7 @@ class Panel:
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
         self.media = None     # set by app.py (app.MediaIO): the MEDIA page's folder and channels
         self.canvas_tap = None   # set by app.py (outputs.CanvasTap): the GRAPH canvas as `panel:graph`
+        self.publish_home: Any = None   # set by app.py: where MEDIA ▸ Live's NDI out choice is kept
         self.canvas_px = None    # GRAPH's canvas this frame (ui_graph.page), else None
         self.dialog_error = ""   # why the file dialog would not open (`open_file_dialog`)
         self.router = None    # set by app.py (routing.Router); else found via midi's table
@@ -1608,15 +1629,12 @@ class Panel:
             g = max(usable / (steps + 1), g)
         return min(g, usable) / 2 + 2.0
 
-    @staticmethod
-    def _origin(p: Param) -> float:
-        """Where the fill starts: zero on a range that spans it, else the left end."""
-        if p.kind is Kind.CONTINUOUS and p.lo < 0 < p.hi and not p.log:
-            try:
-                return p._norm_of(0.0)
-            except Exception:  # noqa: BLE001 — a taper that cannot place 0
-                return 0.0
-        return 0.0
+    def _origin(self, p: Param) -> float:
+        """Where the fill starts (plan 82: the param's `ui_fields.Shape`) —
+        a bipolar param's zero, a unity param's 1, else the left end."""
+        if p.kind is not Kind.CONTINUOUS:
+            return 0.0
+        return ui_fields.shape_of(self, p).origin
 
     def _track(self, draw, norm: float, origin: float = 0.0, steps: int = 0,
                knob: bool = True) -> tuple:
@@ -2807,6 +2825,10 @@ class Panel:
         if changed:
             self._graph_edit(lambda e: graphview.set_through(e, n, v), "output_said")
 
+    def _page_fractal(self, dt: float) -> None:
+        """The FRACTAL section (plan 64): `ui_fractal.page`."""
+        ui_fractal.page(self, dt)
+
     def _page_view(self, dt: float) -> None:
         """The VIEW section, on the kit (hyperspace/dkit) where it is there
         (`ui_view.page`); else `_view_stock`."""
@@ -2881,8 +2903,6 @@ class Panel:
         self._slider("view.lines_alpha", half)
         beside(strokes_w)
         self._check("view.screen_strokes")
-        if sh.name in _FRACTALS:
-            self._check("view.frac_additive")      # plan 64: a fractal's line order
         # the count, and Fit beside it: whole copies only, framed to the screen
         fit_w = imgui.calc_text_size("Fit").x + imgui.get_frame_height() + 2 * imgui.get_style(
             ).item_inner_spacing.x
@@ -3113,7 +3133,10 @@ class Panel:
         root = lib.home
         machine = getattr(lib, "machine", root)
         missing = getattr(lib, "missing", None)
-        if missing is not None:
+        if missing is not None and missing.name == NO_LIBRARY:
+            lines = [(("library: none set — saves are off (put [library] path in "
+                       "config.toml, then restart)"), True)]
+        elif missing is not None:
             lines = [((f"library: {missing} — not found, saves are off "
                       "(restart once it is there)"), True)]
         else:
@@ -3121,6 +3144,9 @@ class Panel:
             said = getattr(lib, "not_moved", "")
             if said:
                 lines.append((said, True))
+        said = getattr(lib, "strays", "")
+        if said:
+            lines.append((said, True))
         if machine != root:
             lines.append((f"machine: {machine}", False))
         return lines
@@ -3135,7 +3161,7 @@ class Panel:
                 tooltip(
                     "this machine's own files: config.toml, bindings.json, windows.json, "
                     "hands.json, last_show, logs" if text.startswith("machine:") else
-                    "patches and installs as JSON ([library] path, else $HYPERSPACE_HOME); "
+                    "patches and installs as JSON, in the [library] path folder alone; "
                     "edit a file and the app follows")
 
     def gpu_lines(self) -> list[str]:

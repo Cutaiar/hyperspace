@@ -153,6 +153,7 @@ from .view import (
     SEGMENT_MODES,
     SEGMENT_QUALITY,
     CutState,
+    KeyState,
     MatteState,
     ResizeState,
     SegmentState,
@@ -204,8 +205,21 @@ PORT_TYPES = (IMAGE, MASK, GEOMETRY, VALUE, FIELD)
 # scene on the projector and a clean layer on the glass
 HANDS_IN = ("layer", "scene")
 # how a layer is laid on: premultiplied over (today), added, or over but
-# hidden where the scene's visible surface is nearer (depth-aware)
-BLENDS = ("over", "add", "depth")
+# hidden where the scene's visible surface is nearer (depth-aware); plan 87:
+# or screened, `src + dst·(1 − src)` — black adds nothing, nothing passes
+# white. Appended, never inserted (a saved composite names its blend)
+BLENDS = ("over", "add", "depth", "screen")
+# plan 87, black is clear: the graph section's key naming the picture nodes
+# whose dark parts are clear (`GraphSpec.keys`), written only when one is
+KEYS_KEY = "keys"
+KEY_NOT_A_NODE = "keys: {name!r} is not a node of the frame — dropped"
+# what a blend says in words, after the layer it lays (over says nothing)
+BLEND_WORDS = {"over": "", "add": "added", "depth": "depth-aware", "screen": "screened"}
+
+
+def blend_words(blend: str) -> str:
+    """`blend`'s words (`BLEND_WORDS`): "" for over or one this build has not."""
+    return BLEND_WORDS.get(blend, "")
 # what the history captures: the scene (today), or the scene with the
 # hands' layer laid on (with the hands inside the scene, the scene holds
 # them already)
@@ -347,6 +361,9 @@ class Wiring:
     # (its entry's `laid`): how that layer is laid on at an output — any
     # other layer is laid over
     laid_on: int = 1
+    # plan 87: the picture nodes keyed, black is clear (`GraphSpec.keys`):
+    # each built wrapped in a `KeyNode` (a channel keyed in its own fit pass)
+    keys: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.backdrop, str) or (
@@ -2286,6 +2303,8 @@ class GraphSpec:
     # plan 35 T3 (row 380): the hands entry `laid` sits on in a wired frame,
     # where any hands node may have a layer (1 outside one: the layer node's)
     laid_on: int = 1
+    # plan 87: the picture nodes keyed, black is clear (`"keys"`), sorted
+    keys: tuple[str, ...] = ()
 
     @property
     def frame_nodes(self) -> tuple:
@@ -2313,7 +2332,7 @@ class GraphSpec:
             return Wiring(draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
                           blend=self.laid, placed=placed, wires=self.wires,
                           composites=self.composites(), wired=True, copies=self.copies,
-                          laid_on=self.laid_on)
+                          laid_on=self.laid_on, keys=self.keys)
         run, wires = None, self.wires
         if any(w.src == "frame" or w.dst == "fx.image" for w in wires):
             # plan 33 R: the section says the run (every loadable patch loaded on
@@ -2469,9 +2488,12 @@ class GraphSpec:
             nodes.append(to() if to is not None else {"kind": kind, **dict(got)})
         # plan 35 F: a wired frame says so first
         head = {FRAME_KEY: WIRED_FRAME} if self.wired else {}
+        # plan 87: the keyed nodes last, and only when there are any (a
+        # section with none is the bytes it was)
+        tail = {KEYS_KEY: list(self.keys)} if self.keys else {}
         if not self.wires:                     # N4: a graph with no wires is D1's, short
-            return {**head, "nodes": nodes}
-        return {**head, "nodes": nodes, "wires": [w.to_json() for w in self.wires]}
+            return {**head, "nodes": nodes, **tail}
+        return {**head, "nodes": nodes, "wires": [w.to_json() for w in self.wires], **tail}
 
 
 def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *,
@@ -2500,10 +2522,10 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
     as it always was: it is only ever a migration's input."""
     if not isinstance(section, dict):
         raise GraphError(f"not an object but {type(section).__name__}")
-    extra = sorted(set(section) - {"nodes", "wires", FRAME_KEY})
+    extra = sorted(set(section) - {"nodes", "wires", FRAME_KEY, KEYS_KEY})
     if extra:
-        raise GraphError(f"no key {', '.join(map(repr, extra))} (it takes nodes, wires and "
-                         "frame)")
+        raise GraphError(f"no key {', '.join(map(repr, extra))} (it takes nodes, wires, "
+                         "frame and keys)")
     # plan 35 F: the marker — a wired frame, its one value
     if FRAME_KEY in section and section[FRAME_KEY] != WIRED_FRAME:
         raise GraphError(FRAME_VALUE.format(value=section[FRAME_KEY]))
@@ -2606,9 +2628,11 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
         # plan 36 T3: hands 1 is always there, and a `/7` writes its entry
         # (`to_json`): read with or without it, the spec is one spec
         hands.setdefault(1, HandsAt(1))
+    keys = _read_keys(section.get(KEYS_KEY, []), wired, notes)
     spec = GraphSpec(hands=tuple(hands[n] for n in sorted(hands)),
                      history=history if history is not None else HistoryAt(),
-                     effects=effects_at, others=tuple(others), notes=tuple(notes), wired=wired)
+                     effects=effects_at, others=tuple(others), notes=tuple(notes), wired=wired,
+                     keys=keys)
     try:
         wiring = spec.wiring()
     except ValueError as err:
@@ -2659,6 +2683,22 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
     except ValueError as err:
         raise GraphError(str(err)) from err
     return spec
+
+
+def _read_keys(raw: Any, wired: bool, notes: list[str]) -> tuple[str, ...]:
+    """The section's `"keys"` (plan 87): the node names keyed, sorted, each
+    once. A list of anything else is refused (`GraphError`); a name that is
+    no node of a wired frame is a note and dropped (the rest stands). An
+    unwired (old) section keys nothing."""
+    if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+        raise GraphError(f"{KEYS_KEY} is not a list of node names")
+    out = set()
+    for name in raw:
+        if not wired or wire_node_kind(name, wired=True) is None:
+            notes.append(KEY_NOT_A_NODE.format(name=name))
+        else:
+            out.add(name)
+    return tuple(sorted(out))
 
 
 def _through_missing(raw: Any, ctx: _WireCtx, d1: list[Wire], wires: tuple[Wire, ...],
@@ -2976,8 +3016,8 @@ def layer_words(wiring: Wiring, layer: str | None = None) -> str:
     k = (split_instance(hands_of(layer))[1]
          if wire_node_kind(layer or "", wired=True) == "layer" else 1)
     words = _node_words(w, k)
-    if w.blend != "over":
-        words += " · depth-aware" if w.blend == "depth" else " · added"
+    if blend_words(w.blend):
+        words += " · " + blend_words(w.blend)
     return words
 
 
@@ -3090,8 +3130,8 @@ def graph_words(spec: GraphSpec | None, dormant: dict[str, str] | None = None) -
             continue
         where = "in the scene" if h.into == "scene" else "a layer"
         parts.append(f"hands {h.n} {where}" + (" as lines" if h.draw == "lines" else ""))
-    if w.blend != "over":
-        parts.append("laid " + ("depth-aware" if w.blend == "depth" else "added"))
+    if blend_words(w.blend):
+        parts.append("laid " + blend_words(w.blend))
     parts += [f"{f} ×{n}" for f, n in sorted(spec.effect_counts().items())]
     if w.history == "scene+hands":
         parts.append("history with the hands")
@@ -3231,6 +3271,19 @@ class Frame:
         return getattr(self.root.s, "mattes", None) or {}
 
     @property
+    def keys(self) -> dict[str, Any]:
+        """Plan 87: each keyed node's black is clear this frame (node name →
+        its `view.KeyState`): the view state's (`ViewState.keys`, the
+        `key.<node>.*` params') — a value, never a rebuild (getattr: a view
+        state from before the key has none)."""
+        return getattr(self.root.s, "keys", None) or {}
+
+    def clear(self, name: str) -> KeyState:
+        """Node `name`'s black is clear this frame (`keys`), its defaults
+        while its knobs are not declared yet."""
+        return self.keys.get(name) or _KEY_DEFAULT
+
+    @property
     def cuts(self) -> dict[str, Any]:
         """Plan 39 T3: each cut's values this frame (cut name → its
         `view.CutState`): the view state's (`ViewState.cuts`, the
@@ -3332,6 +3385,12 @@ class Node:
     # words, set in `run` by a node that has any (a delay's "last frame's ·
     # 960×600 half-float") — GRAPH's summary reads it
     said: str = ""
+    # plan 87: a keyed picture laid over another keeps its alpha when it is
+    # painted into a consumer (an effect's input, a backdrop's ground), on an
+    # opaque window too — the window's own end makes it opaque. Set by the
+    # build on a keyed node alone (`_Build._keyed`): every other node paints
+    # as it did
+    keeps_alpha: bool = False
 
     def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
         unknown = set(inputs) - set(self.INPUTS)
@@ -3404,7 +3463,8 @@ class Node:
         if tex is None:
             return
         rect = tuple(dst.viewport)
-        frame.r._show(dst, rect, rect, tex, frame.size, frame.bg_alpha >= 1.0, frame.bg_alpha)
+        opaque = frame.bg_alpha >= 1.0 and not self.keeps_alpha
+        frame.r._show(dst, rect, rect, tex, frame.size, opaque, frame.bg_alpha)
 
     def __repr__(self) -> str:
         wired = ", ".join(f"{p}={n.name if n else None}" for p, n in self.inputs.items())
@@ -3947,6 +4007,10 @@ class MediaNode(Node):
         super().__init__(name, after)
         self.channel = channel
         self.alpha_of = alpha_of
+        # plan 87: the graph's name this channel is keyed under (black is
+        # clear, `Wiring.keys`) — keyed in its own fit pass, no pass more —
+        # or None
+        self.keyed: str | None = None
 
     def opacity(self, frame: Frame) -> float:
         """The opacity folded into the picture this frame: the `alpha_of`
@@ -3960,8 +4024,13 @@ class MediaNode(Node):
         if key not in frame.data:
             fit = getattr(frame.r, "_media_fit", None)
             with frame.timed(self.name):
-                frame.data[key] = (fit(self.channel, frame.size, self.opacity(frame))
-                                   if fit is not None else None)
+                if fit is None:
+                    frame.data[key] = None
+                elif self.keyed is None:
+                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame))
+                else:
+                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame),
+                                          key=frame.r.key_of(frame.clear(self.keyed)))
         return frame.data[key]
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
@@ -5746,10 +5815,55 @@ class Capture(Node):
 
 # ---------------------------------------------------------------- composite
 
+_KEY_DEFAULT = KeyState()
+
+
+class KeyNode(Node):
+    """Black is clear (plan 87) on any picture: `image`'s picture with its
+    dark parts transparent, by the node's knobs (`key.<of>.*`, `Frame.clear`),
+    through `MaskPasses.key` into a frame texture of its own, once a frame.
+    The build puts one after every node its graph keys (`Wiring.keys`) but
+    a channel (keyed in its fit pass), so every consumer of that node reads
+    it keyed; `of` is the keyed node's graph name. Its opacity, depth and
+    whether it reads anything are its picture's. It makes no mask and reads
+    none: a picture's own transparency, not a mask (row 440)."""
+
+    KIND = "key"
+    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
+    OUTPUT = IMAGE
+
+    def __init__(self, name: str, of: str, image: Node | None = None):
+        super().__init__(name, image=image)
+        self.of = of
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        if self.name not in frame.data:
+            src = self.inputs["image"]
+            tex = picture(frame, src) if src is not None else None
+            if tex is not None:
+                with frame.timed(self.name):
+                    tex = frame.r.mask_passes().key(tex, frame.key(self.name), frame.size,
+                                                    frame.clear(self.of))
+            frame.data[self.name] = tex
+        return frame.data[self.name]
+
+    def depth(self, frame: Frame) -> moderngl.Texture | None:
+        src = self.inputs["image"]
+        return src.depth(frame) if src is not None else None
+
+    def alpha(self, frame: Frame) -> float:
+        src = self.inputs["image"]
+        return src.alpha(frame) if src is not None else 1.0
+
+    def reads(self, frame: Frame) -> bool:
+        src = self.inputs["image"]
+        return src is not None and src.reads(frame)
+
+
 class Composite(Node):
     """`over` laid on `under` (`Renderer.lay`), premultiplied at `over`'s
     opacity (`ghost.alpha` for the hands' layer): `blend` "over" (today's
-    `Ghost.composite`), "add", or "depth" — over, but hidden where the
+    `Ghost.composite`), "add", "screen" (plan 87), or "depth" — over, but hidden where the
     image on the `depth` port (the scene) has a visible surface nearer the
     eye (`render.LAYER_DEPTH_BIAS`), so a separate hands layer can still
     go behind the shape. `under` None is the ground (the clear at the
@@ -5833,8 +5947,12 @@ class Composite(Node):
             if tex is None:
                 return
             with frame.timed(self.name):
+                # (plan 87: on a keyed picture's holes — the backdrop's keyed
+                # channel, or an `under` painted keeping its alpha — the over
+                # adds its coverage)
+                holes = self.keeps_alpha or (under is not None and under.keeps_alpha)
                 lay(frame, self.blend, over, self.inputs["depth"], dst, (0, 0, *size),
-                    r.fx.opaque)
+                    r.fx.opaque and not holes)
         except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
             r._hands_failed(e, frame.target, frame.vp)
 
@@ -5898,6 +6016,23 @@ def _spare(frame: Frame, dst: moderngl.Framebuffer | None, hold: bool = False
     if hold:
         held.add(id(tex))
     return tex, fbo
+
+
+def is_generator(spec) -> bool:
+    """Plan 80: whether effect spec `spec` paints the whole frame from
+    nothing — its Python half (`fx.HOOKS`) says `GENERATOR` (the
+    Mandelbrot) — so it is built and drawn with no wire into its image."""
+    from . import fx  # here, not at the top: a hot reload of fx.py is seen
+
+    hook = fx.HOOKS.get(getattr(spec, "hook", "") or "") if spec is not None else None
+    return bool(getattr(hook, "GENERATOR", False))
+
+
+def generators_of(state) -> frozenset[str]:
+    """Plan 80: the effect instances of `state` (an `FxState`, or None)
+    that are generators (`is_generator`): `build_graph`'s `generators`."""
+    specs = getattr(state, "specs", None) or {}
+    return frozenset(n for n, spec in specs.items() if is_generator(spec))
 
 
 class Effect(Node):
@@ -5978,13 +6113,22 @@ class Effect(Node):
         if self.laid_over:
             return True
         src = self.inputs["image"]
-        while isinstance(src, Effect):
+        while isinstance(src, (Effect, KeyNode)):     # (plan 87: a keyed layer is a layer)
             src = src.inputs["image"]
         return src is not None and src.KIND == "layer"
 
     def reads(self, frame: Frame) -> bool:
         src = self.inputs["image"]
-        return src is not None and src.reads(frame)
+        if src is None:
+            return self.generates(frame) and self.on(frame)
+        return src.reads(frame)
+
+    def generates(self, frame: Frame) -> bool:
+        """Plan 80: its file paints the whole frame from nothing — its
+        Python half says `GENERATOR` (the Mandelbrot, `mandel.py`) — so with
+        no picture wired into `image` it still draws, over transparent
+        black (`_pass`), where any other effect reads nothing."""
+        return is_generator(frame.r.fx.state.specs.get(self.effect))
 
     def run(self, frame: Frame) -> None:
         # plan 33 R: folded here only where something reads it at the
@@ -6113,6 +6257,27 @@ class Effect(Node):
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         src = self.inputs["image"]
         if src is None:
+            if not self.generates(frame):
+                return
+            if not self.on(frame):
+                # plan 80: a generator off, with nothing wired in, has no
+                # picture to read through: its consumer gets the ground, not
+                # whatever its target held last (Devin's review of #471); a
+                # see-through ground where it is laid over another picture
+                x, y, w, h = dst.viewport
+                rect = (int(x), int(y), int(w), int(h))
+                dst.use()
+                frame.ctx.viewport = rect
+                frame.ctx.clear(0.0, 0.0, 0.0, 0.0 if self.see_through else frame.bg_alpha,
+                                viewport=rect)
+                return
+            # plan 80: a generator with nothing wired in still draws
+            readers = frame.graph.readers(self) if frame.graph is not None else 1
+            if self.name in frame.data or readers > 1:
+                self._make(frame, dst)
+                super().paint(frame, dst)
+                return
+            self._pass(frame, dst)
             return
         own = self.own_size(frame)
         if own is not None and tuple(own) != tuple(frame.size):
@@ -6186,7 +6351,11 @@ class Effect(Node):
         themselves before it)."""
         aux = self._aux(frame, dst)          # first: making it may take a spare
         tex, fbo = _spare(frame, dst)
-        self.inputs["image"].paint(frame, fbo)
+        src = self.inputs["image"]
+        if src is not None:
+            src.paint(frame, fbo)
+        else:                                # plan 80: a generator over nothing
+            fbo.clear(0.0, 0.0, 0.0, 0.0)
         kw = {"aux": aux} if aux is not None else {}
         kw.update({"opaque": 0} if self.see_through else self._opaque(frame))
         with frame.timed(self.name):
@@ -6591,6 +6760,7 @@ class Graph:
         self.order: list[Node] = []
         self.clouds: tuple[str, ...] = ()        # the cloud roles the default graph drew (A4b)
         self.effects: tuple[str, ...] = ()       # the effect instances of its runs (D0)
+        self.generators: tuple[str, ...] = ()    # plan 80: those built with no input (`Effect.generates`)
         self.dormant: dict[str, str] = {}        # D1: placed effect → why it has no node
         # the entries of `dormant` written while the graph ran (an output's
         # folds skipped this frame: `Output.run`), taken out again before
@@ -6812,7 +6982,8 @@ def _upstream(node: Node) -> set[int]:
 # ---------------------------------------------------------------- the wired frame (plan 35 B)
 
 def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[str, ...] = (),
-                effects: tuple[str, ...] = (), bus_cuts: BusCuts | None = None) -> Graph:
+                effects: tuple[str, ...] = (), bus_cuts: BusCuts | None = None,
+                generators: tuple[str, ...] = ()) -> Graph:
     """A wired frame as a graph (plan 35 B, rows 372 and 379): only what the
     wires reach (`reaches`: a path to an output's port, All outputs', or
     the look-back's capture) is built — `{"frame": "wired"}` alone is the
@@ -6856,6 +7027,9 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     g = Graph(graph_key(views), wiring)
     g.clouds = tuple(clouds)
     g.effects = tuple(effects)
+    # plan 80: the effects that paint the whole frame from nothing
+    # (`Effect.generates`): one with no wire into its image is still built
+    g.generators = tuple(generators)
     g.bus_cuts = bus_cuts if bus_cuts is not None else BusCuts()
     _Build(g, wiring, len(views), g.bus_cuts).build()
     return g
@@ -6939,6 +7113,7 @@ class _Build:
         self.g, self.wiring, self.count = g, wiring, count
         self.bus_cuts = bus_cuts if bus_cuts is not None else BusCuts()     # plan 36 T1: the bus cables
         self.have = set(g.effects)
+        self.generators = set(g.generators)
         wires = tuple(getattr(wiring, "wires", ()))
         # plan 35 T4: a wire into an output this rig has not open (`output.3`
         # with two windows) reaches nothing — what only it shows is not
@@ -7058,8 +7233,42 @@ class _Build:
         if name in self.made:
             return self.made[name]
         self.made[name] = None                       # (a loop reads nothing: refused at read)
-        got = self.made[name] = self._make(name)
+        got = self.made[name] = self._keyed(name, self._make(name))
         return got
+
+    def _keyed(self, name: str, got: Node | None) -> Node | None:
+        """Plan 87: `got`, the node built for `name`, keyed when the wiring
+        keys `name` (black is clear) and it makes a picture — a channel in
+        its own fit pass (`MediaNode.keyed`), anything else read through a
+        `KeyNode` its consumers read instead."""
+        if (got is None or name not in getattr(self.wiring, "keys", ())
+                or got.OUTPUT != IMAGE or isinstance(got, KeyNode)):
+            return got
+        if isinstance(got, MediaNode):
+            got.keyed = name
+            got.keeps_alpha = self._keeps(name)
+            return got
+        key = self._keep(KeyNode(f"{name}(key)", name, image=got))
+        key.keeps_alpha = self._keeps(name)
+        return key
+
+    def _keeps(self, name: str) -> bool:
+        """Plan 87: whether keyed node `name`'s picture is laid over another —
+        `laid_over`, or through a switch that is (a switch paints its pick
+        straight into its consumer). Asked of keyed nodes alone, so no
+        unkeyed picture changes how it paints. A search by node, each switch
+        asked once however many wires reach it (review of #479: a path
+        search was exponential in a reconverging chain of switches)."""
+        todo, seen = [name], {name}
+        while todo:
+            at = todo.pop()
+            if self.laid_over(at):
+                return True
+            for w in self.wires:
+                if w.src == at and w.node not in seen and _kind(w.node) == "switch":
+                    seen.add(w.node)
+                    todo.append(w.node)
+        return False
 
     def _make(self, name: str) -> Node | None:
         kind = _kind(name)
@@ -7104,9 +7313,18 @@ class _Build:
             over = self._from("backdrop.scene")
             if self.back_channel:
                 # a channel straight in: the plan 32 backdrop, node for node
-                under = self._keep(MediaNode(channel_name(self.back_channel), self.back_channel,
-                                             alpha_of="backdrop_alpha"))
-                return self._keep(Composite(BACKDROP, blend="over", over=over, under=under))
+                media = MediaNode(channel_name(self.back_channel), self.back_channel,
+                                  alpha_of="backdrop_alpha")
+                keyed = channel_name(self.back_channel) in getattr(self.wiring, "keys", ())
+                if keyed:
+                    # plan 87: keyed, its black shows the ground under it
+                    media.keyed = channel_name(self.back_channel)
+                    media.keeps_alpha = True
+                under = self._keep(media)
+                back = Composite(BACKDROP, blend="over", over=over, under=under)
+                # (and the scene laid on it adds its own coverage over the holes)
+                back.keeps_alpha = keyed
+                return self._keep(back)
             wired = self._one("backdrop.image") is not None
             return self._keep(Composite(BACKDROP, blend="over", over=over,
                                         under=self._from("backdrop.image"),
@@ -7216,7 +7434,7 @@ class _Build:
                 return None
             return self._keep(FieldEffect(name, image=src if "image" in takes else None,
                                           node=self._unique(name)))
-        if src is None:
+        if src is None and effect not in self.generators:
             self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
             return None
         if kind == "copy":
@@ -7246,10 +7464,14 @@ class _Build:
         chains: dict[int, tuple[Composite, set[int], set[int]]] = {}
         for i, p in enumerate(ports):
             n, mine = p["image"], set()
-            while isinstance(n, Effect):
+            # (plan 87: a keyed node's `KeyNode` is part of its chain, as an effect)
+            while isinstance(n, (Effect, KeyNode)):
                 mine.add(id(n))
                 n = n.inputs["image"]
-            if isinstance(n, Composite) and isinstance(n.inputs["over"], HandsLayer):
+            over = n.inputs["over"] if isinstance(n, Composite) else None
+            if isinstance(over, KeyNode):            # (a keyed layer is still the hands')
+                over = over.inputs["image"]
+            if isinstance(n, Composite) and isinstance(over, HandsLayer):
                 got = chains.setdefault(id(n), (n, set(), set()))
                 got[1].add(i)
                 got[2].update(mine)
@@ -7395,6 +7617,8 @@ class _Build:
             if w.port != AUX or _kind(w.node) not in ("effect", "copy"):
                 continue
             target, src = self.made.get(w.node), self._taken(self.node(w.src), w)
+            if isinstance(target, KeyNode):          # plan 87: keyed, its aux is the effect's
+                target = target.inputs["image"]
             if not isinstance(target, Effect) or target not in self.built or src is None:
                 continue
             if src is target or id(target) in _upstream(src):

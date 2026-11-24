@@ -27,6 +27,10 @@ def _renderer(ctx, extra=()):
     """The scene through kaleido to output 1; `wave` fed by the scene and
     feeding nothing, `acid` fed by nothing: both unreached."""
     r = render.Renderer(ctx)
+    # (the thumbnails' clock held still: on the wall clock, a frame slower than
+    # `THUMB_DROP_S` — a loaded CI runner compiling six effects — drops the
+    # names it just made at the frame's end, and the counts here go wrong)
+    r.thumbs.clock = lambda: 0.0
     r.ghost.state.on = False
     for n in ("kaleido", "wave", "acid", *extra):
         r.fx.state.values[n].update(on=True, mix=1.0)

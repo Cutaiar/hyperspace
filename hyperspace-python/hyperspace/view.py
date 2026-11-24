@@ -94,6 +94,30 @@ class MatteState:
     sat: float = 1.0
 
 
+# plan 87, black is clear: what a keyed node measures a pixel's brightness
+# by — the largest of r, g, b, or Rec. 709 luma — by index (`key.<node>.measure`)
+KEY_MEASURES = ("peak", "luma")
+
+
+@dataclass
+class KeyState:
+    """One keyed node's black is clear (plan 87, `key.<node>.*`:
+    params.declare_keys), read once a frame by the renderer (`ViewState.keys`,
+    `graph.Frame.keys`): `measure` an index into `KEY_MEASURES`, `level` the
+    brightness at or below which a pixel is clear, `soft` the ramp above it
+    (to solid at level + soft; 0 a hard edge), `keep` keep colour
+    (premultiplied colour untouched, alpha from the ramp), `feather` a blur
+    of the ramp in px, `invert` white is clear instead. A value, never a
+    rebuild: whether a node is keyed at all is its graph's (`"keys"`)."""
+
+    measure: int = 0
+    level: float = 0.02
+    soft: float = 0.1
+    keep: bool = True
+    feather: float = 0.0
+    invert: bool = False
+
+
 @dataclass
 class CutState:
     """One cut node's values (plan 39 T3, `cut[.n].*`: params.declare_cuts),
@@ -165,6 +189,18 @@ class ViewState:
     # its cells go to the GPU, one instance each, and blend unsorted
     # (fractal_gl.py). Not saved: a look for the owner to judge (row 884)
     frac_additive: bool = False
+    # plan 64's fractal section: how much detail a fractal shows (× its split
+    # size's reciprocal: 2 splits a cell at half the size on screen), and how
+    # far and how near its cells are drawn (octaves added to the fractal's own
+    # reach, `Fractal.far` / `Fractal.near`). The look's own: saved, routable
+    frac_detail: float = 1.0
+    frac_far: float = 0.0
+    frac_near: float = 0.0
+    # plan 81: a fractal's dive, in levels a second (× 1 / ratio each), signed:
+    # a velocity on the zoom, integrated by `fractal.step`, so a route on it
+    # dives without end and a negative one climbs back out to the whole shape.
+    # The look's own: saved and routable (`view.frac_dive`)
+    frac_dive: float = 0.0
     playing: bool = True
     planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)
@@ -243,6 +279,9 @@ class ViewState:
     # plan 39 T3: each cut node's values (`cut[.n].*`, declared from the
     # loadable patch's graph: params.declare_cuts) — cut name → its state
     cuts: dict[str, CutState] = field(default_factory=dict)
+    # plan 87: each keyed node's black is clear (`key.<node>.*`, declared from
+    # the loadable patch's graph `"keys"`: params.declare_keys) — node → its state
+    keys: dict[str, KeyState] = field(default_factory=dict)
     # plan 39 T4: each segment node's values (`segment[.n].*`, declared from
     # the loadable patch's graph: params.declare_segments) — segment name → its state
     segments: dict[str, SegmentState] = field(default_factory=dict)
@@ -298,14 +337,16 @@ class ViewState:
             if self.planes[p]:
                 self.ang[p] += dt * self.speed * RATE[p] * self.rate[p]
 
-    def reroot(self, reg=None, off=None) -> None:
+    def reroot(self, reg=None, off=None, dt: float = 0.0) -> None:
         """A self-similar shape's view, re-rooted once the zoom has gone a
         level in or out (`fractal.step`): the same picture, at a zoom that
-        never runs out. Once a frame, after `integrate`; `reg` takes the move
+        never runs out, zoomed and turned about the middle of the screen
+        (plan 81). Once a frame, after `integrate`; `reg` takes the move
         onto the camera params' bases; `off`, the offset drawn after the
-        shape (`shapeframe.drawn_offset`), read for the cell under the eye.
+        shape (`shapeframe.drawn_offset`), read for the cell under the eye;
+        `dt`, the frame's seconds, for the dive rate (`frac_dive`).
         Nothing for any other shape."""
-        fractal.step(self, reg, off)
+        fractal.step(self, reg, off, dt)
 
     def pose(self) -> list[float]:
         """The spin's pose as six plane angles, each in (−π, π] — what a

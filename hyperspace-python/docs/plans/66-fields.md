@@ -7,7 +7,7 @@ and work packages where they differ; this plan keeps the detail (§3–§6, the 
 **Stage 3a was built** on `ccr-956dc2aa-r1kaqe` (Time Displace over the live look-back),
 and by plan 67 §4 it is the pattern to avoid — a private measure, a knob naming a
 look-back — so it is held unmerged until it is rebuilt on the field and history wires
-(plan 67 Q7). Register rows 902–910; hand checks 699–703, group EB. Read at `main`
+(plan 67 Q7). Register rows 1081–1089; hand checks 873–877, group FJ. Read at `main`
 b08a256. Tags: **[V]** read or run in the code, **[I]** inferred, **[Rec]** a
 recommendation.
 
@@ -131,12 +131,12 @@ and never built (row 349), like any node; its thumbnail is the grey promotion.
 
 Each pixel reads the past: at `now − field × Span`. The echo node is the constant field.
 
-### 3a. The live look-back — **built** (rows 902–905)
+### 3a. The live look-back — **built** (rows 1081–1084)
 
 It stands alone: it needs no field wire, because until stage 1 it carries its own field
 and reads a picture as one by convention. An effect file with a Python half
 (`shaders/fx/timedisplace.glsl`, `// @hook timedisplace`, `hyperspace/timedisplace.py`),
-so no node kind and no schema move (row 902).
+so no node kind and no schema move (row 1081).
 
 - **Where the past comes from.** A look-back's ring, named by the **Look-back** knob (1 is
   `lookback`, 2 `lookback.2` …). The renderer hands its chain its rings
@@ -148,15 +148,15 @@ so no node kind and no schema move (row 902).
 - **The field.** **Field**: `line` (a ramp across the frame along Angle: the classic
   slit-scan, one edge now and the other Span ago), `rings` (from the centre out), `spokes`
   (round it), `flat` (every pixel Span ago: an echo), `aux` (the brightness of a picture
-  wired into the aux: black is now, white Span ago — row 903). **Repeat** lays the ramp
+  wired into the aux: black is now, white Span ago — row 1082). **Repeat** lays the ramp
   that many times across; **Drift** sweeps it (a `@clock`, repeats a second); **Steps**
   flattens it into bands; **Flip** turns it end for end. The field is 0 … 1.
-- **Between frames** (row 904). A pixel whose time falls between two commits blends them
+- **Between frames** (row 1083). A pixel whose time falls between two commits blends them
   by time (**Between** blend), or takes the nearer (nearest: hard bands, the scan's
   stripes). Between now and the newest commit it blends its own input with that commit:
   at 0 it *is* its input, so **Span 0 is the picture again**, and Span is an amount
   (zero-safe log taper, 0 … 8 s).
-- **Past the ring** (row 905): a time older than the oldest commit reads the oldest. The
+- **Past the ring** (row 1084): a time older than the oldest commit reads the oldest. The
   ring holds 32 × `dream.gap`; to reach further back, raise the gap (coarser steps). The
   tip says so.
 - **Nothing to read** — no look-back of that number in the graph, no capture wired, the
@@ -247,28 +247,28 @@ T3 and T4 are measured before they are built. W2 can go any time; W1 rides the l
    pool about mid-grey)? [Rec] its own wire: values are signed and unbounded, the 8-bit
    crossings clamp them, half-float rounds an offset, and stage 2's byte-for-byte identity
    needs float32. The convention is cheaper, and stage 2 would then be "within a level",
-   not identical. (Row 906.)
+   not identical. (Row 1085.)
 2. **Answered (owner, 2026-11-23): the new wire is a field; the copy layout is renamed the
    lattice.** The question was: "Field" is the instance field today (`field.py`, "the
    field" in prose for the copies' layout). The glossary is signed and renames ride SEM.
    [Rec] **field** for the new wire, and the instance field becomes **the copies' layout**
    in prose, its modules renamed when SEM next runs; or call the new thing a **map**
-   ("offset map", "time map") and leave the old word alone. (Row 907.)
+   ("offset map", "time map") and leave the old word alone. (Row 1086.)
 3. **Stage 2's reach.** Keep `wave.glsl` and `blocks.glsl` and add patches proven
    identical (no migration), or retire the files with a migration in the next lane?
-   [Rec] keep them now; Shake stays its file either way (it is not one field). (Row 908.)
+   [Rec] keep them now; Shake stays its file either way (it is not one field). (Row 1087.)
 4. **Time Displace's aux reading.** Built: brightness, black now, white Span ago (one-sided:
    the live ring has no future). Displace reads mid-grey as zero. [Rec] keep brightness for
-   a *picture*; a *field* (stage 3b) carries signed time. (Row 903, built as recommended.)
+   a *picture*; a *field* (stage 3b) carries signed time. (Row 1082, built as recommended.)
 5. **The past at full size.** The ring is 128–384 lines. A full-size ring needs a texture
    array: 32 × 1920 × 1080 × 4 = 265 MB, 64 frames 530 MB. Worth it for the slit-scan,
-   as a `dream.res` choice "full"? [Rec] yes, measured first (T4). (Row 909.)
+   as a `dream.res` choice "full"? [Rec] yes, measured first (T4). (Row 1088.)
 6. **The look-ahead's budget.** A window per playing file channel, at half the channel's
-   size, 128 MB each by default (§5 3c's table)? (Row 909.)
+   size, 128 MB each by default (§5 3c's table)? (Row 1088.)
 7. **The wavetable.** A render node for pictures and fields and a modifier for curves,
    sharing the word; the old effect's label "Stamp Trail" now and its ids in the lane?
-   Or another name? (Row 910.)
-8. **Time Displace as a hooked effect** (built, row 902) rather than a graph node kind
+   Or another name? (Row 1089.)
+8. **Time Displace as a hooked effect** (built, row 1081) rather than a graph node kind
    like the echo: no schema move, and its look-back is a knob, not a wire. Keep, or make it
    a node whose look-back is wired? [Rec] keep.
 
@@ -277,4 +277,4 @@ T3 and T4 are measured before they are built. W2 can go any time; W1 rides the l
 Written in a cloud session on Mesa's software rasteriser. Time Displace's frame time on the
 Mac, how the slit-scan reads on stage, a real look-back at 120 Hz, and the card on its
 thumbnail (the card through it shows the card where the field is 0 and that look-back's
-frames elsewhere: the past is not the card's) were not checked there: hand checks 699–703.
+frames elsewhere: the past is not the card's) were not checked there: hand checks 873–877.

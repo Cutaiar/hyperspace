@@ -136,6 +136,10 @@ UNITS = {"fx.depth": "taper"}
 # the file's keys, in the order a lift writes them
 KEYS = ("schema", "name", "note", "nodes", "wires", "values", "modifiers", "routes", "desk",
         "macros", "lfos", "envs", "ports", "layout", UNITS_KEY)
+# plan 87: a fragment's members keyed (black is clear) — the loadable patch's
+# graph `"keys"` cut to the members, written last and only when one is (so not
+# among `KEYS`, the keys every fragment writes, in order)
+KEYED = "keys"
 # (a patch of one group's keys are `GROUP_KEYS`, plan 50: `check` reads it apart)
 
 # what a patch may hold of the render graph: the kinds a loadable patch's section
@@ -494,6 +498,8 @@ class _Members:
         out: list[_ParamRow] = []
         for name in self.render:
             out += [(pre, name, keys) for pre, keys in _param_rows(name)]
+            # plan 87: its black is clear knobs, while it is keyed
+            out.append((f"key.{name}", name, _any_key))
         for scheme in (MOD, LFO, ENV):
             for n in self.ids(scheme):
                 out.append((f"{scheme}.{n}", f"{scheme}.{n}", _any_key))
@@ -679,6 +685,8 @@ class _Renamer:
         if vo is not None:
             return f"{vo[0]}.{self.voice(*vo)}" + pid[len(pre):]
         moved = self.name(who)
+        if pre.startswith("key."):                # plan 87: `key.<node>.*` by the node's name
+            return f"key.{moved}" + pid[len(pre):]
         # (a member that keeps its name keeps its ids: `rot.*` is no `shape.*`)
         return pid if moved == who else G.param_prefix(moved) + pid[len(pre):]
 
@@ -779,6 +787,8 @@ class Patch:
     # plan 50: the param group a patch of one group is (`GROUP_KEY`), "" for
     # a canvas fragment
     group: str = ""
+    # plan 87: the members keyed (black is clear), by name
+    keys: tuple[str, ...] = ()
 
     @property
     def members(self) -> _Members:
@@ -887,7 +897,9 @@ def read(doc: Mapping) -> Patch:
                  modifiers=mods, routes=routes, desk=desk, macros=macros,
                  lfos=tuple(sorted(m.lfos)), envs=tuple(sorted(m.envs)), layout=layout,
                  ports=ports, control_rows=tuple(control), host_ports=tuple(host),
-                 group=str(doc.get(GROUP_KEY) or ""))
+                 group=str(doc.get(GROUP_KEY) or ""),
+                 keys=tuple(sorted({k for k in doc.get(KEYED) or () if isinstance(k, str)}
+                                   & set(m.render))))
 
 
 def _macro_n(mid: Any) -> int:
@@ -910,14 +922,15 @@ def check(doc: Any) -> list[str]:
         out.append(f"schema {doc.get('schema')!r} is not {SCHEMA}")
     if GROUP_KEY in doc:                  # plan 50: a patch of one param group
         return out + _check_group(doc)
-    extra = sorted(set(doc) - set(KEYS))
+    extra = sorted(set(doc) - set(KEYS) - {KEYED})
     if extra:
         out.append(f"no key {', '.join(map(repr, extra))} in a patch")
     if not isinstance(doc.get("name", ""), str) or not isinstance(doc.get("note", ""), str):
         out.append("name and note are text")
     for key, typ in (("nodes", list), ("wires", list), ("values", dict), ("modifiers", list),
                      ("routes", list), ("desk", list), ("macros", dict), ("lfos", list),
-                     ("envs", list), ("ports", list), ("layout", dict), (UNITS_KEY, dict)):
+                     ("envs", list), ("ports", list), ("layout", dict), (UNITS_KEY, dict),
+                     (KEYED, list)):
         if key in doc and not isinstance(doc[key], typ):
             out.append(f"{key} is not a {'list' if typ is list else 'map'}")
     if out:
@@ -939,6 +952,9 @@ def check(doc: Any) -> list[str]:
             out.append(COPY_WORDS.format(name=name, of=e.get("of")))
     if len(set(m.render)) != len(m.render):
         out.append("a node named twice")
+    for k in doc.get(KEYED) or ():
+        if not isinstance(k, str) or k not in m.render:
+            out.append(f"keys: {k!r} is not a node of the patch"[:120])
     held = set(m.render)
     ports = [p for p in doc.get("ports") or ()]
     seen: set[str] = set()
@@ -1341,6 +1357,9 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
            "lfos": sorted(rn.voice(LFO, n) for n in members.lfos),
            "envs": sorted(rn.voice(ENV, n) for n in members.envs),
            "ports": ports, "layout": lay, UNITS_KEY: dict(UNITS)}
+    keyed = sorted(rn.name(n) for n in render if n in getattr(spec, "keys", ()))
+    if keyed:                                     # plan 87: only when a member is keyed
+        doc[KEYED] = keyed
     return doc, refused
 
 
@@ -1478,6 +1497,8 @@ class Landing:
     # wave 3 P1: the patch's single-instance nodes (`ONE_PER_FRAME`) the host
     # already has. Not empty: this landing does not land (`refusal`).
     taken: tuple[str, ...] = ()
+    # plan 87: the members keyed (black is clear), renamed — into the host's `keys`
+    keys: tuple[str, ...] = ()
     # wave 3 P2: what replacing `replacing` costs the host and what it keeps,
     # in words, and the host they were read off, the sheet's
     # (`dataclasses.replace` by `ui_graph.spawn`: this module cannot see the
@@ -1749,7 +1770,8 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
                    routes=routes, desk=desk, macros=macros, lfos=lfos, envs=envs,
                    layout=layout, group=group, ports=ports, conflicts=tuple(conflicts),
                    wants={k: tuple(v) for k, v in wants.items()}, notes=tuple(notes),
-                   taken=tuple(singles))
+                   taken=tuple(singles),
+                   keys=tuple(sorted(rn.name(k) for k in p.keys if k in m.render)))
 
 
 def is_control_source(addr: str) -> bool:

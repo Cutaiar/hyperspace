@@ -304,8 +304,8 @@ def test_a_marked_document_is_left_alone_and_the_marker_is_what_a_save_writes(fi
 def test_an_old_loadable_loads_as_the_tool_rewrites_it(tmp_path):
     """End to end: a corpus loadable patch with the marker taken off and its depths
     put back to the numbers it held before this change loads through the
-    app (`LoadedPatch.load_doc` converts, silently) and saves byte for byte
-    as the tool writes it — which is the corpus file itself."""
+    app (`LoadedPatch.load_doc` converts, and says so: plan 86) and saves
+    byte for byte as the tool writes it — which is the corpus file itself."""
     t = _tool()
     data = (CORPUS / "party-acid.json").read_bytes()
     doc = json.loads(data)
@@ -320,9 +320,38 @@ def test_an_old_loadable_loads_as_the_tool_rewrites_it(tmp_path):
     old = tmp_path / "party-acid.json"
     old.write_text(loadable.dumps(doc))
     again, notes, _ = headless.resave(old, tmp_path / "scratch")
-    assert again == data and notes == []
+    _, moved = retaper_depths(json.loads(old.read_text()), FxState().files)
+    assert again == data and notes == [loadable.retaper_note(moved)] and len(moved) == 4
     out, change = t.retaper(json.loads(old.read_text()), FxState().files, file=old.name)
     assert t.text(out).encode() == data and len(change.rows) == 4
+
+
+def test_a_file_written_without_the_marker_says_which_depths_it_rescaled(tmp_path, files):
+    """Plan 86 (row 1060): a loadable patch written by hand with no ``units`` key is
+    read as a file from before the tapers, and its depths onto the effects' speed and
+    amount params move under it (two agents' 0.12 read as 0.28, 2026-11-19). The
+    rescale stands, since old files depend on it; the load now says it, naming each
+    route with its old and new depth, and a load of the marked file says nothing."""
+    doc = json.loads((CORPUS / "party-acid.json").read_bytes())
+    del doc[UNITS_KEY]
+    row = next(r for r in doc["routes"] if r["target"] == "fx.wobble.amount")
+    row["value"] = 0.12
+    hand = tmp_path / "by-hand.json"
+    hand.write_text(json.dumps(doc, indent=2))
+    saved, notes, _ = headless.resave(hand, tmp_path / "scratch")
+    _, moved = retaper_depths(doc, files)
+    new = next(r for r in json.loads(saved)["routes"]
+               if r["target"] == "fx.wobble.amount")["value"]
+    assert new != 0.12                                  # the rescale is as it was
+    assert len(notes) == 1 and notes[0] == loadable.retaper_note(moved)
+    said = next(m for m in moved if "fx.wobble.amount" in m)
+    assert f"{row['source']} → fx.wobble.amount: push 0.12 → {new:.4g}" in said
+    assert said in notes[0] and f'"{DEPTH_UNIT}": "{DEPTH_TAPER}"' in notes[0]
+    assert f"{len(moved)} depths rescaled" in notes[0]
+    # the marked file it saved loads with nothing to say
+    again = tmp_path / "saved.json"
+    again.write_bytes(saved)
+    assert headless.resave(again, tmp_path / "scratch2")[1] == []
 
 
 def test_every_corpus_loadable_is_marked_and_a_run_on_the_corpus_is_a_no_op(files):

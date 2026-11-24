@@ -64,6 +64,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
+import numpy as np
+
 from . import envelope, geometry, grip, lfo, poi, sequencer, tempo, totem
 from . import undo as undos
 from .fx import FxState
@@ -78,6 +80,73 @@ from .players import THERE, UNPLUGGED, Duty, Players
 from .pointer import Pointer, deck_number
 from .routing import Bindings, Router, Sources
 from .view import ViewState
+
+
+def _unseen(view) -> None:
+    """After an undo or redo restores the camera: the view's dive (plan 81)
+    takes it as it is on the next step, not as a zoom about the middle of the
+    screen since the view it last saw."""
+    d = getattr(view, "dive", None)
+    if d is not None:
+        d.seen = None
+
+
+class DiveFrame:
+    """What an undo step holds beside the camera (`undo.Undo`'s `beside`, plan
+    81 follow-up, row 1018): the view's dive framing (`fractal.Dive.frame`),
+    the pans made inside a fractal, which no param holds, and which life of the
+    dive it was (`Dive.lives`). Put back only when a restore writes the camera,
+    so an undone pan takes its framing with it and an unrelated edit leaves the
+    framing alone."""
+
+    ids = ("camera.zoom", "camera.pan.x", "camera.pan.y")
+
+    def __init__(self, view):
+        self.view = view
+
+    def take(self):
+        d = getattr(self.view, "dive", None)
+        fr = getattr(d, "frame", None)
+        if fr is None:
+            return None
+        path = getattr(d, "path", [])
+        return {"frame": tuple(float(x) for x in fr), "lives": getattr(d, "lives", 0),
+                # (the rooted cell, cheaply: how deep and its last few levels)
+                "cell": (len(path), tuple(path[-8:])),
+                "diving": bool(getattr(self.view, "frac_dive", 0.0))}
+
+    @staticmethod
+    def continues(then, now) -> bool:
+        """Are the follows made between `then` and `now` the dive's own motion,
+        to keep on a restore? Only within one dive (`lives`): across a load,
+        another shape or the top a restore puts the camera back as it was. And
+        not while the dive stands still in the same cell: there the follows
+        were the edit's own (the zoom about the middle and its settle), the
+        camera then and now are in one frame, and it goes back exactly."""
+        if not (isinstance(then, dict) and isinstance(now, dict)
+                and then.get("lives") == now.get("lives")):
+            return False
+        return bool(now.get("diving")) or then.get("cell") != now.get("cell")
+
+    def put(self, doc, kept: bool = False) -> None:
+        """The framing back, and the dive told how to read the camera the
+        restore wrote: `kept` (the same dive, the follows since kept), a
+        restored zoom or turn is taken about the middle of the screen, as the
+        edit it undoes was — so the cell lands back where it was — and a
+        restored pan as it is; otherwise the whole camera as it is (`_unseen`)."""
+        d = getattr(self.view, "dive", None)
+        if d is None:
+            return
+        fr = doc.get("frame") if isinstance(doc, dict) else None
+        if fr is not None and len(fr) == 4:
+            d.frame = np.array(fr, dtype=np.float64)
+        seen = getattr(d, "seen", None)
+        if not kept or seen is None:
+            _unseen(self.view)
+            return
+        # (the pan as it lands: a route on it writes the object at the next
+        # `apply`, so the dive takes it then — `fractal.centre`, p None)
+        d.seen = (seen[0], None, seen[2])
 
 
 def in_patch(p) -> bool:
@@ -309,6 +378,9 @@ class Deck:
         marks = Marks(loaded_patch.lib)
         undo_obj = undos.Undo(reg, router.table, marks=marks, only=in_patch,
                               on_restore=router.sync_macros,
+                              # the dive's framing goes with the camera, and the
+                              # dive is told how to take a restored camera (row 1018)
+                              beside=DiveFrame(s),
                               # the LFOs' membership (plan 31 B), read off the
                               # router at each step, so a re-classed router counts
                               banks=lambda: router._banks(),

@@ -8,6 +8,7 @@
 // @tip in — that widens toward the rim. Deconverge splits three hard channels;
 // @tip this one sweeps the whole spectrum, so the fringe is a gradient, not three ghosts.
 // @tip Tilt adds a straight split on top, its direction turning with the speed.
+// @pair u_cx u_cy "Centre"
 
 uniform float u_amount; // @param 0 0.4 0.02 amount "Amount" How far the ends of the spectrum part at the edge of the frame, in frame heights.
 uniform float u_rim;    // @param 0 3 1 "Rim" How the split grows out from the centre: 0 the same everywhere, 1 a lens, 3 only the outer ring.
