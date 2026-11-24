@@ -44,11 +44,12 @@ decisions"):
 
 And the three that wrap what exists (A1's call, registered):
 
-- **FX** (`Effect`, `Copy`, `Shown`; plan 30 D0, plan 35): each effect
+- **FX** (`Effect`, `Slot`, `Shown`; plan 30 D0, plan 35, plan 89): each effect
   instance is an image node (`Effect`: one pass of its file's program,
   `FxChain.run_one`), the run a chain of them in wire order ending in an
-  output's end (`Shown`, one per picture an output shows); a copy draws an
-  instance again on another picture (a through output's). An effect that
+  output's end (`Shown`, one per picture an output shows); an effect's
+  slot (`acid.slot.2`, plan 89) runs the instance again on another picture
+  (a through output's), with the one set of knobs. An effect that
   is off reads its input through: no pass, no texture.
 - **History** (`History`, `Capture`): a look-back (`lookback.Lookback`,
   one ring per instance: `lookback`, `lookback.2` …) as two nodes, because
@@ -355,8 +356,9 @@ class Wiring:
     # wire, and any hands node may have a layer (row 380). T2's builder reads
     # it; T1 sets it so a wired section reads
     wired: bool = False
-    # plan 35 F: a wired frame's copies (`CopyAt`: each one's `of`), by instance
-    copies: tuple[CopyAt, ...] = ()
+    # plan 89: a wired frame's effect slots past the first (`SlotAt`: each
+    # one's effect and number), by effect and slot — what plan 35 F's copies were
+    slots: tuple[SlotAt, ...] = ()
     # plan 36 T2: in a wired frame, the hands node whose layer `blend` is
     # (its entry's `laid`): how that layer is laid on at an output — any
     # other layer is laid over
@@ -431,6 +433,7 @@ class GraphError(ValueError):
 # hands' layer, the history, an output, an effect instance
 PLACE_KEYS = ("after", "into")
 _INSTANCE = r"(?:[2-9]|[1-9][0-9]+)"
+MAX_SLOTS = 8         # plan 89: the most pictures one effect node draws on (as a switch's eight)
 # (plan 35 V2: and the new ids a wired frame places on — `lookback`, the
 # layers `hands.layer`, `hands.<n>.layer`)
 _PLACE_NODE = re.compile(rf"scene|history|lookback|hands(?:\.{_INSTANCE})?(?:\.layer)?"
@@ -439,7 +442,8 @@ _PLACE_NODE = re.compile(rf"scene|history|lookback|hands(?:\.{_INSTANCE})?(?:\.l
 # `fx`, the faces' `shape`, `pattern`, `backdrop`, `switch` — so no effect
 # file may take them, and no effect's place is one of them. Plan 34 L: and
 # feedback's `delay`, `resize`, `echo` (`echo.<k>`) and `dream`. Plan 35 F:
-# and the wired frame's `copy` (`copy.<n>`) and the source word `ground`.
+# and the wired frame's `copy` (`copy.<n>`; plan 89: read only to migrate it
+# to an effect's slot) and the source word `ground`.
 # Plan 39 T2: and the mask node `matte` (`matte.<n>`); T3: and `cut` (`cut.<n>`);
 # T4: and `segment` (`segment.<n>`)
 RESERVED = ("frame", "fx", "pattern", "shape", "backdrop", "switch", "delay", "resize", "echo",
@@ -502,6 +506,10 @@ class EffectAt:
     n: int
     after: str | None = None
     into: str | None = None
+    # plan 89: how many pictures the instance draws on, each its own slot
+    # (`image`/`aux` in, a picture out) with the one set of knobs — slot 1
+    # its own name, slot k `acid.slot.<k>` (`SlotAt`)
+    slots: int = 1
 
     def __post_init__(self) -> None:
         if not isinstance(self.file, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", self.file):
@@ -515,6 +523,10 @@ class EffectAt:
                              "once — one of the two")
         if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
             raise ValueError(f"effect {self.file} instance {self.n!r}: a whole number from 1")
+        if (not isinstance(self.slots, int) or isinstance(self.slots, bool)
+                or not 1 <= self.slots <= MAX_SLOTS):
+            raise ValueError(SLOTS_RANGE.format(name=self.name, slots=self.slots,
+                                                most=MAX_SLOTS))
         # (plan 33 R21: an unplaced instance 1 is the file kept on no wire —
         # T1's "instance 1 is the file itself, always there" was the stack's)
         for key in PLACE_KEYS:
@@ -547,7 +559,13 @@ class EffectAt:
         """This instance at the default placement: where its wires put
         it (None for instance 1: a D1 placement refused leaves the file
         where its wires put it — R21's unwired entry is written, never made here)."""
-        return EffectAt(self.file, self.n) if self.n >= 2 else None
+        if self.n >= 2 or self.slots > 1:
+            return EffectAt(self.file, self.n, slots=self.slots)
+        return None
+
+    def slot_list(self) -> tuple[SlotAt, ...]:
+        """Its slots past the first (plan 89), in order."""
+        return tuple(SlotAt(self.name, k) for k in range(2, self.slots + 1))
 
 
 def placement_loops(placed) -> dict[str, str]:
@@ -614,14 +632,15 @@ def _effect_entry(e: dict) -> tuple[EffectAt | None, str | None]:
     the placeable vocabulary) — (the instance at the default placement,
     or None for instance 1, which its wires name; the reason).
     `read_graph` notes the reason; the rest of the graph stands."""
-    _entry_keys(e, "effect", ("instance", "file", *PLACE_KEYS))
+    _entry_keys(e, "effect", ("instance", "file", "slots", *PLACE_KEYS))
     if "file" not in e:
         raise GraphError("effect node: names no file")
     file, n = e["file"], _instance(e)
+    slots = e.get("slots", 1)                 # plan 89: its slots (checked by EffectAt)
     after, into = e.get("after"), e.get("into")
     if "after" not in e and "into" not in e:
-        return EffectAt(file, n), None
-    EffectAt(file, max(n, 2))                 # the file's name is the file's, placed or not
+        return EffectAt(file, n, slots=slots), None
+    EffectAt(file, max(n, 2), slots=slots)    # the file's name is the file's, placed or not
     name = instance_name(file, n)
     if "after" in e and "into" in e:
         why = f"{name} after {after!r} and into {into!r} at once — one of the two"
@@ -630,8 +649,8 @@ def _effect_entry(e: dict) -> tuple[EffectAt | None, str | None]:
         key, where = ("after", after) if "after" in e else ("into", into)
         why = placement_error(name, key, where)
         if why is None:
-            return EffectAt(file, n, after=after, into=into), None
-    return (EffectAt(file, n) if n >= 2 else None), why
+            return EffectAt(file, n, after=after, into=into, slots=slots), None
+    return EffectAt(file, n, slots=slots).unplaced(), why
 
 
 def _history_entry(e: dict, wired: bool = False) -> HistoryAt | LookbackAt:
@@ -1230,8 +1249,13 @@ PLACEMENT_IS_A_WIRE = ("{name} {key} {where!r}: a placement is not read since /7
                        "— wire {name} on GRAPH")
 FRAME_VALUE = "frame {value!r}: the one value is \"wired\""
 GEOMETRY_INTO_SCENE = "{src} makes geometry: it goes into scene.geometry"
-COPY_NO_OF = "copy {name}: names no of (the effect instance it draws again)"
-COPY_BAD_OF = "copy {name}: of {of!r} is no effect instance of this graph"
+COPY_IS_A_SLOT = ('copy node: gone (plan 89) — an effect draws on another picture by a slot '
+                  'of its own: "slots": 2 on its entry, and wires into <effect>.slot.2.image '
+                  'and out of <effect>.slot.2; a file older than this build is migrated on load')
+SLOT_NOT_DECLARED = ('no {name}: {effect} has {have} slot{s} (say "slots": {k} on its '
+                     'effect entry)')
+SLOTS_RANGE = "effect {name}: slots {slots!r}, a whole number from 1 to {most}"
+MAX_SLOTS = 8
 GROUND_ONLY_INTO_OUTPUTS = "ground goes only into an output's port: it shows nothing there"
 OLD_ID_IN_A_WIRED_FRAME = "{old} is the old name (plan 35): in a wired frame it is {new}"
 # (a frame kind's entry outside a wired frame: plan 34's table has no such node)
@@ -1471,7 +1495,37 @@ _HANDS_W = re.compile(rf"hands(?:\.{_INSTANCE})?")
 _LAYER_W = re.compile(rf"hands(?:\.{_INSTANCE})?\.layer")
 _GUIDE_W = re.compile(rf"hands(?:\.{_INSTANCE})?\.guide")
 _CHANNEL = re.compile(rf"channel\.[{MEDIA_CHANNELS}]")
-_COPY = re.compile(rf"copy(?:\.{_INSTANCE})?")
+# plan 89: an effect's slot past the first — `acid.slot.2`, `acid.2.slot.3`
+# (slot 1 is the effect's own name and ports)
+SLOT_WORD = "slot"
+_SLOT = re.compile(rf"({_PLACE_EFFECT.pattern})\.{SLOT_WORD}\.({_INSTANCE})")
+
+
+def slot_name(effect: str, k: int) -> str:
+    """Slot `k` of effect instance `effect` as a wire names it: the
+    effect's own name for slot 1, `acid.slot.2` past it (plan 89)."""
+    return effect if k == 1 else f"{effect}.{SLOT_WORD}.{k}"
+
+
+def slot_of(name: Any) -> tuple[str, int] | None:
+    """`acid.slot.2` → ("acid", 2); None for anything that is no slot past
+    the first (plan 89)."""
+    m = _SLOT.fullmatch(name) if isinstance(name, str) else None
+    return (m.group(1), int(m.group(2))) if m else None
+
+
+def split_slot(name: str) -> tuple[str, int]:
+    """An effect's wire name → (its effect instance, its slot): `acid.slot.2`
+    → ("acid", 2), `acid` → ("acid", 1) — slot 1 is the effect itself (plan 89)."""
+    got = slot_of(name)
+    return got if got is not None else (name, 1)
+
+
+def effect_of(name: Any) -> Any:
+    """The effect instance a wire's name runs: a slot's effect, else the
+    name itself (plan 89)."""
+    got = slot_of(name)
+    return got[0] if got is not None else name
 
 
 def _wired_kind(name: str) -> str | None:
@@ -1485,13 +1539,15 @@ def _wired_kind(name: str) -> str | None:
         # plan 36 T2: the scene's mask and depth pins; plan 39 T4: a
         # segment's fg, bg and mask
         return name.rpartition(".")[2]
+    if _SLOT.fullmatch(name):
+        return "slot"                        # plan 89: an effect's slot past the first
     for kind, pat in (("hands", _HANDS_W), ("layer", _LAYER_W), ("guide", _GUIDE_W),
                       ("output", _OUTPUT), ("composite", _COMPOSITE), ("channel", _CHANNEL),
                       ("switch", _SWITCH), ("delay", _DELAY), ("resize", _RESIZE),
                       # plan 36 T4: a look-back's echo pin is an echo; `echo.<k>`
                       # (plan 34's own node) only an old frame's, read to migrate
                       ("echo", _ECHO_PIN), ("echo", _ECHO), ("lookback", _LOOKBACK),
-                      ("dream", _DREAM), ("copy", _COPY), ("matte", _MATTE),
+                      ("dream", _DREAM), ("matte", _MATTE),
                       ("cut", _CUT), ("segment", _SEGMENT)):
         if pat.fullmatch(name):
             return kind
@@ -1615,28 +1671,23 @@ class GuideAt(_HandsPictureAt):
 
 
 @dataclass(frozen=True)
-class CopyAt:
-    """A copy (plan 35 F, row 377): effect instance `of` drawn again on
-    another picture, with its knobs and its clock — its own `image` and
-    `aux` — `copy`, `copy.<n>`. What the per-pipeline run was, said as a
-    node, only where one is wanted."""
+class SlotAt:
+    """An effect's slot past the first (plan 89, replacing plan 35 F's
+    copy): effect instance `effect` run again on another picture — its own
+    `image` and `aux` and its own picture out — with the one set of knobs
+    and the one clock. `acid.slot.2`, `acid.2.slot.3`. Declared by the
+    effect's entry (`"slots": 2`), never an entry of its own."""
 
-    n: int
-    of: str
+    effect: str
+    k: int
 
     def __post_init__(self) -> None:
-        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
-            raise ValueError(f"copy instance {self.n!r}: a whole number from 1")
+        if not isinstance(self.k, int) or isinstance(self.k, bool) or self.k < 2:
+            raise ValueError(f"slot {self.k!r}: a whole number from 2")
 
     @property
     def name(self) -> str:
-        return "copy" if self.n == 1 else f"copy.{self.n}"
-
-    def to_json(self) -> dict:
-        d: dict[str, Any] = {"kind": "copy", "of": self.of}
-        if self.n != 1:
-            d["instance"] = self.n
-        return d
+        return slot_name(self.effect, self.k)
 
 
 def _frame_entry(cls):
@@ -1653,15 +1704,10 @@ def _picture_entry(cls):
     return read
 
 
-def _copy_entry(e: dict) -> CopyAt:
-    _entry_keys(e, "copy", ("of", "instance"))
-    n = _instance(e)
-    name = CopyAt(n, "").name
-    if "of" not in e:
-        raise GraphError(COPY_NO_OF.format(name=name))
-    if not isinstance(e["of"], str):
-        raise GraphError(COPY_BAD_OF.format(name=name, of=e["of"]))
-    return CopyAt(n, e["of"])
+def _copy_entry(e: dict) -> None:
+    """Plan 89: a copy is an effect's slot now — the entry is migrated on
+    load (`graphmigrate.slots_of_copies`), never read here."""
+    raise GraphError(COPY_IS_A_SLOT)
 
 
 for _cls in (SceneAt, ShapeAt, BackdropAt, PatternAt):
@@ -1674,9 +1720,10 @@ del _cls
 
 # plan 34 L: the node kinds a section declares by an entry, one per
 # instance, before a wire may name one (as a composite and a switch).
-# Plan 35 F: and a copy, which always needs its entry, and the frame's
-# kinds — but a wire of a wired frame naming one of those declares it
-DECLARED = ("composite", "switch", "delay", "resize", "echo", "dream", "copy", "matte",
+# Plan 35 F: and the frame's kinds — but a wire of a wired frame naming one
+# of those declares it. (Plan 89: an effect's slots are its entry's `slots`,
+# `_WireCtx.slots`, never an entry of their own)
+DECLARED = ("composite", "switch", "delay", "resize", "echo", "dream", "matte",
             "cut", "segment", *FRAME_KINDS)
 
 
@@ -1720,9 +1767,10 @@ class _WireCtx:
     dream: bool = False
     # plan 35 F: whether the section is a wired frame (its wires in the new
     # ids, `WIRED_TAKES`; `ghosts` then holds the hands nodes' new names,
-    # `hands`, `hands.2` …), and the copies declared (their names)
+    # `hands`, `hands.2` …). Plan 89: and the effects' slots past the
+    # first (their names, `acid.slot.2`), None: any (a drag on the canvas)
     wired: bool = False
-    copies: frozenset[str] = frozenset()
+    slots: frozenset[str] | None = None
     # plan 36 T4: the look-backs declared (their names: `lookback` by a
     # wire, `lookback.<n>` by an entry), and whether the read is a
     # migration's of an old frame (`legacy`: `lookback.capture` and plan
@@ -1740,7 +1788,7 @@ class _WireCtx:
         """The names of kind `kind` (one of `DECLARED`) the section declares
         (a frame kind's: none here — a wire of a wired frame declares it)."""
         return {"composite": self.composites, "switch": self.switches, "delay": self.delays,
-                "resize": self.resizes, "echo": self.echoes, "copy": self.copies,
+                "resize": self.resizes, "echo": self.echoes,
                 "dream": frozenset({"dream"}) if self.dream else frozenset(),
                 "lookback": self.lookbacks, "matte": self.mattes,
                 "cut": self.cuts, "segment": self.segments}.get(kind, frozenset())
@@ -1852,11 +1900,11 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
 # backdrop lays `scene` over `image`; a look-back records its `image`
 # (plan 36 T4: and makes the trail, held back by `occluder`'s brightness and
 # the `cover` mask), the dream dreams its `image`; a
-# copy is an effect's; an output and All outputs take a picture, the hands
+# slot is an effect's (plan 89); an output and All outputs take a picture, the hands
 # over it and the guide over all; `ground` makes nothing, as a picture
 WIRED_MAKES = {"scene": IMAGE, "shape": GEOMETRY, "hands": GEOMETRY, "layer": IMAGE,
                "guide": IMAGE, "lookback": IMAGE, "channel": IMAGE, "backdrop": IMAGE,
-               "copy": IMAGE, "output": None, GROUND: IMAGE, "effect": IMAGE,
+               "slot": IMAGE, "output": None, GROUND: IMAGE, "effect": IMAGE,
                "composite": IMAGE, "pattern": IMAGE, "switch": IMAGE, "delay": IMAGE,
                "resize": IMAGE, "echo": IMAGE, "dream": IMAGE,
                # plan 36 T2: the scene's pins (`PINS`)
@@ -1874,7 +1922,7 @@ WIRED_TAKES: dict[str, dict[str, str]] = {
     "lookback": {"image": IMAGE, "occluder": IMAGE, "cover": MASK},
     "dream": {"image": IMAGE},
     "backdrop": {"image": IMAGE, "scene": IMAGE},
-    "copy": {"image": IMAGE, "aux": IMAGE},
+    "slot": {"image": IMAGE, "aux": IMAGE},
     "output": {"image": IMAGE, "hands": IMAGE, "guide": IMAGE, DEPTH_PORT: IMAGE},
     "composite": {**WIRE_TAKES["composite"], DEPTH_PORT: IMAGE},
     **{k: WIRE_TAKES[k] for k in ("effect", "pattern", "switch", "delay",
@@ -1888,13 +1936,13 @@ WIRED_TAKES: dict[str, dict[str, str]] = {
 WIRED_TO_WORDS = ("output.1 …, output.all (image, hands, guide, depth), scene.geometry, "
                   "shape.faces, backdrop.image / scene, lookback.image / occluder / cover "
                   "(lookback.2 …), dream.image, hands.layer.hands …, hands.guide.hands …, "
-                  "pattern.media, an effect's or a copy's image or aux, a composite's under "
+                  "pattern.media, an effect's or its slot's image or aux, a composite's under "
                   "/ over / depth, a switch's in1 … in8, a delay's, a resize's, a "
                   "matte's or a segment's image, or a cut's image / mask")
 WIRED_FROM_WORDS = ("scene, scene.cover, scene.depth, shape, hands …, hands.layer …, "
                     "hands.guide …, lookback …, lookback.echo.1 …, dream, backdrop, pattern, "
-                    "an effect, a copy, a composite, a switch, a delay, a resize, a matte, "
-                    "a cut, segment.fg / .bg / .mask, a channel (channel.a …) or ground")
+                    "an effect, an effect's slot (acid.slot.2 …), a composite, a switch, "
+                    "a delay, a resize, a matte, a cut, segment.fg / .bg / .mask, a channel (channel.a …) or ground")
 # plan 39 T2 (W1, decision 2): a picture into a mask port is refused with the
 # converter's name; the promotion runs the other way only
 PICTURE_INTO_MASK = "{src} makes a picture, {dst} takes a mask — put a matte between"
@@ -1987,6 +2035,15 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
     if makes != want and not (makes in (MASK, FIELD) and want == IMAGE):
         return f"{w.src} makes {TYPE_WORDS[makes]}, {w.dst} takes {TYPE_WORDS[want]}"
     for name, k in ((w.src, src_kind), (node, kind)):
+        if k == "slot":
+            # plan 89: a slot is its effect's, declared by the effect's entry
+            effect, n = split_slot(name)
+            if ctx.effects is not None and effect not in ctx.effects:
+                return f"no {effect} effect in this build"
+            if ctx.slots is not None and name not in ctx.slots:
+                have = 1 + sum(1 for x in ctx.slots if effect_of(x) == effect)
+                return SLOT_NOT_DECLARED.format(name=name, effect=effect, have=have,
+                                                s="" if have == 1 else "s", k=n)
         if k == "effect" and ctx.effects is not None and name not in ctx.effects:
             return f"no {name} effect in this build"
         if k in ("hands", "layer", "guide"):
@@ -2170,7 +2227,7 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
     # frame the scene's geometry takes several, drawn in section order
     # Plan 35 B: and there D1's `into` is a fold of what the port reads
     # (the migration's `placed_wires`), not a second wire into it — so an
-    # output's own picture (a through's copies) and the look-back's take
+    # output's own picture (a through's slots) and the look-back's take
     # their wire with an effect placed into them
     into: dict[str, list[Wire]] = {}
     folds = {w for w in d1 if (w.src in ctx.placed and ctx.placed[w.src][0] == "into")
@@ -2313,9 +2370,11 @@ class GraphSpec:
         return tuple(got for k, got in self.others if k in FRAME_KINDS)
 
     @property
-    def copies(self) -> tuple[CopyAt, ...]:
-        """The copies the section adds (plan 35 F), by instance."""
-        return self._of("copy")
+    def slots(self) -> tuple[SlotAt, ...]:
+        """Every effect's slots past the first (plan 89: what plan 35 F's
+        copies were), by effect and slot."""
+        return tuple(s for e in sorted(self.effects, key=lambda e: (e.file, e.n))
+                     for s in e.slot_list())
 
     def wiring(self) -> Wiring:
         """The default graph's wiring this graph says. Plan 28 N4: the
@@ -2331,7 +2390,7 @@ class GraphSpec:
             # (no run, no shortening, no backdrop channel); T2 builds them
             return Wiring(draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
                           blend=self.laid, placed=placed, wires=self.wires,
-                          composites=self.composites(), wired=True, copies=self.copies,
+                          composites=self.composites(), wired=True, slots=self.slots,
                           laid_on=self.laid_on, keys=self.keys)
         run, wires = None, self.wires
         if any(w.src == "frame" or w.dst == "fx.image" for w in wires):
@@ -2438,9 +2497,12 @@ class GraphSpec:
 
     def effect_names(self) -> frozenset[str]:
         """Plan 36 T3 (W3): every effect instance the section names — by an
-        entry, a wire's end, a copy's `of` — the ones that exist while it is
-        landed (`FxState.hold`): instance 1 of a file too, only when named."""
-        out = {e.name for e in self.effects} | {c.of for c in self.copies}
+        entry, a wire's end, a slot's effect (plan 89) — the ones that exist
+        while it is landed (`FxState.hold`): instance 1 of a file too, only
+        when named."""
+        out = {e.name for e in self.effects}
+        out |= {effect_of(name) for w in self.all_wires() for name in (w.src, w.node)
+                if wire_node_kind(name, wired=self.wired) == "slot"}
         out |= {name for w in self.all_wires() for name in (w.src, w.node)
                 if wire_node_kind(name, wired=self.wired) == "effect"}
         return frozenset(out)
@@ -2480,6 +2542,8 @@ class GraphSpec:
                 d["instance"] = e.n
             if e.where is not None:
                 d[e.where[0]] = e.where[1]
+            if e.slots != 1:                   # plan 89: its slots, only when more than one
+                d["slots"] = e.slots
             nodes.append(d)
         if self.history.holds != "scene":
             nodes.append({"kind": "history", "holds": self.history.holds})
@@ -2547,7 +2611,7 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
         if reader is None:
             raise GraphError(f"unknown node kind {kind!r} (this build knows "
                              f"{', '.join(sorted(NODE_KINDS))})")
-        if not wired and (kind in FRAME_KINDS or kind == "copy"):
+        if not wired and kind in FRAME_KINDS:
             raise GraphError(FRAME_KIND_UNWIRED.format(kind=kind))
         try:
             # plan 35 F: a wired frame's hands take no `into`, and `history`
@@ -2575,7 +2639,7 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
                 # (a placement is not read, honoured or not)
                 why = PLACEMENT_IS_A_WIRE.format(name=instance_name(*key), key=place,
                                                  where=e[place])
-                at = EffectAt(*key)
+                at = EffectAt(*key, slots=e.get("slots", 1))
             found[key] = at
             if why is not None:
                 notes.append(why)
@@ -2609,21 +2673,6 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
             found[key] = at.unplaced()
     effects_at = tuple(found[k] for k in sorted(found) if found[k] is not None)
     raw_wires = section.get("wires")
-    # plan 35 F: a copy draws an effect instance the section holds — by an
-    # entry, a wire or D1 — again; one whose `of` names none is said and
-    # dropped with its wires (the rest of the graph stands)
-    if any(k == "copy" for k, _ in others):
-        held = {e.name for e in effects_at} | {
-            name for w in (raw_wires if isinstance(raw_wires, list) else ())
-            if isinstance(w, dict) for name in (w.get("from"), _wire_node(w.get("to")))
-            if wire_node_kind(name, wired=True) == "effect"}
-        for k, got in list(others):
-            if k == "copy" and got.of not in held:
-                notes.append(COPY_BAD_OF.format(name=got.name, of=got.of))
-                others.remove((k, got))
-                if isinstance(raw_wires, list):
-                    raw_wires = [w for w in raw_wires if not isinstance(w, dict)
-                                 or got.name not in (w.get("from"), _wire_node(w.get("to")))]
     if wired:
         # plan 36 T3: hands 1 is always there, and a `/7` writes its entry
         # (`to_json`): read with or without it, the spec is one spec
@@ -2670,7 +2719,7 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
                    echoes=frozenset(e.name for e in spec.echoes),
                    dream=spec.dream is not None,
                    placed={e.name: e.where for e in effects_at if e.placed},
-                   wired=wired, copies=frozenset(c.name for c in spec.copies),
+                   wired=wired, slots=frozenset(x.name for x in spec.slots),
                    lookbacks=frozenset({"lookback", *(lb.name for lb in spec.lookbacks)}),
                    legacy=placements)
     wires, wire_notes = _read_wires(raw_wires, ctx, d1_wires(effects_at))
@@ -2931,11 +2980,11 @@ def output_ports(wiring: Wiring, n: int, bus_cuts: BusCuts | None = None
 
 
 def _picture_head(wiring: Wiring, src: str | None) -> str | None:
-    """`src` back through the effects and copies on its way (their `image`
+    """`src` back through the effects and slots on its way (their `image`
     wires) to what they start from."""
     into = {x.dst: x.src for x in wiring.wires}
     seen: set[str] = set()
-    while src is not None and wire_node_kind(src, wired=True) in ("effect", "copy") \
+    while src is not None and wire_node_kind(src, wired=True) in ("effect", "slot") \
             and src not in seen:
         seen.add(src)
         src = into.get(f"{src}.image")
@@ -3534,7 +3583,7 @@ class Shape(Node):
 
     def pattern(self) -> PatternNode | None:
         """The pattern node the faces' wires lead back to (plan 36 T2):
-        straight, or through effects, copies, switches and composites —
+        straight, or through effects and their slots, switches and composites —
         whatever reads it on the way — or None."""
         todo, seen = [self.inputs.get("faces")], set()
         while todo:
@@ -5548,7 +5597,7 @@ class HandsLayer(Node):
     textures; and the guide and the tethers' labels into a second one
     (`Ghost.readout`) that no effect bends — while the layer reaches a live
     effect (`readout` "downstream", the effects in `downstream`: plan 35 B,
-    a through output's copies), or always (`readout` "always": the hands
+    a through output's slots), or always (`readout` "always": the hands
     are also inside the scene, or an effect sits on the layer, so the
     guide may never be in a picture the effects bend). With no
     geometry wired it draws nothing (plan 36 T2: the hands are the wire
@@ -5589,7 +5638,7 @@ class HandsLayer(Node):
         frame): always while the hands are also in the scene or an effect
         sits on the layer — the guide is never in a picture the effects
         bend — else while the layer reaches a live effect (plan 35 B: a
-        wired frame's copies)."""
+        wired frame's slots)."""
         key = self.name + "#split"
         got = frame.data.get(key)
         if got is None:
@@ -6039,8 +6088,8 @@ class Effect(Node):
     """One effect instance as an image node (plan 30 D0): one effect file's
     program (`fx.FxChain`) over its input. `effect` is the instance's name
     as `FxState` knows it (`acid`, `acid.2`, `palette`) and its params are
-    `fx.<effect>.*`; the node's own `name` is the effect's (a copy's its
-    own, `copy.2`: plan 35 T4 retired the pipelines' `acid(scene+hands)`).
+    `fx.<effect>.*`; the node's own `name` is the effect's (a slot's its
+    own, `acid.slot.2`: plan 35 T4 retired the pipelines' `acid(scene+hands)`).
 
     **Off** this frame — not `FxState.live` (switched off, mix 0, the
     stack bypassed; plan 33 R: no target and no order, its place is its
@@ -6518,12 +6567,12 @@ class FieldPicture(Node):
         return frame.data[key]
 
 
-class Copy(Effect):
-    """A copy (plan 35 F, row 377): effect instance `of` drawn again on
-    another picture — `copy`, `copy.2` … — with the instance's knobs, its
-    `FxState.live` and its clock (`effect` is `of`), its own `image` and
-    `aux`. What each retired pipeline's own run node was
-    (`acid(scene+hands)`), said as a node, made only where a wire says one."""
+class Slot(Effect):
+    """An effect's slot past the first (plan 89, row 377's copy made part of
+    its effect): effect instance `effect` run again on another picture —
+    `acid.slot.2` … — with the instance's knobs, its `FxState.live` and its
+    clock, its own `image` and `aux`. What each retired pipeline's own run
+    node was (`acid(scene+hands)`), made only where a wire says one."""
 
     KIND = "effect"
 
@@ -7012,7 +7061,7 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     hands, as the default graph's in-scene readout was; the clouds by the
     meta controller's wires into the scene (`cloud_wire`, while standing); a
     composite's and an output's depth the wire into its `depth`, an
-    output's hands laid as their layer's `laid` says; effects, copies,
+    output's hands laid as their layer's `laid` says; effects, their slots,
     composites, switches, channels, the pattern, plan 34's delays and ring
     pictures); then one `Shown` per distinct picture an output takes; then the capture (`lookback.capture`'s) after every end and
     every delay's write; then one `Output` per view, each port its own
@@ -7060,7 +7109,7 @@ def _build_rank(name: str) -> tuple[int, str]:
 
 
 def _effects_of(node: Node | None) -> list[Effect]:
-    """The effects (copies too) a picture runs through, first first."""
+    """The effects (slots too) a picture runs through, first first."""
     out: list[Effect] = []
     while isinstance(node, Effect):
         out.insert(0, node)
@@ -7070,7 +7119,7 @@ def _effects_of(node: Node | None) -> list[Effect]:
 
 def layers_behind(node: Node | None, writes: dict[str, Node] | None = None) -> list[HandsLayer]:
     """The hands layers picture `node` shows, through every pass that hands
-    one picture on unchanged in kind — an effect or a copy (`image`), a
+    one picture on unchanged in kind — an effect or its slot (`image`), a
     resize (`image`), a delay (its write's `image`: `writes`, delay name →
     `DelayWrite`) and a switch (any of its inputs: which one is a value)
     — the one walk for how a layer is laid on (`_laid_of`) and for a depth
@@ -7103,11 +7152,11 @@ def _laid_of(node: Node | None, writes: dict[str, Node] | None = None) -> str:
 
 
 def _through_chain(node: Node | None) -> bool:
-    """Whether picture `node` is a chain of copies over a composite laying a
+    """Whether picture `node` is a chain of slots over a composite laying a
     hands layer on — "hands through the effects" as wiring. Order only
     (plan 36 T1): such a chain is added right after the run, where the
     through pipelines ran; it shows exactly as wired."""
-    while isinstance(node, Copy):
+    while isinstance(node, Slot):
         node = node.inputs["image"]
     return isinstance(node, Composite) and isinstance(node.inputs["over"], HandsLayer)
 
@@ -7115,7 +7164,7 @@ def _through_chain(node: Node | None) -> bool:
 class _Build:
     """`build_graph`'s work (plan 35 B): the reached wires made into nodes,
     added to `g` in the default graph's order (the frame's own nodes, the
-    run, each through's composite and copies, the ends, the capture, the
+    run, each through's composite and slots, the ends, the capture, the
     outputs), so the passes run as today's frame ran them."""
 
     def __init__(self, g: Graph, wiring: Wiring, count: int, bus_cuts: BusCuts | None = None):
@@ -7137,7 +7186,7 @@ class _Build:
         for w in self.wires:
             self.into.setdefault(w.dst, []).append(w)
         self.blends = {c.name: c.blend for c in getattr(wiring, "composites", ())}
-        self.copy_of = {c.name: c.of for c in getattr(wiring, "copies", ())}
+        self.slot_names = {x.name for x in getattr(wiring, "slots", ())}
         self.draws = {h.n: h.draw for h in wiring.nodes()}
         back = self._one("backdrop.image")
         self.back_channel = (back.src.partition(".")[2]
@@ -7355,7 +7404,7 @@ class _Build:
             if w is not None and _kind(w.src) == "channel":
                 return self._keep(PatternNode("pattern", channel=w.src.partition(".")[2]))
             return self._keep(PatternNode("pattern", media=self._from("pattern.media")))
-        if kind in ("effect", "copy"):
+        if kind in ("effect", "slot"):
             return self._effect(name, kind)
         if kind == "composite":
             # plan 36 T2: its blend its own, its depth the wire into its
@@ -7425,11 +7474,13 @@ class _Build:
         return None
 
     def _effect(self, name: str, kind: str) -> Node | None:
-        """An effect instance's node, or a copy's (plan 35 F: `effect` its
-        original's) — read through while its file is not in this build, as
+        """An effect instance's node, or its slot's (plan 89: `effect` its
+        effect's) — read through while its file is not in this build, as
         the default graph's run read through one (plan 33 R27)."""
-        effect = name if kind == "effect" else self.copy_of.get(name)
+        effect = name if kind == "effect" else (
+            effect_of(name) if name in self.slot_names else None)
         if effect is None:
+            self.g.dormant[name] = f"no {name} in this build"
             return None
         src = self._from(f"{name}.image")
         if effect not in self.have:
@@ -7446,8 +7497,8 @@ class _Build:
         if src is None and effect not in self.generators:
             self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
             return None
-        if kind == "copy":
-            return self._keep(Copy(self._unique(name), effect, image=src))
+        if kind == "slot":
+            return self._keep(Slot(self._unique(name), effect, image=src))
         node = Effect(name, image=src, node=self._unique(name), placed="wire")
         node.laid_over = self.laid_over(name)
         return self._keep(node)
@@ -7464,7 +7515,7 @@ class _Build:
     def _mute_hands(self, ports: list[dict], readers: list[Node]) -> None:
         """Plan 36 T1 (R9): a window's hands mute inside a through chain.
         Each composite laying a hands layer `over` at the head of a window's
-        picture chain (through its effects and copies) is told the windows
+        picture chain (through its effects and slots) is told the windows
         it feeds (`Composite.mute_hands`): while every one of them has its
         hands muted, it lays nothing over — a mute, read per frame, not a
         rewire. A composite (or a node of its chain) anything else reads —
@@ -7525,7 +7576,7 @@ class _Build:
         # `frame.fx_on` asks, as of the pipelines' runs)
         run: list[Effect] = []
         n = self._from(f"{ALL_OUTPUTS}.image")
-        while isinstance(n, Effect) and not isinstance(n, Copy) and n not in run:
+        while isinstance(n, Effect) and not isinstance(n, Slot) and n not in run:
             run.insert(0, n)
             n = n.inputs["image"]
         for e in run:
@@ -7583,7 +7634,7 @@ class _Build:
                     layer.depth_laid = True
         self._mute_hands(ports, [*self.built, *self.ends, *writes, *captures])
         # into the graph in the default graph's order: the frame's own
-        # nodes, the run, each through's composite and copies, the
+        # nodes, the run, each through's composite and slots, the
         # capture's picture, the ends, the writes, the capture, the outputs
         made = self.made
         roots: list[Node | None] = [*self.clouds, made.get("pattern"), made.get("shape")]
@@ -7623,7 +7674,7 @@ class _Build:
         """Each aux wire on its effect's or copy's `aux` port (plan 32 R): a
         source the effect feeds (a loop) is dormant, in words."""
         for w in self.wires:
-            if w.port != AUX or _kind(w.node) not in ("effect", "copy"):
+            if w.port != AUX or _kind(w.node) not in ("effect", "slot"):
                 continue
             target, src = self.made.get(w.node), self._taken(self.node(w.src), w)
             if isinstance(target, KeyNode):          # plan 87: keyed, its aux is the effect's
@@ -7654,7 +7705,7 @@ class _Build:
         """How each layer splits its guide out (`HandsLayer.split`): always
         while its hands are also in the scene or an effect reads the layer
         (the guide is never folded), else while an effect it reaches is
-        live (the copies a through output wires)."""
+        live (the slots a through output wires)."""
         readers: dict[int, list[Node]] = {}
         for c in self.g.nodes.values():
             for src in c.inputs.values():
@@ -7663,7 +7714,7 @@ class _Build:
         scene = self.made.get("scene")
         held = set(map(id, scene.geometries())) if isinstance(scene, Scene) else set()
         for layer in layers:
-            on = any(isinstance(c, Effect) and not isinstance(c, Copy)
+            on = any(isinstance(c, Effect) and not isinstance(c, Slot)
                      and c.inputs.get("image") is layer for c in readers.get(id(layer), ()))
             if id(layer.inputs["geometry"]) in held or on:
                 layer.readout = "always"
@@ -7688,9 +7739,9 @@ class _Build:
 # ---------------------------------------------------------------- the proof (plan 35 B)
 
 def _sig_class(n: Node) -> str:
-    """A node's class in `signature`: a copy is the effect it draws again
+    """A node's class in `signature`: a slot is the effect it draws again
     (each pipeline's own run node was an `Effect`: plan 35 V)."""
-    return "Effect" if isinstance(n, Copy) else type(n).__name__
+    return "Effect" if isinstance(n, Slot) else type(n).__name__
 
 
 def _sig_what(n: Node) -> Any:
@@ -7754,7 +7805,7 @@ def signature(g: Graph) -> tuple:
     and the old backdrop sink (which drew nothing), each (class, which, the
     ports wired).
     Names never count — `fx` and `shown(lookback)` are one end — and a
-    copy counts as the `Effect` it draws again. Plan 35 T3: a chain
+    slot counts as the `Effect` it draws again. Plan 35 T3: a chain
     follows every wired port by name, and "which" is past the effect
     (`_sig_what`: a channel's letter, a hands node's instance); last, each
     sink no output shows — the capture, each delay's write — by the chain

@@ -155,6 +155,7 @@ from .graph import (
     bus_cuts_of,
     channel_into,
     cloud_roles,
+    effect_of,
     generators_of,
     graph_key,
     mask_flip,
@@ -1156,7 +1157,7 @@ def thumb_source(frame: Frame, name: str, how: str,
     - ``card``: an effect whose thumbnail is switched to the test card
       (`card_through`): never the frame's picture, and nothing of the
       frame is pulled for it;
-    - ``unwired`` (plan 65): an effect or a copy whose picture reaches no
+    - ``unwired`` (plan 65): an effect whose picture reaches no
       output, so the frame never built it (`graph.reaches`): its real input
       put through it at a thumbnail's size when the frame made that input,
       else the test card (`unwired_through`). An unbuilt effect asked for
@@ -1262,7 +1263,7 @@ UNWIRED_PER_FRAME = 4
 
 def unwired_through(frame: Frame, name: str, pulled: frozenset[str] | None = None,
                     card: bool = False) -> moderngl.Texture | None:
-    """Plan 65: the thumbnail of effect (or copy) `name`, which the frame did
+    """Plan 65: the thumbnail of effect (or its slot, plan 89) `name`, which the frame did
     not build because its picture reaches no output (`graph.reaches`, row
     349): its input put through it, at a thumbnail's size (`CARD_PX`), with
     its values and clocks as the frame left them.
@@ -1277,8 +1278,7 @@ def unwired_through(frame: Frame, name: str, pulled: frozenset[str] | None = Non
     unbuilt. None for a name that is no effect the state holds."""
     r = frame.r
     wiring = getattr(r, "wiring", None)
-    copies = {c.name: c.of for c in (getattr(wiring, "copies", None) or ())}
-    effect = copies.get(name, name)
+    effect = effect_of(name)              # (plan 89: a slot runs its effect)
     chain = r.fx
     if effect not in chain.state.specs:
         return None

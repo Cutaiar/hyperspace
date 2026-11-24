@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/11",
+ "schema": "hyperspace.loadable/12",
  "name": "kinetic-finger-drums",
  "note": "Play it with your fingertips. Each thumb-to-finger pinch on the right hand is a drum: index bursts, middle splits the colours, ring doubles the picture, pinky floods it magenta and green. Hold the pinch and it sustains; let go and it rings out. A left pinch punches the camera in, a flick of the left hand flashes, and its height sets the spin.",
  "graph": {

@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/11",
+ "schema": "hyperspace.loadable/12",
  "name": "distort-wave-slabs",
  "note": "A square wave cuts the picture into slabs that slide apart. The sub band pushes Amount. The right hand's height brings in the colour split; the left hand's height moves how many slabs.",
  "graph": {

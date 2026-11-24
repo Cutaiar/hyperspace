@@ -13,9 +13,8 @@ from hyperspace import graphview
 from hyperspace.outputs import Switches
 
 SECTION = {"frame": "wired", "nodes": [{"kind": "effect", "file": "wave"},
-                                       {"kind": "effect", "file": "displace"},
-                                       {"kind": "effect", "file": "acid"},
-                                       {"kind": "copy", "of": "displace"}],
+                                       {"kind": "effect", "file": "displace", "slots": 2},
+                                       {"kind": "effect", "file": "acid"}],
            "wires": [{"from": "shape", "to": "scene.geometry"},
                      {"from": "scene", "to": "wave.image"},
                      {"from": "wave", "to": "displace.image"},
@@ -39,7 +38,7 @@ def test_the_aux_port_only_where_the_file_reads_it_or_a_wire_goes_in(tmp_path):
     assert "aux" in _ports(view, "displace")             # it reads one
     assert "aux" not in _ports(view, "wave")             # it doesn't
     assert "aux" in _ports(view, "acid")                 # it doesn't, but a saved wire goes in
-    assert "aux" in _ports(view, "copy")                 # a copy of displace
+    assert "aux 2" in _ports(view, "displace")           # its slot 2's (plan 89)
     c = next(c for c in view.cables if c.dst_port == "rin:acid/aux")
     assert c.src_port == "rout:scene"                    # drawn, so it can be deleted
     assert {"image"} <= _ports(view, "wave")

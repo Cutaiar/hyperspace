@@ -913,7 +913,8 @@ def test_through_with_no_hand_showing_draws_the_same(ctx):
         assert np.array_equal(a, b), src
         # (plan 36 T1: the through window shows its own chain, as wired —
         # no stand-down to the shared end — and draws the same picture)
-        want = ["shown(warp)"] if src == "hands switch off" else ["shown(warp)", "shown(copy)"]
+        want = (["shown(warp)"] if src == "hands switch off"
+                else ["shown(warp)", "shown(warp.slot.2)"])
         assert r.stats["ends"] == want, src
         assert r.ghost.readout is None, src
 
@@ -923,7 +924,7 @@ def test_four_outputs_need_at_most_three_chain_runs(ctx):
     r = rig(ctx)
     run(ctx, r, wviews(ctx, r, S(), Thru(), Thru(scene=False), S(hands=False)), frames=2)
     assert r.stats["chain_runs"] == 3
-    assert r.stats["ends"] == ["shown(warp)", "shown(copy)", "shown(copy.2)"]
+    assert r.stats["ends"] == ["shown(warp)", "shown(warp.slot.2)", "shown(warp.slot.3)"]
 
 
 def _readout_alpha(r):

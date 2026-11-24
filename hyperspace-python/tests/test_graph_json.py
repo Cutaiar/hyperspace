@@ -57,7 +57,8 @@ def _old(w: G.Wiring) -> G.Wiring:
                                                     else {})} for h in w.extra]
     nodes += [{"kind": "effect", "file": e.file, **({"instance": e.n} if e.n != 1 else {}),
                e.where[0]: e.where[1]} for e in w.placed]
-    nodes += [c.to_json() for c in (*w.composites, *w.copies)]
+    nodes += [c.to_json() for c in w.composites]
+    assert not w.slots                     # (plan 89: an effect's slot is no old word)
     section = {"frame": "wired", "nodes": nodes, "wires": [x.to_json() for x in w.wires]}
     got = unwired(section)
     assert got is not None, section

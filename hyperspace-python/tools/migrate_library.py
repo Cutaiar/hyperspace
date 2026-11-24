@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""The one migration (plan 57 §7, §7a): a library to `/11`, its shows to install files.
+"""The one migration (plan 57 §7, §7a): a library to the newest (`/12` since plan 89),
+its shows to install files.
 
     uv run python tools/migrate_library.py [--library PATH] [--show NAME] [--apply]
                                            [--force NAME …]
@@ -14,11 +15,12 @@ never see the other Mac: quit there first), then, in this order, because of what
    ``presets-backup-*``.
 3. **The retaper,** a no-op after the first (`retaper_plan`), and module presets and
    ``patch/1`` files into the one format (`group_plan`).
-4. **Every loadable patch to** ``hyperspace.loadable/11`` by `hyperspace.headless.resave`, in
+4. **Every loadable patch to** ``hyperspace.loadable/12`` (plan 89; ``/11`` plan 57) by
+   `hyperspace.headless.resave`, in
    place, with three checks: it loads; it is a fixed point (loaded and saved untouched again,
-   the same bytes); and the same picture: the old file and its ``/11`` are each drawn on the
+   the same bytes); and the same picture: the old file and its newest are each drawn on the
    golden-frame rig, the rig's show open, and every output's hash must match. Both are drawn
-   by this build, so that proves the written ``/11`` draws what this build draws of the old
+   by this build, so that proves the written file draws what this build draws of the old
    file, never what an older build drew. **Shows still exist here:** an old file takes the
    eye, looks and cuts of **the rig's show** (``--show NAME``, else this Mac's last show, else
    the library's one show). A file that fails a check is not written and stays readable; it
@@ -71,7 +73,8 @@ PROJECTS = "projects"
 INSTALLS = "installs"
 SHOW_SUFFIX = ".hyp.json"
 BACKUP_PREFIX = "library-backup-"
-NEWEST = "hyperspace.loadable/11"         # plan 57 (FQ4)
+NEWEST = "hyperspace.loadable/12"         # plan 57 (FQ4); plan 89: copies as slots
+NEW = "/" + NEWEST.rpartition("/")[2]     # how the words say it ("/12")
 OLD_BACKUPS = "presets-backup-"           # a hand-made copy, deleted with the trash (§7a)
 TRASH = "trash"
 NOTHING_FILES = ("Icon\r", "Icon", ".DS_Store")   # what makes no folder worth keeping
@@ -93,7 +96,7 @@ class Result:
     new: str = ""                   # the schema it saves as
     notes: list[str] = field(default_factory=list)
     error: str = ""                 # it does not load (nothing to write)
-    fixed: bool = False             # the /11 re-saves as itself
+    fixed: bool = False             # the newest re-saves as itself
     picture: str = ""               # the round trip: "same", "differs (k of n outputs)", or why not drawn
     unchanged: bool = False         # the save is the file's own bytes
     data: bytes = b""               # what a write puts there
@@ -267,7 +270,7 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None,
     res.data, res.notes, res.name = data, notes, name
     version = graphmigrate.schema_version(json.loads(original))
     if (version is None or version < graphmigrate.SEVEN) and any(NOT_READ in n for n in notes):
-        res.error = ("its graph section was not read by this build (black) — writing its /11 "
+        res.error = ("its graph section was not read by this build (black) — writing its newest "
                      "would lose the migration for good")
         return res
     res.new = str(json.loads(data).get("schema"))
@@ -280,7 +283,7 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None,
         res.fixed = again == data
     except (LibraryError, ValueError, KeyError, TypeError, OSError, RuntimeError) as e:
         res.fixed = False
-        res.notes = [*res.notes, f"its /11 does not load: {e}"]
+        res.notes = [*res.notes, f"its {NEW} does not load: {e}"]
     if picture is None:
         picture = _golden_picture()
     try:
@@ -735,10 +738,10 @@ def line(r: Result) -> str:
     head = f"{r.file:40s} {r.name!r:36s} {r.old.rpartition('/')[2] or '?':>2} → "
     if r.error:
         return f"{r.file:40s} {'':36s} {r.old.rpartition('/')[2]:>2} → --  SKIP: {r.error}"
-    state = ("already /11, untouched" if r.unchanged and r.ok else
+    state = (f"already {NEW}, untouched" if r.unchanged and r.ok else
              "ok" if r.ok else "SKIP")
     why = [] if r.ok else [w for w in (
-        "" if r.fixed else "its /11 is not a fixed point",
+        "" if r.fixed else f"its {NEW} is not a fixed point",
         "" if r.picture == "same" else f"round-trip picture {r.picture}") if w]
     out = f"{head}{r.new.rpartition('/')[2]}  round-trip picture: {r.picture}  fixed point: " \
           f"{'yes' if r.fixed else 'NO'}  {state}" + (f" ({'; '.join(why)})" if why else "")
@@ -805,7 +808,7 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
              else "  — dry run, nothing is written"))
     print(said)
     print("(round-trip picture: the old file as this build loads it, the show open, vs its "
-          "/11 — not parity with an older build; eyeball dream patches live, hand check 366)")
+          f"{NEW} — not parity with an older build; eyeball dream patches live, hand check 366)")
     # (review 5: every /11 is computed against the module presets as the retaper leaves
     # them; a dry run and --to read a retapered scratch copy, so they report what --apply writes)
     retapers = retaper_plan(library, home)
@@ -894,11 +897,11 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
         for r in writes:
             (a.to / r.file).parent.mkdir(parents=True, exist_ok=True)
             write(a.to / r.file, r.data)
-        print(f"wrote {len(writes)} as /11 into {a.to}, skipped {len(skipped)}")
+        print(f"wrote {len(writes)} as {NEW} into {a.to}, skipped {len(skipped)}")
     elif a.apply:
         for r in writes:
             write(paths[r.file], r.data)
-        print(f"rewrote {len(writes)} as /11, left {len(untouched)} untouched (already /11), "
+        print(f"rewrote {len(writes)} as {NEW}, left {len(untouched)} untouched (already {NEW}), "
               f"skipped {len(skipped)}")
         if skipped:
             # (review of #434: an old patch not written still takes the show's eye, looks
@@ -920,8 +923,8 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
         for words in troubles:
             print(words)
     else:
-        print(f"would rewrite {len(writes)} as /11, leave {len(untouched)} untouched "
-              f"(already /11), skip {len(skipped)}"
+        print(f"would rewrite {len(writes)} as {NEW}, leave {len(untouched)} untouched "
+              f"(already {NEW}), skip {len(skipped)}"
               + (f"; retaper {len(retapers)} first" if retapers else "")
               + f"; write {len(installs)} install file(s); delete {len(trash) + len(tidy)} and "
                 f"{len(empties)} empty folder(s)"
@@ -934,7 +937,7 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
                                  if any(not r.error for r in skipped) else "") + ":")
         for r in skipped:
             why = r.error or "; ".join(w for w in (
-                "" if r.fixed else "its /11 is not a fixed point",
+                "" if r.fixed else f"its {NEW} is not a fixed point",
                 "" if r.picture == "same" else f"round-trip picture {r.picture}") if w)
             print(f"  {r.file.removesuffix('.json')}: {why}")
     return 1 if skipped or troubles else 0

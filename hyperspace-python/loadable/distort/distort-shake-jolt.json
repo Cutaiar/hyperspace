@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/11",
+ "schema": "hyperspace.loadable/12",
  "name": "distort-shake-jolt",
  "note": "The frame is knocked a new way six times a second and settles, with a smear and a colour fringe. The sub band pushes Amount. The right hand's height brings in the colour split; the left hand's height moves the rate.",
  "graph": {

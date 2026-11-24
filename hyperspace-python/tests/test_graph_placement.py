@@ -560,14 +560,14 @@ def test_a_placed_effect_alone_bends_no_pipeline(ctx):
     from test_outputs import keep_run, rig, run, wviews
 
     r = rig(ctx, effects=("warp",))
-    r.fx.state.values["warp"]["on"] = False      # (in the run, off: a copy to stand down)
+    r.fx.state.values["warp"]["on"] = False      # (in the run, off: a slot to stand down)
     _palette(r)
     r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),)))
     run(ctx, r, wviews(ctx, r, S(), Thru()), frames=2)
     assert r.fx.state.live("palette") and r.stats["fx_on"] is False
     assert r.stats["chain_runs"] == 0 and r.stats["effects"] == ["palette"]
-    assert r.stats["routes"] == [("shown(warp)", True), ("shown(copy)", False)]
-    assert r.stats["ends"] == ["shown(warp)", "shown(copy)"]
+    assert r.stats["routes"] == [("shown(warp)", True), ("shown(warp.slot.2)", False)]
+    assert r.stats["ends"] == ["shown(warp)", "shown(warp.slot.2)"]
 
 
 def test_into_a_through_output_folds_its_chain_every_frame(ctx):

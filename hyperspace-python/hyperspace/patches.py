@@ -90,8 +90,8 @@ from typing import Any
 
 from . import envelope as envmod
 from . import graph as G
+from . import graphmigrate, modbank
 from . import lfo as lfomod
-from . import modbank
 from . import modifiers as modmod
 from .groupwords import group_word
 from .lookback import is_lookback_key
@@ -100,11 +100,12 @@ from .routing_sources import nsew
 
 KIND = "hyperspace.patch"
 # plan 50: `/2` is `/1` plus the optional `group` key (a patch of one param
-# group, what a module preset was). Every save writes `/2`; a load reads
-# either through `forward` (the one ladder); an older build refuses a `/2`
-VERSION = 2
+# group, what a module preset was). Plan 89: `/3` is `/2` with no copy node —
+# a copy is a slot of its effect (`_slots_step`). Every save writes `/3`; a
+# load reads each through `forward` (the one ladder); an older build refuses it
+VERSION = 3
 SCHEMA = f"{KIND}/{VERSION}"
-READS = (1, 2)
+READS = (1, 2, 3)
 # a module preset as it was before plan 50 — `hyperspace.preset/1` with a
 # `group` — read through `forward` as a `/2`, never written
 MODULE_KIND, MODULE_VERSION = "hyperspace.preset", 1
@@ -146,7 +147,7 @@ KEYED = "keys"
 # declares (`graph.wire_node_kind(…, wired=True)`), since wave 3 P1 the
 # frame's too. Not here: the meta controller's (`FIXTURE_KINDS`), the look's one camera, and
 # what is a name but no node of a wired frame (an echo pin, `fx`, `frame`)
-MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "copy", "matte", "cut",
+MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "matte", "cut",
             "segment", "hands", "layer", "guide", "scene", "shape", "backdrop", "pattern",
             "lookback", "dream")
 # what a frame holds one of: never renamed by a spawn (`scene.2` is no node;
@@ -195,7 +196,6 @@ SEQ_WORDS = "the sequencer is the look's one, never a patch's; left out"
 LANE_ENV_WORDS = ("{name} is a sequencer lane's envelope; left out (a patch's envelope "
                   "spawns as {first} or more)")
 NO_NODE_WORDS = "{name}: no such node; left out"
-COPY_WORDS = "{name} draws {of} again: take {of} with it; left out"
 # (at a save only: a file an older build saved with a layer alone still reads)
 LAYER_WORDS = "{name} draws {of}: take {of} with it; left out"
 HOST_MACRO_WORDS = ("{mid} is not in the patch: its subscriber on {pid} stays the loadable patch's "
@@ -204,10 +204,13 @@ NO_MACRO_NOTE = "{mid}: no free macro — its subscribers not spawned"
 NO_VOICE_NOTE = "{vid}: {why} — not spawned, nor its routes"
 NO_INPUT_NOTE = "{mid}: its input {k} read {vid}, which did not spawn — left empty"
 CROSSES_WORDS = "wire {wire} crosses the edge: a port says it"
+# plan 89: a copy entry in a `/3` (a `/2`'s is moved by the ladder, `_slots_step`)
+COPY_GONE_WORDS = ("{name} is gone (plan 89): an effect draws on another picture by a slot "
+                   "of its own; left out")
 # a node entry of a kind that is no node a section declares but names a
 # thing a patch may not hold (`check`): said as that thing
 _KIND_WORDS = {"output": WINDOW_WORDS, "camera": CAMERA_WORDS, "cloud": FIXTURE_WORDS,
-               "channel": CHANNEL_WORDS, "media": CHANNEL_WORDS}
+               "channel": CHANNEL_WORDS, "media": CHANNEL_WORDS, "copy": COPY_GONE_WORDS}
 
 
 def slug(name: str) -> str:
@@ -241,10 +244,47 @@ def _module_step(doc: Mapping) -> dict:
     return out
 
 
+def _slots_step(doc: Mapping) -> dict:
+    """``patch/2`` → ``patch/3`` (plan 89): its copies made slots of their
+    effects (`graphmigrate.slots_of_copies`, the loadable patch's rule): the
+    entries, the wires, `keys`, a boundary port's own end (`to` / `from`)
+    renamed, and a copy's canvas place dropped (its effect's node has one).
+    A copy of an effect the patch does not hold is dropped with its wires."""
+    out = {**dict(doc), "schema": f"{KIND}/3"}
+    section = {k: doc[k] for k in ("nodes", "wires", KEYED) if k in doc}
+    got, renames, _notes = graphmigrate.slots_of_copies(section)
+    if got is section:
+        return out
+    out.update(got)
+    # (the copy's `key.<copy>.*` knobs and canvas mentions elsewhere, the slot's)
+    for k in ("values", "routes", "desk", "macros", "modifiers"):
+        if k in out:
+            out[k] = graphmigrate.retarget_copies(out[k], renames)
+    copies = {f"render:{graphmigrate.copy_name(e)}" for e in doc.get("nodes") or ()
+              if isinstance(e, Mapping) and e.get("kind") == "copy"}
+    if isinstance(doc.get("layout"), Mapping):
+        out["layout"] = {k: v for k, v in doc["layout"].items() if k not in copies}
+    ports = []
+    for p in doc.get("ports") or ():
+        if isinstance(p, Mapping):
+            p = dict(p)
+            if isinstance(p.get("from"), str):
+                p["from"] = renames.get(p["from"], p["from"])
+            if isinstance(p.get("to"), str):
+                node, _, port = p["to"].rpartition(".")
+                if node in renames:
+                    p["to"] = f"{renames[node]}.{port}"
+        ports.append(p)
+    if "ports" in doc:
+        out["ports"] = ports
+    return out
+
+
 # the ladder's steps: (kind, version) → that document one version on, in
 # the patch's kind (a module preset's one step lands it on `/2` at once)
 STEPS = {
     (KIND, 1): lambda doc: {**dict(doc), "schema": f"{KIND}/2"},   # /2 is /1 plus `group`
+    (KIND, 2): _slots_step,                                       # /3: copies are slots
     (MODULE_KIND, MODULE_VERSION): _module_step,
 }
 
@@ -252,7 +292,7 @@ STEPS = {
 def forward(doc: Mapping) -> dict:
     """The one ladder for a fragment (plan 50): a ``patch/1``, a ``patch/2``
     or a module preset (``hyperspace.preset/1`` with a `group`) → its
-    ``patch/2``, step by step (`STEPS`), a copy — the input is never
+    ``patch/3`` (plan 89), step by step (`STEPS`), a copy — the input is never
     changed. A whole loadable patch (``hyperspace.preset/2`` and up) is no fragment:
     its ladder is `graphmigrate`'s, so it is refused here, as is anything
     newer than this build or of another kind (ValueError, in words)."""
@@ -355,17 +395,23 @@ def _kind(name: str) -> str | None:
 
 
 def _node_of(src: str) -> str:
-    """A wire's source → the node it is an output of (a pin is its node:
-    `segment.2.fg` → `segment.2`, `scene.depth` → `scene`)."""
-    return G.pin_node(src) or src
+    """A wire's end → the node it is drawn on (a pin is its node:
+    `segment.2.fg` → `segment.2`, `scene.depth` → `scene`; plan 89: an
+    effect's slot its effect, `acid.slot.2` → `acid`)."""
+    return G.pin_node(src) or G.effect_of(src)
 
 
 def _family(name: str) -> tuple[str, int, str]:
     """A render node name → (its base, its instance, a suffix): `acid.2` →
     ("acid", 2, ""), `hands.3.layer` → ("hands", 3, ".layer"). The base and
     instance are what a rename moves — a hands node, its layer and its
-    guide move together."""
+    guide move together; plan 89: an effect's slot moves with its effect,
+    `acid.slot.2` → ("acid", 1, ".slot.2")."""
     kind = _kind(name)
+    if kind == "slot":
+        effect, k = G.split_slot(name)
+        base, n, _ = _family(effect)
+        return base, n, f".{G.SLOT_WORD}.{k}"
     if kind in ("layer", "guide"):
         base, n = G.split_instance(G.hands_of(name))
         return base, n, f".{kind}"
@@ -436,7 +482,7 @@ def spec_names(spec: G.GraphSpec | None) -> frozenset[str]:
     out = {name for e in spec.to_json().get("nodes", []) if (name := entry_name(e))}
     for w in spec.all_wires():
         out.add(_node_of(w.src))
-        out.add(w.node)
+        out.add(_node_of(w.node))
     out.discard(G.GROUND)
     return frozenset(out)
 
@@ -562,10 +608,9 @@ def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
     `view.pattern*` and `view.media_*` the pattern's; `dream.*` split by
     key between a look-back and the dream (`params.is_lookback_knob`), so
     either can be in a patch, and land, without the other's values. The
-    scene has none: `scene.*` is the band scene's (a shared meta group); a
-    copy's knobs are its original's."""
+    scene has none: `scene.*` is the band scene's (a shared meta group)."""
     kind = _kind(name)
-    if kind in ("copy", "scene"):
+    if kind == "scene":
         return []
     if kind == "shape":
         return [("rot", _any_key), ("view", _is_shape_view_key),
@@ -705,8 +750,6 @@ class _Renamer:
             out.pop("instance", None)
             if n != 1:
                 out["instance"] = n
-        if out.get("kind") == "copy" and isinstance(out.get("of"), str):
-            out["of"] = self.name(out["of"])
         return out
 
     def wire(self, w: Mapping) -> dict:
@@ -898,8 +941,9 @@ def read(doc: Mapping) -> Patch:
                  lfos=tuple(sorted(m.lfos)), envs=tuple(sorted(m.envs)), layout=layout,
                  ports=ports, control_rows=tuple(control), host_ports=tuple(host),
                  group=str(doc.get(GROUP_KEY) or ""),
-                 keys=tuple(sorted({k for k in doc.get(KEYED) or () if isinstance(k, str)}
-                                   & set(m.render))))
+                 # (plan 89: a member effect's slot may be keyed: it is the effect's)
+                 keys=tuple(sorted(k for k in set(doc.get(KEYED) or ())
+                                   if isinstance(k, str) and _node_of(k) in m.render)))
 
 
 def _macro_n(mid: Any) -> int:
@@ -948,12 +992,11 @@ def check(doc: Any) -> list[str]:
         why = held_words(name)
         if why is not None:
             out.append(why)
-        elif e.get("kind") == "copy" and e.get("of") not in m.render:
-            out.append(COPY_WORDS.format(name=name, of=e.get("of")))
     if len(set(m.render)) != len(m.render):
         out.append("a node named twice")
     for k in doc.get(KEYED) or ():
-        if not isinstance(k, str) or k not in m.render:
+        # (plan 89: a member effect's slot may be keyed: it is the effect's)
+        if not isinstance(k, str) or _node_of(k) not in m.render:
             out.append(f"keys: {k!r} is not a node of the patch"[:120])
     held = set(m.render)
     ports = [p for p in doc.get("ports") or ()]
@@ -973,7 +1016,7 @@ def check(doc: Any) -> list[str]:
             out.append(f"port {pid}: names one of to (an inlet) or from (an outlet)")
             continue
         end = p.get("to") if "to" in p else p.get("from")
-        node = (end.rpartition(".")[0] if "to" in p else _node_of(end)) if isinstance(
+        node = (_node_of(end.rpartition(".")[0]) if "to" in p else _node_of(end)) if isinstance(
             end, str) else None
         if node not in held:
             out.append(f"port {pid}: {end!r} is no node of the patch")
@@ -988,7 +1031,7 @@ def check(doc: Any) -> list[str]:
         # a patch's wires are its own, both ends in it; a cable across the edge
         # is a port, never a wire — a wire would be landed by a spawn, an
         # attachment by its saved name (D2, plan 36: no hidden edge)
-        for end in (_node_of(src), dst.rpartition(".")[0]):
+        for end in (_node_of(src), _node_of(dst.rpartition(".")[0])):
             if end in held:
                 continue
             # (the meta controller's own ends said as such; any other end — the scene, a
@@ -1083,7 +1126,7 @@ def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
     every id it may not (P1's rule — `lift`'s, and the GRAPH page's Group):
     an output, the camera or a cloud, a media channel, a hands' layer or
     guide without its hands, the sequencer, a lane envelope, a node the section lacks, a modifier
-    the table lacks, a copy without its original, a group (no nesting),
+    the table lacks, a group (no nesting),
     any other canvas id (a device, the analyzer: the meta controller's). Pure.
 
     Plan 50: this is the **save's** rule — `Edit.save_patch` asks it, and a
@@ -1098,7 +1141,7 @@ def groupable(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
     50, the second half of harden-node-groups: "a group holds any node,
     checked at save"). A group is a patch not yet saved, so it holds any
     node the loadable patch file saves: every render node of its section — the
-    frame's singletons, hands 1, the camera, a copy without its original —
+    frame's singletons, hands 1, the camera —
     its modifiers, its LFOs and envelopes (the lane envelopes too) and the
     macros. Refused here only what no loadable patch holds and what a group cannot:
     the meta controller's render kinds (`FIXTURE_KINDS`: a window, All outputs, a media
@@ -1140,13 +1183,8 @@ def _select(spec: G.GraphSpec | None, table, node_ids: Iterable[str], *, save: b
             refused.append(NO_NODE_WORDS.format(name=nid))
         else:
             voices[vo[0]].append(vo[1])
-    entries = {entry_name(e): e for e in (spec.to_json().get("nodes", []) if spec else [])}
     for name in list(render) if save else ():
-        e = entries.get(name)
-        if e is not None and e.get("kind") == "copy" and e.get("of") not in render:
-            refused.append(COPY_WORDS.format(name=name, of=e.get("of")))
-            render.remove(name)
-        elif _kind(name) in ("layer", "guide") and G.hands_of(name) not in render:
+        if _kind(name) in ("layer", "guide") and G.hands_of(name) not in render:
             # (a hands' layer alone would land as a layer of a hands no one holds)
             refused.append(LAYER_WORDS.format(name=name, of=G.hands_of(name)))
             render.remove(name)
@@ -1164,7 +1202,7 @@ def crossing(spec: G.GraphSpec | None, render: Iterable[str]
     held = set(render)
     out: list[tuple[G.Wire, str]] = []
     for w in (spec.all_wires() if spec is not None else ()):
-        a, b = _node_of(w.src) in held, w.node in held
+        a, b = _node_of(w.src) in held, _node_of(w.node) in held
         if a and b:
             out.append((w, INSIDE))
         elif b:
@@ -1357,7 +1395,8 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
            "lfos": sorted(rn.voice(LFO, n) for n in members.lfos),
            "envs": sorted(rn.voice(ENV, n) for n in members.envs),
            "ports": ports, "layout": lay, UNITS_KEY: dict(UNITS)}
-    keyed = sorted(rn.name(n) for n in render if n in getattr(spec, "keys", ()))
+    # (plan 89: a member effect's keyed slot too, renamed with its effect)
+    keyed = sorted(rn.name(n) for n in getattr(spec, "keys", ()) if _node_of(n) in render)
     if keyed:                                     # plan 87: only when a member is keyed
         doc[KEYED] = keyed
     return doc, refused
@@ -1697,7 +1736,8 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     held = set(m.render)
     wires = tuple(rn.wire(w) for w in p.wires
                   if isinstance(w.get("from"), str) and isinstance(w.get("to"), str)
-                  and _node_of(w["from"]) in held and w["to"].rpartition(".")[0] in held)
+                  and _node_of(w["from"]) in held
+                  and _node_of(w["to"].rpartition(".")[0]) in held)
     # D5 for any caller, not only one that ran `check`: a member's params only
     values = {rn.param(k): v for k, v in p.values.items() if m.owns(k) and not lost.owns(k)}
     mods = []
@@ -1771,7 +1811,8 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
                    layout=layout, group=group, ports=ports, conflicts=tuple(conflicts),
                    wants={k: tuple(v) for k, v in wants.items()}, notes=tuple(notes),
                    taken=tuple(singles),
-                   keys=tuple(sorted(rn.name(k) for k in p.keys if k in m.render)))
+                   keys=tuple(sorted(rn.name(k) for k in p.keys
+                                     if _node_of(k) in m.render)))
 
 
 def is_control_source(addr: str) -> bool:
