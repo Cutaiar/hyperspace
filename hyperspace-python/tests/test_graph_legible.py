@@ -109,7 +109,7 @@ def test_every_node_starts_collapsed_with_at_most_five_lines(rig):
     # pattern's seven (view.pattern*, view.media_*), plus fx.face_map; plan
     # 33 T7: less view.media (retired: the wire into pattern.media); less the
     # eight pattern.mod.k, the faces pattern node's since 2026-10-27
-    assert graphview.summary(view.node("render:shape"))[0].startswith("47 params · ")   # (plan 64: Detail, Reach, Near, To the top; plan 81: Dive)
+    assert graphview.summary(view.node("render:shape"))[0].startswith("53 params · ")   # (plan 64: Detail, Reach, Near, To the top; plan 81: Dive; 2026-11-23: +6, the camera.* pose)
     assert st["wires"] < len(view.cables) / 3
     # a collapsed node takes its lines' room in the column, not its ports' —
     # plan 37 C1: a picture node (the shape's is its scene's, faint) its
@@ -313,9 +313,9 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     frame(rig.panel, "graph")
     assert st["said"] == ui_graph.ALREADY_TIDY
     ui_graph.toggle_open(st, "render:shape")
-    rig.lib.loaded_patch.layout["render:camera"] = [900, 40]
+    rig.lib.loaded_patch.layout["render:scene"] = [900, 40]
     frame(rig.panel, "graph")
-    assert st["applied"]["render:camera"] == (900.0, 40.0)
+    assert st["applied"]["render:scene"] == (900.0, 40.0)
     st["tidy"] = True
     frame(rig.panel, "graph")
     idle = sum(n.idle for n in view.nodes)               # N9: the areas' words
@@ -326,7 +326,7 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     auto = ui_graph.layout_of(st, view)
     assert all(st["applied"][n.id] == auto[n.id] for n in view.nodes
                if not n.idle)                           # N9: an idle node is not placed
-    assert st["applied"]["render:camera"] != (900.0, 40.0)
+    assert st["applied"]["render:scene"] != (900.0, 40.0)
 
 
 def test_t_tidies_the_graph(rig):
@@ -669,13 +669,13 @@ def test_a_dormant_bundle_draws_faint_and_a_live_one_moves_without_a_rebuild(
     view, wiring = st["view"], st["wiring"]
     dormant = next(b for b in st["bundles"].values() if b.dormant)
     assert links[ui_graph._id(st, "c:" + dormant.id)][0] == pytest.approx(ui_graph.DORMANT_ALPHA)
-    lfo = st["bundles"]["bundle:lfo.1>render:camera"]
+    lfo = st["bundles"]["bundle:lfo.1>render:shape"]
     assert not lfo.dormant and lfo.live == pytest.approx(0.3)
     assert links[ui_graph._id(st, "c:" + lfo.id)][0] == 1.0
     router.feed("lfo", [0.8, 0.0, 0.0, 0.0])
     frame(rig.panel, "graph")
     assert st["view"] is view and st["wiring"] is wiring
-    assert st["bundles"]["bundle:lfo.1>render:camera"].live == pytest.approx(0.8)
+    assert st["bundles"]["bundle:lfo.1>render:shape"].live == pytest.approx(0.8)
 
 
 def test_a_bundles_menu_and_a_nodes_learn_menu_draw(rig, monkeypatch):
@@ -963,7 +963,7 @@ def test_every_nodes_side_panel_draws(rig):
     assert len(drawn) > 40
     assert {"render:copy", "render:backdrop", "render:pattern", "render:hands.guide",
             "render:lookback", "render:dream", "render:delay", "render:resize",
-            "render:output.all", "render:camera"} <= set(drawn)
+            "render:output.all", "render:scene"} <= set(drawn)
     for nid in drawn:
         pick(rig, st, nid)
 
@@ -1270,6 +1270,37 @@ def test_the_page_sets_each_stubs_hit_rect_outward_at_a_zoomed_out_canvas(rig, m
             assert x1 == pytest.approx(cx + PIN / 2)      # grown left, past the node's edge
         else:
             assert x0 == pytest.approx(cx - PIN / 2)      # grown right
+
+
+def test_the_hands_node_draws_the_hands_page_as_its_selection(rig, monkeypatch):
+    """The hands node's selection IS the hands page (the owner, 2026-11-23: "you
+    click on the hands node and it doesn't actually show you anything"): the box,
+    pinches, axes, calibration and grip, with no library strip on the grip. A
+    picture node's side pane is not given the page."""
+    from hyperspace.hands import panel as ui_hands
+    st = party(rig)
+    calls = []
+    monkeypatch.setattr(ui_hands, "body", lambda panel, dt, **k: calls.append(k))
+    pick(rig, st, "render:hands")
+    assert calls and all(k == {"strip": False} for k in calls)
+    calls.clear()
+    pick(rig, st, "render:output.2")
+    assert calls == []
+
+
+def test_undo_over_the_hands_mirror_button_goes_by_the_hands_stack(rig):
+    """The axis editor's `mirror` is a plain button, not a param widget: hovered in the
+    GRAPH selection (whose section is no meta one) ⌘Z must still go by the hands' (meta)
+    stack — it copies `hands.*` params, not a patch's."""
+    from test_ui_pane import _tall_driver
+
+    from hyperspace import ui as ui_mod
+    st = party(rig)
+    pick(rig, st, "render:hands")
+    d = _tall_driver(rig, None)
+    d.record(lambda o, n, v: setattr(o, n, v))
+    d.run(d.wait(3), d.move("mirror", frames=3))
+    assert ui_mod.Panel.in_meta_section(rig.panel) is True
 
 
 def test_a_picture_nodes_side_pane_has_no_not_live_readings(rig, monkeypatch):

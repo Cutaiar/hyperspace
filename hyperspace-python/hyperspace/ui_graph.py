@@ -269,6 +269,7 @@ from . import ui_effect_picker as fxpick
 from .bands import CEIL
 from .graph import Effect
 from .groupwords import group_title
+from .hands import panel as ui_hands
 from .learn import META_UNDO, PairAsk
 from .library import LibraryError
 from .params import KEY_GROUP, Kind
@@ -4764,6 +4765,9 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
             ui._micro("dials")
             panel._dials()
         return                                  # — the picture says what the port lines would
+    if n.id == f"render:{rgraph.wired_hands_name(1)}":     # the hands node IS the hands page: where they are,
+        ui_hands.body(panel, 1 / 60, strip=False)   # the pinches, the axes, calibration, the grip
+        return
     if _param_rows(panel, st, n):
         return
     if n.kind in FRAME_READINGS:            # (a source's readings are its content; a picture
@@ -5058,8 +5062,6 @@ def home_page(n: graphview.VNode):
     # plan 35 G: by the wired frame's ids — `render:camera` (was `render:eye`),
     # a channel `render:channel.<c>`, All outputs the OUTPUT page with no
     # window picked, a copy FX with its original selected (`Copy.effect`)
-    if n.id == f"render:{graphview.CAMERA}":
-        return ("camera", None)
     if n.id == f"render:{rgraph.ALL_OUTPUTS}":
         return ("output", None)
     if isinstance(r, rgraph.MediaNode):
