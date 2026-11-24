@@ -435,11 +435,11 @@ Markdown beside it, saying what the effect does, how the fields in it are wired,
 try. Brief, to the point, easy to scan.
 
 - **Where: `loadable/field-examples/`** in the library on the Drive — the owner, 2026-11-23:
-  "loadable is the SINGLE canonical location to save patches." The repository keeps the
-  source at the same path, `hyperspace-python/loadable/field-examples/<effect>.json` +
-  `<effect>.md`, so the copy is one folder onto its twin (the cloud session cannot reach the
-  Drive; a person copies it when the change merges). Not under the repository's `presets/`,
-  which is the old word (the glossary's FQ4).
+  "loadable is the SINGLE canonical location to save patches." The session writes them
+  there itself, through the Google Drive connector (`Hyperspace/loadable/field-examples/`,
+  2026-11-24: the first four and the README). The repository keeps a copy only as test
+  fixtures, `tests/fixtures/field-examples/`, which `tests/test_field_examples.py` opens
+  through the library's own load; a change updates both.
 - A change is not done until its example loads, renders the picture the Markdown describes
   (a test, as `tests/test_distort_presets.py` does for `distort/`), and its Markdown names
   only knobs and wires that exist.
@@ -557,8 +557,8 @@ A per-field precision choice is the later step, for smooth fields.
 
 **Testing it locally** (the Mac): `git checkout ccr-956dc2aa-r1kaqe`, `cd hyperspace-python &&
 uv sync`, `uv run pytest tests/test_field_wire.py tests/test_field_lib.py
-tests/test_field_examples.py tests/test_wave_patch.py`, copy `loadable/field-examples/` into the
-library's `loadable/`, restart (`uv run hyperspace`), hand checks 878–883.
+tests/test_field_examples.py tests/test_wave_patch.py`; the examples are already
+in the Drive's `loadable/field-examples/`, restart (`uv run hyperspace`), hand checks 878–883.
 
 **The owner, 2026-11-24:** four channels at 1080p are fine for now. Fields made at 0.75k and
 0.5k (810 and 540 lines) and upscaled are a follow-up session (row 1096).

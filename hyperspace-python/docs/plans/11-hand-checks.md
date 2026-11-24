@@ -8848,7 +8848,7 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
 ## FK. The field wire (rows 1090–1096, 2026-11-23)
 
-Plan 67 F1. Headless: `tests/test_field_wire.py` (types, directives, the wire checks in words, the build, raw values, the grey, off, Displace by a field, the canvas's ports and cable, the thumbnail), `tests/test_field_lib.py`, `tests/test_field_examples.py`. Copy `loadable/field-examples/` into the library's `loadable/` first.
+Plan 67 F1. Headless: `tests/test_field_wire.py` (types, directives, the wire checks in words, the build, raw values, the grey, off, Displace by a field, the canvas's ports and cable, the thumbnail), `tests/test_field_lib.py`, `tests/test_field_examples.py`. The examples are in the Drive library's `loadable/field-examples/`.
 
 **878. A field cable on the canvas.** (Mac, GRAPH) Load `field-examples/field-rings-lens`. *Pass:* Measure's cable into Displace's `field` port is green, distinct from the red picture cables and the purple masks, at the stage's distance; Measure's node has no picture input. *Fail:* a field cable you cannot tell from a picture cable.
 

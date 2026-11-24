@@ -1,8 +1,8 @@
-"""Plan 67 §9.3 — the field examples (`loadable/field-examples/`): every effect
-that changes for fields ships a loadable patch and a short Markdown beside it.
-The owner, 2026-11-23: "loadable is the SINGLE canonical location to save
-patches" — the folder is the library's `loadable/field-examples/` on the
-Drive, and its source here at the same path.
+"""Plan 67 §9.3 — the field examples: every effect that changes for fields
+ships a loadable patch and a short Markdown beside it. The owner, 2026-11-23:
+"loadable is the SINGLE canonical location to save patches" — their home is the
+Drive library's `loadable/field-examples/`; these are the repository's copies,
+test fixtures (`tests/fixtures/field-examples/`), kept equal to the Drive's.
 
 Each must open through the library's own load with no unknown id and no note,
 draw the picture its note describes (a field moves something), and its
@@ -20,7 +20,7 @@ import pytest
 
 from hyperspace import headless, library
 
-HERE = Path(__file__).resolve().parents[1] / "loadable" / "field-examples"
+HERE = Path(__file__).resolve().parent / "fixtures" / "field-examples"
 FILES = sorted(HERE.glob("*.json"))
 
 
