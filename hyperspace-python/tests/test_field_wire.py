@@ -364,3 +364,22 @@ def test_a_displace_slot_takes_a_field(ctx):
                         {"kind": "effect", "file": "displace", "slots": 2}]
     a, b = _shots(ctx, section, {"rings": {"on": True, "out": 1}})
     assert (np.abs(b - a).max(axis=2) > 20).mean() > 0.05
+
+
+def test_a_field_crossing_a_saved_patch_edge_is_saved_a_field():
+    """Save-as-patch types each wire crossing the group's edge (`patches.
+    wire_type`) by the lookup the wire checks use: a field into Displace's
+    `field`, into a Displace slot's, and out of a field maker are fields, not
+    pictures (Devin's review of #489: a slot's field inlet was saved `image`)."""
+    from hyperspace import graph as G
+    from hyperspace import patches
+
+    def into(dst):
+        return patches.wire_type(G.Wire("rings", dst), patches.INTO)
+
+    assert into("displace.field") == G.FIELD
+    assert into("displace.slot.2.field") == G.FIELD
+    assert into("displace.image") == G.IMAGE
+    assert into("displace.slot.2.image") == G.IMAGE
+    assert patches.wire_type(G.Wire("rings", "displace.field"), patches.OUT) == G.FIELD
+    assert patches.wire_type(G.Wire("displace", "output.1.image"), patches.OUT) == G.IMAGE

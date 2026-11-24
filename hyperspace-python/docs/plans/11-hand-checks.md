@@ -8855,6 +8855,7 @@ Plan 67 §15. Headless: `tests/test_field_wire.py`, `tests/test_wave_patch.py`, 
 **890. Nothing reaches nothing.** (Mac) Load each of the five `field-examples`, and open the FX section with each field node selected. *Pass:* no node says "reaches nothing"; each sits under Run. *Fail:* any field node faint, or "it reaches nothing — wire it on graph".
 
 ## FL. The field wire (rows 1096–1102, 2026-11-23)
+## FL. The field wire (rows 1096–1100, 1102, 2026-11-23)
 
 Plan 67 F1. Headless: `tests/test_field_wire.py` (types, directives, the wire checks in words, the build, raw values, the grey, off, Displace by a field, the canvas's ports and cable, the thumbnail), `tests/test_field_lib.py`, `tests/test_field_examples.py`. The examples are in the Drive library's `loadable/field-examples/`.
 
