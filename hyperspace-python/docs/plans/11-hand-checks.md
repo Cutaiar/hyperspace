@@ -8854,7 +8854,7 @@ Plan 67 §15. Headless: `tests/test_field_wire.py`, `tests/test_wave_patch.py`, 
 
 **890. Nothing reaches nothing.** (Mac) Load each of the five `field-examples`, and open the FX section with each field node selected. *Pass:* no node says "reaches nothing"; each sits under Run. *Fail:* any field node faint, or "it reaches nothing — wire it on graph".
 
-## FL. The field wire (rows 1096–1100, 1102, 2026-11-23)
+## FL. The field wire (rows 1096–1102, 2026-11-23)
 
 Plan 67 F1. Headless: `tests/test_field_wire.py` (types, directives, the wire checks in words, the build, raw values, the grey, off, Displace by a field, the canvas's ports and cable, the thumbnail), `tests/test_field_lib.py`, `tests/test_field_examples.py`. The examples are in the Drive library's `loadable/field-examples/`.
 
@@ -8867,6 +8867,8 @@ Plan 67 F1. Headless: `tests/test_field_wire.py` (types, directives, the wire ch
 **884. The three examples on stage.** (Mac, a sub band playing) Each of `field-rings-lens`, `field-line-shear`, `field-self-bend`. *Pass:* each does what its Markdown says, with the sub band and the hand on the knobs it names; Amount 0 is the plain picture. Read each Markdown: is it enough to rebuild the patch from scratch? *Fail:* a patch that does not move, or a Markdown that names a knob that is not there.
 
 **885. What a field costs.** (Mac, 1080p outputs, SYSTEM page) `field-rings-lens`. *Pass:* no drop in the frame rate with two fields held. Note the numbers (row 1097: a field held is 33 MB at 1080p). *Fail:* a cost that shows.
+
+**886. Wave taken apart.** (Mac, a sub band playing) Load `distort-wave-ripple`, then `field-examples/field-wave`, side by side if two decks are free (one on air, one off). *Pass:* the same ripples, the same response to the sub band and both hands; on the canvas five nodes and their green field cables; switching Waveform's Shape to square still looks like Wave's slabs (the odd edge pixel is row 1101's). Then wire the Waveform straight into an output as well: grey rings, moving. *Fail:* a picture that differs at a glance, or a frame rate that drops with the five passes.
 
 
 ## DY. The Mandelbrot (rows 872–881, 2026-11-19)

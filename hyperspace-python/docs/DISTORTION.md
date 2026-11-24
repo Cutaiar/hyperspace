@@ -71,6 +71,9 @@ Along × Push gives six fields: rows slipping (line, slide), a spring
 (line, squeeze), a pond (rings, squeeze), counter-turning rings (rings,
 slide), petals (spokes, slide), pinched wedges (spokes, squeeze).
 
+**As a patch** (plan 67 §12, §15): `point → rings → waveform → combine ← rings.2 →
+displace`, the field example `field-wave` (Line or Spokes for Wave's other Alongs).
+
 ## Blocks (`blocks.glsl`)
 
 The frame cut into a grid; a rule hands each cell a number; an action
