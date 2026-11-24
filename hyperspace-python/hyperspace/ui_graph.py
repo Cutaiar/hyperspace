@@ -284,6 +284,9 @@ COLOURS = {
     graphview.IMAGE: imgui.ImVec4(*RED_RGB, 1.0),     # ui.RED: the one red
     graphview.GEOMETRY: imgui.ImVec4(0.38, 0.72, 1.0, 1.0),
     graphview.MASK: imgui.ImVec4(0.72, 0.52, 1.0, 1.0),
+    # plan 67 F1: a field cable, green — no other cable is, and it reads as
+    # "a map", not a picture
+    graphview.FIELD: imgui.ImVec4(0.36, 0.86, 0.56, 1.0),
 }
 # a cable of a kind with a colour of its own, whatever it carries (plan 57: the
 # owner's "a special type of cable", not white, as the value cables nearly are)
@@ -5975,7 +5978,7 @@ def _drag_tip(text: str) -> None:
 # graphview.IMAGE / GEOMETRY / MASK to its own)
 CREATE = {graphview.VALUE: _value_drag, graphview.TRIGGER: _value_drag,
           graphview.IMAGE: _create_render, graphview.GEOMETRY: _create_render,
-          graphview.MASK: _create_render}
+          graphview.MASK: _create_render, graphview.FIELD: _create_render}
 
 
 def _drag_type(view: graphview.View, a: str, b: str) -> str:

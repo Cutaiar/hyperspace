@@ -24,28 +24,26 @@ uniform float u_split;  // @param 0 1 0 "Split" Parts the colours along the push
 uniform float u_cx;     // @param -1 1 0 "Centre X" Rings and spokes: the centre, −1 the left edge … +1 the right (frame heights from the middle).
 uniform float u_cy;     // @param -1 1 0 "Centre Y" Rings and spokes: the centre, −1 the bottom … +1 the top.
 
+// the measure and the push are _lib.glsl's field pieces (plan 67 P2): a patch of
+// measure → waveform → quantise → displace computes this file's field to the bit
 vec4 effect(vec2 uv) {
-    vec2 p = centred(uv) - vec2(u_cx * 0.5 * u_res.x / u_res.y, u_cy * 0.5);
-    float r = length(p);
-    vec2 out_ = r > 1e-5 ? p / r : vec2(0.0);
-    vec2 g;          // the way the measure grows
-    float x;         // the measure, in waves
+    vec2 p = from_point(uv, u_cx, u_cy);
     float every = 4096.0;   // where the noise repeats
+    Measure m;
     if (u_along == 1) {
-        g = out_;
-        x = r * u_waves;
+        m = measure_rings(p);
     } else if (u_along == 2) {
-        g = vec2(-out_.y, out_.x);
+        m = measure_spokes(p);
         every = max(floor(u_waves + 0.5), 1.0);
-        x = atan(p.y, p.x) / TAU * every;
     } else {
-        g = vec2(cos(u_angle), sin(u_angle));
-        x = dot(p, g) * u_waves;
+        m = measure_line(p, u_angle);
     }
+    vec2 g = m.g;                                   // the way the measure grows
+    float x = m.x * (u_along == 2 ? every : u_waves);   // the measure, in waves
     // round a circle the noise repeats every turn, so it has no seam where
     // the angle wraps (the other shapes have period 1 and need nothing)
     float w = u_shape == 4 ? noise1(x - u_drift_t, every) : wave(u_shape, x - u_drift_t);
-    if (u_steps > 0) w = floor(w * float(u_steps) + 0.5) / float(u_steps);
+    w = quantise(w, u_steps);
     vec2 dir = u_push == 0 ? vec2(-g.y, g.x) : g;
     return pushed(uv, dir * w * u_amount, u_split);
 }

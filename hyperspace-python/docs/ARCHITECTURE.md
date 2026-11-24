@@ -301,7 +301,7 @@ into are one pool (`FxChain.pool`, sized by `Graph.pool`), and a held
 picture is never handed to the consumer that paints into it. The faces
 have no chain of their own: their effects are nodes on a branch into
 `shape.faces`. The ports are typed
-`image`, `mask`, `geometry` and `value`; `graph.VALUE` is declared for
+`image`, `mask`, `geometry`, `value` and (plan 67) `field`; `graph.VALUE` is declared for
 the palette's lights-out and camera-in ports and no node uses it. A
 **mask** (plan 39) is the owner's meaning: a pattern, a pixel passes (1)
 or it does not (0), a value between only at an edge a feather or softness
@@ -312,7 +312,17 @@ mask may be wired into any picture port and reads there as white
 (premultiplied, opaque) where it passes and black elsewhere, fitted by
 cover at the consumer's size (`graph.MaskPicture`); a picture is never
 read as a mask — wired into a mask port it is refused in words ("… put a
-matte between"), and the converter is always a `matte`.
+matte between"), and the converter is always a `matte`. A **field** (plan 67 F1, the owner's
+"Field is its own wire") is a value or a pair at every pixel: float32 RGBA at
+the frame's size, signed, never premultiplied, its .a 0 for a scalar and 1 for
+a vector. Effect files make and take one by saying so (`// @makes field`,
+`// @takes <port> field`: `fx.ports`, `fx.ports_of`, `graph.effect_ports`); a
+field maker is a `graph.FieldEffect`, made once a frame into a float32 target
+(`fx.FIELD_TAIL`: raw, no blend, mix or clamp) that every consumer reads; an
+effect that reads one has a third port, `field` (unit 3, `field_port(uv)`). Like
+a mask, a field wired into a picture port is promoted — grey about the middle,
+`graph.FieldPicture`, `FxChain.show_field` — and a picture into a field port is
+refused in words naming the converter, To field (`PICTURE_INTO_FIELD`).
 
 **Wires; outputs as nodes** (plan 28 N4). A loadable patch's graph may also carry
 a wire list, `{"from": "<node>", "to": "<node>.<port>"}`: into an

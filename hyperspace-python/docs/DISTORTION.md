@@ -113,7 +113,11 @@ A node that reaches no output is never built, so its thumbnail is made beside th
 
 Write a file that computes `d`, the offset in frame heights, and ends
 `return pushed(uv, d, u_split);`. Use `wave()` for anything periodic and
-a `@clock` for anything that moves. Then:
+a `@clock` for anything that moves. Build the field from `_lib.glsl`'s field
+pieces (plan 67): `from_point` for a Centre X / Y, `measure_line`,
+`measure_rings`, `measure_spokes` or `measure_cells` for what is counted,
+`quantise` for Steps — never a copy of your own
+(`tests/test_field_lib.py` checks). Then:
 
 1. Add its `fx.<name>.amount` to `AMOUNTS` in `tests/test_retaper.py`.
 2. Add it to `NAMES` in `tests/test_fx_distort.py`: the Amount 0 and
