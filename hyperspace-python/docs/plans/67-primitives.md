@@ -538,3 +538,24 @@ pool, the grey promotion, the refusal in words), then Wave as a proven patch wit
 `FieldEffect`, the grey promotion, the refusal naming To field, Measure and To field, Displace's
 field port, three field examples in `loadable/field-examples/`. Next: Wave as a proven patch
 (`measure → waveform → quantise → displace`), which needs the `waveform` op and Displace's Split.
+
+## 12. Wave as a patch (2026-11-24)
+
+Built: **Waveform** and **Combine** (field ops), Measure's Out **across**, Displace's **Split**,
+and Wave as `measure → waveform`, `measure.2 → combine`, `combine → displace`
+(`tests/wavepatch.py`), its field example `loadable/field-examples/field-wave`. Equal to
+`wave.glsl` up to the compiler's rounding (row 916): every field bit for bit; a smooth wave's
+saved looks byte for byte; a hard wave's edges a pixel apart at most 1 % of the time. GLSL
+lets a compiler reorder a chain of multiplies inside one program and not across two, so
+"byte for byte across a program boundary" is a promise the language does not make; the
+files stay for the saved looks and for speed (one pass, not five).
+
+**The owner's questions of 2026-11-24** (row 917): a field stays four float32 channels (33 MB at
+1080p). Two would halve it and lose the scalar-or-vector flag and the spare half; half floats
+would halve it too and round an offset to a quarter pixel and a large count to 1/32 of a wave.
+A per-field precision choice is the later step, for smooth fields.
+
+**Testing it locally** (the Mac): `git checkout ccr-956dc2aa-r1kaqe`, `cd hyperspace-python &&
+uv sync`, `uv run pytest tests/test_field_wire.py tests/test_field_lib.py
+tests/test_field_examples.py tests/test_wave_patch.py`, copy `loadable/field-examples/` into the
+library's `loadable/`, restart (`uv run hyperspace`), hand checks 704–709.

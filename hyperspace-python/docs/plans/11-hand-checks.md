@@ -8860,6 +8860,8 @@ Plan 67 F1. Headless: `tests/test_field_wire.py` (types, directives, the wire ch
 
 **708. What a field costs.** (Mac, 1080p outputs, SYSTEM page) `field-rings-lens`. *Pass:* no drop in the frame rate with two fields held. Note the numbers (row 912: a field held is 33 MB at 1080p). *Fail:* a cost that shows.
 
+**709. Wave taken apart.** (Mac, a sub band playing) Load `distort-wave-ripple`, then `field-examples/field-wave`, side by side if two decks are free (one on air, one off). *Pass:* the same ripples, the same response to the sub band and both hands; on the canvas five nodes and their green field cables; switching Waveform's Shape to square still looks like Wave's slabs (the odd edge pixel is row 916's). Then wire the Waveform straight into an output as well: grey rings, moving. *Fail:* a picture that differs at a glance, or a frame rate that drops with the five passes.
+
 ## EB. Time Displace (rows 902–910, 2026-11-22)
 
 Plan 66 stage 3a. Headless: `tests/test_time_displace.py` (Span 0 its input byte for byte; the flat field at a frame's age that frame; the blend and the nearer frame; the oldest past the ring; the line, rings and aux fields; Drift; nothing to read is its input; the renderer's rings in a real graph). For each check: a look-back on the graph with its capture wired (the scene), and Time Displace after the frame into an output.

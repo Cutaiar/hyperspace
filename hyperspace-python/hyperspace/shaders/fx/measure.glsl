@@ -7,13 +7,14 @@
 // @tip a line, the distance from a point (rings), the angle round it (spokes), a cell's
 // @tip number on a grid, or noise. It draws nothing itself: wire it into a node that
 // @tip reads a field (Displace's field port) to say where that node acts and how much.
-// @tip Out direction gives the way the count grows instead, a vector field.
+// @tip Out direction gives the way the count grows instead, a vector field; across, that
+// @tip way turned a quarter turn.
 
 // plan 67 F1: the first field generator, `_lib.glsl`'s measures as a node.
 // A scalar field is in units of Scale: the line and rings in frame heights
 // × Scale, spokes in turns × Scale, cells by their rule, noise about −1 … 1
 uniform int u_along;     // @param choice [line|rings|spokes|cells|noise] 0 "Along" What is counted: the distance along the angle, the distance from the point, the angle round it, a cell's number by its rule, or noise.
-uniform int u_out;       // @param choice [value|direction] 0 "Out" Value: the count, a scalar field. Direction: the unit way the count grows, a vector field (line, rings, spokes).
+uniform int u_out;       // @param choice [value|direction|across] 0 "Out" Value: the count, a scalar field. Direction: the unit way the count grows, a vector field (line, rings, spokes). Across: that way turned a quarter turn anticlockwise.
 uniform float u_scale;   // @param 0.0625 64 1 log "Scale" How fast it counts: line and rings, per frame height; spokes, per turn; cells and noise, cells to a frame height.
 uniform float u_angle;   // @param 0 6.2832 0 wrap "Angle" Line: the direction it counts along, radians (0 across, a quarter turn up).
 uniform int u_rule;      // @param choice [rows|columns|diagonal|rings|random] 0 "Rule" Cells: how the number runs over the grid.
@@ -30,10 +31,16 @@ vec4 effect(vec2 uv) {
     else if (u_along == 3) {
         vec2 id = floor(p * u_scale + 0.5);          // a cell sits on the point
         m = Measure(measure_cells(id, u_rule, u_spread), vec2(0.0));
-        return u_out == 1 ? as_vector(m.g) : as_scalar(m.x);
+        return u_out >= 1 ? as_vector(m.g) : as_scalar(m.x);
     } else {
         m = Measure(perlin(p * u_scale) * 2.0, vec2(0.0));
-        return u_out == 1 ? as_vector(m.g) : as_scalar(m.x);
+        return u_out >= 1 ? as_vector(m.g) : as_scalar(m.x);
     }
-    return u_out == 1 ? as_vector(m.g) : as_scalar(m.x * u_scale);
+    // the other half rides along in the spare channels (a value carries its
+    // direction in y and z, a direction its value in z): nothing reads them
+    // yet, but the count and its direction are then worked out together, as
+    // wave.glsl works them out, to the bit (plan 67: Wave as a patch)
+    if (u_out == 2) return vec4(-m.g.y, m.g.x, m.x, 1.0);      // across: a quarter turn on
+    if (u_out == 1) return vec4(m.g, m.x, 1.0);
+    return vec4(m.x * u_scale, m.g, 0.0);
 }

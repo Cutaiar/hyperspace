@@ -194,3 +194,11 @@ No look changed, so no field example yet (plan 67 §9.3): the first comes with W
 - **The examples** (rule 9.3): `loadable/field-examples/` — rings lens, line shear, self bend.
 - **Not yet:** a field on any knob (P3), a field on a copy (a copy is still a picture effect's),
   RG32F (half the memory), hiding Mix and Blend on a field maker's FX strip.
+
+## 9. Built: Wave as a patch (2026-11-24)
+
+The roundup's "Becomes" for Wave, `measure → waveform → quantise → displace`, as built: the
+quantise is Waveform's Steps, and the push's way is a second Measure (Out direction, or across
+for slide) multiplied in by Combine — five nodes. Proven equal up to rounding (plan 67 §12,
+register 916). The next rows of §1 to take apart reuse these: Blocks (`measure (cells)` →
+Waveform → an action), Trip warp (`measure (noise)` → Displace), Hue cycle (a field on a knob).

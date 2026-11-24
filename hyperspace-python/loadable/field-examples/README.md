@@ -14,6 +14,7 @@ cp -r loadable/field-examples ~/Hyperspace/loadable/
 | `field-rings-lens` | Measure (rings, direction) → Displace: a lens |
 | `field-line-shear` | Measure (line, value) → Displace along its angle: a shear |
 | `field-self-bend` | To field (the scene's brightness) → Displace: the picture bends itself |
+| `field-wave` | Wave taken apart: Measure → Waveform, × a second Measure's direction (Combine) → Displace |
 
 A **field** is a number (or a pair) at every pixel: green cables on GRAPH, grey
 when shown as a picture. `tests/test_field_examples.py` opens every one.
