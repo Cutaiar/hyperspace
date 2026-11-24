@@ -1992,6 +1992,10 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
     takes = WIRED_TAKES[kind]
     if kind == "effect":
         takes = effect_ports(node)[1]           # plan 67 F1: its file's ports
+    elif kind == "slot" and effect_ports(effect_of(node))[0] == IMAGE:
+        # a picture effect's slot takes what its effect takes (a Displace
+        # slot's field port; plan 89's slots, plan 67's ports)
+        takes = {**takes, **effect_ports(effect_of(node))[1]}
     if kind == "lookback" and port == "capture":
         # plan 36 T4: the look-back records its `image` — an old frame's
         # capture wire is read only by the migration that rewrites it
@@ -7690,9 +7694,11 @@ class _Build:
         """Plan 67 F1: each wire into an effect's `field` port on that port — a
         source the effect feeds (a loop) is dormant, in words, as an aux's."""
         for w in self.wires:
-            if w.port != FIELD_PORT or _kind(w.node) != "effect":
+            if w.port != FIELD_PORT or _kind(w.node) not in ("effect", "slot"):
                 continue
             target, src = self.made.get(w.node), self._taken(self.node(w.src), w)
+            if isinstance(target, KeyNode):          # plan 87: keyed, its field is the effect's
+                target = target.inputs["image"]
             if (not isinstance(target, Effect) or target not in self.built or src is None
                     or FIELD_PORT not in target.INPUTS):
                 continue

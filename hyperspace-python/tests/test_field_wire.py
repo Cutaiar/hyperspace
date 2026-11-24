@@ -318,3 +318,49 @@ def test_a_field_generator_wired_into_a_reader_reaches():
     assert "rings" not in graphview.unreached(spec)
     alone = _spec(wired(("scene", "displace.image"), ("displace", "output.all.image")))
     assert "rings" in graphview.unreached(alone)
+
+
+def _shots(ctx, section, values):
+    """Output 1 drawn twice, Displace's Amount 0 then 0.15."""
+    from test_graph_faces import _faces, _px
+
+    from hyperspace.render import Renderer
+
+    shots = []
+    for amount in (0.0, 0.15):
+        r = Renderer(ctx)
+        r.ghost.state.on = False
+        spec = _spec(section)
+        assert not spec.notes, spec.notes
+        r.wiring = spec.wiring()
+        for name, v in values.items():
+            r.fx.state.values[name].update(v)
+        r.fx.state.values["displace"].update(on=True, amount=amount)
+        vs = _views(ctx, 1)
+        r.draw_outputs(_faces(), 160, 120, 1.0, vs, t_now=2.0)
+        assert ctx.error == "GL_NO_ERROR"
+        shots.append(_px(vs[0].target).astype(int))
+    return shots
+
+
+def test_a_keyed_displace_still_reads_its_field(ctx):
+    """Plan 87's black is clear builds a keyed node through a `KeyNode`; the
+    field binds to the effect behind it, as its aux does (Devin's review of
+    #489: a keyed Displace dropped its field)."""
+    section = {**wired(("scene", "displace.image"), ("rings", "displace.field"),
+                       ("displace", "output.1.image")), "keys": ["displace"]}
+    a, b = _shots(ctx, section, {"rings": {"on": True, "out": 1}})
+    assert (np.abs(b - a).max(axis=2) > 20).mean() > 0.05
+
+
+def test_a_displace_slot_takes_a_field(ctx):
+    """A picture effect's slot takes what its effect takes (plan 89 + 67): a
+    field wired into `displace.slot.2.field` is accepted and moves that slot's
+    picture (Devin's review of #489: the canvas drew the port, the wire was
+    refused)."""
+    section = wired(("scene", "displace.slot.2.image"), ("rings", "displace.slot.2.field"),
+                    ("displace.slot.2", "output.1.image"))
+    section["nodes"] = [{"kind": "effect", "file": "rings"},
+                        {"kind": "effect", "file": "displace", "slots": 2}]
+    a, b = _shots(ctx, section, {"rings": {"on": True, "out": 1}})
+    assert (np.abs(b - a).max(axis=2) > 20).mean() > 0.05
