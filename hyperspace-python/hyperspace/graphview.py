@@ -7229,12 +7229,14 @@ def drop_slot(edit: Edit, slot: str) -> str | None:
     # (the registry the section declares its knobs in: the landed graph's)
     reg = getattr(edit, "reg", None) or getattr(getattr(edit, "graph", None), "reg", None)
     if keyed and reg is not None:
-        # (a keyed later slot keeps its black-is-clear values under its new name)
+        # (a keyed later slot keeps its black-is-clear values under its new
+        # name — moved only once the section is known to land: a refused
+        # removal leaves every key as it was)
+        why = _land(edit, doc, f"remove {slot}", said, dry=True)
+        if why is not None:
+            return why
         rename_keys(reg, keyed)
-    why = _land(edit, doc, f"remove {slot}", said)
-    if why is not None and keyed and reg is not None:
-        rename_keys(reg, {new: old for old, new in keyed.items()})
-    return why
+    return _land(edit, doc, f"remove {slot}", said)
 
 
 def render_drop(edit: Edit, node: str) -> str | None:
