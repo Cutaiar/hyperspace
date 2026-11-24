@@ -1301,3 +1301,16 @@ def test_undo_over_the_hands_mirror_button_goes_by_the_hands_stack(rig):
     d.record(lambda o, n, v: setattr(o, n, v))
     d.run(d.wait(3), d.move("mirror", frames=3))
     assert ui_mod.Panel.in_meta_section(rig.panel) is True
+
+
+def test_a_picture_nodes_side_pane_has_no_not_live_readings(rig, monkeypatch):
+    """A node that is not a source keeps no per-port "image: not live" lines: a
+    source's readings are its content, a picture node's say nothing."""
+    st = party(rig)
+    said = []
+    real = ui_graph._said
+    monkeypatch.setattr(ui_graph, "_said", lambda v: said.append(v) or real(v))
+    pick(rig, st, "render:output.2")
+    assert said == []
+    pick(rig, st, "analyzer")
+    assert said, "an analyzer's readings are still drawn"
