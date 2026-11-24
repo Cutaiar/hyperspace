@@ -1166,7 +1166,9 @@ def test_every_effect_runs_on_the_face_target(ctx, name):
 # the pattern for To field, a field for an op), then onto the faces as its grey
 FIELD_INTO = {"tofield": [("pattern", "tofield.image")],
               "waveform": [("rings", "waveform.image")],
-              "combine": [("rings", "combine.image"), ("line", "combine.field")]}
+              "combine": [("rings", "combine.image"), ("line", "combine.field")],
+              "cellaction": [("cells", "waveform.image"), ("waveform", "cellaction.image"),
+                             ("cells.2", "cellaction.field")]}
 
 
 @pytest.mark.parametrize("name", FIELD_MAKERS)
