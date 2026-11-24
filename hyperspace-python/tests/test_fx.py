@@ -502,7 +502,9 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
     from imgui_bundle import imgui
 
     from hyperspace import ui_fx
-    rig = browsing(tmp_path, monkeypatch)
+    # (acid.3 fed, so it runs and is listed under both its ends)
+    fed = {**BROWSED, "wires": [*BROWSED["wires"], {"from": "media.a", "to": "acid.3.image"}]}
+    rig = browsing(tmp_path, monkeypatch, fed)
     try:
         ids: list[int] = []
         names: dict[int, str] = {}
@@ -1265,7 +1267,7 @@ def test_faces_on_switches_the_faces_on(tmp_path, monkeypatch):
     says so, with the chip that mends it: Param.set on view.faces. One that
     ends elsewhere is not idle for it, and one that reaches nothing says
     that."""
-    from hyperspace.ui_fx import IDLE
+    from hyperspace.ui_fx import IDLE, UNFED
     rig = browsing(tmp_path, monkeypatch)
     try:
         reg, view = rig.reg, rig.panel.view
@@ -1290,13 +1292,20 @@ def test_faces_on_switches_the_faces_on(tmp_path, monkeypatch):
         rig.frame()                                  # running: no line, no chip, no veil
         assert line not in rig.texts and "idle.view.faces" not in rig.rects
         assert not rig.veils
-        reg["view.faces"].set(False)                 # one under the scene: not the faces'
-        rig.panel.fx_selected = "kaleido.2"
+        reg["view.faces"].set(False)                 # one in the run: not the faces'
+        rig.panel.fx_selected = "warp"
         rig.frame()
         assert line not in rig.texts and not rig.veils
         rig.panel.fx_selected = "wobble.2"           # unreached: said, no chip
         rig.frame()
         assert IDLE["reaches nothing"][0] in rig.texts and len(rig.veils) == 2
+        assert not [k for k in rig.rects if k.startswith("idle.")]
+        # R15: one under the scene with no wire into its image is never built,
+        # though its path reaches the backdrop — said, no chip (GRAPH mends it)
+        rig.panel.fx_selected = "kaleido.2"
+        rig.frame()
+        assert IDLE[UNFED][0] == "fed by nothing — wire its input on graph"
+        assert IDLE[UNFED][0] in rig.texts and len(rig.veils) == 2
         assert not [k for k in rig.rects if k.startswith("idle.")]
     finally:
         rig.close()
@@ -1333,9 +1342,10 @@ def test_the_map_is_one_undo_step(tmp_path, monkeypatch):
 def test_the_strip_says_where_its_effect_ends_wherever_it_is_drawn(tmp_path, monkeypatch):
     """`ui_fx.strip` — the FX page's open strip and the GRAPH page's side
     column for a selected effect node — reads the graph itself, so its title
-    note says where the effect's paths end (`acid.glsl · → output 2 · →
-    blend aux`) however the strip is reached; a D1 placement says its place
-    (`→ after hands`)."""
+    note says where the effect's paths end (`acid.glsl · → faces`) however
+    the strip is reached — one fed by nothing says that (R15: acid.3 has no
+    wire into its image, so it never runs wherever its paths go); a D1
+    placement says its place (`→ after hands`)."""
     from hyperspace import graph as G
     from hyperspace import ui_fx
     rig = browsing(tmp_path, monkeypatch)
@@ -1355,12 +1365,13 @@ def test_the_strip_says_where_its_effect_ends_wherever_it_is_drawn(tmp_path, mon
             ui_fx.strip(panel, name)
             imgui.end()
             imgui.end_frame()
+        side("acid.2")
         side("acid.3")
         side("zoomblur")                    # (plan 36 T3: not in this graph, so no effect)
-        assert seen[-1:] == [("acid.3", "→ output 2 · → blend aux")]
+        assert seen[-2:] == [("acid.2", "→ faces"), ("acid.3", "fed by nothing")]
         panel.fx_selected = "acid.3"
         rig.frame()
-        assert seen[-1] == ("acid.3", "→ output 2 · → blend aux")
+        assert seen[-1] == ("acid.3", "fed by nothing")
         panel.graph_now = lambda: (G.Wiring(), G.read_graph(
             {"nodes": [{"kind": "effect", "file": "warp", "after": "hands"}]}))
         side("warp")
@@ -1384,15 +1395,24 @@ BROWSED = {
         ("glimmer.2", "switch.in1"), ("switch", "pattern.media"),
         ("acid.3", "output.2.image"), ("acid.3", "blend.aux"))],
 }
+# as the panel groups it: the wired frame a load makes of it (plan 35 M). R15:
+# acid.3, kaleido.2 and glimmer.2 have no wire into their image, so the builder
+# never builds them — "fed by nothing", not their paths' ends as if they ran
+# (`graph.hungry`); wobble.2 is wired to nothing at all
 BROWSED_GROUPS = [
     ("Run", ["warp", "blend"]),
     ("→ faces", ["acid.2"]),
-    ("→ pattern media", ["glimmer.2"]),
-    ("→ backdrop", ["kaleido.2"]),
-    ("→ output 2", ["acid.3"]),
-    ("→ blend aux", ["acid.3"]),
+    ("fed by nothing", ["acid.3", "glimmer.2", "kaleido.2"]),
     ("reaches nothing", ["wobble.2"]),
 ]
+
+
+def browsed_spec(section=BROWSED):
+    """`section` as the wired frame a load of it is (what `Panel.graph_now`
+    hands the FX pane)."""
+    from hyperspace import graph as G
+    from hyperspace.graphmigrate import renamed, wired_section
+    return G.read_graph(wired_section(renamed(section), G.read_graph(section)))
 EMPTY_GRAPH = "no effects in the graph — add one on graph (right-click the canvas)"
 
 
@@ -1401,10 +1421,17 @@ def test_groups_follow_the_wires():
     ends — the run in wire order, then the faces, the pattern's layer, the
     backdrop, each output, each effect's aux, and the unreached last; one
     behind a switch by the switch's destination; one read in two places in
-    each; within a group from the head to the sink."""
+    each; within a group from the head to the sink. R15: in the wired frame
+    one fed by nothing is grouped so, wherever its path leads."""
     from hyperspace import graph as G
     from hyperspace.ui_fx import groups
-    assert groups(G.read_graph(BROWSED)) == BROWSED_GROUPS
+    assert groups(browsed_spec()) == BROWSED_GROUPS
+    # the same section unwired (D1's words, before plan 35): every path's end
+    assert groups(G.read_graph(BROWSED)) == [
+        ("Run", ["warp", "blend"]), ("→ faces", ["acid.2"]),
+        ("→ pattern media", ["glimmer.2"]), ("→ backdrop", ["kaleido.2"]),
+        ("→ output 2", ["acid.3"]), ("→ blend aux", ["acid.3"]),
+        ("reaches nothing", ["wobble.2"])]
     # within a group, the path from its head: acid.2 before huecycle.2
     chain = G.read_graph({
         "nodes": [{"kind": "effect", "file": "acid", "instance": 2},
@@ -1453,10 +1480,10 @@ def test_the_fx_page_lists_the_graphs_effects(tmp_path, monkeypatch):
         assert {p.id: p.base for p in rig.reg if p.id.startswith("fx.")} == before
         # each row: its on, a small mix and its state in a word
         # (a row's mix is the panel's own slider, on the row's line)
-        assert "on.→ faces.acid.2" in rig.rects and "on.→ blend aux.acid.3" in rig.rects
+        assert "on.→ faces.acid.2" in rig.rects and "on.fed by nothing.acid.3" in rig.rects
         on, mix = rig.rects["on.Run.warp"], rig.rects["fx.warp.mix"]
         assert mix[0] >= on[2] and mix[1] == pytest.approx(on[1])
-        assert {"running", "reaches nothing"} <= set(rig.texts)
+        assert {"running", "fed by nothing", "reaches nothing"} <= set(rig.texts)
     finally:
         rig.close()
 

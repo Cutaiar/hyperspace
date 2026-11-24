@@ -8846,6 +8846,12 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## FP. Fed by nothing, one rule (row 1113, 2026-11-24)
+
+R15 and plan 80. Headless: `tests/test_field_wire.py` (the builder, `unfed`, GRAPH and the FX pane agree for a Mandelbrot, Wave, Acid, Waveform and Rings, each wired onward with nothing in), `tests/test_fx.py` (`BROWSED_GROUPS`, the strip's line), `tests/test_unwired_thumbs.py`. Checked in the real app offscreen (`tools/app_driver.py`) on Mesa: nothing here was seen on the Mac.
+
+**892. Fed by nothing says so, a generator runs.** (Mac, GRAPH) Add a Mandelbrot and wire it alone into an output; add a Kaleidoscope and wire it into another output, nothing into its input. *Pass:* the Mandelbrot is lit and draws on its output; the Kaleidoscope is faint and its node says "fed by nothing — wire its input", its hover "wire a picture into it", its thumbnail "fed by nothing: the test card through it here"; the FX section lists it under **fed by nothing** (not "→ output N") and its strip says "fed by nothing — wire its input on graph". Wire the scene into its input: it lights, draws, and moves to "→ output N". A Waveform the same way says the same, its hover "wire a field into it". *Fail:* a faint Mandelbrot, or an effect listed under its output while it draws nothing.
+
 ## FO. Trip warp taken apart (rows 1110–1112, 2026-11-24)
 
 Plan 67 §16. Headless: `tests/test_trip_patch.py` (the push is the formula; Amount 0 the picture; how near), `tests/test_field_examples.py` (`field-trip` opens with no note). The example is in the Drive library's `loadable/field-examples/`.

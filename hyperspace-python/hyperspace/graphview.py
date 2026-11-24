@@ -798,15 +798,17 @@ def _port_type(kind: str) -> str:
 # pipelines' composites and ends) is drawn: none of it is a node any more.
 
 REACHES_NOTHING = "reaches nothing"     # the spec's canvas word for an unreached node
-NEEDS_FIELD = "wire a field into its input"   # R15, a field op fed by nothing
-NEEDS_PICTURE = "wire a picture into its input"
+# R15: a faint node fed by nothing and wired onward (`graph.hungry`) — the
+# words the builder's dormant line and the FX pane say
+FED_BY_NOTHING = f"{rgraph.FED_BY_NOTHING} — {rgraph.WIRE_ITS_INPUT}"
 
 
 def needs_input(n) -> str:
-    """What a faint node fed by nothing says (R15): what its input takes."""
+    """What a node fed by nothing takes into its input (R15), for its hover:
+    "a field" (Waveform, Combine …) or "a picture"."""
     name = n.id.partition(":")[2]
     takes = rgraph.effect_ports(rgraph.effect_of(name) or name)[1].get("image")
-    return NEEDS_FIELD if takes == rgraph.FIELD else NEEDS_PICTURE
+    return "a field" if takes == rgraph.FIELD else "a picture"
 MAKER_KINDS = ("effect", "composite", "switch")    # (`unreached` before the wired frame)
 D1_AFTER = "sits after"     # a cable drawn from a D1 `after` effect (`build`, `returns`)
 
@@ -990,6 +992,8 @@ CARD_KINDS = ("effect",)                # the kinds whose thumbnail has the chip
 # test card — put through it at a thumbnail's size (`render.unwired_through`)
 UNWIRED_PIC = "unwired"
 UNWIRED_WORDS = "reaches nothing: its input, or the test card, through it here"
+# R15: one fed by nothing (`VNode.unfed`) has no input — the card it is
+UNFED_WORDS = f"{rgraph.FED_BY_NOTHING}: the test card through it here"
 THUMBS: dict[str, str] = {
     "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
     "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,
@@ -1656,9 +1660,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     names = [n for n in dict.fromkeys(names) if kind_of(n) not in ("output", rgraph.ALL_OUTPUTS)]
     names += [rgraph.ALL_OUTPUTS, *sorted(outs, key=lambda n: int(n.partition(".")[2]))]
     gone = unreached(frame)
-    # R15's, among those a path from would reach a sink: they need an input;
-    # one that reaches nothing either way still says so
-    hungry = rgraph.hungry_fields(frame)
+    # R15's, among those wired onward: they need an input (`graph.runs_unfed`
+    # the generators that do not); one wired to nothing still reaches nothing
+    hungry = rgraph.hungry(frame)
     refs: dict[str, rgraph.Node] = {}
     stood: set[str] = set()
     for name in names:
@@ -3265,7 +3269,7 @@ def summary(n: VNode) -> list[str]:
         if isinstance(n.ref, rgraph.SwitchNode):
             lines.insert(0, switch_pick(n))
         if n.faint:                         # plan 33 U: unreached, said first
-            lines.insert(0, needs_input(n) if n.unfed else REACHES_NOTHING)
+            lines.insert(0, FED_BY_NOTHING if n.unfed else REACHES_NOTHING)
     return lines[:SUMMARY_LINES]
 
 
