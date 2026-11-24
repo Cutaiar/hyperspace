@@ -559,3 +559,6 @@ A per-field precision choice is the later step, for smooth fields.
 uv sync`, `uv run pytest tests/test_field_wire.py tests/test_field_lib.py
 tests/test_field_examples.py tests/test_wave_patch.py`, copy `loadable/field-examples/` into the
 library's `loadable/`, restart (`uv run hyperspace`), hand checks 704–709.
+
+**The owner, 2026-11-24:** four channels at 1080p are fine for now. Fields made at 0.75k and
+0.5k (810 and 540 lines) and upscaled are a follow-up session (row 917).
