@@ -631,3 +631,14 @@ def test_a_selected_cable_says_node_mode_in_words_and_offers_leave(rig, panel_ri
     _pane(panel_rig.panel, view, ("cable", c), monkeypatch, rig.nd1,
           press=f"{rig.desk.role}: leave")
     assert not rig.nd1.rows()
+
+
+def test_a_node_with_no_params_gets_no_point_chip(panel_rig, monkeypatch):
+    """A grey "point apc40 here" on a node the controller cannot enter is noise
+    (the owner, 2026-11-23): the refusal "has no params to point at" hides the chip."""
+    from hyperspace import nodemode
+    nd = _nd(node="render:other")
+    nd.refusal = lambda *_a: nodemode.NO_PARAMS.format(node="acid")
+    chips: list[str] = []
+    _block(panel_rig.panel, nd, monkeypatch, chips)
+    assert chips == []
