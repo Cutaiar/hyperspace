@@ -949,7 +949,9 @@ here; overturn → the change, then the same.
 | 1100 | Plan 67: Waveform (`wave()` over a field: Waves, Shape, Round free or whole, Drift a `@clock`, Steps) and Combine (add, multiply, min, max; a vector with a scalar takes it in each component) as field ops; Measure's Out gains across; Displace gains Split; a Measure's field carries its other half (the direction, or the value) in its spare channels | 889 | (rec) — plan 67 §12 |
 | 1101 | Plan 67: Wave as a patch (`measure → waveform`, `measure.2 → combine`, `combine → displace`), equal to `wave.glsl` up to the compiler's rounding — every field bit for bit; a smooth wave's picture byte for byte on every saved look, at most one level on one pixel in a thousand elsewhere; a hard wave (square, saw, Steps) at most one pixel in a hundred, on its edges. `wave.glsl` stays and draws every saved look as before | 886 | (rec) — plan 67 §12 |
 | 1102 | Plan 67: a field stays float32 RGBA (33 MB at 1080p), not RG32F (16.6 MB: the scalar-or-vector flag and the spare half go) nor half floats (16.6 MB as RGBA16F: an offset off by up to a quarter pixel, a count past 32 stepping in 1/32 of a wave) — until memory bites; a per-field precision choice later | 885 | owner (2026-11-24): four channels at 1080p are fine for now; fields at 0.75k and 0.5k, upscaled, are a follow-up session |
+| 1103 | Plan 67: Blocks as a patch (`measure (cells) → waveform → cell action ← measure.2 (cells, direction) → displace`), equal to `blocks.glsl` up to rounding at the frame height it is mapped for (Blocks' Cell is px, a Measure counts cells to a frame height): the grid one piece (`cell_of`, `cell_pair`), so every pixel is in the same block; a pixel whose centre lies exactly on a cell's edge may take either cell; elsewhere one level at most — on Mesa 349 of 396 renders byte for byte, the rest one level on at most 26 pixels of 6144; every saved Blocks look through the renderer within the same bound. `blocks.glsl` stays and draws every saved look byte for byte (960 renders) | 887 | (rec) — plan 67 §14 |
 | 1104 | Plan 67: a cell's geometry rides on Measure's cells field instead of being worked out again: Out value carries the cell's size (frame heights) in y and z, Out direction is the pixel's place in its cell (frame heights) with its side of a pair × Group in z; Measure gains Aspect, Group and Pairs (none, across, up) and Scale reaches 512; Waveform passes what rides with its input on. So Cell action (Action, Amount, Angle) has no grid knobs of its own | 889 | (rec) — plan 67 §14; §13 left it to this session |
+| 1105 | Plan 67: Cell action's push is in **half** frame heights, read by Displace at its top Amount (0.5), so the push is exact (×2 then ×½). Widening Displace's Amount to 1 would be cleaner, but saved route depths are measured along the knob's taper (`params.retaper_depths`), so a wider range is a format-lane migration of every route on `fx.displace.amount` (the Drive's `field-wave` among them) | 888 | **pending the owner** (rec: keep half frame heights until a migration has another reason to run) |
 | 1106 | Plan 67: Waveform gains Phase (turns, an LFO's word), saved as `fx.waveform.start`: `u_phase` is every file's clock and `fx.<n>.phase` the position jog of §10.1. 0 leaves Wave's patch as it was (`x − t + 0` is `x − t`) | 889 | (rec) |
 | 1107 | Plan 67 §15: Measure split into Line, Rings, Spokes, Cells and Noise, each with only the knobs it uses; Centre X / Y replaced by a **Point** node, a vector field of each pixel's offset from it, read on each measure's field port (none: the middle). Wired to a Point, every mode is Measure's bit for bit (158 cases); with none, the middle is `centred`, an ulp or so from `from_point(uv, 0, 0)`. Measure was never on `main`; the five field examples move | 889 | owner (2026-11-24) |
 | 1108 | Plan 67 §15: Cells' Out place is the place in the cell in **cell units** (−½ … ½), not frame heights, so it shows on the canvas (the owner's "anything but value does nothing"); Cell action scales it by the cell's size that rides with the number, as before, to the bit | 889 | (rec) |
@@ -15379,12 +15381,26 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Built.** Nothing new: row 1097's storage.
 - **Judge it.** 885 (what the fields cost on the Mac).
 
+### 1103. Blocks as a patch, and how equal
+
+- **What.** `tests/blockspatch.py` maps any Blocks look onto five nodes: Measure (cells, value: Scale = the frame's height ÷ Cell, Aspect, Group, Rule, Spread, Pairs), Measure.2 (the same grid, Out direction), Waveform (Shape, Drift, Waves 1, Phase ¼), Cell action (Action, Amount, Angle), Displace (Amount 0.5, Split, Mix, Blend). The grid is one piece (`_lib.glsl`'s `cell_of`, `cell_pair`; `blocks.glsl` moved onto it byte for byte, 960 renders). Blocks counts its grid in pixels and the Measure in frame heights, so the patch is Blocks at the frame height it is mapped for, and a pixel whose centre lies exactly on a cell's edge may round into either cell (`blockspatch.on_edges`). Off the edges, measured on Mesa: 349 of 396 renders (every choice, every pair, three times) byte for byte, the rest one level on at most 26 pixels of 6144; every saved Blocks look through the renderer within one level on one pixel in 200 off the edges.
+- **Answer.** (rec) — the builder's, plan 67 §14 (2026-11-24), the handoff's item 1.
+- **Built.** `shaders/fx/cellaction.glsl`, `measure.glsl`, `waveform.glsl`, `blocks.glsl`, `_lib.glsl`; `tests/blockspatch.py`, `tests/test_blocks_patch.py`; `loadable/field-examples/field-blocks.json` + `.md`.
+- **Judge it.** 887.
+
 ### 1104. A cell's geometry rides on the Measure's fields
 
 - **What.** Cell action needs the cell's number through a waveform, the place in the cell, the cell's size and the side of a pair. Rather than give it Cell, Aspect and Group knobs of its own (a second grid to keep in step), a cells Measure carries them: Out value the cell's size (frame heights) in y and z beside the number; Out direction the pixel's place in its cell (frame heights) with its side of a pair × Group in z. Waveform passes on what rides with its input. Measure gains Aspect, Group and Pairs (none, across, up); Scale reaches 512. Measure's cells direction and across, empty before, change meaning (6 renders of the sweep); nothing else of Measure's moves.
 - **Answer.** (rec) — plan 67 §14; §13 left the choice to this session.
 - **Built.** `measure.glsl`, `waveform.glsl`, `cellaction.glsl`.
 - **Judge it.** 889.
+
+### 1105. Cell action's push is in half frame heights
+
+- **What.** A field that is already the push wants Displace at Amount 1, past its top (0.5). Saved route depths are measured along a knob's taper (`params.retaper_depths`), so a wider range would move every saved route on `fx.displace.amount` (the Drive's `field-wave` among them): a format-lane migration. So Cell action writes its push × 2 and the patch's Displace sits at 0.5 — exact, since ×2 then ×½ is.
+- **Answer.** **pending the owner** — rec: keep it until a migration runs for another reason, then widen Displace and drop the factor.
+- **Built.** `cellaction.glsl`, `tests/blockspatch.py`.
+- **Judge it.** 888.
 
 ### 1106. Waveform's Phase
 
