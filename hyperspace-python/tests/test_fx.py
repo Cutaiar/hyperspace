@@ -305,9 +305,13 @@ def test_off_is_the_old_frame_exactly(ctx):
 # their aux input; with none (here) they leave it as it is, by design —
 # tests/test_media_faces_aux.py holds them with an aux
 AUX_ONLY = {"displace", "blend"}
+# plan 66: Time Displace reads a look-back's ring; with none recorded (here) it
+# is its input, by design (`test_time_displace.py::test_with_nothing_to_read_it_is_its_input`),
+# and that file holds it with a filled ring
+RING_ONLY = {"timedisplace"}
 
 
-@pytest.mark.parametrize("name", sorted(set(FxState().specs) - AUX_ONLY))
+@pytest.mark.parametrize("name", sorted(set(FxState().specs) - AUX_ONLY - RING_ONLY))
 def test_each_effect_changes_the_frame(ctx, name):
     base = render(ctx, FxState())
     st = FxState()
@@ -1119,12 +1123,23 @@ def face_frame(ctx, fx: FxState, frames: int = 3, pattern: int = 2, faces: tuple
     return out, r
 
 
-@pytest.mark.parametrize("name", sorted(FxState().specs))
+def _makes_field(name):
+    from hyperspace.fx import FIELD, ports
+    return ports(FxState().specs[name])[0] == FIELD
+
+
+PICTURE_EFFECTS = sorted(n for n in FxState().specs if not _makes_field(n))
+FIELD_MAKERS = sorted(n for n in FxState().specs if _makes_field(n))
+
+
+@pytest.mark.parametrize("name", PICTURE_EFFECTS)
 def test_every_effect_runs_on_the_face_target(ctx, name):
     """On the faces alone (plan 33 R: wired `pattern → name → shape.faces`),
     every factory effect compiles, the frame draws with no GL error, the
     picture is not the seed, and the frame is not the frame without it. No
-    effect is adapted and none is refused."""
+    effect is adapted and none is refused. (A field maker cannot sit in that
+    chain — it takes no picture, or a field — so the next test wires each
+    the way it can be.)"""
     from hyperspace.render import FACE_PIC
     base, r0 = face_frame(ctx, FxState())
     assert r0.face_pic.tex is None
@@ -1149,6 +1164,49 @@ def test_every_effect_runs_on_the_face_target(ctx, name):
     assert change > 0.25, f"{name} left the picture as the seed was"
     assert np.abs(img.astype(int) - base).sum() > 200, f"{name} does not show on the faces"
 
+
+
+# plan 67: each field maker as it can be wired: its input (none for a generator,
+# the pattern for To field, a field for an op), then onto the faces as its grey
+FIELD_INTO = {"tofield": [("pattern", "tofield.image")],
+              "waveform": [("rings", "waveform.image")],
+              "combine": [("rings", "combine.image"), ("line", "combine.field")],
+              "cellaction": [("cells", "waveform.image"), ("waveform", "cellaction.image"),
+                             ("cells.2", "cellaction.field")]}
+
+
+@pytest.mark.parametrize("name", FIELD_MAKERS)
+def test_every_field_maker_shows_on_the_faces(ctx, name):
+    """A field wired onto the faces is shown as its grey (`FieldPicture`):
+    every field file compiles there, the frame draws with no GL error, and
+    the faces are not the faces without it."""
+    from hyperspace import graph as G
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+
+    base, _ = face_frame(ctx, FxState())
+    st = FxState()
+    st.set_instances({"cells": 2})
+    wires = [G.Wire(a, b) for a, b in FIELD_INTO.get(name, ())] + [G.Wire(name, "shape.faces")]
+    for n in {name, *(w.src for w in wires if w.src != "pattern")}:
+        st.values[n].update(on=True)
+    if name in ("line", "rings", "spokes"):
+        st.values[name]["out"] = 1                 # a vector: red and green, not one grey
+    st.values["cells.2"]["out"] = 1
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
+    r = Renderer(ctx, fx=st)
+    r.wiring = wired_wiring(G.Wiring(wires=tuple(wires)))
+    s = ViewState(shape=10, faces=True, pattern=2, bright=1.3)
+    s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
+    for k in range(3):
+        fbo.use()
+        ctx.viewport = (0, 0, W, H)
+        r.draw(s, W, H, t_now=4.0 + k / 30)
+    img = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(H, W, 4).copy()
+    fbo.release()
+    assert ctx.error == "GL_NO_ERROR"
+    assert r.face_error == "" and r.fx.errors == {}
+    assert np.abs(img.astype(int) - base).sum() > 200, f"{name} does not show on the faces"
 
 # ---------------------------------------------------------------- the faces on the page
 
