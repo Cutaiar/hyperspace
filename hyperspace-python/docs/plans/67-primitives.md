@@ -12,7 +12,7 @@ The owner, 2026-11-22, after plan 66's questions:
 > together in novel ways. When primitives compete / have esoteric quirks / don't interface
 > with each other, you end up with a pile of disjoint bitmaps stacked on top of each other."
 
-And the decision that started it: **a field is its own wire** (owner, 2026-11-22; row 1085).
+And the decision that started it: **a field is its own wire** (owner, 2026-11-22; row 1091).
 
 Two sessions answered the owner's question separately — plan 66's builder and the session
 that wrote plan 66's brief — and agreed on the diagnosis. This doc merges them; where an
@@ -544,13 +544,13 @@ field port, three field examples in `loadable/field-examples/`. Next: Wave as a 
 Built: **Waveform** and **Combine** (field ops), Measure's Out **across**, Displace's **Split**,
 and Wave as `measure → waveform`, `measure.2 → combine`, `combine → displace`
 (`tests/wavepatch.py`), its field example `loadable/field-examples/field-wave`. Equal to
-`wave.glsl` up to the compiler's rounding (row 1095): every field bit for bit; a smooth wave's
+`wave.glsl` up to the compiler's rounding (row 1101): every field bit for bit; a smooth wave's
 saved looks byte for byte; a hard wave's edges a pixel apart at most 1 % of the time. GLSL
 lets a compiler reorder a chain of multiplies inside one program and not across two, so
 "byte for byte across a program boundary" is a promise the language does not make; the
 files stay for the saved looks and for speed (one pass, not five).
 
-**The owner's questions of 2026-11-24** (row 1096): a field stays four float32 channels (33 MB at
+**The owner's questions of 2026-11-24** (row 1102): a field stays four float32 channels (33 MB at
 1080p). Two would halve it and lose the scalar-or-vector flag and the spare half; half floats
 would halve it too and round an offset to a quarter pixel and a large count to 1/32 of a wave.
 A per-field precision choice is the later step, for smooth fields.
@@ -558,10 +558,10 @@ A per-field precision choice is the later step, for smooth fields.
 **Testing it locally** (the Mac): `git checkout ccr-956dc2aa-r1kaqe`, `cd hyperspace-python &&
 uv sync`, `uv run pytest tests/test_field_wire.py tests/test_field_lib.py
 tests/test_field_examples.py tests/test_wave_patch.py`; the examples are already
-in the Drive's `loadable/field-examples/`, restart (`uv run hyperspace`), hand checks 878–883.
+in the Drive's `loadable/field-examples/`, restart (`uv run hyperspace`), hand checks 881–886.
 
 **The owner, 2026-11-24:** four channels at 1080p are fine for now. Fields made at 0.75k and
-0.5k (810 and 540 lines) and upscaled are a follow-up session (row 1096).
+0.5k (810 and 540 lines) and upscaled are a follow-up session (row 1102).
 
 ## 13. Handoff (2026-11-24): where this stands, and the next session's work
 
@@ -574,7 +574,7 @@ a patch (§12, roundup §9), four field examples. Held: Time Displace (owner: ho
 field and stack wires, §4, §7.1). Decided and not built: motion as a position jog with rates per
 turn (§9.1, §10.1), Blend retired into Composite and one blend library with the standard modes
 (§9.2, §7.4), Hue cycle retired into Palette + fields (roundup §6), the stack of T (§7.1), the
-lattice rename (§8.3), fields at 0.75k and 0.5k upscaled (a later session, row 1096).
+lattice rename (§8.3), fields at 0.75k and 0.5k upscaled (a later session, row 1102).
 
 **The next session's work — the roundup's next rows, in this order:**
 
@@ -603,8 +603,8 @@ lattice rename (§8.3), fields at 0.75k and 0.5k upscaled (a later session, row 
   in that folder's own listing; upload JSON and Markdown with conversion off), and the same files
   in `tests/fixtures/field-examples/`, which `tests/test_field_examples.py` opens.
 - **Numbers.** Plans 66 and 67 keep theirs. Before writing a register row or a hand check,
-  `git fetch origin main` and take the next free numbers there (on 2026-11-24: rows from 1097,
-  hand checks from 884, groups from FL); `main` moves fast.
+  `git fetch origin main` and take the next free numbers there (on 2026-11-24: rows from 1103,
+  hand checks from 887, groups from FM); `main` moves fast.
 - **Overlaps to watch.** `main`'s plan 80 added effects built with no input (`_Build.generators`,
   `Effect.generates`); a field generator is built first, by `FieldEffect`. The two should become
   one rule. The FX page still shows Mix and Blend on a field maker (they do nothing there); a copy
@@ -631,19 +631,19 @@ things at a pixel: the cell's number through a waveform, the place in the cell, 
 size (shift moves whole cells, bulge's lens fills the inscribed circle) and, for swap, which
 half of a pair it is. Recomputing them in the action would give it Cell, Aspect and Group knobs
 of its own — a second grid to keep in step, the private copy rule 2 forbids. So they **ride on
-the Measure's fields** (row 1098), as §12's direction rides with a value: Out value carries the
+the Measure's fields** (row 1104), as §12's direction rides with a value: Out value carries the
 cell's size beside the number, Out direction *is* the place in the cell (a field worth seeing:
 into Displace, every cell zooms) with the pair's side beside it, and Waveform passes on what
 rides with its input. That is why two field ports (image and field) are enough for Cell action.
 
-**Equal up to rounding, and where not** (row 1097). Blocks counts its grid in pixels (Cell) and
+**Equal up to rounding, and where not** (row 1103). Blocks counts its grid in pixels (Cell) and
 the Measure in frame heights (Scale = the frame's height ÷ Cell), so the patch is Blocks at the
 frame height it is mapped for. Where a cell's edge falls exactly on a pixel's centre (an odd
 number of pixels to a cell) the two may round that pixel into either cell; off the edges they
 agree to one level — on Mesa 349 of 396 renders byte for byte, the rest one level on at most
 26 pixels of 6144 — and every saved Blocks look through the renderer holds the same bound.
 
-**Displace stays 0 … 0.5** (row 1099, for the owner). Cell action's push is in half frame
+**Displace stays 0 … 0.5** (row 1105, for the owner). Cell action's push is in half frame
 heights and the patch's Displace sits at its top Amount, 0.5: exact, since ×2 then ×½ is.
 Widening Displace's Amount to 1 is cleaner, but saved route depths are measured along a knob's
 taper (`params.retaper_depths`), so a wider range moves every saved route on it — a migration
@@ -656,7 +656,7 @@ in the format lane. Recommendation: leave it until a migration runs for another 
 The owner tested the field examples on the Mac: the FX pane said Measure, Waveform and Combine
 "reach nothing"; Measure's knobs only did something in some combinations ("a pretty significant
 anti-pattern"); Centre X / Y "should be our primitive"; and "you're probably not testing the app
-and looking at the graph view". Answered (row 1101): **split Measure into nodes**, **a Point makes a
+and looking at the graph view". Answered (row 1107): **split Measure into nodes**, **a Point makes a
 field**, sharp edges first.
 
 - **Point** (X, Y) makes a vector field: each pixel's offset from it, frame heights. **Line**,
@@ -664,9 +664,9 @@ field**, sharp edges first.
   their `field` port (none: the middle). One Point moves every measure wired to it.
 - Proven against Measure's own output, 316 settings: bit for bit wherever a Point is wired; at the
   middle with none, within 5e-6. Wave's patch always wires a Point, so it is unchanged.
-- **Cells' Out place** is in cell units, −½ … ½ (row 1102): visible, and Displace-able at the
+- **Cells' Out place** is in cell units, −½ … ½ (row 1108): visible, and Displace-able at the
   default Amount. Cell action multiplies by the cell's size riding with the number.
-- **The bugs** (row 1103): the FX pane's walk ignored field ports; the saved-look proofs skipped
+- **The bugs** (row 1109): the FX pane's walk ignored field ports; the saved-look proofs skipped
   in silence since `main` moved the distort patches; the app driver had no library since #480.
 - **How it was checked this time:** the real app, driven offscreen (`tools/app_driver.py`), every
   example loaded and GRAPH captured; what the canvas and the FX pane mark unreached printed beside

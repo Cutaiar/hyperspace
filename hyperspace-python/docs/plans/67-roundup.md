@@ -200,7 +200,7 @@ No look changed, so no field example yet (plan 67 §9.3): the first comes with W
 The roundup's "Becomes" for Wave, `measure → waveform → quantise → displace`, as built: the
 quantise is Waveform's Steps, and the push's way is a second Measure (Out direction, or across
 for slide) multiplied in by Combine — five nodes. Proven equal up to rounding (plan 67 §12,
-register 1095). The next rows of §1 to take apart reuse these: Blocks (`measure (cells)` →
+register 1101). The next rows of §1 to take apart reuse these: Blocks (`measure (cells)` →
 Waveform → an action), Trip warp (`measure (noise)` → Displace), Hue cycle (a field on a knob).
 
 ## 10. Built: Blocks as a patch (2026-11-24)
@@ -208,8 +208,8 @@ Waveform → an action), Trip warp (`measure (noise)` → Displace), Hue cycle (
 The roundup's "Becomes" for Blocks, `measure (cells) → waveform → action field → displace`, as
 built: the action field is **Cell action**, and the place in the cell comes from a second
 Measure of cells (Out direction) — five nodes, as Wave's. The cell's geometry rides on the
-Measures' fields, so Cell action has no grid knobs (plan 67 §14, row 1098). Equal to
-`blocks.glsl` up to rounding at the frame height it is mapped for (row 1097); `blocks.glsl`
+Measures' fields, so Cell action has no grid knobs (plan 67 §14, row 1104). Equal to
+`blocks.glsl` up to rounding at the frame height it is mapped for (row 1103); `blocks.glsl`
 moved onto `_lib.glsl`'s `cell_of` and `cell_pair` byte for byte, so the grid is one piece
 that Blocks and Measure share; Glimmer, Wave Table, Grain and Fractals keep their own cells for
 now (§2).
@@ -217,6 +217,6 @@ now (§2).
 ## 11. Measure taken apart (2026-11-24)
 
 The roundup's `measure (…)` is five nodes now — Line, Rings, Spokes, Cells, Noise — and `point` one
-more, a field every measure reads (plan 67 §15, row 1101). Where §1 says `measure (cells)` read
+more, a field every measure reads (plan 67 §15, row 1107). Where §1 says `measure (cells)` read
 Cells; `measure (noise)`, Noise; `point → …`, a Point wired into the measure's `field` port.
 
