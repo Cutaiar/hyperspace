@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-22
+## v1.3 — 2026-11-23
 
 ### Panel
 
@@ -53,19 +53,23 @@
 
 - Point a controller at a node: from the chip in GRAPH's selection section, the APC40's K1–K8, D1–D8 and S1–S8 fill with that node's params, saved in the patch, per player and per deck; drawn as their own green cables, outlined on the desk, left from the chip or the cable's menu (#396, #397)
 - Node mode on pads: a pad's sticks and axes push the node's params and the look comes back on release; buttons that already do something are never taken, and the camera orbit stands down only on the filled axes; not yet tried on a real pad (#433)
+- Node mode fills dropdowns too: on a desk, a knob left over picks one choice per stretch of its throw; on a pad, each dropdown takes a free button (LB, RB, the stick clicks, …) and a press steps to the next choice, wrapping round (#468)
 
 ### Presets
 
 - Load a patch from GRAPH's deck row: **load…** opens a file browser on `loadable/` and loads the pick onto the off-air deck; the side pane's folder tree and the strip's ◀ ▶ are gone (#349, #444)
 - **save as**, beside **load…** on GRAPH's deck row, saves the deck's look in one press as a new patch next to the one loaded (moo → moo 2), never over a file; Learn puts the same press on a desk or pad button (#467)
 - A patch or folder moved or renamed in Finder is followed: the loaded patch and every install keep pointing at it, and unsaved edits stay (#444)
-- Six kinetic presets to copy into `<library>/loadable/`, played with the hands, a pad or a Joy-Con: `kinetic-clay`, `-comet`, `-tunnel`, `-looking-glass`, `-wand` and `-finger-drums`, in `presets/kinetic/` with a gesture table each (#448)
+- Six kinetic presets to copy into `<library>/loadable/`, played with the hands, a pad or a Joy-Con: `kinetic-clay`, `-comet`, `-tunnel`, `-looking-glass`, `-wand` and `-finger-drums`, in `loadable/kinetic/` with a gesture table each; `tools/copy_patches.py kinetic` copies them into the library (#448, #482)
 - A preset now holds the hands' look, the clouds' look and the bus cuts; presets move to `/10` and shows to `/3`, migrated with a backup (#351)
 - One saved format: module presets are patches of one group (`patches/<group>/`, `hyperspace.patch/2`), and a group holds any node the preset saves; run `tools/migrate_library.py --apply` once, both Macs on this build, between shows (#352)
 - A patch can hold the scene, shape, backdrop, pattern, look-back and dream, so a dream + fx + composite patch can be saved; spawning one where the host already has that node is refused in words (#355)
 - Spawning a patch with a dream into a preset that has one offers **Replace and spawn** on the sheet, one press and one undo step (#361)
 - A new **wire as saved, replacing …** chip lands a patch's outlets even on taken ports and names each cable it cuts; the plain chip still never cuts (#364)
 - The one library migration (`/11`): `presets/` becomes `loadable/`, shows become `installs/<name>.json`, and old trash and backups are cleared after one backup; quit both Macs and run `tools/migrate_library.py --apply` once (#434)
+- **save as ▾** beside the chip: **save as name…** saves under a name you type, **save to location…** into a folder you pick (new folders too) inside the library; a taken name is refused and nothing is written over (#481)
+- No `[library] path` means no library: nothing is ever saved into `~/Hyperspace`, saves are refused in words and SYSTEM shows "library: none set — saves are off"; old library folders left in `~/Hyperspace` are flagged in red, and `tools/move_library.py` now moves them aside into `old-local-library-<date>-<time>/` (#480)
+- Loading a patch with no units marker now says which route depths it rescaled (old → new), instead of changing them silently; a save writes the marker (#468)
 
 ### Routes
 
@@ -103,16 +107,21 @@
 - Adding an effect opens **effects…**, a picker of tiles grouped by family: each shows the effect over a test card and plays its loop on hover, search finds by name or tip and Enter takes the first match; it replaces the effects ▸ submenu in the add menu and a cable's insert ▸ (#461)
 - An effect that isn't wired yet still shows a thumbnail, through its input or the test card, and only effects that read a second picture (Blend, Displace) have an `aux` port; a saved aux wire still loads (#461)
 - A **gpu cost** chip on GRAPH's head marks every render node by its GPU time: the costlier, the brighter, with a badge ("#1 · 2.10 ms" for the top three) and the frame's total under the head; a node that drew nothing says "made nothing"; off by default and costs nothing when off (#470)
+- **black is clear**, on any picture node's menu (or MEDIA for a channel), makes the picture's dark parts see-through, so fire on black no longer covers the scene with a black box; tune it with `key.<node>.level`, `soft`, `feather`, `keep` and `invert`, and a composite can now lay **screen** (#479)
+- The copy node is gone: an effect runs on more pictures through its own slots, extra port rows on the one node sharing its knobs — **add slot** / **remove slot k** on its menu, **slot on ▸** in the picker, or select it and press ⌘C then ⌘V; saved copies turn into slots at load (patches move to `/12`) (#478, #487)
+- Selecting the hands node shows the whole HANDS page; the shape's node holds `camera.*` and the first scene's holds `eye.*`, and the separate camera node is gone (#486)
+- Nodes with nothing to say say nothing: no grey "point … here" chip on a node with no params, and no "not live" lines on picture nodes (#484)
 
 ### Effects
 
 - New **Grow** effect: grass, sprouts, blobs, noodles, mould, coral or cells grow out of the picture and push its pixels (a lens-like bulge, or a lift along Angle); ride `fx.grow.grow` with an LFO to grow it in and out — at 0 the frame is untouched (#381)
 - Four new light effects: **Prism** opens edges into a rainbow around a lens you can move (Centre X / Y), **Oil slick** tints what's lit with a thin film's rainbow and leaves black black, **Bloom** spills a soft glow from whatever is over Threshold (chain two for a frame-wide veil), and **Grain** adds film grain, with **Steps** and **Dither** for a crushed, dot-screen print look (#454)
 - New **Wave Table** effect: a disc of the picture at each root is dragged along grass, noodle or curl paths into an extruded tube; scrub or LFO `fx.wavetable.pos` — at 0 the frame is untouched (#406)
-- Three distortion effects that move the picture's pixels: **Shake** moves the whole frame (buzz, orbit, punch or jolt, with Smear and Split), **Wave** lays one waveform across it along lines, rings or spokes, and **Blocks** cuts it into cells that shift, zoom, stretch, turn, bulge or swap — every Amount is untouched at 0, so a lane, hand or pad fades it in; 23 ready patches in `presets/distort/` play them (#458)
+- Three distortion effects that move the picture's pixels: **Shake** moves the whole frame (buzz, orbit, punch or jolt, with Smear and Split), **Wave** lays one waveform across it along lines, rings or spokes, and **Blocks** cuts it into cells that shift, zoom, stretch, turn, bulge or swap — every Amount is untouched at 0, so a lane, hand or pad fades it in; 23 ready patches in `loadable/distort/` play them, copied into the library by `tools/copy_patches.py distort` (#458, #482)
 - New **Mandelbrot** effect, a live Mandelbrot / Julia generator to explore by hand or controller: every term of z → z^p + c is a knob (Centre, Zoom to 10¹³×, z₀, c, Slice, Power 2–8, Steps); Pan, Dive and the drives move the picture as far at any depth, Size (540 / 810 / 1080 lines) sets its cost, and it feeds Palette's gradient or a built-in ramp (#462)
 - Mandelbrot draws with nothing wired in, its coloured inside is smooth rings at any depth instead of flat grey and blocks, the c and z₀ drives are no longer far too fast off the screen's axis, and a deep zoom costs about a quarter of what it did (15 ms instead of 81 at 10⁷× on the M3 Max) (#471)
 - XY pads: Prism and Wave get a Centre pad, Wave Table an Offset pad and Zoom burst a Burst volume (the third value a halo); click or drag the point, ⇧ for fine, and each axis keeps its own knob for routes and Learn; saved patches are unchanged (#469)
+- Fields: a new green **field** wire and field nodes — **Point**, **Line**, **Rings**, **Spokes**, **Cells**, **Noise**, **To field**, **Waveform**, **Combine** and **Cell action** — build a distortion by hand, and Displace takes a field and gains **Split**; Wave and Blocks can be rebuilt this way, and five examples (`field-rings-lens`, `field-line-shear`, `field-self-bend`, `field-wave`, `field-blocks`) are in the library's `loadable/field-examples/` (#489, #490, #491)
 
 ### Shapes
 
@@ -120,6 +129,8 @@
 - A fist grabs a fractal as an object from outside; once you're inside it, the fist holds the space and moving it flies you through the fractal's 4D space, with no jump at any depth (#460)
 - A patch saves where you are inside a fractal (its dive) and loading it takes you back; a broken saved dive is refused with a note and the rest of the patch still loads (#460)
 - A **fractal** section (in **sections ▾**) holds a fractal's controls: where you are, **Detail**, **Reach**, **Near**, **Additive** (moved from VIEW) and **To the top**; Detail, Reach and Near are saved in a fractal patch (#466)
+- An endless dive: **Dive** (`view.frac_dive`, −2 … +2 levels a second), the fractal section's first slider, goes in forever or climbs back out to the whole shape; inside a fractal, zoom and turn act about the middle of the screen and the dive settles on its cell, so the screen stays full; saved with the patch, and an LFO, hand or knob can drive it (#474)
+- Inside a dive, a pan's framing is saved with the patch, and ⌘Z while a dive runs takes back one edit at a time, framing included (#474)
 
 ### Media
 
@@ -128,6 +139,8 @@
 - Launching with a camera, NDI or Syphon source listed no longer crashes at start-up with a `RecursionError` (#381)
 - A patch's media opens on both Macs: a clip missing from this Mac's own folder falls back to the same file in the shared Drive `media/` folder, and assigning a clip that is in both now saves the `shared:` id (#419)
 - **Listen to video sound** says on its hover and under the toggle that the off-air look reacts to the on-air video's sound too (#416)
+- NDI between two Macs from the panel: MEDIA ▸ Live ▸ **Send output N** sends that output as `<this Mac> out N` (kept per Mac), and **Find NDI** on the other Mac lists it as `ndi:<Mac> out 1` to put in a channel — no config.toml edit or restart (#476)
+- Drag image or video files onto either window, or ⌘V an image, and they fill the next empty cells of the channel picked on MEDIA (a pasted image is saved in `<home>/media/`), one undo step (#477)
 
 ### Hands
 
@@ -140,6 +153,7 @@
 - A new **BONES** ghost style draws the hand's 27 bones; SKIN is gone, as it couldn't hold a frame at any projector size (#449)
 - `ghost.material` beside the style: PLAIN, BONE, GLASS or EMBER, with GLASS letting the scene show through and the guide always drawn plain (#449, #450)
 - The ghost hands' show look is on, BONES, PLAIN, at 50 %, and a new hands node starts from it; `tools/set_hands_look.py` sets the library's patches to it (a dry run unless `--apply`, which backs the library up first) (#459)
+- The HANDS page's "setup ◀ ▶" strip is retired; a show that names a hands setup ignores it, and `hands.json` (the room's calibration) is untouched (#485)
 
 ### For developers
 
@@ -171,6 +185,10 @@
 - `previews.py` draws each effect's still and loop off the show's chain, `fx.reads_aux` decides the aux port and a `// @family` directive groups the picker; `tools/effect_previews.py` writes stills, GIFs and a contact sheet (#461); the tidy is `graphview.flow` and `graphview.sling`, tuned beside `BANDS` (#463)
 - `ui_fields.Shape` / `shape_of` / `polarity` draw every fader, with `bipolar` / `unipolar` on a `@param` line and `// @pair` / `// @volume` directives (`fx.PadSpec`) for pads (#469); `Renderer.gpu_watch`, `PassTimer.watch` and `ui_graph.rank_costs` / `ease_costs` / `fold_owners` back the gpu cost chip (#470)
 - `mandel.GENERATOR` and `graph.Effect.generates` let a hooked effect draw with no input, and `tools/mandel_bench.py --owner` runs the owner's cases (#471); `ui_fractal.py` and the optional `"fractal"` patch key (`loadable.FRACTAL_PIDS`, no schema bump) (#466); `ui_loadable.save_as_chip` (#467); `ghost.SHOW_LOOK` (#459)
+- Plan 81: `fractal.centre`, `fractal.nearest`, `SETTLE_ON`, `MAX_PATH`, an optional `"frame"` in `Dive.to_json`, `Undo(beside=deck.DiveFrame)` and `Param._drift`; `tools/fractal_dive_demo.py` (#474)
+- `graph.KeyNode`, `masks.KEY_FS` and `glsl.KEY_RAMP` key a node, listed in the graph section's optional `"keys"`; `screen` joins `graph.BLENDS` (#479); effect slots: `{"kind":"effect","file":"acid","slots":3}` and `acid.slot.k`, loadables `/12` (`graphmigrate.twelve`), fragments `patch/3` (#487)
+- Fields: `graph.FIELD`, `// @makes field` / `// @takes <port> field`, `FieldEffect` and `FieldPicture`, the shared field pieces in `_lib.glsl` and `tools/fx_sweep.py` to prove a move byte for byte (#489); `shaders/fx/cellaction.glsl`, `tests/wavepatch.py` and `tests/blockspatch.py` (#490, #491)
+- `loadable.retaper_note`, `node_desk.PAD_BUTTONS` and `Bindings.node_buttons` (#468); `library.Install.save_named` (#481); `library.strays` and `NO_LIBRARY` (#480); `tools/copy_patches.py` (#482); `hands` joins `library.RETIRED_MODULES` (#485); `OWNERS["camera"]` is `"shape"` and `_eye_owner` (#486); `publish.ask_ndi` / `take_ask` with `<home>/publish.here.json` (#476); `ui_media.intake` / `paste` (#477)
 
 ## v1.2 — 2026-11-02
 
