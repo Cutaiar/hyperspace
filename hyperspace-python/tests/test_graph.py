@@ -398,16 +398,16 @@ def test_the_graph_is_built_once_per_set_of_switches_and_reused(ctx):
 
 
 def test_a_through_window_runs_its_chain_as_wired(ctx):
-    """The graph for an output wired with the hands through holds its copy
-    chain and runs it whether or not a hand shows (plan 36 T1: no
+    """The graph for an output wired with the hands through holds its slot
+    chain (plan 89; a copy chain before it) and runs it whether or not a hand shows (plan 36 T1: no
     stand-down; the run's own end, which no window shows, is not built)."""
     from test_outputs import rig, run, wviews
 
     for hands in (False, True):
         r = rig(ctx, hands=hands)
         run(ctx, r, wviews(ctx, r, Thru()), frames=2)
-        assert "shown(copy)" in r._graph.nodes and "shown(warp)" not in r._graph.nodes
-        assert r.stats["ends"] == ["shown(copy)"]
+        assert "shown(warp.slot.2)" in r._graph.nodes and "shown(warp)" not in r._graph.nodes
+        assert r.stats["ends"] == ["shown(warp.slot.2)"]
         assert r.stats["chain_runs"] == 1 and r.stats["layer"] is hands
         assert r.stats["direct"] is True
 
@@ -428,11 +428,11 @@ def test_the_timer_lists_the_graphs_nodes_and_drops_a_node_that_left(ctx):
     run(ctx, r, vs, frames=PassTimer.LAG + 2)
     # plan 30 D0 (decision 5): the effect that ran has its own line, in
     # its place before its end; the graph's static lines are the rest
-    # (plan 35 T4: the hands through are a copy of warp over a composite)
+    # (plan 35 T4: the hands through are warp's slot 2 over a composite, plan 89)
     timed = r._graph.timed
-    at = timed.index("shown(copy)")
-    assert list(r.stats["gpu_ms"]) == [*timed[:at], "copy", *timed[at:]]
-    assert "shown(copy)" in r.stats["gpu_ms"] and "composite" in r.stats["gpu_ms"]
+    at = timed.index("shown(warp.slot.2)")
+    assert list(r.stats["gpu_ms"]) == [*timed[:at], "warp.slot.2", *timed[at:]]
+    assert "shown(warp.slot.2)" in r.stats["gpu_ms"] and "composite" in r.stats["gpu_ms"]
     vs = wviews(ctx, r, S())
     run(ctx, r, vs, frames=PassTimer.LAG + 1)
     assert r._graph.timed == ["scene", "hands.layer", "shown(warp)", "output.1"]

@@ -39,12 +39,12 @@ def test_the_marker_reads_and_round_trips():
 FULL_NODES = [
     {"kind": "scene"}, {"kind": "shape"}, {"kind": "backdrop"}, {"kind": "pattern"},
     {"kind": "lookback"}, {"kind": "layer", "instance": 2}, {"kind": "guide"},
-    {"kind": "effect", "file": "acid"}, {"kind": "copy", "of": "acid"}]
+    {"kind": "effect", "file": "acid", "slots": 2}]
 FULL_WIRES = [
     ("shape", "scene.geometry"), ("hands", "scene.geometry"), ("scene", "backdrop.scene"),
     ("channel.a", "backdrop.image"), ("backdrop", "lookback.occluder"),
     ("scene", "lookback.image"), ("lookback", "acid.image"), ("acid", "output.all.image"),
-    ("lookback", "copy.image"), ("copy", "output.2.image"),
+    ("lookback", "acid.slot.2.image"), ("acid.slot.2", "output.2.image"),
     ("hands.layer", "output.all.hands"), ("hands.layer", "output.all.guide"),
     # plan 36 T2: the edges the builder read by name, as wires
     ("pattern", "shape.faces"), ("scene.cover", "lookback.cover"),
@@ -59,7 +59,7 @@ def test_the_frame_kinds_read_and_round_trip():
     assert spec.to_json()["frame"] == "wired" and next(iter(spec.to_json())) == "frame"
     assert spec.frame_nodes == (G.SceneAt(), G.ShapeAt(), G.BackdropAt(), G.PatternAt(),
                                 G.LookbackAt(), G.LayerAt(2), G.GuideAt())
-    assert spec.copies == (G.CopyAt(1, "acid"),)
+    assert spec.slots == (G.SlotAt("acid", 2),)
     assert [w.to_json() for w in spec.wires] == [{"from": a, "to": b} for a, b in FULL_WIRES]
     for at, name, js in ((G.SceneAt(), "scene", {"kind": "scene"}),
                          (G.ShapeAt(), "shape", {"kind": "shape"}),
@@ -69,13 +69,13 @@ def test_the_frame_kinds_read_and_round_trip():
                          (G.LayerAt(), "hands.layer", {"kind": "layer"}),
                          (G.LayerAt(3), "hands.3.layer", {"kind": "layer", "instance": 3}),
                          (G.GuideAt(), "hands.guide", {"kind": "guide"}),
-                         (G.GuideAt(2), "hands.2.guide", {"kind": "guide", "instance": 2}),
-                         (G.CopyAt(1, "acid"), "copy", {"kind": "copy", "of": "acid"}),
-                         (G.CopyAt(2, "acid.2"), "copy.2",
-                          {"kind": "copy", "of": "acid.2", "instance": 2})):
+                         (G.GuideAt(2), "hands.2.guide", {"kind": "guide", "instance": 2})):
         assert at.name == name and at.to_json() == js
+    # plan 89: an effect's slot is named off its effect, declared by its entry
+    assert G.SlotAt("acid", 2).name == "acid.slot.2"
+    assert G.SlotAt("acid.2", 3).name == "acid.2.slot.3"
     assert G.SceneAt().n == G.LookbackAt().n == 1
-    assert set(G.FRAME_KINDS) | {"copy"} <= set(G.DECLARED)
+    assert set(G.FRAME_KINDS) <= set(G.DECLARED) and "copy" not in G.DECLARED
     assert {"copy", "ground"} <= set(G.RESERVED)
 
 
@@ -153,23 +153,29 @@ def test_ground_goes_only_into_outputs():
     assert G.GROUND == "ground"
 
 
-def test_a_copy_needs_an_of_and_an_instance():
-    with pytest.raises(G.GraphError) as err:
-        G.read_graph(wired(nodes=[{"kind": "copy", "instance": 2}]))
-    assert str(err.value) == G.COPY_NO_OF.format(name="copy.2")
-    spec = G.read_graph(wired(("lookback", "copy.image"), ("copy", "output.2.image"),
-                              ("lookback", "output.all.image"),
-                              nodes=[{"kind": "copy", "of": "teapot"}]))
-    assert spec.notes == (G.COPY_BAD_OF.format(name="copy", of="teapot"),)
-    assert spec.copies == ()
-    assert spec.wires == (G.Wire("lookback", "output.all.image"),)
-    # an of the section holds by a wire or an entry stands; a copy on a wire needs its entry
-    spec = G.read_graph(wired(("lookback", "acid.2.image"), ("acid.2", "output.all.image"),
-                              nodes=[{"kind": "copy", "of": "acid.2", "instance": 3}]))
-    assert spec.notes == () and spec.copies == (G.CopyAt(3, "acid.2"),)
-    spec = G.read_graph(wired(("lookback", "copy.image")))
-    assert spec.notes == (note(("lookback", "copy.image"),
-                               'no copy node in this graph (add one: {"kind": "copy"})'),)
+def test_a_copy_entry_is_refused_and_a_slot_is_its_effects():
+    """Plan 89: no copy node — its entry is refused in words (a file older
+    than the build has it migrated before the read); an effect's slot is
+    declared by its entry's `slots` and named off it; a wire naming a slot
+    the entry does not declare is a note; `slots` is a count from 1 to
+    `MAX_SLOTS`."""
+    for entry in ({"kind": "copy", "instance": 2}, {"kind": "copy", "of": "acid"}):
+        with pytest.raises(G.GraphError) as err:
+            G.read_graph(wired(nodes=[entry]))
+        assert str(err.value) == G.COPY_IS_A_SLOT
+    spec = G.read_graph(wired(("lookback", "acid.2.slot.3.image"),
+                              ("acid.2.slot.3", "output.all.image"),
+                              nodes=[{"kind": "effect", "file": "acid", "instance": 2,
+                                      "slots": 3}]))
+    assert spec.notes == () and spec.slots == (G.SlotAt("acid.2", 2), G.SlotAt("acid.2", 3))
+    assert spec.effect_names() == {"acid.2"}
+    spec = G.read_graph(wired(("lookback", "acid.slot.2.image")))
+    assert spec.notes == (note(("lookback", "acid.slot.2.image"), G.SLOT_NOT_DECLARED.format(
+        name="acid.slot.2", effect="acid", have=1, s="", k=2)),)
+    for bad in (0, G.MAX_SLOTS + 1, True, "2"):
+        with pytest.raises(G.GraphError) as err:
+            G.read_graph(wired(nodes=[{"kind": "effect", "file": "acid", "slots": bad}]))
+        assert str(err.value) == G.SLOTS_RANGE.format(name="acid", slots=bad, most=G.MAX_SLOTS)
 
 
 def test_reach_runs_from_the_outputs_and_the_capture():
@@ -307,7 +313,7 @@ def test_an_old_id_in_a_wired_frame_is_refused(pair, old, new):
 
 
 def test_a_full_wired_frame_saves_as_it_stands(tmp_path):
-    """A wired frame's words — every frame kind, a copy, a ground — load
+    """A wired frame's words — every frame kind, an effect's slot, a ground — load
     and save `/6` as the frame stands (row 394: every save is `/6`, so no
     frame is put back into older words), and reload the same."""
     from test_plan31_wiring import make_app

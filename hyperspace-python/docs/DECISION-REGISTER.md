@@ -942,6 +942,12 @@ here; overturn → the change, then the same.
 | 1078 | Plan 88: **save to location…** opens **load…**'s file dialog (ImFileDialog, else the native one) in save mode, on the loaded patch's folder, else the library's patches folder. On the owner's Mac the library is in Google Drive by `config.toml`, so that is `My Drive/Hyperspace/loadable`; no Drive path is in the code | 871 | owner (2026-11-23, as recommended) |
 | 1079 | Plan 88: the dialog's place must be under the library's patches folder (any subfolder, a new one made in the dialog too); anywhere else is refused in words, since no load, pad or list would find a patch there. No export copy | 872 | owner (2026-11-23, as recommended) |
 | 1080 | Plan 88: in the dialog, the file name typed (less `.json`) is the patch's name and the folder its folder; the file is written under that name's slug, as every save is (`Closing Look` → `closing-look.json`) | 871 | owner (2026-11-23, as recommended) |
+| 1081 | Plan 89: an effect node has discrete slots — several pictures wired into one effect node, each slot its own `image` / `aux` in and its own picture out, each processed separately with the one shared set of knobs; the separate `copy` node is gone, and clicking the effect shows its one set of controls | 873 | owner (2026-11-23) |
+| 1082 | Plan 89: slot 1 is the effect's own name; slot k is `<effect>.slot.<k>` (`acid.slot.2`, `acid.2.slot.3`), declared by the effect's entry `"slots": n` (written above 1 only), 1 … 8 (`graph.MAX_SLOTS`, a switch's eight); a wire naming an undeclared slot is a note | 873 | (rec) |
+| 1083 | Plan 89: the migration — a section's copies of one effect, lowest copy instance first, become its next slots; wire ends and `keys` renamed; an entry added for an instance only wires named; a copy of no effect the section holds, or past the eighth slot, dropped with its wires and said; a copy's GRAPH place and group membership dropped (its effect's node has its own) | 875 | (rec) |
+| 1084 | Plan 89: the schema moves — every save is `hyperspace.loadable/12` and `hyperspace.patch/3`, an older build refusing either as newer; the checked-in `/11` corpus, presets and fixtures and the `patch/2` band scenes, none holding a copy, bumped in place | 875 | (rec) |
+| 1085 | Plan 89: the edits — the picker's **slot on ▸** (was **copy of ▸**), an effect's menu **add slot** and **remove slot k**, ⌘V after ⌘C on an effect adds a slot to it (was: a copy under it); removing a slot lifts it (the chain closes over it) and numbers the later slots down, their wires with them | 874 | (rec) |
+| 1086 | Plan 89: a slot is a pin of its effect on the canvas (`graphview.canvas_node`) but not to the graph's reach and loop analysis (`graph.pin_node` unchanged): it depends on its own input only, so `acid → acid.slot.2.image` is a chain, as a copy after its original was | 873 | (rec) |
 | 1000 | Plan 80: an effect whose Python half says `GENERATOR` (the Mandelbrot) draws with nothing wired into its `image`, over transparent black; `graph.Effect.generates`. Every other effect with no input still reads nothing. A change to `graph.py`, outside plan 80's files, kept to `Effect.reads`, `paint` and `_pass` | 800 | owner — 2026-11-22: accepted, the `graph.py` change included |
 | 1001 | Plan 80: Inside coloured is how fast a point settles onto its cycle — L·ln K / ln abs(λ_L) from the sum of ln abs(f′(z)) over a lag L the periodicity check found, K = what 5 % of a pixel is at zoom 1 and 810 lines — not the step the check caught it at. That step hung on a pixel-sized tolerance (deep in, most of the inside never settled before the cap: flat grey), Brent's window (bands, discs) and float32's last bit after a rebase (blocks). The inside/outside decision is unchanged | 801 | (rec) — pending the owner |
 | 1002 | Plan 80: a c or z₀ drive moves its term by the view height × min(1, TERM_RATE × R), R the term's measured sensitivity (how much a pan changes the picture over how much the term does, per plane unit, on a 16×9 grid of the view), measured every 0.25 s a drive runs, a faster rate eased in over 0.5 s and a slower one taken at once. TERM_RATE 0.1, to be tuned on the rig. Pan and Dive unchanged; an unused term keeps plan 63's rate | 802, 803 | (rec) — pending the owner |
@@ -15867,3 +15873,45 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** owner (2026-11-23, as recommended).
 - **Built.** `ui_browse.save_name`; `tests/test_save_live.py::test_save_to_location_names_from_the_folder_and_file_picked`.
 - **Judge it.** 871.
+
+### 1081. An effect has slots; no copy node
+
+- **What.** Plan 89: an effect node has discrete processing slots. Several pictures are wired into one effect node (each slot its own `image` / `aux` in and its own picture out); each slot is processed separately with the one shared set of knobs and clock. The `copy` node (plan 35 F, row 377) is gone; selecting the effect shows its one set of controls.
+- **Answer.** owner (2026-11-23).
+- **Built.** `graph.Slot`, `SlotAt`, `EffectAt.slots`; `graphview` slot ports; `tests/test_effect_slots.py::test_two_slots_of_one_effect_draw_what_two_copies_drew`.
+- **Judge it.** 873.
+
+### 1082. A slot's name and declaration
+
+- **What.** Plan 89: slot 1 is the effect's own name; slot k is `<effect>.slot.<k>`, declared by the effect's entry (`"slots": n`, 1 … 8). A wire naming an undeclared slot is a note.
+- **Answer.** (rec).
+- **Built.** `graph.slot_of`, `slot_name`, `SLOT_NOT_DECLARED`, `SLOTS_RANGE`; `tests/test_graph_wired.py::test_a_copy_entry_is_refused_and_a_slot_is_its_effects`.
+- **Judge it.** 873.
+
+### 1083. Copies migrate to slots
+
+- **What.** Plan 89: each copy becomes its effect's next slot, lowest copy instance first; wires and `keys` renamed; a copy of nothing, or past the eighth slot, dropped and said; its GRAPH place and group membership dropped.
+- **Answer.** (rec).
+- **Built.** `graphmigrate.slots_of_copies`, `twelve`; `patches._slots_step`; `tests/test_effect_slots.py`.
+- **Judge it.** 875.
+
+### 1084. `/12` and `patch/3`
+
+- **What.** Plan 89: every save writes `hyperspace.loadable/12` and `hyperspace.patch/3`; the checked-in files at the old schemas, none holding a copy, bumped in place.
+- **Answer.** (rec).
+- **Built.** `graphmigrate.TWELVE_SCHEMA`, `loadable.VERSIONS`, `patches.VERSION`, `tools/migrate_library.NEWEST`; `tests/test_format_lane.py::test_the_kinds_say_one_thing`.
+- **Judge it.** 875.
+
+### 1085. Adding and removing a slot
+
+- **What.** Plan 89: **slot on ▸** in the picker, **add slot** / **remove slot k** on an effect's menu, ⌘V after ⌘C adds a slot; removing one closes the chain over it and numbers the later slots down.
+- **Answer.** (rec).
+- **Built.** `graphview.add_slot`, `drop_slot`, `drop_slots`; `ui_graph.render_node_menu`, `_copy_paste`; `tests/test_graph_edit.py::test_a_slot_comes_off_and_the_later_ones_close_up`, `tests/test_graph_copy_paste.py`.
+- **Judge it.** 874.
+
+### 1086. A slot is no pin to the graph's analysis
+
+- **What.** Plan 89: on the canvas a slot is drawn on its effect's node, but the graph's reach and loop checks see it as its own node, fed only by its own input: `acid → acid.slot.2.image` is a chain, as a copy after its original was.
+- **Answer.** (rec).
+- **Built.** `graphview.canvas_node`; `graph.pin_node` unchanged; `tests/test_effect_slots.py::test_each_copy_is_its_effects_next_slot`.
+- **Judge it.** 873.

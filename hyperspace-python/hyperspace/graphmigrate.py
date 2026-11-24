@@ -94,7 +94,13 @@ LOADABLE_KIND = "hyperspace.loadable"
 ELEVEN_SCHEMA = f"{LOADABLE_KIND}/11"
 ELEVEN = 11
 TEN = 10
-SAVE_SCHEMA = ELEVEN_SCHEMA
+# plan 89: `/12` is `/11` with no copy node — an effect that draws on another
+# picture does it by a slot of its own (`"slots"` on its entry, wires into
+# `<effect>.slot.<k>.image` and out of `<effect>.slot.<k>`). What every save
+# writes; `/11` and older are read through `twelve` (`slots_of_copies`)
+TWELVE_SCHEMA = f"{LOADABLE_KIND}/12"
+TWELVE = 12
+SAVE_SCHEMA = TWELVE_SCHEMA
 BUS_KEY = "bus"
 # the keys `/10` retired: the module labels (row 540, the owner, 2026-11-03)
 # and the desk templates (plan 24 C3: neither library held one)
@@ -459,6 +465,12 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
     held_backdrop = bool(values.get("backdrop.history", False))
     section = out.get("graph")
     section = section if isinstance(section, dict) else {}
+    # (plan 89: a copy is a slot before anything reads the section — a `/6`
+    # wired frame may hold one; `forward` has made it one already)
+    got, _, slot_notes = slots_of_copies(section)
+    if got is not section:
+        section = out["graph"] = got
+    notes += slot_notes
     # (read against the files this build has, as the loader reads it: a
     # placement on an effect not on disk is refused there, and its effect
     # takes the run like any other)
@@ -654,8 +666,8 @@ def _named(kind: str, n: int) -> str:
 
 
 def _held(spec: G.GraphSpec, kind: str) -> set[int]:
-    """The instances of `kind` (`composite`, `copy`) `spec` holds: by an
-    entry or by a wire's end."""
+    """The instances of `kind` (`composite`) `spec` holds: by an entry or
+    by a wire's end."""
     got = {o.n for k, o in spec.others if k == kind}
     for name in (x for w in spec.wires for x in (w.src, w.node)):
         head, _, n = name.partition(".")
@@ -672,13 +684,47 @@ def _next_composite(spec: G.GraphSpec) -> int:
     return next(k for k in range(1, len(held) + 2) if k not in held)
 
 
-def _next_copies(spec: G.GraphSpec, count: int) -> list[int]:
-    """`count` copy instances no entry or wire of `spec` holds, lowest first."""
-    held, out, k = _held(spec, "copy"), [], 1
-    while len(out) < count:
-        if k not in held:
-            out.append(k)
-        k += 1
+def _next_slots(spec: G.GraphSpec, run: list[str]) -> tuple[list[dict], list[str]]:
+    """A new slot of each effect of `run` (plan 89: what plan 35's copies
+    were), in order: (the effect entries that declare them — each effect's
+    entry with its `slots` one up, `merge_entries` joins them to a
+    section — and the slots' names). An effect at `graph.MAX_SLOTS` is a
+    ValueError, in words."""
+    have = {e.name: e for e in spec.effects}
+    entries: dict[str, dict] = {}
+    names: list[str] = []
+    for name in run:
+        at = have.get(name)
+        if name in entries:
+            k = entries[name]["slots"] + 1
+        else:
+            k = (at.slots if at is not None else 1) + 1
+        file, n = G.split_instance(name)
+        e = G.EffectAt(file, n, slots=k)          # (raises past MAX_SLOTS, in words)
+        entry = {"kind": "effect", "file": file, **({"instance": n} if n != 1 else {}),
+                 "slots": e.slots}
+        entries[name] = entry
+        names.append(G.slot_name(name, k))
+    return list(entries.values()), names
+
+
+def merge_entries(nodes: list, adds: list) -> list:
+    """Section `nodes` with entries `adds` joined (plan 89): an effect entry
+    for an instance the nodes already declare raises that entry's `slots`
+    to the added one's (the rest of the entry as it is); any other is
+    appended. A new list; the entries in it are new dicts where changed."""
+    out = list(nodes)
+    for add in adds:
+        if add.get("kind") == "effect":
+            key = (add.get("file"), add.get("instance", 1))
+            i = next((i for i, e in enumerate(out) if isinstance(e, dict)
+                      and e.get("kind") == "effect"
+                      and (e.get("file"), e.get("instance", 1)) == key), None)
+            if i is not None:
+                slots = max(out[i].get("slots", 1), add.get("slots", 1))
+                out[i] = {**out[i], **({"slots": slots} if slots != 1 else {})}
+                continue
+        out.append(add)
     return out
 
 
@@ -855,7 +901,7 @@ def _output_wires_into(section: dict, n: int, shows: Shows) -> dict:
     if sorted(map(str, (w for w in mine if w not in refused))) == sorted(map(str, got)):
         return section                     # (its own wires say it already: kept where they are)
     out = dict(section)
-    out["nodes"] = [*section.get("nodes", []), *(e for e in got if "kind" in e)]
+    out["nodes"] = merge_entries(section.get("nodes", []), [e for e in got if "kind" in e])
     out["wires"] = [*(w for w in section.get("wires", [])
                       if not (isinstance(w, dict) and str(w.get("to", "")).startswith(port))),
                     *(w for w in got if "kind" not in w), *refused]
@@ -1177,7 +1223,7 @@ def placed_wires(section: Any, files: set[str] | None = None,
     except G.GraphError:
         return section
     pending = [e for e in spec.effects if e.placed]
-    refused = [n for n in spec.notes if not n.startswith(("wire ", "copy "))]
+    refused = [n for n in spec.notes if not n.startswith("wire ")]
     if notes is not None:
         # (a placement the read refused stood nowhere: its entry is kept,
         # on no wire, and said)
@@ -1246,7 +1292,8 @@ def schema_version(doc: Any) -> int | None:
 
 def section_effects(section: Any) -> set[str]:
     """Every effect instance a wired `section` names — by an entry, a wire's
-    end, or a copy's `of` — the effects that exist in its loadable patch (W3)."""
+    end, or (a section not yet through `twelve`) a copy's `of` — the effects
+    that exist in its loadable patch (W3)."""
     out: set[str] = set()
     if not isinstance(section, dict):
         return out
@@ -1267,6 +1314,8 @@ def section_effects(section: Any) -> set[str]:
 
 
 MIGRATED_NOTE = "{old} migrated to {new} (plan 36): every edge drawn as it ran — save to keep it"
+SLOTS_MIGRATED_NOTE = ("{old} migrated to {new} (plan 89): each copy is a slot of its effect "
+                       "now — save to keep it")
 
 
 # ---------------------------------------------------------------- the one orbit camera (plan 43 C2)
@@ -1591,9 +1640,10 @@ def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
     not in it, or the scene off) always writes a `composite.k` (the lowest
     free instance, its blend the hands' `laid`; the head of All outputs'
     picture under — the look-back — and nothing under with the scene off;
-    the layer over) and one `copy` of each effect of All outputs' run
-    (none for an empty run), `composite.k → copy → … → output.<n>.image`,
-    each copy with its original's aux wire; whether it bends is the
+    the layer over) and a new slot of each effect of All outputs' run
+    (none for an empty run; plan 89, a copy before it), `composite.k →
+    acid.slot.k → … → output.<n>.image`, each slot with its effect's aux
+    wire, its effect's entry carrying the slot (`merge_entries`); whether it bends is the
     frame's (`Shown.bent`). Entries come first in the list (the dicts with
     `kind`), then the wires. The section's own `ground` wires into the
     output are not read: they are what an earlier call wrote."""
@@ -1638,7 +1688,7 @@ def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
             if image in ("SH", "H"):
                 image = "S" if image == "SH" else None
             over = src = w.src
-            while _kind(src) in ("effect", "copy"):
+            while _kind(src) in ("effect", "slot"):
                 src = _src_into(pictures, f"{src}.image")
             if guide is None and _kind(src) == "layer":
                 guide = src
@@ -1661,9 +1711,9 @@ def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
         out.append(_w(layer, f"{comp}.over"))
         src = comp
         aux = {w.node: w.src for w in wires if w.port == G.AUX}
-        for e, c in zip(run, _next_copies(spec, len(run))):
-            name = _named("copy", c)
-            entries.append(G.CopyAt(c, e).to_json())
+        made, slots = _next_slots(spec, run)
+        entries += made
+        for e, name in zip(run, slots):
             out.append(_w(src, f"{name}.image"))
             if e in aux:
                 out.append(_w(aux[e], f"{name}.aux"))
@@ -1686,8 +1736,9 @@ def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) 
     instance, its blend the hands' `laid`) laying All outputs' hands layer
     `over` the head of All outputs' picture (behind its run; nothing
     `under` while the window's picture is `ground`: the hands alone), one
-    `copy` of each effect of that run, each with its original's aux wire,
-    `composite.k → copy → … → output.<n>.image`, and `ground →
+    new slot of each effect of that run (plan 89), each with its effect's
+    aux wire, `composite.k → acid.slot.k → … → output.<n>.image` (the
+    effects' entries carrying the slots: `merge_entries`), and `ground →
     output.<n>.hands` — the layer goes through, not over again. Nothing
     else: the guide, and every other wire of `spec`, are left as they are.
     Entries first (the dicts with `kind`), then the wires. `spec` is a
@@ -1698,9 +1749,11 @@ def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) 
     wires = spec.wires
     allp = {w.port: w.src for w in wires if w.node == G.ALL_OUTPUTS}
     pictures = [w for w in wires if w.port == "image"]
+    # (plan 89: All outputs' run back through its effects and their slots —
+    # each pass by its own name, for its own input and aux wire)
     run: list[str] = []
     head = allp.get("image")
-    while _kind(head) == "effect" and head not in run:
+    while _kind(head) in ("effect", "slot") and head not in run:
         run.insert(0, head)
         head = _src_into(pictures, f"{head}.image")
     port = f"output.{n}."
@@ -1719,15 +1772,187 @@ def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) 
         out.append(_w(DEPTH_PIN, f"{comp}.{G.DEPTH_PORT}"))
     src = comp
     aux = {w.node: w.src for w in wires if w.port == G.AUX}
-    for e, c in zip(run, _next_copies(spec, len(run))):
-        name = _named("copy", c)
-        entries.append(G.CopyAt(c, e).to_json())
+    made, slots = _next_slots(spec, [G.effect_of(p) for p in run])
+    entries += made
+    for e, name in zip(run, slots):
         out.append(_w(src, f"{name}.image"))
         if e in aux:
             out.append(_w(aux[e], f"{name}.aux"))
         src = name
     out += [_w(src, port + "image"), _w(G.GROUND, port + "hands")]
     return [*entries, *out]
+
+
+# ---------------------------------------------------------------- copies as slots (plan 89)
+
+COPY_DROPPED = ("{name}: a copy of {of!r}, which is no effect instance of this graph — "
+                "dropped with its wires (plan 89)")
+COPY_PAST_SLOTS = ("{name}: a copy of {of}, past the {most} slots one effect has — dropped "
+                   "with its wires (plan 89)")
+
+
+def copy_name(e: Any) -> str | None:
+    """A `copy` entry's node name (`copy`, `copy.2`), None for a bad instance."""
+    n = e.get("instance", 1)
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+        return None
+    return "copy" if n == 1 else f"copy.{n}"
+
+
+def slots_of_copies(section: Any) -> tuple[Any, dict[str, str], list[str]]:
+    """A graph section (a loadable patch's, or a patch fragment's nodes and
+    wires — any dict with `nodes` and `wires`) with every `copy` entry
+    made a slot of the effect it drew again (plan 89, the one way): (the
+    section, a copy's name → its slot's name, the notes).
+
+    The rule: a section's copies of one effect instance, lowest copy
+    instance first, become that effect's next slots — `copy` of `acid`
+    with `acid` holding one slot is `acid.slot.2`, the next copy of `acid`
+    `acid.slot.3`. The effect's entry says `slots` (an entry is added for
+    an effect only its wires named); every wire end naming the copy (its
+    picture out, its `image` and `aux` in) and a `keys` member names the
+    slot. A slot runs the effect on its own picture with the one set of
+    knobs and clock, as the copy did (`graph.Slot` is the pass a
+    `graph.Copy` was), so the picture is the same. A copy of no effect the
+    section holds (one the read dropped, said) and one past
+    `graph.MAX_SLOTS` are dropped with their wires, said. Anything that is
+    no section, or holds no copy, comes back as it is."""
+    if not isinstance(section, dict) or not isinstance(section.get("nodes"), list):
+        return section, {}, []
+    copies = [e for e in section["nodes"] if isinstance(e, dict) and e.get("kind") == "copy"]
+    if not copies:
+        return section, {}, []
+    wires = [w for w in section.get("wires") or [] if isinstance(w, dict)]
+    held = {G.instance_name(e["file"], e.get("instance", 1)) for e in section["nodes"]
+            if isinstance(e, dict) and e.get("kind") == "effect" and isinstance(e.get("file"), str)
+            and isinstance(e.get("instance", 1), int)}
+    held |= {name for w in wires for name in (w.get("from"), _wire_end(w.get("to")))
+             if _kind(name) == "effect"}
+    notes: list[str] = []
+    renames: dict[str, str] = {}
+    dropped: set[str] = set()
+    adds: list[dict] = []
+    slots: dict[str, int] = {}
+    for e in section["nodes"]:
+        if isinstance(e, dict) and e.get("kind") == "effect" and isinstance(e.get("file"), str):
+            n = e.get("instance", 1)
+            k = e.get("slots", 1)
+            if isinstance(n, int) and isinstance(k, int):
+                slots[G.instance_name(e["file"], n)] = k
+
+    def order(e: dict) -> int:
+        n = e.get("instance", 1)
+        return n if isinstance(n, int) and not isinstance(n, bool) else 0
+
+    for e in sorted(copies, key=order):
+        name, of = copy_name(e), e.get("of")
+        if name is None:
+            continue                        # (no copy the read ever made: its wires named nothing)
+        if not isinstance(of, str) or of not in held or _kind(of) != "effect":
+            notes.append(COPY_DROPPED.format(name=name, of=of))
+            dropped.add(name)
+            continue
+        k = slots.get(of, 1) + 1
+        if k > G.MAX_SLOTS:
+            notes.append(COPY_PAST_SLOTS.format(name=name, of=of, most=G.MAX_SLOTS))
+            dropped.add(name)
+            continue
+        slots[of] = k
+        renames[name] = G.slot_name(of, k)
+        file, n = G.split_instance(of)
+        adds.append({"kind": "effect", "file": file, **({"instance": n} if n != 1 else {}),
+                     "slots": k})
+    out = dict(section)
+    out["nodes"] = merge_entries([e for e in section["nodes"]
+                                  if not (isinstance(e, dict) and e.get("kind") == "copy")], adds)
+
+    def end(name: Any) -> Any:
+        return renames.get(name, name)
+
+    new_wires = []
+    for w in section.get("wires") or []:
+        if not isinstance(w, dict):
+            new_wires.append(w)
+            continue
+        src, dst = w.get("from"), w.get("to")
+        node = _wire_end(dst)
+        if src in dropped or node in dropped:
+            continue
+        w = dict(w)
+        if isinstance(src, str):
+            w["from"] = end(src)
+        if isinstance(dst, str) and node in renames:
+            w["to"] = f"{renames[node]}.{dst.rpartition('.')[2]}"
+        new_wires.append(w)
+    if "wires" in section:
+        out["wires"] = new_wires
+    if isinstance(section.get(G.KEYS_KEY), list):
+        out[G.KEYS_KEY] = [end(k) for k in section[G.KEYS_KEY] if k not in dropped]
+    return out, renames, notes
+
+
+def retarget_copies(obj: Any, renames: dict[str, str]) -> Any:
+    """`obj` (a document's values, rows, node mode … — anything but its
+    graph) with what named a migrated copy naming its slot (plan 89): its
+    black-is-clear knobs `key.<copy>.*` → `key.<slot>.*` (keys of a map, and
+    any text, a row's target say), and a canvas node `render:<copy>` (node
+    mode's target) → `render:<effect>`, the node the slot is drawn on. A
+    copy instance's ids never take another's (`key.copy.2.*` is not
+    `copy`'s). A copy where anything changed, else `obj` itself."""
+    if not renames:
+        return obj
+    order = sorted(renames, key=len, reverse=True)
+
+    def one(x: str) -> str:
+        for old in order:
+            new = renames[old]
+            if x == f"render:{old}":
+                return f"render:{G.effect_of(new)}"
+            head = f"key.{old}"
+            if x == head:
+                return f"key.{new}"
+            if x.startswith(head + ".") and not x[len(head) + 1:][:1].isdigit():
+                return f"key.{new}" + x[len(head):]
+        return x
+
+    def walk(v: Any) -> Any:
+        if isinstance(v, str):
+            return one(v)
+        if isinstance(v, dict):
+            return {(one(k) if isinstance(k, str) else k): walk(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [walk(x) for x in v]
+        return v
+    got = walk(obj)
+    return obj if got == obj else got
+
+
+def twelve(doc: dict) -> tuple[dict, list[str]]:
+    """An older loadable patch (before `/12`) as its `/12` reads it (plan
+    89) — pure, one way, on load: its graph section's copies made slots
+    (`slots_of_copies`), and the copies' GRAPH places and group
+    memberships (`render:copy.<n>`) dropped — a slot is drawn on its
+    effect's node, which has its own place. The schema is left to the
+    ladder (`forward`). (the document, the notes)"""
+    section = doc.get("graph") if isinstance(doc, dict) else None
+    got, renames, notes = slots_of_copies(section)
+    if got is section or not isinstance(section, dict):
+        return doc, []
+    # (plan 89: every other key's mentions of a copy — its `key.<copy>.*`
+    # knobs in values and rows, node mode's `render:<copy>` — the slot's)
+    out = {k: (v if k in ("graph", "layout", GROUPS_KEY, "schema", "name")
+               else retarget_copies(v, renames)) for k, v in doc.items()}
+    out["graph"] = got
+    gone = {f"render:{name}" for name in renames} | {
+        f"render:{copy_name(e)}" for e in section["nodes"]
+        if isinstance(e, dict) and e.get("kind") == "copy" and copy_name(e)}
+    if isinstance(doc.get("layout"), dict):
+        out["layout"] = {k: v for k, v in doc["layout"].items() if k not in gone}
+    if isinstance(doc.get(GROUPS_KEY), list):
+        out[GROUPS_KEY] = [{**g, "nodes": [x for x in g["nodes"] if x not in gone]}
+                           if isinstance(g, dict) and isinstance(g.get("nodes"), list) else g
+                           for g in doc[GROUPS_KEY]]
+    return out, notes
 
 
 # ---------------------------------------------------------------- the one ladder (plan 50)
@@ -1775,17 +2000,30 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     place the open show held (`nine`), before `/10` the look made whole
     (`ten`: the show's hands' and clouds' looks and its bus cuts, the
     module labels and the desk template's name dropped — the template
-    said), before `/11` the kind's new word (`eleven`). A fragment's ladder is `patches.forward`; the two are the one
-    reader of the one shape (`patches.shape_of` says which a file is)."""
+    said), before `/11` the kind's new word (`eleven`), and — first, before
+    any step reads the section — before `/12` its copies made slots of
+    their effects (`twelve`, plan 89; said when there were any). A
+    fragment's ladder is `patches.forward`; the two are the one reader of
+    the one shape (`patches.shape_of` says which a file is)."""
     notes: list[str] = []
     migrate_notes: list[str] = []
     migrated = ""
     from_show: set[str] = set()
     version = schema_version(doc)
+    if version is None or version < TWELVE:
+        # plan 89: copies are slots before anything reads the section (a
+        # `/6` wired frame may hold one; the steps below read slots alone)
+        was = doc
+        doc, slot_notes = twelve(doc)
+        migrate_notes += slot_notes
+        if doc is not was:
+            migrated = SLOTS_MIGRATED_NOTE.format(old=str(doc.get("schema")),
+                                                  new=TWELVE_SCHEMA)
     if version is None or version < SEVEN:
         old = str(doc.get("schema"))
-        doc, migrate_notes = seven(doc, specs)
-        migrated = MIGRATED_NOTE.format(old=old, new=ELEVEN_SCHEMA)
+        doc, seven_notes = seven(doc, specs)
+        migrate_notes += seven_notes
+        migrated = MIGRATED_NOTE.format(old=old, new=TWELVE_SCHEMA)
     if version is None or version < NINE:
         doc = nine(doc, eye, camera_at)
     if version is None or version < TEN:
@@ -1798,4 +2036,6 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
             if isinstance(doc.get("values"), dict) else set()
     if version is None or version < ELEVEN:
         doc = eleven(doc)
+    if version is None or version < TWELVE:
+        doc = {**doc, "schema": TWELVE_SCHEMA}
     return Forward(doc, tuple(notes), tuple(migrate_notes), migrated, frozenset(from_show))

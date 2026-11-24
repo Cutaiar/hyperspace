@@ -961,7 +961,7 @@ def test_every_nodes_side_panel_draws(rig):
     frame(rig.panel, "graph")
     drawn = [n.id for n in st["view"].nodes if ui_graph.drawn_node(st, n)]
     assert len(drawn) > 40
-    assert {"render:copy", "render:backdrop", "render:pattern", "render:hands.guide",
+    assert {"render:backdrop", "render:pattern", "render:hands.guide",
             "render:lookback", "render:dream", "render:delay", "render:resize",
             "render:output.all", "render:scene"} <= set(drawn)
     for nid in drawn:
@@ -979,7 +979,8 @@ def test_every_node_has_a_label_and_a_hover(rig):
     assert graphview.label_of("channel.a") == "Channel A"
     assert graphview.label_of("hands.2.layer") == "Hands layer 2"
     assert graphview.label_of("echo.3") == "Echo 3"
-    assert graphview.label_of("copy.2", of="acid") == "copy of acid (2)"
+    assert graphview.label_of("acid.slot.2") == "acid slot 2"          # (plan 89)
+    assert graphview.label_of("acid.2.slot.3") == "acid 2 slot 3"
     assert graphview.label_of("acid.2") == "acid 2"
     assert graphview.label_of("output.all") == "All outputs"
     assert graphview.label_of("output.2") == "Output 2"
@@ -1031,11 +1032,15 @@ def test_home_page_maps_each_node_kind(rig):
         "lookback"
     assert home(V("render:dream", "render", "Dream", ref=G.DreamNode("dream"))) == "lookback"
     assert home(view.node("render:output.all")) == "output"
-    # a copy: FX with its original selected
-    key, sel = ui_graph.home_page(view.node("render:copy"))
+    # plan 89: an effect with a slot (party-trip's through output) is one
+    # node — FX with it selected, its slot's ports on it
+    n = next(n for n in view.nodes if any(".slot." in p.id for p in n.ports))
+    key, sel = ui_graph.home_page(n)
     panel.fx_selected = None
     sel(panel)
-    assert key == "fx" and panel.fx_selected == view.node("render:copy").ref.effect
+    assert key == "fx" and panel.fx_selected == n.ref.effect
+    assert {f"rin:{n.ref.effect}.slot.2/image", f"rout:{n.ref.effect}.slot.2"} <= {
+        p.id for p in n.ports}
     key, sel = ui_graph.home_page(view.node("lfo.3"))
     assert key == "lfo"
     sel(panel)

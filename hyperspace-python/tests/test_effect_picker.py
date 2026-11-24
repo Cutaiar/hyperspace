@@ -71,7 +71,7 @@ def test_the_menus_have_one_effects_row_in_place_of_the_submenu(rig):
     assert "effects" not in subs
     row = m.row(fxpick.MENU_LABEL)
     assert row is not None and row.id == "graph.pick.effects"
-    assert "copy of" in subs                   # the rest of the picker as it was
+    assert "slot on" in subs                   # the rest of the picker as it was (plan 89)
     m.pick(row.id)
     s = fxpick.state(st)
     assert s["mode"] == "add" and s["at"] == AT and s["open"]
