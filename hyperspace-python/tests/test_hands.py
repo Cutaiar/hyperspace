@@ -306,20 +306,19 @@ def test_setup_is_registry_params_that_round_trip():
     assert s.learn_depth == 0.25
 
 
-def test_a_setup_saves_and_loads_through_the_library(tmp_path):
+def test_the_hands_setup_strip_is_retired(tmp_path):
+    """2026-11-23 (the owner): nobody used a hands setup. The group lists no
+    module presets, a default file in its folder is no default, and a show that
+    names a hands setup neither lists nor applies it; the feel keeps its defaults."""
+    from hyperspace.library import RETIRED_MODULES
     chain = Analyzer(Analyser())
     reg = build_registry(ViewState(), Control(chain), NS(chain=chain))
     s = HandSettings.from_config({})
     hands.register(reg, s)
     lib = Library(tmp_path)
     lib.attach(reg)
-    assert "hands" in lib.groups()
-    s.axes[0].curve, s.learn_depth = 0.4, 0.1
-    lib.save_as("hands", "Soft")
-    s.axes[0].curve, s.learn_depth = 0.0, 0.25
-    lib.load("hands", "Soft")
-    assert s.axes[0].curve == pytest.approx(0.4)
-    assert s.learn_depth == pytest.approx(0.1)               # the learn depth is the setup's
+    assert "hands" in RETIRED_MODULES and "hands" not in lib.groups()
+    assert lib.default_name("hands") is None
 
 
 # ---------------------------------------------------------------- the adapter
