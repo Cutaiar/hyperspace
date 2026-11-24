@@ -87,8 +87,11 @@ def real_graph(fixture=None):
     wired as graph fixture `fixture` says — its wired frame kept on it
     (`section`, the frame `load` lands for party-trip)."""
     from wiredframe import shown
-    spec = G.read_graph(json.loads((FIXTURES / f"{fixture}.json").read_text())["graph"]
-                        ) if fixture else None
+
+    from hyperspace.graphmigrate import slots_of_copies
+    # (plan 89: a fixture's copies are slots, as the load migrates them)
+    spec = G.read_graph(slots_of_copies(json.loads(
+        (FIXTURES / f"{fixture}.json").read_text())["graph"])[0]) if fixture else None
     wiring = spec.wiring() if spec is not None else G.Wiring()
     extra = tuple(e.name for e in spec.effects) if spec is not None else ()
     effects = REAL + tuple(e for e in extra if e not in REAL)
