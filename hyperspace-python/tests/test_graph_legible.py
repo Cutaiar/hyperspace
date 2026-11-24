@@ -1270,3 +1270,16 @@ def test_the_page_sets_each_stubs_hit_rect_outward_at_a_zoomed_out_canvas(rig, m
             assert x1 == pytest.approx(cx + PIN / 2)      # grown left, past the node's edge
         else:
             assert x0 == pytest.approx(cx - PIN / 2)      # grown right
+
+
+def test_a_picture_nodes_side_pane_has_no_not_live_readings(rig, monkeypatch):
+    """A node that is not a source keeps no per-port "image: not live" lines: a
+    source's readings are its content, a picture node's say nothing."""
+    st = party(rig)
+    said = []
+    real = ui_graph._said
+    monkeypatch.setattr(ui_graph, "_said", lambda v: said.append(v) or real(v))
+    pick(rig, st, "render:output.2")
+    assert said == []
+    pick(rig, st, "analyzer")
+    assert said, "an analyzer's readings are still drawn"
