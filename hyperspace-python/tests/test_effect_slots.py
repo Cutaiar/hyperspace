@@ -258,3 +258,73 @@ def test_two_migrated_copies_build_the_frame_the_slots_build():
     assert G.signature(a) == G.signature(b)
     assert [G._sig_class(a.nodes[n]) for n in ("acid", "acid.slot.2", "acid.slot.3")] == \
         ["Effect"] * 3
+
+
+# ---------------------------------------------------------------- review of #487
+
+
+def test_a_keyed_copys_knobs_and_node_mode_follow_it_to_its_slot():
+    """A copy's black-is-clear knobs (`key.copy.*`, in values and rows) are
+    its slot's after the migration, and a controller in node mode on the
+    copy points at the effect the slot is drawn on — a whole patch and a
+    fragment alike; `key.copy.2.*` stays `copy.2`'s."""
+    doc = {"schema": M.ELEVEN_SCHEMA, "name": "keyed", "graph": copy.deepcopy(OLD),
+           "values": {"key.copy.level": 0.7, "key.copy.2.soft": 0.3, "view.bright": 1.0},
+           "routes": [{"source": "lane:0", "target": "key.copy.level", "op": "push"}],
+           "node_mode": [{"player": 1, "controller": "midi", "node": "render:copy"}]}
+    got = M.forward(copy.deepcopy(doc), {}).doc
+    assert got["graph"]["keys"] == ["acid.slot.3", "acid"]
+    assert got["values"] == {"key.acid.slot.2.level": 0.7, "key.acid.2.slot.2.soft": 0.3,
+                             "view.bright": 1.0}
+    assert got["routes"][0]["target"] == "key.acid.slot.2.level"
+    assert got["node_mode"][0]["node"] == "render:acid"
+    frag = {"schema": "hyperspace.patch/2", "name": "f",
+            "nodes": [{"kind": "effect", "file": "acid"}, {"kind": "copy", "of": "acid"}],
+            "wires": [_w("acid", "copy.image")], "keys": ["copy"],
+            "values": {"key.copy.level": 0.7}}
+    new = patches.forward(frag)
+    assert new["keys"] == ["acid.slot.2"] and new["values"] == {"key.acid.slot.2.level": 0.7}
+    assert patches.check(new) == []
+
+
+def test_a_keyed_slot_is_read_and_spawned_with_its_effect():
+    """A fragment's key on a member effect's slot is read (`patches.read`) and
+    lands renamed with its effect (`spawn`'s landing keys)."""
+    frag = {"schema": patches.SCHEMA, "name": "f",
+            "nodes": [{"kind": "effect", "file": "acid", "slots": 2}],
+            "wires": [_w("acid", "acid.slot.2.image")], "keys": ["acid.slot.2"]}
+    assert patches.check(frag) == []
+    p = patches.read(frag)
+    assert p.keys == ("acid.slot.2",)
+
+
+def test_dropping_a_first_instance_effect_on_a_cable_keeps_its_slots():
+    """An instance 1's entry that says `slots` is no R21 bare entry: put on a
+    cable (`graphview._onto`), it stays, and its slots with it."""
+    from hyperspace import graphview
+    doc = {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid", "slots": 2}],
+           "wires": [_w("scene", "output.all.image"), _w("acid.slot.2", "output.2.image")]}
+    graphview._onto(doc, "scene", "output.all.image", "acid")
+    assert doc["nodes"] == [{"kind": "effect", "file": "acid", "slots": 2}]
+    assert G.read_graph(doc).notes == ()
+
+
+def test_through_traces_all_outputs_run_through_its_slots():
+    """"Hands through the effects" puts the hands through every pass of All
+    outputs' run — a slot too, each pass by its own name (its own aux), a new
+    slot allocated on its effect."""
+    sec = {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid", "slots": 2}],
+           "wires": [_w("shape", "scene.geometry"), _w("hands", "hands.layer.hands"),
+                     _w("scene", "acid.image"), _w("scene", "acid.aux"),
+                     _w("acid", "acid.slot.2.image"), _w("hands.layer", "acid.slot.2.aux"),
+                     _w("acid.slot.2", "output.all.image"),
+                     _w("hands.layer", "output.all.hands")]}
+    got = M.through_wires(G.read_graph(sec), 2)
+    assert [e for e in got if "kind" in e][1:] == [
+        {"kind": "effect", "file": "acid", "slots": 4}]
+    wires = [(w["from"], w["to"]) for w in got if "kind" not in w]
+    assert ("composite", "acid.slot.3.image") in wires
+    assert ("scene", "acid.slot.3.aux") in wires
+    assert ("acid.slot.3", "acid.slot.4.image") in wires
+    assert ("hands.layer", "acid.slot.4.aux") in wires
+    assert ("acid.slot.4", "output.2.image") in wires

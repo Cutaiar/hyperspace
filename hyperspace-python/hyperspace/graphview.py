@@ -130,7 +130,7 @@ from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
 from .groupwords import group_title
-from .params import PATCH_GROUPS, Kind, Param, Registry
+from .params import PATCH_GROUPS, Kind, Param, Registry, rename_keys
 from .routing import (
     MOD_OPS,
     PAIR_SCHEME,
@@ -6839,10 +6839,11 @@ def _onto(doc: dict, s: str, d: str, name: str, inlet: str | None = None) -> Non
             return f"{n}.image" == d
         return f"{where}.image" == d
     _unplace(doc, into_d)
-    # (R21: an instance 1 kept unwired is named by its wires again)
+    # (R21: an instance 1 kept unwired is named by its wires again — but
+    # one that declares slots keeps its entry, plan 89)
     doc["nodes"] = [e for e in doc.get("nodes", []) if not (
         _entry_name(e) == name and e.get("instance", 1) == 1
-        and not any(k in e for k in rgraph.PLACE_KEYS))]
+        and not any(k in e for k in (*rgraph.PLACE_KEYS, "slots")))]
     wires = doc.get("wires", [])
     if d in rgraph.MANY_PORTS:
         kept = [x for x in wires if (x["from"], x["to"]) != (s, d)]
@@ -7124,12 +7125,15 @@ def _slots_in(doc: dict, effect: str) -> int:
     return k if isinstance(k, int) and not isinstance(k, bool) else 1
 
 
-def drop_slots(doc: dict, names: Iterable[str]) -> list[str]:
+def drop_slots(doc: dict, names: Iterable[str],
+               keyed: dict[str, str] | None = None) -> list[str]:
     """Slots `names` (`acid.slot.2` …) out of section `doc` (plan 89): each
     lifted (`_lift`: what fed its picture goes on to what it fed), its other
     wires gone, and each effect's later slots numbered down to close the gap
-    (`acid.slot.3` is `acid.slot.2` now, its wires with it), its entry's
-    `slots` one down per slot gone. Returns the ports left fed by nothing."""
+    (`acid.slot.3` is `acid.slot.2` now, its wires and its key with it), its
+    entry's `slots` one down per slot gone. `keyed`, when given, gets each
+    keyed slot's old name → new (its knobs to move: `params.rename_keys`).
+    Returns the ports left fed by nothing."""
     lost: list[str] = []
     by_effect: dict[str, list[int]] = {}
     for name in names:
@@ -7154,6 +7158,8 @@ def drop_slots(doc: dict, names: Iterable[str]) -> list[str]:
                 if node in ren:
                     x["to"] = f"{ren[node]}.{port}"
             if isinstance(doc.get(rgraph.KEYS_KEY), list):
+                if keyed is not None:
+                    keyed.update({o: n for o, n in ren.items() if o in doc[rgraph.KEYS_KEY]})
                 doc[rgraph.KEYS_KEY] = [ren.get(n, n) for n in doc[rgraph.KEYS_KEY]
                                         if n != name]
             have -= 1
@@ -7204,12 +7210,21 @@ def drop_slot(edit: Edit, slot: str) -> str | None:
     if got[1] > _slots_in(doc, got[0]):
         return f"{slot}: {got[0]} has no slot {got[1]}"
     ends = [n for x in doc.get("wires", []) for n in (x["from"], x["to"].rpartition(".")[0])]
-    lost = drop_slots(doc, [slot])
+    keyed: dict[str, str] = {}
+    lost = drop_slots(doc, [slot], keyed)
     _keep_declared(doc, [n for n in ends if rgraph.effect_of(n) != got[0]])
     said = SLOT_DROPPED.format(label=label_of(got[0]), k=got[1])
     if lost:
         said += f"; {', '.join(lost)} fed by nothing now"
-    return _land(edit, doc, f"remove {slot}", said)
+    # (the registry the section declares its knobs in: the landed graph's)
+    reg = getattr(edit, "reg", None) or getattr(getattr(edit, "graph", None), "reg", None)
+    if keyed and reg is not None:
+        # (a keyed later slot keeps its black-is-clear values under its new name)
+        rename_keys(reg, keyed)
+    why = _land(edit, doc, f"remove {slot}", said)
+    if why is not None and keyed and reg is not None:
+        rename_keys(reg, {new: old for old, new in keyed.items()})
+    return why
 
 
 def render_drop(edit: Edit, node: str) -> str | None:

@@ -256,6 +256,10 @@ def _slots_step(doc: Mapping) -> dict:
     if got is section:
         return out
     out.update(got)
+    # (the copy's `key.<copy>.*` knobs and canvas mentions elsewhere, the slot's)
+    for k in ("values", "routes", "desk", "macros", "modifiers"):
+        if k in out:
+            out[k] = graphmigrate.retarget_copies(out[k], renames)
     copies = {f"render:{graphmigrate.copy_name(e)}" for e in doc.get("nodes") or ()
               if isinstance(e, Mapping) and e.get("kind") == "copy"}
     if isinstance(doc.get("layout"), Mapping):
@@ -937,8 +941,9 @@ def read(doc: Mapping) -> Patch:
                  lfos=tuple(sorted(m.lfos)), envs=tuple(sorted(m.envs)), layout=layout,
                  ports=ports, control_rows=tuple(control), host_ports=tuple(host),
                  group=str(doc.get(GROUP_KEY) or ""),
-                 keys=tuple(sorted({k for k in doc.get(KEYED) or () if isinstance(k, str)}
-                                   & set(m.render))))
+                 # (plan 89: a member effect's slot may be keyed: it is the effect's)
+                 keys=tuple(sorted(k for k in set(doc.get(KEYED) or ())
+                                   if isinstance(k, str) and _node_of(k) in m.render)))
 
 
 def _macro_n(mid: Any) -> int:
@@ -1806,7 +1811,8 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
                    layout=layout, group=group, ports=ports, conflicts=tuple(conflicts),
                    wants={k: tuple(v) for k, v in wants.items()}, notes=tuple(notes),
                    taken=tuple(singles),
-                   keys=tuple(sorted(rn.name(k) for k in p.keys if k in m.render)))
+                   keys=tuple(sorted(rn.name(k) for k in p.keys
+                                     if _node_of(k) in m.render)))
 
 
 def is_control_source(addr: str) -> bool:

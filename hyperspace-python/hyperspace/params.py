@@ -1987,6 +1987,21 @@ def _key_state(r: Registry) -> dict[str, KeyState]:
     return state
 
 
+def rename_keys(r: Registry, renames: dict[str, str]) -> None:
+    """Keyed nodes renamed (plan 89: an effect's later slots numbered down
+    when one comes off): each old name's `KeyState` — its values — moves to
+    its new name, and both names' knobs leave the registry, so the next
+    `declare_keys` makes the new name's over the state it carries. A name
+    with no state is left alone."""
+    state = _key_state(r)
+    moved = {new: state.pop(old) for old, new in renames.items() if old in state}
+    state.update(moved)
+    for name in {*renames, *moved}:
+        for pid in key_ids(name):
+            if pid in r:
+                r.remove(pid)
+
+
 def declare_keys(r: Registry, names: Iterable[str]) -> list[str]:
     """Black is clear's knobs (plan 87), as `declare_mattes` does the
     mattes': for each node `names` keys, `level` 0–1 (0.02), `soft` 0–1

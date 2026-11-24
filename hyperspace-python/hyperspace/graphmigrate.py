@@ -1749,9 +1749,11 @@ def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) 
     wires = spec.wires
     allp = {w.port: w.src for w in wires if w.node == G.ALL_OUTPUTS}
     pictures = [w for w in wires if w.port == "image"]
+    # (plan 89: All outputs' run back through its effects and their slots —
+    # each pass by its own name, for its own input and aux wire)
     run: list[str] = []
     head = allp.get("image")
-    while _kind(head) == "effect" and head not in run:
+    while _kind(head) in ("effect", "slot") and head not in run:
         run.insert(0, head)
         head = _src_into(pictures, f"{head}.image")
     port = f"output.{n}."
@@ -1770,7 +1772,7 @@ def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) 
         out.append(_w(DEPTH_PIN, f"{comp}.{G.DEPTH_PORT}"))
     src = comp
     aux = {w.node: w.src for w in wires if w.port == G.AUX}
-    made, slots = _next_slots(spec, run)
+    made, slots = _next_slots(spec, [G.effect_of(p) for p in run])
     entries += made
     for e, name in zip(run, slots):
         out.append(_w(src, f"{name}.image"))
@@ -1889,6 +1891,42 @@ def slots_of_copies(section: Any) -> tuple[Any, dict[str, str], list[str]]:
     return out, renames, notes
 
 
+def retarget_copies(obj: Any, renames: dict[str, str]) -> Any:
+    """`obj` (a document's values, rows, node mode … — anything but its
+    graph) with what named a migrated copy naming its slot (plan 89): its
+    black-is-clear knobs `key.<copy>.*` → `key.<slot>.*` (keys of a map, and
+    any text, a row's target say), and a canvas node `render:<copy>` (node
+    mode's target) → `render:<effect>`, the node the slot is drawn on. A
+    copy instance's ids never take another's (`key.copy.2.*` is not
+    `copy`'s). A copy where anything changed, else `obj` itself."""
+    if not renames:
+        return obj
+    order = sorted(renames, key=len, reverse=True)
+
+    def one(x: str) -> str:
+        for old in order:
+            new = renames[old]
+            if x == f"render:{old}":
+                return f"render:{G.effect_of(new)}"
+            head = f"key.{old}"
+            if x == head:
+                return f"key.{new}"
+            if x.startswith(head + ".") and not x[len(head) + 1:][:1].isdigit():
+                return f"key.{new}" + x[len(head):]
+        return x
+
+    def walk(v: Any) -> Any:
+        if isinstance(v, str):
+            return one(v)
+        if isinstance(v, dict):
+            return {(one(k) if isinstance(k, str) else k): walk(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [walk(x) for x in v]
+        return v
+    got = walk(obj)
+    return obj if got == obj else got
+
+
 def twelve(doc: dict) -> tuple[dict, list[str]]:
     """An older loadable patch (before `/12`) as its `/12` reads it (plan
     89) — pure, one way, on load: its graph section's copies made slots
@@ -1900,7 +1938,11 @@ def twelve(doc: dict) -> tuple[dict, list[str]]:
     got, renames, notes = slots_of_copies(section)
     if got is section or not isinstance(section, dict):
         return doc, []
-    out = {**doc, "graph": got}
+    # (plan 89: every other key's mentions of a copy — its `key.<copy>.*`
+    # knobs in values and rows, node mode's `render:<copy>` — the slot's)
+    out = {k: (v if k in ("graph", "layout", GROUPS_KEY, "schema", "name")
+               else retarget_copies(v, renames)) for k, v in doc.items()}
+    out["graph"] = got
     gone = {f"render:{name}" for name in renames} | {
         f"render:{copy_name(e)}" for e in section["nodes"]
         if isinstance(e, dict) and e.get("kind") == "copy" and copy_name(e)}

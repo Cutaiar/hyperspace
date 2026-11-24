@@ -1831,6 +1831,27 @@ def test_a_slot_comes_off_and_the_later_ones_close_up(tmp_path):
     assert graphview.drop_slot(e, "acid.slot.2") == "acid.slot.2: acid has no slot 2"
 
 
+def test_a_keyed_later_slot_keeps_its_knobs_when_it_numbers_down(tmp_path):
+    """Plan 89 (review of #487): slot 3 keyed (black is clear) is slot 2 once
+    slot 2 comes off — its key and its knobs' values with it."""
+    section = {"frame": "wired",
+               "nodes": [{"kind": "effect", "file": "acid", "slots": 3}],
+               "wires": [{"from": "scene", "to": "acid.image"},
+                         {"from": "acid", "to": "output.all.image"},
+                         {"from": "lookback", "to": "acid.slot.2.image"},
+                         {"from": "acid.slot.2", "to": "output.2.image"},
+                         {"from": "scene", "to": "acid.slot.3.image"},
+                         {"from": "acid.slot.3", "to": "output.3.image"}],
+               "keys": ["acid.slot.3"]}
+    rig, e, _ = wired_rig(tmp_path, section)
+    rig.reg["key.acid.slot.3.level"].set(0.6)
+    assert e.drop_node("rout:acid.slot.2") is None
+    spec = rig.loaded_patch.graph.spec
+    assert spec.keys == ("acid.slot.2",)
+    assert "key.acid.slot.3.level" not in rig.reg
+    assert rig.reg["key.acid.slot.2.level"].value == pytest.approx(0.6)
+
+
 def test_unwiring_an_effects_only_input_leaves_it_faint_with_its_outs(tmp_path):
     """R15: in a wired frame an effect with no input reads nothing — drawn
     faint, its outs kept, no refusal (`branch-two-sizes`: `acid.2` fed by a
