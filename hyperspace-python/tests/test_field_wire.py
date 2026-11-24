@@ -406,3 +406,23 @@ def test_a_field_op_fed_by_nothing_says_what_it_needs():
     # a picture effect fed by nothing keeps its words (plan 80's generators run so)
     pic = _spec(wired(("wave", "output.1.image"), nodes=("wave",)))
     assert "wave" in G.unfed(pic) and not G.hungry_fields(pic)
+
+
+def test_a_small_fields_thumbnail_fills_its_grey(ctx):
+    """Rings at Scale 1/16 count to about 0.06 at the corners: shown as it is,
+    a thumbnail of it is mid-grey everywhere (the owner: "flat grey"). The
+    thumbnail scales the field to its own range (`FxChain.field_range`), so
+    its corners are white again; a field wired into an output is shown as it
+    is, unscaled."""
+    on = {**ON, "rings": {"on": True, "scale": 0.0625}}
+    r = _rig(ctx, BASIC, on)
+    _draw(ctx, r)
+    r.thumbs.want({"rings": "picture"})
+    _draw(ctx, r)
+    tex = r.thumbs.get("rings")
+    assert tex is not None
+    w, h = tex.size
+    px = np.frombuffer(tex.read(), np.uint8).reshape(h, w, 4)
+    assert abs(int(px[h // 2, w // 2, 0]) - 128) <= 6 and int(px[1, 1, 0]) > 230
+    made = r._field_gains["rings"]
+    assert 10.0 < made[1] < 40.0                     # 1 / the corner's ~0.06

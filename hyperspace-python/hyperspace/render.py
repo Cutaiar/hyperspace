@@ -1216,8 +1216,26 @@ def _field_thumb(frame: Frame, node) -> moderngl.Texture | None:
         return None
     tex, fbo = frame.r._frame_target(frame.key(node.name + "#thumb"), frame.size)
     fbo.viewport = (0, 0, *frame.size)
-    frame.r.fx.show_field(made, fbo)
+    frame.r.fx.show_field(made, fbo, gain=_thumb_gain(frame, node.name, made))
     return tex
+
+
+FIELD_RANGE_EVERY = 30      # frames between a field thumbnail's measures of its range
+
+
+def _thumb_gain(frame: Frame, name: str, made: moderngl.Texture) -> float:
+    """A field thumbnail's gain: 1 over the field's largest magnitude
+    (`FxChain.field_range`), so its shape fills the grey whatever its scale
+    — measured every `FIELD_RANGE_EVERY` frames, a read back being a stall
+    (between, the last measure). 1 for an empty field; within 1/64 … 4096."""
+    keep = frame.r.__dict__.setdefault("_field_gains", {})
+    n = frame.r.__dict__.get("_thumb_frames", 0)
+    frame.r._thumb_frames = n + 1
+    got = keep.get(name)
+    if got is None or n - got[0] >= FIELD_RANGE_EVERY:
+        m = frame.r.fx.field_range(made)
+        got = keep[name] = (n, 1.0 if m <= 0.0 else min(max(1.0 / m, 1.0 / 64.0), 4096.0))
+    return got[1]
 
 
 # the card is put through an effect at twice a thumbnail's size, so the
