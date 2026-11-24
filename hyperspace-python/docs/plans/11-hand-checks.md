@@ -8846,7 +8846,7 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
-## FN. Measure taken apart, a Point (rows 1107–1109, 2026-11-24)
+## FN. Measure taken apart, a Point (rows 1104, 1106–1109, 2026-11-24)
 
 Plan 67 §15. Headless: `tests/test_field_wire.py`, `tests/test_wave_patch.py`, `tests/test_blocks_patch.py`, `tests/test_field_examples.py` (every example's nodes reach, on the canvas and the FX pane). The examples are in the Drive library's `loadable/field-examples/`.
 
@@ -8854,7 +8854,7 @@ Plan 67 §15. Headless: `tests/test_field_wire.py`, `tests/test_wave_patch.py`, 
 
 **890. Nothing reaches nothing.** (Mac) Load each of the five `field-examples`, and open the FX section with each field node selected. *Pass:* no node says "reaches nothing"; each sits under Run. *Fail:* any field node faint, or "it reaches nothing — wire it on graph".
 
-## FM. Blocks taken apart (rows 1103–1106, 2026-11-24)
+## FM. Blocks taken apart (rows 1103, 1105, 2026-11-24)
 
 Plan 67 §14. Headless: `tests/test_blocks_patch.py` (every Blocks choice and pair, three times, one pass per node; every saved Blocks look through the renderer), `tests/test_field_examples.py` (`field-blocks` opens with no note, its routes live), `tools/fx_sweep.py` (Blocks byte for byte on the shared cell pieces). The example is in the Drive library's `loadable/field-examples/`.
 
@@ -8878,19 +8878,6 @@ Plan 67 F1. Headless: `tests/test_field_wire.py` (types, directives, the wire ch
 
 **886. Wave taken apart.** (Mac, a sub band playing) Load `distort-wave-ripple`, then `field-examples/field-wave`, side by side if two decks are free (one on air, one off). *Pass:* the same ripples, the same response to the sub band and both hands; on the canvas five nodes and their green field cables; switching Waveform's Shape to square still looks like Wave's slabs (the odd edge pixel is row 1101's). Then wire the Waveform straight into an output as well: grey rings, moving. *Fail:* a picture that differs at a glance, or a frame rate that drops with the five passes.
 
-## FK. Time Displace (rows 1087–1095, 2026-11-22)
-
-Plan 66 stage 3a. Headless: `tests/test_time_displace.py` (Span 0 its input byte for byte; the flat field at a frame's age that frame; the blend and the nearer frame; the oldest past the ring; the line, rings and aux fields; Drift; nothing to read is its input; the renderer's rings in a real graph). For each check: a look-back on the graph with its capture wired (the scene), and Time Displace after the frame into an output.
-
-**876. The slit-scan on stage.** (Mac, the rig's display, a moving shape or a camera channel) Time Displace with Field line, Span 1 s, Angle 0. *Pass:* the left edge is live and sharp, the picture lags more toward the right, a moving thing smears into a curve across the frame; Drift 0.5 sweeps the lag across smoothly; Between nearest with Steps 8 gives hard bands; the frame rate holds. *Fail:* a stutter, a band that jumps when no knob moved, or the right edge live.
-
-**877. A picture as the field.** Wire a channel (a gradient or a face video) into Time Displace's aux, Field aux. *Pass:* dark parts are live, bright parts lag by up to Span; a mask from a matte in the aux gives a live cut-out over a lagging ground. *Fail:* the aux ignored, or bright and dark the wrong way round.
-
-**878. Span on a fader.** Map Span to a knob or a hand; sweep it from 0. *Pass:* at 0 it is exactly the live picture; it fades into the lag with no jump; Between blend is smooth between the ring's frames. *Fail:* a jump off 0, or visible steps at blend.
-
-**879. Past the ring, and none.** With Echo time apart at its default, set Span to 8 s. *Pass:* the far side holds the oldest frame (about a second back), and raising Echo time apart reaches further, in coarser steps. Set Look-back to 2 with no second look-back on the graph: *Pass:* the live picture, no error. *Fail:* black, a frozen frame, or an error line.
-
-**880. What it costs, and how soft the past is.** (Mac, 1080p outputs) SYSTEM's line for Time Displace with Field line and Span 1 s, at look-back resolution 256 and 384. *Pass:* no drop in the frame rate; note the milliseconds, and say whether the past's softness beside the sharp now reads as a style or a fault (row 1094: a full-size ring). *Fail:* a cost that shows in the frame rate.
 
 ## DY. The Mandelbrot (rows 872–881, 2026-11-19)
 
@@ -9057,6 +9044,20 @@ Plan 88. Headless: `tests/test_save_live.py` (the ▾ joined to **save as** and 
 **871. Save to location.** ▾ → **save to location…**. *Pass:* the file dialog opens in the loaded patch's folder (with nothing loaded: `My Drive/Hyperspace/loadable`); step into another era folder or make a new one, type a name, save: the patch is there, loaded, on a pad, and the chip names it. *Fail:* the dialog opening somewhere outside the library, or the save landing elsewhere than picked.
 
 **872. Outside, and over a file.** In that dialog, save to the Desktop; then again on an existing patch's file (say yes to "Replace?"). *Pass:* both refused on the footer, nothing written. *Fail:* a file outside the library, or a patch written over.
+
+## FK. Time Displace (rows 1087–1095, 2026-11-22)
+
+Plan 66 stage 3a. Headless: `tests/test_time_displace.py` (Span 0 its input byte for byte; the flat field at a frame's age that frame; the blend and the nearer frame; the oldest past the ring; the line, rings and aux fields; Drift; nothing to read is its input; the renderer's rings in a real graph). For each check: a look-back on the graph with its capture wired (the scene), and Time Displace after the frame into an output.
+
+**876. The slit-scan on stage.** (Mac, the rig's display, a moving shape or a camera channel) Time Displace with Field line, Span 1 s, Angle 0. *Pass:* the left edge is live and sharp, the picture lags more toward the right, a moving thing smears into a curve across the frame; Drift 0.5 sweeps the lag across smoothly; Between nearest with Steps 8 gives hard bands; the frame rate holds. *Fail:* a stutter, a band that jumps when no knob moved, or the right edge live.
+
+**877. A picture as the field.** Wire a channel (a gradient or a face video) into Time Displace's aux, Field aux. *Pass:* dark parts are live, bright parts lag by up to Span; a mask from a matte in the aux gives a live cut-out over a lagging ground. *Fail:* the aux ignored, or bright and dark the wrong way round.
+
+**878. Span on a fader.** Map Span to a knob or a hand; sweep it from 0. *Pass:* at 0 it is exactly the live picture; it fades into the lag with no jump; Between blend is smooth between the ring's frames. *Fail:* a jump off 0, or visible steps at blend.
+
+**879. Past the ring, and none.** With Echo time apart at its default, set Span to 8 s. *Pass:* the far side holds the oldest frame (about a second back), and raising Echo time apart reaches further, in coarser steps. Set Look-back to 2 with no second look-back on the graph: *Pass:* the live picture, no error. *Fail:* black, a frozen frame, or an error line.
+
+**880. What it costs, and how soft the past is.** (Mac, 1080p outputs) SYSTEM's line for Time Displace with Field line and Span 1 s, at look-back resolution 256 and 384. *Pass:* no drop in the frame rate; note the milliseconds, and say whether the past's softness beside the sharp now reads as a style or a fault (row 1094: a full-size ring). *Fail:* a cost that shows in the frame rate.
 
 ## FJ. An effect's slots, no copy node (rows 1081–1086, 2026-11-23)
 
