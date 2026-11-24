@@ -383,3 +383,26 @@ def test_a_field_crossing_a_saved_patch_edge_is_saved_a_field():
     assert into("displace.slot.2.image") == G.IMAGE
     assert patches.wire_type(G.Wire("rings", "displace.field"), patches.OUT) == G.FIELD
     assert patches.wire_type(G.Wire("displace", "output.1.image"), patches.OUT) == G.IMAGE
+
+
+def test_a_field_op_fed_by_nothing_says_what_it_needs():
+    """The owner on the rig: a Waveform wired onward but fed by nothing said
+    "reaches nothing". It is R15's — nothing in its input — so the canvas says
+    what it needs (a field) and the FX pane groups it "fed by nothing", with
+    its own reason, not "reaches nothing"."""
+    from hyperspace import graph as G
+    from hyperspace import graphview, ui_fx
+
+    spec = _spec(wired(("scene", "displace.image"), ("waveform", "displace.field"),
+                       ("displace", "output.1.image"), nodes=("waveform", "displace")))
+    assert G.unfed(spec) == {"waveform"} and G.hungry_fields(spec) == {"waveform"}
+    assert "waveform" in graphview.unreached(spec)
+    groups = dict(ui_fx.groups(spec))
+    assert groups.get(ui_fx.UNFED) == ["waveform"] and ui_fx.UNREACHED not in groups
+    n = graphview.VNode("render:waveform", "render", "waveform", faint=True, unfed=True)
+    assert graphview.summary(n)[0] == graphview.NEEDS_FIELD
+    # a generator is fed by nothing by design, and a picture effect needs a picture
+    assert "rings" not in G.unfed(_spec(wired(("rings", "displace.field"))))
+    # a picture effect fed by nothing keeps its words (plan 80's generators run so)
+    pic = _spec(wired(("wave", "output.1.image"), nodes=("wave",)))
+    assert "wave" in G.unfed(pic) and not G.hungry_fields(pic)

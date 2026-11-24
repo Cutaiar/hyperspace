@@ -265,6 +265,9 @@ class VNode:
     # that no path leads from to a sink (`graph.reaches`): kept, never run,
     # drawn faint with the line "reaches nothing" — never idle
     faint: bool = False
+    # R15: faint because nothing is wired into its input, though it may reach
+    # an output — said as what it needs, not "reaches nothing"
+    unfed: bool = False
     # plan 37 C1 (P1): how this node's thumbnail is found (`THUMBS`' word:
     # "picture", "scene", "layer", "window", "mask"), None for a node that stays
     # text (the modulation side, a group, the camera); and the size of the
@@ -795,6 +798,15 @@ def _port_type(kind: str) -> str:
 # pipelines' composites and ends) is drawn: none of it is a node any more.
 
 REACHES_NOTHING = "reaches nothing"     # the spec's canvas word for an unreached node
+NEEDS_FIELD = "wire a field into its input"   # R15, a field op fed by nothing
+NEEDS_PICTURE = "wire a picture into its input"
+
+
+def needs_input(n) -> str:
+    """What a faint node fed by nothing says (R15): what its input takes."""
+    name = n.id.partition(":")[2]
+    takes = rgraph.effect_ports(rgraph.effect_of(name) or name)[1].get("image")
+    return NEEDS_FIELD if takes == rgraph.FIELD else NEEDS_PICTURE
 MAKER_KINDS = ("effect", "composite", "switch")    # (`unreached` before the wired frame)
 D1_AFTER = "sits after"     # a cable drawn from a D1 `after` effect (`build`, `returns`)
 
@@ -1254,10 +1266,7 @@ def unreached(spec) -> frozenset[str]:
         # reached while any of its slots is)
         # (plan 67 F1: a file that takes no picture — a field generator,
         # Point, Rings … — is fed by nothing by design, and reaches what it feeds)
-        fed = {w.node for w in spec.all_wires() if w.port == "image"}
-        got -= {n for n in got if kind_of(n) in ("effect", "slot") and n not in fed
-                and n not in {e.name for e in spec.effects if e.placed}
-                and not (kind_of(n) == "effect" and "image" not in rgraph.effect_ports(n)[1])}
+        got -= rgraph.unfed(spec)
         got |= {rgraph.effect_of(n) for n in got if kind_of(n) == "slot"}
         return frozenset(n for n in frame_names(spec) if n not in got
                          and kind_of(n) not in ("output", rgraph.ALL_OUTPUTS, rgraph.GROUND))
@@ -1647,6 +1656,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     names = [n for n in dict.fromkeys(names) if kind_of(n) not in ("output", rgraph.ALL_OUTPUTS)]
     names += [rgraph.ALL_OUTPUTS, *sorted(outs, key=lambda n: int(n.partition(".")[2]))]
     gone = unreached(frame)
+    # R15's, among those a path from would reach a sink: they need an input;
+    # one that reaches nothing either way still says so
+    hungry = rgraph.hungry_fields(frame)
     refs: dict[str, rgraph.Node] = {}
     stood: set[str] = set()
     for name in names:
@@ -1979,6 +1991,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         # waits to be wired in; (plan 35 G) a channel with nothing in its
         # bin and no cable sits on MEDIA's idle line, as an idle macro does
         n.faint = n.kind in FRAME_VKINDS and n.id.partition(":")[2] in gone
+        n.unfed = n.faint and n.id.partition(":")[2] in hungry
         n.idle = not n.faint and (
             (n.kind == "channel" and is_idle(n, macros, named) and channel_empty(n, reg))
             or (n.kind != "channel" and is_idle(n, macros, named))
@@ -3252,7 +3265,7 @@ def summary(n: VNode) -> list[str]:
         if isinstance(n.ref, rgraph.SwitchNode):
             lines.insert(0, switch_pick(n))
         if n.faint:                         # plan 33 U: unreached, said first
-            lines.insert(0, REACHES_NOTHING)
+            lines.insert(0, needs_input(n) if n.unfed else REACHES_NOTHING)
     return lines[:SUMMARY_LINES]
 
 

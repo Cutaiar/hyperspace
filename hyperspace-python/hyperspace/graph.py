@@ -2804,6 +2804,34 @@ _PICTURE_PORTS = frozenset({"image", "aux", "under", "over", "media", "faces",
                             "hands", "readout", *SWITCH_PORTS})
 
 
+def unfed(spec: GraphSpec) -> frozenset[str]:
+    """R15 in a wired frame: the effects and slots whose input port nothing is
+    wired into — never built, though a path from them may reach a sink. A file
+    that takes no input (a generator: Point, Rings, the test card …) is fed by
+    nothing by design and is not here; nor is a D1-placed effect."""
+    if not getattr(spec, "wired", False):
+        return frozenset()
+    fed = {w.node for w in spec.all_wires() if w.port == "image"}
+    placed = {e.name for e in spec.effects if e.placed}
+    names = {e.name for e in spec.effects} | {n for w in spec.all_wires() for n in (w.src, w.node)}
+    return frozenset(n for n in names
+                     if wire_node_kind(n, wired=True) in ("effect", "slot") and n not in fed
+                     and n not in placed
+                     and not (wire_node_kind(n, wired=True) == "effect"
+                              and "image" not in effect_ports(n)[1]))
+
+
+def hungry_fields(spec: GraphSpec | None) -> frozenset[str]:
+    """The field ops among `unfed` that a path from would reach a sink: a
+    Waveform or Combine wired onward with no field into its input. They cannot
+    run without one (a picture effect may: plan 80's generators), so GRAPH and
+    the FX pane say what they need rather than "reaches nothing"."""
+    if spec is None or not getattr(spec, "wired", False):
+        return frozenset()
+    return frozenset(n for n in unfed(spec) & reaches(spec)
+                     if effect_ports(effect_of(n) or n)[1].get("image") == FIELD)
+
+
 def reaches(spec: GraphSpec) -> frozenset[str]:
     """Every node with a path, through wires into picture ports, to a sink
     port (`SINKS`: an output, the pipeline end, the faces, the pattern's
