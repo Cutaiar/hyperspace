@@ -60,10 +60,16 @@ def test_the_field_type_is_one_word_in_both_modules():
 
 
 def test_each_file_says_what_its_ports_carry():
-    assert ports_of("rings") == ("field", {"aux": "image", "field": "field"})   # no input; a point
-    assert ports_of("tofield") == ("field", {"image": "image", "aux": "image"})
-    assert ports_of("displace") == ("image", {"image": "image", "aux": "image", "field": "field"})
-    assert ports_of("wave") == ("image", {"image": "image", "aux": "image"})
+    # (plan 67 P3: and each knob that takes a field a port of its key, a field's;
+    # `tests/test_knob_fields.py` holds those — here, the picture and field ports)
+    def own(file):
+        makes, takes = ports_of(file)
+        return makes, {k: v for k, v in takes.items() if k in fx.PORT_NAMES}
+    assert own("rings") == ("field", {"aux": "image", "field": "field"})   # no input; a point
+    assert own("tofield") == ("field", {"image": "image", "aux": "image"})
+    assert own("displace") == ("image", {"image": "image", "aux": "image", "field": "field"})
+    assert own("wave") == ("image", {"image": "image", "aux": "image"})
+    assert ports_of("wave")[1]["amount"] == "field" and "along" not in ports_of("wave")[1]
     assert ports_of("no_such_file") == ("image", {"image": "image", "aux": "image"})
 
 

@@ -1676,6 +1676,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if w.node in stood and src is not None and w.port in r.INPUTS:
             r.inputs[w.port] = src
     aux_wired = {w.dst for w in frame.all_wires() if w.port == rgraph.AUX}
+    wired_to = {w.dst for w in frame.all_wires()}
     for name, r in refs.items():
         kind = kind_of(name)
         vkind = ("channel" if kind == "channel" else
@@ -1694,6 +1695,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 if port == rgraph.AUX and kind == "effect" and not aux_shown(
                         reg, name, f"{slot}.{port}" in aux_wired):
                     continue                    # plan 65: a file that reads no aux has no port
+                if (kind == "effect" and port not in rgraph.PORT_NAMES
+                        and f"{slot}.{port}" not in wired_to):
+                    continue    # plan 67 P3: a knob's field port is drawn once wired (`knob_pin`)
                 add_port(n, VPort(f"rin:{slot}/{port}", port + tail, IN, typ))
             made = _makes(kind, name)
             if made is not None:
@@ -1922,8 +1926,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         # (plan 67 F1: and a field maker's a field cable, promoted or not)
         typ = (pin_type[src] if pin_type.get(src) in (MASK, FIELD)
                else _takes(kind_of(w.node), w.node).get(w.port, IMAGE))
+        # plan 67 P3: a field into a knob says its depth, as a route does
+        knob = rgraph.is_knob_port(w.node, rgraph.wire_node_kind(w.node, wired=True), w.port)
         view.cables.append(VCable(cable_id(f"wire:{w.src}>{w.node}/{w.port}"), src, dst,
-                                  typ, ref=w,
+                                  typ, ref=w, depth=w.depth if knob else None,
                                   kind="render", dormant=shut, off=shut, label=said))
     # plan 36 T1 (W1, D1): the meta controller's bus cables, `output.all.<port> →
     # output.<n>.<port>` — each standing one the show has not cut, into
@@ -4195,6 +4201,10 @@ class Edit:
         """Why `wire` would refuse, changing nothing (the drag's words)."""
         return self.wire(src_port, dst_port, dry=True)
 
+    def set_depth(self, w: rgraph.Wire, depth: float) -> str | None:
+        """Plan 67 P3: how deep field wire `w` into a knob goes (`set_wire_depth`)."""
+        return set_wire_depth(self, w, depth)
+
     def unwire(self, cable, dst: str | None = None) -> str | None:
         """Take a render cable (a `VCable`, or its two ends; one port's
         name alone: whatever is wired into it) out of the graph — any wire
@@ -5479,6 +5489,8 @@ class Edit:
             if "to" in p:
                 node = canvas_node(was)
                 w = {"from": was, "to": p["to"]}
+                if isinstance(p.get(rgraph.WIRE_DEPTH), (int, float)):   # plan 67 P3
+                    w[rgraph.WIRE_DEPTH] = p[rgraph.WIRE_DEPTH]
             else:
                 node = canvas_node(was.rpartition(".")[0])
                 w = {"from": p["from"], "to": was}
@@ -5778,6 +5790,68 @@ def onto_words(view: View, c: VCable) -> str:
 # are none now). What stays refused: a type error, a loop, the meta controller's own —
 # a window (delete takes its wires: `OUTPUT_UNWIRED`) and a cloud
 # (`NOT_REMOVABLE`) — and the look's one camera (`CAMERA_KEPT`, plan 43 C2).
+
+
+KNOB_DEPTH_STEPS = (1.0, 0.5, 0.25, 0.125)     # plan 67 P3: shares of a knob's range
+SET_DEPTH_SAID = "{wire}: depth {depth:g}"
+
+
+def depth_choices(w: rgraph.Wire) -> list[tuple[float, str]]:
+    """Plan 67 P3: the depths offered for field wire `w` into a knob — 1 (the
+    field as it is, in the knob's units), then ±⅛ … ±1 of the knob's range
+    (a field of 0 … 1 then sweeps that share of it) — each with its words;
+    none for a wire into no knob."""
+    if not rgraph.is_knob_port(w.node, rgraph.wire_node_kind(w.node, wired=True), w.port):
+        return []
+    spec = rgraph.knob_spec(w.node)
+    p = next((p for p in spec.params if p.key == w.port), None) if spec is not None else None
+    if p is None:
+        return []
+    span = p.hi - p.lo
+    out: list[tuple[float, str]] = [(1.0, "1: the field as it is")]
+    for k in KNOB_DEPTH_STEPS:
+        for sign in (1.0, -1.0):
+            d = sign * span * k
+            share = {1.0: "its whole range", 0.5: "half its range",
+                     0.25: "a quarter of its range", 0.125: "an eighth of its range"}[k]
+            out.append((d, f"{d:+g}: {'' if sign > 0 else 'minus '}{share}"))
+    return out
+
+
+def set_wire_depth(edit: Edit, w: rgraph.Wire, depth: float) -> str | None:
+    """Plan 67 P3: field wire `w` into a knob at `depth` (`graph.WIRE_DEPTH`),
+    one undo step; refused in words for a wire the section does not have."""
+    doc = _doc(edit)
+    wires = doc.get("wires", [])
+    at = next((i for i, x in enumerate(wires) if (x.get("from"), x.get("to")) == (w.src, w.dst)),
+              None)
+    if at is None:
+        return NO_SUCH_WIRE.format(wire=str(w))
+    doc["wires"] = [*wires[:at], rgraph.Wire(w.src, w.dst, float(depth)).to_json(),
+                    *wires[at + 1:]]
+    said = SET_DEPTH_SAID.format(wire=w, depth=depth)
+    return _land(edit, doc, f"depth {w.dst}", said)
+
+
+def knob_pin(pin: str) -> str | None:
+    """Plan 67 P3: a knob's row on GRAPH — its `param:`, `base:`, `mod:` or
+    `depth:` pin of `fx.<effect>[.<n>].<key>` — as the knob's field port,
+    `rin:<effect>/<key>`, so a field cable dropped on the knob wires it (or
+    is refused in words: a choice, a count, a rate); None for any other pin."""
+    head, _, pid = pin.partition(":")
+    if head not in ("param", BASE, MOD, DEPTH) or not pid.startswith("fx."):
+        return None
+    parts = pid.split(".")[1:]
+    if len(parts) >= 3 and parts[1].isdecimal():
+        name, key = f"{parts[0]}.{parts[1]}", ".".join(parts[2:])
+    elif len(parts) == 2:
+        name, key = parts
+    else:
+        return None
+    takes = rgraph.effect_ports(name)[1]
+    if (key in rgraph.PORT_NAMES or takes.get(key) != FIELD) and rgraph.knob_refusal(name, key) is None:
+        return None
+    return f"rin:{name}/{key}"
 
 
 def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
@@ -6154,7 +6228,7 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
     s, why = spec_name(src, edit.render)
     if s is None:
         return why
-    d, why = spec_name(dst, edit.render)
+    d, why = spec_name(knob_pin(dst) or dst, edit.render)
     if d is None:
         return why
     if kind_of(d) is not None:

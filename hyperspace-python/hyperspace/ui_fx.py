@@ -48,7 +48,15 @@ from imgui_bundle import imgui
 
 from . import ui, ui_fields, ui_kit
 from .fx import FACE_MAPS, FX_DIR, PER_FACE, pad_of
-from .graph import _PICTURE_PORTS, FIELD_PORT, hungry_fields, run_back, run_of, wire_node_kind
+from .graph import (
+    _PICTURE_PORTS,
+    FIELD_PORT,
+    hungry_fields,
+    is_knob_port,
+    run_back,
+    run_of,
+    wire_node_kind,
+)
 
 # the groups `groups` makes, as their headers say them
 RUN = "Run"
@@ -104,10 +112,12 @@ def groups(spec) -> list[tuple[str, list[str]]]:
 
     def kind_of(name: str) -> str | None:
         return wire_node_kind(name, wired=wired)
-    # (the picture ports `graph.reaches` follows, and the field port: a field
-    # into Displace's `field` reaches what Displace reaches — plan 67. A value
-    # port carries none)
-    wires = [w for w in spec.all_wires() if w.port in _PICTURE_PORTS or w.port == FIELD_PORT]
+    # (the picture ports `graph.reaches` follows, and the field ports: a field
+    # into Displace's `field`, or into a knob, reaches what that effect reaches
+    # — plan 67 F1, P3. A value port carries none)
+    wires = [w for w in spec.all_wires()
+             if w.port in _PICTURE_PORTS or w.port == FIELD_PORT
+             or is_knob_port(w.node, kind_of(w.node), w.port)]
     names = {e.name for e in spec.effects}
     for w in wires:
         names.update(n for n in (w.src, w.node) if kind_of(n) == "effect")

@@ -768,3 +768,21 @@ def test_a_patch_saved_in_the_old_pad_words_reads_in_todays():
     p = read({"nodes": [], "routes": [{"source": "pair:UP/DOWN", "target": "view.zoom"},
                                       {"source": "pad:A", "target": "deck.chase"}]})
     assert [r["source"] for r in p.routes] == ["pair:hat.N/hat.S", "pad:S"]
+
+
+def test_a_field_wire_into_a_knob_keeps_its_depth_through_a_lift_and_a_spawn():
+    """Plan 67 P3: a field into a knob says its depth (`graph.WIRE_DEPTH`); a
+    patch lifted with that wire inside keeps it, renamed with its nodes, and an
+    inlet carrying one across the region's edge keeps it as the port's, landed
+    on the wire a spawn makes."""
+    noita = copy.deepcopy(loadable("party-noita"))
+    noita["graph"]["nodes"].append({"kind": "effect", "file": "line"})
+    noita["graph"]["wires"].append({"from": "line", "to": "warp.amount", "depth": 0.25})
+    doc, _ = patches.lift(*parts(noita), [*NOITA_CORE, "render:line"])
+    assert {"from": "line", "to": "warp.amount", "depth": 0.25} in doc["wires"]
+    landing = spawn(doc, host_of(parts(noita)), at=(0, 0))
+    assert {"from": "line.2", "to": "warp.2.amount", "depth": 0.25} in landing.wires
+    # across the edge: the line stays in the host, an inlet carries the depth
+    edge, _ = patches.lift(*parts(noita), NOITA_CORE)
+    inlet = next(p for p in edge["ports"] if p.get("to") == "warp.amount")
+    assert inlet[G.WIRE_DEPTH] == 0.25 and inlet["type"] == G.FIELD and inlet["was"] == "line"

@@ -411,7 +411,7 @@ def test_a_pass_reads_its_own_pixel_byte_for_byte(ctx, fxdir, monkeypatch):
         return got[4:, 8:]
 
     assert np.array_equal(through("const"), want)
-    monkeypatch.setattr(chain, "_program", lambda name: None)
+    monkeypatch.setattr(chain, "_program", lambda name, knobs=(): None)
     assert np.array_equal(through("const"), want)
 
 

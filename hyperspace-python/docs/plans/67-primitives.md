@@ -731,3 +731,27 @@ and `tests/fixtures/field-examples/`, kept equal.
 - **Devin reviews every PR**: verify each finding against the code, fix what is real with a test
   that fails first, answer and resolve its thread.
 
+
+## 18. Any knob takes a field (2026-11-24)
+
+Built (P3, §3.9; rows 1113–1118, hand checks 892–894): a field wired into a knob makes it
+**value + depth × field** at every pixel, about its value — the panel, routes and LFOs still
+set the value, the field spreads it.
+
+- **The accessor.** `fx.py` writes it from the `@param` lines: with knobs wired, the pass runs
+  a program of its own, the file's `uniform float u_<key>;` renamed to its value and `u_<key>`
+  a `#define` that reads the field (`knob_at`: clamped to the knob's range, wrapped for a
+  `wrap` knob). No file changed. With none wired the program is the file's, string for string:
+  `tools/fx_sweep.py` over every file, 2886 renders saved on `main` and checked here, every byte
+  equal.
+- **The port** is the knob's key (`wave.amount`), a field's in `fx.ports`, so `graph.takes_of`
+  and `patches.wire_type` type it with no second lookup. GRAPH draws it once wired; a field
+  cable dropped on the knob's own row wires it (`graphview.knob_pin`).
+- **The depth** is a key on the wire (the owner: "a depth key on the wire"), written only when
+  not 1, kept through a patch's lift and spawn; the cable's menu, **depth ▸**, offers 1 and
+  ±⅛ … ±1 of the knob's range. No schema bump (DECISIONS).
+- **Refused in words:** a choice, a count (every `int`), a `@clock`'s rate, any knob of a file
+  with a Python half; more than 12 knobs of one effect at once.
+- **The example** `field-knob`: Point → Rings (value) → Wave's Amount at depth 0.06.
+
+**Next** (§17): retire Hue cycle into Palette + fields; one rule for "fed by nothing".
