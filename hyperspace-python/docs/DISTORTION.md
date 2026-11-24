@@ -5,7 +5,6 @@ they share. Added 2026-11-13. Each is one file in
 `hyperspace/shaders/fx/` with nothing in Python, like every effect
 (`fx.py`'s docstring has the file format).
 
-- Patches to play them: `presets/distort/` (its README lists all 23).
 - Tests: `tests/test_fx_distort.py`, `tests/test_distort_presets.py`.
 - Demo video: `tools/distort_demo.py` (see "Showing an effect" below).
 

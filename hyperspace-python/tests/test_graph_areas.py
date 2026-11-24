@@ -208,7 +208,7 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
                               "group:audio", "group:scene")} == {graphview.AUDIO}
     assert {area[k] for k in ("lfo.1", "macro.1", "group:lfo")} == {graphview.MODULATION}
     # (plan 35 G: by primitive, in the new ids)
-    assert {area[k] for k in ("render:shape", "render:camera", "render:hands", "render:scene",
+    assert {area[k] for k in ("render:shape", "render:hands", "render:scene",
                               "render:hands.layer", "group:hands",
                               "group:cloud")} == {graphview.SCENE_AREA}
     # (plan 36 T4: party-trip's look-back was off — none drawn; party-tracer's on)
@@ -300,7 +300,7 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     view = st["view"]
     ui_graph.toggle_idle(st, graphview.MODULATION)
     ui_graph.toggle_open(st, "render:shape")
-    rig.lib.loaded_patch.layout["render:camera"] = [900, 40]
+    rig.lib.loaded_patch.layout["render:scene"] = [900, 40]
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
@@ -755,7 +755,7 @@ def test_the_areas_run_by_primitive(rig):
     view = load(rig, "party-trip")["view"]
     area = {n.id: n.area for n in view.nodes}
     assert {area[k] for k in ("render:shape", "render:scene", "render:hands",
-                              "render:hands.layer", "render:camera")} == {graphview.SCENE_AREA}
+                              "render:hands.layer")} == {graphview.SCENE_AREA}
     tracer = {n.id: n.area for n in load(rig, "party-tracer")["view"].nodes}
     assert tracer["render:lookback"] == graphview.LOOKBACK_AREA      # (plan 36 T4)
     assert {area[k] for k in ("render:acid", "render:palette")} == {graphview.EFFECTS_AREA}
@@ -807,7 +807,7 @@ def test_a_blank_loadable_draws_only_the_outputs(rig, monkeypatch):
     st = landed({"frame": "wired"})
     view = st["view"]
     drawn = {n.id for n in view.nodes if n.kind in ("render", "output", "channel")
-             and not n.idle and n.id != "render:camera"}
+             and not n.idle}
     # (plan 36 T3: hands 1's entry is always written, so its node is drawn)
     assert drawn == {"render:hands", "render:output.all", "render:output.1", "render:output.2"}
     chans_ = [n for n in view.nodes if n.kind == "channel"]

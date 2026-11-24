@@ -248,6 +248,7 @@ from . import graph as rgraph
 from . import (
     graphview,
     modifiers,
+    nodemode,
     params,
     patches,
     pinch,
@@ -268,6 +269,7 @@ from . import ui_effect_picker as fxpick
 from .bands import CEIL
 from .graph import Effect
 from .groupwords import group_title
+from .hands import panel as ui_hands
 from .learn import META_UNDO, PairAsk
 from .library import LibraryError
 from .params import KEY_GROUP, Kind
@@ -4724,6 +4726,9 @@ def _side(panel, st: dict, view: graphview.View, sel) -> None:
         imgui.pop_id()
 
 
+FRAME_READINGS = ("render", "output", "channel")    # nodes whose port readings are not content
+
+
 def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode) -> None:
     """A selected node's side panel (the owner, 2026-10-24): its page's
     chip (`home_page`), then an effect's strip, a modifier's editor, or its
@@ -4763,8 +4768,13 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
             ui._micro("dials")
             panel._dials()
         return                                  # — the picture says what the port lines would
+    if n.id == f"render:{rgraph.wired_hands_name(1)}":     # the hands node IS the hands page: where they are,
+        ui_hands.body(panel, 1 / 60, strip=False)   # the pinches, the axes, calibration, the grip
+        return
     if _param_rows(panel, st, n):
         return
+    if n.kind in FRAME_READINGS:            # (a source's readings are its content; a picture
+        return                              # node's "image: not live" says nothing)
     for port in n.ports:
         if port.patched:
             imgui.text_disabled(f"{port.name}: {_said(port.live)}")
@@ -4836,6 +4846,9 @@ def node_mode_block(panel, n: graphview.VNode) -> None:
     for h in nd.held():
         cid = f"graph.side.node_mode.{h.role}"
         if h.node != n.id:
+            if nd.refusal(h.role, n.id) == nodemode.NO_PARAMS.format(
+                    node=n.id.removeprefix("render:")):
+                continue                # nothing to point at: no chip, rather than a grey one
             tip = OTHER_DECK_TIP if not h.on_here else (
                 f"Fill {h.role}'s {FILLS.get(h.kind, 'knobs and faders')} with this node's "
                 "params, saved in this patch. One undo step.")
@@ -5052,8 +5065,6 @@ def home_page(n: graphview.VNode):
     # plan 35 G: by the wired frame's ids — `render:camera` (was `render:eye`),
     # a channel `render:channel.<c>`, All outputs the OUTPUT page with no
     # window picked, a copy FX with its original selected (`Copy.effect`)
-    if n.id == f"render:{graphview.CAMERA}":
-        return ("camera", None)
     if n.id == f"render:{rgraph.ALL_OUTPUTS}":
         return ("output", None)
     if isinstance(r, rgraph.MediaNode):

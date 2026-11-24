@@ -389,6 +389,14 @@ def _effect_owner(pid: str, ctx: _Ctx) -> str | None:
     return None
 
 
+def _eye_owner(pid: str, ctx: _Ctx) -> str | None:
+    """`eye.*` (the fov and the distance) is the first scene's: a scene is its geometries
+    and the eye they are seen through. With no scene in the frame, the group's node."""
+    scenes = sorted((n for n in ctx.names if kind_of(n) == "scene"),
+                    key=lambda n: (len(n), n))      # `scene`, `scene.2`, …
+    return scenes[0] if scenes else None
+
+
 def _output_owner(pid: str, ctx: _Ctx) -> str | None:
     seg = pid.split(".")
     if len(seg) >= 3 and seg[0] == "output" and seg[1].isdigit():
@@ -440,9 +448,9 @@ def _key_owner(pid: str, ctx: _Ctx) -> str | None:
 # param_prefix`: `dream.*` a look-back's and the dream's by key, `ghost.2.*`
 # hands 2's). A node
 # the section does not name (no look-back, no backdrop) leaves the param
-# to its group's node. `CAMERA` is the shared camera's node — the look's
-# one orbit camera since plan 43 C2, always there — which no section
-# names. A group not listed here has no render node: a node per group
+# to its group's node. The look's one orbit camera (plan 43 C2) has no node
+# of its own since 2026-11-23: `camera.*` is the shape's world pose and
+# `eye.*` the first scene's eye. A group not listed here has no render node: a node per group
 # (`group:<group>`)
 OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "view": _view_owner,
@@ -465,8 +473,8 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "cloud": _cloud_owner,
     "dream": _dream_owner,
     "fx": _effect_owner,
-    "camera": CAMERA,
-    "eye": CAMERA,
+    "camera": "shape",          # 2026-11-23: its world pose and scale (decision 4) — not a camera
+    "eye": _eye_owner,          # …the eye is the scene's: what its geometries are seen through
     "output": _output_owner,
     "media": _media_owner,
     "key": _key_owner,
@@ -1110,6 +1118,8 @@ def param_ids(reg, nid: str, of: str = "") -> list[str]:
     # plan 87: a keyed node's black is clear knobs (`key.<name>.*`) after its own
     keyed = f"key.{name}."
     ids += [p.id for p in reg if p.id.startswith(keyed)]
+    if name == "scene":         # the eye is the first scene's (`_eye_owner`): it was the camera
+        ids += [p.id for p in reg if not p.alias and p.id.startswith("eye.")]   # node's, which
     return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
 
 

@@ -3,11 +3,24 @@
 23 whole-frame patches (`hyperspace.loadable/11`) for trying the three
 distortion effects: Shake, Wave and Blocks (`docs/DISTORTION.md` has every
 knob). They are not part of the app (nothing ships with it). Copy them
-into the library's `loadable/` folder and they appear in the list:
+into a `distort/` folder of their own in the library's `loadable/`,
+never loose into `loadable/` itself, and they appear in the list as
+`distort/<name>`.
+
+The library is the folder `[library] path` names in
+`~/Hyperspace/config.toml` (the shared Drive folder), not `~/Hyperspace`:
+the app never lists patches there. From `hyperspace-python/`:
 
 ```bash
-cp presets/distort/*.json ~/Hyperspace/loadable/
+uv run python tools/copy_patches.py distort
 ```
+
+It reads `[library] path` as the app does, and copies nothing when none is
+set, when the folder it names is not there (it is never created), or when
+it is `~/Hyperspace` itself. It never overwrites: a patch the library
+already has is left alone, and one that differs from this repo's (edited
+and saved since) is listed as `KEPT THEIRS`. To take this repo's version
+of one, delete or rename the library's first.
 
 Every one draws the Celestial tesseract with plaid faces through one
 effect (the last through all three), with the six audio lanes on the six
