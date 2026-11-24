@@ -778,6 +778,27 @@ NO_SOURCE = ("output", "fx", "shape", "backdrop")
 AUX = "aux"     # plan 32 R: an effect's second picture port (`Effect.INPUTS`)
 
 
+def takes_of(node: str, kind: str | None) -> dict[str, str]:
+    """Port → type of the ports a wire may go into on wired-frame node `node`
+    of `kind`: the kind's (`WIRED_TAKES`), an effect's its file's, and a
+    picture effect's slot its effect's too (plan 67 + 89). The one lookup wire
+    checks and a saved patch's inlets share (`patches.wire_type`)."""
+    takes = WIRED_TAKES.get(kind or "", {})
+    if kind == "effect":
+        return effect_ports(node)[1]
+    if kind == "slot" and effect_ports(effect_of(node))[0] == IMAGE:
+        return {**takes, **effect_ports(effect_of(node))[1]}
+    return takes
+
+
+def makes_of(node: str, kind: str | None) -> str | None:
+    """What wired-frame node `node` of `kind` puts out: the kind's
+    (`WIRED_MAKES`), a field maker's a field (plan 67 F1)."""
+    if kind == "effect":
+        return effect_ports(node)[0]
+    return WIRED_MAKES.get(kind or "")
+
+
 def wire_node_kind(name: Any, wired: bool = False) -> str | None:
     """What kind of node a wire's name is (`WIRE_MAKES`'s keys), or None.
     Plan 35 F: `wired`, a name of a wired frame (`WIRED_MAKES`' keys), in
@@ -1989,13 +2010,7 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
         return f"no input {w.dst!r}: a wire goes into {WIRED_TO_WORDS}"
     if kind == "output" and new_id(w.dst) != w.dst:
         return OLD_ID_IN_A_WIRED_FRAME.format(old=w.dst, new=new_id(w.dst))
-    takes = WIRED_TAKES[kind]
-    if kind == "effect":
-        takes = effect_ports(node)[1]           # plan 67 F1: its file's ports
-    elif kind == "slot" and effect_ports(effect_of(node))[0] == IMAGE:
-        # a picture effect's slot takes what its effect takes (a Displace
-        # slot's field port; plan 89's slots, plan 67's ports)
-        takes = {**takes, **effect_ports(effect_of(node))[1]}
+    takes = takes_of(node, kind)                # an effect's (and a slot's) its file's
     if kind == "lookback" and port == "capture":
         # plan 36 T4: the look-back records its `image` — an old frame's
         # capture wire is read only by the migration that rewrites it
@@ -2015,9 +2030,7 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
         return f"{node} has no port {port!r} ({said})"
     if src_kind == GROUND and kind != "output":
         return GROUND_ONLY_INTO_OUTPUTS
-    makes, want = WIRED_MAKES[src_kind], takes[port]
-    if src_kind == "effect":
-        makes = effect_ports(w.src)[0]          # plan 67 F1: a field maker makes a field
+    makes, want = makes_of(w.src, src_kind), takes[port]
     # plan 36 T2: a pin goes where its kind is taken, a depth port takes the
     # scene's depth alone, a layer's or a guide's hands a hands node
     if PINS.get(w.src) == "scene" and not (src_kind == "cover" and port == "cover") and not (
