@@ -689,3 +689,45 @@ the zoom is the file's; the swim differs off the frame's axes, up to about a qua
 
 **Next** (§13): any knob takes a field, then Hue cycle retired into Palette + fields.
 
+## 17. Handoff (2026-11-24, evening): where this stands, and the next session's work
+
+**On `main`:** the fields foundation (#489: the field wire, Point, Line, Rings, Spokes, Cells,
+Noise, To field, Waveform, Combine, Displace's field port), Wave as a patch (#490), Blocks as a
+patch with Cell action (#491), the sharp edges (#492: a field op fed by nothing says "wire a field
+into its input"; a field thumbnail scales to its own range), Trip warp as a patch, near (#493, with
+Scale and Noise's flow), and Point's X / Y as one plane on its strip (`// @pair`). **Held:** Time
+Displace (#488, plan 66; up to date with `main`, green; the owner holds it until it is rebuilt on
+the field and stack wires). The examples are in the Drive's `Hyperspace/loadable/field-examples/`
+and `tests/fixtures/field-examples/`, kept equal.
+
+**The next session's work, in order:**
+
+1. **Any knob takes a field** (P3, §3.9, owner: yes). `value + depth × field(uv)` per pixel,
+   through a generated accessor (`fx.py` writes it from the file's `@param` lines), so an unwired
+   knob is a bare uniform and every file's bytes do not move (`tools/fx_sweep.py`, save before,
+   check after). Choices, loop counts and `@clock` rates refuse a field in words. A knob's field
+   arrives on a port per knob — decide its name on GRAPH (`<knob>` beside `image`, `aux`,
+   `field`) and how `graph.takes_of` / `patches.wire_type` type it (they are the one lookup).
+2. **Retire Hue cycle into Palette + fields** (roundup §6): a migration of its six saved files in
+   the format lane, the look held by the golden frames.
+3. **One rule for "fed by nothing"** (not yet a PR): `graph.unfed` (R15) does not know plan 80's
+   no-input generators (`Effect.generates`, `_Build.generators`), so the FX pane still lists a
+   picture effect with no input under where it leads although the builder leaves it dormant
+   (`tests/test_fx.py`'s `BROWSED`). #492 fixed it for field ops only (`graph.hungry_fields`).
+
+**How to work** (learned here, on top of §13's):
+
+- **Look at GRAPH and the FX pane in the app**, not only renders: `tools/app_driver.py` (its
+  library is `<home>/library` since #480), print `graphview.unreached` and `ui_fx.groups` beside
+  the screenshots. The owner found three bugs by eye that every render passed.
+- **Run the sweep tier** (`uv run pytest -q -m sweep`) before a push that adds or changes effect
+  files: it walks every effect and is not in the fast suite.
+- **Read a test run's exit code, not its last line through a pipe** (`… > log; echo $?`): a
+  `| tail` once hid two failures and a broken push went out.
+- **Stacked PRs:** merge `main` into the next branch after each squash; take `main`'s side for
+  files the branch does not change, and rebuild a register or hand-check file from `main`'s copy
+  plus the branch's rows when a textual merge doubles them. Next free numbers on `main` (after
+  #493): rows from 1113, hand checks from 892, groups from FP.
+- **Devin reviews every PR**: verify each finding against the code, fix what is real with a test
+  that fails first, answer and resolve its thread.
+
