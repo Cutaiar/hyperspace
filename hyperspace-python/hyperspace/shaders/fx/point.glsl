@@ -3,6 +3,7 @@
 // @family field
 // @makes field
 // @takes image none
+// @pair u_x u_y "Point"
 // @tip A place on the frame, as a field: at every pixel, the way and distance from the
 // @tip point to it (frame heights), a vector. Wire it into a Line, Rings, Spokes, Cells or
 // @tip Noise to say where they count from — one Point can move every one of them at once.

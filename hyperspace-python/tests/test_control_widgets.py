@@ -351,3 +351,17 @@ def test_without_the_kit_a_packed_pad_is_its_sliders(tmp_path, monkeypatch):
         assert not st.errors
         assert not pads
         assert "fx.packed.sat_lo" in d.rects and "fx.packed.sat_hi" in d.rects
+
+
+def test_points_plane_sets_its_x_and_y(tmp_path, monkeypatch):
+    """Plan 67: Point, the field node a measure counts from, is a place on the
+    frame, so its X and Y are one plane on the strip as Wave's and Prism's
+    Centre are (the owner, 2026-11-24)."""
+    assert [(p.keys, p.label) for p in FxState().files["point"].pads] == [(("x", "y"), "Point")]
+    with strip(tmp_path, monkeypatch, "point") as (r, d, _st):
+        x, y = r.reg["fx.point.x"], r.reg["fx.point.y"]
+        x0, y0, x1, y1 = d.rect("pad.fx.point.x")
+        assert x1 - x0 >= 120 and abs((x1 - x0) - (y1 - y0)) < 1
+        d.run(d.move("pad.fx.point.x"), d.press(True),
+              d.move((x0 + 0.75 * (x1 - x0), y0 + 0.25 * (y1 - y0)), 6), d.press(False), d.park())
+        assert x.value == pytest.approx(0.5, abs=0.02) and y.value == pytest.approx(0.5, abs=0.02)
