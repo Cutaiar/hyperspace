@@ -562,3 +562,48 @@ in the Drive's `loadable/field-examples/`, restart (`uv run hyperspace`), hand c
 
 **The owner, 2026-11-24:** four channels at 1080p are fine for now. Fields made at 0.75k and
 0.5k (810 and 540 lines) and upscaled are a follow-up session (row 1096).
+
+## 13. Handoff (2026-11-24): where this stands, and the next session's work
+
+**State.** Branch `ccr-956dc2aa-r1kaqe`, draft PR #488 into `main` (merged with `main` on
+2026-11-24; full suite 8220 passed). Built: the shared field pieces (§11, roundup §7), the field
+wire (roundup §8), Measure, To field, Waveform, Combine, Displace's field port and Split, Wave as
+a patch (§12, roundup §9), four field examples. Held: Time Displace (owner: hold; rebuild it on the
+field and stack wires, §4, §7.1). Decided and not built: motion as a position jog with rates per
+turn (§9.1, §10.1), Blend retired into Composite and one blend library with the standard modes
+(§9.2, §7.4), Hue cycle retired into Palette + fields (roundup §6), the stack of T (§7.1), the
+lattice rename (§8.3), fields at 0.75k and 0.5k upscaled (a later session, row 1096).
+
+**The next session's work — the roundup's next rows, in this order:**
+
+1. **Blocks as a patch.** `measure (cells)` → Waveform → an *action* field → Displace. The cell
+   rule is `measure_cells`; Blocks' actions (shift, zoom, stretch, turn, bulge, swap) each make an
+   offset from the cell's number and the pixel's place in its cell, so the action is a field op
+   that needs the cell-local position — decide whether Measure's cells output carries it (its
+   spare channels, as §12 did for the direction) or the action op recomputes it. Prove it as
+   `tests/test_wave_patch.py` does (`tests/wavepatch.py` is the pattern), and ship
+   `field-blocks` as an example.
+2. **Trip warp as a patch.** `measure (noise, vector)` × a radial weight (`point`, `combine`) →
+   Displace. Its Amount is in "no unit of its own" (roundup §4): say how the patch's Amount maps.
+3. **Any knob takes a field (P3, §3.9, owner: yes).** `value + depth × field(uv)` per pixel,
+   through a generated accessor so an unwired knob is a bare uniform and the bytes do not move;
+   choices, loop counts and `@clock` rates refuse a field in words. Then **retire Hue cycle into
+   Palette + fields** (roundup §6): a migration of its six saved files in the format lane.
+
+**How to work** (what this session learned):
+
+- **Prove every move.** `tools/fx_sweep.py save before.npz <files>` on the old code (stash), then
+  `check` on the new: every byte equal, or say exactly why not. Across two programs a GLSL
+  compiler may reorder a chain of multiplies, so a patch equals its file *up to rounding*
+  (§12): hold the bound in the test, and keep the file for saved looks.
+- **A field example ships with every change**: a loadable patch + a short Markdown, written to the
+  Drive's `Hyperspace/loadable/field-examples/` with the Google Drive connector (the folder id is
+  in that folder's own listing; upload JSON and Markdown with conversion off), and the same files
+  in `tests/fixtures/field-examples/`, which `tests/test_field_examples.py` opens.
+- **Numbers.** Plans 66 and 67 keep theirs. Before writing a register row or a hand check,
+  `git fetch origin main` and take the next free numbers there (on 2026-11-24: rows from 1097,
+  hand checks from 884, groups from FL); `main` moves fast.
+- **Overlaps to watch.** `main`'s plan 80 added effects built with no input (`_Build.generators`,
+  `Effect.generates`); a field generator is built first, by `FieldEffect`. The two should become
+  one rule. The FX page still shows Mix and Blend on a field maker (they do nothing there); a copy
+  of a field maker is a picture effect's copy; a field is RGBA32F (33 MB at 1080p, owner: fine).
