@@ -6,8 +6,8 @@ library's own load with no unknown id and no note: a route dropped at load is
 a gesture that does nothing on stage. Each is opened from where its README
 copies it: the library's `loadable/distort/`, by its folder-qualified name.
 The README's own command is run too (`readme_copy`): it must land the files
-in the library `[library] path` names, as desktop startup reads it, and
-copy nothing when none is set.
+in the library `[library] path` names, as desktop startup reads it
+(`tests/test_copy_patches.py` has what it refuses).
 """
 
 from __future__ import annotations
@@ -62,6 +62,7 @@ def test_the_readme_copies_into_the_library_the_config_names(tmp_path):
     (drive / library.LOADABLE).mkdir(parents=True)
     done = readme_copy.run(DISTORT / "README.md", machine, drive)
     assert done.returncode == 0, done.stderr
+    assert f"{len(FILES)} copied" in done.stdout
     landed = drive / library.LOADABLE / "distort"
     assert sorted(q.name for q in landed.glob("*.json")) == [q.name for q in FILES]
     assert not (machine / library.LOADABLE).exists()     # never ~/Hyperspace
@@ -70,10 +71,3 @@ def test_the_readme_copies_into_the_library_the_config_names(tmp_path):
     assert app.loaded_patch.load(f"distort/{FILES[0].stem}") == []
     assert not app.lib.warning
 
-
-def test_with_no_library_set_the_readme_copies_nothing(tmp_path):
-    machine = tmp_path / "machine"
-    done = readme_copy.run(DISTORT / "README.md", machine, None)
-    assert done.returncode != 0
-    assert "no [library] path" in done.stderr
-    assert not list(tmp_path.rglob("*.json"))

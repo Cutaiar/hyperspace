@@ -9,14 +9,18 @@ never loose into `loadable/` itself, and they appear in the list as
 
 The library is the folder `[library] path` names in
 `~/Hyperspace/config.toml` (the shared Drive folder), not `~/Hyperspace`:
-the app never lists patches there. From `hyperspace-python/`, this asks
-the app's own config where that is, and copies nothing when no library
-is set:
+the app never lists patches there. From `hyperspace-python/`:
 
 ```bash
-LOADABLE=$(uv run python -c 'import sys; from pathlib import Path; from hyperspace import config, library; p = config.load()["library"]["path"]; print(library.loadable_dir(Path(p))) if p else sys.exit("no [library] path in ~/Hyperspace/config.toml: nowhere to copy")') &&
-  mkdir -p "$LOADABLE/distort" && cp loadable/distort/*.json "$LOADABLE/distort/"
+uv run python tools/copy_patches.py distort
 ```
+
+It reads `[library] path` as the app does, and copies nothing when none is
+set, when the folder it names is not there (it is never created), or when
+it is `~/Hyperspace` itself. It never overwrites: a patch the library
+already has is left alone, and one that differs from this repo's (edited
+and saved since) is listed as `KEPT THEIRS`. To take this repo's version
+of one, delete or rename the library's first.
 
 Every one draws the Celestial tesseract with plaid faces through one
 effect (the last through all three), with the six audio lanes on the six
