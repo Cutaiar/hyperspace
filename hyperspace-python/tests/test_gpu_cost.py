@@ -391,3 +391,15 @@ def test_the_chip_reaches_neither_the_loadable_nor_the_show(rig):
         assert "gpu cost" not in json.dumps(doc)
     assert plain == lit
     assert show_plain == show_lit
+
+
+def test_a_badge_sits_on_its_nodes_top_edge_not_across_it():
+    """The badge's bottom edge is the node's top edge: the node editor draws
+    its nodes over the canvas's draw list, so a pill reaching below it (its
+    centre line on the edge, as it was) showed only its top half."""
+    (ax, ay), (bx, by) = ui_graph.cost_badge_rect((100.0, 50.0), 400.0, (60.0, 14.0))
+    assert by == 50.0 and ay == 50.0 - ui_graph.COST_BADGE_H
+    assert bx == 100.0 + 400.0 - 8.0 and bx - ax == 60.0 + 2 * ui_graph.COST_BADGE_PAD
+    # tall words grow the pill upward, never into the node
+    (_, ay2), (_, by2) = ui_graph.cost_badge_rect((100.0, 50.0), 400.0, (60.0, 30.0))
+    assert by2 == 50.0 and ay2 == 50.0 - 34.0
