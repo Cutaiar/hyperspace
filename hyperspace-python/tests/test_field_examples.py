@@ -103,3 +103,23 @@ def test_an_example_draws_a_moved_picture(ctx):
         return _px(vs[0].target).astype(int)
 
     assert np.abs(draw(0.05) - draw(0.0)).max() > 30
+
+
+@pytest.mark.parametrize("path", FILES, ids=lambda p: p.stem)
+def test_no_node_of_an_example_reaches_nothing(path):
+    """The owner on the rig (2026-11-24): the FX pane said Waveform and Combine
+    "reach nothing" — it followed picture wires only, and a field ends in a
+    field port. Every node of an example reaches an output, on the canvas
+    (`graphview.unreached`) and on the FX pane (`ui_fx.groups`) alike."""
+    from hyperspace import graph as G
+    from hyperspace import graphview, ui_fx
+    from hyperspace.fx import FxState
+
+    spec = G.read_graph(json.loads(path.read_text())["graph"], effects=set(FxState().specs))
+    assert not spec.notes, spec.notes
+    effects = {n["file"] + (f".{n['instance']}" if "instance" in n else "")
+               for n in json.loads(path.read_text())["graph"]["nodes"] if n["kind"] == "effect"}
+    assert not effects & graphview.unreached(spec)
+    groups = dict(ui_fx.groups(spec))
+    assert ui_fx.UNREACHED not in groups, groups
+    assert effects <= set(groups.get(ui_fx.RUN, ())), groups

@@ -14,7 +14,8 @@ frames (the control window and the render window, as the app swapped
 them), and ``OUT/frames.json`` lists them with the mouse per frame, for a
 cursor overlay — imgui draws none of its own.
 
-A known start: a fresh home (``--home`` to keep one) seeded with the test
+A known start: a fresh home (``--home`` to keep one) whose library
+(``<home>/library``, its ``[library] path``) is seeded with the test
 corpus as the tests' homes are (`conftest.seed`: the corpus loadable patches and
 the party show, opened at launch — an empty home opens an unwired loadable patch
 and a black output), a config with no devices and no dream, the mouse
@@ -55,6 +56,8 @@ from ui_driver import Driver
 
 from hyperspace import app, ui
 
+LIBRARY = "library"    # the driven app's library, `<home>/library`
+
 # no [[devices]] entry at all: no desk, pad, hands or bridge is opened
 CONFIG = """[[devices]]
 role = "none"
@@ -79,11 +82,18 @@ def run(script, out: Path, every: int = 2, home: Path | None = None, settle: int
     fresh = home is None
     home = home or Path(tempfile.mkdtemp(prefix="hyperspace-drive-"))
     home.mkdir(parents=True, exist_ok=True)
+    # the library is a folder of its own beside the machine's files: since
+    # #480 no [library] path is no library, and the home is never one
+    lib = home / LIBRARY
+    lib.mkdir(exist_ok=True)
     if fresh and corpus:
-        seed(home)
+        seed(lib)
+        mark = lib / "last_install"           # the show a launch opens: a home file
+        if mark.exists():
+            mark.replace(home / mark.name)
     cfg = home / "config.toml"
     if not cfg.exists():
-        cfg.write_text(CONFIG)
+        cfg.write_text(CONFIG + f'\n[library]\npath = "{lib}"\n')
     os.environ["HYPERSPACE_HOME"] = str(home)
     os.environ.setdefault("HYPERSPACE_FRAMES", "100000")
 
