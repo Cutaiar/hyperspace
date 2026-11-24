@@ -48,7 +48,7 @@ from imgui_bundle import imgui
 
 from . import ui, ui_fields, ui_kit
 from .fx import FACE_MAPS, FX_DIR, PER_FACE, pad_of
-from .graph import _PICTURE_PORTS, FIELD_PORT, run_back, run_of, wire_node_kind
+from .graph import _PICTURE_PORTS, FIELD_PORT, hungry_fields, run_back, run_of, wire_node_kind
 
 # the groups `groups` makes, as their headers say them
 RUN = "Run"
@@ -56,6 +56,7 @@ FACES = "→ faces"
 PATTERN = "→ pattern media"
 BACKDROP = "→ backdrop"
 UNREACHED = "reaches nothing"
+UNFED = "fed by nothing"      # R15: nothing wired into its input, so never built
 # a picture port's sink → the group it ends in (an output, an aux: by name)
 _ENDS = {"shape.faces": FACES, "pattern.media": PATTERN, "backdrop.image": BACKDROP,
          "fx.image": RUN, "output.all.image": RUN}     # (plan 35: a wired frame's run's end)
@@ -76,6 +77,7 @@ IDLE = {
                  "Switch the effects on (the Effects check at the top)."),
     "fx mix 0": ("FX mix is at 0", None, None, None),     # its fader is at the top of the page
     "mix 0": ("its mix is at 0", None, None, None),       # its fader is the next row
+    UNFED: ("no field is wired into its input — wire one on graph", None, None, None),
 }
 # one line at the page's width (plan 20 WP2: it wrapped to two by 2 px)
 RESET_NOTE = "a patch load resets these: save a patch to keep them"
@@ -138,8 +140,9 @@ def groups(spec) -> list[tuple[str, list[str]]]:
         if e.placed and e.where[0] == "after" and not ends.get(e.name):
             ends[e.name] = {f"→ after {e.where[1]}": 1}
     by: dict[str, list[str]] = {}
+    hungry = hungry_fields(spec)
     for name in sorted(names):
-        for end in ends[name] or {UNREACHED: 0}:
+        for end in ({UNFED: 0} if name in hungry and ends[name] else ends[name] or {UNREACHED: 0}):
             by.setdefault(end, []).append(name)
     for end, members in by.items():
         if end == RUN:
@@ -166,6 +169,8 @@ def _group_key(end: str) -> tuple:
         return (fixed[end], 0, "")
     if end == UNREACHED:
         return (9, 0, "")
+    if end == UNFED:
+        return (8, 0, "")
     if end.startswith("→ output "):
         n = end[len("→ output "):]
         return (4, int(n) if n.isdecimal() else 0, n)
@@ -279,7 +284,8 @@ def state_word(chain, fx, name: str, where: str = RUN, faces_on: bool = True) ->
     err = _error(chain, fx, name)
     if err:
         return f"error: {err.splitlines()[0]}"
-    why = why_idle(fx, name, faces_on or where != FACES, reached=where != UNREACHED)
+    why = why_idle(fx, name, faces_on or where != FACES, reached=where != UNREACHED,
+                   fed=where != UNFED)
     return why if why is not None else "running"
 
 
@@ -339,7 +345,8 @@ def strip(panel, sel: str) -> None:
     # under the line are dimmed but live — set it up dark, then switch it on.
     # Plan 33 T7: "faces off" and "reaches nothing" read its paths
     faces_on = bool(getattr(panel.view, "faces", True)) or not where or where != [FACES]
-    idle = why_idle(fx, sel, faces_on, reached=where != [UNREACHED] if where else True)
+    idle = why_idle(fx, sel, faces_on, reached=where != [UNREACHED] if where else True,
+                    fed=where != [UNFED] if where else True)
     if idle is not None:
         _idle_line(panel, sel, idle)
     panel._check(f"{pre}.on")
@@ -546,9 +553,11 @@ def _chip_baseline() -> None:
     imgui.pop_style_var()
 
 
-def why_idle(fx, name: str, faces_on: bool = True, reached: bool = True) -> str | None:
+def why_idle(fx, name: str, faces_on: bool = True, reached: bool = True,
+             fed: bool = True) -> str | None:
     """Why `name` is not running, first reason only; None while it runs.
-    "off" | "reaches nothing" | "faces off" | "bypassed" | "fx mix 0" | "mix 0".
+    "off" | "fed by nothing" | "reaches nothing" | "faces off" | "bypassed" | "fx mix 0" |
+    "mix 0" (`fed` False: nothing is wired into its input, R15).
 
     With the two flags left True it is None exactly when `FxState.live`
     says the effect draws. Plan 33 T7: where it is wired is the caller's to
@@ -558,6 +567,8 @@ def why_idle(fx, name: str, faces_on: bool = True, reached: bool = True) -> str 
     v = fx.values[name]
     if not v["on"]:
         return "off"
+    if not fed:
+        return UNFED
     if not reached:
         return UNREACHED
     if not faces_on:

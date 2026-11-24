@@ -350,6 +350,8 @@ BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it �
 FAINT_TIP = (f"{graphview.REACHES_NOTHING}: no path from it ends at an output, the faces, "
              "the pattern, the backdrop or the run — it never runs. Wire it in, or drop "
              "it on a picture cable")
+UNFED_TIP = ("{need}: nothing is wired into its input, so it is never built and draws "
+             "nothing — wire its input on the canvas")
 BUNDLE_STEP = 0.5        # px a cable, past the first
 BUNDLE_MAX = 7.5         # the cap: a bundle of ten cables or more (3 + 9 × 0.5)
 EXPAND_TIP = "Expand this node: a row per port, its real cables"
@@ -4254,7 +4256,8 @@ def _hover(st: dict, view: graphview.View, panel=None) -> None:
         elif n is not None and n.thumb is not None and st.get("thumb_hover") == n.id:
             tip = thumb_tip(st, n)          # plan 37 C2: on its picture
         elif n is not None and n.faint:
-            tip = f"{n.label}\n{FAINT_TIP}" + (f"\n{n.status}" if n.status else "")
+            tip = (f"{n.label}\n{UNFED_TIP.format(need=graphview.needs_input(n)) if n.unfed else FAINT_TIP}"
+                   + (f"\n{n.status}" if n.status else ""))
         elif n is not None and n.status:
             tip = f"{n.label}\n{n.status}"
     if tip:

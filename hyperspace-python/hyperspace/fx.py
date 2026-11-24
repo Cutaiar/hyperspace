@@ -110,6 +110,7 @@ from pathlib import Path
 from typing import Any
 
 import moderngl
+import numpy as np
 
 from . import mandel, tapers
 from .glsl import QUAD_VS, common, common_mtime, gl_error
@@ -1090,7 +1091,30 @@ void main() {
 
 # plan 67 F1: a field texture shown as a picture — the grey promotion
 # (`graph.FieldPicture`), one pass of the lib's `field_grey`
-SHOW_FIELD = "vec4 effect(vec2 uv) { return field_in(uv); }\n"
+SHOW_FIELD = ("uniform float u_gain;   // a thumbnail's: the field scaled to its own range\n"
+              "vec4 effect(vec2 uv) { vec4 f = field_in(uv); return vec4(f.xyz * u_gain, f.a); }\n")
+FIELD_SAMPLE = (48, 27)      # `field_range`'s reduction of a field: one texel a region
+# its reduction pass: each texel the largest magnitude over its region of the
+# field (a vector's x and y, a scalar's x), every texel of the region read
+FIELD_MAX = """
+#version 330
+uniform sampler2D u_src;
+uniform ivec2 u_step;
+out vec4 f_color;
+void main() {
+    ivec2 n = textureSize(u_src, 0);
+    ivec2 o = ivec2(gl_FragCoord.xy) * u_step;
+    float m = 0.0;
+    for (int j = 0; j < u_step.y; j++)
+        for (int i = 0; i < u_step.x; i++) {
+            ivec2 at = o + ivec2(i, j);
+            if (at.x >= n.x || at.y >= n.y) continue;
+            vec4 v = texelFetch(u_src, at, 0);
+            m = max(m, v.a > 0.5 ? max(abs(v.x), abs(v.y)) : abs(v.x));
+        }
+    f_color = vec4(m);
+}
+"""
 
 # an effect with no program: its source across, 1:1 by texelFetch as
 # FS_TAIL's `here` reads it
@@ -1333,10 +1357,14 @@ class FxChain:
         finally:
             ctx.enable(moderngl.BLEND)
 
-    def show_field(self, tex: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
+    def show_field(self, tex: moderngl.Texture, dst: moderngl.Framebuffer,
+                   gain: float = 1.0, raw: bool = False) -> None:
         """Plan 67 F1: field texture `tex` as a picture into `dst`'s viewport —
         the grey promotion (`field_grey`: a scalar grey about mid-grey, a vector
-        its x in red and y in green), read texel for texel, opaque."""
+        its x in red and y in green), read texel for texel, opaque. `gain`
+        scales the field first (a thumbnail's, `field_range`; a field wired
+        into a picture port is shown at 1, as it is); `raw` writes the field
+        itself (into a float target), not its grey."""
         prog = getattr(self, "_show_field", None)
         if prog is None or prog[0] != self.state.lib:
             src = fragment_source(self.state.lib, SHOW_FIELD, self.state.common, (), FIELD)
@@ -1349,7 +1377,8 @@ class FxChain:
         dst.use()
         tex.use(location=0)
         vp = tuple(dst.viewport)
-        for k, x in (("u_src", 0), ("u_field_show", 1), ("u_res", tuple(float(v) for v in vp[2:])),
+        for k, x in (("u_src", 0), ("u_field_show", 0 if raw else 1), ("u_gain", float(gain)),
+                     ("u_res", tuple(float(v) for v in vp[2:])),
                      ("u_scaled", int(tuple(vp[2:]) != tuple(tex.size))),
                      ("u_origin", (int(vp[0]), int(vp[1])))):
             self._set(p, k, x)
@@ -1358,6 +1387,36 @@ class FxChain:
             vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
             self.ctx.enable(moderngl.BLEND)
+
+    def field_range(self, tex: moderngl.Texture) -> float:
+        """The largest magnitude field texture `tex` holds — what a thumbnail
+        scales by, so a field of small values (a cell's push, a measure at a
+        small Scale) shows its shape, not mid-grey. Reduced on the GPU: each of
+        `FIELD_SAMPLE`'s texels is the largest magnitude over its whole region
+        of the field (`FIELD_MAX`; a vector's x and y, a scalar's x), so a
+        field repeating at the sample's spacing is not read at its zero
+        crossings alone (Devin's review of #492); a few kilobytes read back.
+        0 for an empty field."""
+        got = getattr(self, "_field_sample", None)
+        if got is None:
+            t = self.ctx.texture(FIELD_SAMPLE, 4, dtype="f4")
+            p = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=FIELD_MAX)
+            got = self._field_sample = (t, self.ctx.framebuffer(color_attachments=[t]), p,
+                                        self.ctx.vertex_array(p, []))
+        _, fbo, p, vao = got
+        fbo.use()
+        fbo.viewport = (0, 0, *FIELD_SAMPLE)
+        tex.use(location=0)
+        self._set(p, "u_src", 0)
+        self._set(p, "u_step", tuple(-(-n // k) for n, k in zip(tex.size, FIELD_SAMPLE, strict=True)))
+        self.ctx.disable(moderngl.BLEND)
+        try:
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            self.ctx.enable(moderngl.BLEND)
+        v = np.frombuffer(fbo.read(components=4, dtype="f4"), np.float32)
+        m = float(np.nanmax(v[0::4])) if v.size else 0.0
+        return m if np.isfinite(m) else 0.0
 
     def upscale(self, tex: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
         """`tex` stretched over `dst`'s viewport through its LINEAR sampler
