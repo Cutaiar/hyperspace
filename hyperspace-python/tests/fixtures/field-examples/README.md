@@ -14,6 +14,7 @@ opens through the library's own load.
 | `field-self-bend` | To field (the scene's brightness) → Displace: the picture bends itself |
 | `field-wave` | Wave taken apart: Point → Rings → Waveform, × a second Rings' direction (Combine) → Displace |
 | `field-blocks` | Blocks taken apart: Cells → Waveform → Cell action, with a second Cells' place in the cell → Displace |
+| `field-trip` | Trip warp taken apart, near: Noise (flow) × Rings, plus a Point scaled (the zoom) → Displace |
 
 A **field** is a number (or a pair) at every pixel: green cables on GRAPH, grey
 when shown as a picture.
