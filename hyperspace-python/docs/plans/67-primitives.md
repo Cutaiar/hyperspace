@@ -565,6 +565,8 @@ in the Drive's `loadable/field-examples/`, restart (`uv run hyperspace`), hand c
 
 ## 13. Handoff (2026-11-24): where this stands, and the next session's work
 
+*(Item 1 is built: §14.)*
+
 **State.** Branch `ccr-956dc2aa-r1kaqe`, draft PR #488 into `main` (merged with `main` on
 2026-11-24; full suite 8220 passed). Built: the shared field pieces (§11, roundup §7), the field
 wire (roundup §8), Measure, To field, Waveform, Combine, Displace's field port and Split, Wave as
@@ -607,3 +609,36 @@ lattice rename (§8.3), fields at 0.75k and 0.5k upscaled (a later session, row 
   `Effect.generates`); a field generator is built first, by `FieldEffect`. The two should become
   one rule. The FX page still shows Mix and Blend on a field maker (they do nothing there); a copy
   of a field maker is a picture effect's copy; a field is RGBA32F (33 MB at 1080p, owner: fine).
+
+## 14. Blocks as a patch (2026-11-24)
+
+Built: **Cell action** (a field op: Action, Amount, Angle), Measure's cells drawn on Blocks'
+grid (**Aspect**, **Group**, **Pairs**; Scale to 512), Waveform's **Phase** (`fx.waveform.start`),
+the shared `cell_of` and `cell_pair` in `_lib.glsl` (Blocks moved onto them byte for byte, 960
+renders), and Blocks as `measure (cells) → waveform → cell action ← measure.2 (cells,
+direction) → displace` (`tests/blockspatch.py`), its field example `field-blocks`.
+
+**The decision §13 left open: where the cell-local position comes from.** An action needs four
+things at a pixel: the cell's number through a waveform, the place in the cell, the cell's
+size (shift moves whole cells, bulge's lens fills the inscribed circle) and, for swap, which
+half of a pair it is. Recomputing them in the action would give it Cell, Aspect and Group knobs
+of its own — a second grid to keep in step, the private copy rule 2 forbids. So they **ride on
+the Measure's fields** (row 1098), as §12's direction rides with a value: Out value carries the
+cell's size beside the number, Out direction *is* the place in the cell (a field worth seeing:
+into Displace, every cell zooms) with the pair's side beside it, and Waveform passes on what
+rides with its input. That is why two field ports (image and field) are enough for Cell action.
+
+**Equal up to rounding, and where not** (row 1097). Blocks counts its grid in pixels (Cell) and
+the Measure in frame heights (Scale = the frame's height ÷ Cell), so the patch is Blocks at the
+frame height it is mapped for. Where a cell's edge falls exactly on a pixel's centre (an odd
+number of pixels to a cell) the two may round that pixel into either cell; off the edges they
+agree to one level — on Mesa 349 of 396 renders byte for byte, the rest one level on at most
+26 pixels of 6144 — and every saved Blocks look through the renderer holds the same bound.
+
+**Displace stays 0 … 0.5** (row 1099, for the owner). Cell action's push is in half frame
+heights and the patch's Displace sits at its top Amount, 0.5: exact, since ×2 then ×½ is.
+Widening Displace's Amount to 1 is cleaner, but saved route depths are measured along a knob's
+taper (`params.retaper_depths`), so a wider range moves every saved route on it — a migration
+in the format lane. Recommendation: leave it until a migration runs for another reason.
+
+**Next** (§13): Trip warp as a patch, then any knob takes a field.

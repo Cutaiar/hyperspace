@@ -13,6 +13,7 @@ opens through the library's own load.
 | `field-line-shear` | Measure (line, value) → Displace along its angle: a shear |
 | `field-self-bend` | To field (the scene's brightness) → Displace: the picture bends itself |
 | `field-wave` | Wave taken apart: Measure → Waveform, × a second Measure's direction (Combine) → Displace |
+| `field-blocks` | Blocks taken apart: Measure (cells) → Waveform → Cell action, with a second Measure's place in the cell → Displace |
 
 A **field** is a number (or a pair) at every pixel: green cables on GRAPH, grey
 when shown as a picture.

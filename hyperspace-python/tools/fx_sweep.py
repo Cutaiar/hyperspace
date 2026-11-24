@@ -5,11 +5,14 @@ changed nothing.
 Every choice, three values of every other knob, every pair of choices, three
 times; a speckled picture and a half see-through aux; Time Displace with a
 filled ring. Keys are the knob values, so a knob added since the save is
-skipped, and every render of the save must still be made.
+skipped, and every render of the save must still be made: `check` renders the
+save's own knob values, so a knob whose range has widened since is checked
+at the values it was saved at.
 
     uv run python tools/fx_sweep.py save before.npz [file …]   # on the old code
     uv run python tools/fx_sweep.py check before.npz [file …]  # on the new
 """
+import ast
 import itertools
 import sys
 
@@ -72,13 +75,19 @@ def ring(ctx):
     return _RING[0]
 
 
-def render(ctx):
+def render(ctx, saved=None):
+    """Every file's sweep; with `saved` (a save's keys), those knob values."""
     pic, auxp = pictures()
     shots = {}
     for name in FILES:
         st = FxState()
         spec = st.specs[name]
-        for ci, c in enumerate(combos(spec)):
+        looks = combos(spec)
+        if saved is not None:
+            looks = [dict(ast.literal_eval(k.split("|")[1]))
+                     for k in dict.fromkeys(k.rsplit("|", 1)[0] for k in saved
+                                            if k.split("|")[0] == name)]
+        for ci, c in enumerate(looks):
             st2 = FxState()
             st2.values[name].update(on=True, mix=1.0, **c)
             chain = FxChain(ctx, st2)
@@ -102,12 +111,13 @@ if __name__ == "__main__":
     if len(sys.argv) > 3:
         FILES[:] = sys.argv[3:]
     ctx = moderngl.create_context(standalone=True)
-    shots = render(ctx)
     if mode == "save":
+        shots = render(ctx)
         np.savez_compressed(path, **shots)
         print("saved", len(shots))
     else:
         old = np.load(path)
+        shots = render(ctx, old.files)
         missing = set(old.files) - set(shots)
         assert not missing, f"{len(missing)} renders of the baseline not made now"
         shots = {k: v for k, v in shots.items() if k in old.files}

@@ -1,0 +1,188 @@
+{
+  "schema": "hyperspace.loadable/11",
+  "name": "field-blocks",
+  "note": "Blocks taken apart: a grid of cells numbered on the diagonal (Measure, cells), a square wave over each cell's number (Waveform), each pixel's place in its cell (a second Measure), and Cell action turning every cell a quarter turn each way as its number snaps (Displace): the picture of distort-blocks-turn. The sub band pushes Amount; the right hand's height brings in the split; the left hand's height, the size of the cells (both Measures together).",
+  "graph": {
+    "frame": "wired",
+    "nodes": [
+      {
+        "kind": "hands",
+        "laid": "over"
+      },
+      {
+        "kind": "effect",
+        "file": "measure"
+      },
+      {
+        "kind": "effect",
+        "file": "measure",
+        "instance": 2
+      },
+      {
+        "kind": "effect",
+        "file": "waveform"
+      },
+      {
+        "kind": "effect",
+        "file": "cellaction"
+      },
+      {
+        "kind": "effect",
+        "file": "displace"
+      }
+    ],
+    "wires": [
+      {
+        "from": "shape",
+        "to": "scene.geometry"
+      },
+      {
+        "from": "pattern",
+        "to": "shape.faces"
+      },
+      {
+        "from": "scene",
+        "to": "displace.image"
+      },
+      {
+        "from": "measure",
+        "to": "waveform.image"
+      },
+      {
+        "from": "waveform",
+        "to": "cellaction.image"
+      },
+      {
+        "from": "measure.2",
+        "to": "cellaction.field"
+      },
+      {
+        "from": "cellaction",
+        "to": "displace.field"
+      },
+      {
+        "from": "displace",
+        "to": "output.all.image"
+      },
+      {
+        "from": "hands",
+        "to": "hands.layer.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.guide"
+      }
+    ]
+  },
+  "values": {
+    "ghost.on": true,
+    "ghost.alpha": 0.35,
+    "view.shape": 55,
+    "view.faces": true,
+    "view.pattern": 2,
+    "view.speed": 0.3,
+    "view.bright": 1.35,
+    "camera.zoom": 1.5,
+    "fx.measure.along": 3,
+    "fx.measure.scale": 12.0,
+    "fx.measure.rule": 2,
+    "fx.measure.spread": 0.5,
+    "fx.measure.on": true,
+    "fx.measure.2.along": 3,
+    "fx.measure.2.scale": 12.0,
+    "fx.measure.2.rule": 2,
+    "fx.measure.2.spread": 0.5,
+    "fx.measure.2.on": true,
+    "fx.measure.2.out": 1,
+    "fx.waveform.waves": 1.0,
+    "fx.waveform.shape": 2,
+    "fx.waveform.drift": 0.7,
+    "fx.waveform.start": 0.25,
+    "fx.waveform.on": true,
+    "fx.cellaction.action": 3,
+    "fx.cellaction.amount": 1.0,
+    "fx.cellaction.on": true,
+    "fx.displace.amount": 0.5,
+    "fx.displace.on": true
+  },
+  "routes": [
+    {
+      "source": "lane:0",
+      "target": "fx.cellaction.amount",
+      "op": "push",
+      "value": 0.25
+    },
+    {
+      "source": "hand:right.y",
+      "target": "fx.displace.split",
+      "op": "push",
+      "value": 0.8
+    },
+    {
+      "source": "hand:left.y",
+      "target": "fx.measure.scale",
+      "op": "push",
+      "value": -0.4
+    },
+    {
+      "source": "hand:left.y",
+      "target": "fx.measure.2.scale",
+      "op": "push",
+      "value": -0.4
+    },
+    {
+      "source": "lane:0",
+      "target": "rot.rate.ZW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:1",
+      "target": "rot.rate.XW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:2",
+      "target": "rot.rate.YW",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:3",
+      "target": "rot.rate.XY",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:4",
+      "target": "rot.rate.XZ",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:5",
+      "target": "rot.rate.YZ",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    }
+  ],
+  "macros": {},
+  "units": {
+    "camera.pan": "world",
+    "fx.depth": "taper"
+  },
+  "media": {
+    "channels": {}
+  }
+}

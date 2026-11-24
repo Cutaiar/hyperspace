@@ -8846,6 +8846,14 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## FL. Blocks taken apart (rows 1097–1100, 2026-11-24)
+
+Plan 67 §14. Headless: `tests/test_blocks_patch.py` (every Blocks choice and pair, three times, one pass per node; every saved Blocks look through the renderer), `tests/test_field_examples.py` (`field-blocks` opens with no note, its routes live), `tools/fx_sweep.py` (Blocks byte for byte on the shared cell pieces). The example is in the Drive library's `loadable/field-examples/`.
+
+**884. Blocks taken apart.** (Mac, a sub band playing, 1080p outputs) Load `distort-blocks-turn`, then `field-examples/field-blocks`, side by side if two decks are free (one on air, one off). *Pass:* the same checkerboard snapping quarter turns, the same response to the sub band and the right hand; the left hand grows the cells in both Measures together; on the canvas five nodes and their green cables. Then set both Measures' Pairs to across and Cell action's Action to swap: whole cells trade places. Wire Measure.2 straight into an output: each cell a small red-green ramp. *Fail:* a picture that differs at a glance (at another frame height the cells differ in size, row 1097: Blocks' Cell is px), cells torn at their edges, or a frame rate that drops with the five passes.
+
+**885. Cell action's half frame heights.** (Mac) In `field-blocks`, drag Displace's Amount down from its top (0.5) to 0.25. *Pass:* every cell moves half as far (a turn becomes a lean), smoothly, nothing jumps; at 0.5 again, the Blocks picture. Say whether a Displace that reaches 1 is worth a migration of the routes on it (row 1099).
+
 ## FK. The field wire (rows 1090–1096, 2026-11-23)
 
 Plan 67 F1. Headless: `tests/test_field_wire.py` (types, directives, the wire checks in words, the build, raw values, the grey, off, Displace by a field, the canvas's ports and cable, the thumbnail), `tests/test_field_lib.py`, `tests/test_field_examples.py`. The examples are in the Drive library's `loadable/field-examples/`.

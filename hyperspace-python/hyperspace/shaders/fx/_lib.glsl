@@ -192,6 +192,20 @@ float measure_cells(vec2 id, int rule, float spread) {
     return hash21(id + 64.5) * 64.0 * spread;
 }
 
+// -- cells: a grid over grid coordinates q (a cell a unit, a cell's corner at
+// each whole q). `id` is the pixel's block (`group` cells on a side share
+// one), `l` its place in its cell, −½ … ½ (Blocks, Measure's cells)
+struct Cell { vec2 id; vec2 l; };
+Cell cell_of(vec2 q, int group) { return Cell(floor(floor(q) / float(group)), fract(q) - 0.5); }
+
+// blocks paired off along `ax` (across or up), so a pair shares one number
+// (Blocks' swap): `id` becomes the pair's; +1 in its first block, −1 its second
+float cell_pair(inout vec2 id, vec2 ax) {
+    float along = dot(id, ax);
+    id -= ax * (along - floor(along * 0.5));
+    return 1.0 - 2.0 * mod(along, 2.0);
+}
+
 // -- picture: a picture read as a field. `luma`, `peak` and `reach` (above)
 // read it unsigned; these read it signed about mid-grey, premultiplied, so
 // a see-through pixel (and an unwired aux) is 0 — Displace's convention
