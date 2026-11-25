@@ -82,8 +82,8 @@ Hosted on Vercel as the project `hyperspace` under `cutaiar`. The Vercel
 project's Root Directory is set to `hyperspace-web/`, so pushing to `main`
 deploys. To ship manually, run `vercel deploy --prod` from the repository root,
 not this directory: with a Root Directory set, the CLI looks for
-`hyperspace-web/` inside wherever it runs. It is also served at
-`hyperspacedemo.cutaiar.io` (`hyperspace.cutaiar.io` now belongs to
+`hyperspace-web/` inside wherever it runs. It has no custom domain
+(`hyperspace.cutaiar.io` belongs to
 [`../hyperspace-contact/`](../hyperspace-contact/)). `vercel.json` rewrites `/` → `/hyperspace.html` and sends the
 `Permissions-Policy` header that lets the deployed origin use the microphone.
 A push that changes nothing under `hyperspace-web/` since the project's last deploy
