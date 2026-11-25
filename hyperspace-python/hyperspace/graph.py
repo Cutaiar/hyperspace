@@ -196,6 +196,7 @@ any other."""
 # into a field port is refused, the converter is a To field (`tofield`)
 FIELD = "field"
 FIELD_PORT = "field"     # an effect's third port, the field it reads (`fx.FIELD_PORT`)
+PORT_NAMES = ("image", "aux", FIELD_PORT)   # plan 67 P3: an effect's own; a knob's is its key
 PORT_TYPES = (IMAGE, MASK, GEOMETRY, VALUE, FIELD)
 
 # ---------------------------------------------------------------- the wiring
@@ -697,6 +698,10 @@ NODE_KINDS: dict[str, Any] = {
 # wire `palette → output.2.image`.
 
 WIRE_KEYS = ("from", "to")
+# plan 67 P3: a wire into a knob's field port may say how deep the field goes,
+# `value + depth × field` (the owner, 2026-11-24: "a depth key on the wire");
+# written only when it is not 1, so every other wire is saved as it was
+WIRE_DEPTH = "depth"
 _LAYER = re.compile(rf"hands(?:\.{_INSTANCE})?")
 _GHOST = re.compile(rf"ghost(?:\.{_INSTANCE})?")
 # plan 35 F: and All outputs, `output.all` (a wired frame's: outside one
@@ -791,6 +796,39 @@ def takes_of(node: str, kind: str | None) -> dict[str, str]:
     return takes
 
 
+def wire_depths(wiring: Any) -> tuple[tuple[str, str, float], ...]:
+    """Plan 67 P3: (from, to, depth) of each wire of `wiring` whose depth is not
+    1, sorted — what a wiring holds beyond its wires' identity (`Wire.depth`
+    compares equal), so a cache keyed by the wiring keys these too."""
+    wires = getattr(wiring, "wires", None) or ()
+    return tuple(sorted((w.src, w.dst, w.depth) for w in wires if w.depth != 1.0))
+
+
+def knob_spec(effect: str):
+    """Plan 67 P3: effect (or slot) `effect`'s file's spec (`fx.spec_of`), or None."""
+    return _fx.spec_of(split_instance(effect_of(effect) or effect)[0])
+
+
+def knob_refusal(effect: str, port: str) -> str | None:
+    """Plan 67 P3: why knob `port` of effect instance `effect` takes no field,
+    in words (`fx.knob_refusal`), or None (a knob that takes one, or no knob)."""
+    spec = _fx.spec_of(split_instance(effect)[0])
+    return _fx.knob_refusal(spec, port) if spec is not None else None
+
+
+def is_knob_port(node: str, kind: str | None, port: str) -> bool:
+    """Plan 67 P3: whether `port` of wired-frame node `node` is a knob's field
+    port — an effect's (or its slot's) knob that takes a field."""
+    if kind not in ("effect", "slot"):
+        return False
+    return port not in PORT_NAMES and takes_of(node, kind).get(port) == FIELD
+
+
+WIRE_DEPTH_IS_A_KNOBS = ("wire {wire} has a depth, and only a field into a knob takes one "
+                         "(value + depth × field)")
+KNOB_FIELDS_MOST = "{node} takes a field on {most} of its knobs at most"
+
+
 def makes_of(node: str, kind: str | None) -> str | None:
     """What wired-frame node `node` of `kind` puts out: the kind's
     (`WIRED_MAKES`), a field maker's a field (plan 67 F1)."""
@@ -850,12 +888,25 @@ class Wire:
 
     src: str
     dst: str
+    # plan 67 P3: how deep a field into a knob goes (`WIRE_DEPTH`). Not part
+    # of what the wire is: two wires between the same ports are one wire
+    depth: float = field(default=1.0, compare=False)
 
     def __post_init__(self) -> None:
         if (not isinstance(self.src, str) or not isinstance(self.dst, str) or not self.src
                 or "." not in self.dst):
             raise ValueError(f"wire {self.src!r} → {self.dst!r}: from a node's name into "
                              "'<node>.<port>'")
+        if (isinstance(self.depth, bool) or not isinstance(self.depth, (int, float))
+                or not math.isfinite(self.depth)):
+            raise ValueError(f"wire {self.src!r} → {self.dst!r}: its depth is a number, "
+                             f"not {self.depth!r}")
+
+    @classmethod
+    def of(cls, e: Any) -> Wire:
+        """A saved wire entry (`{"from", "to"}`, and `"depth"` when it has one)
+        → its Wire. ValueError, TypeError or KeyError for one that is not."""
+        return cls(e["from"], e["to"], e.get(WIRE_DEPTH, 1.0))
 
     @property
     def node(self) -> str:
@@ -867,6 +918,8 @@ class Wire:
         return self.dst.rpartition(".")[2]
 
     def to_json(self) -> dict:
+        if self.depth != 1.0:
+            return {"from": self.src, "to": self.dst, WIRE_DEPTH: self.depth}
         return {"from": self.src, "to": self.dst}
 
     def __str__(self) -> str:
@@ -2024,6 +2077,10 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
             return ECHO_RANGE.format(name=name, most=MAX_ECHOES)
         if k == "dream" and name != "dream":
             return ONE_DREAM.format(name=name)
+    if kind in ("effect", "slot") and port not in takes:
+        why = knob_refusal(effect_of(node) or node, port)   # plan 67 P3: a knob, in words
+        if why is not None:
+            return why
     if port not in takes:
         names = list(takes) if len(takes) < 4 else [next(iter(takes)), "…", [*takes][-1]]
         said = f"it takes {', '.join(names)}" if takes else "nothing is wired into it"
@@ -2031,6 +2088,13 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
     if src_kind == GROUND and kind != "output":
         return GROUND_ONLY_INTO_OUTPUTS
     makes, want = makes_of(w.src, src_kind), takes[port]
+    if w.depth != 1.0 and not is_knob_port(node, kind, port):
+        return WIRE_DEPTH_IS_A_KNOBS.format(wire=w)
+    if is_knob_port(node, kind, port) and ctx.wires is not None:
+        knobs = sorted({x.port for x in ctx.wires
+                        if x.node == node and is_knob_port(node, kind, x.port)})
+        if port in knobs and knobs.index(port) >= _fx.KNOB_UNITS:
+            return KNOB_FIELDS_MOST.format(node=node, most=_fx.KNOB_UNITS)
     # plan 36 T2: a pin goes where its kind is taken, a depth port takes the
     # scene's depth alone, a layer's or a guide's hands a hands node
     if PINS.get(w.src) == "scene" and not (src_kind == "cover" and port == "cover") and not (
@@ -2220,11 +2284,12 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
         raise GraphError("wires is not a list")
     wires: list[Wire] = []
     for e in raw:
-        if (not isinstance(e, dict) or set(e) != set(WIRE_KEYS)
+        if (not isinstance(e, dict) or not set(WIRE_KEYS) <= set(e)
+                or not set(e) <= {*WIRE_KEYS, WIRE_DEPTH}
                 or not all(isinstance(e[k], str) for k in WIRE_KEYS)):
             raise GraphError(f'a wire is {{"from": a node, "to": "node.port"}}, not {e!r}'[:140])
         try:
-            w = Wire(e["from"], e["to"])
+            w = Wire.of(e)
         except ValueError as err:
             raise GraphError(str(err)) from err
         if w in wires:
@@ -2794,7 +2859,7 @@ def _through_missing(raw: Any, ctx: _WireCtx, d1: list[Wire], wires: tuple[Wire,
     if not back:
         return wires, notes
     stood = set(wires)
-    keep = tuple(w for w in (Wire(e["from"], e["to"]) for e in raw) if w in stood or w in back)
+    keep = tuple(w for w in (Wire.of(e) for e in raw) if w in stood or w in back)
     return keep, [n for n in notes if not any(n.startswith(f"wire {w} — ") for w in back)]
 
 
@@ -2804,11 +2869,40 @@ _PICTURE_PORTS = frozenset({"image", "aux", "under", "over", "media", "faces",
                             "hands", "readout", *SWITCH_PORTS})
 
 
+# R15's words, the one phrase every place says them in: the builder's dormant
+# line, GRAPH's faint node, the FX pane's group and its strip
+FED_BY_NOTHING = "fed by nothing"
+WIRE_ITS_INPUT = "wire its input"
+
+
+def runs_unfed(name: str) -> bool:
+    """The one rule for an effect (or its slot, plan 89) that runs with
+    nothing wired into its `image`: a generator. Two kinds — a file with no
+    input port (`@takes image none`: Point, Line, Rings … the field
+    generators, plan 67) and a file whose Python half says `GENERATOR` (plan
+    80: the Mandelbrot, `is_generator`). The builder builds such a one over
+    nothing (`_Build._effect`), `Effect.generates` draws it, and `unfed`
+    leaves it out, so GRAPH and the FX pane never call it fed by nothing.
+    Read off the shipped file (`fx.ports_of`, `fx.hook_of`), so it is the same
+    answer whoever asks; any other effect fed by nothing is never built. A
+    slot is a picture effect's (plan 89): a field maker's slot has no field
+    node, so it never runs (Devin's review of #501)."""
+    effect = effect_of(name)
+    makes, takes = effect_ports(effect)
+    if name != effect and makes != IMAGE:
+        return False
+    if "image" not in takes:
+        return True
+    from . import fx  # here, not at the top: a hot reload of fx.py is seen
+
+    return _says_generator(fx.hook_of(split_instance(effect)[0]))
+
+
 def unfed(spec: GraphSpec) -> frozenset[str]:
     """R15 in a wired frame: the effects and slots whose input port nothing is
-    wired into — never built, though a path from them may reach a sink. A file
-    that takes no input (a generator: Point, Rings, the test card …) is fed by
-    nothing by design and is not here; nor is a D1-placed effect."""
+    wired into — never built, though a path from them may reach a sink. A
+    generator (`runs_unfed`: Point, Rings, the Mandelbrot …) is fed by nothing
+    by design and is not here; nor is a D1-placed effect."""
     if not getattr(spec, "wired", False):
         return frozenset()
     fed = {w.node for w in spec.all_wires() if w.port == "image"}
@@ -2816,20 +2910,22 @@ def unfed(spec: GraphSpec) -> frozenset[str]:
     names = {e.name for e in spec.effects} | {n for w in spec.all_wires() for n in (w.src, w.node)}
     return frozenset(n for n in names
                      if wire_node_kind(n, wired=True) in ("effect", "slot") and n not in fed
-                     and n not in placed
-                     and not (wire_node_kind(n, wired=True) == "effect"
-                              and "image" not in effect_ports(n)[1]))
+                     and n not in placed and not runs_unfed(n))
 
 
-def hungry_fields(spec: GraphSpec | None) -> frozenset[str]:
-    """The field ops among `unfed` that a path from would reach a sink: a
-    Waveform or Combine wired onward with no field into its input. They cannot
-    run without one (a picture effect may: plan 80's generators), so GRAPH and
-    the FX pane say what they need rather than "reaches nothing"."""
+def hungry(spec: GraphSpec | None) -> frozenset[str]:
+    """The effects and slots among `unfed` wired onward — a picture or a field
+    wired out of them — which would run if something were wired in: GRAPH
+    says "fed by nothing — wire its input" on such a node and the FX pane
+    groups it "fed by nothing", the first reason it does not run (a path
+    that also reaches nothing is the next). One wired to nothing at all
+    "reaches nothing", as before."""
     if spec is None or not getattr(spec, "wired", False):
         return frozenset()
-    return frozenset(n for n in unfed(spec) & reaches(spec)
-                     if effect_ports(effect_of(n) or n)[1].get("image") == FIELD)
+    onward = {w.src for w in spec.all_wires() if w.port in _PICTURE_PORTS or w.port == FIELD_PORT}
+    # (one with no input to wire — a field generator's slot — reaches nothing)
+    return frozenset(n for n in unfed(spec) & onward
+                     if "image" in effect_ports(effect_of(n))[1])
 
 
 def reaches(spec: GraphSpec) -> frozenset[str]:
@@ -6116,17 +6212,23 @@ def is_generator(spec) -> bool:
     """Plan 80: whether effect spec `spec` paints the whole frame from
     nothing — its Python half (`fx.HOOKS`) says `GENERATOR` (the
     Mandelbrot) — so it is built and drawn with no wire into its image."""
+    return _says_generator(getattr(spec, "hook", "") if spec is not None else "")
+
+
+def _says_generator(hook: str) -> bool:
+    """Whether `fx.HOOKS`' module for `@hook` name `hook` says `GENERATOR`."""
     from . import fx  # here, not at the top: a hot reload of fx.py is seen
 
-    hook = fx.HOOKS.get(getattr(spec, "hook", "") or "") if spec is not None else None
-    return bool(getattr(hook, "GENERATOR", False))
+    return bool(getattr(fx.HOOKS.get(hook or ""), "GENERATOR", False))
 
 
 def generators_of(state) -> frozenset[str]:
     """Plan 80: the effect instances of `state` (an `FxState`, or None)
-    that are generators (`is_generator`): `build_graph`'s `generators`."""
+    that run with nothing wired in (`runs_unfed`): `build_graph`'s
+    `generators`, part of the built graph's key — a reload that makes a file
+    a generator, or one no longer, builds again."""
     specs = getattr(state, "specs", None) or {}
-    return frozenset(n for n, spec in specs.items() if is_generator(spec))
+    return frozenset(n for n in specs if runs_unfed(n))
 
 
 class Effect(Node):
@@ -6181,9 +6283,12 @@ class Effect(Node):
     def __init__(self, name: str, *, image: Node | None = None, node: str | None = None,
                  after: tuple[Node, ...] = (), placed: str | None = None):
         # plan 67 F1: a file that reads a field has a third port, `field`
-        # (an instance's own ports, shadowing the class's: set, not declared)
+        # (an instance's own ports, shadowing the class's: set, not declared);
         if FIELD_PORT in effect_ports(name)[1]:
             self.__dict__["INPUTS"] = {**Effect.INPUTS, FIELD_PORT: FIELD}
+        # plan 67 P3: a knob wired to a field — its port gains an input when a
+        # wire lands (`_Build._fields`), so an unwired node is as it was
+        self.depths: dict[str, float] = {}      # knob → its wire's depth
         super().__init__(node if node is not None else name, after, image=image)
         self.effect = name
         self.placed = placed          # D1: "after" / "into" when the loadable patch places it
@@ -6219,10 +6324,11 @@ class Effect(Node):
 
     def generates(self, frame: Frame) -> bool:
         """Plan 80: its file paints the whole frame from nothing — its
-        Python half says `GENERATOR` (the Mandelbrot, `mandel.py`) — so with
-        no picture wired into `image` it still draws, over transparent
-        black (`_pass`), where any other effect reads nothing."""
-        return is_generator(frame.r.fx.state.specs.get(self.effect))
+        Python half says `GENERATOR` (the Mandelbrot, `mandel.py`;
+        `runs_unfed`, the rule the builder and `unfed` read) — so with no
+        picture wired into `image` it still draws, over transparent black
+        (`_pass`), where any other effect reads nothing."""
+        return runs_unfed(self.effect)
 
     def run(self, frame: Frame) -> None:
         # plan 33 R: folded here only where something reads it at the
@@ -6324,7 +6430,20 @@ class Effect(Node):
         field = _field_of(self.inputs.get(FIELD_PORT), frame)
         if field is not None:
             kw["field"] = field
+        knobs = self._knobs(frame)
+        if knobs:
+            kw["knobs"] = knobs
         return kw
+
+    def _knobs(self, frame: Frame) -> dict[str, tuple[moderngl.Texture, float]]:
+        """Plan 67 P3: knob → (the field wired into it this frame, its wire's
+        depth), for `run_one` — each knob port with a field made."""
+        out = {}
+        for port, depth in getattr(self, "depths", {}).items():
+            tex = _field_of(self.inputs.get(port), frame)
+            if tex is not None:
+                out[port] = (tex, depth)
+        return out
 
     @staticmethod
     def _opaque(frame: Frame) -> dict:
@@ -6496,6 +6615,7 @@ class FieldEffect(Effect):
         if FIELD_PORT in takes:
             ports[FIELD_PORT] = FIELD
         self.__dict__["INPUTS"] = ports        # (its own, shadowing the class's)
+        self.depths: dict[str, float] = {}     # plan 67 P3: as an `Effect`'s
         Node.__init__(self, node if node is not None else name, after, image=image)
         self.effect = name
         self.placed = "wire"
@@ -6556,6 +6676,9 @@ class FieldEffect(Effect):
         field = _field_of(self.inputs.get(FIELD_PORT), frame)
         if field is not None:
             kw["field"] = field
+        knobs = self._knobs(frame)
+        if knobs:
+            kw["knobs"] = knobs
         with frame.timed(self.name):
             frame.r.fx.run_one(self.effect, pic if pic is not None else frame.r._blank, fbo,
                                frame.t, **kw)
@@ -6863,7 +6986,9 @@ class Graph:
         self.order: list[Node] = []
         self.clouds: tuple[str, ...] = ()        # the cloud roles the default graph drew (A4b)
         self.effects: tuple[str, ...] = ()       # the effect instances of its runs (D0)
-        self.generators: tuple[str, ...] = ()    # plan 80: those built with no input (`Effect.generates`)
+        # plan 80: the instances that run with no input (`runs_unfed`), as the
+        # build was asked them — the graph's key, the builder reads the rule
+        self.generators: tuple[str, ...] = ()
         self.dormant: dict[str, str] = {}        # D1: placed effect → why it has no node
         # the entries of `dormant` written while the graph ran (an output's
         # folds skipped this frame: `Output.run`), taken out again before
@@ -7130,8 +7255,8 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     g = Graph(graph_key(views), wiring)
     g.clouds = tuple(clouds)
     g.effects = tuple(effects)
-    # plan 80: the effects that paint the whole frame from nothing
-    # (`Effect.generates`): one with no wire into its image is still built
+    # plan 80: the effects that run with nothing wired in (`generators_of`),
+    # kept as part of the key — `_Build` reads the rule itself (`runs_unfed`)
     g.generators = tuple(generators)
     g.bus_cuts = bus_cuts if bus_cuts is not None else BusCuts()
     _Build(g, wiring, len(views), g.bus_cuts).build()
@@ -7216,7 +7341,6 @@ class _Build:
         self.g, self.wiring, self.count = g, wiring, count
         self.bus_cuts = bus_cuts if bus_cuts is not None else BusCuts()     # plan 36 T1: the bus cables
         self.have = set(g.effects)
-        self.generators = set(g.generators)
         wires = tuple(getattr(wiring, "wires", ()))
         # plan 35 T4: a wire into an output this rig has not open (`output.3`
         # with two windows) reaches nothing — what only it shows is not
@@ -7534,13 +7658,13 @@ class _Build:
         if kind == "effect" and effect_ports(name)[0] == FIELD:
             # plan 67 F1: a field maker; a generator takes no input
             takes = effect_ports(name)[1]
-            if "image" in takes and src is None:
-                self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
+            if not runs_unfed(name) and src is None:
+                self.g.dormant[name] = f"{name} is {FED_BY_NOTHING} here: {WIRE_ITS_INPUT}"
                 return None
             return self._keep(FieldEffect(name, image=src if "image" in takes else None,
                                           node=self._unique(name)))
-        if src is None and effect not in self.generators:
-            self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
+        if src is None and not runs_unfed(name):     # (a slot: its own answer, plan 89)
+            self.g.dormant[name] = f"{name} is {FED_BY_NOTHING} here: {WIRE_ITS_INPUT}"
             return None
         if kind == "slot":
             return self._keep(Slot(self._unique(name), effect, image=src))
@@ -7733,20 +7857,24 @@ class _Build:
 
     def _fields(self) -> None:
         """Plan 67 F1: each wire into an effect's `field` port on that port — a
-        source the effect feeds (a loop) is dormant, in words, as an aux's."""
+        source the effect feeds (a loop) is dormant, in words, as an aux's.
+        Plan 67 P3: and each into a knob's field port, with its depth."""
         for w in self.wires:
-            if w.port != FIELD_PORT or _kind(w.node) not in ("effect", "slot"):
+            if _kind(w.node) not in ("effect", "slot") or (
+                    w.port != FIELD_PORT and not is_knob_port(w.node, _kind(w.node), w.port)):
                 continue
             target, src = self.made.get(w.node), self._taken(self.node(w.src), w)
             if isinstance(target, KeyNode):          # plan 87: keyed, its field is the effect's
                 target = target.inputs["image"]
             if (not isinstance(target, Effect) or target not in self.built or src is None
-                    or FIELD_PORT not in target.INPUTS):
+                    or (w.port == FIELD_PORT and FIELD_PORT not in target.INPUTS)):
                 continue
             if src is target or id(target) in _upstream(src):
                 self.g.dormant[str(w)] = f"wire {w} — {w.node} feeds {w.src}: that makes a loop"
                 continue
-            target.inputs[FIELD_PORT] = src
+            target.inputs[w.port] = src
+            if w.port != FIELD_PORT:
+                target.depths[w.port] = w.depth
 
     def _split(self, layers: tuple[HandsLayer, ...]) -> None:
         """How each layer splits its guide out (`HandsLayer.split`): always

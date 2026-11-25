@@ -753,7 +753,8 @@ class _Renamer:
         return out
 
     def wire(self, w: Mapping) -> dict:
-        return {"from": self.src(w["from"]), "to": self.dst(w["to"])}
+        # (plan 67 P3: a wire's other keys — a knob's field's depth — kept)
+        return {**w, "from": self.src(w["from"]), "to": self.dst(w["to"])}
 
     def row(self, r: Mapping) -> dict:
         out = dict(r)
@@ -1348,8 +1349,10 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
             wires.append(rn.wire(w.to_json()))
         elif where == INTO:
             ins += 1
-            port = {"id": _join("in", ins), "type": wire_type(w, where),
-                    "to": rn.dst(w.dst), "was": w.src}
+            port: dict[str, Any] = {"id": _join("in", ins), "type": wire_type(w, where),
+                                    "to": rn.dst(w.dst), "was": w.src}
+            if w.depth != 1.0:      # plan 67 P3: a field into a knob keeps its depth
+                port[G.WIRE_DEPTH] = w.depth
             # a many-wire port's order is the draw order: where this inlet
             # sits among the patch's own wires into it (absent: after them)
             nxt = next((x for x, at in crossed[k + 1:]
@@ -1359,8 +1362,11 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
             ports.append(port)
         else:
             outs += 1
-            ports.append({"id": _join("out", outs), "type": wire_type(w, where),
-                          "from": rn.src(w.src), "was": w.dst})
+            port = {"id": _join("out", outs), "type": wire_type(w, where),
+                    "from": rn.src(w.src), "was": w.dst}
+            if w.depth != 1.0:      # (an outlet into a host's knob too: Devin, #497)
+                port[G.WIRE_DEPTH] = w.depth
+            ports.append(port)
     # the rows: every one that touches a member
     routes = [rn.row(b.to_json()) for b in table.routes()
               if touches(members, b.source, b.target)]

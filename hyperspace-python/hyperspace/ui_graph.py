@@ -350,8 +350,8 @@ BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it �
 FAINT_TIP = (f"{graphview.REACHES_NOTHING}: no path from it ends at an output, the faces, "
              "the pattern, the backdrop or the run — it never runs. Wire it in, or drop "
              "it on a picture cable")
-UNFED_TIP = ("{need}: nothing is wired into its input, so it is never built and draws "
-             "nothing — wire its input on the canvas")
+UNFED_TIP = (f"{graphview.FED_BY_NOTHING}: nothing is wired into its input, so it is "
+             "never built and draws nothing — wire {need} into it on the canvas")
 BUNDLE_STEP = 0.5        # px a cable, past the first
 BUNDLE_MAX = 7.5         # the cap: a bundle of ten cables or more (3 + 9 × 0.5)
 EXPAND_TIP = "Expand this node: a row per port, its real cables"
@@ -1974,6 +1974,24 @@ def _cost_style(st: dict, n: graphview.VNode):
         ed.pop_style_color(2)
 
 
+COST_BADGE_PAD = 6.0        # a badge's words from its ends (canvas units)
+
+
+def cost_badge_rect(node_pos: tuple[float, float], node_w: float,
+                    text: tuple[float, float]) -> tuple[tuple[float, float], tuple[float, float]]:
+    """A gpu cost badge's corners (top left, bottom right) for a node at
+    `node_pos` `node_w` wide, its words `text` (w, h) in size: right-aligned
+    8 units in from the node's right end, its bottom edge on the node's top
+    edge. The node editor draws its nodes over the canvas's draw list, so
+    any part of the pill below that edge is hidden behind the node (it sat
+    0.4 of its height down, and showed half its words)."""
+    h = max(COST_BADGE_H, text[1] + 4)
+    w = text[0] + 2 * COST_BADGE_PAD
+    x1 = node_pos[0] + max(node_w, NODE_W) - 8.0
+    y1 = node_pos[1]
+    return (x1 - w, y1 - h), (x1, y1)
+
+
 def _cost_badge(st: dict, n: graphview.VNode) -> None:
     """Node `n`'s gpu cost badge (plan 84), just drawn: its time ("#1 ·
     2.10 ms") or "made nothing" on a small pill sitting on its top edge,
@@ -1986,11 +2004,10 @@ def _cost_badge(st: dict, n: graphview.VNode) -> None:
     p, sz = ed.get_node_position(k), ed.get_node_size(k)
     words = c.words
     size = imgui.calc_text_size(words)
-    pad = 6.0
-    w, h = size.x + 2 * pad, max(COST_BADGE_H, size.y + 4)
-    x1 = p.x + max(float(sz.x), NODE_W) - 8.0
-    y0 = p.y - h * 0.6
-    a, b = imgui.ImVec2(x1 - w, y0), imgui.ImVec2(x1, y0 + h)
+    pad = COST_BADGE_PAD
+    (ax, ay), (bx, by) = cost_badge_rect((p.x, p.y), float(sz.x), (size.x, size.y))
+    a, b = imgui.ImVec2(ax, ay), imgui.ImVec2(bx, by)
+    h = by - ay
     if c.ms is None:
         ground, ink = imgui.ImVec4(0.12, 0.12, 0.13, 0.95), COST_FAINT
     else:
@@ -4083,7 +4100,7 @@ def thumb_tip(st: dict, n: graphview.VNode) -> str:
     if card_shown(st, n):
         tip += "\nshowing the test card through it"
     elif getattr(n, "faint", False) and has_card(n):
-        tip += f"\n{graphview.UNWIRED_WORDS}"
+        tip += f"\n{graphview.UNFED_WORDS if n.unfed else graphview.UNWIRED_WORDS}"
     return tip + (f"\n{n.status}" if n.status else "")
 
 
@@ -6414,6 +6431,12 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at,
         with m.sub("insert"):
             for kind in modifiers.KINDS:
                 m.item(kind, lambda kind=kind: insert_modifier(panel, c, kind))
+    if c.kind == "render" and c.depth is not None:   # plan 67 P3: a field into a knob
+        with m.sub("depth"):
+            for d, words in graphview.depth_choices(c.ref):
+                m.item(words, (lambda d=d: _render_said(
+                    panel, render_edit(panel), lambda e, d=d: e.set_depth(c.ref, d))),
+                       enabled=d != c.depth)
     if c.kind == "render" and c.type == graphview.IMAGE:
         e = render_edit(panel)
         with m.sub("insert"):                   # plan 33 U; 2026-11-01: every picture node

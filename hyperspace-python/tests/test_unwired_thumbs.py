@@ -143,7 +143,9 @@ def test_the_page_asks_for_it_only_for_a_faint_effect(rig):
     assert faint and lit
     for n in faint:
         assert got[ui_graph.thumb_name(n)] == UNWIRED
-        assert graphview.UNWIRED_WORDS in ui_graph.thumb_tip(st, n)
+        # (R15: one wired onward with nothing in says that instead)
+        words = graphview.UNFED_WORDS if n.unfed else graphview.UNWIRED_WORDS
+        assert words in ui_graph.thumb_tip(st, n)
     for n in lit:
         assert got[ui_graph.thumb_name(n)] == graphview.PICTURE
     others = {ui_graph.thumb_name(n) for n in view.nodes if not (n.faint and ui_graph.has_card(n))}

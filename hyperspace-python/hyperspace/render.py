@@ -162,6 +162,7 @@ from .graph import (
     mask_made,
     param_prefix,
     picture,
+    wire_depths,
 )
 from .lookback import Dreamer, DreamState, Lookback
 from .masks import MaskPasses
@@ -2105,14 +2106,19 @@ class Renderer:
         effects = frozenset(st.specs) if st is not None else frozenset()
         # plan 80: the effects that draw with nothing wired in (`Effect.generates`)
         gens = generators_of(st)
+        # plan 67 P3: a wire's depth is not part of what the wire is, so a
+        # depth changed alone is no other wiring: the depths are keyed too
+        depths = wire_depths(wiring)
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
+                or getattr(graph, "depths", ()) != depths
                 or getattr(graph, "clouds", ()) != clouds
                 or getattr(graph, "bus_cuts", None) != bus_cuts
                 or frozenset(getattr(graph, "effects", ())) != effects
                 or frozenset(getattr(graph, "generators", ())) != gens):
             graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
                                               bus_cuts, tuple(sorted(gens)))
+            graph.depths = depths
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
@@ -3791,6 +3797,7 @@ class Renderer:
 
         # ---- face fills, under the wireframe (agent-validated prototype) ----
         self._face_verts = 0
+        self._point_verts = 0
         self._copies = 0
         self._cover_cells = None
         if s.faces:
@@ -3904,8 +3911,11 @@ class Renderer:
                 draws.append((self._lvao, len(verts), self._lines, float(alpha.max())))
 
             if s.points and not g.get("curve") and sf.walk is None:   # a curve (plan 28) has no corners to dot
-                tp = (pd - near) / span
-                order_p = np.argsort(pd, kind="stable")
+                # V's corners only: the rows after them (a pentagram's
+                # crossings) are points a face needs, not corners to dot
+                n = g.get("corners", g["n"])
+                tp = (pd[:n] - near) / span
+                order_p = np.argsort(pd[:n], kind="stable")
                 # radius in framebuffer px (× dpr) at scale 1; POINT_VS scales
                 # it by the copy in world space (plan 26 A2b) and rounds the
                 # diameter to whole pixels, as the point sprites the quads
@@ -3928,7 +3938,6 @@ class Renderer:
                     pa = pa * st["p_alpha"]
                     r = r * np.sqrt(st["p_alpha"])
                     prgb = np.where(st["p_tinted"][:, None], st["p_rgb"], RED)[order_p]
-                n = g["n"]
                 pverts = np.empty((n * 6, 10), dtype=np.float32)
                 for k in range(6):
                     pverts[k::6, 0:3] = P[order_p]
@@ -3943,6 +3952,7 @@ class Renderer:
                 self._points["u_px"].value = (float(max(vpx[2], 1)), float(max(vpx[3], 1)))
                 self._points["u_wscale"].value = wsc
                 self._pvao.render(moderngl.TRIANGLES, vertices=len(pverts), instances=copies)
+                self._point_verts = len(pverts)
                 draws.append((self._pvao, len(pverts), self._points, float(pa.max())))
 
             if has_depth:
