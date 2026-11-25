@@ -33,11 +33,25 @@ are `kinect.*`, after the ``##``."""
 
 from __future__ import annotations
 
+import math
+from dataclasses import dataclass
+from functools import lru_cache
+
 from imgui_bundle import imgui
 
 from . import ui
 from .dkit.tokens import SPACE
-from .kinect import EXPOSURE_MAX, EXPOSURE_MIN, IR_MAX, IR_MIN, LEDS, TILT_MAX
+from .kinect import (
+    EXPOSURE_MAX,
+    EXPOSURE_MIN,
+    FOCAL,
+    IR_MAX,
+    IR_MIN,
+    LEDS,
+    RADAR_RANGE,
+    RADAR_SHAPE,
+    TILT_MAX,
+)
 
 KEY = "kinect.pane"
 TILT_STEP = 0.5                     # the tilt slider's detent, degrees
@@ -45,6 +59,20 @@ NOT_SAVED = ("for this run: they are the entry's, and an entry in the device lis
              "never rewritten. Edit the entry to keep them.")
 NO_SENSOR = "no Kinect is connected"
 HOLD_TIP = "sent when you let go"
+
+RADAR_ID = "kinect.radar"
+RADAR_ASPECT = 0.7                  # the radar's height over its width
+RADAR_MAX_H = 260.0                 # ... capped
+RADAR_PAD = 4.0                     # px inside the frame
+RADAR_ARC = 14                      # segments in an arc
+SENSOR_W = 640                      # the depth picture's width, pixels
+HEAT_TOKENS = ("DIM", "RED")        # the heat ramp, thin cell to fullest: ui.py names, read when first drawn
+# (ui imports this module while it is still loading, so the colours cannot be read at import)
+HEAT_STEPS = 16
+HEAT_ALPHA = (0.18, 0.85)
+RADAR_TIP = ("The Kinect from above, the sensor at the bottom. The faint fan is all it can see; "
+             "the bright part is what near and far keep; the heat is where it reads something "
+             "now (the brighter, the more of the picture). Mirror flips it as it flips the cloud.")
 
 VIDEO_LABELS = (("off", "off"), ("color", "colour"), ("ir", "infrared"))
 
@@ -103,6 +131,7 @@ def body(panel, dev) -> None:
         return t.can.get(key, "") if live else NO_SENSOR
 
     _status(dev, t)
+    _radar(dev, t)
     _tilt(dev, t, st, why("tilt"))
     _led(dev, t, why("led"))
     _infrared(dev, t, st, why("ir"))
@@ -110,6 +139,142 @@ def body(panel, dev) -> None:
     _streams(dev, why("restart"), why("reconnect"))
     _placement(dev)
     _telemetry(t)
+
+
+@dataclass(frozen=True)
+class RadarView:
+    """The radar's lines in screen points: the theoretical fan's two edge rays
+    (sensor to `rng`), the limited fan's arcs at `near` and `far` and its two
+    edge rays between them, and the `centre` tick (None beyond the range)."""
+
+    apex: tuple[float, float]
+    fan: tuple[tuple[float, float], tuple[float, float]]
+    rim: tuple[tuple[float, float], ...]                 # the theoretical fan's outer arc
+    near_arc: tuple[tuple[float, float], ...]
+    far_arc: tuple[tuple[float, float], ...]
+    edges: tuple[tuple[tuple[float, float], tuple[float, float]], ...]
+    centre: tuple[tuple[float, float], tuple[float, float]] | None
+
+
+def half_angle(focal: float, width: float = SENSOR_W) -> float:
+    """The view's half-angle, radians: atan((W/2)/focal)."""
+    return math.atan((width / 2) / (focal if focal > 0 else FOCAL))
+
+
+def radar_scale(focal: float, w: float, h: float, rng: float = RADAR_RANGE) -> float:
+    """Pixels per metre that fit the whole fan to `w` x `h` with `RADAR_PAD` around."""
+    half = half_angle(focal)
+    side = max(rng * math.sin(half) if half < math.pi / 2 else rng, 1e-6)
+    return max(min((h - 2 * RADAR_PAD) / rng, (w / 2 - RADAR_PAD) / side), 1.0)
+
+
+def radar_geometry(focal: float, near: float, far: float, centre: float, scale: float,
+                   ox: float, oy: float, rng: float = RADAR_RANGE,
+                   steps: int = RADAR_ARC) -> RadarView:
+    """The radar's lines, pure: the sensor at (ox, oy), straight ahead up the
+    screen, `scale` pixels per metre. The limited fan is the same fan between
+    `near` and `far` (kept inside 0..rng and in order)."""
+    half = half_angle(focal)
+    far = min(max(far, 0.0), rng)
+    near = min(max(near, 0.0), far)
+
+    def at(r: float, a: float) -> tuple[float, float]:
+        return (ox + r * scale * math.sin(a), oy - r * scale * math.cos(a))
+
+    def arc(r: float) -> tuple[tuple[float, float], ...]:
+        return tuple(at(r, -half + 2 * half * i / steps) for i in range(steps + 1))
+
+    tick = None
+    if 0.0 <= centre <= rng:
+        y = oy - centre * scale
+        tick = ((ox - 4.0, y), (ox + 4.0, y))
+    return RadarView((ox, oy), (at(rng, -half), at(rng, half)), arc(rng), arc(near), arc(far),
+                     ((at(near, -half), at(far, -half)), (at(near, half), at(far, half))), tick)
+
+
+@lru_cache(maxsize=8)
+def _rays(focal: float, n: int) -> tuple[tuple[float, float], ...]:
+    """(sin, cos) of the `n + 1` angle edges of the radar's grid across the fan."""
+    half = half_angle(focal)
+    return tuple((math.sin(a), math.cos(a))
+                 for a in (-half + 2 * half * i / n for i in range(n + 1)))
+
+
+_ramp: list[int] = []
+
+
+def _heat(v: int) -> int:
+    """The u32 colour of a cell holding `v` (1-255), from the ramp of `HEAT_COLD` to
+    `HEAT_HOT`, built once from the tokens."""
+    if not _ramp:
+        cold, hot = (getattr(ui, n) for n in HEAT_TOKENS)
+        a0, a1 = HEAT_ALPHA
+        for i in range(HEAT_STEPS):
+            f = i / (HEAT_STEPS - 1)
+            _ramp.append(ui.u32(imgui.ImVec4(
+                cold.x + (hot.x - cold.x) * f,
+                cold.y + (hot.y - cold.y) * f,
+                cold.z + (hot.z - cold.z) * f, a0 + (a1 - a0) * f)))
+    return _ramp[min((v - 1) * HEAT_STEPS // 255, HEAT_STEPS - 1)]
+
+
+def _pts(points) -> list[imgui.ImVec2]:
+    return [imgui.ImVec2(x, y) for x, y in points]
+
+
+def _radar(dev, t) -> None:
+    """The top-down radar: read-only, asks for nothing. Not live: the theoretical fan only, dim."""
+    w = max(imgui.get_content_region_avail().x, 40.0)
+    h = min(w * RADAR_ASPECT, RADAR_MAX_H)
+    imgui.invisible_button(f"##{RADAR_ID}", imgui.ImVec2(w, h))
+    hovered = imgui.is_item_hovered()
+    r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    dl = imgui.get_window_draw_list()
+    dl.add_rect(r0, r1, ui.u32(ui.LINE))
+    live = bool(t.live)
+    o = dev.options
+    focal = t.focal if t.focal > 0 else FOCAL
+    scale = radar_scale(focal, w, h)
+    ox, oy = (r0.x + r1.x) / 2, r1.y - RADAR_PAD
+    g = radar_geometry(focal, o.near, o.far, o.centre, scale, ox, oy)
+    line = ui.u32(ui.LINE)          # the theoretical fan: the one grey line, live or not
+    apex = imgui.ImVec2(ox, oy)
+    if live:
+        grid = t.radar
+        n_a, n_r = t.radar_shape
+        if grid is not None and len(grid) == n_a * n_r and (n_a, n_r) == RADAR_SHAPE:
+            rays = _rays(focal, n_a)
+            step = RADAR_RANGE / n_r * scale
+            for i in range(n_a):
+                (s0, c0), (s1, c1) = rays[i], rays[i + 1]
+                for j in range(n_r):
+                    v = grid[i * n_r + j]
+                    if v:
+                        a, b = j * step, (j + 1) * step
+                        dl.add_convex_poly_filled(
+                            [imgui.ImVec2(ox + a * s0, oy - a * c0), imgui.ImVec2(ox + b * s0, oy - b * c0),
+                             imgui.ImVec2(ox + b * s1, oy - b * c1), imgui.ImVec2(ox + a * s1, oy - a * c1)],
+                            _heat(v))
+    dl.add_polyline(_pts(g.rim), line, 1.0, 0)
+    dl.add_line(apex, imgui.ImVec2(*g.fan[0]), line, 1.0)
+    dl.add_line(apex, imgui.ImVec2(*g.fan[1]), line, 1.0)
+    if live:
+        strong = ui.u32(ui.TEXT)
+        dl.add_polyline(_pts(g.near_arc), strong, 1.5, 0)
+        dl.add_polyline(_pts(g.far_arc), strong, 1.5, 0)
+        for a, b in g.edges:
+            dl.add_line(imgui.ImVec2(*a), imgui.ImVec2(*b), strong, 1.5)
+        if g.centre:
+            dl.add_line(imgui.ImVec2(*g.centre[0]), imgui.ImVec2(*g.centre[1]), ui.u32(ui.RED), 2.0)
+        imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
+        room = w / 2 - RADAR_PAD - 2
+        for r in (min(o.near, RADAR_RANGE), min(o.far, RADAR_RANGE)):
+            text = ui.fit_text(f"{r:g} m", room)
+            y = max(oy - r * scale - imgui.get_text_line_height(), r0.y + 1)
+            dl.add_text(imgui.ImVec2(ox + 3, y), ui.u32(ui.DIM), text)
+        imgui.pop_font()
+    if hovered:
+        ui.tooltip(RADAR_TIP)
 
 
 def _ask(dev, kind: str, value=None) -> None:

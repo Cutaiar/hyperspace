@@ -5,6 +5,7 @@ shown disabled with its word. Over a stand-in device: no hardware."""
 
 from __future__ import annotations
 
+import math
 from types import SimpleNamespace as NS
 
 import pytest
@@ -18,9 +19,18 @@ ALL = {"kinect.tilt", "kinect.tilt.go", "kinect.tilt.level", "kinect.led", "kine
        "kinect.video.off", "kinect.video.color", "kinect.video.ir", "kinect.auto_exposure",
        "kinect.white_balance", "kinect.flicker", "kinect.exposure", "kinect.restart",
        "kinect.reconnect", "kinect.near", "kinect.far", "kinect.centre", "kinect.step",
-       "kinect.mirror"}
+       "kinect.mirror", "kinect.radar"}
 OPEN = {k: "" for k in ("tilt", "led", "ir", "video", "restart", "reconnect", "auto_exposure",
                         "white_balance", "flicker")}
+
+
+def radar_cells() -> bytes:
+    """A radar grid with a few cells lit, one at full."""
+    a, r = kinect.RADAR_SHAPE
+    g = bytearray(a * r)
+    for i, j, v in ((12, 6, 255), (13, 6, 90), (4, 12, 1), (20, 3, 140)):
+        g[i * r + j] = v
+    return bytes(g)
 
 
 class Dev:
@@ -34,7 +44,8 @@ class Dev:
                 "share": 0.93, "nearest": 0.52, "median": 1.84, "points": 61234, "tilt": 1.0,
                 "tilt_status": "stopped", "accel": (-0.38, 9.44, 0.2), "led": "green",
                 "target": 0.0, "ir": 30, "exposure": 10000, "flags": {"auto_exposure": False},
-                "video": "color", "log": "", "said": "", "can": {**OPEN, "exposure": ""}}
+                "video": "color", "log": "", "said": "", "can": {**OPEN, "exposure": ""}, "focal": 575.0,
+                "radar": radar_cells(), "radar_shape": kinect.RADAR_SHAPE}
         self.telemetry = kinect.Telemetry(**{**base, **tele})
         self.status = "connected"
         self.options = kinect.Options()
@@ -274,3 +285,67 @@ def test_the_module_is_watched_and_reloaded_in_order():
     m = hotreload.MODULES
     assert m.index("kinect") < m.index("ui_kinect") < m.index("ui_graph")
     assert m.index("dkit.tokens") < m.index("ui_kinect")
+
+
+def test_the_radar_is_drawn_inside_the_pane_and_asks_for_nothing_even_unlit(rig, monkeypatch):
+    for width in (ui_graph.SIDE_MIN, ui_graph.SIDE_W):
+        for tele in ({}, {"live": False, "radar": None, "can": {}}, {"radar": None}):
+            dev = Dev(**tele)
+            p = Pane(rig, monkeypatch, dev, width)
+            x0, y0, x1, y1 = p.d.rects["kinect.radar"]
+            assert 10 <= x0 and x1 <= 10 + width + 1 and y1 - y0 <= ui_kinect.RADAR_MAX_H + 1
+            assert (y1 - y0) == pytest.approx(min((x1 - x0) * ui_kinect.RADAR_ASPECT, ui_kinect.RADAR_MAX_H), abs=1)
+            assert not p.spills(), p.spills()
+            p.d.run(p.d.wait(5))
+            assert dev.asked == [] and dev.placed == []
+
+
+def test_the_radar_draws_a_quad_per_lit_cell_from_the_tokens(rig, monkeypatch):
+    quads = []
+    real = imgui.ImDrawList.add_convex_poly_filled
+    monkeypatch.setattr(imgui.ImDrawList, "add_convex_poly_filled",
+                        lambda self, pts, col: (quads.append((len(pts), col)), real(self, pts, col))[1])
+    Pane(rig, monkeypatch, Dev(), ui_graph.SIDE_W)
+    assert quads and {n for n, _ in quads} == {4}
+    assert len({c for _, c in quads}) >= 3                       # the ramp: not one colour
+    quads.clear()
+    Pane(rig, monkeypatch, Dev(live=False, can={}), ui_graph.SIDE_W)
+    assert quads == []                                           # not live: the frustum only
+
+
+def test_the_limited_frustum_follows_near_and_far():
+    f = 575.0
+    a = ui_kinect.radar_geometry(f, 0.5, 4.5, 2.0, 40.0, 100.0, 200.0)
+    b = ui_kinect.radar_geometry(f, 1.0, 3.0, 2.0, 40.0, 100.0, 200.0)
+    assert a.fan == b.fan and a.rim == b.rim and a.apex == (100.0, 200.0)
+    assert a.near_arc != b.near_arc and a.far_arc != b.far_arc
+    mid = len(a.far_arc) // 2
+    assert a.near_arc[mid] == pytest.approx((100.0, 200.0 - 0.5 * 40.0))     # straight ahead
+    assert b.far_arc[mid] == pytest.approx((100.0, 200.0 - 3.0 * 40.0))
+    half = ui_kinect.half_angle(f)
+    assert half == pytest.approx(math.atan(320 / 575))
+    (nl, fl), (nr, fr) = b.edges                                   # the edge rays join the arcs' ends
+    assert nl == pytest.approx(b.near_arc[0]) and fr == pytest.approx(b.far_arc[-1])
+    assert fl == pytest.approx(b.far_arc[0]) and nr == pytest.approx(b.near_arc[-1])
+    assert b.centre == ((96.0, 200.0 - 80.0), (104.0, 200.0 - 80.0))
+    assert ui_kinect.radar_geometry(f, 0.5, 4.5, 9.0, 40.0, 0, 0).centre is None
+    wide = ui_kinect.radar_geometry(f, 0.5, 20.0, 2.0, 40.0, 0, 0)         # clipped to the range
+    assert wide.far_arc[mid][1] == pytest.approx(-ui_kinect.RADAR_RANGE * 40.0)
+
+
+def test_the_geometry_follows_the_devices_place():
+    d = kinect.KinectDevice("room", {}, sensor=lambda o: None)
+    before = ui_kinect.radar_geometry(575.0, d.options.near, d.options.far, d.options.centre, 40, 0, 0)
+    assert d.place(near=1.0, far=3.0) == ""
+    after = ui_kinect.radar_geometry(575.0, d.options.near, d.options.far, d.options.centre, 40, 0, 0)
+    assert before.near_arc != after.near_arc and before.far_arc != after.far_arc
+
+
+def test_the_fan_fits_the_radar_box_at_both_widths():
+    for width in (ui_graph.SIDE_MIN, ui_graph.SIDE_W):
+        h = min(width * ui_kinect.RADAR_ASPECT, ui_kinect.RADAR_MAX_H)
+        s = ui_kinect.radar_scale(575.0, width, h)
+        g = ui_kinect.radar_geometry(575.0, 0.5, 4.5, 2.0, s, width / 2, h - ui_kinect.RADAR_PAD)
+        xs = [x for x, _ in g.rim]
+        ys = [y for _, y in g.rim]
+        assert min(xs) >= 0 and max(xs) <= width and min(ys) >= 0

@@ -541,3 +541,55 @@ def test_the_video_choice_reaches_the_devices_options_and_pictures():
         assert d.options.colors and not d.options.infrared and "kinect:room/color" in d.media_sources()
     finally:
         d.close()
+
+
+def cell(grid: bytes, i: int, j: int) -> int:
+    return grid[i * kinect.RADAR_SHAPE[1] + j]
+
+
+def lit(grid: bytes) -> list[tuple[int, int]]:
+    r = kinect.RADAR_SHAPE[1]
+    return [(k // r, k % r) for k, v in enumerate(grid) if v]
+
+
+def test_the_radar_grid_puts_a_pixel_in_its_cell_and_mirrors_it():
+    n_a, n_r = kinect.RADAR_SHAPE
+    px = depth((240, 480, 2000))                      # right of centre, 2 m
+    plain = kinect.radar_grid(px, F, O(mirror=False))
+    flip = kinect.radar_grid(px, F, O(mirror=True))
+    [(a, r)] = lit(plain)
+    assert a > n_a // 2 and r == int(2.0 * np.hypot(160, F) / F / kinect.RADAR_RANGE * n_r)
+    assert cell(plain, a, r) == 255
+    assert lit(flip) == [(n_a - 1 - a, r)]
+    ahead = kinect.radar_grid(depth((240, 320, 2000)), F, O(mirror=False))
+    assert lit(ahead) == [(n_a // 2, int(2.0 / kinect.RADAR_RANGE * n_r))]
+    far = kinect.radar_grid(depth((240, 320, 9000)), F, O())            # past the radar's range
+    assert not any(far)
+
+
+def test_the_radar_grid_is_empty_for_an_empty_picture_and_scales_to_the_fullest():
+    assert kinect.radar_grid(depth(), F, O()) == bytes(kinect.RADAR_SHAPE[0] * kinect.RADAR_SHAPE[1])
+    g = kinect.radar_grid(depth((240, 320, 2000), (244, 320, 2000), (248, 320, 2000),
+                                (240, 480, 3000)), F, O(mirror=False))
+    assert sorted(v for v in g if v) == [85, 255]
+    assert len(g) == kinect.RADAR_SHAPE[0] * kinect.RADAR_SHAPE[1]
+
+
+def test_the_radar_is_made_on_the_devices_thread_and_published():
+    s = Steered(picture=depth((240, 480, 2000)), o=O(mirror=False))
+    seen = []
+    real = kinect.radar_grid
+    kinect.radar_grid = lambda *a: (seen.append(threading.current_thread().name), real(*a))[1]
+    d = device(s, mirror=False)
+    try:
+        d.open()
+        live(d)
+        assert until(lambda: d.telemetry.radar is not None)
+        t = d.telemetry
+        assert t.focal == F and t.radar_shape == kinect.RADAR_SHAPE and any(t.radar)
+        assert t.radar == real(s.picture, F, O(mirror=False))
+    finally:
+        kinect.radar_grid = real
+        d.close()
+    assert seen and set(seen) == {"kinect-room"}
+    assert kinect.Telemetry().radar is None and kinect.Telemetry().focal == 575.0

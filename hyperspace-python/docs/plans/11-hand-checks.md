@@ -9133,10 +9133,12 @@ Setup for all: (Mac, G Hub not running) 910's entry in the device list; select t
 
 **956. The motor missing, and placement.** Set `motor = false` on the entry (or open the Kinect with the motor part unreachable). *Pass:* the camera streams as before, the pane says why the motor is not open, tilt and LED are greyed with that word, infrared and video still work. Then move near / far / centre / step / mirror: the cloud follows at once; the pane says they are for this run; reopen the device and they are the entry's again. *Fail:* a lost camera, or a placement that is still changed after a reopen.
 
+**957. The radar.** (the pane's first block) Stand in the middle of the sensor's view, then move to its left edge, then hold a hand a metre away. *Pass:* a fan from the bottom centre, a dim one for what the sensor can see in theory and a bright one clipped between near and far; your heat shows at about your range (2 m is 40 % of the way out) and at your side of the fan, mirrored as the cloud is, and follows you at about 4 Hz; move **near**, **far** and **centre** and the bright arcs and the tick move at once; with nothing connected only the dim fan shows. *Fail:* heat on the wrong side, heat at the wrong range, or the block drawn past the pane's edge at either width. Not checked by eye anywhere yet: the colours, the labels' places, how the cells read.
+
 ## What no test covers
 
 Only a person can settle these:
-- the Kinect's control panel on a real sensor (950–956): the tests use a stand-in sensor and a stand-in libfreenect; the motor, the LED, the camera's flags and exposure, infrared with depth, the libusb model read and the accelerometer have never met hardware;
+- the Kinect's control panel on a real sensor (950–957): the tests use a stand-in sensor and a stand-in libfreenect; the motor, the LED, the camera's flags and exposure, infrared with depth, the libusb model read and the accelerometer have never met hardware;
 - what macOS does to screens across a real replug, and to two of one model (600, 601): the tests list stand-in screens in either order;
 - the dream's look (9) and the default hand feel (16);
 - a spawned dream patch's picture with a worker running (497): the tests read
