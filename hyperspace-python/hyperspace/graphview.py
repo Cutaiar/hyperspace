@@ -6907,6 +6907,10 @@ def _onto(doc: dict, s: str, d: str, name: str, inlet: str | None = None) -> Non
         kept = [x for x in kept if x["to"] != into]
         kept.append({"from": s, "to": into})
     doc["wires"] = kept + [{"from": out, "to": d}]
+    # a source taken over (a channel's, a generator's landing) whose last wire
+    # that was stays on the canvas unwired, as `render_wire` keeps a node
+    # (Devin's review of #501)
+    _keep_declared(doc, [x["from"] for x in wires if x not in doc["wires"]])
 
 
 def _feeds(doc: dict, name: str) -> bool:

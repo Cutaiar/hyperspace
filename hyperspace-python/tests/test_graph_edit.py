@@ -1000,6 +1000,11 @@ def test_a_generator_on_a_cable_takes_it_over(tmp_path):
     assert ("colour", "output.all.image") in got and ("lookback", "output.all.image") not in got
     assert not [w for w in got if w[1].startswith("colour.")]
     assert e.said.startswith("colour feeds output.all.image instead of lookback")
+    # (Devin's review of #501: the look-back, its last wire gone, stays on the
+    # canvas unwired — kept by its entry, as `render_wire` keeps a node)
+    spec = rig.loaded_patch.graph.spec
+    assert "lookback" in graphview.frame_names(spec)
+    assert not [w for w in got if w[0] == "lookback"]
     # a drop of the one already there onto another cable
     assert e.place_node(("channel.a", "shape.faces"), "colour") is None
     got = wires_of(rig)
