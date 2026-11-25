@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-23
+## v1.3 — 2026-11-24
 
 ### Panel
 
@@ -120,8 +120,10 @@
 - Three distortion effects that move the picture's pixels: **Shake** moves the whole frame (buzz, orbit, punch or jolt, with Smear and Split), **Wave** lays one waveform across it along lines, rings or spokes, and **Blocks** cuts it into cells that shift, zoom, stretch, turn, bulge or swap — every Amount is untouched at 0, so a lane, hand or pad fades it in; 23 ready patches in `loadable/distort/` play them, copied into the library by `tools/copy_patches.py distort` (#458, #482)
 - New **Mandelbrot** effect, a live Mandelbrot / Julia generator to explore by hand or controller: every term of z → z^p + c is a knob (Centre, Zoom to 10¹³×, z₀, c, Slice, Power 2–8, Steps); Pan, Dive and the drives move the picture as far at any depth, Size (540 / 810 / 1080 lines) sets its cost, and it feeds Palette's gradient or a built-in ramp (#462)
 - Mandelbrot draws with nothing wired in, its coloured inside is smooth rings at any depth instead of flat grey and blocks, the c and z₀ drives are no longer far too fast off the screen's axis, and a deep zoom costs about a quarter of what it did (15 ms instead of 81 at 10⁷× on the M3 Max) (#471)
-- XY pads: Prism and Wave get a Centre pad, Wave Table an Offset pad and Zoom burst a Burst volume (the third value a halo); click or drag the point, ⇧ for fine, and each axis keeps its own knob for routes and Learn; saved patches are unchanged (#469)
+- XY pads: Prism and Wave get a Centre pad, Wave Table an Offset pad and Zoom burst a Burst volume (the third value a halo); click or drag the point, ⇧ for fine, and each axis keeps its own knob for routes and Learn; the Point field node's X and Y are one plane too; saved patches are unchanged (#469, #494)
 - Fields: a new green **field** wire and field nodes — **Point**, **Line**, **Rings**, **Spokes**, **Cells**, **Noise**, **To field**, **Waveform**, **Combine** and **Cell action** — build a distortion by hand, and Displace takes a field and gains **Split**; Wave and Blocks can be rebuilt this way, and five examples (`field-rings-lens`, `field-line-shear`, `field-self-bend`, `field-wave`, `field-blocks`) are in the library's `loadable/field-examples/` (#489, #490, #491)
+- A field node with nothing in its input says **wire a field into its input** instead of "reaches nothing", and the FX pane groups it under **fed by nothing**; a field node's thumbnail fills its square, so a small field no longer shows flat grey (#492)
+- **Noise** gains **Out flow** and **Drift**, **Scale** is a new field op, and a `field-trip` example rebuilds Trip warp from fields, near but not identical, while the Trip warp effect stays as it was (#493)
 
 ### Shapes
 
@@ -131,6 +133,7 @@
 - A **fractal** section (in **sections ▾**) holds a fractal's controls: where you are, **Detail**, **Reach**, **Near**, **Additive** (moved from VIEW) and **To the top**; Detail, Reach and Near are saved in a fractal patch (#466)
 - An endless dive: **Dive** (`view.frac_dive`, −2 … +2 levels a second), the fractal section's first slider, goes in forever or climbs back out to the whole shape; inside a fractal, zoom and turn act about the middle of the screen and the dive settles on its cell, so the screen stays full; saved with the patch, and an LFO, hand or knob can drive it (#474)
 - Inside a dive, a pan's framing is saved with the patch, and ⌘Z while a dive runs takes back one edit at a time, framing included (#474)
+- A new shape, the snub icosidodecadodecahedron (shape 109, last in Star polyhedra): a star polyhedron sized by the plastic number, its pentagram faces filled once and only its 60 corners dotted; restart after pulling, and a patch saved with it shows an error on a build from before it (#498, #499)
 
 ### Media
 
@@ -189,6 +192,8 @@
 - `graph.KeyNode`, `masks.KEY_FS` and `glsl.KEY_RAMP` key a node, listed in the graph section's optional `"keys"`; `screen` joins `graph.BLENDS` (#479); effect slots: `{"kind":"effect","file":"acid","slots":3}` and `acid.slot.k`, loadables `/12` (`graphmigrate.twelve`), fragments `patch/3` (#487)
 - Fields: `graph.FIELD`, `// @makes field` / `// @takes <port> field`, `FieldEffect` and `FieldPicture`, the shared field pieces in `_lib.glsl` and `tools/fx_sweep.py` to prove a move byte for byte (#489); `shaders/fx/cellaction.glsl`, `tests/wavepatch.py` and `tests/blockspatch.py` (#490, #491)
 - `loadable.retaper_note`, `node_desk.PAD_BUTTONS` and `Bindings.node_buttons` (#468); `library.Install.save_named` (#481); `library.strays` and `NO_LIBRARY` (#480); `tools/copy_patches.py` (#482); `hands` joins `library.RETIRED_MODULES` (#485); `OWNERS["camera"]` is `"shape"` and `_eye_owner` (#486); `publish.ask_ndi` / `take_ask` with `<home>/publish.here.json` (#476); `ui_media.intake` / `paste` (#477)
+- `graph.unfed` and `graph.hungry_fields`, and `FxChain.field_range` for field thumbnails (#492); `tests/trippatch.py` (#493); `geometry.PLASTIC`, `_star_crossings` and an optional `geom()["corners"]` (#498)
+- Vercel builds both web projects again: the ignore step now builds whenever it can't compare, after every production deploy had failed since 2026-11-03; the old web app's link is `hyperspace-legacy.vercel.app` (#500)
 
 ## v1.2 — 2026-11-02
 
