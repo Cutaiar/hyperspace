@@ -846,6 +846,14 @@ class DelayPair:
         self.holds = False
         self.wrote = False
         self.idle = 0
+        # the delay's rate (`graph.delay_due`): `kept` — the write skipped
+        # this frame, so the read side stays as it is; `holds_any` — a picture
+        # has been taken; `since` — frames since one; `cell` — the clock grid
+        # cell of the last
+        self.kept = False
+        self.holds_any = False
+        self.since = 0
+        self.cell: int | None = None
 
     def target(self, ctx: moderngl.Context, size: tuple[int, int]) -> moderngl.Framebuffer:
         """The write side at `size`: made again only when missing or of
@@ -872,9 +880,12 @@ class DelayPair:
         if self.wrote:
             self.read, self.write = self.write, self.read
             self.holds = True
+        elif self.kept and self.holds:
+            pass                        # a frame between two pictures: still holds the last
         else:
             self.holds = False
-        self.wrote = False
+            self.holds_any = False      # (an input that read nothing: the next frame takes afresh)
+        self.wrote = self.kept = False
 
     @staticmethod
     def _free(side) -> None:
@@ -886,7 +897,8 @@ class DelayPair:
         self._free(self.read)
         self._free(self.write)
         self.read = self.write = None
-        self.holds = self.wrote = False
+        self.holds = self.wrote = self.kept = self.holds_any = False
+        self.cell = None
 
 
 class FaceTarget:
@@ -1327,6 +1339,9 @@ def unwired_through(frame: Frame, name: str, pulled: frozenset[str] | None = Non
 
 
 class Renderer:
+    # plan 34 D: the one tempo clock (`tempo.Clock`), set by the app; None headless
+    tempo: Any = None
+
     def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None,
                  fx: FxState | None = None, ghost: GhostState | None = None):
         self.ctx = ctx
@@ -2015,11 +2030,13 @@ class Renderer:
         selects = dict(getattr(s, "switch", None) or {})
         # plan 34 Z: each resize's values likewise (`ViewState.resize`)
         resizes = dict(getattr(s, "resize", None) or {})
+        # plan 34 D: each delay's rate likewise (`ViewState.delay`)
+        delays = dict(getattr(s, "delay", None) or {})
         samples = getattr(first, "samples", None)   # (plan 44 D4: a deck drawn for a window)
         frame = Frame(self, ctx, s, w, h, dpr, t, views, size,
                       samples if samples is not None else _samples_of(ctx, target),
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
-                      stats=stats, selects=selects, resizes=resizes)
+                      stats=stats, selects=selects, resizes=resizes, delays=delays)
         timer = self._pass_timer()
         # plan 84: what each node runs this frame, only while GRAPH's **gpu
         # cost** chip asks (`gpu_watch`, set by the page each frame it is lit
@@ -3070,7 +3087,7 @@ class Renderer:
             return
         if reset:
             for pair in pairs.values():
-                pair.wrote = False      # (so `turn` holds nothing this frame)
+                pair.wrote = pair.kept = pair.holds_any = False   # (so `turn` holds nothing this frame)
         held = {n.name for n in getattr(graph, "nodes", {}).values() if isinstance(n, Delay)}
         for name in list(pairs):
             pair = pairs[name]

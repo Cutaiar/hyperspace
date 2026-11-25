@@ -440,3 +440,125 @@ def test_a_query_inside_another_is_a_no_op(ctx):
         pass
     assert ctx.error == "GL_NO_ERROR"
     assert [name for name, _ in t._frame] == ["delay(write)", "zoomblur.2"]
+
+
+# ---------------------------------------------------------------- the rate
+
+def test_delay_params_come_and_go_and_write_the_state():
+    """`delay[.n].every / frames / hz` are declared from the graph's delays,
+    write a `DelayState` kept while the name stays, and go with the delay."""
+    from hyperspace import params
+    from hyperspace.view import DELAY_EVERY
+
+    reg = params.Registry()
+    made = params.declare_delays(reg, ["delay", "delay.2"])
+    assert sorted(made) == sorted(params.delay_ids("delay") + params.delay_ids("delay.2"))
+    assert all(reg[pid].group == params.DELAY_GROUP == "delay" for pid in made)
+    assert params.DELAY_GROUP in params.PATCH_GROUPS
+    reg["delay.frames"].set(5)
+    reg["delay.2.every"].set(DELAY_EVERY.index("1/4"))
+    assert reg.delay_state["delay"].frames == 5
+    assert DELAY_EVERY[reg.delay_state["delay.2"].every] == "1/4"
+    kept = reg.delay_state["delay"]
+    assert params.declare_delays(reg, ["delay", "delay.2"]) == []
+    assert reg.delay_state["delay"] is kept
+    gone = params.declare_delays(reg, ["delay"])
+    assert sorted(gone) == sorted(params.delay_ids("delay.2"))
+    assert "delay.2" not in reg.delay_state
+    assert params.is_delay_id("delay.12.hz") and not params.is_delay_id("delay.1.hz")
+    assert not params.is_delay_id("delay.rate")
+
+
+def _booked(st, frames, dt=1 / 60, bpm=120.0):
+    """The frames (0-based) a delay at `st` takes a picture on, over `frames`
+    frames at `dt`, booked the way `DelayWrite` and `DelayPair.turn` do."""
+    from hyperspace.render import DelayPair
+
+    pair, taken = DelayPair(), []
+    for k in range(frames):
+        t = 10.0 + k * dt
+        if G.delay_due(pair, st, t, t * bpm / 60.0):
+            taken.append(k)
+            pair.wrote = pair.holds_any = True
+        else:
+            pair.kept = True
+        pair.holds = pair.wrote or pair.kept        # (`turn`, without the textures)
+        pair.wrote = pair.kept = False
+    return taken
+
+
+def test_every_frame_is_the_default_and_every_nth_takes_each_nth():
+    from hyperspace.view import DelayState
+
+    assert _booked(DelayState(), 6) == [0, 1, 2, 3, 4, 5]
+    assert _booked(DelayState(frames=3), 10) == [0, 3, 6, 9]
+    assert _booked(DelayState(frames=5), 11) == [0, 5, 10]
+
+
+def test_hz_takes_that_many_a_second_whatever_the_frame_rate():
+    from hyperspace.view import DELAY_EVERY, DelayState
+
+    hz = DELAY_EVERY.index("Hz")
+    assert len(_booked(DelayState(every=hz, hz=10.0), 120)) in (20, 21)       # 2 s at 60 fps
+    assert len(_booked(DelayState(every=hz, hz=10.0), 60, dt=1 / 30)) in (20, 21)
+    assert _booked(DelayState(every=hz, hz=120.0), 6) == [0, 1, 2, 3, 4, 5]   # above the rate
+
+
+def test_tempo_units_take_one_a_cell_of_the_beat():
+    from hyperspace.view import DELAY_EVERY, DelayState
+
+    quarter_st = DelayState(every=DELAY_EVERY.index("1/4"))
+    # 120 bpm = 2 beats/s: a quarter every 0.5 s, a bar every 2 s; 4 s at 60 fps
+    quarter = _booked(quarter_st, 240)
+    bar = _booked(DelayState(every=DELAY_EVERY.index("1 bar")), 240)
+    assert len(quarter) in (8, 9) and len(bar) in (2, 3)
+    assert {b - a for a, b in pairwise(quarter)} == {30}
+    assert len(_booked(quarter_st, 240, bpm=240.0)) > len(quarter)
+
+
+def test_a_delay_that_read_nothing_takes_again_at_once():
+    """After a frame the pair held nothing (its input read nothing), the next
+    frame takes a picture whatever the rate: no stale wait."""
+    from hyperspace.render import DelayPair
+    from hyperspace.view import DelayState
+
+    pair, st = DelayPair(), DelayState(frames=8)
+    assert G.delay_due(pair, st, 1.0, 2.0)
+    pair.holds_any = True
+    assert not G.delay_due(pair, st, 1.1, 2.2)
+    pair.holds_any = False                               # `DelayPair.turn`: nothing written
+    assert G.delay_due(pair, st, 1.2, 2.4)
+
+
+def test_a_kept_pair_holds_its_picture_between_two():
+    from hyperspace.render import DelayPair
+
+    pair = DelayPair()
+    pair.read, pair.write = ("a", "fa"), ("b", "fb")
+    pair.holds = pair.holds_any = pair.kept = True
+    pair.turn()
+    assert pair.holds and pair.read == ("a", "fa")       # nothing swapped
+    pair.turn()                                          # neither kept nor written
+    assert not pair.holds and not pair.holds_any
+
+
+def test_every_third_frame_holds_the_picture_between(ctx):
+    """GL: channel a's still changes colour every frame; `media.a → delay →
+    output.2` taking every 3rd frame shows each picture taken for three
+    frames running, a frame after it was taken."""
+    from hyperspace.view import DelayState
+
+    size = (160, 120)
+    still = Still(_rgba(16, 9, RED))
+    r = _renderer(ctx, _media(a=still), [("media.a", "delay.image"),
+                                         ("delay", "output.2.image")], DELAY)
+    vs, s = _views(ctx, size), _faces()
+    s.delay = {"delay": DelayState(frames=3)}
+    colours = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (0, 255, 255),
+               (255, 0, 255), (255, 128, 0), (128, 0, 255)]
+    got = []
+    for k, colour in enumerate(colours):
+        still.f = MediaFrame(_rgba(16, 9, colour), 1.0, k)
+        got.append(_mid(_frame(ctx, r, s, vs, size, k)[1]))
+    assert got == [(0, 0, 0), colours[0], colours[0], colours[0], colours[3], colours[3],
+                   colours[3], colours[6]], got

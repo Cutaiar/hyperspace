@@ -2404,6 +2404,8 @@ def main(argv: list[str] | None = None) -> None:
     # frame: compiling its shaders then would stall the room (rec, row 648)
     glfw.make_context_current(root_win)
     renderer2 = renderer.sibling(ghost=ghosts.show_look())
+    # plan 34 D: a delay on the tempo takes its picture on the one clock's beat
+    renderer.tempo = renderer2.tempo = clock
     glfw.make_context_current(ctrl_win)
     renderer2.segment_cfg = renderer.segment_cfg
     # the meta controller's wires, on both (plan 44 D5c): either deck can be on air

@@ -102,6 +102,9 @@ from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
 from .tapers import clamp as _clamp
 from .view import (
+    DELAY_EVERY,
+    DELAY_FRAMES_MAX,
+    DELAY_HZ,
     KEY_MEASURES,
     MATTE_FEATHER,
     MATTE_FROM,
@@ -114,6 +117,7 @@ from .view import (
     SEGMENT_MODES,
     SEGMENT_QUALITY,
     CutState,
+    DelayState,
     KeyState,
     MatteState,
     ResizeState,
@@ -150,6 +154,8 @@ F_KEYS = 8
 # loadable patch's, `seq.run` and the playhead are not persisted at all)
 # `switch` (plan 33 S): each switch node's `select`, the loadable patch's, declared
 # while its graph holds the switch (declare_switches)
+# `delay` (plan 34 D): each delay node's rate (every, frames, hz), the loadable
+# patch's, declared while its graph holds the entry (declare_delays)
 # `resize` (plan 34 Z): each resize node's size, aspect, fit, filter and
 # crop, the loadable patch's, declared while its graph holds the entry (declare_resizes)
 # `matte` (plan 39 T2): each matte node's source, key, edge and feather, the
@@ -174,7 +180,7 @@ F_KEYS = 8
 # changes what its own `axis:L.*` / `axis:R.*` routes do. The pad's feel (`desk.pad.*`)
 # is about the hardware, and stays the meta controller's
 PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
-                      "backdrop", "switch", "resize", "matte", "cut", "segment", "key", "ghost",
+                      "backdrop", "switch", "resize", "matte", "cut", "segment", "key", "delay", "ghost",
                       "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "mod")
 # `grip` (plan 60, the hand rig): a patch's own, each deck's — the owner, 2026-11-10,
 # testing it: "this really should be per preset". The on-air deck's acts on the one world
@@ -946,6 +952,8 @@ class Registry:
     # this deck's dial readings, {"L": "petal", "R": "blend"} (`declare_dial`); None: a
     # registry with no dial
     dial_modes: dict[str, str] | None = None
+    # plan 34 D: each delay's rate, `ViewState.delay`'s dict (`build_registry`)
+    delay_state: dict[str, Any]
 
     @staticmethod
     def group_word(group: str) -> str:
@@ -1723,6 +1731,83 @@ def declare_switches(r: Registry, names: Iterable[str]) -> list[str]:
                    "the faces then show the pattern, the backdrop nothing. Only the "
                    "picked input's picture is made.")
         changed.append(pid)
+    return changed
+
+
+# ---- plan 34 D: the delays' rate ----
+DELAY_GROUP = "delay"
+_DELAY_KEYS = ("every", "frames", "hz")
+_DELAY_ID = re.compile(r"delay(?:\.(?:[2-9]|[1-9][0-9]+))?\.(every|frames|hz)")
+
+
+def delay_ids(name: str) -> list[str]:
+    """Delay node `name`'s params (`delay.2` → `delay.2.every` …), in order."""
+    return [f"{name}.{k}" for k in _DELAY_KEYS]
+
+
+def is_delay_id(pid: str) -> bool:
+    """Is `pid` one of a delay's values — one that exists only while a
+    loadable patch's graph holds that delay? A load sorts such ids against
+    the graph it lands, as it does a resize's."""
+    return bool(_DELAY_ID.fullmatch(pid))
+
+
+def _delay_state(r: Registry) -> dict[str, DelayState]:
+    """The states the delay params write, delay name → `DelayState`: the
+    view state's (`ViewState.delay`), kept by `build_registry` as
+    `r.delay_state`; a dict of the registry's own for one built without a view."""
+    state = getattr(r, "delay_state", None)
+    if not isinstance(state, dict):
+        state = r.delay_state = {}
+    return state
+
+
+_DELAY_TIPS = {
+    "every": "How often {name} takes its picture: every so many frames, so many times a "
+             "second (Hz), or on the tempo — a sixteenth, an eighth, a quarter, a half, "
+             "a bar, two bars, four bars. Between two it holds the last one.",
+    "frames": "The frames between two pictures {name} takes, when it counts frames: 1 is "
+              "every frame (last frame's picture), 3 every third, 5 every fifth — a "
+              "coarser, more diffused look-back.",
+    "hz": "The pictures a second {name} takes, when it runs in Hz, whatever the frame rate.",
+}
+
+
+def declare_delays(r: Registry, names: Iterable[str]) -> list[str]:
+    """The delays' params (plan 34 D), as `declare_resizes` does the resizes':
+    for each delay `names` holds, `every` (an enum over `DELAY_EVERY`),
+    `frames` (1–`DELAY_FRAMES_MAX`) and `hz` — group `delay` (a patch group:
+    the loadable patch's), over a `DelayState` made when first declared and
+    kept while the name stays; those of every delay no longer named dropped,
+    with their states. Returns the ids that appeared or went."""
+    state = _delay_state(r)
+    want = {n: delay_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == DELAY_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        if st is None:
+            st = state[name] = DelayState()
+        for pid, key in zip(ids, _DELAY_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _DELAY_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key == "every":
+                r.enum(pid, label, *got, list(DELAY_EVERY), group=DELAY_GROUP, tip=tip)
+            elif key == "frames":
+                r.continuous(pid, label, *got, lo=1, hi=DELAY_FRAMES_MAX, integer=True,
+                             fmt=lambda v: f"{int(v)}", group=DELAY_GROUP, tip=tip)
+            else:
+                r.continuous(pid, label, *got, lo=DELAY_HZ[0], hi=DELAY_HZ[1],
+                             fmt=lambda v: f"{v:.1f} Hz", group=DELAY_GROUP, tip=tip)
+            changed.append(pid)
     return changed
 
 
@@ -2555,6 +2640,15 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
              tip="While held, whatever the performers are doing to the look is written "
                  "into its values; let go and the look stays where they left it. One undo "
                  "step per hold.")
+    # plan 34 D: the delays' rate likewise (`ViewState.delay`)
+    delays = getattr(view, "delay", None)
+    if not isinstance(delays, dict):
+        delays = {}
+        try:
+            view.delay = delays
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.delay_state = delays
     # plan 34 Z: the resizes' values likewise (`ViewState.resize`)
     sizes = getattr(view, "resize", None)
     if not isinstance(sizes, dict):

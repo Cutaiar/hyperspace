@@ -175,6 +175,7 @@ from .modifiers import Modifier
 from .palettecompat import palette_slice
 from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadable.* names
     CUT_GROUP,
+    DELAY_GROUP,
     DEPTH_TAPER,
     DEPTH_UNIT,
     MATTE_GROUP,
@@ -189,6 +190,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     UNITS,
     UNITS_KEY,
     declare_cuts,
+    declare_delays,
     declare_keys,
     declare_lookbacks,
     declare_mattes,
@@ -197,6 +199,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     declare_switches,
     fx_files,
     is_cut_id,
+    is_delay_id,
     is_instance_id,
     is_key_id,
     is_lookback_id,
@@ -497,11 +500,12 @@ class GraphSection:
         ``switch``, ``resize``, ``lookback``, and (plan 39 T2–T4) ``matte``, ``cut``,
         ``segment``; (plan 87) ``key``, the nodes keyed."""
         if spec is None:
-            return {"fx": frozenset(), "switch": [], "resize": [], "lookback": [],
+            return {"fx": frozenset(), "switch": [], "resize": [], "delay": [], "lookback": [],
                     "matte": [], "cut": [], "segment": [], "key": []}
         return {"fx": frozenset(spec.effect_names()),
                 "switch": [sw.name for sw in spec.switches],
                 "resize": [z.name for z in spec.resizes],
+                "delay": [d.name for d in spec.delays],
                 "lookback": [lb.name for lb in spec.lookbacks],
                 # plan 39 T2–T4: the mattes, cuts and segments, by their entries
                 "matte": [m.name for m in spec.mattes],
@@ -523,6 +527,8 @@ class GraphSection:
         # plan 34 Z: each resize's values, by its entry — reached or not, so
         # an unwired resize keeps its knobs as an unwired switch its pick
         declare_resizes(reg, names["resize"])
+        # plan 34 D: each delay's rate, by its entry, as a resize's
+        declare_delays(reg, names["delay"])
         # plan 39 T2: each matte's values, by its entry, as a resize's
         declare_mattes(reg, names["matte"])
         # plan 39 T3: each cut's values, by its entry, as a matte's
@@ -606,7 +612,7 @@ GROUP_BAD = "groups: an entry that is not a group, ignored"
 # plan 34 Z: nor a resize's values; plan 39 T2: nor a matte's; T3: nor a cut's)
 # (T4: nor a segment's) — and (plan 40 T5, D6) the effects', whose module
 # loadable patches are retired outright: a save writes no fx label
-NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, RESIZE_GROUP, MATTE_GROUP, CUT_GROUP,
+NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, DELAY_GROUP, RESIZE_GROUP, MATTE_GROUP, CUT_GROUP,
              SEGMENT_GROUP, FX_GROUP)
 # the groups whose module presets are retired (plan 40 T5, D6,
 # `library.RETIRED_MODULES`): a file that still names one keeps the label
@@ -989,7 +995,7 @@ class LoadedPatch:
                   if k in reg and reg[k].group in PATCH_GROUPS
                   and reg[k].group != modifiers.GROUP and reg[k].persist
                   and not is_instance_id(k) and not is_switch_id(k)
-                  and not is_resize_id(k) and not is_lookback_id(k)
+                  and not is_resize_id(k) and not is_delay_id(k) and not is_lookback_id(k)
                   and not is_matte_id(k) and not is_cut_id(k)
                   and not is_segment_id(k) and not is_key_id(k)}
         doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PATCH, "values": values,
@@ -1109,7 +1115,7 @@ class LoadedPatch:
             elif pid.startswith(modifiers.PREFIX):
                 # a modifier's param is set by its entry (`modifiers`), never here
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
-            elif (is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid)
+            elif (is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid) or is_delay_id(pid)
                   or is_lookback_id(pid) or is_matte_id(pid) or is_cut_id(pid)
                   or is_segment_id(pid) or is_key_id(pid)
                   or graphmigrate.effect_of(pid) is not None):

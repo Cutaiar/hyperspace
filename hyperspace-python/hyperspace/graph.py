@@ -144,6 +144,8 @@ from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix
 from .lookback import MAX_ECHOES
 from .outputs import View
 from .view import (
+    DELAY_BEATS,
+    DELAY_EVERY,
     MATTE_FEATHER,
     MATTE_FROM,
     RESIZE_ASPECTS,
@@ -155,6 +157,7 @@ from .view import (
     SEGMENT_MODES,
     SEGMENT_QUALITY,
     CutState,
+    DelayState,
     KeyState,
     MatteState,
     ResizeState,
@@ -3459,6 +3462,9 @@ class Frame:
     # `view.ResizeState`), read once by the renderer (`ViewState.resize`):
     # what `ResizeNode` crops and sizes by — a value, never a rebuild
     resizes: dict[str, Any] = field(default_factory=dict)
+    # plan 34 D: each delay's rate this frame (delay name → its
+    # `view.DelayState`), read once by the renderer (`ViewState.delay`)
+    delays: dict[str, Any] = field(default_factory=dict)
 
     @property
     def root(self) -> Frame:
@@ -4542,6 +4548,32 @@ class Delay(Node):
         return frame.data[key]
 
 
+# (the rate of a delay with none this frame: every frame, as a delay always was)
+_DELAY_DEFAULT = DelayState()
+
+
+def delay_due(pair: Any, st: DelayState, t: float, beat: float) -> bool:
+    """Whether a delay takes its picture this frame (and books the next).
+    The first picture, and any after the pair holds nothing, is always taken.
+    `frames`: every Nth frame (N = 1: every frame, strict z⁻¹). `Hz` and the
+    tempo units are grids on the clock — seconds × hz, or beats ÷ the unit's
+    beats — a picture taken on the first frame inside each cell, so a rate
+    above the frame rate is every frame and a tempo change never stalls it."""
+    mode = DELAY_EVERY[min(max(int(st.every), 0), len(DELAY_EVERY) - 1)]
+    if mode == "frames":
+        n = max(int(st.frames), 1)
+        pair.since += 1
+        due = n <= 1 or not pair.holds_any or pair.since >= n
+        if due:
+            pair.since = 0
+        return due
+    cell = math.floor(t * max(float(st.hz), 1e-3)) if mode == "Hz" \
+        else math.floor(beat / DELAY_BEATS[mode])
+    due = not pair.holds_any or cell != pair.cell
+    pair.cell = cell
+    return due
+
+
 class DelayWrite(Node):
     """A delay's other half (plan 34 D): `<delay>(write)`, its `image`
     input painted into the pair's write side once a frame — before the
@@ -4584,6 +4616,13 @@ class DelayWrite(Node):
         try:
             held = self.held(frame)
             pair = get(self.delay)
+            st = (getattr(frame.root, "delays", None) or {}).get(self.delay) or _DELAY_DEFAULT
+            clock = getattr(r, "tempo", None)
+            beat = clock.beat() if clock is not None else frame.t * 2.0
+            if not delay_due(pair, st, frame.t, beat):
+                pair.kept = True        # between two pictures: it keeps the one it has
+                self.said = "holding"
+                return
             fbo = pair.target(frame.ctx, held)
             fbo.viewport = (0, 0, *held)
             fbo.use()
@@ -4597,6 +4636,7 @@ class DelayWrite(Node):
                 with frame.timed(self.name):
                     src.paint(at, fbo)
                 pair.wrote = True
+                pair.holds_any = True
             self.said = ""
         except Exception as e:  # noqa: BLE001 — a delay must not take the frame down
             # (nothing written: next frame the delay reads nothing)
