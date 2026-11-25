@@ -75,7 +75,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from . import fx, groupwords, patterns, tapers, undo
+from . import fx, groupwords, patterns, tapers, undo, writes
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
@@ -378,10 +378,13 @@ class Param:
 
     def set(self, v) -> None:
         """Write a raw value — to the object, or to the base while modulated."""
-        if self._base is None:
-            self.put(v)
-        else:
-            self._base = self._norm_of(v)
+        try:
+            if self._base is None:
+                self.put(v)
+            else:
+                self._base = self._norm_of(v)
+        finally:                  # (a put that raised half way may have written)
+            writes.mark()
 
     @property
     def names(self) -> list[str]:
@@ -574,10 +577,12 @@ class Param:
         no step and runs no step on (plan 81 follow-up, register row 1018)."""
         if self.kind is not Kind.CONTINUOUS:
             self.put(v)
+            writes.mark()
             return
         old = self._norm_of(self.get())
         was = self._norm_of(self.base)
         self.put(v)
+        writes.mark()
         if self._base is not None:
             cur = self._norm_of(self.get())
             if math.isfinite(cur) and math.isfinite(old):
@@ -591,6 +596,7 @@ class Param:
             if self.wrap:                       # the short way round
                 moved = (moved + 0.5) % 1.0 - 0.5
             self._drift += moved
+        writes.mark()
 
     def nudge(self, delta: float) -> float:
         """Add `delta` to the base, wrapped or clamped into range; returns
@@ -699,6 +705,7 @@ class Param:
             self._base = base if math.isfinite(base) else 0.0
             self._last = self._base
             self._disc = None
+            writes.mark()         # the round trip may have moved it (out of range, off a detent)
         u = float(u)
         if math.isfinite(u):
             self._mod += u
@@ -732,6 +739,7 @@ class Param:
             # (the trim stays: a source back next frame, after a gate's or a
             # lane's flicker, brings the offset the base already holds)
             self._base = self._last = self._disc = None
+            writes.mark()
             return
         if k is not Kind.TRIGGER:
             # something wrote the object since we did (the rotation
@@ -742,6 +750,8 @@ class Param:
             elif self._last is not None and cur != self._last:
                 self._base += cur - self._last
                 self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
+                if self.persist:          # (a turning angle folds every frame, on no stack)
+                    writes.mark()
         target = self._base + mod
         if k is Kind.CONTINUOUS:
             push = mod if pos is None else mod - pos
@@ -784,6 +794,7 @@ class Param:
         shown = self._norm_of(self.get()) if self.integer else target
         self._trim = push - (0.0 if self.wrap else raw - shown)
         self._base = shown
+        writes.mark()
 
     def _snap(self, x: float) -> float:
         """Nearest integer, moving only once past the midpoint + deadband."""
@@ -953,6 +964,9 @@ class Registry:
     # for a registry of its own (a bare one, the tests'; and one from
     # before a hot reload, on the class)
     meta_reg: MetaRegistry | None = None
+    # moves when a base, or anything a param here reads, was written: what
+    # `undo.Undo` (a leaf) asks instead of reading every base (writes.py)
+    writes = staticmethod(writes.serial)
     # the base chase (plan 52): held now; this deck's `undo.Undo`
     # (`Deck.build`), None: a bare registry has no steps
     chasing: bool = False
@@ -1232,6 +1246,7 @@ class Registry:
             if p.kind is not Kind.TRIGGER and p.get() != q.get():
                 p.put(q.get())                 # what it shows, as `_last` says it does
             p._base, p._last, p._disc, p._armed = q._base, q._last, q._disc, q._armed
+        writes.mark()
 
     def restore(self, values: dict[str, Any], *, trims: dict[str, float] | None = None
                 ) -> list[str]:
@@ -1640,8 +1655,7 @@ def retaper_depths(doc: dict, files: dict) -> tuple[dict, list[str]]:
     return out, moved
 
 
-def _attr(obj, name):
-    return (lambda: getattr(obj, name)), (lambda v: setattr(obj, name, v))
+_attr = writes.cell
 
 
 def _item(get_list, i):

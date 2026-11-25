@@ -495,7 +495,7 @@ META_MODULES = _mods(
 # finding, not a licence: splitting them is the structure audit's (draft #273), and until then
 # `META_NAMES` below stands guard over what a patch module takes from them
 BOTH_LAYERS = _mods("params", "routing", "routing_sources", "library", "undo", "learn",
-                    "outputs", "groupwords", "hot_slots")
+                    "outputs", "groupwords", "hot_slots", "writes")
 # above both: the panel and the headless tools, which may read either
 # (`dkit`: the panel's component kit, imported by the panel alone, importing nothing of
 # the package's)
