@@ -67,13 +67,15 @@ stack only reads.
 
 **Leaves** — modules that import nothing from the package, so anything
 may import them: `writes`, `analysis`, `tapers`, `motion`, `undo`, `placement`,
-`geometry`, `patterns`, `tempo`, `modbank`, `sequencer`, `glsl`, `gamepad`, `apc40`,
+`geometry`, `patterns`, `tempo`, `modbank`, `glsl`, `gamepad`, `apc40`,
 `generic`, `watchdog`, `modgraph`, `players`, `pointer`, `world`, `hands/signal.py`, `hands/tape.py`.
 `devices` imports nothing from the package at load: every adapter, and
 `routing`, only inside a function. Near-leaves: `outputs`, `fx`,
 `lookback` and `masks` (plan 39) import only `glsl`; `grip` (plan 60) only `world`; `view` and `field` only `geometry`; `lfo` and
-`envelope` only `modbank` (plan 31; all of these but `outputs`, `masks` and
-`field` also `writes`, whose `Observed` their settings are); `modifiers` only
+`envelope` only `modbank` (plan 31), `sequencer` none of these and
+`hands/core.py` none (all of them but `outputs`, `masks` and
+`field` also `writes`, whose `Observed` their settings are;
+`hands` and `sequencer` by the owner, 2026-11-25); `modifiers` only
 `motion` and `tapers`; `routing_sources` only `motion` (plan 44 D2,
 `tests/test_routing_boundary.py`) (`modgraph` is held by
 `tests/test_modgraph.py::test_modgraph_is_a_leaf`; `modifiers` by convention

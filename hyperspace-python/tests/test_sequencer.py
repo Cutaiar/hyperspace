@@ -327,7 +327,8 @@ def test_seq_trigger_keeps_its_offset_until_the_clock_trigger_clears_it():
 def test_the_sequencer_imports_nothing_from_the_host():
     for n in ast.walk(ast.parse((PKG / "sequencer.py").read_text())):
         if isinstance(n, ast.ImportFrom):
-            assert not n.level and not (n.module or "").startswith("hyperspace")
+            assert (not n.level or [a.name for a in n.names] == ["writes"]
+                    ) and not (n.module or "").startswith("hyperspace")
         elif isinstance(n, ast.Import):
             assert not any(a.name.startswith("hyperspace") for a in n.names)
 
@@ -336,9 +337,9 @@ def test_a_hot_reload_swap_keeps_k_last_and_fires_nothing_twice(monkeypatch):
     clock, seq, log = rig()
     frames(seq, clock, log, at_60fps(0.0, 1.1))
     k = seq.k_last
-    spec = importlib.util.spec_from_file_location("seq_reloaded", PKG / "sequencer.py")
+    spec = importlib.util.spec_from_file_location("hyperspace.seq_reloaded", PKG / "sequencer.py")
     fresh = importlib.util.module_from_spec(spec)
-    monkeypatch.setitem(sys.modules, "seq_reloaded", fresh)   # dataclasses look it up
+    monkeypatch.setitem(sys.modules, "hyperspace.seq_reloaded", fresh)   # dataclasses look it up
     spec.loader.exec_module(fresh)
     seq.__class__ = fresh.Sequencer                    # what the reloader does
     assert seq.k_last == k

@@ -644,6 +644,7 @@ nuance). Built so far: D1, D2, D3, D4.
 | A tap, a nudge or a typed BPM is not an undo step: the `tempo` group is not watched. | `undo.EXCLUDED_GROUPS` | row 36 |
 | Camera moves are undo steps. | `undo.watched` | row 39 |
 | A drag that pauses for longer than the settle time becomes two steps. | `undo.SETTLE_S` | row 43 |
+| Undo looks at what changed only when a write marked (`writes.py`); a setting written round `Param` is observed, not moved onto `Param.set`. The hands and the sequencer import `writes`, the one exception to importing nothing from the host. | `writes.Observed`, `tests/conftest.py::undo_oracle` | owner, 2026-11-25 |
 | A player's move is one step on the meta controller's undo stack (amends row 740). `players.json` follows an undo; a controller unplugged since refuses in words and stays on the stack. On that stack the board takes only moves, and everywhere else takes everything but. | `deck.MetaPlayers`, `MetaController.put_players` | row 800 |
 | A hot class adds nothing to the layout over another hot class; slots it needs there stand on cold `hot_slots.py`. A target that refuses strands no other. The real-app test is `live`; a rule over every real class holds it on CI. | `hot_slots.py`, `hotreload.HotReloader.poll`, `tests/test_hot_reload_app.py` | row 802 |
 | Row 802's rule skips a module only when a third-party package is missing; any other import error fails it, so no class leaves the rule unread. | `tests/test_hot_reload_app.py::report` | row 812 |
