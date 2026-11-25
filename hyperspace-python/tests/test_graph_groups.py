@@ -1301,7 +1301,7 @@ def test_splice_on_a_cable_lands_the_patch_in_the_run_in_one_step(rig):
                 ("delay", "plasma.image")} <= set(w)
         assert G.run_of(pre.graph.spec, "scene", "delay.image") == ("acid", "wobble")
         assert G.run_back(pre.graph.spec, "output.all.image") == (
-            "plasma", "kaleido", "zoomblur", "huecycle")
+            "plasma", "kaleido", "zoomblur", "hueturn")
         assert "ports" not in pre.groups[0]
         assert graphview.open_ports(pre.graph.spec, pre.groups[0]) == []
         assert u.undo() and ("scene", "plasma.image") in wires(rig) and pre.groups == []
@@ -1360,7 +1360,7 @@ def test_wire_as_saved_wires_the_free_ports_and_refuses_a_taken_one(rig):
         assert [p["id"] for p in graphview.open_ports(pre.graph.spec, pre.groups[0])] == ["out"]
         frame(rig.panel, "graph")
         cable = next(c for c in st["view"].cables if c.kind == "render"
-                     and (c.ref.src, c.ref.dst) == ("huecycle", "output.all.image"))
+                     and (c.ref.src, c.ref.dst) == ("hueturn", "output.all.image"))
         assert ui_graph._render_said(rig.panel, ui_graph.render_edit(rig.panel),
                                      lambda e: e.unwire(cable)) is None
         assert ui_graph.wire_as_saved(rig.panel, "group.1") is None

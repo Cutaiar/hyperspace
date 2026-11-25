@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from . import fractal
+from . import fractal, writes
 from .fractal import Dive
 from .geometry import (
     EYE_DISTANCE,
@@ -164,7 +164,7 @@ class SegmentState:
 
 
 @dataclass
-class ViewState:
+class ViewState(writes.Observed):
     """Mirror of the reference's S object (render-relevant fields)."""
 
     shape: int = 3
@@ -184,11 +184,12 @@ class ViewState:
     # (the pre-A2 feel). True — screen space: they keep their pixel weight
     # whatever the zoom (A2's behaviour)
     screen_strokes: bool = False
-    # plan 64: a fractal's line order. False (the default) — sorted: the CPU
-    # makes the frame and the painter sorts it, as any shape. True — additive:
-    # its cells go to the GPU, one instance each, and blend unsorted
-    # (fractal_gl.py). Not saved: a look for the owner to judge (row 884)
-    frac_additive: bool = False
+    # plan 64: a fractal's line order. True (the default since 2026-11-24, the
+    # owner's call on row 884 after field-wave-slow's scene node cost ~21 ms
+    # sorted, ~8 ms additive) — additive: its cells go to the GPU, one
+    # instance each, and blend unsorted (fractal_gl.py). False — sorted: the
+    # CPU makes the frame and the painter sorts it, as any shape. Not saved
+    frac_additive: bool = True
     # plan 64's fractal section: how much detail a fractal shows (× its split
     # size's reciprocal: 2 splits a cell at half the size on screen), and how
     # far and how near its cells are drawn (octaves added to the fractal's own

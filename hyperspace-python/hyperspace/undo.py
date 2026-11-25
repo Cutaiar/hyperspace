@@ -1,6 +1,8 @@
-"""Undo — one step per gesture, with no write hook (plan 15 WP1, decision 26).
+"""Undo — one step per gesture, whatever wrote it (plan 15 WP1, decision 26).
 
-Nothing tells this module that a parameter was written. Once a frame
+Nothing tells this module *which* parameter was written; a counter says that
+something was (`reg.writes`, writes.py), and a frame it has not moved in costs
+a comparison (`Undo._still`). Once a frame with a write
 `Undo.tick` compares a cheap **fingerprint** of what the user sets — the
 *base* of every watched param, the table's performer rows, the desk's
 patch layer and the macros — with last frame's. A change opens a step
@@ -220,6 +222,16 @@ def _number(v) -> bool:
 
 _row = attrgetter(*ROW_FIELDS)        # a row as the tuple of its fields
 
+# the debug mode (tests/conftest.py): called with (stack, the fingerprint held, the one
+# taken) whenever a tick would have skipped a fingerprint that had changed — a
+# write somewhere that marks nothing. Every tick then takes its fingerprint
+oracle = globals().get("oracle")
+
+
+def _marking(cls) -> bool:
+    """Does writing any of `ROW_FIELDS` on a row of this class mark?"""
+    return getattr(cls, "_cells", frozenset()).issuperset(ROW_FIELDS)
+
 
 def _rows(rows) -> tuple:
     return tuple(map(_row, rows))
@@ -319,6 +331,11 @@ class Undo:
     called = "here"  # how the refusal names this stack ("on deck 2"; `MetaController`)
     _opens = False   # the open step began on focus: when it lands it opens the latch
     beside: Any = None    # …and these (row 1018)
+    _seen: Any = None     # …and these: `reg.writes` as the last fingerprint began
+    _seen_every: Any = None    # …and the registry's params, the very list it read
+    _reading: Any = None
+    _rowlist: Any = None  # the table's rows then, by identity; None: rows that do not mark
+    _polled: Any = ()     # (index in `_watched`, param): the bases no write marks
     _quiet: Any = None    # `beside.take()` as of the last quiet frame
 
     def __init__(self, reg, table, *, marks=None, tag=None, tagged=("band.",),
@@ -354,6 +371,7 @@ class Undo:
         self._lands = self._read_lands()  # what is landed, as of the last quiet frame
         self._quiet = self._quiet_take()
         self._fp = self._fingerprint()
+        self._saw()
         self._settled = self._take()
 
     # ---- what is watched ----
@@ -375,8 +393,25 @@ class Undo:
         if every != self._every:
             self._every = every
             self._watched = [p for p in every if self._watches(p)]
-            self._ids = tuple(p.id for p in self._watched)
+            ids = tuple(p.id for p in self._watched)
+            if ids != self._ids:          # (else the same tuple: `_still` asks by identity)
+                self._ids = ids
+            self._polled = self._unmarked(every)
         return self._watched
+
+    def _unmarked(self, every: list) -> list:
+        """The watched params whose base may move with no mark (writes.py), read
+        every frame: a getter on no cell; a cell two params write (one's
+        offset would be the other's base); an enum whose choices are worked
+        out (a modulated base's index goes by how many there are)."""
+        cells: dict = {}
+        for p in every:
+            c = getattr(getattr(p, "get", None), "cell", None)
+            if c is not None:
+                cells[c] = cells.get(c, 0) + 1
+        return [(i, p) for i, p in enumerate(self._watched)
+                if cells.get(getattr(getattr(p, "get", None), "cell", None), 0) != 1
+                or callable(getattr(p, "choices", None))]
 
     def _mods(self) -> list:
         """The table's modifiers as a loadable patch holds them, their params at
@@ -405,12 +440,46 @@ class Undo:
         read `tick` makes every frame. The patch layer is read as the
         table's rows whose `layer` is "preset" (what `table.desk()`
         returns, without asking every row whether it is a MIDI row)."""
+        writes = getattr(self.reg, "writes", None)
+        self._reading = writes() if writes is not None else None    # before anything is read
         ps = self._params()
         table = self.table
         return (self._ids, tuple([_base_of(p) for p in ps]), _rows(table.routes()),
                 _rows([b for b in table.bindings if b.layer == "preset"]),
                 _macros(table), self._tag(), self._mods(), self._bank_ids(),
                 _rows(self._table_rows()), self._moves_doc())
+
+    def _saw(self) -> None:
+        """The fingerprint just taken is this stack's now: what was marked by
+        the time it began has been looked at."""
+        self._seen, self._seen_every = self._reading, self._every
+        rows = [*self.table.bindings, *self._table_rows()]
+        self._rowlist = rows if all(_marking(type(b)) for b in rows) else None
+
+    def _still(self) -> bool:
+        """Is `_fp` what a fingerprint taken now would be? By what no write can
+        move without saying so: no mark since it was taken, the same params
+        and rows, the few bases and table parts that do not mark read and
+        found equal. Never True on doubt (a registry that counts no writes, a
+        row type that marks none)."""
+        writes = getattr(self.reg, "writes", None)
+        if writes is None or self._seen is None or self._rowlist is None or writes() != self._seen:
+            return False
+        fp = self._fp
+        self._params()
+        # other param objects, even under the same ids: a shader reload declares
+        # a knob over a new value, and nothing was written
+        if self._every is not self._seen_every or fp[0] is not self._ids or fp[5] != self._tag():
+            return False
+        bases = fp[1]
+        for i, p in self._polled:
+            v = _base_of(p)
+            if v is not bases[i] and v != bases[i]:
+                return False
+        table, rows = self.table, self._table_rows()
+        now = [*table.bindings, *rows]
+        return (now == self._rowlist and _macros(table) == fp[4] and self._mods() == fp[6]
+                and self._bank_ids() == fp[7] and self._moves_doc() == fp[9])
 
     def _follows_kept(self, then: State, now) -> bool:
         """Are the follows made since `then` to be kept on a restore to it
@@ -539,7 +608,11 @@ class Undo:
         """Once a frame, after the scene-setters have written their bases."""
         self._now = now
         self._frame += 1
-        fp = self._fingerprint()
+        fp = self._fp if self._still() else self._fingerprint()
+        if fp is self._fp and oracle is not None:
+            fp = self._fingerprint()
+            if not self._same_fp(fp, self._fp):
+                oracle(self, self._fp, fp)
         if self._observe(fp):
             return
         if self._open is None:
@@ -555,6 +628,8 @@ class Undo:
         follow-ups, a change. True when the frame is settled by it (no
         step may close on this frame's evidence)."""
         last = self._fp
+        if fp is not last:
+            self._saw()
         if fp[0] != last[0] or fp[5] != last[5]:
             # the watched ids or the tag changed (a band added, removed or
             # moved; a shader reloaded into another shape): not a step
@@ -729,6 +804,7 @@ class Undo:
             self._say(f"{verb} {step.label}" + (f" ({LEFT})" if left else "")
                       + (f". {trouble}" if trouble else ""))
             self._fp = self._fingerprint()
+            self._saw()
             self._settled = self._take()
             self._lands = self._read_lands()
             self._quiet = self._quiet_take()
@@ -747,6 +823,7 @@ class Undo:
         if self._kept is not None:
             self._end_kept()
         self._fp = self._fingerprint()
+        self._saw()
         self._settled = self._take()
 
     def _say(self, text: str) -> None:

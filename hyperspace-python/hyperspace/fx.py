@@ -112,7 +112,7 @@ from typing import Any
 import moderngl
 import numpy as np
 
-from . import mandel, tapers
+from . import mandel, tapers, writes
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 
 FX_DIR = Path(__file__).parent / "shaders" / "fx"
@@ -291,6 +291,10 @@ def clock_rate(clock: ClockSpec, values: dict[str, Any]) -> float:
 def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
     if key in RESERVED or key in seen:
         raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
+    if key in PORT_NAMES:
+        # plan 67 P3: a knob's field comes in on a port named by its key
+        raise SpecError(f"{name}:{n}: u_{key} — {key!r} is a port's name (a knob's "
+                        "field comes in on a port named by its key)")
     if key.isdecimal():
         # the naming rule (plan 26 A0/A4): a purely decimal segment
         # right after `fx.<file>` is an instance marker — `fx.acid.2`
@@ -423,7 +427,90 @@ def ports(spec: EffectSpec) -> tuple[str, dict[str, str]]:
             takes.pop(port, None)
         else:
             takes[port] = typ
+    for key in field_knobs(spec):           # plan 67 P3: a knob takes a field on its key
+        takes[key] = FIELD
     return getattr(spec, "makes", PICTURE), takes
+
+
+# plan 67 P3 (§3.9): any knob takes a field, `value + depth × field(uv)` per
+# pixel, on a port named by its key (`wave.amount`). The pass binds each wired
+# knob's field from KNOB_UNIT0 on: GL 3.3 promises a fragment shader 16 units,
+# 0 … 3 are the input, the aux, a hook's and the field port's
+KNOB_UNIT0 = 4
+KNOB_UNITS = 12
+PORT_NAMES = ("image", "aux", FIELD_PORT)      # no knob's key may be a port's
+
+
+def knob_refusal(spec: EffectSpec, key: str) -> str | None:
+    """Why knob `key` of effect file `spec` takes no field, in words, or None
+    when it takes one (or is no knob of the file). A choice, a whole number (a
+    count) and a `@clock`'s rate cannot vary per pixel (the host integrates one
+    phase per effect), nor any knob of a file with a Python half (its hook reads
+    the knobs once for the frame)."""
+    p = next((p for p in spec.params if p.key == key), None)
+    if p is None:
+        return None
+    what = f"{spec.label}'s {p.label}"
+    if getattr(spec, "hook", ""):
+        return (f"{what} takes no field: {spec.label} has a Python half, which reads "
+                "its knobs once for the whole frame")
+    if p.choices:
+        return f"{what} is a choice: a choice takes no field"
+    if p.integer:
+        return f"{what} is a whole number (it counts): a count takes no field"
+    if any(key in (c.factors or tuple(c.rate.split("*"))) for c in getattr(spec, "clocks", ())):
+        return (f"{what} is a rate: its clock turns once for the whole frame, so it takes "
+                "no field")
+    return None
+
+
+def field_knobs(spec: EffectSpec) -> tuple[str, ...]:
+    """The keys of effect file `spec`'s knobs that take a field, in file order."""
+    return tuple(p.key for p in spec.params if knob_refusal(spec, p.key) is None)
+
+
+# the accessor's reading: a knob's value + depth × its field's x at this pixel
+# (`v_uv`, the pixel `effect` is drawing), clamped to the knob's range or wrapped
+KNOB_AT = """// plan 67 P3: knobs that take a field (fx.knob_declarations)
+float knob_at(sampler2D f, float v, float d, float lo, float hi, int wrap) {
+    ivec2 n = textureSize(f, 0);
+    float x = v + d * texelFetch(f, clamp(ivec2(v_uv * vec2(n)), ivec2(0), n - 1), 0).x;
+    return wrap != 0 ? lo + mod(x - lo, hi - lo) : clamp(x, lo, hi);
+}
+"""
+
+
+def knob_declarations(spec: EffectSpec, keys) -> tuple[str, str]:
+    """Plan 67 P3: the accessor for knobs `keys` of `spec`, each wired to a
+    field — (the head's part: each knob's field sampler, its depth and the
+    reading function; the part before the file: a `#define` per knob, so the
+    file's `u_<key>` reads `knob_at(…)` at this pixel). The file's own
+    declaration of `u_<key>` is renamed to `k_<key>_v`, its value
+    (`with_knob_fields`). No keys: nothing — the program is the file's as it was."""
+    if not keys:
+        return "", ""
+    by = {p.key: p for p in spec.params}
+    head = [KNOB_AT]
+    defs = []
+    for key in keys:
+        p = by[key]
+        head.append(f"uniform sampler2D k_{key}_f; uniform float k_{key}_d;\n")
+        defs.append(f"#define u_{key} knob_at(k_{key}_f, k_{key}_v, k_{key}_d, "
+                    f"{float(p.lo)!r}, {float(p.hi)!r}, {int(p.wrap)})\n")
+    return "".join(head), "".join(defs)
+
+
+def with_knob_fields(spec: EffectSpec, keys) -> str:
+    """The file's source with each of knobs `keys`' declarations renamed to its
+    value (`uniform float k_<key>_v;`), on its own line, so every line number
+    stays the file's."""
+    src = spec.source
+    for key in keys:
+        src, n = re.subn(rf"\buniform\s+float\s+u_{key}\s*;", f"uniform float k_{key}_v;", src,
+                         count=1)
+        if n != 1:
+            raise SpecError(f"{spec.name}: u_{key} is declared where its field cannot reach")
+    return src
 
 
 # plan 67 F1: each shipped file's `ports`, by file name — kept by every
@@ -431,6 +518,39 @@ def ports(spec: EffectSpec) -> tuple[str, dict[str, str]]:
 # and builder (`ports_of`). Module-level, so it survives a reload of this
 # module: the dict is taken over, not made again
 _PORTS: dict[str, tuple[str, dict[str, str]]] = globals().get("_PORTS", {})
+
+
+_SPECS: dict[str, EffectSpec] = globals().get("_SPECS", {})
+
+
+def spec_of(file: str) -> EffectSpec | None:
+    """Plan 67 P3: shipped effect file `file`'s spec, kept as `_PORTS` is (read
+    from the folder now when no state has), or None for a file not there."""
+    got = _SPECS.get(file)
+    if got is None:
+        try:
+            got = _SPECS[file] = parse(file, (FX_DIR / f"{file}.glsl").read_text())
+        except (OSError, SpecError):
+            return None
+    return got
+
+
+# plan 67: a retired effect file (Hue cycle) — no longer drawn, but its spec is
+# still what an old file's depths onto it are measured against
+# (`params.fx_files`, `params.retaper_depths`) before the ladder rewrites it
+RETIRED_DIR = FX_DIR / "retired"
+_RETIRED: dict[str, EffectSpec] = globals().get("_RETIRED", {})
+
+
+def retired_specs() -> dict[str, EffectSpec]:
+    """The retired effect files' specs, by name, parsed once."""
+    if not _RETIRED:
+        for p in sorted(RETIRED_DIR.glob("*.glsl")):
+            try:
+                _RETIRED[p.stem] = parse(p.stem, p.read_text())
+            except (OSError, SpecError):
+                continue
+    return dict(_RETIRED)
 
 
 def ports_of(file: str) -> tuple[str, dict[str, str]]:
@@ -444,6 +564,26 @@ def ports_of(file: str) -> tuple[str, dict[str, str]]:
         except (OSError, SpecError):
             return PICTURE, {"image": PICTURE, "aux": PICTURE}
         _PORTS[file] = got
+    return got
+
+
+# plan 80: each shipped file's `@hook` (its `EffectSpec.hook`, "" none), kept
+# beside `_PORTS` by the same `FxState` reads — what `graph.runs_unfed` asks
+# of a file whatever state the asker holds. Taken over on a reload, as `_PORTS`
+_HOOK_OF: dict[str, str] = globals().get("_HOOK_OF", {})
+
+
+def hook_of(file: str) -> str:
+    """Shipped effect file `file`'s `@hook` ("" none), read as `ports_of`
+    reads its ports: as the last `FxState` of the shipped folder read it, else
+    from the folder now; a file not there (or that does not parse) has none."""
+    got = _HOOK_OF.get(file)
+    if got is None:
+        try:
+            got = parse(file, (FX_DIR / f"{file}.glsl").read_text()).hook
+        except (OSError, SpecError):
+            return ""
+        _HOOK_OF[file] = got
     return got
 
 
@@ -587,7 +727,7 @@ def pad_of(spec: EffectSpec, key: str) -> PadSpec | None:
     return next((p for p in getattr(spec, "pads", ()) if key in p.keys), None)
 
 
-class FxState:
+class FxState(writes.Observed):
     """The fx.* params' object: the specs on disk, their values, their clocks.
 
     `values[name]` holds one effect's settings by key — its four own
@@ -687,6 +827,8 @@ class FxState:
         if Path(self.dir).resolve() == FX_DIR.resolve():
             for name, spec in found.items():          # plan 67 F1: what the graph reads
                 _PORTS[name] = ports(spec)
+                _SPECS[name] = spec                   # plan 67 P3: why a knob refuses a field
+                _HOOK_OF[name] = spec.hook
         found = self._wanted(found)
         for name in set(self.specs) - set(found):
             changed.add(name)
@@ -787,7 +929,7 @@ class FxState:
         for p in spec.params:
             x = old.get(p.key, p.default)
             v[p.key] = round(x) if p.integer else float(x)
-        self.values[name] = v
+        self.values[name] = writes.ObservedDict(v)
         self.phase.setdefault(name, 0.0)
         # a `@clock` keeps its phase across an edit that keeps the clock;
         # one the edit dropped is forgotten, one it added starts at 0
@@ -929,12 +1071,7 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
                          fmt=_fmt(p), group=g, tip=p.tip)
 
 
-def _attr(obj, name):
-    return (lambda: getattr(obj, name)), (lambda x: setattr(obj, name, x))
-
-
-def _key(d: dict, k: str):
-    return (lambda: d[k]), (lambda x: d.__setitem__(k, x))
+_attr, _key = writes.cell, writes.key
 
 
 def _fmt(p: ParamSpec) -> Callable[[float], str]:
@@ -1133,14 +1270,19 @@ void main() {
 
 
 def fragment_source(lib: str, effect: str, shared: str | None = None, clocks=(),
-                    makes: str = PICTURE) -> str:
+                    makes: str = PICTURE, knobs: tuple[str, str] = ("", "")) -> str:
     """The whole fragment shader of an effect: the head (with the file's
     `@clock` uniforms declared), the shared helpers, the lib, the file,
-    the tail — a field maker's own (plan 67 F1: `FIELD_TAIL`)."""
+    the tail — a field maker's own (plan 67 F1: `FIELD_TAIL`). `knobs`
+    (plan 67 P3, `knob_declarations`): the accessor of the knobs wired to a
+    field, its head's part and its `#define`s; none, and the source is the
+    file's as it always was."""
     shared = common() if shared is None else shared
     tail = FIELD_TAIL if makes == FIELD else FS_TAIL
-    return (f"{FS_HEAD}{clock_declarations(clocks)}#line 1 1\n{shared}\n#line 1 2\n{lib}\n"
-            f"#line 1 3\n{effect}\n#line 1 4\n{tail}")
+    head, defs = knobs
+    defs = f"#line 1 3\n{defs}" if defs else ""
+    return (f"{FS_HEAD}{clock_declarations(clocks)}{head}#line 1 1\n{shared}\n#line 1 2\n{lib}\n"
+            f"{defs}#line 1 3\n{effect}\n#line 1 4\n{tail}")
 
 
 def _is_field_target(dst: moderngl.Framebuffer) -> bool:
@@ -1302,7 +1444,8 @@ class FxChain:
                 t: float, opaque: int | None = None,
                 aux: moderngl.Texture | None = None,
                 res: tuple[int, int] | None = None,
-                field: moderngl.Texture | None = None) -> None:
+                field: moderngl.Texture | None = None,
+                knobs: dict[str, tuple[moderngl.Texture, float]] | None = None) -> None:
         """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
         program over `src` into `dst`'s viewport, every uniform set, the
         clocks moved first (once per frame time,
@@ -1319,9 +1462,19 @@ class FxChain:
         `render.card_through`). `field` (plan 67 F1): the field on the
         effect's `field` port, bound on unit 3 (`u_field_on` 1). A field
         maker's pass (`@makes field`) writes its field raw into a float32
-        target and shows it grey into any other (`u_field_show`)."""
+        target and shows it grey into any other (`u_field_show`). `knobs`
+        (plan 67 P3): knob key → (the field wired into it, the wire's depth);
+        each such knob reads `value + depth × field` at every pixel, through a
+        program of its own (`_program`), its field bound from `KNOB_UNIT0` on.
+        A knob that takes no field (`knob_refusal`) is left out: its wire was
+        refused in words before it got here."""
         self.state.advance_to(t)
-        pv = self._program(name)
+        spec = self.state.specs.get(name)
+        given = knobs or {}
+        ok = field_knobs(spec) if spec is not None and given else ()
+        knobs = {k: given[k] for k in ok if k in given}
+        wired = tuple(sorted(knobs))[:KNOB_UNITS]
+        pv = self._program(name, wired)
         ctx = self.ctx
         ctx.disable(moderngl.BLEND)
         try:
@@ -1347,6 +1500,13 @@ class FxChain:
             if field is not None:
                 field.use(location=FIELD_UNIT)
                 self._set(prog, "u_field_on", 1)
+            v = self.state.values[name]
+            for i, key in enumerate(wired):     # plan 67 P3: each knob's field and depth
+                tex, depth = knobs[key]
+                tex.use(location=KNOB_UNIT0 + i)
+                self._set(prog, f"k_{key}_f", KNOB_UNIT0 + i)
+                self._set(prog, f"k_{key}_d", float(depth))
+                self._set(prog, f"k_{key}_v", float(v[key]))
             if getattr(self.state.specs[name], "makes", PICTURE) == FIELD:
                 self._set(prog, "u_field_show", int(not _is_field_target(dst)))
             hook = HOOKS.get(getattr(self.state.specs[name], "hook", "") or "")
@@ -1433,29 +1593,39 @@ class FxChain:
         if name in prog:
             prog[name].value = value
 
-    def _program(self, name: str):
+    def _program(self, name: str, knobs: tuple[str, ...] = ()):
         """The effect's (program, vao), built on first use and on every
-        change to its file or the lib; None if it never compiled."""
+        change to its file or the lib; None if it never compiled. `knobs`
+        (plan 67 P3): the keys of its knobs wired to a field, sorted — a
+        program of its own for each set wired, the file's for none."""
         st = self.state
         spec = st.specs.get(name)
         if spec is None:
             return None
-        src = fragment_source(st.lib, spec.source, st.common, getattr(spec, "clocks", ()),
-                              getattr(spec, "makes", PICTURE))
-        key = spec.name                 # the file: every instance of it runs one program (A4)
+        try:
+            source = with_knob_fields(spec, knobs)
+        except SpecError as e:
+            self.errors[spec.name] = str(e)
+            return None
+        src = fragment_source(st.lib, source, st.common, getattr(spec, "clocks", ()),
+                              getattr(spec, "makes", PICTURE), knob_declarations(spec, knobs))
+        # the file: every instance of it runs one program (A4); with knobs
+        # wired to a field, one per set of them
+        key = spec.name if not knobs else f"{spec.name}|{','.join(knobs)}"
         have = self._progs.get(key)
         if (have is None or have[0] != src) and self._tried.get(key) != src:
             self._tried[key] = src
             try:
                 prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=src)
             except Exception as e:  # noqa: BLE001 — a bad edit must not kill the show
-                self.errors[key] = gl_error(e, {1: "_common.glsl:", 2: "_lib.glsl:", 3: "line "})
+                self.errors[spec.name] = gl_error(
+                    e, {1: "_common.glsl:", 2: "_lib.glsl:", 3: "line "})
             else:
                 if have is not None:
                     have[2].release()
                     have[1].release()
                 self._progs[key] = have = (src, prog, self.ctx.vertex_array(prog, []))
-                self.errors.pop(key, None)
+                self.errors.pop(spec.name, None)
         return None if have is None else (have[1], have[2])
 
     def compile_all(self) -> dict[str, str]:

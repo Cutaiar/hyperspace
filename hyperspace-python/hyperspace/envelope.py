@@ -81,6 +81,8 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 from .modbank import Bank
+from .writes import Observed
+from .writes import cell as cell_of
 
 MODES = ["gate", "one-shot"]
 SYNCS = ["s", "beats"]
@@ -112,7 +114,7 @@ def shape(x: float, curve: float) -> float:
 
 
 @dataclass
-class Envelope:
+class Envelope(Observed):
     """One AHDSR voice: its knobs (the params) and its running state."""
 
     mode: int = GATE
@@ -322,45 +324,42 @@ def declare(reg, n: int, env: Envelope) -> None:
     if f"{p}.fire" in reg:
         return
 
-    def put(attr, cast):
-        return lambda v: setattr(env, attr, cast(v))
+    def cell(attr, cast):
+        return cell_of(env, attr, cast)
 
     def time(k, tip, zero=False):
         a = ATTR.get(k, k)
-        reg.continuous(f"{p}.{k}", f"{name} {k}", lambda: getattr(env, a), put(a, float),
+        reg.continuous(f"{p}.{k}", f"{name} {k}", *cell(a, float),
                        lo=T_LO, hi=T_HI, log=True, fmt=_fmt_time(env, zero), group=GROUP,
                        tip=tip + " Seconds, or beats when Sync is beats.")
 
-    reg.enum(f"{p}.mode", f"{name} mode", lambda: env.mode, put("mode", int), MODES,
+    reg.enum(f"{p}.mode", f"{name} mode", *cell("mode", int), MODES,
              group=GROUP,
              tip="Gate holds the sustain until the gate closes; one-shot runs attack, "
                  "hold and decay, then releases on its own.")
     time("attack", "The rise to the peak.")
     time("hold", "How long it stays at the peak; at the bottom it is 0, an ADSR.", zero=True)
     time("decay", "The fall from the peak to the sustain.")
-    reg.continuous(f"{p}.sustain", f"{name} sustain", lambda: env.sustain,
-                   put("sustain", float), lo=0.0, hi=1.0,
+    reg.continuous(f"{p}.sustain", f"{name} sustain", *cell("sustain", float), lo=0.0, hi=1.0,
                    fmt=lambda v: f"sustain {v:.2f}", group=GROUP,
                    tip="The level held while the gate is open, a fraction of the peak.")
     time("release", "The fall to rest once the gate closes.")
-    reg.continuous(f"{p}.curve", f"{name} curve", lambda: env.curve, put("curve", float),
+    reg.continuous(f"{p}.curve", f"{name} curve", *cell("curve", float),
                    lo=-1.0, hi=1.0, fmt=lambda v: f"curve {v:+.2f}", group=GROUP,
                    tip="One shape for every stage: below 0 snaps out of each corner, "
                        "above 0 starts slow; 0 is straight.")
-    reg.enum(f"{p}.sync", f"{name} sync", lambda: env.sync, put("sync", int), SYNCS,
+    reg.enum(f"{p}.sync", f"{name} sync", *cell("sync", int), SYNCS,
              group=GROUP,
              tip="The times in seconds, or in beats of the clock — a tempo change "
                  "mid-stage changes its rate from there.")
-    reg.enum(f"{p}.retrig", f"{name} retrig", lambda: env.retrig, put("retrig", int),
+    reg.enum(f"{p}.retrig", f"{name} retrig", *cell("retrig", int),
              RETRIGS, group=GROUP,
              tip="A fire while it sounds: legato re-attacks from where it is, reset "
                  "starts again from 0.")
-    reg.continuous(f"{p}.amount", f"{name} amount", lambda: env.amount,
-                   put("amount", float), lo=0.0, hi=1.0,
+    reg.continuous(f"{p}.amount", f"{name} amount", *cell("amount", float), lo=0.0, hi=1.0,
                    fmt=lambda v: f"amount {v:.2f}", group=GROUP,
                    tip="The peak at full velocity; 0 is silent.")
-    reg.continuous(f"{p}.velocity", f"{name} velocity", lambda: env.velocity,
-                   put("velocity", float), lo=0.0, hi=1.0,
+    reg.continuous(f"{p}.velocity", f"{name} velocity", *cell("velocity", float), lo=0.0, hi=1.0,
                    fmt=lambda v: f"vel {v:.2f}", group=GROUP,
                    tip="How much a fire's velocity scales the peak; 0 ignores it.")
     reg.trigger(f"{p}.fire", f"{name} fire", lambda: env.fire(), group=GROUP,

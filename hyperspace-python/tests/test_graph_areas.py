@@ -54,7 +54,9 @@ FREE = ("branch-two-sizes", "media-chain-backdrop", "media-chain-faces", "switch
 # every effect file, by its @order: the chain an old loadable patch with every one
 # on lands as (plan 33 T7: `names()` is by name — there is no stack)
 # (plan 67 F1: the picture effects — a field maker takes no picture to chain)
-REAL = tuple(sorted((n for n, s in FxState().specs.items() if s.makes != "field"),
+# (the picture effects that take one: a field maker, or Colour, takes no picture)
+REAL = tuple(sorted((n for n, s in FxState().specs.items()
+                     if s.makes != "field" and "image" in G.effect_ports(n)[1]),
                     key=lambda n: (FxState().specs[n].order, n)))
 CONCERNS = (graphview.AUDIO, graphview.SCENE_AREA, graphview.LOOKBACK_AREA, graphview.EFFECTS_AREA,
             graphview.OUTPUTS_AREA)
@@ -163,7 +165,7 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     Plan 33 T6: the free graph's `/5` fixtures, each loaded as the loadable patch
     on its own graph, hold too. The rule that keeps them right-running: a
     picture made of the media alone (every path back from it starts at a
-    channel or the pattern — `media.a → acid.2 → huecycle.2`) is a branch
+    channel or the pattern — `media.a → acid.2 → hueturn.2`) is a branch
     of the media and sits in the media area, so it runs on into the faces
     (geometry), the backdrop and a switch (media, deeper) or an output
     (shaders); a picture the scene made, taken back into a switch with the

@@ -317,6 +317,25 @@ def forward(doc: Mapping) -> dict:
             raise ValueError(f"no step from {KIND}/{version}")
         out = step(out)
         version += 1
+    return _retire_hue_cycle(out)
+
+
+def _retire_hue_cycle(doc: dict) -> dict:
+    """Plan 67: a fragment naming Hue cycle with it retired, at any version
+    (`graphmigrate.retire_hue_cycle`; keyed on the file, not the schema)."""
+    nodes, wires = doc.get("nodes"), doc.get("wires")
+    if not isinstance(nodes, list) or not isinstance(wires, list):
+        return doc
+    rest = {k: v for k, v in doc.items() if k not in ("nodes", "wires", "ports", "schema", "name")}
+    ports = doc.get("ports") if isinstance(doc.get("ports"), list) else None
+    nodes2, wires2, rest2, ports2, notes = graphmigrate.retire_hue_cycle(nodes, wires, rest, ports)
+    if not notes:
+        return doc
+    out = {k: doc[k] for k in ("schema", "name") if k in doc}
+    out.update(rest2)
+    out.update(nodes=nodes2, wires=wires2)
+    if ports2 is not None:
+        out["ports"] = ports2
     return out
 
 
@@ -753,7 +772,8 @@ class _Renamer:
         return out
 
     def wire(self, w: Mapping) -> dict:
-        return {"from": self.src(w["from"]), "to": self.dst(w["to"])}
+        # (plan 67 P3: a wire's other keys — a knob's field's depth — kept)
+        return {**w, "from": self.src(w["from"]), "to": self.dst(w["to"])}
 
     def row(self, r: Mapping) -> dict:
         out = dict(r)
@@ -1348,8 +1368,10 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
             wires.append(rn.wire(w.to_json()))
         elif where == INTO:
             ins += 1
-            port = {"id": _join("in", ins), "type": wire_type(w, where),
-                    "to": rn.dst(w.dst), "was": w.src}
+            port: dict[str, Any] = {"id": _join("in", ins), "type": wire_type(w, where),
+                                    "to": rn.dst(w.dst), "was": w.src}
+            if w.depth != 1.0:      # plan 67 P3: a field into a knob keeps its depth
+                port[G.WIRE_DEPTH] = w.depth
             # a many-wire port's order is the draw order: where this inlet
             # sits among the patch's own wires into it (absent: after them)
             nxt = next((x for x, at in crossed[k + 1:]
@@ -1359,8 +1381,11 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
             ports.append(port)
         else:
             outs += 1
-            ports.append({"id": _join("out", outs), "type": wire_type(w, where),
-                          "from": rn.src(w.src), "was": w.dst})
+            port = {"id": _join("out", outs), "type": wire_type(w, where),
+                    "from": rn.src(w.src), "was": w.dst}
+            if w.depth != 1.0:      # (an outlet into a host's knob too: Devin, #497)
+                port[G.WIRE_DEPTH] = w.depth
+            ports.append(port)
     # the rows: every one that touches a member
     routes = [rn.row(b.to_json()) for b in table.routes()
               if touches(members, b.source, b.target)]

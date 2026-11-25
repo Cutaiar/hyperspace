@@ -982,6 +982,36 @@ def test_insert_effect_on_a_render_cable(tmp_path):
     assert e.insert_effect(cable, "teapot") == "no teapot effect in this build"
 
 
+def test_a_generator_on_a_cable_takes_it_over(tmp_path):
+    """Devin's review of #501: Colour (a picture generator, no input port)
+    picked in insert mode, or dropped on a cable, spliced as `src →
+    colour.image`, a port it has not, and the landing was refused. A
+    generator takes a cable over as a channel does: it feeds the port
+    instead of what fed it, said so; its inlets are its file's
+    (`graphview.insert_ports`)."""
+    rig, e, _pushed = free_rig(tmp_path, ("lookback", "output.all.image"),
+                              ("channel.a", "shape.faces"))
+    assert graphview.insert_ports("colour") == ((), "colour") and graphview.is_source("colour")
+    assert graphview.insert_ports("acid") == (("acid.image",), "acid")
+    assert not graphview.is_source("acid")
+    # the insert picker's path
+    assert e.insert_effect(("lookback", "output.all.image"), "colour") is None
+    got = wires_of(rig)
+    assert ("colour", "output.all.image") in got and ("lookback", "output.all.image") not in got
+    assert not [w for w in got if w[1].startswith("colour.")]
+    assert e.said.startswith("colour feeds output.all.image instead of lookback")
+    # (Devin's review of #501: the look-back, its last wire gone, stays on the
+    # canvas unwired — kept by its entry, as `render_wire` keeps a node)
+    spec = rig.loaded_patch.graph.spec
+    assert "lookback" in graphview.frame_names(spec)
+    assert not [w for w in got if w[0] == "lookback"]
+    # a drop of the one already there onto another cable
+    assert e.place_node(("channel.a", "shape.faces"), "colour") is None
+    got = wires_of(rig)
+    assert ("colour", "shape.faces") in got and ("channel.a", "shape.faces") not in got
+    assert not [w for w in got if w[1].startswith("colour.")]
+
+
 def test_inserting_an_effect_no_one_holds_uses_instance_one_and_switches_it_on(tmp_path):
     """R25: an effect inserted on a cable, or added from the picker, that no
     wire, node or placement in the section holds is the file itself
@@ -1182,24 +1212,26 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
 
 
 def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
-    """R26 (refines R21), in the wired frame: party-trip with `huecycle`
+    """R26 (refines R21), in the wired frame: party-trip with `hueturn`
     taken out of its run on GRAPH (its wires gone, R21's entry keeping it,
     faint) — on or off, the save is `/6` (row 394) with the entry kept and
     the run as wired, so a reload finds it where it was left."""
     import json
     rig, e, _ = wired_rig(tmp_path, slug="party-trip")
-    assert run_of(rig) == ("plasma", "kaleido", "zoomblur", "huecycle")
-    assert e.unwire("huecycle", "output.all.image") is None
-    assert e.unwire("zoomblur", "huecycle.image") is None
+    assert run_of(rig) == ("plasma", "kaleido", "zoomblur", "hueturn")
+    assert e.unwire("hueturn", "output.all.image") is None
+    assert e.unwire("zoomblur", "hueturn.image") is None
     assert e.wire("rout:zoomblur", "rin:output.all/image") is None
     assert run_of(rig) == ("plasma", "kaleido", "zoomblur")
-    assert {"kind": "effect", "file": "huecycle"} in rig.loaded_patch.graph.spec.to_json()["nodes"]
-    rig.reg["fx.huecycle.on"].set(True)
+    # (plan 67: Hue turn's band still names it — `scale.3 → hueturn.turn` — so it
+    # stays without R21's entry, its knobs kept)
+    assert "hueturn" in graphview._named(rig.loaded_patch.graph.spec.to_json())
+    rig.reg["fx.hueturn.on"].set(True)
     for name, on in (("On", True), ("Off", False)):
-        rig.reg["fx.huecycle.on"].set(on)
+        rig.reg["fx.hueturn.on"].set(on)
         doc = json.loads(rig.loaded_patch.save_as(name).read_text())
         assert doc["schema"] == "hyperspace.loadable/12", name
-        assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
+        assert "hueturn" in graphview._named(doc["graph"]), name
         assert G.run_back(G.read_graph(doc["graph"]), "output.all.image") == (
             "plasma", "kaleido", "zoomblur"), name
 

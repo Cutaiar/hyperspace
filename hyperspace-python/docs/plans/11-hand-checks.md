@@ -8846,6 +8846,33 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## FS. Hue cycle retired into Hue turn + fields (rows 1122–1128, 2026-11-25)
+
+Plan 67 §19. Headless: `tests/test_hue_turn.py` (Hue cycle's own shader against the migrated patch, seven settings, three times; the migration's rows, macros, layout, groups, slots, a second instance, knob-only, a fragment, an old file end to end), `tests/test_field_examples.py` (`hue-cycle`). The example is in the Drive library's `loadable/field-examples/`.
+
+**898. The looks look the same.** (Mac, 1080p outputs) Open `party-trip`, `party-acid`, `hands-pinch`, `dial` and the kinetic `comet` and `tunnel`. *Pass:* each looks and moves as it did — the bands, their turning, the paint; GRAPH shows Hue turn with Line, Rings, three Scales and a Combine wired into its Turn, every node lit; the FX pane has them with Hue turn, none under "reaches nothing". Open a look of yours saved with Hue cycle: the load says it is Hue turn now; save, reopen: nothing said. *Fail:* a look whose colours differ at a glance, or a node marked unreached.
+
+**899. Spread under the hands and the desk.** (Mac) `party-trip`: turn the right hand (yaw). *Pass:* the bands widen and narrow as before. Turn the desk knob that was Spread (cc 23): from its middle up, as before; below its middle the bands turn the other way, and the load said so. *Fail:* a push that moves the bands twice as far as before.
+
+**900. The goldens.** (Mac) `uv run pytest -q -m golden`; then `uv run python tools/golden_frames.py --record --only party-trip,party-acid,hands-pinch,dial,palette-glass,wired-outputs,media-chain-faces`. *Pass:* before the record, only those looks differ (the GPU's rounding); after it, every golden passes. *Fail:* another look differs.
+
+## FR. Any knob takes a field (rows 1116–1121, 2026-11-24)
+
+Plan 67 §18. Headless: `tests/test_knob_fields.py` (every knob takes a field or says why; a field of 0 is the unwired knob; half a frame at one value, half at another; clamped or wrapped; the wire's depth saved and read; GRAPH's port, the drop on a knob's row, the depth menu; the FX pane), `tests/test_field_examples.py` (`field-knob` opens with no note, reaches, and draws the field), `tools/fx_sweep.py` (2886 renders, no byte moved). The example is in the Drive library's `loadable/field-examples/`.
+
+**895. A field on a knob.** (Mac, 1080p outputs) Load `field-examples/field-knob`. *Pass:* the wave is still around the middle and ripples more toward the edges; the sub band pumps all of it; the right hand slides the still middle across. Right-click the green cable into Wave, **depth ▸** → −0.25 and raise Wave's Amount: now strong in the middle, still at the edges; ⌘Z puts it back in one step. Save the patch and load it again: the depth is kept. *Fail:* a wave the same everywhere, a jump when the depth changes beyond the picture changing, a depth lost on a reload.
+
+**896. Dropping a field on a knob.** Add Line and Palette, wire the scene through Palette to All outputs, and drag Line's out onto Palette's **Hue turn** row. *Pass:* a wire `line → palette.hue_turn`, the port drawn on Palette's node once wired, Line lit (it reaches), and on the FX pane Line beside Palette in Run — the hue banded across the frame. Drag it onto **Mode** or **Anchors**: refused, in words (a choice; a count); onto Wave's **Drift**: refused (a rate). *Fail:* a field that does nothing, Line under "reaches nothing", or a refusal without words.
+
+**897. Old patches, unchanged.** (Mac) Open three saved looks with effects (`party-noita`, `kinetic-comet`, one of yours) on this build. *Pass:* each looks and moves exactly as before; GRAPH draws no new ports on their nodes. *Fail:* any look that differs.
+## FQ. Fed by nothing, one rule; a Colour generator (rows 1114–1115, 2026-11-25)
+
+R15 and plan 80. Headless: `tests/test_field_wire.py` (the builder, `unfed`, GRAPH and the FX pane agree for a Mandelbrot, Wave, Acid, Waveform and Rings, each wired onward with nothing in), `tests/test_fx.py` (`BROWSED_GROUPS`, the strip's line), `tests/test_unwired_thumbs.py`. Checked in the real app offscreen (`tools/app_driver.py`) on Mesa: nothing here was seen on the Mac.
+
+**893. Fed by nothing says so, a generator runs.** (Mac, GRAPH) Add a Mandelbrot and wire it alone into an output; add a Kaleidoscope and wire it into another output, nothing into its input. *Pass:* the Mandelbrot is lit and draws on its output; the Kaleidoscope is faint and its node says "fed by nothing — wire its input", its hover "wire a picture into it", its thumbnail "fed by nothing: the test card through it here"; the FX section lists it under **fed by nothing** (not "→ output N") and its strip says "fed by nothing — wire its input on graph". Wire the scene into its input: it lights, draws, and moves to "→ output N". A Waveform the same way says the same, its hover "wire a field into it". *Fail:* a faint Mandelbrot, or an effect listed under its output while it draws nothing.
+
+**894. A colour on the cylinder.** (Mac, GRAPH, the outputs on) Right-click the canvas → **effects…** → Colour (under generators); wire it alone into All outputs. *Pass:* it is lit and the outputs are red at once. Drag on the HSV square: across turns the hue round the wheel, up takes it from grey to full; the third knob (Value) darkens it to black. Route an LFO onto Hue: the colour cycles smoothly round and back to red with no jump at the wrap. Set Spin to 0.25: a full turn every four seconds; move Spin while it turns — the colour changes speed, never jumps. Say whether the square reads as the cylinder or a disc is wanted (row 1115). *Fail:* a dark or flickering output, a jump at the wrap or on a Spin step, a knob that does nothing.
+
 ## FO. Trip warp taken apart (rows 1110–1112, 2026-11-24)
 
 Plan 67 §16. Headless: `tests/test_trip_patch.py` (the push is the formula; Amount 0 the picture; how near), `tests/test_field_examples.py` (`field-trip` opens with no note). The example is in the Drive library's `loadable/field-examples/`.
@@ -9083,6 +9110,13 @@ Headless: `tests/test_catalog.py` (the counts, six faces at every corner, every 
 Headless: `tests/test_quiet_off_air.py` (the chip on the deck row, a press and a second press, the canvas's pair drawn and not drawn, the gaps in the row kept as the air moves, a page state from before this edit). No restart: the chip is the page's own state.
 
 **920. Editing through a fade.** (a DualSense Edge or a hand on the crossfader, the rig) On GRAPH, on the deck that is on air, open a patch with a few nodes and start editing — drag a node, open a picker. Now fade to the other deck (the Edge's D-pad ← / →, or **fade**). *Pass:* the canvas takes a red frame and the inset of what is on air, the deck chip goes red and reads **off air**; press **quiet off air** and both go from the canvas while the chip stays red; the nodes under the hand never move, and the row's chips do not shift under it beyond the deck chip's own word growing. Press it again and the pair comes back. Say whether, with it quiet, you still know which deck is live from the chip alone. *Fail:* the inset or frame staying while it is lit, the chip losing its red, the canvas scrolling or a drag dropping when it is pressed, or the quiet forgotten while the app runs.
+## FT. The Kinect (row 1130, 2026-11-24)
+
+Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).
+
+**910. The Kinect.** (Mac, G Hub not running) Add the entry (config.py's comment) to the device list; stand 1–3 m from the sensor. *Pass:* the DEVICES line says `connected` and 30 fps; you are points in the scene, moving as a mirror does, at about the shape's middle at 2 m; the depth picture is in MEDIA. Pull its USB: the points go and the line says so; put it back: they return. *Fail:* a frozen person, a dropped frame rate, or the app waiting on the sensor at launch or quit.
+
+**911. The Kinect demo patch.** (Mac) Copy `loadable/kinect` (its README), 910's entry with `colors`, nothing within half a metre of the sensor. Load `kinect/kinect-mirror`, step the switch 1–5, then channel B to slot 2. *Pass:* each look as the README's table says, steady over a minute. *Fail:* depth that goes blank on a cycle with a clear view (row 1130's device), or a look that is black with you in front.
 
 ## What no test covers
 

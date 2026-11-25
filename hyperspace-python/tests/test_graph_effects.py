@@ -172,8 +172,10 @@ def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
     def every_one_wired(r):
         """Every effect in the run (by its file's @order), switched off."""
         st = r.fx.state
-        # (plan 67 F1: the picture effects — a field maker takes no picture)
-        names = sorted((n for n, s in st.specs.items() if s.makes != "field"),
+        # (plan 67 F1: the picture effects that take a picture — a field
+        # maker takes none, nor does a generator with no input, Colour)
+        names = sorted((n for n, s in st.specs.items()
+                        if s.makes != "field" and "image" in G.effect_ports(n)[1]),
                        key=lambda n: (st.specs[n].order, n))
         chain = ["frame", *names]
         r.wiring = wired_wiring(wired(r, {"wires": [{"from": a, "to": f"{b}.image"}
