@@ -1569,7 +1569,7 @@ class Install:
     def fade_to(self, step: int = 1) -> str | None:
         """`preset.fade.next` / `prev` where there is one deck (a headless rig, a
         test's panel): the walk alone, since there is nothing to fade into.
-        `DeckInstall.fade_to` is the real verb (row 1099)."""
+        `DeckInstall.fade_to` is the real verb (row 1199)."""
         return self.walk(step)
 
     def load_startup(self) -> bool | None:
@@ -3061,7 +3061,7 @@ class Library:
         wrapping at both ends; from a name not in it, the first (n > 0) or the last.
         None when the list is empty. It loads nothing: `_step` walks from this
         library's own loaded name, and the fade walks from another deck's
-        (`Install.fade_to`, row 1099)."""
+        (`Install.fade_to`, row 1199)."""
         names = self.list(group)
         if not names:
             return None
@@ -4162,7 +4162,7 @@ class DeckInstall(DeckInstallSlots, Install):
         return name
 
     def fade_to(self, step: int = 1) -> str | None:
-        """Walk the patch list and **fade the room into it** (row 1099, the Edge's
+        """Walk the patch list and **fade the room into it** (row 1199, the Edge's
         D-pad): the patch one step from the one **on air** loads onto the deck off
         air, by a pad's own road (`_landing`: refused, said, while the crossfader is
         between its ends), and the crossfader then runs across on its own, over

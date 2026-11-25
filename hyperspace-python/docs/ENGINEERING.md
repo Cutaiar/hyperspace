@@ -2287,7 +2287,7 @@ pad that has one, are free; Learn pad puts anything on them. Hold-to-save
 is the Edge's alone (register row 724). (2026-10-29: the walk left B / X, where a
 stray thumb threw the look away; speed left the pad.)
 
-**The Edge's D-pad fades patches** (register row 1099), its own layout alone, as
+**The Edge's D-pad fades patches** (register row 1199), its own layout alone, as
 hold-to-save is: ← / → (`preset.fade.prev` / `preset.fade.next`) load the patch one
 step from the one **on air** in the PATCHES list onto the deck off air, then run the
 crossfader across on their own, over `output.xfade_s` — the one fade in the app, a
