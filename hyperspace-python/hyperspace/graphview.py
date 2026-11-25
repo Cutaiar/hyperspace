@@ -770,6 +770,12 @@ def _desk_order(rows: list) -> list:
     return sorted(rows, key=lambda r: rank.get(r[1], len(rank)))     # stable: layout order
 
 
+def kinect_label(d, how_many: int = 1) -> str:
+    """A Kinect device's node title: "Kinect", and with more than one, "Kinect <role>"
+    (its role is the entry's, `room` in the demo patch: it is not what the sensor is)."""
+    return "Kinect" if how_many < 2 else f"Kinect {getattr(d, 'role', '')}".rstrip()
+
+
 def device_nodes(d, table=None) -> list[tuple[VNode, list]]:
     """A listed device as its nodes, each with the ports it draws as
     ``(Port, group, layer)``. A device with fewer than two `layers` is one
@@ -1547,8 +1553,12 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         lpins[k] = pin
         return pin
 
-    for d in (devices or ()):
+    listed = list(devices or ())
+    kinects = [d for d in listed if getattr(d, "kind", "") == "kinect"]
+    for d in listed:
         for node, ports in device_nodes(d, table):
+            if getattr(d, "kind", "") == "kinect":      # row 1170: the sensor, not the role it is listed under
+                node.label = kinect_label(d, len(kinects))
             n = add_node(node)
             if node.layer:
                 layered.setdefault(node.role, {})[node.layer] = n

@@ -441,3 +441,14 @@ def test_a_kinects_node_is_drawn_under_patch_only_though_no_cable_reaches_it(rig
         assert "n:device:room" in st["names"].values()                   # on the canvas
     finally:
         reg.close()
+
+
+def test_a_kinects_node_is_titled_kinect_not_by_its_role(rig):
+    from hyperspace import ui_routing
+    router = ui_routing.router_of(rig.panel)
+    one = kinect.KinectDevice("room", {"role": "room", "kind": "kinect"})
+    v = graphview.build(router.table, rig.panel.reg, router, [one])
+    assert v.node("device:room").label == "Kinect"                 # the id is still the role's
+    two = kinect.KinectDevice("stage", {"role": "stage", "kind": "kinect"})
+    v = graphview.build(router.table, rig.panel.reg, router, [one, two])
+    assert [v.node("device:room").label, v.node("device:stage").label] == ["Kinect room", "Kinect stage"]
