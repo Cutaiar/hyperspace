@@ -1910,6 +1910,16 @@ def test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame():
 
 # ------------------------------------------------------------- plan 09 WP5
 
+def _instance_one(pid: str) -> str:
+    """An effect instance's knob as its file's (`fx.scale.2.mul` → `fx.scale.mul`):
+    the full registry declares instance 1, and a later instance's knobs are its
+    file's (plan 67: a corpus loadable holds `scale.2` and `scale.3`)."""
+    parts = pid.split(".")
+    if len(parts) == 4 and parts[0] == "fx" and parts[2].isdigit():
+        return f"fx.{parts[1]}.{parts[3]}"
+    return pid
+
+
 def test_every_corpus_loadable_names_real_params_with_one_owner(tmp_path):
     """The routes of every corpus loadable patch (the files the build shipped, held
     to this check while it did) land on params the full registry has,
@@ -1924,11 +1934,12 @@ def test_every_corpus_loadable_names_real_params_with_one_owner(tmp_path):
         doc = corpus_doc(name)
         routes = [Binding.from_json(d) for d in doc["routes"]]
         for b in routes:
-            assert b.target in ids and r.reg[b.target].modulatable, (name, b)
-            assert b.scale is None or b.scale in ids, (name, b)
+            target = _instance_one(b.target)
+            assert target in ids and r.reg[target].modulatable, (name, b)
+            assert b.scale is None or _instance_one(b.scale) in ids, (name, b)
             assert b.is_performer, (name, b)
         assert routing.referee(routes)[1] == [], name
-        assert {v for v in doc["values"] if not retired(v)} <= ids, name
+        assert {_instance_one(v) for v in doc["values"] if not retired(v)} <= ids, name
 
 
 def test_a_converted_loadables_values_are_bases_a_loadable_would_save(tmp_path):
@@ -1944,6 +1955,7 @@ def test_a_converted_loadables_values_are_bases_a_loadable_would_save(tmp_path):
         for pid in corpus_doc(key)["values"]:
             if retired(pid):
                 continue
+            pid = _instance_one(pid)
             assert pid in ids, (key, pid)
             p = r.reg[pid]
             assert p.persist and not p.alias and part_of(p) == "patch", (key, pid)

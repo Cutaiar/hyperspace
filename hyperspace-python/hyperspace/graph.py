@@ -2989,6 +2989,17 @@ def _wired_reach(wires) -> frozenset[str]:
         into.setdefault(w.node, []).append(w.src)
         if pin_node(w.src) is not None:
             into.setdefault(w.src, []).append(pin_node(w.src))
+    # plan 67: a slot reads its effect's knob fields (`_Build._fields`), so a
+    # slot reached reaches what feeds them, its effect reached or not
+    slots = {n for w in wires for n in (w.src, w.node)
+             if wire_node_kind(n, wired=True) == "slot"}
+    for w in wires:
+        if w.port in PORT_NAMES or not is_knob_port(w.node, wire_node_kind(w.node, wired=True),
+                                                    w.port):
+            continue
+        for s in slots:
+            if effect_of(s) == w.node:
+                into.setdefault(s, []).append(w.src)
     todo = [w.src for w in wires if _is_sink(w)]
     got: set[str] = set()
     while todo:
@@ -7875,6 +7886,35 @@ class _Build:
             target.inputs[w.port] = src
             if w.port != FIELD_PORT:
                 target.depths[w.port] = w.depth
+        # plan 67: a slot is its effect on another picture, its knobs the
+        # effect's — so the fields wired into those knobs too, where the slot
+        # has none of its own: read off the effect's wires, built or not (a
+        # slot may run with its effect unfed), and a field the slot itself
+        # feeds is dormant, in words, as a wire's loop is (Devin on #509)
+        for name, node in list(self.made.items()):
+            if _kind(name) != "slot":
+                continue
+            if isinstance(node, KeyNode):
+                node = node.inputs["image"]
+            if not isinstance(node, Effect) or node not in self.built:
+                continue
+            owner = effect_of(name)
+            for w in getattr(self.wiring, "wires", ()):     # (the effect's, reached or not)
+                if w.src not in self.reached:
+                    continue
+                if (w.node != owner or w.port == FIELD_PORT or w.port in node.depths
+                        or not is_knob_port(w.node, _kind(w.node), w.port)):
+                    continue
+                src = self._taken(self.node(w.src), w)
+                if src is None:
+                    continue
+                if src is node or id(node) in _upstream(src):
+                    self.g.dormant[f"{w} → {name}"] = (
+                        f"wire {w} — {name} reads it as its effect's, and feeds {w.src}: "
+                        "that makes a loop")
+                    continue
+                node.inputs[w.port] = src
+                node.depths[w.port] = w.depth
 
     def _split(self, layers: tuple[HandsLayer, ...]) -> None:
         """How each layer splits its guide out (`HandsLayer.split`): always

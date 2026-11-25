@@ -1503,9 +1503,11 @@ def fx_files(source=None) -> dict:
     if files is None:
         files = getattr(getattr(source, "fx_state", None), "files", None)
     if files is not None:
-        return files
+        # (plan 67: and the retired files', which an old file still names
+        # until the ladder's last step rewrites it — Devin on #509)
+        return {**fx.retired_specs(), **files}
     if _FALLBACK_FILES is None:
-        _FALLBACK_FILES = FxState().files
+        _FALLBACK_FILES = {**fx.retired_specs(), **FxState().files}
     return _FALLBACK_FILES
 
 

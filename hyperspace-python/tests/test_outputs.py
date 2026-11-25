@@ -121,7 +121,7 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
         alpha=1.0, faces=False):
     """A renderer with `effects` on, the ghost hands on (synthetic), the
     master dim and the ground as asked. Plan 33 R23: the run as a load
-    lands it (`graphmigrate.wiring_of`). `faces`: huecycle on as well, on
+    lands it (`graphmigrate.wiring_of`). `faces`: hueturn on as well, on
     no wire — what was aimed at the faces until plan 33 draws only where a
     wire puts it (tests/test_graph_faces.py), so it changes no byte."""
     from hyperspace.fx import FxState
@@ -137,7 +137,7 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
     r.old_wiring = wiring_for(state_values(fx), specs_of(fx), wired=False)
     r.wiring = wired_wiring(r.old_wiring)
     if faces:
-        fx.values["huecycle"]["on"] = True
+        fx.values["hueturn"]["on"] = True
     r.bg_alpha, r.dim = bg, dim
     if echoes:
         st = r.lookback.state

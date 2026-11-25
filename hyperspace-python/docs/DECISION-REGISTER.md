@@ -965,6 +965,13 @@ here; overturn → the change, then the same.
 | 1119 | Plan 67 P3: the depth is a key on the wire, `{"from", "to", "depth"}`, written only when not 1, so every other wire saves as it did; any finite number, signed; a depth on a wire into anything but a knob is refused in words. Not part of what the wire is (two wires between the same ports are one). A patch's own wire and an inlet across its edge keep it through a lift and a spawn. No schema bump (DECISIONS) | 895, 897 | owner (2026-11-24: "a depth key on the wire", over a Scale node in front and a depth param per knob) |
 | 1120 | Plan 67 P3: GRAPH sets the depth from the field cable's menu, **depth ▸**: 1 (the field as it is, in the knob's units) and ±⅛, ¼, ½ and the whole of the knob's range, one undo step each; the cable's hover says the depth, as a route's does. No free number entry yet (the menu holds items only) | 895 | (rec) |
 | 1121 | Plan 67 P3: a field wired only into a knob reaches what that effect reaches — on GRAPH and on the FX pane (`ui_fx.groups` follows a knob's field port as it follows `field`) | 896 | (rec) |
+| 1122 | Plan 67: Hue cycle is retired into **Hue turn** (`hueturn.glsl`: Turn, degrees, wraps, takes a field; Paint; Saturation 0 … 2; the clock is the effect's Speed, as Hue cycle's) and its bands as field nodes — Line (45°, Scale √2), Rings (Scale 2), a Scale each (1 − Rings, Rings), Combine (add), a Scale (Spread) — wired into Turn at depth 360. Proven against Hue cycle's own shader (kept as a test fixture) over the saved looks' settings and a sweep, three times each: at most 2 levels on fewer than 1 % of pixels | 898 | owner (2026-11-25: "migrate exactly, new ops"; "new op: Hue turn") |
+| 1123 | Plan 67: the rewrite is keyed on the retired file, not a schema: the ladder's last step (`graphmigrate.hue_turns`, a fragment's `patches.forward`) runs at every version, and the steps before it place a Hue cycle where an old stack ran it (`RETIRED_SPECS` in `specs_of` and `forward`). No schema bump (DECISIONS) | 898, 900 | (rec) |
+| 1124 | Plan 67: rows on Spread land on the bands' × — a push's depth halved (twice the range; a push with no depth, 1, written 0.5), a set's norm moved (Spread 0 … 4 is × 0 … 4 of −4 … 4); a macro's base subscriber's from / to moved the same way; a row that places the knob (abs, position) is kept as it is, so it spans −4 … 4 (its middle still, below it the bands turn the other way) — a row holds no offset — and the load says so. A row on Rings is left out, said. A field wired into Spread goes to the bands' ×; into Rings, to its two weights (± its depth). Black is clear's `keys` and `key.<node>.*` follow the rename. An old file's depth onto Hue cycle's Speed is retapered against the retired file's spec, shipped in `shaders/fx/retired/` | 899 | owner (2026-11-25: "accept, and say so") |
+| 1125 | Plan 67: a Hue cycle named only by its knobs (off, out of an old stack's run) is renamed with its knobs and gets no bands: nothing draws it | 898 | (rec) |
+| 1126 | Plan 67: the six saved looks naming Hue cycle are rewritten — `loadable/kinetic/kinetic-comet` and `kinetic-tunnel`, and the corpus's `dial`, `hands-pinch`, `party-acid`, `party-trip` (each through the app's own resave, so it round-trips byte for byte). The older test fixtures stay as they were written, read through the ladder | 898 | (rec) |
+| 1127 | Plan 67: a slot reads its effect's knob fields, as it reads its knobs, unless a field is wired into the slot's own port — off its effect's wires, built or not (a reached slot reaches what feeds them); one the slot itself feeds is dormant, said: a loop (OUTPUT's "hands through the effects" makes `hueturn.slot.2`, which turns by the same bands) | 898 | (rec) |
+| 1128 | Plan 67: the frame signatures of the 17 cases holding Hue cycle are re-recorded (Hue turn and its bands' nodes in place of Hue cycle's; every other case unchanged); the golden frames of the looks holding it move by the GPU's rounding and are re-recorded on the rig they were recorded on (the Mac) | 900 | (rec) |
 | 1114 | R15 has one rule for running with no input, `graph.runs_unfed`: the field generators (`@takes image none`) and plan 80's (`GENERATOR`, the Mandelbrot) run fed by nothing, every other effect is never built. The builder, `Effect.generates`, `graph.unfed`, GRAPH and the FX pane read it; an unfed effect wired onward (`graph.hungry`, which replaces `hungry_fields`) is "fed by nothing — wire its input" on GRAPH (its hover says a picture or a field) and grouped "fed by nothing" on the FX pane, a picture effect as a field op — not under its path's end as if it ran. The test card stays a filter here: it draws over its picture, so with none it is fed by nothing | 893 | (rec) |
 | 1115 | A generator of one flat colour, **Colour** (`shaders/fx/colour.glsl`), its own file rather than a mode of Palette (Palette maps its input's luma through a gradient; a colour reads nothing): Hue (turns, wraps), Saturation, Value — a place on the HSV cylinder — on one XYZ volume, plus Spin, a clock (turns a second) so a step never jumps the hue. `@takes image none`, so the one rule (row 1114) runs it fed by nothing, wired straight into an output | 894 | owner asked for it (2026-11-25); the shape (rec) |
 | 1081 | Plan 89: an effect node has discrete slots — several pictures wired into one effect node, each slot its own `image` / `aux` in and its own picture out, each processed separately with the one shared set of knobs; the separate `copy` node is gone, and clicking the effect shows its one set of controls | 873 | owner (2026-11-23) |
@@ -15518,6 +15525,55 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Other options.** A mode of Palette: Palette is a filter of its input's luma, and a mode that ignores its input would need its input port hidden by mode. A polar pad (a disc: angle the hue, radius the saturation) — the pads are squares (plan 82); a disc is a widget of its own, a follow-up if the square does not feel like the cylinder. Its knobs read x / y / z as every pad's do; their hover names them.
 - **Built.** `shaders/fx/colour.glsl`; `tests/test_fx_colour.py`. The two tests that chain every picture effect through `image` (`test_graph_effects`, `test_graph_areas`) take those that have one.
 - **Judge it.** 894.
+
+### 1122. Hue turn, and Hue cycle's bands as fields
+
+- **What.** Hue cycle hid a field: its bands, `mix(p.x + p.y, 2 |p|, Rings) × Spread`, in turns. They are Line, Rings, two Scales, Combine and a Scale now, into Hue turn's Turn at depth 360; Hue turn keeps the turn in YIQ by the clock, Paint and Saturation — one op, since Paint mixes two results of one input.
+- **Answer.** Owner, 2026-11-25: "migrate exactly, new ops"; "new op: Hue turn".
+- **Built.** `shaders/fx/hueturn.glsl`; `tests/fixtures/retired-fx/huecycle.glsl` (the oracle); `tests/test_hue_turn.py`.
+- **Judge it.** 898.
+
+### 1123. Keyed on the file, not a schema
+
+- **What.** The ladder's last step rewrites any Hue cycle at any version; the steps before it still place one where an old stack ran it.
+- **Answer.** (rec).
+- **Built.** `graphmigrate.hue_turns`, `graphmigrate.retire_hue_cycle`, `graphmigrate.RETIRED_SPECS`, `graphmigrate.specs_of`, `patches._retire_hue_cycle`.
+- **Judge it.** 898, 900.
+
+### 1124. Rows on Spread and Rings
+
+- **What.** Onto the bands' ×: a push's depth halved, a set's norm moved, a macro subscriber's ends moved; an abs desk row kept, said; a row on Rings left out, said.
+- **Answer.** Owner, 2026-11-25: "accept, and say so" (for the abs row).
+- **Built.** `graphmigrate.retire_hue_cycle`, `graphmigrate.HUE_ABS_NOTE`, `graphmigrate.HUE_RINGS_NOTE`.
+- **Judge it.** 899.
+
+### 1125. A Hue cycle named by its knobs alone
+
+- **What.** Renamed with its knobs, no bands.
+- **Answer.** (rec).
+- **Built.** `graphmigrate.retire_hue_cycle`.
+- **Judge it.** 898.
+
+### 1126. The six saved looks rewritten
+
+- **What.** The two kinetic looks and the corpus's four, through the app's resave.
+- **Answer.** (rec).
+- **Built.** `loadable/kinetic/`, `tests/corpus/loadable/`.
+- **Judge it.** 898.
+
+### 1127. A slot reads its effect's knob fields
+
+- **What.** Where a slot has none of its own wired.
+- **Answer.** (rec).
+- **Built.** `graph._Build._fields`; `tests/test_knob_fields.py::test_a_slot_reads_its_effects_knob_fields`.
+- **Judge it.** 898.
+
+### 1128. Signatures and goldens
+
+- **What.** 17 frame signatures re-recorded; the goldens of the Hue cycle looks re-recorded on the Mac.
+- **Answer.** (rec).
+- **Built.** `tests/fixtures/frame-signatures.json`.
+- **Judge it.** 900.
 
 ### 1096. The shared field pieces
 
