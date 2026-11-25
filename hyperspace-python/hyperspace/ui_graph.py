@@ -2336,6 +2336,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     # (a collapsed node's port) is never a drop target 300 units off the wire
     st["pin_xy"] = {}
     st["cost_drawn"] = set()
+    _note_hot(st)                       # whose widgets are drawn (`hot`)
     for n in view.nodes:
         if drawn_node(st, n):
             with _cost_style(st, n):    # plan 84: nothing pushed with the chip off
@@ -2884,9 +2885,61 @@ def _ends(st: dict, view: graphview.View, wid: str, a: str, b: str, drawn: set[s
     return po, pi
 
 
+# past the node's content, its padding and a little over: under the pointer
+HOT_PAD = 14.0
+
+
+def _note_hot(st: dict) -> None:
+    """What `hot` reads, once a frame, inside the editor: the pointer (canvas
+    units), the selected nodes, whether the keys or a pad are moving imgui's
+    focus, and the nodes a mouse button went down on (`hot_held`)."""
+    m = imgui.get_mouse_pos()
+    st["hot_at"] = (m.x, m.y)
+    st["hot_selected"] = set(selected_ids(st))
+    st["hot_nav"] = imgui.get_io().nav_visible
+    if not imgui.is_mouse_down(0):
+        st["hot_held"] = set()
+
+
+def hot(st: dict, nid: str) -> bool:
+    """Are node `nid`'s widgets (its + / -, **all ports**, its groups' folds)
+    drawn as widgets this frame? Asked right after `begin_node`: the pointer
+    is over it (by this frame's pointer, so a press the frame the pointer
+    arrives lands), it is selected, the mouse went down on it and is still
+    down (a button being pressed is not taken away), or the keys or a pad
+    are moving the focus (every node's, so it can get to them)."""
+    if st["hot_nav"] or nid in st["hot_selected"] or nid in st["hot_held"]:
+        return True
+    (mx, my), p = st["hot_at"], imgui.get_cursor_screen_pos()
+    if not (p.x - HOT_PAD <= mx <= p.x + NODE_W + HOT_PAD and my >= p.y - HOT_PAD):
+        return False
+    # (its size as last drawn; a button's row is in it whatever it grows to)
+    if my > p.y + ed.get_node_size(ed.NodeId(_id(st, "n:" + nid))).y + HOT_PAD:
+        return False
+    if imgui.is_mouse_clicked(0):
+        st["hot_held"].add(nid)
+    return True
+
+
+def _hot_button(label: str, live: bool) -> bool:
+    """A node's `small_button` while the node is `hot`; else its words alone,
+    faint, at the same place and in the same room, so hovering a node moves
+    nothing and what the button says (a group's name, open or folded) stays."""
+    if live:
+        return ui.small_button(label)
+    words = label.split("##")[0]
+    p, pad = imgui.get_cursor_screen_pos(), imgui.get_style().frame_padding.x
+    size = imgui.calc_text_size(words)
+    imgui.dummy(imgui.ImVec2(size.x + 2 * pad, size.y))
+    imgui.get_window_draw_list().add_text(
+        imgui.ImVec2(round(p.x + pad), round(p.y)), ui.u32(ui.DIM), words)
+    return False
+
+
 def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     ed.begin_node(ed.NodeId(_id(st, "n:" + n.id)))
     imgui.push_id(n.id)
+    live = hot(st, n.id)
     shut = collapsed(st, n.id)
     has_in = any(p.direction == graphview.IN for p in n.ports)
     has_out = any(p.direction == graphview.OUT for p in n.ports)
@@ -2901,13 +2954,14 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
         n.grey or not n.up or n.faint) else ui.TEXT)
     imgui.text(ui.fit_text(n.label, NODE_W - 40 - 2 * PIN))
     imgui.pop_style_color()
-    imgui.same_line(NODE_W - 30 - PIN)          # the + clear of the out stub
-    if ui.small_button("+" if shut else "-"):
-        toggle_open(st, n.id)
-    if imgui.is_item_hovered():
-        ed.suspend()
-        ui.tooltip(EXPAND_TIP if shut else COLLAPSE_TIP)
-        ed.resume()
+    if live or not shut:        # (no + off a hovered node: every node is collapsed but a few)
+        imgui.same_line(NODE_W - 30 - PIN)      # the + clear of the out stub
+        if _hot_button("+" if shut else "-", live):
+            toggle_open(st, n.id)
+        if live and imgui.is_item_hovered():
+            ed.suspend()
+            ui.tooltip(EXPAND_TIP if shut else COLLAPSE_TIP)
+            ed.resume()
     if has_out:
         imgui.same_line(NODE_W - PIN)
         _stub(st, graphview.stub_out(n.id), ed.PinKind.output, n.wires > 0, drawn)
@@ -2922,7 +2976,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
         ed.end_node()
         return
     every = full(st, n.id)
-    if ui.small_button("patched only" if every else "all ports"):
+    if _hot_button("patched only" if every else "all ports", live):
         st["flip"] ^= {n.id}
     ports = shown(st, n)
     group = None
@@ -2933,8 +2987,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
             folded = (n.id, group) in st["folds"]
             count = sum(1 for p in n.ports if p.group == group)
             sign = "+" if folded else "-"
-            if ui.small_button(f"{sign} {group_title(group) or 'misc'} ({count})"
-                                  f"##{group}"):
+            if _hot_button(f"{sign} {group_title(group) or 'misc'} ({count})##{group}", live):
                 st["folds"] ^= {(n.id, group)}
         if port not in ports:
             continue
