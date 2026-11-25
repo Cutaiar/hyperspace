@@ -6431,6 +6431,12 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at,
         with m.sub("insert"):
             for kind in modifiers.KINDS:
                 m.item(kind, lambda kind=kind: insert_modifier(panel, c, kind))
+    if c.kind == "render" and c.depth is not None:   # plan 67 P3: a field into a knob
+        with m.sub("depth"):
+            for d, words in graphview.depth_choices(c.ref):
+                m.item(words, (lambda d=d: _render_said(
+                    panel, render_edit(panel), lambda e, d=d: e.set_depth(c.ref, d))),
+                       enabled=d != c.depth)
     if c.kind == "render" and c.type == graphview.IMAGE:
         e = render_edit(panel)
         with m.sub("insert"):                   # plan 33 U; 2026-11-01: every picture node

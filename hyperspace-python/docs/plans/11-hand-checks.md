@@ -8846,6 +8846,15 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## FR. Any knob takes a field (rows 1116–1121, 2026-11-24)
+
+Plan 67 §18. Headless: `tests/test_knob_fields.py` (every knob takes a field or says why; a field of 0 is the unwired knob; half a frame at one value, half at another; clamped or wrapped; the wire's depth saved and read; GRAPH's port, the drop on a knob's row, the depth menu; the FX pane), `tests/test_field_examples.py` (`field-knob` opens with no note, reaches, and draws the field), `tools/fx_sweep.py` (2886 renders, no byte moved). The example is in the Drive library's `loadable/field-examples/`.
+
+**895. A field on a knob.** (Mac, 1080p outputs) Load `field-examples/field-knob`. *Pass:* the wave is still around the middle and ripples more toward the edges; the sub band pumps all of it; the right hand slides the still middle across. Right-click the green cable into Wave, **depth ▸** → −0.25 and raise Wave's Amount: now strong in the middle, still at the edges; ⌘Z puts it back in one step. Save the patch and load it again: the depth is kept. *Fail:* a wave the same everywhere, a jump when the depth changes beyond the picture changing, a depth lost on a reload.
+
+**896. Dropping a field on a knob.** Add Line and Palette, wire the scene through Palette to All outputs, and drag Line's out onto Palette's **Hue turn** row. *Pass:* a wire `line → palette.hue_turn`, the port drawn on Palette's node once wired, Line lit (it reaches), and on the FX pane Line beside Palette in Run — the hue banded across the frame. Drag it onto **Mode** or **Anchors**: refused, in words (a choice; a count); onto Wave's **Drift**: refused (a rate). *Fail:* a field that does nothing, Line under "reaches nothing", or a refusal without words.
+
+**897. Old patches, unchanged.** (Mac) Open three saved looks with effects (`party-noita`, `kinetic-comet`, one of yours) on this build. *Pass:* each looks and moves exactly as before; GRAPH draws no new ports on their nodes. *Fail:* any look that differs.
 ## FQ. Fed by nothing, one rule; a Colour generator (rows 1114–1115, 2026-11-25)
 
 R15 and plan 80. Headless: `tests/test_field_wire.py` (the builder, `unfed`, GRAPH and the FX pane agree for a Mandelbrot, Wave, Acid, Waveform and Rings, each wired onward with nothing in), `tests/test_fx.py` (`BROWSED_GROUPS`, the strip's line), `tests/test_unwired_thumbs.py`. Checked in the real app offscreen (`tools/app_driver.py`) on Mesa: nothing here was seen on the Mac.
