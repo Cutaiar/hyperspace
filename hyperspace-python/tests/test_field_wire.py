@@ -458,6 +458,32 @@ def test_one_rule_for_running_with_no_input():
     assert dict(ui_fx.groups(alone)) == {ui_fx.UNREACHED: ["wave"]}
 
 
+def test_a_field_makers_slot_is_never_built():
+    """Devin's review of #501: a slot is a picture effect's (plan 89) — a
+    field maker's slot has no field node — so with nothing in it is left
+    dormant, as before the one rule, never built as a picture `Slot`; it
+    has no input to wire, so it is not "fed by nothing — wire its input"
+    (`hungry`). A picture
+    generator's slot (the Mandelbrot's, Colour's) runs fed by nothing."""
+    from hyperspace import graphview
+
+    assert not G.runs_unfed("rings.slot.2") and not G.runs_unfed("point.slot.2")
+    assert G.runs_unfed("rings") and G.runs_unfed("mandel.slot.2") and G.runs_unfed("colour.slot.2")
+    def two(file):
+        return {"frame": "wired", "nodes": [{"kind": "effect", "file": file, "slots": 2}],
+                "wires": [{"from": "shape", "to": "scene.geometry"},
+                          {"from": file, "to": "output.1.image"},
+                          {"from": f"{file}.slot.2", "to": "output.2.image"}]}
+    g = _built(two("colour"))
+    assert "colour.slot.2" in g.nodes and "colour.slot.2" not in g.dormant
+    sec = two("rings")
+    g, spec = _built(sec), _spec(sec)
+    assert "rings.slot.2" not in g.nodes and "rings.slot.2" in g.dormant
+    assert "rings.slot.2" in G.unfed(spec) and "rings.slot.2" not in G.hungry(spec)
+    # (a slot is drawn on its effect's node, row 1086: Rings is lit by slot 1)
+    assert "rings" not in graphview.unreached(spec)
+
+
 def effect_field(name):
     return G.effect_ports(name)[0] == G.FIELD
 

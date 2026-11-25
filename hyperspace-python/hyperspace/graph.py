@@ -2819,9 +2819,14 @@ def runs_unfed(name: str) -> bool:
     nothing (`_Build._effect`), `Effect.generates` draws it, and `unfed`
     leaves it out, so GRAPH and the FX pane never call it fed by nothing.
     Read off the shipped file (`fx.ports_of`, `fx.hook_of`), so it is the same
-    answer whoever asks; any other effect fed by nothing is never built."""
+    answer whoever asks; any other effect fed by nothing is never built. A
+    slot is a picture effect's (plan 89): a field maker's slot has no field
+    node, so it never runs (Devin's review of #501)."""
     effect = effect_of(name)
-    if "image" not in effect_ports(effect)[1]:
+    makes, takes = effect_ports(effect)
+    if name != effect and makes != IMAGE:
+        return False
+    if "image" not in takes:
         return True
     from . import fx  # here, not at the top: a hot reload of fx.py is seen
 
@@ -2853,7 +2858,9 @@ def hungry(spec: GraphSpec | None) -> frozenset[str]:
     if spec is None or not getattr(spec, "wired", False):
         return frozenset()
     onward = {w.src for w in spec.all_wires() if w.port in _PICTURE_PORTS or w.port == FIELD_PORT}
-    return frozenset(unfed(spec) & onward)
+    # (one with no input to wire — a field generator's slot — reaches nothing)
+    return frozenset(n for n in unfed(spec) & onward
+                     if "image" in effect_ports(effect_of(n))[1])
 
 
 def reaches(spec: GraphSpec) -> frozenset[str]:
@@ -7571,7 +7578,7 @@ class _Build:
                 return None
             return self._keep(FieldEffect(name, image=src if "image" in takes else None,
                                           node=self._unique(name)))
-        if src is None and not runs_unfed(effect):
+        if src is None and not runs_unfed(name):     # (a slot: its own answer, plan 89)
             self.g.dormant[name] = f"{name} is {FED_BY_NOTHING} here: {WIRE_ITS_INPUT}"
             return None
         if kind == "slot":
