@@ -9,7 +9,7 @@ logo drawn flat and as capsules, and eight fractals), rotating through six plane
 frequency band of whatever audio is playing.
 
 This repository holds two iterations, a couple of companions for sharing it,
-and a prototype:
+a launcher, and a prototype:
 
 - **[`hyperspace-python/`](hyperspace-python/)** — the Python re-platform. Where
   active development happens. See
@@ -29,6 +29,10 @@ and a prototype:
 - **[`hyperspace-ios-widget/`](hyperspace-ios-widget/)** — an iOS Home Screen
   widget (a [Scriptable](https://scriptable.app) script) showing the same QR
   code.
+
+- **[`hyperspace-raycast/`](hyperspace-raycast/)** — a [Raycast](https://raycast.com)
+  script command that starts the app, on the rig or on a laptop, in one
+  command from the launcher.
 
 - **[`prototypes/edge-lab/`](prototypes/edge-lab/)** — a browser lab for the
   DualSense Edge (plan 42): Chrome reads it over USB or Bluetooth through
