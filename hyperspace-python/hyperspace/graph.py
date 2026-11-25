@@ -2869,11 +2869,40 @@ _PICTURE_PORTS = frozenset({"image", "aux", "under", "over", "media", "faces",
                             "hands", "readout", *SWITCH_PORTS})
 
 
+# R15's words, the one phrase every place says them in: the builder's dormant
+# line, GRAPH's faint node, the FX pane's group and its strip
+FED_BY_NOTHING = "fed by nothing"
+WIRE_ITS_INPUT = "wire its input"
+
+
+def runs_unfed(name: str) -> bool:
+    """The one rule for an effect (or its slot, plan 89) that runs with
+    nothing wired into its `image`: a generator. Two kinds — a file with no
+    input port (`@takes image none`: Point, Line, Rings … the field
+    generators, plan 67) and a file whose Python half says `GENERATOR` (plan
+    80: the Mandelbrot, `is_generator`). The builder builds such a one over
+    nothing (`_Build._effect`), `Effect.generates` draws it, and `unfed`
+    leaves it out, so GRAPH and the FX pane never call it fed by nothing.
+    Read off the shipped file (`fx.ports_of`, `fx.hook_of`), so it is the same
+    answer whoever asks; any other effect fed by nothing is never built. A
+    slot is a picture effect's (plan 89): a field maker's slot has no field
+    node, so it never runs (Devin's review of #501)."""
+    effect = effect_of(name)
+    makes, takes = effect_ports(effect)
+    if name != effect and makes != IMAGE:
+        return False
+    if "image" not in takes:
+        return True
+    from . import fx  # here, not at the top: a hot reload of fx.py is seen
+
+    return _says_generator(fx.hook_of(split_instance(effect)[0]))
+
+
 def unfed(spec: GraphSpec) -> frozenset[str]:
     """R15 in a wired frame: the effects and slots whose input port nothing is
-    wired into — never built, though a path from them may reach a sink. A file
-    that takes no input (a generator: Point, Rings, the test card …) is fed by
-    nothing by design and is not here; nor is a D1-placed effect."""
+    wired into — never built, though a path from them may reach a sink. A
+    generator (`runs_unfed`: Point, Rings, the Mandelbrot …) is fed by nothing
+    by design and is not here; nor is a D1-placed effect."""
     if not getattr(spec, "wired", False):
         return frozenset()
     fed = {w.node for w in spec.all_wires() if w.port == "image"}
@@ -2881,20 +2910,22 @@ def unfed(spec: GraphSpec) -> frozenset[str]:
     names = {e.name for e in spec.effects} | {n for w in spec.all_wires() for n in (w.src, w.node)}
     return frozenset(n for n in names
                      if wire_node_kind(n, wired=True) in ("effect", "slot") and n not in fed
-                     and n not in placed
-                     and not (wire_node_kind(n, wired=True) == "effect"
-                              and "image" not in effect_ports(n)[1]))
+                     and n not in placed and not runs_unfed(n))
 
 
-def hungry_fields(spec: GraphSpec | None) -> frozenset[str]:
-    """The field ops among `unfed` that a path from would reach a sink: a
-    Waveform or Combine wired onward with no field into its input. They cannot
-    run without one (a picture effect may: plan 80's generators), so GRAPH and
-    the FX pane say what they need rather than "reaches nothing"."""
+def hungry(spec: GraphSpec | None) -> frozenset[str]:
+    """The effects and slots among `unfed` wired onward — a picture or a field
+    wired out of them — which would run if something were wired in: GRAPH
+    says "fed by nothing — wire its input" on such a node and the FX pane
+    groups it "fed by nothing", the first reason it does not run (a path
+    that also reaches nothing is the next). One wired to nothing at all
+    "reaches nothing", as before."""
     if spec is None or not getattr(spec, "wired", False):
         return frozenset()
-    return frozenset(n for n in unfed(spec) & reaches(spec)
-                     if effect_ports(effect_of(n) or n)[1].get("image") == FIELD)
+    onward = {w.src for w in spec.all_wires() if w.port in _PICTURE_PORTS or w.port == FIELD_PORT}
+    # (one with no input to wire — a field generator's slot — reaches nothing)
+    return frozenset(n for n in unfed(spec) & onward
+                     if "image" in effect_ports(effect_of(n))[1])
 
 
 def reaches(spec: GraphSpec) -> frozenset[str]:
@@ -6181,17 +6212,23 @@ def is_generator(spec) -> bool:
     """Plan 80: whether effect spec `spec` paints the whole frame from
     nothing — its Python half (`fx.HOOKS`) says `GENERATOR` (the
     Mandelbrot) — so it is built and drawn with no wire into its image."""
+    return _says_generator(getattr(spec, "hook", "") if spec is not None else "")
+
+
+def _says_generator(hook: str) -> bool:
+    """Whether `fx.HOOKS`' module for `@hook` name `hook` says `GENERATOR`."""
     from . import fx  # here, not at the top: a hot reload of fx.py is seen
 
-    hook = fx.HOOKS.get(getattr(spec, "hook", "") or "") if spec is not None else None
-    return bool(getattr(hook, "GENERATOR", False))
+    return bool(getattr(fx.HOOKS.get(hook or ""), "GENERATOR", False))
 
 
 def generators_of(state) -> frozenset[str]:
     """Plan 80: the effect instances of `state` (an `FxState`, or None)
-    that are generators (`is_generator`): `build_graph`'s `generators`."""
+    that run with nothing wired in (`runs_unfed`): `build_graph`'s
+    `generators`, part of the built graph's key — a reload that makes a file
+    a generator, or one no longer, builds again."""
     specs = getattr(state, "specs", None) or {}
-    return frozenset(n for n, spec in specs.items() if is_generator(spec))
+    return frozenset(n for n in specs if runs_unfed(n))
 
 
 class Effect(Node):
@@ -6287,10 +6324,11 @@ class Effect(Node):
 
     def generates(self, frame: Frame) -> bool:
         """Plan 80: its file paints the whole frame from nothing — its
-        Python half says `GENERATOR` (the Mandelbrot, `mandel.py`) — so with
-        no picture wired into `image` it still draws, over transparent
-        black (`_pass`), where any other effect reads nothing."""
-        return is_generator(frame.r.fx.state.specs.get(self.effect))
+        Python half says `GENERATOR` (the Mandelbrot, `mandel.py`;
+        `runs_unfed`, the rule the builder and `unfed` read) — so with no
+        picture wired into `image` it still draws, over transparent black
+        (`_pass`), where any other effect reads nothing."""
+        return runs_unfed(self.effect)
 
     def run(self, frame: Frame) -> None:
         # plan 33 R: folded here only where something reads it at the
@@ -6948,7 +6986,9 @@ class Graph:
         self.order: list[Node] = []
         self.clouds: tuple[str, ...] = ()        # the cloud roles the default graph drew (A4b)
         self.effects: tuple[str, ...] = ()       # the effect instances of its runs (D0)
-        self.generators: tuple[str, ...] = ()    # plan 80: those built with no input (`Effect.generates`)
+        # plan 80: the instances that run with no input (`runs_unfed`), as the
+        # build was asked them — the graph's key, the builder reads the rule
+        self.generators: tuple[str, ...] = ()
         self.dormant: dict[str, str] = {}        # D1: placed effect → why it has no node
         # the entries of `dormant` written while the graph ran (an output's
         # folds skipped this frame: `Output.run`), taken out again before
@@ -7215,8 +7255,8 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     g = Graph(graph_key(views), wiring)
     g.clouds = tuple(clouds)
     g.effects = tuple(effects)
-    # plan 80: the effects that paint the whole frame from nothing
-    # (`Effect.generates`): one with no wire into its image is still built
+    # plan 80: the effects that run with nothing wired in (`generators_of`),
+    # kept as part of the key — `_Build` reads the rule itself (`runs_unfed`)
     g.generators = tuple(generators)
     g.bus_cuts = bus_cuts if bus_cuts is not None else BusCuts()
     _Build(g, wiring, len(views), g.bus_cuts).build()
@@ -7301,7 +7341,6 @@ class _Build:
         self.g, self.wiring, self.count = g, wiring, count
         self.bus_cuts = bus_cuts if bus_cuts is not None else BusCuts()     # plan 36 T1: the bus cables
         self.have = set(g.effects)
-        self.generators = set(g.generators)
         wires = tuple(getattr(wiring, "wires", ()))
         # plan 35 T4: a wire into an output this rig has not open (`output.3`
         # with two windows) reaches nothing — what only it shows is not
@@ -7619,13 +7658,13 @@ class _Build:
         if kind == "effect" and effect_ports(name)[0] == FIELD:
             # plan 67 F1: a field maker; a generator takes no input
             takes = effect_ports(name)[1]
-            if "image" in takes and src is None:
-                self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
+            if not runs_unfed(name) and src is None:
+                self.g.dormant[name] = f"{name} is {FED_BY_NOTHING} here: {WIRE_ITS_INPUT}"
                 return None
             return self._keep(FieldEffect(name, image=src if "image" in takes else None,
                                           node=self._unique(name)))
-        if src is None and effect not in self.generators:
-            self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
+        if src is None and not runs_unfed(name):     # (a slot: its own answer, plan 89)
+            self.g.dormant[name] = f"{name} is {FED_BY_NOTHING} here: {WIRE_ITS_INPUT}"
             return None
         if kind == "slot":
             return self._keep(Slot(self._unique(name), effect, image=src))

@@ -394,24 +394,104 @@ def test_a_field_crossing_a_saved_patch_edge_is_saved_a_field():
 def test_a_field_op_fed_by_nothing_says_what_it_needs():
     """The owner on the rig: a Waveform wired onward but fed by nothing said
     "reaches nothing". It is R15's — nothing in its input — so the canvas says
-    what it needs (a field) and the FX pane groups it "fed by nothing", with
-    its own reason, not "reaches nothing"."""
+    so ("fed by nothing — wire its input", its hover what to wire: a field)
+    and the FX pane groups it "fed by nothing", with its own reason, not
+    "reaches nothing"."""
     from hyperspace import graph as G
     from hyperspace import graphview, ui_fx
 
     spec = _spec(wired(("scene", "displace.image"), ("waveform", "displace.field"),
                        ("displace", "output.1.image"), nodes=("waveform", "displace")))
-    assert G.unfed(spec) == {"waveform"} and G.hungry_fields(spec) == {"waveform"}
+    assert G.unfed(spec) == {"waveform"} and G.hungry(spec) == {"waveform"}
     assert "waveform" in graphview.unreached(spec)
     groups = dict(ui_fx.groups(spec))
     assert groups.get(ui_fx.UNFED) == ["waveform"] and ui_fx.UNREACHED not in groups
     n = graphview.VNode("render:waveform", "render", "waveform", faint=True, unfed=True)
-    assert graphview.summary(n)[0] == graphview.NEEDS_FIELD
-    # a generator is fed by nothing by design, and a picture effect needs a picture
+    assert graphview.summary(n)[0] == graphview.FED_BY_NOTHING == "fed by nothing — wire its input"
+    assert graphview.needs_input(n) == "a field"
+    from hyperspace import ui_graph
+    tip = ui_graph.thumb_tip({}, graphview.VNode("render:acid", "render", "acid", faint=True,
+                                                 unfed=True, thumb=graphview.PICTURE))
+    assert graphview.UNFED_WORDS in tip and graphview.UNWIRED_WORDS not in tip
+    # a generator is fed by nothing by design
     assert "rings" not in G.unfed(_spec(wired(("rings", "displace.field"))))
-    # a picture effect fed by nothing keeps its words (plan 80's generators run so)
-    pic = _spec(wired(("wave", "output.1.image"), nodes=("wave",)))
-    assert "wave" in G.unfed(pic) and not G.hungry_fields(pic)
+
+
+def _built(section):
+    from hyperspace.graphmigrate import wired_wiring
+    from hyperspace.outputs import Switches, View
+    from hyperspace.view import ViewState
+
+    st = FxState()
+    views = [View(i, ViewState(), Switches()) for i in (1, 2)]
+    return G.build_graph(views, wired_wiring(G.read_graph(section, effects=set(st.specs)).wiring()),
+                         effects=tuple(sorted(st.specs)),
+                         generators=tuple(sorted(G.generators_of(st))))
+
+
+def test_one_rule_for_running_with_no_input():
+    """`graph.runs_unfed` is the one rule: the field generators (no input
+    port) and plan 80's (the Mandelbrot's Python half says GENERATOR) run fed
+    by nothing; every other effect does not. The builder builds exactly what
+    it says (`_Build._effect`), `unfed` leaves exactly those out, so GRAPH and
+    the FX pane say "fed by nothing" of exactly what the builder leaves
+    dormant — a picture effect as a field op."""
+    from hyperspace import graphview, ui_fx
+
+    assert G.runs_unfed("rings") and G.runs_unfed("point.2") and G.runs_unfed("mandel")
+    assert G.runs_unfed("mandel.slot.2")             # (plan 89: a generator's slot)
+    assert not G.runs_unfed("wave") and not G.runs_unfed("waveform")
+    assert not G.runs_unfed("testcard")              # draws over its picture: needs one
+    assert G.generators_of(FxState()) >= {"mandel", "rings", "point"}
+    # each wired onward with nothing in: what the builder does, the views say
+    for name, runs in (("mandel", True), ("wave", False), ("acid", False),
+                       ("waveform", False), ("rings", True)):
+        port = "displace.field" if effect_field(name) else "output.1.image"
+        section = wired((name, port), ("scene", "displace.image"),
+                        ("displace", "output.2.image"), nodes=(name, "displace"))
+        g, spec = _built(section), _spec(section)
+        assert (name in g.dormant) is not runs, (name, g.dormant)
+        assert (name in G.unfed(spec)) is not runs and (name in G.hungry(spec)) is not runs
+        assert (name in graphview.unreached(spec)) is not runs
+        grouped = dict(ui_fx.groups(spec))
+        assert (name in grouped.get(ui_fx.UNFED, ())) is not runs, grouped
+        if not runs:
+            assert g.dormant[name] == f"{name} is fed by nothing here: wire its input"
+            assert not [t for t, ns in grouped.items() if name in ns and t != ui_fx.UNFED]
+    # wired to nothing at all, it reaches nothing, fed or not
+    alone = _spec(wired(nodes=("wave",)))
+    assert "wave" in G.unfed(alone) and not G.hungry(alone)
+    assert dict(ui_fx.groups(alone)) == {ui_fx.UNREACHED: ["wave"]}
+
+
+def test_a_field_makers_slot_is_never_built():
+    """Devin's review of #501: a slot is a picture effect's (plan 89) — a
+    field maker's slot has no field node — so with nothing in it is left
+    dormant, as before the one rule, never built as a picture `Slot`; it
+    has no input to wire, so it is not "fed by nothing — wire its input"
+    (`hungry`). A picture
+    generator's slot (the Mandelbrot's, Colour's) runs fed by nothing."""
+    from hyperspace import graphview
+
+    assert not G.runs_unfed("rings.slot.2") and not G.runs_unfed("point.slot.2")
+    assert G.runs_unfed("rings") and G.runs_unfed("mandel.slot.2") and G.runs_unfed("colour.slot.2")
+    def two(file):
+        return {"frame": "wired", "nodes": [{"kind": "effect", "file": file, "slots": 2}],
+                "wires": [{"from": "shape", "to": "scene.geometry"},
+                          {"from": file, "to": "output.1.image"},
+                          {"from": f"{file}.slot.2", "to": "output.2.image"}]}
+    g = _built(two("colour"))
+    assert "colour.slot.2" in g.nodes and "colour.slot.2" not in g.dormant
+    sec = two("rings")
+    g, spec = _built(sec), _spec(sec)
+    assert "rings.slot.2" not in g.nodes and "rings.slot.2" in g.dormant
+    assert "rings.slot.2" in G.unfed(spec) and "rings.slot.2" not in G.hungry(spec)
+    # (a slot is drawn on its effect's node, row 1086: Rings is lit by slot 1)
+    assert "rings" not in graphview.unreached(spec)
+
+
+def effect_field(name):
+    return G.effect_ports(name)[0] == G.FIELD
 
 
 def test_a_small_fields_thumbnail_fills_its_grey(ctx):

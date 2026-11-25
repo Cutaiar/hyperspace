@@ -734,7 +734,7 @@ and `tests/fixtures/field-examples/`, kept equal.
 
 ## 18. Any knob takes a field (2026-11-24)
 
-Built (P3, §3.9; rows 1114–1119, hand checks 893–895): a field wired into a knob makes it
+Built (P3, §3.9; rows 1116–1121, hand checks 895–897): a field wired into a knob makes it
 **value + depth × field** at every pixel, about its value — the panel, routes and LFOs still
 set the value, the field spreads it.
 
