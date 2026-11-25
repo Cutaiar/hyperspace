@@ -1974,6 +1974,24 @@ def _cost_style(st: dict, n: graphview.VNode):
         ed.pop_style_color(2)
 
 
+COST_BADGE_PAD = 6.0        # a badge's words from its ends (canvas units)
+
+
+def cost_badge_rect(node_pos: tuple[float, float], node_w: float,
+                    text: tuple[float, float]) -> tuple[tuple[float, float], tuple[float, float]]:
+    """A gpu cost badge's corners (top left, bottom right) for a node at
+    `node_pos` `node_w` wide, its words `text` (w, h) in size: right-aligned
+    8 units in from the node's right end, its bottom edge on the node's top
+    edge. The node editor draws its nodes over the canvas's draw list, so
+    any part of the pill below that edge is hidden behind the node (it sat
+    0.4 of its height down, and showed half its words)."""
+    h = max(COST_BADGE_H, text[1] + 4)
+    w = text[0] + 2 * COST_BADGE_PAD
+    x1 = node_pos[0] + max(node_w, NODE_W) - 8.0
+    y1 = node_pos[1]
+    return (x1 - w, y1 - h), (x1, y1)
+
+
 def _cost_badge(st: dict, n: graphview.VNode) -> None:
     """Node `n`'s gpu cost badge (plan 84), just drawn: its time ("#1 ·
     2.10 ms") or "made nothing" on a small pill sitting on its top edge,
@@ -1986,11 +2004,10 @@ def _cost_badge(st: dict, n: graphview.VNode) -> None:
     p, sz = ed.get_node_position(k), ed.get_node_size(k)
     words = c.words
     size = imgui.calc_text_size(words)
-    pad = 6.0
-    w, h = size.x + 2 * pad, max(COST_BADGE_H, size.y + 4)
-    x1 = p.x + max(float(sz.x), NODE_W) - 8.0
-    y0 = p.y - h * 0.6
-    a, b = imgui.ImVec2(x1 - w, y0), imgui.ImVec2(x1, y0 + h)
+    pad = COST_BADGE_PAD
+    (ax, ay), (bx, by) = cost_badge_rect((p.x, p.y), float(sz.x), (size.x, size.y))
+    a, b = imgui.ImVec2(ax, ay), imgui.ImVec2(bx, by)
+    h = by - ay
     if c.ms is None:
         ground, ink = imgui.ImVec4(0.12, 0.12, 0.13, 0.95), COST_FAINT
     else:

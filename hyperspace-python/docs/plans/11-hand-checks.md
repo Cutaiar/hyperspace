@@ -9082,6 +9082,11 @@ Setup for all: the sections menu → **fractal**, VIEW's shape a fractal.
 **700. The controls, by eye.** A few levels into the Menger sponge and the 5-cell: drag **Detail** up and down, then **Reach**, then **Near**. *Pass:* Detail makes the cells split finer or coarser; Reach draws further into the shape or less; Near lets cells come closer before they dissolve, or fade sooner; none jumps or flickers, and the frame rate holds at the top of Detail on the rig. Save the look, load another and back: the three are as you left them. Say what ranges you want. *Fail:* a slider that does nothing, a jump, or a value not saved.
 
 **701. To the top.** Deep in, turned: press **To the top**. *Pass:* the whole shape, centred, at zoom 1, still turned as it was; a grabbed fractal comes home. *Fail:* a dive left behind, or the turn lost.
+## FP. The snub icosidodecadodecahedron (row 1113, 2026-11-24)
+
+Headless: `tests/test_catalog.py` (the counts, six faces at every corner, every edge on two faces, the circumradius ½√(ρ⁴ + 2) edges against the plastic number found on its own, a pentagram filled once), `tests/test_render.py::test_only_a_shapes_corners_are_dotted`, `tests/test_shapes4d.py` (its recorded digest). A restart after pulling (a new shape).
+
+**892. The snub icosidodecadodecahedron.** (laptop, VIEW) Open the Shape menu's 3D part, **Star polyhedra**, and pick **Snub icosidodecadodecahedron** (last in the group). Turn Faces on, then XZ and YZ, and let it turn; then Points off and on. *Pass:* the header reads `3D · 60V 180E · | 5/3 3 5`; a ball of crossing faces with twelve five-pointed stars standing out, each filled right into its middle, among triangles and pentagons; red dots only where edges meet — none at the five points inside each star where its edges cross; it turns the same with the W planes on. Say whether it reads as the picture it was asked for (Wikipedia's, the stars red). *Fail:* a star filled only at its tips or brighter in its middle (filled twice), a red dot inside a star, or a header saying 120V.
 
 ## What no test covers
 

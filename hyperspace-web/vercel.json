@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "[ -n \"$VERCEL_GIT_PREVIOUS_SHA\" ] && git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" HEAD -- .",
+  "ignoreCommand": "if [ -n \"$VERCEL_GIT_PREVIOUS_SHA\" ] && git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" HEAD -- . 2>/dev/null; then exit 0; else exit 1; fi",
   "git": {
     "deploymentEnabled": { "**": false, "main": true }
   },
