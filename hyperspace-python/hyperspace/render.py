@@ -162,6 +162,7 @@ from .graph import (
     mask_made,
     param_prefix,
     picture,
+    wire_depths,
 )
 from .lookback import Dreamer, DreamState, Lookback
 from .masks import MaskPasses
@@ -1227,10 +1228,16 @@ def _thumb_gain(frame: Frame, name: str, made: moderngl.Texture) -> float:
     """A field thumbnail's gain: 1 over the field's largest magnitude
     (`FxChain.field_range`), so its shape fills the grey whatever its scale
     — measured every `FIELD_RANGE_EVERY` frames, a read back being a stall
-    (between, the last measure). 1 for an empty field; within 1/64 … 4096."""
+    (between, the last measure). 1 for an empty field; within 1/64 … 4096.
+
+    The count is of frames (`Renderer._thumbnails` adds one a frame), not of
+    thumbnails: counted per thumbnail, seven field nodes measured each other
+    every four frames between them — a read back, and so a whole-frame stall,
+    nearly every frame (~10–17 ms of field-wave-slow's). Counted per frame,
+    the fields first seen together are measured together: one stall per
+    `FIELD_RANGE_EVERY` frames."""
     keep = frame.r.__dict__.setdefault("_field_gains", {})
     n = frame.r.__dict__.get("_thumb_frames", 0)
-    frame.r._thumb_frames = n + 1
     got = keep.get(name)
     if got is None or n - got[0] >= FIELD_RANGE_EVERY:
         m = frame.r.fx.field_range(made)
@@ -2099,14 +2106,19 @@ class Renderer:
         effects = frozenset(st.specs) if st is not None else frozenset()
         # plan 80: the effects that draw with nothing wired in (`Effect.generates`)
         gens = generators_of(st)
+        # plan 67 P3: a wire's depth is not part of what the wire is, so a
+        # depth changed alone is no other wiring: the depths are keyed too
+        depths = wire_depths(wiring)
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
+                or getattr(graph, "depths", ()) != depths
                 or getattr(graph, "clouds", ()) != clouds
                 or getattr(graph, "bus_cuts", None) != bus_cuts
                 or frozenset(getattr(graph, "effects", ())) != effects
                 or frozenset(getattr(graph, "generators", ())) != gens):
             graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
                                               bus_cuts, tuple(sorted(gens)))
+            graph.depths = depths
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
@@ -2248,6 +2260,8 @@ class Renderer:
             th = self._thumbs()
         wanted = th.take()
         th.begin_frame()
+        # the frames `_thumb_gain` counts between its measures: one a frame
+        self._thumb_frames = self.__dict__.get("_thumb_frames", 0) + 1
         if wanted and frame is not None:
             timer = getattr(self, "timer", None)
             was = getattr(timer, "_active", False) if timer is not None else False
