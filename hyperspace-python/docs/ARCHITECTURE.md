@@ -1640,12 +1640,19 @@ a picture is drawn as that picture, collapsed or expanded: a thumbnail in a
   `outputs.PreviewTextures`, a texture keeper beside `Preview` that knows
   nothing of the graph: one 16-tap downsample pass to `THUMB_PX` = 192
   on the long side.
+  - At `THUMB_HZ` = 25 a second each, on the keeper's own clock: `take`
+    gives only the names `due`, each on a beat of its own (`phase`), so the
+    copies are spread over the frames. A name never copied, found another
+    way or that made nothing the last time is due at once; a wish not yet
+    due waits. Output 1's `Preview` and the backdrop are no thumbnails:
+    every frame.
   - While it asks, the GPU timer is muted and the frame's `stats` are
     restored, so the outputs and SYSTEM's per-node lines are the frame's
     own.
   - It flushes the context when it copied anything.
 - **Lifetime.** A name unwanted for a second is dropped. A node that made
-  nothing is dimmed, then black a second later. SYSTEM reports
+  nothing when last tried is dimmed (`THUMB_LATE_S` after its last copy),
+  then black a second after it; a frame between two beats dims nothing. SYSTEM reports
   `thumbnails · N copied · K repainted · M kept`. A node that painted
   straight into its consumer is repainted at full size for its thumbnail,
   which costs more.
