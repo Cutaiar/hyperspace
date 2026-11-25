@@ -959,6 +959,12 @@ here; overturn → the change, then the same.
 | 1110 | Plan 67: Trip warp as a patch — `noise (flow) × rings → scale`, `point → scale.2`, `combine.2 (add) → displace` — **near, not equal**: warp.glsl counts in fractions of the frame's width and height, the field nodes in frame heights, so the patch's calm middle is round (the file's an oval fitted to the frame) and its swim as long across as up; equal on the frame's axes, up to about a quarter more up and down toward the corners; the zoom is the file's; Amount 0 the picture byte for byte. warp.glsl stays and draws every saved look as before | 891 | owner (2026-11-24): "near patch, keep file" |
 | 1111 | Plan 67: Noise gains Out flow (warp.glsl's two drifting octaves as a vector) and Drift (a `@clock`, drift × scale, as Trip warp's); Drift 0 leaves Out value as it was | 891 | (rec) |
 | 1112 | Plan 67 §3.2: Scale, the lane modifier `scale` as a field op — × then + (−4 … 4, −1 … 1), on a scalar's value or a vector's x and y, what rides along untouched; no clamp (a field is signed) | 891 | (rec) |
+| 1116 | Plan 67 P3: any knob takes a field — `value + depth × field(uv)` at every pixel, through an accessor `fx.py` generates from the `@param` lines: with a knob wired the pass runs a program of its own, the file's `uniform float u_<key>;` renamed to its value and `u_<key>` a `#define` reading the field (`knob_at`), so no file changes; with none wired, the program is the file's string for string and no byte moves (2886 renders of every file, before and after, equal). The result is clamped to the knob's range, or wrapped for a `wrap` knob. The field's x is read (a vector's x) | 895, 897 | owner (2026-11-23, Q3: "yes") |
+| 1117 | Plan 67 P3: a knob's field port is named by its key (`wave.amount`), typed a field by `fx.ports`, so `graph.takes_of` and `patches.wire_type` (the one lookup) know it; no key may be `image`, `aux` or `field`. On GRAPH the port is drawn only once a wire goes in (else every node would grow a port per knob), and a field cable dropped on the knob's own row (its `param:` / `base:` / `mod:` / `depth:` pin) wires that port. A node gains the input only when wired, so an unwired effect node is as it was | 895, 896 | (rec) |
+| 1118 | Plan 67 P3: a choice, a whole number (a count), a knob in a `@clock`'s rate and every knob of a file with a Python half (Mandelbrot) refuse a field, in words ("Wave's Along is a choice: a choice takes no field"); one effect takes a field on at most 12 knobs at once (GL 3.3 promises 16 texture units; 0–3 are taken), the 13th refused in words | 896 | owner (2026-11-23: "choices, loop counts and `@clock` rates refuse one in words"); (rec) for counts as every int and the 12 |
+| 1119 | Plan 67 P3: the depth is a key on the wire, `{"from", "to", "depth"}`, written only when not 1, so every other wire saves as it did; any finite number, signed; a depth on a wire into anything but a knob is refused in words. Not part of what the wire is (two wires between the same ports are one). A patch's own wire and an inlet across its edge keep it through a lift and a spawn. No schema bump (DECISIONS) | 895, 897 | owner (2026-11-24: "a depth key on the wire", over a Scale node in front and a depth param per knob) |
+| 1120 | Plan 67 P3: GRAPH sets the depth from the field cable's menu, **depth ▸**: 1 (the field as it is, in the knob's units) and ±⅛, ¼, ½ and the whole of the knob's range, one undo step each; the cable's hover says the depth, as a route's does. No free number entry yet (the menu holds items only) | 895 | (rec) |
+| 1121 | Plan 67 P3: a field wired only into a knob reaches what that effect reaches — on GRAPH and on the FX pane (`ui_fx.groups` follows a knob's field port as it follows `field`) | 896 | (rec) |
 | 1114 | R15 has one rule for running with no input, `graph.runs_unfed`: the field generators (`@takes image none`) and plan 80's (`GENERATOR`, the Mandelbrot) run fed by nothing, every other effect is never built. The builder, `Effect.generates`, `graph.unfed`, GRAPH and the FX pane read it; an unfed effect wired onward (`graph.hungry`, which replaces `hungry_fields`) is "fed by nothing — wire its input" on GRAPH (its hover says a picture or a field) and grouped "fed by nothing" on the FX pane, a picture effect as a field op — not under its path's end as if it ran. The test card stays a filter here: it draws over its picture, so with none it is fed by nothing | 893 | (rec) |
 | 1115 | A generator of one flat colour, **Colour** (`shaders/fx/colour.glsl`), its own file rather than a mode of Palette (Palette maps its input's luma through a gradient; a colour reads nothing): Hue (turns, wraps), Saturation, Value — a place on the HSV cylinder — on one XYZ volume, plus Spin, a clock (turns a second) so a step never jumps the hue. `@takes image none`, so the one rule (row 1114) runs it fed by nothing, wired straight into an output | 894 | owner asked for it (2026-11-25); the shape (rec) |
 | 1081 | Plan 89: an effect node has discrete slots — several pictures wired into one effect node, each slot its own `image` / `aux` in and its own picture out, each processed separately with the one shared set of knobs; the separate `copy` node is gone, and clicking the effect shows its one set of controls | 873 | owner (2026-11-23) |
@@ -15457,6 +15463,46 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Built.** `shaders/fx/scale.glsl`.
 - **Judge it.** 891.
 
+### 1116. Any knob takes a field: the accessor
+
+- **What.** `value + depth × field(uv)` at every pixel, plan 67 §3.9. The file is not edited: with knobs wired, `fx.py` builds a program of its own whose `u_<key>` is a `#define` reading the field (`fx.knob_declarations`, `with_knob_fields`), clamped to the knob's range or wrapped; with none, the program is the file's, string for string, so no byte moves (`tools/fx_sweep.py`: 2886 renders of every file, equal).
+- **Answer.** Owner, 2026-11-23 (Q3): yes.
+- **Built.** `fx.field_knobs`, `fx.knob_declarations`, `fx.with_knob_fields`, `FxChain._program`, `FxChain.run_one(knobs=)`, `graph.Effect._knobs`; `tests/test_knob_fields.py`.
+- **Judge it.** 895, 897.
+
+### 1117. A knob's field port
+
+- **What.** The port is the knob's key (`wave.amount`), typed a field in `fx.ports`, so `graph.takes_of` and `patches.wire_type` read it from the one lookup. GRAPH draws it only once wired; a field cable dropped on the knob's row wires it. A node gains the input only when a wire lands.
+- **Answer.** (rec).
+- **Built.** `fx.ports`, `fx.PORT_NAMES`, `graph.is_knob_port`, `graph._Build._fields`, `graphview.knob_pin`.
+- **Judge it.** 895, 896.
+
+### 1118. What refuses a field
+
+- **What.** A choice, a count (every `int` knob), a `@clock`'s rate and every knob of a hooked file (Mandelbrot), each in words; at most 12 knobs of one effect at once (GL 3.3's 16 texture units, less the four taken).
+- **Answer.** Owner, 2026-11-23, for choices, counts and rates; (rec) for every `int` as a count and the 12.
+- **Built.** `fx.knob_refusal`, `graph.knob_refusal`, `graph.KNOB_FIELDS_MOST`.
+- **Judge it.** 896.
+
+### 1119. The depth, a key on the wire
+
+- **What.** `{"from", "to", "depth"}`, written only when not 1; any finite number; refused on a wire into anything but a knob; kept through a patch's lift (its own wire, or an inlet across its edge) and spawn. No schema bump: both Macs run one build.
+- **Answer.** Owner, 2026-11-24: "a depth key on the wire" (over a Scale node in front, or a depth param per knob).
+- **Built.** `graph.WIRE_DEPTH`, `graph.Wire.depth`, `graph.Wire.of`, `patches._Renamer.wire`, `patches.lift`'s inlets, `graphview` spawn.
+- **Judge it.** 895, 897.
+
+### 1120. Setting the depth on GRAPH
+
+- **What.** The field cable's menu, **depth ▸**: 1, then ±⅛, ¼, ½ and the whole of the knob's range; one undo step; the hover says the depth.
+- **Answer.** (rec).
+- **Built.** `graphview.depth_choices`, `graphview.set_wire_depth`, `Edit.set_depth`, `ui_graph._cable_menu`.
+- **Judge it.** 895.
+
+### 1121. A field into a knob reaches
+
+- **What.** A field node wired only into a knob reaches what the knob's effect reaches, on GRAPH and on the FX pane.
+- **Answer.** (rec).
+- **Built.** `ui_fx.groups`.
 ### 1114. One rule for running with no input
 
 - **What.** Two rules said what happens to an effect with nothing wired into its `image`. R15 (`graph.unfed`) knew the field generators only, so a Mandelbrot wired onward with nothing in was drawn faint on GRAPH though the builder ran it; and the FX pane listed a picture effect fed by nothing under where its path leads ("→ output 2") as if it ran, though the builder left it dormant. Now `graph.runs_unfed(name)` is the one rule, read off the shipped file (`fx.ports_of`, and `fx.hook_of` beside it) so every asker gets the same answer: no input port, or a Python half that says `GENERATOR`. `_Build._effect` builds by it, `Effect.generates` draws by it, `generators_of` (the built graph's key) lists by it and `unfed` leaves its generators out. `graph.hungry` — the unfed wired onward, picture or field — is what GRAPH says "fed by nothing — wire its input" of (the hover: "wire a picture/field into it on the canvas"; the thumbnail: "fed by nothing: the test card through it here") and what the FX pane groups "fed by nothing", its first reason, before "reaches nothing" (one wired to nothing at all still reaches nothing). The words are one phrase, `graph.FED_BY_NOTHING` and `WIRE_ITS_INPUT`, the builder's dormant line's.

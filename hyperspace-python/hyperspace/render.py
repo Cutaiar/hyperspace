@@ -162,6 +162,7 @@ from .graph import (
     mask_made,
     param_prefix,
     picture,
+    wire_depths,
 )
 from .lookback import Dreamer, DreamState, Lookback
 from .masks import MaskPasses
@@ -2099,14 +2100,19 @@ class Renderer:
         effects = frozenset(st.specs) if st is not None else frozenset()
         # plan 80: the effects that draw with nothing wired in (`Effect.generates`)
         gens = generators_of(st)
+        # plan 67 P3: a wire's depth is not part of what the wire is, so a
+        # depth changed alone is no other wiring: the depths are keyed too
+        depths = wire_depths(wiring)
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
+                or getattr(graph, "depths", ()) != depths
                 or getattr(graph, "clouds", ()) != clouds
                 or getattr(graph, "bus_cuts", None) != bus_cuts
                 or frozenset(getattr(graph, "effects", ())) != effects
                 or frozenset(getattr(graph, "generators", ())) != gens):
             graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
                                               bus_cuts, tuple(sorted(gens)))
+            graph.depths = depths
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does

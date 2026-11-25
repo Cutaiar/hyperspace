@@ -196,6 +196,7 @@ any other."""
 # into a field port is refused, the converter is a To field (`tofield`)
 FIELD = "field"
 FIELD_PORT = "field"     # an effect's third port, the field it reads (`fx.FIELD_PORT`)
+PORT_NAMES = ("image", "aux", FIELD_PORT)   # plan 67 P3: an effect's own; a knob's is its key
 PORT_TYPES = (IMAGE, MASK, GEOMETRY, VALUE, FIELD)
 
 # ---------------------------------------------------------------- the wiring
@@ -697,6 +698,10 @@ NODE_KINDS: dict[str, Any] = {
 # wire `palette → output.2.image`.
 
 WIRE_KEYS = ("from", "to")
+# plan 67 P3: a wire into a knob's field port may say how deep the field goes,
+# `value + depth × field` (the owner, 2026-11-24: "a depth key on the wire");
+# written only when it is not 1, so every other wire is saved as it was
+WIRE_DEPTH = "depth"
 _LAYER = re.compile(rf"hands(?:\.{_INSTANCE})?")
 _GHOST = re.compile(rf"ghost(?:\.{_INSTANCE})?")
 # plan 35 F: and All outputs, `output.all` (a wired frame's: outside one
@@ -791,6 +796,39 @@ def takes_of(node: str, kind: str | None) -> dict[str, str]:
     return takes
 
 
+def wire_depths(wiring: Any) -> tuple[tuple[str, str, float], ...]:
+    """Plan 67 P3: (from, to, depth) of each wire of `wiring` whose depth is not
+    1, sorted — what a wiring holds beyond its wires' identity (`Wire.depth`
+    compares equal), so a cache keyed by the wiring keys these too."""
+    wires = getattr(wiring, "wires", None) or ()
+    return tuple(sorted((w.src, w.dst, w.depth) for w in wires if w.depth != 1.0))
+
+
+def knob_spec(effect: str):
+    """Plan 67 P3: effect (or slot) `effect`'s file's spec (`fx.spec_of`), or None."""
+    return _fx.spec_of(split_instance(effect_of(effect) or effect)[0])
+
+
+def knob_refusal(effect: str, port: str) -> str | None:
+    """Plan 67 P3: why knob `port` of effect instance `effect` takes no field,
+    in words (`fx.knob_refusal`), or None (a knob that takes one, or no knob)."""
+    spec = _fx.spec_of(split_instance(effect)[0])
+    return _fx.knob_refusal(spec, port) if spec is not None else None
+
+
+def is_knob_port(node: str, kind: str | None, port: str) -> bool:
+    """Plan 67 P3: whether `port` of wired-frame node `node` is a knob's field
+    port — an effect's (or its slot's) knob that takes a field."""
+    if kind not in ("effect", "slot"):
+        return False
+    return port not in PORT_NAMES and takes_of(node, kind).get(port) == FIELD
+
+
+WIRE_DEPTH_IS_A_KNOBS = ("wire {wire} has a depth, and only a field into a knob takes one "
+                         "(value + depth × field)")
+KNOB_FIELDS_MOST = "{node} takes a field on {most} of its knobs at most"
+
+
 def makes_of(node: str, kind: str | None) -> str | None:
     """What wired-frame node `node` of `kind` puts out: the kind's
     (`WIRED_MAKES`), a field maker's a field (plan 67 F1)."""
@@ -850,12 +888,25 @@ class Wire:
 
     src: str
     dst: str
+    # plan 67 P3: how deep a field into a knob goes (`WIRE_DEPTH`). Not part
+    # of what the wire is: two wires between the same ports are one wire
+    depth: float = field(default=1.0, compare=False)
 
     def __post_init__(self) -> None:
         if (not isinstance(self.src, str) or not isinstance(self.dst, str) or not self.src
                 or "." not in self.dst):
             raise ValueError(f"wire {self.src!r} → {self.dst!r}: from a node's name into "
                              "'<node>.<port>'")
+        if (isinstance(self.depth, bool) or not isinstance(self.depth, (int, float))
+                or not math.isfinite(self.depth)):
+            raise ValueError(f"wire {self.src!r} → {self.dst!r}: its depth is a number, "
+                             f"not {self.depth!r}")
+
+    @classmethod
+    def of(cls, e: Any) -> Wire:
+        """A saved wire entry (`{"from", "to"}`, and `"depth"` when it has one)
+        → its Wire. ValueError, TypeError or KeyError for one that is not."""
+        return cls(e["from"], e["to"], e.get(WIRE_DEPTH, 1.0))
 
     @property
     def node(self) -> str:
@@ -867,6 +918,8 @@ class Wire:
         return self.dst.rpartition(".")[2]
 
     def to_json(self) -> dict:
+        if self.depth != 1.0:
+            return {"from": self.src, "to": self.dst, WIRE_DEPTH: self.depth}
         return {"from": self.src, "to": self.dst}
 
     def __str__(self) -> str:
@@ -2024,6 +2077,10 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
             return ECHO_RANGE.format(name=name, most=MAX_ECHOES)
         if k == "dream" and name != "dream":
             return ONE_DREAM.format(name=name)
+    if kind in ("effect", "slot") and port not in takes:
+        why = knob_refusal(effect_of(node) or node, port)   # plan 67 P3: a knob, in words
+        if why is not None:
+            return why
     if port not in takes:
         names = list(takes) if len(takes) < 4 else [next(iter(takes)), "…", [*takes][-1]]
         said = f"it takes {', '.join(names)}" if takes else "nothing is wired into it"
@@ -2031,6 +2088,13 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
     if src_kind == GROUND and kind != "output":
         return GROUND_ONLY_INTO_OUTPUTS
     makes, want = makes_of(w.src, src_kind), takes[port]
+    if w.depth != 1.0 and not is_knob_port(node, kind, port):
+        return WIRE_DEPTH_IS_A_KNOBS.format(wire=w)
+    if is_knob_port(node, kind, port) and ctx.wires is not None:
+        knobs = sorted({x.port for x in ctx.wires
+                        if x.node == node and is_knob_port(node, kind, x.port)})
+        if port in knobs and knobs.index(port) >= _fx.KNOB_UNITS:
+            return KNOB_FIELDS_MOST.format(node=node, most=_fx.KNOB_UNITS)
     # plan 36 T2: a pin goes where its kind is taken, a depth port takes the
     # scene's depth alone, a layer's or a guide's hands a hands node
     if PINS.get(w.src) == "scene" and not (src_kind == "cover" and port == "cover") and not (
@@ -2220,11 +2284,12 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
         raise GraphError("wires is not a list")
     wires: list[Wire] = []
     for e in raw:
-        if (not isinstance(e, dict) or set(e) != set(WIRE_KEYS)
+        if (not isinstance(e, dict) or not set(WIRE_KEYS) <= set(e)
+                or not set(e) <= {*WIRE_KEYS, WIRE_DEPTH}
                 or not all(isinstance(e[k], str) for k in WIRE_KEYS)):
             raise GraphError(f'a wire is {{"from": a node, "to": "node.port"}}, not {e!r}'[:140])
         try:
-            w = Wire(e["from"], e["to"])
+            w = Wire.of(e)
         except ValueError as err:
             raise GraphError(str(err)) from err
         if w in wires:
@@ -2794,7 +2859,7 @@ def _through_missing(raw: Any, ctx: _WireCtx, d1: list[Wire], wires: tuple[Wire,
     if not back:
         return wires, notes
     stood = set(wires)
-    keep = tuple(w for w in (Wire(e["from"], e["to"]) for e in raw) if w in stood or w in back)
+    keep = tuple(w for w in (Wire.of(e) for e in raw) if w in stood or w in back)
     return keep, [n for n in notes if not any(n.startswith(f"wire {w} — ") for w in back)]
 
 
@@ -6218,9 +6283,12 @@ class Effect(Node):
     def __init__(self, name: str, *, image: Node | None = None, node: str | None = None,
                  after: tuple[Node, ...] = (), placed: str | None = None):
         # plan 67 F1: a file that reads a field has a third port, `field`
-        # (an instance's own ports, shadowing the class's: set, not declared)
+        # (an instance's own ports, shadowing the class's: set, not declared);
         if FIELD_PORT in effect_ports(name)[1]:
             self.__dict__["INPUTS"] = {**Effect.INPUTS, FIELD_PORT: FIELD}
+        # plan 67 P3: a knob wired to a field — its port gains an input when a
+        # wire lands (`_Build._fields`), so an unwired node is as it was
+        self.depths: dict[str, float] = {}      # knob → its wire's depth
         super().__init__(node if node is not None else name, after, image=image)
         self.effect = name
         self.placed = placed          # D1: "after" / "into" when the loadable patch places it
@@ -6362,7 +6430,20 @@ class Effect(Node):
         field = _field_of(self.inputs.get(FIELD_PORT), frame)
         if field is not None:
             kw["field"] = field
+        knobs = self._knobs(frame)
+        if knobs:
+            kw["knobs"] = knobs
         return kw
+
+    def _knobs(self, frame: Frame) -> dict[str, tuple[moderngl.Texture, float]]:
+        """Plan 67 P3: knob → (the field wired into it this frame, its wire's
+        depth), for `run_one` — each knob port with a field made."""
+        out = {}
+        for port, depth in getattr(self, "depths", {}).items():
+            tex = _field_of(self.inputs.get(port), frame)
+            if tex is not None:
+                out[port] = (tex, depth)
+        return out
 
     @staticmethod
     def _opaque(frame: Frame) -> dict:
@@ -6534,6 +6615,7 @@ class FieldEffect(Effect):
         if FIELD_PORT in takes:
             ports[FIELD_PORT] = FIELD
         self.__dict__["INPUTS"] = ports        # (its own, shadowing the class's)
+        self.depths: dict[str, float] = {}     # plan 67 P3: as an `Effect`'s
         Node.__init__(self, node if node is not None else name, after, image=image)
         self.effect = name
         self.placed = "wire"
@@ -6594,6 +6676,9 @@ class FieldEffect(Effect):
         field = _field_of(self.inputs.get(FIELD_PORT), frame)
         if field is not None:
             kw["field"] = field
+        knobs = self._knobs(frame)
+        if knobs:
+            kw["knobs"] = knobs
         with frame.timed(self.name):
             frame.r.fx.run_one(self.effect, pic if pic is not None else frame.r._blank, fbo,
                                frame.t, **kw)
@@ -7772,20 +7857,24 @@ class _Build:
 
     def _fields(self) -> None:
         """Plan 67 F1: each wire into an effect's `field` port on that port — a
-        source the effect feeds (a loop) is dormant, in words, as an aux's."""
+        source the effect feeds (a loop) is dormant, in words, as an aux's.
+        Plan 67 P3: and each into a knob's field port, with its depth."""
         for w in self.wires:
-            if w.port != FIELD_PORT or _kind(w.node) not in ("effect", "slot"):
+            if _kind(w.node) not in ("effect", "slot") or (
+                    w.port != FIELD_PORT and not is_knob_port(w.node, _kind(w.node), w.port)):
                 continue
             target, src = self.made.get(w.node), self._taken(self.node(w.src), w)
             if isinstance(target, KeyNode):          # plan 87: keyed, its field is the effect's
                 target = target.inputs["image"]
             if (not isinstance(target, Effect) or target not in self.built or src is None
-                    or FIELD_PORT not in target.INPUTS):
+                    or (w.port == FIELD_PORT and FIELD_PORT not in target.INPUTS)):
                 continue
             if src is target or id(target) in _upstream(src):
                 self.g.dormant[str(w)] = f"wire {w} — {w.node} feeds {w.src}: that makes a loop"
                 continue
-            target.inputs[FIELD_PORT] = src
+            target.inputs[w.port] = src
+            if w.port != FIELD_PORT:
+                target.depths[w.port] = w.depth
 
     def _split(self, layers: tuple[HandsLayer, ...]) -> None:
         """How each layer splits its guide out (`HandsLayer.split`): always

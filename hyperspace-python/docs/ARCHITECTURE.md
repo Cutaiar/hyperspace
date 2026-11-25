@@ -323,6 +323,21 @@ effect that reads one has a third port, `field` (unit 3, `field_port(uv)`). Like
 a mask, a field wired into a picture port is promoted — grey about the middle,
 `graph.FieldPicture`, `FxChain.show_field` — and a picture into a field port is
 refused in words naming the converter, To field (`PICTURE_INTO_FIELD`).
+**Any knob takes a field** (plan 67 P3, §3.9): a field wired into a knob's port —
+named by its key, `wave.amount`; `fx.field_knobs`, so `graph.takes_of` and
+`patches.wire_type` type it as every other port — makes that knob `value + depth ×
+field` at every pixel, about its value (routes and the panel still set the value).
+The accessor is generated: with knobs wired the pass runs a program of its own
+(`FxChain._program` keyed by the wired set), whose `fx.knob_declarations` turn each
+`u_<key>` into `knob_at(…)` (clamped to the knob's range, wrapped for `wrap`); with
+none, the program is the file's string for string. The field arrives in
+`run_one(…, knobs=)` from `Effect._knobs` (the builder's `_fields` puts it on the
+node, with the wire's `depth`, `graph.WIRE_DEPTH`). A choice, a count, a `@clock`'s
+rate and a hooked file's knobs refuse one in words (`fx.knob_refusal`,
+`graph.knob_refusal`); up to `fx.KNOB_UNITS` (12) knobs of one effect at once. On
+GRAPH the port is drawn once wired, a field cable dropped on the knob's own row
+wires it (`graphview.knob_pin`), and its menu's **depth ▸** sets the depth
+(`graphview.depth_choices`, `set_wire_depth`).
 
 **Running with no input** (R15, row 1114). An effect or slot nothing is wired
 into is never built — unless it is a generator, which `graph.runs_unfed` alone

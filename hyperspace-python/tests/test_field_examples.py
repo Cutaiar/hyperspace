@@ -123,3 +123,36 @@ def test_no_node_of_an_example_reaches_nothing(path):
     groups = dict(ui_fx.groups(spec))
     assert ui_fx.UNREACHED not in groups, groups
     assert effects <= set(groups.get(ui_fx.RUN, ())), groups
+
+
+def test_the_knob_example_draws_the_field_on_the_knob(ctx):
+    """`field-knob` (plan 67 P3): Rings into Wave's Amount at its depth moves
+    the picture; with that wire gone (Amount 0, no field) Wave moves nothing."""
+    from test_field_wire import _views
+    from test_graph_faces import _faces, _px
+
+    from hyperspace import graph as G
+    from hyperspace.render import Renderer
+
+    doc = json.loads((HERE / "field-knob.json").read_text())
+
+    def draw(knob: bool):
+        r = Renderer(ctx)
+        r.ghost.state.on = False
+        graph = {**doc["graph"], "wires": [
+            {**w, "to": w["to"].replace("output.all.image", "output.1.image")}
+            for w in doc["graph"]["wires"]
+            if (not w["to"].startswith("output.all.") or w["to"] == "output.all.image")
+            and (knob or w["to"] != "wave.amount")]}
+        spec = G.read_graph(graph, effects=set(r.fx.state.specs))
+        assert not spec.notes, spec.notes
+        r.wiring = spec.wiring()
+        for pid, v in doc["values"].items():
+            if pid.startswith("fx."):
+                _, file, key = pid.split(".")
+                r.fx.state.values[file][key] = v
+        vs = _views(ctx, 1)
+        r.draw_outputs(_faces(), 160, 120, 1.0, vs, t_now=2.0)
+        return _px(vs[0].target).astype(int)
+
+    assert np.abs(draw(True) - draw(False)).max() > 30
