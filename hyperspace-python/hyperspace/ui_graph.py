@@ -1598,8 +1598,11 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
             ui.tooltip(BESIDE_TIP)
     # last of the chips that are always there: its words change with its
     # toggles, and nothing beside it moves under the hand
-    ui.beside(ui.chip_w(canvas_words(st)))
-    _canvas_menu(panel, st, view)
+    words = canvas_words(st)
+    if ui.chip_w(words) > width:            # not even on a row of its own: how many, its hover says which
+        words = f"canvas: {len(canvas_on(st))} on"
+    ui.beside(ui.chip_w(words))
+    _canvas_menu(panel, st, view, words)
     if (w := wants_chip_w(panel)) > 0:      # plan 40 T4: N devices missing
         _wants_chip(panel, ui.fits_beside(w - imgui.get_style().item_spacing.x))
     _head_words(st, view)
@@ -1674,14 +1677,15 @@ def canvas_words(st: dict) -> str:
     return "canvas" + (": " + " · ".join(on) if on else "")
 
 
-def _canvas_menu(panel, st: dict, view: graphview.View) -> None:
+def _canvas_menu(panel, st: dict, view: graphview.View, words: str) -> None:
     """The **canvas** chip and its menu: what the canvas draws (expand all,
     the two filters, output behind and its slider, tint cables, gpu cost) and
     the counts. Lit while a mark is on it (tint, gpu cost): those two are off
     by default and change every cable or node. The menu stays open through
     its clicks."""
-    hit = ui.lit_chip(f"{canvas_words(st)}##graph.canvas", st["tint"] or st["cost"])
-    if not _drop_menu(CANVAS_POPUP, hit, CANVAS_TIP):
+    hit = ui.lit_chip(f"{words}##graph.canvas", st["tint"] or st["cost"])
+    full = canvas_words(st)
+    if not _drop_menu(CANVAS_POPUP, hit, CANVAS_TIP if words == full else f"{full}\n{CANVAS_TIP}"):
         return
     any_open = bool(st["open"])
     if ui.chip("collapse all##graph" if any_open else "expand all##graph"):

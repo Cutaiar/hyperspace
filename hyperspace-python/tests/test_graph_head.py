@@ -93,7 +93,7 @@ def test_the_mouse_toggles_and_jumps_in_two_clicks(tmp_path, monkeypatch):
         assert label not in d.rects                              # and it shut
 
 
-@pytest.mark.parametrize("width", [1600, 820, 540])
+@pytest.mark.parametrize("width", [1600, 820, 540, 480])
 def test_every_head_chip_is_inside_the_page(tmp_path, monkeypatch, width):
     """With every mark lit and a device missing, whatever the width: the row
     this replaced ran its last chips past a narrow page's edge."""
@@ -107,18 +107,24 @@ def test_every_head_chip_is_inside_the_page(tmp_path, monkeypatch, width):
             def spy(label, *a, _r=real, **k):
                 hit = _r(label, *a, **k)
                 rects[label] = (imgui.get_item_rect_min().x, imgui.get_item_rect_max().x,
-                                imgui.get_window_pos().x + imgui.get_window_size().x)
+                                imgui.internal.get_current_window().clip_rect.max.x)
                 return hit
             monkeypatch.setattr(ui, name, spy)
         frame(r.panel, "graph")
         st = ui_graph._state(r.panel)
-        st["tint"] = st["cost"] = True
+        for key, _ in ui_graph.CANVAS_TOGGLES:          # every word the chip can say
+            st[key] = True
         frame(r.panel, "graph")
+        rects.clear()
         frame(r.panel, "graph")
         head = {k: v for k, v in rects.items()
                 if k.endswith(("##graph", "##graph.areas", "##graph.canvas", "##wants"))}
         assert {"2 devices missing##wants", ui_graph.AREAS_LABEL, ui_graph.TIDY_CHIP,
-                f"{ui_graph.canvas_words(st)}##graph.canvas"} <= set(head)
+                } <= set(head)
+        said = [k.split("##")[0] for k in head if k.endswith("##graph.canvas")]
+        full = ui_graph.canvas_words(st)
+        assert said in ([full], [f"canvas: {len(ui_graph.CANVAS_TOGGLES)} on"])
+        assert said == [full] or width < 820          # shortened only where it must be
         for k, (x0, x1, right) in head.items():
             assert 0 <= x0 and x1 <= right, (k, x0, x1, right)
 
