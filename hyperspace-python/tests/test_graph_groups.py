@@ -140,7 +140,7 @@ def test_a_loadable_with_groups_round_trips_through_document_and_load_doc(tmp_pa
     app.lib.load("loadable", "party-noita")
     app.loaded_patch.groups = [dict(ENTRY, patch="noita-core")]
     doc = app.loaded_patch.document("noita grouped")
-    assert doc["schema"] == "hyperspace.loadable/11"          # (plan 43 C2: every save)
+    assert doc["schema"] == "hyperspace.loadable/12"          # (plan 43 C2: every save)
     assert doc["groups"] == [{"id": "group.1", "name": "noita core", "patch": "noita-core",
                               "nodes": NOITA_CORE, "open": False}]
     keys = list(doc)
@@ -159,7 +159,7 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     C2) loaded and saved untouched is the same bytes — and so is every
     corpus loadable patch, with no groups (a `/9` without the key)."""
     raw = FIXTURE.read_bytes()
-    assert json.loads(raw)["schema"] == "hyperspace.loadable/11"
+    assert json.loads(raw)["schema"] == "hyperspace.loadable/12"
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
     assert notes == [] and again == raw
     for k, path in enumerate(CORPUS_LOADABLES):
@@ -227,7 +227,7 @@ def test_signature_changes_when_a_group_is_made_and_a_save_drops_a_deleted_membe
     assert app.loaded_patch.document("x")["groups"] == [dict(ENTRY, nodes=["render:warp"])]
     app.loaded_patch.groups = [dict(ENTRY, nodes=["render:acid.4"])]
     doc = app.loaded_patch.document("x")
-    assert "groups" not in doc and doc["schema"] == "hyperspace.loadable/11"   # (C2: /9 either way)
+    assert "groups" not in doc and doc["schema"] == "hyperspace.loadable/12"   # (C2: /9 either way)
 
 
 # ---------------------------------------------------------------- the proof: the renderer learns nothing
@@ -343,19 +343,25 @@ def test_a_meta_node_is_never_a_member_and_loadable_only_keeps_the_group(rig):
 
 # ---------------------------------------------------------------- the verbs
 
-def test_a_group_holds_a_copy_alone_and_the_save_refuses_it_in_words(rig):
+def test_a_group_holds_a_hands_layer_alone_and_the_save_refuses_it_in_words(rig):
     """Plan 50 (harden-node-groups' second half): a group holds any node
-    the loadable patch saves — a copy without its original too, which no patch can
-    carry — and the check that it can be saved as a patch runs at the save:
-    refused in words, nothing written, the group as it was."""
+    the loadable patch saves — a hands' layer without its hands too, which no
+    patch can carry — and the check that it can be saved as a patch runs at
+    the save: refused in words, nothing written, the group as it was. (Plan
+    89: the copy that was this test's case is an effect's slot now, which
+    goes wherever its effect goes.)"""
     noita(rig)
-    assert graphview.render_add(ui_graph.group_edit(rig.panel), "copy", "warp") is None
-    entry = ui_graph.group_nodes(rig.panel, ["render:copy", "render:doublevision"])
-    assert entry["nodes"] == ["render:copy", "render:doublevision"]
+    e = ui_graph.group_edit(rig.panel)
+    assert graphview.render_add(e, "hands") is None
+    hands = e.added
+    assert graphview.render_add(e, "layer", instance=int(hands.rpartition(".")[2])) is None
+    layer = e.added
+    entry = ui_graph.group_nodes(rig.panel, [f"render:{layer}", "render:doublevision"])
+    assert entry["nodes"] == [f"render:{layer}", "render:doublevision"]
     home = files(rig.lib.home)
-    assert ui_graph.save_patch(rig.panel, "group.1", "with the copy", "") == (
-        graphview.SAVE_REFUSED.format(name="group 1", why=patches.COPY_WORDS.format(
-            name="copy", of="warp")))
+    assert ui_graph.save_patch(rig.panel, "group.1", "with the layer", "") == (
+        graphview.SAVE_REFUSED.format(name="group 1", why=patches.LAYER_WORDS.format(
+            name=layer, of=hands)))
     assert files(rig.lib.home) == home
     assert rig.lib.loaded_patch.groups == [entry] and "patch" not in entry
     # the loadable patch saves it and reads it back as it was
@@ -1442,7 +1448,7 @@ def test_save_as_patch_writes_that_file_and_nothing_else(rig):
         assert set(after) - set(home) == {"patches/noita-core.json"}
         assert {k: v for k, v in after.items() if k in home} == home
         doc = json.loads(after["patches/noita-core.json"])
-        assert doc["schema"] == "hyperspace.patch/2" and doc["name"] == "noita core"
+        assert doc["schema"] == "hyperspace.patch/3" and doc["name"] == "noita core"
         assert doc["note"] == "the middle"
         assert [e.get("file") for e in doc["nodes"]] == ["doublevision", "fractals", "warp"]
         assert [(p["id"], p["was"]) for p in doc["ports"]] == [

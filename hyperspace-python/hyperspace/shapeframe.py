@@ -37,7 +37,7 @@ class ShapeFrame:
     """One frame of a shape, as the scene pass draws it.
 
     `g`: the geometry dict (`V`, `E`, `n`, `m`, and a scene's `style`, a
-    curve's `curve`); `P`, `w4`, `pd`: each point in 3D before camera.zoom and
+    curve's `curve`, a star's `corners`); `P`, `w4`, `pd`: each point in 3D before camera.zoom and
     pan, its 4D divisor and its depth cue (nearer is larger). `cue`: the
     cue's fixed ends, None for `pd`'s own extent. `dens_m`: the edge count
     the stroke density reads. `zoom_strokes`: on the legacy path a stroke

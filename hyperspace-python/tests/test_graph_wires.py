@@ -576,7 +576,7 @@ def test_no_corpus_loadable_places_an_effect():
         g = graph(sw, G.Wiring(run=RUN), effects=RUN)
         assert all(n.placed in (None, "wire") for n in g.nodes.values()
                    if isinstance(n, G.Effect))
-        assert all(isinstance(n, G.Copy) for n in g.nodes.values()
+        assert all(isinstance(n, G.Slot) for n in g.nodes.values()
                    if isinstance(n, G.Effect) and n.placed == "wire")
         assert g.dormant == {} and g.notes == []
         for out in g.outputs:

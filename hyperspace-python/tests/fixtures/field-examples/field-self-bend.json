@@ -1,0 +1,140 @@
+{
+  "schema": "hyperspace.loadable/11",
+  "name": "field-self-bend",
+  "note": "The scene's own brightness, read by To field as a field (mid-grey 0), bends the scene: bright parts push along Displace's angle, dark parts pull back. The sub band pushes Amount; the right hand's height turns the angle.",
+  "graph": {
+    "frame": "wired",
+    "nodes": [
+      {
+        "kind": "hands",
+        "laid": "over"
+      },
+      {
+        "kind": "effect",
+        "file": "tofield"
+      },
+      {
+        "kind": "effect",
+        "file": "displace"
+      }
+    ],
+    "wires": [
+      {
+        "from": "shape",
+        "to": "scene.geometry"
+      },
+      {
+        "from": "pattern",
+        "to": "shape.faces"
+      },
+      {
+        "from": "scene",
+        "to": "tofield.image"
+      },
+      {
+        "from": "scene",
+        "to": "displace.image"
+      },
+      {
+        "from": "tofield",
+        "to": "displace.field"
+      },
+      {
+        "from": "displace",
+        "to": "output.all.image"
+      },
+      {
+        "from": "hands",
+        "to": "hands.layer.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.guide"
+      }
+    ]
+  },
+  "values": {
+    "ghost.on": true,
+    "ghost.alpha": 0.35,
+    "view.shape": 55,
+    "view.faces": true,
+    "view.pattern": 2,
+    "view.speed": 0.3,
+    "view.bright": 1.35,
+    "camera.zoom": 1.5,
+    "fx.tofield.on": true,
+    "fx.tofield.read": 0,
+    "fx.tofield.about": 0,
+    "fx.displace.on": true,
+    "fx.displace.amount": 0.02,
+    "fx.displace.angle": 0.0
+  },
+  "routes": [
+    {
+      "source": "lane:0",
+      "target": "fx.displace.amount",
+      "op": "push",
+      "value": 0.3
+    },
+    {
+      "source": "hand:right.y",
+      "target": "fx.displace.angle",
+      "op": "push",
+      "value": 0.5
+    },
+    {
+      "source": "lane:0",
+      "target": "rot.rate.ZW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:1",
+      "target": "rot.rate.XW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:2",
+      "target": "rot.rate.YW",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:3",
+      "target": "rot.rate.XY",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:4",
+      "target": "rot.rate.XZ",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:5",
+      "target": "rot.rate.YZ",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    }
+  ],
+  "macros": {},
+  "units": {
+    "camera.pan": "world",
+    "fx.depth": "taper"
+  },
+  "media": {
+    "channels": {}
+  }
+}

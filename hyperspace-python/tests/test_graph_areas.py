@@ -53,7 +53,11 @@ WIRED = sorted(p.stem for p in FIXTURES.glob("*.json")
 FREE = ("branch-two-sizes", "media-chain-backdrop", "media-chain-faces", "switch-faces")
 # every effect file, by its @order: the chain an old loadable patch with every one
 # on lands as (plan 33 T7: `names()` is by name — there is no stack)
-REAL = tuple(sorted(FxState().specs, key=lambda n: (FxState().specs[n].order, n)))
+# (plan 67 F1: the picture effects — a field maker takes no picture to chain)
+# (the picture effects that take one: a field maker, or Colour, takes no picture)
+REAL = tuple(sorted((n for n, s in FxState().specs.items()
+                     if s.makes != "field" and "image" in G.effect_ports(n)[1]),
+                    key=lambda n: (FxState().specs[n].order, n)))
 CONCERNS = (graphview.AUDIO, graphview.SCENE_AREA, graphview.LOOKBACK_AREA, graphview.EFFECTS_AREA,
             graphview.OUTPUTS_AREA)
 
@@ -87,8 +91,11 @@ def real_graph(fixture=None):
     wired as graph fixture `fixture` says — its wired frame kept on it
     (`section`, the frame `load` lands for party-trip)."""
     from wiredframe import shown
-    spec = G.read_graph(json.loads((FIXTURES / f"{fixture}.json").read_text())["graph"]
-                        ) if fixture else None
+
+    from hyperspace.graphmigrate import slots_of_copies
+    # (plan 89: a fixture's copies are slots, as the load migrates them)
+    spec = G.read_graph(slots_of_copies(json.loads(
+        (FIXTURES / f"{fixture}.json").read_text())["graph"])[0]) if fixture else None
     wiring = spec.wiring() if spec is not None else G.Wiring()
     extra = tuple(e.name for e in spec.effects) if spec is not None else ()
     effects = REAL + tuple(e for e in extra if e not in REAL)
@@ -206,15 +213,16 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
                               "group:audio", "group:scene")} == {graphview.AUDIO}
     assert {area[k] for k in ("lfo.1", "macro.1", "group:lfo")} == {graphview.MODULATION}
     # (plan 35 G: by primitive, in the new ids)
-    assert {area[k] for k in ("render:shape", "render:camera", "render:hands", "render:scene",
+    assert {area[k] for k in ("render:shape", "render:hands", "render:scene",
                               "render:hands.layer", "group:hands",
                               "group:cloud")} == {graphview.SCENE_AREA}
     # (plan 36 T4: party-trip's look-back was off — none drawn; party-tracer's on)
     assert "render:lookback" not in area
     tracer = {n.id: n.area for n in load(rig, "party-tracer")["view"].nodes}
     assert tracer["render:lookback"] == graphview.LOOKBACK_AREA
-    assert {area[k] for k in ("render:acid", "render:palette", "render:copy",
+    assert {area[k] for k in ("render:acid", "render:palette",
                               "render:composite")} == {graphview.EFFECTS_AREA}
+    assert "render:copy" not in area                    # (plan 89: acid's slot, on acid)
     assert {area[k] for k in ("render:output.all", "render:output.1", "render:output.2",
                               "group:output")} == {graphview.OUTPUTS_AREA}
     assert {area[k] for k in ("group:preset", "group:ui", "group:desk",
@@ -298,20 +306,21 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     view = st["view"]
     ui_graph.toggle_idle(st, graphview.MODULATION)
     ui_graph.toggle_open(st, "render:shape")
-    rig.lib.loaded_patch.layout["render:camera"] = [900, 40]
+    rig.lib.loaded_patch.layout["render:scene"] = [900, 40]
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
     # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off)
-    # twice — and the eight media channels, their bins empty (plan 32 T10:
+    # — once each since plan 89 (their through slots on their own nodes,
+    # no copies) — and the eight media channels, their bins empty (plan 32 T10:
     # the channels' params on their own nodes); plan 35 G: the backdrop's
     # group node too (no backdrop in the section: it idles like any group);
     # plan 36 T4: one more, the frame drawing no look-back (its params' node idles);
     # plan 60: the grip's group node, the grip off
-    assert sum(n.idle for n in view.nodes) == 27
+    assert sum(n.idle for n in view.nodes) == 25
     k = len({n.area for n in view.nodes if not n.idle})
-    assert st["said"] == (f"laid out {len(view.nodes) - 27} nodes in {k} areas, every one "
-                          "collapsed · 27 idle off the canvas")
+    assert st["said"] == (f"laid out {len(view.nodes) - 25} nodes in {k} areas, every one "
+                          "collapsed · 25 idle off the canvas")
     assert st["idle_open"] == set() and st["open"] == set() and rig.lib.loaded_patch.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)
@@ -753,7 +762,7 @@ def test_the_areas_run_by_primitive(rig):
     view = load(rig, "party-trip")["view"]
     area = {n.id: n.area for n in view.nodes}
     assert {area[k] for k in ("render:shape", "render:scene", "render:hands",
-                              "render:hands.layer", "render:camera")} == {graphview.SCENE_AREA}
+                              "render:hands.layer")} == {graphview.SCENE_AREA}
     tracer = {n.id: n.area for n in load(rig, "party-tracer")["view"].nodes}
     assert tracer["render:lookback"] == graphview.LOOKBACK_AREA      # (plan 36 T4)
     assert {area[k] for k in ("render:acid", "render:palette")} == {graphview.EFFECTS_AREA}
@@ -769,7 +778,6 @@ def test_the_areas_run_by_primitive(rig):
                       (G.BackdropNode("backdrop"), graphview.SCENE_AREA),
                       (G.EchoNode("echo.2", 2), graphview.LOOKBACK_AREA),
                       (G.DreamNode("dream"), graphview.LOOKBACK_AREA),
-                      (G.Copy("copy", "acid"), graphview.EFFECTS_AREA),
                       (G.Composite("composite"), graphview.EFFECTS_AREA),
                       (G.SwitchNode("switch"), graphview.MEDIA),
                       (G.Delay("delay"), graphview.MEDIA),
@@ -805,7 +813,7 @@ def test_a_blank_loadable_draws_only_the_outputs(rig, monkeypatch):
     st = landed({"frame": "wired"})
     view = st["view"]
     drawn = {n.id for n in view.nodes if n.kind in ("render", "output", "channel")
-             and not n.idle and n.id != "render:camera"}
+             and not n.idle}
     # (plan 36 T3: hands 1's entry is always written, so its node is drawn)
     assert drawn == {"render:hands", "render:output.all", "render:output.1", "render:output.2"}
     chans_ = [n for n in view.nodes if n.kind == "channel"]

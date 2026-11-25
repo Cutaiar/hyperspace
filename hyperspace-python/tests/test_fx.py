@@ -411,7 +411,7 @@ def test_a_pass_reads_its_own_pixel_byte_for_byte(ctx, fxdir, monkeypatch):
         return got[4:, 8:]
 
     assert np.array_equal(through("const"), want)
-    monkeypatch.setattr(chain, "_program", lambda name: None)
+    monkeypatch.setattr(chain, "_program", lambda name, knobs=(): None)
     assert np.array_equal(through("const"), want)
 
 
@@ -502,7 +502,9 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
     from imgui_bundle import imgui
 
     from hyperspace import ui_fx
-    rig = browsing(tmp_path, monkeypatch)
+    # (acid.3 fed, so it runs and is listed under both its ends)
+    fed = {**BROWSED, "wires": [*BROWSED["wires"], {"from": "media.a", "to": "acid.3.image"}]}
+    rig = browsing(tmp_path, monkeypatch, fed)
     try:
         ids: list[int] = []
         names: dict[int, str] = {}
@@ -1119,12 +1121,31 @@ def face_frame(ctx, fx: FxState, frames: int = 3, pattern: int = 2, faces: tuple
     return out, r
 
 
-@pytest.mark.parametrize("name", sorted(FxState().specs))
+def _makes_field(name):
+    from hyperspace.fx import FIELD, ports
+    return ports(FxState().specs[name])[0] == FIELD
+
+
+def _takes_picture(name):
+    from hyperspace.fx import ports
+    return "image" in ports(FxState().specs[name])[1]
+
+
+# (a picture generator with no input port — Colour — cannot sit in the faces'
+# chain either: it takes no picture; tests/test_fx_colour.py wires it straight in)
+PICTURE_EFFECTS = sorted(n for n in FxState().specs
+                         if not _makes_field(n) and _takes_picture(n))
+FIELD_MAKERS = sorted(n for n in FxState().specs if _makes_field(n))
+
+
+@pytest.mark.parametrize("name", PICTURE_EFFECTS)
 def test_every_effect_runs_on_the_face_target(ctx, name):
     """On the faces alone (plan 33 R: wired `pattern → name → shape.faces`),
     every factory effect compiles, the frame draws with no GL error, the
     picture is not the seed, and the frame is not the frame without it. No
-    effect is adapted and none is refused."""
+    effect is adapted and none is refused. (A field maker cannot sit in that
+    chain — it takes no picture, or a field — so the next test wires each
+    the way it can be.)"""
     from hyperspace.render import FACE_PIC
     base, r0 = face_frame(ctx, FxState())
     assert r0.face_pic.tex is None
@@ -1149,6 +1170,49 @@ def test_every_effect_runs_on_the_face_target(ctx, name):
     assert change > 0.25, f"{name} left the picture as the seed was"
     assert np.abs(img.astype(int) - base).sum() > 200, f"{name} does not show on the faces"
 
+
+
+# plan 67: each field maker as it can be wired: its input (none for a generator,
+# the pattern for To field, a field for an op), then onto the faces as its grey
+FIELD_INTO = {"tofield": [("pattern", "tofield.image")],
+              "waveform": [("rings", "waveform.image")],
+              "combine": [("rings", "combine.image"), ("line", "combine.field")],
+              "cellaction": [("cells", "waveform.image"), ("waveform", "cellaction.image"),
+                             ("cells.2", "cellaction.field")]}
+
+
+@pytest.mark.parametrize("name", FIELD_MAKERS)
+def test_every_field_maker_shows_on_the_faces(ctx, name):
+    """A field wired onto the faces is shown as its grey (`FieldPicture`):
+    every field file compiles there, the frame draws with no GL error, and
+    the faces are not the faces without it."""
+    from hyperspace import graph as G
+    from hyperspace.render import Renderer
+    from hyperspace.view import ViewState
+
+    base, _ = face_frame(ctx, FxState())
+    st = FxState()
+    st.set_instances({"cells": 2})
+    wires = [G.Wire(a, b) for a, b in FIELD_INTO.get(name, ())] + [G.Wire(name, "shape.faces")]
+    for n in {name, *(w.src for w in wires if w.src != "pattern")}:
+        st.values[n].update(on=True)
+    if name in ("line", "rings", "spokes"):
+        st.values[name]["out"] = 1                 # a vector: red and green, not one grey
+    st.values["cells.2"]["out"] = 1
+    fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
+    r = Renderer(ctx, fx=st)
+    r.wiring = wired_wiring(G.Wiring(wires=tuple(wires)))
+    s = ViewState(shape=10, faces=True, pattern=2, bright=1.3)
+    s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
+    for k in range(3):
+        fbo.use()
+        ctx.viewport = (0, 0, W, H)
+        r.draw(s, W, H, t_now=4.0 + k / 30)
+    img = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(H, W, 4).copy()
+    fbo.release()
+    assert ctx.error == "GL_NO_ERROR"
+    assert r.face_error == "" and r.fx.errors == {}
+    assert np.abs(img.astype(int) - base).sum() > 200, f"{name} does not show on the faces"
 
 # ---------------------------------------------------------------- the faces on the page
 
@@ -1211,7 +1275,7 @@ def test_faces_on_switches_the_faces_on(tmp_path, monkeypatch):
     says so, with the chip that mends it: Param.set on view.faces. One that
     ends elsewhere is not idle for it, and one that reaches nothing says
     that."""
-    from hyperspace.ui_fx import IDLE
+    from hyperspace.ui_fx import IDLE, UNFED
     rig = browsing(tmp_path, monkeypatch)
     try:
         reg, view = rig.reg, rig.panel.view
@@ -1236,13 +1300,20 @@ def test_faces_on_switches_the_faces_on(tmp_path, monkeypatch):
         rig.frame()                                  # running: no line, no chip, no veil
         assert line not in rig.texts and "idle.view.faces" not in rig.rects
         assert not rig.veils
-        reg["view.faces"].set(False)                 # one under the scene: not the faces'
-        rig.panel.fx_selected = "kaleido.2"
+        reg["view.faces"].set(False)                 # one in the run: not the faces'
+        rig.panel.fx_selected = "warp"
         rig.frame()
         assert line not in rig.texts and not rig.veils
         rig.panel.fx_selected = "wobble.2"           # unreached: said, no chip
         rig.frame()
         assert IDLE["reaches nothing"][0] in rig.texts and len(rig.veils) == 2
+        assert not [k for k in rig.rects if k.startswith("idle.")]
+        # R15: one under the scene with no wire into its image is never built,
+        # though its path reaches the backdrop — said, no chip (GRAPH mends it)
+        rig.panel.fx_selected = "kaleido.2"
+        rig.frame()
+        assert IDLE[UNFED][0] == "fed by nothing — wire its input on graph"
+        assert IDLE[UNFED][0] in rig.texts and len(rig.veils) == 2
         assert not [k for k in rig.rects if k.startswith("idle.")]
     finally:
         rig.close()
@@ -1279,9 +1350,10 @@ def test_the_map_is_one_undo_step(tmp_path, monkeypatch):
 def test_the_strip_says_where_its_effect_ends_wherever_it_is_drawn(tmp_path, monkeypatch):
     """`ui_fx.strip` — the FX page's open strip and the GRAPH page's side
     column for a selected effect node — reads the graph itself, so its title
-    note says where the effect's paths end (`acid.glsl · → output 2 · →
-    blend aux`) however the strip is reached; a D1 placement says its place
-    (`→ after hands`)."""
+    note says where the effect's paths end (`acid.glsl · → faces`) however
+    the strip is reached — one fed by nothing says that (R15: acid.3 has no
+    wire into its image, so it never runs wherever its paths go); a D1
+    placement says its place (`→ after hands`)."""
     from hyperspace import graph as G
     from hyperspace import ui_fx
     rig = browsing(tmp_path, monkeypatch)
@@ -1301,12 +1373,13 @@ def test_the_strip_says_where_its_effect_ends_wherever_it_is_drawn(tmp_path, mon
             ui_fx.strip(panel, name)
             imgui.end()
             imgui.end_frame()
+        side("acid.2")
         side("acid.3")
         side("zoomblur")                    # (plan 36 T3: not in this graph, so no effect)
-        assert seen[-1:] == [("acid.3", "→ output 2 · → blend aux")]
+        assert seen[-2:] == [("acid.2", "→ faces"), ("acid.3", "fed by nothing")]
         panel.fx_selected = "acid.3"
         rig.frame()
-        assert seen[-1] == ("acid.3", "→ output 2 · → blend aux")
+        assert seen[-1] == ("acid.3", "fed by nothing")
         panel.graph_now = lambda: (G.Wiring(), G.read_graph(
             {"nodes": [{"kind": "effect", "file": "warp", "after": "hands"}]}))
         side("warp")
@@ -1330,15 +1403,24 @@ BROWSED = {
         ("glimmer.2", "switch.in1"), ("switch", "pattern.media"),
         ("acid.3", "output.2.image"), ("acid.3", "blend.aux"))],
 }
+# as the panel groups it: the wired frame a load makes of it (plan 35 M). R15:
+# acid.3, kaleido.2 and glimmer.2 have no wire into their image, so the builder
+# never builds them — "fed by nothing", not their paths' ends as if they ran
+# (`graph.hungry`); wobble.2 is wired to nothing at all
 BROWSED_GROUPS = [
     ("Run", ["warp", "blend"]),
     ("→ faces", ["acid.2"]),
-    ("→ pattern media", ["glimmer.2"]),
-    ("→ backdrop", ["kaleido.2"]),
-    ("→ output 2", ["acid.3"]),
-    ("→ blend aux", ["acid.3"]),
+    ("fed by nothing", ["acid.3", "glimmer.2", "kaleido.2"]),
     ("reaches nothing", ["wobble.2"]),
 ]
+
+
+def browsed_spec(section=BROWSED):
+    """`section` as the wired frame a load of it is (what `Panel.graph_now`
+    hands the FX pane)."""
+    from hyperspace import graph as G
+    from hyperspace.graphmigrate import renamed, wired_section
+    return G.read_graph(wired_section(renamed(section), G.read_graph(section)))
 EMPTY_GRAPH = "no effects in the graph — add one on graph (right-click the canvas)"
 
 
@@ -1347,10 +1429,17 @@ def test_groups_follow_the_wires():
     ends — the run in wire order, then the faces, the pattern's layer, the
     backdrop, each output, each effect's aux, and the unreached last; one
     behind a switch by the switch's destination; one read in two places in
-    each; within a group from the head to the sink."""
+    each; within a group from the head to the sink. R15: in the wired frame
+    one fed by nothing is grouped so, wherever its path leads."""
     from hyperspace import graph as G
     from hyperspace.ui_fx import groups
-    assert groups(G.read_graph(BROWSED)) == BROWSED_GROUPS
+    assert groups(browsed_spec()) == BROWSED_GROUPS
+    # the same section unwired (D1's words, before plan 35): every path's end
+    assert groups(G.read_graph(BROWSED)) == [
+        ("Run", ["warp", "blend"]), ("→ faces", ["acid.2"]),
+        ("→ pattern media", ["glimmer.2"]), ("→ backdrop", ["kaleido.2"]),
+        ("→ output 2", ["acid.3"]), ("→ blend aux", ["acid.3"]),
+        ("reaches nothing", ["wobble.2"])]
     # within a group, the path from its head: acid.2 before huecycle.2
     chain = G.read_graph({
         "nodes": [{"kind": "effect", "file": "acid", "instance": 2},
@@ -1399,10 +1488,10 @@ def test_the_fx_page_lists_the_graphs_effects(tmp_path, monkeypatch):
         assert {p.id: p.base for p in rig.reg if p.id.startswith("fx.")} == before
         # each row: its on, a small mix and its state in a word
         # (a row's mix is the panel's own slider, on the row's line)
-        assert "on.→ faces.acid.2" in rig.rects and "on.→ blend aux.acid.3" in rig.rects
+        assert "on.→ faces.acid.2" in rig.rects and "on.fed by nothing.acid.3" in rig.rects
         on, mix = rig.rects["on.Run.warp"], rig.rects["fx.warp.mix"]
         assert mix[0] >= on[2] and mix[1] == pytest.approx(on[1])
-        assert {"running", "reaches nothing"} <= set(rig.texts)
+        assert {"running", "fed by nothing", "reaches nothing"} <= set(rig.texts)
     finally:
         rig.close()
 
@@ -1600,7 +1689,7 @@ def test_an_old_loadable_saves_no_retired_id(tmp_path):
            "media": {"channels": {"b": ["shared:x.png"]}}}
     assert app.loaded_patch.load_doc(doc) == []
     out = app.loaded_patch.document("old")
-    assert out["schema"] == "hyperspace.loadable/11"
+    assert out["schema"] == "hyperspace.loadable/12"
     assert not [k for k in out["values"] if M.retired(k)]
     run = G.run_back(G.read_graph(out["graph"]), "output.all.image")
     assert run == ("warp", "acid")                     # warp (@order 20) before acid (30)
@@ -1618,7 +1707,7 @@ def test_an_old_loadable_saves_no_retired_id(tmp_path):
     sec = {**sec, "wires": [*keep[:at], *rerun, *keep[at:]]}
     app.loaded_patch.graph.land(G.read_graph(sec), sec)
     out = app.loaded_patch.document("old")
-    assert out["schema"] == "hyperspace.loadable/11"
+    assert out["schema"] == "hyperspace.loadable/12"
     assert G.run_back(G.read_graph(out["graph"]), "output.all.image") == (
         "acid", "warp")
     assert not [k for k in out["values"] if M.retired(k)]

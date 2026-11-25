@@ -8846,6 +8846,62 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## FR. Any knob takes a field (rows 1116–1121, 2026-11-24)
+
+Plan 67 §18. Headless: `tests/test_knob_fields.py` (every knob takes a field or says why; a field of 0 is the unwired knob; half a frame at one value, half at another; clamped or wrapped; the wire's depth saved and read; GRAPH's port, the drop on a knob's row, the depth menu; the FX pane), `tests/test_field_examples.py` (`field-knob` opens with no note, reaches, and draws the field), `tools/fx_sweep.py` (2886 renders, no byte moved). The example is in the Drive library's `loadable/field-examples/`.
+
+**895. A field on a knob.** (Mac, 1080p outputs) Load `field-examples/field-knob`. *Pass:* the wave is still around the middle and ripples more toward the edges; the sub band pumps all of it; the right hand slides the still middle across. Right-click the green cable into Wave, **depth ▸** → −0.25 and raise Wave's Amount: now strong in the middle, still at the edges; ⌘Z puts it back in one step. Save the patch and load it again: the depth is kept. *Fail:* a wave the same everywhere, a jump when the depth changes beyond the picture changing, a depth lost on a reload.
+
+**896. Dropping a field on a knob.** Add Line and Palette, wire the scene through Palette to All outputs, and drag Line's out onto Palette's **Hue turn** row. *Pass:* a wire `line → palette.hue_turn`, the port drawn on Palette's node once wired, Line lit (it reaches), and on the FX pane Line beside Palette in Run — the hue banded across the frame. Drag it onto **Mode** or **Anchors**: refused, in words (a choice; a count); onto Wave's **Drift**: refused (a rate). *Fail:* a field that does nothing, Line under "reaches nothing", or a refusal without words.
+
+**897. Old patches, unchanged.** (Mac) Open three saved looks with effects (`party-noita`, `kinetic-comet`, one of yours) on this build. *Pass:* each looks and moves exactly as before; GRAPH draws no new ports on their nodes. *Fail:* any look that differs.
+## FQ. Fed by nothing, one rule; a Colour generator (rows 1114–1115, 2026-11-25)
+
+R15 and plan 80. Headless: `tests/test_field_wire.py` (the builder, `unfed`, GRAPH and the FX pane agree for a Mandelbrot, Wave, Acid, Waveform and Rings, each wired onward with nothing in), `tests/test_fx.py` (`BROWSED_GROUPS`, the strip's line), `tests/test_unwired_thumbs.py`. Checked in the real app offscreen (`tools/app_driver.py`) on Mesa: nothing here was seen on the Mac.
+
+**893. Fed by nothing says so, a generator runs.** (Mac, GRAPH) Add a Mandelbrot and wire it alone into an output; add a Kaleidoscope and wire it into another output, nothing into its input. *Pass:* the Mandelbrot is lit and draws on its output; the Kaleidoscope is faint and its node says "fed by nothing — wire its input", its hover "wire a picture into it", its thumbnail "fed by nothing: the test card through it here"; the FX section lists it under **fed by nothing** (not "→ output N") and its strip says "fed by nothing — wire its input on graph". Wire the scene into its input: it lights, draws, and moves to "→ output N". A Waveform the same way says the same, its hover "wire a field into it". *Fail:* a faint Mandelbrot, or an effect listed under its output while it draws nothing.
+
+**894. A colour on the cylinder.** (Mac, GRAPH, the outputs on) Right-click the canvas → **effects…** → Colour (under generators); wire it alone into All outputs. *Pass:* it is lit and the outputs are red at once. Drag on the HSV square: across turns the hue round the wheel, up takes it from grey to full; the third knob (Value) darkens it to black. Route an LFO onto Hue: the colour cycles smoothly round and back to red with no jump at the wrap. Set Spin to 0.25: a full turn every four seconds; move Spin while it turns — the colour changes speed, never jumps. Say whether the square reads as the cylinder or a disc is wanted (row 1115). *Fail:* a dark or flickering output, a jump at the wrap or on a Spin step, a knob that does nothing.
+
+## FO. Trip warp taken apart (rows 1110–1112, 2026-11-24)
+
+Plan 67 §16. Headless: `tests/test_trip_patch.py` (the push is the formula; Amount 0 the picture; how near), `tests/test_field_examples.py` (`field-trip` opens with no note). The example is in the Drive library's `loadable/field-examples/`.
+
+**891. Trip warp taken apart.** (Mac, 1080p outputs) Load `party-noita`, then `field-examples/field-trip`, side by side if two decks are free. *Pass:* the same swimming rim and calm middle, the same zoom; the right hand deepens the swim, its depth changes the noise's size, the left hand its drift. Toward the corners the patch may swim a little more up and down (row 1110). Move the Point: the calm middle stays where it was (Rings is not wired to it) — wire the Point into Rings' `field` and it moves. *Fail:* a picture that differs at a glance in the middle third, or a frame rate that drops with the eight passes.
+
+## FN. Measure taken apart, a Point (rows 1104, 1106–1109, 2026-11-24)
+
+Plan 67 §15. Headless: `tests/test_field_wire.py`, `tests/test_wave_patch.py`, `tests/test_blocks_patch.py`, `tests/test_field_examples.py` (every example's nodes reach, on the canvas and the FX pane). The examples are in the Drive library's `loadable/field-examples/`.
+
+**889. One Point, many measures.** (Mac, GRAPH) Load `field-examples/field-rings-lens`. *Pass:* Point → Rings → Displace, all lit, green cables; Rings' knobs are Scale and Out only, and each changes the picture. Right-click the canvas, add a Spokes, wire the same Point into its `field` and Spokes into a second Displace on another output: drag Point's X and both move together. Add a Cells: every knob (Scale, Aspect, Group, Rule, Spread, Pairs) changes its thumbnail; Out place shows a small red-green ramp in every cell. *Fail:* a knob that does nothing, a node drawn faint while wired.
+
+**890. Nothing reaches nothing.** (Mac) Load each of the five `field-examples`, and open the FX section with each field node selected. *Pass:* no node says "reaches nothing"; each sits under Run. *Fail:* any field node faint, or "it reaches nothing — wire it on graph".
+
+## FM. Blocks taken apart (rows 1103, 1105, 2026-11-24)
+
+Plan 67 §14. Headless: `tests/test_blocks_patch.py` (every Blocks choice and pair, three times, one pass per node; every saved Blocks look through the renderer), `tests/test_field_examples.py` (`field-blocks` opens with no note, its routes live), `tools/fx_sweep.py` (Blocks byte for byte on the shared cell pieces). The example is in the Drive library's `loadable/field-examples/`.
+
+**887. Blocks taken apart.** (Mac, a sub band playing, 1080p outputs) Load `distort-blocks-turn`, then `field-examples/field-blocks`, side by side if two decks are free (one on air, one off). *Pass:* the same checkerboard snapping quarter turns, the same response to the sub band and the right hand; the left hand grows the cells in both Measures together; on the canvas five nodes and their green cables. Then set both Measures' Pairs to across and Cell action's Action to swap: whole cells trade places. Wire Measure.2 straight into an output: each cell a small red-green ramp. *Fail:* a picture that differs at a glance (at another frame height the cells differ in size, row 1103: Blocks' Cell is px), cells torn at their edges, or a frame rate that drops with the five passes.
+
+**888. Cell action's half frame heights.** (Mac) In `field-blocks`, drag Displace's Amount down from its top (0.5) to 0.25. *Pass:* every cell moves half as far (a turn becomes a lean), smoothly, nothing jumps; at 0.5 again, the Blocks picture. Say whether a Displace that reaches 1 is worth a migration of the routes on it (row 1105).
+
+## FL. The field wire (rows 1096–1102, 2026-11-23)
+
+Plan 67 F1. Headless: `tests/test_field_wire.py` (types, directives, the wire checks in words, the build, raw values, the grey, off, Displace by a field, the canvas's ports and cable, the thumbnail), `tests/test_field_lib.py`, `tests/test_field_examples.py`. The examples are in the Drive library's `loadable/field-examples/`.
+
+**881. A field cable on the canvas.** (Mac, GRAPH) Load `field-examples/field-rings-lens`. *Pass:* Measure's cable into Displace's `field` port is green, distinct from the red picture cables and the purple masks, at the stage's distance; Measure's node has no picture input. *Fail:* a field cable you cannot tell from a picture cable.
+
+**882. A picture refused, in words.** Drag the scene's output onto Displace's `field` port. *Pass:* the drag goes red and the words name To field; drag it onto To field's input and To field onto `field`: it lands. *Fail:* a silent refusal, or a picture accepted into a field port.
+
+**883. Seeing a field.** Wire Measure straight into an output, and look at its thumbnail and its tile in the effect picker. *Pass:* grey about the middle — mid-grey where the field is 0, lighter where it is positive, darker negative; the direction field coloured (red across, green up). *Fail:* black, white, or a different picture in the three places.
+
+**884. The three examples on stage.** (Mac, a sub band playing) Each of `field-rings-lens`, `field-line-shear`, `field-self-bend`. *Pass:* each does what its Markdown says, with the sub band and the hand on the knobs it names; Amount 0 is the plain picture. Read each Markdown: is it enough to rebuild the patch from scratch? *Fail:* a patch that does not move, or a Markdown that names a knob that is not there.
+
+**885. What a field costs.** (Mac, 1080p outputs, SYSTEM page) `field-rings-lens`. *Pass:* no drop in the frame rate with two fields held. Note the numbers (row 1097: a field held is 33 MB at 1080p). *Fail:* a cost that shows.
+
+**886. Wave taken apart.** (Mac, a sub band playing) Load `distort-wave-ripple`, then `field-examples/field-wave`, side by side if two decks are free (one on air, one off). *Pass:* the same ripples, the same response to the sub band and both hands; on the canvas five nodes and their green field cables; switching Waveform's Shape to square still looks like Wave's slabs (the odd edge pixel is row 1101's). Then wire the Waveform straight into an output as well: grey rings, moving. *Fail:* a picture that differs at a glance, or a frame rate that drops with the five passes.
+
+
 ## DY. The Mandelbrot (rows 872–881, 2026-11-19)
 
 Plan 63. Headless: `tests/test_mandel.py` (the maths against a float64 oracle, the shader against its float32 twin, the drives, the reference's lifetime, the tiles, the sizes). Frame times off the rig mean nothing, so every check here is the rig's. A restart after pulling (`FxChain.mandel` is a new field on a live object, and `mandel` a new module).
@@ -9026,6 +9082,16 @@ Plan 88. Headless: `tests/test_save_live.py` (the ▾ joined to **save as** and 
 
 **872. Outside, and over a file.** In that dialog, save to the Desktop; then again on an existing patch's file (say yes to "Replace?"). *Pass:* both refused on the footer, nothing written. *Fail:* a file outside the library, or a patch written over.
 
+## FJ. An effect's slots, no copy node (rows 1081–1086, 2026-11-23)
+
+Plan 89. Headless: `tests/test_effect_slots.py` (the migration, the ladder, a fragment, three slots of one effect drawn on GL), `tests/test_graph_edit.py` (add, remove, close up, delete), the goldens (every through golden recorded with copies draws byte for byte through slots).
+
+**873. One node, one set of knobs.** (Mac, the trackpad) On GRAPH, right-click an effect → **add slot**. *Pass:* the effect's node grows a second row of ports (`image 2`, `aux 2`, `2` out); wire a picture into `image 2` and `2` into a window: that window shows the effect on that picture; selecting the node shows one set of controls, and turning a knob bends both pictures at once. *Fail:* a second node, an empty side panel, or a knob that bends one picture only.
+
+**874. Remove and paste.** With three slots wired, the effect's menu → **remove slot 2**. *Pass:* what fed slot 2 now feeds what it fed; slot 3's cables are now on slot 2's ports; ⌘Z puts it back. Then ⌘C on the effect and ⌘V: a fourth row of ports on the same node. *Fail:* a cable lost, or a new node from ⌘V.
+
+**875. An old library.** Open a patch saved before this build with a "hands through the effects" window or a copy node. *Pass:* the strip says it was migrated to `/12`; the window draws as before (compare with the other Mac before it updates); the effect's node carries the slot; save and reopen: the same. Then, on the Mac the goldens were recorded on, `uv run pytest -m golden tests/test_golden_frames.py` (the container that built this draws on llvmpipe, where the byte-for-byte golden test skips). *Pass:* every golden byte for byte. *Fail:* a missing picture, a dropped wire, a copy node on the canvas, or a golden that moved.
+
 ## EB. The FRACTAL section (rows 902–905, 2026-11-20)
 
 Plan 64. Headless: `tests/test_ui_pane.py::test_the_fractal_section_draws_its_controls_inside_the_pane` (every control drawn, inside the pane, at every layout) and `tests/test_fractal_grab.py` (Detail, Reach and Near change what is drawn, To the top, saved with the look). A restart after pulling (new fields on `ViewState`).
@@ -9037,6 +9103,11 @@ Setup for all: the sections menu → **fractal**, VIEW's shape a fractal.
 **700. The controls, by eye.** A few levels into the Menger sponge and the 5-cell: drag **Detail** up and down, then **Reach**, then **Near**. *Pass:* Detail makes the cells split finer or coarser; Reach draws further into the shape or less; Near lets cells come closer before they dissolve, or fade sooner; none jumps or flickers, and the frame rate holds at the top of Detail on the rig. Save the look, load another and back: the three are as you left them. Say what ranges you want. *Fail:* a slider that does nothing, a jump, or a value not saved.
 
 **701. To the top.** Deep in, turned: press **To the top**. *Pass:* the whole shape, centred, at zoom 1, still turned as it was; a grabbed fractal comes home. *Fail:* a dive left behind, or the turn lost.
+## FP. The snub icosidodecadodecahedron (row 1113, 2026-11-24)
+
+Headless: `tests/test_catalog.py` (the counts, six faces at every corner, every edge on two faces, the circumradius ½√(ρ⁴ + 2) edges against the plastic number found on its own, a pentagram filled once), `tests/test_render.py::test_only_a_shapes_corners_are_dotted`, `tests/test_shapes4d.py` (its recorded digest). A restart after pulling (a new shape).
+
+**892. The snub icosidodecadodecahedron.** (laptop, VIEW) Open the Shape menu's 3D part, **Star polyhedra**, and pick **Snub icosidodecadodecahedron** (last in the group). Turn Faces on, then XZ and YZ, and let it turn; then Points off and on. *Pass:* the header reads `3D · 60V 180E · | 5/3 3 5`; a ball of crossing faces with twelve five-pointed stars standing out, each filled right into its middle, among triangles and pentagons; red dots only where edges meet — none at the five points inside each star where its edges cross; it turns the same with the W planes on. Say whether it reads as the picture it was asked for (Wikipedia's, the stars red). *Fail:* a star filled only at its tips or brighter in its middle (filled twice), a red dot inside a star, or a header saying 120V.
 
 ## What no test covers
 

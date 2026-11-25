@@ -982,6 +982,36 @@ def test_insert_effect_on_a_render_cable(tmp_path):
     assert e.insert_effect(cable, "teapot") == "no teapot effect in this build"
 
 
+def test_a_generator_on_a_cable_takes_it_over(tmp_path):
+    """Devin's review of #501: Colour (a picture generator, no input port)
+    picked in insert mode, or dropped on a cable, spliced as `src →
+    colour.image`, a port it has not, and the landing was refused. A
+    generator takes a cable over as a channel does: it feeds the port
+    instead of what fed it, said so; its inlets are its file's
+    (`graphview.insert_ports`)."""
+    rig, e, _pushed = free_rig(tmp_path, ("lookback", "output.all.image"),
+                              ("channel.a", "shape.faces"))
+    assert graphview.insert_ports("colour") == ((), "colour") and graphview.is_source("colour")
+    assert graphview.insert_ports("acid") == (("acid.image",), "acid")
+    assert not graphview.is_source("acid")
+    # the insert picker's path
+    assert e.insert_effect(("lookback", "output.all.image"), "colour") is None
+    got = wires_of(rig)
+    assert ("colour", "output.all.image") in got and ("lookback", "output.all.image") not in got
+    assert not [w for w in got if w[1].startswith("colour.")]
+    assert e.said.startswith("colour feeds output.all.image instead of lookback")
+    # (Devin's review of #501: the look-back, its last wire gone, stays on the
+    # canvas unwired — kept by its entry, as `render_wire` keeps a node)
+    spec = rig.loaded_patch.graph.spec
+    assert "lookback" in graphview.frame_names(spec)
+    assert not [w for w in got if w[0] == "lookback"]
+    # a drop of the one already there onto another cable
+    assert e.place_node(("channel.a", "shape.faces"), "colour") is None
+    got = wires_of(rig)
+    assert ("colour", "shape.faces") in got and ("channel.a", "shape.faces") not in got
+    assert not [w for w in got if w[1].startswith("colour.")]
+
+
 def test_inserting_an_effect_no_one_holds_uses_instance_one_and_switches_it_on(tmp_path):
     """R25: an effect inserted on a cable, or added from the picker, that no
     wire, node or placement in the section holds is the file itself
@@ -1166,7 +1196,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert n is not None and n.faint and not n.idle
     assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
     doc = json.loads(rig.loaded_patch.save_as("Out").read_text())
-    assert doc["schema"] == "hyperspace.loadable/11"
+    assert doc["schema"] == "hyperspace.loadable/12"
     assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
     settle(rig)
     assert rig.undo.undo()           # (both unwires inside one settle: one step)
@@ -1198,7 +1228,7 @@ def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
     for name, on in (("On", True), ("Off", False)):
         rig.reg["fx.huecycle.on"].set(on)
         doc = json.loads(rig.loaded_patch.save_as(name).read_text())
-        assert doc["schema"] == "hyperspace.loadable/11", name
+        assert doc["schema"] == "hyperspace.loadable/12", name
         assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
         assert G.run_back(G.read_graph(doc["graph"]), "output.all.image") == (
             "plasma", "kaleido", "zoomblur"), name
@@ -1752,8 +1782,8 @@ DELETES = ("party-wake", "through-one-output", "branch-two-sizes")
 
 @pytest.mark.parametrize("slug", DELETES)
 def test_every_frame_node_and_wire_deletes(tmp_path, slug):
-    """Review Focus 5: on party-wake migrated — and (R16, R15) the copy
-    fixture `through-one-output` and the two-out fixture `branch-two-sizes`
+    """Review Focus 5: on party-wake migrated — and (R16, R15) the slot
+    fixture `through-one-output` (plan 89: its copy migrated to acid's slot 2) and the two-out fixture `branch-two-sizes`
     — each wire in turn, and then each node in turn, goes with its words
     said and no refusal — the owner's refusals deleting `grounded`, `frame →
     fx` and the run's cables are gone. What is left is the marker alone.
@@ -1779,29 +1809,97 @@ def test_every_frame_node_and_wire_deletes(tmp_path, slug):
     rig, e, _ = wired_rig(tmp_path / "nodes-first", slug=slug)
     gs = rig.loaded_patch.graph
     for name in _names(gs.spec):
-        if name not in _names(gs.spec):          # (gone with another: a copy with its effect)
+        if name not in _names(gs.spec):          # (gone with another: a layer with its hands)
             continue
         e.said = ""
         assert e.drop_node(f"render:{name}") is None, name
         assert e.said, name
-    assert not gs.spec.wires and not gs.spec.copies
+    assert not gs.spec.wires and not gs.spec.slots
 
 
-def test_deleting_an_effect_takes_its_copies(tmp_path):
-    """R16: an effect a copy draws again, deleted, takes its copies (their
-    entries and wires) in the same landing — a copy of nothing is no node —
-    and says so."""
+def test_deleting_an_effect_takes_its_slots(tmp_path):
+    """R16, plan 89: an effect with slots, deleted, takes them (their wires
+    and its entry) in the same landing, and says so."""
     rig, e, pushed = wired_rig(tmp_path, slug="through-one-output")
     spec = rig.loaded_patch.graph.spec
-    name = min({c.of for c in spec.copies})
-    mine = [c.name for c in spec.copies if c.of == name]
+    assert spec.slots == (G.SlotAt("acid", 2),)
     n = len(pushed)
-    assert e.drop_node(f"render:{name}") is None
-    words = "its copy" if len(mine) == 1 else f"its {len(mine)} copies"
-    assert e.said == f"{name} deleted, and {words}" and len(pushed) == n + 1
+    assert e.drop_node("render:acid") is None
+    assert e.said == "acid deleted, and its slot 2" and len(pushed) == n + 1
     spec = rig.loaded_patch.graph.spec
-    assert not [c for c in spec.copies if c.of == name]
-    assert not [w for w in spec.wires if {w.src, w.node} & set(mine)]
+    assert not spec.slots and "acid" not in spec.effect_names()
+    assert not [w for w in spec.wires if {w.src, w.node} & {"acid", "acid.slot.2"}]
+
+
+def test_a_slot_comes_off_and_the_later_ones_close_up(tmp_path):
+    """Plan 89: **remove slot k** on an effect's menu takes slot k off — what
+    fed its picture goes on to what it fed (the chain closes over it, as a
+    delete does) — and slot k + 1 is slot k from then, its wires with it; the
+    entry's `slots` one down. One undo step each; slot 1 is the node's delete."""
+    section = {"frame": "wired",
+               "nodes": [{"kind": "effect", "file": "acid", "slots": 3}],
+               "wires": [{"from": "scene", "to": "acid.image"},
+                         {"from": "acid", "to": "output.all.image"},
+                         {"from": "lookback", "to": "acid.slot.2.image"},
+                         {"from": "acid.slot.2", "to": "output.2.image"},
+                         {"from": "scene", "to": "acid.slot.3.image"},
+                         {"from": "acid.slot.3", "to": "output.3.image"}]}
+    rig, e, pushed = wired_rig(tmp_path, section)
+    assert e.slots_on("acid") == ["acid.slot.2", "acid.slot.3"]
+    assert e.drop_node("rout:acid.slot.2") is None
+    assert e.said == "acid slot 2 removed" and pushed[-1] == "remove acid.slot.2"
+    spec = rig.loaded_patch.graph.spec
+    assert spec.notes == () and spec.slots == (G.SlotAt("acid", 2),)
+    assert {(w.src, w.dst) for w in spec.wires} == {
+        ("scene", "acid.image"), ("acid", "output.all.image"),
+        ("lookback", "output.2.image"),                  # (closed over the slot gone)
+        ("scene", "acid.slot.2.image"), ("acid.slot.2", "output.3.image")}
+    assert e.drop_node("rout:acid.slot.2") is None
+    spec = rig.loaded_patch.graph.spec
+    assert not spec.slots and {"kind": "effect", "file": "acid", "slots": 2} not in \
+        spec.to_json()["nodes"]
+    assert graphview.drop_slot(e, "acid.slot.2") == "acid.slot.2: acid has no slot 2"
+
+
+def test_a_keyed_later_slot_keeps_its_knobs_when_it_numbers_down(tmp_path):
+    """Plan 89 (review of #487): slot 3 keyed (black is clear) is slot 2 once
+    slot 2 comes off — its key and its knobs' values with it."""
+    section = {"frame": "wired",
+               "nodes": [{"kind": "effect", "file": "acid", "slots": 3}],
+               "wires": [{"from": "scene", "to": "acid.image"},
+                         {"from": "acid", "to": "output.all.image"},
+                         {"from": "lookback", "to": "acid.slot.2.image"},
+                         {"from": "acid.slot.2", "to": "output.2.image"},
+                         {"from": "scene", "to": "acid.slot.3.image"},
+                         {"from": "acid.slot.3", "to": "output.3.image"}],
+               "keys": ["acid.slot.3"]}
+    rig, e, _ = wired_rig(tmp_path, section)
+    rig.reg["key.acid.slot.3.level"].set(0.6)
+    assert e.drop_node("rout:acid.slot.2") is None
+    spec = rig.loaded_patch.graph.spec
+    assert spec.keys == ("acid.slot.2",)
+    assert "key.acid.slot.3.level" not in rig.reg
+    assert rig.reg["key.acid.slot.2.level"].value == pytest.approx(0.6)
+
+
+def test_a_refused_slot_removal_leaves_every_key_as_it_was(tmp_path, monkeypatch):
+    """Review of #487: a removal the section refuses moves no key's knobs."""
+    section = {"frame": "wired",
+               "nodes": [{"kind": "effect", "file": "acid", "slots": 3}],
+               "wires": [{"from": "scene", "to": "acid.image"},
+                         {"from": "acid", "to": "output.all.image"},
+                         {"from": "lookback", "to": "acid.slot.2.image"},
+                         {"from": "acid.slot.2", "to": "output.2.image"},
+                         {"from": "scene", "to": "acid.slot.3.image"},
+                         {"from": "acid.slot.3", "to": "output.3.image"}],
+               "keys": ["acid.slot.2", "acid.slot.3"]}
+    rig, e, _ = wired_rig(tmp_path, section)
+    rig.reg["key.acid.slot.2.level"].set(0.4)
+    rig.reg["key.acid.slot.3.level"].set(0.6)
+    monkeypatch.setattr(graphview, "_land", lambda *a, **k: "refused")
+    assert e.drop_node("rout:acid.slot.2") == "refused"
+    assert rig.reg["key.acid.slot.2.level"].value == pytest.approx(0.4)
+    assert rig.reg["key.acid.slot.3.level"].value == pytest.approx(0.6)
 
 
 def test_unwiring_an_effects_only_input_leaves_it_faint_with_its_outs(tmp_path):
@@ -1917,8 +2015,8 @@ def test_deleting_a_window_unwires_it(tmp_path):
 def test_the_picker_groups_by_primitive(tmp_path):
     """The picker in the owner's groups: starters ▸ (plan 36 T5), then scene ▸,
     look-back ▸, pictures ▸, media ▸ (the channels, 2026-10-31; the segment)
-    and masks ▸ (plan 39 T5), the effect files, a copy of each effect
-    instance in the section — each item's group `PICKER_GROUP[kind]`."""
+    and masks ▸ (plan 39 T5), the effect files, a slot on each effect
+    instance in the section (plan 89) — each item's group `PICKER_GROUP[kind]`."""
     section = {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
                "wires": [{"from": "scene", "to": "acid.image"},
                          {"from": "acid", "to": "output.all.image"}]}
@@ -1943,10 +2041,10 @@ def test_the_picker_groups_by_primitive(tmp_path):
         *(("channel", c, f"channel {c}") for c in "abcdefgh"),
         ("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut"),
         *(("effect", f, f) for f in files),
-        ("copy", "acid", "copy of acid"), ("copy", "acid.2", "copy of acid.2")]
+        ("slot", "acid", "slot on acid"), ("slot", "acid.2", "slot on acid.2")]
     groups = [graphview.PICKER_GROUP[k] for k, _, _ in items]
     assert list(dict.fromkeys(groups)) == ["starters", "scene", "look-back", "pictures",
-                                           "media", "masks", "effects", "copy of"]
+                                           "media", "masks", "effects", "slot on"]
 
 
 def test_the_starter_wires_the_scene_to_all_outputs(tmp_path):
@@ -2007,17 +2105,23 @@ def test_a_ground_wire_deletes(tmp_path):
 
 def test_a_frame_node_is_added_once(tmp_path):
     """A frame kind from the picker is its entry, there once: a second add
-    is refused in words; a copy of an instance is `CopyAt(next, of)`."""
+    is refused in words; a slot on an instance is its entry's `slots` one up
+    (plan 89), the effect's own node, nothing new."""
     from hyperspace import graph as G
     rig, e, _ = wired_rig(tmp_path, {"frame": "wired"})
     assert e.add_node("lookback") is None and e.added == "lookback"
     assert G.LookbackAt() in rig.loaded_patch.graph.spec.frame_nodes
     assert e.add_node("lookback") == "Look-back is in the graph already"
     assert e.add_node("effect", "acid") is None
-    assert e.add_node("copy", "acid") is None and e.added == "copy"
-    assert e.add_node("copy", "acid") is None and e.added == "copy.2"
-    assert rig.loaded_patch.graph.spec.copies == (G.CopyAt(1, "acid"), G.CopyAt(2, "acid"))
-    assert e.add_node("copy", "teapot") == "copy of teapot: no such effect instance in the graph"
+    assert e.add_node("slot", "acid") is None and not e.added
+    assert e.said == graphview.SLOT_ADDED.format(label="acid", k=2, name="acid.slot.2")
+    assert e.add_node("slot", "acid") is None
+    assert rig.loaded_patch.graph.spec.slots == (G.SlotAt("acid", 2), G.SlotAt("acid", 3))
+    assert e.add_node("slot", "teapot") == "teapot: no such effect instance in the graph"
+    for _ in range(G.MAX_SLOTS - 3):
+        assert e.add_node("slot", "acid") is None
+    assert e.add_node("slot", "acid") == graphview.SLOTS_FULL.format(of="acid",
+                                                                    most=G.MAX_SLOTS)
 
 
 def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):

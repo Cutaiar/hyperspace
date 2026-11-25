@@ -232,10 +232,11 @@ EYE_SCHEMA = graphmigrate.EYE_SCHEMA
 # hands' and clouds' looks in `values`, the bus cuts in `bus`, no module
 # labels, no desk template — what every save writes
 LOOK_SCHEMA = graphmigrate.LOOK_SCHEMA
-# plan 57 (FQ4): `/11` is `/10` under `hyperspace.loadable`: what every save writes
-SAVE_SCHEMA = graphmigrate.ELEVEN_SCHEMA
+# plan 57 (FQ4): `/11` is `/10` under `hyperspace.loadable`. Plan 89: `/12` is
+# `/11` with an effect's copies as its slots — what every save writes
+SAVE_SCHEMA = graphmigrate.TWELVE_SCHEMA
 KIND = graphmigrate.LOADABLE_KIND
-VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
 # plan 44 D3: the loadable patch's bus cuts, `{"cut": [{"from", "to"}, …]}` — the
 # meta controller's cables from All outputs into a window that this loadable patch cuts
 # (`graph.BusCuts`); no key: every cable stands
@@ -1401,11 +1402,9 @@ class LoadedPatch:
         """The registry ids under canvas node `node`, for `nodemode.fillable`: the
         panel's list (`graphview.param_ids`), read off the section, so the rows do
         not wait for a panel to have drawn."""
-        spec = getattr(self._graph_section(), "spec", None)
-        name = node.partition(":")[2] if node.startswith("render:") else node
-        frame = graphview.frame_of(spec)
-        of = next((c.of for c in getattr(frame, "copies", ()) if c.name == name), "")
-        return graphview.param_ids(self.reg, node, of)
+        # (plan 89: no canvas node is a copy — an effect's slots are its own
+        # node's, under its one set of knobs)
+        return graphview.param_ids(self.reg, node)
 
     def document(self, name: str) -> dict:
         """The live state as a loadable patch document, named — what a save writes."""

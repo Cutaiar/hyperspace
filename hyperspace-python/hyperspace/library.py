@@ -309,7 +309,9 @@ DEFAULT_NAMES = {"band": "Balanced"}
 # entry in `groups()`, no default loadable patch — `defaults` is the fresh values
 # even where an old `<library>/fx/default.json` survives. Their params are
 # untouched: the effects are the graph's (the FX page, D10, stays)
-RETIRED_MODULES = ("fx",)
+# plan 40 T5: `fx`; 2026-11-23: `hands` — nobody used a hands setup (no patch or preset
+# names one); the feel keeps its defaults and a patch that wants other ones says so itself
+RETIRED_MODULES = ("fx", "hands")
 
 # working-directory files that move into the library home on first run
 MIGRATED_FILES = ("config.toml", "midi_map.json")
@@ -1171,8 +1173,9 @@ class Install:
                 lib.reland(group, mark)
         docs: list[tuple[str, str, dict | None]] = []
         for group, ref in self.modules.items():
-            if group in lib._kinds or group not in SHARED_META_GROUPS:
-                continue                              # a loadable patch's, or a document kind's
+            if (group in lib._kinds or group not in SHARED_META_GROUPS
+                    or group in RETIRED_MODULES):
+                continue          # a loadable patch's, a document kind's, or a retired module's
             if isinstance(ref, dict):                 # inline copy of a loadable patch
                 name, doc = str(ref.get("name") or ""), dict(ref)
             else:                                     # by name in the library
@@ -1696,7 +1699,8 @@ class Install:
         self.session = {**self._held_back(), **lib.reg.snapshot(part="shared_meta")}
         self.modules = {}
         for group, cur in lib._current.items():
-            if cur is None or group in lib._kinds or group not in SHARED_META_GROUPS:
+            if (cur is None or group in lib._kinds or group not in SHARED_META_GROUPS
+                    or group in RETIRED_MODULES):
                 continue                              # a loadable patch's label, or a kind's
             if lib.path_of(group, cur) is not None:
                 self.modules[group] = cur

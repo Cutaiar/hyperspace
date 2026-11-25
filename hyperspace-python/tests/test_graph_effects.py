@@ -1,8 +1,8 @@
 """Plan 30 D0: the effect node, and the frame chain as a run of them.
 
 The pure half first — the frame holds one `graph.Effect` node per
-effect instance in the run's wire order, and (plan 35 T4) one `graph.Copy`
-per effect for each output wired with the hands through, each chain ending
+effect instance in the run's wire order, and (plan 35 T4; plan 89) one
+`graph.Slot` per effect for each output wired with the hands through, each chain ending
 in its end (`graph.Shown`), and the pool it asks for — then the
 renderer's half on offscreen targets: an off effect reads through and
 runs no pass, two instances are two nodes on one program, an effect read
@@ -30,7 +30,7 @@ RUN = ("warp", "acid", "acid.2", "palette")
 
 
 def _effects(g: G.Graph, end: str) -> list[G.Effect]:
-    """The effects (copies too) end `end` reads, first first."""
+    """The effects (slots too) end `end` reads, first first."""
     return G._effects_of(g.nodes[end].inputs["image"])
 
 
@@ -47,8 +47,9 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
     """All outputs' end reads the last of a run of effect nodes, one per
     instance in the run's wire order (plan 33 R; plan 35: `lookback → … →
     output.all.image`), the first reading the look-back; each output wired
-    with the hands through has a copy of each (`Copy`, named `copy`,
-    `copy.2` …) over its composite (plan 35 T4, row 377); none given, the
+    with the hands through has a slot of each (plan 89: `Slot`, named
+    `warp.slot.2`, then `warp.slot.3` for the next output …) over its
+    composite (plan 35 T4, row 377); none given, the
     end reads the look-back as before D0. Plan 36 T1: with every window
     through, the run is built (All outputs' picture) but no end shows it."""
     wires = [{"from": a, "to": f"{b}.image"} for a, b in zip(("frame", *RUN), RUN)]
@@ -62,9 +63,9 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
     assert graph(shows, effects=RUN).run == ()
     assert "shown(palette)" not in g.nodes and g.nodes["palette"].inputs["image"] is \
         g.nodes["acid.2"]
-    for end, src, names in (
-            ("shown(copy.4)", "composite", ["copy", "copy.2", "copy.3", "copy.4"]),
-            ("shown(copy.8)", "composite.2", ["copy.5", "copy.6", "copy.7", "copy.8"])):
+    for end, src, k in (("shown(palette.slot.2)", "composite", 2),
+                        ("shown(palette.slot.3)", "composite.2", 3)):
+        names = [f"{e}.slot.{k}" for e in RUN]
         run = _effects(g, end)
         assert _run_of(g, end) == list(RUN)
         assert [e.name for e in run] == names
@@ -74,7 +75,7 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
         order = [n.name for n in g.order]
         assert [order.index(n) for n in names] == sorted(order.index(n) for n in names)
         assert order.index(names[-1]) < order.index(end)
-    assert all(isinstance(g.nodes[f"copy.{k}"], G.Copy) for k in range(2, 9))
+    assert all(isinstance(g.nodes[f"{e}.slot.{k}"], G.Slot) for e in RUN for k in (2, 3))
     # the timed lines are the graph's own: an effect has one only when it runs
     assert not set(g.timed) & {n.name for n in g.order if isinstance(n, G.Effect)}
     assert g.pool == 2
@@ -171,7 +172,11 @@ def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
     def every_one_wired(r):
         """Every effect in the run (by its file's @order), switched off."""
         st = r.fx.state
-        names = sorted(st.specs, key=lambda n: (st.specs[n].order, n))
+        # (plan 67 F1: the picture effects that take a picture — a field
+        # maker takes none, nor does a generator with no input, Colour)
+        names = sorted((n for n, s in st.specs.items()
+                        if s.makes != "field" and "image" in G.effect_ports(n)[1]),
+                       key=lambda n: (st.specs[n].order, n))
         chain = ["frame", *names]
         r.wiring = wired_wiring(wired(r, {"wires": [{"from": a, "to": f"{b}.image"}
                                        for a, b in zip(chain, names)]
@@ -391,7 +396,7 @@ def test_the_run_draws_what_the_one_block_chain_drew(ctx, monkeypatch, effects):
     """Byte for byte, with the off effects between the on ones read
     through: the run of nodes against the pre-D0 end (no effect nodes, the
     block chain), through the scene and the hands-through outputs (plan
-    35 T4: their copies)."""
+    35 T4: their slots, plan 89)."""
     import numpy as np
     from test_outputs import rig, run, views, wviews
     from wiredframe import wiring
@@ -411,7 +416,7 @@ def test_the_run_draws_what_the_one_block_chain_drew(ctx, monkeypatch, effects):
         # a through's end is always itself (hands drawn and an effect on:
         # what bent the pipeline)
         thru = wiring(G.Wiring(), *(s.shows if isinstance(s, Thru) else Shows() for s in sw))
-        assert not thru.copies
+        assert not thru.slots
 
         def bare(vs, o=old):
             from test_outputs import _stack_names
@@ -442,8 +447,9 @@ def test_the_value_port_type_exists_and_no_node_uses_it():
 
     from hyperspace import modgraph
 
-    assert G.VALUE == "value" and G.PORT_TYPES == (G.IMAGE, G.MASK, G.GEOMETRY, G.VALUE)
-    assert len(set(G.PORT_TYPES)) == 4
+    # (plan 67 F1: the field, a fifth)
+    assert G.VALUE == "value" and G.PORT_TYPES == (G.IMAGE, G.MASK, G.GEOMETRY, G.VALUE, G.FIELD)
+    assert len(set(G.PORT_TYPES)) == 5
     src = Path(G.__file__).read_text()
     doc = src[src.index('VALUE = "value"'):src.index("PORT_TYPES =")]
     assert "palette" in doc and "lights" in doc and "sample" in doc and "plan 29" in doc

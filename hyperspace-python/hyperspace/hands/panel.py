@@ -165,8 +165,18 @@ def _gate_menu(router, rows) -> bool:
 
 def page(panel, dt: float) -> None:
     settings = getattr(panel, "hand_settings", None)
-    io = getattr(panel, "hands", None)
     panel._section("hands", GROUP if settings is not None else None)
+    body(panel, dt)
+
+
+def body(panel, dt: float, *, strip: bool = True) -> None:
+    """Everything the HANDS page draws under its header: status, the box from
+    above, the pinches, the ghost, the axes and their editor, feel &
+    calibration, and the grip. The GRAPH page's hands node draws it as its
+    selection (`strip=False`: no library strip on the grip — the hands'
+    settings are the node's own, not a preset's to compose)."""
+    settings = getattr(panel, "hand_settings", None)
+    io = getattr(panel, "hands", None)
     if settings is None:
         imgui.text_disabled("no hands setup — the SYSTEM page says why")
         return
@@ -188,7 +198,7 @@ def page(panel, dt: float) -> None:
         _calibrate(io, settings, k)
     if "grip.on" in panel.reg:
         imgui.spacing()
-        grip(panel)
+        grip(panel, strip=strip)
 
 
 GRIP_ROWS = ("grip.coupling", "grip.drag")
@@ -199,12 +209,12 @@ GRIP_GATES = (("grip.clutch", "Clutch", "default_clutch"),
              ("grip.shape_clutch", "Shape clutch", "default_shape_clutch"))
 
 
-def grip(panel) -> None:
+def grip(panel, *, strip: bool = True) -> None:
     """The hand rig (plan 60, grip.py): its section and preset strip, the
     switch, then — while on — the hand, the coupling and drag, the inertia
     and the two clutches as lane addresses (empty: the grabs)."""
     reg = panel.reg
-    panel._section("grip", "grip")
+    panel._section("grip", "grip" if strip else None)
     panel._check("grip.on")
     if not bool(reg["grip.on"].value):
         return
@@ -744,6 +754,7 @@ def _editor(panel, io, settings, k: int) -> None:
     if ui.small_button("mirror"):
         mirror(settings, a.name)
     if imgui.is_item_hovered():
+        panel._param_under = panel.reg[f"{p}.deadzone"]    # ⌘Z goes by the hands' (meta) stack
         ui.tooltip("Copy this axis's feel (not its MIDI out) to the same axis "
                           "on the other hand.")
     if io is not None:

@@ -505,11 +505,12 @@ def _click_view(d, key: str):
 
 def _spills(d, st) -> list[tuple[str, float]]:
     """The controls drawn in the pane last frame whose right edge passes
-    the pane's: (id, by how many px)."""
+    the pane's: (id, by how many px). A control that starts beyond the pane's right
+    edge is the canvas's, not the pane's (the camera node's removal moved one there)."""
     (x, y), (w, h) = st["details_rect"]
     out = []
     for k, (x0, y0, x1, _y1) in d.rects.items():
-        if x0 >= x - 1 and y - 1 <= y0 <= y + h and x1 > x + w + 1:
+        if x - 1 <= x0 < x + w and y - 1 <= y0 <= y + h and x1 > x + w + 1:
             out.append((k, round(x1 - (x + w), 1)))
     return out
 

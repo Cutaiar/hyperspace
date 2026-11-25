@@ -1,11 +1,11 @@
 # Hyperspace
 
-A real-time 4D polytope visualizer. 101 shapes (the 5-cell to the 600-cell and
+A real-time 4D polytope visualizer. 110 shapes (the 5-cell to the 600-cell and
 some forty more 4-polytopes from the grand antiprism to the star polychora, the
 Clifford torus, eight surfaces from
 the Heart to a Klein bottle, and — plan 28's spike — a catalog of 3D solids,
 stars, compounds, mathematical toys and multi-shape scenes, and a vector
-logo drawn flat and as capsules), rotating through six planes, with each plane driven by a
+logo drawn flat and as capsules, and eight fractals), rotating through six planes, with each plane driven by a
 frequency band of whatever audio is playing.
 
 This repository holds two iterations, a couple of companions for sharing it,
@@ -20,7 +20,7 @@ and a prototype:
 - **[`hyperspace-web/`](hyperspace-web/)** — the original single-file HTML
   version. No longer under active development, kept for reference and as the
   test oracle for the Python renderer. Live at
-  <https://hyperspace-lake.vercel.app> and <https://hyperspacedemo.cutaiar.io>.
+  <https://hyperspace-legacy.vercel.app> and <https://hyperspacedemo.cutaiar.io>.
 
 - **[`hyperspace-contact/`](hyperspace-contact/)** — a one-page link tree to
   share the project: our Instagram handles and a QR code back to the page. Live

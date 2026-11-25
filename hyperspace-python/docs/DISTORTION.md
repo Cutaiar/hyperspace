@@ -5,7 +5,6 @@ they share. Added 2026-11-13. Each is one file in
 `hyperspace/shaders/fx/` with nothing in Python, like every effect
 (`fx.py`'s docstring has the file format).
 
-- Patches to play them: `presets/distort/` (its README lists all 23).
 - Tests: `tests/test_fx_distort.py`, `tests/test_distort_presets.py`.
 - Demo video: `tools/distort_demo.py` (see "Showing an effect" below).
 
@@ -72,6 +71,9 @@ Along × Push gives six fields: rows slipping (line, slide), a spring
 (line, squeeze), a pond (rings, squeeze), counter-turning rings (rings,
 slide), petals (spokes, slide), pinched wedges (spokes, squeeze).
 
+**As a patch** (plan 67 §12, §15): `point → rings → waveform → combine ← rings.2 →
+displace`, the field example `field-wave` (Line or Spokes for Wave's other Alongs).
+
 ## Blocks (`blocks.glsl`)
 
 The frame cut into a grid; a rule hands each cell a number; an action
@@ -87,6 +89,12 @@ uses it.
 | Shape, Drift | How a cell's number moves in time, and how fast. Drift 0 holds the grid still |
 | Action | `shift` · `zoom` · `stretch` (one way; low numbers pull a line into streaks) · `turn` · `bulge` (a lens inside the cell's inscribed circle, still at its rim, so cells stay joined) · `swap` (blocks pair off and each pair trades places: every cell is shown once, none twice) |
 | Angle, Split | The way shift and stretch go, and whether swap trades across or up and down; the colour split |
+
+**As a patch** (plan 67 §14, §15): `cells → waveform → cell action ← cells.2
+(Out place) → displace`, the field example `field-blocks`. Cell,
+Aspect, Group, Rule, Spread go to both Cells (Cell as cells to a frame height:
+the frame's height ÷ Cell); Shape and Drift to Waveform, its Phase a quarter turn;
+Action, Amount and Angle to Cell action; Split to Displace, Amount 0.5.
 
 ## Test card (`testcard.glsl`)
 
@@ -114,7 +122,11 @@ A node that reaches no output is never built, so its thumbnail is made beside th
 
 Write a file that computes `d`, the offset in frame heights, and ends
 `return pushed(uv, d, u_split);`. Use `wave()` for anything periodic and
-a `@clock` for anything that moves. Then:
+a `@clock` for anything that moves. Build the field from `_lib.glsl`'s field
+pieces (plan 67): `from_point` for a Centre X / Y, `measure_line`,
+`measure_rings`, `measure_spokes` or `measure_cells` for what is counted,
+`quantise` for Steps — never a copy of your own
+(`tests/test_field_lib.py` checks). Then:
 
 1. Add its `fx.<name>.amount` to `AMOUNTS` in `tests/test_retaper.py`.
 2. Add it to `NAMES` in `tests/test_fx_distort.py`: the Amount 0 and

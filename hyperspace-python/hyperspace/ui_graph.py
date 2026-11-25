@@ -164,7 +164,8 @@ a picture cable's menu has the tracers, dream and feedback ones, on its
 picture, and a picture node's menu has **add feedback after**, the loop on
 the cable out of it, laid under the node's box: `render_node_menu`,
 `add_feedback_after`, `node_below`), scene ▸, look-back ▸, pictures ▸, effects ▸,
-copy of ▸ — a frame node the section has drawn disabled
+slot on ▸ (plan 89: one more picture through an effect, on its own node) —
+a frame node the section has drawn disabled
 (`render_picker`).
 
 A node can be moved: where it is dropped is saved, in the
@@ -248,6 +249,7 @@ from . import graph as rgraph
 from . import (
     graphview,
     modifiers,
+    nodemode,
     params,
     patches,
     pinch,
@@ -268,6 +270,7 @@ from . import ui_effect_picker as fxpick
 from .bands import CEIL
 from .graph import Effect
 from .groupwords import group_title
+from .hands import panel as ui_hands
 from .learn import META_UNDO, PairAsk
 from .library import LibraryError
 from .params import KEY_GROUP, Kind
@@ -281,6 +284,9 @@ COLOURS = {
     graphview.IMAGE: imgui.ImVec4(*RED_RGB, 1.0),     # ui.RED: the one red
     graphview.GEOMETRY: imgui.ImVec4(0.38, 0.72, 1.0, 1.0),
     graphview.MASK: imgui.ImVec4(0.72, 0.52, 1.0, 1.0),
+    # plan 67 F1: a field cable, green — no other cable is, and it reads as
+    # "a map", not a picture
+    graphview.FIELD: imgui.ImVec4(0.36, 0.86, 0.56, 1.0),
 }
 # a cable of a kind with a colour of its own, whatever it carries (plan 57: the
 # owner's "a special type of cable", not white, as the value cables nearly are)
@@ -328,9 +334,9 @@ TITLE_SCREEN = 18.0      # px: what it stays on screen while the canvas is zoome
 TITLE_FLOOR = 12.0       # px: never smaller on screen (review round 1); a short word if need be
 TITLE_GAP = 16.0         # canvas units kept clear before the next title on its row
 THROUGH_ALPHA = 0.5      # a through wire over off effects: drawn, but plainly not a cable
-COPY_NOTHING = "nothing to copy: select an effect, or a copy of one, then ⌘C"
+COPY_NOTHING = "nothing to copy: select an effect, then ⌘C"
 PASTE_NOTHING = "nothing copied yet: select an effect and press ⌘C"
-COPIED = "{of} copied: ⌘V adds a copy of it, with its knobs"
+COPIED = "{of} copied: ⌘V adds a slot to it — one more picture through it, with its knobs"
 THROUGH_NO_DELETE = ("a through wire stands for off effects: turn one on (FX) or open the "
                      "off effects line to edit its cables")
 AREA_TIP = "Frame the canvas on this area's boxes (a click on its title does the same)" 
@@ -344,6 +350,8 @@ BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it �
 FAINT_TIP = (f"{graphview.REACHES_NOTHING}: no path from it ends at an output, the faces, "
              "the pattern, the backdrop or the run — it never runs. Wire it in, or drop "
              "it on a picture cable")
+UNFED_TIP = (f"{graphview.FED_BY_NOTHING}: nothing is wired into its input, so it is "
+             "never built and draws nothing — wire {need} into it on the canvas")
 BUNDLE_STEP = 0.5        # px a cable, past the first
 BUNDLE_MAX = 7.5         # the cap: a bundle of ten cables or more (3 + 9 × 0.5)
 EXPAND_TIP = "Expand this node: a row per port, its real cables"
@@ -1383,20 +1391,15 @@ def still_held(panel, nid: str, spec) -> bool:
 
 def node_params(panel, nid: str) -> list[str]:
     """The registry ids under canvas node `nid` (`Panel.graph_selected_params`):
-    `graphview.param_ids`, a copy's being its original's, as its side-panel
-    header says."""
-    view = _state(panel).get("view")
-    n = view.node(nid) if view is not None else None
-    name = nid.partition(":")[2] if nid.startswith("render:") else nid
-    of = getattr(n.ref, "effect", "") if n is not None and graphview.kind_of(name) == "copy" else ""
-    return graphview.param_ids(panel.reg, nid, of)
+    `graphview.param_ids`, as its side-panel header says (plan 89: an
+    effect's one set, whatever slots it has)."""
+    return graphview.param_ids(panel.reg, nid)
 
 
 def effect_node(view: graphview.View, name: str) -> graphview.VNode | None:
     """The node effect instance `name` is drawn as: its scene pipeline's
     (named by the instance), else its first."""
     hits = [n for n in view.nodes if isinstance(n.ref, Effect) and n.ref.effect == name]
-    # (plan 35 G: the instance's own node, before a copy of it)
     return next((n for n in hits if n.id == f"render:{name}"),
                 next((n for n in hits if n.ref.name == name), hits[0] if hits else None))
 
@@ -1467,12 +1470,11 @@ def _chord(key) -> bool:
 
 
 def _copy_paste(panel, st: dict, view: graphview.View) -> None:
-    """⌘C / ⌘V on the canvas, for a node that can have copies (an effect, or
-    a copy of one): ⌘C holds the effect instance it draws (`st["clip"]`),
-    ⌘V adds a copy of it (`Edit.add_node("copy", of)`: the same effect with
-    its knobs, on another picture — unwired until a picture is) just under
-    the node last copied or pasted, one undo step, and selects it. Any
-    other selection says what can be copied."""
+    """⌘C / ⌘V on the canvas, for an effect: ⌘C holds the effect instance
+    (`st["clip"]`), ⌘V adds a slot to it (plan 89, `Edit.add_node("slot",
+    of)`: the same effect with its knobs on one more picture — unwired until
+    a picture is — on the effect's own node), one undo step, and selects
+    the effect. Any other selection says what can be copied."""
     copy, paste = _chord(imgui.Key.c), _chord(imgui.Key.v)
     if not (copy or paste):
         return
@@ -1491,12 +1493,10 @@ def _copy_paste(panel, st: dict, view: graphview.View) -> None:
     if not clip:
         _note(st, PASTE_NOTHING)
         return
-    at = node_below(st, clip["nid"])
     e = render_edit(panel)
-    why = add_render(panel, e, "copy", clip["of"], at)
-    if why is None and e.added:
-        clip["nid"] = f"render:{e.added}"       # the next paste lands under this one
-        select_node(panel, e.added)
+    why = add_render(panel, e, "slot", clip["of"])
+    if why is None:
+        select_node(panel, clip["of"])
 
 
 def _tidy_key(panel, st: dict) -> None:
@@ -1974,6 +1974,24 @@ def _cost_style(st: dict, n: graphview.VNode):
         ed.pop_style_color(2)
 
 
+COST_BADGE_PAD = 6.0        # a badge's words from its ends (canvas units)
+
+
+def cost_badge_rect(node_pos: tuple[float, float], node_w: float,
+                    text: tuple[float, float]) -> tuple[tuple[float, float], tuple[float, float]]:
+    """A gpu cost badge's corners (top left, bottom right) for a node at
+    `node_pos` `node_w` wide, its words `text` (w, h) in size: right-aligned
+    8 units in from the node's right end, its bottom edge on the node's top
+    edge. The node editor draws its nodes over the canvas's draw list, so
+    any part of the pill below that edge is hidden behind the node (it sat
+    0.4 of its height down, and showed half its words)."""
+    h = max(COST_BADGE_H, text[1] + 4)
+    w = text[0] + 2 * COST_BADGE_PAD
+    x1 = node_pos[0] + max(node_w, NODE_W) - 8.0
+    y1 = node_pos[1]
+    return (x1 - w, y1 - h), (x1, y1)
+
+
 def _cost_badge(st: dict, n: graphview.VNode) -> None:
     """Node `n`'s gpu cost badge (plan 84), just drawn: its time ("#1 ·
     2.10 ms") or "made nothing" on a small pill sitting on its top edge,
@@ -1986,11 +2004,10 @@ def _cost_badge(st: dict, n: graphview.VNode) -> None:
     p, sz = ed.get_node_position(k), ed.get_node_size(k)
     words = c.words
     size = imgui.calc_text_size(words)
-    pad = 6.0
-    w, h = size.x + 2 * pad, max(COST_BADGE_H, size.y + 4)
-    x1 = p.x + max(float(sz.x), NODE_W) - 8.0
-    y0 = p.y - h * 0.6
-    a, b = imgui.ImVec2(x1 - w, y0), imgui.ImVec2(x1, y0 + h)
+    pad = COST_BADGE_PAD
+    (ax, ay), (bx, by) = cost_badge_rect((p.x, p.y), float(sz.x), (size.x, size.y))
+    a, b = imgui.ImVec2(ax, ay), imgui.ImVec2(bx, by)
+    h = by - ay
     if c.ms is None:
         ground, ink = imgui.ImVec4(0.12, 0.12, 0.13, 0.95), COST_FAINT
     else:
@@ -3834,7 +3851,7 @@ def _group_item(panel, st: dict, m: ui_menu.Menu) -> None:
 
 def thumb_name(n: graphview.VNode) -> str:
     """The render node a canvas node's thumbnail is kept under: its render
-    node's name (a channel's or a copy's own), else the canvas id's."""
+    node's name (a channel's own), else the canvas id's."""
     return getattr(n.ref, "name", None) or n.id.partition(":")[2]
 
 
@@ -3905,7 +3922,7 @@ def thumb_how(st: dict, n: graphview.VNode) -> str:
 
 def has_card(n: graphview.VNode) -> bool:
     """Can node `n`'s thumbnail be switched to the test card? An effect's
-    can (a copy of one too): the card is put through that one effect."""
+    can: the card is put through that one effect."""
     return n.thumb == graphview.PICTURE and graphview.kind_of(n.id.partition(":")[2]) \
         in graphview.CARD_KINDS
 
@@ -4083,7 +4100,7 @@ def thumb_tip(st: dict, n: graphview.VNode) -> str:
     if card_shown(st, n):
         tip += "\nshowing the test card through it"
     elif getattr(n, "faint", False) and has_card(n):
-        tip += f"\n{graphview.UNWIRED_WORDS}"
+        tip += f"\n{graphview.UNFED_WORDS if n.unfed else graphview.UNWIRED_WORDS}"
     return tip + (f"\n{n.status}" if n.status else "")
 
 
@@ -4256,7 +4273,8 @@ def _hover(st: dict, view: graphview.View, panel=None) -> None:
         elif n is not None and n.thumb is not None and st.get("thumb_hover") == n.id:
             tip = thumb_tip(st, n)          # plan 37 C2: on its picture
         elif n is not None and n.faint:
-            tip = f"{n.label}\n{FAINT_TIP}" + (f"\n{n.status}" if n.status else "")
+            tip = (f"{n.label}\n{UNFED_TIP.format(need=graphview.needs_input(n)) if n.unfed else FAINT_TIP}"
+                   + (f"\n{n.status}" if n.status else ""))
         elif n is not None and n.status:
             tip = f"{n.label}\n{n.status}"
     if tip:
@@ -4410,7 +4428,7 @@ def render_picker(panel, at, m: ui_menu.Menu) -> None:
     T5, `graphview.STARTERS`), then scene ▸, look-back ▸ (its look-back frames under `LOOKBACK_MENU`),
     pictures ▸ (R28's switch over the channels under the switch), media ▸
     (2026-10-31: channel a–h, each selecting a channel that always exists,
-    `pick_channel`; the segment), masks ▸, effects ▸ and copy of ▸. A
+    `pick_channel`; the segment), masks ▸, effects ▸ and slot on ▸. A
     frame node the section has already — the scene, the
     shape, the look-back, the backdrop, the pattern, an echo, the dream —
     is drawn disabled (`graphview.picked`): there is one of each. A node
@@ -4545,7 +4563,9 @@ def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | N
 
 def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
     """A render node's menu items: a hands node drawn solid or as lines, a
-    composite's blend, black is clear on any picture node (plan 87), a picture node's "add feedback after" (wave 0 E1:
+    composite's blend, an effect's slots (plan 89: **add slot**, **remove
+    slot k**), black is clear on any picture node (plan 87), a picture
+    node's "add feedback after" (wave 0 E1:
     `_feedback_after_menu`, `add_feedback_after`), delete."""
     e = render_edit(panel)
     name, _ = graphview.spec_name(n.id, e.render)
@@ -4558,6 +4578,15 @@ def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
         for how in rgraph.BLENDS:
             m.item(f"laid {how}", lambda how=how: _render_said(
                 panel, e, lambda e, how=how: e.set_node(name, blend=how)))
+    if kind == "effect":
+        # plan 89: one more picture through the effect, on its own node; and
+        # each slot past the first taken off again
+        m.item(SLOT_ITEM, lambda: _render_said(panel, e, lambda e: e.add_node("slot", name)),
+               tip=SLOT_TIP)
+        for slot in e.slots_on(name):
+            k = rgraph.split_slot(slot)[1]
+            m.item(f"remove slot {k}", lambda slot=slot: _render_said(
+                panel, e, lambda e, slot=slot: e.drop_node(f"rout:{slot}")))
     if graphview.keyable(name):
         # plan 87: black is clear on any picture node — its knobs then on
         # the selection (`key.<name>.*`)
@@ -4572,6 +4601,10 @@ def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
 
 
 FEEDBACK_AFTER = "add feedback after"
+# plan 89: an effect's menu item for one more slot, and what it says
+SLOT_ITEM = "add slot"
+SLOT_TIP = ("One more picture through this effect: its own image and aux in and its own "
+            "picture out, with the same knobs.")
 # plan 87: a picture node's menu item, and what it says
 KEY_ITEM = "black is clear"
 KEY_TIP = ("This node's dark parts become transparent, so what is under it shows "
@@ -4721,6 +4754,9 @@ def _side(panel, st: dict, view: graphview.View, sel) -> None:
         imgui.pop_id()
 
 
+FRAME_READINGS = ("render", "output", "channel")    # nodes whose port readings are not content
+
+
 def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode) -> None:
     """A selected node's side panel (the owner, 2026-10-24): its page's
     chip (`home_page`), then an effect's strip, a modifier's editor, or its
@@ -4760,8 +4796,13 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
             ui._micro("dials")
             panel._dials()
         return                                  # — the picture says what the port lines would
+    if n.id == f"render:{rgraph.wired_hands_name(1)}":     # the hands node IS the hands page: where they are,
+        ui_hands.body(panel, 1 / 60, strip=False)   # the pinches, the axes, calibration, the grip
+        return
     if _param_rows(panel, st, n):
         return
+    if n.kind in FRAME_READINGS:            # (a source's readings are its content; a picture
+        return                              # node's "image: not live" says nothing)
     for port in n.ports:
         if port.patched:
             imgui.text_disabled(f"{port.name}: {_said(port.live)}")
@@ -4833,6 +4874,9 @@ def node_mode_block(panel, n: graphview.VNode) -> None:
     for h in nd.held():
         cid = f"graph.side.node_mode.{h.role}"
         if h.node != n.id:
+            if nd.refusal(h.role, n.id) == nodemode.NO_PARAMS.format(
+                    node=n.id.removeprefix("render:")):
+                continue                # nothing to point at: no chip, rather than a grey one
             tip = OTHER_DECK_TIP if not h.on_here else (
                 f"Fill {h.role}'s {FILLS.get(h.kind, 'knobs and faders')} with this node's "
                 "params, saved in this patch. One undo step.")
@@ -5048,9 +5092,7 @@ def home_page(n: graphview.VNode):
         return (key, None) if key is not None else None
     # plan 35 G: by the wired frame's ids — `render:camera` (was `render:eye`),
     # a channel `render:channel.<c>`, All outputs the OUTPUT page with no
-    # window picked, a copy FX with its original selected (`Copy.effect`)
-    if n.id == f"render:{graphview.CAMERA}":
-        return ("camera", None)
+    # window picked, an effect FX with it selected (its slots are its own)
     if n.id == f"render:{rgraph.ALL_OUTPUTS}":
         return ("output", None)
     if isinstance(r, rgraph.MediaNode):
@@ -5866,7 +5908,7 @@ def put_onto(panel, view: graphview.View, nid: str, c: graphview.VCable,
     if n is None:
         return None
     if n.kind in graphview.FRAME_VKINDS:
-        # (plan 35 G: the node's own name — an instance, or a copy of one)
+        # (plan 35 G: the node's own name — an instance)
         name = n.id.partition(":")[2]
         ask = graphview.inlet_choices(name)
         if ask and inlet is None:
@@ -5956,7 +5998,7 @@ def _drag_tip(text: str) -> None:
 # graphview.IMAGE / GEOMETRY / MASK to its own)
 CREATE = {graphview.VALUE: _value_drag, graphview.TRIGGER: _value_drag,
           graphview.IMAGE: _create_render, graphview.GEOMETRY: _create_render,
-          graphview.MASK: _create_render}
+          graphview.MASK: _create_render, graphview.FIELD: _create_render}
 
 
 def _drag_type(view: graphview.View, a: str, b: str) -> str:
@@ -6389,6 +6431,12 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at,
         with m.sub("insert"):
             for kind in modifiers.KINDS:
                 m.item(kind, lambda kind=kind: insert_modifier(panel, c, kind))
+    if c.kind == "render" and c.depth is not None:   # plan 67 P3: a field into a knob
+        with m.sub("depth"):
+            for d, words in graphview.depth_choices(c.ref):
+                m.item(words, (lambda d=d: _render_said(
+                    panel, render_edit(panel), lambda e, d=d: e.set_depth(c.ref, d))),
+                       enabled=d != c.depth)
     if c.kind == "render" and c.type == graphview.IMAGE:
         e = render_edit(panel)
         with m.sub("insert"):                   # plan 33 U; 2026-11-01: every picture node

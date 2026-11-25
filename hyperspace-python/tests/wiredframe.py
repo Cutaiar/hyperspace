@@ -37,11 +37,16 @@ def section(src: Any = None, **kw) -> dict:
         if src.wired:
             # (plan 36 T3: `wiring_of` and a renderer hand a wired one —
             # its section is its wires, as the canvas reads it)
+            # (plan 89: an effect's slots on its entry)
+            most: dict[str, int] = {}
+            for x in src.slots:
+                most[x.effect] = max(most.get(x.effect, 1), x.k)
             return G.GraphSpec(
                 hands=tuple(src.nodes()),
                 laid=src.blend, laid_on=src.laid_on,
-                others=(*(("composite", c) for c in src.composites),
-                        *(("copy", c) for c in src.copies)),
+                effects=tuple(G.EffectAt(*G.split_instance(e), slots=k)
+                              for e, k in sorted(most.items())),
+                others=tuple(("composite", c) for c in src.composites),
                 wires=tuple(src.wires), wired=True).to_json()
         # (plan 36 T3: D1's placements are written as wires in `shown`,
         # after the states — the builder placed on each output's state)
@@ -243,7 +248,7 @@ def unwired(section: Any, specs: M.Specs | None = None) -> tuple[dict, bool] | N
     """A wired frame's round trip (plan 35 M, row 384): (the section in the
     old ids that `migrate` writes as exactly this frame, the
     `backdrop.history` its capture wire says), or None when there is none —
-    the frame was edited, or it says what no section before it can (a copy,
+    the frame was edited, or it says what no section before it can (a slot,
     a frame node's entry, a picture into All outputs that is not the run).
 
     The rest: the section with the marker, the frame's own wires (the
@@ -265,7 +270,7 @@ def unwired(section: Any, specs: M.Specs | None = None) -> tuple[dict, bool] | N
         return None
     raw = [w for w in section.get("wires") or [] if isinstance(w, dict)]
     pairs = [(w.get("from"), w.get("to")) for w in raw]
-    if any(M._kind(x) == "copy" for a, b in pairs
+    if any(M._kind(x) == "slot" for a, b in pairs
            for x in (a, b.rpartition(".")[0] if isinstance(b, str) else None)):
         return None
     into = {b: a for a, b in pairs}
@@ -312,7 +317,7 @@ def unwired(section: Any, specs: M.Specs | None = None) -> tuple[dict, bool] | N
         if not isinstance(e, dict):
             continue
         kind = e.get("kind")
-        if kind in (*G.FRAME_KINDS, "copy"):
+        if kind in G.FRAME_KINDS:
             continue
         if kind == "composite" and comp is not None and M._named(
                 "composite", int(e.get("instance", 1))) == comp:

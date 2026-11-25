@@ -136,6 +136,7 @@ from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .graph import (
     EMPTY,
     FACE_PIC,
+    FIELD,
     IMAGE,
     MEDIA_CHANNELS,
     Capture,
@@ -154,12 +155,14 @@ from .graph import (
     bus_cuts_of,
     channel_into,
     cloud_roles,
+    effect_of,
     generators_of,
     graph_key,
     mask_flip,
     mask_made,
     param_prefix,
     picture,
+    wire_depths,
 )
 from .lookback import Dreamer, DreamState, Lookback
 from .masks import MaskPasses
@@ -1155,7 +1158,7 @@ def thumb_source(frame: Frame, name: str, how: str,
     - ``card``: an effect whose thumbnail is switched to the test card
       (`card_through`): never the frame's picture, and nothing of the
       frame is pulled for it;
-    - ``unwired`` (plan 65): an effect or a copy whose picture reaches no
+    - ``unwired`` (plan 65): an effect whose picture reaches no
       output, so the frame never built it (`graph.reaches`): its real input
       put through it at a thumbnail's size when the frame made that input,
       else the test card (`unwired_through`). An unbuilt effect asked for
@@ -1189,6 +1192,8 @@ def thumb_source(frame: Frame, name: str, how: str,
         if scene is None:
             return None
         node = scene
+    if getattr(node, "OUTPUT", None) == FIELD:
+        return _field_thumb(frame, node)
     if getattr(node, "OUTPUT", None) != IMAGE:
         return None
     # (review: every kind — a composite, a delay, a resize, a copy behind a
@@ -1200,6 +1205,38 @@ def thumb_source(frame: Frame, name: str, how: str,
     if not node.reads(frame):
         return None
     return picture(frame, node)
+
+
+def _field_thumb(frame: Frame, node) -> moderngl.Texture | None:
+    """Plan 67 F1: a field node's thumbnail — the field this frame already
+    made, shown grey (`FxChain.show_field`) into a frame texture of its own;
+    None when the frame made none (a thumbnail never makes a field, as it
+    never makes a mask)."""
+    made = frame.data.get(node.name + getattr(node, "MADE", "#field"))
+    if made is None:
+        return None
+    tex, fbo = frame.r._frame_target(frame.key(node.name + "#thumb"), frame.size)
+    fbo.viewport = (0, 0, *frame.size)
+    frame.r.fx.show_field(made, fbo, gain=_thumb_gain(frame, node.name, made))
+    return tex
+
+
+FIELD_RANGE_EVERY = 30      # frames between a field thumbnail's measures of its range
+
+
+def _thumb_gain(frame: Frame, name: str, made: moderngl.Texture) -> float:
+    """A field thumbnail's gain: 1 over the field's largest magnitude
+    (`FxChain.field_range`), so its shape fills the grey whatever its scale
+    — measured every `FIELD_RANGE_EVERY` frames, a read back being a stall
+    (between, the last measure). 1 for an empty field; within 1/64 … 4096."""
+    keep = frame.r.__dict__.setdefault("_field_gains", {})
+    n = frame.r.__dict__.get("_thumb_frames", 0)
+    frame.r._thumb_frames = n + 1
+    got = keep.get(name)
+    if got is None or n - got[0] >= FIELD_RANGE_EVERY:
+        m = frame.r.fx.field_range(made)
+        got = keep[name] = (n, 1.0 if m <= 0.0 else min(max(1.0 / m, 1.0 / 64.0), 4096.0))
+    return got[1]
 
 
 # the card is put through an effect at twice a thumbnail's size, so the
@@ -1245,7 +1282,7 @@ UNWIRED_PER_FRAME = 4
 
 def unwired_through(frame: Frame, name: str, pulled: frozenset[str] | None = None,
                     card: bool = False) -> moderngl.Texture | None:
-    """Plan 65: the thumbnail of effect (or copy) `name`, which the frame did
+    """Plan 65: the thumbnail of effect (or its slot, plan 89) `name`, which the frame did
     not build because its picture reaches no output (`graph.reaches`, row
     349): its input put through it, at a thumbnail's size (`CARD_PX`), with
     its values and clocks as the frame left them.
@@ -1260,8 +1297,7 @@ def unwired_through(frame: Frame, name: str, pulled: frozenset[str] | None = Non
     unbuilt. None for a name that is no effect the state holds."""
     r = frame.r
     wiring = getattr(r, "wiring", None)
-    copies = {c.name: c.of for c in (getattr(wiring, "copies", None) or ())}
-    effect = copies.get(name, name)
+    effect = effect_of(name)              # (plan 89: a slot runs its effect)
     chain = r.fx
     if effect not in chain.state.specs:
         return None
@@ -2064,14 +2100,19 @@ class Renderer:
         effects = frozenset(st.specs) if st is not None else frozenset()
         # plan 80: the effects that draw with nothing wired in (`Effect.generates`)
         gens = generators_of(st)
+        # plan 67 P3: a wire's depth is not part of what the wire is, so a
+        # depth changed alone is no other wiring: the depths are keyed too
+        depths = wire_depths(wiring)
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
+                or getattr(graph, "depths", ()) != depths
                 or getattr(graph, "clouds", ()) != clouds
                 or getattr(graph, "bus_cuts", None) != bus_cuts
                 or frozenset(getattr(graph, "effects", ())) != effects
                 or frozenset(getattr(graph, "generators", ())) != gens):
             graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
                                               bus_cuts, tuple(sorted(gens)))
+            graph.depths = depths
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
@@ -3748,6 +3789,7 @@ class Renderer:
 
         # ---- face fills, under the wireframe (agent-validated prototype) ----
         self._face_verts = 0
+        self._point_verts = 0
         self._copies = 0
         self._cover_cells = None
         if s.faces:
@@ -3861,8 +3903,11 @@ class Renderer:
                 draws.append((self._lvao, len(verts), self._lines, float(alpha.max())))
 
             if s.points and not g.get("curve") and sf.walk is None:   # a curve (plan 28) has no corners to dot
-                tp = (pd - near) / span
-                order_p = np.argsort(pd, kind="stable")
+                # V's corners only: the rows after them (a pentagram's
+                # crossings) are points a face needs, not corners to dot
+                n = g.get("corners", g["n"])
+                tp = (pd[:n] - near) / span
+                order_p = np.argsort(pd[:n], kind="stable")
                 # radius in framebuffer px (× dpr) at scale 1; POINT_VS scales
                 # it by the copy in world space (plan 26 A2b) and rounds the
                 # diameter to whole pixels, as the point sprites the quads
@@ -3885,7 +3930,6 @@ class Renderer:
                     pa = pa * st["p_alpha"]
                     r = r * np.sqrt(st["p_alpha"])
                     prgb = np.where(st["p_tinted"][:, None], st["p_rgb"], RED)[order_p]
-                n = g["n"]
                 pverts = np.empty((n * 6, 10), dtype=np.float32)
                 for k in range(6):
                     pverts[k::6, 0:3] = P[order_p]
@@ -3900,6 +3944,7 @@ class Renderer:
                 self._points["u_px"].value = (float(max(vpx[2], 1)), float(max(vpx[3], 1)))
                 self._points["u_wscale"].value = wsc
                 self._pvao.render(moderngl.TRIANGLES, vertices=len(pverts), instances=copies)
+                self._point_verts = len(pverts)
                 draws.append((self._pvao, len(pverts), self._points, float(pa.max())))
 
             if has_depth:

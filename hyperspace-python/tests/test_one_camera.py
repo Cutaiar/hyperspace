@@ -167,7 +167,7 @@ def test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_bac
     pose = view.pose()
     path = rig.loaded_patch.save_as("FRAMED")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.loadable/11" == loadable.SAVE_SCHEMA   # (plan 44 D3)
+    assert doc["schema"] == "hyperspace.loadable/12" == loadable.SAVE_SCHEMA   # (plan 44 D3)
     assert doc["values"]["eye.fov"] == 31.0 and doc["values"]["eye.distance"] == 6.0
     assert list(doc[loadable.POSE_KEY]) == list(POSE_IDS)
     assert [doc[loadable.POSE_KEY][k] for k in POSE_IDS] == pytest.approx(pose, abs=1e-6)
@@ -614,7 +614,7 @@ def test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_loadable(tmp_pa
     assert "retaper first: 1 document(s)" in out and "patch acid-wash.json" in out
     assert "desk old-desk.json" not in out                  # (plan 44 D3: retired)
     assert "show rig.hyp.json → installs/rig.json" in out
-    assert "would rewrite 2 as /11, leave 1 untouched (already /11), skip 0" in out
+    assert "would rewrite 2 as /12, leave 1 untouched (already /12), skip 0" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     out = capsys.readouterr().out
     backups = list(home.glob("library-backup-*"))
@@ -635,7 +635,7 @@ def test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_loadable(tmp_pa
     assert json.loads((lib / "patches/acid-wash.json").read_text())["units"]["fx.depth"] == \
         "taper"
     assert (lib / "desk/old-desk.json").read_bytes() == before["desk/old-desk.json"]
-    assert "retapered 1 document(s)" in out and "rewrote 2 as /11" in out
+    assert "retapered 1 document(s)" in out and "rewrote 2 as /12" in out
     assert "wrote 1 install file(s)" in out
     # once more: nothing to do
     after = _tree(lib)

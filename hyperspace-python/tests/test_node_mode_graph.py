@@ -205,8 +205,8 @@ def test_a_bundle_says_leave_not_expand(rig, monkeypatch):
     assert ui_graph.delete_bundle({}, other) == graphview.EXPAND_TO_EDIT
 
 
-def test_a_node_of_a_copy_gets_its_cables_on_the_copy(rig):
-    """The pane says the copy's name, and its params' ports live on the original."""
+def test_a_node_whose_params_sit_elsewhere_gets_its_cables_on_itself(rig):
+    """The pane says the node's name, and its params' ports live on another node."""
     node, params = pick_node(rig.one)
     view0 = view_of(rig.one, rig.devs)
     other = next(n.id for n in view0.nodes if n.id.startswith("render:") and n.id != node
@@ -537,73 +537,33 @@ def test_the_desk_asks_once_a_draw_not_once_a_control(panel_rig, monkeypatch):
     assert asked.count("away") <= 2 and asked.count("rows") <= 3
 
 
-# …a real copy, made as the picker makes one
+# …an effect with a slot, made as the picker makes one (plan 89: no copy node)
 
 
-def _real_copy(rig) -> tuple[str, str, object]:
-    """An effect and a copy of it in deck 1's section, by the picker's own verb."""
+def _effect_with_slot(rig) -> tuple[str, object]:
+    """An effect and a second slot on it in deck 1's section, by the picker's own verbs."""
     gs = rig.one.loaded_patch.graph
     gs.attach(Stub())
     e = graphview.Edit(graph=gs, push=lambda _label: None)
     assert e.add_node("effect", "acid") is None
-    original = f"render:{e.added}"
-    assert e.add_node("copy", e.added) is None
-    return original, f"render:{e.added}", gs.spec
+    name = e.added
+    assert e.add_node("slot", name) is None
+    assert e.slots_on(name) == [f"{name}.slot.2"]
+    return f"render:{name}", gs.spec
 
 
-def _grouped(rig, spec, members: list[str]):
-    view = graphview.build(rig.one.table, rig.one.reg, rig.one.router, rig.devs, None, spec)
-    graphview.attach_groups(view, [{"id": "g1", "name": "g", "nodes": members, "open": False}],
-                            rig.one.table)
-    return view, view.groups[0]
-
-
-def test_a_real_copys_cables_land_on_the_copy(rig):
-    original, copy, spec = _real_copy(rig)
-    assert rig.nd1.enter(rig.desk.role, copy) is None
+def test_node_mode_on_an_effect_with_a_slot_lands_on_its_one_set_of_knobs(rig):
+    """Plan 89: the slot is the effect's own node's — node mode points at the
+    effect, and its cables land on the effect's own params' ports (no pin of
+    a node of its own, as a copy's needed)."""
+    node, spec = _effect_with_slot(rig)
+    assert rig.nd1.enter(rig.desk.role, node) is None
     rows = rig.nd1.rows()
     assert rows and all(b.target.startswith("fx.acid") for b in rows)
     view = graphview.build(rig.one.table, rig.one.reg, rig.one.router, rig.devs, None, spec)
     got = cables(view)
-    assert len(got) == len(rows) and {view.owner(c.dst_port)[0].id for c in got} == {copy}
-    assert all(c.dst_port.startswith(f"{graphview.NODE_PIN}:{copy}|") for c in got)
-    assert original != copy
-
-
-def test_a_group_holding_only_the_copy_gives_its_cables_a_pin(rig):
-    """The params are the original's, whom the group does not hold: where it lands decides."""
-    _original, copy, spec = _real_copy(rig)
-    rig.nd1.enter(rig.desk.role, copy)
-    view, g = _grouped(rig, spec, [copy])
-    got = cables(view)
-    assert got and all(c.id in g.ends and g.ends[c.id][1] for c in got)
-    pin = g.ends[got[0].id][1]
-    # the pin stands for where the cable lands, which takes no drag, not the original's param
-    assert graphview.real_pin(view, pin) == got[0].dst_port
-    assert view.owner(graphview.real_pin(view, pin))[0].id == copy
-
-
-def test_a_group_holding_only_the_original_leaves_the_copys_cables_alone(rig):
-    """No dangling port: nothing of this group is on the end of them."""
-    original, copy, spec = _real_copy(rig)
-    rig.nd1.enter(rig.desk.role, copy)
-    view, g = _grouped(rig, spec, [original])
-    got = cables(view)
-    assert got and not any(c.id in g.ends or c.id in g.inside for c in got)
-    assert not any(p.param in {c.ref[1].target for c in got} for p in g.ports)
-
-
-def test_a_group_holding_both_keeps_the_two_desks_pins_apart(rig):
-    """Two desks, one on the original and one on its copy: one param, two ends."""
-    original, copy, spec = _real_copy(rig)
-    rig.nd1.enter(rig.desk.role, original)
-    _second_desk(rig, copy)
-    view, g = _grouped(rig, spec, [original, copy])
-    got = cables(view)
-    to_copy = [c for c in got if c.dst_port.startswith(f"{graphview.NODE_PIN}:")]
-    to_original = [c for c in got if c not in to_copy]
-    assert to_copy and to_original
-    assert {g.ends[c.id][1] for c in to_copy}.isdisjoint(g.ends[c.id][1] for c in to_original)
+    assert len(got) == len(rows) and {view.owner(c.dst_port)[0].id for c in got} == {node}
+    assert not any(c.dst_port.startswith(f"{graphview.NODE_PIN}:") for c in got)
 
 
 # …the side pane's words
@@ -671,3 +631,14 @@ def test_a_selected_cable_says_node_mode_in_words_and_offers_leave(rig, panel_ri
     _pane(panel_rig.panel, view, ("cable", c), monkeypatch, rig.nd1,
           press=f"{rig.desk.role}: leave")
     assert not rig.nd1.rows()
+
+
+def test_a_node_with_no_params_gets_no_point_chip(panel_rig, monkeypatch):
+    """A grey "point apc40 here" on a node the controller cannot enter is noise
+    (the owner, 2026-11-23): the refusal "has no params to point at" hides the chip."""
+    from hyperspace import nodemode
+    nd = _nd(node="render:other")
+    nd.refusal = lambda *_a: nodemode.NO_PARAMS.format(node="acid")
+    chips: list[str] = []
+    _block(panel_rig.panel, nd, monkeypatch, chips)
+    assert chips == []

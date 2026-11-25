@@ -18,7 +18,7 @@ vec4 effect(vec2 uv) {
     if (u_mode == 2) return a + b - a * b;
     if (u_mode == 3) return vec4(abs(a.rgb - b.rgb), max(a.a, b.a));
     if (u_mode == 4) {
-        float k = clamp((luma(b.rgb) - u_key + u_soft) / max(2.0 * u_soft, 1e-4), 0.0, 1.0);
+        float k = threshold_soft(luma(b.rgb), u_key, u_soft);   // _lib.glsl's key (plan 67 P2)
         b *= k;
     }
     return b + a * (1.0 - b.a);

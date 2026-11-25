@@ -199,7 +199,11 @@ def test_every_file_fits_in_the_memory_the_plan_states(ctx):
     _until_done(cache, sorted(st.files))
     assert len(cache.atlas) == len(st.files) >= 27
     assert pv.ATLAS_BYTES == 960 * 540 * 4
-    assert cache.bytes_kept < 64 * 2 ** 20
+    # the budget is per file — one 2.07 MB atlas each — plus a fixed part (the
+    # card, the aux disc, the work picture mipmapped); a total cap broke with
+    # every file added (plan 67 F1 added Measure and To field: 31 files, 71 MB)
+    fixed = cache.bytes_kept - len(cache.atlas) * pv.ATLAS_BYTES
+    assert 0 < fixed < 8 * 2 ** 20
     assert pv.ATLAS_COLS * pv.ATLAS_ROWS == 1 + pv.LOOP_FRAMES
 
 

@@ -229,8 +229,9 @@ LAYER      lookback(cover)   the faces' mask, only while the look-back occludes
 BACKDROP   backdrop   the scene over `backdrop.image` at `backdrop.alpha` (plan 35: `grounded` merged)
 HISTORY    lookback   the age-weighted trail of its `image`, alone (plan 36; the echoes' clock);
                       dream (plan 36) is its own node: its `image` in, the dreamed picture out
-EFFECT     acid … palette, copy …   one node per wired effect instance, and a `copy` for an
-                      instance drawn on another picture; on, its pass over its input into a
+EFFECT     acid … palette, acid.slot.2 …   one node per wired effect instance, and a pass
+                      per slot past the first (plan 89: the instance on another picture, the
+                      one set of knobs); on, its pass over its input into a
                       pool texture or its consumer; off, its input read through
 MASK       matte, segment   (plan 39) a one-channel mask at its maker's size: matte from a picture
                       (luma, alpha, chroma); segment from its worker's model, a frame or two
@@ -239,7 +240,7 @@ MASK       matte, segment   (plan 39) a one-channel mask at its maker's size: ma
                       where it passes, black elsewhere) by an untimed `<mask>(picture)` node
 SHOWN      shown(src) one per distinct picture an output shows → the window itself when it is
                       the picture's only consumer at the frame size, else a frame texture
-                      [a copy chain over a hands composite stands down to its originals
+                      [a slot chain over a hands composite stands down to its effects
                        while it bends nothing: Shown.fallback]
 HISTORY    lookback(capture)   the ring takes what is wired to `lookback.capture`, exactly
                       once, after every Shown, every delay's write and every output's
@@ -300,7 +301,7 @@ into are one pool (`FxChain.pool`, sized by `Graph.pool`), and a held
 picture is never handed to the consumer that paints into it. The faces
 have no chain of their own: their effects are nodes on a branch into
 `shape.faces`. The ports are typed
-`image`, `mask`, `geometry` and `value`; `graph.VALUE` is declared for
+`image`, `mask`, `geometry`, `value` and (plan 67) `field`; `graph.VALUE` is declared for
 the palette's lights-out and camera-in ports and no node uses it. A
 **mask** (plan 39) is the owner's meaning: a pattern, a pixel passes (1)
 or it does not (0), a value between only at an edge a feather or softness
@@ -311,7 +312,44 @@ mask may be wired into any picture port and reads there as white
 (premultiplied, opaque) where it passes and black elsewhere, fitted by
 cover at the consumer's size (`graph.MaskPicture`); a picture is never
 read as a mask — wired into a mask port it is refused in words ("… put a
-matte between"), and the converter is always a `matte`.
+matte between"), and the converter is always a `matte`. A **field** (plan 67 F1, the owner's
+"Field is its own wire") is a value or a pair at every pixel: float32 RGBA at
+the frame's size, signed, never premultiplied, its .a 0 for a scalar and 1 for
+a vector. Effect files make and take one by saying so (`// @makes field`,
+`// @takes <port> field`: `fx.ports`, `fx.ports_of`, `graph.effect_ports`); a
+field maker is a `graph.FieldEffect`, made once a frame into a float32 target
+(`fx.FIELD_TAIL`: raw, no blend, mix or clamp) that every consumer reads; an
+effect that reads one has a third port, `field` (unit 3, `field_port(uv)`). Like
+a mask, a field wired into a picture port is promoted — grey about the middle,
+`graph.FieldPicture`, `FxChain.show_field` — and a picture into a field port is
+refused in words naming the converter, To field (`PICTURE_INTO_FIELD`).
+**Any knob takes a field** (plan 67 P3, §3.9): a field wired into a knob's port —
+named by its key, `wave.amount`; `fx.field_knobs`, so `graph.takes_of` and
+`patches.wire_type` type it as every other port — makes that knob `value + depth ×
+field` at every pixel, about its value (routes and the panel still set the value).
+The accessor is generated: with knobs wired the pass runs a program of its own
+(`FxChain._program` keyed by the wired set), whose `fx.knob_declarations` turn each
+`u_<key>` into `knob_at(…)` (clamped to the knob's range, wrapped for `wrap`); with
+none, the program is the file's string for string. The field arrives in
+`run_one(…, knobs=)` from `Effect._knobs` (the builder's `_fields` puts it on the
+node, with the wire's `depth`, `graph.WIRE_DEPTH`). A choice, a count, a `@clock`'s
+rate and a hooked file's knobs refuse one in words (`fx.knob_refusal`,
+`graph.knob_refusal`); up to `fx.KNOB_UNITS` (12) knobs of one effect at once. On
+GRAPH the port is drawn once wired, a field cable dropped on the knob's own row
+wires it (`graphview.knob_pin`), and its menu's **depth ▸** sets the depth
+(`graphview.depth_choices`, `set_wire_depth`).
+
+**Running with no input** (R15, row 1114). An effect or slot nothing is wired
+into is never built — unless it is a generator, which `graph.runs_unfed` alone
+decides: a file with no input port (`@takes image none`: Point, Rings … the
+field generators) or one whose Python half says `GENERATOR` (plan 80: the
+Mandelbrot). The builder (`_Build._effect`), the drawn node
+(`Effect.generates`), `graph.unfed` and so GRAPH's faint nodes and the FX
+pane's groups all read that rule, never their own: an unfed effect wired
+onward (`graph.hungry`) is "fed by nothing — wire its input" on both, a
+picture effect as a field op, wherever its path leads. Colour (`colour.glsl`,
+row 1115) is a picture generator by the first clause: one flat colour on the
+HSV cylinder, no input port.
 
 **Wires; outputs as nodes** (plan 28 N4). A loadable patch's graph may also carry
 a wire list, `{"from": "<node>", "to": "<node>.<port>"}`: into an
@@ -384,10 +422,12 @@ or to `lookback.capture`). The frame's own nodes are ordinary: `shape`,
 `scene` (its `geometry` port takes the shape, the hands and the clouds the
 meta controller lists, in wire order), `backdrop` (`scene` over `image`), `pattern`,
 `lookback` (`image`, `capture`, `occluder`), `hands[.n]` with its
-`.layer` and `.guide`, `channel.<c>`, effects and their `copy`, and the
+`.layer` and `.guide`, `channel.<c>`, effects and their slots (plan 89:
+`acid.slot.2`, declared by the effect's `"slots"`, drawn as ports of its one
+node — the copy node is gone), and the
 outputs. `frame`, `fx`, `grounded`, `capture` and `cover` are not nodes of
 the section, and there are no pipelines: the old per-pipeline run is wires
-and copies. **`Shown`** is the one internal end: one per distinct picture
+and slots. **`Shown`** is the one internal end: one per distinct picture
 an output shows, carrying the direct paint into a window, the stand-down
 (`Shown.fallback`, `Output.settle`) and the count of users per frame
 through the mutes. **An output** shows its own `image`, `hands` and `guide`
@@ -1317,7 +1357,7 @@ address it is. Everything that reaches the host loadable patch's graph is a
 derived from the rows, a member lane onto a host param, a host lane onto a
 member, a member macro's base subscriber on a host param, a modifier input
 read from a host lane. A patch holds only what can exist twice (effects,
-composites, switches, delays, resizes, copies, extra hands, mattes, cuts,
+composites, switches, delays, resizes, extra hands, mattes, cuts,
 segments, modifiers, voices, macros); the frame's singletons, the outputs,
 the camera, the clouds, a media channel and the sequencer are refused in
 words. It never carries a host param's value (D5). `patches.select` is the
@@ -1443,9 +1483,9 @@ docstring has the rest.
 | `patterns.py` | the face patterns' eight inputs and seventeen modes as data: names, meanings, what each input does in each mode | `INPUTS`, `MODES`, `NAMES`, `SCALE` … `SPREAD`, `effect`, `ignores`, `label`, `tip` | imports nothing (by convention); `params`, `render` and `ui_patterns` read it; `shaders/patterns.glsl`'s accessors and header are held to it, and modes are appended, never inserted (`tests/test_patterns.py`) |
 | `view.py` | `ViewState`, the live object the view, rotation and camera params write | `ViewState` (`integrate`, `instances`, `inst_layout`), `RED` | imports only `geometry`; no GL, so the registry and tests can hold a view |
 | `field.py` | the instance field: where each copy goes — the flat layouts, the six 3D lattices, the fit to the screen and its snapped zoom and pan, the painter's order between copies, the cull | `field` (per frame: a row of centre, scale, alpha per drawn copy), `lattice`, `inst_positions`, `fit_dims`, `NAMES`, `LAYOUTS_3D`, `takes_offset` (plan 64: whether the scene pass composes the world's offset — one copy or a flat field with Fit off — read by `render.draw_scene`, `app._space` and `app._reroot`) | pure numpy, imports only `geometry`; no GL, no state but caches (`tests/test_field.py`) |
-| `graph.py` | the render graph (§2): node kinds and ports (`IMAGE`, `MASK`, `GEOMETRY`, `VALUE`), evaluation in dependency order, the layers' blends (`BLENDS`: over, add, depth, screen — plan 87; `blend_words`), black is clear on any keyed picture node (plan 87: `GraphSpec.keys`, `Wiring.keys`, `KeyNode`, `_Build._keyed`), the wired frame built from the `Wiring` alone (`build_graph`: only what a wire reaches; each window's ports its own wire else All outputs' by its bus cable, `window_ports`), the effect nodes, the look-back and the dream as two nodes, the hands node, the point-cloud node, the loadable patch's `graph` section, the wiring in words (plan 30 placements read only for the migration) | `Node`, `Graph` (`order`, `evaluate`, `pulled`, `timed`, `timed_in`, `pool`, `dormant`), `Frame`, `Shape`, `Hands`, `PointCloud`, `Scene`, `Cover`, `HandsLayer`, `Readout`, `Composite`, `Effect`, `Copy`, `Shown`, `History`, `Capture`, `Output`, `Wiring`, `PatternNode`, `BackdropNode`, `SwitchNode`, `Delay`, `DelayWrite` (z⁻¹, plan 34), `EchoNode`, `DreamNode`, `ResizeNode` (own size, `Node.own_size`, built by `_Build._make`), `MatteNode`, `MaskPicture`, `CutNode`, `SegmentNode`, `SegmentPin`, `MatteAt`, `CutAt`, `SegmentAt`, `mask_of`, `mask_port`, `segment_pin`, `SEGMENT_PINS`, `PICTURE_INTO_MASK` (plan 39), `DelayAt`, `ResizeAt`, `EchoAt`, `DreamAt`, `LookbackAt`, `BusCuts`, `BUS_PORTS`, `bus_wire`, `window_ports`, `wire_loops`, `loop_words`, `build_graph`, `graph_key`, `GraphSpec`, `EffectAt`, `CompositeAt`, `SwitchAt`, `Wire`, `wire_error`, `read_graph`, `run_of`, `reaches`, `SINKS`, `RESERVED`, `source_into`, `channel_into`, `placement_words`, `NODE_KINDS`, `PORT_TYPES`, `cloud_roles` | imports the render stack only and names no write (`tests/test_graph.py`); a loadable patch's graph it cannot read is a note and is not read — black, nothing filled in (`tests/test_graph_json.py`) |
+| `graph.py` | the render graph (§2): node kinds and ports (`IMAGE`, `MASK`, `GEOMETRY`, `VALUE`), evaluation in dependency order, the layers' blends (`BLENDS`: over, add, depth, screen — plan 87; `blend_words`), black is clear on any keyed picture node (plan 87: `GraphSpec.keys`, `Wiring.keys`, `KeyNode`, `_Build._keyed`), the wired frame built from the `Wiring` alone (`build_graph`: only what a wire reaches; each window's ports its own wire else All outputs' by its bus cable, `window_ports`), the effect nodes, the look-back and the dream as two nodes, the hands node, the point-cloud node, the loadable patch's `graph` section, the wiring in words (plan 30 placements read only for the migration) | `Node`, `Graph` (`order`, `evaluate`, `pulled`, `timed`, `timed_in`, `pool`, `dormant`), `Frame`, `Shape`, `Hands`, `PointCloud`, `Scene`, `Cover`, `HandsLayer`, `Readout`, `Composite`, `Effect`, `Copy`, `Shown`, `History`, `Capture`, `Output`, `Wiring`, `PatternNode`, `BackdropNode`, `SwitchNode`, `Delay`, `DelayWrite` (z⁻¹, plan 34), `EchoNode`, `DreamNode`, `ResizeNode` (own size, `Node.own_size`, built by `_Build._make`), `MatteNode`, `MaskPicture`, `CutNode`, `SegmentNode`, `SegmentPin`, `MatteAt`, `CutAt`, `SegmentAt`, `mask_of`, `mask_port`, `segment_pin`, `SEGMENT_PINS`, `PICTURE_INTO_MASK` (plan 39), `DelayAt`, `ResizeAt`, `EchoAt`, `DreamAt`, `LookbackAt`, `BusCuts`, `BUS_PORTS`, `bus_wire`, `window_ports`, `wire_loops`, `loop_words`, `build_graph`, `graph_key`, `GraphSpec`, `EffectAt`, `CompositeAt`, `SwitchAt`, `Wire`, `wire_error`, `read_graph`, `run_of`, `reaches`, `runs_unfed` (R15's one rule for an effect that runs with nothing wired in: the field generators and plan 80's; the builder, `Effect.generates`, `unfed` and `generators_of` read it), `unfed`, `hungry` (the unfed wired onward: GRAPH's and the FX pane's "fed by nothing", `FED_BY_NOTHING`), `generators_of`, `SINKS`, `RESERVED`, `source_into`, `channel_into`, `placement_words`, `NODE_KINDS`, `PORT_TYPES`, `cloud_roles` | imports the render stack only and names no write (`tests/test_graph.py`); a loadable patch's graph it cannot read is a note and is not read — black, nothing filled in (`tests/test_graph_json.py`) |
 | `render.py` | the passes the graph's nodes call: face picture, scene (with depth), cover, the hands' lay, composite, outputs, dim; the GPU timer; the patterns' clock and the FACES page's swatches; the scene's instanced draws (one 3D pass, one vec4 a copy) | `Renderer` (`draw`, `draw_outputs`, `thumbs` (GRAPH's thumbnails, plan 37; the module's `thumb_source` resolves them; an unwired effect's by `unwired_through`, plan 65), `effect_previews` (plan 65), `mask_passes`, `segmenter`, `motion_pair`, `media_now` (plan 39), `_graph_for`, `wiring`, `ghost_of`, `cloud_source`, `lay`, `dim_pass`, `pool_at`, `stats`, `timer`, `gpu_watch` (plan 84: GRAPH's **gpu cost** chip asks a frame at a time; the module's `gpu_made` answers), `now`, `bands`, `_pattern_clock`, `want_swatches`, `swatch`, `pattern_tile`), `PassTimer`, `SceneTarget`, `DEPTH_ALPHA`, `LAYER_DEPTH_BIAS`, `CELL`, `FaceTarget`, `inst_positions` (re-exported from `field`), `render_offscreen` | imports no registry (`tests/test_render.py::test_the_render_stack_imports_no_registry`); §2's draw guarantees (`tests/test_render.py`, `tests/test_camera.py`, `tests/test_golden_frames.py`) |
-| `fx.py` + `shaders/fx/` | post effects as GLSL files whose `// @param` uniforms become params (a line flagged `amount` is on the zero-safe log taper `amount_taper`; every `speed` on the signed exponential `T_SPEED`; `retaper_of` says what a route's depth onto one is measured against — wave 0 T1) whose `bipolar` / `unipolar` flag says how the panel draws it, whose `// @pair` / `// @volume` lines draw two or three params as one pad (plan 82: drawing only, not in the signature), and whose `// @clock <uniform> <rate-param> [period]` lines are phases the host integrates (speed × the param, wrapped to the period) and binds; one effect's pass for a graph node (every effect is a `graph.Effect` node where the graph wires it) | `FxState` (`names`, `live`, `advance_to`, `face_map`, `clocks`), `FxChain` (`run_one`, `pool`, `fit_pool`, `ready`), `ClockSpec`, `PadSpec`, `pad_of`, `FACE_MAPS`, `declare` | an effect is never defined in Python (plan 63: a `// @hook <name>` file's Python half, `HOOKS`, runs its pass and its drives, and declares no param); a broken edit keeps the last good spec; off is bit-identical; `@order` is parsed and read only by `graphmigrate`; `fx.face_map` is modulatable (`tests/test_fx.py`); **no shader multiplies time by a param** — a rate-like param is a `@clock` (row 560; `tests/test_shader_time_lint.py` holds every shipped shader to it, `tests/uv_flow.py` measures a step) |
+| `fx.py` + `shaders/fx/` | post effects as GLSL files whose `// @param` uniforms become params (a line flagged `amount` is on the zero-safe log taper `amount_taper`; every `speed` on the signed exponential `T_SPEED`; `retaper_of` says what a route's depth onto one is measured against — wave 0 T1) whose `bipolar` / `unipolar` flag says how the panel draws it, whose `// @pair` / `// @volume` lines draw two or three params as one pad (plan 82: drawing only, not in the signature), and whose `// @clock <uniform> <rate-param> [period]` lines are phases the host integrates (speed × the param, wrapped to the period) and binds; one effect's pass for a graph node (every effect is a `graph.Effect` node where the graph wires it) | `FxState` (`names`, `live`, `advance_to`, `face_map`, `clocks`), `FxChain` (`run_one`, `pool`, `fit_pool`, `ready`), `ClockSpec`, `PadSpec`, `pad_of`, `FACE_MAPS`, `declare`, `ports_of`, `hook_of` (a shipped file's `@hook`, read by `graph.runs_unfed`) | an effect is never defined in Python (plan 63: a `// @hook <name>` file's Python half, `HOOKS`, runs its pass and its drives, and declares no param); a broken edit keeps the last good spec; off is bit-identical; `@order` is parsed and read only by `graphmigrate`; `fx.face_map` is modulatable (`tests/test_fx.py`); **no shader multiplies time by a param** — a rate-like param is a `@clock` (row 560; `tests/test_shader_time_lint.py` holds every shipped shader to it, `tests/uv_flow.py` measures a step) |
 | `lookback.py` + `dream.py` | the frame history and its age-weighted composite; the torch worker that dreams on it | `Lookback`, `DreamState`, `DreamWorker` | torch only in `dream.py`; nothing in the core imports `dream`; `submit` never blocks the frame (`tests/test_dream.py`, `tests/test_lookback.py`) |
 | `masks.py` | the mask passes (plan 39): a picture → a mask (luma, alpha, chroma), the separable feather, the promotion (white / black by cover), the cut, the motion matte and its background learn, the worker's downsample, black is clear's key pass (plan 87) | `MaskPasses` (`matte`, `feather`, `promote`, `fit`, `cut`, `motion`, `learn`, `readback`), `MATTE_FS`, `BLUR_FS`, `PROMOTE_FS`, `CUT_FS`, `MOTION_FS`, `LEARN_FS`, `DOWN_FS`, `KEY_FS`, `MaskPasses.key`, `cover_scale`, `MOTION_SOFT` | imports `moderngl`, `numpy` and `glsl` only (`tests/test_graph_masks.py::test_masks_is_a_leaf`); `cover_scale` equals `media_tex.fit_scale(COVER)` (a test); hot-reloadable, before `render` |
 | `segment.py` | the segment worker (plan 39): a person matte off the frame thread, one worker per node on the dream's pattern; Apple Vision and torchvision behind one backend shape | `SegmentWorker` (`submit`, `latest`, `wants`, `said`, `stop`, `close`), `VisionBackend`, `TorchBackend`, `pick_backend`, `make_worker`, `find_weights`, `QUALITIES` | imported only by `Renderer.segmenter`; top level numpy and the standard library only, Vision / Quartz / torch inside `open()` and `run()` (`tests/test_app_boundary.py`, `tests/test_dream.py::test_core_does_not_import_the_worker`); `submit` never blocks, `close` joins within 1 s (`tests/test_segment.py`); cold for hot reload (live threads) |
@@ -1564,7 +1604,7 @@ a picture is drawn as that picture, collapsed or expanded: a thumbnail in a
   - for an output, its window: output 1 is the page's existing `Preview`,
     outputs 2–4 are their `Handoff.frame`;
   - for a matte or a segment, its mask in grey (row 777);
-  - for an effect or a copy that reaches nothing (faint, never built:
+  - for an effect that reaches nothing (faint, never built:
     row 349), its input — else the test card — put through it at a
     thumbnail's size beside the graph, at most `UNWIRED_PER_FRAME` a frame
     (`render.unwired_through`, plan 65, row 900).

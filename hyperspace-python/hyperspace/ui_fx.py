@@ -8,9 +8,11 @@ The owner's "file explorer" over the graph (row 348): the page lists every
 effect instance the loaded patch's graph holds — in the run, on a branch,
 unreached — grouped by where its path ends (`groups`): **Run** (in wire
 order), **→ faces**, **→ pattern media**, **→ backdrop**, **→ output N**,
-**→ <effect> aux**, and **reaches nothing** last. An effect behind a switch
-is grouped by the switch's destination; one that ends in two places is
-listed under each. The page adds, removes, wires and reorders nothing:
+**→ <effect> aux**, then **fed by nothing** (R15: nothing wired into its
+input, so the builder never builds it — `graph.hungry`; a generator,
+`graph.runs_unfed`, is never here) and **reaches nothing** last. An effect
+behind a switch is grouped by the switch's destination; one that ends in
+two places is listed under each. The page adds, removes, wires and reorders nothing:
 that is GRAPH's.
 
 The head is `fx.on` and `fx.mix`, every effect's bypass and fade; the
@@ -48,7 +50,17 @@ from imgui_bundle import imgui
 
 from . import ui, ui_fields, ui_kit
 from .fx import FACE_MAPS, FX_DIR, PER_FACE, pad_of
-from .graph import _PICTURE_PORTS, run_back, run_of, wire_node_kind
+from .graph import (
+    _PICTURE_PORTS,
+    FED_BY_NOTHING,
+    FIELD_PORT,
+    WIRE_ITS_INPUT,
+    hungry,
+    is_knob_port,
+    run_back,
+    run_of,
+    wire_node_kind,
+)
 
 # the groups `groups` makes, as their headers say them
 RUN = "Run"
@@ -56,6 +68,7 @@ FACES = "→ faces"
 PATTERN = "→ pattern media"
 BACKDROP = "→ backdrop"
 UNREACHED = "reaches nothing"
+UNFED = FED_BY_NOTHING      # R15: nothing wired into its input, so never built (`graph.hungry`)
 # a picture port's sink → the group it ends in (an output, an aux: by name)
 _ENDS = {"shape.faces": FACES, "pattern.media": PATTERN, "backdrop.image": BACKDROP,
          "fx.image": RUN, "output.all.image": RUN}     # (plan 35: a wired frame's run's end)
@@ -76,6 +89,7 @@ IDLE = {
                  "Switch the effects on (the Effects check at the top)."),
     "fx mix 0": ("FX mix is at 0", None, None, None),     # its fader is at the top of the page
     "mix 0": ("its mix is at 0", None, None, None),       # its fader is the next row
+    UNFED: (f"{UNFED} — {WIRE_ITS_INPUT} on graph", None, None, None),
 }
 # one line at the page's width (plan 20 WP2: it wrapped to two by 2 px)
 RESET_NOTE = "a patch load resets these: save a patch to keep them"
@@ -86,7 +100,9 @@ def groups(spec) -> list[tuple[str, list[str]]]:
     none) grouped by where their path ends, in the page's order: `Run` (the
     run's wire order, `graph.run_of`), `→ faces`, `→ pattern media`, `→
     backdrop`, `→ output <n>` by n, `→ <effect> aux` by effect, any other
-    end (`→ history`), and `reaches nothing` last. A path is followed
+    end (`→ history`), `fed by nothing` (`graph.hungry`: wired onward with
+    nothing into its input, so never built, wherever its path leads — said
+    so rather than as if it ran) and `reaches nothing` last. A path is followed
     through effects' `image` inputs and through switches (to their
     destination, whatever their pick: the page shows what is wired);
     an effect ending in two places is in each group; within a group the
@@ -102,8 +118,12 @@ def groups(spec) -> list[tuple[str, list[str]]]:
 
     def kind_of(name: str) -> str | None:
         return wire_node_kind(name, wired=wired)
-    # (the picture ports `graph.reaches` follows: a value port carries none)
-    wires = [w for w in spec.all_wires() if w.port in _PICTURE_PORTS]
+    # (the picture ports `graph.reaches` follows, and the field ports: a field
+    # into Displace's `field`, or into a knob, reaches what that effect reaches
+    # — plan 67 F1, P3. A value port carries none)
+    wires = [w for w in spec.all_wires()
+             if w.port in _PICTURE_PORTS or w.port == FIELD_PORT
+             or is_knob_port(w.node, kind_of(w.node), w.port)]
     names = {e.name for e in spec.effects}
     for w in wires:
         names.update(n for n in (w.src, w.node) if kind_of(n) == "effect")
@@ -119,7 +139,7 @@ def groups(spec) -> list[tuple[str, list[str]]]:
             kind, port = kind_of(w.node), w.port
             if w.node in seen:
                 continue
-            if kind in ("effect", "switch", "composite", "copy") and port != "aux":
+            if kind in ("effect", "switch", "composite", "slot") and port != "aux":
                 for end, d in follow(w.node, seen | {w.node}).items():
                     got[end] = min(got.get(end, d + 1), d + 1)
                 continue
@@ -136,8 +156,9 @@ def groups(spec) -> list[tuple[str, list[str]]]:
         if e.placed and e.where[0] == "after" and not ends.get(e.name):
             ends[e.name] = {f"→ after {e.where[1]}": 1}
     by: dict[str, list[str]] = {}
+    unfed = hungry(spec)        # R15: never built, wherever its path leads
     for name in sorted(names):
-        for end in ends[name] or {UNREACHED: 0}:
+        for end in ({UNFED: 0} if name in unfed else ends[name] or {UNREACHED: 0}):
             by.setdefault(end, []).append(name)
     for end, members in by.items():
         if end == RUN:
@@ -164,6 +185,8 @@ def _group_key(end: str) -> tuple:
         return (fixed[end], 0, "")
     if end == UNREACHED:
         return (9, 0, "")
+    if end == UNFED:
+        return (8, 0, "")
     if end.startswith("→ output "):
         n = end[len("→ output "):]
         return (4, int(n) if n.isdecimal() else 0, n)
@@ -277,7 +300,8 @@ def state_word(chain, fx, name: str, where: str = RUN, faces_on: bool = True) ->
     err = _error(chain, fx, name)
     if err:
         return f"error: {err.splitlines()[0]}"
-    why = why_idle(fx, name, faces_on or where != FACES, reached=where != UNREACHED)
+    why = why_idle(fx, name, faces_on or where != FACES, reached=where != UNREACHED,
+                   fed=where != UNFED)
     return why if why is not None else "running"
 
 
@@ -337,7 +361,8 @@ def strip(panel, sel: str) -> None:
     # under the line are dimmed but live — set it up dark, then switch it on.
     # Plan 33 T7: "faces off" and "reaches nothing" read its paths
     faces_on = bool(getattr(panel.view, "faces", True)) or not where or where != [FACES]
-    idle = why_idle(fx, sel, faces_on, reached=where != [UNREACHED] if where else True)
+    idle = why_idle(fx, sel, faces_on, reached=where != [UNREACHED] if where else True,
+                    fed=where != [UNFED] if where else True)
     if idle is not None:
         _idle_line(panel, sel, idle)
     panel._check(f"{pre}.on")
@@ -544,9 +569,11 @@ def _chip_baseline() -> None:
     imgui.pop_style_var()
 
 
-def why_idle(fx, name: str, faces_on: bool = True, reached: bool = True) -> str | None:
+def why_idle(fx, name: str, faces_on: bool = True, reached: bool = True,
+             fed: bool = True) -> str | None:
     """Why `name` is not running, first reason only; None while it runs.
-    "off" | "reaches nothing" | "faces off" | "bypassed" | "fx mix 0" | "mix 0".
+    "off" | "fed by nothing" | "reaches nothing" | "faces off" | "bypassed" | "fx mix 0" |
+    "mix 0" (`fed` False: nothing is wired into its input, R15).
 
     With the two flags left True it is None exactly when `FxState.live`
     says the effect draws. Plan 33 T7: where it is wired is the caller's to
@@ -556,6 +583,8 @@ def why_idle(fx, name: str, faces_on: bool = True, reached: bool = True) -> str 
     v = fx.values[name]
     if not v["on"]:
         return "off"
+    if not fed:
+        return UNFED
     if not reached:
         return UNREACHED
     if not faces_on:
