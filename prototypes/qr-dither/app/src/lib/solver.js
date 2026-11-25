@@ -18,6 +18,10 @@ export class QArtSolver {
         cur: new Uint32Array(curB),
         pivJ: new Uint16Array(sec(`pivj${i}`)),
         pivF: new Uint8Array(sec(`pivf${i}`)),
+        // (group << 4) | bit weight for pivots carrying a pinned digit,
+        // 0xFFFF for everything else.  Absent in blobs built before digit
+        // pinning existed, which simply means nothing is overridable.
+        pin: meta.sections[`pin${i}`] ? new Uint16Array(sec(`pin${i}`)) : null,
         us: new Uint32Array(usB),
         acc: new Uint32Array(b.words),
         res: new Uint32Array(b.words),
@@ -27,6 +31,33 @@ export class QArtSolver {
   }
 
   static bit(bytes, j) { return (bytes[(j >> 5) * 4 + ((j >> 3) & 3)] >> (7 - (j & 7))) & 1; }
+
+  /** Digits this blob can carry; 0 means it was built without pinning. */
+  get digitCapacity() { return this.meta.pin_digits || 0; }
+
+  /** Point the fragment at a different number.
+   *
+   *  The factorisation does not depend on WHICH constant is pinned -- pivots
+   *  are chosen by position and only their values are read when solving -- so
+   *  this is the whole cost of swapping π for φ: rewriting one byte per pinned
+   *  bit, then a normal solve.  No refactorisation, no new blob.
+   */
+  setDigits(digits) {
+    const want = this.digitCapacity;
+    if (!want) return false;
+    const s = String(digits).replace(/\D/g, '').slice(0, want).padEnd(want, '0');
+    for (const b of this.blocks) {
+      if (!b.pin) continue;
+      for (let k = 0; k < b.nPiv; k++) {
+        const p = b.pin[k];
+        if (p === 0xFFFF) continue;
+        const v = parseInt(s.slice((p >> 4) * 3, (p >> 4) * 3 + 3), 10);
+        b.pivF[k] = (v >> (p & 15)) & 1;
+      }
+    }
+    this.digits = s;
+    return true;
+  }
 
   // want: Uint8Array(n*n), 1 = ink
   solve(want) {

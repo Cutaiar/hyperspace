@@ -82,18 +82,82 @@ cd app && npm run check
    the exact physical size rather than scaling the published SVG, which is what
    the grid is in the manifest for.
 
-   Verified end to end, not by inspection: a real 15-up Letter sheet was
-   exported, the PDF rasterised by macOS Quartz and the SVG by Chrome, and
-   zxing read **15/15 codes out of each file**, the seven inverted ones
-   included.
-
    Not implemented, and not to be implied: PDF optional content groups (true
    layers) and spot colours. The PDF's cuts are ordinary magenta strokes. A
    vendor who needs a named spot plate wants the SVG.
 
+5. ~~**Style**~~ — done: `src/lib/style.ts`, the TypeScript twin of
+   `gen/style.py`. The exporters carry the dot, eye and colour treatment, not
+   just the geometry, so a sheet of `pal-red` or `sty-dots` downloads as the
+   thing the gallery shows. Still re-rendered from the grid: a rounded module
+   is arcs in the SVG and the matching cubics in the PDF, and a gradient is an
+   axial shading clipped to the module path, so the PDF stays dependency-free
+   and unrasterised.
+
+   The manifest carries the style because it already carries the grid.
+   `gen/gallery.py` writes every argument it handed `style.to_svg` —
+   `eye_frame`, `eye_core`, `fg`, `fg2`, `bg`, `plate_radius`, `style_eyes` —
+   next to the `dot` it already wrote. A table of the same facts in the app
+   would be a second place for them to drift.
+
+   "Twin" is a claim, so it is tested rather than asserted. `npm run twins`
+   draws all 29 gallery stills again through `lib/style.ts`, and `gen/twins.py`
+   shoots both versions with the same Chrome and compares them: **26 of 29 are
+   bit identical**, and the three circular ones differ only within one pixel of
+   an edge, because `style.py` emits a `<circle>` where the port emits the same
+   circle as four arcs. The test is *where* pixels differ, not how many — a
+   0.1-module offset is caught, a 0.02-module one is under a pixel and is not,
+   so the two renderers agree to about 0.015 mm on a 44 mm sticker.
+
 Codes come from `manifest.json`. Re-render from `matrix` rather than scaling the
 SVG when a code needs an exact physical size — the grid is in the manifest
 precisely so this does not go through a rasteriser.
+
+## What a styled sheet actually costs
+
+Measured, not assumed. `cd app && npm run check` writes eight sheets to
+`work/sheets/`; `gen/sheets.py` rasterises each one with a renderer that had
+nothing to do with writing it — headless Chrome for the SVG, poppler for the
+PDF (`brew install poppler`; `mutool` or `pypdfium2` if you would rather, and
+`QRD_PDFRAST` to pick), both at 384 dpi so the two columns compare the files
+and not the settings — decodes every sticker, then crops one sticker of each
+code and runs it through `gen/robust.py`.
+
+**276/276 stickers decoded** across those sixteen files, styled and plain,
+including 24/24 on the hostile sheet (vendor, zero gutter, `pal-red` and
+`pal-invert` alternating). Per code, at 44 mm:
+
+| sheet | code | min px/module (SVG / PDF) | blur | flash |
+| --- | --- | --- | --- | --- |
+| ordinary | `c16-tilt`, no style | 1 / 1 | 0.45 | 1.2 |
+| ordinary | `pal-red` | 1 / 1 | 0.45 | **0.6** |
+| ordinary | `pal-grad` | 1 / 1 | 0.45 | 1.2 |
+| ordinary | `sty-classy-rounded` | 1 / 1 | 0.45 | 1.2 |
+| ordinary | `sty-dots` | **3 / 3** | 0.45 | 1.2 |
+| ordinary | `sty-dots-tight` | **2 / 3** | 0.45 | 1.2 |
+| hostile | `pal-red` | 3 / 3 | 0.40 | 0.6 |
+| hostile | `pal-invert` | 3 / 3 | 0.40 | 1.0 |
+
+Three things worth reading off that:
+
+- **Circular modules cost resolution on a sheet too**, the same way they do on
+  a still, and a little more of it: `dots` measures 3 px a module here against
+  the 2 the gallery measures on the isolated still, because a sticker cropped
+  out of a page raster carries its surroundings with it. At 0.603 mm a module,
+  3 px is a camera resolving 0.2 mm — so a dots sheet wants more millimetres
+  per sticker, not fewer. The two writers agree within one step everywhere,
+  `dots-tight` included, which is the point of measuring both.
+- **Red keeps its glare penalty**: flash 0.6 against 1.2 for ink, exactly the
+  figure the gallery measures on the still. Styling the export did not invent
+  a new weakness or hide an old one.
+- **A zero gutter costs every code a step**, styled or not — at no gutter the
+  crop around one sticker contains its neighbours' ink, and a camera pointed at
+  one sticker sees the same thing. That is an argument for the gutter, not
+  against the style.
+
+These are synthetic rasterisations of a file, like every other number here.
+They say the exporter is sound; they do not say what a printer will do with it.
+
 
 ## Open, and not to be guessed at
 

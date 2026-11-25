@@ -1,4 +1,13 @@
-"""Export the factorisation as a binary blob the browser can solve against."""
+"""Export the factorisation as a binary blob the browser can solve against.
+
+With --pin-digits N the blob reserves the first N digits of the numeric filler
+for a constant, and carries a `pin` section saying which pivot belongs to which
+digit group. That last part is what makes an explorer possible: _build picks
+pivots by POSITION and only solve() reads their values, so one factorisation
+serves every constant at a given digit count and the browser can swap the
+number with no new blob. The digits baked in here are zeros; they are meant to
+be overridden.
+"""
 import argparse, json, pathlib, struct
 from basis import Affine
 
@@ -26,13 +35,16 @@ def main():
     ap.add_argument("--mask", type=int, default=0)
     ap.add_argument("--out", default="solver")
     ap.add_argument("--order", default="even", choices=["even", "centre", "clump", "streak", "gothic"])
+    ap.add_argument("--pin-digits", type=int, default=0,
+                    help="reserve this many leading filler digits for a constant")
     a = ap.parse_args()
 
-    aff = Affine(a.url, version=a.version, mask=a.mask, level=0, order=a.order)
+    aff = Affine(a.url, version=a.version, mask=a.mask, level=0, order=a.order,
+                 pin_digits="0" * a.pin_digits)
     n = aff.n
     buf = bytearray()
     meta = {"url": a.url, "version": a.version, "mask": a.mask, "modules": n,
-            "order": a.order,
+            "order": a.order, "pin_digits": len(aff.pin_digits),
             "quiet": 4, "sections": {}, "blocks": []}
 
     def add(name, data):
@@ -60,6 +72,21 @@ def main():
         piv_j = struct.pack(f"<{len(blk['pivots'])}H", *blk["pivots"])
         piv_f = bytes((255 if j not in blk["forced"] else int(blk["forced"][j]))
                       for j in blk["pivots"])
+
+        # Which pivots carry a pinned digit, as (group << 4) | bit weight.
+        # 0xFFFF means "not a digit": the URL's own bits and the 511 caps keep
+        # the values baked above. A client rewrites only the digit ones.
+        pins = []
+        for j in blk["pivots"]:
+            gb = blk["glob"][j]
+            off = gb - aff.num_start
+            gi, k = divmod(off, 10)
+            if (j in blk["forced"] and off >= 0 and gb < aff.upper
+                    and gi * 3 + 3 <= len(aff.pin_digits) and k < 10):
+                pins.append((gi << 4) | (9 - k))
+            else:
+                pins.append(0xFFFF)
+        piv_pin = struct.pack(f"<{len(pins)}H", *pins)
         us = bytearray()
         for u in blk["us"]:
             packed, _ = pack_bits(int_to_bits(u, L), L)
@@ -70,6 +97,7 @@ def main():
         add(f"cur{i}", cur)
         add(f"pivj{i}", piv_j)
         add(f"pivf{i}", piv_f)
+        add(f"pin{i}", piv_pin)
         add(f"us{i}", bytes(us))
         meta["blocks"].append({"L": L, "words": words, "pivots": len(blk["pivots"])})
 
@@ -77,8 +105,16 @@ def main():
     out.with_suffix(".bin").write_bytes(bytes(buf))
     out.with_suffix(".json").write_text(json.dumps(meta))
     total = sum(b["pivots"] for b in meta["blocks"])
-    print(f"web/{a.out}.bin  {len(buf)/1024:.0f} KB   "
-          f"{len(meta['blocks'])} blocks, {total} pivots, {n}x{n} modules")
+    pinned = sum(1 for i in range(len(meta["blocks"]))
+                 for v in struct.unpack(
+                     f"<{meta['sections'][f'pin{i}']['bytes']//2}H",
+                     bytes(buf[meta["sections"][f"pin{i}"]["offset"]:
+                               meta["sections"][f"pin{i}"]["offset"]
+                               + meta["sections"][f"pin{i}"]["bytes"]]))
+                 if v != 0xFFFF)
+    print(f"{a.out}.bin  {len(buf)/1024:.0f} KB   "
+          f"{len(meta['blocks'])} blocks, {total} pivots, {n}x{n} modules, "
+          f"{len(aff.pin_digits)} digits reserved on {pinned} pivots")
 
 
 if __name__ == "__main__":

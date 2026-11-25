@@ -57,13 +57,29 @@ TEXTURES = {
 
 
 class Affine:
-    def __init__(self, url, version=12, mask=0, level=0, order="even"):
+    def __init__(self, url, version=12, mask=0, level=0, order="even",
+                 pin_digits=""):
         """order: "centre" spends every degree of freedom on the middle and
         leaves a dense noise ring at the rim; "even" spreads the modules it
         cannot control uniformly, so the leftover noise reads as one texture
-        across the whole code instead of a border."""
+        across the whole code instead of a border.
+
+        pin_digits: leading digits of the numeric filler to fix, so the
+        fragment literally reads `#31415926...` before the drawing's own
+        digits take over. Those bits stop following the image, so each pinned
+        digit costs roughly three modules of drawing freedom -- still about a
+        fifth of what the same character costs as literal text in the URL,
+        because a digit rides at 10 bits per three instead of 8 bits each.
+
+        Only whole 3-digit groups can be pinned, since a group is one 10-bit
+        unit; a request is truncated down to a multiple of three and the
+        effective string is kept in `self.pin_digits`.
+        """
         self.url, self.version, self.mask, self.level = url, version, mask, level
         self.order = order
+        if not str(pin_digits).isdigit() and pin_digits:
+            raise ValueError("pin_digits takes digits only")
+        self.pin_digits = str(pin_digits)[:len(str(pin_digits)) // 3 * 3]
 
         data = QrData(url + "#", level)
         painter = QrPainter(data, version, mask, 0)
@@ -161,21 +177,44 @@ class Affine:
                     forced[j] = self.base_bits[g]
             for g in range(0, self.numbers_count, 3):
                 width = 10 if g + 3 <= self.numbers_count else [0, 4, 7][self.numbers_count - g]
+                if not width:
+                    continue
                 off = self.num_start + g // 3 * 10
-                if width and di <= off < di + dbc:
+                if g + 3 <= len(self.pin_digits) and width == 10:
+                    # This group is spelled out, so pin all ten of its bits to
+                    # the value the digits ask for. It needs no 511 cap: a
+                    # three-digit group is legal numeric by construction, and
+                    # the cap exists only for groups the solver drives blind.
+                    v = int(self.pin_digits[g:g + 3])
+                    for k in range(width):
+                        gb = off + k
+                        if di <= gb < di + dbc and self.num_start <= gb < self.upper:
+                            forced[gb - di] = bool((v >> (width - 1 - k)) & 1)
+                elif di <= off < di + dbc:
                     forced[off - di] = False
 
             # Then everything else.  Whichever positions fall past the end of the
             # pivot budget are the ones that go uncontrolled, so this order is
             # really a choice about WHERE the leftover noise lands.
             R2 = (0.7548776662466927, 0.5698402909980532)   # low-discrepancy
-            tex = TEXTURES.get(self.order)
+            tex = None if callable(self.order) else TEXTURES.get(self.order)
 
             def rank(j):
                 p = self.pos_of.get(glob(j))
                 if p is None:
                     return math.inf
                 x, y = p[0], p[1]
+                if callable(self.order):
+                    # An image-dependent order. pyqart sorts pivots by how
+                    # confident the drawing is at each module and spends the
+                    # code's freedom on the darkest darks and lightest lights,
+                    # which is what grows the clean halo in the stills. A fixed
+                    # order cannot do that -- it is guessing at a drawing it has
+                    # not seen -- but that only matters when the order has to be
+                    # reusable across frames. A one-off still can afford to
+                    # re-factorise, so it can rank by the image and keep the
+                    # quality the live path gives up.
+                    return self.order(x, y)
                 if self.order == "centre":
                     return math.hypot(x - cx, y - cy)
                 if tex is None:

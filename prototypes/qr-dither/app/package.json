@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "check": "esbuild check/solver.check.ts --bundle --format=esm --platform=node --outfile=node_modules/.tmp/solver.mjs --log-level=warning && node node_modules/.tmp/solver.mjs && esbuild check/sheet.check.ts --bundle --format=esm --platform=node --outfile=node_modules/.tmp/sheet.mjs --log-level=warning && node node_modules/.tmp/sheet.mjs && esbuild check/export.check.ts --bundle --format=esm --platform=node --outfile=node_modules/.tmp/export.mjs --log-level=warning && node node_modules/.tmp/export.mjs"
+    "check": "esbuild check/solver.check.ts --bundle --format=esm --platform=node --outfile=node_modules/.tmp/solver.mjs --log-level=warning && node node_modules/.tmp/solver.mjs && esbuild check/sheet.check.ts --bundle --format=esm --platform=node --outfile=node_modules/.tmp/sheet.mjs --log-level=warning && node node_modules/.tmp/sheet.mjs && esbuild check/export.check.ts --bundle --format=esm --platform=node --outfile=node_modules/.tmp/export.mjs --log-level=warning && node node_modules/.tmp/export.mjs",
+    "twins": "esbuild check/twin.ts --bundle --format=esm --platform=node --outfile=node_modules/.tmp/twin.mjs --log-level=warning && node node_modules/.tmp/twin.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

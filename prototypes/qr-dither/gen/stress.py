@@ -6,7 +6,7 @@ photographed, an etched plate, a frame grabbed off the projector. Point it at
 image files and it reports them next to boring QRs for the same destination.
 
     uv run --with pillow --with numpy --with segno --with zxing-cpp \\
-      python3 gen/stress.py --url https://hyperspace.cutaiar.io shot.png
+      python3 gen/stress.py --url https://www.instagram.com/hyperspace.av/ shot.png
 """
 import argparse
 

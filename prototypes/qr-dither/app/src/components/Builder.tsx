@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { download, sheetPdf, sheetSvg, type Code } from '@/lib/export'
-import type { Item, Manifest } from '@/lib/manifest'
+import { styleOf, type Item, type Manifest } from '@/lib/manifest'
 import {
   DEFAULTS, PAPERS, assign, layout, minSticker, pitch,
   type CutMode, type Pick,
@@ -60,9 +60,12 @@ export function Builder() {
   const need = worst ? minSticker(worst.modules, floorMm) : 0
   const under = worst ? p < floorMm : false
 
-  // the exporters re-render from the module grid, so they need the codes, not the files
+  // The exporters re-render from the module grid, so they need the codes, not
+  // the files — and the style alongside, or a sheet of pal-red comes out as
+  // plain black squares.
   const codes = useMemo(() => Object.fromEntries(items.map(i =>
-    [i.id, { id: i.id, modules: i.modules, matrix: i.matrix, dark: i.dark } as Code])), [items])
+    [i.id, { id: i.id, modules: i.modules, matrix: i.matrix, dark: i.dark,
+             style: styleOf(i) } as Code])), [items])
   // A cutter takes its geometry from registration marks, so a printed cut line
   // is just ink on the sticker. Only a vendor wants one in the artwork.
   const cutlineApplies = mode === 'vendor'
@@ -181,10 +184,11 @@ export function Builder() {
             draws them as magenta strokes — it has no spot plate or true layers, so a vendor who
             needs those wants the SVG.
           </p>
-          <p className="text-[10px] leading-relaxed text-primary/80">
-            Exports carry the code’s <b>geometry only</b> — black modules on white, or white on
-            black for an inverted one. Dot styles and palettes are preview-only for now, so a
-            sheet of <code>pal-red</code> downloads as plain black squares.
+          <p className="text-[10px] leading-relaxed text-muted-foreground/70">
+            Dots, eyes and colours come out too: <code>lib/style.ts</code> re-renders the
+            selected treatment at the physical size, in both formats. Circular modules cost
+            resolution — <code>dots-tight</code> wants 3 camera pixels per module where square
+            wants 1 — so give a styled sheet more millimetres, not fewer.
           </p>
         </div>
 
