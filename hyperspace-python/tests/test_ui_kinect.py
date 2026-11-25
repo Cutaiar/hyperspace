@@ -393,3 +393,51 @@ def test_the_fan_fits_the_radar_box_at_both_widths():
         xs = [x for x, _ in g.rim]
         ys = [y for _, y in g.rim]
         assert min(xs) >= 0 and max(xs) <= width and min(ys) >= 0
+
+
+def test_a_kinects_node_is_drawn_under_patch_only_though_no_cable_reaches_it(rig, monkeypatch):
+    """The owner saw no Kinect node with the sensor plugged in: its cloud is no lane, so
+    nothing wires it to the loadable patch, and the default "patch only" view drew
+    only what reaches the patch. Its control panel is its node's pane, so it is drawn."""
+    import time
+
+    import numpy as np
+    from test_ui_shell import frame
+
+    from hyperspace import devices
+
+    class Stand:
+        focal = 575.0
+
+        def __init__(self, o):
+            pass
+
+        def open(self):
+            pass
+
+        def read(self):
+            time.sleep(0.01)
+            return np.full((480, 640), 2000, np.uint16), None
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(kinect.KinectDevice.__init__, "__kwdefaults__", {"io": None, "sensor": Stand})
+    reg = devices.DeviceRegistry([{"role": "room", "kind": "kinect"}], devices.Context())
+    reg.open_all()
+    try:
+        end = time.monotonic() + 3
+        while reg.get("room").status != "connected" and time.monotonic() < end:
+            time.sleep(0.01)
+        rig.panel.devices = reg
+        for _ in range(6):
+            frame(rig.panel, "graph")
+        st = ui_graph._state(rig.panel)
+        st["patch_only"] = True                     # the app's default (the tests' fixtures turn it off)
+        for _ in range(4):
+            frame(rig.panel, "graph")
+        assert st["view"].spec is not None, "a loadable patch is open"
+        assert "device:room" in graphview.patch_only(st["view"])
+        assert "n:device:room" in st["names"].values()                   # on the canvas
+    finally:
+        reg.close()

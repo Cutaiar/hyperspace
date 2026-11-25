@@ -9117,7 +9117,7 @@ Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in se
 
 Headless: `tests/test_kinect_control.py` (requests on the device's thread in order, a failed one said, pending ones dropped at close and reconnect, the snapshot, a motor that will not open, nothing sent on open), `tests/test_ui_kinect.py` (the pane at `SIDE_MIN` and `SIDE_W`, every control with an id, the tilt sent only on release / go / level). A restart after pulling (a new module and new fields on `KinectDevice`). All of it ran over a stand-in sensor: **none of it has met a Kinect.**
 
-Setup for all: (Mac, G Hub not running) 910's entry in the device list; select the Kinect's node on GRAPH. Stand where the sensor sees you.
+Setup for all: (Mac, G Hub not running) 910's entry in the device list; its node (`room`, under controllers) is on GRAPH with **patch only** on, and with no cable to it; select it. Stand where the sensor sees you.
 
 **950. The pane and its telemetry.** *Pass:* the status says `connected`; model reads `1414`; depth about 30 fps and the frame count climbing; the share of pixels read, nearest and median depth change as you step towards the sensor; points follows; tilt reads about the angle the sensor sits at (1.0° on the owner's unit) with `stopped`; accel is about 9.8 m/s² in total and its axes change when the sensor is tipped by hand. *Fail:* a model that reads `unknown` or a wrong number, an accelerometer that never moves, a stalled frame rate while the pane is open (the tilt poll is a blocking transfer, a few times a second).
 

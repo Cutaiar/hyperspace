@@ -3137,7 +3137,7 @@ def patch_only(view: View) -> frozenset[str]:
     output — All outputs and each window, wired or not: they are where a
     picture is wired to, so one the loadable patch no longer reaches must stay on
     the canvas to be wired again (the owner, 2026-10-27: unwiring the
-    outputs made them vanish) — and, the same way, every media channel
+    outputs made them vanish); a Kinect's node (row 1170: no cable, but its panel) — and, the same way, every media channel
     (2026-10-31, the owner after the show of 2026-10-30: with no faces
     media node wired "you can't actually spawn one, it just doesn't
     exist"): a channel always exists, empty or not, and is where a file
@@ -3168,6 +3168,10 @@ def _patch_only(view: View) -> frozenset[str]:
                 shown.add(x)
                 todo.append(x)
     shown |= {nid for nid, n in have.items() if n.kind in ("output", "channel")}
+    # a Kinect's point cloud is no lane, so its node has no cable to the loadable patch, and
+    # its control panel is that node's side pane (row 1170): it is drawn, as an output is
+    shown |= {nid for nid, n in have.items()
+              if n.kind == "device" and getattr(n.ref, "kind", "") == "kinect"}
     # plan 40 T2: a group's members are the loadable patch's (a group holds nothing
     # of the meta controller's: `patches.groupable`), so a group is drawn, open or folded
     shown |= {n.id for g in view.groups for n in g.members}
