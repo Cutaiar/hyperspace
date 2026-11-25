@@ -781,3 +781,12 @@ exactly, "accept, and say so".
 **Not built:** the golden frames of the Hue cycle looks move by the GPU's rounding and are
 re-recorded on the Mac (hand check 900). "One rule for fed by nothing" (§17 item 3) landed on
 `main` in #501.
+
+## 20. History, and the dream taken apart (2026-11-25)
+
+P4 is designed in its own plan, [`90-history-and-the-dream.md`](90-history-and-the-dream.md):
+the dream and the look-back inventoried against the public primitives, the owner's priors, the
+recursive accumulator (`D`, `M`) laid out for a decision, and the spec of the `stack` wire —
+Record, Read and Trail; echoes as reads; Time Displace as a Read with a field on its index; the
+slim async dream node; the migration. Its §6 holds fourteen questions for the owner. Nothing is
+built until they are answered; Time Displace (#488) stays held.
