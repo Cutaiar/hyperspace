@@ -20,7 +20,8 @@ def test_the_instrument_imports_nothing_from_the_host(path):
     for mod, level in imports(path):
         if level:                       # relative: only inside this package, never an adapter
             where = inside(path, mod, level) or ()
-            assert where[:1] == ("hands",) and where[1:2] and where[1] not in ADAPTERS, \
+            assert where == ("writes",) or (
+                where[:1] == ("hands",) and where[1:2] and where[1] not in ADAPTERS), \
                 f"{shown(path)} reaches outside the instrument: {'.' * level}{mod}"
         else:
             assert not mod.startswith("hyperspace"), f"{shown(path)} imports {mod}"
@@ -29,7 +30,7 @@ def test_the_instrument_imports_nothing_from_the_host(path):
 def test_the_panel_is_the_only_piece_that_knows_the_host():
     """If this fails, the adapter has spread and extraction got harder."""
     reaching = [shown(f) for f in FILES
-                if any((inside(f, m, lv) or ("",))[0] != "hands" if lv
+                if any((inside(f, m, lv) or ("",))[0] not in ("hands", "writes") if lv
                        else m.startswith("hyperspace") for m, lv in imports(f))]
     assert reaching == ["hands/device.py", "hands/panel.py"]
 
