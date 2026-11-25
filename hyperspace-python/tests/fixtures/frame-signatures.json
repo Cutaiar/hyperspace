@@ -4470,7 +4470,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -4524,6 +4524,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -4563,7 +4615,7 @@
    1,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -4643,6 +4695,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -4669,7 +4773,7 @@
    2,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -4723,6 +4827,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -4736,7 +4892,7 @@
    3,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -4780,6 +4936,58 @@
                   ]
                  ]
                 ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
                ]
               ]
              ]
@@ -4838,7 +5046,7 @@
    5,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -4882,6 +5090,58 @@
                   ]
                  ]
                 ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
                ]
               ]
              ]
@@ -4986,10 +5246,50 @@
     ]
    ],
    [
-    "Effect",
-    "huecycle",
+    "FieldEffect",
+    "line",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale",
     [
      "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "rings",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "combine",
+    [
+     "field",
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "scale.3",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "hueturn",
+    [
+     "image",
+     "turn"
     ]
    ],
    [
@@ -5023,9 +5323,10 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
-     "image"
+     "image",
+     "turn"
     ]
    ],
    [
@@ -5058,9 +5359,10 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
-     "image"
+     "image",
+     "turn"
     ]
    ]
   ],
@@ -5071,7 +5373,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -5125,6 +5427,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -5164,7 +5518,7 @@
    1,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -5244,6 +5598,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -5270,7 +5676,7 @@
    2,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -5324,6 +5730,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -5337,7 +5795,7 @@
    3,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -5381,6 +5839,58 @@
                   ]
                  ]
                 ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
                ]
               ]
              ]
@@ -5439,7 +5949,7 @@
    5,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -5483,6 +5993,58 @@
                   ]
                  ]
                 ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
                ]
               ]
              ]
@@ -5587,10 +6149,50 @@
     ]
    ],
    [
-    "Effect",
-    "huecycle",
+    "FieldEffect",
+    "line",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale",
     [
      "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "rings",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "combine",
+    [
+     "field",
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "scale.3",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "hueturn",
+    [
+     "image",
+     "turn"
     ]
    ],
    [
@@ -5624,9 +6226,10 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
-     "image"
+     "image",
+     "turn"
     ]
    ],
    [
@@ -5659,9 +6262,10 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
-     "image"
+     "image",
+     "turn"
     ]
    ]
   ],
@@ -9136,7 +9740,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -9156,6 +9760,58 @@
              "PatternNode",
              "",
              []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -9202,7 +9858,7 @@
    1,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -9255,6 +9911,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -9281,7 +9989,7 @@
    2,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -9308,6 +10016,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -9321,7 +10081,7 @@
    3,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -9341,6 +10101,58 @@
              "PatternNode",
              "",
              []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -9396,7 +10208,7 @@
    5,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -9416,6 +10228,58 @@
              "Hands",
              1,
              []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -9496,10 +10360,50 @@
     ]
    ],
    [
-    "Effect",
-    "huecycle",
+    "FieldEffect",
+    "line",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale",
     [
      "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "rings",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "combine",
+    [
+     "field",
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "scale.3",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "hueturn",
+    [
+     "image",
+     "turn"
     ]
    ],
    [
@@ -9512,9 +10416,10 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
-     "image"
+     "image",
+     "turn"
     ]
    ],
    [
@@ -9526,9 +10431,10 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
-     "image"
+     "image",
+     "turn"
     ]
    ]
   ],
@@ -11805,7 +12711,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -11849,6 +12755,58 @@
                   ]
                  ]
                 ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
                ]
               ]
              ]
@@ -11904,7 +12862,7 @@
       "image",
       [
        "Effect",
-       "huecycle",
+       "hueturn",
        [
         [
          "image",
@@ -11984,6 +12942,58 @@
            ]
           ]
          ]
+        ],
+        [
+         "turn",
+         [
+          "FieldEffect",
+          "scale.3",
+          [
+           [
+            "image",
+            [
+             "FieldEffect",
+             "combine",
+             [
+              [
+               "field",
+               [
+                "FieldEffect",
+                "scale.2",
+                [
+                 [
+                  "image",
+                  [
+                   "FieldEffect",
+                   "rings",
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "image",
+               [
+                "FieldEffect",
+                "scale",
+                [
+                 [
+                  "image",
+                  [
+                   "FieldEffect",
+                   "line",
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
         ]
        ]
       ]
@@ -12013,7 +13023,7 @@
    2,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -12067,6 +13077,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -12080,7 +13142,7 @@
    3,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -12124,6 +13186,58 @@
                   ]
                  ]
                 ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
                ]
               ]
              ]
@@ -12182,7 +13296,7 @@
    5,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -12226,6 +13340,58 @@
                   ]
                  ]
                 ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
                ]
               ]
              ]
@@ -12330,10 +13496,50 @@
     ]
    ],
    [
-    "Effect",
-    "huecycle",
+    "FieldEffect",
+    "line",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale",
     [
      "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "rings",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "combine",
+    [
+     "field",
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "scale.3",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "hueturn",
+    [
+     "image",
+     "turn"
     ]
    ],
    [
@@ -12366,9 +13572,10 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
-     "image"
+     "image",
+     "turn"
     ]
    ],
    [
@@ -12402,9 +13609,10 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
-     "image"
+     "image",
+     "turn"
     ]
    ],
    [
@@ -14397,7 +15605,7 @@
       "image",
       [
        "Effect",
-       "huecycle",
+       "hueturn",
        [
         [
          "image",
@@ -14441,6 +15649,58 @@
                      ]
                     ]
                    ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "turn",
+         [
+          "FieldEffect",
+          "scale.3",
+          [
+           [
+            "image",
+            [
+             "FieldEffect",
+             "combine",
+             [
+              [
+               "field",
+               [
+                "FieldEffect",
+                "scale.2",
+                [
+                 [
+                  "image",
+                  [
+                   "FieldEffect",
+                   "rings",
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "image",
+               [
+                "FieldEffect",
+                "scale",
+                [
+                 [
+                  "image",
+                  [
+                   "FieldEffect",
+                   "line",
+                   []
                   ]
                  ]
                 ]
@@ -14533,7 +15793,7 @@
    2,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -14587,6 +15847,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -14600,7 +15912,7 @@
    3,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -14644,6 +15956,58 @@
                   ]
                  ]
                 ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
                ]
               ]
              ]
@@ -14702,7 +16066,7 @@
    5,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -14746,6 +16110,58 @@
                   ]
                  ]
                 ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
                ]
               ]
              ]
@@ -14850,10 +16266,50 @@
     ]
    ],
    [
-    "Effect",
-    "huecycle",
+    "FieldEffect",
+    "line",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale",
     [
      "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "rings",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "combine",
+    [
+     "field",
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "scale.3",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "hueturn",
+    [
+     "image",
+     "turn"
     ]
    ],
    [
@@ -14886,9 +16342,10 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
-     "image"
+     "image",
+     "turn"
     ]
    ],
    [
@@ -16859,7 +18316,7 @@
          "faces",
          [
           "Effect",
-          "huecycle.2",
+          "hueturn",
           [
            [
             "image",
@@ -16873,6 +18330,58 @@
                 "MediaNode",
                 "a",
                 []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "turn",
+            [
+             "FieldEffect",
+             "scale.3",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "combine",
+                [
+                 [
+                  "field",
+                  [
+                   "FieldEffect",
+                   "scale.2",
+                   [
+                    [
+                     "image",
+                     [
+                      "FieldEffect",
+                      "rings",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ],
+                 [
+                  "image",
+                  [
+                   "FieldEffect",
+                   "scale",
+                   [
+                    [
+                     "image",
+                     [
+                      "FieldEffect",
+                      "line",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
                ]
               ]
              ]
@@ -16957,7 +18466,7 @@
             "faces",
             [
              "Effect",
-             "huecycle.2",
+             "hueturn",
              [
               [
                "image",
@@ -16971,6 +18480,58 @@
                    "MediaNode",
                    "a",
                    []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "turn",
+               [
+                "FieldEffect",
+                "scale.3",
+                [
+                 [
+                  "image",
+                  [
+                   "FieldEffect",
+                   "combine",
+                   [
+                    [
+                     "field",
+                     [
+                      "FieldEffect",
+                      "scale.2",
+                      [
+                       [
+                        "image",
+                        [
+                         "FieldEffect",
+                         "rings",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ],
+                    [
+                     "image",
+                     [
+                      "FieldEffect",
+                      "scale",
+                      [
+                       [
+                        "image",
+                        [
+                         "FieldEffect",
+                         "line",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
                   ]
                  ]
                 ]
@@ -17022,7 +18583,7 @@
          "faces",
          [
           "Effect",
-          "huecycle.2",
+          "hueturn",
           [
            [
             "image",
@@ -17036,6 +18597,58 @@
                 "MediaNode",
                 "a",
                 []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "turn",
+            [
+             "FieldEffect",
+             "scale.3",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "combine",
+                [
+                 [
+                  "field",
+                  [
+                   "FieldEffect",
+                   "scale.2",
+                   [
+                    [
+                     "image",
+                     [
+                      "FieldEffect",
+                      "rings",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ],
+                 [
+                  "image",
+                  [
+                   "FieldEffect",
+                   "scale",
+                   [
+                    [
+                     "image",
+                     [
+                      "FieldEffect",
+                      "line",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
                ]
               ]
              ]
@@ -17071,7 +18684,7 @@
          "faces",
          [
           "Effect",
-          "huecycle.2",
+          "hueturn",
           [
            [
             "image",
@@ -17085,6 +18698,58 @@
                 "MediaNode",
                 "a",
                 []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "turn",
+            [
+             "FieldEffect",
+             "scale.3",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "combine",
+                [
+                 [
+                  "field",
+                  [
+                   "FieldEffect",
+                   "scale.2",
+                   [
+                    [
+                     "image",
+                     [
+                      "FieldEffect",
+                      "rings",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ],
+                 [
+                  "image",
+                  [
+                   "FieldEffect",
+                   "scale",
+                   [
+                    [
+                     "image",
+                     [
+                      "FieldEffect",
+                      "line",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
                ]
               ]
              ]
@@ -17215,10 +18880,50 @@
     ]
    ],
    [
-    "Effect",
-    "huecycle.2",
+    "FieldEffect",
+    "line",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale",
     [
      "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "rings",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "combine",
+    [
+     "field",
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "scale.3",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "hueturn",
+    [
+     "image",
+     "turn"
     ]
    ],
    [
@@ -26641,7 +28346,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -26764,7 +28469,7 @@
    2,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -26896,7 +28601,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -26931,7 +28636,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -26944,7 +28649,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -27059,7 +28764,7 @@
    1,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -27242,7 +28947,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -27279,7 +28984,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -27292,7 +28997,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -27336,6 +29041,58 @@
                   ]
                  ]
                 ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
                ]
               ]
              ]
@@ -27435,10 +29192,50 @@
     ]
    ],
    [
-    "Effect",
-    "huecycle",
+    "FieldEffect",
+    "line",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale",
     [
      "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "rings",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "combine",
+    [
+     "field",
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "scale.3",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "hueturn",
+    [
+     "image",
+     "turn"
     ]
    ]
   ],
@@ -27449,7 +29246,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -27529,6 +29326,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -27584,6 +29433,45 @@
     ]
    ],
    [
+    "FieldEffect",
+    "line",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "rings",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "combine",
+    [
+     "field",
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "scale.3",
+    [
+     "image"
+    ]
+   ],
+   [
     "Composite",
     null,
     [
@@ -27614,9 +29502,10 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
-     "image"
+     "image",
+     "turn"
     ]
    ]
   ],
@@ -27627,7 +29516,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -27750,7 +29639,7 @@
    2,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -27882,7 +29771,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -27917,7 +29806,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -27930,7 +29819,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -28045,7 +29934,7 @@
    1,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -28228,7 +30117,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -28265,7 +30154,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -28278,7 +30167,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -28322,6 +30211,58 @@
                   ]
                  ]
                 ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
                ]
               ]
              ]
@@ -28421,10 +30362,50 @@
     ]
    ],
    [
-    "Effect",
-    "huecycle",
+    "FieldEffect",
+    "line",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale",
     [
      "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "rings",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "combine",
+    [
+     "field",
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "scale.3",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "hueturn",
+    [
+     "image",
+     "turn"
     ]
    ]
   ],
@@ -28435,7 +30416,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -28515,6 +30496,58 @@
         ]
        ]
       ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
      ]
     ]
    ],
@@ -28570,6 +30603,45 @@
     ]
    ],
    [
+    "FieldEffect",
+    "line",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "rings",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "combine",
+    [
+     "field",
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "scale.3",
+    [
+     "image"
+    ]
+   ],
+   [
     "Composite",
     null,
     [
@@ -28600,9 +30672,10 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
-     "image"
+     "image",
+     "turn"
     ]
    ]
   ],
@@ -34599,7 +36672,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -34695,7 +36768,7 @@
    2,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -34779,7 +36852,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -34793,7 +36866,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -34806,7 +36879,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -34894,7 +36967,7 @@
    1,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -35029,7 +37102,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -35045,7 +37118,7 @@
    ],
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      "image"
     ]
@@ -35058,7 +37131,7 @@
    0,
    [
     "Effect",
-    "huecycle",
+    "hueturn",
     [
      [
       "image",
@@ -35078,6 +37151,58 @@
              "PatternNode",
              "",
              []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "turn",
+      [
+       "FieldEffect",
+       "scale.3",
+       [
+        [
+         "image",
+         [
+          "FieldEffect",
+          "combine",
+          [
+           [
+            "field",
+            [
+             "FieldEffect",
+             "scale.2",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "rings",
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "image",
+            [
+             "FieldEffect",
+             "scale",
+             [
+              [
+               "image",
+               [
+                "FieldEffect",
+                "line",
+                []
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -35153,10 +37278,50 @@
     ]
    ],
    [
-    "Effect",
-    "huecycle",
+    "FieldEffect",
+    "line",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale",
     [
      "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "rings",
+    []
+   ],
+   [
+    "FieldEffect",
+    "scale.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "combine",
+    [
+     "field",
+     "image"
+    ]
+   ],
+   [
+    "FieldEffect",
+    "scale.3",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "hueturn",
+    [
+     "image",
+     "turn"
     ]
    ]
   ],

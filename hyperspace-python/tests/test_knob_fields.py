@@ -421,3 +421,24 @@ def test_deleting_a_converter_keeps_the_effect_its_cable_alone_named(tmp_path):
     assert edit.drop_node("tofield") is None
     assert "wave" in graphview._named(rig.loaded_patch.graph.doc)
     assert "tofield" not in graphview._named(rig.loaded_patch.graph.doc)
+
+
+def test_a_slot_reads_its_effects_knob_fields():
+    """A slot is its effect on another picture, with the effect's knobs: a
+    field on the effect's knob reaches the slot too (plan 67; Hue turn's band,
+    under "hands through the effects"), unless the slot has its own wired."""
+    from hyperspace import graph as G
+    from hyperspace.outputs import Switches
+    sys_path_tests()
+    from test_graphview import views, wired_wiring
+    section = _wired(("scene", "wave.image"), ("wave", "output.all.image"),
+                     {"from": "line", "to": "wave.amount", "depth": 0.5},
+                     ("hands.layer", "wave.slot.2.image"), ("wave.slot.2", "output.1.image"))
+    next(e for e in section["nodes"] if e["file"] == "wave")["slots"] = 2
+    spec = _spec(section)
+    assert not spec.notes, spec.notes
+    g = G.build_graph(views(Switches()), wired_wiring(spec.wiring()),
+                      effects=("line", "wave"))
+    slot = next(n for n in g.nodes.values() if isinstance(n, G.Effect)
+                and n.name.startswith("wave.slot.2"))
+    assert slot.depths.get("amount") == 0.5 and slot.inputs.get("amount") is not None

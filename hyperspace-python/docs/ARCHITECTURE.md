@@ -337,7 +337,11 @@ rate and a hooked file's knobs refuse one in words (`fx.knob_refusal`,
 `graph.knob_refusal`); up to `fx.KNOB_UNITS` (12) knobs of one effect at once. On
 GRAPH the port is drawn once wired, a field cable dropped on the knob's own row
 wires it (`graphview.knob_pin`), and its menu's **depth ▸** sets the depth
-(`graphview.depth_choices`, `set_wire_depth`).
+(`graphview.depth_choices`, `set_wire_depth`). A slot reads its effect's knob
+fields, as it reads its knobs. **A retired effect** (Hue cycle, plan 67) is
+rewritten on load by the ladder's last step, keyed on its file
+(`graphmigrate.hue_turns`; a fragment's, `patches.forward`), and the steps
+before it still place it where an old stack ran it (`graphmigrate.RETIRED_SPECS`).
 
 **Running with no input** (R15, row 1114). An effect or slot nothing is wired
 into is never built — unless it is a generator, which `graph.runs_unfed` alone

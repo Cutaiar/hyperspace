@@ -154,7 +154,7 @@ def test_shapes_of_the_effects_params(tmp_path, monkeypatch):
         speed = shape_of(p, reg["fx.kaleido.speed"])       # the stop, and the 1× notch
         assert speed.polarity == BIPOLAR and speed.detent == 0.5 and len(speed.notches) == 2
         assert p._origin(reg["fx.kaleido.swirl"]) == 0.5     # the stock path's fill too
-        assert shape_of(p, reg["fx.huecycle.sat"]).polarity == UNITY
+        assert shape_of(p, reg["fx.hueturn.sat"]).polarity == UNITY
         assert shape_of(p, reg["fx.blocks.aspect"]).polarity == UNITY
 
 

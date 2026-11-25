@@ -187,7 +187,7 @@ FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 # T7's three: the still on the faces (`view.media`), and the still wired into
 # an effect's aux — blend's luma key, displace by its brightness. Plan 33
 # T4's three (`hyperspace.preset/5`): the still through its own shaders onto
-# the faces (`media.a → acid.2 → huecycle.2 → shape.faces`), under the scene
+# the faces (`media.a → acid.2 → huecycle.2 → shape.faces`; Hue turn since plan 67), under the scene
 # (`media.a → kaleido.2 → backdrop.image`), and one branch read at two sizes
 # (acid.2 on the faces at 1024² and as output 2's picture). Plan 33 T5's
 # one: a switch onto the faces at select 2, the still (in1 an empty channel,
@@ -739,6 +739,7 @@ def plan33_section(loaded_patch, slug: str) -> tuple[dict, set[str]]:
     doc = source_doc(loaded_patch, slug)
     gs = loaded_patch.graph
     old, _ = graphmigrate.migrate(doc, gs.specs(), desk=None, wire=False)
+    old, _ = graphmigrate.hue_turns(old)        # (plan 67: as the load's ladder ends)
     files = {n.partition(".")[0] for n in gs.specs()}
     return (old.get("graph") if isinstance(old.get("graph"), dict) else {}), files
 
@@ -754,6 +755,7 @@ def _placements_wait(loaded_patch, slug: str) -> dict | None:
         return None
     gs = loaded_patch.graph
     out, _ = graphmigrate.migrate(doc, gs.specs(), desk=None)
+    out, _ = graphmigrate.hue_turns(out)        # (plan 67: as the load's ladder ends)
     section = out.get("graph")
     if not isinstance(section, dict) or not any(
             isinstance(e, dict) and any(k in e for k in G.PLACE_KEYS)
@@ -1256,6 +1258,7 @@ class Loader:
         doc = source_doc(self.loaded_patch, slug)
         old, _ = graphmigrate.migrate(doc, gs.specs(), desk=None,
                                       wire=False)
+        old, _ = graphmigrate.hue_turns(old)    # (plan 67: as the load's ladder ends)
         effects = tuple(sorted(self.fx.specs))
         section = old.get("graph") if isinstance(old.get("graph"), dict) else {}
         spec = read_graph(section, effects={e.partition(".")[0] for e in effects})

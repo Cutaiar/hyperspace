@@ -81,11 +81,13 @@ def land(p, landing, *, as_saved: bool = True):
     sec = spec.to_json()
     wires = [*sec.get("wires", []), *copy.deepcopy(list(landing.wires))]
     for port in landing.ports if as_saved else ():
+        # (plan 67 P3: a field into a knob keeps its depth, as `Edit._saved_pins` lands it)
+        depth = {G.WIRE_DEPTH: port[G.WIRE_DEPTH]} if G.WIRE_DEPTH in port else {}
         if "to" in port:
-            wires.append({"from": port["was"], "to": port["to"]})
+            wires.append({"from": port["was"], "to": port["to"], **depth})
         else:
             wires = [w for w in wires if w["to"] != port["was"]]
-            wires.append({"from": port["from"], "to": port["was"]})
+            wires.append({"from": port["from"], "to": port["was"], **depth})
     sec["nodes"] = [*sec.get("nodes", []), *copy.deepcopy(list(landing.nodes))]
     sec["wires"] = wires
     spec = G.read_graph(sec)
