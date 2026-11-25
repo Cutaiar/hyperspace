@@ -1,0 +1,299 @@
+"""A Kinect's side pane (plan 29, row 1170): what GRAPH shows when the
+Kinect's device node (``device:<role>``, an entry of kind ``kinect``) is
+selected. Manual state control and telemetry, and nothing else: nothing here
+drives the sensor by itself, and nothing moves it when the pane opens.
+
+**Controls** (each a `KinectDevice.request`, served on the device's own
+thread; the pane never touches libfreenect and never waits):
+
+- *tilt*: a target (±31°, libfreenect's clamp), sent when the slider is let
+  go, by **go**, or as 0 by **level**: never while it is being dragged. There
+  is a tilt motor and no yaw motor.
+- *LED*: off, green, red, yellow, blink green, blink red / yellow.
+- *infrared*: the IR camera's brightness, 1–50, sent on release.
+- *video*: off, colour or infrared (one stream: they exclude each other);
+  auto exposure, auto white balance and auto flicker; and, with auto
+  exposure off, the exposure time.
+- *streams*: **restart** (every stream stopped and started) and **reconnect**
+  (the sensor closed and opened again).
+- *placement*: the entry's `near`, `far`, `centre`, `step` and `mirror`, for
+  this run (`KinectDevice.place`). They are the sensor's place, the entry's
+  and no param's or patch's, and they are **not saved**: `devicelist` never
+  rewrites a role's entry, and the entry is a file two Macs share. The pane
+  says so; to keep a placement, edit the entry.
+
+A control the device cannot use now is drawn disabled, with the word why
+beside it (`Telemetry.can`). **Telemetry**: the model, the status, the
+rates, the counts, how much of the picture read, the nearest and median
+depth, the tilt, its motor, the accelerometer and libfreenect's last line.
+The pictures themselves stay on the MEDIA page (`kinect:<role>/depth`).
+
+View state only (`_state`): a slider's value while it is being edited. Ids
+are `kinect.*`, after the ``##``."""
+
+from __future__ import annotations
+
+from imgui_bundle import imgui
+
+from . import ui
+from .dkit.tokens import SPACE
+from .kinect import EXPOSURE_MAX, EXPOSURE_MIN, IR_MAX, IR_MIN, LEDS, TILT_MAX
+
+KEY = "kinect.pane"
+TILT_STEP = 0.5                     # the tilt slider's detent, degrees
+NOT_SAVED = ("for this run: they are the entry's, and an entry in the device list is "
+             "never rewritten. Edit the entry to keep them.")
+NO_SENSOR = "no Kinect is connected"
+HOLD_TIP = "sent when you let go"
+
+VIDEO_LABELS = (("off", "off"), ("color", "colour"), ("ir", "infrared"))
+
+
+def is_kinect_node(n) -> bool:
+    """Is `n` a Kinect's device node?"""
+    return getattr(n, "kind", "") == "device" and getattr(getattr(n, "ref", None), "kind", "") == "kinect"
+
+
+def _state(panel, role: str) -> dict:
+    all_ = panel.__dict__.setdefault(KEY, {})
+    return all_.setdefault(role, {"tilt": None, "ir": None, "exposure": None, "held": set()})
+
+
+def _gap(n: float = 2) -> None:
+    imgui.dummy(imgui.ImVec2(0, SPACE[n]))
+
+
+def _head(text: str) -> None:
+    _gap(2)
+    ui._micro(text)
+
+
+def _why(text: str) -> None:
+    """The word a disabled control gives, under it, quiet and wrapped."""
+    imgui.push_style_color(imgui.Col_.text, ui.FAINT)
+    imgui.text_wrapped(text)
+    imgui.pop_style_color()
+
+
+def _kv(label: str, value: str) -> None:
+    """A telemetry row: the label in the label column, the value fitted to what is left."""
+    imgui.text_colored(ui.DIM, label)
+    imgui.same_line(ui.LABEL_W)
+    room = imgui.get_content_region_avail().x
+    imgui.text_colored(ui.TEXT, ui.fit_text(value, room))
+
+
+def _num(v, fmt: str = "{:.2f}", unit: str = "") -> str:
+    return "—" if v is None else fmt.format(v) + unit
+
+
+def _tip(text: str) -> None:
+    if text and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+        ui.tooltip(text)
+
+
+def body(panel, dev) -> None:
+    """The selected Kinect's pane. `dev` is its `KinectDevice` (or anything with
+    `telemetry`, `request`, `place`, `options` and `status`)."""
+    st = _state(panel, str(getattr(dev, "role", "kinect")))
+    t = dev.telemetry
+    live = bool(t.live)
+
+    def why(key: str) -> str:
+        return t.can.get(key, "") if live else NO_SENSOR
+
+    _status(dev, t)
+    _tilt(dev, t, st, why("tilt"))
+    _led(dev, t, why("led"))
+    _infrared(dev, t, st, why("ir"))
+    _video(dev, t, st, why)
+    _streams(dev, why("restart"), why("reconnect"))
+    _placement(dev)
+    _telemetry(t)
+
+
+def _ask(dev, kind: str, value=None) -> None:
+    dev.request(kind, value)
+
+
+def _status(dev, t) -> None:
+    imgui.text_wrapped(f"{dev.status}")
+    if t.said:
+        imgui.push_style_color(imgui.Col_.text, ui.DIM)
+        imgui.text_wrapped(t.said)
+        imgui.pop_style_color()
+
+
+def _slider_row(label: str, key: str, st: dict, shown, lo, hi, fmt: str, *, whole: bool,
+                ident: str, why: str):
+    """A slider that sends nothing while it is dragged: (its value, let go?).
+    It follows what the sensor reports while it is not being edited."""
+    held = st["held"]
+    if key not in held and shown is not None:
+        st[key] = shown
+    if st[key] is None:
+        st[key] = lo if lo > 0 else 0 if whole else 0.0
+    imgui.begin_disabled(bool(why))
+    imgui.set_next_item_width(-1)
+    if whole:
+        changed, v = imgui.slider_int(f"##{ident}", int(st[key]), int(lo), int(hi), fmt)
+    else:
+        changed, v = imgui.slider_float(f"##{ident}", float(st[key]), lo, hi, fmt)
+    active = imgui.is_item_active()
+    let_go = imgui.is_item_deactivated_after_edit()
+    imgui.end_disabled()
+    _tip(why or label)
+    if changed:
+        st[key] = v
+    if active:
+        held.add(key)
+    else:
+        held.discard(key)
+    return st[key], let_go
+
+
+def _tilt(dev, t, st: dict, why: str) -> None:
+    _head("tilt")
+    seed = t.target if t.target is not None else t.tilt
+    if st["tilt"] is None and seed is not None:
+        st["tilt"] = round(seed / TILT_STEP) * TILT_STEP
+    v, let_go = _slider_row("tilt target, degrees: " + HOLD_TIP, "tilt", st, None,
+                            -TILT_MAX, TILT_MAX, "%.1f°", whole=False, ident="kinect.tilt", why=why)
+    if let_go:
+        _ask(dev, "tilt", v)
+    imgui.begin_disabled(bool(why))
+    if ui.chip("go##kinect.tilt.go"):
+        _ask(dev, "tilt", v)
+    _tip(why or "send the target now")
+    imgui.same_line()
+    if ui.chip("level##kinect.tilt.level"):
+        st["tilt"] = 0.0
+        _ask(dev, "tilt", 0.0)
+    _tip(why or "tilt to 0°")
+    imgui.end_disabled()
+    if why:
+        _why(why)
+
+
+def _led(dev, t, why: str) -> None:
+    _head("LED")
+    names = [n for n, _ in LEDS]
+    now = names.index(t.led) if t.led in names else -1
+    imgui.begin_disabled(bool(why))
+    imgui.set_next_item_width(-1)
+    changed, i = imgui.combo("##kinect.led", max(now, 0), names)
+    imgui.end_disabled()
+    _tip(why or ("the light on the front; the sensor cannot say which it shows"
+                 if now < 0 else "the light on the front"))
+    if changed:
+        _ask(dev, "led", LEDS[i][1])
+    if why:
+        _why(why)
+
+
+def _infrared(dev, t, st: dict, why: str) -> None:
+    _head("infrared brightness")
+    v, let_go = _slider_row("the IR camera's brightness, 1–50: " + HOLD_TIP, "ir", st, t.ir,
+                            IR_MIN, IR_MAX, "%d", whole=True, ident="kinect.ir", why=why)
+    if let_go:
+        _ask(dev, "ir", int(v))
+    if why:
+        _why(why)
+
+
+def _video(dev, t, st: dict, why) -> None:
+    _head("video")
+    imgui.begin_disabled(bool(why("video")))
+    hit = ui.chip_group([f"{words}##kinect.video.{key}" for key, words in VIDEO_LABELS],
+                        lit=[t.video == key for key, _ in VIDEO_LABELS],
+                        tips=["no video stream", "the colour stream (it joins the cloud's colours)",
+                              "the infrared picture"])
+    imgui.end_disabled()
+    if hit is not None and VIDEO_LABELS[hit][0] != t.video:
+        _ask(dev, "video", VIDEO_LABELS[hit][0])
+    if why("video"):
+        _why(why("video"))
+    for key, label in (("auto_exposure", "auto exposure"), ("white_balance", "auto white balance"),
+                       ("flicker", "auto flicker")):
+        w = why(key)
+        imgui.begin_disabled(bool(w))
+        changed, on = ui.checkbox(f"{label}##kinect.{key}", bool(t.flags.get(key, False)))
+        imgui.end_disabled()
+        _tip(w or ("what was last sent: libfreenect cannot read it back"
+                   if key not in t.flags else ""))
+        if changed:
+            _ask(dev, key, on)
+    if why("auto_exposure"):
+        _why(f"auto settings: {why('auto_exposure')}")
+    w = why("exposure")
+    v, let_go = _slider_row("exposure time, µs: " + HOLD_TIP, "exposure", st, t.exposure,
+                            EXPOSURE_MIN, EXPOSURE_MAX, "%d µs", whole=True,
+                            ident="kinect.exposure", why=w)
+    if let_go:
+        _ask(dev, "exposure", int(v))
+    if w and w != why("auto_exposure"):
+        _why(f"exposure time: {w}")
+
+
+def _streams(dev, why_restart: str, why_reconnect: str) -> None:
+    _head("streams")
+    imgui.begin_disabled(bool(why_restart))
+    if ui.chip("restart##kinect.restart"):
+        _ask(dev, "restart")
+    _tip(why_restart or "stop every stream and start it again")
+    imgui.end_disabled()
+    imgui.same_line()
+    imgui.begin_disabled(bool(why_reconnect))
+    if ui.chip("reconnect##kinect.reconnect"):
+        _ask(dev, "reconnect")
+    _tip(why_reconnect or "close the sensor and open it again")
+    imgui.end_disabled()
+
+
+def _placement(dev) -> None:
+    _head("placement")
+    o = dev.options
+    settings = (("near", o.near, 0.0, max(o.far - 0.05, 0.0), "%.2f m"),
+                ("far", o.far, o.near + 0.05, 8.0, "%.2f m"),
+                ("centre", o.centre, 0.0, 8.0, "%.2f m"))
+    said = ""
+    for name, v, lo, hi, fmt in settings:
+        imgui.text_colored(ui.DIM, name)
+        imgui.same_line(ui.LABEL_W)
+        imgui.set_next_item_width(-1)
+        changed, nv = imgui.slider_float(f"##kinect.{name}", float(v), float(lo), float(hi), fmt)
+        if changed:
+            said = dev.place(**{name: nv}) or said
+    imgui.text_colored(ui.DIM, "step")
+    imgui.same_line(ui.LABEL_W)
+    imgui.set_next_item_width(-1)
+    changed, step = imgui.slider_int("##kinect.step", int(o.step), 1, 16, "%d")
+    if changed:
+        said = dev.place(step=step) or said
+    changed, mirror = ui.checkbox("mirror##kinect.mirror", bool(o.mirror))
+    if changed:
+        said = dev.place(mirror=mirror) or said
+    if said:
+        _why(said)
+    _why(NOT_SAVED)
+
+
+def _telemetry(t) -> None:
+    _head("telemetry")
+    _kv("model", t.model or "—")
+    _kv("depth", f"{t.depth_fps:.0f} fps · {t.frames} frames")
+    _kv("video", f"{t.video_fps:.0f} fps · {t.video_frames} frames" if t.video != "off" else "off")
+    _kv("restarts", f"{t.restarts} streams · {t.reconnects} reconnects")
+    _kv("read", _num(None if t.share is None else t.share * 100, "{:.0f}", " % of pixels"))
+    _kv("nearest", _num(t.nearest, "{:.2f}", " m"))
+    _kv("median", _num(t.median, "{:.2f}", " m"))
+    _kv("points", f"{t.points}")
+    if t.motor_why:
+        _kv("motor", "not open")
+        _why(t.motor_why)
+    else:
+        _kv("tilt", f"{_num(t.tilt, '{:.1f}', '°')} · {t.tilt_status or '—'}")
+        a = t.accel
+        _kv("accel", "—" if a is None else f"{a[0]:.2f} {a[1]:.2f} {a[2]:.2f} m/s²")
+    if t.log:
+        _why(f"libfreenect: {t.log}")

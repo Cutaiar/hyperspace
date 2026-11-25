@@ -1,0 +1,276 @@
+"""The Kinect's side pane (plan 29, row 1170): GRAPH's selected device node
+drawn at the pane's narrowest and widest, every control in it with an id,
+the tilt sent only on a deliberate action, a control the device cannot use
+shown disabled with its word. Over a stand-in device: no hardware."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace as NS
+
+import pytest
+from imgui_bundle import imgui
+from test_ui_shell import build_rig
+from ui_driver import Driver
+
+from hyperspace import graphview, kinect, ui_graph, ui_kinect
+
+ALL = {"kinect.tilt", "kinect.tilt.go", "kinect.tilt.level", "kinect.led", "kinect.ir",
+       "kinect.video.off", "kinect.video.color", "kinect.video.ir", "kinect.auto_exposure",
+       "kinect.white_balance", "kinect.flicker", "kinect.exposure", "kinect.restart",
+       "kinect.reconnect", "kinect.near", "kinect.far", "kinect.centre", "kinect.step",
+       "kinect.mirror"}
+OPEN = {k: "" for k in ("tilt", "led", "ir", "video", "restart", "reconnect", "auto_exposure",
+                        "white_balance", "flicker")}
+
+
+class Dev:
+    """What the pane reads of a KinectDevice."""
+
+    role, kind = "room", "kinect"
+
+    def __init__(self, **tele):
+        base = {"live": True, "model": "1414", "depth_fps": 30.0, "video_fps": 29.0,
+                "frames": 1234, "video_frames": 1200, "restarts": 2, "reconnects": 1,
+                "share": 0.93, "nearest": 0.52, "median": 1.84, "points": 61234, "tilt": 1.0,
+                "tilt_status": "stopped", "accel": (-0.38, 9.44, 0.2), "led": "green",
+                "target": 0.0, "ir": 30, "exposure": 10000, "flags": {"auto_exposure": False},
+                "video": "color", "log": "", "said": "", "can": {**OPEN, "exposure": ""}}
+        self.telemetry = kinect.Telemetry(**{**base, **tele})
+        self.status = "connected"
+        self.options = kinect.Options()
+        self.asked: list[tuple] = []
+        self.placed: list[dict] = []
+
+    def request(self, kind, value=None):
+        self.asked.append((kind, value))
+        return ""
+
+    def place(self, **kw):
+        self.placed.append(kw)
+        return ""
+
+
+def node(dev) -> graphview.VNode:
+    return graphview.VNode(f"device:{dev.role}", "device", dev.role, ref=dev)
+
+
+class Pane:
+    """The pane drawn in a window of a width, a frame at a time."""
+
+    def __init__(self, r, monkeypatch, dev, width, height=1800):
+        self.r, self.dev, self.size = r, dev, (width, height)
+        imgui.get_io().display_size = imgui.ImVec2(width + 40, height + 40)
+        self.d = Driver(step=self.frame)
+        self.d.record(monkeypatch.setattr)
+        self.d.run(self.d.wait(3))
+
+    def frame(self) -> None:
+        r = self.r
+        st = ui_graph._state(r.panel)
+        imgui.new_frame()
+        imgui.set_next_window_pos(imgui.ImVec2(10, 10))
+        imgui.set_next_window_size(imgui.ImVec2(*self.size))
+        imgui.begin("side", None, imgui.WindowFlags_.no_move)
+        ui_graph._side(r.panel, st, st["view"], ("node", node(self.dev)))
+        imgui.end()
+        imgui.end_frame()
+
+    def spills(self) -> list[tuple[str, float]]:
+        right = 10 + self.size[0]
+        return [(k, round(x1 - right, 1)) for k, (x0, _y0, x1, _y1) in self.d.rects.items()
+                if x0 < right and x1 > right + 1]
+
+
+@pytest.fixture()
+def rig(tmp_path):
+    with build_rig(tmp_path) as r:
+        r.panel.desk = False
+        ui_graph._state(r.panel)               # (made by a frame, below)
+        from test_ui_shell import frame
+        frame(r.panel, "graph")
+        yield r
+
+
+WIDTHS = [pytest.param(ui_graph.SIDE_MIN, id="SIDE_MIN"), pytest.param(ui_graph.SIDE_W, id="SIDE_W")]
+
+
+@pytest.mark.parametrize("width", WIDTHS)
+def test_every_control_is_in_the_pane_with_an_id_and_none_passes_its_edge(rig, monkeypatch, width):
+    p = Pane(rig, monkeypatch, Dev(), width)
+    assert ALL <= set(p.d.rects), sorted(ALL - set(p.d.rects))
+    assert not p.spills(), p.spills()
+
+
+@pytest.mark.parametrize("width", WIDTHS)
+def test_long_words_and_a_dead_sensor_still_fit(rig, monkeypatch, width):
+    """A motor that did not open, a long libfreenect line, nothing live: the words wrap or
+    are cut, and the controls stay inside."""
+    dev = Dev(live=False, motor_why="the motor would not open (" + "LIBUSB_ERROR_ACCESS " * 6
+              + "); the camera runs without it", log="x" * 300, said="tilt: " + "y" * 200,
+              model="not a 1414 (bcdDevice 99999)", can={})
+    dev.status = "error: " + "another app holds the Kinect " * 4
+    p = Pane(rig, monkeypatch, dev, width)
+    assert ALL <= set(p.d.rects)
+    assert not p.spills(), p.spills()
+
+
+def test_tilt_is_sent_on_release_and_never_while_dragging(rig, monkeypatch):
+    dev = Dev()
+    p = Pane(rig, monkeypatch, dev, ui_graph.SIDE_W)
+    d = p.d
+    x0, y0, x1, y1 = d.rect("kinect.tilt")
+    y = (y0 + y1) / 2
+    d.run(d.move("kinect.tilt"), d.press(True))
+    for i in range(1, 9):                                    # a drag, a frame at a time
+        d.run(d.move((x0 + (x1 - x0) * i / 10, y)))
+        assert dev.asked == [], f"sent while dragging, frame {i}"
+    d.run(d.press(False))
+    d.run(d.wait(2))
+    assert [k for k, _ in dev.asked] == ["tilt"]
+    _kind, target = dev.asked[0]
+    assert -31.0 <= target <= 31.0 and target != 0.0
+
+
+def test_go_and_level_are_the_other_deliberate_actions(rig, monkeypatch):
+    dev = Dev()
+    p = Pane(rig, monkeypatch, dev, ui_graph.SIDE_W)
+    d = p.d
+    d.run(d.enter("kinect.tilt", 12))
+    assert dev.asked[-1] == ("tilt", 12.0)
+    n = len(dev.asked)
+    d.run(d.click("kinect.tilt.go"), d.park())
+    assert dev.asked[n:] == [("tilt", 12.0)]
+    d.run(d.click("kinect.tilt.level"), d.park())
+    assert dev.asked[-1] == ("tilt", 0.0)
+    d.run(d.wait(2))
+    d.run(d.click("kinect.tilt.go"), d.park())
+    assert dev.asked[-1] == ("tilt", 0.0)                    # the level is the target now
+
+
+def test_nothing_is_asked_by_drawing(rig, monkeypatch):
+    dev = Dev()
+    p = Pane(rig, monkeypatch, dev, ui_graph.SIDE_W)
+    p.d.run(p.d.wait(20))
+    assert dev.asked == [] and dev.placed == []
+
+
+def test_the_led_video_and_streams_ask_for_what_was_picked(rig, monkeypatch):
+    dev = Dev()
+    p = Pane(rig, monkeypatch, dev, ui_graph.SIDE_W)
+    d = p.d
+    d.run(d.pick("kinect.led", 4))                           # blink green
+    assert dev.asked[-1] == ("led", 4)
+    d.run(d.pick("kinect.led", 5))
+    assert dev.asked[-1] == ("led", 6)                       # blink red / yellow: libfreenect's 6
+    d.run(d.click("kinect.video.ir"), d.park())
+    assert dev.asked[-1] == ("video", "ir")
+    d.run(d.click("kinect.video.color"), d.park())           # (it is already colour: not asked)
+    assert dev.asked[-1] == ("video", "ir")
+    d.run(d.click("kinect.restart"), d.park())
+    assert dev.asked[-1] == ("restart", None)
+    d.run(d.click("kinect.reconnect"), d.park())
+    assert dev.asked[-1] == ("reconnect", None)
+    d.run(d.click("kinect.flicker"), d.park())
+    assert dev.asked[-1] == ("flicker", True)
+
+
+def test_the_infrared_and_exposure_are_sent_on_release_by_value(rig, monkeypatch):
+    dev = Dev()
+    p = Pane(rig, monkeypatch, dev, ui_graph.SIDE_W)
+    d = p.d
+    d.run(d.enter("kinect.ir", 42))
+    assert dev.asked[-1] == ("ir", 42)
+    d.run(d.enter("kinect.exposure", 5000))
+    assert dev.asked[-1] == ("exposure", 5000)
+
+
+def test_the_placement_is_this_run_only_and_says_so(rig, monkeypatch):
+    dev = Dev()
+    p = Pane(rig, monkeypatch, dev, ui_graph.SIDE_W)
+    d = p.d
+    said = []
+    real = imgui.text_wrapped
+    monkeypatch.setattr(imgui, "text_wrapped", lambda s, *a: (said.append(s), real(s, *a))[1])
+    d.run(d.enter("kinect.far", 3), d.click("kinect.mirror"), d.park())
+    assert dev.placed[0] == {"far": 3.0} and dev.placed[-1] == {"mirror": False}
+    assert ui_kinect.NOT_SAVED in said
+    assert dev.asked == []                                   # a placement is no request
+
+
+def test_a_control_the_device_cannot_use_is_disabled_with_its_word(rig, monkeypatch):
+    said = []
+    real = imgui.text_wrapped
+    monkeypatch.setattr(imgui, "text_wrapped", lambda s, *a: (said.append(s), real(s, *a))[1])
+    why = "the motor would not open (x); the camera runs without it"
+    dev = Dev(motor_why=why, tilt=None, tilt_status="", accel=None, flags={},
+              video="off", can={**OPEN, "tilt": why, "led": why, "exposure": "needs the colour stream",
+                                "auto_exposure": "needs the colour stream",
+                                "white_balance": "needs the colour stream",
+                                "flicker": "needs the colour stream"})
+    p = Pane(rig, monkeypatch, dev, ui_graph.SIDE_MIN)
+    d = p.d
+    assert said.count(why) >= 3                              # the tilt's, the LED's, the motor's line
+    assert "auto settings: needs the colour stream" in said        # said once, not four times
+    assert "exposure time: needs the colour stream" not in said
+    n = len(dev.asked)
+    d.run(d.click("kinect.tilt.go"), d.click("kinect.tilt.level"), d.click("kinect.flicker"),
+          d.park())
+    d.run(d.enter("kinect.exposure", 4000))
+    assert dev.asked[n:] == []                               # a disabled control asks nothing
+    d.run(d.click("kinect.restart"), d.park())               # the streams' own are not the motor's
+    assert dev.asked[-1] == ("restart", None)
+
+
+def test_no_sensor_says_so_on_every_control_and_asks_nothing(rig, monkeypatch):
+    said = []
+    real = imgui.text_wrapped
+    monkeypatch.setattr(imgui, "text_wrapped", lambda s, *a: (said.append(s), real(s, *a))[1])
+    dev = Dev(live=False, can={})
+    dev.status = "lost"
+    p = Pane(rig, monkeypatch, dev, ui_graph.SIDE_MIN)
+    p.d.run(p.d.click("kinect.restart"), p.d.click("kinect.reconnect"), p.d.click("kinect.tilt.go"),
+            p.d.park())
+    assert dev.asked == [] and ui_kinect.NO_SENSOR in said
+
+
+def test_the_telemetry_reads_the_snapshot(rig, monkeypatch):
+    shown = []
+    real = imgui.text_colored
+    monkeypatch.setattr(imgui, "text_colored", lambda c, s: (shown.append(s), real(c, s))[1])
+    p = Pane(rig, monkeypatch, Dev(log="usb_claim_interface failed"), ui_graph.SIDE_W)
+    p.d.run(p.d.wait(1))
+    text = "\n".join(shown)
+    for want in ("1414", "30 fps · 1234 frames", "93 % of pixels", "0.52 m", "1.84 m", "61234",
+                 "1.0° · stopped", "-0.38 9.44 0.20 m/s²", "2 streams · 1 reconnects"):
+        assert want in text, want
+
+
+def test_other_devices_panes_are_as_they_were(rig, monkeypatch):
+    """The Kinect's body is for a kinect device only: another kind's node never reaches it."""
+    calls = []
+    monkeypatch.setattr(ui_kinect, "body", lambda panel, dev: calls.append(dev))
+    st = ui_graph._state(rig.panel)
+    for kind in ("gamepad", "midi", "hands", "osc", "cloud", ""):
+        n = graphview.VNode(f"device:{kind or 'x'}", "device", kind or "x", ref=NS(kind=kind, io=None))
+        imgui.new_frame()
+        imgui.begin("side")
+        ui_graph._node_side(rig.panel, st, st["view"], None, n)
+        imgui.end()
+        imgui.end_frame()
+    assert calls == []
+    assert ui_kinect.is_kinect_node(node(Dev()))
+    assert not ui_kinect.is_kinect_node(graphview.VNode("render:acid", "render", "acid", ref=Dev()))
+    n = node(Dev())
+    imgui.new_frame()
+    imgui.begin("side")
+    ui_graph._node_side(rig.panel, st, st["view"], None, n)
+    imgui.end()
+    imgui.end_frame()
+    assert len(calls) == 1
+
+
+def test_the_module_is_watched_and_reloaded_in_order():
+    from hyperspace import hotreload
+    m = hotreload.MODULES
+    assert m.index("kinect") < m.index("ui_kinect") < m.index("ui_graph")
+    assert m.index("dkit.tokens") < m.index("ui_kinect")
