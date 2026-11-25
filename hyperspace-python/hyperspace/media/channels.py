@@ -44,6 +44,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from .. import writes
 from . import adapters, ids, mixer, pool
 from .adapters import MissingSource
 from .frame import MediaFrame
@@ -128,7 +129,7 @@ class Closer:
 
 
 @dataclass
-class Channel:
+class Channel(writes.Observed):
     name: str
     bin: list[str | None] = field(default_factory=lambda: [None] * BIN)
     slot: float = 0.0
