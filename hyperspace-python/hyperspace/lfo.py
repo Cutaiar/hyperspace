@@ -83,6 +83,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 from .modbank import MAX, Bank  # noqa: F401 — lfo.MAX: the cap, 16
+from .writes import Observed, cell
 
 SHAPES = ["sine", "tri", "saw", "square", "random"]
 SYNCS = ["Hz", "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16"]
@@ -114,7 +115,7 @@ def wave(shape: int, x: float) -> float:
 
 
 @dataclass
-class LFO:
+class LFO(Observed):
     """One oscillator: its settings (the params) and its running state."""
 
     shape: int = 0
@@ -283,23 +284,18 @@ def declare(reg, lfos: LFOs, clock, n: int, lf: LFO) -> None:
     """LFO `n`'s knobs, ``lfo.<n>.*`` — the bank's `declare` for this kind."""
     hz = lambda v: f"{v:.2f} Hz" if v < 10 else f"{v:.1f} Hz"
     p, name = f"{GROUP}.{n}", f"LFO {n}"
-    reg.enum(f"{p}.shape", f"{name} shape", lambda lf=lf: lf.shape,
-             lambda v, lf=lf: setattr(lf, "shape", int(v)), SHAPES, group=GROUP,
+    reg.enum(f"{p}.shape", f"{name} shape", *cell(lf, "shape", int), SHAPES, group=GROUP,
              tip="The wave. Random is sample-and-hold: one value per cycle.")
-    reg.continuous(f"{p}.rate", f"{name} rate", lambda lf=lf: lf.rate,
-                   lambda v, lf=lf: setattr(lf, "rate", float(v)),
+    reg.continuous(f"{p}.rate", f"{name} rate", *cell(lf, "rate", float),
                    lo=RATE_LO, hi=RATE_HI, log=True, fmt=hz, group=GROUP,
                    tip="Cycles per second while Sync is Hz; a division ignores it.")
-    reg.enum(f"{p}.sync", f"{name} sync", lambda lf=lf: lf.sync,
-             lambda v, lf=lf: setattr(lf, "sync", int(v)), SYNCS, group=GROUP,
+    reg.enum(f"{p}.sync", f"{name} sync", *cell(lf, "sync", int), SYNCS, group=GROUP,
              tip="Free-running at the rate, or locked to the clock: a division "
                  "lands on the downbeat and follows the global trigger.")
-    reg.continuous(f"{p}.depth", f"{name} depth", lambda lf=lf: lf.depth,
-                   lambda v, lf=lf: setattr(lf, "depth", float(v)),
+    reg.continuous(f"{p}.depth", f"{name} depth", *cell(lf, "depth", float),
                    lo=0.0, hi=1.0, fmt=lambda v: f"depth {v:.2f}", group=GROUP,
                    tip="How far the output swings about its rest of 0.5; 0 is still.")
-    reg.continuous(f"{p}.phase", f"{name} phase", lambda lf=lf: lf.phase,
-                   lambda v, lf=lf: setattr(lf, "phase", float(v)),
+    reg.continuous(f"{p}.phase", f"{name} phase", *cell(lf, "phase", float),
                    lo=0.0, hi=1.0, wrap=True, fmt=lambda v: f"phase {v:.2f}",
                    group=GROUP,
                    tip="An offset into the cycle, on top of the clock or the "

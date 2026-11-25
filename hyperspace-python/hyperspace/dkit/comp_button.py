@@ -447,6 +447,9 @@ class Join:
         return corner_flags(self.corners)
 
 
+_CORNER_FLAGS: dict = {}      # corner names → their flags (`corner_flags`, asked per chip per frame)
+
+
 def corner_flags(corners) -> int:
     """ImDrawFlags for a set of corner names.
 
@@ -454,13 +457,18 @@ def corner_flags(corners) -> int:
     is: the enum lives on the imgui module and naming it at import time would
     make this module depend on an order it has no reason to care about.
     """
+    key = tuple(corners)
+    got = _CORNER_FLAGS.get(key)
+    if got is not None:
+        return got
     f = imgui.ImDrawFlags_
     tbl = {"tl": f.round_corners_top_left, "tr": f.round_corners_top_right,
            "br": f.round_corners_bottom_right, "bl": f.round_corners_bottom_left}
     out = 0
-    for c in corners:
+    for c in key:
         out |= tbl[c]
-    return out or f.round_corners_none
+    got = _CORNER_FLAGS[key] = out or f.round_corners_none
+    return got
 
 
 def button_group(rects, orientation: str = "horizontal") -> list:

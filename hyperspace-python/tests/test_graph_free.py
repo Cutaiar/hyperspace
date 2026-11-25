@@ -451,7 +451,11 @@ def test_only_wired_effects_have_nodes(ctx, tmp_path):
     assert list(want) == list(g.run)
     end = g.outputs[0].inputs["image"]
     assert [e.effect for e in G._effects_of(end.inputs["image"])] == list(want)
-    assert sorted(n.effect for n in _effect_nodes(g)) == sorted(want)
+    # (plan 67: and Hue turn's bands — field nodes, made when Hue turn reads them)
+    pictures = [n.effect for n in _effect_nodes(g) if not isinstance(n, G.FieldEffect)]
+    assert sorted(pictures) == sorted(want)
+    assert sorted(n.effect for n in _effect_nodes(g) if isinstance(n, G.FieldEffect)) == [
+        "combine", "line", "rings", "scale", "scale.2", "scale.3"]
 
 
 def test_the_run_order_is_the_wire_order(ctx, tmp_path):

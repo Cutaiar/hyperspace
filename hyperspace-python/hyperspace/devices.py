@@ -1524,8 +1524,7 @@ def read_clouds(path: Path | str) -> CloudFile:
 
 class CloudDevice(Base):
     """A recorded point cloud played back as a source (plan 27 B4), so the
-    `PointCloud` type is exercised with no sensor — the Kinect and the
-    live sensors are plan 29. Its entry: `file` (a `write_clouds` .npz; a
+    `PointCloud` type is exercised with no sensor (a live one: kinect.py). Its entry: `file` (a `write_clouds` .npz; a
     relative path is the home's), `rate` (frames per second; default the
     file's own), `loop` (default true: at the end it starts again; false
     holds the last frame). It plays at its own rate against the frame's
@@ -1618,6 +1617,7 @@ def kinds() -> dict[str, type[Base]]:
     B2), which imports this module, so it is looked up when asked for —
     `devices.KINDS` and `devices.HandsDevice` read through here too."""
     from .hands.device import HandsDevice
+    from .kinect import KinectDevice  # (libfreenect is loaded on its own thread)
     from .media.camera import CameraKind  # (each imports its library only in a scan or open)
     from .media.ndi import NdiKind
     from .media.syphon import SyphonKind
@@ -1630,6 +1630,7 @@ def kinds() -> dict[str, type[Base]]:
         "midi-out": MidiOutDevice,          # plan 27 B3: a sink alone
         "osc": OscDevice,
         "cloud": CloudDevice,
+        "kinect": KinectDevice,             # plan 29: a live cloud and its pictures
         "ndi": NdiKind,                     # plan 32 T8: live media feeds, `media_feeds`
         "syphon": SyphonKind,
         "camera": CameraKind,

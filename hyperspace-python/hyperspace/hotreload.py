@@ -65,11 +65,11 @@ from pathlib import Path
 # subpackage's modules are named with a dot (tests/test_hotreload.py
 # holds both rules against the package's own imports).
 MODULES = (
-    "media.frame", "media.ids", "media.source", "media.pool", "media.still", "media.proxy", "media.video", "media.adapters", "media.thumbs", "media.folder", "media",
+    "writes", "media.frame", "media.ids", "media.source", "media.pool", "media.still", "media.proxy", "media.video", "media.adapters", "media.thumbs", "media.folder", "media",
     "pointer", "players", "analysis", "tapers", "motion", "media.transport", "media.mixer", "media.channels", "modifiers", "palettecompat", "groupwords", "undo", "placement", "geometry", "fractal", "fractal_gl", "shapeframe", "world", "grip", "bands", "analyzer", "audio", "tempo", "modbank", "lfo", "envelope", "sequencer", "glsl", "masks", "patterns",
     "lookback", "dream", "mandel", "fx", "previews", "handmesh", "ghost", "outputs", "pacing", "replay", "view", "field", "graph", "routing_sources", "graphmigrate", "media_tex", "poi_guide", "render", "params", "library", "playlist", "control", "config",
     "overlay", "pads.models", "pads.gesture", "poi", "totem", "pads.sony", "pads.nintendo", "pads.hid", "pads", "gamepad", "apc40", "generic", "idle_lights", "sharedfile", "devicelist", "displays", "hotplug", "modgraph", "seq_page", "routing", "nodemode", "patches", "loadable", "learn", "deck", "midiports", "midi", "bridge",
-    "hands.signal", "hands.tape", "hands.room", "hands.core", "hands", "devices", "media.live", "media.panel", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "node_desk", "osc", "graphview", "ui_browse", "ui_loadable", "ui_lookback", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
+    "hands.signal", "hands.tape", "hands.room", "hands.core", "hands", "devices", "media.live", "media.panel", "media.ndi", "media.syphon", "media.camera", "media.publish", "kinect", "hands.device", "node_desk", "osc", "graphview", "ui_browse", "ui_loadable", "ui_lookback", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
     "ui_lfo", "ui_media", "ui_diagram", "ui_desk", "ui_pad_lab", "ui_pad_nvg", "ui_pad_views", "ui_pad", "hands.panel", "ui_players", "ui_displays", "ui_playlist", "dkit.tokens", "dkit.ease", "dkit.icons", "dkit.rect", "dkit.flex", "dkit.tree", "dkit.box", "dkit.draw", "dkit.uictx", "dkit.wheel", "dkit.comp_button", "dkit.interact", "dkit.menu", "dkit.combobox_tokens", "dkit.combobox_items", "dkit.combobox_select", "dkit.combobox_measure", "dkit.layer", "dkit.comp_combobox", "dkit.comp_command", "dkit.comp_context_menu", "dkit", "ui_kit", "ui_menu", "ui_fields", "ui_camera", "ui_view", "ui_fractal", "ui_pane", "ui_switcher", "ui_strip", "ui_effect_picker", "ui_graph", "ui_seq", "ui",
 )
 # (plan 39 T2: `masks` sits after `glsl`, whose QUAD_VS it binds, and before
@@ -185,6 +185,10 @@ class HotReloader:
                 return False
 
         first = min(self.modules.index(name) for name, _ in changed)
+        # what a getter reads may be another class's after this: undo looks once
+        writes = sys.modules.get(f"{self.package}.writes")
+        if writes is not None:
+            writes.mark()
         notes = []
         try:
             for name in self.modules[first:]:

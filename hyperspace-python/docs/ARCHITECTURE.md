@@ -66,13 +66,14 @@ offsets; the panel, the desk and the library write bases; the render
 stack only reads.
 
 **Leaves** — modules that import nothing from the package, so anything
-may import them: `analysis`, `tapers`, `motion`, `undo`, `placement`,
+may import them: `writes`, `analysis`, `tapers`, `motion`, `undo`, `placement`,
 `geometry`, `patterns`, `tempo`, `modbank`, `sequencer`, `glsl`, `gamepad`, `apc40`,
 `generic`, `watchdog`, `modgraph`, `players`, `pointer`, `world`, `hands/signal.py`, `hands/tape.py`.
 `devices` imports nothing from the package at load: every adapter, and
 `routing`, only inside a function. Near-leaves: `outputs`, `fx`,
 `lookback` and `masks` (plan 39) import only `glsl`; `grip` (plan 60) only `world`; `view` and `field` only `geometry`; `lfo` and
-`envelope` only `modbank` (plan 31); `modifiers` only
+`envelope` only `modbank` (plan 31; all of these but `outputs`, `masks` and
+`field` also `writes`, whose `Observed` their settings are); `modifiers` only
 `motion` and `tapers`; `routing_sources` only `motion` (plan 44 D2,
 `tests/test_routing_boundary.py`) (`modgraph` is held by
 `tests/test_modgraph.py::test_modgraph_is_a_leaf`; `modifiers` by convention
@@ -95,7 +96,7 @@ pins this order over stubs:
 | 1 | `router.keys(keys)` — key rows, R, F1–F8 / ⇧F1–F8, ⌘Z among them; ↑ / ↓ ride `view.depth4` (`_ride_depth`) | bases |
 | 2 | `devices.poll(dt, now, router=, learn=)` — **the scene-setter slot**: every open device in `[[devices]]` order is polled (`poll`), offered to an armed Learn (`learn`), then delivers its rows (`act`). The pad: `Pad.poll`, `gamepad.learn_from`, `router.pad(pad)` (the `axis` lanes fed, then the button rows), then the sticks' camera job (`gamepad.steer`: each stick or trigger no route names, through `nudge` / `scale`, `router.claimed("axis")`); each MIDI desk: `MidiIO.poll` — the rows of its layer that is up and the invariant rows, knob glides, an armed desk Learn's candidate; the bridge and a `midi-out`: their ports looked for again; an OSC device: its socket read, its hits as rows; a cloud: its frame. Every ~30 frames the registry also looks at `config.toml`'s mtime (`DeviceRegistry.watch`). Right after it, `media.poll(dt, now)` (plan 32): each of the eight channels checks whether the id at its slot changed (a source opened, the old one queued for the closer thread), steps a timed source's transport and tells its source where to be, and every second asks the resolver again; it decodes, scans and joins nothing | bases (`media.<c>.*` are read, not written) |
 | 3 | `router.follow_macros()` — a macro whose base moved sets its base subscribers' bases | bases |
-| 4 | `undo.tick(now)` — compares the watched bases and the loadable patch's table with last frame's | nothing |
+| 4 | `undo.tick(now)` — when a write has marked (`writes.serial`) or one of the few polled parts moved, compares the watched bases and the loadable patch's table with last frame's | nothing |
 | 5 | `output.apply()` for every output; `renderer.bg_alpha` and `renderer.dim` handed over | window state |
 | 6 | `mouse.poll(shift)` — orbit, pan, zoom through `nudge` / `scale` | bases |
 | 7 | `audio.step(dt)`, `audio.publish(router)` | lanes |
@@ -337,7 +338,11 @@ rate and a hooked file's knobs refuse one in words (`fx.knob_refusal`,
 `graph.knob_refusal`); up to `fx.KNOB_UNITS` (12) knobs of one effect at once. On
 GRAPH the port is drawn once wired, a field cable dropped on the knob's own row
 wires it (`graphview.knob_pin`), and its menu's **depth ▸** sets the depth
-(`graphview.depth_choices`, `set_wire_depth`).
+(`graphview.depth_choices`, `set_wire_depth`). A slot reads its effect's knob
+fields, as it reads its knobs. **A retired effect** (Hue cycle, plan 67) is
+rewritten on load by the ladder's last step, keyed on its file
+(`graphmigrate.hue_turns`; a fragment's, `patches.forward`), and the steps
+before it still place it where an old stack ran it (`graphmigrate.RETIRED_SPECS`).
 
 **Running with no input** (R15, row 1114). An effect or slot nothing is wired
 into is never built — unless it is a generator, which `graph.runs_unfed` alone
@@ -856,8 +861,16 @@ Consequences:
   output) are meta settings — not persisted, not modulatable — whose base
   is the slot's `outputs.Switches`; the renderer only reads it
   (`tests/test_overlay.py::test_the_output_switches_are_meta_settings`).
-- **Undo is a scene-setter that watches the other scene-setters.** It has
-  no write hook: `Param` and `Registry` do not know it exists. It compares
+- **Undo is a scene-setter that watches the other scene-setters.** `Param`
+  and `Registry` do not know it exists: every road that moves a base or a row
+  says only *that* there was a write (`writes.mark`; `Param.set`, `follow`, a
+  source taking or leaving a param, and the settings objects themselves,
+  `writes.Observed`, for what writes round `Param`), and a frame with no mark
+  takes no fingerprint (`Undo._still`). What cannot mark is read every frame
+  (`Undo._unmarked`, and the macros, modifiers, banks, players and tag): a
+  new setting is polled until its getter is a `writes.cell`. In every test
+  each tick takes the fingerprint all the same and an unmarked change fails
+  it (`tests/conftest.py::undo_oracle`). It compares
   bases, so a performer moving makes no step; floats compare within
   `undo.REL_TOL` / `ABS_TOL`, so a performer's round-off in the last bits
   makes none either (`tests/test_undo.py::test_a_performer_moving_makes_no_step`).
@@ -1496,6 +1509,7 @@ docstring has the rest.
 | `hotplug.py` | a display coming and going while the app runs (wave 5 SC3b, rows 813–816): a callback's flag, then between frames the windows follow `displays.wanted`; the hold, the close order, the control window, displays' numbers for the run | `Hotplug` (`start`, `between_frames`, `windows`, `lines`, `others_chose`, `take_others`), `HOLD_S`, `SETTLE_S` | `glfw` is handed in (`tests/test_hotplug.py`); `Slot.win` only ever holds a live window; reads and writes no file; `--laptop` has none |
 | `pacing.py` | what paces the loop (SC3a): the first live display window's swap, a floor under it believing no display's refresh, a 60 Hz timer with nothing to wait on | `Pacer` (`choose`, `swapped`, `end_frame`), `Floor`, `CAP_HZ`, `NO_DISPLAY_HZ`, `BURST` | no imports from the app or the render stack; `glfw` is handed in (`tests/test_pacing.py`); `choose` between frames only, and it never touches a window not in its list, one already destroyed |
 | `replay.py` | draw-list replay (2026-11-02): the GRAPH canvas drawn again from its own imgui draw lists into `outputs.CanvasTap`, after the control window's own render and before its swap — the filter rule (`keep`: only the page window's own list, by `ImDrawList._owner_name`, as `Panel.canvas_px` records it; a child, a popup, a tooltip, the foreground list are dropped; the side pane's decorations — its ground, border and scrollbar, which imgui draws on the parent's list inside `begin_child` — cut out by the index range the page noted, `spans`), the GL replay with the backend's program and the projection moved onto the canvas rect | `keep`, `canvas_lists`, `spans`, `scissor`, `projection`, `draw_lists`, `framebuffer_size`, `grab`, `BACKEND_ATTRS`, `missing_backend_names`, `check_backend`, `FOREGROUND`, `BACKGROUND` | imports `outputs`, imgui and GL only; the backend's private names `draw_lists` uses are checked on import (`check_backend`: a rename raises there, not as every grab's error); `keep`, `spans`, `scissor`, `projection` are pure (`tests/test_replay.py`); the page's note covers the pane's decorations and nothing else (`tests/test_media_panel.py::test_the_pane_decorations_are_noted_for_the_replay_to_cut_out`); `grab` draws only on a frame the tap was wanted, GRAPH drew and the framebuffer is not empty (the backend skips those frames before scaling the clip rects), a draw that fails is `abort`ed — nothing published — and is the tap's `error`, never the loop's; the viewport is put back after `end` (moderngl's rebind reapplies the one it noted at creation) |
+| `imgui_gl.py` | the control window's imgui backend (2026-11-25): `GlfwRenderer`'s input and font textures, the draw in Dear ImGui's own C++ OpenGL 3 backend; with none, as `GlfwRenderer` draws | `ControlRenderer` (`render`, `shutdown`, `native`) | the Python renderer's handles stay, as `replay.py` draws with them, and the clip rects are left in framebuffer pixels after the draw for `replay.grab`; cold (one live object, made at launch) |
 | `mandel.py` + `shaders/fx/mandel.glsl` | the Mandelbrot effect's Python half (plan 63): the drives, the tier, the float64 reference orbit, the render size and upscale, the skip's tile passes; the float64 numpy oracles its tests hold the shader to | `run`, `advance`, `reference_orbit`, `binomial_delta`, `rebase`, `escape_counts`, `perturbed_counts`, `tile_flags`, `skip_valid`, `render_size`, `Reference`, `Gl` | imports `moderngl`, `numpy` and `glsl` only; its GL objects live on the chain (`FxChain.mandel`), never at module level, so a hot reload keeps them (`tests/test_mandel.py`) |
 | `glsl.py` + `shaders/_common.glsl` | the GLSL every shader shares | `QUAD_VS`, `common`, `FALLBACK` | a helper is defined once; a broken edit falls back to `FALLBACK` (`tests/test_fx.py::test_the_shared_helpers_are_written_once`) |
 | `overlay.py` | where output 1 is and how it looks (window, fullscreen, overlay); the master dim; the per-output switches | `Output` (`register`, `apply`, `allowed`, `dim`), `register_switches` | touches the window system only in `apply()`; meta settings never persist or modulate; overlay only when the config allows (`tests/test_overlay.py`) |
@@ -1513,6 +1527,7 @@ docstring has the rest.
 | `hold.py` | hold the projector (plan 38): the program drawn from the wiring, bus cables and look held at HOLD while edits land as the preview behind GRAPH; take, drop; the `output.hold` / `.take` / `.drop` controls | `Hold` (`engage`, `take`, `drop`, `program`, `draw_preview`, `keep`, `program_only`, `reset_delays`, `changed`, `rewired`), `HELD_GROUPS`, `ONE_FOR_BOTH`, `PROGRAM_IDS`, `program_value`, `preview_size`, `mirror`, `MIRRORED`, `preview_renderer`, `canvas_renderer`, `register` | at module level imports only `undo` and `params`' groups and id helpers, no graph and no GL (`preview_renderer` imports `render` when first called; the renderer, registry and undo are arguments, read duck-typed); the program writes with `Param.put`, never `set`, and puts every live value, the wiring and the meta controller back even when the draw raises; never constructs a `Wiring` or fills in a cable (`tests/test_hold.py`) |
 | `devices.py` | the device registry: the protocol, the ports, today's devices (MIDI, the pad, the bridge, `midi-out`), the point-cloud type, file and device, the list's open / retry / watch / close | `Device`, `Port`, `Context`, `Base`, `OffDevice`, `RefusedDevice`, `MidiDevice`, `PadDevice`, `BridgeDevice`, `MidiOutDevice`, `CloudDevice`, `PointCloud`, `write_clouds`, `read_clouds`, `kinds`, `make`, `DeviceRegistry` (`poll`, `feed`, `send`, `continuous_schemes`, `row_schemes`, `midi_roles`, `primaries`, `wants`, `sink_ports`, `clouds`, `lines`, `watch`, `apply`, `said`), `retry_after`, `WATCH_FRAMES`; what a loadable patch wants (plan 40, §3.11): `wants` → `Want`, `wants_for`, `want_words`, `want_lines`, `missing_chip`, `wanted_lines`, `arrival`, `SCHEME_ROLE` | the one importer of every adapter module, each inside its device's `open` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); one device's exception never stops the frame; two enabled devices never feed one Router key — a second pad publishes under its role, a second hands device is refused (`tests/test_devices.py`) |
 | `osc.py` | an OSC sender as a device: a non-blocking UDP socket read in `poll`, axes fed under the role, hits as rows | `OscDevice`, `Server`, `Layout`, `fire`, `TIMEOUT_S`, `DEFAULT_PORT` | `pythonosc` only inside `Server`; only this module and the kind table name the device (`tests/test_osc.py`) |
+| `kinect.py` (plan 29) | an Xbox 360 Kinect as a device, through libfreenect on a thread of its own: `cloud:<role>` and the pictures `kinect:<role>/depth` and `/color`; a silent stream started again | `KinectDevice`, `Sensor`, `Options`, `deproject`, `depth_picture` | the native library is loaded on the thread; only `devices.kinds()` names the device (`tests/test_kinect.py`) |
 | `pads/` (plans 42, 46) | game controllers as one vocabulary: `models.py` a `Model` per kind of pad (its caps, its glyphs, which controls it has) and the `controller =` rule; `sony.py` the DualSense / Edge report format (input over USB, BT full and BT simple; calibration; output with the BT CRC; trigger effects); `nintendo.py` the Joy-Con / Pro Controller format (report 0x30 by position for the Wii-Remote hold, the flash's stick and sensor calibration and the rest's recentre, HD rumble and the player lights, the connect sequence); `gesture.py` the `touch:` and `motion:` lanes; `hid.py` the hidapi road (a reader thread per pad through its codec, the hub lending pads to entries, tapes). A model's own controls are `Model.layout`, heard through `routing.layout_of` in place of the table's on those controls and asked of by `totem.skip_of` (what the totem holds off it) and `totem.own_layout`; `poi.no_position` says whose sensors move no position | `models.MODELS`, `HID_IDS`, `matches`, `may_be_hid`, `parse_spec`, `is_model`, `glfw_ids`; `sony.decode`, `calibration`, `update_version`, `output_report`, `trigger_block`, `Effects`, `Trigger`, `player_bits`; `nintendo.decode`, `calibration`, `recentre`, `setup`, `output_reports`, `rumble_bytes`, `AXIS_MAP`; `gesture.Touchpad`, `Motion`, `AxisMap`; `hid.HidPad`, `HidHub`, `TapePad`, `Recorder`, `pad_devices`, `codec_for`, `available` | `models`, `sony`, `nintendo` and `gesture` are leaves (the standard library and each other); `hid` imports `hid` only in a scan or an open (`tests/test_pads_sony.py`, `test_pads_nintendo.py`, `test_pads_gesture.py`, `test_pads_hid.py`) |
 | `gamepad.py` + `bridge.py` | a pad read by one of four roads into one vocabulary (plan 42): GLFW raw (the Xbox map, or a Sony map without hidapi), hid (a Sony pad over USB or Bluetooth, `pads/hid.py`), a wired 360 pad over libusb (`UsbPad`), a tape; its axes fed as the `axis` lanes, its touchpad and sensors as `touch` / `motion` (`touch_lanes`, `motion_lanes`), its outputs taken as `Effects` (`send_effects`), the sticks' default camera job; the face drawn per model (`layout_for`, `shown_model`, `control_in`); the DAW bridge (`ext` lanes in, its sink rows out as MIDI) and the MIDI out port and gate the sinks share | `Pad` (`open`, `poll`, `close`, `publish`), `publish`, `steer`, `ride_depth`; `Bridge` (`receive`, `publish`, `send_values`, `reconnect`), `Sender`, `OutPort` | the pad never raises when absent; the bridge never writes a `Param` and is off by default (`tests/test_gamepad.py`, `tests/test_bridge.py`) |
 | `app.py` | the entry point: windows and outputs, construction order, the frame loop, the device registry and the dream gate; the media resolver (`MediaResolver`: the folder, the devices' feeds and the built-in `panel:graph`); after the control window's imgui render, `replay.grab` into the GRAPH canvas's tap (2026-11-02); the signal door (2026-11-11: `_install_quit_signals` makes Ctrl-C set `Quit.at`, which ends the loop, so a signal never unwinds the stack past the teardown, with a kernel alarm behind it for a teardown that wedges; SIGINT alone — SIGTERM stays the kernel's, since no Python handler runs while the main thread is wedged in a native call) | `main`, `Host` (`devices`, `adapters`, `pad`), `frame`, `Keys`, `Mouse`, `MediaResolver`, `close_all`, `Quit`, `_install_quit_signals`, `_arm_hard_exit`, `_restore_quit_signals`, `_draw_render`, `_open_devices`, `_open_dream` | §1 Host row, §2 (`tests/test_app_boundary.py`, `tests/test_app_relative.py`, `tests/test_quit_signal.py`) |
@@ -1610,6 +1625,11 @@ a picture is drawn as that picture, collapsed or expanded: a thumbnail in a
     (`render.unwired_through`, plan 65, row 900).
 
   The modulation side stays text.
+- **Drawn only as far as it reads.** Zoomed out until the words are under
+  `ui_graph.FAR_PX` on screen, or off the canvas, a node is drawn from the
+  note its last whole draw left (`ui_graph.Sketch`): the same size and
+  pins, so the layout and every cable read the same, and no words but its
+  title (off the canvas, not that nor its picture).
 - **Wanted only on screen.** Each frame, the page `want`s the nodes that
   are drawn (not hidden by **preset only**) and that overlap the
   editor's visible canvas rect (`ui_graph.thumb_wants`).
