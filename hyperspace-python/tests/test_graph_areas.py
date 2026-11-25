@@ -120,13 +120,13 @@ def load_fixture(rig, fixture):
 
 
 def drawn_ids(rig, monkeypatch):
-    """The nodes the page draws next frame (its `_node` calls)."""
+    """The nodes the page draws next frame (its `_node_shown` calls)."""
     seen: list[str] = []
-    real = ui_graph._node
-    monkeypatch.setattr(ui_graph, "_node", lambda st, n, drawn: (seen.append(n.id),
-                                                                  real(st, n, drawn)))
+    real = ui_graph._node_shown
+    monkeypatch.setattr(ui_graph, "_node_shown", lambda st, n, drawn: (seen.append(n.id),
+                                                                        real(st, n, drawn)))
     frame(rig.panel, "graph")
-    monkeypatch.setattr(ui_graph, "_node", real)
+    monkeypatch.setattr(ui_graph, "_node_shown", real)
     return seen
 
 
