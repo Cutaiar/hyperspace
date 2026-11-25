@@ -9078,6 +9078,12 @@ Headless: `tests/test_catalog.py` (the counts, six faces at every corner, every 
 
 **892. The snub icosidodecadodecahedron.** (laptop, VIEW) Open the Shape menu's 3D part, **Star polyhedra**, and pick **Snub icosidodecadodecahedron** (last in the group). Turn Faces on, then XZ and YZ, and let it turn; then Points off and on. *Pass:* the header reads `3D · 60V 180E · | 5/3 3 5`; a ball of crossing faces with twelve five-pointed stars standing out, each filled right into its middle, among triangles and pentagons; red dots only where edges meet — none at the five points inside each star where its edges cross; it turns the same with the W planes on. Say whether it reads as the picture it was asked for (Wikipedia's, the stars red). *Fail:* a star filled only at its tips or brighter in its middle (filled twice), a red dot inside a star, or a header saying 120V.
 
+## FQ. The Kinect (row 1120, 2026-11-24)
+
+Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).
+
+**893. The Kinect.** (Mac, G Hub not running) Add the entry (config.py's comment) to the device list; stand 1–3 m from the sensor. *Pass:* the DEVICES line says `connected` and 30 fps; you are points in the scene, moving as a mirror does, at about the shape's middle at 2 m; the depth picture is in MEDIA. Pull its USB: the points go and the line says so; put it back: they return. *Fail:* a frozen person, a dropped frame rate, or the app waiting on the sensor at launch or quit.
+
 ## What no test covers
 
 Only a person can settle these:

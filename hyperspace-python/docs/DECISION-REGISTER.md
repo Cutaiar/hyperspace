@@ -994,6 +994,7 @@ here; overturn → the change, then the same.
 | 1034 | Plan 83: the playlist's entries are a list of their own that scrolls, as tall as the screen leaves under the popup (never under three rows), with the add list under it always in view; each entry is one row 34 px tall (`ui_playlist.ROW_H`): its place and name, its dwell, a square × | 834 | owner (2026-11-23, as recommended) |
 | 1035 | Plan 83: the entry on air is scrolled to the list's middle when the popup opens and each time it changes; between, a hand's scroll is left where it put the list | 835 | owner (2026-11-23, as recommended) |
 | 1113 | The snub icosidodecadodecahedron is shape index 109, in Star polyhedra, after the fractals: corners from the plastic number (one corner's turns by the icosahedral group), edges the pairs at edge length, faces whole and crossing, each pentagram filled through the five points where its edges cross. Those points are rows of V after its corners (`geom()["corners"]`), dotted nowhere — alone or in a scene — and V in VIEW's header and ENGINEERING's table is the corners. No schema bump: a build from before freezes on a patch saved with it (it has no index 109); both Macs run one build | 892 | owner — 2026-11-11: "can you add this shape to hyperspace as one of our polytopes?" (the shape); (rec) its drawing |
+| 1120 | A `kinect` device publishes `cloud:<role>` and the pictures `kinect:<role>/depth` and `/color`; its placement (`centre`, `mirror`, `near`, `far`, `step`) is its device entry's, never a param. No schema bump for the `kinect:` media kind: both Macs run one build | 893 | owner — 2026-11-24 (the device); (rec) its shape |
 
 "—": no hand check shows it; tests only.
 
@@ -16060,3 +16061,12 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **To reverse.** The index is the identity and `SHAPES` is append-only: retiring it means keeping slot 109 (a stand-in shape) or migrating presets. `"corners"` can go when no builder sets it.
 - **Built.** `geometry.PLASTIC`, `_tetra_turns`, `_star_crossings`, `_build_snub_icosidodecadodeca`, `geom` ("corners"), `_scene_style`, `render.Renderer.draw_scene` (the points; `_point_verts`), `ui.Panel._view_hero`; `tests/test_catalog.py::test_the_snub_icosidodecadodecahedron_is_uniform`, `::test_the_snub_icosidodecadodecahedron_is_sized_by_the_plastic_number`, `::test_a_pentagram_face_is_filled_once`, `::test_a_scene_layer_dots_only_its_shapes_corners`, `::test_a_solid_has_its_textbook_counts`, `tests/test_render.py::test_only_a_shapes_corners_are_dotted`, `tests/test_golden.py::test_the_engineering_table_matches_the_code`, `tests/golden/shape_digests.json` (row 109 added, no other row moved).
 - **Judge it.** 892.
+
+### 1120. A Kinect is a device that publishes a cloud and pictures
+
+- **What.** A `kinect` entry publishes `cloud:<role>` and the media sources `kinect:<role>/depth` and, with `colors`, `kinect:<role>/color`. Its placement is its entry's, not a param's. libfreenect through ctypes, not a package; the camera alone is opened, never the motor or audio. It feeds the Router nothing yet.
+- **Answer.** owner asked for the device (2026-11-24); its shape is (rec).
+- **Other options.** Placement as `cloud.x/y/z` params: live on a knob, but a saved patch would then carry a room's geometry.
+- **To reverse.** Remove the kind line in `devices.kinds()`, `graph.CLOUD_DEVICES` and `media/ids.KINDS`.
+- **Built.** `kinect.KinectDevice`; `tests/test_kinect.py`.
+- **Judge it.** 893.
