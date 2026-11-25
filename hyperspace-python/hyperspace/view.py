@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from . import fractal
+from . import fractal, writes
 from .fractal import Dive
 from .geometry import (
     EYE_DISTANCE,
@@ -164,7 +164,7 @@ class SegmentState:
 
 
 @dataclass
-class ViewState:
+class ViewState(writes.Observed):
     """Mirror of the reference's S object (render-relevant fields)."""
 
     shape: int = 3

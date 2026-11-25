@@ -66,13 +66,14 @@ offsets; the panel, the desk and the library write bases; the render
 stack only reads.
 
 **Leaves** — modules that import nothing from the package, so anything
-may import them: `analysis`, `tapers`, `motion`, `undo`, `placement`,
+may import them: `writes`, `analysis`, `tapers`, `motion`, `undo`, `placement`,
 `geometry`, `patterns`, `tempo`, `modbank`, `sequencer`, `glsl`, `gamepad`, `apc40`,
 `generic`, `watchdog`, `modgraph`, `players`, `pointer`, `world`, `hands/signal.py`, `hands/tape.py`.
 `devices` imports nothing from the package at load: every adapter, and
 `routing`, only inside a function. Near-leaves: `outputs`, `fx`,
 `lookback` and `masks` (plan 39) import only `glsl`; `grip` (plan 60) only `world`; `view` and `field` only `geometry`; `lfo` and
-`envelope` only `modbank` (plan 31); `modifiers` only
+`envelope` only `modbank` (plan 31; all of these but `outputs`, `masks` and
+`field` also `writes`, whose `Observed` their settings are); `modifiers` only
 `motion` and `tapers`; `routing_sources` only `motion` (plan 44 D2,
 `tests/test_routing_boundary.py`) (`modgraph` is held by
 `tests/test_modgraph.py::test_modgraph_is_a_leaf`; `modifiers` by convention
@@ -95,7 +96,7 @@ pins this order over stubs:
 | 1 | `router.keys(keys)` — key rows, R, F1–F8 / ⇧F1–F8, ⌘Z among them; ↑ / ↓ ride `view.depth4` (`_ride_depth`) | bases |
 | 2 | `devices.poll(dt, now, router=, learn=)` — **the scene-setter slot**: every open device in `[[devices]]` order is polled (`poll`), offered to an armed Learn (`learn`), then delivers its rows (`act`). The pad: `Pad.poll`, `gamepad.learn_from`, `router.pad(pad)` (the `axis` lanes fed, then the button rows), then the sticks' camera job (`gamepad.steer`: each stick or trigger no route names, through `nudge` / `scale`, `router.claimed("axis")`); each MIDI desk: `MidiIO.poll` — the rows of its layer that is up and the invariant rows, knob glides, an armed desk Learn's candidate; the bridge and a `midi-out`: their ports looked for again; an OSC device: its socket read, its hits as rows; a cloud: its frame. Every ~30 frames the registry also looks at `config.toml`'s mtime (`DeviceRegistry.watch`). Right after it, `media.poll(dt, now)` (plan 32): each of the eight channels checks whether the id at its slot changed (a source opened, the old one queued for the closer thread), steps a timed source's transport and tells its source where to be, and every second asks the resolver again; it decodes, scans and joins nothing | bases (`media.<c>.*` are read, not written) |
 | 3 | `router.follow_macros()` — a macro whose base moved sets its base subscribers' bases | bases |
-| 4 | `undo.tick(now)` — compares the watched bases and the loadable patch's table with last frame's | nothing |
+| 4 | `undo.tick(now)` — when a write has marked (`writes.serial`) or one of the few polled parts moved, compares the watched bases and the loadable patch's table with last frame's | nothing |
 | 5 | `output.apply()` for every output; `renderer.bg_alpha` and `renderer.dim` handed over | window state |
 | 6 | `mouse.poll(shift)` — orbit, pan, zoom through `nudge` / `scale` | bases |
 | 7 | `audio.step(dt)`, `audio.publish(router)` | lanes |
@@ -860,8 +861,16 @@ Consequences:
   output) are meta settings — not persisted, not modulatable — whose base
   is the slot's `outputs.Switches`; the renderer only reads it
   (`tests/test_overlay.py::test_the_output_switches_are_meta_settings`).
-- **Undo is a scene-setter that watches the other scene-setters.** It has
-  no write hook: `Param` and `Registry` do not know it exists. It compares
+- **Undo is a scene-setter that watches the other scene-setters.** `Param`
+  and `Registry` do not know it exists: every road that moves a base or a row
+  says only *that* there was a write (`writes.mark`; `Param.set`, `follow`, a
+  source taking or leaving a param, and the settings objects themselves,
+  `writes.Observed`, for what writes round `Param`), and a frame with no mark
+  takes no fingerprint (`Undo._still`). What cannot mark is read every frame
+  (`Undo._unmarked`, and the macros, modifiers, banks, players and tag): a
+  new setting is polled until its getter is a `writes.cell`. In every test
+  each tick takes the fingerprint all the same and an unmarked change fails
+  it (`tests/conftest.py::undo_oracle`). It compares
   bases, so a performer moving makes no step; floats compare within
   `undo.REL_TOL` / `ABS_TOL`, so a performer's round-off in the last bits
   makes none either (`tests/test_undo.py::test_a_performer_moving_makes_no_step`).

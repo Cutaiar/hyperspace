@@ -42,6 +42,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import world as worlds
+from . import writes
 
 GROUP = "grip"
 SIDES = ("left", "right")
@@ -50,7 +51,7 @@ SHAPE = (-0.75, 3.0)     # k: grip.shape's range (−: flattened along the palms
 
 
 @dataclass
-class GripState:
+class GripState(writes.Observed):
     """The grip's settings, what its params read and write."""
 
     on: bool = False
@@ -220,43 +221,37 @@ def register(reg, state: GripState) -> None:
         return
     reg.grip = state
 
-    def setter(key: str, cast):
-        return lambda v: setattr(state, key, cast(v))
-
     def set_on(v) -> None:
         state.on = bool(v)
         state.fresh += 1          # a load writes it too: the next look starts from home
 
-    reg.toggle(f"{GROUP}.on", "Grip", lambda: state.on, set_on, group=GROUP,
+    reg.toggle(f"{GROUP}.on", "Grip", writes.getter(state, "on"), set_on, group=GROUP,
                tip="This look's grip: close the holding hand's clutch near the shape and "
                    "it follows the hand; open it and it flies on. Saved with the look; off, "
                    "or a new look, and the shape springs home.")
-    reg.enum(f"{GROUP}.hand", "Hand", lambda: state.hand, setter("hand", int), list(SIDES),
+    reg.enum(f"{GROUP}.hand", "Hand", *writes.cell(state, "hand", int), list(SIDES),
              group=GROUP, tip="Which hand holds the shape; the other shapes its inertia.")
-    reg.continuous(f"{GROUP}.coupling", "Coupling", lambda: state.coupling,
-                   setter("coupling", float), lo=0.0, hi=1.0, group=GROUP,
+    reg.continuous(f"{GROUP}.coupling", "Coupling", *writes.cell(state, "coupling", float), lo=0.0, hi=1.0, group=GROUP,
                    tip="1: welded to the hand. Lower: a spring, looser and bouncier down "
                        "to about 0.3 Hz at 0, for where it sits and how it turns.")
-    reg.continuous(f"{GROUP}.drag", "Drag", lambda: state.drag, setter("drag", float),
+    reg.continuous(f"{GROUP}.drag", "Drag", *writes.cell(state, "drag", float),
                    lo=DRAG[0], hi=DRAG[1], group=GROUP,
                    tip="How fast a shape let go slows, moving and turning (1/s). 0 coasts on.")
-    reg.toggle(f"{GROUP}.inertia", "Shaped inertia", lambda: state.inertia,
-               setter("inertia", bool), group=GROUP,
+    reg.toggle(f"{GROUP}.inertia", "Shaped inertia", *writes.cell(state, "inertia", bool), group=GROUP,
                tip="Off: even inertia, no gyroscopic effect. On: close the other hand's "
                    "clutch and the line between your palms shapes it; open it and it "
                    "locks into the shape, which then precesses as it turns.")
-    reg.continuous(f"{GROUP}.shape", "Shape", lambda: state.shape, setter("shape", float),
+    reg.continuous(f"{GROUP}.shape", "Shape", *writes.cell(state, "shape", float),
                    lo=SHAPE[0], hi=SHAPE[1], group=GROUP,
                    tip="How strongly the palms' line shapes the inertia: above 0 heavier "
                        "about that line, below 0 lighter. The ratio stays within 0.25–4.")
-    reg.toggle(f"{GROUP}.skater", "Skater", lambda: state.skater, setter("skater", bool),
+    reg.toggle(f"{GROUP}.skater", "Skater", *writes.cell(state, "skater", bool),
                group=GROUP,
                tip="Keep the spin's momentum when the inertia changes: hands apart slow "
                    "it, together speed it up. Off: the spin stays as it is.")
-    reg.text(f"{GROUP}.clutch", "Clutch", lambda: state.clutch, setter("clutch", str),
+    reg.text(f"{GROUP}.clutch", "Clutch", *writes.cell(state, "clutch", str),
              group=GROUP, tip="The holding gate, a lane that reads 1 while held "
                               "(hand:right.pinch.index, hand:right.pinch.middle). Empty: the "
                               "holding hand's grab. A pad button or key is no lane.")
-    reg.text(f"{GROUP}.shape_clutch", "Shape clutch", lambda: state.shape_clutch,
-             setter("shape_clutch", str), group=GROUP,
+    reg.text(f"{GROUP}.shape_clutch", "Shape clutch", *writes.cell(state, "shape_clutch", str), group=GROUP,
              tip="The shaping gate, a lane address. Empty: the other hand's grab.")

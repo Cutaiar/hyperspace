@@ -65,7 +65,7 @@ from pathlib import Path
 # subpackage's modules are named with a dot (tests/test_hotreload.py
 # holds both rules against the package's own imports).
 MODULES = (
-    "media.frame", "media.ids", "media.source", "media.pool", "media.still", "media.proxy", "media.video", "media.adapters", "media.thumbs", "media.folder", "media",
+    "writes", "media.frame", "media.ids", "media.source", "media.pool", "media.still", "media.proxy", "media.video", "media.adapters", "media.thumbs", "media.folder", "media",
     "pointer", "players", "analysis", "tapers", "motion", "media.transport", "media.mixer", "media.channels", "modifiers", "palettecompat", "groupwords", "undo", "placement", "geometry", "fractal", "fractal_gl", "shapeframe", "world", "grip", "bands", "analyzer", "audio", "tempo", "modbank", "lfo", "envelope", "sequencer", "glsl", "masks", "patterns",
     "lookback", "dream", "mandel", "fx", "previews", "handmesh", "ghost", "outputs", "pacing", "replay", "view", "field", "graph", "routing_sources", "graphmigrate", "media_tex", "poi_guide", "render", "params", "library", "playlist", "control", "config",
     "overlay", "pads.models", "pads.gesture", "poi", "totem", "pads.sony", "pads.nintendo", "pads.hid", "pads", "gamepad", "apc40", "generic", "idle_lights", "sharedfile", "devicelist", "displays", "hotplug", "modgraph", "seq_page", "routing", "nodemode", "patches", "loadable", "learn", "deck", "midiports", "midi", "bridge",
@@ -185,6 +185,10 @@ class HotReloader:
                 return False
 
         first = min(self.modules.index(name) for name, _ in changed)
+        # what a getter reads may be another class's after this: undo looks once
+        writes = sys.modules.get(f"{self.package}.writes")
+        if writes is not None:
+            writes.mark()
         notes = []
         try:
             for name in self.modules[first:]:

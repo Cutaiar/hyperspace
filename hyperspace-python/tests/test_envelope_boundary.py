@@ -10,7 +10,7 @@ from walls import family, imports, inside, module_of, shown
 
 FILES = family("envelope")
 # itself, and the leaves envelope.py may import
-ALLOWED = {module_of(f)[0] for f in FILES} | {"modbank"}
+ALLOWED = {module_of(f)[0] for f in FILES} | {"modbank", "writes"}
 
 
 @pytest.mark.parametrize("path", FILES, ids=shown)

@@ -112,7 +112,7 @@ from typing import Any
 import moderngl
 import numpy as np
 
-from . import mandel, tapers
+from . import mandel, tapers, writes
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 
 FX_DIR = Path(__file__).parent / "shaders" / "fx"
@@ -727,7 +727,7 @@ def pad_of(spec: EffectSpec, key: str) -> PadSpec | None:
     return next((p for p in getattr(spec, "pads", ()) if key in p.keys), None)
 
 
-class FxState:
+class FxState(writes.Observed):
     """The fx.* params' object: the specs on disk, their values, their clocks.
 
     `values[name]` holds one effect's settings by key — its four own
@@ -929,7 +929,7 @@ class FxState:
         for p in spec.params:
             x = old.get(p.key, p.default)
             v[p.key] = round(x) if p.integer else float(x)
-        self.values[name] = v
+        self.values[name] = writes.ObservedDict(v)
         self.phase.setdefault(name, 0.0)
         # a `@clock` keeps its phase across an edit that keeps the clock;
         # one the edit dropped is forgotten, one it added starts at 0
@@ -1071,12 +1071,7 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
                          fmt=_fmt(p), group=g, tip=p.tip)
 
 
-def _attr(obj, name):
-    return (lambda: getattr(obj, name)), (lambda x: setattr(obj, name, x))
-
-
-def _key(d: dict, k: str):
-    return (lambda: d[k]), (lambda x: d.__setitem__(k, x))
+_attr, _key = writes.cell, writes.key
 
 
 def _fmt(p: ParamSpec) -> Callable[[float], str]:
