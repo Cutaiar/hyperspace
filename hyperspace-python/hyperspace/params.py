@@ -1054,6 +1054,11 @@ class Registry:
     def get(self, pid: str) -> Param | None:
         return self._p.get(pid)
 
+    def missing(self, ids: Iterable[str]) -> list[str]:
+        """Those of `ids` no param here has, in their order."""
+        own = self._p
+        return [pid for pid in ids if pid not in own]
+
     def ids(self) -> list[str]:
         return list(self._p)
 

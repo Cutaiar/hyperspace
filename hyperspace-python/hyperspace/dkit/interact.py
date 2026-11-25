@@ -158,7 +158,8 @@ def tabs(ui: Ui, key, x, y, h, items, active, *, pad=3.0, keys=None, icons=None,
         ink = mix(ui.col("muted-foreground"), ui.col("foreground"), st.hot * 0.7)
         ink = mix(ink, ui.col(active_ink or "foreground"), sel)
         if icons:
-            D.icon(ui.dl, icons[i], cx + (tw - 16.0) / 2, y + pad + (ih - 16.0) / 2, 16.0, ink)
+            D.icon(ui.dl, icons[i], cx + (tw - 16.0) / 2, y + pad + (ih - 16.0) / 2, 16.0, ink,
+                   kept=ui.anim.store.setdefault("icons", {}), slot=f"{key}.{i}")
         else:
             D.label(ui.dl, cx, y + pad, s, ui.faces, "medium", 14, ink,
                     align="center", box_w=tw, baseline_box=ih)

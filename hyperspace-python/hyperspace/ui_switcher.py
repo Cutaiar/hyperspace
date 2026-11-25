@@ -37,6 +37,8 @@ ICONS = {               # Lucide's names (hyperspace/dkit/icons.py)
     "system": "cpu",
 }
 
+_KEPT: dict = {}        # what is made once of the tables above (a reload starts it afresh)
+
 
 def height() -> float:
     """The switcher's two rows and the step between them."""
@@ -55,13 +57,32 @@ def bar(panel, key: str, said: str = "") -> None:
     ui_kit.end_block((x, y, w, h))
 
 
+def _by_key() -> tuple[dict, dict]:
+    """(the views' titles, their groups) by key, made once of `ui_pane.SECTIONS`."""
+    of = ui_pane.SECTIONS
+    if _KEPT.get("sections") is not of:
+        _KEPT.update(sections=of, by_key=({kk: t for kk, t, _, _ in of},
+                                          {kk: g for kk, _, g, _ in of}))
+    return _KEPT["by_key"]
+
+
+def _plain_items(M, titles: dict, key: str) -> list:
+    """The menu's rows with no dirty mark, for the frames it is down (the one that
+    opens it among them): made once for the view up."""
+    of = (M.Item, titles, ui_pane.MENU, key)
+    got = _KEPT.get("items")
+    if got is None or any(a is not b for a, b in zip(got[0], of)):
+        got = _KEPT["items"] = (of, [M.Item(id=kk, label=titles[kk], checked=kk == key)
+                                     for kk in ui_pane.MENU])
+    return got[1]
+
+
 def _tabs(panel, k, key: str, said: str, x: float, y: float, w: float) -> None:
     """The views of `ui_pane.TABS` as the kit's Tabs — its triggers ``##pane.<key>``, its
     icons Lucide's, the active one's in the one red — then each tab's dirty
     dot and tooltip over the rects it hands back."""
     I = ui_kit.mod("interact")
-    titles = {kk: t for kk, t, _, _ in ui_pane.SECTIONS}
-    groups = {kk: g for kk, _, g, _ in ui_pane.SECTIONS}
+    titles, groups = _by_key()
     tabs = list(ui_pane.TABS)
     rects: list = []
     hit, _w = I.tabs(k, "pane.tabs", x, y, TAB_H, [titles[kk] for kk in tabs],
@@ -86,15 +107,14 @@ def _tabs(panel, k, key: str, said: str, x: float, y: float, w: float) -> None:
 
 def _sections(panel, k, key: str, x: float, y: float, w: float) -> None:
     I, M = ui_kit.mod("interact"), ui_kit.mod("menu")
-    titles = {kk: t for kk, t, _, _ in ui_pane.SECTIONS}
-    groups = {kk: g for kk, _, g, _ in ui_pane.SECTIONS}
+    titles, groups = _by_key()
     # the rows' dirty marks only while the menu is up: asking every group
     # each frame for a menu nobody sees was the switcher's largest cost
     # (tools/profile_kit.py; a group's dirt is a snapshot compare)
     up = imgui.is_popup_open("##sel.pane.sections")
-    items = [M.Item(id=kk, label=titles[kk], checked=kk == key,
-                    shortcut=DIRTY if up and ui_pane._dirty(panel, groups[kk]) else "")
-             for kk in ui_pane.MENU]
+    items = ([M.Item(id=kk, label=titles[kk], checked=kk == key,
+                     shortcut=DIRTY if ui_pane._dirty(panel, groups[kk]) else "")
+              for kk in ui_pane.MENU] if up else _plain_items(M, titles, key))
     label = titles[key] if key in ui_pane.MENU else ""
     chosen, _open = I.select(k, "pane.sections", x, y, w, label, items,
                              size=ui_fields.SELECT_SIZE, placeholder=ui_pane.SECTIONS_WORD,
