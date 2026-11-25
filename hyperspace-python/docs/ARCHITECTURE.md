@@ -324,7 +324,7 @@ a mask, a field wired into a picture port is promoted — grey about the middle,
 `graph.FieldPicture`, `FxChain.show_field` — and a picture into a field port is
 refused in words naming the converter, To field (`PICTURE_INTO_FIELD`).
 
-**Running with no input** (R15, row 1113). An effect or slot nothing is wired
+**Running with no input** (R15, row 1114). An effect or slot nothing is wired
 into is never built — unless it is a generator, which `graph.runs_unfed` alone
 decides: a file with no input port (`@takes image none`: Point, Rings … the
 field generators) or one whose Python half says `GENERATOR` (plan 80: the
@@ -332,7 +332,9 @@ Mandelbrot). The builder (`_Build._effect`), the drawn node
 (`Effect.generates`), `graph.unfed` and so GRAPH's faint nodes and the FX
 pane's groups all read that rule, never their own: an unfed effect wired
 onward (`graph.hungry`) is "fed by nothing — wire its input" on both, a
-picture effect as a field op, wherever its path leads.
+picture effect as a field op, wherever its path leads. Colour (`colour.glsl`,
+row 1115) is a picture generator by the first clause: one flat colour on the
+HSV cylinder, no input port.
 
 **Wires; outputs as nodes** (plan 28 N4). A loadable patch's graph may also carry
 a wire list, `{"from": "<node>", "to": "<node>.<port>"}`: into an

@@ -1126,7 +1126,15 @@ def _makes_field(name):
     return ports(FxState().specs[name])[0] == FIELD
 
 
-PICTURE_EFFECTS = sorted(n for n in FxState().specs if not _makes_field(n))
+def _takes_picture(name):
+    from hyperspace.fx import ports
+    return "image" in ports(FxState().specs[name])[1]
+
+
+# (a picture generator with no input port — Colour — cannot sit in the faces'
+# chain either: it takes no picture; tests/test_fx_colour.py wires it straight in)
+PICTURE_EFFECTS = sorted(n for n in FxState().specs
+                         if not _makes_field(n) and _takes_picture(n))
 FIELD_MAKERS = sorted(n for n in FxState().specs if _makes_field(n))
 
 
