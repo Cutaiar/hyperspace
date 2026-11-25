@@ -358,6 +358,28 @@ class View:
         n = self.node(hit[0])
         return None if n is None else (n, n.port(hit[1]))
 
+    def made_of(self) -> tuple:
+        """What the memos below were worked out from: these very lists, at
+        this length. A built view's lists are only ever added to or replaced."""
+        return (id(self.nodes), len(self.nodes), id(self.cables), len(self.cables),
+                len(self.pins), id(self.spec), sum(len(n.ports) for n in self.nodes),
+                tuple((id(g), len(g.members)) for g in self.groups))
+
+    def source_owners(self) -> list[tuple[VNode, VPort | None] | None]:
+        """`owner` of each cable's source pin, in the cables' order: the
+        view's structure, so worked out once a view (`refresh` reads it every
+        frame, and a port's search is a walk of its node's ports)."""
+        return self.memo("owners", lambda: [self.owner(c.src_port) for c in self.cables])
+
+    def memo(self, what: str, make: Callable[[], Any]) -> Any:
+        """`make()`, kept while the view is made of the same things (`made_of`)."""
+        kept = self.__dict__.setdefault("_memo", {})
+        at = self.made_of()
+        got = kept.get(what)
+        if got is None or got[0] != at:
+            got = kept[what] = (at, make())
+        return got[1]
+
     def cables_of(self, nid: str) -> list[VCable]:
         """Every cable into or out of node `nid`."""
         pins = {p for n in self.nodes if n.id == nid for port in n.ports for p in port.pins}
@@ -509,14 +531,18 @@ def render_owner(p: Param, ctx: _Ctx) -> str | None:
 
 # ---------------------------------------------------------------- reading
 
-def reading(router: Router | None, addr: str, lanes=None) -> float | None:
+def reading(router: Router | None, addr: str, lanes=None, feeds=None) -> float | None:
     """A source address's 0–1 reading this frame, None while not live —
     the analyzer's lanes from `lanes` (already normalised), anything else
-    from the Router's fed vectors (`Router.feeds`)."""
+    from the Router's fed vectors (`feeds`: `Router.feeds`, which a caller
+    reading many addresses looks up once)."""
     if router is None or not addr:
         return None
     scheme, i = router.lane(addr)
-    vec = lanes if scheme == "lane" else router.feeds.get(scheme)
+    if scheme == "lane":
+        vec = lanes
+    else:
+        vec = (router.feeds if feeds is None else feeds).get(scheme)
     if vec is None or not 0 <= i < len(vec):
         return None
     try:
@@ -2110,6 +2136,14 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
     cut = set(getattr(router, "modgraph_cut", ()) or ()) if router is not None else set()
     layer_of = getattr(table, "layer_of", None)
     route_rest = routes_held(table, reg, router) if table is not None else {}
+    feeds = router.feeds if router is not None else None      # one look a frame, not one a cable
+    seen: dict[str, float | None] = {}      # an address's reading is one for the frame
+
+    def read(addr: str) -> float | None:
+        if addr not in seen:
+            seen[addr] = reading(router, addr, lanes, feeds)
+        return seen[addr]
+    owners = view.source_owners()
     for n in view.nodes:
         if n.layer and layer_of is not None:      # plan 28 N5: the latch, read each frame
             up = layer_of(n.role or None)
@@ -2123,10 +2157,10 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
                     pick and port.param is not None):
                 continue
             if port.addr is not None:
-                port.live = reading(router, port.addr, lanes)
+                port.live = read(port.addr)
             elif port.param is not None:
                 port.live = _norm(reg.get(port.param))
-    for c in view.cables:
+    for c, hit in zip(view.cables, owners, strict=True):
         if c.kind == "render":
             continue
         at = c.ref if c.kind == NODE_MODE else None     # (a name: testing `c.ref` narrows it)
@@ -2136,7 +2170,7 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
         if knob:
             c.live = _norm(reg.get(at[1].target)) if at is not None else c.live
         elif c.addr is not None:
-            c.live = reading(router, c.addr, lanes)
+            c.live = read(c.addr)
         elif c.kind == "sub":
             c.live = _norm(reg.get(c.ref[0]))
             c.label = sub_said(c.ref[1])
@@ -2145,7 +2179,6 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
             c.depth, c.label = route_said(b, table, reg, (b.source, b.target) in cut,
                                           route_rest.get(id(b), ""))
         grey = False
-        hit = view.owner(c.src_port)
         if hit is not None and (hit[0].grey or (hit[1] is not None and not hit[1].up)):
             grey = True                  # a lost device, or a desk layer that is down
         c.dormant = c.off or grey or (c.kind != "sub" and not knob and c.live is None)
@@ -3110,7 +3143,11 @@ def patch_only(view: View) -> frozenset[str]:
     exist"): a channel always exists, empty or not, and is where a file
     is dropped or a source picked and what a picture is wired from.
     Only a drawing choice: nothing in `view` is changed. A view with no
-    section (`view.spec` None) draws everything."""
+    section (`view.spec` None) draws everything. Worked out once a view."""
+    return view.memo("patch_only", lambda: _patch_only(view))
+
+
+def _patch_only(view: View) -> frozenset[str]:
     if view.spec is None:
         return frozenset(n.id for n in view.nodes)
     have = {n.id: n for n in view.nodes}
