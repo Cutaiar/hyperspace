@@ -26,6 +26,7 @@ from hyperspace.graphmigrate import wired_wiring
 from hyperspace.outputs import (
     THUMB_BLACK_S,
     THUMB_DROP_S,
+    THUMB_LATE_S,
     THUMB_PX,
     PreviewTextures,
     Switches,
@@ -49,12 +50,20 @@ def party(rig):
     return _party(rig)
 
 
+@pytest.fixture(autouse=True)
+def _every_frame(monkeypatch):
+    """These tests are of what a thumbnail is, not how often: each wish is
+    copied at once (`test_thumb_rate.py` is the rate's)."""
+    monkeypatch.setattr(PreviewTextures, "due", lambda self, name, how, now: True)
+
+
 def _frame(th: PreviewTextures, made: dict) -> None:
     """One renderer frame's end as `Renderer._thumbnails` runs it: what was
     wanted, `put` from `made` (name → a picture's size, or absent: nothing)."""
     wanted = th.take()
     th.begin_frame()
-    for name in wanted:
+    for name, how in wanted.items():
+        th.tried(name, how)
         if name in made:
             th.put(name, NS(size=made[name]))
     th.end_frame()
@@ -90,7 +99,7 @@ def test_a_node_that_made_nothing_is_dimmed_then_black_after_a_second():
     _frame(th, {"acid": (64, 64)})
     assert th.shade("acid") == 1.0
     th.want({"acid": "picture"})
-    clock.t += 0.1
+    clock.t += THUMB_LATE_S + 0.01
     _frame(th, {})                                   # wanted, made nothing
     assert th.count == 0 and th.kept == 1
     assert th.shade("acid") == PreviewTextures.DIM   # a flag the page reads, not a copy
@@ -420,7 +429,7 @@ def test_a_node_behind_an_unpicked_switch_input_is_not_made(ctx):
     assert r.thumbs.count == 1 and r.thumbs.shade("composite") == 1.0
     s.switch = {"switch": 1}                    # unpicked: nothing made for it
     for k in range(2):
-        clock.t += 0.1
+        clock.t += THUMB_LATE_S + 0.01
         r.thumbs.want({"composite": "picture"})
         r.draw_outputs(s, *SIZE, 1.0, views, t_now=2.1 + k / 60)
         assert r.thumbs.count == 0, k

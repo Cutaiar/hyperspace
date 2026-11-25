@@ -2239,7 +2239,8 @@ class Renderer:
 
     def _thumbnails(self) -> None:
         """The end of a frame (`_for_the_panel`): each node the GRAPH page
-        wanted since the last frame (`PreviewTextures.take`) copied into its
+        wanted and whose beat has come (`PreviewTextures.take`: `THUMB_HZ` a
+        second each, spread over the frames) copied into its
         thumbnail from this frame's picture of it (`thumb_source`), then the
         names not wanted for a second dropped. Nothing wanted, nothing done:
         a closed page costs nothing. A painted node is painted again here
@@ -2262,6 +2263,9 @@ class Renderer:
         th.begin_frame()
         # the frames `_thumb_gain` counts between its measures: one a frame
         self._thumb_frames = self.__dict__.get("_thumb_frames", 0) + 1
+        if frame is None:               # (a frame that failed made nothing)
+            for name, how in wanted.items():
+                th.tried(name, how)
         if wanted and frame is not None:
             timer = getattr(self, "timer", None)
             was = getattr(timer, "_active", False) if timer is not None else False
@@ -2272,10 +2276,14 @@ class Renderer:
             saved = {k: list(v) if isinstance(v, list) else v for k, v in frame.stats.items()}
             try:
                 pulled = frame.graph.pulled(frame) if frame.graph is not None else None
-                wanted = self._unwired_budget(wanted)
+                within = self._unwired_budget(wanted)
+                for name in wanted.keys() - within.keys():
+                    th.defer(name, wanted[name])
+                wanted = within
                 # (masks last: one a picture's repaint just made is free to show)
                 for name, how in sorted(wanted.items(), key=lambda kv: kv[1] == "mask"):
                     held = len(frame.data)
+                    th.tried(name, how)
                     try:
                         src = thumb_source(frame, name, how, pulled)
                         flip = (how == "mask" and src is not None
