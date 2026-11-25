@@ -12,12 +12,21 @@ chip only on effects."""
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from test_thumbnails import SIZE, S, _px, _renderer, _views, party
 from test_ui_shell import rig as shell_rig
 
 from hyperspace import graphview, render, ui_graph
+from hyperspace.outputs import PreviewTextures
 
 rig = shell_rig
+
+
+@pytest.fixture(autouse=True)
+def _every_frame(monkeypatch):
+    """These tests are of what a thumbnail is, not how often: each wish is
+    copied at once (`test_thumb_rate.py` is the rate's)."""
+    monkeypatch.setattr(PreviewTextures, "due", lambda self, name, how, now: True)
 
 
 def _thumb(r, name: str) -> np.ndarray:

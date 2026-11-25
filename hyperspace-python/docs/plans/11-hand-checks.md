@@ -9105,6 +9105,14 @@ Headless: `tests/test_catalog.py` (the counts, six faces at every corner, every 
 
 **892. The snub icosidodecadodecahedron.** (laptop, VIEW) Open the Shape menu's 3D part, **Star polyhedra**, and pick **Snub icosidodecadodecahedron** (last in the group). Turn Faces on, then XZ and YZ, and let it turn; then Points off and on. *Pass:* the header reads `3D · 60V 180E · | 5/3 3 5`; a ball of crossing faces with twelve five-pointed stars standing out, each filled right into its middle, among triangles and pentagons; red dots only where edges meet — none at the five points inside each star where its edges cross; it turns the same with the W planes on. Say whether it reads as the picture it was asked for (Wikipedia's, the stars red). *Fail:* a star filled only at its tips or brighter in its middle (filled twice), a red dot inside a star, or a header saying 120V.
 
+## FT. The Kinect (row 1130, 2026-11-24)
+
+Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).
+
+**910. The Kinect.** (Mac, G Hub not running) Add the entry (config.py's comment) to the device list; stand 1–3 m from the sensor. *Pass:* the DEVICES line says `connected` and 30 fps; you are points in the scene, moving as a mirror does, at about the shape's middle at 2 m; the depth picture is in MEDIA. Pull its USB: the points go and the line says so; put it back: they return. *Fail:* a frozen person, a dropped frame rate, or the app waiting on the sensor at launch or quit.
+
+**911. The Kinect demo patch.** (Mac) Copy `loadable/kinect` (its README), 910's entry with `colors`, nothing within half a metre of the sensor. Load `kinect/kinect-mirror`, step the switch 1–5, then channel B to slot 2. *Pass:* each look as the README's table says, steady over a minute. *Fail:* depth that goes blank on a cycle with a clear view (row 1130's device), or a look that is black with you in front.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -9256,3 +9264,7 @@ Only a person can settle these:
 - NanoVG in the control window on the Mac's GL (417): the tests draw the
   lab's drawings through a stand-in NanoVG, and the shots were rendered
   on Mesa's software rasteriser; one look on Dillon's Mac so far.
+
+## GC. Thumbnails at 25 Hz (row 1150, 2026-11-24)
+
+**930. Thumbnails at 25 Hz.** (Mac, GRAPH at full frame rate) Open a light patch that moves, and one with a matte, a segment or a field node, GRAPH in view. *Pass:* the thumbnails move smoothly enough; none flickers dark, goes black or stays frozen while its node runs; the card chip and a knob turned on a carded effect show at once (within a frame or three); switching an input off dims its node about a tenth of a second later and lights it the moment it is back; scrolling a node into view shows its picture at once; output 1's picture and the backdrop move at the full frame rate. With the **panel:graph** source on a channel, the projected canvas looks the same. With **tint cables** and **gpu cost** lit, the hues and the numbers read as before.

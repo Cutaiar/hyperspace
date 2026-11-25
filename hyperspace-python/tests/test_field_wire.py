@@ -549,6 +549,9 @@ def test_field_thumbnails_measure_their_range_per_frame_not_per_thumbnail(ctx, m
                     ("displace", "output.1.image"), ("spokes", "output.2.image"),
                     nodes=("rings", "spokes", "displace"))
     r = _rig(ctx, section, {**ON, "spokes": {"on": True}})
+    # (the frames are counted here, not the thumbnails' own 25 Hz: test_thumb_rate.py)
+    from hyperspace.outputs import PreviewTextures
+    monkeypatch.setattr(PreviewTextures, "due", lambda self, name, how, now: True)
     calls = []
     real = r.fx.field_range
     monkeypatch.setattr(r.fx, "field_range", lambda tex: calls.append(1) or real(tex))
