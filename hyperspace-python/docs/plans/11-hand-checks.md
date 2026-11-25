@@ -9078,6 +9078,12 @@ Headless: `tests/test_catalog.py` (the counts, six faces at every corner, every 
 
 **892. The snub icosidodecadodecahedron.** (laptop, VIEW) Open the Shape menu's 3D part, **Star polyhedra**, and pick **Snub icosidodecadodecahedron** (last in the group). Turn Faces on, then XZ and YZ, and let it turn; then Points off and on. *Pass:* the header reads `3D · 60V 180E · | 5/3 3 5`; a ball of crossing faces with twelve five-pointed stars standing out, each filled right into its middle, among triangles and pentagons; red dots only where edges meet — none at the five points inside each star where its edges cross; it turns the same with the W planes on. Say whether it reads as the picture it was asked for (Wikipedia's, the stars red). *Fail:* a star filled only at its tips or brighter in its middle (filled twice), a red dot inside a star, or a header saying 120V.
 
+## GA. Quiet off-air signs on GRAPH (row 1140, 2026-11-24)
+
+Headless: `tests/test_quiet_off_air.py` (the chip on the deck row, a press and a second press, the canvas's pair drawn and not drawn, the gaps in the row kept as the air moves, a page state from before this edit). No restart: the chip is the page's own state.
+
+**920. Editing through a fade.** (a DualSense Edge or a hand on the crossfader, the rig) On GRAPH, on the deck that is on air, open a patch with a few nodes and start editing — drag a node, open a picker. Now fade to the other deck (the Edge's D-pad ← / →, or **fade**). *Pass:* the canvas takes a red frame and the inset of what is on air, the deck chip goes red and reads **off air**; press **quiet off air** and both go from the canvas while the chip stays red; the nodes under the hand never move, and the row's chips do not shift under it beyond the deck chip's own word growing. Press it again and the pair comes back. Say whether, with it quiet, you still know which deck is live from the chip alone. *Fail:* the inset or frame staying while it is lit, the chip losing its red, the canvas scrolling or a drag dropping when it is pressed, or the quiet forgotten while the app runs.
+
 ## What no test covers
 
 Only a person can settle these:
