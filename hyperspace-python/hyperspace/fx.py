@@ -447,6 +447,26 @@ def ports_of(file: str) -> tuple[str, dict[str, str]]:
     return got
 
 
+# plan 80: each shipped file's `@hook` (its `EffectSpec.hook`, "" none), kept
+# beside `_PORTS` by the same `FxState` reads — what `graph.runs_unfed` asks
+# of a file whatever state the asker holds. Taken over on a reload, as `_PORTS`
+_HOOK_OF: dict[str, str] = globals().get("_HOOK_OF", {})
+
+
+def hook_of(file: str) -> str:
+    """Shipped effect file `file`'s `@hook` ("" none), read as `ports_of`
+    reads its ports: as the last `FxState` of the shipped folder read it, else
+    from the folder now; a file not there (or that does not parse) has none."""
+    got = _HOOK_OF.get(file)
+    if got is None:
+        try:
+            got = parse(file, (FX_DIR / f"{file}.glsl").read_text()).hook
+        except (OSError, SpecError):
+            return ""
+        _HOOK_OF[file] = got
+    return got
+
+
 def parse(name: str, source: str) -> EffectSpec:
     """An effect file's text → its spec. Raises SpecError on a bad header."""
     if not _NAME.match(name):
@@ -687,6 +707,7 @@ class FxState:
         if Path(self.dir).resolve() == FX_DIR.resolve():
             for name, spec in found.items():          # plan 67 F1: what the graph reads
                 _PORTS[name] = ports(spec)
+                _HOOK_OF[name] = spec.hook
         found = self._wanted(found)
         for name in set(self.specs) - set(found):
             changed.add(name)
