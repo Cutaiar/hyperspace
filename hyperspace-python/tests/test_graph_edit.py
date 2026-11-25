@@ -1212,24 +1212,26 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
 
 
 def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
-    """R26 (refines R21), in the wired frame: party-trip with `huecycle`
+    """R26 (refines R21), in the wired frame: party-trip with `hueturn`
     taken out of its run on GRAPH (its wires gone, R21's entry keeping it,
     faint) — on or off, the save is `/6` (row 394) with the entry kept and
     the run as wired, so a reload finds it where it was left."""
     import json
     rig, e, _ = wired_rig(tmp_path, slug="party-trip")
-    assert run_of(rig) == ("plasma", "kaleido", "zoomblur", "huecycle")
-    assert e.unwire("huecycle", "output.all.image") is None
-    assert e.unwire("zoomblur", "huecycle.image") is None
+    assert run_of(rig) == ("plasma", "kaleido", "zoomblur", "hueturn")
+    assert e.unwire("hueturn", "output.all.image") is None
+    assert e.unwire("zoomblur", "hueturn.image") is None
     assert e.wire("rout:zoomblur", "rin:output.all/image") is None
     assert run_of(rig) == ("plasma", "kaleido", "zoomblur")
-    assert {"kind": "effect", "file": "huecycle"} in rig.loaded_patch.graph.spec.to_json()["nodes"]
-    rig.reg["fx.huecycle.on"].set(True)
+    # (plan 67: Hue turn's band still names it — `scale.3 → hueturn.turn` — so it
+    # stays without R21's entry, its knobs kept)
+    assert "hueturn" in graphview._named(rig.loaded_patch.graph.spec.to_json())
+    rig.reg["fx.hueturn.on"].set(True)
     for name, on in (("On", True), ("Off", False)):
-        rig.reg["fx.huecycle.on"].set(on)
+        rig.reg["fx.hueturn.on"].set(on)
         doc = json.loads(rig.loaded_patch.save_as(name).read_text())
         assert doc["schema"] == "hyperspace.loadable/12", name
-        assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
+        assert "hueturn" in graphview._named(doc["graph"]), name
         assert G.run_back(G.read_graph(doc["graph"]), "output.all.image") == (
             "plasma", "kaleido", "zoomblur"), name
 

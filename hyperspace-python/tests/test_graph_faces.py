@@ -3,7 +3,7 @@ graph inputs (`shape.faces`, `pattern.media`, `backdrop.image`), and a
 branch is made once a frame at the size its consumer asks.
 
 The owner's headline graph is a channel through its own shaders onto the
-faces (`media.a → huecycle.2 → shape.faces`); the rest is what keeps it
+faces (`media.a → hueturn.2 → shape.faces`); the rest is what keeps it
 honest: faces left unwired draw as they always did (no 1024² pass), a
 channel that reads nothing leaves the pattern on the faces, a branch into
 the pattern's layer keeps the channel's aspect, a branch lays under the
@@ -229,31 +229,31 @@ def _centre(px, d=4):
     return px[h // 2 - d: h // 2 + d, w // 2 - d: w // 2 + d, :3].reshape(-1, 3)
 
 
-HUE = {"huecycle": 2}
-HUE_ON = {"huecycle.2": {"on": True, "mix": 1.0}}
+HUE = {"hueturn": 2}
+HUE_ON = {"hueturn.2": {"on": True, "mix": 1.0}}
 
 
 def test_a_channel_through_effects_lands_on_the_faces(ctx):
-    """The headline: a red still on a, `media.a → huecycle.2 → shape.faces`
+    """The headline: a red still on a, `media.a → hueturn.2 → shape.faces`
     at mix 1 — the faces show the still through the effect (its clock a
     third of a turn on: red turned to green), neither red nor the pattern.
-    The wire to the faces removed, huecycle.2 reaches nothing and the frame
+    The wire to the faces removed, hueturn.2 reaches nothing and the frame
     is the frame with no media."""
     plain = _draw(ctx, _renderer(ctx), _faces())[0]
-    pairs = [("media.a", "huecycle.2.image"), ("huecycle.2", "shape.faces")]
-    r = _renderer(ctx, _media(a=Still(_rgba(16, 9))), pairs, [_instance("huecycle", 2)],
+    pairs = [("media.a", "hueturn.2.image"), ("hueturn.2", "shape.faces")]
+    r = _renderer(ctx, _media(a=Still(_rgba(16, 9))), pairs, [_instance("hueturn", 2)],
                   HUE, HUE_ON)
-    r.fx.state.phase["huecycle.2"] = 1 / 3
+    r.fx.state.phase["hueturn.2"] = 1 / 3
     (got,) = _draw(ctx, r, _faces())
-    assert r.face_error == "" and "huecycle.2" in r.stats["effects"]
+    assert r.face_error == "" and "hueturn.2" in r.stats["effects"]
     c, base = _centre(got), _centre(plain)
     assert not (c[:, 0] > 2 * c[:, 1] + 20).any(), c[:4]               # not red
     assert (c[:, 1] > c[:, 0] + 20).mean() > 0.9, c[:4]                # turned: green
     assert not np.array_equal(c, base)                                 # and not the pattern
-    r = _renderer(ctx, _media(a=Still(_rgba(16, 9))), pairs[:1], [_instance("huecycle", 2)],
+    r = _renderer(ctx, _media(a=Still(_rgba(16, 9))), pairs[:1], [_instance("hueturn", 2)],
                   HUE, HUE_ON)
     (cut,) = _draw(ctx, r, _faces())
-    assert np.array_equal(cut, plain) and "huecycle.2" not in r.stats["effects"]
+    assert np.array_equal(cut, plain) and "hueturn.2" not in r.stats["effects"]
 
 
 def _tool():
@@ -306,12 +306,12 @@ def test_faces_fall_back_to_the_pattern_when_the_branch_reads_nothing(ctx):
     s = _faces(pattern=2)
     unwired = _draw(ctx, _renderer(ctx, _media()), s)[0]
     assert unwired[..., :3].max() > 40
-    pairs = [("media.a", "huecycle.2.image"), ("huecycle.2", "shape.faces")]
-    r = _renderer(ctx, _media(), pairs, [_instance("huecycle", 2)], HUE, HUE_ON)
+    pairs = [("media.a", "hueturn.2.image"), ("hueturn.2", "shape.faces")]
+    r = _renderer(ctx, _media(), pairs, [_instance("hueturn", 2)], HUE, HUE_ON)
     (got,) = _draw(ctx, r, s)
     assert np.array_equal(got, unwired) and r.face_error == "" and r._pic is None
     still = Still(_rgba(16, 9))
-    r = _renderer(ctx, _media(a=still), pairs, [_instance("huecycle", 2)], HUE, HUE_ON)
+    r = _renderer(ctx, _media(a=still), pairs, [_instance("hueturn", 2)], HUE, HUE_ON)
     (shown,) = _draw(ctx, r, s)
     assert not np.array_equal(shown, unwired)
     still.gone = True                                         # the feed lost
@@ -323,8 +323,8 @@ def test_a_branch_into_pattern_media_keeps_the_channels_aspect(ctx):
     """A 2:1 still through an effect into `pattern.media`: the picture the
     pattern's layer draws is made at the channel's own size (2:1, as
     `view.media_scale` expects), not the raw texture and not a square."""
-    pairs = [("media.a", "huecycle.2.image"), ("huecycle.2", "pattern.media")]
-    r = _renderer(ctx, _media(a=Still(_rgba(32, 16))), pairs, [_instance("huecycle", 2)],
+    pairs = [("media.a", "hueturn.2.image"), ("hueturn.2", "pattern.media")]
+    r = _renderer(ctx, _media(a=Still(_rgba(32, 16))), pairs, [_instance("hueturn", 2)],
                   HUE, HUE_ON)
     seen = []
     real = r.draw_scene
@@ -337,7 +337,7 @@ def test_a_branch_into_pattern_media_keeps_the_channels_aspect(ctx):
     _draw(ctx, r, _faces(media_alpha=0.8))
     (tex, upright), = seen
     assert tex.size == (32, 16) and tex is not r.media_texture("a") and upright
-    assert "huecycle.2" in r.stats["effects"]
+    assert "hueturn.2" in r.stats["effects"]
 
 
 def test_a_branch_under_the_scene(ctx):
