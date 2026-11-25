@@ -3868,6 +3868,8 @@ class Hands(Node):
 # the device kind a point-cloud node is made for (the ruling of this run:
 # clouds follow the device list; A4's graph JSON has no `cloud` node kind)
 CLOUD_KIND = "cloud"
+# the device kinds that publish a cloud: a recording, a Kinect (plan 29)
+CLOUD_DEVICES = ("cloud", "kinect")
 
 CLOUD_EYE_W = f"{EYE_NEAR * 1.2:.6f}"    # render.EYE_W: a point behind the eye is dropped
 
@@ -3914,13 +3916,13 @@ _CLOUD_CORNERS = np.array([(-1, -1), (1, -1), (-1, 1), (1, -1), (1, 1), (-1, 1)]
 
 
 def cloud_roles(source) -> tuple[str, ...]:
-    """The roles of the `cloud` devices `source` lists (a device registry,
+    """The roles of the `CLOUD_DEVICES` `source` lists (a device registry,
     duck-typed), in list order — listed, open or not: what the default
     graph gains a point-cloud node for. None (no registry) is none."""
     if source is None:
         return ()
     try:
-        return tuple(str(d.role) for d in source if getattr(d, "kind", "") == CLOUD_KIND)
+        return tuple(str(d.role) for d in source if getattr(d, "kind", "") in CLOUD_DEVICES)
     except Exception:  # noqa: BLE001 — a registry mid-change costs the clouds, never the frame
         return ()
 

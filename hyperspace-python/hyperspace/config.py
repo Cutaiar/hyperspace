@@ -129,7 +129,8 @@ like the rename above. The SYSTEM page shows both.
                             # ignored (one note each)
     role = "apc40"          # the name rows and the SYSTEM page use; unique; no ":"
     kind = "midi"           # "midi", "gamepad", "hands", "bridge", "midi-out",
-                            # "osc", "cloud", "ndi", "syphon", "camera";
+                            # "osc", "cloud", "kinect", "ndi", "syphon",
+                            # "camera";
                             # an unknown kind is an
                             # error line on the SYSTEM page, never a dead launch
     enabled = true          # false lists it as `off`: nothing opened, nothing imported
@@ -195,6 +196,14 @@ like the rename above. The SYSTEM page shows both.
                             #   [[devices]]  role = "camera"  kind = "camera"  enabled = true
                             #   (a refused camera: System Settings ▸ Privacy &
                             #   Security ▸ Camera)
+                            # An Xbox 360 Kinect (plan 29, kinect.py; needs
+                            # `brew install libfreenect`, and Logitech G Hub
+                            # not running): its live points are cloud:<role>, its
+                            # pictures kinect:<role>/depth and …/color. Metres;
+                            # kinect.py has what each key does:
+                            #   [[devices]]  role = "room"  kind = "kinect"
+                            #                near = 0.5  far = 4.5  centre = 2.0
+                            #                step = 2  mirror = true  colors = false
 
     [gamepad]               # a game controller (gamepad.py, pads/): an Xbox pad through
                             # GLFW, a DualSense / DualSense Edge over USB or Bluetooth,

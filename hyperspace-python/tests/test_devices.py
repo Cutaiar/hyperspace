@@ -79,7 +79,7 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
     # plan 27 B3 adds the midi-out sink; B4 the recorded cloud and the OSC device: one line each;
     # plan 32 T8 the live media feeds
     assert set(devices.KINDS) == {"midi", "gamepad", "hands", "bridge", "midi-out", "osc", "cloud",
-                                  "ndi", "syphon", "camera"}
+                                  "kinect", "ndi", "syphon", "camera"}
     assert devices.MidiDevice.schemes == ("cc", "note", "pitch")
     # plan 42: the touchpad and the motion sensors, for a pad that may be a Sony one
     assert devices.PadDevice.schemes == ("axis", "pair", "pad", "hat", "touch", "motion")
