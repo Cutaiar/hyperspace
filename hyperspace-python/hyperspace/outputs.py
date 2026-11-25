@@ -772,6 +772,8 @@ class PreviewTextures:
         self.how: dict[str, str] = {}           # name → how it was last tried
         self.phase: dict[str, float] = {}       # name → where its beat falls (of a period)
         self._phases = 0                        # beats given out
+        self.picked: dict[str, float] = {}      # name → when its last try was taken (`take`)
+        self._took = 0.0                        # when the frame's names were taken
         self.count = 0
         self.repainted = 0
         self.error = ""
@@ -844,7 +846,7 @@ class PreviewTextures:
     def take(self) -> dict[str, str]:
         """What was wanted and is `due` (and forget that wish); the rest
         wait their beat in `wanted`."""
-        now = self.clock()
+        now = self._took = self.clock()
         due = {n: how for n, how in self.wanted.items() if self.due(n, how, now)}
         for name in due:
             del self.wanted[name]
@@ -865,6 +867,9 @@ class PreviewTextures:
         if ph is None:
             ph = self.phase[name] = (self._phases * THUMB_PHASE) % 1.0
             self._phases += 1
+        # (by when it was taken, not done: a copy that ends past the next beat
+        # has not used that one up)
+        at = self.picked.get(name, at)
         return math.floor(now * THUMB_HZ - ph) > math.floor(at * THUMB_HZ - ph)
 
     def defer(self, name: str, how: str) -> None:
@@ -875,6 +880,7 @@ class PreviewTextures:
     def tried(self, name: str, how: str) -> None:
         """`name` is tried this frame: made nothing until `put` says so."""
         self.how[name] = how
+        self.picked[name] = self._took
         self.missed.add(name)
 
     def begin_frame(self) -> None:
@@ -969,7 +975,7 @@ class PreviewTextures:
 
     def drop(self, name: str) -> None:
         for d in (self.asked, self.made, self.sizes, self.made_in, self.wanted,
-                  self.hues, self.hue_at, self.how, self.phase):
+                  self.hues, self.hue_at, self.how, self.phase, self.picked):
             d.pop(name, None)
         self.masks.discard(name)
         self.missed.discard(name)

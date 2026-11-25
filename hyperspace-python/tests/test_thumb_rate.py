@@ -168,3 +168,16 @@ def test_the_renderer_copies_a_wired_node_25_times_a_second(ctx):
         n += r.thumbs.count
         assert r.thumbs.shade("scene") == r.thumbs.shade("kaleido") == 1.0
     assert 2 * 24 <= n <= 2 * 27
+
+
+@pytest.mark.parametrize("start", [0.0, 0.037, 0.0385])
+def test_a_copy_that_ends_past_a_beat_does_not_use_it_up(start):
+    """A copy is made some ms after it is taken. Timed by its end, one taken
+    just before a beat and done just after it used that beat up too: at 25 fps
+    every other frame skipped (Devin's review of #508)."""
+    r = Run(25.0)
+    r.t += start
+    for _ in range(50):
+        if r.frame(made=lambda name, copied: setattr(r, "t", r.t + 0.004) or True):
+            r.t -= 0.004                    # (the frame is 40 ms, its work in it)
+    assert sum(map(len, r.copies)) == 50
