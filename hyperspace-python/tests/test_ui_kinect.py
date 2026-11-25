@@ -452,3 +452,17 @@ def test_a_kinects_node_is_titled_kinect_not_by_its_role(rig):
     two = kinect.KinectDevice("stage", {"role": "stage", "kind": "kinect"})
     v = graphview.build(router.table, rig.panel.reg, router, [one, two])
     assert [v.node("device:room").label, v.node("device:stage").label] == ["Kinect room", "Kinect stage"]
+
+
+def test_a_setting_a_sink_row_drives_is_the_routes_not_the_sliders(rig, monkeypatch):
+    said = []
+    real = imgui.text_wrapped
+    monkeypatch.setattr(imgui, "text_wrapped", lambda s, *a: (said.append(s), real(s, *a))[1])
+    dev = Dev()
+    dev.driven = frozenset({"ir"})
+    p = Pane(rig, monkeypatch, dev, ui_graph.SIDE_W)
+    assert ui_kinect.DRIVEN in said
+    p.d.run(p.d.enter("kinect.ir", 10))
+    assert ("ir", 10) not in dev.asked                       # the slider is the route's now
+    p.d.run(p.d.enter("kinect.exposure", 5000))
+    assert dev.asked[-1] == ("exposure", 5000)               # …and only that one

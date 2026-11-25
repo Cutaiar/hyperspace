@@ -104,6 +104,9 @@ LEDS = (("off", 0), ("green", 1), ("red", 2), ("yellow", 3), ("blink green", 4),
 # freenect_flag
 FLAGS = {"auto_exposure": 1 << 14, "flicker": 1 << 7, "white_balance": 1 << 1}
 VIDEO = ("off", "color", "ir")
+# the sink channels, `<role>:<k>`: a saved row names the number, so this list is append-only
+SINK_CHANNELS = (("ir", "infrared brightness"), ("exposure", "exposure time"))
+SINK_S = 0.2         # a sink's value is sent at most this often, and only when it changed
 TILT_STATUS = {0: "stopped", 1: "limit", 4: "moving"}
 _FAR_GREY, _NEAR_GREY = 40, 255     # the depth picture's shades at `far` and at `near`
 
@@ -246,6 +249,15 @@ def check(kind: str, value) -> tuple[object, str]:
     if kind in ("restart", "reconnect"):
         return None, ""
     return None, f"{kind!r} is not a Kinect request"
+
+
+def sink_value(kind: str, u: float) -> int:
+    """A sink reading u (0–1) as the setting it drives: the infrared brightness
+    1–50 or the exposure in µs, the ends of `IR_MIN`…`IR_MAX` and
+    `EXPOSURE_MIN`…`EXPOSURE_MAX`."""
+    u = min(max(float(u), 0.0), 1.0) if math.isfinite(u) else 0.0
+    lo, hi = (IR_MIN, IR_MAX) if kind == "ir" else (EXPOSURE_MIN, EXPOSURE_MAX)
+    return round(lo + u * (hi - lo))
 
 
 def model_name(bcd: int | None) -> str:
@@ -780,6 +792,8 @@ class KinectDevice(devices.Base):
         self._reset_counts()
 
     def _reset_counts(self) -> None:
+        self._driven: frozenset[str] = frozenset()
+        self._sent: dict[str, tuple[int, float]] = {}
         self._made_n = 0
         self._carry = {"video": 0, "restarts": 0, "reconnects": 0}
         self._pub = 0.0
@@ -828,6 +842,44 @@ class KinectDevice(devices.Base):
 
     def media_sources(self) -> dict[str, Picture]:
         return self._pictures
+
+    @property
+    def sinks(self) -> tuple[devices.Port, ...]:
+        """What a route can drive (row 1170): the infrared brightness and the exposure
+        time, as sink ports ``<role>:<k>``. The tilt, the LED and the streams are the
+        pane's alone: a motor is not for a modulator to move."""
+        return tuple(devices.Port(str(k), label, group="camera", scheme=self.role)
+                     for k, (_, label) in enumerate(SINK_CHANNELS))
+
+    @property
+    def driven(self) -> frozenset[str]:
+        """The settings a sink row drives now (`SINK_CHANNELS` keys): the pane shows
+        them as the route's, not its own."""
+        return self._driven
+
+    def send(self, reg, analyzer) -> None:
+        """After `reg.apply`: each sink row's reading as a request, when it moved and
+        no more often than `SINK_S`. With no row on a channel nothing is sent, so the
+        pane's slider stays the only hand on it. A request refused (no sensor, auto
+        exposure on) is tried again, and said in the telemetry."""
+        table = self.table
+        vals: dict[int, float] = {}
+        if table is not None and hasattr(table, "sinks"):
+            from .routing import sink_values
+            vals = sink_values(table.sinks(self.role), reg, analyzer)
+        self._driven = frozenset(SINK_CHANNELS[k][0] for k in vals if 0 <= k < len(SINK_CHANNELS))
+        if not self._live:
+            self._sent.clear()               # a sensor that came back has its defaults
+        now = time.monotonic()
+        for k, u in vals.items():
+            if not 0 <= k < len(SINK_CHANNELS):
+                continue
+            kind = SINK_CHANNELS[k][0]
+            v = sink_value(kind, u)
+            if self._sent.get(kind, (None, 0.0))[0] == v or now - self._sent.get(kind, (None, -1e9))[1] < SINK_S:
+                continue
+            if self.request(kind, v) == "":
+                self._sent[kind] = (v, now)
 
     @property
     def telemetry(self) -> Telemetry:

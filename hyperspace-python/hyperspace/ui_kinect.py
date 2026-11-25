@@ -58,6 +58,7 @@ TILT_STEP = 0.5                     # the tilt slider's detent, degrees
 NOT_SAVED = ("for this run: they are the entry's, and an entry in the device list is "
              "never rewritten. Edit the entry to keep them.")
 NO_SENSOR = "no Kinect is connected"
+DRIVEN = "driven by a sink row (ROUTING, sinks): it is the route's now"
 HOLD_TIP = "sent when you let go"
 
 RADAR_ID = "kinect.radar"
@@ -129,8 +130,11 @@ def body(panel, dev) -> None:
     t = dev.telemetry
     live = bool(t.live)
 
+    driven = getattr(dev, "driven", frozenset())
+
     def why(key: str) -> str:
-        return t.can.get(key, "") if live else NO_SENSOR
+        base = t.can.get(key, "") if live else NO_SENSOR
+        return base or (DRIVEN if key in ("ir", "exposure") and key in driven else "")
 
     _status(dev, t)
     _radar(dev, t)

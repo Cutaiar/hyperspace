@@ -588,3 +588,107 @@ def test_the_radar_is_made_on_the_devices_thread_only_while_watched_and_publishe
         d.close()
     assert seen and set(seen) == {"kinect-room"}
     assert kinect.Telemetry().radar is None and kinect.Telemetry().focal == 575.0
+
+
+# ---------------------------------------------------------------- a route drives it (sinks)
+
+class Rows:
+    """A binding table's sinks, as `routing.sink_values` reads them."""
+
+    def __init__(self, *rows):
+        self.rows = rows
+
+    def sinks(self, role=None, *, enabled=True):
+        return [b for b in self.rows if b.is_sink and (role is None or b.sink[0] == role)]
+
+
+def sink_row(role, k, param):
+    from hyperspace import routing
+    return routing.Binding(f"param:{param}", routing.sink_target(role, k), routing.SINK_OP)
+
+
+class Reg:
+    def __init__(self, **norm):
+        self.norm = norm
+
+    def get(self, pid):
+        n = self.norm.get(pid)
+        return None if n is None else NS(kind=None, eff_norm=n)
+
+
+def test_the_sinks_are_the_infrared_and_the_exposure_and_the_numbers_are_kept():
+    d = kinect.KinectDevice("room", {})
+    assert [(p.address, p.label) for p in d.sinks] == [("room:0", "infrared brightness"),
+                                                       ("room:1", "exposure time")]
+    assert kinect.SINK_CHANNELS[0][0] == "ir" and kinect.SINK_CHANNELS[1][0] == "exposure"   # append-only
+    assert kinect.sink_value("ir", 0.0) == 1 and kinect.sink_value("ir", 1.0) == 50
+    assert kinect.sink_value("ir", 2) == 50 and kinect.sink_value("ir", float("nan")) == 1
+    assert kinect.sink_value("exposure", 1.0) == kinect.EXPOSURE_MAX
+    assert not any(p.name in ("tilt", "led") for p in d.sinks)          # the motor is not a modulator's
+
+
+def sink_device(*rows, sensor=None):
+    from hyperspace import devices
+    s = sensor or Steered()
+    d = kinect.KinectDevice("room", {}, devices.Context(table=Rows(*rows)), sensor=lambda o: s)
+    return d, s
+
+
+def test_a_sink_row_sends_its_reading_as_a_request_only_when_it_moves(monkeypatch):
+    monkeypatch.setattr(kinect, "SINK_S", 0.05)
+    d, s = sink_device(sink_row("room", 0, "view.bright"))
+    d.open()
+    try:
+        live(d)
+        d.send(Reg(**{"view.bright": 1.0}), None)
+        assert until(lambda: [k for _, k, _ in s.applied] == ["ir"])
+        assert s.applied[0][2] == 50 and d.driven == {"ir"}
+        for _ in range(5):
+            d.send(Reg(**{"view.bright": 1.0}), None)        # the same reading: not asked again
+        time.sleep(0.1)
+        assert len(s.applied) == 1
+        d.send(Reg(**{"view.bright": 0.0}), None)             # a rate limit: too soon after the last
+        assert len(s.applied) == 1
+        time.sleep(0.06)
+        d.send(Reg(**{"view.bright": 0.0}), None)
+        assert until(lambda: [v for _, _, v in s.applied] == [50, 1])
+    finally:
+        d.close()
+
+
+def test_no_row_means_no_request_and_the_pane_keeps_the_hand_on_it():
+    d, s = sink_device()
+    d.open()
+    try:
+        live(d)
+        d.send(Reg(), None)
+        time.sleep(0.05)
+        assert s.applied == [] and d.driven == frozenset()
+    finally:
+        d.close()
+
+
+def test_a_sink_row_with_no_sensor_is_tried_again_when_one_is_there(monkeypatch):
+    monkeypatch.setattr(kinect, "SINK_S", 0.0)
+    d, s = sink_device(sink_row("room", 1, "p"))
+    d.send(Reg(p=1.0), None)                                   # not open: refused, nothing queued
+    assert d.driven == {"exposure"} and s.applied == []
+    d.open()
+    try:
+        live(d)
+        d.send(Reg(p=1.0), None)
+        assert until(lambda: [(k, v) for _, k, v in s.applied] == [("exposure", kinect.EXPOSURE_MAX)])
+    finally:
+        d.close()
+
+
+def test_a_row_on_a_channel_the_kinect_has_not_is_ignored():
+    d, s = sink_device(sink_row("room", 7, "p"))
+    d.open()
+    try:
+        live(d)
+        d.send(Reg(p=1.0), None)
+        time.sleep(0.05)
+        assert s.applied == [] and d.driven == frozenset()
+    finally:
+        d.close()
