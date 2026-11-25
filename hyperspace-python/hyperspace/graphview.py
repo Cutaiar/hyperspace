@@ -5489,8 +5489,6 @@ class Edit:
             if "to" in p:
                 node = canvas_node(was)
                 w = {"from": was, "to": p["to"]}
-                if isinstance(p.get(rgraph.WIRE_DEPTH), (int, float)):   # plan 67 P3
-                    w[rgraph.WIRE_DEPTH] = p[rgraph.WIRE_DEPTH]
             else:
                 node = canvas_node(was.rpartition(".")[0])
                 w = {"from": p["from"], "to": was}
@@ -5499,6 +5497,8 @@ class Edit:
                         refused.append(PORT_TAKEN.format(port=was))
                         continue
                     taking = True
+            if isinstance(p.get(rgraph.WIRE_DEPTH), (int, float)):   # plan 67 P3: an inlet's
+                w[rgraph.WIRE_DEPTH] = p[rgraph.WIRE_DEPTH]          # or an outlet's depth
             if node not in have and kind_of(node) not in ALWAYS_KINDS:
                 refused.append(NO_HOST_NODE.format(name=node))
                 continue
@@ -6903,6 +6903,17 @@ def insert_items(edit: Edit) -> list[tuple[str, str, str | None]]:
     return out
 
 
+def _bypass_takes(src: str, dst: str) -> bool:
+    """Whether port `dst` takes what node `src` makes, as a bypass would wire
+    it: a picture never goes into a field port (a knob's, an effect's
+    `field`); anything else is as the read of the section says."""
+    node = dst.rpartition(".")[0]
+    want = rgraph.takes_of(node, rgraph.wire_node_kind(node, wired=True)).get(
+        dst.rpartition(".")[2])
+    makes = rgraph.makes_of(src, rgraph.wire_node_kind(src, wired=True))
+    return not (want == FIELD and makes not in (FIELD, None))
+
+
 def _lift(doc: dict, name: str) -> list[str]:
     """Node `name` out of where its picture goes, in section `doc`: the
     wire into its primary inlet (an effect's `image`, a composite's
@@ -6921,7 +6932,14 @@ def _lift(doc: dict, name: str) -> list[str]:
     keep = [x for x in wires if x is not into and not any(x is o for o in outs)]
     lost: list[str] = []
     if into is not None:
-        keep += [{"from": into["from"], "to": o["to"]} for o in outs]
+        # (plan 67 P3, Devin on #497: a bypass keeps what the cable out said —
+        # a knob's depth — and a port that cannot take what fed the node, a
+        # picture into a field or a knob, is left fed by nothing)
+        for o in outs:
+            if _bypass_takes(into["from"], o["to"]):
+                keep.append({**o, "from": into["from"]})
+            else:
+                lost.append(o["to"])
     else:
         lost = [o["to"] for o in outs]
     doc["wires"] = keep

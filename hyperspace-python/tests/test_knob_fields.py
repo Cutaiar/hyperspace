@@ -344,3 +344,58 @@ def test_a_field_wired_only_into_a_knob_reaches_on_graph_and_the_fx_pane():
     groups = dict(ui_fx.groups(spec))
     assert "line" in groups.get("Run", []), groups
     assert "reaches nothing" not in groups
+
+
+def test_a_depth_changed_alone_reaches_the_picture(ctx):
+    """Devin's review of #497: a wire's depth is not part of what the wire is,
+    so a wiring that differs only in a depth compared equal and the renderer
+    kept its cached graph, drawing the old depth. Change the depth alone after
+    a frame is drawn: the next frame draws the new one."""
+    sys_path_tests()
+    from test_graph_faces import _faces, _fbo, _px
+
+    from hyperspace.outputs import Switches, View
+    from hyperspace.render import Renderer
+
+    def section(d):
+        return _wired(("scene", "wave.image"), ("wave", "output.all.image"),
+                      {"from": "line", "to": "wave.amount", "depth": d})
+    r = Renderer(ctx)
+    r.ghost.state.on = False
+    r.fx.state.values["line"].update(on=True, angle=0.0)
+    r.fx.state.values["wave"].update(on=True, amount=0.0, waves=2.0)
+    vs = [View(Switches(), (160, 120), target=_fbo(ctx, 160, 120))]
+
+    def draw(d):
+        r.wiring = _spec(section(d)).wiring()
+        r.draw_outputs(_faces(), 160, 120, 1.0, vs, t_now=2.0)
+        return _px(vs[0].target).astype(int)
+    still = draw(0.0)
+    assert not np.array_equal(draw(0.1), still)
+    assert np.array_equal(draw(0.0), still)
+
+
+def test_deleting_a_field_node_before_a_knob_keeps_the_depth_or_lets_go(tmp_path):
+    """Devin's review of #497: a node deleted out of a chain is bypassed — what
+    fed it wired on into what it fed. Into a knob the bypass keeps the cable's
+    depth; where what fed it is a picture (To field's input), a knob or field
+    port cannot take it, so that cable goes and the deletion lands."""
+    sys_path_tests()
+    from test_graph_wires import _edit_rig
+    rig, _, edit, _ = _edit_rig(tmp_path)
+    for f in ("line", "scale", "wave", "tofield", "displace"):
+        assert edit.add_node("effect", f) is None
+    assert edit.wire("rout:line", "rin:scale/image") is None
+    assert edit.wire("rout:scale", "rin:wave/amount") is None
+    w = next(w for w in rig.loaded_patch.graph.spec.wires if w.dst == "wave.amount")
+    assert edit.set_depth(w, 0.125) is None
+    assert edit.drop_node("scale") is None
+    got = [w for w in rig.loaded_patch.graph.spec.wires if w.dst == "wave.amount"]
+    assert [(w.src, w.depth) for w in got] == [("line", 0.125)]
+    # a picture fed To field: neither the knob nor Displace's field port takes it
+    assert edit.wire("scene", "tofield.image") is None
+    assert edit.wire("rout:tofield", "rin:wave/waves") is None
+    assert edit.wire("rout:tofield", "rin:displace/field") is None
+    assert edit.drop_node("tofield") is None
+    wires = rig.loaded_patch.graph.spec.wires
+    assert not [w for w in wires if w.dst in ("wave.waves", "displace.field")]

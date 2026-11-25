@@ -1362,8 +1362,11 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
             ports.append(port)
         else:
             outs += 1
-            ports.append({"id": _join("out", outs), "type": wire_type(w, where),
-                          "from": rn.src(w.src), "was": w.dst})
+            port = {"id": _join("out", outs), "type": wire_type(w, where),
+                    "from": rn.src(w.src), "was": w.dst}
+            if w.depth != 1.0:      # (an outlet into a host's knob too: Devin, #497)
+                port[G.WIRE_DEPTH] = w.depth
+            ports.append(port)
     # the rows: every one that touches a member
     routes = [rn.row(b.to_json()) for b in table.routes()
               if touches(members, b.source, b.target)]

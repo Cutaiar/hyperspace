@@ -796,6 +796,14 @@ def takes_of(node: str, kind: str | None) -> dict[str, str]:
     return takes
 
 
+def wire_depths(wiring: Any) -> tuple[tuple[str, str, float], ...]:
+    """Plan 67 P3: (from, to, depth) of each wire of `wiring` whose depth is not
+    1, sorted — what a wiring holds beyond its wires' identity (`Wire.depth`
+    compares equal), so a cache keyed by the wiring keys these too."""
+    wires = getattr(wiring, "wires", None) or ()
+    return tuple(sorted((w.src, w.dst, w.depth) for w in wires if w.depth != 1.0))
+
+
 def knob_spec(effect: str):
     """Plan 67 P3: effect (or slot) `effect`'s file's spec (`fx.spec_of`), or None."""
     return _fx.spec_of(split_instance(effect_of(effect) or effect)[0])
