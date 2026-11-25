@@ -30,7 +30,7 @@ from test_loadable import boot, put
 from wiredframe import Shows, Thru, graph, wire_switches, wiring
 
 from hyperspace import graph as G
-from hyperspace import graphview, loadable
+from hyperspace import graphmigrate, graphview, loadable
 from hyperspace.graphmigrate import wired_wiring
 from hyperspace.library import LOADABLE
 from hyperspace.outputs import Switches, View
@@ -45,9 +45,12 @@ RUN = ("warp", "acid", "acid.2", "palette")
 
 def unrescaled(notes: list[str]) -> list[str]:
     """A load's notes less plan 86's: a fixture from before the effect tapers has no
-    units marker, and its rescaled depths are said (`loadable.retaper_note`)."""
+    units marker, and its rescaled depths are said (`loadable.retaper_note`). And
+    less plan 67's: a fixture from before Hue cycle's retirement says it is Hue
+    turn now (`graphmigrate.HUE_TURN_NOTE`)."""
     head = loadable.RETAPER_NOTE.partition("{count}")[0]
-    return [n for n in notes if not n.startswith(head)]
+    hue = graphmigrate.HUE_TURN_NOTE.partition("{new}")[2][:40]
+    return [n for n in notes if not n.startswith(head) and hue not in n]
 
 
 
@@ -348,7 +351,7 @@ def test_dragging_an_image_cable_on_the_canvas_edits_the_spec_and_dirties_the_lo
         stub = Stub()
         rig.lib.loaded_patch.graph.attach(stub)
         g = G.build_graph(_views(S(), S(scene=False)), wired_wiring(stub.wiring),
-                          effects=("plasma", "kaleido", "zoomblur", "huecycle"))
+                          effects=("plasma", "kaleido", "zoomblur", "hueturn"))
         stub._graph = g
         rig.panel.renderer = stub
         frame(rig.panel, "graph")

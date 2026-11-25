@@ -2,71 +2,6 @@
  "schema": "hyperspace.loadable/12",
  "name": "kinetic-tunnel",
  "note": "Reach in. The picture feeds back on itself into a tunnel. Pull two hands apart to draw it out longer, bring them together to snap it shut. Turn the hands against each other like a steering wheel to spiral it. Right hand height drives you forward or back. Right trigger floods it with colour.",
- "graph": {
-  "frame": "wired",
-  "nodes": [
-   {
-    "kind": "hands",
-    "laid": "over"
-   },
-   {
-    "kind": "composite"
-   },
-   {
-    "kind": "delay"
-   }
-  ],
-  "wires": [
-   {
-    "from": "shape",
-    "to": "scene.geometry"
-   },
-   {
-    "from": "pattern",
-    "to": "shape.faces"
-   },
-   {
-    "from": "scene",
-    "to": "composite.over"
-   },
-   {
-    "from": "composite",
-    "to": "output.all.image"
-   },
-   {
-    "from": "composite",
-    "to": "delay.image"
-   },
-   {
-    "from": "delay",
-    "to": "kaleido.image"
-   },
-   {
-    "from": "kaleido",
-    "to": "huecycle.image"
-   },
-   {
-    "from": "huecycle",
-    "to": "fade.image"
-   },
-   {
-    "from": "fade",
-    "to": "composite.under"
-   },
-   {
-    "from": "hands",
-    "to": "hands.layer.hands"
-   },
-   {
-    "from": "hands.layer",
-    "to": "output.all.hands"
-   },
-   {
-    "from": "hands.layer",
-    "to": "output.all.guide"
-   }
-  ]
- },
  "values": {
   "ghost.on": true,
   "ghost.alpha": 0.35,
@@ -79,15 +14,31 @@
   "fx.kaleido.segments": 2,
   "fx.kaleido.zoom": 0.8,
   "fx.kaleido.swirl": 0.0,
-  "fx.huecycle.on": true,
-  "fx.huecycle.paint": 0.45,
-  "fx.huecycle.spread": 0.5,
-  "fx.huecycle.rings": 0.0,
   "fx.fade.on": true,
   "fx.fade.level": 0.7,
   "view.faces": true,
   "view.pattern": 9,
-  "view.pattern_mix": 0.8
+  "view.pattern_mix": 0.8,
+  "fx.hueturn.on": true,
+  "fx.hueturn.paint": 0.45,
+  "fx.line.on": true,
+  "fx.line.angle": 0.7853981633974483,
+  "fx.line.scale": 1.4142135623730951,
+  "fx.line.out": 0,
+  "fx.rings.on": true,
+  "fx.rings.scale": 2.0,
+  "fx.rings.out": 0,
+  "fx.scale.on": true,
+  "fx.scale.mul": 1.0,
+  "fx.scale.offset": 0.0,
+  "fx.scale.2.on": true,
+  "fx.scale.2.mul": 0.0,
+  "fx.scale.2.offset": 0.0,
+  "fx.combine.on": true,
+  "fx.combine.how": 0,
+  "fx.scale.3.on": true,
+  "fx.scale.3.mul": 0.5,
+  "fx.scale.3.offset": 0.0
  },
  "routes": [
   {
@@ -118,7 +69,7 @@
   },
   {
    "source": "axis:RT",
-   "target": "fx.huecycle.paint",
+   "target": "fx.hueturn.paint",
    "op": "push",
    "value": 0.75
   },
@@ -172,5 +123,121 @@
  },
  "media": {
   "channels": {}
+ },
+ "graph": {
+  "frame": "wired",
+  "nodes": [
+   {
+    "kind": "hands",
+    "laid": "over"
+   },
+   {
+    "kind": "composite"
+   },
+   {
+    "kind": "delay"
+   },
+   {
+    "kind": "effect",
+    "file": "line"
+   },
+   {
+    "kind": "effect",
+    "file": "rings"
+   },
+   {
+    "kind": "effect",
+    "file": "scale"
+   },
+   {
+    "kind": "effect",
+    "file": "scale",
+    "instance": 2
+   },
+   {
+    "kind": "effect",
+    "file": "combine"
+   },
+   {
+    "kind": "effect",
+    "file": "scale",
+    "instance": 3
+   }
+  ],
+  "wires": [
+   {
+    "from": "line",
+    "to": "scale.image"
+   },
+   {
+    "from": "rings",
+    "to": "scale.2.image"
+   },
+   {
+    "from": "scale",
+    "to": "combine.image"
+   },
+   {
+    "from": "scale.2",
+    "to": "combine.field"
+   },
+   {
+    "from": "combine",
+    "to": "scale.3.image"
+   },
+   {
+    "from": "scale.3",
+    "to": "hueturn.turn",
+    "depth": 360.0
+   },
+   {
+    "from": "shape",
+    "to": "scene.geometry"
+   },
+   {
+    "from": "pattern",
+    "to": "shape.faces"
+   },
+   {
+    "from": "scene",
+    "to": "composite.over"
+   },
+   {
+    "from": "composite",
+    "to": "output.all.image"
+   },
+   {
+    "from": "composite",
+    "to": "delay.image"
+   },
+   {
+    "from": "delay",
+    "to": "kaleido.image"
+   },
+   {
+    "from": "kaleido",
+    "to": "hueturn.image"
+   },
+   {
+    "from": "hueturn",
+    "to": "fade.image"
+   },
+   {
+    "from": "fade",
+    "to": "composite.under"
+   },
+   {
+    "from": "hands",
+    "to": "hands.layer.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.guide"
+   }
+  ]
  }
 }

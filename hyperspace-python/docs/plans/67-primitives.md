@@ -755,3 +755,29 @@ set the value, the field spreads it.
 - **The example** `field-knob`: Point → Rings (value) → Wave's Amount at depth 0.06.
 
 **Next** (§17): retire Hue cycle into Palette + fields; one rule for "fed by nothing".
+
+## 19. Hue cycle retired into Hue turn + fields (2026-11-25)
+
+Built (roundup §6; rows 1122–1128, hand checks 898–900). The owner chose an exact migration
+with new ops, a new op named **Hue turn**, and, for the one row that cannot carry over
+exactly, "accept, and say so".
+
+- **What Hue cycle was:** a field it hid — its bands, `mix(p.x + p.y, 2 |p|, Rings) ×
+  Spread`, in turns — and a turn of the hues by its clock plus the bands, in YIQ, with Paint
+  (the brightness in the turning hue) and Saturation to 2.
+- **What it is now:** Line (45°, Scale √2) and Rings (Scale 2), weighed by two Scales (1 −
+  Rings, Rings), added by Combine, × Spread by a third Scale, wired into **Hue turn**'s Turn at a
+  depth of 360. Hue turn holds the rest; it is one op because Paint mixes two results of one
+  input. Palette is untouched: its slice is HSV, Hue cycle's turn is YIQ.
+- **Proven:** Hue cycle's own shader, kept as a test fixture, against the migrated patch
+  through the renderer — the saved looks' settings and a sweep, three times each: at most 2
+  levels, on fewer than 1 % of pixels.
+- **The migration** is the ladder's last step, keyed on the file at any version
+  (`graphmigrate.hue_turns`), so no schema moves; rows on Spread land on the bands' × (a
+  push halved, a set moved, an abs desk row kept and said); the six saved looks are
+  rewritten. A slot reads its effect's knob fields.
+- **The example** `hue-cycle`.
+
+**Not built:** the golden frames of the Hue cycle looks move by the GPU's rounding and are
+re-recorded on the Mac (hand check 900). "One rule for fed by nothing" (§17 item 3) landed on
+`main` in #501.
