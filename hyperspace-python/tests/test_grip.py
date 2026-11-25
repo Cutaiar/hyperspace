@@ -558,7 +558,7 @@ def test_the_grip_imports_only_the_world():
             assert not (n.module or "").startswith("hyperspace"), n.module
         elif isinstance(n, ast.Import):
             assert not any(a.name.startswith("hyperspace") for a in n.names)
-    assert got == {"world"}
+    assert got == {"world", "writes"}       # (a leaf, as the world is)
 
 
 # ---------------------------------------------------------------- per preset (2026-11-10)

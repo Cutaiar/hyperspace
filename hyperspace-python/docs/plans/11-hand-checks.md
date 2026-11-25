@@ -8846,6 +8846,16 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## FS. Hue cycle retired into Hue turn + fields (rows 1122–1128, 2026-11-25)
+
+Plan 67 §19. Headless: `tests/test_hue_turn.py` (Hue cycle's own shader against the migrated patch, seven settings, three times; the migration's rows, macros, layout, groups, slots, a second instance, knob-only, a fragment, an old file end to end), `tests/test_field_examples.py` (`hue-cycle`). The example is in the Drive library's `loadable/field-examples/`.
+
+**898. The looks look the same.** (Mac, 1080p outputs) Open `party-trip`, `party-acid`, `hands-pinch`, `dial` and the kinetic `comet` and `tunnel`. *Pass:* each looks and moves as it did — the bands, their turning, the paint; GRAPH shows Hue turn with Line, Rings, three Scales and a Combine wired into its Turn, every node lit; the FX pane has them with Hue turn, none under "reaches nothing". Open a look of yours saved with Hue cycle: the load says it is Hue turn now; save, reopen: nothing said. *Fail:* a look whose colours differ at a glance, or a node marked unreached.
+
+**899. Spread under the hands and the desk.** (Mac) `party-trip`: turn the right hand (yaw). *Pass:* the bands widen and narrow as before. Turn the desk knob that was Spread (cc 23): from its middle up, as before; below its middle the bands turn the other way, and the load said so. *Fail:* a push that moves the bands twice as far as before.
+
+**900. The goldens.** (Mac) `uv run pytest -q -m golden`; then `uv run python tools/golden_frames.py --record --only party-trip,party-acid,hands-pinch,dial,palette-glass,wired-outputs,media-chain-faces`. *Pass:* before the record, only those looks differ (the GPU's rounding); after it, every golden passes. *Fail:* another look differs.
+
 ## FR. Any knob takes a field (rows 1116–1121, 2026-11-24)
 
 Plan 67 §18. Headless: `tests/test_knob_fields.py` (every knob takes a field or says why; a field of 0 is the unwired knob; half a frame at one value, half at another; clamped or wrapped; the wire's depth saved and read; GRAPH's port, the drop on a knob's row, the depth menu; the FX pane), `tests/test_field_examples.py` (`field-knob` opens with no note, reaches, and draws the field), `tools/fx_sweep.py` (2886 renders, no byte moved). The example is in the Drive library's `loadable/field-examples/`.
@@ -9095,6 +9105,14 @@ Headless: `tests/test_catalog.py` (the counts, six faces at every corner, every 
 
 **892. The snub icosidodecadodecahedron.** (laptop, VIEW) Open the Shape menu's 3D part, **Star polyhedra**, and pick **Snub icosidodecadodecahedron** (last in the group). Turn Faces on, then XZ and YZ, and let it turn; then Points off and on. *Pass:* the header reads `3D · 60V 180E · | 5/3 3 5`; a ball of crossing faces with twelve five-pointed stars standing out, each filled right into its middle, among triangles and pentagons; red dots only where edges meet — none at the five points inside each star where its edges cross; it turns the same with the W planes on. Say whether it reads as the picture it was asked for (Wikipedia's, the stars red). *Fail:* a star filled only at its tips or brighter in its middle (filled twice), a red dot inside a star, or a header saying 120V.
 
+## FT. The Kinect (row 1130, 2026-11-24)
+
+Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).
+
+**910. The Kinect.** (Mac, G Hub not running) Add the entry (config.py's comment) to the device list; stand 1–3 m from the sensor. *Pass:* the DEVICES line says `connected` and 30 fps; you are points in the scene, moving as a mirror does, at about the shape's middle at 2 m; the depth picture is in MEDIA. Pull its USB: the points go and the line says so; put it back: they return. *Fail:* a frozen person, a dropped frame rate, or the app waiting on the sensor at launch or quit.
+
+**911. The Kinect demo patch.** (Mac) Copy `loadable/kinect` (its README), 910's entry with `colors`, nothing within half a metre of the sensor. Load `kinect/kinect-mirror`, step the switch 1–5, then channel B to slot 2. *Pass:* each look as the README's table says, steady over a minute. *Fail:* depth that goes blank on a cycle with a clear view (row 1130's device), or a look that is black with you in front.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -9246,3 +9264,7 @@ Only a person can settle these:
 - NanoVG in the control window on the Mac's GL (417): the tests draw the
   lab's drawings through a stand-in NanoVG, and the shots were rendered
   on Mesa's software rasteriser; one look on Dillon's Mac so far.
+
+## GC. Thumbnails at 25 Hz (row 1150, 2026-11-24)
+
+**930. Thumbnails at 25 Hz.** (Mac, GRAPH at full frame rate) Open a light patch that moves, and one with a matte, a segment or a field node, GRAPH in view. *Pass:* the thumbnails move smoothly enough; none flickers dark, goes black or stays frozen while its node runs; the card chip and a knob turned on a carded effect show at once (within a frame or three); switching an input off dims its node about a tenth of a second later and lights it the moment it is back; scrolling a node into view shows its picture at once; output 1's picture and the backdrop move at the full frame rate. With the **panel:graph** source on a channel, the projected canvas looks the same. With **tint cables** and **gpu cost** lit, the hues and the numbers read as before.

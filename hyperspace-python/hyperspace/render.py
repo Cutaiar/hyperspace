@@ -1228,10 +1228,16 @@ def _thumb_gain(frame: Frame, name: str, made: moderngl.Texture) -> float:
     """A field thumbnail's gain: 1 over the field's largest magnitude
     (`FxChain.field_range`), so its shape fills the grey whatever its scale
     — measured every `FIELD_RANGE_EVERY` frames, a read back being a stall
-    (between, the last measure). 1 for an empty field; within 1/64 … 4096."""
+    (between, the last measure). 1 for an empty field; within 1/64 … 4096.
+
+    The count is of frames (`Renderer._thumbnails` adds one a frame), not of
+    thumbnails: counted per thumbnail, seven field nodes measured each other
+    every four frames between them — a read back, and so a whole-frame stall,
+    nearly every frame (~10–17 ms of field-wave-slow's). Counted per frame,
+    the fields first seen together are measured together: one stall per
+    `FIELD_RANGE_EVERY` frames."""
     keep = frame.r.__dict__.setdefault("_field_gains", {})
     n = frame.r.__dict__.get("_thumb_frames", 0)
-    frame.r._thumb_frames = n + 1
     got = keep.get(name)
     if got is None or n - got[0] >= FIELD_RANGE_EVERY:
         m = frame.r.fx.field_range(made)
@@ -2233,7 +2239,8 @@ class Renderer:
 
     def _thumbnails(self) -> None:
         """The end of a frame (`_for_the_panel`): each node the GRAPH page
-        wanted since the last frame (`PreviewTextures.take`) copied into its
+        wanted and whose beat has come (`PreviewTextures.take`: `THUMB_HZ` a
+        second each, spread over the frames) copied into its
         thumbnail from this frame's picture of it (`thumb_source`), then the
         names not wanted for a second dropped. Nothing wanted, nothing done:
         a closed page costs nothing. A painted node is painted again here
@@ -2254,6 +2261,11 @@ class Renderer:
             th = self._thumbs()
         wanted = th.take()
         th.begin_frame()
+        if frame is None:               # (a frame that failed made nothing)
+            for name, how in wanted.items():
+                th.tried(name, how)
+        # the frames `_thumb_gain` counts between its measures: one a frame
+        self._thumb_frames = self.__dict__.get("_thumb_frames", 0) + 1
         if wanted and frame is not None:
             timer = getattr(self, "timer", None)
             was = getattr(timer, "_active", False) if timer is not None else False
@@ -2264,10 +2276,14 @@ class Renderer:
             saved = {k: list(v) if isinstance(v, list) else v for k, v in frame.stats.items()}
             try:
                 pulled = frame.graph.pulled(frame) if frame.graph is not None else None
-                wanted = self._unwired_budget(wanted)
+                within = self._unwired_budget(wanted)
+                for name in wanted.keys() - within.keys():
+                    th.defer(name, wanted[name])
+                wanted = within
                 # (masks last: one a picture's repaint just made is free to show)
                 for name, how in sorted(wanted.items(), key=lambda kv: kv[1] == "mask"):
                     held = len(frame.data)
+                    th.tried(name, how)
                     try:
                         src = thumb_source(frame, name, how, pulled)
                         flip = (how == "mask" and src is not None

@@ -639,6 +639,15 @@ THUMB_PX = 192
 THUMB_DROP_S = 1.0
 # a node that made nothing this long shows black (dimmed before that)
 THUMB_BLACK_S = 1.0
+# a node's thumbnail is copied this many times a second at most (the owner's
+# rate), each on a beat of its own so a frame copies a share of them
+# (`PreviewTextures.due`); never copied yet, it is copied at once
+THUMB_HZ = 25.0
+# a node that makes nothing is said to have stopped once its last copy is
+# this old: a mask (a field) only another node's repaint makes is made on
+# that node's beat, not its own, so one try that finds nothing says nothing
+THUMB_LATE_S = 3.0 / THUMB_HZ
+THUMB_PHASE = (math.sqrt(5.0) - 1.0) / 2.0     # the step between two names' beats
 # the downsample pass (plan 37 C1): 4×4 bilinear taps over the footprint
 # of one thumbnail texel — each tap averages 2×2 source texels, so a
 # 1920-wide picture's ten texels a thumbnail texel are read eight across,
@@ -730,9 +739,15 @@ class PreviewTextures:
     `THUMB_DROP_S` is dropped and its texture freed, so a node off screen,
     hidden or collapsed off the canvas costs nothing after a second.
 
-    A node wanted that made nothing this frame keeps its last thumbnail:
-    `shade(name)` is 1 when it was copied the renderer's last frame, `DIM`
-    while it is less than `THUMB_BLACK_S` old, 0 (black) after — a number
+    `take` gives only the names `due`: each is copied `THUMB_HZ` times a
+    second at most, on a beat of its own (`phase`), so the copies are
+    spread over the frames; a wish not yet due waits in `wanted`. The
+    renderer marks each name it tries (`tried`).
+
+    A node wanted that made nothing when tried keeps its last thumbnail
+    and is tried every frame: `shade(name)` is 1 while its last try copied
+    it (or that copy is under `THUMB_LATE_S` old), `DIM` while the copy is
+    less than `THUMB_BLACK_S` old, 0 (black) after — a number
     the page multiplies the picture by, never a copy. `count` is the
     copies the last frame made (the SYSTEM line), `repainted` how many of
     them were of a picture the frame had not made (a node that paints into
@@ -753,6 +768,12 @@ class PreviewTextures:
         self.sizes: dict[str, tuple[int, int]] = {}   # name → the picture's own size
         self.frame = 0                          # the renderer's frames ended
         self.made_in: dict[str, int] = {}       # name → the frame it was last copied in
+        self.missed: set[str] = set()           # names whose last try copied nothing
+        self.how: dict[str, str] = {}           # name → how it was last tried
+        self.phase: dict[str, float] = {}       # name → where its beat falls (of a period)
+        self._phases = 0                        # beats given out
+        self.picked: dict[str, float] = {}      # name → when its last try was taken (`take`)
+        self._took = 0.0                        # when the frame's names were taken
         self.count = 0
         self.repainted = 0
         self.error = ""
@@ -788,14 +809,16 @@ class PreviewTextures:
         return self.sizes.get(name)
 
     def shade(self, name: str) -> float:
-        """1 copied the last frame; `DIM` while the last copy is under
-        `THUMB_BLACK_S` old; 0 after that, or never copied."""
-        if self.made_in.get(name) == self.frame and self.frame:
+        """1 when its last try copied it (a frame between its beats changes
+        nothing); else 1 while that copy is under `THUMB_LATE_S` old, `DIM`
+        under `THUMB_BLACK_S`; 0 after that, or never copied."""
+        if name in self.made_in and name not in self.missed:
             return 1.0
         at = self.made.get(name)
-        if at is None or self.clock() - at >= THUMB_BLACK_S:
+        if at is None:
             return 0.0
-        return self.DIM
+        age = self.clock() - at
+        return 1.0 if age < THUMB_LATE_S else self.DIM if age < THUMB_BLACK_S else 0.0
 
     @property
     def kept(self) -> int:
@@ -821,9 +844,44 @@ class PreviewTextures:
     # ---- the renderer's side
 
     def take(self) -> dict[str, str]:
-        """What was wanted since the last frame (and forget the wish)."""
-        wanted, self.wanted = self.wanted, {}
-        return wanted
+        """What was wanted and is `due` (and forget that wish); the rest
+        wait their beat in `wanted`."""
+        now = self._took = self.clock()
+        due = {n: how for n, how in self.wanted.items() if self.due(n, how, now)}
+        for name in due:
+            del self.wanted[name]
+        return due
+
+    def due(self, name: str, how: str, now: float) -> bool:
+        """Whether wanted `name` is copied this frame: never copied, made
+        nothing the last time, found another way now (its chip clicked, a
+        wire plugged), or a beat of its own since its last copy. The beats
+        are `THUMB_HZ` a second on a fixed grid, offset by `phase` — golden
+        ratio steps in the order first asked, so however many there are they
+        lie evenly over the period. At `THUMB_HZ` frames a second or fewer
+        there is a beat in every frame: nothing is skipped."""
+        at = self.made.get(name)
+        if at is None or name in self.missed or self.how.get(name) != how:
+            return True
+        ph = self.phase.get(name)
+        if ph is None:
+            ph = self.phase[name] = (self._phases * THUMB_PHASE) % 1.0
+            self._phases += 1
+        # (by when it was taken, not done: a copy that ends past the next beat
+        # has not used that one up)
+        at = self.picked.get(name, at)
+        return math.floor(now * THUMB_HZ - ph) > math.floor(at * THUMB_HZ - ph)
+
+    def defer(self, name: str, how: str) -> None:
+        """Taken but not tried (the frame's budget): still wanted, unless
+        the page has said so anew."""
+        self.wanted.setdefault(name, how)
+
+    def tried(self, name: str, how: str) -> None:
+        """`name` is tried this frame: made nothing until `put` says so."""
+        self.how[name] = how
+        self.picked[name] = self._took
+        self.missed.add(name)
 
     def begin_frame(self) -> None:
         """A frame's copies start: none counted yet."""
@@ -904,6 +962,7 @@ class PreviewTextures:
         (self.masks.add if mask else self.masks.discard)(name)
         self.made[name] = self.clock()
         self.made_in[name] = self.frame
+        self.missed.discard(name)
         self.count += 1
         self.repainted += bool(repainted)
         return True
@@ -916,9 +975,10 @@ class PreviewTextures:
 
     def drop(self, name: str) -> None:
         for d in (self.asked, self.made, self.sizes, self.made_in, self.wanted,
-                  self.hues, self.hue_at):
+                  self.hues, self.hue_at, self.how, self.phase, self.picked):
             d.pop(name, None)
         self.masks.discard(name)
+        self.missed.discard(name)
         got = self.tex.pop(name, None)
         if got is not None:
             for res in (got[1], got[0]):

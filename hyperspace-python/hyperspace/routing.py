@@ -283,7 +283,7 @@ from typing import NamedTuple, Protocol
 
 import numpy as np
 
-from . import apc40, envelope, lfo, modgraph, modifiers, motion, seq_page
+from . import apc40, envelope, lfo, modgraph, modifiers, motion, seq_page, writes
 from . import undo as undo_steps
 from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
@@ -700,7 +700,7 @@ class Owned(Exception):
 # ---------------------------------------------------------------- binding
 
 @dataclass
-class Binding:
+class Binding(writes.Observed):
     source: str                  # "scheme:address", see the module docstring
     target: str                  # param id
     op: str = "fire"
@@ -969,6 +969,10 @@ class Binding:
             depth = "" if self.value == 1.0 else f" {self.value:.3g}"
             return f"{who} positions{depth}{by}{when}"
         return who
+
+
+# a row is edited in place (the ROUTING page, Learn): an edit of what undo compares marks
+writes.watch(Binding, *undo_steps.ROW_FIELDS)
 
 
 _SHIFT = Binding(SHIFT_SOURCE, SHIFT_PARAM, "toggle")    # the latch's control

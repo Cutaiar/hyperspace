@@ -19,6 +19,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import numpy as np
+import pytest
 from test_graph_faces import Still, _fbo, _media, _rgba
 from test_graph_segment import (
     COLOUR,
@@ -38,12 +39,19 @@ from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel 
 from hyperspace import graph as G
 from hyperspace import graphview, masks, render, ui_graph
 from hyperspace.graphview import MASK_PIC
-from hyperspace.outputs import Switches, View, thumb_size
+from hyperspace.outputs import PreviewTextures, Switches, View, thumb_size
 from hyperspace.view import MatteState
 
 MATTE = {"kind": "matte"}
 SEG_WANT = {"segment": MASK_PIC}
 FG_ONLY = [("channel.a", "segment.image"), ("segment.fg", "output.2.image")]
+
+
+@pytest.fixture(autouse=True)
+def _every_frame(monkeypatch):
+    """These tests are of what a thumbnail is, not how often: each wish is
+    copied at once (`test_thumb_rate.py` is the rate's)."""
+    monkeypatch.setattr(PreviewTextures, "due", lambda self, name, how, now: True)
 
 
 def _thumb(r, name) -> np.ndarray:
