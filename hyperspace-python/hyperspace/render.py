@@ -853,7 +853,9 @@ class DelayPair:
         self.kept = False
         self.holds_any = False
         self.since = 0
-        self.cell: int | None = None
+        self.cell: Any = None
+        self.phase = 0.0                # Hz: cycles run, advanced by dt × the rate now
+        self.last_t: float | None = None
 
     def target(self, ctx: moderngl.Context, size: tuple[int, int]) -> moderngl.Framebuffer:
         """The write side at `size`: made again only when missing or of
@@ -898,7 +900,8 @@ class DelayPair:
         self._free(self.write)
         self.read = self.write = None
         self.holds = self.wrote = self.kept = self.holds_any = False
-        self.cell = None
+        self.cell = self.last_t = None
+        self.phase = 0.0
 
 
 class FaceTarget:
@@ -2968,6 +2971,11 @@ class Renderer:
         got = pairs.get(name)
         if got is None:
             got = pairs[name] = DelayPair()
+        elif not hasattr(got, "phase"):
+            # a pair kept across a hot reload from before the delay's rate: the
+            # fields it lacks, at their first-frame values (it takes afresh)
+            got.kept = got.holds_any = False
+            got.since, got.cell, got.phase, got.last_t = 0, None, 0.0, None
         return got
 
     def segmenter(self, name: str):

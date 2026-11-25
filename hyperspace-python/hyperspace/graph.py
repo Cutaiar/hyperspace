@@ -4552,13 +4552,17 @@ class Delay(Node):
 _DELAY_DEFAULT = DelayState()
 
 
-def delay_due(pair: Any, st: DelayState, t: float, beat: float) -> bool:
+def delay_due(pair: Any, st: DelayState, t: float, beat: float, epoch: int = 0) -> bool:
     """Whether a delay takes its picture this frame (and books the next).
     The first picture, and any after the pair holds nothing, is always taken.
-    `frames`: every Nth frame (N = 1: every frame, strict z⁻¹). `Hz` and the
-    tempo units are grids on the clock — seconds × hz, or beats ÷ the unit's
-    beats — a picture taken on the first frame inside each cell, so a rate
-    above the frame rate is every frame and a tempo change never stalls it."""
+    `frames`: every Nth frame (N = 1: every frame, strict z⁻¹). `Hz`: a phase
+    advanced each frame by the time since the last × the rate *now* (so a
+    modulated rate speeds and slows it, never jumps it), a picture on each
+    whole cycle; above the frame rate is every frame. Tempo units: the cell
+    of the beat grid (beats ÷ the unit's beats) in the clock's `epoch` — a
+    downbeat placed (`Clock.trigger`) is a new grid, so its first frame takes
+    a picture — on the first frame inside each cell, so a tempo change never
+    stalls it."""
     mode = DELAY_EVERY[min(max(int(st.every), 0), len(DELAY_EVERY) - 1)]
     if mode == "frames":
         n = max(int(st.frames), 1)
@@ -4567,8 +4571,15 @@ def delay_due(pair: Any, st: DelayState, t: float, beat: float) -> bool:
         if due:
             pair.since = 0
         return due
-    cell = math.floor(t * max(float(st.hz), 1e-3)) if mode == "Hz" \
-        else math.floor(beat / DELAY_BEATS[mode])
+    if mode == "Hz":
+        last, pair.last_t = pair.last_t, t
+        if last is not None and t > last:
+            pair.phase += (t - last) * max(float(st.hz), 1e-3)
+        cell = math.floor(pair.phase)
+        due = not pair.holds_any or cell != pair.cell
+        pair.cell = cell
+        return due
+    cell = (epoch, math.floor(beat / DELAY_BEATS[mode]))
     due = not pair.holds_any or cell != pair.cell
     pair.cell = cell
     return due
@@ -4619,7 +4630,8 @@ class DelayWrite(Node):
             st = (getattr(frame.root, "delays", None) or {}).get(self.delay) or _DELAY_DEFAULT
             clock = getattr(r, "tempo", None)
             beat = clock.beat() if clock is not None else frame.t * 2.0
-            if not delay_due(pair, st, frame.t, beat):
+            epoch = getattr(clock, "epoch", 0)
+            if not delay_due(pair, st, frame.t, beat, epoch):
                 pair.kept = True        # between two pictures: it keeps the one it has
                 self.said = "holding"
                 return

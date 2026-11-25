@@ -16,6 +16,7 @@ context."""
 
 from __future__ import annotations
 
+import math
 from itertools import pairwise
 from types import SimpleNamespace
 
@@ -562,3 +563,47 @@ def test_every_third_frame_holds_the_picture_between(ctx):
         got.append(_mid(_frame(ctx, r, s, vs, size, k)[1]))
     assert got == [(0, 0, 0), colours[0], colours[0], colours[0], colours[3], colours[3],
                    colours[3], colours[6]], got
+
+
+def test_a_downbeat_placed_in_the_first_cell_takes_a_picture():
+    """`Clock.trigger` resets the beat and bumps the epoch: entering cell 0 of
+    the new grid is a new cell even when the old one was cell 0 too."""
+    from hyperspace.render import DelayPair
+    from hyperspace.view import DELAY_EVERY, DelayState
+
+    pair, st = DelayPair(), DelayState(every=DELAY_EVERY.index("4 bars"))
+    assert G.delay_due(pair, st, 1.0, 0.5, 0)
+    pair.holds_any = True
+    assert not G.delay_due(pair, st, 2.0, 4.0, 0)        # still cell 0, same grid
+    assert G.delay_due(pair, st, 2.1, 0.0, 1)            # the downbeat placed: a new grid
+
+
+def test_a_modulated_hz_runs_faster_and_slower_not_jumps():
+    """The Hz phase advances by dt × the rate now, so a rate swung between 1
+    and 3 Hz takes about 2 a second whatever the renderer's uptime."""
+    from hyperspace.render import DelayPair
+    from hyperspace.view import DELAY_EVERY, DelayState
+
+    for uptime in (0.0, 60.0):
+        pair, st, taken = DelayPair(), DelayState(every=DELAY_EVERY.index("Hz")), 0
+        for k in range(120):                              # 2 s at 60 fps
+            t = uptime + k / 60
+            st.hz = 2.0 + math.sin(2 * math.pi * k / 60)
+            if G.delay_due(pair, st, t, 0.0):
+                taken += 1
+                pair.holds_any = True
+        assert 3 <= taken <= 6, (uptime, taken)
+
+
+def test_a_pair_from_before_the_rate_is_made_whole():
+    """A pair kept across a hot reload lacks the rate's fields: `delay_pair`
+    gives them back, so the delay keeps drawing."""
+    from types import SimpleNamespace
+
+    from hyperspace.render import Renderer
+
+    old = SimpleNamespace(read=None, write=None, holds=False, wrote=False, idle=0)
+    r = Renderer.__new__(Renderer)
+    r.__dict__["_delays"] = {"delay": old}
+    got = r.delay_pair("delay")
+    assert got is old and got.since == 0 and got.phase == 0.0 and not got.holds_any
