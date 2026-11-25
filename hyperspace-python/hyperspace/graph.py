@@ -130,6 +130,7 @@ undo or control. Node methods are `run`, `paint`, `draw`, `image`,
 
 from __future__ import annotations
 
+import functools
 import math
 import re
 from dataclasses import dataclass, field, replace
@@ -1602,6 +1603,7 @@ def effect_of(name: Any) -> Any:
     return got[0] if got is not None else name
 
 
+@functools.lru_cache(maxsize=4096)
 def _wired_kind(name: str) -> str | None:
     """`wire_node_kind(name, wired=True)`: a wired frame's kinds. `frame`
     and `fx` are named so `wire_error` can say they are gone; an old id

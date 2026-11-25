@@ -1044,7 +1044,15 @@ class Registry:
         return list(self._p)
 
     def group(self, name: str) -> list[Param]:
-        return [p for p in self if p.group == name]
+        # (a param's group is settled at its declaration: one walk per add or remove)
+        at = (self.serial, len(self._p))
+        kept = self.__dict__.get("_groups_kept")
+        if kept is None or kept[0] != at:
+            by: dict[str | None, list[Param]] = {}
+            for p in self:
+                by.setdefault(p.group, []).append(p)
+            kept = self.__dict__["_groups_kept"] = (at, by)
+        return list(kept[1].get(name, ()))
 
     def remove(self, pid: str) -> Param | None:
         """Drop a param (a band that was deleted). Bindings to it go dormant —
@@ -1178,18 +1186,27 @@ class Registry:
         out: dict[str, Any] = {}
         if part is not None and part not in PARTS:
             raise KeyError(part)
-        for p in self._p.values():
+        for p in (self._p.values() if part is None else self._part_params(part)):
             if not p.persist:
                 continue
             if group is not None and not in_group(p, group):
                 continue
             if ids is not None and p.id not in ids:
                 continue
-            if part is not None and part_of(p) != part:
-                continue
             v = p.base
             out[p.id] = list(v) if isinstance(v, list) else v
         return out
+
+    def _part_params(self, part: str) -> list[Param]:
+        """The params of one part, in order: a param's part is settled at its
+        declaration, so worked out again only when one is added or removed
+        (`serial`; the panel asks for the shared meta ones every frame)."""
+        kept = self.__dict__.setdefault("_parts_kept", {})
+        got = kept.get(part)
+        if got is None or got[0] != (self.serial, len(self._p)):
+            got = kept[part] = ((self.serial, len(self._p)),
+                                [p for p in self._p.values() if part_of(p) == part])
+        return got[1]
 
     def forget_commits(self, ids: Iterable[str]) -> None:
         """The base chase's ledger empties on these params (plan 52): whatever
