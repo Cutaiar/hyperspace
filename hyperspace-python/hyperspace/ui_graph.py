@@ -384,6 +384,11 @@ DECK_TIP = ("Which deck this panel shows and edits. Click for the other. Red: it
             "so nothing here reaches the room until the crossfader brings it up. Controllers "
             "go where their players' duties say, whichever you look at, and a pad or an F-key "
             "loads the deck off air. A load from this panel lands on the deck it shows.")
+QUIET_LABEL = "quiet off air"
+QUIET_TIP = ("Off air, the canvas takes a red frame and the inset of what is on air. Quiet: "
+             "the deck chip alone says it, so a fade across — a hand's, the playlist's or the "
+             "Edge's D-pad — does not land over the nodes you are editing. Lit means a sign is "
+             "hushed. Kept until the app quits, and no patch carries it.")
 COPY_LABEL = "copy on air to off air"
 COPY_TIP = ("Replace the deck off air with the look on air, running from where it is now, so "
             "the two are one until someone touches either. The deck on air does not move. "
@@ -457,7 +462,7 @@ def _state(panel) -> dict:
     for k, v in (("editor", None), ("ids", {}), ("names", {}), ("applied", {}),
                  ("flip", set()), ("folds", set()), ("patched_only", True), ("view", None),
                  ("key", None), ("tidy", False), ("times", []), ("created", 0),
-                 ("beside", False)):
+                 ("beside", False), ("quiet_off_air", False)):
         if k not in st:
             st[k] = v
     for k, make in EDIT_STATE:                     # plan 28 N3's keys
@@ -1695,6 +1700,13 @@ def panel_off_air(panel) -> bool:
     return meta is not None and meta.panel is not meta.on_air
 
 
+def quiet_off_air(panel) -> bool:
+    """Has the canvas's off-air pair — the red frame and the on-air inset — been
+    hushed (`QUIET_LABEL`)? Read off the page's state without making it, so a
+    stand-in with no page drawn yet answers False rather than growing one."""
+    return bool(panel.__dict__.get(STATE, {}).get("quiet_off_air", False))
+
+
 def _wrap_for(width: float) -> None:
     """Beside the last item when `width` fits on the line, else on the next."""
     imgui.same_line()
@@ -1720,6 +1732,14 @@ def _deck_row(panel, st: dict) -> None:
         st["panel_to"] = meta.decks[1] if meta.panel is meta.decks[0] else meta.decks[0]
     if imgui.is_item_hovered():
         ui.tooltip(DECK_TIP)
+    # and beside it, the one that hushes the canvas's pair of them: always here,
+    # never only while off air — a chip that comes and goes would move this row's
+    # others under the hand mid-edit, which is the disruption it is here to end
+    _wrap_for(ui.chip_w(QUIET_LABEL))
+    if ui.lit_chip(f"{QUIET_LABEL}##graph.quiet", quiet_off_air(panel)):
+        st["quiet_off_air"] = not quiet_off_air(panel)
+    if imgui.is_item_hovered():
+        ui.tooltip(QUIET_TIP)
     # choosing a patch to load is the meta controller's: onto the deck off air
     _wrap_for(ui.chip_w(ui_browse.LABEL))
     ui_browse.chip(panel)
@@ -2128,7 +2148,7 @@ def _monitor(panel, origin, avail) -> None:
     or a tooltip lies over them; `replay` cuts them out (`panel:graph` is no place
     for either)."""
     mon = getattr(panel, "monitor", None)
-    if not panel_off_air(panel):
+    if not panel_off_air(panel) or quiet_off_air(panel):
         return
     dl = imgui.get_window_draw_list()
     edge = OFF_AIR_FRAME / 2
