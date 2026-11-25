@@ -22,7 +22,7 @@ import pytest
 from conftest import seed
 from test_graph_legible import party
 from test_thumbnails import SIZE, S, _px, _views, _wire
-from test_ui_shell import frame
+from test_ui_shell import frame, head_menu
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graphview, render, ui, ui_graph
@@ -274,6 +274,8 @@ def test_the_chip_is_off_by_default_and_last_on_the_head(rig, monkeypatch):
     lit = ui.lit_chip
     monkeypatch.setattr(ui, "lit_chip", lambda label, on, *a, **k:
                         labels.append(label) or lit(label, on, *a, **k))
+    head_menu(rig.panel)
+    labels.clear()
     frame(rig.panel, "graph")
     head = [x for x in labels if x.endswith("##graph")]
     assert head[-1] == ui_graph.COST_LABEL
@@ -283,8 +285,8 @@ def test_the_chip_is_off_by_default_and_last_on_the_head(rig, monkeypatch):
 @pytest.mark.parametrize("width", [820, 540])
 def test_the_chip_stays_inside_a_narrow_page(rig, monkeypatch, width):
     """Devin's finding on #470: on a narrow controls panel the head's row of
-    chips runs past the page's right edge; the chip takes a row of its own
-    (`ui.beside`) rather than a place nobody can click."""
+    chips runs past the page's right edge; in the canvas menu it has a row of
+    its own, inside the menu and the page."""
     from imgui_bundle import imgui
     party(rig)
     imgui.get_io().display_size = imgui.ImVec2(width, 820)
@@ -294,11 +296,13 @@ def test_the_chip_stays_inside_a_narrow_page(rig, monkeypatch, width):
     def spy(label, on, *a, **k):
         hit = lit(label, on, *a, **k)
         if label == ui_graph.COST_LABEL:
-            right = imgui.get_window_pos().x + imgui.get_window_size().x
+            right = min(imgui.get_window_pos().x + imgui.get_window_size().x, width)
             seen.append((imgui.get_item_rect_max().x, right))
         return hit
     monkeypatch.setattr(ui, "lit_chip", spy)
-    frame(rig.panel, "graph")
+    head_menu(rig.panel)
+    frame(rig.panel, "graph")           # (a popup's first frame measures it, undrawn)
+    seen.clear()
     frame(rig.panel, "graph")
     assert seen
     for x1, right in seen:

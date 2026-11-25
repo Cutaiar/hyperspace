@@ -15,6 +15,8 @@ nothing about the rig.
 import json
 import os
 
+from imgui_bundle import imgui
+
 from hyperspace import graphview, ui_graph
 
 MARKS: dict[str, int] = {}
@@ -44,10 +46,11 @@ def script(d, panel):
     yield from d.park()
     yield from _wait(30)
     _mark("off")
-    yield from d.click(ui_graph.COST_LABEL)
-    _mark.n += 3
-    yield from d.park()
-    _mark.n += 1
+    for act in (d.click("graph.canvas"), d.wait(3),     # the head's canvas menu
+                d.click(ui_graph.COST_LABEL), d.key(imgui.Key.escape), d.park()):
+        for _ in act:
+            _mark.n += 1
+            yield
     yield from _wait(90)                 # the medians read back, the marks eased in
     assert st["cost"], "the chip did not light"
     _mark("lit")

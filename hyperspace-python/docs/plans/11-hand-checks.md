@@ -9095,6 +9095,12 @@ Headless: `tests/test_catalog.py` (the counts, six faces at every corner, every 
 
 **892. The snub icosidodecadodecahedron.** (laptop, VIEW) Open the Shape menu's 3D part, **Star polyhedra**, and pick **Snub icosidodecadodecahedron** (last in the group). Turn Faces on, then XZ and YZ, and let it turn; then Points off and on. *Pass:* the header reads `3D · 60V 180E · | 5/3 3 5`; a ball of crossing faces with twelve five-pointed stars standing out, each filled right into its middle, among triangles and pentagons; red dots only where edges meet — none at the five points inside each star where its edges cross; it turns the same with the W planes on. Say whether it reads as the picture it was asked for (Wikipedia's, the stars red). *Fail:* a star filled only at its tips or brighter in its middle (filled twice), a red dot inside a star, or a header saying 120V.
 
+## GE. A slim GRAPH head (row 1160, 2026-11-24)
+
+Headless: `tests/test_graph_head.py` (a shut menu builds nothing, every verb under its id, the chip's words, every chip and warning inside the page at three widths, no message moving the canvas).
+
+**940. The head with less on it.** (laptop, GRAPH, the window wide and then narrow) Edit for a few minutes: open **areas** and jump; open **canvas**, switch patch only and gpu cost, drag output behind's slider; refuse a cable and read the warning. *Pass:* nothing used every minute is behind a menu; the canvas chip tells you why nodes are missing without opening it; both menus open under their chips and a click on the canvas shuts them. Say whether a control should come back out. *Fail:* a warning cut or not seen, the canvas jumping as a message comes or goes, or a chip past the page's edge.
+
 ## What no test covers
 
 Only a person can settle these:

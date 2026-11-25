@@ -454,7 +454,7 @@ def test_a_shift_drag_moves_graphs_backdrop_a_tenth_as_far(tmp_path, monkeypatch
         d.run(d.wait(2))
         st = ui_graph._state(r.panel)
         st["backdrop"] = True
-        d.run(d.wait(2))
+        d.run(d.wait(2), d.click("graph.canvas", frames=2), d.wait(2))      # its menu
         fine, plain = fine_and_plain(d, "graph.backdrop", lambda: st["backdrop_alpha"],
                                      lambda: st.__setitem__("backdrop_alpha", 0.3), 20)
         assert plain > 0.1 and fine == pytest.approx(plain * ui.FINE, rel=0.1)

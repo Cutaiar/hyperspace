@@ -2017,8 +2017,8 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   params · 32 patched", a modifier's kind and output, a macro's knob), no
   row per port, an ``in`` stub at the left of its title and an ``out``
   stub at its right. Its **+** expands it (N2's ports: **patched only**
-  on the head and the node's own **all ports / patched only** chip within;
-  its port groups fold); **−** collapses it; the head's **expand all** /
+  in the head's canvas menu and the node's own **all ports / patched only** chip within;
+  its port groups fold); **−** collapses it; that menu's **expand all** /
   **collapse all** does every node. Which nodes are expanded is UI state
   only (not in the loadable patch or the show; every node collapsed at launch).
 - **One wire a node pair** (N7). While either end is collapsed, every
@@ -2050,7 +2050,7 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   theirs and every other area by its own depth (an LFO or macro fed by
   nothing first, a modifier one past what feeds it), the shaders' chain
   wrapped in rows of four — so every wire runs left to right but a row's
-  return. One table, `graphview.AREA`. The head's area chips
+  return. One table, `graphview.AREA`. The head's areas menu
   (**CONTROLLERS · AUDIO · MODULATION · GEOMETRY · SHADERS**) and a click
   on a canvas title frame that area. A title stays 18 px on screen
   zoomed out, never under 12 px, a short word (CTRL, MOD …) when the
@@ -2081,8 +2081,10 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   mask ports. Colour by kind, thickness by reading, faint when dormant.
   Hover: from → to, the reading, the depth, the `scale` and the gate; a
   cable a loop keeps off says so.
-- **The head**: **expand all** / **collapse all**, **patched only**,
-  **tidy** — every node collapsed, the idle lines shut, every position
+- **The head** (row 1160): the deck row; **patches**; the **areas** menu; the **canvas**
+  menu (**expand all** / **collapse all**, **patched only**, **patch only**,
+  **output behind**, tint cables, gpu cost — its chip's words are what is on);
+  **Turbo Tidy** — every node collapsed, the idle lines shut, every position
   forgotten (one undo step), laid out again in the areas and the canvas
   framed on them; it says "laid out 31 nodes in 6 areas, every one
   collapsed · 22 idle off the canvas", or "already tidy" — and,

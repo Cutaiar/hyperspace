@@ -677,13 +677,19 @@ def tags_shown(spans: list[tuple[float, float]], first: int, gap: float = TAG_GA
     return sorted(kept)
 
 
+def fits_beside(w: float) -> bool:
+    """Does an item `w` wide end by the region's right edge on the line of the
+    item before (`beside` asks, and moves there)?"""
+    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+    return imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + w <= right + 0.5
+
+
 def beside(w: float) -> bool:
     """The next item, `w` wide, on the line of the item before when it ends
     by the region's right edge; else on a row of its own (plan 49 stage 2:
     a page's row of chips or ticks in the side pane's 240–320 px). Call it
     where `imgui.same_line()` stood. True when it stayed on the line."""
-    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
-    if imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + w <= right + 0.5:
+    if fits_beside(w):
         imgui.same_line()
         return True
     return False
