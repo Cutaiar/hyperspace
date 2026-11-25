@@ -445,7 +445,7 @@ class Sensor:
         """The camera, with the motor beside it where it will open: a motor
         that will not is said and the camera opens without it. The audio is
         never claimed."""
-        lib = self._lib
+        lib = self.lib
         tries = (_CAMERA | _MOTOR, _CAMERA) if self.o.motor else (_CAMERA,)
         if not self.o.motor:
             self.motor_why = "the entry has motor = false"
@@ -470,12 +470,19 @@ class Sensor:
             elif any(self._fn(n) is None for n in _MOTOR_CALLS):
                 self.motor_why = "this libfreenect has no motor calls"
 
+    @property
+    def lib(self) -> C.CDLL:
+        """The loaded libfreenect; a Fault where there is none (closed)."""
+        if self._lib is None:
+            raise Fault("the Kinect is closed")
+        return self._lib
+
     def _fn(self, name: str):
         return getattr(self._lib, f"freenect_{name}", None)
 
     def _configure(self) -> None:
         """The depth and video modes of `o`, set while the streams are stopped."""
-        lib, v = self._lib, self.o.video
+        lib, v = self.lib, self.o.video
         fmt = _DEPTH_REGISTERED if self.o.colors else _DEPTH_MM
         mode = lib.freenect_find_depth_mode(_RES_MEDIUM, fmt)
         self._ok(lib.freenect_set_depth_mode(self._dev, mode), "depth mode")
@@ -487,7 +494,7 @@ class Sensor:
             lib.freenect_set_video_callback(self._dev, self._on_video)
 
     def _start(self) -> None:
-        lib = self._lib
+        lib = self.lib
         self._ok(lib.freenect_start_depth(self._dev), "depth start")
         if self.o.video != "off":
             self._ok(lib.freenect_start_video(self._dev), "video start")
@@ -495,7 +502,7 @@ class Sensor:
                                     time.monotonic())
 
     def _stop(self) -> None:
-        lib = self._lib
+        lib = self.lib
         if self.o.video != "off":
             lib.freenect_stop_video(self._dev)
         lib.freenect_stop_depth(self._dev)
@@ -555,8 +562,8 @@ class Sensor:
             if now - t > QUIET_S:
                 if name == "video":
                     self._rgb = None          # no moving point wears a stopped picture
-                getattr(self._lib, f"freenect_stop_{name}")(self._dev)
-                self._ok(getattr(self._lib, f"freenect_start_{name}")(self._dev),
+                getattr(self.lib, f"freenect_stop_{name}")(self._dev)
+                self._ok(getattr(self.lib, f"freenect_start_{name}")(self._dev),
                          f"{name} start")
                 self._heard[name] = now
                 self.restarts += 1
@@ -569,7 +576,7 @@ class Sensor:
         if self.motor_why or now < self._next_tilt:
             return
         self._next_tilt = now + TILT_POLL_S
-        lib = self._lib
+        lib = self.lib
         if lib.freenect_update_tilt_state(self._dev) < 0:
             self._tilt_fails += 1
             if self._tilt_fails >= 3:
@@ -631,21 +638,21 @@ class Sensor:
 
     def _do_tilt(self, _kind, deg: float) -> str:
         deg = max(-TILT_MAX, min(TILT_MAX, float(deg)))
-        said = self._sent(self._lib.freenect_set_tilt_degs(self._dev, deg), "tilt")
+        said = self._sent(self.lib.freenect_set_tilt_degs(self._dev, deg), "tilt")
         if not said:
             self.target = deg
             self._next_tilt = 0.0           # the next poll shows it going
         return said
 
     def _do_led(self, _kind, code: int) -> str:
-        said = self._sent(self._lib.freenect_set_led(self._dev, int(code)), "led")
+        said = self._sent(self.lib.freenect_set_led(self._dev, int(code)), "led")
         if not said:
             self.led = next(n for n, c in LEDS if c == code)
         return said
 
     def _do_ir(self, _kind, level: int) -> str:
         level = int(max(IR_MIN, min(IR_MAX, level)))
-        said = self._sent(self._lib.freenect_set_ir_brightness(self._dev, level), "ir")
+        said = self._sent(self.lib.freenect_set_ir_brightness(self._dev, level), "ir")
         if not said:
             got = self._fn("get_ir_brightness")
             v = got(self._dev) if got is not None else -1
@@ -653,7 +660,7 @@ class Sensor:
         return said
 
     def _do_flag(self, kind: str, on: bool) -> str:
-        said = self._sent(self._lib.freenect_set_flag(self._dev, FLAGS[kind], 1 if on else 0), kind)
+        said = self._sent(self.lib.freenect_set_flag(self._dev, FLAGS[kind], 1 if on else 0), kind)
         if not said:
             self.flags[kind] = bool(on)
             self._read_exposure()
@@ -661,7 +668,7 @@ class Sensor:
 
     def _do_exposure(self, _kind, us: int) -> str:
         us = int(max(EXPOSURE_MIN, min(EXPOSURE_MAX, us)))
-        said = self._sent(self._lib.freenect_set_exposure(self._dev, us), "exposure")
+        said = self._sent(self.lib.freenect_set_exposure(self._dev, us), "exposure")
         if not said:
             self._read_exposure()
             if self.exposure is None:
@@ -684,7 +691,7 @@ class Sensor:
 
     def _do_restart(self, _kind, _value) -> str:
         """Every stream stopped and started again, as `_wake` does one."""
-        lib = self._lib
+        lib = self.lib
         for name in self._heard:
             getattr(lib, f"freenect_stop_{name}")(self._dev)
         for name in self._heard:

@@ -218,7 +218,7 @@ def _heat(v: int) -> int:
     return _ramp[min((v - 1) * HEAT_STEPS // 255, HEAT_STEPS - 1)]
 
 
-def _pts(points) -> list[imgui.ImVec2]:
+def _pts(points) -> list[imgui.ImVec2Like]:
     return [imgui.ImVec2(x, y) for x, y in points]
 
 
