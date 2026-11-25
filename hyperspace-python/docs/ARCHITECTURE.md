@@ -1620,6 +1620,11 @@ a picture is drawn as that picture, collapsed or expanded: a thumbnail in a
     (`render.unwired_through`, plan 65, row 900).
 
   The modulation side stays text.
+- **Drawn only as far as it reads.** Zoomed out until the words are under
+  `ui_graph.FAR_PX` on screen, or off the canvas, a node is drawn from the
+  note its last whole draw left (`ui_graph.Sketch`): the same size and
+  pins, so the layout and every cable read the same, and no words but its
+  title (off the canvas, not that nor its picture).
 - **Wanted only on screen.** Each frame, the page `want`s the nodes that
   are drawn (not hidden by **preset only**) and that overlap the
   editor's visible canvas rect (`ui_graph.thumb_wants`).

@@ -351,7 +351,9 @@ def test_the_page_draws_a_thumbnail_on_every_picture_node_collapsed_or_not(rig, 
     frame(rig.panel, "graph")
     drawn_pics = {n.id for n in view.nodes
                   if n.thumb is not None and ui_graph.drawn_node(st, n)}
-    assert drawn_pics and drawn_pics <= set(asked)
+    shown = {nid for nid in drawn_pics
+             if ui_graph.on_screen(st["seen_rect"], *ui_graph._where(st, nid))}
+    assert shown and shown <= set(asked)        # (one off the canvas draws no body)
     # wanted for the next frame: the ones on screen, the scene among them
     rect = st["seen_rect"]
     on = {ui_graph.thumb_name(view.node(nid)) for nid in drawn_pics
