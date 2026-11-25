@@ -6755,11 +6755,23 @@ FEEDS_NOTHING = "; {name} feeds nothing now"
 LOST_FEED = "; {ports} fed by nothing now"
 
 
+def _inlets_of(name: str) -> tuple[tuple[str, ...], str] | None:
+    """`INSERT_PORTS`' entry for node `name`, an effect's (or its slot's) read
+    off its file: a generator with no input port (`@takes image none`:
+    Colour, Point …) has no inlet — it splices as a source, as a channel."""
+    kind = kind_of(name) or ""
+    got = INSERT_PORTS.get(kind)
+    if got is not None and kind in ("effect", "slot") and \
+            "image" not in rgraph.effect_ports(rgraph.effect_of(name))[1]:
+        return (), got[1]
+    return got
+
+
 def insert_ports(name: str) -> tuple[tuple[str, ...], str] | None:
-    """Node `name`'s splice ports (`INSERT_PORTS`): (its inlet ports, each
-    as `<name>.<port>`, and its outlet pin — the node, or `<name>.<pin>`),
-    or None for a kind that never splices."""
-    got = INSERT_PORTS.get(kind_of(name) or "")
+    """Node `name`'s splice ports (`INSERT_PORTS`, an effect's its file's):
+    (its inlet ports, each as `<name>.<port>`, and its outlet pin — the
+    node, or `<name>.<pin>`), or None for a kind that never splices."""
+    got = _inlets_of(name)
     if got is None:
         return None
     ins, out = got
@@ -6774,9 +6786,10 @@ def inlet_choices(name: str) -> tuple[str, ...]:
 
 
 def is_source(name: str) -> bool:
-    """Does node `name` make a picture from no picture (a channel)? Dropped
-    on a cable it takes the cable over: it feeds the port instead."""
-    got = INSERT_PORTS.get(kind_of(name) or "")
+    """Does node `name` make a picture from no picture (a channel; a
+    generator with no input port, Colour)? Dropped on a cable it takes the
+    cable over: it feeds the port instead."""
+    got = _inlets_of(name)
     return got is not None and not got[0]
 
 
