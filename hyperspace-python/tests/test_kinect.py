@@ -138,6 +138,37 @@ def test_frames_become_the_devices_cloud_and_a_held_picture():
     assert d.media_sources() == {}
 
 
+def test_a_colour_picture_is_published_once_and_a_silent_colour_stream_is_let_go():
+    """Colour that stops while depth goes on is not live (PR #503 review): the
+    same picture is never published again, and a stream silent for `QUIET_S`
+    gives its last one up, so no moving point wears it."""
+    depth, rgb = depth_at((240, 320, 2000)), np.full((480, 640, 3), 9, np.uint8)
+    sensor = FakeSensor([(depth, None)])
+    d = device([sensor], colors=True)
+    d.open()
+    try:
+        assert until(lambda: d.status == "connected")
+        src = d.media_sources()["kinect:room/color"]
+        src.open()
+        sensor.frames += [(depth, rgb), (depth, rgb), (depth, rgb)]
+        assert until(lambda: d._fresh[0] == 3)
+        assert src.latest().frame == 1
+        sensor.frames.append((depth, rgb.copy()))
+        assert until(lambda: src.latest().frame == 2)
+    finally:
+        d.close()
+    s = kinect.Sensor(O(colors=True))
+    s._lib = NS(freenect_process_events_timeout=lambda c, tv: 0,
+                freenect_stop_video=lambda v: 0, freenect_start_video=lambda v: 0)
+    s._rgb, now = rgb, time.monotonic()
+    s._heard = {"depth": now, "video": now}
+    s.read()
+    assert s._rgb is rgb
+    s._heard["video"] = now - kinect.QUIET_S - 0.1
+    s.read()
+    assert s._rgb is None
+
+
 def test_a_sensor_that_stops_is_said_its_cloud_goes_and_it_comes_back(monkeypatch):
     monkeypatch.setattr(kinect, "RETRY_S", 0.3)
     f = (depth_at((240, 320, 2000)), None)

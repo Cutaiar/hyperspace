@@ -289,10 +289,13 @@ class Sensor:
         return None if d is None else (d, self._rgb)
 
     def _wake(self) -> None:
-        """Start again any stream with no frame for `QUIET_S`."""
+        """Start again any stream with no frame for `QUIET_S`; a silent colour
+        stream's last picture is let go."""
         now = time.monotonic()
         for name, t in self._heard.items():
             if now - t > QUIET_S:
+                if name == "video":
+                    self._rgb = None          # no moving point wears a stopped picture
                 getattr(self._lib, f"freenect_stop_{name}")(self._dev)
                 self._ok(getattr(self._lib, f"freenect_start_{name}")(self._dev),
                          f"{name} start")
@@ -346,6 +349,7 @@ class KinectDevice(devices.Base):
         self._fault = ""
         self._live = False
         self._fps = 0.0
+        self._shown: np.ndarray | None = None     # the colour picture published last
 
     def open(self) -> None:
         """The entry checked and the thread started; nothing here waits."""
@@ -450,6 +454,8 @@ class KinectDevice(devices.Base):
                 continue
             if sid.endswith("/depth"):
                 pic.put(depth_picture(depth, o))
-            elif rgb is not None:
+            elif rgb is not None and rgb is not self._shown:
+                # each once: `Picture.put` stamps it now, so one put again never goes stale
+                self._shown = rgb
                 pic.put(_rgba(rgb, o))
         self._live, self._fault = True, ""
