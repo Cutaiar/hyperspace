@@ -672,7 +672,7 @@ its nodes read 0 ms. Evaluating the frame this way moved no pixel of A0's
 427 goldens. (Since plan 28 the *modulation* is a graph evaluated in
 dependency order too, in `Router.modulate`: ARCHITECTURE §2.) For one default
 output the order is `shape → ghost → scene → cover → hands → history →
-plasma → acid → kaleido → … → huecycle → palette → fx → capture →
+plasma → acid → kaleido → … → hueturn → palette → fx → capture →
 output.1`: one effect node per instance in the run the loadable patch wires from
 `frame` to `fx.image` (plan 33; in wire order, on or off), and none for an
 effect the graph does not wire.
@@ -978,7 +978,7 @@ loadable patch that asks for the dream with no worker is a warning, once.
 `shaders/fx/` — acid, blend, deconverge, displace, doublevision, edges,
 fade (wave 0 E1, 2026-11-02: the whole premultiplied picture, colour and
 alpha, times its level — the feedback starter's decay), fractals,
-glimmer, huecycle, kaleido, palette, plasma, tripcolour, warp, wobble,
+glimmer, hueturn, kaleido, palette, plasma, tripcolour, warp, wobble,
 zoomblur (`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
 Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
 `on mix speed blend` per effect (plan 33 removed `order` and `target`);
@@ -1352,7 +1352,7 @@ order. The SYSTEM page shows "gpu per node, ms (median of the last
 frames):" and one line per node (`Graph.timed`: every node that times
 itself and every solid geometry a scene draws) plus, since plan 30, one
 per effect that ran a pass that frame (`Graph.timed_in(frame)`, from
-`frame.stats["effects"]`: `acid`, `huecycle` …, a placed one under its
+`frame.stats["effects"]`: `acid`, `hueturn` …, a placed one under its
 source); a node that leaves the graph, or an effect switched off, leaves
 the list a few frames later. The pipeline end's own `fx` line reads 0.00:
 it runs no pass of its own, and its effects' time is on their lines. On

@@ -131,6 +131,7 @@ from typing import Any, Protocol, runtime_checkable
 import moderngl
 import numpy as np
 
+from . import writes
 from .glsl import FALLBACK, QUAD_VS, common, gl_error
 
 MAX_ECHOES = 32
@@ -357,7 +358,7 @@ def fade_depth(depth, source, values: dict[str, Any] | None = None) -> float | N
 
 
 @dataclass
-class DreamState:
+class DreamState(writes.Observed):
     """The dream.* params' object (params.py binds to these fields).
 
     Defaults started as the spike's recommendation (docs/plans/assets/

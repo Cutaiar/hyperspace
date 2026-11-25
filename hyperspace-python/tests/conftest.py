@@ -744,3 +744,26 @@ def tree(home, *, but: tuple[str, ...] = ()) -> dict:
     return {p.relative_to(home).as_posix(): (p.read_bytes(), p.stat().st_mtime_ns)
             for p in sorted(home.rglob("*"))
             if p.is_file() and not p.relative_to(home).as_posix().startswith(but)}
+
+
+# ---------------------------------------------------------------- undo's oracle
+# `Undo.tick` reads its fingerprint only when a write marked (writes.py). In
+# every test each tick takes it all the same, and a change nothing marked
+# fails the test: at a show that edit would be on no stack.
+
+def unmarked_lines(stack, old, new) -> list[str]:
+    """What changed between two fingerprints of `stack`, in words."""
+    out = [f"{pid}: {a!r} → {b!r}" for pid, a, b in zip(new[0], old[1], new[1], strict=False)
+           if a != b]
+    parts = ("routes", "desk", "macros", "tag", "modifiers", "banks", "rows", "players")
+    return out + [name for name, a, b in zip(parts, old[2:], new[2:], strict=True) if a != b]
+
+
+@pytest.fixture(autouse=True)
+def undo_oracle():
+    from hyperspace import undo
+    unmarked: list[str] = []
+    undo.oracle = lambda stack, old, new: unmarked.extend(unmarked_lines(stack, old, new))
+    yield unmarked
+    undo.oracle = None
+    assert not unmarked, f"written with no mark (hyperspace/writes.py): {unmarked[:8]}"

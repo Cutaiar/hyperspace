@@ -20,7 +20,7 @@ import numpy as np
 
 from hyperspace.fx import FxChain, FxState
 
-FILES = ["wave", "blocks", "displace", "blend", "prism", "zoomblur", "huecycle",
+FILES = ["wave", "blocks", "displace", "blend", "prism", "zoomblur", "hueturn",
          "oilslick"]
 W, H = 96, 64
 TIMES = (0.0, 0.73, 3.1)

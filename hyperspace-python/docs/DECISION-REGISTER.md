@@ -873,7 +873,7 @@ here; overturn → the change, then the same.
 | 871 | T is GRAPH's tidy and 0 its fit, neither a row: T lays the canvas out again and 0 brings every node into view (`ui_graph.KEY`, `FIT_KEY`, the panel's own keys, as the player board's O). T leaves the overlay (the panel's toggle and the APC40's MASTER select keep it) and 0 the track restart (the AUDIO section keeps it); the old factory rows are dropped from a file that holds them (`routing.RETIRED_KEY_ROWS`). The tidy no longer frames every node: the zoom and the place being looked at stay as they are, and 0 is what frames | — | owner — 2026-11-11: T and 0, over the overlay's and the track restart's claim on them |
 | 882 | Plan 64: a fractal's frame is walked from the top each frame (`fractal.walk`), nothing about its cells kept between frames; the view re-roots into the cell under the middle of the screen as the zoom passes a level (`fractal.step`), `Dive.path` the only state, so the zoom stays in about [1.7, 4) and float32 never runs out | 682 | owner — 2026-11-18, decision 1: "Stateless and re-rooting stay" |
 | 883 | Plan 64: a fractal's cells are world geometry like every other shape's — placed through the shape's model matrix (camera.zoom and pan, the world's offset) and seen through the one eye — never screen-space copies; `field.py`'s instances (a 2D offset, a scale and an alpha after the projection) are not the model for them and are not used. The field's copies of a fractal are copies of the whole drawn shape, as of any shape | 684 | owner — 2026-11-18, decision 2: "World space is a hard requirement" |
-| 884 | Plan 64: `view.frac_additive` switches a fractal between sorted (off, the default: the CPU path, painter sorted as every shape) and additive (on: the GPU path, unsorted, colour `SRC_ALPHA, ONE`, alpha the pass's own blend). Not saved (`persist=False`) and not modulatable; in VIEW only on a fractal. The owner looked at the comparison and kept sorted as the default | 679, 680, 681 | owner — 2026-11-18, decision 3: "render it and let the owner look before anything depends on it"; 2026-11-19: "sorted as the default is the right move" |
+| 884 | Plan 64: `view.frac_additive` switches a fractal between sorted (off: the CPU path, painter sorted as every shape) and additive (on, the default since 2026-11-24: the GPU path, unsorted, colour `SRC_ALPHA, ONE`, alpha the pass's own blend). Not saved (`persist=False`) and not modulatable; in VIEW only on a fractal. The owner looked at the comparison and kept sorted as the default; after field-wave-slow's scene node measured ~21 ms sorted against ~8 ms additive (a 4D Vicsek cross, 25,728 edges, at 1686×1080), made additive the default | 679, 680, 681 | owner — 2026-11-18, decision 3: "render it and let the owner look before anything depends on it"; 2026-11-19: "sorted as the default is the right move"; 2026-11-24: "make the default to turn on additive fractals" |
 | 885 | Plan 64: `render.draw_scene` draws every shape through `shapeframe.frame(view, w, h, offset)` → `ShapeFrame`; a fixed shape, a scene and a fractal each have a provider. The fractal's four special cases are fields: the cue's fixed ends (`cue`), the stroke density's count (`dens_m`), whether a legacy stroke scales with camera.zoom (`zoom_strokes`), the frame's own triangles, uvs and weights (`faces()`). A pure refactor for every non-fractal shape: 240 offscreen frames over every shape, faces, copies, Fit, screen strokes and a world offset are byte-identical to before it | — | (rec) — the brief's "one shape interface" |
 | 886 | Plan 64: the GPU path uploads each fractal's meshes once and one row of six floats a cell a frame: its centre already in the view (zoom · (o @ M) + p, 4D, before the divide), its radius in the view and its alpha (`fractal.instances`). The big numbers cancel there, in float64, so the vertex shader only adds a cell-sized turn: within 5 × 10⁻⁶ of a cell's size of the CPU about 22 halvings in. The cull and the split stay on the CPU (`fractal.walk`), the one walk both paths draw. The field's copies are one draw each, the copy a uniform; the depth pass and the look-back's cover draw the same cells | 683, 688 | (rec) — the brief: "(4D centre, scale, alpha)", the cull and split on the CPU |
 | 887 | Plan 64, part 2 (`plans/64-depth-dependent-grab.md`). The cull and the depth cue read the offset drawn after the shape (`shapeframe.drawn_offset`), so a grabbed fractal culls where it is drawn. **Outside** (the shape fits the rig's box and the view has gone into no cell) the fist holds an object: the world's offset on the shape, drawn home ∘ offset, as plan 59. **Inside** (`fractal.wants_inside`: a projected corner of the whole shape past the box, or the view in a cell; back out within 90% of the box) it holds the space: the object's offset becomes the view's own (`Dive.turn`, a turn about the middle of the screen before the 4D divide, and `Dive.shift`, its room placement in world units), and the grip's flight of the space (the shape object's offset, home the identity) is folded into the view each frame (`fractal.fold_flight`): it turns about the middle of the screen and travels through the fractal's own space, before the 4D divide. Crossing in or out redraws nothing; a body's motion and a joint's hold are re-expressed (`World.to_space`, `to_object`); inside, the rig neither boxes the space nor shapes its inertia. Only ever inside does the view re-root, so an object is never re-rooted and nothing makes up for an offset across a re-root: the compensation first pushed for this row (a pan-and-depth solve, an offset rebase, a 4D drift) is gone. The off-air deck re-roots with no offset and draws the world's only while it is an object | 684, 685 | owner — 2026-11-19: a depth-dependent grab; "sane default behavior"; "dragging inside the fractal … is traveling through the 4D space of the fractal"; the margins and the grip's inside behaviour defaults, "subject to change" once played with |
@@ -965,6 +965,13 @@ here; overturn → the change, then the same.
 | 1119 | Plan 67 P3: the depth is a key on the wire, `{"from", "to", "depth"}`, written only when not 1, so every other wire saves as it did; any finite number, signed; a depth on a wire into anything but a knob is refused in words. Not part of what the wire is (two wires between the same ports are one). A patch's own wire and an inlet across its edge keep it through a lift and a spawn. No schema bump (DECISIONS) | 895, 897 | owner (2026-11-24: "a depth key on the wire", over a Scale node in front and a depth param per knob) |
 | 1120 | Plan 67 P3: GRAPH sets the depth from the field cable's menu, **depth ▸**: 1 (the field as it is, in the knob's units) and ±⅛, ¼, ½ and the whole of the knob's range, one undo step each; the cable's hover says the depth, as a route's does. No free number entry yet (the menu holds items only) | 895 | (rec) |
 | 1121 | Plan 67 P3: a field wired only into a knob reaches what that effect reaches — on GRAPH and on the FX pane (`ui_fx.groups` follows a knob's field port as it follows `field`) | 896 | (rec) |
+| 1122 | Plan 67: Hue cycle is retired into **Hue turn** (`hueturn.glsl`: Turn, degrees, wraps, takes a field; Paint; Saturation 0 … 2; the clock is the effect's Speed, as Hue cycle's) and its bands as field nodes — Line (45°, Scale √2), Rings (Scale 2), a Scale each (1 − Rings, Rings), Combine (add), a Scale (Spread) — wired into Turn at depth 360. Proven against Hue cycle's own shader (kept as a test fixture) over the saved looks' settings and a sweep, three times each: at most 2 levels on fewer than 1 % of pixels | 898 | owner (2026-11-25: "migrate exactly, new ops"; "new op: Hue turn") |
+| 1123 | Plan 67: the rewrite is keyed on the retired file, not a schema: the ladder's last step (`graphmigrate.hue_turns`, a fragment's `patches.forward`) runs at every version, and the steps before it place a Hue cycle where an old stack ran it (`RETIRED_SPECS` in `specs_of` and `forward`). No schema bump (DECISIONS) | 898, 900 | (rec) |
+| 1124 | Plan 67: rows on Spread land on the bands' × — a push's depth halved (twice the range; a push with no depth, 1, written 0.5), a set's norm moved (Spread 0 … 4 is × 0 … 4 of −4 … 4); a macro's base subscriber's from / to moved the same way; a row that places the knob (abs, position) is kept as it is, so it spans −4 … 4 (its middle still, below it the bands turn the other way) — a row holds no offset — and the load says so. A row on Rings is left out, said. A field wired into Spread goes to the bands' ×; into Rings, to its two weights (± its depth). Black is clear's `keys` and `key.<node>.*` follow the rename. An old file's depth onto Hue cycle's Speed is retapered against the retired file's spec, shipped in `shaders/fx/retired/` | 899 | owner (2026-11-25: "accept, and say so") |
+| 1125 | Plan 67: a Hue cycle named only by its knobs (off, out of an old stack's run) is renamed with its knobs and gets no bands: nothing draws it | 898 | (rec) |
+| 1126 | Plan 67: the six saved looks naming Hue cycle are rewritten — `loadable/kinetic/kinetic-comet` and `kinetic-tunnel`, and the corpus's `dial`, `hands-pinch`, `party-acid`, `party-trip` (each through the app's own resave, so it round-trips byte for byte). The older test fixtures stay as they were written, read through the ladder | 898 | (rec) |
+| 1127 | Plan 67: a slot reads its effect's knob fields, as it reads its knobs, unless a field is wired into the slot's own port — off its effect's wires, built or not (a reached slot reaches what feeds them); one the slot itself feeds is dormant, said: a loop (OUTPUT's "hands through the effects" makes `hueturn.slot.2`, which turns by the same bands) | 898 | (rec) |
+| 1128 | Plan 67: the frame signatures of the 17 cases holding Hue cycle are re-recorded (Hue turn and its bands' nodes in place of Hue cycle's; every other case unchanged); the golden frames of the looks holding it move by the GPU's rounding and are re-recorded on the rig they were recorded on (the Mac) | 900 | (rec) |
 | 1114 | R15 has one rule for running with no input, `graph.runs_unfed`: the field generators (`@takes image none`) and plan 80's (`GENERATOR`, the Mandelbrot) run fed by nothing, every other effect is never built. The builder, `Effect.generates`, `graph.unfed`, GRAPH and the FX pane read it; an unfed effect wired onward (`graph.hungry`, which replaces `hungry_fields`) is "fed by nothing — wire its input" on GRAPH (its hover says a picture or a field) and grouped "fed by nothing" on the FX pane, a picture effect as a field op — not under its path's end as if it ran. The test card stays a filter here: it draws over its picture, so with none it is fed by nothing | 893 | (rec) |
 | 1115 | A generator of one flat colour, **Colour** (`shaders/fx/colour.glsl`), its own file rather than a mode of Palette (Palette maps its input's luma through a gradient; a colour reads nothing): Hue (turns, wraps), Saturation, Value — a place on the HSV cylinder — on one XYZ volume, plus Spin, a clock (turns a second) so a step never jumps the hue. `@takes image none`, so the one rule (row 1114) runs it fed by nothing, wired straight into an output | 894 | owner asked for it (2026-11-25); the shape (rec) |
 | 1081 | Plan 89: an effect node has discrete slots — several pictures wired into one effect node, each slot its own `image` / `aux` in and its own picture out, each processed separately with the one shared set of knobs; the separate `copy` node is gone, and clicking the effect shows its one set of controls | 873 | owner (2026-11-23) |
@@ -1002,6 +1009,7 @@ here; overturn → the change, then the same.
 | 1034 | Plan 83: the playlist's entries are a list of their own that scrolls, as tall as the screen leaves under the popup (never under three rows), with the add list under it always in view; each entry is one row 34 px tall (`ui_playlist.ROW_H`): its place and name, its dwell, a square × | 834 | owner (2026-11-23, as recommended) |
 | 1035 | Plan 83: the entry on air is scrolled to the list's middle when the popup opens and each time it changes; between, a hand's scroll is left where it put the list | 835 | owner (2026-11-23, as recommended) |
 | 1113 | The snub icosidodecadodecahedron is shape index 109, in Star polyhedra, after the fractals: corners from the plastic number (one corner's turns by the icosahedral group), edges the pairs at edge length, faces whole and crossing, each pentagram filled through the five points where its edges cross. Those points are rows of V after its corners (`geom()["corners"]`), dotted nowhere — alone or in a scene — and V in VIEW's header and ENGINEERING's table is the corners. No schema bump: a build from before freezes on a patch saved with it (it has no index 109); both Macs run one build | 892 | owner — 2026-11-11: "can you add this shape to hyperspace as one of our polytopes?" (the shape); (rec) its drawing |
+| 1130 | A `kinect` device publishes `cloud:<role>` and the pictures `kinect:<role>/depth` and `/color`; its placement (`centre`, `mirror`, `near`, `far`, `step`) is its device entry's, never a param. No schema bump for the `kinect:` media kind: both Macs run one build | 910, 911 | owner — 2026-11-24 (the device); (rec) its shape |
 
 "—": no hand check shows it; tests only.
 
@@ -15519,6 +15527,55 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Built.** `shaders/fx/colour.glsl`; `tests/test_fx_colour.py`. The two tests that chain every picture effect through `image` (`test_graph_effects`, `test_graph_areas`) take those that have one.
 - **Judge it.** 894.
 
+### 1122. Hue turn, and Hue cycle's bands as fields
+
+- **What.** Hue cycle hid a field: its bands, `mix(p.x + p.y, 2 |p|, Rings) × Spread`, in turns. They are Line, Rings, two Scales, Combine and a Scale now, into Hue turn's Turn at depth 360; Hue turn keeps the turn in YIQ by the clock, Paint and Saturation — one op, since Paint mixes two results of one input.
+- **Answer.** Owner, 2026-11-25: "migrate exactly, new ops"; "new op: Hue turn".
+- **Built.** `shaders/fx/hueturn.glsl`; `tests/fixtures/retired-fx/huecycle.glsl` (the oracle); `tests/test_hue_turn.py`.
+- **Judge it.** 898.
+
+### 1123. Keyed on the file, not a schema
+
+- **What.** The ladder's last step rewrites any Hue cycle at any version; the steps before it still place one where an old stack ran it.
+- **Answer.** (rec).
+- **Built.** `graphmigrate.hue_turns`, `graphmigrate.retire_hue_cycle`, `graphmigrate.RETIRED_SPECS`, `graphmigrate.specs_of`, `patches._retire_hue_cycle`.
+- **Judge it.** 898, 900.
+
+### 1124. Rows on Spread and Rings
+
+- **What.** Onto the bands' ×: a push's depth halved, a set's norm moved, a macro subscriber's ends moved; an abs desk row kept, said; a row on Rings left out, said.
+- **Answer.** Owner, 2026-11-25: "accept, and say so" (for the abs row).
+- **Built.** `graphmigrate.retire_hue_cycle`, `graphmigrate.HUE_ABS_NOTE`, `graphmigrate.HUE_RINGS_NOTE`.
+- **Judge it.** 899.
+
+### 1125. A Hue cycle named by its knobs alone
+
+- **What.** Renamed with its knobs, no bands.
+- **Answer.** (rec).
+- **Built.** `graphmigrate.retire_hue_cycle`.
+- **Judge it.** 898.
+
+### 1126. The six saved looks rewritten
+
+- **What.** The two kinetic looks and the corpus's four, through the app's resave.
+- **Answer.** (rec).
+- **Built.** `loadable/kinetic/`, `tests/corpus/loadable/`.
+- **Judge it.** 898.
+
+### 1127. A slot reads its effect's knob fields
+
+- **What.** Where a slot has none of its own wired.
+- **Answer.** (rec).
+- **Built.** `graph._Build._fields`; `tests/test_knob_fields.py::test_a_slot_reads_its_effects_knob_fields`.
+- **Judge it.** 898.
+
+### 1128. Signatures and goldens
+
+- **What.** 17 frame signatures re-recorded; the goldens of the Hue cycle looks re-recorded on the Mac.
+- **Answer.** (rec).
+- **Built.** `tests/fixtures/frame-signatures.json`.
+- **Judge it.** 900.
+
 ### 1096. The shared field pieces
 
 - **What.** Plan 67 P2's first step: one section of `_lib.glsl` holds the field primitives every effect and every field node to come uses — a point (`point_at`, `from_point`), the measures (`measure_line`, `measure_rings`, `measure_spokes`, `measure_cells`, each returning the measure and the direction it grows), a picture read signed about mid-grey (`read_signed`), and the ops named as the modifiers are (`quantise`, `threshold_soft`, `remap`, `combine`). Eight files that carried a private copy now call them, byte for byte (1041 renders before and after). Not moved: the gradients (they need a texture), Bloom's knee and Edges' threshold (other curves: a change of look), Hue cycle (to be retired).
@@ -16124,3 +16181,12 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **To reverse.** The index is the identity and `SHAPES` is append-only: retiring it means keeping slot 109 (a stand-in shape) or migrating presets. `"corners"` can go when no builder sets it.
 - **Built.** `geometry.PLASTIC`, `_tetra_turns`, `_star_crossings`, `_build_snub_icosidodecadodeca`, `geom` ("corners"), `_scene_style`, `render.Renderer.draw_scene` (the points; `_point_verts`), `ui.Panel._view_hero`; `tests/test_catalog.py::test_the_snub_icosidodecadodecahedron_is_uniform`, `::test_the_snub_icosidodecadodecahedron_is_sized_by_the_plastic_number`, `::test_a_pentagram_face_is_filled_once`, `::test_a_scene_layer_dots_only_its_shapes_corners`, `::test_a_solid_has_its_textbook_counts`, `tests/test_render.py::test_only_a_shapes_corners_are_dotted`, `tests/test_golden.py::test_the_engineering_table_matches_the_code`, `tests/golden/shape_digests.json` (row 109 added, no other row moved).
 - **Judge it.** 892.
+
+### 1130. A Kinect is a device that publishes a cloud and pictures
+
+- **What.** A `kinect` entry publishes `cloud:<role>` and the media sources `kinect:<role>/depth` and, with `colors`, `kinect:<role>/color`. Its placement is its entry's, not a param's. libfreenect through ctypes, not a package; the camera alone is opened, never the motor or audio. It feeds the Router nothing yet.
+- **Answer.** owner asked for the device (2026-11-24); its shape is (rec).
+- **Other options.** Placement as `cloud.x/y/z` params: live on a knob, but a saved patch would then carry a room's geometry.
+- **To reverse.** Remove the kind line in `devices.kinds()`, `graph.CLOUD_DEVICES` and `media/ids.KINDS`.
+- **Built.** `kinect.KinectDevice`; `tests/test_kinect.py`. The demo patch: `loadable/kinect/`, `tests/test_kinect_preset.py`.
+- **Judge it.** 910, 911.
