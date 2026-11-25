@@ -9,7 +9,7 @@ A 4D polytope viewer in a single HTML file. 18 shapes, from the 5-cell to the
 600-cell, rotating through six planes. Audio-reactive: six frequency bands each
 drive one plane via a Peak Controller-style transfer chain.
 
-**Live: https://hyperspace-lake.vercel.app**
+**Live: https://hyperspace-legacy.vercel.app**
 
 ## Running it
 
@@ -89,7 +89,11 @@ not this directory: with a Root Directory set, the CLI looks for
 A push that changes nothing under `hyperspace-web/` since the project's last deploy
 is skipped: `vercel.json`'s `ignoreCommand` (Vercel's "Ignored Build Step")
 diffs this folder against `$VERCEL_GIT_PREVIOUS_SHA` and builds when it
-differs, or when there is no earlier deploy to compare with.
+differs, or when it cannot compare: no earlier deploy, or one older than
+Vercel's shallow clone reaches. The `if … then exit 0; else exit 1` matters:
+Vercel fails a deploy whose ignore step exits with anything but 0 or 1, and a
+bare `git diff` against a commit outside the clone exits 128 — which once
+failed every deploy for weeks, since a failed deploy never moves the base on.
 Only `main` deploys at all: `git.deploymentEnabled` turns off Vercel's
 automatic deploys for every other branch, so a pull request gets no
 preview (run `vercel deploy` from the repository root for one).
