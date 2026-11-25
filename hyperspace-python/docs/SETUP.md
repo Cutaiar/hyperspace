@@ -213,12 +213,29 @@ port = "DDJ-FLX4"
 idle = { lights = "ddj-flx4", after = 30 }
 
 # all the keys, with their defaults:
-# idle = { lights = "ddj-flx4", after = 30, pattern = "wave",
-#          yield_to = ["rekordbox"], never = [] }
+# idle = { lights = "ddj-flx4", after = 30, pattern = "wave", each = 20,
+#          shape = "Tesseract", dither = false, yield_to = ["rekordbox"], never = [] }
+
+# the APC40, every animation in turn, one per idle spell:
+# idle = { after = 180, pattern = "all" }
 ```
 
 `lights` is `"ddj-flx4"` or `"apc40"`; the APC40's entry can say just
-`idle = true`. `pattern` is `"wave"` or `"breathe"`. `never` lists lights to
+`idle = true`. `pattern` is one name, a list played in turn (each for `each`
+seconds; the next idle spell starts on the one after), or `"all"`. The names:
+`wave` and `breathe` (every light the same way), and the whole-desk
+animations `wash` (a diagonal band), `ripple`, `wobble` (wiggly ripples),
+`heat` (a drifting heat map), `fireworks`, `hearts` (heart-shaped ripples),
+`heartbeat` and `zoom` (the outline of `shape`, a polytope from the shape
+list, turning in 4D and growing from the centre). On the APC40 they colour
+the clip grid green, yellow and red and run across every button below it;
+the knob rings keep showing their values, because drawing on a ring moves
+its knob. On the DDJ-FLX4 they run as shapes, in its one colour.
+`dither = true` flickers lights fast to fake in-between brightness; it may
+read as dim or as flicker. `tools/idle_lights_demo.py` plays any of them on a
+desk without the app (`--lights`, `--each`, `--after`, `--dither`, `--shape`;
+`--lamp` lights the APC40's rows one at a time so you can name their colours).
+`never` lists lights to
 leave alone, as a row's source names them without the role
 (`"note:0:11"` is deck 1's play, `"cc:0:2"` its level meter). With
 `yield_to = []` the animation also runs while Rekordbox is open. Then put every
