@@ -2897,7 +2897,7 @@ def _note_hot(st: dict) -> None:
     st["hot_at"] = (m.x, m.y)
     st["hot_selected"] = set(selected_ids(st))
     st["hot_nav"] = imgui.get_io().nav_visible
-    if not imgui.is_mouse_down(0):
+    if "hot_held" not in st or not imgui.is_mouse_down(0):     # (none: a panel's first frame)
         st["hot_held"] = set()
 
 

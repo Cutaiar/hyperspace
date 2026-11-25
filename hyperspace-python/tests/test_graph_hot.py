@@ -174,3 +174,15 @@ def test_the_keys_bring_every_nodes_widgets(canvas):
     imgui.get_io().config_flags &= ~imgui.ConfigFlags_.nav_enable_keyboard
     d.run(d.move((300.0, 300.0)), d.move((310.0, 300.0)), d.park(), d.wait(2))
     assert c.live() == set()                        # the mouse has it again
+
+
+def test_a_first_frame_with_the_button_held_draws(shell_rig, monkeypatch):  # noqa: F811
+    """The page's state outlives a hot reload, so the first frame that asks
+    `hot` may come with no `hot_held` and the mouse down (Devin's review of
+    #505: it raised inside the editor, and the app went with it)."""
+    st = party(shell_rig)
+    for k in [k for k in st if k.startswith("hot_")]:
+        del st[k]
+    monkeypatch.setattr(ui_graph.imgui, "is_mouse_down", lambda *a: True)
+    frame(shell_rig.panel, "graph")
+    assert st["hot_held"] == set()
