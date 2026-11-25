@@ -36,8 +36,10 @@ the window.
 
 ## Notes
 
-- Raycast runs scripts with a bare `PATH`, so `uv` is named in full
-  (`/opt/homebrew/bin/uv`). A different install location goes in `UV`.
+- Raycast runs scripts with a bare `PATH`, so `uv` is looked for where it
+  installs rather than by name: Homebrew (`/opt/homebrew/bin`, `/usr/local/bin`),
+  then uv's own installer (`~/.local/bin`), then the `PATH`. Somewhere else
+  entirely — `UV=/path/to/uv` in the environment wins over all of them.
 - The app is launched with `nohup … &` and disowned. Without that, Raycast
   waits on the app's whole run and reports it as a command that never ends.
 - Output goes to `~/Hyperspace/launch.log`, next to the app's other files, so a

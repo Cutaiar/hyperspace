@@ -19,13 +19,25 @@
 # Where the app is: the sibling of this script's own directory when Raycast
 # reads the repo copy (symlinks resolved), else the usual checkout.
 SELF="$0"
-while [ -L "$SELF" ]; do SELF="$(readlink "$SELF")"; done
+while [ -L "$SELF" ]; do
+  TARGET="$(readlink "$SELF")" || exit 1
+  case "$TARGET" in
+    /*) SELF="$TARGET" ;;            # absolute
+    *) SELF="$(dirname "$SELF")/$TARGET" ;;   # relative to the link, not to $PWD
+  esac
+done
 HERE="$(cd "$(dirname "$SELF")" && pwd)"
 REPO="$HERE/../hyperspace-python"
 [ -d "$REPO" ] || REPO="$HOME/Dev/hyperspace/hyperspace-python"
 
-# Raycast runs scripts with a bare PATH, so uv is named in full.
-UV="/opt/homebrew/bin/uv"
+# Raycast runs scripts with a bare PATH, so uv is looked for where it installs:
+# an explicit UV from the environment first, then Homebrew, then uv's own
+# installer, and the PATH last in case it does hold it.
+if [ -z "$UV" ]; then
+  for CANDIDATE in /opt/homebrew/bin/uv /usr/local/bin/uv "$HOME/.local/bin/uv" "$(command -v uv 2>/dev/null)"; do
+    if [ -n "$CANDIDATE" ] && [ -x "$CANDIDATE" ]; then UV="$CANDIDATE"; break; fi
+  done
+fi
 LOG="$HOME/Hyperspace/launch.log"
 
 # Already up? Bring it forward rather than starting a second process.
@@ -36,7 +48,7 @@ if [ -n "$PID" ]; then
   exit 0
 fi
 
-[ -x "$UV" ] || { echo "uv not found at $UV — brew install uv"; exit 1; }
+[ -x "$UV" ] || { echo "uv not found — brew install uv, or set UV to its path"; exit 1; }
 [ -d "$REPO" ] || { echo "Repo not found at $REPO"; exit 1; }
 
 ARGS=()
