@@ -2734,7 +2734,7 @@ def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[
             dl.add_circle(c, PIN / 2, col, 0, 1.5)
     ed.end_pin()
     drawn.add(pin)
-    if st.get("rec") is not None and (port.patched or graphview.is_stub(pin)):   # `_node_shown`
+    if st.get("rec") is not None and (pin in st["wired"] or graphview.is_stub(pin)):  # `_node_shown`
         st["rec"].pins.append(((p0.x, p0.y), pin, kind, port, stub, room, grow))
     st["pin_xy"][pin] = (p0.x + PIN / 2, p0.y + PIN / 2)     # canvas units, inside the editor
 
@@ -2928,8 +2928,10 @@ def _set_detail(st: dict, view: graphview.View) -> None:
     st["far"] = is_far(st.get("far", False), st["zoom"], imgui.get_font_size(),
                        imgui.is_mouse_down(0))
     st["fold_key"] = frozenset(st["folds"])
-    if st.get("sketch_view") is not view:       # its nodes and ports are other objects
+    if st.get("sketch_view") is not view or "wired" not in st:     # its nodes and ports are other objects
         st["sketch_view"], st["sketches"] = view, {}
+        # a pin a cable ends on: `VPort.patched` is the row's, any of its pins
+        st["wired"] = {e for c in view.cables for e in (c.src_port, c.dst_port)}
 
 
 def _sketch_key(st: dict, n: graphview.VNode) -> tuple:

@@ -66,7 +66,9 @@ def test_zoomed_out_a_node_keeps_its_size_its_place_and_its_wired_pins(canvas, o
     assert set(far_pins) <= set(pins)
     for pin, xy in far_pins.items():
         assert xy == pytest.approx(pins[pin]), pin
-    unwired = {pin for n in st["view"].nodes for p in n.ports if not p.patched for pin in p.pins}
+    # (pin by pin: a param with a route has a base and a depth pin no cable ends on)
+    ends = {e for c in st["view"].cables for e in (c.src_port, c.dst_port)}
+    unwired = {pin for n in st["view"].nodes for p in n.ports for pin in p.pins} - ends
     assert not unwired & set(far_pins)
     if opened and every:
         assert unwired & set(pins)
