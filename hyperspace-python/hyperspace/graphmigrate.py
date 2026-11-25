@@ -579,7 +579,9 @@ def specs_of(fx: Any) -> Specs:
     on disk (`FxState.files`) with the instances held, so what a landed
     graph does not name is still a file the next migration reads."""
     got = {**(getattr(fx, "files", None) or {}), **(getattr(fx, "specs", None) or {})}
-    return {n: (int(sp.order), float(sp.mix)) for n, sp in got.items()}
+    # (plan 67: and a retired file, where an old stack ran it — the ladder's
+    # last step makes it what replaced it)
+    return {**RETIRED_SPECS, **{n: (int(sp.order), float(sp.mix)) for n, sp in got.items()}}
 
 
 def state_values(fx: Any) -> dict:
@@ -1955,6 +1957,312 @@ def twelve(doc: dict) -> tuple[dict, list[str]]:
     return out, notes
 
 
+# ---------------------------------------------------------------- Hue cycle retired (plan 67)
+
+# the owner, 2026-11-25 ("migrate exactly, new ops"; "new op: Hue turn"): Hue
+# cycle hid a field — its bands, `mix(p.x + p.y, 2 |p|, Rings) × Spread`, in
+# turns, frame heights from the middle — and turned the hues by it. Its bands
+# are field nodes now, wired into Hue turn's Turn at a depth of 360 (degrees a
+# turn): Line (45°, Scale √2: p.x + p.y) and Rings (Scale 2: 2 |p|), each
+# weighted by a Scale (1 − Rings, Rings), added (Combine), × Spread (a Scale,
+# so a route on Spread keeps a knob to land on). The picture is Hue cycle's to
+# the GPU's rounding (`tests/test_hue_turn.py`). Keyed on the file, not a
+# schema: a document still naming `huecycle`, of any version, is rewritten on
+# load (`retire_hue_cycle`), so no schema moves (DECISIONS)
+HUE_CYCLE, HUE_TURN = "huecycle", "hueturn"
+HUE_CYCLE_DEFAULTS = {"spread": 0.8, "rings": 0.5}
+# the retired files' (@order, @mix), so the steps before the retirement still
+# place one where an old stack ran it (`forward`'s `specs`)
+RETIRED_SPECS: dict[str, tuple[int, float]] = {HUE_CYCLE: (85, 1.0)}
+HUE_TURN_DEPTH = 360.0
+HUE_SPREAD_SPAN = 4.0            # Spread ran 0 … 4; the band's Scale × runs −4 … 4
+HUE_TURN_NOTE = ("{old} is Hue turn now ({new}): Hue cycle is retired (plan 67), its bands "
+                 "Line, Rings, Scale and Combine wired into Turn — the same picture; save to keep it")
+HUE_ABS_NOTE = ("{row}: a row that placed Hue cycle's Spread (0 … 4) places the bands' Scale × "
+                "now (−4 … 4): its middle is still, below it the bands turn the other way")
+HUE_RINGS_NOTE = ("{row}: Hue cycle's Rings is two Scales of the bands now (1 − Rings and "
+                  "Rings), so this row is left out")
+_HUE_BASE = re.compile(r"^huecycle(?:\.(\d+))?(?=\.|$)")
+_HUE_PARAM = re.compile(r"^fx\.huecycle(?:\.(\d+))?\.([a-z_][a-z0-9_]*)$")
+_ROW_LISTS = ("routes", "desk", "bindings")
+
+
+def _effect_base(name: str) -> str:
+    """`scale.2.image` → `scale.2`; `hueturn.slot.2` → `hueturn`: the effect
+    instance a wire's end names."""
+    parts = name.split(".")
+    return parts[0] + (f".{parts[1]}" if len(parts) > 1 and parts[1].isdigit() else "")
+
+
+def _hue_old(name: Any) -> str | None:
+    """The Hue cycle instance `name` names (`huecycle.2.image` → `huecycle.2`), or None."""
+    m = _HUE_BASE.match(name) if isinstance(name, str) else None
+    return m.group(0) if m else None
+
+
+def retire_hue_cycle(nodes: list, wires: list, rest: dict, ports: list | None = None
+                     ) -> tuple[list, list, dict, list | None, list[str]]:
+    """A section's `nodes` and `wires`, the document's other keys (`rest`:
+    values, rows, macros, layout, groups, node mode …) and a fragment's
+    `ports`, with every Hue cycle made Hue turn and its bands' field nodes
+    (plan 67; module notes above) — (nodes, wires, rest, ports, notes). Pure:
+    the inputs are untouched, and handed back as they are when no Hue cycle is
+    named. A row onto Spread lands on the bands' × (a push's depth halved, the
+    range being twice as wide; a set's norm moved onto it; an abs desk row
+    kept, said: `HUE_ABS_NOTE`); a row onto Rings is left out, said."""
+    olds: list[str] = []
+    for e in nodes:
+        if isinstance(e, dict) and e.get("kind") == "effect" and e.get("file") == HUE_CYCLE:
+            n = e.get("instance", 1)
+            olds.append(G.instance_name(HUE_CYCLE, n if isinstance(n, int) else 1))
+    for w in wires:
+        if isinstance(w, dict):
+            for end in (w.get("from"), w.get("to")):
+                got = _hue_old(end)
+                if got is not None and got not in olds:
+                    olds.append(got)
+    drawn = set(olds)
+    # (one named only by its knobs — off, out of an old stack's run — is
+    # renamed, its knobs kept, and gets no bands: nothing draws it)
+    for k in _hue_params(rest):
+        m = _HUE_PARAM.match(k)
+        got = G.instance_name(HUE_CYCLE, int(m.group(1)) if m.group(1) else 1) if m else None
+        if got is not None and got not in olds:
+            olds.append(got)
+    if not olds:
+        return nodes, wires, rest, ports, []
+    taken: set[str] = set()
+    for e in nodes:
+        if isinstance(e, dict) and isinstance(e.get("file"), str):
+            n = e.get("instance", 1)
+            taken.add(G.instance_name(e["file"], n if isinstance(n, int) else 1))
+    for w in wires:
+        if isinstance(w, dict):
+            for end in (w.get("from"), w.get("to")):
+                if isinstance(end, str):
+                    taken.add(_effect_base(end))
+
+    def free(file: str) -> str:
+        n = 1
+        while G.instance_name(file, n) in taken:
+            n += 1
+        name = G.instance_name(file, n)
+        taken.add(name)
+        return name
+
+    def entry(name: str, like: dict | None = None) -> dict:
+        file, n = G.split_instance(name)
+        out = {k: v for k, v in (like or {"kind": "effect"}).items() if k != "instance"}
+        out.update(kind="effect", file=file)
+        if n != 1:
+            out["instance"] = n
+        return out
+
+    renames = {old: free(HUE_TURN) for old in olds}
+    values = dict(rest.get("values") or {}) if isinstance(rest.get("values"), dict) else {}
+    knobs: dict[str, dict[str, Any]] = {old: {} for old in olds}
+    for k in list(values):
+        m = _HUE_PARAM.match(k)
+        if m is None:
+            continue
+        old = G.instance_name(HUE_CYCLE, int(m.group(1)) if m.group(1) else 1)
+        knobs.setdefault(old, {})[m.group(2)] = values.pop(k)
+    out_nodes = [entry(renames[G.instance_name(HUE_CYCLE, e.get("instance", 1))], e)
+                 if isinstance(e, dict) and e.get("kind") == "effect" and e.get("file") == HUE_CYCLE
+                 else e for e in nodes]
+
+    def rename(x: Any) -> Any:
+        old = _hue_old(x)
+        return renames[old] + x[len(old):] if old in renames else x
+    out_wires = [{**w, "from": rename(w.get("from")), "to": rename(w.get("to"))}
+                 if isinstance(w, dict) else w for w in wires]
+    # (a field once wired into Spread or Rings — a knob then — goes where that
+    # knob is now: Spread the bands' ×, Rings its two weights; Devin on #509)
+    knob_fields = [w for w in out_wires if isinstance(w, dict) and isinstance(w.get("to"), str)
+                   and w["to"].rpartition(".")[2] in HUE_CYCLE_DEFAULTS
+                   and w["to"].rpartition(".")[0] in renames.values()]
+    out_wires = [w for w in out_wires if not any(w is k for k in knob_fields)]
+    notes: list[str] = []
+    band: list[dict] = []
+    spread_to: dict[str, str] = {}      # a Hue cycle → its bands' × (`fx.scale.<n>.mul`)
+    for old in olds:
+        if old not in drawn:
+            values.update({f"fx.{renames[old]}.{k}": v for k, v in knobs.get(old, {}).items()
+                           if k not in HUE_CYCLE_DEFAULTS})
+            notes.append(HUE_TURN_NOTE.format(old=old, new=renames[old]))
+            continue
+        new = renames[old]      # (named by its entry, or by its wires as Hue cycle was)
+        line, rings, wa, wb, add, spread = (free("line"), free("rings"), free("scale"),
+                                            free("scale"), free("combine"), free("scale"))
+        out_nodes += [entry(x) for x in (line, rings, wa, wb, add, spread)]
+        # (the section's own wires go first, as a landing writes them —
+        # `graphview._frame_order` — so an edit leaves the order as loaded;
+        # a slot of Hue turn reads its effect's field, `graph._Build._fields`)
+        band += [{"from": line, "to": f"{wa}.image"}, {"from": rings, "to": f"{wb}.image"},
+                 {"from": wa, "to": f"{add}.image"}, {"from": wb, "to": f"{add}.field"},
+                 {"from": add, "to": f"{spread}.image"},
+                 {"from": spread, "to": f"{new}.turn", G.WIRE_DEPTH: HUE_TURN_DEPTH}]
+        had = knobs.get(old, {})
+        r = float(had.get("rings", HUE_CYCLE_DEFAULTS["rings"]))
+        sp = float(had.get("spread", HUE_CYCLE_DEFAULTS["spread"]))
+        pre = f"fx.{new}."
+        values.update({pre + k: v for k, v in had.items() if k not in HUE_CYCLE_DEFAULTS})
+        for name, kv in ((line, {"angle": 0.7853981633974483, "scale": 1.4142135623730951,
+                                 "out": 0}),
+                         (rings, {"scale": 2.0, "out": 0}),
+                         (wa, {"mul": 1.0 - r, "offset": 0.0}), (wb, {"mul": r, "offset": 0.0}),
+                         (add, {"how": 0}), (spread, {"mul": sp, "offset": 0.0})):
+            values[f"fx.{name}.on"] = True
+            values.update({f"fx.{name}.{k}": v for k, v in kv.items()})
+        spread_to[old] = f"fx.{spread}.mul"
+        for w in knob_fields:
+            if w["to"].rpartition(".")[0] != new:
+                continue
+            d = float(w.get(G.WIRE_DEPTH, 1.0))
+            if w["to"].endswith(".spread"):
+                band.append({**w, "to": f"{spread}.mul", G.WIRE_DEPTH: d})
+            else:       # Rings r weighs rings by r and the diagonal by 1 − r
+                band.append({**w, "to": f"{wb}.mul", G.WIRE_DEPTH: d})
+                band.append({**w, "to": f"{wa}.mul", G.WIRE_DEPTH: -d})
+        notes.append(HUE_TURN_NOTE.format(old=old, new=new))
+    out_wires = [*band, *out_wires]
+
+    def param(pid: Any) -> Any:
+        m = _HUE_PARAM.match(pid) if isinstance(pid, str) else None
+        if m is None:
+            return pid
+        old = G.instance_name(HUE_CYCLE, int(m.group(1)) if m.group(1) else 1)
+        if old not in renames:
+            return pid
+        if m.group(2) == "spread" and old in spread_to:
+            return spread_to[old]
+        return f"fx.{renames[old]}.{m.group(2)}"
+
+    def row(r: Any, where: str) -> Any:
+        if not isinstance(r, dict):
+            return r
+        t = r.get("target")
+        m = _HUE_PARAM.match(t) if isinstance(t, str) else None
+        if m is not None and m.group(2) in ("spread", "rings") and G.instance_name(
+                HUE_CYCLE, int(m.group(1)) if m.group(1) else 1) not in spread_to:
+            notes.append(HUE_RINGS_NOTE.format(row=f"{where} {r.get('source')} → {t}"))
+            return None
+        if m is not None and m.group(2) == "rings":
+            notes.append(HUE_RINGS_NOTE.format(row=f"{where} {r.get('source')} → {t}"))
+            return None
+        out = {k: (param(v) if k in ("target", "scale", "source") else v) for k, v in r.items()}
+        if m is not None and m.group(2) == "spread":
+            op, v = r.get("op"), r.get("value", 1.0)       # (a row's default depth: 1)
+            if op == "push" and isinstance(v, (int, float)):
+                out["value"] = v / 2.0
+            elif op == "set" and isinstance(v, (int, float)):
+                out["value"] = v / 2.0 + 0.5
+            elif op in ("abs", "abs14", "position"):
+                # (a row that sets the knob's place, not a push about it: the
+                # bands' × spans −4 … 4 where Spread spanned 0 … 4, and a row
+                # holds no offset — kept, said; Devin on #509 for position)
+                notes.append(HUE_ABS_NOTE.format(row=f"{where} {r.get('source')} → {t}"))
+        return out
+
+    def walk(v: Any) -> Any:
+        if isinstance(v, str):
+            if v.startswith("render:") and v[7:] in renames:
+                return f"render:{renames[v[7:]]}"
+            if v.startswith("key.") and _hue_old(v[4:]) in renames:     # (black is clear's knobs)
+                return "key." + rename(v[4:])
+            return param(rename(v)) if _HUE_PARAM.match(v) or _hue_old(v) else v
+        if isinstance(v, dict):
+            return {(walk(k) if isinstance(k, str) else k): walk(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [walk(x) for x in v]
+        return v
+    out_rest = {}
+    for k, v in rest.items():
+        if k == "values":
+            out_rest[k] = {(walk(x) if x.startswith("key.") else x): y for x, y in values.items()}
+        elif k in _ROW_LISTS and isinstance(v, list):
+            out_rest[k] = [x for x in (row(r, k) for r in v) if x is not None]
+        elif k == "macros" and isinstance(v, dict):
+            out_rest[k] = walk(_hue_macros(v, _HUE_PARAM, spread_to, renames))
+        else:
+            out_rest[k] = walk(v)
+    if "values" not in rest:
+        out_rest["values"] = values
+    out_ports = None if ports is None else [
+        {**p, **({"to": rename(p["to"])} if isinstance(p.get("to"), str) else {}),
+         **({"from": rename(p["from"])} if isinstance(p.get("from"), str) else {}),
+         **({"was": rename(p["was"])} if isinstance(p.get("was"), str) else {})}
+        if isinstance(p, dict) else p for p in ports]
+    return out_nodes, out_wires, out_rest, out_ports, notes
+
+
+def _hue_params(rest: dict) -> list[str]:
+    """Every Hue cycle knob id `rest` mentions: its values' keys, and any text
+    of its rows, macros and the rest (a row's target, a subscriber's base)."""
+    found: list[str] = []
+
+    def walk(v: Any) -> None:
+        if isinstance(v, str):
+            if _HUE_PARAM.match(v):
+                found.append(v)
+        elif isinstance(v, dict):
+            for k, x in v.items():
+                walk(k)
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+    walk(rest)
+    return found
+
+
+def _hue_macros(macros: dict, pattern: re.Pattern, spread_to: dict, renames: dict) -> dict:
+    """The macros with a base subscriber on a Hue cycle's Spread moved onto its
+    bands' × (`from` / `to` are norms: the same Spread is half way up plus
+    half as far); every other mention renamed by the walk after."""
+    out = {}
+    for mid, m in macros.items():
+        if not isinstance(m, dict) or not isinstance(m.get("subs"), list):
+            out[mid] = m
+            continue
+        subs = []
+        for sub in m["subs"]:
+            got = pattern.match(sub.get("base")) if isinstance(sub, dict) and isinstance(
+                sub.get("base"), str) else None
+            if got is not None and got.group(2) == "spread":
+                old = G.instance_name(HUE_CYCLE, int(got.group(1)) if got.group(1) else 1)
+                if old in spread_to:
+                    sub = {**sub, "base": spread_to[old],
+                           **{k: sub[k] / 2.0 + 0.5 for k in ("from", "to")
+                              if isinstance(sub.get(k), (int, float))}}
+            subs.append(sub)
+        out[mid] = {**m, "subs": subs}
+    return out
+
+
+def hue_turns(doc: dict) -> tuple[dict, list[str]]:
+    """A whole loadable patch with every Hue cycle retired (`retire_hue_cycle`)
+    — (the document, the notes); the document itself when it names none."""
+    section = doc.get("graph") if isinstance(doc, dict) else None
+    if not isinstance(section, dict) or not isinstance(section.get("nodes", []), list) \
+            or not isinstance(section.get("wires", []), list):
+        return doc, []
+    rest = {k: v for k, v in doc.items() if k not in ("graph", "schema", "name")}
+    nodes, wires, rest2, _, notes = retire_hue_cycle(
+        list(section.get("nodes", [])), list(section.get("wires", [])), rest)
+    if not notes:
+        return doc, []
+    out = {k: doc[k] for k in ("schema", "name") if k in doc}
+    out.update(rest2)
+    # (the section's other keys — black is clear's `keys` — name nodes too)
+    others = {k: v for k, v in section.items() if k not in ("nodes", "wires")}
+    _, _, others2, _, _ = retire_hue_cycle(list(section.get("nodes", [])),
+                                           list(section.get("wires", [])), others)
+    others2.pop("values", None)
+    out["graph"] = {**others2, "nodes": nodes, "wires": wires}
+    return out, notes
+
+
 # ---------------------------------------------------------------- the one ladder (plan 50)
 
 # what a load says of a file naming a desk template (retired, plan 44 D3;
@@ -2002,7 +2310,9 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     module labels and the desk template's name dropped — the template
     said), before `/11` the kind's new word (`eleven`), and — first, before
     any step reads the section — before `/12` its copies made slots of
-    their effects (`twelve`, plan 89; said when there were any). A
+    their effects (`twelve`, plan 89; said when there were any); last, at
+    any version, a Hue cycle made Hue turn and its bands' field nodes
+    (`hue_turns`, plan 67; said). A
     fragment's ladder is `patches.forward`; the two are the one reader of
     the one shape (`patches.shape_of` says which a file is)."""
     notes: list[str] = []
@@ -2010,6 +2320,7 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     migrated = ""
     from_show: set[str] = set()
     version = schema_version(doc)
+    specs = {**RETIRED_SPECS, **specs}      # (plan 67: Hue cycle, retired below)
     if version is None or version < TWELVE:
         # plan 89: copies are slots before anything reads the section (a
         # `/6` wired frame may hold one; the steps below read slots alone)
@@ -2038,4 +2349,7 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
         doc = eleven(doc)
     if version is None or version < TWELVE:
         doc = {**doc, "schema": TWELVE_SCHEMA}
+    # plan 67: Hue cycle retired, whatever the version (keyed on the file)
+    doc, hue_notes = hue_turns(doc)
+    migrate_notes += hue_notes
     return Forward(doc, tuple(notes), tuple(migrate_notes), migrated, frozenset(from_show))

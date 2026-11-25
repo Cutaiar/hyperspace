@@ -130,6 +130,7 @@ undo or control. Node methods are `run`, `paint`, `draw`, `image`,
 
 from __future__ import annotations
 
+import functools
 import math
 import re
 from dataclasses import dataclass, field, replace
@@ -1602,6 +1603,7 @@ def effect_of(name: Any) -> Any:
     return got[0] if got is not None else name
 
 
+@functools.lru_cache(maxsize=4096)
 def _wired_kind(name: str) -> str | None:
     """`wire_node_kind(name, wired=True)`: a wired frame's kinds. `frame`
     and `fx` are named so `wire_error` can say they are gone; an old id
@@ -2989,6 +2991,17 @@ def _wired_reach(wires) -> frozenset[str]:
         into.setdefault(w.node, []).append(w.src)
         if pin_node(w.src) is not None:
             into.setdefault(w.src, []).append(pin_node(w.src))
+    # plan 67: a slot reads its effect's knob fields (`_Build._fields`), so a
+    # slot reached reaches what feeds them, its effect reached or not
+    slots = {n for w in wires for n in (w.src, w.node)
+             if wire_node_kind(n, wired=True) == "slot"}
+    for w in wires:
+        if w.port in PORT_NAMES or not is_knob_port(w.node, wire_node_kind(w.node, wired=True),
+                                                    w.port):
+            continue
+        for s in slots:
+            if effect_of(s) == w.node:
+                into.setdefault(s, []).append(w.src)
     todo = [w.src for w in wires if _is_sink(w)]
     got: set[str] = set()
     while todo:
@@ -3855,6 +3868,8 @@ class Hands(Node):
 # the device kind a point-cloud node is made for (the ruling of this run:
 # clouds follow the device list; A4's graph JSON has no `cloud` node kind)
 CLOUD_KIND = "cloud"
+# the device kinds that publish a cloud: a recording, a Kinect (plan 29)
+CLOUD_DEVICES = ("cloud", "kinect")
 
 CLOUD_EYE_W = f"{EYE_NEAR * 1.2:.6f}"    # render.EYE_W: a point behind the eye is dropped
 
@@ -3901,13 +3916,13 @@ _CLOUD_CORNERS = np.array([(-1, -1), (1, -1), (-1, 1), (1, -1), (1, 1), (-1, 1)]
 
 
 def cloud_roles(source) -> tuple[str, ...]:
-    """The roles of the `cloud` devices `source` lists (a device registry,
+    """The roles of the `CLOUD_DEVICES` `source` lists (a device registry,
     duck-typed), in list order — listed, open or not: what the default
     graph gains a point-cloud node for. None (no registry) is none."""
     if source is None:
         return ()
     try:
-        return tuple(str(d.role) for d in source if getattr(d, "kind", "") == CLOUD_KIND)
+        return tuple(str(d.role) for d in source if getattr(d, "kind", "") in CLOUD_DEVICES)
     except Exception:  # noqa: BLE001 — a registry mid-change costs the clouds, never the frame
         return ()
 
@@ -7875,6 +7890,35 @@ class _Build:
             target.inputs[w.port] = src
             if w.port != FIELD_PORT:
                 target.depths[w.port] = w.depth
+        # plan 67: a slot is its effect on another picture, its knobs the
+        # effect's — so the fields wired into those knobs too, where the slot
+        # has none of its own: read off the effect's wires, built or not (a
+        # slot may run with its effect unfed), and a field the slot itself
+        # feeds is dormant, in words, as a wire's loop is (Devin on #509)
+        for name, node in list(self.made.items()):
+            if _kind(name) != "slot":
+                continue
+            if isinstance(node, KeyNode):
+                node = node.inputs["image"]
+            if not isinstance(node, Effect) or node not in self.built:
+                continue
+            owner = effect_of(name)
+            for w in getattr(self.wiring, "wires", ()):     # (the effect's, reached or not)
+                if w.src not in self.reached:
+                    continue
+                if (w.node != owner or w.port == FIELD_PORT or w.port in node.depths
+                        or not is_knob_port(w.node, _kind(w.node), w.port)):
+                    continue
+                src = self._taken(self.node(w.src), w)
+                if src is None:
+                    continue
+                if src is node or id(node) in _upstream(src):
+                    self.g.dormant[f"{w} → {name}"] = (
+                        f"wire {w} — {name} reads it as its effect's, and feeds {w.src}: "
+                        "that makes a loop")
+                    continue
+                node.inputs[w.port] = src
+                node.depths[w.port] = w.depth
 
     def _split(self, layers: tuple[HandsLayer, ...]) -> None:
         """How each layer splits its guide out (`HandsLayer.split`): always

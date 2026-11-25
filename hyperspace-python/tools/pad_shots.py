@@ -34,7 +34,7 @@ JOYCON_OUT = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets" /
 ROWS = (  # plan 42's ideas 4 and 5, as rows
     Binding("touch:x", "fx.zoomblur.cx", "position"),
     Binding("touch:pinch", "camera.zoom", "push", 0.5),
-    Binding("motion:roll", "fx.huecycle.speed", "position"),
+    Binding("motion:roll", "fx.hueturn.speed", "position"),
     Binding("axis:RT", "fx.kaleido.mix", "position"),
 )
 

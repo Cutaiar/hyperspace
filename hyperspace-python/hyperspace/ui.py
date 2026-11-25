@@ -2478,9 +2478,10 @@ class Panel:
         lib = self.library
         if lib is not None and lib.reg is not None:
             proj = lib.install
-            text = f"{proj.name}{' ●' if proj.is_dirty() else ''}"
+            dirty = proj.is_dirty()             # (it compares every meta param: once a frame)
+            text = f"{proj.name}{' ●' if dirty else ''}"
             flush_right(imgui.calc_text_size(text).x)
-            imgui.text_colored(RED if proj.is_dirty() else DIM, text)
+            imgui.text_colored(RED if dirty else DIM, text)
             if imgui.is_item_hovered():
                 tooltip("the open install — the patches section")
 

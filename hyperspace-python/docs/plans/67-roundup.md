@@ -150,6 +150,11 @@ saved files use it (`presets/kinetic/kinetic-comet`, `kinetic-tunnel`; the corpu
 `hands-pinch`, `party-acid`, `party-trip`), so the retirement is a migration in the lane:
 each `huecycle` node rewritten as the Palette patch, its look proven by the golden frames.
 
+**Built (2026-11-25, plan 67 §19):** not into Palette but into a new op, **Hue turn**, the
+owner's choice: Palette's slice is HSV, Hue cycle's turn YIQ, and Paint mixes two results of
+one input. Spread is a field on Hue turn's Turn (Line, Rings, Scale, Combine), as above; the
+six saved files rewritten, the picture proven against Hue cycle's own shader.
+
 ## 7. Built: the shared field pieces (P2's first step, 2026-11-23)
 
 `shaders/fx/_lib.glsl`, a new section "fields: the shared pieces", every effect's program:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-KINDS = ("shared", "local", "file", "camera", "syphon", "ndi", "phone", "panel")
+KINDS = ("shared", "local", "file", "camera", "syphon", "ndi", "phone", "panel", "kinect")
 FILE_KINDS = ("shared", "local", "file")
 
 

@@ -78,7 +78,6 @@ import glfw
 import moderngl
 import numpy as np
 from imgui_bundle import imgui
-from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
 from . import (
     config,
@@ -114,6 +113,7 @@ from .displays import DisplayList, Running, Wanted, opened_of, wanted
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hotplug import Hotplug
 from .hotreload import HotReloader
+from .imgui_gl import ControlRenderer
 from .learn import Learn
 from .library import NO_LIBRARY, Library
 from .library import home as library_home
@@ -2199,7 +2199,7 @@ def main(argv: list[str] | None = None) -> None:
     ui_ctx = imgui.create_context()
     apply_style()
     load_fonts()
-    impl = GlfwRenderer(ctrl_win)
+    impl = ControlRenderer(ctrl_win)
     install_pinch()     # the trackpad's pinch, which GLFW drops: GRAPH zooms on it
     io = imgui.get_io()
     # hot-reloaded panel code can raise mid-window; let imgui unwind the

@@ -22,7 +22,7 @@ from hyperspace import graphview, ui_graph, undo
 from hyperspace.graphview import TakeOver
 
 GID = "group.1"
-HUECYCLE = ("huecycle", "output.all.image")
+HUECYCLE = ("hueturn", "output.all.image")
 THROUGH = ("delay", "output.all.image")
 
 
@@ -86,16 +86,16 @@ def test_the_chip_names_the_cut_and_one_press_takes_it_and_one_undo_gives_it_bac
     before, u = state(rig), watch(rig)
     try:
         plan = edit(rig).take_over_of(GID)
-        assert plan.lines == ("wire as saved, replacing", "huecycle → All outputs")
+        assert plan.lines == ("wire as saved, replacing", "hueturn → All outputs")
         assert state(rig) == before                             # (asking moves nothing)
         n = len(u.stack)
         assert ui_graph.take_over(rig.panel, plan) is None
         assert len(u.stack) == n + 1
-        assert u.stack[-1].label == "wire acid wash as saved, replacing huecycle → All outputs"
+        assert u.stack[-1].label == "wire acid wash as saved, replacing hueturn → All outputs"
         got = wires(rig)
         assert THROUGH in got and ("scene", "acid.image") in got and HUECYCLE not in got
         assert st["said"] == ("wired as saved: scene → acid.image, delay → output.all.image; "
-                              "cut huecycle → All outputs")
+                              "cut hueturn → All outputs")
         assert st["note"] == ""
         assert open_ids(rig) == []
         assert edit(rig).take_over_of(GID) is None              # the chip is gone
@@ -114,9 +114,9 @@ def test_what_was_cut_stays_on_the_canvas_and_is_not_rewired(rig):  # noqa: F811
     spawned(rig)
     assert press(rig) is None
     frame(rig.panel, "graph")
-    assert "huecycle" in graphview.frame_names(rig.lib.loaded_patch.graph.spec)
-    assert st["view"].node("render:huecycle") is not None
-    assert not [w for w in wires(rig) if w[0] == "huecycle"]
+    assert "hueturn" in graphview.frame_names(rig.lib.loaded_patch.graph.spec)
+    assert st["view"].node("render:hueturn") is not None
+    assert not [w for w in wires(rig) if w[0] == "hueturn"]
 
 
 def test_a_source_a_cut_mentions_last_keeps_its_entry():
@@ -136,7 +136,7 @@ def test_the_plain_chip_is_unmoved_it_never_cuts_and_the_chip_stays_beside_it(ri
     assert ui_graph.wire_as_saved(rig.panel, GID) == "output.all.image is taken"  # again: the same
     assert HUECYCLE in wires(rig)
     plan = edit(rig).take_over_of(GID)                # (the chip after a plain press: only the cut)
-    assert plan.lines[-1] == "huecycle → All outputs" and plan.wires == ("delay → output.all.image",)
+    assert plan.lines[-1] == "hueturn → All outputs" and plan.wires == ("delay → output.all.image",)
     assert ui_graph.take_over(rig.panel, plan) is None
     assert THROUGH in wires(rig) and HUECYCLE not in wires(rig)
 
@@ -176,21 +176,21 @@ def test_a_taken_inlet_is_no_open_pin_and_a_hands_wire_is_not_cut(rig):  # noqa:
     st = trip(rig)
     spawned(rig)
     assert ui_graph._render_said(rig.panel, ui_graph.render_edit(rig.panel),
-                                 lambda e: graphview.render_wire(e, "rout:huecycle",
+                                 lambda e: graphview.render_wire(e, "rout:hueturn",
                                                                  "rin:acid/image")) is None
     assert open_ids(rig) == ["out"]
     plan = edit(rig).take_over_of(GID)
     assert plan.cuts == (HUECYCLE,)                   # the outlet's alone
     assert ui_graph.take_over(rig.panel, plan) is None
-    assert ("huecycle", "acid.image") in wires(rig) and ("scene", "acid.image") not in wires(rig)
-    assert st["said"].startswith("wired as saved: delay → output.all.image; cut huecycle")
+    assert ("hueturn", "acid.image") in wires(rig) and ("scene", "acid.image") not in wires(rig)
+    assert st["said"].startswith("wired as saved: delay → output.all.image; cut hueturn")
 
 
 def test_a_pin_refused_for_another_reason_stays_refused_beside_a_take_over():
     no_node = {"id": "out.2", "type": "image", "from": "acid", "was": "tripcolour.image"}
     e, gs, pushed = on_section(
-        {"nodes": [*EFFECTS, {"kind": "effect", "file": "huecycle"}],
-         "wires": [{"from": "huecycle", "to": "output.all.image"}]},
+        {"nodes": [*EFFECTS, {"kind": "effect", "file": "hueturn"}],
+         "wires": [{"from": "hueturn", "to": "output.all.image"}]},
         OUT, no_node, nodes=("render:warp", "render:acid"))
     plan = e.take_over_of(GID)
     assert plan.refused == ("no node tripcolour",)
@@ -243,12 +243,12 @@ def test_a_chip_names_every_cut_or_says_the_count_and_the_hover_has_them_all():
 
 def test_the_hover_says_the_wires_and_what_stays_refused_too():
     e, _, _ = on_section(
-        {"nodes": [*EFFECTS, {"kind": "effect", "file": "huecycle"}],
-         "wires": [{"from": "huecycle", "to": "output.all.image"}]},
+        {"nodes": [*EFFECTS, {"kind": "effect", "file": "hueturn"}],
+         "wires": [{"from": "hueturn", "to": "output.all.image"}]},
         OUT, {"id": "out.2", "type": "image", "from": "acid", "was": "output.all.image"},
         nodes=("render:warp", "render:acid"))
     tip = e.take_over_of(GID).tip
-    assert "huecycle → All outputs" in tip                 # the cut
+    assert "hueturn → All outputs" in tip                 # the cut
     assert "warp → output.all.image" in tip                # which of the two outlets wins
     assert "output.all.image is taken" in tip              # and the other
 
@@ -265,28 +265,28 @@ def test_the_words_are_the_canvases():
 
 def test_two_cuts_are_one_press_and_both_said():
     doc = {"nodes": [*EFFECTS, {"kind": "effect", "file": "wobble"},
-                     {"kind": "effect", "file": "huecycle"}],
+                     {"kind": "effect", "file": "hueturn"}],
            "wires": [{"from": "wobble", "to": "output.all.image"},
-                     {"from": "huecycle", "to": "output.1.image"}]}
+                     {"from": "hueturn", "to": "output.1.image"}]}
     e, gs, pushed = on_section(
         doc, OUT, {"id": "out.2", "type": "image", "from": "acid", "was": "output.1.image"},
         nodes=("render:warp", "render:acid"))
     plan = e.take_over_of(GID)
-    assert plan.words == ("wobble → All outputs", "huecycle → Output 1")
+    assert plan.words == ("wobble → All outputs", "hueturn → Output 1")
     assert e.wire_taking_over(plan) is None
     assert len(pushed) == 1 and gs.landed == 1
     assert into(gs, "output.all.image") == ["warp"] and into(gs, "output.1.image") == ["acid"]
-    assert "cut wobble → All outputs, huecycle → Output 1" in e.said
+    assert "cut wobble → All outputs, hueturn → Output 1" in e.said
 
 
 def test_two_outlets_on_one_taken_port_cut_one_cable_and_the_second_is_refused():
-    doc = {"nodes": EFFECTS + [{"kind": "effect", "file": "huecycle"}],
-           "wires": [{"from": "huecycle", "to": "output.all.image"}]}
+    doc = {"nodes": EFFECTS + [{"kind": "effect", "file": "hueturn"}],
+           "wires": [{"from": "hueturn", "to": "output.all.image"}]}
     e, gs, _ = on_section(doc, OUT, {"id": "out.2", "type": "image", "from": "acid",
                                      "was": "output.all.image"},
                           nodes=("render:warp", "render:acid"))
     plan = e.take_over_of(GID)
-    assert plan.cuts == (("huecycle", "output.all.image"),)
+    assert plan.cuts == (("hueturn", "output.all.image"),)
     assert plan.refused == ("output.all.image is taken",)
     assert e.wire_taking_over(plan) == "output.all.image is taken"
     assert into(gs, "output.all.image") == ["warp"]
@@ -497,7 +497,7 @@ def test_a_port_coming_free_under_a_held_chip_says_so_at_the_release(driven):
     r, d, st = driven
     d.run(d.move(CHIP), d.press(True), d.wait(2))
     assert ui_graph._render_said(r.panel, ui_graph.render_edit(r.panel),
-                                 lambda e: graphview.render_unwire(e, "rout:huecycle",
+                                 lambda e: graphview.render_unwire(e, "rout:hueturn",
                                                                    "rin:output.all/image")) is None
     d.run(d.wait(2))
     assert CHIP not in d.rects

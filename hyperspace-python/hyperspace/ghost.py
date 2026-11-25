@@ -58,7 +58,7 @@ from typing import cast
 import moderngl
 import numpy as np
 
-from . import handmesh
+from . import handmesh, writes
 from .geometry import EYE_DISTANCE, EYE_FOV, eye_matrix
 from .glsl import QUAD_VS
 
@@ -106,7 +106,7 @@ STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE", "MESH",
 MATERIALS = ["PLAIN", "BONE", "GLASS", "EMBER"]
 
 @dataclass
-class GhostState:
+class GhostState(writes.Observed):
     """What the ghost.* params write. The look's, but for `mirror`: see
     `register`."""
 
@@ -233,25 +233,21 @@ def register(reg, state: GhostState, n: int = 1) -> None:
         # a node from before a hot reload included)
         _the_mirror(reg, state).follow(state)
         return
-    reg.toggle(f"{pre}.on", f"{lb} hands", lambda: state.on,
-               lambda v: setattr(state, "on", bool(v)), group=GROUP,
+    reg.toggle(f"{pre}.on", f"{lb} hands", *writes.cell(state, "on", bool), group=GROUP,
                tip="Draw both tracked hands over the render, after every effect — "
                    "so a newcomer sees their hands are in there. Needs the tracker on.")
-    reg.continuous(f"{pre}.alpha", f"{lb} opacity", lambda: state.alpha,
-                   lambda v: setattr(state, "alpha", float(v)), lo=0.0, hi=1.0,
+    reg.continuous(f"{pre}.alpha", f"{lb} opacity", *writes.cell(state, "alpha", float), lo=0.0, hi=1.0,
                    fmt=lambda v: f"{v * 100:.0f}%", group=GROUP,
                    tip="How solid the ghost hands are over the picture.")
     _the_mirror(reg, state).follow(state)
-    reg.enum(f"{pre}.guide", f"{lb} guide", lambda: state.guide,
-             lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP,
+    reg.enum(f"{pre}.guide", f"{lb} guide", *writes.cell(state, "guide", int), GUIDES, group=GROUP,
              modulatable=False,
              tip="What each hand is doing: a ball per axis (x red, y green, z blue), a "
                  "ring per rotation with a dot where the fingers point (pitch, yaw) or "
                  "the palm faces (roll), and the four pinch switches. All six always "
                  "show; the ones the setup routes are brighter and show what the table "
                  "is fed. Beside the hand, or on it.")
-    reg.toggle(f"{pre}.tethers", f"{lb} tethers", lambda: state.tethers,
-               lambda v: setattr(state, "tethers", bool(v)), group=GROUP, modulatable=False,
+    reg.toggle(f"{pre}.tethers", f"{lb} tethers", *writes.cell(state, "tethers", bool), group=GROUP, modulatable=False,
                tip="With a guide on: a line from each routed axis, pinch or grab to a "
                    "label at the edge of the frame naming the params it drives.")
     reg.enum(f"{pre}.style", f"{lb} style", lambda: getattr(state, "style", 0),
