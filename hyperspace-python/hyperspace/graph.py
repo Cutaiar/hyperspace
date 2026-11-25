@@ -7875,6 +7875,23 @@ class _Build:
             target.inputs[w.port] = src
             if w.port != FIELD_PORT:
                 target.depths[w.port] = w.depth
+        # plan 67: a slot is its effect on another picture, its knobs the
+        # effect's — so the fields on those knobs too, where the slot has none
+        # wired of its own
+        for name, node in list(self.made.items()):
+            if _kind(name) != "slot":
+                continue
+            owner = self.made.get(effect_of(name))
+            if isinstance(owner, KeyNode):
+                owner = owner.inputs["image"]
+            if isinstance(node, KeyNode):
+                node = node.inputs["image"]
+            if not isinstance(owner, Effect) or not isinstance(node, Effect) or owner is node:
+                continue
+            for port, depth in getattr(owner, "depths", {}).items():
+                if port not in node.depths and owner.inputs.get(port) is not None:
+                    node.inputs[port] = owner.inputs[port]
+                    node.depths[port] = depth
 
     def _split(self, layers: tuple[HandsLayer, ...]) -> None:
         """How each layer splits its guide out (`HandsLayer.split`): always

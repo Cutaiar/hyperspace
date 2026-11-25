@@ -245,6 +245,8 @@ def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
 
 @pytest.mark.parametrize("slug, want", [
     # into output 2: on its picture, All outputs' by the bus cable it rode
+    # (plan 67: Hue cycle as `seven` places it, before its retirement — the
+    # ladder's last step — makes it Hue turn)
     ("palette-glass", [("huecycle", "palette.image"), ("palette", "output.2.image")]),
     # after the scene: every picture wire from the scene reads acid.2 (plan
     # 36 T4: the look-back on — it records acid.2, and the trail and the
@@ -259,7 +261,7 @@ def test_placements_become_the_wires_they_stood_for(slug, want):
     from hyperspace.fx import FxState
 
     doc = json.loads((FIXTURES / f"{slug}.json").read_text())
-    out, _ = M.seven(doc, M.specs_of(FxState()))
+    out, _ = M.seven(doc, {**M.RETIRED_SPECS, **M.specs_of(FxState())})
     section = out["graph"]
     assert not any(k in e for e in section["nodes"] for k in G.PLACE_KEYS)
     for pair in want:

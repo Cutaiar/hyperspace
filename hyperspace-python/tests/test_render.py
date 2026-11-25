@@ -1154,7 +1154,7 @@ def _aimed(*names, face_map=0, **values):
 def _shown(face_map=0):
     """The picture as seeded, on the faces: a pass that changes nothing
     (Hue cycle at a mix of one in a million, its clock stopped)."""
-    return _aimed("huecycle", face_map=face_map, mix=1e-6, speed=0.0)
+    return _aimed("hueturn", face_map=face_map, mix=1e-6, speed=0.0)
 
 
 def _wire(r, s):

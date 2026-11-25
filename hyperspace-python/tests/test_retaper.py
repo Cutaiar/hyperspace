@@ -129,7 +129,7 @@ def test_speed_and_the_amount_params_are_on_the_tapers_and_nothing_else_is(reg):
         elif p.id in speeds:
             assert (p.lo, p.hi, p.steps) == (-8.0, 8.0, 400)
     for pid in ("fx.warp.mix", "fx.warp.scale", "fx.warp.drift", "fx.kaleido.swirl",
-                "fx.huecycle.paint", "fx.zoomblur.glow", "fx.mix"):
+                "fx.hueturn.paint", "fx.zoomblur.glow", "fx.mix"):
         assert reg[pid].taper is None, pid
     assert reg["fx.warp.scale"].log
 

@@ -53,7 +53,9 @@ def unrescaled(notes: list[str]) -> list[str]:
     """A load's notes less plan 86's: a fixture from before the effect tapers has no
     units marker, and its rescaled depths are said (`loadable.retaper_note`)."""
     head = loadable.RETAPER_NOTE.partition("{count}")[0]
-    return [n for n in notes if not n.startswith(head)]
+    # (plan 67: and Hue cycle's retirement, said of a fixture from before it)
+    hue = M.HUE_TURN_NOTE.partition("{new}")[2][:40]
+    return [n for n in notes if not n.startswith(head) and hue not in n]
 
 
 

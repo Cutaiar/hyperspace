@@ -165,7 +165,7 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     Plan 33 T6: the free graph's `/5` fixtures, each loaded as the loadable patch
     on its own graph, hold too. The rule that keeps them right-running: a
     picture made of the media alone (every path back from it starts at a
-    channel or the pattern — `media.a → acid.2 → huecycle.2`) is a branch
+    channel or the pattern — `media.a → acid.2 → hueturn.2`) is a branch
     of the media and sits in the media area, so it runs on into the faces
     (geometry), the backdrop and a switch (media, deeper) or an output
     (shaders); a picture the scene made, taken back into a switch with the

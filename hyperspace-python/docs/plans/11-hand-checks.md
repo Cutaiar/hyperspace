@@ -8846,6 +8846,16 @@ Plan 65. Headless: `tests/test_effect_previews.py` (the budget a frame, the stil
 **697. The exported loops.** `uv run python tools/effect_previews.py --out /tmp/effects --sheet`. *Pass:* a PNG and a looping GIF per effect and `sheet.png` grouped by family, each the picture the picker shows. *Fail:* a missing file, a black still, a GIF that does not loop.
 
 **698. Two decks.** Switch the panel to the deck off air and open the picker there; pick an effect. *Pass:* the picker works the same; the effect lands in the off-air deck's patch and the room sees nothing until the crossfade. *Fail:* the effect on the on-air deck, or a preview on an output.
+## FS. Hue cycle retired into Hue turn + fields (rows 1122–1128, 2026-11-25)
+
+Plan 67 §19. Headless: `tests/test_hue_turn.py` (Hue cycle's own shader against the migrated patch, seven settings, three times; the migration's rows, macros, layout, groups, slots, a second instance, knob-only, a fragment, an old file end to end), `tests/test_field_examples.py` (`hue-cycle`). The example is in the Drive library's `loadable/field-examples/`.
+
+**898. The looks look the same.** (Mac, 1080p outputs) Open `party-trip`, `party-acid`, `hands-pinch`, `dial` and the kinetic `comet` and `tunnel`. *Pass:* each looks and moves as it did — the bands, their turning, the paint; GRAPH shows Hue turn with Line, Rings, three Scales and a Combine wired into its Turn, every node lit; the FX pane has them with Hue turn, none under "reaches nothing". Open a look of yours saved with Hue cycle: the load says it is Hue turn now; save, reopen: nothing said. *Fail:* a look whose colours differ at a glance, or a node marked unreached.
+
+**899. Spread under the hands and the desk.** (Mac) `party-trip`: turn the right hand (yaw). *Pass:* the bands widen and narrow as before. Turn the desk knob that was Spread (cc 23): from its middle up, as before; below its middle the bands turn the other way, and the load said so. *Fail:* a push that moves the bands twice as far as before.
+
+**900. The goldens.** (Mac) `uv run pytest -q -m golden`; then `uv run python tools/golden_frames.py --record --only party-trip,party-acid,hands-pinch,dial,palette-glass,wired-outputs,media-chain-faces`. *Pass:* before the record, only those looks differ (the GPU's rounding); after it, every golden passes. *Fail:* another look differs.
+
 ## FR. Any knob takes a field (rows 1116–1121, 2026-11-24)
 
 Plan 67 §18. Headless: `tests/test_knob_fields.py` (every knob takes a field or says why; a field of 0 is the unwired knob; half a frame at one value, half at another; clamped or wrapped; the wire's depth saved and read; GRAPH's port, the drop on a knob's row, the depth menu; the FX pane), `tests/test_field_examples.py` (`field-knob` opens with no note, reaches, and draws the field), `tools/fx_sweep.py` (2886 renders, no byte moved). The example is in the Drive library's `loadable/field-examples/`.
