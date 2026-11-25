@@ -138,11 +138,11 @@ from .tokens import RADII, RING_W, SPACE, rgba
 #   icon            32x32     10      0    14     20      -    16
 #   icon-lg         36x36     10      0    14     20      -    16
 #
-# The box widths are for the string "Button" in Geist Medium 14 and are not
-# pinned anywhere: the content width is what `button_size` computes, and
-# ImGui's rasterizer will not agree with Chromium's to the fraction. The
-# browser's content widths, for the record, were 43.719 / 37.484 / 39.969 at
-# 14 / 12 / 12.8 px — all three the same string, scaled.
+# The box widths are for the string "Button" in Inter Medium 14 and are not
+# pinned anywhere: the content width is what `button_size` computes, from
+# `draw.text_w`. The browser's content widths, for the record, are 43.844 /
+# 37.578 / 40.078 at 14 / 12 / 12.8 px (Geist's were 43.719 / 37.484 /
+# 39.969) - all three the same string, scaled.
 #
 # `pad_icon` is the padding that `has-data-[icon=inline-start]:pl-N` and
 # `...inline-end]:pr-N` swap in on the side the icon is on: measured
@@ -218,10 +218,6 @@ NUDGE = 0.0
 UNDERLINE_OFFSET = SPACE[1]     # underline-offset-4
 UNDERLINE_W = 1.0        # measured at 14px only - see the note at the top
 
-# Geist: ascender 1005 / (1005 + 295) of the span draw.FONT_SPAN_EM carries.
-# The link's underline hangs off the alphabetic baseline, which is that far
-# down the glyph box - not off the box's own centre.
-ASCENT_FRAC = 1005.0 / 1300.0
 
 
 # --------------------------------------------------------------------------
@@ -630,18 +626,19 @@ def fill_rect(x, y, w, h, borders) -> tuple:
 
 
 def underline_y(y: float, h: float, font: float) -> float:
-    """Where the `link` variant's underline sits, in unsnapped px.
+    """Where the `link` variant's underline sits.
 
     `underline-offset-4` hangs it 4 px below the ALPHABETIC BASELINE, not
-    below the box or the glyph box. The glyph box is `font * FONT_SPAN_EM`
-    tall and centred in the button, and the baseline is ASCENT_FRAC down it.
+    below the box or the glyph box - and that baseline is the text's own,
+    `draw.baseline_y` at the button's line-height, so the rule and the
+    glyphs it underlines cannot drift apart.
 
-    Measured: a 32 px `link` button at 14 px puts one 1 px rule at
-    box-relative y 25, which is what this returns (24.97, snapped to 25).
+    Measured on ?probe's `button.link` (Inter, 14 px in 32): one 1 px rule
+    at box-relative y 25, x 11..54 - the baseline at 21, plus 4. (It used
+    its own unrounded glyph-box formula with Geist's ascent fraction, which
+    landed on the same row by luck - RETRO row 90.)
     """
-    span = font * D.FONT_SPAN_EM.get("medium", 1.0)
-    glyph_top = y + (h - span) / 2.0
-    return glyph_top + ASCENT_FRAC * span + UNDERLINE_OFFSET
+    return D.baseline_y(y, font, h, D.TEXT_LEADING.get(float(font), 0.0)) + UNDERLINE_OFFSET
 
 
 def button(dl, x, y, w, h, label, faces, theme, tbl, *, variant="default",

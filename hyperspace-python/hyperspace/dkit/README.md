@@ -18,9 +18,11 @@ Nothing here is imported by the app — it lives in `tools/` on purpose.
 ## The bar
 
 **Chrome matches within ~1px; glyph rasterization may differ.** Two text
-rasterizers never agree (ImGui's stb_truetype applies no OpenType features and
-snaps glyphs to integer positions; browsers use subpixel advances), so text is
-out of scope and the diff runs with it hidden. The box is the thing.
+rasterizers never agree on the ink itself, so the diff runs with text hidden
+and the box is the thing. Text METRICS are another matter: since RETRO row
+61 the kit's advances, kerning, ligatures and baselines are Chromium's to
+within a few hundredths of a pixel, checked in `test_text.py` - in Inter,
+the panel's own family, which the oracle renders in too.
 
 ## How it works
 
@@ -87,35 +89,55 @@ the two rasterizers differing, not geometry to be fixed.
 
 ### Text (advisory)
 
-Geist ships only as a variable woff2, which stb_truetype can read neither of,
-so `fonts/` holds six faces cut from that exact file by `build_fonts.py`:
-wght 400/500/600, each with and without tabular figures frozen in. With
-those, ink extents land within a few px on a 110-170px string:
+The kit's text is **Inter**, the panel's own family, and so is the oracle's
+(`--font-sans` in `prototypes/dashboard/src/index.css`): one typeface on
+both sides of the diff. Inter ships to the oracle as a variable woff2,
+which ImGui's loader can read neither of, so `fonts/` holds six faces cut
+from that exact file by `dev/build_fonts.py`: wght 400/500/600, each with
+and without tabular figures. Ink extents against the oracle, both themes:
 
 ```
-text.body14    113x11  vs  113x10   (exact)
-text.title30   144x29  vs  146x29
-text.num14     138x12  vs  132x12   <- advance rounding, not tnum
+                 Geist, before   Geist, fixed   Inter (now)
+text.num14       -6 px            0              0
+text.small12     +6 / +5         +1 / -1        +1 / 0
+text.title30     +2               0              0
+text.mixed       +2               0              0
 ```
 
-Two findings worth carrying forward:
+What it took, each measured - read `draw.py`'s "faces and metrics":
 
-* **ImGui's font size is not a CSS px.** stb_truetype scales so that
-  `ascent - descent` equals the requested size; CSS maps the em square to
-  `font-size`. Geist is upem 1000 with ascent 1005 / descent -295, so its span
-  is 1.30em and ImGui renders 14px CSS text at 77% unless asked for 14 x 1.30.
-  The ratio is a property of the font, so the kit keeps it per face
-  (`draw.FONT_SPAN_EM`).
-* **No OpenType features at runtime** — so `tnum` is frozen into the cmap at
-  build time instead (`build_fonts.py`), producing a parallel `-tnum` face.
-  Proportional Geist digits are 384-663 units wide; frozen they are all 600.
-  A live readout cycling 1.36 / 0.50 / 2.08 **jitters by 9px** proportional
-  and is **stable at 23px** tabular. That is the reason to do it — not width
-  parity with the browser, which it does not buy.
-* **ImGui rounds every glyph advance to a whole pixel** (9.0, 5.0, 8.0 at
-  14px; still 66.0, 38.0 at 100px). Browsers use fractional advances, so a
-  long string drifts by a few px either way. This is the irreducible text
-  difference, and it is why `text.num14` sits -6px against the oracle.
+* **ImGui's loader is FreeType, not stb_truetype**, in imgui_bundle 1.92.
+  It sizes a face by `ascent - descent` (REAL_DIM) where CSS maps the em
+  (Geist's span was 1.30em, Inter's is 1.21). The old answer was to push
+  `css x span` - but **ImGui 1.92 rounds every font size to a whole
+  pixel**, so 12px Geist became 15.6 and then 16: text 2.6% large. The
+  build writes a one-em line box into the TTFs, so the kit pushes the CSS
+  px itself; the real ascender and descender live in `fonts/metrics.json`.
+* **FreeType hints by default, and a hinted advance is a whole pixel.** The
+  faces load with `NoHinting`.
+* **No OpenType features at runtime.** The build exports the font's
+  default substitutions (Inter's `calt`: an arrow for `->`, a `×` for an
+  `x` between digits, punctuation raised between capitals and digits; and
+  `tnum` on the tabular faces, in lookup order) and its `kern` pairs to
+  `fonts/metrics.json`, and `draw.shape` replays them. The build checks the
+  replay against HarfBuzz - Chromium's shaper - on 27,319 strings per face
+  and fails on any difference. Advances come from `hmtx` too - FreeType's
+  are in 1/64ths of a pixel.
+* **Line-height is Tailwind's.** `label` centres a line box of the size's
+  Tailwind line-height (`draw.TEXT_LEADING`: 12px on 16, 14 on 20), as
+  every shadcn component's text has one. In Geist this was invisible; in
+  Inter it was a pixel (RETRO 92).
+* **Layout is exact; glyph placement is close, for speed.** Widths,
+  alignment and baselines come from the frozen metrics. The glyphs are
+  drawn by `add_text` in runs that restart at the kerned pen whenever
+  ImGui's unkerned one drifts 0.25px (`draw.DRIFT_PX`), so a glyph lands
+  within ~0.7px of Chromium's position. One quad per glyph was exact and
+  cost ~3ms of a dashboard frame. The baseline stays a whole pixel
+  (`draw.baseline_y`, measured on 252 cells in each font - see its
+  docstring for the two roundings).
+* Tabular figures: proportional digits differ in width; tabular ones do
+  not. A live readout cycling 1.36 / 0.50 / 2.08 **jitters by 9px**
+  proportional (Geist) and is **stable** tabular.
 
 ## Measuring a component before building it
 

@@ -146,20 +146,21 @@ def test_the_icon_sizes_keep_text_sm():
 # --------------------------------------------------------------------------
 # intrinsic size
 # --------------------------------------------------------------------------
-# Chromium, the string "Button" in Geist Medium at each size. The CONTENT
-# width is the browser's own text advance and ImGui will not reproduce it to
-# the fraction, so `text_w` is passed in and the law is what is pinned.
+# Chromium, the string "Button" in Inter Medium at each size (?probe's
+# `button.size.*`; Chromium lays out in 1/64ths of a pixel). The law is
+# what is pinned, so the browser's own content width is passed in; the
+# kit's `text_w` agrees with it to 0.005px (test_text.py checks text).
 #
-#   size      content    box
-#   xs         37.4844   55.4844
-#   sm         39.9688   61.9688
-#   default    43.7188   65.7188
-#   lg         43.7188   65.7188
+#   size      content     box
+#   xs         37.578125  55.578125
+#   sm         40.078125  62.078125
+#   default    43.84375   65.84375
+#   lg         43.84375   65.84375
 BROWSER_INTRINSIC = [
-    ("xs",      37.4844, 55.4844),
-    ("sm",      39.9688, 61.9688),
-    ("default", 43.7188, 65.7188),
-    ("lg",      43.7188, 65.7188),
+    ("xs",      37.578125, 55.578125),
+    ("sm",      40.078125, 62.078125),
+    ("default", 43.84375,  65.84375),
+    ("lg",      43.84375,  65.84375),
 ]
 
 
@@ -616,14 +617,13 @@ def test_disabled_opacity_is_a_half():
 def test_the_underline_sits_four_pixels_below_the_baseline():
     """`underline-offset-4` hangs off the ALPHABETIC BASELINE, not the box.
 
-    Measured on the rendered `link` button by diffing the rest and hover
+    Measured on ?probe's `link` button by diffing the rest and hover
     frames: exactly one row differs, at box-relative y 25 of a 32 px button
-    at 14 px, spanning the text's own advance width (box-relative x 11..54,
-    44 px, against a text box of x 11 w 43.719).
+    at 14 px, spanning the text's own advance width (box-relative x 11..54).
+    Inter, re-measured when the kit moved to it; Geist gave the same row.
     """
     y = CB.underline_y(0.0, 32.0, 14.0)
-    assert y == pytest.approx(24.97, abs=0.05)
-    assert round(y) == 25
+    assert y == 25.0
     assert CB.UNDERLINE_OFFSET == 4.0
     assert CB.UNDERLINE_W == 1.0
 
@@ -639,33 +639,12 @@ def test_the_underline_follows_the_glyph_box_and_not_the_box_centre():
     assert CB.underline_y(0.0, 32.0, 12.0) < a
 
 
-def test_the_ascent_fraction_is_geists_own_metric():
-    """ASCENT_FRAC has to agree with draw.FONT_SPAN_EM or the underline drifts
-    off the baseline: the span is (ascender - descender) / upem and the
-    fraction is ascender / (ascender - descender)."""
-    assert D.FONT_SPAN_EM["medium"] == pytest.approx(1.30)
-    assert CB.ASCENT_FRAC == pytest.approx(1005.0 / 1300.0)
-    assert 14.0 * D.FONT_SPAN_EM["medium"] * CB.ASCENT_FRAC == pytest.approx(14.07)
-
-
-# --------------------------------------------------------------------------
-# ButtonGroup
-# --------------------------------------------------------------------------
-# Chromium, three `outline` buttons in a horizontal group, from ?probe:
-#
-#   group  154.0625 x 32 at x 24
-#   [0]     48.6875 at  24.0000   radii 10,0,0,10   borders 1,1,1,1
-#   [1]     47.8125 at  72.6875   radii  0,0,0,0    borders 1,1,1,0
-#   [2]     57.5625 at 120.5000   radii  0,10,10,0  borders 1,1,1,0
-#
-# and two in a vertical group:
-#
-#   group   48.8125 x 64
-#   [0]     32 tall at y 674.375  radii 10,10,0,0   borders 1,1,1,1
-#   [1]     32 tall at y 706.375  radii  0,0,10,10  borders 0,1,1,1
-
-H_RADII = [("tl", "bl"), (), ("tr", "br")]
-V_RADII = [("tl", "tr"), ("bl", "br")]
+def test_the_underline_hangs_off_the_texts_own_baseline():
+    """The rule and the glyphs share one baseline, `draw.baseline_y`, so a
+    change to how text is placed moves the underline with it."""
+    for h, font in ((32.0, 14.0), (36.0, 14.0), (24.0, 12.0)):
+        base = D.baseline_y(0.0, font, h, D.TEXT_LEADING[font])
+        assert CB.underline_y(0.0, h, font) == base + CB.UNDERLINE_OFFSET
 
 
 def test_horizontal_group_rounds_only_its_outer_corners():

@@ -28,7 +28,7 @@ from hyperspace.dkit import comp_combobox as C
 from hyperspace.dkit import tokens as T
 
 
-# A fake text measurer: 7 px a character, which is close enough to Geist at
+# A fake text measurer: 7 px a character, which is close enough to the kit's font at
 # 14px to keep the numbers readable and, more to the point, EXACT — so a
 # width assertion below is arithmetic rather than a tolerance.
 def mw(s, variant="regular", size=14.0):
@@ -786,13 +786,13 @@ def test_the_group_heading_is_regular_weight_not_medium():
     declares no weight, so it inherits the panel's. The kit carried
     `medium`, which is `command.tsx`'s CommandGroup heading."""
     t = C.combobox_table("light")
-    # asked of the source: the kit's variant names map to Geist's face
+    # asked of the source: the kit's variant names map to its font's face
     # files, and the one Chromium reports as 400 is the Regular face.
     from hyperspace.dkit import draw as D
     faces = dict(D.FACE_FILES)
-    assert faces[t["head_weight"]] == "Geist-Regular.ttf", \
+    assert faces[t["head_weight"]] == f"{D.FAMILY}-Regular.ttf", \
         f"{t['head_weight']} is not the 400 face"
-    assert faces["medium"] == "Geist-Medium.ttf"      # i.e. 500, which it is not
+    assert faces["medium"] == f"{D.FAMILY}-Medium.ttf"      # i.e. 500, which it is not
     assert BROWSER_GRP["label_weight"] == 400
     assert t["head_h"] == BROWSER_GRP["label_h"]
     assert t["head_pad_x"] == BROWSER_GRP["label_pad_x"]

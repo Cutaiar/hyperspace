@@ -501,7 +501,7 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     imgui.push_style_color(imgui.Col_.nav_cursor, imgui.ImVec4(0, 0, 0, 0))
     # The SAME font `draw.label` draws every other string in the kit with.
     # Without it the stock widget renders the value in imgui's CURRENT font
-    # at imgui's current size, which is not the Geist face at
+    # at imgui's current size, which is not the kit's face at
     # `font * FONT_SPAN_EM` - so the value and the placeholder, one line of
     # one field, had different metrics and did not land on the same rows.
     # Measured 1 px apart on Mesa at density 1; far wider on a Retina Mac,
@@ -528,9 +528,15 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     # where the browser's is 6 (`pr-1.5` from the inline-end addon). That
     # clips a very long value four pixels earlier than Chromium would; it
     # is the deliberate half of the trade.
-    imgui.push_style_var(imgui.StyleVar_.frame_padding,
-                         imgui.ImVec2(pl, max(0.0, (h - fs) / 2.0)))
-    imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
+    #
+    # The glyphs then sit on imgui's line, whose baseline is its face's
+    # ascent below the padding - not Blink's, which `draw.label` (the
+    # placeholder) uses. The frame is moved by the difference, which is
+    # zero at the field's 14px in an even box and at most a pixel anywhere.
+    pad_y = max(0.0, (h - fs) / 2.0)
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(pl, pad_y))
+    imgui.set_cursor_screen_pos(
+        imgui.ImVec2(x, D.stock_text_y(y, tbl["field_font"], h, ui.faces) - pad_y))
     imgui.push_item_width(w - cz)
     if grab_focus:
         # The popup window has the keyboard the moment it appears, but
