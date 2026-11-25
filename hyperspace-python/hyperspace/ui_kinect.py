@@ -48,8 +48,8 @@ from .kinect import (
     IR_MAX,
     IR_MIN,
     LEDS,
+    RADAR_COLS,
     RADAR_RANGE,
-    RADAR_SHAPE,
     TILT_MAX,
 )
 
@@ -66,13 +66,12 @@ RADAR_MAX_H = 260.0                 # ... capped
 RADAR_PAD = 4.0                     # px inside the frame
 RADAR_ARC = 14                      # segments in an arc
 SENSOR_W = 640                      # the depth picture's width, pixels
-HEAT_TOKENS = ("DIM", "RED")        # the heat ramp, thin cell to fullest: ui.py names, read when first drawn
-# (ui imports this module while it is still loading, so the colours cannot be read at import)
-HEAT_STEPS = 16
-HEAT_ALPHA = (0.18, 0.85)
-RADAR_TIP = ("The Kinect from above, the sensor at the bottom. The faint fan is all it can see; "
-             "the bright part is what near and far keep; the heat is where it reads something "
-             "now (the brighter, the more of the picture). Mirror flips it as it flips the cloud.")
+SPEC_RANGE = (0.8, 4.0)             # metres: Microsoft's working range for the Xbox 360 Kinect
+RADAR_TIP = ("The Kinect from above, the sensor at the bottom. The grey fan is what its depth camera "
+             "sees (its own calibration; the arcs are its working range). The white dots are what it "
+             "reads now, the nearest thing in each direction, as libfreenect gives it in millimetres. "
+             "The red wireframe is your near / far / centre: what the cloud keeps. Mirror flips it as "
+             "it flips the cloud.")
 
 VIDEO_LABELS = (("off", "off"), ("color", "colour"), ("ir", "infrared"))
 
@@ -124,6 +123,9 @@ def body(panel, dev) -> None:
     """The selected Kinect's pane. `dev` is its `KinectDevice` (or anything with
     `telemetry`, `request`, `place`, `options` and `status`)."""
     st = _state(panel, str(getattr(dev, "role", "kinect")))
+    watch = getattr(dev, "watch", None)
+    if watch is not None:
+        watch()                     # the thread measures for the radar and telemetry only while this is called
     t = dev.telemetry
     live = bool(t.live)
 
@@ -145,7 +147,8 @@ def body(panel, dev) -> None:
 class RadarView:
     """The radar's lines in screen points: the theoretical fan's two edge rays
     (sensor to `rng`), the limited fan's arcs at `near` and `far` and its two
-    edge rays between them, and the `centre` tick (None beyond the range)."""
+    edge rays between them, the `centre` tick (None beyond the range), and arcs at
+    the sensor's working range."""
 
     apex: tuple[float, float]
     fan: tuple[tuple[float, float], tuple[float, float]]
@@ -154,6 +157,7 @@ class RadarView:
     far_arc: tuple[tuple[float, float], ...]
     edges: tuple[tuple[tuple[float, float], tuple[float, float]], ...]
     centre: tuple[tuple[float, float], tuple[float, float]] | None
+    spec: tuple[tuple[tuple[float, float], ...], ...] = ()    # arcs at the sensor's working range
 
 
 def half_angle(focal: float, width: float = SENSOR_W) -> float:
@@ -170,7 +174,7 @@ def radar_scale(focal: float, w: float, h: float, rng: float = RADAR_RANGE) -> f
 
 def radar_geometry(focal: float, near: float, far: float, centre: float, scale: float,
                    ox: float, oy: float, rng: float = RADAR_RANGE,
-                   steps: int = RADAR_ARC) -> RadarView:
+                   steps: int = RADAR_ARC, spec: tuple[float, ...] = SPEC_RANGE) -> RadarView:
     """The radar's lines, pure: the sensor at (ox, oy), straight ahead up the
     screen, `scale` pixels per metre. The limited fan is the same fan between
     `near` and `far` (kept inside 0..rng and in order)."""
@@ -189,33 +193,37 @@ def radar_geometry(focal: float, near: float, far: float, centre: float, scale: 
         y = oy - centre * scale
         tick = ((ox - 4.0, y), (ox + 4.0, y))
     return RadarView((ox, oy), (at(rng, -half), at(rng, half)), arc(rng), arc(near), arc(far),
-                     ((at(near, -half), at(far, -half)), (at(near, half), at(far, half))), tick)
+                     ((at(near, -half), at(far, -half)), (at(near, half), at(far, half))), tick,
+                     tuple(arc(r) for r in spec if r <= rng))
 
 
 @lru_cache(maxsize=8)
-def _rays(focal: float, n: int) -> tuple[tuple[float, float], ...]:
-    """(sin, cos) of the `n + 1` angle edges of the radar's grid across the fan."""
-    half = half_angle(focal)
-    return tuple((math.sin(a), math.cos(a))
-                 for a in (-half + 2 * half * i / n for i in range(n + 1)))
+def _lateral(focal: float, mirror: bool) -> tuple[float, ...]:
+    """Per radar column, (x − W/2) / focal, x the column's pixel: a reading z metres
+    out lies z times this to the side. Flipped when mirrored."""
+    step = SENSOR_W // RADAR_COLS
+    sign = -1.0 if mirror else 1.0
+    return tuple(sign * (i * step + step // 2 - SENSOR_W / 2) / focal for i in range(RADAR_COLS))
 
 
-_ramp: list[int] = []
-
-
-def _heat(v: int) -> int:
-    """The u32 colour of a cell holding `v` (1-255), from the ramp of `HEAT_COLD` to
-    `HEAT_HOT`, built once from the tokens."""
-    if not _ramp:
-        cold, hot = (getattr(ui, n) for n in HEAT_TOKENS)
-        a0, a1 = HEAT_ALPHA
-        for i in range(HEAT_STEPS):
-            f = i / (HEAT_STEPS - 1)
-            _ramp.append(ui.u32(imgui.ImVec4(
-                cold.x + (hot.x - cold.x) * f,
-                cold.y + (hot.y - cold.y) * f,
-                cold.z + (hot.z - cold.z) * f, a0 + (a1 - a0) * f)))
-    return _ramp[min((v - 1) * HEAT_STEPS // 255, HEAT_STEPS - 1)]
+def radar_points(profile, focal: float, mirror: bool, scale: float, ox: float, oy: float,
+                 rng: float = RADAR_RANGE) -> list[list[tuple[float, float]]]:
+    """The readings as screen points, pure: `profile` is `kinect.radar_profile`'s mm a
+    column. Runs of neighbouring columns that read something within `rng`; a gap
+    (nothing read, or too far) ends a run, so a line is never drawn across one."""
+    k = _lateral(focal if focal > 0 else FOCAL, bool(mirror))
+    runs: list[list[tuple[float, float]]] = []
+    run: list[tuple[float, float]] = []
+    for i, mm in enumerate(profile[:RADAR_COLS]):
+        z = mm * 0.001
+        if 0.0 < z <= rng:
+            run.append((ox + k[i] * z * scale, oy - z * scale))
+        elif run:
+            runs.append(run)
+            run = []
+    if run:
+        runs.append(run)
+    return runs
 
 
 def _pts(points) -> list[imgui.ImVec2Like]:
@@ -223,7 +231,8 @@ def _pts(points) -> list[imgui.ImVec2Like]:
 
 
 def _radar(dev, t) -> None:
-    """The top-down radar: read-only, asks for nothing. Not live: the theoretical fan only, dim."""
+    """The top-down radar: read-only, asks for nothing. Not live: the sensor's fan and your
+frustum, no readings."""
     w = max(imgui.get_content_region_avail().x, 40.0)
     h = min(w * RADAR_ASPECT, RADAR_MAX_H)
     imgui.invisible_button(f"##{RADAR_ID}", imgui.ImVec2(w, h))
@@ -239,40 +248,32 @@ def _radar(dev, t) -> None:
     g = radar_geometry(focal, o.near, o.far, o.centre, scale, ox, oy)
     line = ui.u32(ui.LINE)          # the theoretical fan: the one grey line, live or not
     apex = imgui.ImVec2(ox, oy)
-    if live:
-        grid = t.radar
-        n_a, n_r = t.radar_shape
-        if grid is not None and len(grid) == n_a * n_r and (n_a, n_r) == RADAR_SHAPE:
-            rays = _rays(focal, n_a)
-            step = RADAR_RANGE / n_r * scale
-            for i in range(n_a):
-                (s0, c0), (s1, c1) = rays[i], rays[i + 1]
-                for j in range(n_r):
-                    v = grid[i * n_r + j]
-                    if v:
-                        a, b = j * step, (j + 1) * step
-                        dl.add_convex_poly_filled(
-                            [imgui.ImVec2(ox + a * s0, oy - a * c0), imgui.ImVec2(ox + b * s0, oy - b * c0),
-                             imgui.ImVec2(ox + b * s1, oy - b * c1), imgui.ImVec2(ox + a * s1, oy - a * c1)],
-                            _heat(v))
+    if live and t.radar is not None:
+        dots = ui.u32(ui.TEXT)
+        for run in radar_points(t.radar, focal, o.mirror, scale, ox, oy):
+            if len(run) > 1:
+                dl.add_polyline(_pts(run), dots, 1.0, 0)
+            for x, y in run:
+                dl.add_circle_filled(imgui.ImVec2(x, y), 1.6, dots, 6)
+    for arc in g.spec:
+        dl.add_polyline(_pts(arc), line, 1.0, 0)
     dl.add_polyline(_pts(g.rim), line, 1.0, 0)
     dl.add_line(apex, imgui.ImVec2(*g.fan[0]), line, 1.0)
     dl.add_line(apex, imgui.ImVec2(*g.fan[1]), line, 1.0)
-    if live:
-        strong = ui.u32(ui.TEXT)
-        dl.add_polyline(_pts(g.near_arc), strong, 1.5, 0)
-        dl.add_polyline(_pts(g.far_arc), strong, 1.5, 0)
-        for a, b in g.edges:
-            dl.add_line(imgui.ImVec2(*a), imgui.ImVec2(*b), strong, 1.5)
-        if g.centre:
-            dl.add_line(imgui.ImVec2(*g.centre[0]), imgui.ImVec2(*g.centre[1]), ui.u32(ui.RED), 2.0)
-        imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
-        room = w / 2 - RADAR_PAD - 2
-        for r in (min(o.near, RADAR_RANGE), min(o.far, RADAR_RANGE)):
-            text = ui.fit_text(f"{r:g} m", room)
-            y = max(oy - r * scale - imgui.get_text_line_height(), r0.y + 1)
-            dl.add_text(imgui.ImVec2(ox + 3, y), ui.u32(ui.DIM), text)
-        imgui.pop_font()
+    strong = ui.u32(ui.RED)          # your frustum: the one accent, over the grey sensor's
+    dl.add_polyline(_pts(g.near_arc), strong, 1.5, 0)
+    dl.add_polyline(_pts(g.far_arc), strong, 1.5, 0)
+    for a, b in g.edges:
+        dl.add_line(imgui.ImVec2(*a), imgui.ImVec2(*b), strong, 1.5)
+    if g.centre:
+        dl.add_line(imgui.ImVec2(*g.centre[0]), imgui.ImVec2(*g.centre[1]), strong, 2.0)
+    imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
+    room = w / 2 - RADAR_PAD - 2
+    for r in (min(o.near, RADAR_RANGE), min(o.far, RADAR_RANGE)):
+        text = ui.fit_text(f"{r:g} m", room)
+        y = max(oy - r * scale - imgui.get_text_line_height(), r0.y + 1)
+        dl.add_text(imgui.ImVec2(ox + 3, y), ui.u32(ui.DIM), text)
+    imgui.pop_font()
     if hovered:
         ui.tooltip(RADAR_TIP)
 

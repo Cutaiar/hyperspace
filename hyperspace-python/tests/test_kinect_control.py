@@ -166,7 +166,7 @@ def test_the_snapshot_is_whole_and_swapped_in_not_edited():
     d.open()
     try:
         live(d)
-        assert until(lambda: d.telemetry.share is not None)
+        assert until(lambda: (d.watch() or True) and d.telemetry.share is not None)
         one = d.telemetry
         assert until(lambda: d.telemetry is not one and d.telemetry.seq > one.seq)
         assert until(lambda: d.telemetry.depth_fps > 0)        # a rate is of the last second
@@ -543,53 +543,48 @@ def test_the_video_choice_reaches_the_devices_options_and_pictures():
         d.close()
 
 
-def cell(grid: bytes, i: int, j: int) -> int:
-    return grid[i * kinect.RADAR_SHAPE[1] + j]
+def test_the_radar_profile_is_the_nearest_millimetres_a_column_in_the_band_round_the_axis():
+    d = depth((240, 4, 2500), (250, 4, 1800), (100, 12, 500), (240, 636, 3000), (240, 20, 0))
+    p = kinect.radar_profile(d)
+    assert len(p) == kinect.RADAR_COLS
+    assert p[0] == 1800                              # the nearer of two, in column 4 (the first)
+    assert p[1] == 0                                 # row 100 is outside the band: the floor and ceiling are not read
+    assert p[79] == 3000 and p[2] == 0               # nothing read is 0
+    assert kinect.radar_profile(depth()) == (0,) * kinect.RADAR_COLS
+    assert all(isinstance(v, int) for v in p)
 
 
-def lit(grid: bytes) -> list[tuple[int, int]]:
-    r = kinect.RADAR_SHAPE[1]
-    return [(k // r, k % r) for k, v in enumerate(grid) if v]
+def test_the_profile_is_cheap():
+    d = np.random.default_rng(1).integers(500, 4500, (480, 640)).astype(np.uint16)
+    kinect.radar_profile(d)
+    t = time.perf_counter()
+    for _ in range(100):
+        kinect.radar_profile(d)
+    assert (time.perf_counter() - t) / 100 < 0.002     # a few tens of µs here; 2 ms is slack for a slow runner
 
 
-def test_the_radar_grid_puts_a_pixel_in_its_cell_and_mirrors_it():
-    n_a, n_r = kinect.RADAR_SHAPE
-    px = depth((240, 480, 2000))                      # right of centre, 2 m
-    plain = kinect.radar_grid(px, F, O(mirror=False))
-    flip = kinect.radar_grid(px, F, O(mirror=True))
-    [(a, r)] = lit(plain)
-    assert a > n_a // 2 and r == int(2.0 * np.hypot(160, F) / F / kinect.RADAR_RANGE * n_r)
-    assert cell(plain, a, r) == 255
-    assert lit(flip) == [(n_a - 1 - a, r)]
-    ahead = kinect.radar_grid(depth((240, 320, 2000)), F, O(mirror=False))
-    assert lit(ahead) == [(n_a // 2, int(2.0 / kinect.RADAR_RANGE * n_r))]
-    far = kinect.radar_grid(depth((240, 320, 9000)), F, O())            # past the radar's range
-    assert not any(far)
-
-
-def test_the_radar_grid_is_empty_for_an_empty_picture_and_scales_to_the_fullest():
-    assert kinect.radar_grid(depth(), F, O()) == bytes(kinect.RADAR_SHAPE[0] * kinect.RADAR_SHAPE[1])
-    g = kinect.radar_grid(depth((240, 320, 2000), (244, 320, 2000), (248, 320, 2000),
-                                (240, 480, 3000)), F, O(mirror=False))
-    assert sorted(v for v in g if v) == [85, 255]
-    assert len(g) == kinect.RADAR_SHAPE[0] * kinect.RADAR_SHAPE[1]
-
-
-def test_the_radar_is_made_on_the_devices_thread_and_published():
-    s = Steered(picture=depth((240, 480, 2000)), o=O(mirror=False))
+def test_the_radar_is_made_on_the_devices_thread_only_while_watched_and_published():
+    s = Steered(picture=depth((240, 484, 2000)), o=O(mirror=False))
     seen = []
-    real = kinect.radar_grid
-    kinect.radar_grid = lambda *a: (seen.append(threading.current_thread().name), real(*a))[1]
+    real = kinect.radar_profile
+    kinect.radar_profile = lambda *a: (seen.append(threading.current_thread().name), real(*a))[1]
     d = device(s, mirror=False)
     try:
         d.open()
         live(d)
-        assert until(lambda: d.telemetry.radar is not None)
+        time.sleep(0.4)
+        assert d.telemetry.radar is None and seen == []          # nobody has looked: nothing is measured
+        assert until(lambda: (d.watch() or True) and d.telemetry.radar is not None)
         t = d.telemetry
-        assert t.focal == F and t.radar_shape == kinect.RADAR_SHAPE and any(t.radar)
-        assert t.radar == real(s.picture, F, O(mirror=False))
+        assert t.focal == F and t.radar[60] == 2000 and sum(1 for v in t.radar if v) == 1
+        assert t.radar == real(s.picture)
+        d.watch()
+        time.sleep(kinect.WATCH_S + 0.3)                         # …and it stops when they stop
+        n = len(seen)
+        time.sleep(0.4)
+        assert len(seen) == n
     finally:
-        kinect.radar_grid = real
+        kinect.radar_profile = real
         d.close()
     assert seen and set(seen) == {"kinect-room"}
     assert kinect.Telemetry().radar is None and kinect.Telemetry().focal == 575.0

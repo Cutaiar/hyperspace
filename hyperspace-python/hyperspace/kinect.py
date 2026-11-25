@@ -87,9 +87,10 @@ _MOTOR, _CAMERA, _LOG_ERROR = 0x01, 0x02, 1
 IR_H = 488           # libfreenect's 8-bit infrared picture is 640 × 488
 STATS_S = 0.25       # the telemetry is made this often at most
 FOCAL = 575.0        # the depth camera's focal length, pixels, until the sensor says (Telemetry.focal)
-RADAR_SHAPE = (25, 16)   # the radar's grid: angle cells (odd: the middle one is straight ahead) x range cells
 RADAR_RANGE = 5.0        # metres, the radar's far edge
-RADAR_STEP = 4           # every 4th pixel and row is binned (~19k pixels: about a millisecond)
+RADAR_COLS = 80          # columns the radar reads: every 8th of the picture's 640
+RADAR_ROWS = (180, 300)  # …in this band of rows round the optical axis: a slice, not the floor or the ceiling
+WATCH_S = 2.0            # the pane's measures are made only while it has looked this lately
 TILT_POLL_S = 0.3    # the motor's state is read this often at most (a blocking control transfer)
 REQUESTS_PER_READ = 8    # requests served between two reads: the events keep being pumped
 TILT_MAX = 31.0      # libfreenect clamps the target to ±31°
@@ -182,36 +183,18 @@ def deproject(depth: np.ndarray, focal: float, o: Options,
     return pts, rgb[::s, ::s][rows, cols].astype(np.float32) / np.float32(255.0)
 
 
-def radar_grid(depth: np.ndarray, focal: float, o: Options) -> bytes:
-    """A top-down heat map of the depth picture: `RADAR_SHAPE` cells, angle
-    (across the sensor's fan, left to right in the cloud's frame, so mirrored
-    as `deproject` is) by range (straight-line metres out to `RADAR_RANGE`),
-    row-major by angle; each cell the count of strided pixels in it, scaled to
-    0-255 against the fullest cell (a cell with any pixel is at least 1). All
-    zero for a picture that reads nothing. Pure numpy: the device's thread
-    calls it, at the telemetry's rate."""
-    n_a, n_r = RADAR_SHAPE
+def radar_profile(depth: np.ndarray) -> tuple[int, ...]:
+    """The radar's data, straight from libfreenect's millimetres: the nearest
+    reading in each of `RADAR_COLS` columns (every 8th), over the band of rows
+    `RADAR_ROWS` round the optical axis; 0 where a column read nothing. About
+    10 000 pixels and no trigonometry: the pane turns a column and its depth
+    into a point (lateral = (x − W/2) · z / focal, forward = z). Left to right
+    in the picture's own order; the pane mirrors as `deproject` does."""
     w = depth.shape[1]
-    sub = depth[::RADAR_STEP, ::RADAR_STEP]
-    rows, cols = np.nonzero(sub)
-    if not len(rows):
-        return bytes(n_a * n_r)
-    f = float(focal) if focal and focal > 0 else FOCAL
-    x = cols.astype(np.float32) * RADAR_STEP - w / 2
-    z = sub[rows, cols].astype(np.float32) * np.float32(0.001)
-    half = math.atan((w / 2) / f)
-    th = np.arctan2(x, np.float32(f))
-    if o.mirror:
-        th = -th
-    r = z * np.hypot(x, np.float32(f)) / np.float32(f)
-    a = np.clip(((th + half) / (2 * half) * n_a).astype(np.int32), 0, n_a - 1)
-    k = (r / np.float32(RADAR_RANGE) * n_r).astype(np.int32)
-    keep = k < n_r
-    count = np.bincount(a[keep] * n_r + k[keep], minlength=n_a * n_r)
-    top = int(count.max())
-    if top == 0:
-        return bytes(n_a * n_r)
-    return (-(-count * 255 // top)).astype(np.uint8).tobytes()
+    step = w // RADAR_COLS
+    band = depth[RADAR_ROWS[0]:RADAR_ROWS[1], step // 2::step]
+    near = np.where(band == 0, np.uint16(65535), band).min(axis=0)
+    return tuple(int(v) if v != 65535 else 0 for v in near)
 
 
 def depth_picture(depth: np.ndarray, o: Options) -> np.ndarray:
@@ -755,8 +738,7 @@ class Telemetry:
     said: str = ""                   # the last request's outcome
     can: dict = field(default_factory=dict)      # control → why not ("" it can)
     focal: float = FOCAL             # the depth camera's, pixels (the radar's fan)
-    radar: bytes | None = None       # `radar_grid` of the last measure (None until measured)
-    radar_shape: tuple[int, int] = RADAR_SHAPE
+    radar: tuple | None = None       # `radar_profile` of the last measure, mm a column (None until measured)
 
 
 class Picture(SharedSource):
@@ -805,7 +787,8 @@ class KinectDevice(devices.Base):
         self._rates = (0.0, 0.0)
         self._measured = 0.0
         self._points = 0
-        self._radar: bytes | None = None
+        self._radar: tuple | None = None
+        self._watched = float("-inf")
         self._focal = FOCAL
         self._look: tuple[float | None, float | None, float | None] = (None, None, None)
         self._said = ""
@@ -1046,13 +1029,19 @@ class KinectDevice(devices.Base):
             log=info.get("log", ""), said=self._said, can=info.get("can", {}),
             focal=self._focal, radar=self._radar)
 
-    def _measure(self, depth: np.ndarray, focal: float = FOCAL, o: Options | None = None) -> None:
+    def watch(self) -> None:
+        """The pane looked just now. The share, the nearest and median depth and
+        the radar's profile are measured on the thread only while one has
+        (`WATCH_S`): a Kinect nobody is looking at pays for none of it."""
+        self._watched = time.monotonic()
+
+    def _measure(self, depth: np.ndarray, focal: float = FOCAL) -> None:
         """What the depth picture reads, a few times a second: the share of
-        pixels with a reading, and the nearest and median of those, metres.
-        A view filled by something very close reads as a share that falls. And the
-        radar's heat map (`radar_grid`), for the pane."""
+        pixels with a reading, and the nearest and median of those, metres
+        (a view filled by something very close reads as a share that falls),
+        and the radar's profile."""
         self._focal = focal if focal and focal > 0 else FOCAL
-        self._radar = radar_grid(depth, self._focal, o or self._o)
+        self._radar = radar_profile(depth)
         read = depth[depth > 0]
         self._look = ((float(read.min()) * 0.001, float(np.median(read)) * 0.001,
                        read.size / depth.size) if read.size else (None, None, 0.0))
@@ -1066,9 +1055,9 @@ class KinectDevice(devices.Base):
         self._fresh = (n, pts, cols)
         self._points = len(pts)
         t = time.monotonic()
-        if t - self._measured >= STATS_S:
+        if t - self._measured >= STATS_S and t - self._watched < WATCH_S:
             self._measured = t
-            self._measure(depth, s.focal, o)
+            self._measure(depth, s.focal)
         for sid, pic in self._pictures.items():
             if not pic.held:
                 continue

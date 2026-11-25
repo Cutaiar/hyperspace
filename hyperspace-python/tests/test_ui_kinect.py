@@ -13,7 +13,7 @@ from imgui_bundle import imgui
 from test_ui_shell import build_rig
 from ui_driver import Driver
 
-from hyperspace import graphview, kinect, ui_graph, ui_kinect
+from hyperspace import graphview, kinect, ui, ui_graph, ui_kinect
 
 ALL = {"kinect.tilt", "kinect.tilt.go", "kinect.tilt.level", "kinect.led", "kinect.ir",
        "kinect.video.off", "kinect.video.color", "kinect.video.ir", "kinect.auto_exposure",
@@ -24,13 +24,15 @@ OPEN = {k: "" for k in ("tilt", "led", "ir", "video", "restart", "reconnect", "a
                         "white_balance", "flicker")}
 
 
-def radar_cells() -> bytes:
-    """A radar grid with a few cells lit, one at full."""
-    a, r = kinect.RADAR_SHAPE
-    g = bytearray(a * r)
-    for i, j, v in ((12, 6, 255), (13, 6, 90), (4, 12, 1), (20, 3, 140)):
-        g[i * r + j] = v
-    return bytes(g)
+def radar_profile() -> tuple:
+    """A radar profile: a person's width of readings at 2 m, a wall at 4 m, gaps."""
+    p = [0] * kinect.RADAR_COLS
+    for c in range(30, 42):
+        p[c] = 2000
+    for c in range(60, 80):
+        p[c] = 4000
+    p[5] = 9000                                   # past the radar's range
+    return tuple(p)
 
 
 class Dev:
@@ -45,7 +47,7 @@ class Dev:
                 "tilt_status": "stopped", "accel": (-0.38, 9.44, 0.2), "led": "green",
                 "target": 0.0, "ir": 30, "exposure": 10000, "flags": {"auto_exposure": False},
                 "video": "color", "log": "", "said": "", "can": {**OPEN, "exposure": ""}, "focal": 575.0,
-                "radar": radar_cells(), "radar_shape": kinect.RADAR_SHAPE}
+                "radar": radar_profile()}
         self.telemetry = kinect.Telemetry(**{**base, **tele})
         self.status = "connected"
         self.options = kinect.Options()
@@ -300,17 +302,59 @@ def test_the_radar_is_drawn_inside_the_pane_and_asks_for_nothing_even_unlit(rig,
             assert dev.asked == [] and dev.placed == []
 
 
-def test_the_radar_draws_a_quad_per_lit_cell_from_the_tokens(rig, monkeypatch):
-    quads = []
-    real = imgui.ImDrawList.add_convex_poly_filled
+def test_the_radar_plots_the_readings_as_dots_and_lines_in_the_tokens_colours(rig, monkeypatch):
+    dots, lines, quads = [], [], []
+    real_c, real_p = imgui.ImDrawList.add_circle_filled, imgui.ImDrawList.add_polyline
+    monkeypatch.setattr(imgui.ImDrawList, "add_circle_filled",
+                        lambda self, c, r, col, n=0: (dots.append(col), real_c(self, c, r, col, n))[1])
+    monkeypatch.setattr(imgui.ImDrawList, "add_polyline",
+                        lambda self, pts, col, fl, th: (lines.append(col), real_p(self, pts, col, fl, th))[1])
     monkeypatch.setattr(imgui.ImDrawList, "add_convex_poly_filled",
-                        lambda self, pts, col: (quads.append((len(pts), col)), real(self, pts, col))[1])
+                        lambda self, *a: quads.append(a))
     Pane(rig, monkeypatch, Dev(), ui_graph.SIDE_W)
-    assert quads and {n for n, _ in quads} == {4}
-    assert len({c for _, c in quads}) >= 3                       # the ramp: not one colour
-    quads.clear()
+    assert dots and len(dots) % 32 == 0 and set(dots) == {ui.u32(ui.TEXT)}   # 12 + 20 a frame; the 9 m one is out of range
+    assert quads == []                                                    # no cells: a dot a column
+    assert {ui.u32(ui.RED), ui.u32(ui.LINE), ui.u32(ui.TEXT)} <= set(lines)   # yours, the sensor's, the readings
+    dots.clear()
     Pane(rig, monkeypatch, Dev(live=False, can={}), ui_graph.SIDE_W)
-    assert quads == []                                           # not live: the frustum only
+    assert dots == []                                                     # not live: no readings
+
+
+def test_the_readings_become_points_the_pure_way():
+    prof = [0] * kinect.RADAR_COLS
+    prof[40], prof[41], prof[43] = 2000, 2000, 3000
+    runs = ui_kinect.radar_points(prof, 575.0, False, 100.0, 0.0, 500.0)
+    assert [len(r) for r in runs] == [2, 1]                                # a gap ends a run
+    (x0, y0), (x1, _y1) = runs[0]
+    assert y0 == pytest.approx(500 - 2.0 * 100.0)                          # forward = z
+    assert x0 == pytest.approx(((40 * 8 + 4 - 320) / 575.0) * 2.0 * 100.0) and x1 > x0   # lateral = (x − W/2) z / f
+    mirrored = ui_kinect.radar_points(prof, 575.0, True, 100.0, 0.0, 500.0)
+    assert mirrored[0][0][0] == pytest.approx(-x0)
+    assert ui_kinect.radar_points([0] * kinect.RADAR_COLS, 575.0, False, 100, 0, 0) == []
+    assert ui_kinect.radar_points([9000] * kinect.RADAR_COLS, 575.0, False, 100, 0, 0) == []
+
+
+def test_the_sensors_working_range_is_drawn_apart_from_your_frustum():
+    g = ui_kinect.radar_geometry(575.0, 1.0, 3.0, 2.0, 40.0, 100.0, 200.0)
+    assert len(g.spec) == 2 and g.near_arc != g.spec[0]
+    assert g.spec[0][0][1] > g.spec[1][0][1]                               # 0.8 m is nearer the sensor than 4 m
+
+
+def test_your_frustum_is_drawn_with_no_sensor_too(rig, monkeypatch):
+    lines = []
+    real = imgui.ImDrawList.add_polyline
+    monkeypatch.setattr(imgui.ImDrawList, "add_polyline",
+                        lambda self, pts, col, fl, th: (lines.append(col), real(self, pts, col, fl, th))[1])
+    Pane(rig, monkeypatch, Dev(live=False, can={}), ui_graph.SIDE_W)
+    assert ui.u32(ui.RED) in lines
+
+
+def test_the_pane_tells_the_device_it_is_looked_at(rig, monkeypatch):
+    dev = Dev()
+    dev.watched = 0
+    dev.watch = lambda: setattr(dev, "watched", dev.watched + 1)
+    Pane(rig, monkeypatch, dev, ui_graph.SIDE_W)
+    assert dev.watched >= 3 and dev.asked == []
 
 
 def test_the_limited_frustum_follows_near_and_far():
