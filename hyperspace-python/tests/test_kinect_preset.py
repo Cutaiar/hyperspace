@@ -38,7 +38,9 @@ def test_every_look_is_wired_and_every_effect_it_turns_on():
     to = {w["to"] for w in doc["graph"]["wires"]}
     assert {f"switch.in{k}" for k in range(1, 6)} <= to
     on = {k.split(".")[1] for k, v in doc["values"].items() if k.startswith("fx.") and k.endswith(".on") and v}
-    assert on <= {t.split(".")[0] for t in to}
+    # (a field source such as `line` is only ever a wire's start)
+    ends = to | {w["from"] for w in doc["graph"]["wires"]}
+    assert on <= {t.split(".")[0] for t in ends}
     assert set(doc["media"]["channels"]["b"]) == {"kinect:room/depth", "kinect:room/color"}
 
 
