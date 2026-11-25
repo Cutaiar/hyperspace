@@ -524,7 +524,7 @@ except ImportError:                       # not built yet
     ICONS, ICON_BOX, ICON_STROKE = {}, 24.0, 2.0
 
 
-def icon(dl, name, x, y, size, col, *, width=None) -> bool:
+def icon(dl, name, x, y, size, col, *, width=None, kept=None, slot=None) -> bool:
     """Stroke a Lucide icon into `size` x `size` at (x, y).
 
     Vector, so it stays crisp at any size and takes its colour from a token:
@@ -536,6 +536,12 @@ def icon(dl, name, x, y, size, col, *, width=None) -> bool:
     degrades to a gap instead of taking the frame down (the panel's draws are
     individually guarded — ARCHITECTURE.md:168 — and a kit should not fight
     that).
+
+    `kept` (a dict the caller keeps across frames) and `slot` (the widget's
+    own key in it) keep the flattened points, and draw them again while the
+    icon stands at the same place and size: the same points, so the same
+    pixels, without walking its curves. For an icon that stays put; one that
+    moves every frame only pays for the keeping.
     """
     subs = ICONS.get(name.replace("-", "_"))
     if not subs or col[3] <= 0.0:
@@ -543,36 +549,54 @@ def icon(dl, name, x, y, size, col, *, width=None) -> bool:
     s = size / ICON_BOX
     w = (width if width is not None else ICON_STROKE) * s
     c = _u32(col)
-    for ops in subs:
-        dl.path_clear()
-        closed = False
-        first = last = None
-        for op in ops:
-            k = op[0]
-            if k in ("M", "L"):
-                dl.path_line_to(imgui.ImVec2(x + op[1] * s, y + op[2] * s))
-                last = (op[1], op[2])
-            elif k == "C":
-                dl.path_bezier_cubic_curve_to(
-                    imgui.ImVec2(x + op[1] * s, y + op[2] * s),
-                    imgui.ImVec2(x + op[3] * s, y + op[4] * s),
-                    imgui.ImVec2(x + op[5] * s, y + op[6] * s))
-                last = (op[5], op[6])
-            elif k == "Z":
-                closed = True
-            if first is None and last is not None:
-                first = last
-        # A path whose last point IS its first point is already closed.
-        # Asking ImGui to close it too adds a zero-length segment, which under
-        # round joins draws a visible tick - it showed up on every circle.
-        if closed and first and last and \
-                abs(first[0] - last[0]) < 1e-6 and abs(first[1] - last[1]) < 1e-6:
-            closed = False
-        # imgui_bundle orders this (col, thickness, flags) - the third time
-        # this binding reverses the C++ order; always pass these by keyword
-        dl.path_stroke(c, thickness=w,
-                       flags=imgui.ImDrawFlags_.closed if closed else 0)
+    if kept is None:
+        for ops in subs:
+            flags = _icon_path(dl, ops, x, y, s)
+            # imgui_bundle orders this (col, thickness, flags) - the third time
+            # this binding reverses the C++ order; always pass these by keyword
+            dl.path_stroke(c, thickness=w, flags=flags)
+        return True
+    at = (x, y, size, imgui.get_style().curve_tessellation_tol)
+    got = kept.get(slot)
+    if got is None or got[0] is not subs or got[1] != at:
+        lines = []
+        for ops in subs:
+            flags = _icon_path(dl, ops, x, y, s)
+            lines.append(([imgui.ImVec2(p.x, p.y) for p in dl._path], flags))
+            dl.path_clear()
+        got = kept[slot] = (subs, at, lines)
+    for pts, flags in got[2]:              # `path_stroke`, which is `add_polyline` of the path
+        dl.add_polyline(pts, c, thickness=w, flags=flags)
     return True
+
+
+def _icon_path(dl, ops, x, y, s) -> int:
+    """One of an icon's strokes as the draw list's path; the flags to stroke it with."""
+    dl.path_clear()
+    closed = False
+    first = last = None
+    for op in ops:
+        k = op[0]
+        if k in ("M", "L"):
+            dl.path_line_to(imgui.ImVec2(x + op[1] * s, y + op[2] * s))
+            last = (op[1], op[2])
+        elif k == "C":
+            dl.path_bezier_cubic_curve_to(
+                imgui.ImVec2(x + op[1] * s, y + op[2] * s),
+                imgui.ImVec2(x + op[3] * s, y + op[4] * s),
+                imgui.ImVec2(x + op[5] * s, y + op[6] * s))
+            last = (op[5], op[6])
+        elif k == "Z":
+            closed = True
+        if first is None and last is not None:
+            first = last
+    # A path whose last point IS its first point is already closed.
+    # Asking ImGui to close it too adds a zero-length segment, which under
+    # round joins draws a visible tick - it showed up on every circle.
+    if closed and first and last and \
+            abs(first[0] - last[0]) < 1e-6 and abs(first[1] - last[1]) < 1e-6:
+        closed = False
+    return imgui.ImDrawFlags_.closed if closed else 0
 
 
 def icon_centred(dl, name, cx, cy, size, col, **kw) -> bool:

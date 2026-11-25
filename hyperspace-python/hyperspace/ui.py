@@ -2596,9 +2596,22 @@ class Panel:
         wiring, _ = self.graph_now()
         bus_cuts = self.bus_cuts_now()
         return [sl.n for sl in (getattr(self, "outputs", None) or [])
-                if getattr(sl, "drawn", sl.opened) and output_shows(sl.switches, fx_on, visible, master, wiring,
-                                         n=sl.n, bus_cuts=bus_cuts)[1]
+                if getattr(sl, "drawn", sl.opened)
+                and self._black_why(sl, fx_on, visible, master, wiring, bus_cuts)
                 not in ("", "master")]
+
+    def _black_why(self, sl, fx_on: bool, visible: bool, master: float, wiring, bus_cuts) -> str:
+        """`output_shows`' reason for one output, kept while everything it is made
+        of is the same: the wires (immutable, so by the object), the bus cuts (by
+        value), the window's mutes and dim, and the function (a hot reload's is new)."""
+        sw = sl.switches
+        of = (output_shows, sw.scene, sw.hands, sw.dim, fx_on, visible, master, bus_cuts)
+        kept = self.__dict__.setdefault("_black_kept", {})
+        got = kept.get(sl.n)
+        if got is None or got[0] is not wiring or got[1] != of:
+            got = kept[sl.n] = (wiring, of, output_shows(sw, fx_on, visible, master, wiring,
+                                                         n=sl.n, bus_cuts=bus_cuts)[1])
+        return got[2]
 
     @staticmethod
     def _black_text(ns: list[int]) -> str:
