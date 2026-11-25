@@ -54,7 +54,9 @@ FREE = ("branch-two-sizes", "media-chain-backdrop", "media-chain-faces", "switch
 # every effect file, by its @order: the chain an old loadable patch with every one
 # on lands as (plan 33 T7: `names()` is by name — there is no stack)
 # (plan 67 F1: the picture effects — a field maker takes no picture to chain)
-REAL = tuple(sorted((n for n, s in FxState().specs.items() if s.makes != "field"),
+# (the picture effects that take one: a field maker, or Colour, takes no picture)
+REAL = tuple(sorted((n for n, s in FxState().specs.items()
+                     if s.makes != "field" and "image" in G.effect_ports(n)[1]),
                     key=lambda n: (FxState().specs[n].order, n)))
 CONCERNS = (graphview.AUDIO, graphview.SCENE_AREA, graphview.LOOKBACK_AREA, graphview.EFFECTS_AREA,
             graphview.OUTPUTS_AREA)

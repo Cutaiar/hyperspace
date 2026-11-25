@@ -350,8 +350,8 @@ BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it �
 FAINT_TIP = (f"{graphview.REACHES_NOTHING}: no path from it ends at an output, the faces, "
              "the pattern, the backdrop or the run — it never runs. Wire it in, or drop "
              "it on a picture cable")
-UNFED_TIP = ("{need}: nothing is wired into its input, so it is never built and draws "
-             "nothing — wire its input on the canvas")
+UNFED_TIP = (f"{graphview.FED_BY_NOTHING}: nothing is wired into its input, so it is "
+             "never built and draws nothing — wire {need} into it on the canvas")
 BUNDLE_STEP = 0.5        # px a cable, past the first
 BUNDLE_MAX = 7.5         # the cap: a bundle of ten cables or more (3 + 9 × 0.5)
 EXPAND_TIP = "Expand this node: a row per port, its real cables"
@@ -4100,7 +4100,7 @@ def thumb_tip(st: dict, n: graphview.VNode) -> str:
     if card_shown(st, n):
         tip += "\nshowing the test card through it"
     elif getattr(n, "faint", False) and has_card(n):
-        tip += f"\n{graphview.UNWIRED_WORDS}"
+        tip += f"\n{graphview.UNFED_WORDS if n.unfed else graphview.UNWIRED_WORDS}"
     return tip + (f"\n{n.status}" if n.status else "")
 
 
@@ -6431,6 +6431,12 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at,
         with m.sub("insert"):
             for kind in modifiers.KINDS:
                 m.item(kind, lambda kind=kind: insert_modifier(panel, c, kind))
+    if c.kind == "render" and c.depth is not None:   # plan 67 P3: a field into a knob
+        with m.sub("depth"):
+            for d, words in graphview.depth_choices(c.ref):
+                m.item(words, (lambda d=d: _render_said(
+                    panel, render_edit(panel), lambda e, d=d: e.set_depth(c.ref, d))),
+                       enabled=d != c.depth)
     if c.kind == "render" and c.type == graphview.IMAGE:
         e = render_edit(panel)
         with m.sub("insert"):                   # plan 33 U; 2026-11-01: every picture node
