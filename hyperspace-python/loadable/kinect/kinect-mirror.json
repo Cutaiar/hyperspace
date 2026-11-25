@@ -1,0 +1,227 @@
+{
+ "schema": "hyperspace.loadable/12",
+ "name": "kinect-mirror",
+ "note": "Stand 1 to 3 m from the Kinect. Look (switch select) 1 is everything; 2 you as a cloud of points around the tesseract, the picture bent by your depth; 3 a window cut to your body; 4 neon outlines that trail; 5 the raw depth. Channel B slot 2 puts the colour camera on the faces (colors = true); Cloud colours tints the points with it. Bass fattens the points, mids bend harder, treble spins the hue.",
+ "graph": {
+  "frame": "wired",
+  "nodes": [
+   {
+    "kind": "matte"
+   },
+   {
+    "kind": "cut"
+   },
+   {
+    "kind": "delay"
+   },
+   {
+    "kind": "composite"
+   },
+   {
+    "kind": "composite",
+    "instance": 2
+   },
+   {
+    "kind": "composite",
+    "instance": 3
+   },
+   {
+    "kind": "switch"
+   }
+  ],
+  "wires": [
+   {
+    "from": "shape",
+    "to": "scene.geometry"
+   },
+   {
+    "from": "channel.b",
+    "to": "shape.faces"
+   },
+   {
+    "from": "channel.a",
+    "to": "edges.image"
+   },
+   {
+    "from": "edges",
+    "to": "huecycle.image"
+   },
+   {
+    "from": "huecycle",
+    "to": "composite.over"
+   },
+   {
+    "from": "composite",
+    "to": "delay.image"
+   },
+   {
+    "from": "delay",
+    "to": "zoomblur.image"
+   },
+   {
+    "from": "zoomblur",
+    "to": "fade.image"
+   },
+   {
+    "from": "fade",
+    "to": "composite.under"
+   },
+   {
+    "from": "channel.a",
+    "to": "plasma.image"
+   },
+   {
+    "from": "plasma",
+    "to": "cut.image"
+   },
+   {
+    "from": "channel.a",
+    "to": "matte.image"
+   },
+   {
+    "from": "matte",
+    "to": "cut.mask"
+   },
+   {
+    "from": "cut",
+    "to": "composite.2.over"
+   },
+   {
+    "from": "composite",
+    "to": "composite.2.under"
+   },
+   {
+    "from": "channel.a",
+    "to": "tofield.image"
+   },
+   {
+    "from": "tofield",
+    "to": "displace.field"
+   },
+   {
+    "from": "scene",
+    "to": "displace.image"
+   },
+   {
+    "from": "displace",
+    "to": "composite.3.over"
+   },
+   {
+    "from": "composite.2",
+    "to": "composite.3.under"
+   },
+   {
+    "from": "composite.3",
+    "to": "switch.in1"
+   },
+   {
+    "from": "displace",
+    "to": "switch.in2"
+   },
+   {
+    "from": "cut",
+    "to": "switch.in3"
+   },
+   {
+    "from": "composite",
+    "to": "switch.in4"
+   },
+   {
+    "from": "channel.a",
+    "to": "switch.in5"
+   },
+   {
+    "from": "switch",
+    "to": "output.all.image"
+   }
+  ]
+ },
+ "values": {
+  "switch.select": 1,
+  "view.shape": 3,
+  "view.faces": true,
+  "view.points": false,
+  "view.speed": 0.2,
+  "view.media_alpha": 0.6,
+  "camera.zoom": 1.1,
+  "fx.face_map": 0,
+  "cloud.size": 1.5,
+  "cloud.scale": 0.8,
+  "cloud.bright": 0.9,
+  "cloud.colors": false,
+  "media.a.fit": 0,
+  "media.b.fit": 0,
+  "media.b.slot": 0,
+  "matte.from": 0,
+  "matte.key": 0.1,
+  "matte.soft": 0.04,
+  "matte.feather": 3.0,
+  "fx.edges.on": true,
+  "fx.edges.threshold": 0.04,
+  "fx.edges.glow": 2.0,
+  "fx.edges.colour": 0,
+  "fx.huecycle.on": true,
+  "fx.huecycle.paint": 1.0,
+  "fx.zoomblur.on": true,
+  "fx.fade.on": true,
+  "fx.fade.level": 0.86,
+  "fx.plasma.on": true,
+  "fx.plasma.level": 0.6,
+  "fx.plasma.scale": 5.0,
+  "fx.tofield.on": true,
+  "fx.tofield.read": 0,
+  "fx.tofield.about": 1,
+  "fx.displace.on": true,
+  "fx.displace.amount": 0.08
+ },
+ "routes": [
+  {
+   "source": "lane:0",
+   "target": "cloud.size",
+   "op": "push",
+   "value": 0.3
+  },
+  {
+   "source": "lane:2",
+   "target": "fx.displace.amount",
+   "op": "push",
+   "value": 0.2
+  },
+  {
+   "source": "lane:4",
+   "target": "fx.huecycle.speed",
+   "op": "push",
+   "value": 0.2
+  },
+  {
+   "source": "lane:1",
+   "target": "rot.rate.XW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:3",
+   "target": "rot.rate.YW",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  }
+ ],
+ "macros": {},
+ "units": {
+  "camera.pan": "world",
+  "fx.depth": "taper"
+ },
+ "media": {
+  "channels": {
+   "a": [
+    "kinect:room/depth"
+   ],
+   "b": [
+    "kinect:room/depth",
+    "kinect:room/color"
+   ]
+  }
+ }
+}
