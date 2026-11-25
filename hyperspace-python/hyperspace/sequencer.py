@@ -86,6 +86,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+from . import writes
+
 LANES = 5
 STEPS = 8
 SPANS = ["1/2 bar", "1 bar", "2 bars", "4 bars"]
@@ -110,16 +112,22 @@ def _clamp(x, a, b):
 
 
 @dataclass
-class Lane:
+class Lane(writes.Observed):
     """One row of the grid: its steps (0 off, > 0 a velocity), mute, and
-    the envelope it fires."""
+    the envelope it fires. Whatever list `steps` is set to is copied into one
+    that says when an item of it is written (writes.py)."""
 
     steps: list[float] = field(default_factory=lambda: [0.0] * STEPS)
     mute: bool = False
     env: int = 1
 
+    def __setattr__(self, name, value):
+        if name == "steps" and not isinstance(value, writes.ObservedList):
+            value = writes.ObservedList(value)
+        super().__setattr__(name, value)
 
-class Sequencer:
+
+class Sequencer(writes.Observed):
     """Five lanes × eight steps over a span, stepped off the tempo clock."""
 
     LANES = LANES
@@ -279,40 +287,35 @@ def register(reg, seq: Sequencer, clock=None) -> None:
         for si in range(STEPS):
             def put(v, lane=lane, si=si):
                 # on keeps a velocity it already has: the toggle is a view
-                # of a float, so a later velocity survives a press
+                # of a float, so a later velocity survives a press. Round the
+                # list's own mark: `Param.set` marks, a performer's write does not
                 if not v:
-                    lane.steps[si] = 0.0
+                    list.__setitem__(lane.steps, si, 0.0)
                 elif lane.steps[si] <= 0.0:
-                    lane.steps[si] = 1.0
+                    list.__setitem__(lane.steps, si, 1.0)
             reg.toggle(f"{p}.{si + 1}", f"{name} step {si + 1}",
-                       lambda lane=lane, si=si: lane.steps[si] > 0.0, put, group=g,
+                       writes.item(lane, "steps", si, lambda x: x > 0.0), put, group=g,
                        tip="This step fires the lane's envelope when the playhead "
                            "reaches it.")
-        reg.toggle(f"{p}.mute", f"{name} mute", lambda lane=lane: lane.mute,
-                   lambda v, lane=lane: setattr(lane, "mute", bool(v)), group=g,
+        reg.toggle(f"{p}.mute", f"{name} mute", *writes.cell(lane, "mute", bool), group=g,
                    tip="A muted lane keeps its pattern and fires nothing.")
         # not lane-driven: retargeting a lane mid-gate would strand the
         # envelope it opened
-        reg.continuous(f"{p}.env", f"{name} envelope", lambda lane=lane: lane.env,
-                       lambda v, lane=lane: setattr(lane, "env", int(_clamp(round(v), 1, ENV_HI))),
+        reg.continuous(f"{p}.env", f"{name} envelope", *writes.cell(lane, "env", lambda v: int(_clamp(round(v), 1, ENV_HI))),
                        lo=1, hi=ENV_HI, integer=True, fmt=lambda v: f"env {int(v)}",
                        group=g, modulatable=False,
                        tip="The envelope this lane's steps fire.")
-    reg.enum(f"{g}.span", "Seq span", lambda: seq.span,
-             lambda v: setattr(seq, "span", int(_clamp(int(v), 0, len(SPANS) - 1))), SPANS,
+    reg.enum(f"{g}.span", "Seq span", *writes.cell(seq, "span", lambda v: int(_clamp(int(v), 0, len(SPANS) - 1))), SPANS,
              group=g,
              tip="The time the eight steps cover: 1/2 bar is 16ths, 1 bar 8ths, 2 bars "
                  "quarters, 4 bars halves.")
-    reg.continuous(f"{g}.length", "Seq length", lambda: seq.length,
-                   lambda v: setattr(seq, "length", int(_clamp(round(v), 1, STEPS))),
+    reg.continuous(f"{g}.length", "Seq length", *writes.cell(seq, "length", lambda v: int(_clamp(round(v), 1, STEPS))),
                    lo=1, hi=STEPS, integer=True, fmt=lambda v: f"{int(v)} steps", group=g,
                    tip="The pattern wraps after this many steps.")
-    reg.continuous(f"{g}.swing", "Seq swing", lambda: seq.swing,
-                   lambda v: setattr(seq, "swing", float(_clamp(v, 0.0, SWING_HI))),
+    reg.continuous(f"{g}.swing", "Seq swing", *writes.cell(seq, "swing", lambda v: float(_clamp(v, 0.0, SWING_HI))),
                    lo=0.0, hi=SWING_HI, fmt=lambda v: f"swing {v:.2f}", group=g,
                    tip="How late every odd step lands, as a fraction of a step.")
-    reg.continuous(f"{g}.gate", "Seq gate", lambda: getattr(seq, "gate", GATE),
-                   lambda v: setattr(seq, "gate", float(_clamp(v, GATE_LO, GATE_HI))),
+    reg.continuous(f"{g}.gate", "Seq gate", *writes.cell(seq, "gate", lambda v: float(_clamp(v, GATE_LO, GATE_HI))),
                    lo=GATE_LO, hi=GATE_HI, fmt=lambda v: f"gate {v:.2f}", group=g,
                    tip="How long a step holds a gate-mode envelope open, as a fraction "
                        "of a step. One-shot envelopes ignore it.")

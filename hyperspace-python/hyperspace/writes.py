@@ -82,8 +82,8 @@ class Observed:
             mark()
 
 
-def _marked(name: str) -> Callable:
-    inner = getattr(dict, name)
+def _marked(name: str, of: type = dict) -> Callable:
+    inner = getattr(of, name)
 
     def method(self, *a, **kw):
         try:
@@ -104,16 +104,27 @@ class ObservedDict(dict):
     del _m
 
 
+class ObservedList(list):
+    """A list whose every change marks."""
+
+    for _m in ("__setitem__", "__delitem__", "__iadd__", "__imul__", "append", "clear",
+               "extend", "insert", "pop", "remove", "reverse", "sort"):
+        locals()[_m] = _marked(_m, list)
+    del _m
+
+
 def watch(cls: type[Observed], *names: str) -> None:
     """`names` are cells of `cls` and of every class made from it after this."""
     cls._cells.update(names)
 
 
-def getter(obj: Any, name: str) -> Callable[[], Any]:
-    """A read of `obj.name`, a cell when `obj` can say it was written: an
+def getter(obj: Any, name: str, of: Callable[[Any], Any] | None = None) -> Callable[[], Any]:
+    """A read of `obj.name` (with `of`, what it makes of that and of nothing
+    that changes), a cell when `obj` can say it was written: an
     `Observed`, and a plain attribute of its own (a property reads other
     things; a class's default is not yet the object's)."""
-    get: Any = lambda: getattr(obj, name)
+    get: Any = ((lambda: getattr(obj, name)) if of is None else
+                (lambda: of(getattr(obj, name))))
     static = next((vars(c)[name] for c in type(obj).__mro__ if name in vars(c)), None)
     if (isinstance(obj, Observed) and name in vars(obj) and not hasattr(type(static), "__set__")
             and not hasattr(type(static), "__get__")):
@@ -131,6 +142,15 @@ def cell(obj: Any, name: str, cast: Callable[[Any], Any] | None = None
     if cast is None:
         return get, lambda v: write(obj, name, v)
     return get, lambda v: write(obj, name, cast(v))
+
+
+def item(obj: Any, name: str, i: int, of: Callable[[Any], Any]) -> Callable[[], Any]:
+    """A read of `of(obj.name[i])`, a cell when the attribute is one and holds an
+    `ObservedList`: for an `obj` that keeps it one whatever is assigned."""
+    get: Any = lambda: of(getattr(obj, name)[i])
+    if hasattr(getter(obj, name), "cell") and isinstance(getattr(obj, name), ObservedList):
+        get.cell = (id(obj), name, i)
+    return get
 
 
 def key(d: dict, k: str) -> tuple[Callable[[], Any], Callable[[Any], None]]:

@@ -1791,9 +1791,9 @@ class Install:
         now (`ghost.2.*`, plan 26 A4): kept by a save and never counted as an
         edit. `ghost.2.mirror` no longer gets this far (`without_unsaved`). The
         old reader goes in CL1."""
-        reg = self.lib.reg
-        return {pid: v for pid, v in (self.session or {}).items()
-                if is_instance_id(pid) and (reg is None or pid not in reg)}
+        session = self.session or {}
+        ids = session if self.lib.reg is None else self.lib._need_reg().missing(session)
+        return {pid: session[pid] for pid in ids if is_instance_id(pid)}
 
 
 def without_unsaved(session: dict) -> dict:

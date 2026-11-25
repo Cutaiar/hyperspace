@@ -2337,11 +2337,12 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     # (a collapsed node's port) is never a drop target 300 units off the wire
     st["pin_xy"] = {}
     st["cost_drawn"] = set()
+    _set_detail(st, view)               # 2026-11-24: how much of each node is drawn
     _note_hot(st)                       # whose widgets are drawn (`hot`)
     for n in view.nodes:
         if drawn_node(st, n):
             with _cost_style(st, n):    # plan 84: nothing pushed with the chip off
-                _node(st, n, drawn)
+                _node_shown(st, n, drawn)
             if st["cost"]:
                 st["cost_drawn"].add(n.id)
     _back_pins(st, view, drawn)         # 2026-11-19: the slings' ends
@@ -2734,6 +2735,8 @@ def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[
             dl.add_circle(c, PIN / 2, col, 0, 1.5)
     ed.end_pin()
     drawn.add(pin)
+    if st.get("rec") is not None and (pin in st["wired"] or graphview.is_stub(pin)):  # `_node_shown`
+        st["rec"].pins.append(((p0.x, p0.y), pin, kind, port, stub, room, grow))
     st["pin_xy"][pin] = (p0.x + PIN / 2, p0.y + PIN / 2)     # canvas units, inside the editor
 
 
@@ -2884,6 +2887,112 @@ def _ends(st: dict, view: graphview.View, wid: str, a: str, b: str, drawn: set[s
     st["curves"][wid] = graphview.cubic(p0, (p0[0] + ox * so, p0[1] + oy * so),
                                         (p3[0] + ix * si, p3[1] + iy * si), p3)
     return po, pi
+
+
+# ---- how much of a node is drawn (2026-11-24) ----
+#
+# A node drawn whole leaves a note of its size and where its pins and its
+# picture sat (`Sketch`). While its words are too small to read (`far`), or
+# it is off the canvas, it is drawn from that note: the same node, of the
+# same size, with the same pins at the same places — so every cable, the
+# layout, a fit and a region read what they would have — and nothing else
+# but its title and its picture. A node with no note of what it is now
+# (a new view, expanded, a group folded) is drawn whole that frame.
+
+FAR_PX = 6.0            # body text under this many screen px: zoomed out
+NEAR_PX = 6.6           # …and at this many or more: whole again
+TITLE_PX = 3.0          # a title under this many screen px is left out (an error's never)
+
+
+@dataclasses.dataclass
+class Sketch:
+    """What a node drawn whole was: `key` (`_sketch_key`), its size, and
+    from its top left its picture's corner and the pins a cable can end on
+    (its patched ports' and its two stubs)."""
+
+    key: tuple
+    size: tuple[float, float] = (0.0, 0.0)
+    thumb: tuple[float, float] | None = None
+    pins: list = dataclasses.field(default_factory=list)
+
+
+def is_far(was: bool, zoom: float, text: float, held: bool = False) -> bool:
+    """Are the canvas's words (`text` units tall, `zoom` canvas units a
+    screen px) too small to read? `was` holds between `NEAR_PX` and
+    `FAR_PX`, and while `held` (a press: a drag never loses its pin)."""
+    if held:
+        return was
+    return text / max(zoom, 1e-3) < (NEAR_PX if was else FAR_PX)
+
+
+def _set_detail(st: dict, view: graphview.View) -> None:
+    st["far"] = is_far(st.get("far", False), st["zoom"], imgui.get_font_size(),
+                       imgui.is_mouse_down(0))
+    st["fold_key"] = frozenset(st["folds"])
+    if st.get("sketch_view") is not view or "wired" not in st:     # its nodes and ports are other objects
+        st["sketch_view"], st["sketches"] = view, {}
+        # a pin a cable ends on: `VPort.patched` is the row's, any of its pins
+        st["wired"] = {e for c in view.cables for e in (c.src_port, c.dst_port)}
+
+
+def _sketch_key(st: dict, n: graphview.VNode) -> tuple:
+    """What a node's size and its pins' places follow from, beside the view."""
+    return (n.id in st["open"], n.id in st["flip"], st["patched_only"], st["fold_key"],
+            n.grey, n.faint, n.unfed, bool(getattr(n.ref, "said", "")),
+            imgui.get_font_size())
+
+
+def _node_shown(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
+    """Node `n`, whole — or, zoomed out or off the canvas, from its `Sketch`."""
+    key = _sketch_key(st, n)
+    sk = st["sketches"].get(n.id)
+    k = ed.NodeId(_id(st, "n:" + n.id))
+    if sk is not None and sk.key == key:
+        p = ed.get_node_position(k)
+        seen = on_screen(st["seen_rect"], (p.x, p.y), sk.size)
+        if st["far"] or not seen:
+            _node_sketch(st, n, sk, drawn, seen)
+            return
+        _node(st, n, drawn)
+        return
+    sk = st["rec"] = Sketch(key)
+    try:
+        _node(st, n, drawn)
+    finally:
+        st["rec"] = None
+    p, size = ed.get_node_position(k), ed.get_node_size(k)
+    sk.size = (size.x, size.y)
+    sk.pins = [((x - p.x, y - p.y), *rest) for (x, y), *rest in sk.pins]
+    if sk.thumb is not None:
+        sk.thumb = (sk.thumb[0] - p.x, sk.thumb[1] - p.y)
+    st["sketches"][n.id] = sk
+
+
+def _node_sketch(st: dict, n: graphview.VNode, sk: Sketch, drawn: set[str], seen: bool) -> None:
+    """Node `n` from its `Sketch`: its pins, and while on the canvas
+    (`seen`) its title and its picture — an error's red title and a mask's
+    refusal (SM3) with them."""
+    pad = ed.get_style().node_padding           # (left, top, right, bottom)
+    ed.begin_node(ed.NodeId(_id(st, "n:" + n.id)))
+    at = imgui.get_cursor_screen_pos()
+    x, y = at.x - pad.x, at.y - pad.y
+    imgui.dummy(imgui.ImVec2(sk.size[0] - pad.x - pad.z, sk.size[1] - pad.y - pad.w))
+    for (dx, dy), pin, kind, port, stub, room, grow in sk.pins:
+        imgui.set_cursor_screen_pos(imgui.ImVec2(x + dx, y + dy))
+        _pin(st, pin, kind, port, stub, drawn, room=room, grow=grow)
+    if seen:
+        err = st.get("errors", {}).get(n.id)
+        if err or imgui.get_font_size() / st["zoom"] >= TITLE_PX:
+            col = ui.WARN if err else ui.FAINT if n.grey or not n.up or n.faint else ui.TEXT
+            stub = bool(sk.pins) and sk.pins[0][1] == graphview.stub_in(n.id)
+            room = PIN + imgui.get_style().item_spacing.x if stub else 0.0
+            imgui.get_window_draw_list().add_text(
+                imgui.ImVec2(at.x + room, at.y), ui.u32(col),
+                ui.fit_text(n.label, NODE_W - 40 - 2 * PIN))
+        if sk.thumb is not None:
+            imgui.set_cursor_screen_pos(imgui.ImVec2(x + sk.thumb[0], y + sk.thumb[1]))
+            _thumb(st, n)
+    ed.end_node()
 
 
 # past the node's content, its padding and a little over: under the pointer
@@ -4099,6 +4208,8 @@ def _thumb(st: dict, n: graphview.VNode) -> None:
     (`backdrop_rect`) at its shade; GL's rows, so drawn upside down in v
     as the backdrop is."""
     p0 = imgui.get_cursor_screen_pos()
+    if st.get("rec") is not None:               # `_node_shown`
+        st["rec"].thumb = (p0.x, p0.y)
     imgui.dummy(imgui.ImVec2(NODE_W, graphview.THUMB_H))
     hovered = imgui.is_item_hovered()
     if hovered:                                 # plan 37 C2: the hover gives details
@@ -4111,7 +4222,7 @@ def _thumb(st: dict, n: graphview.VNode) -> None:
         a, b = backdrop_rect((p0.x, p0.y), (NODE_W, graphview.THUMB_H), tuple(tex.size))
         dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
                      imgui.ImVec2(0, 1), imgui.ImVec2(1, 0), ui.u32(imgui.ImVec4(k, k, k, 1.0)))
-    if has_card(n):
+    if has_card(n) and not st.get("far"):       # (zoomed out: too small to read or click)
         _chip(st, n, p0, hovered)
     words = graphview.mask_words(n) if k < 1.0 else ""
     if words:                                   # SM3: no mask, and it says why, on the node

@@ -9289,3 +9289,7 @@ Only a person can settle these:
 - NanoVG in the control window on the Mac's GL (417): the tests draw the
   lab's drawings through a stand-in NanoVG, and the shots were rendered
   on Mesa's software rasteriser; one look on Dillon's Mac so far.
+
+## GC. Thumbnails at 25 Hz (row 1150, 2026-11-24)
+
+**930. Thumbnails at 25 Hz.** (Mac, GRAPH at full frame rate) Open a light patch that moves, and one with a matte, a segment or a field node, GRAPH in view. *Pass:* the thumbnails move smoothly enough; none flickers dark, goes black or stays frozen while its node runs; the card chip and a knob turned on a carded effect show at once (within a frame or three); switching an input off dims its node about a tenth of a second later and lights it the moment it is back; scrolling a node into view shows its picture at once; output 1's picture and the backdrop move at the full frame rate. With the **panel:graph** source on a channel, the projected canvas looks the same. With **tint cables** and **gpu cost** lit, the hues and the numbers read as before.

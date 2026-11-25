@@ -489,6 +489,8 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "backdrop": "backdrop",
     "switch": _switch_owner,
     "resize": _resize_owner,
+    # plan 34 D: `delay[.<n>].<key>` on its delay's node (the resize's rule)
+    "delay": _resize_owner,
     # plan 39 T2: `matte[.<n>].<key>` on its matte's node (the resize's rule)
     "matte": _resize_owner,
     # plan 39 T3: `cut[.<n>].<key>` on its cut's node (the resize's rule)

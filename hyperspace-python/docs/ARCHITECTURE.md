@@ -67,13 +67,15 @@ stack only reads.
 
 **Leaves** — modules that import nothing from the package, so anything
 may import them: `writes`, `analysis`, `tapers`, `motion`, `undo`, `placement`,
-`geometry`, `patterns`, `tempo`, `modbank`, `sequencer`, `glsl`, `gamepad`, `apc40`,
+`geometry`, `patterns`, `tempo`, `modbank`, `glsl`, `gamepad`, `apc40`,
 `generic`, `watchdog`, `modgraph`, `players`, `pointer`, `world`, `hands/signal.py`, `hands/tape.py`.
 `devices` imports nothing from the package at load: every adapter, and
 `routing`, only inside a function. Near-leaves: `outputs`, `fx`,
 `lookback` and `masks` (plan 39) import only `glsl`; `grip` (plan 60) only `world`; `view` and `field` only `geometry`; `lfo` and
-`envelope` only `modbank` (plan 31; all of these but `outputs`, `masks` and
-`field` also `writes`, whose `Observed` their settings are); `modifiers` only
+`envelope` only `modbank` (plan 31), `sequencer` none of these and
+`hands/core.py` none (all of them but `outputs`, `masks` and
+`field` also `writes`, whose `Observed` their settings are;
+`hands` and `sequencer` by the owner, 2026-11-25); `modifiers` only
 `motion` and `tapers`; `routing_sources` only `motion` (plan 44 D2,
 `tests/test_routing_boundary.py`) (`modgraph` is held by
 `tests/test_modgraph.py::test_modgraph_is_a_leaf`; `modifiers` by convention
@@ -1463,7 +1465,7 @@ docstring has the rest.
 
 | Module | For | Names | Rule (held by) |
 |---|---|---|---|
-| `params.py` | the registry: ids, base vs effective, the once-a-frame `apply()` | `Param` (`follow`, plan 64: the object moved by its owner — a fractal's re-root — the base moving with it once, held or not), `Registry`, `Kind`, `build_registry`, `PATCH_GROUPS` / `SHARED_META_GROUPS`, `F_KEYS`, `pan_world`, `retaper_depths` (a document's depths onto the effects' retapered params read as they were; `UNITS` marks a saved one) | never imports an adapter; every persisted group is performance or meta controller (`tests/test_params.py::test_every_persisted_group_is_patch_or_meta`); `Kind` keeps its identity across a reload (`tests/test_hotreload.py::test_reloading_params_keeps_kind_identity`) |
+| `params.py` | the registry: ids, base vs effective, the once-a-frame `apply()` | `Param` (`follow`, plan 64: the object moved by its owner — a fractal's re-root — the base moving with it once, held or not), `Registry` (`missing`: the ids of a list no param has), `Kind`, `build_registry`, `PATCH_GROUPS` / `SHARED_META_GROUPS`, `F_KEYS`, `pan_world`, `retaper_depths` (a document's depths onto the effects' retapered params read as they were; `UNITS` marks a saved one) | never imports an adapter; every persisted group is performance or meta controller (`tests/test_params.py::test_every_persisted_group_is_patch_or_meta`); `Kind` keeps its identity across a reload (`tests/test_hotreload.py::test_reloading_params_keeps_kind_identity`) |
 | `motion.py` | the envelope followers the analyzer is made of, and a damped spring, for any signal; a spring set by perceptual duration and bounce (Apple's model), exactly a frequency and a damping ratio (`spring_hz`, `spring_feel`, the named `SPRINGS`); what a feel does to a jump (`response`, `settle`) | `pole`, `follow`, `spring`, `Motion`, `Follower`, `response`, `settle`, `spring_hz`, `SPRINGS`, `DEFAULT_ROUTE_FEEL` (the feel a new route is made with) | the chain still matches the frozen oracle (`tests/test_golden.py`); the spring is exact at any dt; a response is what a Follower stepping frame by frame lands on; a spring file written as hz / damp reads as the same spring (`tests/test_motion.py`) |
 | `tapers.py` | position ↔ value for every fader | `Taper`, `exp_zero`, `exp_pure`, `exp_time`, `lin_t`, `lin_db`, `count`, `exp_signed` (the effects' speed: a hard zero in the middle, exponential either side), `exp_amount` (an amount's zero-safe log: off at 0, then its octaves) | exact round trip on every detent (`tests/test_control.py::test_taper_round_trip`, `tests/test_retaper.py`) |
 | `routing.py` | the table, the file, the referee, the desk's layers, the macros, the modifiers, the modulation pass in dependency order, the banks and the sequencer stepped in it | `Binding`, `Bindings` (`modifiers`, `set_modifiers`, `set_modifier_input`), `Router` (`modgraph`, `build_modgraph`, `modgraph_notes`, `use_lfos`, `use_bank`, `bank`, `use_sequencer`, `modulate`, `felt_now`, `felt_lanes`), `BANKS`, `BUILTIN_LANES`, `declare_modifiers`, `Macro` / `Sub`, `Owned`, `act`, `referee`, `register_desk`, `led_level`, `LOOP_KEY_ROWS`, `backup`, `remap_factory`, `renamed_session` | §3.3–§3.8; imports nothing above it (`tests/test_routing_boundary.py`); `tests/test_routing.py`, `tests/test_desk.py`, `tests/test_macros.py`, `tests/test_hand_names.py` |
@@ -1626,6 +1628,11 @@ a picture is drawn as that picture, collapsed or expanded: a thumbnail in a
     (`render.unwired_through`, plan 65, row 900).
 
   The modulation side stays text.
+- **Drawn only as far as it reads.** Zoomed out until the words are under
+  `ui_graph.FAR_PX` on screen, or off the canvas, a node is drawn from the
+  note its last whole draw left (`ui_graph.Sketch`): the same size and
+  pins, so the layout and every cable read the same, and no words but its
+  title (off the canvas, not that nor its picture).
 - **Wanted only on screen.** Each frame, the page `want`s the nodes that
   are drawn (not hidden by **preset only**) and that overlap the
   editor's visible canvas rect (`ui_graph.thumb_wants`).
@@ -1636,12 +1643,19 @@ a picture is drawn as that picture, collapsed or expanded: a thumbnail in a
   `outputs.PreviewTextures`, a texture keeper beside `Preview` that knows
   nothing of the graph: one 16-tap downsample pass to `THUMB_PX` = 192
   on the long side.
+  - At `THUMB_HZ` = 25 a second each, on the keeper's own clock: `take`
+    gives only the names `due`, each on a beat of its own (`phase`), so the
+    copies are spread over the frames. A name never copied, found another
+    way or that made nothing the last time is due at once; a wish not yet
+    due waits. Output 1's `Preview` and the backdrop are no thumbnails:
+    every frame.
   - While it asks, the GPU timer is muted and the frame's `stats` are
     restored, so the outputs and SYSTEM's per-node lines are the frame's
     own.
   - It flushes the context when it copied anything.
 - **Lifetime.** A name unwanted for a second is dropped. A node that made
-  nothing is dimmed, then black a second later. SYSTEM reports
+  nothing when last tried is dimmed (`THUMB_LATE_S` after its last copy),
+  then black a second after it; a frame between two beats dims nothing. SYSTEM reports
   `thumbnails · N copied · K repainted · M kept`. A node that painted
   straight into its consumer is repainted at full size for its thumbnail,
   which costs more.
