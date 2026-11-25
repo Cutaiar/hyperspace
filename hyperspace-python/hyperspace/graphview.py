@@ -770,6 +770,9 @@ def _desk_order(rows: list) -> list:
     return sorted(rows, key=lambda r: rank.get(r[1], len(rank)))     # stable: layout order
 
 
+KINECT_CLOUD = "Kinect point cloud"
+
+
 def kinect_label(d, how_many: int = 1) -> str:
     """A Kinect device's node title: "Kinect", and with more than one, "Kinect <role>"
     (its role is the entry's, `room` in the demo patch: it is not what the sensor is)."""
@@ -2017,6 +2020,13 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         for nid in ends:
             if nid in nodes:
                 nodes[nid].wires += 1
+    # row 1170: a Kinect's point cloud is its own kind of cloud — made of the sensor's depth by
+    # the sensor's own calibration, so not one to take for any cloud's — and is titled so
+    sensor_roles = {str(getattr(d, "role", "")) for d in kinects}
+    for i, role in enumerate(roles):
+        cloud = nodes.get(f"render:{rgraph.cloud_name(i)}")
+        if cloud is not None and role in sensor_roles:
+            cloud.label = cloud.label.replace(LABELS["cloud"], KINECT_CLOUD, 1)
     # plan 28 N9: each node's area, and which sit with nothing in and out
     named = {b.scale for b in routes if b.scale} | {b.when for b in routes if b.when}
     # review round 1: an effect switched off whose nodes no value cable

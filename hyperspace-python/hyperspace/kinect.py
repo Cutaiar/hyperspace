@@ -862,11 +862,11 @@ class KinectDevice(devices.Base):
         no more often than `SINK_S`. With no row on a channel nothing is sent, so the
         pane's slider stays the only hand on it. A request refused (no sensor, auto
         exposure on) is tried again, and said in the telemetry."""
-        table = self.table
+        rows = getattr(self.table, "sinks", None)
         vals: dict[int, float] = {}
-        if table is not None and hasattr(table, "sinks"):
+        if rows is not None:
             from .routing import sink_values
-            vals = sink_values(table.sinks(self.role), reg, analyzer)
+            vals = sink_values(rows(self.role), reg, analyzer)
         self._driven = frozenset(SINK_CHANNELS[k][0] for k in vals if 0 <= k < len(SINK_CHANNELS))
         if not self._live:
             self._sent.clear()               # a sensor that came back has its defaults

@@ -466,3 +466,20 @@ def test_a_setting_a_sink_row_drives_is_the_routes_not_the_sliders(rig, monkeypa
     assert ("ir", 10) not in dev.asked                       # the slider is the route's now
     p.d.run(p.d.enter("kinect.exposure", 5000))
     assert dev.asked[-1] == ("exposure", 5000)               # …and only that one
+
+
+def test_a_kinects_cloud_is_titled_kinect_point_cloud_and_another_clouds_is_not():
+    """The Kinect's cloud is made of the sensor's depth by the sensor's calibration: its
+    own kind, not a general point cloud, and its node says so. A `cloud` device's stays."""
+    from test_plan36_edges import Bindings, Registry, build, migrated
+
+    from hyperspace import graph as G
+    spec = G.read_graph(migrated())
+    sensor = kinect.KinectDevice("room", {"role": "room", "kind": "kinect"})
+    scan = NS(role="scan", kind="cloud", status="connected", sources=(), feeds=())
+    g = build(spec, clouds=("room", "scan"))
+    v = graphview.build(Bindings(), Registry(), None, [sensor, scan], g, spec)
+    assert v.node("render:cloud").label == "Kinect point cloud"
+    assert v.node("render:cloud.2").label == "Point cloud 2"
+    v = graphview.build(Bindings(), Registry(), None, [scan], build(spec, clouds=("scan",)), spec)
+    assert v.node("render:cloud").label == "Point cloud"
