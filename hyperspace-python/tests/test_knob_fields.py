@@ -399,3 +399,25 @@ def test_deleting_a_field_node_before_a_knob_keeps_the_depth_or_lets_go(tmp_path
     assert edit.drop_node("tofield") is None
     wires = rig.loaded_patch.graph.spec.wires
     assert not [w for w in wires if w.dst in ("wave.waves", "displace.field")]
+
+
+def test_deleting_a_converter_keeps_the_effect_its_cable_alone_named(tmp_path):
+    """Devin's second review of #497: Wave named only by the cable from To
+    field into its Waves (a loaded patch's wires, no entry) — deleting To field
+    drops that cable, which may not take the picture that fed To field; Wave
+    stays on the canvas, unwired, by an entry, its knobs kept."""
+    sys_path_tests()
+    from test_graph_wires import _edit_rig
+    from test_loadable import put
+
+    from hyperspace import graphview
+    from hyperspace.library import LOADABLE
+    rig, _, edit, _ = _edit_rig(tmp_path)
+    put(rig.home, "Only", graph={"frame": "wired", "nodes": [], "wires": [
+        {"from": "shape", "to": "scene.geometry"}, {"from": "scene", "to": "tofield.image"},
+        {"from": "tofield", "to": "wave.waves"}]})
+    rig.lib.load(LOADABLE, "Only")
+    assert "wave" in graphview._named(rig.loaded_patch.graph.doc)
+    assert edit.drop_node("tofield") is None
+    assert "wave" in graphview._named(rig.loaded_patch.graph.doc)
+    assert "tofield" not in graphview._named(rig.loaded_patch.graph.doc)

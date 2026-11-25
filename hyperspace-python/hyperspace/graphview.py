@@ -6943,6 +6943,10 @@ def _lift(doc: dict, name: str) -> list[str]:
     else:
         lost = [o["to"] for o in outs]
     doc["wires"] = keep
+    # (a node a lost cable was the last mention of stays on the canvas by its
+    # entry, its knobs kept, as an unwire leaves it: Devin's second review of #497)
+    _keep_declared(doc, [t.rpartition(".")[0] for t in lost
+                         if canvas_node(t.rpartition(".")[0]) != canvas_node(name)])
     _unplace(doc, lambda n, key, where: n == name)
     # R21: an instance 1 left on no wire is kept, named (unreached, faint)
     if kind_of(name) == "effect":
