@@ -32,7 +32,7 @@ from hyperspace.fx import FX_DIR, FxState
 
 moderngl = pytest.importorskip("moderngl")
 
-RETIRED = Path(__file__).parent / "fixtures" / "retired-fx" / "huecycle.glsl"
+RETIRED = FX_DIR / "retired" / "huecycle.glsl"
 CORPUS = Path(__file__).parent / "corpus" / "loadable"
 
 
@@ -165,7 +165,7 @@ def test_rows_values_macros_layout_and_groups_follow():
     assert got["layout"] == {"render:hueturn": [10, 20]}
     assert got["groups"][0]["nodes"] == ["render:hueturn"]
     assert any("Hue turn now" in n for n in notes)
-    assert any("spans the bands' Scale ×" in n for n in notes)
+    assert any("places the bands' Scale ×" in n for n in notes)
     assert any("left out" in n for n in notes)
     turn = next(w for w in got["graph"]["wires"] if w["to"] == "hueturn.turn")
     assert turn == {"from": "scale.3", "to": "hueturn.turn", "depth": 360.0}
@@ -237,3 +237,94 @@ def test_an_old_file_loads_retired_and_resaves_as_itself(tmp_path):
     (Path(__file__).parents[1] / "loadable").rglob("*.json")), ids=lambda p: p.stem)
 def test_no_saved_look_names_hue_cycle(path):
     assert "huecycle" not in path.read_text(), path
+
+
+# ---------------------------------------------------------------- Devin's review of #509
+
+def test_black_is_clear_follows_the_rename():
+    """The section's `keys` and the `key.<node>.*` knobs name the node too."""
+    doc = _doc(values={"fx.huecycle.on": True, "key.huecycle.level": 0.2})
+    doc["graph"]["keys"] = ["huecycle"]
+    got, _ = graphmigrate.hue_turns(doc)
+    assert got["graph"]["keys"] == ["hueturn"]
+    assert got["values"]["key.hueturn.level"] == 0.2 and "huecycle" not in json.dumps(got)
+
+
+def test_a_field_on_spread_or_rings_lands_where_that_knob_is_now():
+    doc = _doc(values={"fx.huecycle.on": True})
+    doc["graph"]["nodes"].append({"kind": "effect", "file": "noise"})
+    doc["graph"]["wires"] += [{"from": "noise", "to": "huecycle.spread", "depth": 0.5},
+                              {"from": "noise", "to": "huecycle.rings", "depth": 0.25}]
+    got, _ = graphmigrate.hue_turns(doc)
+    wires = got["graph"]["wires"]
+    assert {"from": "noise", "to": "scale.3.mul", "depth": 0.5} in wires
+    assert {"from": "noise", "to": "scale.2.mul", "depth": 0.25} in wires       # Rings
+    assert {"from": "noise", "to": "scale.mul", "depth": -0.25} in wires        # 1 − Rings
+    assert not any(w["to"].endswith((".spread", ".rings")) for w in wires)
+    spec = G.read_graph(got["graph"], effects=set(FxState().specs))
+    assert not spec.notes, spec.notes
+
+
+def test_a_spread_push_with_no_depth_is_written_halved():
+    doc = _doc(values={"fx.huecycle.on": True},
+               routes=[{"source": "lane:0", "target": "fx.huecycle.spread", "op": "push"}])
+    got, _ = graphmigrate.hue_turns(doc)
+    assert got["routes"][0] == {"source": "lane:0", "target": "fx.scale.3.mul", "op": "push",
+                                "value": 0.5}
+
+
+def test_a_spread_position_row_is_kept_and_said():
+    """A position sets the knob's place: 0 … 4 cannot become 0 … 4 of −4 … 4
+    without an offset a row does not hold — kept, said, as an abs row."""
+    doc = _doc(values={"fx.huecycle.on": True},
+               routes=[{"source": "lane:0", "target": "fx.huecycle.spread", "op": "position",
+                        "value": 0.8}])
+    got, notes = graphmigrate.hue_turns(doc)
+    assert got["routes"][0]["value"] == 0.8 and got["routes"][0]["target"] == "fx.scale.3.mul"
+    assert any("places the bands' Scale ×" in n for n in notes)
+
+
+def test_an_old_speed_depth_is_retapered_as_hue_cycles():
+    """Before the effect tapers a file measured depths linearly; the retaper
+    reads the retired file's spec, so Hue cycle's Speed converts as it did."""
+    from hyperspace import fx, params
+    assert "huecycle" in params.fx_files(FxState())
+    assert graphmigrate.RETIRED_SPECS["huecycle"] == (
+        fx.retired_specs()["huecycle"].order, fx.retired_specs()["huecycle"].mix)
+    doc = {"values": {"fx.huecycle.on": True},
+           "routes": [{"source": "lane:0", "target": "fx.huecycle.speed", "op": "push",
+                       "value": 0.25}]}
+    got, moved = params.retaper_depths(doc, params.fx_files(FxState()))
+    assert moved and got["routes"][0]["value"] != 0.25
+
+
+def test_a_slot_inherits_its_effects_field_when_the_effect_is_unfed_and_never_through_a_loop():
+    from hyperspace.outputs import Switches
+    sys.path.insert(0, str(Path(__file__).parent))
+    from test_graphview import views, wired_wiring
+
+    def build(wires, nodes):
+        section = _section(wires, nodes)
+        spec = G.read_graph(section, effects=set(FxState().specs))
+        assert not spec.notes, spec.notes
+        return G.build_graph(views(Switches()), wired_wiring(spec.wiring()),
+                             effects=tuple(sorted({n["file"] for n in nodes})))
+
+    def slot(g):
+        return next(n for n in g.nodes.values() if isinstance(n, G.Effect)
+                    and n.name.startswith("wave.slot.2"))
+    # Wave itself unfed: its slot still reads the field on Amount
+    g = build([{"from": "scene", "to": "wave.slot.2.image"},
+               {"from": "wave.slot.2", "to": "output.all.image"},
+               {"from": "line", "to": "wave.amount", "depth": 0.5}],
+              [{"kind": "effect", "file": "wave", "slots": 2}, {"kind": "effect", "file": "line"}])
+    assert slot(g).depths.get("amount") == 0.5
+    # the slot feeds the field: no inheritance, said
+    g = build([{"from": "scene", "to": "wave.image"}, {"from": "scene", "to": "wave.slot.2.image"},
+               {"from": "wave.slot.2", "to": "tofield.image"},
+               {"from": "tofield", "to": "wave.amount"},
+               {"from": "wave", "to": "output.all.image"},
+               {"from": "wave.slot.2", "to": "output.1.image"}],
+              [{"kind": "effect", "file": "wave", "slots": 2}, {"kind": "effect", "file": "tofield"}])
+    assert "amount" not in slot(g).depths
+    assert any("makes a loop" in v for v in g.dormant.values())

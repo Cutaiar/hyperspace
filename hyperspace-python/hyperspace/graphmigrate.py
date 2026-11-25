@@ -1978,8 +1978,8 @@ HUE_TURN_DEPTH = 360.0
 HUE_SPREAD_SPAN = 4.0            # Spread ran 0 … 4; the band's Scale × runs −4 … 4
 HUE_TURN_NOTE = ("{old} is Hue turn now ({new}): Hue cycle is retired (plan 67), its bands "
                  "Line, Rings, Scale and Combine wired into Turn — the same picture; save to keep it")
-HUE_ABS_NOTE = ("{row}: a desk knob on Hue cycle's Spread (0 … 4) spans the bands' Scale × now "
-                "(−4 … 4): its middle is still, below it the bands turn the other way")
+HUE_ABS_NOTE = ("{row}: a row that placed Hue cycle's Spread (0 … 4) places the bands' Scale × "
+                "now (−4 … 4): its middle is still, below it the bands turn the other way")
 HUE_RINGS_NOTE = ("{row}: Hue cycle's Rings is two Scales of the bands now (1 − Rings and "
                   "Rings), so this row is left out")
 _HUE_BASE = re.compile(r"^huecycle(?:\.(\d+))?(?=\.|$)")
@@ -2076,6 +2076,12 @@ def retire_hue_cycle(nodes: list, wires: list, rest: dict, ports: list | None = 
         return renames[old] + x[len(old):] if old in renames else x
     out_wires = [{**w, "from": rename(w.get("from")), "to": rename(w.get("to"))}
                  if isinstance(w, dict) else w for w in wires]
+    # (a field once wired into Spread or Rings — a knob then — goes where that
+    # knob is now: Spread the bands' ×, Rings its two weights; Devin on #509)
+    knob_fields = [w for w in out_wires if isinstance(w, dict) and isinstance(w.get("to"), str)
+                   and w["to"].rpartition(".")[2] in HUE_CYCLE_DEFAULTS
+                   and w["to"].rpartition(".")[0] in renames.values()]
+    out_wires = [w for w in out_wires if not any(w is k for k in knob_fields)]
     notes: list[str] = []
     band: list[dict] = []
     spread_to: dict[str, str] = {}      # a Hue cycle → its bands' × (`fx.scale.<n>.mul`)
@@ -2109,6 +2115,15 @@ def retire_hue_cycle(nodes: list, wires: list, rest: dict, ports: list | None = 
             values[f"fx.{name}.on"] = True
             values.update({f"fx.{name}.{k}": v for k, v in kv.items()})
         spread_to[old] = f"fx.{spread}.mul"
+        for w in knob_fields:
+            if w["to"].rpartition(".")[0] != new:
+                continue
+            d = float(w.get(G.WIRE_DEPTH, 1.0))
+            if w["to"].endswith(".spread"):
+                band.append({**w, "to": f"{spread}.mul", G.WIRE_DEPTH: d})
+            else:       # Rings r weighs rings by r and the diagonal by 1 − r
+                band.append({**w, "to": f"{wb}.mul", G.WIRE_DEPTH: d})
+                band.append({**w, "to": f"{wa}.mul", G.WIRE_DEPTH: -d})
         notes.append(HUE_TURN_NOTE.format(old=old, new=new))
     out_wires = [*band, *out_wires]
 
@@ -2137,12 +2152,15 @@ def retire_hue_cycle(nodes: list, wires: list, rest: dict, ports: list | None = 
             return None
         out = {k: (param(v) if k in ("target", "scale", "source") else v) for k, v in r.items()}
         if m is not None and m.group(2) == "spread":
-            op, v = r.get("op"), r.get("value")
-            if op in ("push", "position") and isinstance(v, (int, float)):
+            op, v = r.get("op"), r.get("value", 1.0)       # (a row's default depth: 1)
+            if op == "push" and isinstance(v, (int, float)):
                 out["value"] = v / 2.0
             elif op == "set" and isinstance(v, (int, float)):
                 out["value"] = v / 2.0 + 0.5
-            elif op in ("abs", "abs14"):
+            elif op in ("abs", "abs14", "position"):
+                # (a row that sets the knob's place, not a push about it: the
+                # bands' × spans −4 … 4 where Spread spanned 0 … 4, and a row
+                # holds no offset — kept, said; Devin on #509 for position)
                 notes.append(HUE_ABS_NOTE.format(row=f"{where} {r.get('source')} → {t}"))
         return out
 
@@ -2150,6 +2168,8 @@ def retire_hue_cycle(nodes: list, wires: list, rest: dict, ports: list | None = 
         if isinstance(v, str):
             if v.startswith("render:") and v[7:] in renames:
                 return f"render:{renames[v[7:]]}"
+            if v.startswith("key.") and _hue_old(v[4:]) in renames:     # (black is clear's knobs)
+                return "key." + rename(v[4:])
             return param(rename(v)) if _HUE_PARAM.match(v) or _hue_old(v) else v
         if isinstance(v, dict):
             return {(walk(k) if isinstance(k, str) else k): walk(x) for k, x in v.items()}
@@ -2159,7 +2179,7 @@ def retire_hue_cycle(nodes: list, wires: list, rest: dict, ports: list | None = 
     out_rest = {}
     for k, v in rest.items():
         if k == "values":
-            out_rest[k] = values
+            out_rest[k] = {(walk(x) if x.startswith("key.") else x): y for x, y in values.items()}
         elif k in _ROW_LISTS and isinstance(v, list):
             out_rest[k] = [x for x in (row(r, k) for r in v) if x is not None]
         elif k == "macros" and isinstance(v, dict):
@@ -2234,7 +2254,12 @@ def hue_turns(doc: dict) -> tuple[dict, list[str]]:
         return doc, []
     out = {k: doc[k] for k in ("schema", "name") if k in doc}
     out.update(rest2)
-    out["graph"] = {**section, "nodes": nodes, "wires": wires}
+    # (the section's other keys — black is clear's `keys` — name nodes too)
+    others = {k: v for k, v in section.items() if k not in ("nodes", "wires")}
+    _, _, others2, _, _ = retire_hue_cycle(list(section.get("nodes", [])),
+                                           list(section.get("wires", [])), others)
+    others2.pop("values", None)
+    out["graph"] = {**others2, "nodes": nodes, "wires": wires}
     return out, notes
 
 

@@ -36,7 +36,7 @@ FIXTURES = sorted(p for p in [*SOURCES.glob("*.json"),
 # files were written against: its order and mix are read from its fixture)
 EFFECTS = {p.stem: fx.parse(p.stem, p.read_text())
            for p in [*(ROOT / "shaders" / "fx").glob("*.glsl"),
-                     *(Path(__file__).parent / "fixtures" / "retired-fx").glob("*.glsl")]
+                     *(ROOT / "shaders" / "fx" / "retired").glob("*.glsl")]
            if not p.stem.startswith("_")}
 SPECS = {n: (s.order, s.mix) for n, s in EFFECTS.items()}
 
