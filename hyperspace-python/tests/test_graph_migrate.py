@@ -32,8 +32,12 @@ FIXTURES = sorted(p for p in [*SOURCES.glob("*.json"),
                               *(Path(__file__).parent / "fixtures" / "merge-31-32").glob("*.json")]
                   if json.loads(p.read_text()).get("schema") not in (M.FREE_SCHEMA,
                                                                        M.SIX_SCHEMA))
+# (plan 67: a retired file — Hue cycle — keeps its place in the old stacks these
+# files were written against: its order and mix are read from its fixture)
 EFFECTS = {p.stem: fx.parse(p.stem, p.read_text())
-           for p in (ROOT / "shaders" / "fx").glob("*.glsl") if not p.stem.startswith("_")}
+           for p in [*(ROOT / "shaders" / "fx").glob("*.glsl"),
+                     *(ROOT / "shaders" / "fx" / "retired").glob("*.glsl")]
+           if not p.stem.startswith("_")}
 SPECS = {n: (s.order, s.mix) for n, s in EFFECTS.items()}
 
 

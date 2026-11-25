@@ -16,6 +16,7 @@ opens through the library's own load.
 | `field-blocks` | Blocks taken apart: Cells → Waveform → Cell action, with a second Cells' place in the cell → Displace |
 | `field-trip` | Trip warp taken apart, near: Noise (flow) × Rings, plus a Point scaled (the zoom) → Displace |
 | `field-knob` | Any knob takes a field: Point → Rings (value) → Wave's Amount, at a depth on the wire |
+| `hue-cycle` | Hue cycle taken apart: Line and Rings, weighed, added, × Spread → Hue turn's Turn |
 
 A **field** is a number (or a pair) at every pixel: green cables on GRAPH, grey
 when shown as a picture.

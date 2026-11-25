@@ -535,6 +535,24 @@ def spec_of(file: str) -> EffectSpec | None:
     return got
 
 
+# plan 67: a retired effect file (Hue cycle) — no longer drawn, but its spec is
+# still what an old file's depths onto it are measured against
+# (`params.fx_files`, `params.retaper_depths`) before the ladder rewrites it
+RETIRED_DIR = FX_DIR / "retired"
+_RETIRED: dict[str, EffectSpec] = globals().get("_RETIRED", {})
+
+
+def retired_specs() -> dict[str, EffectSpec]:
+    """The retired effect files' specs, by name, parsed once."""
+    if not _RETIRED:
+        for p in sorted(RETIRED_DIR.glob("*.glsl")):
+            try:
+                _RETIRED[p.stem] = parse(p.stem, p.read_text())
+            except (OSError, SpecError):
+                continue
+    return dict(_RETIRED)
+
+
 def ports_of(file: str) -> tuple[str, dict[str, str]]:
     """`ports` of shipped effect file `file` (a name, no instance mark): as the
     last `FxState` of the shipped folder read it, else read from the folder now

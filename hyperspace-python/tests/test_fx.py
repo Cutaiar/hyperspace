@@ -214,9 +214,9 @@ def test_live_follows_the_bypass_and_the_mixes():
     is on above mix 0 and the effects are on above FX mix 0 — no order, no
     target. (The run's order is its wires: test_graph_free.py.)"""
     st = FxState()
-    for n in ("warp", "acid", "huecycle"):
+    for n in ("warp", "acid", "hueturn"):
         st.values[n]["on"] = True
-    assert {n for n in st.names() if st.live(n)} == {"warp", "acid", "huecycle"}
+    assert {n for n in st.names() if st.live(n)} == {"warp", "acid", "hueturn"}
     st.values["warp"]["mix"] = 0.0
     assert not st.live("warp") and st.live("acid")              # a dry effect reads through
     st.on = False
@@ -1440,14 +1440,14 @@ def test_groups_follow_the_wires():
         ("→ pattern media", ["glimmer.2"]), ("→ backdrop", ["kaleido.2"]),
         ("→ output 2", ["acid.3"]), ("→ blend aux", ["acid.3"]),
         ("reaches nothing", ["wobble.2"])]
-    # within a group, the path from its head: acid.2 before huecycle.2
+    # within a group, the path from its head: acid.2 before hueturn.2
     chain = G.read_graph({
         "nodes": [{"kind": "effect", "file": "acid", "instance": 2},
-                  {"kind": "effect", "file": "huecycle", "instance": 2}],
+                  {"kind": "effect", "file": "hueturn", "instance": 2}],
         "wires": [{"from": a, "to": b} for a, b in (
             ("frame", "fx.image"), ("media.a", "acid.2.image"),
-            ("acid.2", "huecycle.2.image"), ("huecycle.2", "shape.faces"))]})
-    assert groups(chain) == [("→ faces", ["acid.2", "huecycle.2"])]
+            ("acid.2", "hueturn.2.image"), ("hueturn.2", "shape.faces"))]})
+    assert groups(chain) == [("→ faces", ["acid.2", "hueturn.2"])]
     assert groups(G.read_graph({"wires": [{"from": "frame", "to": "fx.image"}]})) == []
 
 

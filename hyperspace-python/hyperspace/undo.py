@@ -332,6 +332,7 @@ class Undo:
     _opens = False   # the open step began on focus: when it lands it opens the latch
     beside: Any = None    # …and these (row 1018)
     _seen: Any = None     # …and these: `reg.writes` as the last fingerprint began
+    _seen_every: Any = None    # …and the registry's params, the very list it read
     _reading: Any = None
     _rowlist: Any = None  # the table's rows then, by identity; None: rows that do not mark
     _polled: Any = ()     # (index in `_watched`, param): the bases no write marks
@@ -451,7 +452,7 @@ class Undo:
     def _saw(self) -> None:
         """The fingerprint just taken is this stack's now: what was marked by
         the time it began has been looked at."""
-        self._seen = self._reading
+        self._seen, self._seen_every = self._reading, self._every
         rows = [*self.table.bindings, *self._table_rows()]
         self._rowlist = rows if all(_marking(type(b)) for b in rows) else None
 
@@ -466,7 +467,9 @@ class Undo:
             return False
         fp = self._fp
         self._params()
-        if fp[0] is not self._ids or fp[5] != self._tag():
+        # other param objects, even under the same ids: a shader reload declares
+        # a knob over a new value, and nothing was written
+        if self._every is not self._seen_every or fp[0] is not self._ids or fp[5] != self._tag():
             return False
         bases = fp[1]
         for i, p in self._polled:

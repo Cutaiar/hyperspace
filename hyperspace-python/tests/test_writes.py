@@ -311,3 +311,23 @@ def test_a_live_settings_object_marks_after_a_reload_of_its_module():
             assert writes.serial() > at
     finally:
         vars(sq).update(kept)
+
+
+def test_a_param_declared_again_under_its_id_is_looked_at(rig):
+    """A shader reload builds a new value and declares its param again over it:
+    nothing is written, and the last effect's ids keep their order. A look that
+    trusted the ids kept the old base, and the next edit's undo put it back
+    (Devin's review of #506)."""
+    new = Box(b=3.0)
+    rig.tick(0.0)
+    assert not looked(rig, 1.0)
+    rig.reg.remove("x.item")
+    rig.reg.remove("x.b")
+    rig.reg.continuous("x.b", "B", *writes.cell(new, "b"), group="view")
+    rig.reg.continuous("x.item", "I", lambda: rig.box.items[0],
+                       lambda v: rig.box.items.__setitem__(0, v), group="view")
+    assert tuple(q.id for q in rig.reg) == rig._fp[0]       # the same ids, in the same order
+    rig._params()                       # (an undo or a restore asks between the ticks)
+    assert looked(rig, 2.0)
+    assert rig._fp[1][rig._fp[0].index("x.b")] == 3.0
+    assert not looked(rig, 3.0)                             # once: the fast path is back

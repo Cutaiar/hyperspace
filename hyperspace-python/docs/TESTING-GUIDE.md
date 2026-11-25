@@ -988,7 +988,7 @@ each is one undo step.
 
 **Judge:** whether the diamond can be told from the dot from a step
 back. Per face, a subtle effect (Double vision, Deconverge, Trip colour,
-Wobble) may be hard to see; strong ones (Hue cycle, Kaleidoscope) should
+Wobble) may be hard to see; strong ones (Hue turn, Kaleidoscope) should
 show. Every face showing the same picture is expected; say if it matters.
 
 **Wrong if:** nothing changes in the faces; the whole frame still folds;
@@ -1001,7 +1001,7 @@ the picture upside down or mirrored.
 **Needs:** laptop.
 
 **Do:** press F1 to F8 in turn. Then F5 (TRIP): aim its four effects
-(Plasma, Kaleidoscope, Zoom burst, Hue cycle) at the faces; watch the
+(Plasma, Kaleidoscope, Zoom burst, Hue turn) at the faces; watch the
 frame rate in the footer. Press F5 again.
 
 **Right if:** every preset looks as it did before this build; the FX
@@ -1019,7 +1019,7 @@ on which machine).
 **Needs:** laptop; the dream running (LOOKBACK page's status names a
 device).
 
-**Do:** F4 (WAKE). Aim Hue cycle at the faces and switch it on.
+**Do:** F4 (WAKE). Aim Hue turn at the faces and switch it on.
 
 **Right if:** the trail behind the shape has the faces' cycling colours
 and the dream grows out of them; an effect left on `frame` still never
@@ -1034,14 +1034,14 @@ appears in the trail.
 **Needs:** laptop. The same with a mouse is E1.
 
 **Do:**
-1. F5 (TRIP), FX page. Drag the Hue cycle chip **by its name** onto the
+1. F5 (TRIP), FX page. Drag the Hue turn chip **by its name** onto the
    Plasma chip and let go. ⌘Z.
 2. Drag a chip onto the right half of the last chip's name.
 3. Click a name; press on a name, slip a little and let go on it; click a
    dot. Use the order slider in the strip.
 
 **Right if:** while dragging, the name follows the pointer and a white
-bar marks the left edge of the chip underneath; after the drop Hue cycle
+bar marks the left edge of the chip underneath; after the drop Hue turn
 is first, the status line starts with it, the picture changes, and its
 strip is open; ⌘Z puts the order back in one press ("undid reorder
 effects"). (2) the bar shows on that chip's right edge and the effect
@@ -1576,7 +1576,7 @@ controls only the code; the top pad row reads TUMBLE … NOITA with TRIP
 green; the track knobs read Brightness, Speed, Instances, Pattern mix,
 Field amp, Field rate, Bitmap alpha, Zoom; the device knobs FX mix, Plasma
 level, Kaleidoscope segments, Kaleidoscope zoom, Zoom burst amount, Zoom
-burst glow, Hue cycle paint, Hue cycle spread; the track faders S1–S8
+burst glow, Hue turn paint, the bands' Scale × (Hue cycle's Spread); the track faders S1–S8
 are dark (TRIP binds none); in the clip-stop row only G6·8 is mapped, to
 Save (it lights only while held); names the desk keeps on every preset are
 grey, the preset's white. Pad rows 4–5: a filled slot amber at half
@@ -2837,7 +2837,7 @@ The screens-together entries are D19–D23 in Part 2 (d).
 and Acid off.
 
 **Right if:** under "gpu per node, ms", lines `acid`, `wobble`,
-`deconverge` and `huecycle` just above `fx`. The `fx` line itself reads
+`deconverge` and `hueturn` just above `fx`. The `fx` line itself reads
 0.00 — that is by design (it only hands the picture on); the effects'
 cost is on their own lines. After the switch, `kaleido` appears and
 `acid` goes within a few frames. No line for an effect that is off.
@@ -3584,7 +3584,7 @@ switch *warp* on, come back; switch it off again. Then click the small
 "9 off effects" box's **+**.
 
 **Right if:** only the effects that are on are boxes (plasma, kaleido,
-zoomblur, huecycle); the faint wire names the effects it runs over and
+zoomblur, hueturn); the faint wire names the effects it runs over and
 Delete only says what it is; *warp* on is a box in the chain, off it is
 back in the small box; **+** shows every effect in its place.
 
