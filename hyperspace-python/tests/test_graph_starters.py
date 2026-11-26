@@ -278,13 +278,12 @@ FB_SAID = ("feedback: scene → composite over → output.all.image; composite �
 
 
 def test_feedback_is_a_starter_a_picture_cable_offers():
-    """Its key names no node kind (`echo` is the look-back's frame): the
-    starter is "feedback", its decay the `fade` effect."""
+    """Its key names no node kind: the starter is "feedback", its decay the
+    `fade` effect."""
     from hyperspace import graph as G
     assert ("feedback", "feedback") in graphview.STARTERS
     assert "feedback" in graphview.CABLE_STARTERS
-    assert "feedback" not in G.NODE_KINDS and "echo" in G.NODE_KINDS   # (why not "echo")
-    assert graphview.label_of("echo.1").startswith("Echo")
+    assert "feedback" not in G.NODE_KINDS
     assert graphview.FEEDBACK_FILE == "fade" and graphview.FEEDBACK_LEVEL == 0.75
 
 
@@ -468,8 +467,9 @@ def test_the_menus_offer_feedback(page, monkeypatch):
     page.lib.loaded_patch.new((0.0, 0.0))
     e = ui_graph.render_edit(panel)
     assert e.add_node("composite") is None                  # feeds nothing
-    assert e.wire("scene", "lookback.image") is None        # the scene feeds two
-    assert e.wire("lookback", "composite.over") is None     # the look-back feeds one
+    assert e.add_node("resize") is None
+    assert e.wire("scene", "resize.image") is None          # the scene feeds two
+    assert e.wire("resize", "composite.over") is None       # the resize feeds one
     frame(panel, "graph")
     view = ui_graph._state(panel)["view"]
     items: list[tuple[str, bool]] = []
@@ -484,8 +484,8 @@ def test_the_menus_offer_feedback(page, monkeypatch):
 
     drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:scene"), m))
     assert menus == [ui_graph.FEEDBACK_AFTER]
-    assert ("→ output.all.image", True) in items and ("→ lookback.image", True) in items
-    drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:lookback"), m))
+    assert ("→ output.all.image", True) in items and ("→ resize.image", True) in items
+    drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:resize"), m))
     assert (ui_graph.FEEDBACK_AFTER, True) in items and menus == []
     drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:composite"), m))
     assert (f"{ui_graph.FEEDBACK_AFTER}: {graphview.FEEDBACK_FEEDS_NOTHING}", False) in items
