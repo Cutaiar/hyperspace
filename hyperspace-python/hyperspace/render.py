@@ -3089,6 +3089,7 @@ class Renderer:
         pair = self.delay_pair(name)
         if getattr(pair, "stack", None) is None:
             pair.stack = DelayStack()
+        pair.stack.owner = id(self)            # this deck's budget (`stack.held`)
         pair.stack.idle = 0
         return pair.stack
 
@@ -3118,8 +3119,9 @@ class Renderer:
         st = (getattr(getattr(self, "_view_now", None), "delay", None) or {}).get(name)
         depth = int(getattr(st, "depth", 1))
         size = tuple(pair.read[0].size)
-        # (every stack on this context, the other deck's too: Devin on #519)
-        others = _stack.held(self.ctx, but=stack)
+        # (this deck's stacks on this context: each deck a budget of its own, so
+        # neither starves the other in a crossfade — Devin on #519)
+        others = _stack.held(self.ctx, but=stack, owner=id(self))
         # past the budget it keeps the frames that fit, never none (the owner on
         # the Mac, hand check 960: past depth 36 the whole picture went black)
         room = max(0, (_stack.BUDGET - others) // frame_bytes(size))

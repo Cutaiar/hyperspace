@@ -266,33 +266,40 @@ def test_a_load_gives_back_a_stacks_room(ctx):
     assert st.depth == 2
 
 
-def test_two_decks_on_one_context_share_one_budget(ctx, monkeypatch):
-    """Sibling renderers (the two decks) share a GL context, so their stacks
-    share one budget (Devin on #519)."""
+def test_each_deck_has_its_own_budget_so_one_never_starves_the_other(ctx, monkeypatch):
+    """Sibling renderers (the two decks) share a GL context. Each holds at most
+    `stack.BUDGET` of stacks, so a deck that filled its budget never leaves the
+    deck faded in with nothing to read (Devin on #519, twice: first the total
+    was unbounded, then one deck could take it all)."""
     from test_graph_faces import _fbo
 
     from hyperspace import stack
     from hyperspace.outputs import Switches, View
 
-    a, sa = _rig(ctx, READ, depth=4, values={"read": {"at": 0.0}})
+    a, sa = _rig(ctx, READ, depth=8, values={"read": {"at": 0.0}})
     b = a.sibling()
     b.ghost.state.on = False
     b.wiring = a.wiring
     b.fx.state.values["colour"].update({"on": True, "saturation": 1.0, "value": 1.0})
     b.fx.state.values["read"]["on"] = True
     sb = _state()
-    sb.delay = {"delay": type(sa.delay["delay"])(depth=4)}
-    one = stack.frame_bytes((32, 24)) * 4
-    monkeypatch.setattr(stack, "BUDGET", one + one // 2)          # room for one, not two
-    for i in range(4):
+    sb.delay = {"delay": type(sa.delay["delay"])(depth=8)}
+    monkeypatch.setattr(stack, "BUDGET", stack.frame_bytes((32, 24)) * 4)   # 4 a deck
+    for i in range(4):                     # deck a alone first: it takes its whole budget
+        v = View(Switches(), (32, 24), target=_fbo(ctx, 32, 24))
+        a.draw_outputs(sa, 32, 24, 1.0, [v], t_now=1.0 + i / 60)
+    for i, h in enumerate(HUES):           # then deck b comes on: it still keeps frames
+        b.fx.state.values["colour"]["hue"] = h
         for r, s in ((a, sa), (b, sb)):
             v = View(Switches(), (32, 24), target=_fbo(ctx, 32, 24))
-            r.draw_outputs(s, 32, 24, 1.0, [v], t_now=1.0 + i / 60)
+            r.draw_outputs(s, 32, 24, 1.0, [v], t_now=2.0 + i / 60)
+    from test_graph_faces import _px
+
+    np.testing.assert_allclose(_px(v.target)[12, 16, :3], _hue_rgb(HUES[-2]), atol=2)
     held = [r.delay_stack("delay") for r in (a, b)]
-    # together within the one budget: the second keeps what fits (hand check 960)
-    assert stack.held(ctx) <= stack.BUDGET
-    assert sorted(st.depth for st in held) == [2, 4]
-    assert any("keeps 2 of 4" in st.error for st in held)
+    assert [st.depth for st in held] == [4, 4]
+    assert stack.held(ctx) <= 2 * stack.BUDGET      # two decks, a budget each
+    assert all("keeps 4 of 8" in st.error for st in held)
 
 
 def test_a_stack_inlet_of_a_saved_group_stays_open():

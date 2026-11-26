@@ -356,8 +356,9 @@ that took a picture hands it to its stack, one GPU copy (`stack.copy_layer`,
 — one sampler for every entry (the Mac's GL has sixteen units), not a 3D texture
 (2048 px deep at most, and its filtering would blend the ring's seam). A stack is
 made only on a reader's ask (`Renderer.delay_stack`) and released when none has asked
-for `SIZED_KEEP_FRAMES`; it only grows (a Depth driven down reads fewer); all stacks
-together hold at most `stack.BUDGET` (1 GiB), past it refused in words. Each entry
+for `SIZED_KEEP_FRAMES`; it only grows (a Depth driven down reads fewer); each deck's
+stacks hold at most `stack.BUDGET` (1 GiB, `stack.held` by context and renderer), and
+past it a delay keeps the frames that fit and says so — never none. Each entry
 keeps its age in seconds on the stack's own clock. A **stack port** (`graph.STACK`,
 `fx.STACK`) takes a delay and nothing else (`STACK_IS_A_DELAYS`); an effect file
 reads one by saying so (`// @takes stack stack`), and only such a file declares the
