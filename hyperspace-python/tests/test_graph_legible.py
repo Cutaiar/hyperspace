@@ -25,7 +25,7 @@ from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_graphview import _in_editor, stacked, thru
 from test_graphview_devices import rig_devices
-from test_ui_shell import frame
+from test_ui_shell import frame, head_menu
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 from ui_driver import Driver
 
@@ -401,7 +401,11 @@ def test_beside_shows_on_a_narrow_page_selected_or_not(rig, monkeypatch):
     monkeypatch.setattr(ui, "chip", lambda label, *a, **k: chips.append(label)
                         or chip(label, *a, **k))
     frame(rig.panel, "graph")
+    head_menu(rig.panel)
+    chips.clear()
+    frame(rig.panel, "graph")
     assert ui_graph.TIDY_CHIP in chips and "expand all##graph" in chips
+    imgui.internal.close_popup_to_level(0, False)
     # a narrow control window's page, nothing selected: the chip (plan 49)
     imgui.get_io().display_size = imgui.ImVec2(ui.PANEL_W + 2 * ui.PANEL_EDGE, CONTROL_SIZE[1])
     frame(rig.panel, "graph")
