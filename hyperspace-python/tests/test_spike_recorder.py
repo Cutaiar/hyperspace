@@ -85,3 +85,64 @@ def test_the_runner_never_writes_beside_the_patch(tmp_path):
     src = (TOOLS / "spike_run.py").read_text()
     assert "copyfile(a.patch, scratch)" in src
     assert "a.patch.write" not in src and "open(a.patch" not in src
+
+
+def test_the_run_is_not_cut_short_by_a_frame_budget(monkeypatch, tmp_path):
+    """The owner's first run on the Mac stopped in round 4 of 5: the app was
+    told to quit after `warmup frames + blocks + 1200`, but the warm-up is
+    counted in seconds (45 s is ~3,400 frames at 75 fps), so the budget ran
+    out early. The script closes the app itself; no frame budget may."""
+    import os
+
+    import spike_run
+
+    class Stop(Exception):
+        pass
+
+    seen = {}
+
+    def run(*a, **k):
+        seen["cap"] = os.environ.get("HYPERSPACE_FRAMES")
+        raise Stop
+
+    patch = tmp_path / "p.json"
+    patch.write_text("{}")
+    monkeypatch.delenv("HYPERSPACE_FRAMES", raising=False)
+    monkeypatch.setattr(spike_run.app_driver, "run", run)
+    monkeypatch.setattr(sys, "argv", ["spike_run", str(patch), "--out", str(tmp_path / "o")])
+    try:
+        spike_run.main()
+    except Stop:
+        pass
+    cap = int(seen["cap"])
+    assert cap == 0 or cap >= 10**7, seen          # 0: the app's "no limit"
+
+
+def test_a_condition_that_slows_every_frame_does_not_write_the_slow_table():
+    """The owner's first run: `additive_flip` doubled the frame (21.8 ms against
+    10.7), so the slowest 5% of the pooled run were its frames and the table
+    blamed whatever that path costs. The table is of the base blocks (and any
+    conditions named), not of the pool."""
+    n = 1200
+    rng = np.random.default_rng(1)
+    base = 10 + rng.normal(0, 0.4, n)
+    block = np.repeat(np.arange(6), 200)
+    since = np.tile(np.arange(200), 6)
+    conds = ["base", "additive_flip", "base", "additive_flip", "base", "additive_flip"]
+    flip = np.isin(block, [1, 3, 5])
+    spike = np.zeros(n)
+    spike[::30] = 20                                # a read-back stall every 30th frame
+    cols = {"total": base + spike + np.where(flip, 12.0, 0.0), "field_range": spike,
+            "sort_cost": np.where(flip, 12.0, 0.0), "frame_fn": base, "outside": np.ones(n)}
+    doc = {"meta": {"patch": "s"}, "conditions": list(sr.CONDITIONS),
+           "blocks": [{"id": i, "cond": c, "round": i // 2, "start": i * 200}
+                      for i, c in enumerate(conds)],
+           "block": block.tolist(), "since": since.tolist(),
+           "cols": {k: np.round(v, 3).tolist() for k, v in cols.items()}}
+    out: list[str] = []
+    sr.report(doc, out.append)
+    text = "\n".join(out)
+    table = text.split("Which parts grew:")[1].split("(parts nest")[0]
+    first = [ln.split()[0] for ln in table.splitlines() if ln.strip()][1:4]
+    assert "field_range" in first and "sort_cost" not in first, text
+    sr.report(doc, out.append, conds=("base", "additive_flip"))     # the pooled table, asked for

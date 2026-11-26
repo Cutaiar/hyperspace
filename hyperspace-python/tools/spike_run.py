@@ -106,12 +106,15 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--gil", action="store_true",
                     help="also run a thread that measures how late a 1 ms sleep wakes (a run of its own)")
+    ap.add_argument("--cond", default="base", help="the conditions the slow-frame table is of "
+                    "(comma-separated; default: base, the control blocks)")
     ap.add_argument("--set", action="append", default=[], metavar="ID=VALUE")
     a = ap.parse_args()
     if not a.patch.is_file():
         sys.exit(f"no such patch: {a.patch}")
-    need = a.warmup + a.rounds * len(sr.CONDITIONS) * a.block + 200
-    os.environ["HYPERSPACE_FRAMES"] = str(need + 1000)
+    # no frame budget: the script closes the app when it ends, and the warm-up is counted in
+    # seconds (a budget of frames cut the first Mac run off in round 4). 0 is "no limit"
+    os.environ["HYPERSPACE_FRAMES"] = "0"
     a.out.mkdir(parents=True, exist_ok=True)
     rec, saved = sr.Recorder(), {}
     scratch = a.out / "scratch"                           # the driver's capture folder: left empty
@@ -121,7 +124,7 @@ def main() -> None:
     rec.save(path)
     doc = json.loads(path.read_text())
     print()
-    sr.report(doc)
+    sr.report(doc, conds=tuple(a.cond.split(",")))
     print(f"\nrecording: {path} ({path.stat().st_size // 1024} KB)")
 
 

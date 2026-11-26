@@ -1,7 +1,8 @@
 """A low-overhead per-frame recorder for the frame-time spikes (median ~15 ms,
 p95 ~40 ms on the owner's Mac), and the report that says which parts grew in
 the slow frames. Run it with `tools/spike_run.py`; this file is the hooks and
-the report, and `python tools/spike_recorder.py FILE.json` reprints a report.
+the report, and `python tools/spike_recorder.py FILE.json [base,gc_frozen]` reprints a report
+(its slow-frame tables of those conditions' blocks, default `base`).
 
 What is recorded, per frame, in ms (all `time.perf_counter` wraps, nothing
 sampled; a wrap costs ~0.2 µs):
@@ -289,20 +290,28 @@ def _pearson(a, b) -> float:
     return float(np.corrcoef(a, b)[0, 1])
 
 
-def report(doc: dict, out=print) -> None:
+def report(doc: dict, out=print, conds: tuple[str, ...] = ("base",)) -> None:
+    """The report. The slow-versus-middle table, the worst frames and the spacing are
+    of the blocks whose condition is in `conds` (default: the control, `base`): a
+    switch that moves every frame (the additive flip doubled the Mac's) would
+    otherwise be the slowest 5% and write the table. The per-condition table
+    below is of every block."""
     import numpy as np
 
     cols = {k: np.array(v) for k, v in doc["cols"].items()}
     since, block = np.array(doc["since"]), np.array(doc["block"])
     total = cols["total"]
-    keep = (since >= SETTLE) & (block >= 0)
+    kept = (since >= SETTLE) & (block >= 0)
+    ids = {b["id"] for b in doc["blocks"] if b["cond"] in conds}
+    keep = kept & np.isin(block, sorted(ids))
     n = int(keep.sum())
-    out(f"{doc['meta'].get('patch', '?')}: {len(total)} frames, {n} after warm-up and "
+    out(f"{doc['meta'].get('patch', '?')}: {len(total)} frames, {int(kept.sum())} after warm-up and "
         f"each block's first {SETTLE}; threads at start: {', '.join(doc['meta'].get('threads_start', []))}")
     if n < 40:
         out("too few frames for a report")
         return
     t = total[keep]
+    out(f"the next three tables are of the {', '.join(conds)} blocks only ({n} frames)")
     q = np.percentile
     out(f"whole frame ms: median {q(t, 50):.1f}  p90 {q(t, 90):.1f}  p95 {q(t, 95):.1f}  "
         f"p99 {q(t, 99):.1f}  max {t.max():.1f}   (frames over 2x median: "
@@ -323,7 +332,7 @@ def report(doc: dict, out=print) -> None:
         d = c[slow].mean() - c[mid].mean()
         rows.append((d, name, c[mid].mean(), c[slow].mean(), _pearson(c[keep], t)))
     for d, name, a, b, r in sorted(rows, reverse=True)[:16]:
-        if abs(d) < 0.01 and abs(r) < 0.05:
+        if abs(d) < 0.01 and not abs(r) >= 0.05:        # (a constant column's r is nan)
             continue
         unit = "" if not name.startswith(("cells", "edges", "gc_n")) else " (count)"
         share = f"{100 * d / excess:5.0f}%" if excess > 0 and not unit else ""
@@ -414,7 +423,7 @@ def report(doc: dict, out=print) -> None:
 
 def main() -> None:
     doc = json.loads(Path(sys.argv[1]).read_text())
-    report(doc)
+    report(doc, conds=tuple(sys.argv[2].split(",")) if len(sys.argv) > 2 else ("base",))
 
 
 if __name__ == "__main__":
