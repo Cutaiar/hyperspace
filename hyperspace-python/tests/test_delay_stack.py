@@ -200,3 +200,39 @@ def test_a_reader_with_no_delay_wired_shows_nothing(ctx):
     r.draw_outputs(_state(), 32, 24, 1.0, [v], t_now=1.0)
     assert ctx.error == "GL_NO_ERROR"
     assert _px(v.target)[12, 16, :3].max() == 0
+
+
+def test_a_depth_driven_down_keeps_what_the_stack_holds(ctx):
+    """Depth is modulatable: lowered, the stack is kept and a reader reads the
+    newest Depth of it; raised past its room, it is made again, clean."""
+    r, s = _rig(ctx, READ, depth=4, values={"read": {"at": 3.0}})
+    for i, h in enumerate(HUES[:5]):
+        _draw(ctx, r, s, h, t=1.0 + i / 60)
+    st = r.delay_stack("delay")
+    tex = st.tex
+    s.delays["delay"].depth = 2
+    got = _draw(ctx, r, s, HUES[5], t=1.0 + 5 / 60)
+    assert st.tex is tex and len(st.entries) == 4
+    np.testing.assert_allclose(got[0], _hue_rgb(HUES[3]), atol=2)     # at 3 → its 2nd newest
+    s.delays["delay"].depth = 8
+    _draw(ctx, r, s, HUES[0], t=1.0 + 6 / 60)
+    assert st.tex is not tex and len(st.entries) == 1
+
+
+def test_the_slit_scan_example_shows_two_moments_across_the_frame(ctx):
+    """A Line field on Read's At (plan 90: a time displace, no node of its own):
+    the left and the right of the frame show different frames."""
+    section = wired(("colour", "delay.image"), ("delay", "read.stack"),
+                    ("read", "output.1.image"), nodes=("colour", "read", "line"))
+    section["wires"].append({"from": "line", "to": "read.at", "depth": 3.0})
+    r, s = _rig(ctx, section, depth=8, values={"read": {"at": 2.0}, "line": {}})
+    from test_graph_faces import _fbo, _px
+
+    from hyperspace.outputs import Switches, View
+    for i, h in enumerate(HUES):
+        r.fx.state.values["colour"]["hue"] = h
+        v = View(Switches(), (64, 24), target=_fbo(ctx, 64, 24))
+        r.draw_outputs(s, 64, 24, 1.0, [v], t_now=1.0 + i / 60)
+    px = _px(v.target)
+    left, right = px[12, 2, :3], px[12, 61, :3]
+    assert np.abs(left - right).max() > 60, (left, right)

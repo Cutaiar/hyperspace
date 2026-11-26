@@ -2017,8 +2017,8 @@ _DELAY_TIPS = {
 def declare_delays(r: Registry, names: Iterable[str]) -> list[str]:
     """The delays' params (plan 90 H1), as `declare_cuts` does the cuts': for
     each delay `names` holds, `depth` (1 … 64, whole) and `gap` (seconds) —
-    group `delay` (a patch group: the loadable patch's); the depth is a count,
-    not modulatable — over a `DelayState` made when first declared and kept
+    group `delay` (a patch group: the loadable patch's), both modulatable (a
+    stack only grows, `DelayStack.ensure`, so a depth driven down keeps it) — over a `DelayState` made when first declared and kept
     while the name stays; those of every delay no longer named dropped, with
     their states. Returns the ids that appeared or went."""
     state = _delay_state(r)
@@ -2042,8 +2042,7 @@ def declare_delays(r: Registry, names: Iterable[str]) -> list[str]:
             got = _attr(st, key)
             if key == "depth":
                 r.continuous(pid, label, *got, lo=DELAY_DEPTH[0], hi=DELAY_DEPTH[1],
-                             integer=True, fmt=lambda v: f"{int(v)}", group=DELAY_GROUP,
-                             modulatable=False, tip=tip)
+                             integer=True, fmt=lambda v: f"{int(v)}", group=DELAY_GROUP, tip=tip)
             else:
                 r.continuous(pid, label, *got, lo=DELAY_GAP[0], hi=DELAY_GAP[1],
                              fmt=lambda v: f"{v:.3f} s", group=DELAY_GROUP, tip=tip)

@@ -101,11 +101,14 @@ class DelayStack:
     # ---- the frames ----
 
     def ensure(self, ctx: moderngl.Context, size: tuple[int, int], depth: int) -> bool:
-        """The array at `size` and `depth` layers, made again — clean — when
-        either changed. False, with the reason on `error`, when it cannot be."""
+        """The array at `size` with room for `depth` layers, made again — clean
+        — when the size changed or the depth grew past its room. A smaller
+        depth keeps it (a reader reads fewer: `read`), so a hand or an LFO on
+        Depth never wipes what it holds on the way down. False, with the
+        reason on `error`, when it cannot be."""
         size = (int(size[0]), int(size[1]))
         depth = max(1, min(int(depth), MAX_DEPTH))
-        if self.tex is not None and size == self.size and depth == self.depth:
+        if self.tex is not None and size == self.size and depth <= self.depth:
             return True
         self.release()
         try:

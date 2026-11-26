@@ -870,7 +870,7 @@ HOVERS: dict[str, str] = {
     "slot": "One more picture through the same effect, with its knobs.",
     "composite": "Lays one picture over another.",
     "switch": "Picks one of eight.",
-    "delay": "Last frame's picture.",
+    "delay": "Last frame's picture; and, at its Depth, the frames before it, a stack Read and Trail take.",
     "resize": "A crop at its own size.",
     "matte": ("Makes a mask of its picture — by brightness, coverage or a keyed hue. Wired "
               "where a picture goes, the mask shows white where it passes."),

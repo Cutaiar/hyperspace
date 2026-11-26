@@ -1,0 +1,139 @@
+{
+  "schema": "hyperspace.loadable/11",
+  "name": "stack-echo",
+  "note": "An echo: a delay keeps the last second of the shape (32 frames, one every 1/30 s) and Read shows the one 20 frames back, added over the shape now. The sub band pushes how far back.",
+  "graph": {
+    "frame": "wired",
+    "nodes": [
+      {
+        "kind": "hands",
+        "laid": "over"
+      },
+      {
+        "kind": "delay"
+      },
+      {
+        "kind": "effect",
+        "file": "read"
+      },
+      {
+        "kind": "composite",
+        "blend": "add"
+      }
+    ],
+    "wires": [
+      {
+        "from": "shape",
+        "to": "scene.geometry"
+      },
+      {
+        "from": "pattern",
+        "to": "shape.faces"
+      },
+      {
+        "from": "hands",
+        "to": "hands.layer.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.guide"
+      },
+      {
+        "from": "scene",
+        "to": "delay.image"
+      },
+      {
+        "from": "delay",
+        "to": "read.stack"
+      },
+      {
+        "from": "read",
+        "to": "composite.over"
+      },
+      {
+        "from": "scene",
+        "to": "composite.under"
+      },
+      {
+        "from": "composite",
+        "to": "output.all.image"
+      }
+    ]
+  },
+  "values": {
+    "ghost.on": true,
+    "ghost.alpha": 0.35,
+    "view.shape": 55,
+    "view.faces": false,
+    "view.lines": true,
+    "view.speed": 0.3,
+    "view.bright": 1.35,
+    "camera.zoom": 1.5,
+    "delay.depth": 32,
+    "delay.gap": 0.033333,
+    "fx.read.on": true,
+    "fx.read.at": 20.0
+  },
+  "routes": [
+    {
+      "source": "lane:0",
+      "target": "fx.read.at",
+      "op": "push",
+      "value": 0.3
+    },
+    {
+      "source": "lane:0",
+      "target": "rot.rate.ZW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:1",
+      "target": "rot.rate.XW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:2",
+      "target": "rot.rate.YW",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:3",
+      "target": "rot.rate.XY",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:4",
+      "target": "rot.rate.XZ",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:5",
+      "target": "rot.rate.YZ",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    }
+  ],
+  "macros": {},
+  "units": {
+    "camera.pan": "world",
+    "fx.depth": "taper"
+  },
+  "media": {
+    "channels": {}
+  }
+}

@@ -3088,7 +3088,7 @@ class Renderer:
                      for n, p in (getattr(self, "_delays", None) or {}).items()
                      if n != name and getattr(p, "stack", None) is not None
                      and p.stack.tex is not None)
-        need = frame_bytes(size) * depth
+        need = frame_bytes(size) * max(depth, stack.depth if stack.size == size else 0)
         if others + need > BUDGET:
             stack.release()
             stack.error = OVER_BUDGET.format(name=name, depth=depth, w=size[0], h=size[1],

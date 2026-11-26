@@ -1,0 +1,137 @@
+{
+  "schema": "hyperspace.loadable/11",
+  "name": "stack-slit",
+  "note": "A slit-scan, a time displace: a Line field into Read's At, so the left of the frame shows the shape now and the right shows it up to a second ago. The right hand's height turns the line.",
+  "graph": {
+    "frame": "wired",
+    "nodes": [
+      {
+        "kind": "hands",
+        "laid": "over"
+      },
+      {
+        "kind": "delay"
+      },
+      {
+        "kind": "effect",
+        "file": "line"
+      },
+      {
+        "kind": "effect",
+        "file": "read"
+      }
+    ],
+    "wires": [
+      {
+        "from": "shape",
+        "to": "scene.geometry"
+      },
+      {
+        "from": "pattern",
+        "to": "shape.faces"
+      },
+      {
+        "from": "hands",
+        "to": "hands.layer.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.guide"
+      },
+      {
+        "from": "scene",
+        "to": "delay.image"
+      },
+      {
+        "from": "delay",
+        "to": "read.stack"
+      },
+      {
+        "from": "line",
+        "to": "read.at",
+        "depth": 16.0
+      },
+      {
+        "from": "read",
+        "to": "output.all.image"
+      }
+    ]
+  },
+  "values": {
+    "ghost.on": true,
+    "ghost.alpha": 0.35,
+    "view.shape": 55,
+    "view.faces": false,
+    "view.lines": true,
+    "view.speed": 0.3,
+    "view.bright": 1.35,
+    "camera.zoom": 1.5,
+    "delay.depth": 32,
+    "delay.gap": 0.033333,
+    "fx.read.on": true,
+    "fx.read.at": 14.0,
+    "fx.line.on": true
+  },
+  "routes": [
+    {
+      "source": "hand:right.y",
+      "target": "fx.line.angle",
+      "op": "push",
+      "value": 0.5
+    },
+    {
+      "source": "lane:0",
+      "target": "rot.rate.ZW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:1",
+      "target": "rot.rate.XW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:2",
+      "target": "rot.rate.YW",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:3",
+      "target": "rot.rate.XY",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:4",
+      "target": "rot.rate.XZ",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:5",
+      "target": "rot.rate.YZ",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    }
+  ],
+  "macros": {},
+  "units": {
+    "camera.pan": "world",
+    "fx.depth": "taper"
+  },
+  "media": {
+    "channels": {}
+  }
+}
