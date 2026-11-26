@@ -4,7 +4,7 @@ deletable cable.
 | was read by name                 | now a wire                                  | unwired      |
 |----------------------------------|---------------------------------------------|--------------|
 | the shape read `pattern`         | `pattern → shape.faces`                     | plain faces  |
-| the cover built from the scene   | `scene.cover → lookback.cover` (a mask)     | no occlusion |
+| the cover built from the scene   | `scene.cover → cut.mask` (a mask)           | no cover     |
 | a layer / guide read `hands`     | `hands → hands.layer.hands` / `.guide.hands`| empty        |
 | clouds injected into the scene   | `cloud → scene.geometry` (the meta controller's)        | no cloud     |
 | `depth` auto-wired, one `blend`  | `scene.depth → composite.depth` / an output's, `laid` the layer's | no depth |
@@ -12,7 +12,11 @@ deletable cable.
 Per row: unwired behaves as the table says; wired reproduces what the
 builder read by name; the migration (`graphmigrate.drawn_edges`) adds the
 wire to a `/4`–`/6` frame; the canvas draws it. The goldens are the proof
-that the migrated frames draw what they drew (tests/test_golden_frames.py)."""
+that the migrated frames draw what they drew (tests/test_golden_frames.py).
+
+Plan 90 H2: the look-back is retired — the cover (`scene(cover)`) goes into
+any mask port (a cut's, here); the migration's rows still read an old
+frame's `lookback.cover`."""
 
 from __future__ import annotations
 
@@ -26,13 +30,16 @@ from hyperspace.params import Registry
 from hyperspace.routing import Bindings
 
 SIZE = (240, 150)
-# (plan 36 T4: the look-back records the scene and its trail is shown)
-FRAME = [("shape", "scene.geometry"), ("scene", "lookback.image"),
-         ("lookback", "output.all.image"), ("hands.layer", "output.all.hands"),
-         ("hands.layer", "output.all.guide")]
-# the same frame in the words before T4 (a `/6` file's: the look-back laid
-# over `lookback.image`, recording `lookback.capture`) — a migration's input
-OLD_FRAME = [*FRAME, ("scene", "lookback.capture")]
+# (plan 90 H2: the scene shown straight — the look-back that stood between
+# is retired)
+FRAME = [("shape", "scene.geometry"), ("scene", "output.all.image"),
+         ("hands.layer", "output.all.hands"), ("hands.layer", "output.all.guide")]
+# a frame in the words before T4 (a `/6` file's: the look-back laid over
+# `lookback.image`, recording `lookback.capture`) — a migration's input
+OLD_FRAME = [("shape", "scene.geometry"), ("scene", "lookback.image"),
+             ("lookback", "output.all.image"), *FRAME[2:], ("scene", "lookback.capture")]
+# a cut on the scene into output 1: a mask port for the cover
+CUT = [("scene", "cut.image"), ("cut", "output.1.image")]
 TRACERS = {"dream.on": True, "dream.mix": 0.0}      # an old file's look-back on, no dream
 
 
@@ -138,29 +145,33 @@ def test_plain_faces_draw_no_pattern_and_the_wire_draws_it(ctx, bus_cuts):
     assert patterned[..., :3].max() > 20 and not (patterned == plain).all()
 
 
-# ---------------------------------------------------------------- the look-back's cover
+# ---------------------------------------------------------------- the scene's cover
 
-def test_unwired_the_look_back_has_no_cover():
-    g = build(spec_of(*FRAME))
-    assert g.nodes["lookback"].inputs["cover"] is None
-    assert "lookback(cover)" not in g.nodes
+def test_unwired_a_mask_port_has_no_cover():
+    """(Plan 90 H2: the look-back's cover port is retired; a cut's mask is
+    the cover's port now.)"""
+    g = build(spec_of(*FRAME, *CUT, nodes=[{"kind": "cut"}]))
+    assert g.nodes["cut"].inputs["mask"] is None
+    assert G.COVER not in g.nodes
 
 
 def test_wired_the_cover_is_the_scenes_faces_mask():
-    g = build(spec_of(*FRAME, ("scene.cover", "lookback.cover")))
-    cover = g.nodes["lookback(cover)"]
+    g = build(spec_of(*FRAME, *CUT, ("scene.cover", "cut.mask"), nodes=[{"kind": "cut"}]))
+    cover = g.nodes[G.COVER]
+    assert G.COVER == "scene(cover)"
     assert isinstance(cover, G.Cover) and cover.inputs["scene"] is g.nodes["scene"]
-    assert g.nodes["lookback"].inputs["cover"] is cover
-    # a pin of the scene: it reaches the scene, and goes into the cover port alone
-    assert {"scene", "scene.cover"} <= G.reaches(spec_of(*FRAME, ("scene.cover",
-                                                                  "lookback.cover")))
+    assert g.nodes["cut"].inputs["mask"] is cover
+    # a pin of the scene: it reaches the scene, and goes into a mask port alone
+    assert {"scene", "scene.cover"} <= G.reaches(spec_of(*FRAME, *CUT, ("scene.cover",
+                                                                        "cut.mask"),
+                                                         nodes=[{"kind": "cut"}]))
     spec = G.read_graph(wired(*FRAME, ("scene.cover", "acid.image"), ("acid", "output.1.image")))
     assert spec.notes == ("wire scene.cover → acid.image — scene.cover is "
                           + G.PIN_WORDS["scene.cover"],)
-    spec = G.read_graph(wired(*FRAME, ("scene", "lookback.cover")))
+    spec = G.read_graph(wired(*FRAME, *CUT, ("scene", "cut.mask"), nodes=[{"kind": "cut"}]))
     # (plan 39 T2: the refusal names the converter)
-    assert spec.notes == (("wire scene → lookback.cover — scene makes a picture, "
-                           "lookback.cover takes a mask — put a matte between"),)
+    assert spec.notes == (("wire scene → cut.mask — scene makes a picture, "
+                           "cut.mask takes a mask — put a matte between"),)
 
 
 def test_the_migration_wires_the_cover_where_both_are_reached():
@@ -171,9 +182,9 @@ def test_the_migration_wires_the_cover_where_both_are_reached():
 
 
 def test_the_canvas_draws_the_cover_cable_from_the_scenes_pin():
-    spec = G.read_graph(migrated(values=TRACERS))
+    spec = spec_of(*FRAME, *CUT, ("scene.cover", "cut.mask"), nodes=[{"kind": "cut"}])
     view = view_of(spec, build(spec))
-    c = cable(view, "scene.cover", "lookback.cover")
+    c = cable(view, "scene.cover", "cut.mask")
     assert c.type == graphview.MASK
     scene = next(n for n in view.nodes if n.id == "render:scene")
     assert {"rout:scene.cover", "rout:scene.depth"} <= {p.id for p in scene.ports}
@@ -186,7 +197,7 @@ def test_unwired_a_layer_and_a_guide_are_empty():
     g = build(spec_of(*FRAME))
     layer = g.nodes["hands.layer"]
     assert layer.inputs["geometry"] is None and "hands" not in g.nodes
-    spec = spec_of(*FRAME[:3], ("hands.guide", "output.all.guide"))
+    spec = spec_of(*FRAME[:2], ("hands.guide", "output.all.guide"))
     g = build(spec)
     assert g.nodes["hands.guide"].inputs["geometry"] is None
     assert "hands" in graphview.unreached(spec)
@@ -195,12 +206,12 @@ def test_unwired_a_layer_and_a_guide_are_empty():
 def test_wired_a_layer_draws_its_hands_and_the_guide_splits_out_of_it():
     g = build(spec_of(*FRAME, ("hands", "hands.layer.hands")))
     assert g.nodes["hands.layer"].inputs["geometry"] is g.nodes["hands"]
-    spec = spec_of(*FRAME[:4], ("hands.guide", "output.all.guide"),
+    spec = spec_of(*FRAME[:3], ("hands.guide", "output.all.guide"),
                    ("hands", "hands.layer.hands"), ("hands", "hands.guide.hands"))
     g = build(spec)
     assert g.outputs[0].inputs["readout"] is g.nodes["hands.layer"]     # one pass, as ever
     # a guide drawing other hands than its layer's is its own
-    spec = spec_of(*FRAME[:4], ("hands.guide", "output.all.guide"),
+    spec = spec_of(*FRAME[:3], ("hands.guide", "output.all.guide"),
                    ("hands", "hands.layer.hands"), ("hands.2", "hands.guide.hands"),
                    nodes=[{"kind": "hands", "instance": 2}])
     g = build(spec)
@@ -235,13 +246,14 @@ def test_an_unwired_layer_draws_nothing_on_the_golden_meta(ctx, bus_cuts):
     it, nothing — the frame is the one with no hands laid over at all."""
     from test_graph_frame import _draw, _land
 
-    _land(bus_cuts, migrated(wired(*OLD_FRAME), values=TRACERS))
+    # (plan 36 T4: the scene shown straight — a look-back drawn is on, and
+    # its trail would grow between the draws; plan 90 H2: it is retired)
+    plain = [("shape", "scene.geometry"), ("scene", "output.all.image")]
+    _land(bus_cuts, wired(*plain, *FRAME[2:], ("pattern", "shape.faces"),
+                          ("hands", "hands.layer.hands")))
     lit, = _draw(ctx, bus_cuts, [Switches()])
     assert bus_cuts.renderer.stats["layer"]
-    # (plan 36 T4: the scene shown straight — a look-back drawn is on, and
-    # its trail would grow between the two draws)
-    plain = [("shape", "scene.geometry"), ("scene", "output.all.image")]
-    _land(bus_cuts, wired(*plain, *FRAME[3:], ("pattern", "shape.faces")))
+    _land(bus_cuts, wired(*plain, *FRAME[2:], ("pattern", "shape.faces")))
     empty, = _draw(ctx, bus_cuts, [Switches()])
     assert not bus_cuts.renderer.stats["layer"]
     _land(bus_cuts, wired(*plain, ("pattern", "shape.faces")))
@@ -294,7 +306,7 @@ def test_the_clouds_wire_is_cut_and_joined_on_graph(tmp_path):
     assert app.loaded_patch.graph.spec.to_json() == before and app.lib.is_dirty("loadable")
     assert e.wire("rout:cloud", "rin:scene/geometry") is None
     assert app.loaded_patch.bus.cut == frozenset() and len(pushed) == 2
-    assert e.wire("rout:cloud", "rin:lookback/image") == graphview.CLOUD_INTO_SCENE.format(
+    assert e.wire("rout:cloud", "rin:output.all/image") == graphview.CLOUD_INTO_SCENE.format(
         cloud="cloud")
 
 
@@ -342,7 +354,7 @@ def test_blend_is_each_composites_own_and_laid_the_layers():
     g = build(spec)
     assert spec.laid == "over" and g.nodes["composite"].inputs["depth"] is g.nodes["scene"]
     assert g.nodes["composite"].blend == "depth" and g.outputs[0].blend == "over"
-    spec = spec_of(*FRAME[:3], ("scene", "output.all.hands"), nodes=DEPTH_HANDS)
+    spec = spec_of(*FRAME[:2], ("scene", "output.all.hands"), nodes=DEPTH_HANDS)
     assert build(spec).outputs[0].blend == "over"
 
 

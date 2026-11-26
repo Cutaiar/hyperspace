@@ -534,8 +534,8 @@ def test_onto_words_names_a_cable_whose_port_is_gone():
 
 
 def _two_cable_rig(rig):
-    """`lookback → acid → output.all` and a free `wobble.2`, the page
-    drawn once and its stubs placed by hand: lookback 0–100, acid
+    """`scene → acid → output.all` and a free `wobble.2`, the page
+    drawn once and its stubs placed by hand: scene 0–100, acid
     300–400, output.all at 600."""
     from types import SimpleNamespace as NS
 
@@ -544,7 +544,7 @@ def _two_cable_rig(rig):
 
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Two", schema="hyperspace.preset/7", graph=_section(
-        *FRAME0, ("lookback", "acid.image"), ("acid", "output.all.image"),
+        *FRAME0, ("scene", "acid.image"), ("acid", "output.all.image"),
         nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
     rig.lib.load("loadable", "Two")
     gs = rig.lib.loaded_patch.graph
@@ -553,7 +553,7 @@ def _two_cable_rig(rig):
     frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
     st["pin_xy"] = {}                       # only these three nodes' stubs are drawn
-    for nid, x in {"render:lookback": 0.0, "render:acid": 300.0,
+    for nid, x in {"render:scene": 0.0, "render:acid": 300.0,
                    "render:output.all": 600.0}.items():
         st["pin_xy"][graphview.stub_out(nid)] = (x + 100.0, 0.0)
         st["pin_xy"][graphview.stub_in(nid)] = (x, 0.0)
@@ -874,7 +874,8 @@ def test_a_selection_delete_keeps_its_first_refusal_s_words(rig, monkeypatch):
 # ---------------------------------------------------------------- plan 33 T6: the free graph
 #
 # (plan 35 T5: every section here is a wired frame in the new ids — the run
-# is the look-back's picture through the effects into All outputs, and
+# is a picture through the effects into All outputs (plan 90 H2: the
+# scene's, where the retired look-back's was), and
 # each of its wires is an ordinary wire)
 
 def _section(*pairs, nodes=()):
@@ -923,7 +924,7 @@ def wires_of(rig) -> set[tuple[str, str]]:
 
 
 def run_of(rig) -> tuple[str, ...]:
-    """The effects from the look-back into All outputs (the run, in wires)."""
+    """The effects into All outputs (the run, in wires)."""
     return G.run_back(rig.loaded_patch.graph.spec, "output.all.image")
 
 
@@ -935,7 +936,7 @@ def test_the_picker_adds_an_effect_unwired(tmp_path):
     from test_graphview import views
 
     from hyperspace.outputs import Switches
-    rig, e, pushed = free_rig(tmp_path, ("lookback", "acid.image"), ("acid", "output.all.image"))
+    rig, e, pushed = free_rig(tmp_path, ("scene", "acid.image"), ("acid", "output.all.image"))
     before = wires_of(rig)
     assert ("switch", None, "switch") in graphview.picker(e)
     assert e.add_node("effect", "acid") is None and e.added == "acid.2"
@@ -960,10 +961,10 @@ def test_insert_effect_on_a_render_cable(tmp_path):
     """"insert effect ▸ kaleido" on the cable `channel.a → shape.faces`: the
     next kaleido instance, wired `channel.a → kaleido.image`, `kaleido →
     shape.faces` in one landing; one undo puts the one wire back. Inserted
-    on `lookback → output.all.image`, the run is that one effect."""
+    on `scene → output.all.image`, the run is that one effect."""
     from test_undo import settle
 
-    rig, e, pushed = free_rig(tmp_path, ("lookback", "output.all.image"),
+    rig, e, pushed = free_rig(tmp_path, ("scene", "output.all.image"),
                               ("channel.a", "shape.faces"), undo_rig=True)
     cable = graphview.VCable("c", "rout:channel.a", "rin:shape/faces", graphview.IMAGE,
                              kind="render")
@@ -976,9 +977,9 @@ def test_insert_effect_on_a_render_cable(tmp_path):
     assert rig.undo.undo()
     assert ("channel.a", "shape.faces") in wires_of(rig)
     assert "kaleido" not in {x.name for x in rig.loaded_patch.graph.spec.effects}
-    assert e.insert_effect(("lookback", "output.all.image"), "acid") is None
+    assert e.insert_effect(("scene", "output.all.image"), "acid") is None
     assert run_of(rig) == ("acid",)
-    assert ("lookback", "output.all.image") not in wires_of(rig)
+    assert ("scene", "output.all.image") not in wires_of(rig)
     assert e.insert_effect(cable, "teapot") == "no teapot effect in this build"
 
 
@@ -989,22 +990,22 @@ def test_a_generator_on_a_cable_takes_it_over(tmp_path):
     generator takes a cable over as a channel does: it feeds the port
     instead of what fed it, said so; its inlets are its file's
     (`graphview.insert_ports`)."""
-    rig, e, _pushed = free_rig(tmp_path, ("lookback", "output.all.image"),
+    rig, e, _pushed = free_rig(tmp_path, ("scene", "output.all.image"),
                               ("channel.a", "shape.faces"))
     assert graphview.insert_ports("colour") == ((), "colour") and graphview.is_source("colour")
     assert graphview.insert_ports("acid") == (("acid.image",), "acid")
     assert not graphview.is_source("acid")
     # the insert picker's path
-    assert e.insert_effect(("lookback", "output.all.image"), "colour") is None
+    assert e.insert_effect(("scene", "output.all.image"), "colour") is None
     got = wires_of(rig)
-    assert ("colour", "output.all.image") in got and ("lookback", "output.all.image") not in got
+    assert ("colour", "output.all.image") in got and ("scene", "output.all.image") not in got
     assert not [w for w in got if w[1].startswith("colour.")]
-    assert e.said.startswith("colour feeds output.all.image instead of lookback")
-    # (Devin's review of #501: the look-back, its last wire gone, stays on the
+    assert e.said.startswith("colour feeds output.all.image instead of scene")
+    # (Devin's review of #501: the scene, its last wire out gone, stays on the
     # canvas unwired — kept by its entry, as `render_wire` keeps a node)
     spec = rig.loaded_patch.graph.spec
-    assert "lookback" in graphview.frame_names(spec)
-    assert not [w for w in got if w[0] == "lookback"]
+    assert "scene" in graphview.frame_names(spec)
+    assert not [w for w in got if w[0] == "scene"]
     # a drop of the one already there onto another cable
     assert e.place_node(("channel.a", "shape.faces"), "colour") is None
     got = wires_of(rig)
@@ -1017,14 +1018,14 @@ def test_inserting_an_effect_no_one_holds_uses_instance_one_and_switches_it_on(t
     wire, node or placement in the section holds is the file itself
     (instance 1), and it is switched on (`fx.<name>.on`) in the same
     landing — the first gesture shows something."""
-    rig, e, pushed = free_rig(tmp_path, ("lookback", "output.all.image"))
+    rig, e, pushed = free_rig(tmp_path, ("scene", "output.all.image"))
     reg = rig.reg
     # (plan 36 T3: neither exists before a gesture names it)
     assert "fx.kaleido.on" not in reg and "fx.wobble.on" not in reg
-    assert e.insert_effect(("lookback", "output.all.image"), "kaleido") is None
+    assert e.insert_effect(("scene", "output.all.image"), "kaleido") is None
     assert e.added == "kaleido" and run_of(rig) == ("kaleido",)
     assert reg["fx.kaleido.on"].value is True
-    assert pushed == ["insert kaleido into lookback → output.all.image"]
+    assert pushed == ["insert kaleido into scene → output.all.image"]
     assert e.add_node("effect", "wobble") is None and e.added == "wobble"
     assert reg["fx.wobble.on"].value is True
     assert "wobble" in {x.name for x in rig.loaded_patch.graph.spec.effects}
@@ -1033,8 +1034,8 @@ def test_inserting_an_effect_no_one_holds_uses_instance_one_and_switches_it_on(t
 def test_a_second_insert_of_the_same_file_takes_instance_two(tmp_path):
     """R25: the run holds kaleido, so the next kaleido inserted is
     `kaleido.2`, and it is switched on too."""
-    rig, e, _ = free_rig(tmp_path, ("lookback", "output.all.image"))
-    assert e.insert_effect(("lookback", "output.all.image"), "kaleido") is None
+    rig, e, _ = free_rig(tmp_path, ("scene", "output.all.image"))
+    assert e.insert_effect(("scene", "output.all.image"), "kaleido") is None
     assert e.added == "kaleido"
     assert e.insert_effect(("kaleido", "output.all.image"), "kaleido") is None
     assert e.added == "kaleido.2"
@@ -1047,14 +1048,14 @@ def test_undo_of_an_insert_restores_the_on_value_too(tmp_path):
     effect off the cable and puts `fx.kaleido.on` back off."""
     from test_undo import settle
 
-    rig, e, _ = free_rig(tmp_path, ("lookback", "output.all.image"), undo_rig=True)
+    rig, e, _ = free_rig(tmp_path, ("scene", "output.all.image"), undo_rig=True)
     assert "fx.kaleido.on" not in rig.reg            # (plan 36 T3: not in the section)
-    assert e.insert_effect(("lookback", "output.all.image"), "kaleido") is None
+    assert e.insert_effect(("scene", "output.all.image"), "kaleido") is None
     assert rig.reg["fx.kaleido.on"].value is True
     settle(rig)
     assert len(rig.undo.stack) == 1 and rig.undo.undo()
     assert "fx.kaleido.on" not in rig.reg           # (gone with its node: plan 36 T3)
-    assert run_of(rig) == () and wires_of(rig) == {("lookback", "output.all.image")}
+    assert run_of(rig) == () and wires_of(rig) == {("scene", "output.all.image")}
 
 
 def test_switch_over_the_channels_wires_all_eight_and_keeps_the_channel(tmp_path):
@@ -1063,7 +1064,7 @@ def test_switch_over_the_channels_wires_all_eight_and_keeps_the_channel(tmp_path
     `pattern.media` in place of what fed it, and `select` the channel that
     fed it (c: 3). "▸ backdrop" on a backdrop fed by nothing is a second
     switch at select 1."""
-    rig, e, pushed = free_rig(tmp_path, ("lookback", "output.all.image"),
+    rig, e, pushed = free_rig(tmp_path, ("scene", "output.all.image"),
                               ("channel.c", "pattern.media"))
     items = graphview.picker(e)
     assert ("channels", "pattern.media", "faces media") in items
@@ -1085,13 +1086,13 @@ def test_undo_of_switch_over_the_channels_puts_the_channel_back(tmp_path):
     """R28: the switch, its nine wires and its `select` are one undo step:
     one undo leaves `channel.c → pattern.media` and no switch."""
     from test_undo import settle
-    rig, e, _ = free_rig(tmp_path, ("lookback", "output.all.image"),
+    rig, e, _ = free_rig(tmp_path, ("scene", "output.all.image"),
                          ("channel.c", "pattern.media"), undo_rig=True)
     assert e.switch_channels("pattern.media") is None
     assert rig.reg["switch.select"].value == 3
     settle(rig)
     assert len(rig.undo.stack) == 1 and rig.undo.undo()
-    assert wires_of(rig) == {("lookback", "output.all.image"), ("channel.c", "pattern.media")}
+    assert wires_of(rig) == {("scene", "output.all.image"), ("channel.c", "pattern.media")}
     assert rig.loaded_patch.graph.spec.switches == () and "switch.select" not in rig.reg
 
 
@@ -1101,18 +1102,18 @@ def test_the_runs_cables_are_ordinary_wires(tmp_path):
     named by its other wire, or (R21) by its entry once it has none, drawn
     faint; the effect deleted goes with its wires; deleting a wire the
     section does not have is the one refusal left."""
-    rig, e, pushed = free_rig(tmp_path, ("lookback", "acid.image"), ("acid", "wobble.image"),
+    rig, e, pushed = free_rig(tmp_path, ("scene", "acid.image"), ("acid", "wobble.image"),
                               ("wobble", "output.all.image"))
     assert e.unwire("acid", "wobble.image") is None
-    assert wires_of(rig) == {("lookback", "acid.image"), ("wobble", "output.all.image")}
-    assert e.unwire("lookback", "acid.image") is None
+    assert wires_of(rig) == {("scene", "acid.image"), ("wobble", "output.all.image")}
+    assert e.unwire("scene", "acid.image") is None
     assert G.EffectAt("acid", 1) in rig.loaded_patch.graph.spec.effects     # (R21: kept, faint)
     assert "acid" in graphview.unreached(rig.loaded_patch.graph.spec)
     assert e.drop_node("render:acid") is None and e.said == "acid deleted"
     assert G.EffectAt("acid", 1) not in rig.loaded_patch.graph.spec.effects
     n = len(pushed)
-    assert e.unwire("lookback", "output.all.image") == graphview.NO_SUCH_WIRE.format(
-        wire="lookback → output.all.image")
+    assert e.unwire("scene", "output.all.image") == graphview.NO_SUCH_WIRE.format(
+        wire="scene → output.all.image")
     assert len(pushed) == n
     # a run effect deleted closes the chain over it
     assert e.insert_effect(("wobble", "output.all.image"), "acid") is None
@@ -1121,11 +1122,11 @@ def test_the_runs_cables_are_ordinary_wires(tmp_path):
 
 
 def test_reordering_the_run_is_rewiring(tmp_path):
-    """`lookback → acid → wobble → output.all`: acid dragged onto the cable
+    """`scene → acid → wobble → output.all`: acid dragged onto the cable
     `wobble → output.all.image` — out of its place, the chain closed over
     it, then in after wobble — is one landing, one undo step: the run is
     wobble, acid."""
-    rig, e, pushed = free_rig(tmp_path, ("lookback", "acid.image"), ("acid", "wobble.image"),
+    rig, e, pushed = free_rig(tmp_path, ("scene", "acid.image"), ("acid", "wobble.image"),
                               ("wobble", "output.all.image"))
     assert e.place_effect(("wobble", "output.all.image"), "acid") is None
     assert run_of(rig) == ("wobble", "acid")
@@ -1138,7 +1139,7 @@ FRAME0 = (("shape", "scene.geometry"),)
 
 def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
     """A free effect node (`wobble.2`: in the section, no cable in or out)
-    let go on the canvas over the cable `lookback → output.all.image` is
+    let go on the canvas over the cable `scene → output.all.image` is
     inserted into it (`ui_graph.dropped`, as a modifier is into a value
     cable) — it is in the run; one let go over nothing stays where it is."""
     from types import SimpleNamespace as NS
@@ -1148,7 +1149,7 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
 
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Free", schema="hyperspace.preset/7", graph=_section(
-        *FRAME0, ("lookback", "output.all.image"),
+        *FRAME0, ("scene", "output.all.image"),
         nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
     rig.lib.load("loadable", "Free")
     gs = rig.lib.loaded_patch.graph
@@ -1159,8 +1160,8 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
     view = st["view"]
     assert view.node("render:wobble.2").faint and view.node("render:frame") is None
     cable = next(c for c in view.cables
-                 if (c.src_port, c.dst_port) == ("rout:lookback", "rin:output.all/image"))
-    st["pin_xy"].update({graphview.stub_out("render:lookback"): (0.0, 0.0),
+                 if (c.src_port, c.dst_port) == ("rout:scene", "rin:output.all/image"))
+    st["pin_xy"].update({graphview.stub_out("render:scene"): (0.0, 0.0),
                          graphview.stub_in("render:output.all"): (400.0, 0.0)})
     assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (900.0, 900.0)) is None
     assert G.run_back(gs.spec, "output.all.image") == ()
@@ -1179,13 +1180,13 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     from test_undo import settle
 
     from hyperspace.outputs import Switches
-    rig, e, pushed = free_rig(tmp_path, ("lookback", "acid.image"), ("acid", "output.all.image"),
+    rig, e, pushed = free_rig(tmp_path, ("scene", "acid.image"), ("acid", "output.all.image"),
                               undo_rig=True)
     rig.reg["fx.acid.on"].set(True)
     settle(rig)
     rig.undo.clear()
     assert e.unwire("acid", "output.all.image") is None
-    assert e.unwire("lookback", "acid.image") is None and len(pushed) == 2
+    assert e.unwire("scene", "acid.image") is None and len(pushed) == 2
     spec = rig.loaded_patch.graph.spec
     assert run_of(rig) == () and wires_of(rig) == set()
     assert G.EffectAt("acid", 1) in spec.effects
@@ -1200,14 +1201,14 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
     settle(rig)
     assert rig.undo.undo()           # (both unwires inside one settle: one step)
-    assert wires_of(rig) == {("lookback", "acid.image"), ("acid", "output.all.image")}
+    assert wires_of(rig) == {("scene", "acid.image"), ("acid", "output.all.image")}
     # wired in again, it is named by its wires alone
-    rig2, e2, _ = free_rig(tmp_path / "again", ("lookback", "acid.image"),
+    rig2, e2, _ = free_rig(tmp_path / "again", ("scene", "acid.image"),
                            ("acid", "output.all.image"))
-    assert e2.unwire("lookback", "acid.image") is None
+    assert e2.unwire("scene", "acid.image") is None
     assert e2.unwire("acid", "output.all.image") is None
-    assert e2.wire("rout:lookback", "rin:output.all/image") is None
-    assert e2.place_effect(("lookback", "output.all.image"), "acid") is None
+    assert e2.wire("rout:scene", "rin:output.all/image") is None
+    assert e2.place_effect(("scene", "output.all.image"), "acid") is None
     assert rig2.loaded_patch.graph.spec.to_json()["nodes"] == [{"kind": "hands", "laid": "over"}]
 
 
@@ -1258,7 +1259,7 @@ def test_a_sink_loop_drag_is_refused_in_words(tmp_path):
     reads the loop at read, so `scene → shape.faces` goes red with words —
     never green, then dormant — and nothing changes. With a delay declared,
     `delay → shape.faces` lands (plan 35 G: only types and loops refuse)."""
-    rig, e, pushed = free_rig(tmp_path, *FRAME0, ("lookback", "output.all.image"))
+    rig, e, pushed = free_rig(tmp_path, *FRAME0, ("scene", "output.all.image"))
     before = rig.loaded_patch.graph.spec.to_json()
     why = e.refusal("rout:scene", "rin:shape/faces")
     # (R5: every wire on the loop is refused, the first named)
@@ -1274,7 +1275,7 @@ def test_a_plain_loop_drag_points_at_a_delay(tmp_path):
     which point at a delay; wired through one it lands, the section read
     with no notes."""
     rig, e, _ = free_rig(
-        tmp_path, *FRAME0, ("lookback", "acid.image"), ("acid", "wobble.image"),
+        tmp_path, *FRAME0, ("scene", "acid.image"), ("acid", "wobble.image"),
         ("wobble", "output.all.image"),
         nodes=[{"kind": "effect", "file": "acid"}, {"kind": "effect", "file": "wobble"}])
     before = rig.loaded_patch.graph.spec.to_json()
@@ -1291,7 +1292,7 @@ def test_a_plain_loop_drag_points_at_a_delay(tmp_path):
 
 
 def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
-    """R22: an effect already wired (`acid` in `lookback → acid → wobble →
+    """R22: an effect already wired (`acid` in `scene → acid → wobble →
     output.all`) let go on another picture cable (`wobble →
     output.all.image`) is moved there in one undo step — the run is wobble,
     acid; let go on its own cables, or on nothing, it stays where it is."""
@@ -1303,7 +1304,7 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     from hyperspace import undo as undo_mod
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Run", schema="hyperspace.preset/7", graph=_section(
-        ("lookback", "acid.image"), ("acid", "wobble.image"), ("wobble", "output.all.image")))
+        ("scene", "acid.image"), ("acid", "wobble.image"), ("wobble", "output.all.image")))
     rig.lib.load("loadable", "Run")
     gs = rig.lib.loaded_patch.graph
     rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
@@ -1314,12 +1315,12 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     pushed = []
     monkeypatch.setattr(undo_mod, "push",
                         lambda label, load=False: pushed.append(label))
-    xy = {"render:lookback": 0.0, "render:acid": 300.0, "render:wobble": 600.0,
+    xy = {"render:scene": 0.0, "render:acid": 300.0, "render:wobble": 600.0,
           "render:output.all": 900.0}
     for nid, x in xy.items():
         st["pin_xy"][graphview.stub_out(nid)] = (x + 100.0, 0.0)
         st["pin_xy"][graphview.stub_in(nid)] = (x, 0.0)
-    # on its own cables (lookback → acid, acid → wobble), and on nothing: no change
+    # on its own cables (scene → acid, acid → wobble), and on nothing: no change
     for at in ((200.0, 0.0), (500.0, 900.0)):
         assert ui_graph.dropped(rig.panel, view, "render:acid", at, lift=True) is None
     # on another cable without ⌘ (2026-10-29): only moved on the canvas
@@ -2016,7 +2017,8 @@ def test_deleting_a_window_unwires_it(tmp_path):
 
 def test_the_picker_groups_by_primitive(tmp_path):
     """The picker in the owner's groups: starters ▸ (plan 36 T5), then scene ▸,
-    look-back ▸, pictures ▸, media ▸ (the channels, 2026-10-31; the segment)
+    pictures ▸ (plan 90 H2: the look-back's group retired, the dream in
+    pictures), media ▸ (the channels, 2026-10-31; the segment)
     and masks ▸ (plan 39 T5), the effect files, a slot on each effect
     instance in the section (plan 89) — each item's group `PICKER_GROUP[kind]`."""
     section = {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
@@ -2024,16 +2026,13 @@ def test_the_picker_groups_by_primitive(tmp_path):
                          {"from": "acid", "to": "output.all.image"}]}
     rig, e, _ = wired_rig(tmp_path, section)
     files = sorted(rig.loaded_patch.graph.files())
-    echoes = [("echo", "1", "echo.1 (newest)"),
-              *(("echo", str(k), f"echo.{k}") for k in range(2, 32)),
-              ("echo", "32", "echo.32 (oldest)")]
     items = graphview.picker(e)
     assert items == [
         *(("starter", k, w) for k, w in graphview.STARTERS),
         ("scene", None, "scene"), ("shape", None, "shape"), ("hands", None, "hands"),
         ("layer", None, "hands layer"), ("guide", None, "hands guide"),
         ("backdrop", None, "backdrop"),
-        ("lookback", None, "look-back"), *echoes, ("dream", None, "dream"),
+        ("dream", None, "dream"),
         ("pattern", None, "faces pattern"), ("composite", None, "composite"),
         ("switch", None, "switch"),
         ("channels", "pattern.media", "faces media"), ("channels", "backdrop.image", "backdrop"),
@@ -2045,7 +2044,7 @@ def test_the_picker_groups_by_primitive(tmp_path):
         *(("effect", f, f) for f in files),
         ("slot", "acid", "slot on acid"), ("slot", "acid.2", "slot on acid.2")]
     groups = [graphview.PICKER_GROUP[k] for k, _, _ in items]
-    assert list(dict.fromkeys(groups)) == ["starters", "scene", "look-back", "pictures",
+    assert list(dict.fromkeys(groups)) == ["starters", "scene", "pictures",
                                            "media", "masks", "effects", "slot on"]
 
 
@@ -2111,9 +2110,9 @@ def test_a_frame_node_is_added_once(tmp_path):
     (plan 89), the effect's own node, nothing new."""
     from hyperspace import graph as G
     rig, e, _ = wired_rig(tmp_path, {"frame": "wired"})
-    assert e.add_node("lookback") is None and e.added == "lookback"
-    assert G.LookbackAt() in rig.loaded_patch.graph.spec.frame_nodes
-    assert e.add_node("lookback") == "Look-back is in the graph already"
+    assert e.add_node("backdrop") is None and e.added == "backdrop"
+    assert G.BackdropAt() in rig.loaded_patch.graph.spec.frame_nodes
+    assert e.add_node("backdrop") == "Backdrop is in the graph already"
     assert e.add_node("effect", "acid") is None
     assert e.add_node("slot", "acid") is None and not e.added
     assert e.said == graphview.SLOT_ADDED.format(label="acid", k=2, name="acid.slot.2")
@@ -2317,13 +2316,13 @@ def _drag_to(rig, probe, nid, centre_to, cmd=False, steps=12):
     return pressed, lit
 
 
-RUN = (*FRAME0, ("lookback", "output.all.image"))
+RUN = (*FRAME0, ("scene", "output.all.image"))
 # every node at hand on one screen: the run along y = 0, the free node below
 PLACES = {"render:scene": [0, 0], "render:output.all": [700, 0], "render:shape": [-800, 0]}
 
 
 def _free_node_rig(rig, monkeypatch, entry: dict, nid: str, *more, effects=("acid", "wobble.2")):
-    """`shape → scene → lookback → output.all` with free node `entry` (`nid`)
+    """`shape → scene → scene → output.all` with free node `entry` (`nid`)
     placed under the run, the canvas centred on the run's last cable."""
     gs, probe = _drag_rig(rig, monkeypatch, *RUN, *more, nodes=[entry], effects=effects,
                           layout={**PLACES, nid: [250, 400]})
@@ -2333,9 +2332,9 @@ def _free_node_rig(rig, monkeypatch, entry: dict, nid: str, *more, effects=("aci
 
 
 def test_a_free_composite_dropped_on_a_cable_asks_under_or_over(rig, monkeypatch):
-    """A free composite dragged onto `lookback → output.all.image`: the drag
+    """A free composite dragged onto `scene → output.all.image`: the drag
     says "then pick under or over", the drop opens the chooser for its
-    inlets and changes nothing; "over" picked wires `lookback →
+    inlets and changes nothing; "over" picked wires `scene →
     composite.over`, `composite → output.all.image` in one step, and the
     line says under is open."""
     _, probe = _free_node_rig(rig, monkeypatch, {"kind": "composite"}, "render:composite")
@@ -2345,16 +2344,16 @@ def test_a_free_composite_dropped_on_a_cable_asks_under_or_over(rig, monkeypatch
     assert pressed and pressed[0] == "render:composite"
     assert lit and lit["best"] == c.id and lit["ask"] == ("under", "over")
     assert probe["words"] == (
-        "let go: Composite onto Look-back → All outputs, then pick under or over")
+        "let go: Composite onto Scene → All outputs, then pick under or over")
     held = st["onto"]
     assert held["node"] == "render:composite" and held["inlets"] == ("under", "over")
     assert held["cables"] == [c.id]
     assert wires_of(rig.lib) == set(RUN)        # nothing until the pick
     view = st["view"]
     assert ui_graph.put_onto(rig.panel, view, "render:composite", c, "over") is c
-    assert wires_of(rig.lib) == {*FRAME0, ("lookback", "composite.over"),
+    assert wires_of(rig.lib) == {*FRAME0, ("scene", "composite.over"),
                                  ("composite", "output.all.image")}
-    assert st["said"] == ("composite moved: lookback → composite over → output.all.image; "
+    assert st["said"] == ("composite moved: scene → composite over → output.all.image; "
                           "composite under is open")
     assert st["onto"] is None
 
@@ -2369,7 +2368,7 @@ def test_the_chooser_takes_under_too_and_a_switch_asks_its_inputs(rig, monkeypat
     _drag_to(rig, probe, "render:composite", mid)
     assert st["onto"] and st["onto"]["inlets"] == ("under", "over")
     assert ui_graph.put_onto(rig.panel, st["view"], "render:composite", c, "under") is c
-    assert wires_of(rig.lib) == {*FRAME0, ("lookback", "composite.under"),
+    assert wires_of(rig.lib) == {*FRAME0, ("scene", "composite.under"),
                                  ("composite", "output.all.image")}
     assert st["said"].endswith("; composite over is open")
     # a switch
@@ -2381,16 +2380,16 @@ def test_the_chooser_takes_under_too_and_a_switch_asks_its_inputs(rig, monkeypat
     assert probe["words"].endswith(", then pick in1 … in8")
     assert st["onto"]["inlets"] == G.SWITCH_PORTS
     assert ui_graph.put_onto(rig.panel, st["view"], "render:switch", c, "in3") is c
-    assert wires_of(rig.lib) == {*FRAME0, ("lookback", "switch.in3"),
+    assert wires_of(rig.lib) == {*FRAME0, ("scene", "switch.in3"),
                                  ("switch", "output.all.image")}
-    assert st["said"] == ("switch moved: lookback → switch in3 → output.all.image; "
+    assert st["said"] == ("switch moved: scene → switch in3 → output.all.image; "
                           "switch in1 … in8 are open")
 
 
 def test_a_channel_dropped_on_a_cable_takes_it_over(rig, monkeypatch):
-    """A source: channel a dragged onto `lookback → output.all.image` feeds
+    """A source: channel a dragged onto `scene → output.all.image` feeds
     the port instead — `channel.a → output.all.image`, the old wire gone,
-    the look-back kept (its own wire in stays) and the line says it feeds
+    the scene kept (its own wire in stays) and the line says it feeds
     nothing now; the drag said so first."""
     gs, probe = _drag_rig(rig, monkeypatch, *RUN, layout=PLACES)
     st = ui_graph._state(rig.panel)
@@ -2402,18 +2401,18 @@ def test_a_channel_dropped_on_a_cable_takes_it_over(rig, monkeypatch):
     c, mid = _cable_mid(rig, "rin:output.all/image")
     pressed, lit = _drag_to(rig, probe, "render:channel.a", mid)
     assert pressed[0] == "render:channel.a" and lit["source"] and lit["best"] == c.id
-    assert probe["words"] == "let go: Channel A feeds All outputs instead of Look-back"
+    assert probe["words"] == "let go: Channel A feeds All outputs instead of Scene"
     assert wires_of(rig.lib) == {*FRAME0, ("channel.a", "output.all.image")}
-    assert st["said"] == ("channel.a feeds output.all.image instead of lookback; "
-                          "lookback feeds nothing now")
+    assert st["said"] == ("channel.a feeds output.all.image instead of scene; "
+                          "scene feeds nothing now")
     assert G.run_back(gs.spec, "output.all.image") == ()
 
 
 def test_cmd_lifts_a_wired_pattern_onto_a_cable_and_closes_its_gap(rig, monkeypatch):
     """⌘-drag of the pattern (wired `channel.b → pattern.media`, `pattern →
-    shape.faces`) onto `lookback → output.all.image`: out of its place —
+    shape.faces`) onto `scene → output.all.image`: out of its place —
     its source bridged to its consumer, `channel.b → shape.faces` — and
-    spliced: `lookback → pattern.media`, `pattern → output.all.image`.
+    spliced: `scene → pattern.media`, `pattern → output.all.image`.
     Without ⌘ the drag only moves it and says to hold ⌘."""
     more = (("channel.b", "pattern.media"), ("pattern", "shape.faces"))
     _, probe = _drag_rig(rig, monkeypatch, *RUN, *more,
@@ -2432,8 +2431,8 @@ def test_cmd_lifts_a_wired_pattern_onto_a_cable_and_closes_its_gap(rig, monkeypa
     pressed, lit = _drag_to(rig, probe, "render:pattern", mid, cmd=True)
     assert lit["lift"] and lit["hot"] and lit["best"] == c.id
     assert wires_of(rig.lib) == {*FRAME0, ("channel.b", "shape.faces"),
-                                 ("lookback", "pattern.media"), ("pattern", "output.all.image")}
-    assert st["said"] == "pattern moved: lookback → pattern → output.all.image"
+                                 ("scene", "pattern.media"), ("pattern", "output.all.image")}
+    assert st["said"] == "pattern moved: scene → pattern → output.all.image"
 
 
 def test_a_node_that_never_splices_is_refused_in_words_and_dims_nothing(rig, monkeypatch):
@@ -2496,10 +2495,10 @@ def test_the_other_refusals_are_said_and_cold(rig):
 
 
 def test_a_through_wire_says_what_to_turn_on(rig, monkeypatch):
-    """acid switched off: the drawn `lookback → output.all` wire is a
+    """acid switched off: the drawn `scene → output.all` wire is a
     through wire, no cable; a free wobble.2 dragged onto it is refused
     with "turn it on to splice here", the wire cold."""
-    gs, probe = _drag_rig(rig, monkeypatch, *FRAME0, ("lookback", "acid.image"),
+    gs, probe = _drag_rig(rig, monkeypatch, *FRAME0, ("scene", "acid.image"),
                           ("acid", "output.all.image"),
                           nodes=[{"kind": "effect", "file": "wobble", "instance": 2}],
                           on=(), layout={**PLACES, "render:wobble.2": [250, 400],
@@ -2507,11 +2506,11 @@ def test_a_through_wire_says_what_to_turn_on(rig, monkeypatch):
     st = ui_graph._state(rig.panel)
     thr = list(st["throughs"].values())
     assert len(thr) == 1 and thr[0].label == "through 1 off effect: acid"
-    a = st["pin_xy"][graphview.stub_out("render:lookback")]
+    a = st["pin_xy"][graphview.stub_out("render:scene")]
     b = st["pin_xy"][graphview.stub_in("render:output.all")]
     mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
     _centre_on(rig, probe, (mid[0], mid[1] + 150))
-    a = st["pin_xy"][graphview.stub_out("render:lookback")]
+    a = st["pin_xy"][graphview.stub_out("render:scene")]
     b = st["pin_xy"][graphview.stub_in("render:output.all")]
     pressed, lit = _drag_to(rig, probe, "render:wobble.2", ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2))
     assert pressed[0] == "render:wobble.2" and lit["best"] is None
@@ -2548,7 +2547,7 @@ def test_a_pin_not_drawn_this_frame_is_no_drop_target(rig, monkeypatch):
     panned: `pin_xy` holds only the pins drawn this frame, so the stale
     port pin never stands in for the drawn stub (a drop 300 units off the
     wire)."""
-    _drag_rig(rig, monkeypatch, *FRAME0, ("lookback", "acid.image"),
+    _drag_rig(rig, monkeypatch, *FRAME0, ("scene", "acid.image"),
                           ("acid", "output.all.image"), layout=PLACES)
     st = ui_graph._state(rig.panel)
     assert graphview.stub_out("render:acid") in st["pin_xy"] and "rout:acid" not in st["pin_xy"]
@@ -2566,7 +2565,7 @@ def test_a_pin_not_drawn_this_frame_is_no_drop_target(rig, monkeypatch):
 
 def test_a_group_member_dropped_out_onto_a_cable_leaves_and_splices(rig, monkeypatch):
     """wobble.2 grouped alone, its group open, dragged out of the region
-    onto `lookback → output.all.image`: it leaves the group and is spliced
+    onto `scene → output.all.image`: it leaves the group and is spliced
     (two steps), as the glow promised."""
     gs, probe = _free_node_rig(rig, monkeypatch, {"kind": "effect", "file": "wobble",
                                                   "instance": 2}, "render:wobble.2")
@@ -2591,7 +2590,8 @@ def test_a_group_member_dropped_out_onto_a_cable_leaves_and_splices(rig, monkeyp
 def test_insert_node_from_the_cable_menu(rig):
     """`ui_graph.insert_node`: a composite asked its inlet, then spliced
     where the menu opened; a delay in one call; `insert_items` disables
-    the look-back the section has; the effect wrapper still stands."""
+    the dream the section has (plan 90 H2: the look-back it disabled is
+    retired); the effect wrapper still stands."""
     st, view, gs = _two_cable_rig(rig)
     c = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
     assert ui_graph.insert_node(rig.panel, c, "composite", at=(321.0, 654.0)) is None
@@ -2609,9 +2609,10 @@ def test_insert_node_from_the_cable_menu(rig):
     assert ui_graph.insert_node(rig.panel, c, "delay", at=(1.0, 2.0)) is None
     assert wires_of(rig.lib) >= {("acid", "delay.image"), ("delay", "composite.over")}
     e = ui_graph.render_edit(rig.panel)
+    assert {k: why for k, _, why in graphview.insert_items(e)}["dream"] is None
+    assert e.add_node("dream") is None
     items = {k: why for k, _, why in graphview.insert_items(e)}
-    assert items["lookback"] == (
-        "Look-back is in the graph already: drag it onto the cable")
+    assert items["dream"] == "Dream is in the graph already: drag it onto the cable"
     assert items["composite"] is None and items["pattern"] is None
     assert e.insert_node(c, "channel") == graphview.CHANNEL_INSERT
     assert e.insert_node(c, "composite") == graphview.PICK_INLET.format(
@@ -2631,7 +2632,7 @@ def test_place_node_lifts_any_kind_by_its_table(tmp_path):
     feed; a node on the cable already, a kind that never splices and an
     inlet it has not are refused in words; the effect wrappers stand."""
     rig, e, pushed = free_rig(
-        tmp_path, ("lookback", "composite.under"), ("channel.c", "composite.over"),
+        tmp_path, ("scene", "composite.under"), ("channel.c", "composite.over"),
         ("composite", "acid.image"), ("acid", "output.all.image"), ("channel.a", "backdrop.image"),
         nodes=[{"kind": "composite"}])
     assert e.place_node(("acid", "output.all.image"), "composite") == graphview.PICK_INLET.format(
@@ -2641,7 +2642,7 @@ def test_place_node_lifts_any_kind_by_its_table(tmp_path):
     assert e.place_node(("composite", "acid.image"), "composite", "under") == \
         "composite is on that cable already"
     assert e.place_node(("acid", "output.all.image"), "composite", "under") is None
-    assert wires_of(rig) == {("lookback", "acid.image"), ("channel.c", "composite.over"),
+    assert wires_of(rig) == {("scene", "acid.image"), ("channel.c", "composite.over"),
                              ("acid", "composite.under"), ("composite", "output.all.image"),
                              ("channel.a", "backdrop.image")}
     assert e.said == "composite moved: acid → composite under → output.all.image"
@@ -2652,20 +2653,20 @@ def test_place_node_lifts_any_kind_by_its_table(tmp_path):
                       "composite feeds nothing now; backdrop.image fed by nothing now")
     assert ("channel.a", "backdrop.image") not in wires_of(rig)
     # a kind that never splices
-    assert e.place_node(("lookback", "acid.image"), "shape") == graphview.GEOMETRY_NODE.format(
+    assert e.place_node(("scene", "acid.image"), "shape") == graphview.GEOMETRY_NODE.format(
         label="Shape")
-    assert e.place_node(("lookback", "acid.image"), "output.all") == \
+    assert e.place_node(("scene", "acid.image"), "output.all") == \
         graphview.OUTPUT_NODE.format(label="All outputs")
     # a segment: in by image, out by fg
     assert e.add_node("segment") is None
-    assert e.place_node(("lookback", "acid.image"), "segment") is None
-    assert {("lookback", "segment.image"), ("segment.fg", "acid.image")} <= wires_of(rig)
+    assert e.place_node(("scene", "acid.image"), "segment") is None
+    assert {("scene", "segment.image"), ("segment.fg", "acid.image")} <= wires_of(rig)
     # (a cable from a pin takes no drop yet: `_cable_ends`' rule, as before)
     assert e.place_node(("segment.fg", "acid.image"), "segment") == \
         graphview.NO_PICTURE_CABLE.format(wire="segment.fg → acid.image")
-    assert e.place_node(("lookback", "segment.image"), "segment") == "segment is on that cable already"
+    assert e.place_node(("scene", "segment.image"), "segment") == "segment is on that cable already"
     # the effect wrappers stand: a `Refusal`, or None
-    why = e.place_effect(("lookback", "segment.image"), "teapot")
+    why = e.place_effect(("scene", "segment.image"), "teapot")
     assert isinstance(why, graphview.Refusal) and "no teapot effect" in why
     assert e.place_effect(("segment.fg", "acid.image"), "acid") == \
         graphview.NO_PICTURE_CABLE.format(wire="segment.fg → acid.image")
@@ -2812,7 +2813,7 @@ def test_a_group_made_taken_apart_and_remade_by_the_mouse(rig, monkeypatch):
     The one menu item picked on each menu is the patched `menu_item_simple`;
     everything else is mouse and key events through imgui."""
     from test_graphview import _in_editor
-    pairs = (*FRAME0, ("lookback", "acid.image"), ("acid", "wobble.image"),
+    pairs = (*FRAME0, ("scene", "acid.image"), ("acid", "wobble.image"),
              ("wobble", "output.all.image"))
     places = {"render:shape": [-800, 0], "render:scene": [0, 0],
               "render:acid": [320, 0], "render:wobble": [640, 0], "render:output.all": [960, 0],

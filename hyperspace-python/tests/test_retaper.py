@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import itertools
 import json
+import re
 import math
 import sys
 from pathlib import Path
@@ -305,7 +306,9 @@ def test_an_old_loadable_loads_as_the_tool_rewrites_it(tmp_path):
     """End to end: a corpus loadable patch with the marker taken off and its depths
     put back to the numbers it held before this change loads through the
     app (`LoadedPatch.load_doc` converts, and says so: plan 86) and saves
-    byte for byte as the tool writes it — which is the corpus file itself."""
+    byte for byte as the tool writes it — which is the corpus file itself —
+    less the retired look-back knobs it names (plan 90 H2: with no look-back
+    they drew nothing, and the load drops them quietly; the tool leaves them)."""
     t = _tool()
     data = (CORPUS / "party-acid.json").read_bytes()
     doc = json.loads(data)
@@ -321,7 +324,10 @@ def test_an_old_loadable_loads_as_the_tool_rewrites_it(tmp_path):
     old.write_text(loadable.dumps(doc))
     again, notes, _ = headless.resave(old, tmp_path / "scratch")
     _, moved = retaper_depths(json.loads(old.read_text()), FxState().files)
-    assert again == data and notes == [loadable.retaper_note(moved)] and len(moved) == 4
+    lean, gone = re.subn(rb'^ *"dream\.(?:echo_mix|fade|echoes|gap|occlude)": [^\n]*,\n', b"",
+                         data, flags=re.MULTILINE)
+    assert gone == 5
+    assert again == lean and notes == [loadable.retaper_note(moved)] and len(moved) == 4
     out, change = t.retaper(json.loads(old.read_text()), FxState().files, file=old.name)
     assert t.text(out).encode() == data and len(change.rows) == 4
 
