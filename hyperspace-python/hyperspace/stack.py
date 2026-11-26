@@ -43,14 +43,14 @@ import moderngl
 
 REF_HZ = 60.0                  # what a frame whose time did not move counts as
 MAX_DEPTH = 64                 # the most frames a stack keeps (`view.DELAY_DEPTH`)
-# the most every stack together may hold (plan 90 Q4: one budget for them
-# all, refused in words past it) — 1 GiB: 32 half-float frames at 1080p
-# are 531 MB
+# the most one deck's stacks together may hold (plan 90 Q4; a deck each since
+# Devin on #519, so the two decks never starve each other: 2 GiB at most on a
+# context) — 1 GiB: 32 half-float frames at 1080p are 531 MB
 BUDGET = 1 << 30
 OVER_BUDGET = ("{name}: a stack of {depth} at {w}×{h} is {mb:.0f} MB, past the "
-               "{budget:.0f} MB all stacks may hold — fewer frames, or a resize before it")
+               "{budget:.0f} MB a deck's stacks may hold — fewer frames, or a resize before it")
 KEEPS_WHAT_FITS = ("{name}: keeps {keep} of {depth} frames at {w}×{h} — more is past the "
-                   "{budget:.0f} MB all stacks may hold; a resize before it keeps more")
+                   "{budget:.0f} MB a deck's stacks may hold; a resize before it keeps more")
 
 
 def frame_bytes(size: tuple[int, int]) -> int:
@@ -66,10 +66,13 @@ def frame_bytes(size: tuple[int, int]) -> int:
 _LIVE: weakref.WeakSet = globals().get("_LIVE") or weakref.WeakSet()
 
 
-def held(ctx: Any, but: Any = None) -> int:
-    """The bytes every stack on `ctx` holds, `but` one left out."""
+def held(ctx: Any, but: Any = None, owner: Any = None) -> int:
+    """The bytes every stack on `ctx` holds, `but` one left out — of one deck's
+    renderer when `owner` is given (its `id`): each deck has a budget of its own,
+    so a deck that filled its own never starves the deck faded in (Devin on #519)."""
     return sum(st.bytes() for st in list(_LIVE)
-               if st is not but and st.tex is not None and st.ctx is ctx)
+               if st is not but and st.tex is not None and st.ctx is ctx
+               and (owner is None or getattr(st, "owner", None) == owner))
 
 
 class DelayStack:
@@ -87,6 +90,7 @@ class DelayStack:
         self.idle = 0                  # frames no reader has asked (`Renderer`)
         self.error = ""                # why it holds nothing (a budget, a driver)
         self.ctx: Any = None           # the context its texture is on (`held`)
+        self.owner: Any = None         # the `id` of the renderer (deck) whose it is
 
     # ---- time ----
 

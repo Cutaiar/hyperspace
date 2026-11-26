@@ -592,7 +592,7 @@ Rows 1171–1174, hand checks 959–962 (group GF).
 
 - **The delay's stack.** `delay[.n].depth` (1–64) keeps the pictures a delay takes, newest
   first, in a half-float texture array beside its pair (`stack.DelayStack`), copied in at the
-  turn; made on a reader's ask, grown never shrunk, all stacks within 1 GiB. Its own picture is
+  turn; made on a reader's ask, grown never shrunk, a deck's stacks within 1 GiB (past it, the frames that fit). Its own picture is
   unchanged: every delay test, and 2916 sweep renders of every effect equal to `main`'s.
 - **One cadence.** Main's #514 gave the delay its rate (frames, Hz, tempo) the same day;
   §4.2's **Gap** was dropped for it — a stack keeps exactly what the delay takes — so
