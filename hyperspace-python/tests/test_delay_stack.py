@@ -289,8 +289,10 @@ def test_two_decks_on_one_context_share_one_budget(ctx, monkeypatch):
             v = View(Switches(), (32, 24), target=_fbo(ctx, 32, 24))
             r.draw_outputs(s, 32, 24, 1.0, [v], t_now=1.0 + i / 60)
     held = [r.delay_stack("delay") for r in (a, b)]
-    assert sum(st.tex is not None for st in held) == 1
-    assert any("past the" in st.error for st in held)
+    # together within the one budget: the second keeps what fits (hand check 960)
+    assert stack.held(ctx) <= stack.BUDGET
+    assert sorted(st.depth for st in held) == [2, 4]
+    assert any("keeps 2 of 4" in st.error for st in held)
 
 
 def test_a_stack_inlet_of_a_saved_group_stays_open():
@@ -372,3 +374,18 @@ def test_the_stack_budget_survives_a_hot_reload_of_its_module(ctx):
     importlib.reload(stack)
     assert stack.held(ctx) == st.bytes()
     st.release()
+
+
+def test_a_depth_past_the_budget_keeps_what_fits_and_never_blanks(ctx, monkeypatch):
+    """The owner on the Mac (hand check 960): past depth 36 the slit-scan went
+    black — the stack was over the budget and was dropped whole. It keeps as
+    many frames as fit, and says so on the delay."""
+    from hyperspace import stack
+
+    monkeypatch.setattr(stack, "BUDGET", stack.frame_bytes((32, 24)) * 3)   # room for 3
+    r, s = _rig(ctx, READ, depth=8, values={"read": {"at": 0.0}})
+    got = [_draw(ctx, r, s, h, t=1.0 + i / 60) for i, h in enumerate(HUES)]
+    st = r.delay_stack("delay")
+    assert st.tex is not None and st.depth == 3
+    np.testing.assert_allclose(got[-1][0], _hue_rgb(HUES[-2]), atol=2)   # still showing
+    assert "keeps 3 of 8" in st.error

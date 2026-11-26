@@ -3100,7 +3100,7 @@ class Renderer:
         (R19). One no reader asked for in `SIZED_KEEP_FRAMES` is released.
         Never raises: a stack that cannot be kept says why on `error`."""
         from . import stack as _stack
-        from .stack import OVER_BUDGET, frame_bytes
+        from .stack import KEEPS_WHAT_FITS, OVER_BUDGET, frame_bytes
 
         stack = getattr(pair, "stack", None)
         if stack is None:
@@ -3120,14 +3120,23 @@ class Renderer:
         size = tuple(pair.read[0].size)
         # (every stack on this context, the other deck's too: Devin on #519)
         others = _stack.held(self.ctx, but=stack)
-        need = frame_bytes(size) * max(depth, stack.depth if stack.size == size else 0)
-        if others + need > _stack.BUDGET:
+        # past the budget it keeps the frames that fit, never none (the owner on
+        # the Mac, hand check 960: past depth 36 the whole picture went black)
+        room = max(0, (_stack.BUDGET - others) // frame_bytes(size))
+        keep = min(depth, room)
+        if stack.size == size and stack.depth > room:
+            stack.release()                     # its old room is more than fits now
+        if keep < 1:
             stack.release()
             stack.error = OVER_BUDGET.format(name=name, depth=depth, w=size[0], h=size[1],
-                                             mb=need / 2**20, budget=_stack.BUDGET / 2**20)
+                                             mb=frame_bytes(size) * depth / 2**20,
+                                             budget=_stack.BUDGET / 2**20)
             return
+        stack.error = "" if keep == depth else KEEPS_WHAT_FITS.format(
+            name=name, keep=keep, depth=depth, w=size[0], h=size[1],
+            budget=_stack.BUDGET / 2**20)
         try:
-            stack.commit(self.ctx, pair.read[1], size, depth)
+            stack.commit(self.ctx, pair.read[1], size, keep)
         except Exception as e:  # noqa: BLE001 — a stack must not take the frame down
             stack.error = f"{name}: {type(e).__name__}: {e}"[:160]
 

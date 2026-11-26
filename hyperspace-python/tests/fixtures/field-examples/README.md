@@ -19,6 +19,7 @@ opens through the library's own load.
 | `hue-cycle` | Hue cycle taken apart: Line and Rings, weighed, added, × Spread → Hue turn's Turn |
 | `stack-echo` | A delay's stack (plan 90): Delay (depth 32, 30 Hz) → Read at 20 steps back, added over the shape — an echo |
 | `stack-trail` | Delay (depth 16) → Trail, each kept frame fainter by its age, added over the shape — a tracer |
+| `stack-echoes` | Delay (depth 6, 5 Hz) → Trail: six echoes, 0.2 s apart, fainter by age — the delay's rate is the spacing |
 | `stack-slit` | Delay → Read with Line on its At: each pixel a different moment — a slit-scan, a time displace |
 
 A **field** is a number (or a pair) at every pixel: green cables on GRAPH, grey

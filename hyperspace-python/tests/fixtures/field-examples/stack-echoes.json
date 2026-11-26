@@ -1,0 +1,142 @@
+{
+  "schema": "hyperspace.loadable/11",
+  "name": "stack-echoes",
+  "note": "Several echoes, spaced: a delay keeps 6 frames, one every 0.2 s (its rate, 5 Hz), and Trail lays them all, each fainter by its age, added over the shape now — six copies, a second back. The sub band slows the rate: the copies spread further apart.",
+  "graph": {
+    "frame": "wired",
+    "nodes": [
+      {
+        "kind": "hands",
+        "laid": "over"
+      },
+      {
+        "kind": "delay"
+      },
+      {
+        "kind": "effect",
+        "file": "trail"
+      },
+      {
+        "kind": "composite",
+        "blend": "add"
+      }
+    ],
+    "wires": [
+      {
+        "from": "shape",
+        "to": "scene.geometry"
+      },
+      {
+        "from": "pattern",
+        "to": "shape.faces"
+      },
+      {
+        "from": "hands",
+        "to": "hands.layer.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.hands"
+      },
+      {
+        "from": "hands.layer",
+        "to": "output.all.guide"
+      },
+      {
+        "from": "scene",
+        "to": "delay.image"
+      },
+      {
+        "from": "delay",
+        "to": "trail.stack"
+      },
+      {
+        "from": "trail",
+        "to": "composite.over"
+      },
+      {
+        "from": "scene",
+        "to": "composite.under"
+      },
+      {
+        "from": "composite",
+        "to": "output.all.image"
+      }
+    ]
+  },
+  "values": {
+    "ghost.on": true,
+    "ghost.alpha": 0.35,
+    "view.shape": 55,
+    "view.faces": false,
+    "view.lines": true,
+    "view.speed": 0.8,
+    "view.bright": 1.35,
+    "camera.zoom": 1.5,
+    "delay.depth": 6,
+    "delay.every": 1,
+    "delay.hz": 5.0,
+    "fx.trail.on": true,
+    "fx.trail.level": 0.8,
+    "fx.trail.fade": 0.6,
+    "fx.trail.lay": 1
+  },
+  "routes": [
+    {
+      "source": "lane:0",
+      "target": "delay.hz",
+      "op": "push",
+      "value": -0.02
+    },
+    {
+      "source": "lane:0",
+      "target": "rot.rate.ZW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:1",
+      "target": "rot.rate.XW",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:2",
+      "target": "rot.rate.YW",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:3",
+      "target": "rot.rate.XY",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:4",
+      "target": "rot.rate.XZ",
+      "op": "push",
+      "value": 0.0625,
+      "scale": "master.gain"
+    },
+    {
+      "source": "lane:5",
+      "target": "rot.rate.YZ",
+      "op": "push",
+      "value": -0.0625,
+      "scale": "master.gain"
+    }
+  ],
+  "macros": {},
+  "units": {
+    "camera.pan": "world",
+    "fx.depth": "taper"
+  },
+  "media": {
+    "channels": {}
+  }
+}

@@ -11,7 +11,7 @@ its frame, `graphview.unreached` and `ui_fx.groups`."""
 
 from hyperspace import graphview, ui_fx
 
-EXAMPLES = ("stack-echo", "stack-trail", "stack-slit")
+EXAMPLES = ("stack-echo", "stack-echoes", "stack-trail", "stack-slit")
 
 
 def script(d, panel):
