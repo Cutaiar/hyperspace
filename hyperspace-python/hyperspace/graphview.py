@@ -772,6 +772,15 @@ def _desk_order(rows: list) -> list:
     return sorted(rows, key=lambda r: rank.get(r[1], len(rank)))     # stable: layout order
 
 
+KINECT_CLOUD = "Kinect point cloud"
+
+
+def kinect_label(d, how_many: int = 1) -> str:
+    """A Kinect device's node title: "Kinect", and with more than one, "Kinect <role>"
+    (its role is the entry's, `room` in the demo patch: it is not what the sensor is)."""
+    return "Kinect" if how_many < 2 else f"Kinect {getattr(d, 'role', '')}".rstrip()
+
+
 def device_nodes(d, table=None) -> list[tuple[VNode, list]]:
     """A listed device as its nodes, each with the ports it draws as
     ``(Port, group, layer)``. A device with fewer than two `layers` is one
@@ -1549,8 +1558,12 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         lpins[k] = pin
         return pin
 
-    for d in (devices or ()):
+    listed = list(devices or ())
+    kinects = [d for d in listed if getattr(d, "kind", "") == "kinect"]
+    for d in listed:
         for node, ports in device_nodes(d, table):
+            if getattr(d, "kind", "") == "kinect":      # row 1170: the sensor, not the role it is listed under
+                node.label = kinect_label(d, len(kinects))
             n = add_node(node)
             if node.layer:
                 layered.setdefault(node.role, {})[node.layer] = n
@@ -2009,6 +2022,13 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         for nid in ends:
             if nid in nodes:
                 nodes[nid].wires += 1
+    # row 1170: a Kinect's point cloud is its own kind of cloud — made of the sensor's depth by
+    # the sensor's own calibration, so not one to take for any cloud's — and is titled so
+    sensor_roles = {str(getattr(d, "role", "")) for d in kinects}
+    for i, role in enumerate(roles):
+        cloud = nodes.get(f"render:{rgraph.cloud_name(i)}")
+        if cloud is not None and role in sensor_roles:
+            cloud.label = cloud.label.replace(LABELS["cloud"], KINECT_CLOUD, 1)
     # plan 28 N9: each node's area, and which sit with nothing in and out
     named = {b.scale for b in routes if b.scale} | {b.when for b in routes if b.when}
     # review round 1: an effect switched off whose nodes no value cable
@@ -3139,7 +3159,7 @@ def patch_only(view: View) -> frozenset[str]:
     output — All outputs and each window, wired or not: they are where a
     picture is wired to, so one the loadable patch no longer reaches must stay on
     the canvas to be wired again (the owner, 2026-10-27: unwiring the
-    outputs made them vanish) — and, the same way, every media channel
+    outputs made them vanish); a Kinect's node (row 1170: no cable, but its panel) — and, the same way, every media channel
     (2026-10-31, the owner after the show of 2026-10-30: with no faces
     media node wired "you can't actually spawn one, it just doesn't
     exist"): a channel always exists, empty or not, and is where a file
@@ -3170,6 +3190,10 @@ def _patch_only(view: View) -> frozenset[str]:
                 shown.add(x)
                 todo.append(x)
     shown |= {nid for nid, n in have.items() if n.kind in ("output", "channel")}
+    # a Kinect's point cloud is no lane, so its node has no cable to the loadable patch, and
+    # its control panel is that node's side pane (row 1170): it is drawn, as an output is
+    shown |= {nid for nid, n in have.items()
+              if n.kind == "device" and getattr(n.ref, "kind", "") == "kinect"}
     # plan 40 T2: a group's members are the loadable patch's (a group holds nothing
     # of the meta controller's: `patches.groupable`), so a group is drawn, open or folded
     shown |= {n.id for g in view.groups for n in g.members}

@@ -256,6 +256,7 @@ from . import (
     ui,
     ui_browse,
     ui_fx,
+    ui_kinect,
     ui_kit,
     ui_loadable,
     ui_menu,
@@ -5021,6 +5022,9 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
             ui._micro("dials")
             panel._dials()
         return                                  # — the picture says what the port lines would
+    if ui_kinect.is_kinect_node(n):             # the Kinect's controls and telemetry (row 1170)
+        ui_kinect.body(panel, n.ref)
+        return
     if n.id == f"render:{rgraph.wired_hands_name(1)}":     # the hands node IS the hands page: where they are,
         ui_hands.body(panel, 1 / 60, strip=False)   # the pinches, the axes, calibration, the grip
         return
