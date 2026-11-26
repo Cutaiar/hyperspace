@@ -609,3 +609,95 @@ Rows 1171–1174, hand checks 959–962 (group GF).
   Depth on its pane.
 
 **Next: H2**, the look-back and its echoes onto the delay and Trail, migrated.
+
+## 10. H2: the look-back and its echoes onto the delay (2026-11-26, a design)
+
+The owner, after checking H1 out on the Mac: "it looks good for now. We should probably start the
+H2 work in its own section." Stacked on H1 (#519). Nothing here is built.
+
+### 10.1 What a saved look-back is [V]
+
+A wired frame's `lookback` (or `lookback.<n>`): `X → lookback.image` (what it records),
+`lookback.occluder` (whose brightness holds the wake back; the old default, `X` itself),
+`scene.cover → lookback.cover` (the faces' coverage mask, **binary**: 1 where a face was drawn,
+`render.CoverTarget`), and its picture into a composite's `over` (add, under `X`: the
+one-shader look-back's bytes, `_trail_of`). Its pins `lookback.echo.<k>` are its k-th newest
+commits. Its knobs are `dream.*` (`LOOKBACK_KEYS`), `dream.<n>.*` for `lookback.<n>`. The old
+trail pass, per echo i, oldest first:
+
+```
+c   = pow(L_i, contrast) · (1 − darken)            (grade)
+a   = w_i · peak(c),  w_i = echo_mix · ½^(age_i / fade)
+wake = wake · (1 − a) + c · w_i
+wake ×= 1 − occlude · max(min(4 · peak(occluder), 1), cover)
+```
+
+In the repository: 5 files hold a look-back node, 2 read echo pins, 1 wires an occluder, 1 a
+cover; 59 carry `dream.*` values (contrast 1.0 in all, darken 0.1 or 0, occlude 1.0 in 48, 0.3
+in 12). The owner's library on the Drive holds more; the migration is run over a copy of it and
+its notes read before it lands (`tools/migrate_library.py`, a backup first).
+
+### 10.2 What it becomes [Rec]
+
+```
+X ─► Curve (shape log₄ contrast) ─► Fade (level 1 − darken; keyed: peak, linear, level 0, soft 1,
+     keep colour) ─► Resize (res) ─► Delay (depth = echoes, every Hz at 1 / gap) ═► Trail
+     (level = echo_mix, fade, lay over) ─► Cut (amount occlude; mask: Matte of the occluder,
+     peak, linear, key ⅛, soft ⅛ — that is min(4·peak, 1)) ─► Cut (amount occlude; mask: cover)
+     ─► composite.over (add, under X)
+lookback.echo.<k>  →  Read (at k − 1, nearest) of the same delay
+```
+
+- **Curve** only where contrast ≠ 1 (none in the repository); the **Fade** always (it carries the
+  key; at darken 0 its level is 1).
+- **The key on the Fade**, not on `X`: a key keys a node's picture for every consumer, and only
+  the recorded copy must be keyed. Keyed, the delay keeps its alpha (`_Build._stacked`, #519), so
+  Trail's over is the old layering, exactly: `c·w` laid by alpha `w·peak(c)`.
+- **The two Cuts** are exact wherever the cover is 0 or 1 at occlude 1 or 0 (the default and 48 of
+  60 files); at a partial occlude, where a face is drawn *and* the occluder is bright, they hold the
+  wake back by up to a quarter more than the old max did. No public part takes the max of two masks.
+- **Cadence:** gap seconds → the delay's rate in Hz (#514's grid), gap 0 → every frame.
+- **Echo pins deeper than `echoes`** (Q25): a second delay of that depth, the same input, so the
+  trail still lays `echoes` copies.
+- **The dream** still reads `dream.darken`, `contrast` and `res` until H3 (it shares
+  `DreamState`): they stay its own; the look-back's chain gets copies of their values, and a route
+  on one is copied onto both (Q26).
+- **Deleted:** `Lookback`, `History`, `Capture`, `EchoNode`, the atlas, `POST_FS`,
+  `TRAIL_VARIANTS`, `_trail_of`, `lay_onto`, `fit_atlas`; `LOOKBACK_KEYS`, `is_lookback_knob`,
+  `declare_lookbacks`, `ViewState.lookback`; GRAPH's look-back area and echo pins; the LOOKBACK
+  page's look-back half. Old files keep loading: the migration rewrites them.
+
+### 10.3 The migration
+
+`graphmigrate.lookbacks(doc)`, keyed on a `lookback` node, a `lookback.<n>` entry or an echo pin
+in any section, run as the ladder's last step after `hue_turns` (#509's model): no schema bump;
+each new node takes the next free instance of its kind; values and rows retargeted with their
+ranges (echo_mix → `fx.trail.level` 0–1 and fade → `fx.trail.fade`, the same log range, exact;
+echoes → `delay.<n>.depth`, a push re-drawn across 1–64; darken → `fx.fade.level` = 1 − darken,
+a push flipped; occlude → each Cut's amount; res → a Resize size; gap → hz, a push on gap
+dropped and said — its inverse is no straight line, Q27). Notes on load name each.
+
+**Proof.** Every repository file with a look-back, and the owner's library copy, drawn through
+`main`'s renderer and through the migrated patch on this branch, the same frames at a fixed clock
+(echoes need a run of frames): byte for byte where §10.2 says exact, bounded where it says not.
+Golden frames that move are re-recorded on the Mac (a hand check).
+
+### 10.4 Questions
+
+23. **Occlusion.** Matte gains Key's **peak** measure and its **linear** ramp — one measure list and
+    one ramp for the two (plan 67 §3.11: "one key: measure, then threshold"; they are copies today)
+    — and the cover is a second Cut, exact at occlude 0 and 1? [Rec] yes. The alternative is a
+    mask union op (`max` of two masks), new and used by nothing else yet.
+24. **The trail's size.** The old ring was `res` on the short side (256: 408 × 256 at 16 : 10);
+    Resize's sizes are powers of two on the long side. [Rec] **512** (320 short: a little more
+    detail, 1.6× the memory, 13 → 21 MB at depth 8); or 256 (160 short: softer); or Resize takes
+    any size.
+25. **Echo pins deeper than the trail's count.** [Rec] a second delay at that depth; or one delay at
+    the deeper depth, and the trail lays more copies than it did.
+26. **Shared knobs until H3.** `dream.darken`, `contrast`, `res` keep driving the dream; the
+    look-back's copies are new nodes; a route on one is copied onto both. [Rec] yes.
+27. **A route on `dream.gap`** (none in the repository). [Rec] dropped with a note; or mapped
+    approximately onto Hz.
+28. **The tracers starters** (`tracers`, `tracers + dream`) spawn Delay (8, 30 Hz) → Trail (add)
+    → Composite (add) — no key, no cuts: the simplest trail from public parts. [Rec] yes; the full
+    chain is what a migrated file gets, not what a starter spawns.
