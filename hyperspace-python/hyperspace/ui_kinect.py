@@ -65,11 +65,10 @@ RADAR_ID = "kinect.radar"
 RADAR_ASPECT = 0.7                  # the radar's height over its width
 RADAR_MAX_H = 260.0                 # ... capped
 RADAR_PAD = 4.0                     # px inside the frame
-RADAR_ARC = 14                      # segments in an arc
 SENSOR_W = 640                      # the depth picture's width, pixels
 SPEC_RANGE = (0.8, 4.0)             # metres: Microsoft's working range for the Xbox 360 Kinect
 RADAR_TIP = ("The Kinect from above, the sensor at the bottom. The grey fan is what its depth camera "
-             "sees (its own calibration; the arcs are its working range). The white dots are what it "
+             "sees (its own calibration; the lines across it are its working range). The white dots are what it "
              "reads now, the nearest thing in each direction, as libfreenect gives it in millimetres. "
              "The red wireframe is your near / far / centre: what the cloud keeps. Mirror flips it as "
              "it flips the cloud.")
@@ -79,7 +78,10 @@ VIDEO_LABELS = (("off", "off"), ("color", "colour"), ("ir", "infrared"))
 
 def is_kinect_node(n) -> bool:
     """Is `n` a Kinect's device node?"""
-    return getattr(n, "kind", "") == "device" and getattr(getattr(n, "ref", None), "kind", "") == "kinect"
+    ref = getattr(n, "ref", None)
+    # a disabled entry is an `OffDevice` that keeps the kind and has no panel to draw: it stays on the generic pane
+    return (getattr(n, "kind", "") == "device" and getattr(ref, "kind", "") == "kinect"
+            and hasattr(ref, "telemetry") and callable(getattr(ref, "request", None)))
 
 
 def _state(panel, role: str) -> dict:
@@ -149,19 +151,21 @@ def body(panel, dev) -> None:
 
 @dataclass(frozen=True)
 class RadarView:
-    """The radar's lines in screen points: the theoretical fan's two edge rays
-    (sensor to `rng`), the limited fan's arcs at `near` and `far` and its two
-    edge rays between them, the `centre` tick (None beyond the range), and arcs at
-    the sensor's working range."""
+    """The radar's lines in screen points. The cloud keeps a reading by its depth along the
+    sensor's axis, not its distance from the sensor (`deproject`), and the radar plots a
+    reading at that depth, so every limit is a straight line across the fan at one depth:
+    the fan's two edge rays and its far end (`rim`), your `near` and `far` and the two edge
+    rays between them, the `centre` tick (None beyond the range), and the sensor's working
+    range as `spec` lines."""
 
     apex: tuple[float, float]
     fan: tuple[tuple[float, float], tuple[float, float]]
-    rim: tuple[tuple[float, float], ...]                 # the theoretical fan's outer arc
-    near_arc: tuple[tuple[float, float], ...]
-    far_arc: tuple[tuple[float, float], ...]
+    rim: tuple[tuple[float, float], tuple[float, float]]
+    near_line: tuple[tuple[float, float], tuple[float, float]]
+    far_line: tuple[tuple[float, float], tuple[float, float]]
     edges: tuple[tuple[tuple[float, float], tuple[float, float]], ...]
     centre: tuple[tuple[float, float], tuple[float, float]] | None
-    spec: tuple[tuple[tuple[float, float], ...], ...] = ()    # arcs at the sensor's working range
+    spec: tuple[tuple[tuple[float, float], tuple[float, float]], ...] = ()
 
 
 def half_angle(focal: float, width: float = SENSOR_W) -> float:
@@ -171,34 +175,32 @@ def half_angle(focal: float, width: float = SENSOR_W) -> float:
 
 def radar_scale(focal: float, w: float, h: float, rng: float = RADAR_RANGE) -> float:
     """Pixels per metre that fit the whole fan to `w` x `h` with `RADAR_PAD` around."""
-    half = half_angle(focal)
-    side = max(rng * math.sin(half) if half < math.pi / 2 else rng, 1e-6)
+    side = max(rng * math.tan(half_angle(focal)), 1e-6)
     return max(min((h - 2 * RADAR_PAD) / rng, (w / 2 - RADAR_PAD) / side), 1.0)
 
 
 def radar_geometry(focal: float, near: float, far: float, centre: float, scale: float,
                    ox: float, oy: float, rng: float = RADAR_RANGE,
-                   steps: int = RADAR_ARC, spec: tuple[float, ...] = SPEC_RANGE) -> RadarView:
-    """The radar's lines, pure: the sensor at (ox, oy), straight ahead up the
-    screen, `scale` pixels per metre. The limited fan is the same fan between
-    `near` and `far` (kept inside 0..rng and in order)."""
-    half = half_angle(focal)
+                   spec: tuple[float, ...] = SPEC_RANGE) -> RadarView:
+    """The radar's lines, pure: the sensor at (ox, oy), straight ahead up the screen,
+    `scale` pixels per metre of depth, a line at depth z reaching z · tan(half-angle) to
+    each side. `near` and `far` are kept inside 0..rng and in order."""
+    reach = math.tan(half_angle(focal))
     far = min(max(far, 0.0), rng)
     near = min(max(near, 0.0), far)
 
-    def at(r: float, a: float) -> tuple[float, float]:
-        return (ox + r * scale * math.sin(a), oy - r * scale * math.cos(a))
+    def line(z: float) -> tuple[tuple[float, float], tuple[float, float]]:
+        y, dx = oy - z * scale, z * reach * scale
+        return (ox - dx, y), (ox + dx, y)
 
-    def arc(r: float) -> tuple[tuple[float, float], ...]:
-        return tuple(at(r, -half + 2 * half * i / steps) for i in range(steps + 1))
-
+    n, f = line(near), line(far)
     tick = None
     if 0.0 <= centre <= rng:
         y = oy - centre * scale
         tick = ((ox - 4.0, y), (ox + 4.0, y))
-    return RadarView((ox, oy), (at(rng, -half), at(rng, half)), arc(rng), arc(near), arc(far),
-                     ((at(near, -half), at(far, -half)), (at(near, half), at(far, half))), tick,
-                     tuple(arc(r) for r in spec if r <= rng))
+    top = line(rng)
+    return RadarView((ox, oy), top, top, n, f, ((n[0], f[0]), (n[1], f[1])), tick,
+                     tuple(line(z) for z in spec if z <= rng))
 
 
 @lru_cache(maxsize=8)
@@ -259,14 +261,13 @@ frustum, no readings."""
                 dl.add_polyline(_pts(run), dots, 1.0, 0)
             for x, y in run:
                 dl.add_circle_filled(imgui.ImVec2(x, y), 1.6, dots, 6)
-    for arc in g.spec:
-        dl.add_polyline(_pts(arc), line, 1.0, 0)
-    dl.add_polyline(_pts(g.rim), line, 1.0, 0)
+    for a, b in (*g.spec, g.rim):
+        dl.add_line(imgui.ImVec2(*a), imgui.ImVec2(*b), line, 1.0)
     dl.add_line(apex, imgui.ImVec2(*g.fan[0]), line, 1.0)
     dl.add_line(apex, imgui.ImVec2(*g.fan[1]), line, 1.0)
     strong = ui.u32(ui.RED)          # your frustum: the one accent, over the grey sensor's
-    dl.add_polyline(_pts(g.near_arc), strong, 1.5, 0)
-    dl.add_polyline(_pts(g.far_arc), strong, 1.5, 0)
+    for a, b in (g.near_line, g.far_line):
+        dl.add_line(imgui.ImVec2(*a), imgui.ImVec2(*b), strong, 1.5)
     for a, b in g.edges:
         dl.add_line(imgui.ImVec2(*a), imgui.ImVec2(*b), strong, 1.5)
     if g.centre:
@@ -387,7 +388,7 @@ def _video(dev, t, st: dict, why) -> None:
                        ("flicker", "auto flicker")):
         w = why(key)
         imgui.begin_disabled(bool(w))
-        changed, on = ui.checkbox(f"{label}##kinect.{key}", bool(t.flags.get(key, False)))
+        changed, on = ui.checkbox(f"{label}##kinect.{key}", bool(t.flags.get(key, key == "auto_exposure")))
         imgui.end_disabled()
         _tip(w or ("what was last sent: libfreenect cannot read it back"
                    if key not in t.flags else ""))

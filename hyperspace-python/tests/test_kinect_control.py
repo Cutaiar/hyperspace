@@ -692,3 +692,65 @@ def test_a_row_on_a_channel_the_kinect_has_not_is_ignored():
         assert s.applied == [] and d.driven == frozenset()
     finally:
         d.close()
+
+
+def test_a_refused_sink_request_is_asked_again_when_the_setting_opens_up(monkeypatch):
+    """A route steady on exposure while auto exposure is on is refused; when manual exposure becomes
+    available it is sent, though the reading never moved (the value counts as sent only once taken)."""
+    monkeypatch.setattr(kinect, "SINK_S", 0.02)
+    s = Steered(fail={"exposure"})
+    d, s = sink_device(sink_row("room", 1, "p"), sensor=s)
+    d.open()
+    try:
+        live(d)
+        reg = Reg(p=1.0)
+        for _ in range(4):
+            d.send(reg, None)
+            time.sleep(0.03)
+        assert until(lambda: len([a for a in s.applied if a[1] == "exposure"]) >= 2)   # tried, refused, tried again
+        assert d.telemetry.said.startswith("exposure:")
+        s.fail.clear()                                      # auto exposure turned off
+        n = len(s.applied)
+        assert until(lambda: (d.send(reg, None) or True) and len(s.applied) > n and not d.telemetry.said.startswith("exposure:"))
+        m = len(s.applied)
+        for _ in range(5):
+            d.send(reg, None)
+            time.sleep(0.03)
+        assert len(s.applied) == m                          # taken: not asked again
+    finally:
+        d.close()
+
+
+def test_a_route_that_stops_driving_a_setting_sends_it_again_when_it_resumes(monkeypatch):
+    monkeypatch.setattr(kinect, "SINK_S", 0.02)
+    d, s = sink_device(sink_row("room", 0, "p"))
+    d.open()
+    try:
+        live(d)
+        d.send(Reg(p=1.0), None)
+        assert until(lambda: [v for _, k, v in s.applied if k == "ir"] == [50])
+        rows, d.ctx.table.rows = d.ctx.table.rows, ()       # the row deleted or disabled: not driven
+        d.send(Reg(p=1.0), None)
+        assert d.driven == frozenset()
+        assert d.request("ir", 7) == ""                     # the pane's hand on it
+        assert until(lambda: [v for _, k, v in s.applied if k == "ir"] == [50, 7])
+        time.sleep(0.03)
+        d.ctx.table.rows = rows
+        d.send(Reg(p=1.0), None)                            # the same route back: it takes over again
+        assert until(lambda: [v for _, k, v in s.applied if k == "ir"] == [50, 7, 50])
+    finally:
+        d.close()
+
+
+def test_the_motor_is_asked_for_only_of_a_1414_so_the_audio_is_never_claimed(monkeypatch, lib):
+    """libfreenect 0.7.5 drops the motor part of a camera whose bcdDevice is not 267 and claims
+    its AUDIO interface to move the motor; this never opens the audio."""
+    for bcd, subs, why in ((267, 0x03, ""), (272, 0x02, "audio interface"), (None, 0x02, "could not be read")):
+        lib.calls.clear()
+        monkeypatch.setattr(kinect, "usb_cameras", lambda bcd=bcd: [] if bcd is None else [bcd])
+        s = kinect.Sensor(O())
+        s.open()
+        assert [c[2] for c in lib.named("select_subdevices")] == [subs], bcd
+        assert (why in s.motor_why) if why else s.motor_why == "", (bcd, s.motor_why)
+        assert not any(c[2] & 0x04 for c in lib.named("select_subdevices"))     # never the audio bit
+        assert "motor" in s.can()["tilt"] or not why                            # and the tilt says so

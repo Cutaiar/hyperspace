@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 from types import SimpleNamespace as NS
 
+import numpy as np
 import pytest
 from imgui_bundle import imgui
 from test_ui_shell import build_rig
@@ -304,7 +305,10 @@ def test_the_radar_is_drawn_inside_the_pane_and_asks_for_nothing_even_unlit(rig,
 
 def test_the_radar_plots_the_readings_as_dots_and_lines_in_the_tokens_colours(rig, monkeypatch):
     dots, lines, quads = [], [], []
-    real_c, real_p = imgui.ImDrawList.add_circle_filled, imgui.ImDrawList.add_polyline
+    real_c, real_p, real_l = (imgui.ImDrawList.add_circle_filled, imgui.ImDrawList.add_polyline,
+                              imgui.ImDrawList.add_line)
+    monkeypatch.setattr(imgui.ImDrawList, "add_line",
+                        lambda self, a, b, col, th=1.0: (lines.append(col), real_l(self, a, b, col, th))[1])
     monkeypatch.setattr(imgui.ImDrawList, "add_circle_filled",
                         lambda self, c, r, col, n=0: (dots.append(col), real_c(self, c, r, col, n))[1])
     monkeypatch.setattr(imgui.ImDrawList, "add_polyline",
@@ -336,15 +340,15 @@ def test_the_readings_become_points_the_pure_way():
 
 def test_the_sensors_working_range_is_drawn_apart_from_your_frustum():
     g = ui_kinect.radar_geometry(575.0, 1.0, 3.0, 2.0, 40.0, 100.0, 200.0)
-    assert len(g.spec) == 2 and g.near_arc != g.spec[0]
+    assert len(g.spec) == 2 and g.near_line != g.spec[0]
     assert g.spec[0][0][1] > g.spec[1][0][1]                               # 0.8 m is nearer the sensor than 4 m
 
 
 def test_your_frustum_is_drawn_with_no_sensor_too(rig, monkeypatch):
     lines = []
-    real = imgui.ImDrawList.add_polyline
-    monkeypatch.setattr(imgui.ImDrawList, "add_polyline",
-                        lambda self, pts, col, fl, th: (lines.append(col), real(self, pts, col, fl, th))[1])
+    real = imgui.ImDrawList.add_line
+    monkeypatch.setattr(imgui.ImDrawList, "add_line",
+                        lambda self, a, b, col, th=1.0: (lines.append(col), real(self, a, b, col, th))[1])
     Pane(rig, monkeypatch, Dev(live=False, can={}), ui_graph.SIDE_W)
     assert ui.u32(ui.RED) in lines
 
@@ -362,27 +366,38 @@ def test_the_limited_frustum_follows_near_and_far():
     a = ui_kinect.radar_geometry(f, 0.5, 4.5, 2.0, 40.0, 100.0, 200.0)
     b = ui_kinect.radar_geometry(f, 1.0, 3.0, 2.0, 40.0, 100.0, 200.0)
     assert a.fan == b.fan and a.rim == b.rim and a.apex == (100.0, 200.0)
-    assert a.near_arc != b.near_arc and a.far_arc != b.far_arc
-    mid = len(a.far_arc) // 2
-    assert a.near_arc[mid] == pytest.approx((100.0, 200.0 - 0.5 * 40.0))     # straight ahead
-    assert b.far_arc[mid] == pytest.approx((100.0, 200.0 - 3.0 * 40.0))
-    half = ui_kinect.half_angle(f)
-    assert half == pytest.approx(math.atan(320 / 575))
-    (nl, fl), (nr, fr) = b.edges                                   # the edge rays join the arcs' ends
-    assert nl == pytest.approx(b.near_arc[0]) and fr == pytest.approx(b.far_arc[-1])
-    assert fl == pytest.approx(b.far_arc[0]) and nr == pytest.approx(b.near_arc[-1])
+    assert a.near_line != b.near_line and a.far_line != b.far_line
+    reach = 320 / 575                                                       # tan of the half-angle
+    assert ui_kinect.half_angle(f) == pytest.approx(math.atan(reach))
+    (x0, y0), (x1, y1) = b.far_line                                         # a line at constant depth
+    assert y0 == y1 == pytest.approx(200.0 - 3.0 * 40.0)
+    assert (x1 - x0) / 2 == pytest.approx(3.0 * reach * 40.0) and (x0 + x1) / 2 == pytest.approx(100.0)
+    (nl, fl), (nr, fr) = b.edges                                            # the edge rays join the lines' ends
+    assert nl == pytest.approx(b.near_line[0]) and fr == pytest.approx(b.far_line[1])
+    assert fl == pytest.approx(b.far_line[0]) and nr == pytest.approx(b.near_line[1])
     assert b.centre == ((96.0, 200.0 - 80.0), (104.0, 200.0 - 80.0))
     assert ui_kinect.radar_geometry(f, 0.5, 4.5, 9.0, 40.0, 0, 0).centre is None
-    wide = ui_kinect.radar_geometry(f, 0.5, 20.0, 2.0, 40.0, 0, 0)         # clipped to the range
-    assert wide.far_arc[mid][1] == pytest.approx(-ui_kinect.RADAR_RANGE * 40.0)
+    wide = ui_kinect.radar_geometry(f, 0.5, 20.0, 2.0, 40.0, 0, 0)          # clipped to the range
+    assert wide.far_line[0][1] == pytest.approx(-ui_kinect.RADAR_RANGE * 40.0)
 
 
-def test_the_geometry_follows_the_devices_place():
-    d = kinect.KinectDevice("room", {}, sensor=lambda o: None)
-    before = ui_kinect.radar_geometry(575.0, d.options.near, d.options.far, d.options.centre, 40, 0, 0)
-    assert d.place(near=1.0, far=3.0) == ""
-    after = ui_kinect.radar_geometry(575.0, d.options.near, d.options.far, d.options.centre, 40, 0, 0)
-    assert before.near_arc != after.near_arc and before.far_arc != after.far_arc
+def test_a_reading_the_cloud_keeps_is_inside_the_red_lines_off_axis_too():
+    """The cloud crops by depth along the axis (`deproject`), not by distance: at far = 4 m a
+    reading 3.8 m out and 1.6 m aside stays in the cloud, so the radar must not draw it past
+    the far limit (an arc of radius 4 m would)."""
+    f, s, ox, oy = 575.0, 40.0, 0.0, 0.0
+    g = ui_kinect.radar_geometry(f, 0.5, 4.0, 2.0, s, ox, oy)
+    prof = [0] * kinect.RADAR_COLS
+    col = 70                                                                 # well off to one side
+    prof[col] = 3800
+    d = np.zeros((480, 640), np.uint16)
+    d[240, col * 8 + 4] = 3800
+    pts, _ = kinect.deproject(d, f, kinect.Options(step=1, mirror=False))
+    assert len(pts) == 1 and math.hypot(pts[0][0], 3.8) > 4.0            # kept, though its distance (4.13 m) is past 4 m
+    [[(x, y)]] = ui_kinect.radar_points(prof, f, False, s, ox, oy)
+    far_y = g.far_line[0][1]
+    assert y > far_y                                                         # inside: nearer the sensor than the far line
+    assert g.far_line[0][0] <= x <= g.far_line[1][0]                         # and between the edge rays
 
 
 def test_the_fan_fits_the_radar_box_at_both_widths():
@@ -483,3 +498,32 @@ def test_a_kinects_cloud_is_titled_kinect_point_cloud_and_another_clouds_is_not(
     assert v.node("render:cloud.2").label == "Point cloud 2"
     v = graphview.build(Bindings(), Registry(), None, [scan], build(spec, clouds=("scan",)), spec)
     assert v.node("render:cloud").label == "Point cloud"
+
+
+def test_a_disabled_kinect_entry_stays_on_the_generic_pane(rig, monkeypatch):
+    """A disabled entry is an `OffDevice` that keeps its kind and has no panel: selecting it must
+    not reach the Kinect's body, which reads telemetry."""
+    from hyperspace import devices
+    reg = devices.DeviceRegistry([{"role": "room", "kind": "kinect", "enabled": False}], devices.Context())
+    off = reg.get("room")
+    assert off.kind == "kinect" and not hasattr(off, "telemetry")
+    n = graphview.device_node(off)[0]
+    assert not ui_kinect.is_kinect_node(n)
+    calls = []
+    monkeypatch.setattr(ui_kinect, "body", lambda panel, dev: calls.append(dev))
+    st = ui_graph._state(rig.panel)
+    imgui.new_frame()
+    imgui.begin("side")
+    ui_graph._node_side(rig.panel, st, st["view"], None, n)             # must not raise
+    imgui.end()
+    imgui.end_frame()
+    assert calls == []
+
+
+def test_auto_exposure_starts_as_the_sensor_treats_it_on(rig, monkeypatch):
+    """With no flag history the checkbox shows auto exposure ON, as `Sensor.can` treats it, so
+    the first click turns it off and unlocks the slider (it used to turn it on)."""
+    dev = Dev(flags={}, can={**OPEN, "exposure": "auto exposure is on"}, video="color")
+    p = Pane(rig, monkeypatch, dev, ui_graph.SIDE_W)
+    p.d.run(p.d.click("kinect.auto_exposure"), p.d.park())
+    assert dev.asked[-1] == ("auto_exposure", False)

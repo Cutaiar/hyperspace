@@ -393,6 +393,7 @@ class Sensor:
         self.o = o
         self.focal = 0.0
         self.model = ""
+        self.bcd: int | None = None    # the USB camera's bcdDevice, None where libusb gave none
         self.motor_why = ""            # "": the motor is open and answering
         self.frames = {"depth": 0, "video": 0}
         self.restarts = 0
@@ -415,7 +416,8 @@ class Sensor:
     def open(self) -> None:
         self._lib = lib = _load()
         cams = usb_cameras()
-        self.model = model_name(cams[self.o.index] if self.o.index < len(cams) else None)
+        self.bcd = cams[self.o.index] if self.o.index < len(cams) else None
+        self.model = model_name(self.bcd)
         if lib.freenect_init(C.byref(self._ctx), None) < 0:
             raise Fault("libfreenect would not start")
         # held by self: libfreenect keeps the pointers
@@ -441,9 +443,18 @@ class Sensor:
         that will not is said and the camera opens without it. The audio is
         never claimed."""
         lib = self.lib
-        tries = (_CAMERA | _MOTOR, _CAMERA) if self.o.motor else (_CAMERA,)
+        # libfreenect 0.7.5 (usb_libusb10.c): on a camera whose bcdDevice is not 267 it drops the motor
+        # part and CLAIMS THE AUDIO interface to move the motor through it. The audio is never opened,
+        # so the motor is asked for only of a sensor known to be a 1414.
+        motor = self.o.motor and self.bcd == BCD_1414
+        tries = (_CAMERA | _MOTOR, _CAMERA) if motor else (_CAMERA,)
         if not self.o.motor:
             self.motor_why = "the entry has motor = false"
+        elif self.bcd is None:
+            self.motor_why = "the sensor's model could not be read (libusb), so its motor is left closed"
+        elif self.bcd != BCD_1414:
+            self.motor_why = ("this model moves its motor through its audio interface, "
+                              "which is never opened")
         for sub in tries:
             lib.freenect_select_subdevices(self._ctx, sub)
             if lib.freenect_num_devices(self._ctx) <= self.o.index:
@@ -793,7 +804,8 @@ class KinectDevice(devices.Base):
 
     def _reset_counts(self) -> None:
         self._driven: frozenset[str] = frozenset()
-        self._sent: dict[str, tuple[int, float]] = {}
+        self._confirmed: dict[str, int] = {}    # a setting's value the sensor took (the thread's)
+        self._tried: dict[str, float] = {}      # when a sink last asked for it
         self._made_n = 0
         self._carry = {"video": 0, "restarts": 0, "reconnects": 0}
         self._pub = 0.0
@@ -868,18 +880,21 @@ class KinectDevice(devices.Base):
             from .routing import sink_values
             vals = sink_values(rows(self.role), reg, analyzer)
         self._driven = frozenset(SINK_CHANNELS[k][0] for k in vals if 0 <= k < len(SINK_CHANNELS))
-        if not self._live:
-            self._sent.clear()               # a sensor that came back has its defaults
         now = time.monotonic()
+        for kind in (c for c, _ in SINK_CHANNELS if c not in self._driven):
+            self._confirmed.pop(kind, None)     # a row that stopped driving it: back on the route, it is sent again
+            self._tried.pop(kind, None)
         for k, u in vals.items():
             if not 0 <= k < len(SINK_CHANNELS):
                 continue
             kind = SINK_CHANNELS[k][0]
             v = sink_value(kind, u)
-            if self._sent.get(kind, (None, 0.0))[0] == v or now - self._sent.get(kind, (None, -1e9))[1] < SINK_S:
+            # asked again until the sensor has TAKEN it (a refusal is not that: auto exposure on, no sensor),
+            # and not before `SINK_S` after the last ask
+            if self._confirmed.get(kind) == v or now - self._tried.get(kind, -1e9) < SINK_S:
                 continue
-            if self.request(kind, v) == "":
-                self._sent[kind] = (v, now)
+            self._tried[kind] = now
+            self.request(kind, v)
 
     @property
     def telemetry(self) -> Telemetry:
@@ -991,6 +1006,7 @@ class KinectDevice(devices.Base):
         self._carry["video"] += info.get("frames", {}).get("video", 0)
         self._carry["restarts"] += info.get("restarts", 0)
         self._win = None
+        self._confirmed.clear()                 # a sensor that comes back has its defaults
         self._tele = replace(self._tele, live=False, depth_fps=0.0, video_fps=0.0, tilt=None,
                              tilt_status="", accel=None, can={}, seq=self._tele.seq + 1)
 
@@ -1032,6 +1048,8 @@ class KinectDevice(devices.Base):
             except Exception as e:  # noqa: BLE001 — a request that failed is said, not fatal
                 said = f"{kind}: {type(e).__name__}: {e}"
             self._said = said or f"sent {kind}{'' if value is None else f' {value}'}"
+            if not said and kind in ("ir", "exposure") and value is not None:
+                self._confirmed[kind] = int(value)      # the sensor took it (a manual one too)
             if kind == "video" and not said:
                 self._video_began(s)
             self._publish(s, time.monotonic(), force=True)
