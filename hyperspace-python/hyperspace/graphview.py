@@ -967,6 +967,12 @@ CABLE_STARTERS = ("tracers", "tracers+dream", "dream", "feedback")
 # "laid add" on the composite's menu brightens it instead. There may be
 # many: each is its own composite, delay and fade instance.
 FEEDBACK_FILE = "fade"
+# plan 90 (H2, Q28): the tracers starters — Delay (8, 30 Hz) → Trail (add) →
+# Composite (add); a migrated look-back gets the whole chain, not a starter
+TRACERS_FILE = "trail"
+TRACERS_DEPTH = 8
+TRACERS_HZ = 30.0
+TRACERS_LAY = 1                       # trail.glsl's Lay: add
 FEEDBACK_LEVEL = 0.75                  # the fade's level: how much of last frame stays
 FEEDBACK_SAID = ("feedback: {src} → {comp} over → {dst}; {comp} → {delay} → {fx} → {comp} "
                  "under — {fx} level {level:g} is how much of last frame stays")
@@ -6567,11 +6573,12 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     - **scene**: `shape → scene.geometry`, `scene → output.all.image` (in
       place of whatever fed All outputs; the shape and the scene kept when
       the section has them) — plain faces, no pattern wire.
-    - **tracers**: the look-back recording the picture, laid on it by a
-      new composite (blend add, `graphmigrate.split_lookback`'s): `picture
-      → lookback.image`, `→ lookback.occluder`, `→ composite.under`,
-      `lookback → composite.over`, the composite where the picture went.
-    - **tracers+dream**: the same with `lookback → dream.image`, `dream →
+    - **tracers** (plan 90 H2, Q28): a new delay keeping 8 pictures at 30
+      Hz read by a new Trail laid add, added on the picture by a new
+      composite (blend add): `picture → delay.image`, `delay → trail.stack`,
+      `picture → composite.under`, `trail → composite.over`, the composite
+      where the picture went. Never refused for a second: each is its own.
+    - **tracers+dream**: the same with `trail → dream.image`, `dream →
       composite.over`.
     - **dream**: `picture → dream.image`, `→ composite.under`, `dream →
       composite.over` (blend over: the dream is its picture, dreamed).
@@ -6594,9 +6601,9 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     went; with no cable, the scene, the composite into the one picture
     port the scene feeds. Where that is not one thing (no scene; the scene
     feeding no picture port, or several) the starter wires what it can and
-    the words name what is left unwired — it never guesses. A look-back,
-    a dream or a backdrop already in the section is refused in words (one
-    of each: one live dream, D2)."""
+    the words name what is left unwired — it never guesses. A dream or a
+    backdrop already in the section is refused in words (one of each: one
+    live dream, D2)."""
     edit.placed = ()
     label = dict(STARTERS).get(which)
     if label is None:
@@ -6660,23 +6667,44 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
                              "and the backdrop's picture (wire it into a picture port)")
     looks = which in ("tracers", "tracers+dream")
     dreams = which in ("tracers+dream", "dream")
-    for kind, wanted in (("lookback", looks), ("dream", dreams)):
-        if wanted and kind in before:
-            return IN_ALREADY.format(label=label_of(kind))
+    if dreams and "dream" in before:
+        return IN_ALREADY.format(label=label_of("dream"))
     unwired: list[str] = []
     if cable is None:
         src, dst, n = _scene_feed(doc)
         if src is not None and dst is None:
             unwired.append("the composite's picture (the scene feeds "
                            + ("no picture port" if not n else f"{n} ports") + ")")
-    comp = rgraph.CompositeAt(_next(_spec(edit), "composite"), "add" if looks else "over")
+    spec = _spec(edit)
+    comp = rgraph.CompositeAt(_next(spec, "composite"), "add" if looks else "over")
     wires = list(doc.get("wires", []))
     if dst is not None:     # (what fed picture port `dst` — one wire: the composite does now)
         wires = [x for x in wires if x["to"] != dst]
-    head = "lookback" if looks else "dream"
-    new = [("lookback", "dream.image")] if which == "tracers+dream" else []
-    new.append(("dream" if dreams else "lookback", f"{comp.name}.over"))
-    ins = ([f"{head}.image"] + (["lookback.occluder"] if looks else []) + [f"{comp.name}.under"])
+    order: list[str] = []
+    new: list[tuple[str, str]] = []
+    if looks:
+        # plan 90 (H2, Q28): the look-back's tracers from public parts — a
+        # delay keeping `TRACERS_DEPTH` pictures at `TRACERS_HZ`, a Trail
+        # laying them added, a composite adding the trail on the picture
+        got = _new_node(edit, spec, doc, "effect", TRACERS_FILE)
+        if isinstance(got, str):
+            return got
+        trail = got[0]
+        delay = rgraph.DelayAt(_next(spec, "delay"))
+        doc["nodes"].append(delay.to_json())
+        order += [delay.name, trail]
+        new.append((delay.name, f"{trail}.stack"))
+        head, ins = trail, [f"{delay.name}.image", f"{comp.name}.under"]
+    else:
+        head, ins = "dream", ["dream.image", f"{comp.name}.under"]
+    if dreams:
+        if looks:
+            new.append((head, "dream.image"))
+            ins = [x for x in ins if x != "dream.image"]
+        doc["nodes"].append({"kind": "dream"})
+        order.append("dream")
+        head = "dream"
+    new.append((head, f"{comp.name}.over"))
     if src is not None:
         new = [(src, p) for p in ins] + new
     else:
@@ -6686,17 +6714,29 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     elif src is None:
         unwired.append("the composite's picture")
     doc["wires"] = wires + [{"from": a, "to": b} for a, b in new]
-    for kind, wanted in (("lookback", looks), ("dream", dreams)):
-        if wanted:
-            doc["nodes"].append({"kind": kind})
     doc["nodes"].append(comp.to_json())
-    chain = " → ".join([*(["lookback"] if looks else []), *(["dream"] if dreams else []),
-                        comp.name])
-    said = (f"{label}: {chain}" + (f" over {src}" if src else "")
+    order.append(comp.name)
+    said = (f"{label}: {' → '.join(order)}" + (f" over {src}" if src else "")
             + (f" → {dst}" if dst else "")
             + (" — left unwired: " + "; ".join(unwired) if unwired else ""))
-    order = (*(["lookback"] if looks else []), *(["dream"] if dreams else []), comp.name)
-    return _started(edit, doc, before, *order, label=label, said=said)
+    why = _started(edit, doc, before, *order, label=label, said=said)
+    if why is None and looks:
+        _set_after_landing(edit, order[1], on=True, lay=TRACERS_LAY)
+        _set_delay_after_landing(edit, order[0], depth=TRACERS_DEPTH, every=1, hz=TRACERS_HZ)
+    return why
+
+
+def _set_delay_after_landing(edit: Edit, name: str, **values) -> None:
+    """Delay `name`'s params `values` (`<name>.<key>`) set after the landing
+    that declared them, in the same undo step — as `_set_after_landing` does
+    an effect's (plan 90 H2: the tracers' delay, 8 pictures at 30 Hz)."""
+    reg = getattr(edit.graph, "reg", None) or edit.reg
+    if reg is None:
+        return
+    for key, value in values.items():
+        pid = f"{name}.{key}"
+        if pid in reg:
+            reg[pid].set(value)
 
 
 def _was_into(doc: dict, port: str, keep: str) -> str:
