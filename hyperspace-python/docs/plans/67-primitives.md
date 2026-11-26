@@ -788,5 +788,5 @@ P4 is designed in its own plan, [`90-history-and-the-dream.md`](90-history-and-t
 the dream and the look-back inventoried against the public primitives, the owner's priors, the
 recursive accumulator (`D`, `M`) laid out for a decision, and the spec of the `stack` wire —
 Record, Read and Trail; echoes as reads; Time Displace as a Read with a field on its index; the
-slim async dream node; the migration. Its §6 holds fourteen questions for the owner. Nothing is
+slim async dream node; the migration. Its §6 holds fourteen questions for the owner; §7 (2026-11-26) revises it on the owner's answer: nothing added only to serve the dream. Nothing is
 built until they are answered; Time Displace (#488) stays held.

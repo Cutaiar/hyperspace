@@ -5,6 +5,9 @@ the deep-dream subsystem taken apart against it. Nothing here is built. Tags: **
 in the code, **[M]** measured in this session, **[Rec]** a recommendation. The owner holds
 Time Displace (#488) until this is settled.
 
+**Revised 2026-11-26 (§7):** the owner's answer — nothing added only to serve the dream, and a
+dream composes with no recipe. §7 overrules §3.3–§6 where they differ.
+
 The owner, 2026-11-25:
 
 > "A lot of the architecture of the dreaming subsystem is legacy … a result of old
@@ -417,3 +420,117 @@ Drive's `Hyperspace/loadable/field-examples/` and `tests/fixtures/field-examples
 13. **Time Displace.** Close #488; its slit-scan is the saved patch `Line → Waveform → Scale →
     read.at` and every knob a public part; At below 0 reads the newest. [Rec] **yes**.
 14. **Order.** H1 → H2 → H3 → H4, one PR each. [Rec] **yes**.
+
+## 7. The owner's answer (2026-11-26) — overrules §3.3–§6 where they differ
+
+> "Recommendations are good here. That being said, I want it to be easier to compose dream
+> stuff without needing to remember specific ways of combining the dream node and other
+> nodes. The whole point is to have composable primitives. If we're introducing things here
+> that are only existing in order to serve the dream, the question is why."
+
+**The rule this sets.** Nothing is added only to serve the dream. A dream dropped on any
+picture cable does its job alone, with no recipe to remember: §3.3's loop (`Mix ← dream`,
+a field delay for the mask) and §4.10's folded *Dream look* were exactly such a recipe, and
+go. What the dream keeps is what makes it a dream; what it gives up goes to primitives that
+other things already use.
+
+### 7.1 Every addition of §3–§6, asked "who else needs it?"
+
+| Added in §3–§6 | Who else needs it | Verdict |
+| --- | --- | --- |
+| The `stack` wire; Record, Read, Trail | echoes, the trail, Time Displace, the look-ahead, the wavetable (plan 67 §7.1) | **keep** — this is history, not the dream |
+| An async node breaks a loop | only the dream's loop | **drop** |
+| A **Mix** op (Combine mix, Composite level) | only the dream's loop | **drop** |
+| The dream's `gate` field port | only the dream | **drop** — the dream reads its input's **alpha** (§7.2) |
+| A delay of any kind; a field Smooth; Scale's clamp | fields in general (plan 67 §3.2, §7.1) — but nothing in *this* plan any more | **out of this plan**: plan 67's backlog, built when a field patch wants them |
+| The 16-bit crossing | only because `D` left the worker | **drop** — `D` stays in the worker (§7.2) |
+| Submit when the worker is idle | nothing public: inside the node | **keep**, internal |
+| *Grade* (darken, contrast) | darken is **Fade** exactly; contrast has no other user | darken → Fade; contrast → Q15 |
+| *Mean colour* (picture → lane) | only `tint_from = scene` | **drop**; Q16 |
+| Resize's short-side choice | only the migration of `dream.res` | **drop**; Q18 |
+| *Dream look*, a folded patch | it is the recipe the owner does not want | **drop** — the bare dream is the look (§7.2) |
+
+What is left new is the history primitive alone: one wire, one maker, two readers.
+
+### 7.2 The dream node, revised
+
+It follows the two rules every picture node follows, and nothing of its own:
+
+1. **Alpha is coverage.** It dreams where its input is: the gradient is gated by the input's
+   alpha. Brightness becomes alpha by **Black is clear** (plan 87), which any node already
+   offers — so the scene keyed dreams as today, and a cut-out, a segment's foreground or a
+   channel with alpha dreams only its subject, with nothing wired to say so. The private
+   "brightness is coverage" rule (`DREAM_FS`, `POST_FS`, the mask `M`) retires house-wide;
+   the trail lays by alpha too (§7.3).
+2. **One picture through; its result laid back on its input by `mix` and `blend`**, from the
+   one blend library, as every effect does (plan 67 §7.4, §9.2: M → M′ → f(M, M′)). No
+   composite to remember.
+
+| | |
+| --- | --- |
+| **Takes** | `image`, at its own size (the dream runs at whatever size arrives; a Resize before it is the performer's choice, as before any node) |
+| **Makes** | a picture: its input with the dreamed picture laid back at `mix` / `blend`, alpha the held coverage |
+| **Knobs** | `on`, `layer`, `steps`, `step`, `jitter`, `octaves` (ids unchanged); **Hold** (`dream.k`, id unchanged: how long the dream keeps what it dreamed, the one temporal knob); `mix` (id unchanged), `blend` (new, the library's list) |
+| **Inside, with no public surface** | `D`, float, in the worker — the thing the dream is done on, so the only thing in the tensor. Each job: `D′ = mix(D, input, k)` on rgba; the gradient gated by `D′.a`; out rgba. The octave rotation, the NaN reset, the thread, latest-wins, submit-when-idle, the stability guard (it can see `k` again; it reads its gate's coverage for the ceiling, 1.5 gated, 0.5 where the gate is everywhere) |
+| **Gone** | `res`, `mask_decay`, the mask's blur and gain, `hue`, `sat`, `tint`, `tint_from`, `tint_hue`, `tint_sat`, `darken`, `contrast`, the shared `DreamState` |
+
+**Why the hold is the dream's own, not a loop.** The gradient pass runs *inside* the
+recursion (§3.1): "dreaming deep" is the same pixel dreamed again job after job. That is
+what a temporal dream *is*, so it is the node's own behaviour, the way a delay's memory is
+the delay's. It costs no public part and no recipe. A performer who wants another recursion
+sets Hold to 1 (the dream follows its input each job, holding nothing) and draws a loop with
+the delay and composite that exist today.
+
+**Colour and grade are after it, if wanted**: Hue turn (hue, saturation), Palette (a tint),
+Fade (darker). None is needed for the dream to look like a dream.
+
+**What a look gives up, said on load.** The mask's linger merges into Hold: at the defaults
+the dreamed region faded over ≈ 69 jobs after its content left (`mask_decay` 0.99) and the
+picture over ≈ 13.5 (`k` 0.05); now both fade together, at Hold (Q17). The mask's 9 px blur
+and ×4 gain are Black is clear's soft and feather on the input.
+
+### 7.3 The look-back, revised
+
+```
+X ─► Key (black is clear: peak, level, soft, keep colour) ─► Fade (1 − darken) ─► Record
+     (Depth, Gap) ═► Trail (Count, Level, Fade, blend over) ─► Cut (amount = occlude)
+                                                                ▲ mask: Matte of the occluder, cover
+```
+
+The trail lays each entry over the older ones **by its alpha**, from the one blend list, like
+any composite; the key before the Record makes that alpha from brightness, which is what the
+old shader did privately. Every part is one a performer already uses elsewhere.
+
+### 7.4 What the build is now
+
+| PR | What |
+| --- | --- |
+| H1 | the `stack` wire; Record, Read, Trail on a texture array (§4.2–§4.5) |
+| H2 | the look-back and echoes on H1, migrated (§7.3, §4.9's rows) |
+| H3 | the dream, slimmed (§7.2), migrated: hue / sat → Hue turn, tint → Palette, darken → Fade, each only where a file's value is off its default; `dream.res` → a Resize only where a file set one (Q18) |
+| H4 | Time Displace as Read + a field on At (§4.8); #488 closed |
+
+Proofs, migrations and docs as §5. Q2, Q6, Q10 and Q11 are void; Q1's answer is C for
+recursions a performer draws, and the dream's own hold for the dream.
+
+### 7.5 New questions
+
+15. **Contrast.** A power curve on the look-back's and the dream's layers. Nothing else has one.
+    Drop it (a look with contrast ≠ 1 opens without it, said on load), or build a picture
+    **Remap** — plan 67 §3.2's "(grade)" cell, the lane's `curve` in the picture kind — which
+    would be general, not the dream's? [Rec] **Remap**, in H1, as §3.2's row: it is a gap in
+    the operation table, and the migration is then exact.
+16. **Tint from the picture** (`tint_from = scene`, the input's mean hue). Drop it, a look
+    keeping its chosen tint colour, or build plan 67 §3.8's picture → lane sampler first?
+    [Rec] **drop it**: the sampler is worth building for its own reasons, later.
+17. **The linger.** One Hold for the dream and its coverage (a dream fades with its picture,
+    ≈ 5× sooner at the defaults than its region did), or a second knob, **Linger**, the
+    coverage's own hold? [Rec] **one Hold**; Linger only if a look on the rig misses it.
+18. **`dream.res`.** The dream runs at its input's size; a file that set a res gets a Resize
+    before the dream. Resize counts its long side, so the migration needs an aspect: the rig's
+    16 : 10 (res 256 → 408)? [Rec] **yes, 16 : 10**, said on load.
+19. **Black is clear's ramp** is a smoothstep; the old "brightness is coverage" was linear, so a
+    migrated trail or dream lays a little differently in its soft edges (up to about a tenth of
+    coverage mid-ramp). Add a **linear** shape to the key — the classic luma-as-alpha, useful on
+    any light-on-black picture — or accept the difference? [Rec] **add the linear shape**: a
+    choice of the key's, appended, general.
