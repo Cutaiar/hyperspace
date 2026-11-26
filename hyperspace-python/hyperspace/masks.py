@@ -50,10 +50,11 @@ from collections.abc import Callable
 import moderngl
 import numpy as np
 
-from .glsl import KEY_RAMP, QUAD_VS
+from .glsl import KEY_RAMP, KEY_SHAPE, QUAD_VS
 
-# the sources `MATTE_FS` reads (`u_from`), in `view.MATTE_FROM`'s order
-LUMA, ALPHA, CHROMA = 0, 1, 2
+# the sources `MATTE_FS` reads (`u_from`), in `view.MATTE_FROM`'s order (plan
+# 90 H2: peak appended — Key's measure, `glsl.KEY_SHAPE`)
+LUMA, ALPHA, CHROMA, PEAK = 0, 1, 2, 3
 # the most px a feather blurs by each way (`BLUR_FS`'s loop bound)
 MAX_FEATHER = 32
 
@@ -72,9 +73,10 @@ uniform int u_from;
 uniform float u_key;
 uniform float u_soft;
 uniform int u_invert;
+uniform int u_ramp;        // view.KEY_RAMPS: 0 smooth, 1 linear (plan 90 H2)
 uniform vec2 u_chroma;     // the keyed colour's chroma: sat · (cos, sin) of its hue
 out vec4 f_color;
-
+""" + KEY_SHAPE + """
 vec2 chroma_of(vec3 rgb) {
     float hi = max(rgb.r, max(rgb.g, rgb.b));
     float lo = min(rgb.r, min(rgb.g, rgb.b));
@@ -97,9 +99,9 @@ void main() {
         vec3 rgb = c.a > 0.0 ? c.rgb / c.a : vec3(0.0);
         v = (1.0 - clamp(distance(chroma_of(rgb), u_chroma), 0.0, 1.0)) * c.a;
     } else {
-        v = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+        v = key_measure(u_from == 3 ? 0 : 1, c.rgb);    // peak, or luma
     }
-    float m = u_soft > 0.0 ? smoothstep(u_key - u_soft, u_key + u_soft, v)
+    float m = u_soft > 0.0 ? key_between(u_key - u_soft, u_key + u_soft, v, u_ramp)
                            : (v >= u_key ? 1.0 : 0.0);
     if (u_invert != 0) m = 1.0 - m;
     f_color = vec4(m, 0.0, 0.0, 1.0);
@@ -340,8 +342,8 @@ class MaskPasses:
 
     def matte(self, src: moderngl.Texture, key, size: tuple[int, int], *, source: int = LUMA,
               level: float = 0.5, soft: float = 0.0, invert: bool = False,
-              feather: float = 0.0, hue: float = 1.0 / 3.0, sat: float = 1.0
-              ) -> moderngl.Texture:
+              feather: float = 0.0, hue: float = 1.0 / 3.0, sat: float = 1.0,
+              ramp: int = 0) -> moderngl.Texture:
         """Picture `src` → a one-channel mask at `size` (`src`'s texels
         sampled straight across: the mask is the picture's own size), kept
         under frame key `(key, size)`; feathered by two `BLUR_FS` passes —
@@ -352,7 +354,7 @@ class MaskPasses:
         out, fbo = self.frame_target((key, size), size, components=1)
         self._run("matte", fbo, rect, (src,), u_src=0, u_from=int(source),
                   u_key=float(level), u_soft=max(float(soft), 0.0),
-                  u_invert=int(bool(invert)), u_chroma=chroma(hue, sat))
+                  u_invert=int(bool(invert)), u_ramp=int(ramp), u_chroma=chroma(hue, sat))
         radius = min(max(float(feather), 0.0), float(MAX_FEATHER))
         if radius > 0.0:
             half, hfbo = self.frame_target((f"{key}/blur", size), size, components=1)

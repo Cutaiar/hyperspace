@@ -146,6 +146,7 @@ from .outputs import View
 from .view import (
     DELAY_BEATS,
     DELAY_EVERY,
+    KEY_RAMPS,
     MATTE_FEATHER,
     MATTE_FROM,
     RESIZE_ASPECTS,
@@ -5151,7 +5152,8 @@ class MatteNode(Node):
             out = frame.r.mask_passes().matte(
                 tex, key, size, source=_pick(range(len(MATTE_FROM)), st.source),
                 level=float(st.key), soft=float(st.soft), invert=bool(st.invert),
-                feather=float(st.feather), hue=float(st.hue), sat=float(st.sat))
+                feather=float(st.feather), hue=float(st.hue), sat=float(st.sat),
+                ramp=_pick(range(len(KEY_RAMPS)), getattr(st, "ramp", 0)))
         root.data[key] = out
         return out
 
