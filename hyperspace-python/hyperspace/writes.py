@@ -2,7 +2,8 @@
 
 `mark()` moves one process-wide number, `serial()`. Every road that moves a
 param's **base** or a row of the table marks; a performer's offset, written
-each frame through `Param.apply`, does not. `undo.Undo.tick` reads the number
+each frame through `Param.apply`, does not, nor does a `Param.follow` that is
+all drift (undo reads a base less its drift). `undo.Undo.tick` reads the number
 and takes its fingerprint only when it moved, so an idle frame costs a
 comparison instead of a read of every setting.
 

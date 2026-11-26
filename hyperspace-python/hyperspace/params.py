@@ -580,7 +580,14 @@ class Param:
 
         How far the base moved is added to `_drift` (normalized): undo reads a
         base less what `follow` moved it (`undo.own`), so a running dive makes
-        no step and runs no step on (plan 81 follow-up, register row 1018)."""
+        no step and runs no step on (plan 81 follow-up, register row 1018).
+
+        **A move that is all drift does not mark** (writes.py): undo compares
+        bases less their drift, so the fingerprint a mark would buy reads the
+        same as the one held (`undo._same_fp`), and a dive that wrote three
+        params a frame made every stack take one every frame. A move that is
+        not drift (a kind with none, a base or a move that is not a number)
+        marks as every write does."""
         if self.kind is not Kind.CONTINUOUS:
             self.put(v)
             writes.mark()
@@ -588,7 +595,6 @@ class Param:
         old = self._norm_of(self.get())
         was = self._norm_of(self.base)
         self.put(v)
-        writes.mark()
         if self._base is not None:
             cur = self._norm_of(self.get())
             if math.isfinite(cur) and math.isfinite(old):
@@ -602,6 +608,7 @@ class Param:
             if self.wrap:                       # the short way round
                 moved = (moved + 0.5) % 1.0 - 0.5
             self._drift += moved
+            return
         writes.mark()
 
     def nudge(self, delta: float) -> float:
