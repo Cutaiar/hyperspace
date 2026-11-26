@@ -49,6 +49,8 @@ MAX_DEPTH = 64                 # the most frames a stack keeps (`view.DELAY_DEPT
 BUDGET = 1 << 30
 OVER_BUDGET = ("{name}: a stack of {depth} at {w}×{h} is {mb:.0f} MB, past the "
                "{budget:.0f} MB all stacks may hold — fewer frames, or a resize before it")
+KEEPS_WHAT_FITS = ("{name}: keeps {keep} of {depth} frames at {w}×{h} — more is past the "
+                   "{budget:.0f} MB all stacks may hold; a resize before it keeps more")
 
 
 def frame_bytes(size: tuple[int, int]) -> int:
