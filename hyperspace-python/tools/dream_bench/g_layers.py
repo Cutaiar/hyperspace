@@ -373,13 +373,20 @@ def time_call(call, sync, n: int, warm: int) -> tuple[float, dict[str, float]]:
 
 def fit(rows: list[Row]) -> dict[str, Any] | None:
     """Least squares of ms = o·convs + c·macs_px·px over `rows` (one net,
-    mode, precision and pass). None with fewer than two distinct points."""
+    mode, precision and pass), neither term below zero. None unless the rows
+    hold at least two layers (two conv counts): with one, any fixed cost
+    passes for `o` and the split means nothing."""
     pts = [r for r in rows if r.p50 is not None and r.convs]
-    if len({(r.convs, r.macs_px * r.px) for r in pts}) < 2:
+    if len({r.convs for r in pts}) < 2:
         return None
     A = np.array([[r.convs, r.macs_px * r.px] for r in pts], dtype=float)
     y = np.array([r.p50 for r in pts], dtype=float)
     (o, c), *_ = np.linalg.lstsq(A, y, rcond=None)
+    if o < 0 or c < 0:                    # the better one-term fit, the other held at 0
+        col = [(0, float(A[:, 0] @ y / (A[:, 0] @ A[:, 0]))),
+               (1, float(A[:, 1] @ y / (A[:, 1] @ A[:, 1])))]
+        best = min(col, key=lambda kc: float(np.sum((A[:, kc[0]] * kc[1] - y) ** 2)))
+        o, c = (best[1], 0.0) if best[0] == 0 else (0.0, best[1])
     resid = A @ np.array([o, c]) - y
     return {"o_ms_per_conv": float(o), "c_ms_per_gmac": float(c * 1e9),
             "gmac_per_s": float(1e3 / (c * 1e9)) if c > 0 else None,

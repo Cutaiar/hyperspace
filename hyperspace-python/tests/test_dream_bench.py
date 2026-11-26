@@ -29,9 +29,11 @@ def g():
     try:
         spec = importlib.util.spec_from_file_location("g_layers", BENCH / "g_layers.py")
         mod = importlib.util.module_from_spec(spec)
+        sys.modules["g_layers"] = mod        # its dataclasses look their module up
         spec.loader.exec_module(mod)
         yield mod
     finally:
+        sys.modules.pop("g_layers", None)
         sys.path.remove(str(BENCH))
 
 
@@ -112,17 +114,23 @@ def test_the_fit_recovers_overhead_and_arithmetic(g):
     assert f["c_ms_per_gmac"] == pytest.approx(c * 1e9, rel=1e-6)
     assert f["max_resid_ms"] < 1e-6
     assert g.fit(rows[:1]) is None
+    assert g.fit(rows[:2]) is None                 # one layer at two sizes: no split
+    # a run that would fit a negative term keeps both at or above zero
+    noisy = rows[:4]
+    noisy[0].p50, noisy[1].p50, noisy[2].p50, noisy[3].p50 = 9.0, 1.0, 9.0, 1.0
+    f = g.fit(noisy)
+    assert f["o_ms_per_conv"] >= 0 and f["c_ms_per_gmac"] >= 0
 
 
 @pytest.mark.slow
 def test_a_tiny_run_goes_end_to_end(g, tmp_path, capsys):
     out = tmp_path / "bench.json"
-    assert g.main(["--device", "cpu", "--random-weights", "--layers", "conv1_1,conv1",
+    assert g.main(["--device", "cpu", "--random-weights", "--layers", "conv1_1,conv1_2,conv1,conv2",
                    "--res", "32,48", "--modes", "eager,fold", "--pass", "step,forward",
                    "--n", "2", "--warm", "1", "--label", "test", "--out", str(out)]) == 0
     result = json.loads(out.read_text())
     rows = result["rows"]
-    assert len(rows) == 2 * 2 * 2 * 2           # layers × sizes × modes × passes
+    assert len(rows) == 4 * 2 * 2 * 2           # layers × sizes × modes × passes
     assert all(r["p50"] is not None and r["p50"] > 0 for r in rows), [r["note"] for r in rows]
     assert {(r["w"], r["h"]) for r in rows} == {(56, 32), (88, 48)}   # 16:9 as echo_size makes it
     assert {f["arch"] for f in result["fits"]} == {"vgg16", "googlenet"}
