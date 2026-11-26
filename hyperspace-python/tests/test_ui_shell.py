@@ -77,7 +77,7 @@ def build_rig(tmp_path, renderer=None):
     # show, which the home then opens as a fresh one did until 2026-10-28
     seed(tmp_path)
     lib = Library(tmp_path, period=0.0)
-    live = {} if renderer is None else {"dream": renderer.lookback.state,
+    live = {} if renderer is None else {"dream": renderer.dreamer.state,
                                         "fx": renderer.fx.state}
     reg = build_registry(view, control, audio, lib.install, **live)
     lib.on_layout("band", control.apply_layout)
@@ -1554,8 +1554,9 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
     assert panel._learn_hint() == "move a hand…"
     lrn.arm(None)
     # not modulatable: a knob may still set it, a hand may not
-    assert not rig.reg["dream.gap"].modulatable
-    _, items = menu(panel, monkeypatch, "dream.gap", "lookback")
+    # (plan 90 H2: `dream.gap` retired with the look-back; the dream's res)
+    assert not rig.reg["dream.res"].modulatable
+    _, items = menu(panel, monkeypatch, "dream.res", "lookback")
     assert _learn_items(items) == ["Learn desk"]
     # a file path: nothing to learn (a knob cannot set a path)
     path = _a_file_path(rig, monkeypatch)

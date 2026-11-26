@@ -1997,7 +1997,7 @@ class Renderer:
         fx = self.fx
         fx.tick()
         fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
-        stats = {"ends": [], "chain_runs": 0, "direct": True, "captures": 0,
+        stats = {"ends": [], "chain_runs": 0, "direct": True,
                  "effects": [], "layer": False, "readout": False,
                  "routes": [(None, False)] * len(views)}
         self.stats = stats

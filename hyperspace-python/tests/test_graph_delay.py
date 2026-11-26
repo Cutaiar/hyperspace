@@ -55,22 +55,23 @@ def test_own_fit_is_cover():
     assert media_tex.FITS[G.OWN_FIT] == "cover"
 
 
-def test_the_delay_write_runs_before_the_capture():
-    """`delay(write)` is in the capture's `after` and before it in the
-    order, so the echoes are taken after the delays have read (row 353)."""
+def test_the_delay_write_runs_after_its_readers():
+    """`delay(write)` runs after what reads the delay, so last frame's
+    picture is read before this frame's is kept (row 353; plan 90 H2: the
+    look-back's capture, which it ran before, is retired)."""
     vs = [View(Switches(), (64, 48))]
     spec = G.read_graph(section(("frame", "fx.image"), ("scene", "delay.image"),
                                 ("delay", "shape.faces"), nodes=DELAY))
     assert not spec.notes, spec.notes
-    g = G.build_graph(vs, wired_wiring(spec.wiring(), "trail"))      # (plan 36 T4: drawn)
+    g = G.build_graph(vs, wired_wiring(spec.wiring()))
     order = [n.name for n in g.order]
     write = g.nodes["delay(write)"]
     assert isinstance(write, G.DelayWrite) and write.delay == "delay"
     assert write.inputs["image"] is g.nodes["scene"]
     assert isinstance(g.nodes["delay"], G.Delay)
     assert g.nodes["shape"].inputs["faces"] is g.nodes["delay"]
-    assert order.index("delay(write)") < order.index("lookback(capture)")
-    assert write in g.nodes["lookback(capture)"].after
+    assert order.index("delay(write)") > max(order.index("delay"), order.index("shape"),
+                                             order.index("scene"))
     assert "delay(write)" in g.timed and not g.dormant
 
 
@@ -401,7 +402,9 @@ def test_nothing_of_plan_33_has_an_own_size(ctx):
     """Review Focus 3: no node of the default graph, nor of any earlier
     fixture's graph (landed through the golden tool's `Rig`), has an own
     size — so the `Effect` own-size path and the refit never run for the
-    693 goldens (row 368)."""
+    693 goldens (row 368). (Plan 90 H2: but one — a fixture whose old values
+    drew a look-back lands it as public parts, and the resize before its
+    delay keeps 512 on the long side by design (Q24): the one own size.)"""
     from hyperspace.render import Renderer
 
     vs = [View(Switches(), (240, 150))]
@@ -422,7 +425,11 @@ def test_nothing_of_plan_33_has_an_own_size(ctx):
             frame = SimpleNamespace(size=(240, 150), r=r,
                                     selects=dict.fromkeys(switches, k))
             frame.root = frame
+            writes = [m.inputs["image"] for m in g.nodes.values()
+                      if isinstance(m, G.DelayWrite)]
             for n in g.nodes.values():
+                if isinstance(n, G.ResizeNode) and any(n is w for w in writes):
+                    continue                    # (the migrated look-back's, Q24)
                 assert n.own_size(frame) is None, (slug, n.name)
 
 

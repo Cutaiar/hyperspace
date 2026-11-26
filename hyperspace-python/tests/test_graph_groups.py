@@ -158,17 +158,29 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     """The grouped fixture (party-noita and one group; `/9` since plan 43
     C2) loaded and saved untouched is the same bytes — and so is every
     corpus loadable patch, with no groups (a `/9` without the key). (Plan
-    90 H2: a corpus file holding a look-back is rewritten once on load —
-    its look-back public parts — and that save then resaves byte for
+    90 H2: the look-back's five retired knobs go quietly from a file that
+    draws none; a corpus file holding a look-back is rewritten once on load
+    — its look-back public parts — and that save then resaves byte for
     byte.)"""
     raw = FIXTURE.read_bytes()
     assert json.loads(raw)["schema"] == "hyperspace.loadable/12"
+    # (plan 90 H2: the look-back's five retired knobs, `graphmigrate.LB_GONE`,
+    # go quietly from a patch that draws no look-back — the rest is the same
+    # bytes)
+    def unretired(data: bytes) -> bytes:
+        doc = json.loads(data)
+        for key in graphmigrate.LB_GONE:
+            doc.get("values", {}).pop(f"dream.{key}", None)
+        return loadable.dumps(doc).encode()
+
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
-    assert notes == [] and again == raw
+    assert notes == [] and again == unretired(raw)
     for k, path in enumerate(CORPUS_LOADABLES):
         data = path.read_bytes()
         again, _, _ = headless.resave(path, tmp_path / f"f{k}")
-        if graphmigrate.lookbacks(json.loads(data))[1]:
+        if not graphmigrate.lookbacks(json.loads(data))[1]:
+            data = unretired(data)
+        else:
             assert b'"lookback' not in again, path.name
             data = again
             moved = tmp_path / f"m{k}" / path.name
