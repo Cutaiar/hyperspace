@@ -317,7 +317,31 @@ def forward(doc: Mapping) -> dict:
             raise ValueError(f"no step from {KIND}/{version}")
         out = step(out)
         version += 1
-    return _retire_hue_cycle(out)
+    return _retire_lookbacks(_retire_hue_cycle(out))
+
+
+def _retire_lookbacks(doc: dict) -> dict:
+    """Plan 90 (H2): a fragment naming a look-back with it made public parts,
+    at any version (`graphmigrate.retire_lookbacks`; keyed on the file)."""
+    nodes, wires = doc.get("nodes"), doc.get("wires")
+    if not isinstance(nodes, list) or not isinstance(wires, list):
+        return doc
+    rest = {k: v for k, v in doc.items()
+            if k not in ("nodes", "wires", "ports", "schema", "name", "keys")}
+    ports = doc.get("ports") if isinstance(doc.get("ports"), list) else None
+    keys = doc.get("keys") if isinstance(doc.get("keys"), list) else None
+    nodes2, wires2, rest2, ports2, keys2, notes = graphmigrate.retire_lookbacks(
+        nodes, wires, rest, ports, keys)
+    if not notes:
+        return doc
+    out = {k: doc[k] for k in ("schema", "name") if k in doc}
+    out.update(rest2)
+    out.update(nodes=nodes2, wires=wires2)
+    if ports2 is not None:
+        out["ports"] = ports2
+    if keys2:
+        out["keys"] = keys2
+    return out
 
 
 def _retire_hue_cycle(doc: dict) -> dict:

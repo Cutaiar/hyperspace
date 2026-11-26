@@ -1270,7 +1270,8 @@ PINS = {"scene.cover": "scene", "scene.depth": "scene",
 DEPTH_PORT = "depth"
 # the pin kinds a segment's pins are (`_wired_kind`): what each makes
 SEGMENT_PINS = {"fg": IMAGE, "bg": IMAGE, "mask": MASK}
-PIN_WORDS = {"scene.cover": "the scene's faces' coverage mask: it goes into lookback.cover",
+PIN_WORDS = {"scene.cover": "the scene's faces' coverage mask: it goes into a mask port (a "
+                            "cut's mask)",
              "scene.depth": ("the scene's depth: it goes into a composite's or an output's "
                              "depth")}
 SEGMENT_IS_ITS_PINS = ("{name} makes its pictures on its pins: {name}.fg (the foreground), "
@@ -2111,7 +2112,8 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
             return KNOB_FIELDS_MOST.format(node=node, most=_fx.KNOB_UNITS)
     # plan 36 T2: a pin goes where its kind is taken, a depth port takes the
     # scene's depth alone, a layer's or a guide's hands a hands node
-    if PINS.get(w.src) == "scene" and not (src_kind == "cover" and port == "cover") and not (
+    # (plan 90 H2: the cover into any mask port — a cut's mask, a mask's)
+    if PINS.get(w.src) == "scene" and not (src_kind == "cover" and want == MASK) and not (
             src_kind == DEPTH_PORT and port == DEPTH_PORT):
         return f"{w.src} is {PIN_WORDS[w.src]}"
     if (port == DEPTH_PORT and kind in ("composite", "output")

@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import copy
 import functools
+import math
 import re
 from dataclasses import dataclass, replace
 from typing import Any
@@ -2263,6 +2264,507 @@ def hue_turns(doc: dict) -> tuple[dict, list[str]]:
     return out, notes
 
 
+# ---------------------------------------------------------------- the look-back retired (plan 90)
+
+# Plan 90 H2 (§10.2, §10.3; the owner's answers Q23–Q28): a look-back
+# (`lookback`, `lookback.<n>`) is public parts — what it records through a
+# Curve (only where its contrast is not 1, or a row drives it), a Fade (1 −
+# darken) keyed black is clear (peak, linear, level 0, soft 1, keep colour: the
+# old "brightness is coverage"), a Resize (512 on the long side), a Delay (depth
+# = its echoes, every 1 / gap seconds in Hz, gap 0 every frame) read by a Trail
+# (level = echo_mix, fade, lay over), cut by a Matte of its occluder (peak,
+# linear, key ⅛, soft ⅛: min(4 · peak, 1)) and by its cover, each Cut's amount
+# its occlude; where its picture went, the last of them. An echo pin
+# `lookback.echo.<k>` is a Read at k − 1, nearest, of that delay — of a second
+# delay, the same input, at depth k, past its echoes (Q25). Its knobs are the
+# parts' (`dream.echo_mix` → `fx.trail.level` …); `dream.darken`, `contrast` and
+# `res` stay the dream's until H3, a row on one copied onto the look-back's part
+# too (Q26); a row on `dream.gap` is dropped, said (Q27). Keyed on the file, not
+# a schema, as Hue cycle's retirement: run as the ladder's last step
+LB_KEYS = ("echo_mix", "fade", "echoes", "gap", "darken", "contrast", "occlude", "res")
+LB_GONE = ("echo_mix", "fade", "echoes", "gap", "occlude")       # dream's no more: retired
+LB_SHARED = ("darken", "contrast", "res")                       # the dream's still (Q26)
+LB_DEFAULTS: dict[str, Any] = {"echo_mix": 0.4, "fade": 0.2252, "echoes": 8, "gap": 0.033333,
+                               "darken": 0.1, "contrast": 1.0, "occlude": 1.0, "res": 2}
+LB_ECHOES = 32                   # dream.echoes ran 0 … 32
+LB_DEPTH = (1, 64)               # a delay's depth (`view.DELAY_DEPTH`)
+LB_CONTRAST = (0.5, 3.0)         # dream.contrast ran 0.5 … 3, linear
+LB_HZ = (0.1, 120.0)             # a delay's Hz (`view.DELAY_HZ`)
+LB_RESIZE = 5                    # `view.RESIZE_SIDES[5]`: 512 on the long side (Q24)
+LB_MATTE = {"from": 3, "key": 0.125, "soft": 0.125, "ramp": 1, "invert": False, "feather": 0.0}
+LB_KEY = {"measure": 0, "level": 0.0, "soft": 1.0, "keep": True, "feather": 0.0,
+          "invert": False, "ramp": 1}
+LOOKBACK_NOTE = ("{old} is public parts now (plan 90): {chain} — the same look, what it keeps "
+                 "at 512 on the long side; save to keep it")
+LB_ECHO_NOTE = "{pin} is {read} now (plan 90): a Read of {delay}, at {at}, nearest"
+LB_GAP_NOTE = ("{row}: the look-back's gap is the delay's rate in Hz now ({delay}.hz), and a "
+               "row on the gap has no straight line onto it — left out (plan 90)")
+LB_RANGE_NOTE = ("{row}: {old} ran {was}, {new} runs {now} — the row is kept, its throw "
+                 "spans the new range (plan 90)")
+LB_NOWHERE_NOTE = "{row}: {old} drew nothing in this patch (plan 90): left out"
+LB_NONE_NOTE = "{old} kept no echoes (echoes 0): its trail is off (plan 90)"
+_LB_END = re.compile(r"^lookback(?:\.([2-9]|[1-9][0-9]+))?"
+                     r"(?:\.(image|occluder|cover|capture)|\.echo\.([1-9][0-9]*))?$")
+_LB_PARAM = re.compile(r"^dream\.(?:([2-9]|[1-9][0-9]+)\.)?(" + "|".join(LB_KEYS) + r")$")
+
+
+def _lb_of(end: Any) -> tuple[str, str, int | None] | None:
+    """A wire's end naming a look-back → (the look-back, its port or "",
+    the echo pin's k or None): `lookback.2.echo.3` → ("lookback.2", "", 3)."""
+    m = _LB_END.match(end) if isinstance(end, str) else None
+    if m is None:
+        return None
+    name = "lookback" if m.group(1) is None else f"lookback.{m.group(1)}"
+    return name, m.group(2) or "", int(m.group(3)) if m.group(3) else None
+
+
+def _lb_param(pid: Any) -> tuple[str, str] | None:
+    """A look-back knob → (its look-back, its key): `dream.2.fade` →
+    ("lookback.2", "fade"), `dream.echo_mix` → ("lookback", "echo_mix")."""
+    m = _LB_PARAM.match(pid) if isinstance(pid, str) else None
+    if m is None:
+        return None
+    return ("lookback" if m.group(1) is None else f"lookback.{m.group(1)}"), m.group(2)
+
+
+def _lb_prefix(lb: str) -> str:
+    return "dream." if lb == "lookback" else f"dream.{lb.partition('.')[2]}."
+
+
+def _num(v: Any, default: float) -> float:
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return float(default)
+    return x if math.isfinite(x) else float(default)
+
+
+def _norm(v: float, lo: float, hi: float) -> float:
+    return min(max((v - lo) / (hi - lo), 0.0), 1.0)
+
+
+def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = None,
+                     keys: list | None = None
+                     ) -> tuple[list, list, dict, list | None, list | None, list[str]]:
+    """A section's `nodes` and `wires`, the document's other keys (`rest`),
+    a fragment's `ports` and the section's `keys` (black is clear's), with
+    every look-back made public parts (module notes above) — (nodes, wires,
+    rest, ports, keys, notes). Pure: the inputs are untouched, and handed
+    back as they are when no look-back is named. The retired knobs
+    (`LB_GONE`, `dream.<n>.*`) of a patch with no look-back drew nothing:
+    their values go quietly, a row on one is left out, said."""
+    olds: list[str] = []
+    for e in nodes:
+        if isinstance(e, dict) and e.get("kind") == "lookback":
+            n = e.get("instance", 1)
+            olds.append("lookback" if n in (1, None) else f"lookback.{n}")
+    for w in wires:
+        if isinstance(w, dict):
+            for end in (w.get("from"), w.get("to")):
+                got = _lb_of(end)
+                if got is not None and got[0] not in olds:
+                    olds.append(got[0])
+    for p in ports or []:
+        if isinstance(p, dict):
+            for end in (p.get("from"), p.get("to")):
+                got = _lb_of(end)
+                if got is not None and got[0] not in olds:
+                    olds.append(got[0])
+    olds.sort(key=lambda n: int(n.partition(".")[2] or 1))
+    values = dict(rest.get("values") or {}) if isinstance(rest.get("values"), dict) else {}
+    named = [k for k in values if _lb_param(k) is not None
+             and (_lb_param(k)[1] in LB_GONE or _lb_param(k)[0] != "lookback")]
+    row_named = any(_lb_param(r.get("target")) is not None
+                    and (_lb_param(r["target"])[1] in LB_GONE
+                         or _lb_param(r["target"])[0] != "lookback")
+                    for key in _ROW_LISTS for r in (rest.get(key) or [])
+                    if isinstance(r, dict))
+    if not olds and not named and not row_named:
+        return nodes, wires, rest, ports, keys, []
+    taken: set[str] = set()
+    for e in nodes:
+        if not isinstance(e, dict):
+            continue
+        n = e.get("instance", 1)
+        n = n if isinstance(n, int) else 1
+        if isinstance(e.get("file"), str):
+            taken.add(G.instance_name(e["file"], n))
+        elif isinstance(e.get("kind"), str):
+            taken.add(G.instance_name(e["kind"], n))
+    for w in wires:
+        if isinstance(w, dict):
+            for end in (w.get("from"), w.get("to")):
+                if isinstance(end, str) and _lb_of(end) is None:
+                    taken.add(_effect_base(end))
+
+    def free(kind: str) -> str:
+        n = 1
+        while G.instance_name(kind, n) in taken:
+            n += 1
+        name = G.instance_name(kind, n)
+        taken.add(name)
+        return name
+
+    def entry(kind: str, name: str, effect: bool) -> dict:
+        _, n = G.split_instance(name)
+        out: dict[str, Any] = {"kind": "effect", "file": kind} if effect else {"kind": kind}
+        if n != 1:
+            out["instance"] = n
+        return out
+
+    driven: set[str] = set()
+    for key in _ROW_LISTS:
+        for r in rest.get(key) or []:
+            if isinstance(r, dict) and isinstance(r.get("target"), str):
+                driven.add(r["target"])
+    for m in (rest.get("macros") or {}).values() if isinstance(rest.get("macros"), dict) else ():
+        for s in (m.get("subs") or []) if isinstance(m, dict) else []:
+            if isinstance(s, dict) and isinstance(s.get("base"), str):
+                driven.add(s["base"])
+
+    notes: list[str] = []
+    out_nodes = [e for e in nodes if not (isinstance(e, dict) and e.get("kind") == "lookback")]
+    out_keys = list(keys) if keys is not None else None
+    new_wires: list[dict] = []
+    ends: dict[str, str] = {}          # a look-back → the part its picture is now
+    heads: dict[str, dict[str, str]] = {}   # a look-back's port → the part's port
+    pins: dict[tuple[str, int], str] = {}   # (look-back, k) → its Read
+    parts: dict[str, dict[str, Any]] = {}   # a look-back → its parts, by role
+    for old in olds:
+        pre = _lb_prefix(old)
+        v = {k: values.get(pre + k, LB_DEFAULTS[k]) for k in LB_KEYS}
+
+        def into(port: str, old: str = old) -> Any:
+            return next((w.get("from") for w in wires if isinstance(w, dict)
+                         and _lb_of(w.get("to")) == (old, port, None)), None)
+        src, occ, cover = into("image") or into("capture"), into("occluder"), into("cover")
+        read_out = any(isinstance(w, dict) and _lb_of(w.get("from")) == (old, "", None)
+                       for w in wires) or any(
+            isinstance(p, dict) and _lb_of(p.get("from")) == (old, "", None) for p in ports or [])
+        ks = sorted({_lb_of(w.get("from"))[2] for w in wires if isinstance(w, dict)
+                     and _lb_of(w.get("from")) is not None and _lb_of(w.get("from"))[0] == old
+                     and _lb_of(w.get("from"))[2] is not None})
+        echoes = int(round(_num(v["echoes"], LB_DEFAULTS["echoes"])))
+        depth = min(max(echoes, LB_DEPTH[0]), LB_DEPTH[1])
+        contrast = _num(v["contrast"], 1.0)
+        curve_on = contrast != 1.0 or pre + "contrast" in driven
+        role: dict[str, Any] = {}
+        chain: list[str] = []
+        if curve_on:
+            role["curve"] = free("curve")
+            out_nodes.append(entry("curve", role["curve"], True))
+            chain.append(f"Curve ({role['curve']})")
+        role["fade"] = free("fade")
+        role["resize"] = free("resize")
+        role["delay"] = free("delay")
+        out_nodes += [entry("fade", role["fade"], True), entry("resize", role["resize"], False),
+                      entry("delay", role["delay"], False)]
+        chain += [f"Fade, keyed ({role['fade']})", f"Resize ({role['resize']})",
+                  f"Delay ({role['delay']})"]
+        if out_keys is None:
+            out_keys = []
+        out_keys.append(role["fade"])
+        first = role.get("curve", role["fade"])
+        heads[old] = {"image": f"{first}.image", "capture": f"{first}.image"}
+        wl: list[dict] = []
+        if src is not None:
+            wl.append(_w(src, f"{first}.image"))
+        if curve_on:
+            wl.append(_w(role["curve"], f"{role['fade']}.image"))
+        wl += [_w(role["fade"], f"{role['resize']}.image"),
+               _w(role["resize"], f"{role['delay']}.image")]
+        end = None
+        if read_out:
+            role["trail"] = free("trail")
+            out_nodes.append(entry("trail", role["trail"], True))
+            chain.append(f"Trail ({role['trail']})")
+            wl.append(_w(role["delay"], f"{role['trail']}.stack"))
+            end = role["trail"]
+            if occ is not None:
+                role["matte"], role["cut"] = free("matte"), free("cut")
+                out_nodes += [entry("matte", role["matte"], False),
+                              entry("cut", role["cut"], False)]
+                chain += [f"Cut ({role['cut']}) by a Matte of its occluder ({role['matte']})"]
+                wl += [_w(end, f"{role['cut']}.image"), _w(occ, f"{role['matte']}.image"),
+                       _w(role["matte"], f"{role['cut']}.mask")]
+                heads[old]["occluder"] = f"{role['matte']}.image"
+                end = role["cut"]
+            if cover is not None or any(isinstance(p, dict) and _lb_of(p.get("to")) == (
+                    old, "cover", None) for p in ports or []):
+                role["cover_cut"] = free("cut")
+                out_nodes.append(entry("cut", role["cover_cut"], False))
+                chain.append(f"Cut ({role['cover_cut']}) by its cover")
+                wl.append(_w(end, f"{role['cover_cut']}.image"))
+                if cover is not None:
+                    wl.append(_w(cover, f"{role['cover_cut']}.mask"))
+                heads[old]["cover"] = f"{role['cover_cut']}.mask"
+                end = role["cover_cut"]
+            ends[old] = end
+        deep = [k for k in ks if k > depth]
+        if deep:
+            role["deep"] = free("delay")
+            out_nodes.append(entry("delay", role["deep"], False))
+            wl.append(_w(role["resize"], f"{role['deep']}.image"))
+        for k in ks:
+            read = free("read")
+            out_nodes.append(entry("read", read, True))
+            maker = role["deep"] if k > depth else role["delay"]
+            wl.append(_w(maker, f"{read}.stack"))
+            pins[(old, k)] = read
+            values[f"fx.{read}.on"] = True
+            values[f"fx.{read}.at"] = float(k - 1)
+            values[f"fx.{read}.between"] = 1
+            notes.append(LB_ECHO_NOTE.format(pin=f"{old}.echo.{k}", read=read, delay=maker,
+                                             at=k - 1))
+        new_wires += wl
+        # (its values: the parts', each from the look-back's own)
+        for k in LB_KEYS:
+            if k in LB_GONE or old != "lookback":
+                values.pop(pre + k, None)
+        darken = _num(v["darken"], LB_DEFAULTS["darken"])
+        if curve_on:
+            values[f"fx.{role['curve']}.on"] = True
+            values[f"fx.{role['curve']}.shape"] = min(max(
+                math.log(max(contrast, 1e-6)) / math.log(4.0), -1.0), 1.0)
+        values[f"fx.{role['fade']}.on"] = True
+        values[f"fx.{role['fade']}.level"] = min(max(1.0 - darken, 0.0), 1.0)
+        values.update({f"key.{role['fade']}.{k}": x for k, x in LB_KEY.items()})
+        values.update({f"{role['resize']}.size": LB_RESIZE, f"{role['resize']}.aspect": 0,
+                       f"{role['resize']}.fit": 0, f"{role['resize']}.filter": 0})
+        gap = _num(v["gap"], LB_DEFAULTS["gap"])
+        for d, dd in ((role["delay"], depth), (role.get("deep"), max(deep, default=0))):
+            if d is None:
+                continue
+            values[f"{d}.depth"] = dd
+            if gap <= 0.0:
+                values.update({f"{d}.every": 0, f"{d}.frames": 1})
+            else:
+                values.update({f"{d}.every": 1, f"{d}.frames": 1,
+                               f"{d}.hz": round(min(max(1.0 / gap, LB_HZ[0]), LB_HZ[1]), 3)})
+        if "trail" in role:
+            t = role["trail"]
+            values[f"fx.{t}.on"] = echoes > 0
+            values[f"fx.{t}.level"] = _num(v["echo_mix"], LB_DEFAULTS["echo_mix"])
+            values[f"fx.{t}.fade"] = _num(v["fade"], LB_DEFAULTS["fade"])
+            values[f"fx.{t}.lay"] = 0
+            if echoes <= 0:
+                notes.append(LB_NONE_NOTE.format(old=old))
+        occlude = min(max(_num(v["occlude"], LB_DEFAULTS["occlude"]), 0.0), 1.0)
+        if "matte" in role:
+            values.update({f"{role['matte']}.{k}": x for k, x in LB_MATTE.items()})
+        for c in (role.get("cut"), role.get("cover_cut")):
+            if c is not None:
+                values.update({f"{c}.amount": occlude, f"{c}.invert": False})
+        parts[old] = role
+        notes.append(LOOKBACK_NOTE.format(old=old, chain=" → ".join(chain)))
+    # every other look-back knob (a patch with none, or `dream.<n>.*` of none drawn)
+    for k in list(values):
+        got = _lb_param(k)
+        if got is not None and (got[1] in LB_GONE or got[0] != "lookback"):
+            del values[k]
+
+    out_wires: list[Any] = []
+    for w in wires:
+        if not isinstance(w, dict):
+            out_wires.append(w)
+            continue
+        f, t = _lb_of(w.get("from")), _lb_of(w.get("to"))
+        if t is not None:
+            continue                     # (into a look-back: its parts' wires above)
+        if f is not None:
+            if f[2] is not None:
+                w = {**w, "from": pins[(f[0], f[2])]}
+            elif f[0] in ends:
+                w = {**w, "from": ends[f[0]]}
+            else:
+                continue
+        out_wires.append(w)
+    out_wires = [*new_wires, *out_wires]
+
+    def retarget(pid: str) -> list[str] | None:
+        """Where a row on look-back knob `pid` goes: the ids, [] dropped, None not one."""
+        got = _lb_param(pid)
+        if got is None:
+            return None
+        lb, k = got
+        role = parts.get(lb)
+        keep = [pid] if lb == "lookback" and k in LB_SHARED else []
+        if role is None:
+            return keep
+        new = {"echo_mix": [f"fx.{role['trail']}.level"] if "trail" in role else [],
+               "fade": [f"fx.{role['trail']}.fade"] if "trail" in role else [],
+               "echoes": [f"{role['delay']}.depth"],
+               "gap": [],
+               "darken": [f"fx.{role['fade']}.level"],
+               "contrast": [f"fx.{role['curve']}.shape"] if "curve" in role else [],
+               "occlude": [f"{c}.amount" for c in (role.get("cut"), role.get("cover_cut"))
+                           if c is not None],
+               "res": []}[k]
+        return keep + new
+
+    def base_of(pid: str, k: str) -> float:
+        lb, _ = _lb_param(pid)
+        return _num((rest.get("values") or {}).get(_lb_prefix(lb) + k, LB_DEFAULTS[k])
+                    if isinstance(rest.get("values"), dict) else LB_DEFAULTS[k], LB_DEFAULTS[k])
+
+    def moved(r: dict, pid: str, new: str, where: str) -> dict | None:
+        """Row `r` on look-back knob `pid` as one on `new`, its reach kept."""
+        _, k = _lb_param(pid)
+        out = {**r, "target": new}
+        op, val = r.get("op"), r.get("value", 1.0)
+        label = f"{where} {r.get('source')} → {pid}"
+        num = isinstance(val, (int, float)) and not isinstance(val, bool)
+        if k == "darken" and num:
+            if op == "push":
+                out["value"] = -val
+            elif op == "set":
+                out["value"] = 1.0 - val
+        elif k == "echoes" and num:
+            if op == "push":
+                out["value"] = round(val * LB_ECHOES / (LB_DEPTH[1] - LB_DEPTH[0]), 6)
+            elif op == "set":
+                out["value"] = round(_norm(val * LB_ECHOES, *LB_DEPTH), 6)
+        elif k == "contrast" and num:
+            c0 = min(max(base_of(pid, "contrast"), LB_CONTRAST[0]), LB_CONTRAST[1])
+            span = LB_CONTRAST[1] - LB_CONTRAST[0]
+            if op == "push":     # (about the file's contrast: d shape = d c / (c ln 4))
+                out["value"] = round(val * span / (c0 * math.log(4.0)) / 2.0, 6)
+            elif op == "set":
+                c = LB_CONTRAST[0] + val * span
+                out["value"] = round((math.log(c) / math.log(4.0) + 1.0) / 2.0, 6)
+        if op in ("abs", "abs14", "position") and k in ("darken", "echoes", "contrast"):
+            was = {"darken": "0 … 1", "echoes": "0 … 32", "contrast": "0.5 … 3"}[k]
+            now = {"darken": "1 … 0 (its level)", "echoes": "1 … 64",
+                   "contrast": "−1 … 1 (log₄)"}[k]
+            notes.append(LB_RANGE_NOTE.format(row=label, old=pid, was=was, new=new, now=now))
+        return out
+
+    def row(r: Any, where: str) -> list:
+        if not isinstance(r, dict):
+            return [r]
+        t = r.get("target")
+        to = retarget(t) if isinstance(t, str) else None
+        if to is None:
+            return [r]
+        label = f"{where} {r.get('source')} → {t}"
+        _, k = _lb_param(t)
+        if k == "gap" and _lb_param(t)[0] in parts:
+            notes.append(LB_GAP_NOTE.format(row=label, delay=parts[_lb_param(t)[0]]["delay"]))
+        elif not to:
+            notes.append(LB_NOWHERE_NOTE.format(row=label, old=t))
+        return [r if new == t else moved(r, t, new, where) for new in to]
+
+    def macros(ms: dict) -> dict:
+        out = {}
+        for mid, m in ms.items():
+            if not isinstance(m, dict) or not isinstance(m.get("subs"), list):
+                out[mid] = m
+                continue
+            subs = []
+            for s in m["subs"]:
+                to = retarget(s.get("base")) if isinstance(s, dict) else None
+                if to is None:
+                    subs.append(s)
+                    continue
+                if not to:
+                    notes.append(LB_NOWHERE_NOTE.format(row=f"macros {mid}", old=s["base"]))
+                for new in to:
+                    if new == s["base"]:
+                        subs.append(s)
+                        continue
+                    _, k = _lb_param(s["base"])
+                    ns = {**s, "base": new}
+                    for end in ("from", "to"):
+                        x = s.get(end, 0.0 if end == "from" else 1.0)
+                        if not isinstance(x, (int, float)):
+                            continue
+                        if k == "darken":
+                            ns[end] = 1.0 - x
+                        elif k == "echoes":
+                            ns[end] = round(_norm(x * LB_ECHOES, *LB_DEPTH), 6)
+                        elif k == "contrast":
+                            c = LB_CONTRAST[0] + x * (LB_CONTRAST[1] - LB_CONTRAST[0])
+                            ns[end] = round((math.log(c) / math.log(4.0) + 1.0) / 2.0, 6)
+                    subs.append(ns)
+            out[mid] = {**m, "subs": subs}
+        return out
+
+    renames = {f"render:{old}": f"render:{parts[old]['delay']}" for old in parts}
+
+    def walk(v: Any) -> Any:
+        if isinstance(v, str):
+            return renames.get(v, v)
+        if isinstance(v, dict):
+            return {(walk(k) if isinstance(k, str) else k): walk(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [walk(x) for x in v]
+        return v
+    out_rest: dict[str, Any] = {}
+    for k, v in rest.items():
+        if k == "values":
+            out_rest[k] = values
+        elif k in _ROW_LISTS and isinstance(v, list):
+            out_rest[k] = [x for r in v for x in row(r, k)]
+        elif k == "macros" and isinstance(v, dict):
+            out_rest[k] = walk(macros(v))
+        else:
+            out_rest[k] = walk(v)
+    if "values" not in rest and values:
+        out_rest["values"] = values
+    if out_keys is not None:
+        out_keys = sorted({x if x not in ends else ends[x] for x in out_keys
+                           if isinstance(x, str) and _lb_of(x) is None or x in ends})
+    out_ports = None
+    if ports is not None:
+        out_ports = []
+        for p in ports:
+            if not isinstance(p, dict):
+                out_ports.append(p)
+                continue
+            q = dict(p)
+            got = _lb_of(p.get("to"))
+            if got is not None:
+                head = heads.get(got[0], {}).get(got[1])
+                if head is None:
+                    continue
+                q["to"] = head
+            got = _lb_of(p.get("from"))
+            if got is not None:
+                src = pins.get((got[0], got[2])) if got[2] is not None else ends.get(got[0])
+                if src is None:
+                    continue
+                q["from"] = src
+            out_ports.append(q)
+    if not notes and not olds:
+        notes.append("the look-back's retired knobs dropped: no look-back drew them (plan 90)")
+    return out_nodes, out_wires, out_rest, out_ports, out_keys, notes
+
+
+def lookbacks(doc: dict) -> tuple[dict, list[str]]:
+    """A whole loadable patch with every look-back made public parts
+    (`retire_lookbacks`) — (the document, the notes); the document itself
+    when it names none."""
+    section = doc.get("graph") if isinstance(doc, dict) else None
+    if not isinstance(section, dict) or not isinstance(section.get("nodes", []), list) \
+            or not isinstance(section.get("wires", []), list):
+        return doc, []
+    rest = {k: v for k, v in doc.items() if k not in ("graph", "schema", "name")}
+    keys = section.get(G.KEYS_KEY)
+    nodes, wires, rest2, _, keys2, notes = retire_lookbacks(
+        list(section.get("nodes", [])), list(section.get("wires", [])), rest,
+        keys=list(keys) if isinstance(keys, list) else None)
+    if not notes:
+        return doc, []
+    out = {k: doc[k] for k in ("schema", "name") if k in doc}
+    out.update(rest2)
+    others = {k: v for k, v in section.items() if k not in ("nodes", "wires", G.KEYS_KEY)}
+    graph = {**others, "nodes": nodes, "wires": wires}
+    if keys2:
+        graph[G.KEYS_KEY] = keys2
+    out["graph"] = graph
+    return out, notes
+
+
 # ---------------------------------------------------------------- the one ladder (plan 50)
 
 # what a load says of a file naming a desk template (retired, plan 44 D3;
@@ -2352,4 +2854,7 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     # plan 67: Hue cycle retired, whatever the version (keyed on the file)
     doc, hue_notes = hue_turns(doc)
     migrate_notes += hue_notes
+    # plan 90 (H2): the look-back made public parts, whatever the version
+    doc, lb_notes = lookbacks(doc)
+    migrate_notes += lb_notes
     return Forward(doc, tuple(notes), tuple(migrate_notes), migrated, frozenset(from_show))
