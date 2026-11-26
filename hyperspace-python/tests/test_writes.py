@@ -65,7 +65,6 @@ def test_an_idle_frame_takes_no_fingerprint(rig):
 @pytest.mark.parametrize("write", [
     lambda u: u.reg["x.a"].set(0.5),
     lambda u: u.reg["x.a"].nudge(0.25),
-    lambda u: u.reg["x.a"].follow(0.25),
     lambda u: setattr(u.box, "a", 0.5),                     # round Param
     lambda u: u.box.items.__setitem__(0, 0.5),              # polled
     lambda u: setattr(u.table.bindings[0], "value", 0.75),  # a row in place
@@ -77,6 +76,33 @@ def test_every_road_of_a_write_is_looked_at_the_frame_it_lands(rig, write):
     write(rig)
     assert looked(rig)
     assert not looked(rig)
+
+
+def test_a_follow_is_not_looked_at_and_is_no_step_but_an_edit_after_it_is_one(rig):
+    """`follow` moves a base and its drift together: the fingerprint it would
+    buy reads the same as the one held (row 1190), so none is taken, and the
+    edit that comes after is compared with a fingerprint older by the follows
+    and still makes exactly one step."""
+    a = rig.reg["x.a"]
+    for v in (0.25, 0.3, 0.4):
+        a.follow(v)
+        assert not looked(rig)
+    rig.tick(5.0)
+    assert not rig.stack
+    a.set(a.base + 0.2)
+    assert looked(rig)
+    rig.tick(6.0)
+    assert len(rig.stack) == 1 and rig.stack[0].label.startswith("A ")
+
+
+def test_a_follow_of_a_polled_base_is_not_looked_at_either(rig):
+    """A base on no cell is read every frame (`_polled`): a follow's drift is
+    the one change of it `_still` lets by, and an equal-drift change is not."""
+    i = rig.reg["x.item"]
+    i.follow(0.4)
+    assert not looked(rig)
+    rig.box.items[0] = 0.9                   # a write that follows nothing
+    assert looked(rig)
 
 
 def test_an_edit_round_param_is_a_step(rig):
