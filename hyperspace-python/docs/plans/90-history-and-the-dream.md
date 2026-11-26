@@ -575,3 +575,13 @@ look-back and echoes migrated onto them, and `History`, `Capture`, `EchoNode`, t
 21. **Readers and the dream are effect files**, their knobs `fx.<file>.*` (saved `dream.*` and
     `dream.<n>.*` ids migrated), the LOOKBACK page retired into the FX pane? [Rec] yes.
 22. **Depth is the only count**: the trail reads all the stack holds? [Rec] yes.
+
+### 8.2 The owner's answers (2026-11-26)
+
+- **Q20: one maker, the Delay** (Depth, Gap; a stack promoted to its newest where a picture is
+  taken). Saved look-backs migrate to a Delay of depth 32.
+- **Q21: Read, Trail and the dream are effect files**, the dream with a Python half; `dream.*`
+  ids migrate to `fx.dream.*`; the LOOKBACK page retires into the FX pane.
+- **Q22: Depth is the only count**; the trail reads all the stack holds.
+
+Every question of §6, §7.5 and §8.1 is answered. H1 starts.
