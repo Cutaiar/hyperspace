@@ -36,6 +36,7 @@ so a delay that takes a picture every 1/30 s keeps one every 1/30 s.
 
 from __future__ import annotations
 
+import weakref
 from typing import Any
 
 import moderngl
@@ -55,6 +56,18 @@ def frame_bytes(size: tuple[int, int]) -> int:
     return int(size[0]) * int(size[1]) * 8
 
 
+# every stack holding a texture, by the context it is on: the two decks' renderers
+# are siblings on one context (`Renderer.sibling`), so the budget is the context's,
+# not a renderer's (Devin on #519)
+_LIVE: weakref.WeakSet = weakref.WeakSet()
+
+
+def held(ctx: Any, but: Any = None) -> int:
+    """The bytes every stack on `ctx` holds, `but` one left out."""
+    return sum(st.bytes() for st in list(_LIVE)
+               if st is not but and st.tex is not None and st.ctx is ctx)
+
+
 class DelayStack:
     """One delay's kept frames: a texture array of `depth` layers at the
     pair's size, and `entries`, (layer, clock) newest first."""
@@ -69,6 +82,7 @@ class DelayStack:
         self.dt = 1.0 / REF_HZ         # the last tick's step
         self.idle = 0                  # frames no reader has asked (`Renderer`)
         self.error = ""                # why it holds nothing (a budget, a driver)
+        self.ctx: Any = None           # the context its texture is on (`held`)
 
     # ---- time ----
 
@@ -105,7 +119,13 @@ class DelayStack:
             self.error = f"no stack at {size[0]}×{size[1]}×{depth}: {e}"[:160]
             return False
         self.tex, self.size, self.depth, self.error = tex, size, depth, ""
+        self.ctx = ctx
+        _LIVE.add(self)
         return True
+
+    def bytes(self) -> int:
+        """What its texture holds, bytes (0 with none)."""
+        return frame_bytes(self.size) * self.depth if self.tex is not None else 0
 
     def commit(self, ctx: moderngl.Context, src: moderngl.Framebuffer, size: tuple[int, int],
                depth: int) -> bool:
@@ -125,8 +145,10 @@ class DelayStack:
         return True
 
     def reset(self) -> None:
-        """Hold nothing (a load, R19): the next commit starts it again."""
-        self.entries = []
+        """Hold nothing (a load, R19), and give back its room: the next commit
+        makes it again at the depth the new look asks for, so an old deep stack
+        never counts against the next look's budget (Devin on #519)."""
+        self.release()
 
     def release(self) -> None:
         if self.tex is not None:
@@ -138,6 +160,7 @@ class DelayStack:
         self.size = (0, 0)
         self.depth = 0
         self.entries = []
+        _LIVE.discard(self)
 
     # ---- what a reader binds ----
 

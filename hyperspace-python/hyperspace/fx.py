@@ -1198,13 +1198,23 @@ STACK_HEAD = f"""uniform sampler2DArray u_stack;   // the stack on the `stack` p
 uniform int u_stack_n;            // the frames it holds, newest first (0: none)
 uniform float u_stack_layer[{MAX_STACK}]; // each one's layer in the array, newest first
 uniform float u_stack_age[{MAX_STACK}];   // …and its age, seconds
+uniform vec2 u_stack_size;        // its frames' own size, px (Devin on #519: fitted by cover)
+
+// where `uv` of this pass lands in a frame of the stack: fitted by cover, as
+// a delay's own picture is (`graph.OWN_FIT`) — a square stack in a wide frame
+// is cropped top and bottom, never stretched
+vec2 stack_uv(vec2 uv) {{
+    if (u_stack_size.x <= 0.0 || u_stack_size.y <= 0.0) return uv;
+    float k = (u_stack_size.x / u_stack_size.y) / (u_res.x / u_res.y);
+    return k > 1.0 ? vec2(0.5 + (uv.x - 0.5) / k, uv.y) : vec2(uv.x, 0.5 + (uv.y - 0.5) * k);
+}}
 
 // the k-th newest frame it holds (0 the newest), clamped into what it holds;
 // transparent black while it holds none
 vec4 stack_frame(int k, vec2 uv) {{
     if (u_stack_n <= 0) return vec4(0.0);
     k = clamp(k, 0, u_stack_n - 1);
-    return texture(u_stack, vec3(uv, u_stack_layer[k]));
+    return texture(u_stack, vec3(stack_uv(uv), u_stack_layer[k]));
 }}
 
 // `steps` frames back (0 the newest), clamped into what it holds: between two,
@@ -1578,6 +1588,8 @@ class FxChain:
             stack["tex"].use(location=STACK_UNIT)
         FxChain._set(prog, "u_stack", STACK_UNIT)
         FxChain._set(prog, "u_stack_n", n)
+        size = stack.get("size", (0, 0)) if stack else (0, 0)
+        FxChain._set(prog, "u_stack_size", (float(size[0]), float(size[1])))
         for name, arr in (("u_stack_layer", layers), ("u_stack_age", ages)):
             if name in prog:
                 cast(moderngl.Uniform, prog[name]).write(arr.tobytes())

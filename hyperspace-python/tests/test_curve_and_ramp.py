@@ -109,3 +109,16 @@ def test_the_smooth_ramp_is_plan_87s_and_the_default(ctx):
     got = np.frombuffer(a.read(), np.uint8).reshape(H, W, 4)[0, :, 3] / 255.0
     want = peak * peak * (3 - 2 * peak)                     # smoothstep(0, 1, peak)
     assert np.abs(got - want).max() <= 2 / 255
+
+
+def test_curve_keeps_black_black_and_premultiplied_colour_within_alpha(ctx):
+    """Shape −1 on premultiplied colour (Devin on #519): exact black stays
+    black, and a quarter-covered white stays a quarter covered."""
+    px = np.zeros((H, W, 4), np.uint8)
+    px[..., 3] = 255                               # opaque black
+    px[0, :, :] = (64, 64, 64, 64)                 # white at a quarter's coverage
+    got = _curve(ctx, -1.0, px=px)
+    assert got[1:, :, :3].max() == 0
+    assert got[0, :, 3].max() <= 65 and got[0, :, :3].max() <= got[0, :, 3].max()
+    inv = _curve(ctx, 0.0, invert=1, px=px)
+    np.testing.assert_allclose(inv[0, 0], (0, 0, 0, 64), atol=1)    # white inverted: clear-black

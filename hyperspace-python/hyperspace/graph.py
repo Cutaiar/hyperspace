@@ -7598,13 +7598,21 @@ class _Build:
         todo, seen = [name], {name}
         while todo:
             at = todo.pop()
-            if self.laid_over(at):
+            if self.laid_over(at) or self._stacked(at):
                 return True
             for w in self.wires:
                 if w.src == at and w.node not in seen and _kind(w.node) == "switch":
                     seen.add(w.node)
                     todo.append(w.node)
         return False
+
+    def _stacked(self, name: str) -> bool:
+        """Plan 90 (H1): whether `name`'s picture goes into a delay a stack
+        reader reads — its coverage is then kept for the reader's over (Devin
+        on #519: keyed black recorded opaque covered the older copies)."""
+        delays = {w.node for w in self.wires
+                  if w.src == name and w.port == "image" and _kind(w.node) == "delay"}
+        return any(w.src in delays and w.port == STACK_PORT for w in self.wires)
 
     def _make(self, name: str) -> Node | None:
         kind = _kind(name)
@@ -8025,6 +8033,8 @@ class _Build:
             target, src = self.made.get(w.node), self.node(w.src)
             if isinstance(target, KeyNode):          # plan 87: keyed, its stack is the effect's
                 target = target.inputs["image"]
+            if isinstance(src, KeyNode):             # a keyed delay keeps its stack under
+                src = src.inputs["image"]            # its key (Devin on #519)
             if (not isinstance(target, Effect) or target not in self.built
                     or STACK_PORT not in target.INPUTS or not isinstance(src, Delay)):
                 continue

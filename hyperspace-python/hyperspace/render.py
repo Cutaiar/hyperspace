@@ -3099,7 +3099,8 @@ class Renderer:
         is kept (`DelayStack.commit`) at its depth (`ViewState.delay`); a load forgets it
         (R19). One no reader asked for in `SIZED_KEEP_FRAMES` is released.
         Never raises: a stack that cannot be kept says why on `error`."""
-        from .stack import BUDGET, OVER_BUDGET, frame_bytes
+        from . import stack as _stack
+        from .stack import OVER_BUDGET, frame_bytes
 
         stack = getattr(pair, "stack", None)
         if stack is None:
@@ -3117,15 +3118,13 @@ class Renderer:
         st = (getattr(getattr(self, "_view_now", None), "delay", None) or {}).get(name)
         depth = int(getattr(st, "depth", 1))
         size = tuple(pair.read[0].size)
-        others = sum(frame_bytes(p.stack.size) * p.stack.depth
-                     for n, p in (getattr(self, "_delays", None) or {}).items()
-                     if n != name and getattr(p, "stack", None) is not None
-                     and p.stack.tex is not None)
+        # (every stack on this context, the other deck's too: Devin on #519)
+        others = _stack.held(self.ctx, but=stack)
         need = frame_bytes(size) * max(depth, stack.depth if stack.size == size else 0)
-        if others + need > BUDGET:
+        if others + need > _stack.BUDGET:
             stack.release()
             stack.error = OVER_BUDGET.format(name=name, depth=depth, w=size[0], h=size[1],
-                                             mb=need / 2**20, budget=BUDGET / 2**20)
+                                             mb=need / 2**20, budget=_stack.BUDGET / 2**20)
             return
         try:
             stack.commit(self.ctx, pair.read[1], size, depth)

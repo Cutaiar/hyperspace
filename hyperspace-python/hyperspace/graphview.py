@@ -4130,7 +4130,7 @@ def real_pin(view: View, pin: str) -> str:
 # looked up by name (`_render`; a plain-words refusal from them becomes a
 # `Refusal`). `RENDER_NOT_YET` is said only by an Edit without them.
 
-RENDER_TYPES = (IMAGE, GEOMETRY, MASK, FIELD)
+RENDER_TYPES = (IMAGE, GEOMETRY, MASK, FIELD, rgraph.STACK)   # plan 90: a saved stack inlet too
 RENDER_NOT_YET = "render cables: not yet"
 # the words a refusal says
 NOT_A_PORT = "not a port"
