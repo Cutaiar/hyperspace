@@ -6073,9 +6073,17 @@ def _frame_order(wires: list[dict]) -> list[dict]:
              if head is not None and run else set())
     held = into.get("lookback.image")
     comp = held if kind_of(held) == "composite" else None
-    # (the composite laying the trail on: its `over` the look-back or a dream of it)
+    # (the composite laying the trail on: its `over` the look-back or a dream of
+    # it — plan 90 H2: or a migrated look-back's last part, a Trail through its Cuts)
+    def trail_end(src: str) -> bool:
+        seen: set[str] = set()
+        while kind_of(src) == "cut" and src not in seen:
+            seen.add(src)
+            src = into.get(f"{src}.image", "")
+        return kind_of(src) == "effect" and src.partition(".")[0] == "trail"
     lays = {x["to"].rpartition(".")[0] for x in wires
-            if x["from"] in ("lookback", "dream") and x["to"].endswith(".over")
+            if (x["from"] in ("lookback", "dream") or trail_end(x["from"]))
+            and x["to"].endswith(".over")
             and kind_of(x["to"].rpartition(".")[0]) == "composite"}
     groups = {"scene.geometry": 1, "backdrop.scene": 2, "lookback.occluder": 3,
               "dream.image": 3, f"{rgraph.ALL_OUTPUTS}.image": 6,
@@ -7490,6 +7498,13 @@ def render_drop(edit: Edit, node: str) -> str | None:
                                                             names)]
     gone = _take_out(doc, names)
     doc["wires"] += [x for x in joined if x not in doc["wires"]]
+    # (plan 87: a deleted node keyed black is clear is no longer keyed — plan
+    # 90 H2's migrated look-backs key their Fade, so every delete met this)
+    keys = [k for k in doc.get(rgraph.KEYS_KEY, []) if k not in names]
+    if keys:
+        doc[rgraph.KEYS_KEY] = keys
+    else:
+        doc.pop(rgraph.KEYS_KEY, None)
     if doc == before:
         return f"{label} is not in the patch's graph"
     _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])

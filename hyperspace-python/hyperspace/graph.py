@@ -2020,13 +2020,13 @@ WIRED_TAKES: dict[str, dict[str, str]] = {
     "segment": {"image": IMAGE}, **{k: {} for k in SEGMENT_PINS},
 }
 WIRED_TO_WORDS = ("output.1 …, output.all (image, hands, guide, depth), scene.geometry, "
-                  "shape.faces, backdrop.image / scene, lookback.image / occluder / cover "
-                  "(lookback.2 …), dream.image, hands.layer.hands …, hands.guide.hands …, "
+                  "shape.faces, backdrop.image / scene, dream.image, hands.layer.hands …, "
+                  "hands.guide.hands …, "
                   "pattern.media, an effect's or its slot's image or aux, a composite's under "
                   "/ over / depth, a switch's in1 … in8, a delay's, a resize's, a "
                   "matte's or a segment's image, or a cut's image / mask")
 WIRED_FROM_WORDS = ("scene, scene.cover, scene.depth, shape, hands …, hands.layer …, "
-                    "hands.guide …, lookback …, lookback.echo.1 …, dream, backdrop, pattern, "
+                    "hands.guide …, dream, backdrop, pattern, "
                     "an effect, an effect's slot (acid.slot.2 …), a composite, a switch, "
                     "a delay, a resize, a matte, a cut, segment.fg / .bg / .mask, a channel (channel.a …) or ground")
 # plan 39 T2 (W1, decision 2): a picture into a mask port is refused with the

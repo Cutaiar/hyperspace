@@ -1160,9 +1160,20 @@ def wired_of(wiring: G.Wiring, *, placements: bool = True, look: str = "off") ->
     if not placements:
         return out
     # (plan 90 H2: and the look-back it drew made public parts, at its defaults)
-    out = split_lookback(placed_wires(out), look)
+    return split_retired(placed_wires(out), look)
+
+
+def split_retired(section: Any, look: str, rest: dict | None = None) -> Any:
+    """`split_lookback`, and the look-back it drew made public parts
+    (`retire_lookbacks`, plan 90 H2): an old frame as the whole ladder ends
+    it — `rest` the file's other keys (its values and rows: a contrast a row
+    drives brings a Curve), none for a caller with no file (`wired_of`). A
+    section with no look-back as it is."""
+    out = split_lookback(section, look)
+    if not isinstance(out, dict):
+        return out
     nodes, wires, _, _, keys, notes = retire_lookbacks(
-        list(out.get("nodes") or []), list(out.get("wires") or []), {},
+        list(out.get("nodes") or []), list(out.get("wires") or []), dict(rest or {}),
         keys=list(out.get(G.KEYS_KEY) or []))
     if not notes:
         return out

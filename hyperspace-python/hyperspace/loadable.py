@@ -710,16 +710,19 @@ def dumps(doc: dict) -> str:
                 halves.append(f'"{part}": [\n{rows}\n ]' if v[part] else f'"{part}": []')
             text = "{" + ",\n ".join(halves) + "}"
         elif (key == GRAPH_KEY and isinstance(v, dict) and v.get(FRAME_KEY) == WIRED_FRAME
-                and set(v) <= {FRAME_KEY, "nodes", "wires"}
-                and all(isinstance(v.get(k, []), list) for k in ("nodes", "wires"))):
+                and set(v) <= {FRAME_KEY, "nodes", "wires", "keys"}
+                and all(isinstance(v.get(k, []), list) for k in ("nodes", "wires", "keys"))):
             # row 394: the wired frame every save writes — the marker, then
-            # the nodes and the wires, one a line
+            # the nodes and the wires, one a line; plan 87's keyed nodes on
+            # one line after them (plan 90 H2: every migrated look-back has one)
             halves = [f'"{FRAME_KEY}": {json.dumps(v[FRAME_KEY])}']
             for part in ("nodes", "wires"):
                 if part not in v:
                     continue
                 rows = ",\n".join("  " + json.dumps(n) for n in v[part])
                 halves.append(f'"{part}": [\n{rows}\n ]' if v[part] else f'"{part}": []')
+            if "keys" in v:
+                halves.append(f'"keys": {json.dumps(v["keys"])}')
             text = "{" + ",\n ".join(halves) + "}"
         elif key == LAYOUT_KEY and isinstance(v, dict) and v:
             # the GRAPH page's positions (plan 28 N2): one node a line
