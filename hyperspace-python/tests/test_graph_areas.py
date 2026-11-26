@@ -33,7 +33,7 @@ from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_graph_legible import party
 from test_graphview import stacked, thru, views
-from test_ui_shell import frame
+from test_ui_shell import frame, head_menu
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as G
@@ -120,13 +120,13 @@ def load_fixture(rig, fixture):
 
 
 def drawn_ids(rig, monkeypatch):
-    """The nodes the page draws next frame (its `_node` calls)."""
+    """The nodes the page draws next frame (its `_node_shown` calls)."""
     seen: list[str] = []
-    real = ui_graph._node
-    monkeypatch.setattr(ui_graph, "_node", lambda st, n, drawn: (seen.append(n.id),
-                                                                  real(st, n, drawn)))
+    real = ui_graph._node_shown
+    monkeypatch.setattr(ui_graph, "_node_shown", lambda st, n, drawn: (seen.append(n.id),
+                                                                        real(st, n, drawn)))
     frame(rig.panel, "graph")
-    monkeypatch.setattr(ui_graph, "_node", real)
+    monkeypatch.setattr(ui_graph, "_node_shown", real)
     return seen
 
 
@@ -579,10 +579,11 @@ def test_the_modulation_has_its_own_depth(rig):
 # ---------------------------------------------------------------- framing an area
 
 def test_the_area_chips_and_a_title_click_frame_an_area(rig, monkeypatch):
-    """The head names the five areas as chips; a click on one frames the
+    """The head's areas menu names the areas; a click on one frames the
     canvas on that area's drawn boxes (and its idle line); so does a click
     on the canvas's background inside an area's title."""
     st = load(rig, "party-trip")
+    head_menu(rig.panel, "graph.areas")
     chips, framed = [], []
     chip = ui.chip
     monkeypatch.setattr(ui, "chip", lambda label, *a, **k: chips.append(label)

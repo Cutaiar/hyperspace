@@ -1198,7 +1198,6 @@ STACK_HEAD = f"""uniform sampler2DArray u_stack;   // the stack on the `stack` p
 uniform int u_stack_n;            // the frames it holds, newest first (0: none)
 uniform float u_stack_layer[{MAX_STACK}]; // each one's layer in the array, newest first
 uniform float u_stack_age[{MAX_STACK}];   // …and its age, seconds
-uniform float u_stack_gap;        // the delay's gap, seconds (0: every frame)
 
 // the k-th newest frame it holds (0 the newest), clamped into what it holds;
 // transparent black while it holds none
@@ -1511,7 +1510,7 @@ class FxChain:
         A knob that takes no field (`knob_refusal`) is left out: its wire was
         refused in words before it got here. `stack` (plan 90 H1): a delay's
         kept frames on the effect's `stack` port (`stack.DelayStack.read`: the
-        array, each frame's layer and age newest first, the gap), bound on
+        array, each frame's layer and age newest first), bound on
         unit 2; None, and the file's `stack_at` reads transparent black."""
         self.state.advance_to(t)
         spec = self.state.specs.get(name)
@@ -1579,7 +1578,6 @@ class FxChain:
             stack["tex"].use(location=STACK_UNIT)
         FxChain._set(prog, "u_stack", STACK_UNIT)
         FxChain._set(prog, "u_stack_n", n)
-        FxChain._set(prog, "u_stack_gap", float(stack.get("gap", 0.0)) if stack else 0.0)
         for name, arr in (("u_stack_layer", layers), ("u_stack_age", ages)):
             if name in prog:
                 cast(moderngl.Uniform, prog[name]).write(arr.tobytes())

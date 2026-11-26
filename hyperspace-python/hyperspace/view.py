@@ -68,6 +68,37 @@ class ResizeState:
     crop_h: float = 1.0
 
 
+# plan 34 D: how often a delay takes its picture — in frames, in Hz, or in
+# tempo units (the LFOs' divisions: a sixteenth … four bars), each a count of
+# beats of the tempo clock (4/4: a bar is 4 beats)
+DELAY_EVERY = ("frames", "Hz", "1/16", "1/8", "1/4", "1/2", "1 bar", "2 bars", "4 bars")
+DELAY_BEATS = {"1/16": 0.25, "1/8": 0.5, "1/4": 1.0, "1/2": 2.0,
+               "1 bar": 4.0, "2 bars": 8.0, "4 bars": 16.0}
+DELAY_FRAMES_MAX = 120
+DELAY_HZ = (0.1, 120.0)
+# plan 90 (H1): how many of the pictures it takes a delay keeps — the stack its
+# readers take (`@takes stack`: Read, Trail); 1 is plan 34's z⁻¹ alone
+DELAY_DEPTH = (1, 64)
+
+
+@dataclass
+class DelayState:
+    """One delay node's values (`delay[.n].*`: params.declare_delays), read
+    once a frame by the renderer (`ViewState.delay`, `graph.Frame.delays`):
+    `every` an index into `DELAY_EVERY`; `frames` (1…`DELAY_FRAMES_MAX`) the
+    frames between two pictures taken when it is "frames" — 1 is every frame,
+    the last frame's, as a delay always was; `hz` the pictures a second when
+    it is "Hz". Between two pictures the delay holds the last one. Plan 90
+    (H1): `depth` how many of the pictures it takes it keeps for a reader of
+    its stack, the newest first (1: the one it shows). A value, never a
+    rebuild."""
+
+    every: int = 0
+    frames: int = 1
+    hz: float = 10.0
+    depth: int = 1
+
+
 # plan 39 T2 (W2): a matte's sources — what makes a pixel pass: its
 # brightness, its own coverage (how a cut picture becomes a mask again), or
 # its closeness to a keyed hue (a chroma key)
@@ -134,24 +165,6 @@ class CutState:
 
     invert: bool = False
     amount: float = 1.0
-
-
-# plan 90 (H1): a delay's depth — how many past frames it keeps, the stack its
-# readers take (`@takes stack`); 1 is the plain z⁻¹ of plan 34
-DELAY_DEPTH = (1, 64)
-DELAY_GAP = (0.0, 0.25)    # seconds between the frames it keeps (0: every frame)
-
-
-@dataclass
-class DelayState:
-    """One delay node's values (plan 90 H1, `delay[.n].*`: params.declare_delays),
-    read once a frame by the renderer (`ViewState.delays`, `graph.Frame.delays`):
-    `depth` the frames it keeps (1 the one before this, plan 34's z⁻¹), `gap`
-    the seconds between them (0 every frame). A value, never a rebuild: a
-    depth change makes its stack again, clean."""
-
-    depth: int = 1
-    gap: float = 0.0
 
 
 # plan 39 T4 (W4): a segment's modes — a person model (the worker's), a
@@ -297,15 +310,15 @@ class ViewState(writes.Observed):
     # plan 34 Z: each resize node's values (`resize[.n].*`, declared from the
     # loadable patch's graph: params.declare_resizes) — resize name → its state
     resize: dict[str, ResizeState] = field(default_factory=dict)
+    # plan 34 D: each delay node's rate (`delay[.n].*`, declared from the
+    # loadable patch's graph: params.declare_delays) — delay name → its state
+    delay: dict[str, DelayState] = field(default_factory=dict)
     # plan 39 T2: each matte node's values (`matte[.n].*`, declared from the
     # loadable patch's graph: params.declare_mattes) — matte name → its state
     mattes: dict[str, MatteState] = field(default_factory=dict)
     # plan 39 T3: each cut node's values (`cut[.n].*`, declared from the
     # loadable patch's graph: params.declare_cuts) — cut name → its state
     cuts: dict[str, CutState] = field(default_factory=dict)
-    # plan 90 (H1): each delay node's depth and gap (`delay[.n].*`, declared from
-    # the loadable patch's graph: params.declare_delays) — delay name → its state
-    delays: dict[str, DelayState] = field(default_factory=dict)
     # plan 87: each keyed node's black is clear (`key.<node>.*`, declared from
     # the loadable patch's graph `"keys"`: params.declare_keys) — node → its state
     keys: dict[str, KeyState] = field(default_factory=dict)

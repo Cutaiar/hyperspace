@@ -15,7 +15,7 @@ line ─(depth 16)────────────────────�
   pixel its own moment. That is a time displace — no node of its own.
 - **Line** (`fx.line.*`): the distance along its **Angle**, in frame heights.
 - **Read** (`fx.read.*`): **At** 14 frames back in the middle, ± 16 × the line across.
-- **Delay** (`delay.depth` 32, `delay.gap` 1/30 s): what there is to read.
+- **Delay** (`delay.depth` 32, `delay.every` Hz, `delay.hz` 30): what there is to read.
 
 **Play it.** `hand:right.y` pushes `fx.line.angle`.
 

@@ -71,7 +71,8 @@
     "view.bright": 1.35,
     "camera.zoom": 1.5,
     "delay.depth": 32,
-    "delay.gap": 0.033333,
+    "delay.every": 1,
+    "delay.hz": 30.0,
     "fx.read.on": true,
     "fx.read.at": 14.0,
     "fx.line.on": true

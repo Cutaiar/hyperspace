@@ -256,6 +256,7 @@ from . import (
     ui,
     ui_browse,
     ui_fx,
+    ui_kinect,
     ui_kit,
     ui_loadable,
     ui_menu,
@@ -405,7 +406,7 @@ THUMB_GROUND = (0.0, 0.0, 0.0, 1.0)    # the box before (or without) a picture
 WIRE_MAX = 260.0         # px: the square's side at most
 WIRE_TIP = ("The shape alone, live: its edges at the angles it is drawn at — no faces, "
             "points, pattern or effects")
-# plan 37 C2 (D3): the head's **pictures · tint cables** switch, off by
+# plan 37 C2 (D3): the canvas menu's **pictures · tint cables** switch, off by
 # default (plain red), page state only — never the loadable patch's or the show's.
 # Lit, a picture cable's red leans by its maker's dominant hue
 # (`PreviewTextures.hue`), at most `TINT_SPAN` turns either side of red
@@ -418,9 +419,19 @@ TINT_TIP = ("Lit: each picture cable's red leans by the colour of the picture it
             "blue-violet ones; red, cyan and grey pictures leave it red — read from its "
             "maker's thumbnail once a second. Off: plain red. A view setting: not saved "
             "with the patch or the install")
+# 2026-11-24 (recommended): the head's two menus. `canvas_words` reads the
+# toggles' words off this table, in the menu's order
+AREAS_LABEL = "areas##graph.areas"
+AREAS_POPUP, CANVAS_POPUP = "##graph.areas_menu", "##graph.canvas_menu"
+AREAS_TIP = "Frame the canvas on one of its areas (a click on an area's title does the same)"
+CANVAS_TIP = ("What the canvas draws: expand all, patched only, patch only, output behind, "
+              "tint cables, gpu cost. Its words are what is on")
+CANVAS_TOGGLES = (("patched_only", "patched only"), ("patch_only", "patch only"),
+                  ("backdrop", "output behind"), ("tint", "tint"), ("cost", "gpu cost"))
+SAID_MIN_W = 240.0          # px: the words after the chips need this much of their row
 TINT_SPAN = 20.0 / 360.0
 TINT_FULL = 0.25
-# plan 84: the head's **gpu cost** chip, off by default, page state only (never
+# plan 84: the canvas menu's **gpu cost** chip, off by default, page state only (never
 # the loadable patch's or the show's). Lit, every render node is marked by its
 # GPU time per frame: its border and ground lean from black toward a hot white by
 # its share of the costliest node's time (`heat_rgb`), a badge above it says its
@@ -720,7 +731,7 @@ def toggle_open(st: dict, nid: str) -> None:
 
 
 def expand_all(st: dict, view: graphview.View, on: bool) -> None:
-    """The head's **expand all** (`on`) / **collapse all**."""
+    """The head's **expand all** (`on`, in its canvas menu) / **collapse all**."""
     st["open"] = {n.id for n in view.nodes if drawn_node(st, n)} if on else set()
 
 
@@ -1569,18 +1580,67 @@ def head_line(st: dict, view: graphview.View) -> str:
 
 
 def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None:
+    """Two rows (2026-11-24, recommended): the deck row, then the canvas's own
+    — patches, Turbo Tidy, the **areas** and **canvas** menus, the warnings, and
+    what the page says in what is left. A page too narrow for a chip wraps it."""
     width = imgui.get_content_region_avail().x
     _deck_row(panel, st)
     if _patches_chip(panel):                # plan 40 T3: the browser
+        _wrap_for(ui.chip_w(TIDY_CHIP))
+    _tidy_chip(st)
+    ui.beside(ui.chip_w(AREAS_LABEL))
+    _areas_menu(st)
+    label = beside_chip(selected, width, st["beside"])
+    if label is not None:
+        ui.beside(ui.chip_w(label))
+        if ui.chip(f"{label}##graph"):
+            st["beside"] = not st["beside"]
+        if imgui.is_item_hovered():
+            ui.tooltip(BESIDE_TIP)
+    # last of the chips that are always there: its words change with its
+    # toggles, and nothing beside it moves under the hand
+    words = canvas_words(st)
+    if ui.chip_w(words) > width:            # not even on a row of its own: how many, its hover says which
+        words = f"canvas: {len(canvas_on(st))} on"
+    ui.beside(ui.chip_w(words))
+    _canvas_menu(panel, st, view, words)
+    if (w := wants_chip_w(panel)) > 0:      # plan 40 T4: N devices missing
+        _wants_chip(panel, ui.fits_beside(w - imgui.get_style().item_spacing.x))
+    _head_words(st, view)
+    if st["cost"]:                          # plan 84: the frame's total and its costliest
+        imgui.text(ui.fit_text(st.get("cost_line", ""), imgui.get_content_region_avail().x))
+    for want in window_wants(panel):       # plan 44 D3: a window the meta controller lacks
+        imgui.text_colored(ui.WARN, want)
+
+
+def _head_words(st: dict, view: graphview.View) -> None:
+    """What the page says: a warning (`st["note"]`), else the last render edit's
+    words and the counts (`head_line`), cut to fit, whole on the hover with
+    `EDIT_HINT`. In what is left of the chips' row where that is `SAID_MIN_W`,
+    else always on a row of its own — by the width, not by what is said, so a
+    message moves no node under the hand. A warning is never cut: too long
+    for what is left, it takes rows of its own, wrapped."""
+    note = st["note"]
+    beside = ui.fits_beside(SAID_MIN_W)
+    if note:
+        if beside and ui.fits_beside(imgui.calc_text_size(note).x):
+            imgui.same_line()
+            imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + ui.CHIP_PAD.y)
+        imgui.push_text_wrap_pos(0.0)
+        imgui.text_colored(ui.WARN, note)
+        imgui.pop_text_wrap_pos()
+        return
+    if beside:
         imgui.same_line()
-    any_open = bool(st["open"])
-    # the canvas's two verbs, quiet (on the kit a ghost Button: no box until
-    # the pointer is on it), then its two filters as one joined pair
-    if ui.chip("collapse all##graph" if any_open else "expand all##graph", variant="ghost"):
-        expand_all(st, view, not any_open)
+        imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + ui.CHIP_PAD.y)     # on the chips' words
+    line = "  ·  ".join(x for x in (st["said"], head_line(st, view)) if x)
+    imgui.text_disabled(ui.fit_text(line, imgui.get_content_region_avail().x))
     if imgui.is_item_hovered():
-        ui.tooltip(ALL_TIP)
-    imgui.same_line()
+        ui.tooltip(f"{line}\n\n{EDIT_HINT}")
+
+
+def _tidy_chip(st: dict) -> None:
+    """**Turbo Tidy**, quiet (on the kit a ghost Button), and its flames."""
     if ui.chip(TIDY_CHIP, variant="ghost"):
         st["tidy"] = True
         flames(st).burst = FLAME_BURST
@@ -1590,7 +1650,49 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     flames(st).step(imgui.get_item_rect_min(), imgui.get_item_rect_max(), hot,
                     imgui.get_io().delta_time)
     flames(st).draw(imgui.get_window_draw_list())
-    imgui.same_line()
+
+
+def _drop_menu(popup: str, clicked: bool, tip: str) -> bool:
+    """The head's chip just drawn as a menu: `clicked` opens `popup` under it,
+    `tip` its hover while that is shut. True while the popup is open and
+    begun: the caller draws it and ends it. Shut, nothing is built."""
+    if clicked:
+        imgui.open_popup(popup)
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        imgui.set_next_window_pos(imgui.ImVec2(lo.x, hi.y + 4))
+    elif imgui.is_item_hovered():
+        ui.tooltip(tip)
+    return imgui.begin_popup(popup)
+
+
+def canvas_on(st: dict) -> list[str]:
+    """The canvas's toggles that are on, by their words, in the menu's order."""
+    return [words for key, words in CANVAS_TOGGLES if st[key]]
+
+
+def canvas_words(st: dict) -> str:
+    """The canvas menu's chip: what is on, so a filter or a mark is read
+    without opening it — "canvas: patched only · output behind"; the bare word
+    with nothing on."""
+    on = canvas_on(st)
+    return "canvas" + (": " + " · ".join(on) if on else "")
+
+
+def _canvas_menu(panel, st: dict, view: graphview.View, words: str) -> None:
+    """The **canvas** chip and its menu: what the canvas draws (expand all,
+    the two filters, output behind and its slider, tint cables, gpu cost) and
+    the counts. Lit while a mark is on it (tint, gpu cost): those two are off
+    by default and change every cable or node. The menu stays open through
+    its clicks."""
+    hit = ui.lit_chip(f"{words}##graph.canvas", st["tint"] or st["cost"])
+    full = canvas_words(st)
+    if not _drop_menu(CANVAS_POPUP, hit, CANVAS_TIP if words == full else f"{full}\n{CANVAS_TIP}"):
+        return
+    any_open = bool(st["open"])
+    if ui.chip("collapse all##graph" if any_open else "expand all##graph"):
+        expand_all(st, view, not any_open)
+    if imgui.is_item_hovered():
+        ui.tooltip(ALL_TIP)
     hit = ui.chip_group(["patched only##graph", "patch only##graph"],
                         [st["patched_only"], st["patch_only"]], [PATCHED_TIP, PATCH_ONLY_TIP])
     if hit == 0:
@@ -1598,42 +1700,21 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
         st["flip"].clear()
     elif hit == 1:
         st["patch_only"] = not st["patch_only"]
-    imgui.same_line()
     _backdrop_chips(panel, st)
-    label = beside_chip(selected, width, st["beside"])
-    if label is not None:
-        imgui.same_line()
-        if ui.chip(f"{label}##graph"):
-            st["beside"] = not st["beside"]
-        if imgui.is_item_hovered():
-            ui.tooltip(BESIDE_TIP)
-    _wants_chip(panel)                      # plan 40 T4: N devices missing
     _tint_chip(st)                          # plan 37 C2 (D3)
-    # plan 84: last among the chips — on the area chips' row when this one
-    # has no room for it (a narrow page), so the head grows no row
-    cost_later = not ui.beside(ui.chip_w(COST_LABEL))
-    if not cost_later:
-        _cost_chip(st)
-    # the counts after the chips, cut to what is left of the line
-    imgui.same_line()
-    line = head_line(st, view)
-    imgui.text_disabled(ui.fit_text(line, imgui.get_content_region_avail().x))
+    _cost_chip(st)                          # plan 84
+    imgui.text_disabled(head_line(st, view))
     if imgui.is_item_hovered():
-        ui.tooltip(line)
-    _area_chips(st)
-    if cost_later:
-        ui.beside(ui.chip_w(COST_LABEL))
-        _cost_chip(st)
-    if st["cost"]:                          # plan 84: the frame's total and its costliest
-        imgui.text(ui.fit_text(st.get("cost_line", ""), imgui.get_content_region_avail().x))
-    for want in window_wants(panel):       # plan 44 D3: a window the meta controller lacks
-        imgui.text_colored(ui.WARN, want)
-    if st["note"]:
-        imgui.text_colored(ui.WARN, st["note"])
-    elif st["said"]:                        # plan 28 N4: the last render edit
-        imgui.text_disabled(st["said"])
-    else:
-        imgui.text_disabled(EDIT_HINT)
+        ui.tooltip(EDIT_HINT)
+    imgui.end_popup()
+
+
+def _areas_menu(st: dict) -> None:
+    """The **areas** chip and its menu (`_area_chips`): a click frames the
+    canvas on an area and closes it."""
+    if _drop_menu(AREAS_POPUP, ui.chip(AREAS_LABEL), AREAS_TIP):
+        _area_chips(st)
+        imgui.end_popup()
 
 
 def panel_wants(panel) -> list:
@@ -1782,9 +1863,8 @@ def copy_on_air(panel) -> None:
 
 
 def _tint_chip(st: dict) -> None:
-    """The head's **pictures · tint cables** chip (plan 37 C2, D3): off by
+    """The canvas menu's **pictures · tint cables** chip (plan 37 C2, D3): off by
     default; lit, the picture cables are tinted (`tint`)."""
-    imgui.same_line()
     if ui.lit_chip(TINT_LABEL, st["tint"]):
         st["tint"] = not st["tint"]
     if imgui.is_item_hovered():
@@ -1794,10 +1874,9 @@ def _tint_chip(st: dict) -> None:
 # ---------------------------------------------------------------- plan 84: gpu cost at a glance
 
 def _cost_chip(st: dict) -> None:
-    """The head's **gpu cost** chip (plan 84): off by default; lit, every
-    render node is marked by its GPU time (`_costs`, `_cost_style`, `_cost_badge`).
-    Placed by the caller (`_head`: beside the tint chip, else on the area
-    chips' row)."""
+    """The canvas menu's **gpu cost** chip (plan 84), its last: off by default;
+    lit, every render node is marked by its GPU time (`_costs`, `_cost_style`,
+    `_cost_badge`)."""
     if ui.lit_chip(COST_LABEL, st["cost"]):
         st["cost"] = not st["cost"]
     if imgui.is_item_hovered():
@@ -2059,7 +2138,7 @@ def cable_tints(st: dict, view: graphview.View) -> dict[str, imgui.ImVec4]:
 
 
 def _backdrop_chips(panel, st: dict) -> None:
-    """The head's **output behind** chip and, while it is lit, its alpha."""
+    """The canvas menu's **output behind** chip and, while it is lit, its alpha."""
     if ui.lit_chip("output behind##graph", st["backdrop"]):
         st["backdrop"] = not st["backdrop"]
     if imgui.is_item_hovered():
@@ -2161,32 +2240,15 @@ def _inset(mon, dl, origin, avail, deck: str) -> None:
 
 
 def _area_chips(st: dict) -> None:
-    """The head's area chips (review round 1): CONTROLLERS · AUDIO ·
+    """The areas menu's rows (review round 1): CONTROLLERS · AUDIO ·
     MODULATION · MEDIA · SCENE · LOOK-BACK · EFFECTS · OUTPUTS (plan 35 G),
-    wrapped to the page; a click frames
-    the canvas on that area (`frame_area`, next frame)."""
-    if ui_kit.ready():
-        # on the kit one segmented bar — the areas joined, a line of them at a
-        # time where the page wraps them — rather than eight loose buttons
-        areas, labels = list(graphview.AREAS), [f"{graphview.TITLES[a]}##area" for a in graphview.AREAS]
-        while areas:
-            room, n = imgui.get_content_region_avail().x, 0
-            while n < len(areas) and ui.chip_w(*labels[:n + 1]) - imgui.get_style().item_spacing.x * n <= room:
-                n += 1
-            n = max(n, 1)
-            hit = ui.chip_group(labels[:n], None, [AREA_TIP] * n)
-            if hit is not None:
-                st["frame_area"] = areas[hit]
-            areas, labels = areas[n:], labels[n:]
-        return
-    for i, a in enumerate(graphview.AREAS):
-        label = f"{graphview.TITLES[a]}##area"
-        if i:
-            imgui.same_line()
-            if imgui.get_content_region_avail().x < ui.chip_w(label):
-                imgui.new_line()
-        if ui.chip(label):
+    one under another; a click frames the canvas on that area
+    (`frame_area`, next frame)."""
+    w = max(ui.chip_w(graphview.TITLES[a]) for a in graphview.AREAS)
+    for a in graphview.AREAS:
+        if ui.chip(f"{graphview.TITLES[a]}##area", imgui.ImVec2(w, 0)):
             st["frame_area"] = a
+            imgui.close_current_popup()
         if imgui.is_item_hovered():
             ui.tooltip(AREA_TIP)
 
@@ -2336,11 +2398,12 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     # (a collapsed node's port) is never a drop target 300 units off the wire
     st["pin_xy"] = {}
     st["cost_drawn"] = set()
+    _set_detail(st, view)               # 2026-11-24: how much of each node is drawn
     _note_hot(st)                       # whose widgets are drawn (`hot`)
     for n in view.nodes:
         if drawn_node(st, n):
             with _cost_style(st, n):    # plan 84: nothing pushed with the chip off
-                _node(st, n, drawn)
+                _node_shown(st, n, drawn)
             if st["cost"]:
                 st["cost_drawn"].add(n.id)
     _back_pins(st, view, drawn)         # 2026-11-19: the slings' ends
@@ -2513,7 +2576,7 @@ def _title_click(st: dict) -> None:
 
 def area_nodes(st: dict, view: graphview.View, area: str) -> list[str]:
     """The canvas ids an area's framing selects: its drawn nodes and its
-    idle line (the head's area chips, a click on its title)."""
+    idle line (the head's areas menu, a click on its title)."""
     ids = [n.id for n in view.nodes if n.area == area and drawn_node(st, n)]
     lay = st.get("auto")
     if lay and area in lay[1].lines:
@@ -2733,6 +2796,8 @@ def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[
             dl.add_circle(c, PIN / 2, col, 0, 1.5)
     ed.end_pin()
     drawn.add(pin)
+    if st.get("rec") is not None and (pin in st["wired"] or graphview.is_stub(pin)):  # `_node_shown`
+        st["rec"].pins.append(((p0.x, p0.y), pin, kind, port, stub, room, grow))
     st["pin_xy"][pin] = (p0.x + PIN / 2, p0.y + PIN / 2)     # canvas units, inside the editor
 
 
@@ -2883,6 +2948,112 @@ def _ends(st: dict, view: graphview.View, wid: str, a: str, b: str, drawn: set[s
     st["curves"][wid] = graphview.cubic(p0, (p0[0] + ox * so, p0[1] + oy * so),
                                         (p3[0] + ix * si, p3[1] + iy * si), p3)
     return po, pi
+
+
+# ---- how much of a node is drawn (2026-11-24) ----
+#
+# A node drawn whole leaves a note of its size and where its pins and its
+# picture sat (`Sketch`). While its words are too small to read (`far`), or
+# it is off the canvas, it is drawn from that note: the same node, of the
+# same size, with the same pins at the same places — so every cable, the
+# layout, a fit and a region read what they would have — and nothing else
+# but its title and its picture. A node with no note of what it is now
+# (a new view, expanded, a group folded) is drawn whole that frame.
+
+FAR_PX = 6.0            # body text under this many screen px: zoomed out
+NEAR_PX = 6.6           # …and at this many or more: whole again
+TITLE_PX = 3.0          # a title under this many screen px is left out (an error's never)
+
+
+@dataclasses.dataclass
+class Sketch:
+    """What a node drawn whole was: `key` (`_sketch_key`), its size, and
+    from its top left its picture's corner and the pins a cable can end on
+    (its patched ports' and its two stubs)."""
+
+    key: tuple
+    size: tuple[float, float] = (0.0, 0.0)
+    thumb: tuple[float, float] | None = None
+    pins: list = dataclasses.field(default_factory=list)
+
+
+def is_far(was: bool, zoom: float, text: float, held: bool = False) -> bool:
+    """Are the canvas's words (`text` units tall, `zoom` canvas units a
+    screen px) too small to read? `was` holds between `NEAR_PX` and
+    `FAR_PX`, and while `held` (a press: a drag never loses its pin)."""
+    if held:
+        return was
+    return text / max(zoom, 1e-3) < (NEAR_PX if was else FAR_PX)
+
+
+def _set_detail(st: dict, view: graphview.View) -> None:
+    st["far"] = is_far(st.get("far", False), st["zoom"], imgui.get_font_size(),
+                       imgui.is_mouse_down(0))
+    st["fold_key"] = frozenset(st["folds"])
+    if st.get("sketch_view") is not view or "wired" not in st:     # its nodes and ports are other objects
+        st["sketch_view"], st["sketches"] = view, {}
+        # a pin a cable ends on: `VPort.patched` is the row's, any of its pins
+        st["wired"] = {e for c in view.cables for e in (c.src_port, c.dst_port)}
+
+
+def _sketch_key(st: dict, n: graphview.VNode) -> tuple:
+    """What a node's size and its pins' places follow from, beside the view."""
+    return (n.id in st["open"], n.id in st["flip"], st["patched_only"], st["fold_key"],
+            n.grey, n.faint, n.unfed, bool(getattr(n.ref, "said", "")),
+            imgui.get_font_size())
+
+
+def _node_shown(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
+    """Node `n`, whole — or, zoomed out or off the canvas, from its `Sketch`."""
+    key = _sketch_key(st, n)
+    sk = st["sketches"].get(n.id)
+    k = ed.NodeId(_id(st, "n:" + n.id))
+    if sk is not None and sk.key == key:
+        p = ed.get_node_position(k)
+        seen = on_screen(st["seen_rect"], (p.x, p.y), sk.size)
+        if st["far"] or not seen:
+            _node_sketch(st, n, sk, drawn, seen)
+            return
+        _node(st, n, drawn)
+        return
+    sk = st["rec"] = Sketch(key)
+    try:
+        _node(st, n, drawn)
+    finally:
+        st["rec"] = None
+    p, size = ed.get_node_position(k), ed.get_node_size(k)
+    sk.size = (size.x, size.y)
+    sk.pins = [((x - p.x, y - p.y), *rest) for (x, y), *rest in sk.pins]
+    if sk.thumb is not None:
+        sk.thumb = (sk.thumb[0] - p.x, sk.thumb[1] - p.y)
+    st["sketches"][n.id] = sk
+
+
+def _node_sketch(st: dict, n: graphview.VNode, sk: Sketch, drawn: set[str], seen: bool) -> None:
+    """Node `n` from its `Sketch`: its pins, and while on the canvas
+    (`seen`) its title and its picture — an error's red title and a mask's
+    refusal (SM3) with them."""
+    pad = ed.get_style().node_padding           # (left, top, right, bottom)
+    ed.begin_node(ed.NodeId(_id(st, "n:" + n.id)))
+    at = imgui.get_cursor_screen_pos()
+    x, y = at.x - pad.x, at.y - pad.y
+    imgui.dummy(imgui.ImVec2(sk.size[0] - pad.x - pad.z, sk.size[1] - pad.y - pad.w))
+    for (dx, dy), pin, kind, port, stub, room, grow in sk.pins:
+        imgui.set_cursor_screen_pos(imgui.ImVec2(x + dx, y + dy))
+        _pin(st, pin, kind, port, stub, drawn, room=room, grow=grow)
+    if seen:
+        err = st.get("errors", {}).get(n.id)
+        if err or imgui.get_font_size() / st["zoom"] >= TITLE_PX:
+            col = ui.WARN if err else ui.FAINT if n.grey or not n.up or n.faint else ui.TEXT
+            stub = bool(sk.pins) and sk.pins[0][1] == graphview.stub_in(n.id)
+            room = PIN + imgui.get_style().item_spacing.x if stub else 0.0
+            imgui.get_window_draw_list().add_text(
+                imgui.ImVec2(at.x + room, at.y), ui.u32(col),
+                ui.fit_text(n.label, NODE_W - 40 - 2 * PIN))
+        if sk.thumb is not None:
+            imgui.set_cursor_screen_pos(imgui.ImVec2(x + sk.thumb[0], y + sk.thumb[1]))
+            _thumb(st, n)
+    ed.end_node()
 
 
 # past the node's content, its padding and a little over: under the pointer
@@ -4098,6 +4269,8 @@ def _thumb(st: dict, n: graphview.VNode) -> None:
     (`backdrop_rect`) at its shade; GL's rows, so drawn upside down in v
     as the backdrop is."""
     p0 = imgui.get_cursor_screen_pos()
+    if st.get("rec") is not None:               # `_node_shown`
+        st["rec"].thumb = (p0.x, p0.y)
     imgui.dummy(imgui.ImVec2(NODE_W, graphview.THUMB_H))
     hovered = imgui.is_item_hovered()
     if hovered:                                 # plan 37 C2: the hover gives details
@@ -4110,7 +4283,7 @@ def _thumb(st: dict, n: graphview.VNode) -> None:
         a, b = backdrop_rect((p0.x, p0.y), (NODE_W, graphview.THUMB_H), tuple(tex.size))
         dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
                      imgui.ImVec2(0, 1), imgui.ImVec2(1, 0), ui.u32(imgui.ImVec4(k, k, k, 1.0)))
-    if has_card(n):
+    if has_card(n) and not st.get("far"):       # (zoomed out: too small to read or click)
         _chip(st, n, p0, hovered)
     words = graphview.mask_words(n) if k < 1.0 else ""
     if words:                                   # SM3: no mask, and it says why, on the node
@@ -4849,6 +5022,9 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
             ui._micro("dials")
             panel._dials()
         return                                  # — the picture says what the port lines would
+    if ui_kinect.is_kinect_node(n):             # the Kinect's controls and telemetry (row 1170)
+        ui_kinect.body(panel, n.ref)
+        return
     if n.id == f"render:{rgraph.wired_hands_name(1)}":     # the hands node IS the hands page: where they are,
         ui_hands.body(panel, 1 / 60, strip=False)   # the pinches, the axes, calibration, the grip
         return

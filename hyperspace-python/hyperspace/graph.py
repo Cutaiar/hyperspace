@@ -144,6 +144,8 @@ from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix
 from .lookback import MAX_ECHOES
 from .outputs import View
 from .view import (
+    DELAY_BEATS,
+    DELAY_EVERY,
     MATTE_FEATHER,
     MATTE_FROM,
     RESIZE_ASPECTS,
@@ -3471,6 +3473,9 @@ class Frame:
     # `view.ResizeState`), read once by the renderer (`ViewState.resize`):
     # what `ResizeNode` crops and sizes by — a value, never a rebuild
     resizes: dict[str, Any] = field(default_factory=dict)
+    # plan 34 D: each delay's rate this frame (delay name → its
+    # `view.DelayState`), read once by the renderer (`ViewState.delay`)
+    delays: dict[str, Any] = field(default_factory=dict)
 
     @property
     def root(self) -> Frame:
@@ -3497,13 +3502,6 @@ class Frame:
         """Node `name`'s black is clear this frame (`keys`), its defaults
         while its knobs are not declared yet."""
         return self.keys.get(name) or _KEY_DEFAULT
-
-    @property
-    def delays(self) -> dict[str, Any]:
-        """Plan 90 (H1): each delay's depth and gap this frame (delay name → its
-        `view.DelayState`): the view state's (`ViewState.delays`, the
-        `delay[.n].*` params') — a value, never a rebuild."""
-        return getattr(self.root.s, "delays", None) or {}
 
     @property
     def cuts(self) -> dict[str, Any]:
@@ -4527,9 +4525,9 @@ class Delay(Node):
         return self._read(frame) is not None
 
     def values(self, frame: Frame):
-        """Plan 90 (H1): its depth and gap this frame (`Frame.delays`), else
-        the defaults (depth 1, every frame)."""
-        return frame.delays.get(self.name) or _DELAY_DEFAULT
+        """Its rate and (plan 90 H1) its depth this frame (`Frame.delays`),
+        else the defaults (every frame, depth 1)."""
+        return (getattr(frame.root, "delays", None) or {}).get(self.name) or _DELAY_DEFAULT
 
     def stack(self, frame: Frame) -> dict[str, Any] | None:
         """Plan 90 (H1): what a reader of its stack binds this frame — its kept
@@ -4539,9 +4537,8 @@ class Delay(Node):
         get = getattr(frame.r, "delay_stack", None)
         if get is None:
             return None
-        v = self.values(frame)
-        got = get(self.name).read(int(v.depth))
-        return None if got is None else {**got, "gap": float(v.gap)}
+        got = get(self.name).read(int(getattr(self.values(frame), "depth", 1)))
+        return got
 
     def run(self, frame: Frame) -> None:
         tex = self._read(frame)
@@ -4550,10 +4547,8 @@ class Delay(Node):
         pair = (getattr(frame.r, "_delays", None) or {}).get(self.name)
         st = getattr(pair, "stack", None)
         if st is not None:
-            v = self.values(frame)
-            every = "every frame" if v.gap <= 0 else f"every {v.gap:.3f} s"
-            self.said = st.error or (f"{self.said} · keeps {len(st.entries)} of "
-                                     f"{int(v.depth)}, {every}")
+            depth = int(getattr(self.values(frame), "depth", 1))
+            self.said = st.error or f"{self.said} · keeps {min(len(st.entries), depth)} of {depth}"
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         """Last frame's picture laid into `dst` by cover — or the ground
@@ -4583,6 +4578,43 @@ class Delay(Node):
                 frame.ctx.clear(0.0, 0.0, 0.0, 0.0)
             frame.data[key] = out
         return frame.data[key]
+
+
+# (the rate of a delay with none this frame: every frame, as a delay always was)
+_DELAY_DEFAULT = DelayState()
+
+
+def delay_due(pair: Any, st: DelayState, t: float, beat: float, epoch: int = 0) -> bool:
+    """Whether a delay takes its picture this frame (and books the next).
+    The first picture, and any after the pair holds nothing, is always taken.
+    `frames`: every Nth frame (N = 1: every frame, strict z⁻¹). `Hz`: a phase
+    advanced each frame by the time since the last × the rate *now* (so a
+    modulated rate speeds and slows it, never jumps it), a picture on each
+    whole cycle; above the frame rate is every frame. Tempo units: the cell
+    of the beat grid (beats ÷ the unit's beats) in the clock's `epoch` — a
+    downbeat placed (`Clock.trigger`) is a new grid, so its first frame takes
+    a picture — on the first frame inside each cell, so a tempo change never
+    stalls it."""
+    mode = DELAY_EVERY[min(max(int(st.every), 0), len(DELAY_EVERY) - 1)]
+    if mode == "frames":
+        n = max(int(st.frames), 1)
+        pair.since += 1
+        due = n <= 1 or not pair.holds_any or pair.since >= n
+        if due:
+            pair.since = 0
+        return due
+    if mode == "Hz":
+        last, pair.last_t = pair.last_t, t
+        if last is not None and t > last:
+            pair.phase += (t - last) * max(float(st.hz), 1e-3)
+        cell = math.floor(pair.phase)
+        due = not pair.holds_any or cell != pair.cell
+        pair.cell = cell
+        return due
+    cell = (epoch, math.floor(beat / DELAY_BEATS[mode]))
+    due = not pair.holds_any or cell != pair.cell
+    pair.cell = cell
+    return due
 
 
 class DelayWrite(Node):
@@ -4627,6 +4659,14 @@ class DelayWrite(Node):
         try:
             held = self.held(frame)
             pair = get(self.delay)
+            st = (getattr(frame.root, "delays", None) or {}).get(self.delay) or _DELAY_DEFAULT
+            clock = getattr(r, "tempo", None)
+            beat = clock.beat() if clock is not None else frame.t * 2.0
+            epoch = getattr(clock, "epoch", 0)
+            if not delay_due(pair, st, frame.t, beat, epoch):
+                pair.kept = True        # between two pictures: it keeps the one it has
+                self.said = "holding"
+                return
             fbo = pair.target(frame.ctx, held)
             fbo.viewport = (0, 0, *held)
             fbo.use()
@@ -4640,6 +4680,7 @@ class DelayWrite(Node):
                 with frame.timed(self.name):
                     src.paint(at, fbo)
                 pair.wrote = True
+                pair.holds_any = True
             self.said = ""
         except Exception as e:  # noqa: BLE001 — a delay must not take the frame down
             # (nothing written: next frame the delay reads nothing)
@@ -4893,8 +4934,6 @@ def _pick(values: tuple, i: Any) -> Any:
 
 # (the values of a resize with none this frame: read, never written)
 _RESIZE_DEFAULT = ResizeState()
-# (a delay's values with none this frame: depth 1, every frame — plan 34's z⁻¹)
-_DELAY_DEFAULT = DelayState()
 
 
 class ResizeNode(Node):

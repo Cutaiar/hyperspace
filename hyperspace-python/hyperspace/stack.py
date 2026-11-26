@@ -28,8 +28,10 @@ and a mix, in the reader (`fx.STACK_HEAD`).
 Time is the stack's own clock, in seconds, moved once a frame by the
 renderer's time (`tick`); a frame whose time did not move counts one frame
 at REF_HZ (as the look-back's ring, plan 14 WP6), so a test drawing at one
-fixed time still sees frames go by. A frame is kept every `gap` seconds of
-that clock (0: every frame), the same rule as the ring's `_due_now`.
+fixed time still sees frames go by, and a reader knows each kept frame's age.
+that clock. What it keeps is what the delay takes: every frame, or at the
+delay's own rate (plan 34 D, `delay[.n].every`: frames, Hz or the tempo),
+so a delay that takes a picture every 1/30 s keeps one every 1/30 s.
 """
 
 from __future__ import annotations
@@ -65,7 +67,6 @@ class DelayStack:
         self.clock = 0.0               # seconds (`tick`)
         self._t_last: float | None = None
         self.dt = 1.0 / REF_HZ         # the last tick's step
-        self._due: float | None = None # the clock of the next frame kept
         self.idle = 0                  # frames no reader has asked (`Renderer`)
         self.error = ""                # why it holds nothing (a budget, a driver)
 
@@ -82,21 +83,6 @@ class DelayStack:
             self._t_last = float(t)
         self.dt = dt
         self.clock += dt
-
-    def due(self, at: float, gap: float) -> bool:
-        """Whether the frame drawn at clock `at` is kept: one every `gap`
-        seconds, the first at once; a frame within half a frame of its due
-        time is on time, so a gap of N frames keeps every Nth at any rate."""
-        gap = max(float(gap), 0.0)
-        dt = self.dt
-        if self._due is None:
-            self._due = at
-        if at + dt / 2 < self._due:
-            return False
-        self._due += gap
-        if self._due <= at + dt / 2 - dt:       # fell behind (a stall): from now
-            self._due = at + gap
-        return True
 
     # ---- the frames ----
 
@@ -122,13 +108,11 @@ class DelayStack:
         return True
 
     def commit(self, ctx: moderngl.Context, src: moderngl.Framebuffer, size: tuple[int, int],
-               depth: int, gap: float) -> bool:
-        """The frame the pair just committed (`src`, its read side at `size`),
-        drawn one frame ago, into the stack if it is due. True if kept."""
+               depth: int) -> bool:
+        """The picture the pair just took (`src`, its read side at `size`),
+        drawn one frame ago, onto the stack. True if kept."""
         at = self.clock - self.dt
         if not self.ensure(ctx, size, depth) or self.tex is None:
-            return False
-        if not self.due(at, gap):
             return False
         used = {layer for layer, _ in self.entries}
         if len(self.entries) >= self.depth:
@@ -143,7 +127,6 @@ class DelayStack:
     def reset(self) -> None:
         """Hold nothing (a load, R19): the next commit starts it again."""
         self.entries = []
-        self._due = None
 
     def release(self) -> None:
         if self.tex is not None:
@@ -155,7 +138,6 @@ class DelayStack:
         self.size = (0, 0)
         self.depth = 0
         self.entries = []
-        self._due = None
 
     # ---- what a reader binds ----
 

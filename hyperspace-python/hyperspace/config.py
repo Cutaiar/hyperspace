@@ -204,6 +204,8 @@ like the rename above. The SYSTEM page shows both.
                             #   [[devices]]  role = "room"  kind = "kinect"
                             #                near = 0.5  far = 4.5  centre = 2.0
                             #                step = 2  mirror = true  colors = false
+                            #                motor = true  (false leaves the tilt, LED and
+                            #                accelerometer part unopened)
 
     [gamepad]               # a game controller (gamepad.py, pads/): an Xbox pad through
                             # GLFW, a DualSense / DualSense Edge over USB or Bluetooth,

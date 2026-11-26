@@ -5,7 +5,7 @@
 // @takes stack stack
 // @tip A frame from the past: wire a delay into its stack, and it shows the frame At
 // @tip frames back (0 the newest the delay keeps; the delay's Depth is how many it keeps
-// @tip and its Gap how far apart). A fraction blends the two either side, unless Between
+// @tip and its rate how far apart). A fraction blends the two either side, unless Between
 // @tip says nearest. At takes a field like any knob: a field across the frame shows each
 // @tip pixel a different moment — a slit-scan, a time displace.
 

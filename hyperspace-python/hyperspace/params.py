@@ -102,6 +102,10 @@ from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
 from .tapers import clamp as _clamp
 from .view import (
+    DELAY_DEPTH,
+    DELAY_EVERY,
+    DELAY_FRAMES_MAX,
+    DELAY_HZ,
     KEY_MEASURES,
     KEY_RAMPS,
     MATTE_FEATHER,
@@ -114,8 +118,6 @@ from .view import (
     SEGMENT_LEARN,
     SEGMENT_MODES,
     SEGMENT_QUALITY,
-    DELAY_DEPTH,
-    DELAY_GAP,
     CutState,
     DelayState,
     KeyState,
@@ -154,6 +156,8 @@ F_KEYS = 8
 # loadable patch's, `seq.run` and the playhead are not persisted at all)
 # `switch` (plan 33 S): each switch node's `select`, the loadable patch's, declared
 # while its graph holds the switch (declare_switches)
+# `delay` (plan 34 D): each delay node's rate (every, frames, hz), the loadable
+# patch's, declared while its graph holds the entry (declare_delays)
 # `resize` (plan 34 Z): each resize node's size, aspect, fit, filter and
 # crop, the loadable patch's, declared while its graph holds the entry (declare_resizes)
 # `matte` (plan 39 T2): each matte node's source, key, edge and feather, the
@@ -180,7 +184,7 @@ F_KEYS = 8
 # changes what its own `axis:L.*` / `axis:R.*` routes do. The pad's feel (`desk.pad.*`)
 # is about the hardware, and stays the meta controller's
 PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
-                      "backdrop", "switch", "resize", "matte", "cut", "segment", "delay", "key", "ghost",
+                      "backdrop", "switch", "resize", "matte", "cut", "segment", "key", "delay", "ghost",
                       "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "mod")
 # `grip` (plan 60, the hand rig): a patch's own, each deck's — the owner, 2026-11-10,
 # testing it: "this really should be per preset". The on-air deck's acts on the one world
@@ -952,6 +956,8 @@ class Registry:
     # this deck's dial readings, {"L": "petal", "R": "blend"} (`declare_dial`); None: a
     # registry with no dial
     dial_modes: dict[str, str] | None = None
+    # plan 34 D: each delay's rate, `ViewState.delay`'s dict (`build_registry`)
+    delay_state: dict[str, Any]
 
     @staticmethod
     def group_word(group: str) -> str:
@@ -1059,6 +1065,11 @@ class Registry:
 
     def get(self, pid: str) -> Param | None:
         return self._p.get(pid)
+
+    def missing(self, ids: Iterable[str]) -> list[str]:
+        """Those of `ids` no param here has, in their order."""
+        own = self._p
+        return [pid for pid in ids if pid not in own]
 
     def ids(self) -> list[str]:
         return list(self._p)
@@ -1732,6 +1743,93 @@ def declare_switches(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 34 D: the delays' rate ----
+DELAY_GROUP = "delay"
+# (plan 90 H1: `depth`, appended — how many of its pictures it keeps for a stack reader)
+_DELAY_KEYS = ("every", "frames", "hz", "depth")
+_DELAY_ID = re.compile(r"delay(?:\.(?:[2-9]|[1-9][0-9]+))?\.(every|frames|hz|depth)")
+
+
+def delay_ids(name: str) -> list[str]:
+    """Delay node `name`'s params (`delay.2` → `delay.2.every` …), in order."""
+    return [f"{name}.{k}" for k in _DELAY_KEYS]
+
+
+def is_delay_id(pid: str) -> bool:
+    """Is `pid` one of a delay's values — one that exists only while a
+    loadable patch's graph holds that delay? A load sorts such ids against
+    the graph it lands, as it does a resize's."""
+    return bool(_DELAY_ID.fullmatch(pid))
+
+
+def _delay_state(r: Registry) -> dict[str, DelayState]:
+    """The states the delay params write, delay name → `DelayState`: the
+    view state's (`ViewState.delay`), kept by `build_registry` as
+    `r.delay_state`; a dict of the registry's own for one built without a view."""
+    state = getattr(r, "delay_state", None)
+    if not isinstance(state, dict):
+        state = r.delay_state = {}
+    return state
+
+
+_DELAY_TIPS = {
+    "every": "How often {name} takes its picture: every so many frames, so many times a "
+             "second (Hz), or on the tempo — a sixteenth, an eighth, a quarter, a half, "
+             "a bar, two bars, four bars. Between two it holds the last one.",
+    "frames": "The frames between two pictures {name} takes, when it counts frames: 1 is "
+              "every frame (last frame's picture), 3 every third, 5 every fifth — a "
+              "coarser, more diffused look-back.",
+    "hz": "The pictures a second {name} takes, when it runs in Hz, whatever the frame rate.",
+    "depth": "How many of the pictures {name} takes it keeps, newest first, for what reads "
+             "its stack — an echo (Read) or a trail (Trail). 1 is the one it shows. With "
+             "its rate, how far back they reach.",
+}
+
+
+def declare_delays(r: Registry, names: Iterable[str]) -> list[str]:
+    """The delays' params (plan 34 D), as `declare_resizes` does the resizes':
+    for each delay `names` holds, `every` (an enum over `DELAY_EVERY`),
+    `frames` (1–`DELAY_FRAMES_MAX`), `hz` and (plan 90 H1) `depth` — group `delay` (a patch group:
+    the loadable patch's), over a `DelayState` made when first declared and
+    kept while the name stays; those of every delay no longer named dropped,
+    with their states. Returns the ids that appeared or went."""
+    state = _delay_state(r)
+    want = {n: delay_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == DELAY_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        if st is None:
+            st = state[name] = DelayState()
+        for pid, key in zip(ids, _DELAY_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _DELAY_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key == "every":
+                r.enum(pid, label, *got, list(DELAY_EVERY), group=DELAY_GROUP, tip=tip)
+            elif key == "frames":
+                r.continuous(pid, label, *got, lo=1, hi=DELAY_FRAMES_MAX, integer=True,
+                             fmt=lambda v: f"{int(v)}", group=DELAY_GROUP, tip=tip)
+            elif key == "depth":
+                # (plan 90 H1: modulatable — a stack only grows, `DelayStack.ensure`,
+                # so a depth driven down keeps what it holds)
+                r.continuous(pid, label, *got, lo=DELAY_DEPTH[0], hi=DELAY_DEPTH[1],
+                             integer=True, fmt=lambda v: f"{int(v)}", group=DELAY_GROUP,
+                             tip=tip)
+            else:
+                r.continuous(pid, label, *got, lo=DELAY_HZ[0], hi=DELAY_HZ[1],
+                             fmt=lambda v: f"{v:.1f} Hz", group=DELAY_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
 # ---- plan 34 Z: the resizes' values ----
 RESIZE_GROUP = "resize"
 _RESIZE_KEYS = ("size", "aspect", "fit", "filter", "crop_x", "crop_y", "crop_w", "crop_h")
@@ -1973,79 +2071,6 @@ def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
                 r.toggle(pid, label, *got, group=CUT_GROUP, tip=tip)
             else:
                 r.continuous(pid, label, *got, lo=0.0, hi=1.0, group=CUT_GROUP, tip=tip)
-            changed.append(pid)
-    return changed
-
-
-# ---- plan 90 (H1): the delays' depth and gap ----
-DELAY_GROUP = "delay"
-_DELAY_KEYS = ("depth", "gap")
-_DELAY_ID = re.compile(r"delay(?:\.(?:[2-9]|[1-9][0-9]+))?\.(" + "|".join(_DELAY_KEYS) + ")")
-
-
-def delay_ids(name: str) -> list[str]:
-    """Delay node `name`'s params (`delay.2` → `delay.2.depth`, `delay.2.gap`)."""
-    return [f"{name}.{k}" for k in _DELAY_KEYS]
-
-
-def is_delay_id(pid: str) -> bool:
-    """Is `pid` one of a delay's values — one that exists only while a loadable
-    patch's graph holds that delay (plan 90 H1)? Sorted against the graph a load
-    lands, as a cut's are."""
-    return bool(_DELAY_ID.fullmatch(pid))
-
-
-def _delay_state(r: Registry) -> dict[str, DelayState]:
-    """The states the delay params write, delay name → `DelayState`: the view
-    state's (`ViewState.delays`), kept by `build_registry` as `r.delay_state`;
-    a dict of the registry's own for one built without a view (as `_cut_state`)."""
-    state = getattr(r, "delay_state", None)
-    if not isinstance(state, dict):
-        state = vars(r)["delay_state"] = {}
-    return state
-
-
-_DELAY_TIPS = {
-    "depth": "How many past frames {name} keeps: 1 is last frame's picture alone; more "
-             "make a stack an echo (Read) or a trail (Trail) reads. Depth × gap is how "
-             "far back it reaches.",
-    "gap": "Seconds between the frames {name} keeps: 0 keeps every frame. A longer gap "
-           "reaches further back with the same depth.",
-}
-
-
-def declare_delays(r: Registry, names: Iterable[str]) -> list[str]:
-    """The delays' params (plan 90 H1), as `declare_cuts` does the cuts': for
-    each delay `names` holds, `depth` (1 … 64, whole) and `gap` (seconds) —
-    group `delay` (a patch group: the loadable patch's), both modulatable (a
-    stack only grows, `DelayStack.ensure`, so a depth driven down keeps it) — over a `DelayState` made when first declared and kept
-    while the name stays; those of every delay no longer named dropped, with
-    their states. Returns the ids that appeared or went."""
-    state = _delay_state(r)
-    want = {n: delay_ids(n) for n in names}
-    keep = {pid for ids in want.values() for pid in ids}
-    changed: list[str] = []
-    for p in [p for p in r if p.group == DELAY_GROUP and p.id not in keep]:
-        r.remove(p.id)
-        changed.append(p.id)
-    for name in [n for n in state if n not in want]:
-        del state[name]
-    for name, ids in want.items():
-        st = state.get(name)
-        if st is None:
-            st = state[name] = DelayState()
-        for pid, key in zip(ids, _DELAY_KEYS, strict=True):
-            if pid in r:
-                continue
-            label = f"{name} {key}"
-            tip = _DELAY_TIPS[key].format(name=name)
-            got = _attr(st, key)
-            if key == "depth":
-                r.continuous(pid, label, *got, lo=DELAY_DEPTH[0], hi=DELAY_DEPTH[1],
-                             integer=True, fmt=lambda v: f"{int(v)}", group=DELAY_GROUP, tip=tip)
-            else:
-                r.continuous(pid, label, *got, lo=DELAY_GAP[0], hi=DELAY_GAP[1],
-                             fmt=lambda v: f"{v:.3f} s", group=DELAY_GROUP, tip=tip)
             changed.append(pid)
     return changed
 
@@ -2640,6 +2665,15 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
              tip="While held, whatever the performers are doing to the look is written "
                  "into its values; let go and the look stays where they left it. One undo "
                  "step per hold.")
+    # plan 34 D: the delays' rate likewise (`ViewState.delay`)
+    delays = getattr(view, "delay", None)
+    if not isinstance(delays, dict):
+        delays = {}
+        try:
+            view.delay = delays
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.delay_state = delays
     # plan 34 Z: the resizes' values likewise (`ViewState.resize`)
     sizes = getattr(view, "resize", None)
     if not isinstance(sizes, dict):
@@ -2676,15 +2710,6 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.cut_state = cuts
-    # plan 90 (H1): the delays' depth and gap likewise (`ViewState.delays`)
-    delays = getattr(view, "delays", None)
-    if not isinstance(delays, dict):
-        delays = {}
-        try:
-            view.delays = delays
-        except AttributeError:            # (a view without the field: the registry's own)
-            pass
-    vars(r)["delay_state"] = delays       # (as `_key_state`)
     # plan 39 T4: the segments' values likewise (`ViewState.segments`)
     segments = getattr(view, "segments", None)
     if not isinstance(segments, dict):

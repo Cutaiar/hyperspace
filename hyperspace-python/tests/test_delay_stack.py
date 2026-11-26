@@ -2,7 +2,8 @@
 and Read and Trail — effect files that take a stack — read it.
 
 The picture a delay makes stays last frame's (plan 34's z⁻¹, byte for byte);
-its Depth and Gap say what it keeps for a reader. A stack port takes a delay
+its Depth says how many of the pictures it takes (at its rate, plan 34 D)
+it keeps for a reader. A stack port takes a delay
 and nothing else, in words. Drawn through the real renderer: a Colour
 generator whose hue moves each frame, into a delay, read back."""
 
@@ -40,7 +41,7 @@ def _spec(section):
     return G.read_graph(section, effects=set(FxState().specs))
 
 
-def _rig(ctx, section, depth=4, gap=0.0, values=None):
+def _rig(ctx, section, depth=4, frames=1, values=None):
     from hyperspace.render import Renderer
     from hyperspace.view import DelayState
 
@@ -53,7 +54,7 @@ def _rig(ctx, section, depth=4, gap=0.0, values=None):
     for name, v in (values or {}).items():
         r.fx.state.values[name].update({"on": True, **v})
     s = _state()
-    s.delays["delay"] = DelayState(depth=depth, gap=gap)
+    s.delay["delay"] = DelayState(depth=depth, frames=frames)
     return r, s
 
 
@@ -156,9 +157,10 @@ def test_a_fraction_blends_the_two_frames_either_side_unless_nearest(ctx):
         np.testing.assert_allclose(got[-1][0], want, atol=3)
 
 
-def test_a_gap_keeps_every_nth_frame(ctx):
-    # a gap of two frames at 60 Hz: the frames kept are every other one
-    r, s = _rig(ctx, READ, depth=4, gap=2 / 60, values={"read": {"at": 1.0}})
+def test_the_stack_keeps_the_pictures_the_delay_takes_at_its_rate(ctx):
+    # the delay's own rate (plan 34 D): every second frame — the stack keeps
+    # those, so one step back is two frames back
+    r, s = _rig(ctx, READ, depth=4, frames=2, values={"read": {"at": 1.0}})
     got = [_draw(ctx, r, s, h, t=1.0 + i / 60) for i, h in enumerate(HUES)]
     kept = [HUES[i] for i in range(0, len(HUES) - 1, 2)]       # 0, 2, 4 of 0 … 4
     np.testing.assert_allclose(got[-1][0], _hue_rgb(kept[-2]), atol=2)
@@ -210,11 +212,11 @@ def test_a_depth_driven_down_keeps_what_the_stack_holds(ctx):
         _draw(ctx, r, s, h, t=1.0 + i / 60)
     st = r.delay_stack("delay")
     tex = st.tex
-    s.delays["delay"].depth = 2
+    s.delay["delay"].depth = 2
     got = _draw(ctx, r, s, HUES[5], t=1.0 + 5 / 60)
     assert st.tex is tex and len(st.entries) == 4
     np.testing.assert_allclose(got[0], _hue_rgb(HUES[3]), atol=2)     # at 3 → its 2nd newest
-    s.delays["delay"].depth = 8
+    s.delay["delay"].depth = 8
     _draw(ctx, r, s, HUES[0], t=1.0 + 6 / 60)
     assert st.tex is not tex and len(st.entries) == 1
 

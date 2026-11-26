@@ -846,8 +846,19 @@ class DelayPair:
         self.holds = False
         self.wrote = False
         self.idle = 0
-        # plan 90 (H1): the frames a reader keeps of it (`stack.DelayStack`),
-        # made on a reader's first ask (`Renderer.delay_stack`), else None
+        # the delay's rate (`graph.delay_due`): `kept` — the write skipped
+        # this frame, so the read side stays as it is; `holds_any` — a picture
+        # has been taken; `since` — frames since one; `cell` — the clock grid
+        # cell of the last
+        self.kept = False
+        self.holds_any = False
+        self.since = 0
+        self.cell: Any = None
+        self.phase = 0.0                # Hz: cycles run, advanced by dt × the rate now
+        self.last_t: float | None = None
+        # plan 90 (H1): the pictures it took, kept for a reader of its stack
+        # (`stack.DelayStack`), made on a reader's first ask
+        # (`Renderer.delay_stack`), else None
         self.stack = None
 
     def target(self, ctx: moderngl.Context, size: tuple[int, int]) -> moderngl.Framebuffer:
@@ -875,9 +886,12 @@ class DelayPair:
         if self.wrote:
             self.read, self.write = self.write, self.read
             self.holds = True
+        elif self.kept and self.holds:
+            pass                        # a frame between two pictures: still holds the last
         else:
             self.holds = False
-        self.wrote = False
+            self.holds_any = False      # (an input that read nothing: the next frame takes afresh)
+        self.wrote = self.kept = False
 
     @staticmethod
     def _free(side) -> None:
@@ -889,7 +903,9 @@ class DelayPair:
         self._free(self.read)
         self._free(self.write)
         self.read = self.write = None
-        self.holds = self.wrote = False
+        self.holds = self.wrote = self.kept = self.holds_any = False
+        self.cell = self.last_t = None
+        self.phase = 0.0
         stack = getattr(self, "stack", None)
         if stack is not None:
             stack.release()
@@ -1334,6 +1350,9 @@ def unwired_through(frame: Frame, name: str, pulled: frozenset[str] | None = Non
 
 
 class Renderer:
+    # plan 34 D: the one tempo clock (`tempo.Clock`), set by the app; None headless
+    tempo: Any = None
+
     def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None,
                  fx: FxState | None = None, ghost: GhostState | None = None):
         self.ctx = ctx
@@ -2022,11 +2041,13 @@ class Renderer:
         selects = dict(getattr(s, "switch", None) or {})
         # plan 34 Z: each resize's values likewise (`ViewState.resize`)
         resizes = dict(getattr(s, "resize", None) or {})
+        # plan 34 D: each delay's rate likewise (`ViewState.delay`)
+        delays = dict(getattr(s, "delay", None) or {})
         samples = getattr(first, "samples", None)   # (plan 44 D4: a deck drawn for a window)
         frame = Frame(self, ctx, s, w, h, dpr, t, views, size,
                       samples if samples is not None else _samples_of(ctx, target),
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
-                      stats=stats, selects=selects, resizes=resizes)
+                      stats=stats, selects=selects, resizes=resizes, delays=delays)
         timer = self._pass_timer()
         # plan 84: what each node runs this frame, only while GRAPH's **gpu
         # cost** chip asks (`gpu_watch`, set by the page each frame it is lit
@@ -2246,7 +2267,8 @@ class Renderer:
 
     def _thumbnails(self) -> None:
         """The end of a frame (`_for_the_panel`): each node the GRAPH page
-        wanted since the last frame (`PreviewTextures.take`) copied into its
+        wanted and whose beat has come (`PreviewTextures.take`: `THUMB_HZ` a
+        second each, spread over the frames) copied into its
         thumbnail from this frame's picture of it (`thumb_source`), then the
         names not wanted for a second dropped. Nothing wanted, nothing done:
         a closed page costs nothing. A painted node is painted again here
@@ -2267,6 +2289,9 @@ class Renderer:
             th = self._thumbs()
         wanted = th.take()
         th.begin_frame()
+        if frame is None:               # (a frame that failed made nothing)
+            for name, how in wanted.items():
+                th.tried(name, how)
         # the frames `_thumb_gain` counts between its measures: one a frame
         self._thumb_frames = self.__dict__.get("_thumb_frames", 0) + 1
         if wanted and frame is not None:
@@ -2279,10 +2304,14 @@ class Renderer:
             saved = {k: list(v) if isinstance(v, list) else v for k, v in frame.stats.items()}
             try:
                 pulled = frame.graph.pulled(frame) if frame.graph is not None else None
-                wanted = self._unwired_budget(wanted)
+                within = self._unwired_budget(wanted)
+                for name in wanted.keys() - within.keys():
+                    th.defer(name, wanted[name])
+                wanted = within
                 # (masks last: one a picture's repaint just made is free to show)
                 for name, how in sorted(wanted.items(), key=lambda kv: kv[1] == "mask"):
                     held = len(frame.data)
+                    th.tried(name, how)
                     try:
                         src = thumb_source(frame, name, how, pulled)
                         flip = (how == "mask" and src is not None
@@ -2950,6 +2979,11 @@ class Renderer:
         got = pairs.get(name)
         if got is None:
             got = pairs[name] = DelayPair()
+        elif not hasattr(got, "phase"):
+            # a pair kept across a hot reload from before the delay's rate: the
+            # fields it lacks, at their first-frame values (it takes afresh)
+            got.kept = got.holds_any = False
+            got.since, got.cell, got.phase, got.last_t = 0, None, 0.0, None
         return got
 
     def segmenter(self, name: str):
@@ -3061,8 +3095,8 @@ class Renderer:
     def _turn_stack(self, name: str, pair: DelayPair, committed: bool, reset: bool,
                     t: float | None) -> None:
         """Plan 90 (H1): a delay's stack at the turn — its clock moves; the
-        frame its pair just committed is kept (`DelayStack.commit`) at the
-        depth and gap its knobs say (`ViewState.delays`); a load forgets it
+        picture its pair just took (at the delay's own rate, `graph.delay_due`)
+        is kept (`DelayStack.commit`) at its depth (`ViewState.delay`); a load forgets it
         (R19). One no reader asked for in `SIZED_KEEP_FRAMES` is released.
         Never raises: a stack that cannot be kept says why on `error`."""
         from .stack import BUDGET, OVER_BUDGET, frame_bytes
@@ -3080,9 +3114,8 @@ class Renderer:
             stack.reset()
         if not committed or pair.read is None:
             return
-        st = (getattr(getattr(self, "_view_now", None), "delays", None) or {}).get(name)
+        st = (getattr(getattr(self, "_view_now", None), "delay", None) or {}).get(name)
         depth = int(getattr(st, "depth", 1))
-        gap = float(getattr(st, "gap", 0.0))
         size = tuple(pair.read[0].size)
         others = sum(frame_bytes(p.stack.size) * p.stack.depth
                      for n, p in (getattr(self, "_delays", None) or {}).items()
@@ -3095,7 +3128,7 @@ class Renderer:
                                              mb=need / 2**20, budget=BUDGET / 2**20)
             return
         try:
-            stack.commit(self.ctx, pair.read[1], size, depth, gap)
+            stack.commit(self.ctx, pair.read[1], size, depth)
         except Exception as e:  # noqa: BLE001 — a stack must not take the frame down
             stack.error = f"{name}: {type(e).__name__}: {e}"[:160]
 
@@ -3122,7 +3155,7 @@ class Renderer:
             return
         if reset:
             for pair in pairs.values():
-                pair.wrote = False      # (so `turn` holds nothing this frame)
+                pair.wrote = pair.kept = pair.holds_any = False   # (so `turn` holds nothing this frame)
         held = {n.name for n in getattr(graph, "nodes", {}).values() if isinstance(n, Delay)}
         for name in list(pairs):
             pair = pairs[name]

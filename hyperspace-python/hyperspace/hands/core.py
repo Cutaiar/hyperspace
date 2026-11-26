@@ -171,6 +171,7 @@ from pathlib import Path
 
 import mido
 
+from ..writes import Observed, cell, getter
 from .room import (
     MODES,
     ROOM,
@@ -682,7 +683,7 @@ class Gate:
 
 
 @dataclass
-class AxisSettings:
+class AxisSettings(Observed):
     """What a setup says about one axis — every field is a registry param.
 
     The three shape fields that depend on the feature (`bipolar`,
@@ -726,7 +727,7 @@ class AxisSettings:
 
 
 @dataclass
-class HandSettings:
+class HandSettings(Observed):
     """A whole setup: the axes plus the global feel."""
 
     axes: list[AxisSettings] = field(default_factory=list)
@@ -781,19 +782,17 @@ def register(reg, settings: HandSettings) -> None:
         return
 
     def cont(pid, label, obj, attr, lo, hi, *, tip, fmt=None, integer=False, log=False):
-        reg.continuous(pid, label, lambda: getattr(obj, attr),
-                       lambda v: setattr(obj, attr, int(v) if integer else float(v)),
+        reg.continuous(pid, label, *cell(obj, attr, int if integer else float),
                        lo=lo, hi=hi, integer=integer, log=log, fmt=fmt, group=GROUP,
                        tip=tip, modulatable=False)
 
     def choice(pid, label, obj, attr, names, tip):
-        reg.enum(pid, label, lambda: names.index(getattr(obj, attr)),
+        reg.enum(pid, label, getter(obj, attr, names.index),
                  lambda i: setattr(obj, attr, names[int(i)]), names, group=GROUP, tip=tip,
                  modulatable=False)
 
     def flag(pid, label, obj, attr, tip):
-        reg.toggle(pid, label, lambda: getattr(obj, attr),
-                   lambda v: setattr(obj, attr, bool(v)), group=GROUP, tip=tip,
+        reg.toggle(pid, label, *cell(obj, attr, bool), group=GROUP, tip=tip,
                    modulatable=False)
 
     secs = lambda v: f"{v * 1000:.0f} ms" if v < 1 else f"{v:.2f} s"

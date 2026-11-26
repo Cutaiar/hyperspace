@@ -4,7 +4,7 @@
 // @takes image none
 // @takes stack stack
 // @tip The frames a delay keeps, laid one over another, oldest first, each fainter by its
-// @tip age: wire a delay into its stack (its Depth how many, its Gap how far apart — a
+// @tip age: wire a delay into its stack (its Depth how many, its rate how far apart — a
 // @tip tracer's copies). Level is the newest's strength, Fade the seconds in which a
 // @tip frame's strength halves. Lay: over (each covers the older where it is) or add.
 // @tip Lay it on a picture with a composite.

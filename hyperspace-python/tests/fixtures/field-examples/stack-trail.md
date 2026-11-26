@@ -10,8 +10,8 @@ scene ─▶ delay.image          delay ═(stack)═▶ trail.stack ─▶ comp
 scene ──────────────────────────────────────────────────────▶ composite.under ─▶ output.all
 ```
 
-- **Delay** (`delay.depth` 16, `delay.gap` 1/30 s): the frames the trail is made of —
-  its Depth is how many copies, its Gap how far apart.
+- **Delay** (`delay.depth` 16, `delay.every` Hz, `delay.hz` 30): the frames the trail is
+  made of — its Depth is how many copies, its rate how far apart.
 - **Trail** (`fx.trail.*`): **Level** the newest copy's strength; **Fade** the seconds
   in which a copy's strength halves; **Lay** add (they sum) or over (each covers the
   older where its alpha is — key the scene's black clear first, with a linear ramp, for
