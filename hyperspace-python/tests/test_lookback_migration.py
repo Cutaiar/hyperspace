@@ -80,6 +80,7 @@ def test_the_trail_is_public_parts():
     assert (v["matte.from"], v["matte.ramp"], v["matte.key"], v["matte.soft"]) == (
         3, 1, 0.125, 0.125)
     assert v["cut.amount"] == v["cut.2.amount"] == 0.3
+    assert v["cut.invert"] is v["cut.2.invert"] is True       # held back where it passes
     for gone in ("echo_mix", "fade", "echoes", "gap", "occlude"):
         assert f"dream.{gone}" not in v
     assert v["dream.darken"] == 0.25                          # the dream's still (Q26)
@@ -269,3 +270,25 @@ def test_every_saved_look_migrates_to_no_look_back(path):
     fwd = graphmigrate.forward(json.loads(path.read_text()), {})
     text = json.dumps(fwd.doc)
     assert "lookback" not in text and "dream.echo_mix" not in text, path
+
+
+def test_the_parts_draw_whatever_the_master_switch_said():
+    """The look-back drew under `fx.on` off and at any `fx.mix`; its parts are
+    effects, which those gate and scale — so they are on and at 1, and the
+    patch's other effects stay as they drew: off, or at their mix × the master's."""
+    nodes = [*COMP, {"kind": "effect", "file": "acid"}, {"kind": "effect", "file": "wave"}]
+    wires = [*TRAIL, {"from": "scene", "to": "acid.image"}, {"from": "acid", "to": "wave.image"},
+             {"from": "wave", "to": "output.2.image"}]
+    got, notes = graphmigrate.lookbacks(_doc(wires, {"fx.on": False, "fx.acid.on": True,
+                                                     "fx.wave.on": False}, nodes))
+    v = got["values"]
+    assert v["fx.on"] is True and v["fx.acid.on"] is False and v["fx.wave.on"] is False
+    assert v["fx.trail.on"] is True and v["fx.fade.on"] is True
+    got, notes = graphmigrate.lookbacks(_doc(wires, {"fx.mix": 0.5, "fx.acid.on": True,
+                                                     "fx.acid.mix": 0.8}, nodes,
+                                             routes=[{"source": "lane:0", "target": "fx.mix",
+                                                      "op": "push"}]))
+    v = got["values"]
+    assert v["fx.mix"] == 1.0 and v["fx.acid.mix"] == pytest.approx(0.4)
+    assert v["fx.acid.on"] is True
+    assert any("fx.mix" in n and "parts too" in n for n in notes)

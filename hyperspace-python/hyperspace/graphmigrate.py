@@ -2273,8 +2273,8 @@ def hue_turns(doc: dict) -> tuple[dict, list[str]]:
 # old "brightness is coverage"), a Resize (512 on the long side), a Delay (depth
 # = its echoes, every 1 / gap seconds in Hz, gap 0 every frame) read by a Trail
 # (level = echo_mix, fade, lay over), cut by a Matte of its occluder (peak,
-# linear, key ⅛, soft ⅛: min(4 · peak, 1)) and by its cover, each Cut's amount
-# its occlude; where its picture went, the last of them. An echo pin
+# linear, key ⅛, soft ⅛: min(4 · peak, 1)) and by its cover, each Cut inverted
+# (held back where its mask passes) at its occlude; where its picture went, the last of them. An echo pin
 # `lookback.echo.<k>` is a Read at k − 1, nearest, of that delay — of a second
 # delay, the same input, at depth k, past its echoes (Q25). Its knobs are the
 # parts' (`dream.echo_mix` → `fx.trail.level` …); `dream.darken`, `contrast` and
@@ -2303,6 +2303,11 @@ LB_RANGE_NOTE = ("{row}: {old} ran {was}, {new} runs {now} — the row is kept, 
                  "spans the new range (plan 90)")
 LB_NOWHERE_NOTE = "{row}: {old} drew nothing in this patch (plan 90): left out"
 LB_NONE_NOTE = "{old} kept no echoes (echoes 0): its trail is off (plan 90)"
+LB_MASTER_NOTE = ("the look-back's parts are effects, which fx.on and fx.mix switch and scale: "
+                  "{what} so it draws as it did; the patch's other effects are as they were "
+                  "(plan 90)")
+LB_MASTER_ROW_NOTE = ("{row}: {pid} switched the effects alone; it switches the look-back's "
+                      "parts too now (plan 90)")
 _LB_END = re.compile(r"^lookback(?:\.([2-9]|[1-9][0-9]+))?"
                      r"(?:\.(image|occluder|cover|capture)|\.echo\.([1-9][0-9]*))?$")
 _LB_PARAM = re.compile(r"^dream\.(?:([2-9]|[1-9][0-9]+)\.)?(" + "|".join(LB_KEYS) + r")$")
@@ -2554,9 +2559,45 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
             values.update({f"{role['matte']}.{k}": x for k, x in LB_MATTE.items()})
         for c in (role.get("cut"), role.get("cover_cut")):
             if c is not None:
-                values.update({f"{c}.amount": occlude, f"{c}.invert": False})
+                # (inverted: a cut keeps what its mask passes, and the wake was
+                # held back where the occluder is bright, or a face was drawn)
+                values.update({f"{c}.amount": occlude, f"{c}.invert": True})
         parts[old] = role
         notes.append(LOOKBACK_NOTE.format(old=old, chain=" → ".join(chain)))
+    # (the parts are effects: the master switch and mix gate and scale them, where
+    # the look-back drew whatever they said — so they are on and at 1, and the
+    # patch's other effects drawn as they were: off where the master was, their
+    # own mix × the master's)
+    if parts:
+        was_on = values.get("fx.on", True) is not False
+        mix = _num(values.get("fx.mix", 1.0), 1.0)
+        ours = {f"fx.{n}." for role in parts.values() for k, n in role.items()
+                if k in ("curve", "fade", "trail")} | {f"fx.{r}." for r in pins.values()}
+        others = sorted({G.instance_name(e["file"], e.get("instance", 1)
+                                         if isinstance(e.get("instance", 1), int) else 1)
+                         for e in out_nodes if isinstance(e, dict) and e.get("kind") == "effect"
+                         and isinstance(e.get("file"), str)} - {p[3:-1] for p in ours})
+        what = []
+        if not was_on:
+            values["fx.on"] = True
+            what.append("fx.on is on")
+            for o in others:
+                if values.get(f"fx.{o}.on") is True:
+                    values[f"fx.{o}.on"] = False
+        if mix != 1.0:
+            values["fx.mix"] = 1.0
+            what.append(f"fx.mix is 1 (was {mix:g})")
+            for o in others:
+                own = values.get(f"fx.{o}.mix")
+                if isinstance(own, (int, float)) and not isinstance(own, bool):
+                    values[f"fx.{o}.mix"] = own * mix
+        if what:
+            notes.append(LB_MASTER_NOTE.format(what=" and ".join(what)))
+            for key in _ROW_LISTS:
+                for r in rest.get(key) or []:
+                    if isinstance(r, dict) and r.get("target") in ("fx.on", "fx.mix"):
+                        notes.append(LB_MASTER_ROW_NOTE.format(
+                            row=f"{key} {r.get('source')} → {r['target']}", pid=r["target"]))
     # every other look-back knob (a patch with none, or `dream.<n>.*` of none drawn)
     for k in list(values):
         got = _lb_param(k)

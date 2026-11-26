@@ -5823,10 +5823,13 @@ class Cover(Node):
 
     # plan 36 T4: the look-backs whose `cover` it is (set by the build)
     wanted_by: tuple[str, ...] = (LOOKBACK,)
+    # plan 90 (H2): read by a node that is no look-back — a cut's mask (set by the build)
+    always: bool = False
 
     def run(self, frame: Frame) -> None:
         frame.cover = None
-        if any(frame.r.ring(n, _ring_state(frame, n)).wants_cover() for n in self.wanted_by):
+        if self.always or any(frame.r.ring(n, _ring_state(frame, n)).wants_cover()
+                              for n in self.wanted_by):
             with frame.timed(self.name):
                 frame.cover = frame.r._draw_cover(frame.w, frame.h)
 
@@ -6426,6 +6429,10 @@ class Effect(Node):
     def reads(self, frame: Frame) -> bool:
         src = self.inputs["image"]
         if src is None:
+            # (plan 90 H2: a stack reader — Trail, Read — reads what its delay does)
+            stack = self.inputs.get(STACK_PORT)
+            if stack is not None:
+                return stack.reads(frame) and self.on(frame)
             return self.generates(frame) and self.on(frame)
         return src.reads(frame)
 
@@ -7905,6 +7912,9 @@ class _Build:
         if self.cover is not None:
             self.cover.wanted_by = tuple(lb.name for lb in self.lookbacks
                                          if lb.inputs["cover"] is self.cover)
+            self.cover.always = any(
+                src is self.cover for n in self.built if not isinstance(n, History)
+                for src in n.inputs.values())
         outputs = []
         # (each delay's write, so a walk back through a delay finds its picture)
         writes_of = {w.delay: w for w in [*self.built, *writes] if isinstance(w, DelayWrite)}
