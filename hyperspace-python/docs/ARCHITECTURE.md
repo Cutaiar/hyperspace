@@ -865,7 +865,8 @@ Consequences:
   (`tests/test_overlay.py::test_the_output_switches_are_meta_settings`).
 - **Undo is a scene-setter that watches the other scene-setters.** `Param`
   and `Registry` do not know it exists: every road that moves a base or a row
-  says only *that* there was a write (`writes.mark`; `Param.set`, `follow`, a
+  says only *that* there was a write (`writes.mark`; `Param.set`, `follow` (but a continuous move that is all drift
+  marks nothing: undo reads it as none, row 1190), a
   source taking or leaving a param, and the settings objects themselves,
   `writes.Observed`, for what writes round `Param`), and a frame with no mark
   takes no fingerprint (`Undo._still`). What cannot mark is read every frame

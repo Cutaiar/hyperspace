@@ -205,6 +205,22 @@ def _same_own(p, a, da: float, b, db: float) -> bool:
     return math.isclose(x, y, rel_tol=REL_TOL, abs_tol=ABS_TOL)
 
 
+def _followed(p, a, b) -> bool:
+    """Is `b`, a base as `_base_of` reads it, `a` and nothing but what
+    `Param.follow` moved it by since? The one difference `_same_fp` also reads
+    as none, so a stack that holds `a` need not take a fingerprint to learn
+    it. Equal drifts are no follow at all: that is an edit, however small."""
+    da, db = (a[1] if isinstance(a, tuple) else 0.0), (b[1] if isinstance(b, tuple) else 0.0)
+    if da == db:
+        return False
+    va, vb = (a[0] if isinstance(a, tuple) else a), (b[0] if isinstance(b, tuple) else b)
+    # at a limit or past it the norm is one whatever the raw value: drift says nothing of the move
+    interior = getattr(p, "interior", None)
+    if interior is None or not (interior(va) and interior(vb)):
+        return False
+    return _same_own(p, va, da, vb, db)
+
+
 def own(p, v, then: float):
     """`v`, a base of `p` taken with `then` of `follow` in it, with the follows
     made since put on: what a restore writes, so it keeps them."""
@@ -474,7 +490,7 @@ class Undo:
         bases = fp[1]
         for i, p in self._polled:
             v = _base_of(p)
-            if v is not bases[i] and v != bases[i]:
+            if v is not bases[i] and v != bases[i] and not _followed(p, bases[i], v):
                 return False
         table, rows = self.table, self._table_rows()
         now = [*table.bindings, *rows]

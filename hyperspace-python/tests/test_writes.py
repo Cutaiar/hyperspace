@@ -65,7 +65,6 @@ def test_an_idle_frame_takes_no_fingerprint(rig):
 @pytest.mark.parametrize("write", [
     lambda u: u.reg["x.a"].set(0.5),
     lambda u: u.reg["x.a"].nudge(0.25),
-    lambda u: u.reg["x.a"].follow(0.25),
     lambda u: setattr(u.box, "a", 0.5),                     # round Param
     lambda u: u.box.items.__setitem__(0, 0.5),              # polled
     lambda u: setattr(u.table.bindings[0], "value", 0.75),  # a row in place
@@ -77,6 +76,69 @@ def test_every_road_of_a_write_is_looked_at_the_frame_it_lands(rig, write):
     write(rig)
     assert looked(rig)
     assert not looked(rig)
+
+
+def test_a_follow_is_not_looked_at_and_is_no_step_but_an_edit_after_it_is_one(rig):
+    """`follow` moves a base and its drift together: the fingerprint it would
+    buy reads the same as the one held (row 1190), so none is taken, and the
+    edit that comes after is compared with a fingerprint older by the follows
+    and still makes exactly one step."""
+    a = rig.reg["x.a"]
+    a.set(0.5)                               # inside the range, as a dive's camera is
+    rig.tick(1.0)
+    rig.tick(2.0)
+    n = len(rig.stack)
+    for v in (0.25, 0.3, 0.4):
+        a.follow(v)
+        assert not looked(rig, 2.1)
+    rig.tick(5.0)
+    assert len(rig.stack) == n
+    a.set(a.base + 0.2)
+    assert looked(rig, 5.1)
+    rig.tick(6.0)
+    assert len(rig.stack) == n + 1 and rig.stack[-1].label.startswith("A ")
+
+
+def test_a_follow_of_a_polled_base_is_not_looked_at_either(rig):
+    """A base on no cell is read every frame (`_polled`): a follow's drift is
+    the one change of it `_still` lets by, and an equal-drift change is not."""
+    i = rig.reg["x.item"]
+    i.set(0.5)
+    looked(rig)
+    i.follow(0.4)
+    assert not looked(rig)
+    rig.box.items[0] = 0.9                   # a write that follows nothing
+    assert looked(rig)
+
+
+@pytest.mark.parametrize("pid", ["x.a", "x.item"])
+def test_a_follow_past_the_limit_is_still_looked_at(rig, pid):
+    """Devin's review of #517: a flight can carry a base past its range (the
+    object keeps the raw value, the norm clamps), where a follow's drift is in
+    clamped units and says nothing of the raw move. Such a follow marks as it
+    always did, and a polled base past its limit is read, not taken as drift."""
+    p = rig.reg[pid]
+    p.follow(1.25)                           # across the limit: looked at (as before)
+    assert looked(rig)
+    p.follow(1.2)                            # both ends clamp to the same norm: no drift, a move
+    assert looked(rig)
+    assert not looked(rig)
+
+
+def test_a_manual_edit_after_a_follow_past_the_limit_is_what_main_made_of_it(rig):
+    """Devin's example: Pan at 0.9, a grab moves it to 1.25 (past `hi`), the
+    watcher looks, then a hand drags it to the limit. The base was 1.25 and is
+    1.0: an edit. (The step is judged at its close against the settled 0.9
+    with the follow taken off, as it always was; what must not change is that
+    the watcher has seen the base move at each of these frames.)"""
+    a = rig.reg["x.a"]
+    a.set(0.9)
+    rig.tick(1.0)
+    rig.tick(2.0)
+    a.follow(1.25)
+    assert looked(rig, 3.0)
+    a.set(1.0)
+    assert looked(rig, 3.1)
 
 
 def test_an_edit_round_param_is_a_step(rig):

@@ -673,6 +673,92 @@ def test_two_edits_during_a_dive_are_two_steps(tmp_path):
     assert detail.base == pytest.approx(d0)
 
 
+def _fingerprints(r, n: int, monkeypatch) -> dict[str, int]:
+    """How many fingerprints each stack takes over `n` frames. The conftest
+    oracle is off for the count: it takes one every tick by design."""
+    from hyperspace import undo
+    monkeypatch.setattr(undo, "oracle", None)
+    took = {"deck": 0, "meta": 0}
+    for name, stack in (("deck", r.undo), ("meta", r.meta_undo)):
+        inner = stack._fingerprint
+
+        def counted(inner=inner, name=name):
+            took[name] += 1
+            return inner()
+        monkeypatch.setattr(stack, "_fingerprint", counted)
+    _run(r, n)
+    return took
+
+
+def test_a_running_dive_takes_no_fingerprint(tmp_path, monkeypatch):
+    """Since #506 a frame no write marked takes no fingerprint. A dive writes
+    camera.zoom's and camera.pan's bases every frame through `Param.follow`
+    and says so each time, so all stacks fingerprinted every frame inside a
+    fractal (measured on the owner's Mac: ~0.75 ms, `writes.serial` +6 a
+    frame). A follow is a move undo reads as none (`_drift`): it need not mark."""
+    r = _undo_rig(tmp_path)
+    r.reg["view.frac_dive"].set(1.5)
+    _run(r, 60)
+    path = len(r.view.dive.path)
+    took = _fingerprints(r, 120, monkeypatch)
+    assert len(r.view.dive.path) > path           # it really was diving
+    assert took == {"deck": 0, "meta": 0}, took
+
+
+def test_a_follow_that_is_not_drift_still_marks():
+    """A kind with no drift (a choice, a switch) moves a base undo must see:
+    `follow` marks for it; a continuous move that is all drift does not."""
+    from hyperspace import writes
+    from hyperspace.params import Kind, Param
+    box = {"v": 0.5}
+    cont = Param(id="t.c", label="c", kind=Kind.CONTINUOUS, lo=0.0, hi=1.0,
+                 get=lambda: box["v"], put=lambda v: box.__setitem__("v", v))
+    n = writes.serial()
+    cont.follow(0.75)
+    assert writes.serial() == n and cont._drift == pytest.approx(0.25)    # all drift: no mark
+    flag = {"v": False}
+    sw = Param(id="t.s", label="s", kind=Kind.TOGGLE,
+               get=lambda: flag["v"], put=lambda v: flag.__setitem__("v", v))
+    n = writes.serial()
+    sw.follow(True)
+    assert writes.serial() > n and sw._drift == 0.0
+
+
+def test_an_edit_in_the_frame_of_a_follow_is_a_step_and_a_tiny_one_is_not(tmp_path):
+    """A hand edit to camera.zoom between two frames of a dive is an edit
+    however much the dive moved it meanwhile; one under the tolerance, as
+    before, is none."""
+    r = _undo_rig(tmp_path)
+    r.reg["view.frac_dive"].set(1.0)
+    _run(r, 90)
+    n = len(r.undo.stack)
+    zoom = r.reg["camera.zoom"]
+    zoom.set(zoom.base * 1.3)                        # then the dive's follow, same frame
+    _run(r, 60)
+    assert len(r.undo.stack) == n + 1 and r.undo.stack[-1].label.startswith("Zoom")
+    pan = r.reg["camera.pan.x"]
+    pan.set(pan.base + 1e-12)
+    _run(r, 60)
+    assert len(r.undo.stack) == n + 1
+
+
+def test_a_long_dive_then_an_edit_is_one_step_and_undoes_clean(tmp_path):
+    """The held fingerprint is as old as the last write: after thousands of
+    frames of follows its drift pairs must still compare equal, so an edit
+    elsewhere makes one step and not two."""
+    r = _undo_rig(tmp_path)
+    r.reg["view.frac_dive"].set(1.5)
+    _run(r, 3000)
+    n = len(r.undo.stack)
+    detail = r.reg["view.frac_detail"]
+    d0 = detail.base
+    detail.set(d0 + 0.2)
+    _run(r, 60)
+    assert len(r.undo.stack) == n + 1 and r.undo.stack[-1].label.startswith("Detail")
+    r.undo.undo()
+    assert detail.base == pytest.approx(d0)
+
+
 def test_a_running_dive_makes_no_step(tmp_path):
     r = _undo_rig(tmp_path)
     r.reg["view.frac_dive"].set(1.5)
