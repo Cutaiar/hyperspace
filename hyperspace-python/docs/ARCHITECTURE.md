@@ -1669,7 +1669,7 @@ a picture is drawn as that picture, collapsed or expanded: a thumbnail in a
 - **The hover.** On the picture, the hover is `graphview.picture_hover`:
   the title, `summary`'s lines, `W×H picture`, and `gpu N.NN ms` from
   `Renderer.stats["gpu_ms"]`.
-- **The tint switch.** The head's last chip, **pictures · tint cables**,
+- **The tint switch.** In the head's canvas menu, **pictures · tint cables**
   is off by default and is page state only. Lit,
   `PreviewTextures.want_hues` reads one thumbnail's dominant hue a frame,
   asynchronously (a 16×16 pass into a pixel buffer, collected next frame,
