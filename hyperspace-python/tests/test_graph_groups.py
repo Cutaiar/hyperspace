@@ -157,7 +157,10 @@ def test_a_loadable_with_groups_round_trips_through_document_and_load_doc(tmp_pa
 def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     """The grouped fixture (party-noita and one group; `/9` since plan 43
     C2) loaded and saved untouched is the same bytes — and so is every
-    corpus loadable patch, with no groups (a `/9` without the key)."""
+    corpus loadable patch, with no groups (a `/9` without the key). (Plan
+    90 H2: a corpus file holding a look-back is rewritten once on load —
+    its look-back public parts — and that save then resaves byte for
+    byte.)"""
     raw = FIXTURE.read_bytes()
     assert json.loads(raw)["schema"] == "hyperspace.loadable/12"
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
@@ -165,6 +168,13 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     for k, path in enumerate(CORPUS_LOADABLES):
         data = path.read_bytes()
         again, _, _ = headless.resave(path, tmp_path / f"f{k}")
+        if graphmigrate.lookbacks(json.loads(data))[1]:
+            assert b'"lookback' not in again, path.name
+            data = again
+            moved = tmp_path / f"m{k}" / path.name
+            moved.parent.mkdir(parents=True)
+            moved.write_bytes(data)
+            again, _, _ = headless.resave(moved, tmp_path / f"g{k}")
         assert again == data and b'"groups"' not in again, path.name
 
 
@@ -242,7 +252,8 @@ def test_a_grouped_loadable_builds_the_graph_of_its_ungrouped_twin(tmp_path):
     of it the same `graph.signature`. The loadable patches with no main run are
     named (T1's `NO_RUN`): none has an effect, so each is proved with every
     node a group may hold grouped instead (review fix) — party-tracer's and
-    party-wake's look-back, composite (and dream); wave 3 P1: the other
+    party-wake's look-back (plan 90 H2: its public parts, which the load
+    makes of it and says so), composite (and dream); wave 3 P1: the other
     fourteen's frame nodes too, which a patch now holds (`patches.select`)."""
     assert NO_RUN == {"big-blue-wave", "ember-orbit", "hands-orbit", "hands-play",
                       "hex-engine", "inverse-halo", "legacy6", "party-faces", "party-field",
@@ -265,7 +276,8 @@ def test_a_grouped_loadable_builds_the_graph_of_its_ungrouped_twin(tmp_path):
             others.append(path.stem)
         want = G.signature(G.build_graph(_views(), flat.wiring()))
         app.loaded_patch.load_doc(grouped_twin(doc, ids))
-        assert app.loaded_patch.notes == [], path.stem
+        said = [n for n in app.loaded_patch.notes if "(plan 90)" not in n]
+        assert said == [], path.stem
         assert app.loaded_patch.groups[0]["nodes"] == ids, path.stem
         spec = app.loaded_patch.graph.spec
         assert spec.to_json() == flat.to_json(), path.stem

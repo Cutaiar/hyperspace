@@ -8,7 +8,7 @@ geometry inside the scene, drawn before the see-through shape, so the
 shape's depth puts a hand in front of or behind it; as a layer they have
 their own colour and depth, and a depth-aware composite hides the layer
 where the shape's visible surface is nearer. The history captures what
-it is wired to. `tests/test_graph.py` holds the graphs' shapes;
+it is wired to (plan 90 H2: a delay, the look-back retired). `tests/test_graph.py` holds the graphs' shapes;
 `tests/test_golden_frames.py` the pictures, byte for byte.
 
 Offscreen renders from synthetic hands (`fake_hands`, test_ghost's pose);

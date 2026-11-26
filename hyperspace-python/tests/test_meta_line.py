@@ -22,6 +22,7 @@ What crosses the line, and how each half is held:
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -237,7 +238,8 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     dry run writes nothing and says the cuts; --apply backs the library up,
     rewrites every loadable patch — folders too — as /10 with the show's look and
     cuts, and the show as /3 beside its .bak-v2-look; a second run has
-    nothing to do."""
+    nothing to do. (Plan 90 H2: the corpus's /12 legacy6 is rewritten too —
+    less the retired look-back knobs it names, which drew nothing.)"""
     lib = tmp_path / "Drive" / "Hyperspace"
     show = _old_show(lib)
     _old_loadable(lib, "OLD")
@@ -252,7 +254,7 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     out = capsys.readouterr().out
     assert {p: p.read_bytes() for p in lib.rglob("*") if p.is_file()} == tree
     assert "1 bus cut(s) into every loadable patch: output.all.image → output.2.image" in out
-    assert "would rewrite 2 as /12, leave 1 untouched (already /12)" in out
+    assert "would rewrite 3 as /12, leave 0 untouched (already /12)" in out
     assert "show rig.hyp.json → installs/rig.json" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     out = capsys.readouterr().out
@@ -265,12 +267,15 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
         assert {k: doc["values"][k] for k in LOOK} == LOOK, rel
         assert "modules" not in doc and "ghost.mirror" not in doc["values"], rel
         assert json.loads((backups[0] / rel).read_text())["schema"] == graphmigrate.EYE_SCHEMA
-    assert (lib / "loadable" / "legacy6.json").read_bytes() == (CORPUS / "legacy6.json").read_bytes()
+    lean, gone = re.subn(rb'^ *"dream\.(?:echo_mix|fade|echoes|gap|occlude)": [^\n]*,\n', b"",
+                         (CORPUS / "legacy6.json").read_bytes(), flags=re.MULTILINE)
+    assert gone == 5
+    assert (lib / "loadable" / "legacy6.json").read_bytes() == lean
     assert not show.exists()
     doc = json.loads((lib / "installs" / "rig.json").read_text())
     assert doc["schema"] == "hyperspace.install/1" and "rig" not in doc
     assert doc["tuning"] == {"tempo.bpm": 128.0, "ghost.mirror": True}
-    assert "rewrote 2 as /12" in out and "wrote 1 install file(s)" in out
+    assert "rewrote 3 as /12" in out and "wrote 1 install file(s)" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     assert "nothing to do" in capsys.readouterr().out
 

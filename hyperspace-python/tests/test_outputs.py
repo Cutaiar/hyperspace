@@ -14,10 +14,9 @@ through the effects" is its output's wiring — a state that puts the hands
 through is a `Thru` (`tests/wiredframe.py`), written into the renderer's
 wiring (`wviews`) with every mute on, as the golden tool draws its states.
 
-Plan 90 H2: the look-back is retired. "Echoes" here are the public parts a
-saved look-back migrates to (`graphmigrate.wired_of`, look "trail": a delay
-keeping `ECHOES` frames read by a trail, added on the scene); the history is
-that delay's stack.
+Plan 90 H2: the look-back is retired. "Echoes" here are a tracer from public
+parts (`with_echoes`: a delay keeping `ECHOES` frames read by a trail, added
+on the scene); the history is that delay's stack.
 
 The pictures are offscreen renders from synthetic hands (fake_hands);
 no window, screen or tracker is involved.
@@ -154,22 +153,40 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
 
 
 def with_echoes(r, words) -> None:
-    """`r` wired with `words` (the old unwired words) and the look-back they
-    drew while `dream.on` was on, as an old loadable patch with it on and no
-    dream migrates (plan 90 H2: its public parts — `… → fade → resize →
-    delay → trail → cuts → composite (add)`, `graphmigrate.wired_of`), the
-    fade and the trail on as a load sets them; the delay's depth and rate are
-    `scene_view`'s. The section is kept whole as the base `wire_switches`
-    wires the windows' states over: a `Wiring` holds no delay, resize, matte
-    or cut entry, only the wires to them."""
+    """`r` wired with `words` (the old unwired words, `graphmigrate.wired_of`)
+    and a tracer of their history from public parts (plan 90 H2: the
+    look-back is retired) — as the tracers starter spawns one: the history's
+    picture into a delay (keeping `ECHOES`, every frame: `scene_view`'s), its
+    stack into a trail laid add, the trail added onto the run's picture by a
+    composite (blend add). The history is the scene, or with
+    `history="scene+hands"` the composite the words lay the hands on. The
+    section is kept whole as the base `wire_switches` wires the windows'
+    states over (a `Wiring` keeps no delay entry, only the wires to it)."""
     from hyperspace import graph as G
     from hyperspace.graphmigrate import wired_of
 
-    sec = wired_of(words, look="trail")
-    for name in ("fade", "trail"):
-        r.fx.state.values[name]["on"] = True
+    sec = wired_of(words)
+    wires = [dict(w) for w in sec["wires"]]
+    nodes = list(sec.get("nodes") or [])
+    taken = {n.get("instance", 1) for n in nodes if n.get("kind") == "composite"}
+    k = next(k for k in range(1, 9) if k not in taken)
+    add = "composite" if k == 1 else f"composite.{k}"
+    # the run's head: the scene's picture into the first effect, or All outputs
+    head = next(w for w in wires if w["from"] == "scene"
+                and not w["to"].startswith(("composite", "backdrop")))
+    held = "composite" if words.history == "scene+hands" else "scene"
+    wires.remove(head)
+    wires += [{"from": held, "to": "delay.image"}, {"from": "delay", "to": "trail.stack"},
+              {"from": "scene", "to": f"{add}.under"}, {"from": "trail", "to": f"{add}.over"},
+              {"from": add, "to": head["to"]}]
+    nodes += [{"kind": "delay"}, {"kind": "effect", "file": "trail"},
+              {"kind": "composite", "blend": "add", **({"instance": k} if k > 1 else {})}]
+    sec = {**sec, "nodes": nodes, "wires": wires}
+    r.fx.state.values["trail"].update(on=True, lay=1)       # (lay: add)
     r._wiredframe_base = sec
-    r.wiring = G.read_graph(sec).wiring()
+    spec = G.read_graph(sec)
+    assert not spec.notes, spec.notes
+    r.wiring = spec.wiring()
 
 
 def wired(r, section: dict):
@@ -577,8 +594,8 @@ def test_the_history_holds_what_it_is_wired_to_and_the_default_graph_wires_it_as
     default graph wires it to the bare scene, so in every switch state
     its echoes hold no hands, as before A3; wired to the scene with the
     hands' layer (`Wiring.history`) they hold the hands. (Plan 35 T4: its
-    picture a `composite`; plan 90 H2: the history is the migrated
-    look-back's delay, recording through its fade.)"""
+    picture a `composite`; plan 90 H2: the history is a delay,
+    `with_echoes`.)"""
     import numpy as np
 
     from hyperspace.graph import Wiring
@@ -593,14 +610,14 @@ def test_the_history_holds_what_it_is_wired_to_and_the_default_graph_wires_it_as
         r = rig(ctx, echoes=True)
         run(ctx, r, wviews(ctx, r, *combo), frames=6)
         assert r.stats["layer"]
-        assert r._graph.nodes["fade"].inputs["image"] is r._graph.nodes["scene"]
+        assert r._graph.nodes["delay(write)"].inputs["image"] is r._graph.nodes["scene"]
         assert np.array_equal(history(r)[1], want)
     for combo in ((S(),), (S(hands=False),), (Thru(scene=False),)):
         r = rig(ctx, echoes=True)
         with_echoes(r, Wiring(history="scene+hands"))
         run(ctx, r, wviews(ctx, r, *combo), frames=6)
         held = history(r)[1]
-        assert r._graph.nodes["fade"].inputs["image"].name == "composite"
+        assert r._graph.nodes["delay(write)"].inputs["image"].name == "composite"
         assert not np.array_equal(held, want), combo
 
 

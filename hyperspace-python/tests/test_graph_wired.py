@@ -249,10 +249,13 @@ def test_loops_in_a_wired_frame_keep_plan_34s_words():
     # (plan 90 H2: the look-back is retired — a live read refuses any wire
     # to or from it, its old capture port too, and an entry of it, in words)
     retired = f"lookback: {G.LOOKBACK_RETIRED}"
-    for pair in (("scene", "lookback.capture"), ("scene", "lookback.image"),
-                 ("lookback", "output.all.image"), ("lookback.echo.3", "output.all.image")):
+    for pair, name in ((("scene", "lookback.capture"), "lookback"),
+                       (("scene", "lookback.image"), "lookback"),
+                       (("lookback", "output.all.image"), "lookback"),
+                       (("lookback.echo.3", "output.all.image"), "lookback.echo.3")):
         spec = G.read_graph(wired(pair))
-        assert spec.notes == (note(pair, retired),) and spec.wires == (), pair
+        assert spec.notes == (note(pair, f"{name}: {G.LOOKBACK_RETIRED}"),), pair
+        assert spec.wires == (), pair
     assert G.read_graph(wired(nodes=[{"kind": "lookback"}])).notes == (retired,)
     # through a delay a loop is legal, as in plan 34
     spec = G.read_graph(wired(("shape", "scene.geometry"), ("scene", "delay.image"),

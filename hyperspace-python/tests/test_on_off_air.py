@@ -277,12 +277,15 @@ def test_a_pad_press_on_the_off_air_deck_reaches_only_it(rig):
 def test_on_gl_on_air_keeps_its_frame_while_the_other_deck_is_edited(ctx, tmp_path):
     """Was `..._the_projector_keeps_the_held_frame_while_the_preview_shows_the_edit`:
     a new loadable patch and a turned knob on the deck off air, and on air is the same bytes;
-    the fader across, the outputs show the edit."""
+    the fader across, the outputs show the edit. (Plan 90 H2: the edit is
+    party-noita, which holds nothing timed — party-wake's look-back is a delay
+    and a trail now, whose kept frames age a frame at each draw even on a
+    clock that does not move, so no two of its pictures are the same bytes.)"""
     rig = _gl(ctx, tmp_path / "rig")
     rig.meta.point_panel(rig.two)
     before = _picture(ctx, rig.one)
     assert before[..., :3].max() > 0
-    rig.two.loaded_patch.load("party-wake")
+    rig.two.loaded_patch.load("party-noita")
     rig.two.reg["view.bright"].set(0.2)
     assert (_picture(ctx, rig.one) == before).all()
     edited = _picture(ctx, rig.two)

@@ -25,7 +25,16 @@ from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as G
-from hyperspace import graphmigrate, graphview, headless, params, patches, ui_graph, ui_routing, undo
+from hyperspace import (
+    graphmigrate,
+    graphview,
+    headless,
+    params,
+    patches,
+    ui_graph,
+    ui_routing,
+    undo,
+)
 from hyperspace.library import PATCHES
 from hyperspace.patches import Host, spawn
 from hyperspace.routing import Bindings

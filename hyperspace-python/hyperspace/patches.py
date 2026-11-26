@@ -330,7 +330,7 @@ def _retire_lookbacks(doc: dict) -> dict:
     keys = doc.get("keys") if isinstance(doc.get("keys"), list) else None
     nodes2, wires2, rest2, ports2, keys2, notes = graphmigrate.retire_lookbacks(
         nodes, wires, rest, ports, keys)
-    if not notes:
+    if not notes and rest2 == rest and nodes2 == nodes and wires2 == wires:
         return doc
     out = {k: doc[k] for k in ("schema", "name") if k in doc}
     out.update(rest2)

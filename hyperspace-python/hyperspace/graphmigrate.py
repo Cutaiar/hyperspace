@@ -2358,6 +2358,14 @@ def _norm(v: float, lo: float, hi: float) -> float:
     return min(max((v - lo) / (hi - lo), 0.0), 1.0)
 
 
+def _lbp(pid: str) -> tuple[str, str]:
+    """`_lb_param` of an id known to be a look-back knob."""
+    got = _lb_param(pid)
+    if got is None:
+        raise ValueError(f"{pid!r} is no look-back knob")
+    return got
+
+
 def lookback_retired(pid: Any) -> bool:
     """Whether `pid` is a retired look-back knob (`LB_GONE`, or any of
     `dream.<n>.*`): a module preset of the dream group still naming one
@@ -2395,11 +2403,8 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
                     olds.append(got[0])
     olds.sort(key=lambda n: int(n.partition(".")[2] or 1))
     values = dict(rest.get("values") or {}) if isinstance(rest.get("values"), dict) else {}
-    named = [k for k in values if _lb_param(k) is not None
-             and (_lb_param(k)[1] in LB_GONE or _lb_param(k)[0] != "lookback")]
-    row_named = any(_lb_param(r.get("target")) is not None
-                    and (_lb_param(r["target"])[1] in LB_GONE
-                         or _lb_param(r["target"])[0] != "lookback")
+    named = [k for k in values if lookback_retired(k)]
+    row_named = any(lookback_retired(r.get("target"))
                     for key in _ROW_LISTS for r in (rest.get(key) or [])
                     if isinstance(r, dict))
     if not olds and not named and not row_named:
@@ -2464,9 +2469,9 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
         read_out = any(isinstance(w, dict) and _lb_of(w.get("from")) == (old, "", None)
                        for w in wires) or any(
             isinstance(p, dict) and _lb_of(p.get("from")) == (old, "", None) for p in ports or [])
-        ks = sorted({_lb_of(w.get("from"))[2] for w in wires if isinstance(w, dict)
-                     and _lb_of(w.get("from")) is not None and _lb_of(w.get("from"))[0] == old
-                     and _lb_of(w.get("from"))[2] is not None})
+        ks = sorted({k for w in wires if isinstance(w, dict)
+                     for got in [_lb_of(w.get("from"))] if got is not None and got[0] == old
+                     for k in [got[2]] if k is not None})
         echoes = round(_num(v["echoes"], LB_DEFAULTS["echoes"]))
         depth = min(max(echoes, LB_DEPTH[0]), LB_DEPTH[1])
         contrast = _num(v["contrast"], 1.0)
@@ -2662,13 +2667,13 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
         return keep + new
 
     def base_of(pid: str, k: str) -> float:
-        lb, _ = _lb_param(pid)
+        lb, _ = _lbp(pid)
         return _num((rest.get("values") or {}).get(_lb_prefix(lb) + k, LB_DEFAULTS[k])
                     if isinstance(rest.get("values"), dict) else LB_DEFAULTS[k], LB_DEFAULTS[k])
 
     def moved(r: dict, pid: str, new: str, where: str) -> dict | None:
         """Row `r` on look-back knob `pid` as one on `new`, its reach kept."""
-        _, k = _lb_param(pid)
+        _, k = _lbp(pid)
         out = {**r, "target": new}
         op, val = r.get("op"), r.get("value", 1.0)
         label = f"{where} {r.get('source')} → {pid}"
@@ -2702,13 +2707,15 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
         if not isinstance(r, dict):
             return [r]
         t = r.get("target")
-        to = retarget(t) if isinstance(t, str) else None
+        if not isinstance(t, str):
+            return [r]
+        to = retarget(t)
         if to is None:
             return [r]
         label = f"{where} {r.get('source')} → {t}"
-        _, k = _lb_param(t)
-        if k == "gap" and _lb_param(t)[0] in parts:
-            notes.append(LB_GAP_NOTE.format(row=label, delay=parts[_lb_param(t)[0]]["delay"]))
+        lb, k = _lbp(t)
+        if k == "gap" and lb in parts:
+            notes.append(LB_GAP_NOTE.format(row=label, delay=parts[lb]["delay"]))
         elif not to:
             notes.append(LB_NOWHERE_NOTE.format(row=label, old=t))
         return [r if new == t else moved(r, t, new, where) for new in to]
@@ -2721,7 +2728,8 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
                 continue
             subs = []
             for s in m["subs"]:
-                to = retarget(s.get("base")) if isinstance(s, dict) else None
+                base = s.get("base") if isinstance(s, dict) else None
+                to = retarget(base) if isinstance(base, str) else None
                 if to is None:
                     subs.append(s)
                     continue
@@ -2731,7 +2739,7 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
                     if new == s["base"]:
                         subs.append(s)
                         continue
-                    _, k = _lb_param(s["base"])
+                    _, k = _lbp(s["base"])
                     ns = {**s, "base": new}
                     for end in ("from", "to"):
                         x = s.get(end, 0.0 if end == "from" else 1.0)
@@ -2794,8 +2802,6 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
                     continue
                 q["from"] = src
             out_ports.append(q)
-    if not notes and not olds:
-        notes.append("the look-back's retired knobs dropped: no look-back drew them (plan 90)")
     return out_nodes, out_wires, out_rest, out_ports, out_keys, notes
 
 
@@ -2812,7 +2818,9 @@ def lookbacks(doc: dict) -> tuple[dict, list[str]]:
     nodes, wires, rest2, _, keys2, notes = retire_lookbacks(
         list(section.get("nodes", [])), list(section.get("wires", [])), rest,
         keys=list(keys) if isinstance(keys, list) else None)
-    if not notes:
+    # (a patch with no look-back may still lose its retired knobs, quietly)
+    if (not notes and rest2 == rest and nodes == section.get("nodes", [])
+            and wires == section.get("wires", [])):
         return doc, []
     out = {k: doc[k] for k in ("schema", "name") if k in doc}
     out.update(rest2)
