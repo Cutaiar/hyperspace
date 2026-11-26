@@ -701,3 +701,14 @@ Golden frames that move are re-recorded on the Mac (a hand check).
 28. **The tracers starters** (`tracers`, `tracers + dream`) spawn Delay (8, 30 Hz) → Trail (add)
     → Composite (add) — no key, no cuts: the simplest trail from public parts. [Rec] yes; the full
     chain is what a migrated file gets, not what a starter spawns.
+
+### 10.5 The owner's answers (2026-11-26)
+
+"The recommendations you had for the H2 stuff are fine." Q23–Q28 as recommended: Matte gains
+peak and the linear ramp, the cover a second Cut; the trail's Resize at 512; a second delay for
+echo pins deeper than the count; darken, contrast and res copied, routes onto both; a route on
+gap dropped with a note; the tracers starters spawn Delay → Trail → Composite (add).
+
+From the owner's hand checks of H1 on the Mac: past a frame size's budget the picture went black
+(depths 36, 53); fixed in #519 — a delay keeps the frames that fit and says so. A migrated
+look-back at 512 × 320, depth 32, is 42 MB, far inside it.
