@@ -28,7 +28,9 @@ def test_each_example_has_its_markdown_and_names_itself():
     assert len(FILES) >= 3
     for p in FILES:
         doc = json.loads(p.read_text())
-        assert doc["name"] == p.stem and doc["schema"] == "hyperspace.loadable/11"
+        # (plan 90 H2's `stack-lookback` was saved by a build writing `/12`)
+        assert doc["name"] == p.stem and doc["schema"] in ("hyperspace.loadable/11",
+                                                           "hyperspace.loadable/12")
         assert p.with_suffix(".md").is_file(), p.stem
         # every example wires a field into a field port, or (plan 90) a stack
         assert any(w["to"].endswith((".field", ".stack")) for w in doc["graph"]["wires"]), p.stem
@@ -122,7 +124,11 @@ def test_no_node_of_an_example_reaches_nothing(path):
     assert not effects & graphview.unreached(spec)
     groups = dict(ui_fx.groups(spec))
     assert ui_fx.UNREACHED not in groups, groups
-    assert effects <= set(groups.get(ui_fx.RUN, ())), groups
+    # (an effect's path may end at a node that is no effect — plan 90 H2's
+    # `stack-lookback`: a Fade into a Resize, a Trail into a Cut — and the pane
+    # groups it there, `→ resize`; it still reaches an output)
+    ends = {e for k, v in groups.items() if k not in (ui_fx.UNREACHED, ui_fx.UNFED) for e in v}
+    assert effects <= ends, groups
 
 
 def test_the_knob_example_draws_the_field_on_the_knob(ctx):
