@@ -21,7 +21,7 @@ import pytest
 from conftest import seed
 from imgui_bundle import imgui
 from test_graph_legible import party
-from test_ui_shell import frame, graph_menus
+from test_ui_shell import frame, graph_menus, head_menu
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as G
@@ -105,9 +105,11 @@ def test_the_tint_switch_is_off_by_default_and_on_the_head_last(rig, monkeypatch
     lit = ui.lit_chip
     monkeypatch.setattr(ui, "lit_chip", lambda label, on, *a, **k:
                         labels.append(label) or lit(label, on, *a, **k))
+    head_menu(rig.panel)
+    labels.clear()
     frame(rig.panel, "graph")
     head = [x for x in labels if x.endswith("##graph")]
-    # after every chip today's head has but plan 84's gpu cost, which follows it
+    # after every chip the canvas menu has but plan 84's gpu cost, which follows it
     assert head[-2:] == [ui_graph.TINT_LABEL, ui_graph.COST_LABEL]
     assert head.index("output behind##graph") < head.index(ui_graph.TINT_LABEL)
     # off: every picture cable plain red

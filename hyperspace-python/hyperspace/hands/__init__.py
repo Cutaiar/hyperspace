@@ -1,7 +1,8 @@
 """Ultraleap hands — a self-contained instrument, host optional.
 
 This package is written to be lifted out whole. The rule that keeps it
-liftable: **core.py, room.py and signal.py import nothing from hyperspace.** They
+liftable: **core.py, room.py and signal.py import nothing from hyperspace** (but
+core.py the one leaf `writes`, which goes with it: the owner, 2026-11-25). They
 are the instrument — tracking, features, the analog chain, the pinch
 switches, MIDI out. Everything they need from a host arrives as an
 argument, duck-typed, never imported:

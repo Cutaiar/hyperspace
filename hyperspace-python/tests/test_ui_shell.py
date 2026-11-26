@@ -154,6 +154,20 @@ def frame(panel, page=None):
     imgui.end_frame()
 
 
+def head_menu(panel, key="graph.canvas"):
+    """One of GRAPH's head menus (2026-11-24: "graph.canvas", "graph.areas"),
+    opened as a click on its chip opens it: one frame with the chip pressed."""
+    real = ui.chip, ui.lit_chip
+
+    def pressed(fn):
+        return lambda label, *a, **k: fn(label, *a, **k) or label.endswith("##" + key)
+    ui.chip, ui.lit_chip = map(pressed, real)
+    try:
+        frame(panel, "graph")
+    finally:
+        ui.chip, ui.lit_chip = real
+
+
 class _Menus(list):
     """What `graph_menus` hands back: the labels of every row that opened,
     and `pick`, the prefix of the row to click — settable, so one test can

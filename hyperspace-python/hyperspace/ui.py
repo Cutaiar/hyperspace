@@ -677,13 +677,19 @@ def tags_shown(spans: list[tuple[float, float]], first: int, gap: float = TAG_GA
     return sorted(kept)
 
 
+def fits_beside(w: float) -> bool:
+    """Does an item `w` wide end by the region's right edge on the line of the
+    item before (`beside` asks, and moves there)?"""
+    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+    return imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + w <= right + 0.5
+
+
 def beside(w: float) -> bool:
     """The next item, `w` wide, on the line of the item before when it ends
     by the region's right edge; else on a row of its own (plan 49 stage 2:
     a page's row of chips or ticks in the side pane's 240–320 px). Call it
     where `imgui.same_line()` stood. True when it stayed on the line."""
-    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
-    if imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + w <= right + 0.5:
+    if fits_beside(w):
         imgui.same_line()
         return True
     return False
@@ -2590,9 +2596,22 @@ class Panel:
         wiring, _ = self.graph_now()
         bus_cuts = self.bus_cuts_now()
         return [sl.n for sl in (getattr(self, "outputs", None) or [])
-                if getattr(sl, "drawn", sl.opened) and output_shows(sl.switches, fx_on, visible, master, wiring,
-                                         n=sl.n, bus_cuts=bus_cuts)[1]
+                if getattr(sl, "drawn", sl.opened)
+                and self._black_why(sl, fx_on, visible, master, wiring, bus_cuts)
                 not in ("", "master")]
+
+    def _black_why(self, sl, fx_on: bool, visible: bool, master: float, wiring, bus_cuts) -> str:
+        """`output_shows`' reason for one output, kept while everything it is made
+        of is the same: the wires (immutable, so by the object), the bus cuts (by
+        value), the window's mutes and dim, and the function (a hot reload's is new)."""
+        sw = sl.switches
+        of = (output_shows, sw.scene, sw.hands, sw.dim, fx_on, visible, master, bus_cuts)
+        kept = self.__dict__.setdefault("_black_kept", {})
+        got = kept.get(sl.n)
+        if got is None or got[0] is not wiring or got[1] != of:
+            got = kept[sl.n] = (wiring, of, output_shows(sw, fx_on, visible, master, wiring,
+                                                         n=sl.n, bus_cuts=bus_cuts)[1])
+        return got[2]
 
     @staticmethod
     def _black_text(ns: list[int]) -> str:

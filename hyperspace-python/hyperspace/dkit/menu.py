@@ -1181,12 +1181,7 @@ def sub_popup(ui, key: str, items, trig, a: float = 1.0, *,
         ui.dl = saved
         imgui.end_popup()
     else:
-        LAST_RECT.pop(key, None)
-        ui.anim.to(f"{key}:open", 0.0)
-        # a closed panel holds no open submenu: without this, the next open
-        # of the same menu comes up with the last submenu already showing -
-        # and its children's rects outlive the children
-        _forget(ui, key)
+        _closed(ui, key)
     imgui.pop_style_color()
     imgui.pop_style_var(4)
     return chosen
@@ -1500,6 +1495,9 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
     which reads wrong for a row action: the menu should land in the same
     place however you arrived at the button.
     """
+    if not imgui.is_popup_open(key):      # what `begin_popup` would answer: nothing to size
+        _closed(ui, key)
+        return None
     cw, ch = measure(ui, items, min_w)
     w, h = cw + 2 * PAD, ch + 2 * PAD
     scrolls = False
@@ -1602,12 +1600,18 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
         ui.dl = saved
         imgui.end_popup()
     else:
-        LAST_RECT.pop(key, None)
-        ui.anim.to(f"{key}:open", 0.0)
-        # a closed panel holds no open submenu: without this, the next open
-        # of the same menu comes up with the last submenu already showing -
-        # and its children's rects outlive the children
-        _forget(ui, key)
+        _closed(ui, key)
     imgui.pop_style_color()
     imgui.pop_style_var(4)
     return chosen
+
+
+def _closed(ui, key: str) -> None:
+    """A frame menu `key` is closed: its open animation back to the start, its
+    rect gone (`LAST_RECT`)."""
+    LAST_RECT.pop(key, None)
+    ui.anim.to(f"{key}:open", 0.0)
+    # a closed panel holds no open submenu: without this, the next open
+    # of the same menu comes up with the last submenu already showing -
+    # and its children's rects outlive the children
+    _forget(ui, key)

@@ -9110,6 +9110,11 @@ Headless: `tests/test_catalog.py` (the counts, six faces at every corner, every 
 Headless: `tests/test_quiet_off_air.py` (the chip on the deck row, a press and a second press, the canvas's pair drawn and not drawn, the gaps in the row kept as the air moves, a page state from before this edit). No restart: the chip is the page's own state.
 
 **920. Editing through a fade.** (a DualSense Edge or a hand on the crossfader, the rig) On GRAPH, on the deck that is on air, open a patch with a few nodes and start editing — drag a node, open a picker. Now fade to the other deck (the Edge's D-pad ← / →, or **fade**). *Pass:* the canvas takes a red frame and the inset of what is on air, the deck chip goes red and reads **off air**; press **quiet off air** and both go from the canvas while the chip stays red; the nodes under the hand never move, and the row's chips do not shift under it beyond the deck chip's own word growing. Press it again and the pair comes back. Say whether, with it quiet, you still know which deck is live from the chip alone. *Fail:* the inset or frame staying while it is lit, the chip losing its red, the canvas scrolling or a drag dropping when it is pressed, or the quiet forgotten while the app runs.
+## GE. A slim GRAPH head (row 1160, 2026-11-24)
+
+Headless: `tests/test_graph_head.py` (a shut menu builds nothing, every verb under its id, the chip's words, every chip and warning inside the page at three widths, no message moving the canvas).
+
+**940. The head with less on it.** (laptop, GRAPH, the window wide and then narrow) Edit for a few minutes: open **areas** and jump; open **canvas**, switch patch only and gpu cost, drag output behind's slider; refuse a cable and read the warning. *Pass:* nothing used every minute is behind a menu; the canvas chip tells you why nodes are missing without opening it; both menus open under their chips and a click on the canvas shuts them. Say whether a control should come back out. *Fail:* a warning cut or not seen, the canvas jumping as a message comes or goes, or a chip past the page's edge.
 ## FT. The Kinect (row 1130, 2026-11-24)
 
 Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).
@@ -9269,3 +9274,7 @@ Only a person can settle these:
 - NanoVG in the control window on the Mac's GL (417): the tests draw the
   lab's drawings through a stand-in NanoVG, and the shots were rendered
   on Mesa's software rasteriser; one look on Dillon's Mac so far.
+
+## GC. Thumbnails at 25 Hz (row 1150, 2026-11-24)
+
+**930. Thumbnails at 25 Hz.** (Mac, GRAPH at full frame rate) Open a light patch that moves, and one with a matte, a segment or a field node, GRAPH in view. *Pass:* the thumbnails move smoothly enough; none flickers dark, goes black or stays frozen while its node runs; the card chip and a knob turned on a carded effect show at once (within a frame or three); switching an input off dims its node about a tenth of a second later and lights it the moment it is back; scrolling a node into view shows its picture at once; output 1's picture and the backdrop move at the full frame rate. With the **panel:graph** source on a channel, the projected canvas looks the same. With **tint cables** and **gpu cost** lit, the hues and the numbers read as before.
