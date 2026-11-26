@@ -16209,3 +16209,12 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **To reverse.** Remove the kind line in `devices.kinds()`, `graph.CLOUD_DEVICES` and `media/ids.KINDS`.
 - **Built.** `kinect.KinectDevice`; `tests/test_kinect.py`. The demo patch: `loadable/kinect/`, `tests/test_kinect_preset.py`.
 - **Judge it.** 910, 911.
+
+### 1190. A running dive makes no mark
+
+- **What.** `Param.follow` on a continuous param does not call `writes.mark()` once its move is in `_drift`; a kind with no drift, or a base that is no number, still marks. `Undo._still` reads a polled base that differs from the held fingerprint only by a follow's drift (`undo._followed`, the difference `_same_fp` already reads as none) as unmoved. So no stack takes a fingerprint in a frame of a dive.
+- **Answer.** (rec). The owner asked for the idea to be tested, not decided.
+- **Other options.** Make `camera.pan` an `ObservedList` so it is a cell and not polled: wider (every writer of the view's pan), and its `__setitem__` marks on every write, which `_land` makes each frame. A separate counter for follows: a second thing for `_still` to read, and the same result.
+- **To reverse.** Put `writes.mark()` back at the end of `Param.follow`'s continuous branch and drop `undo._followed` from `_still`.
+- **Built.** `params.Param.follow`, `undo.Undo._still` / `undo._followed`; `tests/test_fractal_dive.py::test_a_running_dive_takes_no_fingerprint` and neighbours, `tests/test_writes.py`.
+- **Judge it.** Undo steps must open, close and label on the same frame as before: 126,000 frames of seeded dive, edit, undo, redo and load schedules traced identically to `main`'s (a temporary harness, not in the tree).
