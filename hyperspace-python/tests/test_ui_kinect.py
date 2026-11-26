@@ -16,6 +16,9 @@ from ui_driver import Driver
 
 from hyperspace import graphview, kinect, ui, ui_graph, ui_kinect
 
+# a window of its own: "side" is test_dial's, and a layout saved under it (imgui.ini) reaches that test
+PANE_WINDOW = "kinect.pane.test"
+
 ALL = {"kinect.tilt", "kinect.tilt.go", "kinect.tilt.level", "kinect.led", "kinect.ir",
        "kinect.video.off", "kinect.video.color", "kinect.video.ir", "kinect.auto_exposure",
        "kinect.white_balance", "kinect.flicker", "kinect.exposure", "kinect.restart",
@@ -84,7 +87,7 @@ class Pane:
         imgui.new_frame()
         imgui.set_next_window_pos(imgui.ImVec2(10, 10))
         imgui.set_next_window_size(imgui.ImVec2(*self.size))
-        imgui.begin("side", None, imgui.WindowFlags_.no_move)
+        imgui.begin(PANE_WINDOW, None, imgui.WindowFlags_.no_move)
         ui_graph._side(r.panel, st, st["view"], ("node", node(self.dev)))
         imgui.end()
         imgui.end_frame()
@@ -98,6 +101,7 @@ class Pane:
 @pytest.fixture()
 def rig(tmp_path):
     with build_rig(tmp_path) as r:
+        imgui.get_io().set_ini_filename("")           # these tests save no layout (imgui.ini)
         r.panel.desk = False
         ui_graph._state(r.panel)               # (made by a frame, below)
         from test_ui_shell import frame
@@ -267,7 +271,7 @@ def test_other_devices_panes_are_as_they_were(rig, monkeypatch):
     for kind in ("gamepad", "midi", "hands", "osc", "cloud", ""):
         n = graphview.VNode(f"device:{kind or 'x'}", "device", kind or "x", ref=NS(kind=kind, io=None))
         imgui.new_frame()
-        imgui.begin("side")
+        imgui.begin(PANE_WINDOW)
         ui_graph._node_side(rig.panel, st, st["view"], None, n)
         imgui.end()
         imgui.end_frame()
@@ -276,7 +280,7 @@ def test_other_devices_panes_are_as_they_were(rig, monkeypatch):
     assert not ui_kinect.is_kinect_node(graphview.VNode("render:acid", "render", "acid", ref=Dev()))
     n = node(Dev())
     imgui.new_frame()
-    imgui.begin("side")
+    imgui.begin(PANE_WINDOW)
     ui_graph._node_side(rig.panel, st, st["view"], None, n)
     imgui.end()
     imgui.end_frame()
@@ -513,7 +517,7 @@ def test_a_disabled_kinect_entry_stays_on_the_generic_pane(rig, monkeypatch):
     monkeypatch.setattr(ui_kinect, "body", lambda panel, dev: calls.append(dev))
     st = ui_graph._state(rig.panel)
     imgui.new_frame()
-    imgui.begin("side")
+    imgui.begin(PANE_WINDOW)
     ui_graph._node_side(rig.panel, st, st["view"], None, n)             # must not raise
     imgui.end()
     imgui.end_frame()
