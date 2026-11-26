@@ -101,25 +101,26 @@ def test_googlenet_has_57_convs_to_inception5b_and_folding_keeps_its_output(g):
     assert not any(isinstance(m, torch.nn.BatchNorm2d) for m in net.modules())
 
 
-def test_the_fit_recovers_overhead_and_arithmetic(g):
-    o, c = 0.24, 3.4e-10
+def test_the_fit_recovers_its_four_terms(g):
+    fixed, o, p, c = 1.5, 0.04, 5.3, 0.63       # GoogLeNet folded, M3 Max, 2026-11-25
     rows = []
-    for convs, macs in ((7, 186048), (13, 305856), (51, 30167), (57, 31582)):
-        for w, h in ((456, 256), (960, 540)):
-            r = g.Row("x", "l", "eager", "fp32", "step", h, w, h, convs=convs, macs_px=macs)
-            r.p50 = o * convs + c * macs * w * h
+    for convs, macs in ((1, 2352), (3, 9519), (9, 12070), (33, 23331)):
+        for w, h in ((456, 256), (960, 540), (1920, 1080)):
+            r = g.Row("x", "l", "fold", "fp32", "step", h, w, h, convs=convs, macs_px=macs)
+            r.p50 = fixed + o * convs + p * w * h / 1e6 + c * macs * w * h / 1e9
             rows.append(r)
     f = g.fit(rows)
-    assert f["o_ms_per_conv"] == pytest.approx(o, rel=1e-6)
-    assert f["c_ms_per_gmac"] == pytest.approx(c * 1e9, rel=1e-6)
+    for term, want in zip(g.TERMS, (fixed, o, p, c), strict=True):
+        assert f[term] == pytest.approx(want, rel=1e-6, abs=1e-9)
     assert f["max_resid_ms"] < 1e-6
-    assert g.fit(rows[:1]) is None
-    assert g.fit(rows[:2]) is None                 # one layer at two sizes: no split
-    # a run that would fit a negative term keeps both at or above zero
-    noisy = rows[:4]
-    noisy[0].p50, noisy[1].p50, noisy[2].p50, noisy[3].p50 = 9.0, 1.0, 9.0, 1.0
+    assert g.fit(rows[:3]) is None                 # one layer: the terms can't be told apart
+    assert g.fit(rows[::3]) is None                # one size: likewise
+    # noise that would fit a negative term keeps every term at or above zero
+    noisy = rows[:6]
+    for r, v in zip(noisy, (9.0, 1.0, 9.0, 1.0, 9.0, 1.0), strict=True):
+        r.p50 = v
     f = g.fit(noisy)
-    assert f["o_ms_per_conv"] >= 0 and f["c_ms_per_gmac"] >= 0
+    assert all(f[t] >= 0 for t in g.TERMS)
 
 
 @pytest.mark.slow
@@ -136,4 +137,4 @@ def test_a_tiny_run_goes_end_to_end(g, tmp_path, capsys):
     assert {f["arch"] for f in result["fits"]} == {"vgg16", "googlenet"}
     assert result["label"] == "test"
     text = capsys.readouterr().out
-    assert "## googlenet · fp32 · step" in text and "o ms/conv" in text
+    assert "## googlenet · fp32 · step" in text and "p ms/Mpx" in text

@@ -11,12 +11,14 @@ dream.net_stack / cut_stack, dream.dream_step — not the spike's trunks in
 common.py) for every layer the layer menu offers, at each resolution, in
 each execution mode, and fits each net's cost to
 
-    ms per step ≈ o × (convs up to the layer) + c × (multiply-adds per pixel) × pixels
+    ms per step ≈ fixed + o × convs + p × megapixels + c × GMAC
 
-so `o` is the fixed cost per conv (launches, dispatch, the BN and ReLU
-riding with it) and `c` the cost of the arithmetic. Eager GoogLeNet is
-mostly `o` (plan 20: inception5b's ~3 ms of arithmetic measured 29 ms at
-256 px); the modes below are the ways to take it out.
+`o` is the cost per conv (launches, dispatch, the BN and ReLU riding with
+it), `p` the per-pixel cost no multiply-add accounts for (elementwise work,
+memory traffic), `c` the arithmetic. On the M3 Max (2026-11-25, --quick):
+eager GoogLeNet pays o ≈ 0.18 ms a conv, folding its BNs cuts that to
+0.04 with no compiler, inductor to 0.03 but with slower arithmetic; and p
+is 5–10 ms a megapixel on every layer, the floor at high resolution.
 
 Modes (--modes, comma-separated; each is '+'-joined tokens):
 
@@ -371,26 +373,44 @@ def time_call(call, sync, n: int, warm: int) -> tuple[float, dict[str, float]]:
 
 # ------------------------------------------------------------------ the fit
 
+TERMS = ("fixed", "o", "p", "c")   # ms per call, per conv, per megapixel, per GMAC
+
+
 def fit(rows: list[Row]) -> dict[str, Any] | None:
-    """Least squares of ms = o·convs + c·macs_px·px over `rows` (one net,
-    mode, precision and pass), neither term below zero. None unless the rows
-    hold at least two layers (two conv counts): with one, any fixed cost
-    passes for `o` and the split means nothing."""
+    """Least squares of ms = fixed + o·convs + p·Mpx + c·GMAC over `rows`
+    (one net, mode, precision and pass), every term ≥ 0: the best fit over
+    the subsets of terms whose own fit has none negative. `p` is the
+    per-pixel cost no multiply-add accounts for (the elementwise work, the
+    full-size activations' memory traffic) — on the M3 it is the floor
+    under every layer at high resolution. None unless the rows hold at
+    least two layers and two sizes: with fewer the terms cannot be told
+    apart."""
+    import itertools
+
     pts = [r for r in rows if r.p50 is not None and r.convs]
-    if len({r.convs for r in pts}) < 2:
+    if len({r.convs for r in pts}) < 2 or len({r.px for r in pts}) < 2:
         return None
-    A = np.array([[r.convs, r.macs_px * r.px] for r in pts], dtype=float)
+    A = np.array([[1.0, r.convs, r.px / 1e6, r.macs_px * r.px / 1e9] for r in pts])
     y = np.array([r.p50 for r in pts], dtype=float)
-    (o, c), *_ = np.linalg.lstsq(A, y, rcond=None)
-    if o < 0 or c < 0:                    # the better one-term fit, the other held at 0
-        col = [(0, float(A[:, 0] @ y / (A[:, 0] @ A[:, 0]))),
-               (1, float(A[:, 1] @ y / (A[:, 1] @ A[:, 1])))]
-        best = min(col, key=lambda kc: float(np.sum((A[:, kc[0]] * kc[1] - y) ** 2)))
-        o, c = (best[1], 0.0) if best[0] == 0 else (0.0, best[1])
-    resid = A @ np.array([o, c]) - y
-    return {"o_ms_per_conv": float(o), "c_ms_per_gmac": float(c * 1e9),
-            "gmac_per_s": float(1e3 / (c * 1e9)) if c > 0 else None,
-            "max_resid_ms": float(np.abs(resid).max()), "points": len(pts)}
+    best: tuple[float, np.ndarray] | None = None
+    for k in range(1, A.shape[1] + 1):
+        for cols in itertools.combinations(range(A.shape[1]), k):
+            x, *_ = np.linalg.lstsq(A[:, cols], y, rcond=None)
+            if (x < 0).any():
+                continue
+            full = np.zeros(A.shape[1])
+            full[list(cols)] = x
+            err = float(np.sum((A @ full - y) ** 2))
+            if best is None or err < best[0]:
+                best = (err, full)
+    if best is None:
+        return None
+    coef = best[1]
+    resid = A @ coef - y
+    out = {f"{t}": float(v) for t, v in zip(TERMS, coef, strict=True)}
+    out.update({"gmac_per_s": float(1e3 / coef[3]) if coef[3] > 0 else None,
+                "max_resid_ms": float(np.abs(resid).max()), "points": len(pts)})
+    return out
 
 
 # ------------------------------------------------------------------ main
@@ -542,13 +562,15 @@ def report(result: dict[str, Any]) -> str:
         out.append("\n## Errors\n")
         out.append("\n".join(f"- `{m}`: {n}" for m, n in errors))
     if result["fits"]:
-        out.append("\n## The fit: ms ≈ o × convs + c × multiply-adds\n")
-        out.append("o is the fixed cost per conv (what compiling should remove); c is the "
-                   "arithmetic, shown as ms per billion multiply-adds and its rate.\n")
+        out.append("\n## The fit: ms ≈ fixed + o × convs + p × megapixels + c × GMAC\n")
+        out.append("fixed is per call; o per conv (launches: what folding and compiling should "
+                   "remove); p per megapixel whatever the layer (elementwise work and memory "
+                   "traffic: the floor at high resolution); c per billion multiply-adds.\n")
         out.append(md_table(
-            ["net", "mode", "precision", "pass", "o ms/conv", "c ms/GMAC", "GMAC/s", "worst miss ms", "points"],
-            [[f["arch"], f["mode"], f["precision"], f["pass"], f"{f['o_ms_per_conv']:.3f}",
-              f"{f['c_ms_per_gmac']:.3f}", "" if f["gmac_per_s"] is None else f"{f['gmac_per_s']:.0f}",
+            ["net", "mode", "precision", "pass", "fixed ms", "o ms/conv", "p ms/Mpx", "c ms/GMAC",
+             "GMAC/s", "worst miss ms", "points"],
+            [[f["arch"], f["mode"], f["precision"], f["pass"], f"{f['fixed']:.2f}", f"{f['o']:.3f}",
+              f"{f['p']:.2f}", f"{f['c']:.3f}", "" if f["gmac_per_s"] is None else f"{f['gmac_per_s']:.0f}",
               f"{f['max_resid_ms']:.2f}", f["points"]] for f in result["fits"]]))
     return "\n".join(out)
 
