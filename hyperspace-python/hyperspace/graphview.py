@@ -3914,7 +3914,8 @@ def kept_words(row: Any) -> str:
 
 # ---- plan 40 T3: a spawn's open pins, a patch's boundary in words ----
 
-PICTURE_NOUNS = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask", FIELD: "field"}
+PICTURE_NOUNS = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask", FIELD: "field",
+                 rgraph.STACK: "stack"}   # plan 90 (Devin on #519: a saved stack inlet)
 OPEN_PIN = "{id} · open (was {was})"
 
 

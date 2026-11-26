@@ -13,13 +13,17 @@
 uniform float u_shape;   // @param -1 1 0 "Shape" Bends every channel: 0 straight, up to 1 only the bright parts stay (x⁴), down to −1 lifted (x^¼).
 uniform int u_invert;    // @param choice [off|on] 0 "Invert" Turn it over: bright for dark (within the picture's own alpha).
 
-// on straight colour, premultiplied again after (Devin on #519): black stays
-// black at any shape, and a see-through pixel stays as see-through
+// bent relative to the pixel's own scale — its coverage, or its brightest
+// channel where that is above it (a glow black is clear kept the colour of:
+// keep colour) — and scaled back, alpha untouched (Devin on #519): black
+// stays black, a see-through pixel as see-through, a kept glow as bright,
+// and Shape 0 is the picture as it was
 vec4 effect(vec2 uv) {
     vec4 c = src(uv);
-    if (c.a <= 0.0) return vec4(0.0);
-    vec3 s = clamp(c.rgb / c.a, 0.0, 1.0);
+    float m = max(c.a, max(c.r, max(c.g, c.b)));
+    if (m <= 0.0) return c;
+    vec3 s = clamp(c.rgb / m, 0.0, 1.0);
     vec3 y = pow(s, vec3(exp2(2.0 * u_shape)));
     if (u_invert == 1) y = 1.0 - y;
-    return vec4(y * c.a, c.a);
+    return vec4(y * m, c.a);
 }

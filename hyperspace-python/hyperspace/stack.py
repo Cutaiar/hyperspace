@@ -59,7 +59,9 @@ def frame_bytes(size: tuple[int, int]) -> int:
 # every stack holding a texture, by the context it is on: the two decks' renderers
 # are siblings on one context (`Renderer.sibling`), so the budget is the context's,
 # not a renderer's (Devin on #519)
-_LIVE: weakref.WeakSet = weakref.WeakSet()
+# (kept across a hot reload of this module: the stacks alive hold their
+# textures through it — Devin on #519)
+_LIVE: weakref.WeakSet = globals().get("_LIVE") or weakref.WeakSet()
 
 
 def held(ctx: Any, but: Any = None) -> int:
@@ -101,6 +103,11 @@ class DelayStack:
     # ---- the frames ----
 
     def ensure(self, ctx: moderngl.Context, size: tuple[int, int], depth: int) -> bool:
+        if self.tex is not None:
+            _LIVE.add(self)                    # (a stack from before a reload counts again)
+        return self._ensure(ctx, size, depth)
+
+    def _ensure(self, ctx: moderngl.Context, size: tuple[int, int], depth: int) -> bool:
         """The array at `size` with room for `depth` layers, made again — clean
         — when the size changed or the depth grew past its room. A smaller
         depth keeps it (a reader reads fewer: `read`), so a hand or an LFO on

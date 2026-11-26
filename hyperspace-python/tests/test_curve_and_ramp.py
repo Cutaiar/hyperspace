@@ -122,3 +122,16 @@ def test_curve_keeps_black_black_and_premultiplied_colour_within_alpha(ctx):
     assert got[0, :, 3].max() <= 65 and got[0, :, :3].max() <= got[0, :, 3].max()
     inv = _curve(ctx, 0.0, invert=1, px=px)
     np.testing.assert_allclose(inv[0, 0], (0, 0, 0, 64), atol=1)    # white inverted: clear-black
+
+
+def test_curve_at_shape_0_leaves_a_kept_glow_as_it_is(ctx):
+    """A picture keyed with keep colour has colour above its coverage (a glow);
+    a neutral Curve passes it through, and a bent one keeps its brightness
+    relative to it, never cutting it to its alpha (Devin on #519)."""
+    px = np.zeros((H, W, 4), np.uint8)
+    px[..., :] = (128, 64, 0, 51)                  # colour above alpha: a kept glow
+    px[1, :, :] = (100, 0, 0, 0)                   # a glow with no coverage at all
+    got = _curve(ctx, 0.0, px=px)
+    np.testing.assert_allclose(got[..., :3], px[..., :3], atol=1)
+    bent = _curve(ctx, 0.5, px=px)
+    assert bent[0, 0, 0] > 51 and bent[1, 0, 0] > 0

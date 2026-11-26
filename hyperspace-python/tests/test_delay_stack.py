@@ -348,3 +348,27 @@ def test_trail_over_takes_a_keyed_scenes_clear_black_as_clear(ctx):
         got = _draw(ctx, r, s, hue, t=1.0 + i / 60)
     got = _draw(ctx, r, s, 0.0, t=1.0 + 3 / 60)
     assert got[0][0] > 200, got[0]                # the red copy shows through clear black
+
+
+def test_a_saved_stack_inlet_has_words_in_the_patch_list():
+    """A patch saved with a stack inlet is listed with words for it, never a
+    KeyError that closes the browser (Devin on #519)."""
+    from hyperspace import graphview
+
+    doc = {"ports": [{"id": "in", "type": "stack", "to": "read.stack", "was": "delay"},
+                     {"id": "out", "type": "image", "from": "read"}]}
+    words = graphview.patch_words(doc)
+    assert "in: stack" in words
+
+
+def test_the_stack_budget_survives_a_hot_reload_of_its_module(ctx):
+    """A reload of `stack` keeps what every live stack holds counted (Devin on #519)."""
+    import importlib
+
+    from hyperspace import stack
+
+    st = stack.DelayStack()
+    assert st.ensure(ctx, (8, 8), 2)
+    importlib.reload(stack)
+    assert stack.held(ctx) == st.bytes()
+    st.release()
