@@ -807,6 +807,14 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
         # writes it, ends with its look-back split as its values had it)
         values = source_doc(loaded_patch, slug).get("values") or {}
         wired = graphmigrate.split_lookback(wired, graphmigrate.look_of(values))
+        # (plan 90 H2: and, as the ladder's last step, the look-back made its
+        # public parts — the same names the load gave them, its values landed)
+        nodes, wires, _, _, keys, notes = graphmigrate.retire_lookbacks(
+            list(wired.get("nodes") or []), list(wired.get("wires") or []), {},
+            keys=list(wired.get(G.KEYS_KEY) or []))
+        if notes:
+            wired = {**wired, "nodes": nodes, "wires": wires,
+                     **({G.KEYS_KEY: keys} if keys else {})}
     return wired
 
 

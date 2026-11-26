@@ -1017,6 +1017,11 @@ here; overturn → the change, then the same.
 | 1172 | The stack's readers are effect files: Read (At steps back, a field on At a time displace; Between) and Trail (Level, Fade half-life, Lay over / add), `@takes stack stack`, bound on unit 2; only they declare the stack | 960, 961 | owner — 2026-11-26 (plan 90 Q21, Q13) |
 | 1173 | Curve, a picture's remap with the lane modifier `curve`'s name and knobs (Shape 4^shape, Invert); contrast c is Shape log₄ c | 962 | owner — 2026-11-26 (plan 90 Q15) |
 | 1174 | Black is clear's ramp, appended: smooth (the default) or linear — brightness as coverage at level 0, softness 1 on peak | 962 | owner — 2026-11-26 (plan 90 Q19) |
+| 1175 | The look-back is retired onto public parts. A saved look-back (`lookback`, `lookback.<n>`) opens as Curve (where contrast ≠ 1 or a row drives it) → Fade (1 − darken, keyed: peak, linear, level 0, soft 1, keep colour) → Resize (512 long side) → Delay (depth = echoes, Hz = 1 / gap, every frame at gap 0) ═► Trail (level, fade, over) → Cut (inverted, by a Matte of its occluder) → Cut (inverted, by its cover), each at its occlude; an echo pin is a Read at k − 1, nearest, a second delay past the echoes. `graphmigrate.lookbacks`, the ladder's last step, no schema bump, said on load. Rows keep their reach; a row on gap is left out, said; darken, contrast and res stay the dream's until H3, a row on one copied onto the part | 963, 966, 967 | owner — 2026-11-26 (plan 90 Q24–Q27) |
+| 1176 | Matte gains Key's peak measure (`matte.from` 3, appended) and its ramp (`matte.ramp`: smooth, linear); one measure and one ramp for Key and Matte, written once (`glsl.KEY_SHAPE`) | 964 | owner — 2026-11-26 (plan 90 Q23) |
+| 1177 | The tracers starters are a Delay (8, 30 Hz) → Trail (lay add) → Composite (add), tracers + dream the same through the dream; never refused for a second | 965 | owner — 2026-11-26 (plan 90 Q28) |
+| 1178 | A migrated look-back's parts are effects, so `fx.on` and `fx.mix` gate and scale them where the look-back drew regardless: the migration turns `fx.on` on and `fx.mix` to 1 only where needed, the patch's other effects kept as they drew (off where the master was off, their mix × the master's), said; a row on `fx.on` / `fx.mix` now moves the parts too, said | 963 | (rec) — the owner to confirm |
+| 1179 | `scene.cover` goes into any mask port (a cut's mask); its node is `scene(cover)`, made where a wire takes it. A live graph refuses a look-back or an echo pin in words (`LOOKBACK_RETIRED`); a migration's read still reads one | 963 | (rec) — follows from 1175 |
 
 "—": no hand check shows it; tests only.
 
@@ -16260,3 +16265,36 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **What.** `key.<node>.ramp` (appended: smooth, plan 87's and the default; linear), on graph keys and channel keys alike (`glsl.KEY_RAMP`, `media_tex.Key.ramp`, MEDIA's key rows). At level 0, softness 1 on peak, linear makes a pixel's brightness its coverage exactly — the look-back's and the dream's private rule (`POST_FS`, `DREAM_FS`), which H2 and H3 retire.
 - **Answer.** owner, 2026-11-26 (plan 90 Q19): the linear shape, appended, general.
 - **Judge it.** 962.
+
+### 1175. The look-back retired onto public parts
+
+- **What.** `lookback`, `History`, `Capture`, `EchoNode`, the atlas, `POST_FS`, `TRAIL_VARIANTS`, `_trail_of` / `lay_onto`, `fit_atlas`, `LOOKBACK_KEYS`, `is_lookback_knob`, `declare_lookbacks`, `ViewState.lookback`, GRAPH's look-back area and echo pins and the LOOKBACK page's look-back half are deleted. A saved look-back is public parts on load (`graphmigrate.lookbacks`, keyed on a look-back node, entry or echo pin; the loadable ladder's last step after `hue_turns`, and the fragment ladder's): X → Curve (shape log₄ contrast; only where contrast ≠ 1 or a row drives it) → Fade (level 1 − darken; keyed black is clear: peak, linear, level 0, soft 1, keep colour) → Resize (512 on the long side, Q24) → Delay (depth = echoes; every Hz at 1 / gap, gap 0 every frame) ═► Trail (level = echo_mix, fade, lay over) → Cut (amount = occlude, inverted; mask a Matte of the occluder: peak, linear, key ⅛, soft ⅛ — `min(4 · peak, 1)`) → Cut (amount = occlude, inverted; mask the cover) → where the look-back's picture went. Each part takes the next free instance of its kind. `lookback.echo.<k>` → a Read (At k − 1, nearest) of that delay; a pin deeper than the echoes reads a second delay at that depth, the same input (Q25).
+- **Values and rows.** echo_mix → `fx.trail.level`, fade → `fx.trail.fade` (the same ranges: exact); echoes → `delay.depth` (a push re-drawn across 1–64, a set's norm moved, an abs row kept and said); darken → `fx.fade.level` (a push flipped, a set turned over); contrast → `fx.curve.shape` (a push about the file's contrast); occlude → each Cut's amount; gap → `delay.hz`, a row on gap left out and said (its inverse is no straight line, Q27). `dream.darken`, `contrast` and `res` stay the dream's until H3 (it reads them); a row on one is copied onto the part too (Q26). The retired knobs of a patch with no look-back drew nothing: their values go quietly, a row on one is left out, said; a dream module preset still naming them lands without them (`lookback_retired`).
+- **Exact where.** `tests/test_lookback_parts_exact.py` draws the migrated chain over changing pictures against a numpy transcription of the old trail pass, at a size where the Resize is the identity: within one level of 255; two where darken ≠ 0 (the faded picture is held at 8 bits before the delay; the old ring darkened each layer in float). The Cuts are inverted: a cut keeps what its mask passes, and the wake was held back where the occluder is bright or a face drawn. The two Cuts equal the old `max(occluder, cover)` wherever the cover is 0 or 1 at occlude 0 or 1; at a partial occlude where both cover, they hold back up to a quarter more.
+- **Whole files.** `tools/lookback_proof.py`: party-tracer, party-wake, kinetic-clay and echo-faces drawn through `main`'s code (a worktree, its import asserted) and through the migrated patch, 48 frames at a pinned clock, 480 × 300. kinetic-clay is byte for byte (its trail is fully held back). The lit area agrees within half a percent; peaks differ (party-tracer up to 204 levels on 3 % of pixels; party-wake 87 on 7 %; echo-faces 42 on 1 %) for two stated reasons — the delay's Hz grid takes its first picture a frame later than the old `gap` clock did, so the copies of a moving shape sit one frame apart; and the copies are kept at 512 × 320, sharp, where the ring kept 408 × 256 mip-blurred, so thin lines cover their own more. `tools/fx_sweep.py` saved on `main` and checked here: 2916 renders of every effect file in both, 0 differ.
+- **To reverse.** Drop the ladder's last step and the parts' notes; the old code is in `main`'s history.
+- **Built.** `graphmigrate.retire_lookbacks` / `lookbacks` / `lookback_retired`, `patches._retire_lookbacks`, the deletions above; `tests/test_lookback_migration.py`, `tests/test_lookback_parts_exact.py`, `tools/lookback_proof.py`; example `stack-lookback`.
+- **Judge it.** 963, 966, 967.
+
+### 1176. Matte's peak and ramp
+
+- **What.** `matte.from` gains peak (index 3, appended: a saved 0–2 keeps its source); `matte.ramp` (smooth, linear) is Key's ramp. The measure (peak, Rec. 709 luma) and the ramp between two values are written once (`glsl.KEY_SHAPE`: `key_measure`, `key_between`) and read by Key's pass and Matte's (plan 67 §3.11). A matte with the defaults draws as before (`tests/test_matte_peak.py`).
+- **Answer.** owner, 2026-11-26 (plan 90 Q23). The alternative, a mask union op (`max` of two masks), is used by nothing else.
+- **Judge it.** 964.
+
+### 1177. The tracers starters
+
+- **What.** **tracers**: a new delay (depth 8, 30 Hz) read by a new Trail (lay add) and added on the picture by a new composite (blend add), where the picture went; **tracers + dream** the same through the dream. Never refused for a second: each is its own parts. A migrated file gets the whole chain, not a starter.
+- **Answer.** owner, 2026-11-26 (plan 90 Q28).
+- **Judge it.** 965.
+
+### 1178. The master switch over a migrated look-back
+
+- **What.** The look-back drew whatever `fx.on` and `fx.mix` said; its parts are effects, which the master switches and scales. So where a migrated patch has `fx.on` off or `fx.mix` below 1, the migration turns `fx.on` on and `fx.mix` to 1, and keeps every other effect of the patch drawing as it did: switched off where the master was off, its own mix × the master's where the master was below 1. Said on load; a row on `fx.on` or `fx.mix` is said too (it now moves the parts as well). party-tracer and party-wake had `fx.on` off.
+- **Answer.** (rec) The owner to confirm — the alternative is a look-back's parts outside the master (a flag no other effect has).
+- **Judge it.** 963.
+
+### 1179. The faces' cover, any mask port
+
+- **What.** `scene.cover` goes into any mask port, a cut's first (it went into `lookback.cover` alone); its render node is `scene(cover)`, built where a wire takes it and drawn then. A live graph refuses a look-back or an echo pin, wire or entry, in words (`graph.LOOKBACK_RETIRED`); a migration's read (`placements=True`, the ladder's earlier steps) still reads them.
+- **Judge it.** 963.

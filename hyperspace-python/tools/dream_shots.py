@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The dream worker live in the real pipeline, offscreen (WP6b).
 
-Renders a rotating 24-cell at 1280×820 through Renderer + Lookback with
+Renders a rotating 24-cell at 1280×820 through Renderer + the dream with
 the DreamWorker on the slot, paced at 60 fps like a vsynced window, the
 worker free-running (latest wins), and writes the composite at the last
 frame to docs/plans/assets/06-lookback/dream-live.png. Then reports the
@@ -185,8 +185,8 @@ def main() -> None:
                                  dither=Image.Dither.FLOYDSTEINBERG).save(OUT, optimize=True)
     print(f"wrote {OUT} ({OUT.stat().st_size / 1e3:.0f} kB)")
 
-    none_times, _ = run(ctx, DreamState(on=True, echoes=0, gap=0.0), None, args.frames)
-    print(f"\n{args.layer} {args.precision} at {r.lookback.echo[0]}x{r.lookback.echo[1]}, "
+    none_times, _ = run(ctx, DreamState(on=True), None, args.frames)
+    print(f"\n{args.layer} {args.precision} at {r.dreamer.size[0]}x{r.dreamer.size[1]}, "
           f"{args.frames} frames paced at 60 fps, renderer at {W}x{H} (ms)")
     print("| what | p50 | p99 | max | n |")
     print("|---|---|---|---|---|")

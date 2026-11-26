@@ -58,7 +58,7 @@ FREE = ("branch-two-sizes", "media-chain-backdrop", "media-chain-faces", "switch
 REAL = tuple(sorted((n for n, s in FxState().specs.items()
                      if s.makes != "field" and "image" in G.effect_ports(n)[1]),
                     key=lambda n: (FxState().specs[n].order, n)))
-CONCERNS = (graphview.AUDIO, graphview.SCENE_AREA, graphview.LOOKBACK_AREA, graphview.EFFECTS_AREA,
+CONCERNS = (graphview.AUDIO, graphview.SCENE_AREA, graphview.EFFECTS_AREA,
             graphview.OUTPUTS_AREA)
 
 
@@ -216,10 +216,10 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     assert {area[k] for k in ("render:shape", "render:hands", "render:scene",
                               "render:hands.layer", "group:hands",
                               "group:cloud")} == {graphview.SCENE_AREA}
-    # (plan 36 T4: party-trip's look-back was off — none drawn; party-tracer's on)
+    # (plan 90 H2: party-tracer's look-back is a delay and a trail now)
     assert "render:lookback" not in area
     tracer = {n.id: n.area for n in load(rig, "party-tracer")["view"].nodes}
-    assert tracer["render:lookback"] == graphview.LOOKBACK_AREA
+    assert "render:lookback" not in tracer and tracer["render:delay"] == graphview.MEDIA
     assert {area[k] for k in ("render:acid", "render:palette",
                               "render:composite")} == {graphview.EFFECTS_AREA}
     assert "render:copy" not in area                    # (plan 89: acid's slot, on acid)
@@ -230,8 +230,8 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
 
 
 def test_a_scene_picture_into_a_switch_runs_back_by_design(rig):
-    """Plan 33 T6: an effect on the look-back wired into a switch (`lookback
-    → acid.2 → switch.in1`, the switch into output 2) is the scene's
+    """Plan 33 T6: an effect on the scene wired into a switch (`scene →
+    acid.2 → switch.in1`, the switch into output 2) is the scene's
     picture — it stays with the effects — so its cable into the switch,
     which sits with the media, runs back: one of `returns` (as a wrapped
     row's is). No other wire runs back. (Into the faces, the pattern or the
@@ -242,9 +242,8 @@ def test_a_scene_picture_into_a_switch_runs_back_by_design(rig):
                          "nodes": [{"kind": "effect", "file": "acid", "instance": 2},
                                    {"kind": "switch"}],
                          "wires": [{"from": "shape", "to": "scene.geometry"},
-                                   {"from": "scene", "to": "lookback.image"},
-                                   {"from": "lookback", "to": "output.all.image"},
-                                   {"from": "lookback", "to": "acid.2.image"},
+                                   {"from": "scene", "to": "output.all.image"},
+                                   {"from": "scene", "to": "acid.2.image"},
                                    {"from": "acid.2", "to": "switch.in1"},
                                    {"from": "switch", "to": "output.2.image"}]})
     assert not spec.notes
@@ -706,66 +705,45 @@ def test_no_cable_runs_backwards_across_areas(rig, name):
 
 def test_a_node_is_laid_where_its_consumers_are(rig):
     """Plan 37 C3: an effect whose consumers sit left of the effects is laid
-    in the leftmost of their areas that is not left of what feeds it —
-    acid.2 (the scene's picture, into the look-back and on into a
-    composite) in LOOK-BACK, at its first column; an effect fed by nothing
-    into the faces in SCENE; a chain of two into the look-back both in
-    LOOK-BACK; one fed by the look-back and kept into it (a loop by design)
-    stays with the effects. A saved position still wins (`layout`), and a
-    tidy lays it out by the same rule."""
-    st = load_fixture(rig, "acid-scene")
-    view = st["view"]
-    acid = view.node("render:acid.2")
-    assert acid.area == graphview.LOOKBACK_AREA
-    assert graphview.area_of(acid) == graphview.EFFECTS_AREA      # the table's is unchanged
-    assert acid.column < view.node("render:lookback").column
-    assert back_wires(view) == []
-    lay = ui_graph.areas_of(st, view)
-    assert lay.nodes["render:acid.2"][0] < lay.nodes["render:lookback"][0]
-    # a saved position wins: the rule names an area, it moves no placed node
-    rig.lib.loaded_patch.layout["render:acid.2"] = [4000, 4000]
-    frame(rig.panel, "graph")
-    assert st["applied"]["render:acid.2"] == (4000.0, 4000.0)
-
+    in the leftmost of their areas that is not left of what feeds it — an
+    effect fed by nothing into the faces in SCENE; one kept into a delay (a
+    loop by design: the cable is not counted as a consumer) stays with the
+    effects. (Plan 90 H2: the look-back's area, where acid-scene's acid.2
+    was laid, is retired with it.)"""
+    from hyperspace.params import declare_delays
     spec = G.read_graph({
         "frame": "wired",
         "nodes": [{"kind": "effect", "file": "acid", "instance": 2},
-                  {"kind": "effect", "file": "warp", "instance": 2},
-                  {"kind": "effect", "file": "palette", "instance": 2},
-                  {"kind": "effect", "file": "kaleido", "instance": 2}],
+                  {"kind": "effect", "file": "kaleido", "instance": 2}, {"kind": "delay"}],
         "wires": [{"from": "shape", "to": "scene.geometry"},
                   {"from": "acid.2", "to": "shape.faces"},              # fed by nothing
-                  {"from": "scene", "to": "warp.2.image"},              # a chain of two
-                  {"from": "warp.2", "to": "palette.2.image"},
-                  {"from": "palette.2", "to": "lookback.occluder"},
-                  {"from": "lookback", "to": "kaleido.2.image"},        # kept: a loop
-                  {"from": "kaleido.2", "to": "lookback.image"},
+                  {"from": "scene", "to": "kaleido.2.image"},
+                  {"from": "kaleido.2", "to": "delay.image"},           # kept: a loop
+                  {"from": "delay", "to": "output.2.image"},
                   {"from": "kaleido.2", "to": "output.all.image"}]})
+    declare_delays(rig.reg, ["delay"])
     g = G.build_graph(views(Switches(), Switches()), spec.wiring(),
-                      effects=(*REAL, "acid.2", "warp.2", "palette.2", "kaleido.2"))
+                      effects=(*REAL, "acid.2", "kaleido.2"))
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     area = {n.id: n.area for n in view.nodes}
     assert area["render:acid.2"] == graphview.SCENE_AREA
-    assert area["render:warp.2"] == area["render:palette.2"] == graphview.LOOKBACK_AREA
     assert area["render:kaleido.2"] == graphview.EFFECTS_AREA
     assert not spec.notes and backward_across_areas(view) == []
 
 
 def test_the_areas_run_by_primitive(rig):
     """Plan 35 G: the areas by primitive, left to right — MEDIA, SCENE,
-    LOOK-BACK, EFFECTS, OUTPUTS after the controllers, the audio and the
+    EFFECTS (plan 90 H2: the look-back's retired), OUTPUTS after the controllers, the audio and the
     modulation. The default frame's nodes sit where the owner's words put
     them (the camera the scene's), and no wire of it runs back."""
     assert graphview.AREAS == (graphview.CONTROLLERS, graphview.AUDIO, graphview.MODULATION,
-                               graphview.MEDIA, graphview.SCENE_AREA, graphview.LOOKBACK_AREA,
+                               graphview.MEDIA, graphview.SCENE_AREA,
                                graphview.EFFECTS_AREA, graphview.OUTPUTS_AREA)
     assert not hasattr(graphview, "SHADERS") and "geometry" not in graphview.TITLES
     view = load(rig, "party-trip")["view"]
     area = {n.id: n.area for n in view.nodes}
     assert {area[k] for k in ("render:shape", "render:scene", "render:hands",
                               "render:hands.layer")} == {graphview.SCENE_AREA}
-    tracer = {n.id: n.area for n in load(rig, "party-tracer")["view"].nodes}
-    assert tracer["render:lookback"] == graphview.LOOKBACK_AREA      # (plan 36 T4)
     assert {area[k] for k in ("render:acid", "render:palette")} == {graphview.EFFECTS_AREA}
     assert {area[k] for k in ("render:output.all", "render:output.1",
                               "render:output.2")} == {graphview.OUTPUTS_AREA}
@@ -777,8 +755,7 @@ def test_the_areas_run_by_primitive(rig):
     V = graphview.VNode
     for ref, want in ((G.Readout("hands.guide"), graphview.SCENE_AREA),
                       (G.BackdropNode("backdrop"), graphview.SCENE_AREA),
-                      (G.EchoNode("echo.2", 2), graphview.LOOKBACK_AREA),
-                      (G.DreamNode("dream"), graphview.LOOKBACK_AREA),
+                      (G.DreamNode("dream"), graphview.EFFECTS_AREA),
                       (G.Composite("composite"), graphview.EFFECTS_AREA),
                       (G.SwitchNode("switch"), graphview.MEDIA),
                       (G.Delay("delay"), graphview.MEDIA),
@@ -874,8 +851,7 @@ def test_a_resize_sits_by_what_it_is_made_of(rig):
     from hyperspace.params import declare_resizes
     spec = G.read_graph({"frame": "wired", "nodes": [{"kind": "resize"}],
                          "wires": [{"from": "shape", "to": "scene.geometry"},
-                                   {"from": "scene", "to": "lookback.image"},
-                                   {"from": "lookback", "to": "output.all.image"},
+                                   {"from": "scene", "to": "output.all.image"},
                                    {"from": "scene", "to": "resize.image"},
                                    {"from": "resize", "to": "output.2.image"}]})
     assert not spec.notes

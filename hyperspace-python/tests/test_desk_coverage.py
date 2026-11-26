@@ -159,11 +159,11 @@ def test_cannot_show_is_the_rule_by_group():
     assert cannot_show("fx.plasma.level", {**v, "fx.on": False}) == "effects off"
     assert cannot_show("fx.mix", {**v, "fx.on": False}) == "effects off"
     assert cannot_show("fx.on", {**v, "fx.on": False}) is None
-    # (plan 36 T4: `dream.on` is the dream's — a look-back's knob shows
-    # while one is drawn, whatever it says)
+    # (plan 36 T4: `dream.on` is the dream's; plan 90 H2: the look-back's
+    # knobs are retired, every `dream.*` is the dream node's)
     assert cannot_show("dream.mix", v) == "dream off"
-    assert cannot_show("dream.fade", v) is None
-    assert cannot_show("dream.fade", v, drawn=frozenset({"scene"})) == "no look-back"
+    assert cannot_show("dream.k", v) == "dream off"
+    assert cannot_show("dream.mix", v, drawn=frozenset({"scene"})) == "no dream"
     assert cannot_show("dream.on", v) is None
     assert cannot_show("rot.rate.XW", v) == "rotation off"
     assert cannot_show("view.plane.XY", v) == "rotation off"
@@ -196,7 +196,7 @@ def test_ranked_puts_the_loadables_own_params_first_in_tiers():
                     ("fx.kaleido.mix", ON), ("fx.kaleido.segments", ON),
                     ("view.speed", DESKED)]
     # the rest by group, the patch groups first, each in registry order:
-    # the plasma is off and the look-back is off (dead), so not this loadable patch's;
+    # the plasma is off and the dream is off (dead), so not this loadable patch's;
     # a shared meta param off its value is not "moved" (the loadable patch never sets it)
     assert rest == [("dream", ["dream.mix"]), ("fx", ["fx.plasma.level"]),
                     ("lfo", ["lfo.1.depth"]), ("band", ["band.0.post"]),
@@ -209,7 +209,7 @@ def test_ranked_is_pure_and_never_offers_a_dead_param_as_the_loadables():
     args = (PARAMS, dict(VALUES), dict(DEFAULTS), {"dream.mix"}, set())
     a = ranked(*args)
     assert ranked(*args) == a and args[1] == VALUES          # the same answer, nothing moved
-    assert "dream.mix" not in [p for p, _ in a[0]]           # routed, but the look-back is off
+    assert "dream.mix" not in [p for p, _ in a[0]]           # routed, but the dream is off
     used, _rest = ranked(PARAMS, {**VALUES, "dream.on": True}, DEFAULTS, {"dream.mix"}, set())
     assert used[0] == ("dream.mix", ROUTED)
     # a caller's own rule
@@ -256,7 +256,7 @@ def test_a_picked_control_is_offered_this_loadables_params_and_a_click_maps_it(r
     values = reg.snapshot()
     assert all(learn.cannot_show(p, values) is None for p in ids)
     assert "fx.kaleido.segments" in ids                  # an effect TRIP has on
-    assert not [p for p in ids if p.startswith("dream.")]   # TRIP's look-back is off
+    assert not [p for p in ids if p.startswith("dream.")]   # TRIP's dream is off
     assert "view" in {g for g, _ in rest}
     assert "band" not in {g for g, _ in rest}            # the meta controller's (row 743)
     # in a narrow control window (the small desk, ~107 × 79 px of ground)

@@ -853,9 +853,9 @@ D1_AFTER = "sits after"     # a cable drawn from a D1 `after` effect (`build`, `
 LABELS: dict[str, str] = {
     "scene": "Scene", "shape": "Shape", "hands": "Hands", "layer": "Hands layer",
     "guide": "Hands guide", "cloud": "Point cloud", "camera": "Camera",
-    "backdrop": "Backdrop", "lookback": "Look-back", "pattern": "Faces pattern",
+    "backdrop": "Backdrop", "pattern": "Faces pattern",
     "channel": "Channel", "composite": "Composite", "switch": "Switch", "delay": "Delay",
-    "resize": "Resize", "echo": "Echo", "dream": "Dream", "slot": "slot",
+    "resize": "Resize", "dream": "Dream", "slot": "slot",
     "matte": "Matte", "cut": "Cut", "segment": "Segment",
     "output": "Output", rgraph.ALL_OUTPUTS: "All outputs", rgraph.GROUND: "Ground",
 }
@@ -871,7 +871,6 @@ HOVERS: dict[str, str] = {
     "cloud": "A listed cloud device, drawn in every scene.",
     "camera": "The shared eye every scene draws through.",
     "backdrop": "Lays the scene over a picture, at backdrop alpha.",
-    "lookback": "Echoes of past frames, its trail; records the picture wired into it.",
     "pattern": ("What the faces show unless a picture is wired into them, and its media "
                 "layer."),
     "channel": "A clip, still or live feed.",
@@ -1040,7 +1039,7 @@ UNFED_WORDS = f"{rgraph.FED_BY_NOTHING}: the test card through it here"
 THUMBS: dict[str, str] = {
     "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
     "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,
-    "lookback": PICTURE, "echo": PICTURE, "dream": PICTURE, "effect": PICTURE,
+    "dream": PICTURE, "effect": PICTURE,
     "layer": PICTURE, "guide": PICTURE,
     # plan 39 at the plan 37 merge: a cut is its picture. SM3 (row 777): a
     # matte's is its mask, and a segment's its matte (fg, bg are its pins)
@@ -1149,9 +1148,6 @@ def label_of(name: str, slots=()) -> str:
     return name
 
 
-DREAM_SHARE = "(its own knobs)"
-
-
 def params_of(name: str) -> str:
     """The prefix node `name`'s params are found by (V2: `graph.
     param_prefix` — params keep their ids); an effect's slot's knobs are
@@ -1173,10 +1169,7 @@ def param_ids(reg, nid: str) -> list[str]:
     name = nid.partition(":")[2] if nid.startswith("render:") else nid
     pre = params_of(name)
     head = pre + "."
-    # (wave 3 P2: `dream.*` is a look-back's and the dream's, by key; no other
-    # node's prefix starts so)
-    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))
-           and (not p.id.startswith("dream.") or patches.dream_owner(p.id) == name)]
+    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))]
     # plan 87: a keyed node's black is clear knobs (`key.<name>.*`) after its own
     keyed = f"key.{name}."
     ids += [p.id for p in reg if p.id.startswith(keyed)]
@@ -1187,19 +1180,16 @@ def param_ids(reg, nid: str) -> list[str]:
 
 def _params_said(name: str) -> str:
     """A node's params' prefix for its hover and side head, where it differs
-    from its id; `dream.*`, split between the look-back and the dream (wave 3
-    P2), says each has only its share of it."""
+    from its id."""
     pre = params_of(name)
-    if pre == "dream":
-        return f" · params dream.* {DREAM_SHARE}"
     return "" if pre == name else f" · params {pre}.*"
 
 
 def hover_of(name: str, slots=(), *, tip: str = "") -> str:
     """Node `name`'s hover (V, `HOVERS`): what it is in one line (an
     effect's own `@tip`, when its file has one), then its id and its params'
-    prefix (`_params_said`) — "… · id lookback · params dream.* (its own
-    knobs)", so `dream.fade` under a node called Look-back reads why."""
+    prefix (`_params_said`) — "… · id hands.2 · params ghost.2.*", so
+    `ghost.2.alpha` under a node called Hands 2 reads why."""
     kind = kind_of(name)
     text = tip if kind == "effect" and tip else HOVERS.get(kind or "", "")
     out = f"{text} · id {name}" if text else f"id {name}"
@@ -1208,8 +1198,7 @@ def hover_of(name: str, slots=(), *, tip: str = "") -> str:
 
 def side_head(n: VNode) -> str:
     """A frame node's side-panel header (V2): its title, its id and, where it
-    differs, its params' prefix — "Look-back · lookback · params dream.* (its
-    own knobs)"."""
+    differs, its params' prefix — "Hands 2 · hands.2 · params ghost.2.*"."""
     name = n.id.partition(":")[2]
     return f"{n.label} · {name}" + _params_said(name)
 
@@ -1251,18 +1240,6 @@ def slot_names(spec, effect: str) -> list[str]:
     declares (plan 89), in order: the ports its node draws besides its own."""
     at = next((e for e in (getattr(spec, "effects", None) or ()) if e.name == effect), None)
     return [x.name for x in at.slot_list()] if at is not None else []
-
-
-ECHO_PINS = 4      # plan 36 T4: the echo pins a look-back always draws (echo.1 … echo.4)
-
-
-def echo_pins(name: str, spec) -> list[str]:
-    """Look-back `name`'s echo pins drawn on the canvas (plan 36 T4): the
-    newest few (`ECHO_PINS`) and every other one a wire of `spec` reads."""
-    wired = {k for w in (spec.all_wires() if spec is not None else ())
-             for got in [rgraph.echo_of(w.src)] if got is not None and got[0] == name
-             for k in [got[1]]}
-    return [f"{name}.echo.{k}" for k in sorted({*range(1, ECHO_PINS + 1), *wired})]
 
 
 def frame_names(spec) -> list[str]:
@@ -1340,10 +1317,10 @@ class GroundNode(rgraph.Node):
 FRAME_CLASS: dict[str, type] = {
     "scene": rgraph.Scene, "shape": rgraph.Shape, "hands": rgraph.Hands,
     "layer": rgraph.HandsLayer, "guide": rgraph.Readout, "cloud": rgraph.PointCloud,
-    "backdrop": rgraph.BackdropNode, "lookback": rgraph.History,
+    "backdrop": rgraph.BackdropNode,
     "pattern": rgraph.PatternNode, "channel": rgraph.MediaNode, "effect": rgraph.Effect,
     "composite": rgraph.Composite, "switch": rgraph.SwitchNode,
-    "delay": rgraph.Delay, "resize": rgraph.ResizeNode, "echo": rgraph.EchoNode,
+    "delay": rgraph.Delay, "resize": rgraph.ResizeNode,
     "matte": rgraph.MatteNode, "cut": rgraph.CutNode, "segment": rgraph.SegmentNode,
     "dream": rgraph.DreamNode, "output": rgraph.Output, rgraph.ALL_OUTPUTS: rgraph.Output,
     rgraph.GROUND: GroundNode,
@@ -1370,9 +1347,6 @@ def _stand_in(name: str, spec=None) -> rgraph.Node | None:
         return rgraph.MediaNode(name, rest)
     if kind == "cloud":
         return rgraph.PointCloud(name, "")
-    if kind == "echo":
-        got = rgraph.echo_of(name)                   # (plan 36 T4: a look-back's pin)
-        return rgraph.EchoNode(name, got[1], lookback=got[0]) if got is not None else None
     if kind in ("output", rgraph.ALL_OUTPUTS):
         return rgraph.Output(name, int(rest) - 1 if rest.isdecimal() else -1)
     if kind in (CAMERA, "slot"):
@@ -1763,9 +1737,6 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             if owner == name and kind != "segment":
                 typ = rgraph.WIRED_MAKES[kind_of(pin)]
                 add_port(n, VPort(f"rout:{pin}", pin.rpartition(".")[2], OUT, typ))
-        if kind == "lookback":                   # plan 36 T4: its own frames, pins
-            for pin in echo_pins(name, frame):
-                add_port(n, VPort(f"rout:{pin}", pin[len(name) + 1:], OUT, IMAGE))
         if isinstance(r, rgraph.PointCloud) and ctx.first_cloud is None:
             ctx.first_cloud = name
     ctx.names = set(refs)
@@ -2273,16 +2244,18 @@ def seq_key(reg: Registry) -> tuple:
 # backdrop under the scene) and by the faces.
 #
 # Plan 35 G: the frame's areas by primitive, the way a picture is made —
-# media, the scene, the look-back, the effects, the outputs — where the
+# media, the scene, the effects, the outputs — where the
 # geometry and the shaders were: the frame is ordinary nodes now, so the
 # areas name what each is, not the pipelines it used to be part of.
 CONTROLLERS, AUDIO, MODULATION, MEDIA = "controllers", "audio", "modulation", "media"
-SCENE_AREA, LOOKBACK_AREA, EFFECTS_AREA, OUTPUTS_AREA = "scene", "lookback", "effects", "outputs"
+# (plan 90 H2: the look-back's area is retired with it; the dream, which
+# works on a picture, is drawn with the effects)
+SCENE_AREA, EFFECTS_AREA, OUTPUTS_AREA = "scene", "effects", "outputs"
 OTHER = "other"
-AREAS = (CONTROLLERS, AUDIO, MODULATION, MEDIA, SCENE_AREA, LOOKBACK_AREA, EFFECTS_AREA,
+AREAS = (CONTROLLERS, AUDIO, MODULATION, MEDIA, SCENE_AREA, EFFECTS_AREA,
          OUTPUTS_AREA)                                       # left to right
 SHARES = {OTHER: AUDIO}       # an area drawn under another's, in its column
-ORDER = (CONTROLLERS, AUDIO, OTHER, MODULATION, MEDIA, SCENE_AREA, LOOKBACK_AREA, EFFECTS_AREA,
+ORDER = (CONTROLLERS, AUDIO, OTHER, MODULATION, MEDIA, SCENE_AREA, EFFECTS_AREA,
          OUTPUTS_AREA)
 
 # the one table: a node's area by its kind, a group node by its id
@@ -2303,7 +2276,7 @@ AREA: dict[str, str] = {
     "group:view": SCENE_AREA, "group:rot": SCENE_AREA, "group:pattern": SCENE_AREA,
     "group:camera": SCENE_AREA, "group:eye": SCENE_AREA, "group:ghost": SCENE_AREA,
     "group:hands": SCENE_AREA, "group:cloud": SCENE_AREA, "group:backdrop": SCENE_AREA,
-    "group:dream": LOOKBACK_AREA,
+    "group:dream": EFFECTS_AREA,
     "group:fx": EFFECTS_AREA,
     "group:output": OUTPUTS_AREA, "group:overlay": OUTPUTS_AREA,
     "group:media": MEDIA, "group:switch": MEDIA,
@@ -2313,10 +2286,9 @@ AREA: dict[str, str] = {
     f"render:{CAMERA}": SCENE_AREA,
     "Shape": SCENE_AREA, "Hands": SCENE_AREA, "HandsLayer": SCENE_AREA, "Readout": SCENE_AREA,
     "PointCloud": SCENE_AREA, "Scene": SCENE_AREA, "BackdropNode": SCENE_AREA,
-    # the look-back: the ring's pictures
-    "History": LOOKBACK_AREA, "EchoNode": LOOKBACK_AREA, "DreamNode": LOOKBACK_AREA,
-    # the effects and what lays or crops a picture between them
-    "Effect": EFFECTS_AREA, "Composite": EFFECTS_AREA, "ResizeNode": EFFECTS_AREA,
+    # the effects and what lays or crops a picture between them (and the
+    # dream, which works on a picture)
+    "DreamNode": EFFECTS_AREA, "Effect": EFFECTS_AREA, "Composite": EFFECTS_AREA, "ResizeNode": EFFECTS_AREA,
     # the windows and All outputs
     "Output": OUTPUTS_AREA, "GroundNode": OUTPUTS_AREA,
     # the media channels (plan 32 T10), and (plan 33 U) the pictures made
@@ -2331,10 +2303,10 @@ AREA: dict[str, str] = {
 # keyed by its constant, never by its title.
 TITLES = {CONTROLLERS: "controllers", AUDIO: "audio", OTHER: "other",
           MODULATION: "modulation", MEDIA: "media", SCENE_AREA: "scene",
-          LOOKBACK_AREA: "look-back", EFFECTS_AREA: "effects", OUTPUTS_AREA: "outputs"}
+          EFFECTS_AREA: "effects", OUTPUTS_AREA: "outputs"}
 # a title too long for its room at the floor size (review round 1)
 SHORT_TITLES = {CONTROLLERS: "ctrl", AUDIO: "aud", OTHER: "oth", MODULATION: "mod",
-                MEDIA: "med", SCENE_AREA: "scn", LOOKBACK_AREA: "lkb", EFFECTS_AREA: "fx",
+                MEDIA: "med", SCENE_AREA: "scn", EFFECTS_AREA: "fx",
                 OUTPUTS_AREA: "out"}
 # 2026-10-26 (the laptop's own screen): the canvas's text, boxes, pins and
 # spacing all a quarter bigger than the panel's — one factor, so the
@@ -2664,7 +2636,7 @@ BANDS: dict[str, int] = {
     CONTROLLERS: 0, AUDIO: 0, OTHER: 0,          # what moves the params
     MODULATION: 1,                               # LFOs, modifiers, macros
     MEDIA: 2, SCENE_AREA: 2,                     # what makes a picture: the shape, the hands
-    LOOKBACK_AREA: 3, EFFECTS_AREA: 3,           # what works on a picture
+    EFFECTS_AREA: 3,                             # what works on a picture
     OUTPUTS_AREA: 4,
 }
 FLOW_GAP = GAP * 1.5        # between two nodes of a column ("room to breathe")
@@ -2985,12 +2957,12 @@ def returns(view: View, lay: Layout) -> set[str]:
     of a wrapped chain to a later one (none since the flow layout of
     2026-11-19, which wraps nothing: every row is 0); (plan 33 T6) a picture the
     scene made, taken back into a sink that sits left of where it was made
-    (`TAKEN_BACK`: `lookback → acid.2 → switch.in1`; into the faces, the
+    (`TAKEN_BACK`: `scene → acid.2 → switch.in1`; into the faces, the
     pattern or the backdrop such a picture is a loop — the scene draws
     them — and is never built) — a picture made of the media alone sits
     with the media (`media_made`), so its wire runs right; and (plan 35 G)
-    every wire into `lookback.capture` and into a delay's `image`: what is
-    kept for the frames after, read back where its ring or its delay sits.
+    every wire into a delay's `image`: what is kept for the frames after,
+    read back where its delay sits.
     Every other wire runs right."""
     out = set()
     order = {a: k for k, a in enumerate(AREAS)}
@@ -3009,10 +2981,9 @@ def returns(view: View, lay: Layout) -> set[str]:
 
 def kept(c: VCable, b: VNode) -> bool:
     """Is cable `c` (into node `b`) what is kept for the frames after — a
-    loop by design, drawn back where its ring or its delay sits (`returns`)?
-    Plan 36 T4: what a look-back records is its `image`, as a delay's; an
-    old loadable patch's D1 `after X` effect is drawn where X's readers read it."""
-    if isinstance(b.ref, (rgraph.Delay, rgraph.History)) and c.dst_port.endswith("/image"):
+    loop by design, drawn back where its delay sits (`returns`)? An old
+    loadable patch's D1 `after X` effect is drawn where X's readers read it."""
+    if isinstance(b.ref, rgraph.Delay) and c.dst_port.endswith("/image"):
         return True
     return c.kind == "render" and f" {D1_AFTER} " in c.label
 
@@ -5964,7 +5935,7 @@ PICKER_GROUP: dict[str, str] = {
     "starter": "starters",
     "scene": "scene", "shape": "scene", "hands": "scene", "layer": "scene", "guide": "scene",
     "backdrop": "scene",
-    "lookback": "look-back", "echo": "look-back", "dream": "look-back",
+    "dream": "pictures",            # (plan 90 H2: the look-back's group retired)
     "pattern": "pictures", "composite": "pictures", "switch": "pictures",
     "channels": "pictures", "resize": "pictures", "delay": "pictures",
     # 2026-10-31: the eight channels under media ▸ (they always exist: the
@@ -5979,14 +5950,7 @@ PICKER_GROUP: dict[str, str] = {
 PICKER_GROUPS = tuple(dict.fromkeys(PICKER_GROUP.values()))
 # the frame kinds the picker adds once each (a second add says so): drawn
 # disabled while the section has one
-ONCE = ("scene", "shape", "backdrop", "pattern", "lookback")
-
-
-def _echo_label(k: int) -> str:
-    """Plan 34's look-back frame item: "echo.1 (newest)" … "echo.32 (oldest)"."""
-    if k == 1:
-        return "echo.1 (newest)"
-    return f"echo.{k} (oldest)" if k == rgraph.MAX_ECHOES else f"echo.{k}"
+ONCE = ("scene", "shape", "backdrop", "pattern")
 
 
 def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
@@ -5994,8 +5958,7 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     the owner's groups (`PICKER_GROUP`) — starters ▸ (plan 36 T5,
     `STARTERS`: each item's file its key); scene ▸ (the
     scene, the shape, hands, a hands layer, a hands guide, the backdrop);
-    look-back ▸ (the look-back, plan 34's look-back frames echo.1 … echo.32
-    and the dream); pictures ▸ (the faces pattern, a composite, a switch,
+    pictures ▸ (the dream, the faces pattern, a composite, a switch,
     R28's switch over the channels, plan 34's resize and delay); media ▸
     (2026-10-31: channel a … channel h, each the channel's letter as its
     file — picking one makes nothing, the channels always exist; then
@@ -6009,10 +5972,7 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     out += [("scene", None, "scene"), ("shape", None, "shape"), ("hands", None, "hands"),
             ("layer", None, "hands layer"), ("guide", None, "hands guide"),
             ("backdrop", None, "backdrop")]
-    out += [("lookback", None, "look-back"),
-            *(("echo", str(k), _echo_label(k)) for k in range(1, rgraph.MAX_ECHOES + 1)),
-            ("dream", None, "dream")]
-    out += [("pattern", None, "faces pattern"), ("composite", None, "composite"),
+    out += [("dream", None, "dream"), ("pattern", None, "faces pattern"), ("composite", None, "composite"),
             ("switch", None, "switch"),
             *(("channels", port, label) for port, label in CHANNEL_SWITCH_PORTS),
             ("resize", None, "resize"), ("delay", None, "delay")]
@@ -6027,19 +5987,17 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
 
 def picked(edit: Edit) -> set[str]:
     """The picker's items already in the section (drawn disabled, plan 35
-    G): the frame kinds there are one of, each echo index, the dream — by
-    their (kind, file) keys' names."""
+    G): the frame kinds there are one of, the dream — by their (kind, file)
+    keys' names."""
     named = _named(_doc(edit))
-    return {n for n in named if kind_of(n) in (*ONCE, "echo", "dream")}
+    return {n for n in named if kind_of(n) in (*ONCE, "dream")}
 
 
 def picked_name(kind: str, file: str | None) -> str:
     """The node a picker item adds once (`picked`'s names): a frame kind
-    itself, `echo.<k>`, the dream; "" for an item there may be many of."""
+    itself, the dream; "" for an item there may be many of."""
     if kind in (*ONCE, "dream"):
         return kind
-    if kind == "echo":
-        return f"echo.{file}"
     return ""
 
 
@@ -6229,7 +6187,8 @@ def _node_name(e: dict) -> str | None:
         return f"{rgraph.wired_hands_name(n)}.{kind}"
     if kind == "echo":
         return f"echo.{e.get('index')}"
-    # (`lookback` and `dream` may be declared again: `lookback.2`)
+    # (`lookback` and `dream` may be declared again: `lookback.2` — an old
+    # frame's, which a load makes public parts)
     if kind in ("composite", "switch", "delay", "resize", "matte", "cut", "segment",
                 "lookback", "dream"):
         return kind if n == 1 else f"{kind}.{n}"
@@ -6458,15 +6417,9 @@ ADDED = {
     "backdrop": "wire a picture into backdrop.image and the scene into backdrop.scene",
     "pattern": ("wire it into shape.faces (unwired, the faces are plain) and a channel "
                 "into pattern.media"),
-    "lookback": ("wire what it records into lookback.image, and its trail into a "
-                 "composite's over (add) — its echo.1 … pins are its frames"),
     "layer": "wire it into an output's hands or a composite's over",
     "guide": "wire it into an output's guide",
 }
-
-
-def _ordinal(k: int) -> str:
-    return f"{k}{'th' if 10 <= k % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(k % 10, 'th')}"
 
 
 def _next(spec, kind: str) -> int:
@@ -6543,23 +6496,6 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
         if why is None and kind == "effect":
             _switch_on(edit, name)
         return why
-    if kind == "echo":
-        # plan 36 T4: an echo is the look-back's own output — its pin; the
-        # item adds the look-back when the section has none
-        try:
-            k = int(file or 1)
-        except ValueError:
-            return f"echo {file!r}: an index from 1 to {rgraph.MAX_ECHOES}"
-        pin = f"lookback.echo.{k}"
-        if "lookback" in named:
-            edit.added = "lookback"
-            edit.said = (f"{pin} is the look-back's {_ordinal(k)} newest frame — wire it from "
-                         "its pin into a picture port")
-            return None
-        doc["nodes"].append({"kind": "lookback"})
-        edit.added = "lookback"
-        return _land(edit, doc, "add lookback", f"lookback added: {pin} is its {_ordinal(k)} "
-                                                "newest frame — wire it from its pin")
     return f"no node kind {kind!r}: the picker adds what its groups list"
 
 
@@ -6897,7 +6833,7 @@ def _touches(x: dict, names: set[str]) -> bool:
 # splices (`drop_refusal` says why).
 INSERT_PORTS: dict[str, tuple[tuple[str, ...], str]] = {
     "effect": (("image",), ""), "slot": (("image",), ""), "delay": (("image",), ""),
-    "resize": (("image",), ""), "dream": (("image",), ""), "lookback": (("image",), ""),
+    "resize": (("image",), ""), "dream": (("image",), ""),
     "cut": (("image",), ""), "segment": (("image",), "fg"),
     "composite": (("under", "over"), ""), "switch": (rgraph.SWITCH_PORTS, ""),
     "backdrop": (("scene",), ""), "pattern": (("media",), ""),
@@ -6905,7 +6841,7 @@ INSERT_PORTS: dict[str, tuple[tuple[str, ...], str]] = {
 }
 # the cable menu's insert ▸ after effects ▸, in this order: (kind, its item)
 INSERT_MENU = (("composite", "composite"), ("switch", "switch"), ("delay", "delay"),
-               ("resize", "resize"), ("dream", "dream"), ("lookback", "look-back"),
+               ("resize", "resize"), ("dream", "dream"),
                ("cut", "cut"), ("segment", "segment"), ("backdrop", "backdrop"),
                ("pattern", "faces pattern"))
 GEOMETRY_NODE = ("{label} makes geometry, not a picture: it goes into scene.geometry, not "
@@ -7664,11 +7600,11 @@ NOTHING = "nothing"            # a window's: `ground` wired; All outputs', the c
 PICTURE_AREA: dict[str, str] = {
     "channel": MEDIA, "pattern": MEDIA, "switch": MEDIA, "delay": MEDIA,
     "scene": SCENE_AREA, "layer": SCENE_AREA, "guide": SCENE_AREA, "backdrop": SCENE_AREA,
-    "lookback": LOOKBACK_AREA, "echo": LOOKBACK_AREA, "dream": LOOKBACK_AREA,
+    "dream": EFFECTS_AREA,
     "effect": EFFECTS_AREA, "slot": EFFECTS_AREA, "composite": EFFECTS_AREA,
     "resize": EFFECTS_AREA,
 }
-PICTURE_AREAS = (MEDIA, SCENE_AREA, LOOKBACK_AREA, EFFECTS_AREA)
+PICTURE_AREAS = (MEDIA, SCENE_AREA, EFFECTS_AREA)
 THROUGH_NO_LAYER = ("hands through the effects: All outputs lays no hands layer over its "
                     "picture — wire a hands layer into output.all.hands on GRAPH")
 THROUGH_OWN_PICTURE = ("{label} shows {src} by its own wire: the hands go through All "

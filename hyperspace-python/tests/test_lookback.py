@@ -20,15 +20,10 @@ from conftest import CORPUS, seed
 moderngl = pytest.importorskip("moderngl")
 
 from hyperspace.lookback import (
-    FADE_HI,
-    MAX_ECHOES,
-    REF_HZ,
     RES,
     DreamState,
-    Lookback,
     LookbackSource,
     echo_size,
-    fade_of_decay,
 )
 from hyperspace.overlay import Output
 from hyperspace.render import Renderer
@@ -46,7 +41,7 @@ class Rig:
         self.fbo = ctx.framebuffer(color_attachments=[self.tex])
         self.r = Renderer(ctx, dream)
         self.r.bg_alpha = bg_alpha
-        self.lb = self.r.lookback
+        self.lb = self.r.dreamer
         self.s = ViewState(shape=3, ang=list(VIEW["ang"]), yaw=VIEW["yaw"], pitch=VIEW["pitch"])
 
     def frame(self, t=0.0):
@@ -76,136 +71,6 @@ def test_echo_size_keeps_aspect():
     assert echo_size(256, 820, 1280) == (256, 400)
     assert echo_size(128, 1920, 1080) == (224, 128)
     assert echo_size(256, 256, 256) == (256, 256)
-
-
-def test_ring_depth_and_age(ctx):
-    rig = Rig(ctx, 200, 128, dream=DreamState(on=True, echoes=4, gap=0.0, res=0))
-    lb = rig.lb
-    assert lb.layers() == []
-    for _ in range(3):
-        rig.frame()
-    # three captures, aged against the frame about to be drawn: 3, 2, 1
-    assert lb.frame == 3
-    assert [round(age * REF_HZ) for _, age in lb.layers()] == [3, 2, 1]
-    for _ in range(5):
-        rig.frame()
-    # the ring holds the newest `echoes`, oldest first
-    assert [round(age * REF_HZ) for _, age in lb.layers()] == [4, 3, 2, 1]
-    slots = [slot for slot, _ in lb.layers()]
-    assert len(set(slots)) == 4 and all(0 <= s < MAX_ECHOES for s in slots)
-    # weights are echo_mix · ½^(age / fade): at 60 Hz, echo_mix · decay^frames
-    lb.state.echo_mix, lb.state.fade = 0.5, fade_of_decay(0.8)
-    assert [w for _, w in lb.weights()] == pytest.approx([0.5 * 0.8 ** a for a in (4, 3, 2, 1)],
-                                                          rel=1e-3)
-    # a shallower ring drops the oldest; zero composites nothing
-    lb.state.echoes = 2
-    assert [round(age * REF_HZ) for _, age in lb.layers()] == [2, 1]
-    lb.state.echoes = 0
-    assert lb.layers() == []
-    rig.release()
-
-
-def _trail(ctx, hz: float, seconds: float, **dream):
-    """(ages, weights) of the echoes after `seconds` drawn at `hz` on the
-    renderer's own clock, as the app's frame loop does."""
-    rig = Rig(ctx, 200, 128, dream=DreamState(on=True, res=0, **dream))
-    n = round(seconds * hz)
-    for k in range(1, n + 1):
-        rig.frame(t=k / hz)
-    ages = [age for _, age in rig.lb.layers()]
-    weights = [w for _, w in rig.lb.weights()]
-    rig.release()
-    return ages, weights
-
-
-def test_the_same_loadable_gives_the_same_trail_at_60_and_120_hz(ctx):
-    """Plan 14 WP6: echo time is seconds. TRACER's set (24 echoes every
-    1/15 s, a 0.76 s half-life) keeps the same trail on a 120 Hz screen as
-    on a 60 Hz one — the same echoes, as old, as bright — where the old
-    per-frame decay and cadence halved it."""
-    set_ = {"echoes": 24, "gap": 4 / REF_HZ, "fade": fade_of_decay(0.985), "echo_mix": 0.7}
-    a60, w60 = _trail(ctx, 60.0, 3.0, **set_)
-    a120, w120 = _trail(ctx, 120.0, 3.0, **set_)
-    assert len(a60) == len(a120) == 24
-    assert a60 == pytest.approx(a120, abs=1.01 / 60)            # within a 60 Hz frame
-    assert max(a60) == pytest.approx(1.6, abs=1 / 15)           # 24 × 1/15 s back
-    assert sum(w60) == pytest.approx(sum(w120), rel=0.05)
-    assert w60[0] == pytest.approx(0.7 * 0.985 ** round(a60[0] * 60), rel=1e-2)
-    # the trail 120 Hz used to get: 24 echoes every 4 frames, 0.985 a frame
-    old_reach = 24 * 4 / 120.0
-    assert max(a120) > 1.9 * old_reach
-
-
-def test_old_per_frame_values_look_the_same_at_60_hz(ctx):
-    """The migration (lookback.migrate_values): WAKE's old 16 echoes every
-    2 frames at 0.93 a frame, read as 60 Hz frames, composite exactly the
-    weights they did — echo_mix · 0.93^age in frames, an echo every 2nd."""
-    from hyperspace.lookback import migrate_values
-
-    vals, notes = migrate_values({"dream.echoes": 16, "dream.decay": 0.93, "dream.every": 2})
-    assert set(vals) == {"dream.echoes", "dream.fade", "dream.gap"} and len(notes) == 2
-    ages, weights = _trail(ctx, 60.0, 1.0, echoes=16, fade=vals["dream.fade"],
-                           gap=vals["dream.gap"], echo_mix=0.3)
-    frames = [round(a * 60) for a in ages]
-    assert frames == list(range(31, 0, -2))                     # every 2nd frame, 16 of them
-    assert weights == pytest.approx([0.3 * 0.93 ** f for f in frames], rel=2e-3)
-    # a new id already named wins; nothing to convert is the dict itself
-    assert migrate_values({"dream.decay": 0.5, "dream.fade": 1.0})[0] == {"dream.fade": 1.0}
-    same = {"dream.fade": 1.0}
-    assert migrate_values(same)[0] is same
-
-
-def test_the_echo_clock_counts_a_frozen_time_as_a_60_hz_frame(ctx):
-    """A tool or test drawing at one fixed time sees the old frames: each
-    tick that does not move forward is 1/60 s."""
-    lb = Lookback(ctx, DreamState())
-    for _ in range(3):
-        lb.tick(0.0)
-    assert lb.clock == pytest.approx(3 / REF_HZ)
-    lb.tick(1.0)
-    assert lb.clock == pytest.approx(3 / REF_HZ + 1.0)
-    lb.release_ring()
-
-
-def test_capture_cadence(ctx):
-    rig = Rig(ctx, 200, 128, dream=DreamState(on=True, echoes=8, gap=3 / REF_HZ, res=0))
-    for _ in range(9):
-        rig.frame()
-    # captures land on frames 3, 6, 9 → ages 7, 4, 1 against frame 10
-    assert [round(age * REF_HZ) for _, age in rig.lb.layers()] == [7, 4, 1]
-    rig.release()
-
-
-def test_off_forgets_the_history(ctx):
-    """Plan 36 T4: a look-back drawn is on — taken out of the frame, its
-    ring forgets; drawn again, it starts clean."""
-    from hyperspace.graph import Wiring
-    from hyperspace.graphmigrate import wired_wiring
-
-    rig = Rig(ctx, 200, 128, dream=DreamState(on=True, echoes=4, gap=0.0, res=0))
-    drawn = rig.r.wiring
-    for _ in range(4):
-        rig.frame()
-    assert len(rig.lb.layers()) == 4
-    rig.r.wiring = wired_wiring(Wiring())         # (the old words' look-back off)
-    rig.frame()
-    assert rig.lb.layers() == []
-    rig.r.wiring = drawn
-    rig.frame()
-    assert [round(age * REF_HZ) for _, age in rig.lb.layers()] == [1]
-    rig.release()
-
-
-def test_res_rebuilds_the_atlas(ctx):
-    rig = Rig(ctx, 400, 256, dream=DreamState(on=True, echoes=4, gap=0.0, res=0))
-    rig.frame()
-    assert rig.lb.echo == (200, 128)
-    assert rig.lb.atlas.size == (200, 128 * MAX_ECHOES)
-    rig.lb.state.res = 2
-    rig.frame()
-    assert rig.lb.echo == (400, 256)
-    assert ctx.error == "GL_NO_ERROR"
-    rig.release()
 
 
 # ---------------------------------------------------------------- the composite
@@ -244,68 +109,6 @@ def synthetic(h, w, seed):
     img[:, : w // 4] = 0.0          # a black quarter: covers nothing
     img[..., 3] = 1.0
     return (img * 255).round().astype(np.uint8)
-
-
-def test_composite_matches_numpy_reference(ctx):
-    # target at the echo size, so atlas sampling is one texel per pixel
-    w, h = echo_size(128, 400, 256)
-    rig = Rig(ctx, w, h, dream=DreamState(on=True, echoes=3, gap=0.0, res=0,
-                                          echo_mix=0.7, fade=fade_of_decay(0.8), darken=0.25,
-                                          contrast=1.6,
-                                          mix=0.0))
-    rig.frame()                        # builds the ring; one real capture in slot 0
-    lb = rig.lb
-    assert lb.echo == (w, h)
-    imgs = [synthetic(h, w, k) for k in range(3)]
-    lb.clock = 10 / REF_HZ             # slot 0's capture (frame 1) falls off the ring
-    lb.frame = 10
-    now = lb.now()
-    for k, img in enumerate(imgs):     # slots 1..3 hold frames aged 3, 2, 1
-        lb.write_slot(k + 1, img, at=now - (3 - k) / REF_HZ)
-    assert [round(age * REF_HZ) for _, age in lb.layers()] == [3, 2, 1]
-    rig.fbo.use()
-    ctx.viewport = (0, 0, w, h)
-    lb.composite(rig.r.scene.tex, rig.fbo)
-    out = rig.read().astype(np.float64) / 255.0
-    scene = rig.scene().astype(np.float64) / 255.0
-    layers = [(img.astype(np.float64) / 255.0, 0.7 * 0.8 ** age)
-              for img, age in zip(imgs, (3, 2, 1))]
-    ref = reference(scene, layers, 0.25, 1.6)
-    err = np.abs(out - ref)
-    assert err.max() <= 2.5 / 255, f"max error {err.max() * 255:.2f}/255"
-    assert err.mean() <= 0.4 / 255
-    # the wake is really there: the composite is not the scene
-    assert np.abs(out - scene).mean() > 0.02
-    # the black quarter of every layer adds nothing over the scene
-    assert np.array_equal((out[:, : w // 4] * 255).round(), (scene[:, : w // 4] * 255).round())
-    rig.release()
-
-
-def test_the_trail_alone_is_the_wake_with_its_alpha(ctx):
-    """Plan 36 T4 (D3): the look-back's own picture is the trail, laid over
-    nothing — premultiplied, its alpha the layers' union — and the fused
-    "add" pass is exactly the scene with that trail added on."""
-    w, h = echo_size(128, 400, 256)
-    rig = Rig(ctx, w, h, dream=DreamState(on=True, echoes=2, gap=0.0, res=0, echo_mix=0.8,
-                                          fade=FADE_HI, darken=0.0, contrast=1.0, mix=0.0,
-                                          occlude=0.0))
-    rig.frame()
-    lb = rig.lb
-    imgs = [synthetic(h, w, k) for k in range(2)]
-    now = lb.now()
-    for k, img in enumerate(imgs):
-        lb.write_slot(k, img, at=now - (2 - k) / REF_HZ)
-    rig.fbo.use()
-    ctx.viewport = (0, 0, w, h)
-    lb.trail(rig.fbo)
-    out = rig.read().astype(np.float64) / 255.0
-    layers = [(img.astype(np.float64) / 255.0, wgt) for img, (_, wgt) in zip(imgs, lb.weights())]
-    black = np.zeros((h, w, 4))
-    ref = reference(black, layers, 0.0, 1.0, occlude=0.0)
-    assert np.abs(out - ref).max() <= 1.5 / 255
-    assert (out[..., :3] <= out[..., 3:] + 1 / 255).all(), "premultiplied"
-    assert out[:, : w // 4].max() == 0.0, "a black layer covers nothing"
-    rig.release()
 
 
 LUMA = np.array([0.299, 0.587, 0.114])
@@ -372,8 +175,7 @@ def test_dream_chroma_matches_numpy_reference(ctx, chroma_kw, tint_rgb):
     import colorsys
 
     w, h = echo_size(128, 400, 256)
-    state = DreamState(on=True, echoes=0, gap=0.0, res=0, darken=0.2, contrast=1.3, mix=0.6,
-                       occlude=0.0, **chroma_kw)
+    state = DreamState(on=True, res=0, darken=0.2, contrast=1.3, mix=0.6, **chroma_kw)
     rig = Rig(ctx, w, h, dream=state)
     rig.frame()
     lb = rig.r.dreamer
@@ -419,82 +221,10 @@ def test_dream_chroma_matches_numpy_reference(ctx, chroma_kw, tint_rgb):
     rig.release()
 
 
-@pytest.mark.parametrize("occlude", [0.0, 0.5, 1.0])
-def test_render_occludes_the_wake(ctx, occlude):
-    """The render over the wake: a lit shape covers the trail beneath it by
-    its brightness × occlude; between the shapes the trail shows whole
-    (plan 36 T4: an echo — the dream is the dream node's, laid over its
-    picture)."""
-    w, h = echo_size(128, 400, 256)
-    d = DreamState(on=True, echoes=1, gap=0.0, res=0, darken=0.0, contrast=1.0, mix=0.0,
-                   echo_mix=1.0, fade=FADE_HI, occlude=occlude)
-    rig = Rig(ctx, w, h, dream=d)
-    rig.frame()
-    # a scene: a bright bar and a faint bar on black; a flat grey dream everywhere
-    scene8 = np.zeros((h, w, 4), dtype=np.uint8)
-    scene8[..., 3] = 255
-    scene8[:, 40:60, :3] = 200           # bright: covers fully at occlude 1
-    scene8[:, 100:120, :3] = 20          # faint: 20/255 × 4 ≈ 31 % coverage
-    rig.r.scene.tex.write(scene8)
-    dream8 = np.full((h, w, 4), 100, dtype=np.uint8)
-    rig.lb.write_slot(rig.lb._next, dream8, at=rig.lb.now())
-    (_, wgt), = rig.lb.weights()
-    rig.fbo.use()
-    ctx.viewport = (0, 0, w, h)
-    rig.lb.composite(rig.r.scene.tex, rig.fbo)
-    out = rig.read().astype(np.float64) / 255.0
-    ref = reference(scene8 / 255.0, [(dream8 / 255.0, wgt)], 0.0, 1.0, occlude=occlude)
-    assert np.abs(out - ref).max() <= 1.5 / 255
-    # between the shapes: the trail, whatever occlude is
-    assert np.abs(out[:, 150:, 0] - 100 / 255).max() <= 1 / 255
-    # on the bright bar: the render alone at occlude 1, render + trail at 0
-    bar = out[:, 40:60, 0]
-    want = 200 / 255 + (1.0 - occlude) * 100 / 255
-    assert np.abs(bar - min(want, 1.0)).max() <= 1.5 / 255
-    rig.release()
-
-
-@pytest.mark.parametrize("bg_alpha", [1.0, 0.0])
-def test_faces_occlude_the_dream_whatever_their_fill(ctx, bg_alpha):
-    """The bug this guards: faces are filled at a few percent alpha, so
-    their brightness alone barely covered the wake and it showed through
-    them at occlude 1. The faces' coverage mask covers it fully, on an
-    opaque ground and on overlay's see-through one (plan 36 T4: the wake is
-    the trail, an echo of flat grey)."""
-    w, h = 320, 240
-    d = DreamState(on=True, echoes=1, gap=1.0, res=0, mix=0.0, darken=0.0, occlude=1.0,
-                   echo_mix=1.0, fade=FADE_HI)
-    rig = Rig(ctx, w, h, bg_alpha=bg_alpha, dream=d)
-    rig.s.faces, rig.s.lines, rig.s.points = True, False, False
-    rig.frame()
-    lb = rig.lb
-    ew, eh = lb.echo
-    grey = np.full((eh, ew, 4), 180, dtype=np.uint8)
-    lb.write_slot(lb._next, grey, at=lb.clock)
-    rig.frame()
-    out, scene = rig.read().astype(int), rig.scene().astype(int)
-    faces = np.frombuffer(rig.r.cover.tex.read(), dtype=np.uint8).reshape(h, w) > 0
-    assert faces.mean() > 0.05, "the shape must cover some of the frame"
-    # brightness alone would have let the dream through most of the faces
-    assert (scene[..., :3].max(axis=2)[faces] * 4 < 255).mean() > 0.5
-    # …the mask does not: inside a face the output is the render, exactly
-    assert np.abs(out[faces] - scene[faces]).max() <= 1
-    # between the shapes the dream shows
-    assert (out[~faces][:, :3] > scene[~faces][:, :3] + 60).all(axis=1).mean() > 0.9
-    # and at occlude 0 it shows through the faces again
-    d.occlude = 0.0
-    rig.s.ang[3] -= 0.03                 # the same pose as the frame just read
-    lb.write_slot(lb._next, grey, at=lb.clock)
-    rig.frame()
-    out0 = rig.read().astype(int)
-    assert (out0[faces][:, :3] > scene[faces][:, :3] + 60).all(axis=1).mean() > 0.9
-    rig.release()
-
-
 def test_dream_chroma_is_neutral_by_default(ctx):
     """Fresh state: hue 0, sat 1, tint 0 leaves the dream as the net painted it."""
     w, h = echo_size(128, 400, 256)
-    d = DreamState(on=True, echoes=0, gap=0.0, res=0, darken=0.0, contrast=1.0, mix=1.0)
+    d = DreamState(on=True, res=0, darken=0.0, contrast=1.0, mix=1.0)
     assert (d.hue, d.sat, d.tint) == (0.0, 1.0, 0.0)
     rig = Rig(ctx, w, h, dream=d)
     rig.frame()
@@ -509,25 +239,6 @@ def test_dream_chroma_is_neutral_by_default(ctx):
     out = rig.read().astype(int)
     # weight 1 over black: the composite is the dream itself (8-bit rounding)
     assert np.abs(out[..., :3] - dream8.astype(int)[..., :3]).max() <= 1
-    rig.release()
-
-
-def test_dream_chroma_tints_the_dream_only(ctx):
-    """An echo keeps the scene's colours whatever the dream's tint."""
-    w, h = echo_size(128, 400, 256)
-    d = DreamState(on=True, echoes=1, gap=0.0, res=0, darken=0.0, contrast=1.0, mix=0.0,
-                   echo_mix=1.0, fade=FADE_HI, tint=1.0, tint_hue=120.0, tint_sat=1.0)
-    rig = Rig(ctx, w, h, dream=d)
-    rig.frame()
-    red = np.zeros((h, w, 4), dtype=np.uint8)
-    red[..., 0] = red[..., 3] = 255
-    rig.lb.write_slot(0, red, at=rig.lb.clock)
-    rig.r.scene.tex.write(np.zeros((h, w, 4), dtype=np.uint8))
-    rig.fbo.use()
-    ctx.viewport = (0, 0, w, h)
-    rig.lb.composite(rig.r.scene.tex, rig.fbo)
-    out = rig.read()
-    assert out[..., 0].min() == 255 and out[..., 1:3].max() == 0, "the echo stays red"
     rig.release()
 
 
@@ -560,7 +271,7 @@ def test_scene_tint_reads_the_echo_only_when_asked(ctx):
     both. The dream off clears the mean (plan 36 T4: the dream node's own
     read of its input, no look-back's)."""
     w, h = echo_size(128, 400, 256)
-    d = DreamState(on=True, echoes=2, gap=0.0, res=0, tint_from=1)
+    d = DreamState(on=True, res=0, tint_from=1)
     rig = Rig(ctx, w, h, dream=d)
     lb = rig.r.dreamer
     for _ in range(4):
@@ -586,35 +297,10 @@ def test_scene_tint_reads_the_echo_only_when_asked(ctx):
 
 
 def test_composite_is_a_copy_when_nothing_is_layered(ctx):
-    rig = Rig(ctx, 200, 128, dream=DreamState(on=True, echoes=0, gap=0.0, res=0))
+    rig = Rig(ctx, 200, 128, dream=DreamState(on=True, res=0))
     rig.frame()
     rig.frame()
     assert np.array_equal(rig.read(), rig.scene())
-    rig.release()
-
-
-def test_alpha_preserved_on_a_transparent_ground(ctx):
-    """Overlay mode: the ground clears to alpha 0. The wake may only raise
-    alpha where an echo has light — premultiplied, colour ≤ coverage — and
-    where nothing ever was the desktop stays clear."""
-    w, h = echo_size(128, 400, 256)
-    rig = Rig(ctx, w, h, bg_alpha=0.0,
-              dream=DreamState(on=True, echoes=6, gap=0.0, res=0, echo_mix=0.8, fade=fade_of_decay(0.9),
-                               darken=0.0, contrast=1.0))
-    rig.s.faces = True
-    for _ in range(7):
-        rig.frame()
-    out = rig.read().astype(int)
-    scene = rig.scene().astype(int)
-    assert (scene[..., 3] == 0).any(), "the ground must be see-through"
-    assert (out[..., 3] >= scene[..., 3]).all()
-    assert (out[..., 3] > scene[..., 3]).any(), "the wake must show somewhere"
-    # alpha rises only where the wake has light: a pixel the wake left
-    # black keeps the scene's alpha exactly
-    lit = (out[..., :3] > scene[..., :3]).any(axis=2)
-    assert (out[..., 3][~lit] == scene[..., 3][~lit]).all()
-    # the corners never saw content: still fully clear
-    assert out[:8, :8].max() == 0 and out[-8:, -8:].max() == 0
     rig.release()
 
 
@@ -773,34 +459,18 @@ class Echo:
         return self.done
 
 
-def test_a_broken_common_glsl_leaves_the_post_pass_on_the_shipped_helpers(ctx, tmp_path, monkeypatch):
-    """audit V2 follow-up: the post pass runs every frame, so a bad edit to
-    _common.glsl falls back to the copy as shipped and says so; a fixed
-    file lands on the next rebuild."""
-    from hyperspace import glsl
-
-    bad = tmp_path / "_common.glsl"
-    bad.write_text("this is not glsl\n")
-    monkeypatch.setattr(glsl, "COMMON_GLSL", bad)
-    lb = Lookback(ctx)
-    assert lb.error.startswith("_common.glsl:1:")
-    bad.write_text(glsl.FALLBACK)
-    lb.on_reload()
-    assert lb.error == ""
-
-
 def test_source_protocol():
     assert isinstance(Echo(), LookbackSource)
     assert not isinstance(object(), LookbackSource)
 
 
 def test_dream_slot_round_trip(ctx):
-    """Plan 36 T4: the dream node submits its own input (the look-back's
-    trail, in an old dream preset's frame) and pulls its own results."""
+    """Plan 36 T4: the dream node submits its own input (the scene, laid
+    over it: plan 90 H2 — the look-back it dreamed in an old dream preset's
+    frame is retired) and pulls its own results."""
     w, h = echo_size(128, 400, 256)
     src = Echo()
-    rig = Rig(ctx, w, h, dream=DreamState(on=True, echoes=1, gap=0.0, res=0, mix=1.0,
-                                          darken=0.0, echo_mix=1.0, fade=FADE_HI))
+    rig = Rig(ctx, w, h, dream=DreamState(on=True, res=0, mix=1.0, darken=0.0))
     dr = rig.r.dreamer
     dr.source = src
     rig.frame()
@@ -808,12 +478,11 @@ def test_dream_slot_round_trip(ctx):
     assert idx == 1 and frame1.shape == (h, w, 4) and src.buffers == 1
     # nothing answered yet: the dream passes its picture through
     assert dr.dream_frame == -1
-    rig.frame()            # submit 2 (the trail now holds an echo); answers submit 1
+    rig.frame()            # submit 2; answers submit 1
     rig.frame()            # pulled before this frame's pass
     assert dr.dream_frame == 1 and src.submitted[1][0].max() > 0
     out = rig.read().astype(int)
     scene = rig.scene().astype(int)
-    assert (out[..., :3] >= scene[..., :3]).all()
     assert np.abs(out - scene).mean() > 0.5, "the dream layer must show"
     # the third submit answered the second; a result already shown is not
     # uploaded again
@@ -822,34 +491,12 @@ def test_dream_slot_round_trip(ctx):
     rig.release()
 
 
-def test_read_write_legs(ctx):
-    w, h = echo_size(128, 400, 256)
-    rig = Rig(ctx, w, h, dream=DreamState(on=True, echoes=1, gap=0.0, res=0))
-    rig.frame()
-    lb = rig.lb
-    buf = np.zeros((h, w, 4), dtype=np.uint8)
-    lb.read_into(buf)
-    assert buf.max() > 0
-    # what came out of the slot is what write_slot put in
-    img = synthetic(h, w, 3)
-    lb.write_slot(lb.newest(), img)
-    lb.read_into(buf)
-    assert np.array_equal(buf, img)
-    dr = rig.r.dreamer
-    dr._ensure(w, h)
-    dr.write_from(img, 5)
-    assert dr.dream_frame == 5
-    back = np.frombuffer(dr.dream.read(), dtype=np.uint8).reshape(h, w, 4)
-    assert np.array_equal(back, img)
-    rig.release()
-
-
 @pytest.mark.slow
 def test_copy_path_round_trip_under_budget(ctx):
     """The spike's number: glReadPixels of a 256-px echo into a host array
     plus the upload back is ~0.5 ms; the budget here is 1.5 ms p50."""
     w, h = echo_size(256, 1280, 820)
-    rig = Rig(ctx, 1280, 820, dream=DreamState(on=True, echoes=1, gap=0.0, res=2))
+    rig = Rig(ctx, 1280, 820, dream=DreamState(on=True, res=2))
     rig.frame()
     lb, dr = rig.lb, rig.r.dreamer
     dr._ensure(1280, 820)
@@ -885,10 +532,9 @@ def registry(dream=None):
 
 
 DREAM_IDS = [
-    "dream.on", "dream.mix", "dream.echo_mix", "dream.fade", "dream.darken",
-    "dream.contrast", "dream.occlude", "dream.hue", "dream.sat", "dream.tint", "dream.tint_from",
-    "dream.tint_hue", "dream.tint_sat",
-    "dream.echoes", "dream.gap", "dream.res", "dream.steps", "dream.step",
+    "dream.on", "dream.mix", "dream.darken",
+    "dream.contrast", "dream.hue", "dream.sat", "dream.tint", "dream.tint_from",
+    "dream.tint_hue", "dream.tint_sat", "dream.res", "dream.steps", "dream.step",
     "dream.k", "dream.layer", "dream.octaves", "dream.mask_decay", "dream.jitter",
 ]
 
@@ -901,16 +547,15 @@ def test_dream_params_declared():
         assert p.persist, p.id
     # the three that rebuild things — the ring, the atlas, the net's trunk —
     # are a scene-setter's, never a performer's (plan 16 WP5 added the layer)
-    rebuild = ("dream.gap", "dream.res", "dream.layer")
+    rebuild = ("dream.res", "dream.layer")
     assert not any(reg[pid].modulatable for pid in rebuild)
     assert all(reg[pid].modulatable for pid in DREAM_IDS if pid not in rebuild)
     assert reg["dream.res"].names == [str(v) for v in RES]
     assert reg["dream.layer"].names[1] == "conv3_3"
     # the params write the state the compositor reads
     reg["dream.on"].set(True)
-    reg["dream.echoes"].set_value(8)
     reg["dream.res"].set(3)
-    assert d.on and d.echoes == 8 and d.res == 3
+    assert d.on and d.res == 3
     # a fresh state stands in when no renderer is passed
     assert "dream.k" in registry()
 
@@ -983,14 +628,18 @@ def test_the_dream_module_presets_load(tmp_path):
     assert lib.list("dream") == ["default", "tracer-only", "wake"]
     assert lib.default_name("dream") == "default"
     assert lib.load("dream", "tracer-only") == []
-    # (plan 36 T4: echoes alone — the dream off; the look-back is the graph's)
-    assert not d.on and d.echoes == 8 and d.mix == 0.0 and d.echo_mix > 0
+    # (plan 36 T4: echoes alone — the dream off; plan 90 H2: the echoes'
+    # knobs retired with the look-back, landing quietly as nothing)
+    assert not d.on and d.mix == 0.0
     assert lib.load("dream", "default") == []
-    assert not d.on and d.echoes == 8 and d.mix == pytest.approx(0.7)
+    assert not d.on and d.mix == pytest.approx(0.7)
     # the default loadable patch is the fresh state: loading it leaves nothing dirty
     assert not lib.is_dirty("dream")
     fresh = DreamState()
+    from hyperspace.graphmigrate import lookback_retired
     for pid, v in lib.read("dream", "default")["values"].items():
+        if lookback_retired(pid):
+            continue
         attr = pid.split(".", 1)[1]
         assert getattr(fresh, attr) == pytest.approx(v), pid
 
@@ -1061,11 +710,8 @@ def test_lookback_page_draws_headless(tmp_path):
 DREAM_FROZEN = [
     ("dream.on", "TOGGLE", 0.0, 1.0, False, True, True, False, False, False, None),
     ("dream.mix", "CONTINUOUS", 0.0, 1.0, 0.7, True, True, False, False, False, None),
-    ("dream.echo_mix", "CONTINUOUS", 0.0, 1.0, 0.4, True, True, False, False, False, None),
-    ("dream.fade", "CONTINUOUS", 0.02, 10.0, 0.2252, True, True, False, True, False, None),
     ("dream.darken", "CONTINUOUS", 0.0, 1.0, 0.1, True, True, False, False, False, None),
     ("dream.contrast", "CONTINUOUS", 0.5, 3.0, 1.0, True, True, False, False, False, None),
-    ("dream.occlude", "CONTINUOUS", 0.0, 1.0, 1.0, True, True, False, False, False, None),
     ("dream.hue", "CONTINUOUS", -180.0, 180.0, 0.0, True, True, False, False, True, None),
     ("dream.sat", "CONTINUOUS", 0.0, 2.0, 1.0, True, True, False, False, False, None),
     ("dream.tint", "CONTINUOUS", 0.0, 1.0, 0.0, True, True, False, False, False, None),
@@ -1073,8 +719,6 @@ DREAM_FROZEN = [
      ("colour", "scene")),
     ("dream.tint_hue", "CONTINUOUS", 0.0, 360.0, 200.0, True, True, False, False, True, None),
     ("dream.tint_sat", "CONTINUOUS", 0.0, 1.0, 1.0, True, True, False, False, False, None),
-    ("dream.echoes", "CONTINUOUS", 0, 32, 8, True, True, True, False, False, None),
-    ("dream.gap", "CONTINUOUS", 0.0, 0.25, 0.033333, True, False, False, False, False, None),
     ("dream.res", "ENUM", 0.0, 1.0, 2, True, False, False, False, False,
      ("128", "192", "256", "384")),
     ("dream.steps", "CONTINUOUS", 1, 3, 2, True, True, True, False, False, None),
@@ -1243,24 +887,17 @@ def lbpage(tmp_path, monkeypatch):
     page.close()
 
 
-def test_the_page_draws_the_two_picture_nodes_and_every_dream_param_once(lbpage):
-    """Plan 49 stage 2 (the owner, 2026-11-02: the look-back / dream / both
-    split was "a horrid representation"): under the page's title, the
-    LOOK-BACK node and the DREAM node, as plan 36 made them — each param
-    under the node it is a knob of (`params.is_lookback_knob`), `dream.on`
-    on the dream's head, the shared "both" gone — and every persisted
-    `dream.*` param drawn exactly once."""
+def test_the_page_draws_the_dream_and_every_dream_param_once(lbpage):
+    """Plan 49 stage 2 drew the look-back and the dream as two nodes; plan 90
+    (H2) retires the look-back's half: under the page's title the DREAM node
+    alone, `dream.on` on its head, darken, contrast and detail its own — and
+    every persisted `dream.*` param drawn exactly once."""
     from hyperspace import ui_lookback
-    from hyperspace.params import is_lookback_knob
 
     lbpage.frame()
     got = lbpage.by_section()
-    assert list(got) == ["look-back · dream", "look-back", "dream"]
-    assert got["look-back · dream"] == []
-    assert got["look-back"] == list(ui_lookback.SECTIONS["look-back"])
-    assert all(is_lookback_knob(pid) for pid in got["look-back"])
+    assert list(got) == ["dream"]
     assert got["dream"][0] == "dream.on"                 # the dream's own switch, on its head
-    assert not any(is_lookback_knob(pid) for pid in got["dream"])
     assert set(got["dream"]) == set(ui_lookback.SECTIONS["dream"])
     drawn = [pid for ids in got.values() for pid in ids]
     assert sorted(drawn) == sorted(DREAM_IDS)
@@ -1272,7 +909,7 @@ def test_the_page_draws_the_two_picture_nodes_and_every_dream_param_once(lbpage)
         assert sorted(ids) == sorted(DREAM_IDS)
     # every cell has a label, and every label is in the page's table
     labels = [text for kind, text in lbpage.events if kind == "label"]
-    cells = [pid for title in ("look-back", "dream") for pid in ui_lookback.SECTIONS[title]
+    cells = [pid for pid in ui_lookback.SECTIONS["dream"]
              if pid not in ("dream.layer", "dream.on")]
     assert [lb for lb in labels if lb != "the tint"] == [ui_lookback.SHORT[pid] for pid in cells]
 
@@ -1353,51 +990,20 @@ def test_an_armed_learn_outlines_the_layer_menu(lbpage, monkeypatch):
     assert framed.count("dream.layer") == 1 and "dream.mix" in framed
 
 
-def test_spacing_is_called_time_apart(lbpage):
-    """The owner's "Spacing does not say what it is": the page's cell says
-    TIME APART, the registry (so ROUTING, Learn and the desk diagram) says
-    "Echo time apart", the readout is a time, and the tip opens with what
-    it is. Echo time is seconds: the fade is a time too."""
-    from hyperspace import ui_lookback
-
-    reg = lbpage.reg
-    gap, fade = reg["dream.gap"], reg["dream.fade"]
-    assert ui_lookback.SHORT["dream.gap"] == "time apart"
-    assert gap.label == "Echo time apart"
-    assert gap.tip.startswith("The time between one echo and the next")
-    assert gap.text() == "33 ms" and not gap.modulatable
-    assert fade.label == "Echo fade time" and ui_lookback.SHORT["dream.fade"] == "fade time"
-    assert fade.text() == "0.23 s" and "halves in brightness every" in fade.tip
-    lbpage.frame()
-    events = lbpage.events
-    k = events.index(("label", "time apart"))
-    assert events[k + 1] == ("widget", "dream.gap")           # the label is that slider's
-    assert not [text for kind, text in events if kind == "label" and "spacing" in text.lower()]
-    # no label on the page or in the group says the old word
-    assert not [p.id for p in reg.group("dream") if "spacing" in (p.label + p.tip).lower()]
-    # the section's note says the trail in the same units
-    assert ui_lookback._trail_note(reg) == "8 × 33 ms · the trail reaches 0.27 s"
-    gap.set_value(0.0)
-    assert ui_lookback._trail_note(reg) == "8, one a frame"
-    reg["dream.echoes"].set_value(0)                # a supported value: the dream alone
-    assert ui_lookback._trail_note(reg) == "no echoes: the dream alone"
-
-
 def test_every_dream_label_says_whose_knob_it_is():
-    """Fork F9: the registry's labels change with the page's. An echo knob
-    says Echo, a dream knob says Dream, the three that grade both and the
-    switch say neither; every tip opens with a sentence."""
+    """Fork F9: the registry's labels change with the page's. A dream knob
+    says Dream, the two that grade it and the switch say neither (plan 90
+    H2: the echo knobs retired with the look-back); every tip opens with a
+    sentence."""
     from hyperspace import ui_lookback
 
     reg = registry()
-    look = ui_lookback.SECTIONS["look-back"]
-    for pid in look[:4]:
-        assert reg[pid].label.startswith("Echo "), pid
     for pid in ui_lookback.SECTIONS["dream"]:
+        if pid in ("dream.darken", "dream.contrast"):
+            continue
         assert reg[pid].label.startswith("Dream "), pid
-    # (plan 49 stage 2: the look-back's own, which the dream reads too — `GRADE_LINE`)
-    assert [reg[pid].label for pid in look[4:]] == [
-        "Shape hides wake", "Darken", "Contrast", "Look-back detail"]
+    assert [reg[pid].label for pid in ("dream.darken", "dream.contrast")] == [
+        "Darken", "Contrast"]
     assert reg["dream.on"].label == "Dream on"           # (plan 36 T4: the dream's own)
     labels = [p.label for p in reg.group("dream")]
     assert len(set(labels)) == len(labels)          # ROUTING's list tells every one apart
@@ -1411,19 +1017,15 @@ def test_every_dream_label_says_whose_knob_it_is():
 
 
 def test_the_routing_page_lists_the_new_labels():
-    """ROUTING's target list is the registry's labels: it says "Echo
-    brightness" and "Dream brightness" where it said "Echo mix" and "Dream
-    mix", and a search for the page's word finds the param."""
+    """ROUTING's target list is the registry's labels: it says "Dream
+    brightness" where it said "Dream mix", and a search for the page's word
+    finds the param."""
     from hyperspace import ui_routing
 
     reg = registry()
     targets = {p.id: p.label for p in ui_routing._targets(SimpleNamespace(reg=reg))
                if p.id.startswith("dream.")}
-    assert targets["dream.echo_mix"] == "Echo brightness"
     assert targets["dream.mix"] == "Dream brightness"
-    assert targets["dream.fade"] == "Echo fade time"
-    assert targets["dream.echoes"] == "Echo count"
-    assert targets["dream.occlude"] == "Shape hides wake"
     assert targets["dream.step"] == "Dream strength"
     assert targets["dream.mask_decay"] == "Dream linger"
     old = {"Echo mix", "Dream mix", "Fade", "Echoes", "Spacing", "Occlude", "Hue shift",
@@ -1431,7 +1033,7 @@ def test_the_routing_page_lists_the_new_labels():
            "Layer", "Resolution"}
     assert not old & set(targets.values())
     # the three that rebuild things are still not a performer's
-    assert not set(targets) & {"dream.gap", "dream.res", "dream.layer"}
+    assert not set(targets) & {"dream.res", "dream.layer"}
 
 
 # ---------------------------------------------------------------- plan 20 WP5: dream speed
@@ -1543,7 +1145,8 @@ def test_the_worker_status_is_never_taller_than_its_room(lbpage):
 
 def test_the_relabel_reaches_no_loadable_file(tmp_path):
     """Labels are not in loadable patch files: the dream module presets name ids
-    only."""
+    only (and, from before plan 90 H2, the look-back's retired ones)."""
+    from hyperspace.graphmigrate import lookback_retired
     from hyperspace.library import Library
 
     reg = registry()
@@ -1551,66 +1154,11 @@ def test_the_relabel_reaches_no_loadable_file(tmp_path):
     lib = Library(tmp_path / "home", period=0.0)
     lib.attach(reg)
     for name in lib.list("dream"):
-        assert set(lib.read("dream", name)["values"]) <= set(DREAM_IDS), name
+        ids = {k for k in lib.read("dream", name)["values"] if not lookback_retired(k)}
+        assert ids <= set(DREAM_IDS), name
 
 
 # ---------------------------------------------------------------- plan 14 WP1: the freeze
-
-def test_capture_off_the_cadence_with_no_source_puts_the_target_back(ctx):
-    """The early return (not a commit frame, no worker, no scene tint) left
-    the atlas `_ensure` had bound; every return now binds `target`."""
-    rig = Rig(ctx, 200, 128, dream=DreamState(on=True, echoes=4, gap=2 / REF_HZ, res=0))
-    rig.lb.source = None
-    scene = ctx.texture((200, 128), 4)
-    rig.fbo.use()
-    rig.lb.capture(scene, rig.fbo)            # frame 1: off the cadence
-    assert rig.lb.frame == 1 and rig.lb._captures == []
-    assert ctx.fbo is rig.fbo
-    rig.lb.capture(scene, rig.fbo)            # frame 2: a commit
-    assert ctx.fbo is rig.fbo and len(rig.lb._captures) == 1
-    scene.release()
-    rig.release()
-
-
-def test_the_atlas_fits_the_drivers_largest_texture(ctx, monkeypatch):
-    """A portrait window at res 384 asked for a 36 864 px tall atlas, past
-    GL_MAX_TEXTURE_SIZE, and capture raised every frame. The slot shrinks,
-    aspect kept, so the atlas fits; when the textures cannot be made at
-    all, nothing is captured and the reason is on `ring_error`."""
-    from hyperspace.lookback import fit_atlas
-
-    assert fit_atlas((384, 1152), 16384) == (168, 512)
-    assert fit_atlas((400, 256), 16384) == (400, 256)
-    ew, eh = fit_atlas(echo_size(RES[-1], 820, 2460), 16384)
-    assert eh * MAX_ECHOES <= 16384 and ew <= 16384
-    lb = Lookback(ctx, DreamState(on=True, echoes=4, gap=0.0, res=len(RES) - 1))
-    monkeypatch.setattr(lb, "max_texture", lambda: 4096)
-    tex = ctx.texture((120, 360), 4)
-    fbo = ctx.framebuffer(color_attachments=[tex])
-    fbo.use()
-    lb.capture(tex, fbo)
-    assert lb.atlas is not None and lb.atlas.size[1] <= 4096 and lb.ring_error == ""
-    assert len(lb._captures) == 1 and ctx.fbo is fbo
-    # the driver refuses outright: no history, no echo recorded, no raise
-    lb.release_ring()
-    lb._captures.clear()
-    real = ctx.texture
-
-    def refuse(size, *a, **k):
-        if size[1] > 1000:
-            raise moderngl.Error("GL_INVALID_VALUE")
-        return real(size, *a, **k)
-
-    monkeypatch.setattr(lb, "ctx", SimpleNamespace(texture=refuse, framebuffer=ctx.framebuffer,
-                                                   clear=ctx.clear, info=ctx.info))
-    monkeypatch.setattr(lb, "max_texture", lambda: 1 << 20)
-    frame = lb.frame
-    lb.capture(tex, fbo)
-    assert lb.atlas is None and lb._captures == [] and lb.frame == frame
-    assert lb.ring_error.startswith("look-back: no history at ")
-    assert ctx.fbo is fbo
-    fbo.release()
-    tex.release()
 
 
 # ---------------------------------------------------------------- the dream layer menu

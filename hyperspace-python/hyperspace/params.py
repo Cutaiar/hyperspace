@@ -84,18 +84,11 @@ from .geometry import EYE_DISTANCE, EYE_FOV, PLANE_NAMES, SHAPES, pan_px_to_worl
 from .ghost import GhostState
 from .ghost import register as declare_ghost
 from .lookback import (
-    FADE_HI,
-    FADE_LO,
-    GAP_HI,
-    GAP_LO,
     LAYERS,
-    LOOKBACK_KEYS,
-    MAX_ECHOES,
     OCTAVES,
     RES,
     TINT_FROM,
     DreamState,
-    is_lookback_key,
 )
 from .media import channels as media_channels
 from .media.transport import LOOPS as MEDIA_LOOPS
@@ -2285,98 +2278,6 @@ def declare_segments(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
-# ---- plan 36 T4: the extra look-backs' values ----
-# `lookback.<n>` (n ≥ 2) has its own ring and trail: `dream.<n>.<key>` for
-# the look-back's own knobs (`lookback`'s are `dream.<key>`, as ever), in
-# the look-back's group, declared while the loadable patch's graph holds the entry
-_LOOKBACK_ID = re.compile(r"dream\.(?:[2-9]|[1-9][0-9]+)\.(" + "|".join(LOOKBACK_KEYS) + ")")
-
-
-def is_lookback_knob(pid: str) -> bool:
-    """Whether `dream.*` param `pid` is a look-back's — its ring and trail,
-    `dream.<key>` or `dream.<n>.<key>` for a key of `LOOKBACK_KEYS` — not the
-    dream node's own (plan 36 T4: `dream.on` gates the dream's alone)."""
-    parts = pid.split(".")
-    return parts[0] == "dream" and len(parts) >= 2 and is_lookback_key(parts[-1])
-
-
-def lookback_ids(name: str) -> list[str]:
-    """Look-back `name`'s own params (`lookback.2` → `dream.2.echo_mix` …),
-    in order; `lookback`'s are the `dream.*` ones."""
-    rest = name.partition(".")[2]
-    return [f"dream.{rest}.{k}" for k in LOOKBACK_KEYS] if rest else [
-        f"dream.{k}" for k in LOOKBACK_KEYS]
-
-
-def is_lookback_id(pid: str) -> bool:
-    """Is `pid` one of an extra look-back's values (`dream.<n>.<key>`, n ≥
-    2) — one that exists only while a loadable patch's graph holds that look-back
-    (plan 36 T4)? A loadable patch load sorts such ids against the graph it lands,
-    as it does a resize's."""
-    return bool(_LOOKBACK_ID.fullmatch(pid))
-
-
-def _lookback_state(r: Registry) -> dict:
-    """The states the extra look-backs' params write, look-back name →
-    `DreamState`: the view state's (`ViewState.lookback`, which the
-    renderer reads once a frame), kept by `build_registry` as
-    `r.lookback_state`; a dict of the registry's own without one."""
-    state = getattr(r, "lookback_state", None)
-    if not isinstance(state, dict):
-        state = r.lookback_state = {}
-    return state
-
-
-def declare_lookbacks(r: Registry, names: Iterable[str]) -> list[str]:
-    """The extra look-backs' params (plan 36 T4), as `declare_resizes` does
-    the resizes': for each `lookback.<n>` (n ≥ 2) `names` holds, its own
-    echo brightness, fade, count, time apart, darken, contrast, shape-hides
-    and detail (`dream.<n>.<key>`, bounds and defaults `dream.<key>`'s),
-    group `dream`, over a `DreamState` made when first declared and kept
-    while the name stays; those of every one no longer named dropped.
-    Returns the ids that appeared or went."""
-    state = _lookback_state(r)
-    want = {n: lookback_ids(n) for n in names if n != "lookback"}
-    keep = {pid for ids in want.values() for pid in ids}
-    changed: list[str] = []
-    for p in [p for p in r if is_lookback_id(p.id) and p.id not in keep]:
-        r.remove(p.id)
-        changed.append(p.id)
-    for name in [n for n in state if n not in want]:
-        del state[name]
-    for name, ids in want.items():
-        st = state.get(name)
-        if st is None:
-            st = state[name] = DreamState()
-        for pid, key in zip(ids, LOOKBACK_KEYS, strict=True):
-            if pid in r:
-                continue
-            base = r.get(f"dream.{key}")
-            label = f"{name} {key.replace('_', ' ')}"
-            tip = (f"{name}'s own: " + base.tip) if base is not None and base.tip else (
-                f"{name}'s {key.replace('_', ' ')}.")
-            if key == "res":
-                r.enum(pid, label, *_attr(st, key), [str(v) for v in RES], group="dream",
-                       modulatable=False, tip=tip)
-            elif key == "echoes":
-                r.continuous(pid, label, *_attr(st, key), lo=0, hi=MAX_ECHOES, integer=True,
-                             group="dream", tip=tip)
-            elif key == "fade":
-                r.continuous(pid, label, *_attr(st, key), lo=FADE_LO, hi=FADE_HI, log=True,
-                             group="dream", tip=tip)
-            elif key == "gap":
-                r.continuous(pid, label, *_attr(st, key), lo=GAP_LO, hi=GAP_HI,
-                             group="dream", modulatable=False, tip=tip)
-            elif key == "contrast":
-                r.continuous(pid, label, *_attr(st, key), lo=0.5, hi=3.0, group="dream",
-                             tip=tip)
-            else:
-                r.continuous(pid, label, *_attr(st, key), lo=0.0, hi=1.0, group="dream",
-                             tip=tip)
-            changed.append(pid)
-    return changed
-
-
 def dream_half_life(k: float) -> int:
     """`dream.k` as its readout: the processed frames in which a frame's
     share of the dream buffer halves, ``log ½ / log(1 − k)``, rounded (the
@@ -2725,15 +2626,6 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.segment_state = segments
-    # plan 36 T4: the extra look-backs' values likewise (`ViewState.lookback`)
-    rings = getattr(view, "lookback", None)
-    if not isinstance(rings, dict):
-        rings = {}
-        try:
-            view.lookback = rings
-        except AttributeError:            # (a view without the field: the registry's own)
-            pass
-    r.lookback_state = rings
     fmt_speed = lambda x: "stop" if x <= 0 else f"{x:.3f}" if x < 1 else f"{x:.2f}"
 
     # ---- view ----
@@ -3073,15 +2965,14 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
              tip="The cloud's own colours, when its source has them; off, every point "
                  "is white.")
 
-    # ---- look-back: the frame history composited over the scene ----
-    # lookback.py reads these every frame; the dream worker (WP6b) reads
-    # the second half. Cadence and size rebuild the ring, so no lane drives
-    # them; everything else is a live fader.
+    # ---- the dream (plan 36 T4: the dream node's) ----
+    # lookback.Dreamer reads these every frame; the dream worker (WP6b) reads
+    # the second half. Its size rebuilds the buffer, so no lane drives it;
+    # everything else is a live fader. Plan 90 (H2): the look-back's own knobs
+    # (echo brightness, fade, count, time apart, shape hides wake) are its
+    # parts' now — a delay, a Trail, cuts; darken, contrast and detail stay the
+    # dream's until H3 (a migrated look-back's parts took copies)
     g = "dream"
-    # the labels are the LOOKBACK page's sections (ui_lookback.py): "Echo …"
-    # acts on the echoes, "Dream …" on the dream buffer, and the rest on both
-    # (plan 20 WP4). Each tip opens with what the knob does.
-    # plan 36 T4 (W4): the dream node's own — a look-back drawn is on
     r.toggle("dream.on", "Dream on", *_attr(dream, "on"), group=g,
              tip="The dream, on or off: on, the dream node dreams its picture (once a "
                  "worker is attached); off, it passes the picture through untouched "
@@ -3090,28 +2981,14 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
                  fmt=lambda v: f"{v:.2f}", group=g,
                  tip="How bright the dream is over its picture: the dream buffer's "
                      "weight, laid over what the dream node takes in.")
-    r.continuous("dream.echo_mix", "Echo brightness", *_attr(dream, "echo_mix"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"{v:.2f}", group=g,
-                 tip="How bright the newest echo is; older ones fade from it by the "
-                     "fade time. An echo is a copy of an earlier frame, drawn faintly "
-                     "under this one — together they are the trail a moving shape leaves.")
-    r.continuous("dream.fade", "Echo fade time", *_attr(dream, "fade"), lo=FADE_LO, hi=FADE_HI,
-                 log=True, fmt=lambda v: f"{v:.2f} s", group=g,
-                 tip="How long the trail lasts: an echo halves in brightness every this "
-                     "many seconds of its age, whatever the screen's frame rate "
-                     "(0.23 s is the old 0.95 a frame at 60 Hz; 0.76 s is 0.985).")
     r.continuous("dream.darken", "Darken", *_attr(dream, "darken"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"×{1.0 - v:.2f}", group=g,
-                 tip="Darkens echoes and dream alike: how much darker the wake is than "
-                     "the frames it came from.")
+                 tip="Darkens the dream: how much darker its buffer is than the "
+                     "pictures it came from.")
     r.continuous("dream.contrast", "Contrast", *_attr(dream, "contrast"), lo=0.5, hi=3.0,
                  fmt=lambda v: f"^{v:.2f}", group=g,
-                 tip="Above 1 only the bright parts of the echoes and the dream show: a "
-                     "power curve on every layer of the wake.")
-    r.continuous("dream.occlude", "Shape hides wake", *_attr(dream, "occlude"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"{v:.2f}", group=g,
-                 tip="At 1 the shape covers the echoes and the dream behind it, so the "
-                     "tracers only fill the space between; at 0 they glow through it.")
+                 tip="Above 1 only the bright parts of the dream show: a power curve "
+                     "on its buffer.")
     # the dream buffer's chroma — the net paints in its own primaries; these
     # re-colour D on its way into the composite (lookback.py, chroma())
     r.continuous("dream.hue", "Dream hue", *_attr(dream, "hue"), lo=-180.0, hi=180.0,
@@ -3134,21 +3011,10 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
     r.continuous("dream.tint_sat", "Dream tint sat", *_attr(dream, "tint_sat"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"sat {v:.2f}", group=g,
                  tip="The chosen tint colour's saturation: 0 tints grey — a greyscale dream.")
-    r.continuous("dream.echoes", "Echo count", *_attr(dream, "echoes"), lo=0, hi=MAX_ECHOES,
-                 integer=True, fmt=lambda v: f"{int(v)}", group=g,
-                 tip="How many echoes are drawn; at 0 only the dream is. With time "
-                     "apart it sets how far back the trail reaches: count × time apart "
-                     "seconds.")
-    r.continuous("dream.gap", "Echo time apart", *_attr(dream, "gap"), lo=GAP_LO, hi=GAP_HI,
-                 fmt=lambda v: f"{v * 1000:.0f} ms", group=g, modulatable=False,
-                 tip="The time between one echo and the next, in milliseconds, whatever "
-                     "the frame rate: short is a smear, long a row of separate copies "
-                     "(33 ms is every 2nd frame at 60 Hz, 67 ms every 4th; 0 is every "
-                     "frame).")
-    r.enum("dream.res", "Look-back detail", *_attr(dream, "res"), [str(v) for v in RES], group=g,
+    r.enum("dream.res", "Dream detail", *_attr(dream, "res"), [str(v) for v in RES], group=g,
            modulatable=False,
-           tip="The size, in pixels, the echoes and the dream are kept at (the short "
-               "side; the picture's aspect is kept); a change starts the trail again.")
+           tip="The size, in pixels, the dream is kept at (the short side; the "
+               "picture's aspect is kept); a change starts the dream again.")
     # the worker's (WP6b) — loadable patches carry them from day one
     r.continuous("dream.steps", "Dream passes", *_attr(dream, "steps"), lo=1, hi=3, integer=True,
                  fmt=lambda v: f"{int(v)}", group=g,

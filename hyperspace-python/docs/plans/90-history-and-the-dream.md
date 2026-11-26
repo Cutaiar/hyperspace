@@ -712,3 +712,36 @@ gap dropped with a note; the tracers starters spawn Delay → Trail → Composit
 From the owner's hand checks of H1 on the Mac: past a frame size's budget the picture went black
 (depths 36, 53); fixed in #519 — a delay keeps the frames that fit and says so. A migrated
 look-back at 512 × 320, depth 32, is 42 MB, far inside it.
+
+## 11. H2 built (2026-11-26)
+
+Rows 1175–1179, hand checks 963–967 (group GG). As §10.2–§10.5, with three things found on the way:
+
+- **The look-back is public parts.** `graphmigrate.lookbacks` (the loadable ladder's last step, after
+  `hue_turns`) and `patches._retire_lookbacks` (the fragment ladder's): §10.2's chain, each part the
+  next free instance of its kind, rows retargeted with their ranges, a row on gap left out and said,
+  darken / contrast / res rows copied onto both. No schema bump. Deleted: `Lookback`, `History`,
+  `Capture`, `EchoNode`, the atlas, `POST_FS`, `TRAIL_VARIANTS`, `_trail_of`, `lay_onto`,
+  `fit_atlas`, `LOOKBACK_KEYS`, `is_lookback_knob`, `declare_lookbacks`, `ViewState.lookback`,
+  GRAPH's look-back area (the dream sits with the effects) and echo pins, the LOOKBACK page's
+  look-back half (the page is the dream's). The dream is untouched until H3.
+- **Found: the Cuts are inverted.** A cut keeps what its mask passes; the wake was held back where
+  the occluder is bright, so each Cut is `invert` at the occlude. The exactness test found it.
+- **Found: the master switch.** The parts are effects, so `fx.on` / `fx.mix` gate them where the
+  look-back drew regardless (party-tracer and party-wake have `fx.on` off). The migration turns them
+  on and to 1 where needed and keeps the patch's other effects as they drew (row 1178, for the owner
+  to confirm).
+- **Matte** gains peak and the linear ramp, one GLSL for both keys (`glsl.KEY_SHAPE`); `scene.cover`
+  goes into any mask port; the tracers starters are Delay (8, 30 Hz) → Trail (add) → Composite (add).
+- **Proof.** `tests/test_lookback_parts_exact.py`: the migrated chain against a numpy transcription of
+  the old trail pass, within one level (two where darken ≠ 0: the faded picture is 8-bit before the
+  delay). `tools/lookback_proof.py`: the four repository files holding a look-back through `main`'s
+  code and this branch's — kinetic-clay byte for byte; the others' lit area within half a percent,
+  their peaks apart by the delay's Hz grid taking its first picture a frame later than the old gap
+  clock (copies of a moving shape one frame apart) and by the 512 × 320 sharp copies against the
+  ring's 408 × 256 mip-blurred ones. `tools/fx_sweep.py`: 2916 renders of every effect, 0 differ.
+- **Example** `stack-lookback`: party-tracer as it opens now.
+
+**Next: H3**, the dream as a hooked effect file, its `dream.*` ids to `fx.dream.*`, `darken`,
+`contrast` and `res` with it.
+

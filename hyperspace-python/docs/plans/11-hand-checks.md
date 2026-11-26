@@ -9122,6 +9122,20 @@ Headless: `tests/test_delay_stack.py` (Read at each step back, a fraction blende
 
 **962. Curve and the linear ramp by eye.** (Mac) Add a Curve after anything bright and sweep **shape** from −1 to 1: lifted, as is at 0, then only the brightest parts. Key a channel on MEDIA with **ramp** linear. *Pass:* Curve never touches pure black or white, and Invert keeps a see-through picture see-through; the linear key fades in evenly where the smooth one eases. *Fail:* a colour shift at Shape 0, or a key that is not see-through on black.
 
+## GG. The look-back retired onto public parts (rows 1175–1179, 2026-11-26)
+
+Headless: `tests/test_lookback_migration.py` (every mapping, rows and their ranges, echo pins, a second look-back, the master switch, the fragment ladder, the corpus whole, an old file through the library's own load and save), `tests/test_lookback_parts_exact.py` (the migrated chain against the old trail pass, to a level), `tests/test_matte_peak.py`, `tests/test_graph_starters.py`; `tools/lookback_proof.py` (each repository look-back through `main`'s code and this one).
+
+**963. A saved look-back by eye.** (Mac) Load `party-tracer` and `party-wake` from the corpus (or your own library's tracer looks, after 967) and `field-examples/stack-lookback`. *Pass:* the strip says the look-back is public parts now; the trail is the one you know — as long, as bright, held back by the shape the same — and the side pane shows a delay, a Trail, a keyed Fade and two Cuts; the hand rows on the trail (height, depth, roll) still move it. *Fail:* no trail, a trail brighter or shorter than before by eye, or a black window.
+
+**964. Matte on peak, linear.** (laptop, GRAPH) Add a Matte on the scene, **from** peak, **ramp** linear, key ⅛, soft ⅛, into a Cut's mask. *Pass:* the mask is white on the shape's lines and fades to black a quarter of the way down its brightness; smooth eases the same edge. A matte saved before (luma, smooth) looks as it did. *Fail:* any matte saved before that looks different.
+
+**965. The tracers starters.** (laptop, GRAPH) Right-click the canvas: starters ▸ tracers, then tracers + dream on a cable. *Pass:* a delay (8, 30 Hz), a Trail (add) and a composite (add) land in one undo step, the trail visible at once; a second tracers is its own three nodes. *Fail:* a refusal, or nothing drawn until a knob is touched.
+
+**966. Golden frames re-recorded.** (Mac) `uv run python tools/golden_frames.py` lists what moved: expect the states of `party-tracer`, `party-wake` (and their `history+hands` wiring), the fixtures `echo-faces`, `kinetic-clay`'s, and the signatures naming `lookback(cover)` (now `scene(cover)`); nothing else. Look at the contact sheet, then `--record --only` those. *Pass:* only those move, and by eye as 963. *Fail:* any other golden moving.
+
+**967. Your library, migrated.** (Mac) `uv run python tools/migrate_library.py` over a copy of `~/Hyperspace` (it backs up first). *Pass:* every file holding a look-back reads "public parts now", no "unknown id"; read the notes for rows on the gap (left out) and on the master switch; open three of them and compare with 963. *Fail:* an unknown id, a file that does not open, or a note you cannot follow.
+
 ## FT. The Kinect (row 1130, 2026-11-24)
 
 Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).

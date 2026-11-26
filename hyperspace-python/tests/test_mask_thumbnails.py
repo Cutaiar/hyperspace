@@ -273,13 +273,15 @@ def test_a_mask_the_frame_did_not_ask_for_is_not_made_for_its_thumbnail(ctx, mon
 
 def test_a_mask_a_pictures_repaint_made_shows_whatever_the_order(ctx, monkeypatch):
     """A cut's thumbnail paints it, and that asks its matte. The matte's
-    thumbnail, wanted first or last, shows that one: masks are copied last."""
+    thumbnail, wanted first or last, shows that one: masks are copied last.
+    (The matte read in two places — plan 90 H2: by a second cut, where the
+    retired look-back's cover read it.)"""
     made = _counting_mattes(monkeypatch)
-    pairs = [("scene", "lookback.image"), ("channel.a", "matte.image"),
-             ("matte", "lookback.cover"), ("lookback", "output.2.image"),
+    pairs = [("scene", "cut.2.image"), ("channel.a", "matte.image"),
+             ("matte", "cut.2.mask"), ("cut.2", "output.2.image"),
              ("channel.a", "cut.image"), ("matte", "cut.mask"), ("cut", "output.3.image")]
     r = _renderer(ctx, _media(a=Still(_rgba(*SIZE, COLOUR))), pairs,
-                  nodes=(MATTE, {"kind": "cut"}))
+                  nodes=(MATTE, {"kind": "cut"}, {"kind": "cut", "instance": 2}))
     _wanted(ctx, r, _s(), {"matte": MASK_PIC, "cut": "picture"}, n=3, frames=1)
     assert r.thumbs.count == 2 and len(made) == 1
 

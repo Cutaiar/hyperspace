@@ -27,9 +27,26 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[1]
-# (the files holding a look-back, after the ladder: 2 with echo pins)
-FILES = ("tests/corpus/loadable/party-tracer.json", "tests/corpus/loadable/party-wake.json",
-         "loadable/kinetic/kinetic-clay.json", "tests/fixtures/presets/echo-faces.json")
+# every repository file that holds a look-back once `main`'s ladder has read it
+# (17; echo-faces reads an echo pin) — found by running `main`'s `graphmigrate.forward`
+# over every loadable in the repository
+FILES = ("loadable/kinetic/kinetic-clay.json",
+         "tests/corpus/loadable/party-tracer.json",
+         "tests/corpus/loadable/party-wake.json",
+         "tests/fixtures/desk-templates/presets/templated.json",
+         "tests/fixtures/factory-sources/presets/party-tracer.json",
+         "tests/fixtures/factory-sources/presets/party-wake.json",
+         "tests/fixtures/plan33-v4-saves/factory--party-tracer.json",
+         "tests/fixtures/plan33-v4-saves/factory--party-wake.json",
+         "tests/fixtures/plan33-v4-saves/presets--acid-scene.json",
+         "tests/fixtures/plan33-v4-saves/presets--hands-glass-only.json",
+         "tests/fixtures/plan33-v4-saves/presets--hands-lines.json",
+         "tests/fixtures/plan33-v4-saves/presets--palette-hands.json",
+         "tests/fixtures/presets/acid-scene.json",
+         "tests/fixtures/presets/echo-faces.json",
+         "tests/fixtures/presets/hands-glass-only.json",
+         "tests/fixtures/presets/hands-lines.json",
+         "tests/fixtures/presets/palette-hands.json")
 FRAMES = (12, 24, 48)          # the frames kept: the trail filling, then full
 SIZE = (480, 300)
 
@@ -37,6 +54,12 @@ SIZE = (480, 300)
 def _paths(root: Path) -> None:
     for p in (root / "tests", root / "tools", root):
         sys.path.insert(0, str(p))
+
+
+def _key(rel: str) -> str:
+    """A short unique key for a file: its folder and stem."""
+    p = Path(rel)
+    return f"{p.parent.name}/{p.stem}"
 
 
 def render(root: Path) -> dict:
@@ -62,10 +85,10 @@ def render(root: Path) -> dict:
                 for k in range(1, max(FRAMES) + 1):
                     rig.frame(views, SIZE, 1.0)
                     if k in FRAMES:
-                        out[f"{Path(rel).stem}@{k}"] = gf._read(ctx, target, SIZE).copy()
+                        out[f"{_key(rel)}@{k}"] = gf._read(ctx, target, SIZE).copy()
                 errors = [v.error for v in views if v.error]
                 assert not errors, errors
-                out[f"{Path(rel).stem}#notes"] = np.array(json.dumps(rig.notes))
+                out[f"{_key(rel)}#notes"] = np.array(json.dumps(rig.notes))
             finally:
                 rig.close()
     return out
@@ -92,7 +115,7 @@ def main() -> int:
         d = np.abs(x - y)
         px = d.max(axis=2)
         worst = max(worst, int(d.max()))
-        print(f"{key:24s} max {int(d.max()):3d}  mean {d.mean():6.3f}  "
+        print(f"{key:48s} max {int(d.max()):3d}  mean {d.mean():6.3f}  "
               f">2 {(px > 2).mean():7.3%}  >16 {(px > 16).mean():7.3%}  "
               f"old lit {(x[..., :3].max(axis=2) > 8).mean():6.2%} "
               f"new lit {(y[..., :3].max(axis=2) > 8).mean():6.2%}")

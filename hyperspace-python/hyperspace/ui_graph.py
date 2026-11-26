@@ -4612,7 +4612,6 @@ def _delete_render_node(panel, st: dict, view: graphview.View, n) -> None:
         ed.reject_deleted_item()
 
 
-LOOKBACK_MENU = "look-back frame"     # plan 34's echo items, under look-back ▸
 EFFECTS_GROUP = "effects"             # the picker group the effect picker replaces (plan 65)
 PICKED_CABLE_GONE = "that cable is gone"
 
@@ -4651,12 +4650,12 @@ def pick_effect(panel, view: graphview.View, s: dict, file: str) -> str | None:
 def render_picker(panel, at, m: ui_menu.Menu) -> None:
     """The picker's render items (`graphview.picker`), grouped by primitive
     (plan 35 G, `graphview.PICKER_GROUP`): starters ▸ at the top (plan 36
-    T5, `graphview.STARTERS`), then scene ▸, look-back ▸ (its look-back frames under `LOOKBACK_MENU`),
-    pictures ▸ (R28's switch over the channels under the switch), media ▸
+    T5, `graphview.STARTERS`), then scene ▸, pictures ▸ (the dream; R28's
+    switch over the channels under the switch), media ▸
     (2026-10-31: channel a–h, each selecting a channel that always exists,
     `pick_channel`; the segment), masks ▸, effects ▸ and slot on ▸. A
     frame node the section has already — the scene, the
-    shape, the look-back, the backdrop, the pattern, an echo, the dream —
+    shape, the backdrop, the pattern, the dream —
     is drawn disabled (`graphview.picked`): there is one of each. A node
     lands unwired (faint, "reaches nothing") where the menu opened (`at`,
     canvas units); the starter and the channels' switch land wired."""
@@ -4674,7 +4673,7 @@ def render_picker(panel, at, m: ui_menu.Menu) -> None:
             continue
         with m.sub(group, id=f"graph.pick.{group}"):
             for kind, f, label in mine:
-                if kind in ("echo", "channels"):     # (their own submenus)
+                if kind == "channels":               # (their own submenu)
                     continue
                 if kind == "channel":                # 2026-10-31: selects, makes nothing
                     m.item(label, lambda f=f: pick_channel(panel, f, at))
@@ -4683,23 +4682,8 @@ def render_picker(panel, at, m: ui_menu.Menu) -> None:
                 m.item(label,
                        (lambda kind=kind, f=f: add_render(panel, e, kind, f, at))
                        if free else None, enabled=free)
-                if kind == "lookback":
-                    _echo_menu(panel, e, [it for it in mine if it[0] == "echo"],
-                               have, at, m)
                 if kind == "switch":
                     _channels_menu(panel, e, items, at, m)
-
-
-def _echo_menu(panel, e: graphview.Edit, echoes, have: set[str], at,
-               m: ui_menu.Menu) -> None:
-    """Plan 34's look-back frames, echo.1 (newest) … echo.32 (oldest), in
-    their own submenu under look-back ▸; one already in the section drawn
-    disabled."""
-    with m.sub(LOOKBACK_MENU):
-        for kind, f, label in echoes:
-            free = f"echo.{f}" not in have
-            m.item(label, (lambda kind=kind, f=f: add_render(panel, e, kind, f, at))
-                   if free else None, enabled=free)
 
 
 def _channels_menu(panel, e: graphview.Edit, items, at, m: ui_menu.Menu) -> None:
@@ -5334,7 +5318,7 @@ def home_page(n: graphview.VNode):
         return ("media", None)
     if isinstance(r, rgraph.Shape):
         return ("view", None)
-    if isinstance(r, (rgraph.History, rgraph.EchoNode, rgraph.DreamNode)):
+    if isinstance(r, rgraph.DreamNode):
         return ("lookback", None)
     if isinstance(r, (rgraph.Hands, rgraph.HandsLayer, rgraph.Readout)):
         return ("hands", None)

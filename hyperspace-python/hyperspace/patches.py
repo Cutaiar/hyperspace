@@ -65,15 +65,14 @@ as their ``/2``), so a file of any age reaches `check`, `read` and
 
 **Frame kinds** (wave 3 P1): a patch holds any render node a loadable patch file
 holds but the meta controller's own and the look's one camera — the scene, the shape,
-the backdrop, the pattern, a look-back, the dream, hands 1, its layer and
+the backdrop, the pattern, the dream, hands 1, its layer and
 its guide as well as what `MAY_HOLD` always named — so a "dream + fx +
 composite" patch exists. No schema moves (the file's keys are as they were;
 an older build's `check` refuses such a file in words). A patch owns of a
 frame kind only that kind's params (`_param_rows`: `rot.*` and most of
-`view.*` the shape's, a look-back's `LOOKBACK_KEYS`, the dream the rest of
-`dream.*`; `scene.*` is the band scene's and no node's). What can be made
-twice is renamed as ever (hands 1 lands as `hands.2`, a look-back as
-`lookback.2`); what a frame holds one of (`ONE_PER_FRAME`) keeps its name,
+`view.*` the shape's, the dream `dream.*`; `scene.*` is the band scene's and
+no node's). What can be made twice is renamed as ever (hands 1 lands as
+`hands.2`); what a frame holds one of (`ONE_PER_FRAME`) keeps its name,
 and a host that already has it refuses the spawn in words, nothing landed
 (`Landing.taken`, `Landing.refusal`) — but for the dream (`REPLACEABLE`,
 wave 3 P2): the conflict sheet asks to replace the host's, whose wires and
@@ -94,7 +93,6 @@ from . import graphmigrate, modbank
 from . import lfo as lfomod
 from . import modifiers as modmod
 from .groupwords import group_word
-from .lookback import is_lookback_key
 from .routing import Binding, Macro, base_scheme, is_continuous, is_macro, meta_refusal
 from .routing_sources import nsew
 
@@ -617,19 +615,11 @@ def _any_key(_key: str) -> bool:
     return True
 
 
-def _is_dream_key(key: str) -> bool:
-    return not is_lookback_key(key)
-
-
 def dream_owner(pid: str) -> str:
-    """The node a `dream.*` param is drawn on and saved with (wave 3 P2): a
-    look-back's knobs on it (`dream.2.fade` on `lookback.2`), the rest on the
-    dream. `graphview.OWNERS` and `ui_graph.node_params` ask here; `_param_rows`
-    is the same split as prefixes."""
-    key, *n = pid.split(".")[:0:-1]
-    if not is_lookback_key(key):
-        return "dream"
-    return f"lookback.{n[0]}" if len(n) == 1 else "lookback"
+    """The node a `dream.*` param is drawn on and saved with (wave 3 P2): the
+    dream (plan 90 H2: the look-back's own knobs are its parts' now).
+    `graphview.OWNERS` and `ui_graph.node_params` ask here."""
+    return "dream"
 
 
 def is_pattern_view_key(key: str) -> bool:
@@ -648,10 +638,9 @@ def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
     params are not under its own name (`graphview.OWNERS`, the app's, so
     restated here; tests/test_patches_frame_kinds.py holds the two equal):
     `rot.*`, `view.*` and `fx.face_map` the shape's, `pattern.*`,
-    `view.pattern*` and `view.media_*` the pattern's; `dream.*` split by
-    key between a look-back and the dream (`params.is_lookback_knob`), so
-    either can be in a patch, and land, without the other's values. The
-    scene has none: `scene.*` is the band scene's (a shared meta group)."""
+    `view.pattern*` and `view.media_*` the pattern's; `dream.*` the dream's
+    (plan 90 H2: the look-back's are its parts'). The scene has none:
+    `scene.*` is the band scene's (a shared meta group)."""
     kind = _kind(name)
     if kind == "scene":
         return []
@@ -660,10 +649,8 @@ def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
                 ("fx", lambda key: key == "face_map")]
     if kind == "pattern":
         return [("pattern", _any_key), ("view", is_pattern_view_key)]
-    if kind == "lookback":
-        return [(G.param_prefix(name), is_lookback_key)]
     if kind == "dream":
-        return [("dream", _is_dream_key)] if name == "dream" else []
+        return [("dream", _any_key)] if name == "dream" else []
     return [(G.param_prefix(name), _any_key)]
 
 

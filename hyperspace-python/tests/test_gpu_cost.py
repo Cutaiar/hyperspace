@@ -241,11 +241,12 @@ def test_the_timer_notes_every_name_that_asks_only_while_watched(ctx):
 
 
 def test_a_pass_under_a_name_of_its_own_is_its_owners():
-    """Devin's finding on #470: a delay's write and a look-back's capture are
-    timed under names no canvas node carries; their time is their node's."""
-    ms = {"delay(write)": 8.0, "scene": 1.0, "lookback": 0.5, "lookback(capture)": 0.25}
-    owner = {"delay(write)": "delay", "lookback(capture)": "lookback"}
-    assert ui_graph.fold_owners(ms, owner) == {"delay": 8.0, "scene": 1.0, "lookback": 0.75}
+    """Devin's finding on #470: a delay's write is timed under a name no
+    canvas node carries; its time is its node's (plan 90 H2: the look-back's
+    capture, the other such pass, is retired)."""
+    ms = {"delay(write)": 8.0, "scene": 1.0, "delay.2": 0.5, "delay.2(write)": 0.25}
+    owner = {"delay(write)": "delay", "delay.2(write)": "delay.2"}
+    assert ui_graph.fold_owners(ms, owner) == {"delay": 8.0, "scene": 1.0, "delay.2": 0.75}
     assert ui_graph.fold_owners(ms, {}) == ms
 
 
@@ -258,10 +259,8 @@ def test_the_renderer_names_each_passes_owner(ctx):
         r.draw_outputs(S, *SIZE, 1.0, views, t_now=t)
     owner = r.stats["gpu_owner"]
     writes = [n for n in r._graph.nodes if n.endswith("(write)")]
-    captures = [n for n in r._graph.nodes if n.endswith("(capture)")]
-    assert writes and captures
-    assert {owner[n] for n in writes} == {"delay"}
-    assert {owner[n] for n in captures} == {"lookback"}
+    assert sorted(writes) == ["delay(write)", "delay.2(write)"]
+    assert {n: owner[n] for n in writes} == {"delay(write)": "delay", "delay.2(write)": "delay.2"}
     assert "delay" in r.stats["gpu_ran"]                # its write ran: it made something
 
 

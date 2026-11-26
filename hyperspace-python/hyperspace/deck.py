@@ -276,7 +276,7 @@ class Deck:
             if given:
                 raise ValueError(f"Deck.build: {', '.join(given)} given with a renderer, "
                                  "whose own states the deck's params must drive")
-            dream, fx, ghost = renderer.lookback.state, renderer.fx.state, renderer.ghost.state
+            dream, fx, ghost = renderer.dreamer.state, renderer.fx.state, renderer.ghost.state
         # one clock for every deck (plan 44 §2): a clock other than the shared
         # sources' is refused before anything registers on it
         if (sources is not None and clock is not None and sources.clock is not None
@@ -432,8 +432,8 @@ class Deck:
             *([(r, "render", "Renderer"),
                (r.scene, "render", "SceneTarget"),
                (r.cover, "render", "CoverTarget"),
-               (r.lookback, "lookback", "Lookback"),
-               (r.lookback.state, "lookback", "DreamState"),
+               (r.dreamer, "lookback", "Dreamer"),
+               (r.dreamer.state, "lookback", "DreamState"),
                (r.fx, "fx", "FxChain"),
                (r.fx.state, "fx", "FxState"),
                (r.ghost, "ghost", "Ghost"),

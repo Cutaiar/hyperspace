@@ -410,6 +410,22 @@ def _no_real_joysticks(monkeypatch):
         monkeypatch.setattr(glfw, name, lambda j: None)
 
 
+def _dream_on_the_scene():
+    """Today's frame with the dream laid over the scene, as the "dream on a
+    picture" starter draws it — the look-back an old dream preset dreamed is
+    retired (plan 90 H2), so the dream takes the scene itself."""
+    from hyperspace import graph as G
+    from hyperspace.graphmigrate import wired_of
+
+    sec = wired_of(G.Wiring())
+    all_in = f"{G.ALL_OUTPUTS}.image"
+    wires = [w for w in sec["wires"] if w["to"] != all_in]
+    wires += [{"from": "scene", "to": "dream.image"}, {"from": "scene", "to": "composite.under"},
+              {"from": "dream", "to": "composite.over"}, {"from": "composite", "to": all_in}]
+    nodes = [*sec.get("nodes", []), {"kind": "dream"}, {"kind": "composite"}]
+    return G.read_graph({**sec, "nodes": nodes, "wires": wires}).wiring()
+
+
 @pytest.fixture(autouse=True)
 def _renderers_draw_todays_frame(request, monkeypatch):
     """Plan 36 T3 (W3): the app's `Renderer` starts on the empty frame
@@ -429,10 +445,11 @@ def _renderers_draw_todays_frame(request, monkeypatch):
     def today(self, *a, **k):
         init(self, *a, **k)
         # (plan 36 T4: its look-back as the old words had it — drawn while
-        # `dream.on` was on, with the dream while its mix is above 0)
-        st = self.lookback.state
-        self.wiring = wired_wiring(Wiring(), look_of({"dream.on": bool(st.on),
-                                                      "dream.mix": st.mix}))
+        # `dream.on` was on, with the dream while its mix is above 0; plan 90
+        # H2: the look-back as public parts, `graphmigrate.wired_of`)
+        st = self.dreamer.state
+        look = look_of({"dream.on": bool(st.on), "dream.mix": st.mix})
+        self.wiring = wired_wiring(Wiring()) if look != "dream" else _dream_on_the_scene()
 
     monkeypatch.setattr(render.Renderer, "__init__", today)
 
@@ -701,7 +718,7 @@ def build_owner_home(home):
     r.loaded_patch.save_as(two)
     # NIGHT THREE: WAKE with its eight device knobs, the trail longer
     r.loaded_patch.load("WAKE")
-    reg["dream.fade"].set_norm(0.7)
+    reg["fx.trail.fade"].set_norm(0.7)            # (plan 90 H2: the look-back's trail)
     r.loaded_patch.save_as(three)
     folder = home / library.LOADABLE
     for name in OWNER_LOADABLES:

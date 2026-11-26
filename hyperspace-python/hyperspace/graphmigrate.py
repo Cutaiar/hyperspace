@@ -1152,11 +1152,21 @@ def wired_of(wiring: G.Wiring, *, placements: bool = True, look: str = "off") ->
     states on first, as the builder placed on each output's state).
     Plan 36 T4: then the look-back split as `look` says the old values had
     it (`split_lookback`: the words hold no `dream.on`; "off", the
-    default, draws no look-back) — only with `placements`, the last step."""
+    default, draws no look-back) — only with `placements`, the last step —
+    and (plan 90 H2) made public parts (`retire_lookbacks`)."""
     section = section_of(wiring)
     out = wired_section(renamed(section), G.read_graph(section),
                         backdrop_history=wiring.backdrop_history)
-    return split_lookback(placed_wires(out), look) if placements else out
+    if not placements:
+        return out
+    # (plan 90 H2: and the look-back it drew made public parts, at its defaults)
+    out = split_lookback(placed_wires(out), look)
+    nodes, wires, _, _, keys, notes = retire_lookbacks(
+        list(out.get("nodes") or []), list(out.get("wires") or []), {},
+        keys=list(out.get(G.KEYS_KEY) or []))
+    if not notes:
+        return out
+    return {**out, "nodes": nodes, "wires": wires, **({G.KEYS_KEY: keys} if keys else {})}
 
 
 def wired_wiring(wiring: G.Wiring, look: str = "off") -> G.Wiring:
@@ -2348,6 +2358,14 @@ def _norm(v: float, lo: float, hi: float) -> float:
     return min(max((v - lo) / (hi - lo), 0.0), 1.0)
 
 
+def lookback_retired(pid: Any) -> bool:
+    """Whether `pid` is a retired look-back knob (`LB_GONE`, or any of
+    `dream.<n>.*`): a module preset of the dream group still naming one
+    (plan 90 H2) lands without it, quietly — it drew nothing there."""
+    got = _lb_param(pid)
+    return got is not None and (got[1] in LB_GONE or got[0] != "lookback")
+
+
 def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = None,
                      keys: list | None = None
                      ) -> tuple[list, list, dict, list | None, list | None, list[str]]:
@@ -2449,7 +2467,7 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
         ks = sorted({_lb_of(w.get("from"))[2] for w in wires if isinstance(w, dict)
                      and _lb_of(w.get("from")) is not None and _lb_of(w.get("from"))[0] == old
                      and _lb_of(w.get("from"))[2] is not None})
-        echoes = int(round(_num(v["echoes"], LB_DEFAULTS["echoes"])))
+        echoes = round(_num(v["echoes"], LB_DEFAULTS["echoes"]))
         depth = min(max(echoes, LB_DEPTH[0]), LB_DEPTH[1])
         contrast = _num(v["contrast"], 1.0)
         curve_on = contrast != 1.0 or pre + "contrast" in driven
@@ -2753,8 +2771,8 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
     if "values" not in rest and values:
         out_rest["values"] = values
     if out_keys is not None:
-        out_keys = sorted({x if x not in ends else ends[x] for x in out_keys
-                           if isinstance(x, str) and _lb_of(x) is None or x in ends})
+        out_keys = sorted({ends.get(x, x) for x in out_keys
+                           if isinstance(x, str) and (_lb_of(x) is None or x in ends)})
     out_ports = None
     if ports is not None:
         out_ports = []
