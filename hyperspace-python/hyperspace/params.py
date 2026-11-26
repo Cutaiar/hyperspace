@@ -1920,7 +1920,8 @@ def declare_resizes(r: Registry, names: Iterable[str]) -> list[str]:
 # ---- plan 39 T2: the mattes' values ----
 MATTE_GROUP = "matte"
 # `matte[.n].from` is the param; its state's field is `source` (`from` is a keyword)
-_MATTE_KEYS = ("from", "key", "soft", "invert", "feather", "hue", "sat")
+# (plan 90 H2: and `ramp`, the key's — appended)
+_MATTE_KEYS = ("from", "key", "soft", "invert", "feather", "hue", "sat", "ramp")
 _MATTE_ATTR = {"from": "source"}
 _MATTE_ID = re.compile(r"matte(?:\.(?:[2-9]|[1-9][0-9]+))?\.(" + "|".join(_MATTE_KEYS) + ")")
 
@@ -1950,7 +1951,8 @@ def _matte_state(r: Registry) -> dict[str, MatteState]:
 
 _MATTE_TIPS = {
     "from": "What makes a pixel of {name}'s picture pass: its brightness (luma), its "
-            "own coverage (alpha), or how near its colour is to {name}'s hue (chroma).",
+            "own coverage (alpha), how near its colour is to {name}'s hue (chroma), or "
+            "its brightest channel (peak, as a key measures).",
     "key": "Where a pixel of {name}'s picture starts to pass, 0–1: at or past it, it "
            "passes.",
     "soft": "The width of {name}'s edge either side of the key: 0 is hard, pass or not.",
@@ -1959,6 +1961,8 @@ _MATTE_TIPS = {
     "hue": "The colour {name} keys on in chroma, round the wheel (0 red, 0.33 green, "
            "0.67 blue).",
     "sat": "How saturated the colour {name} keys on in chroma is: 0 keys the greys.",
+    "ramp": "How {name}'s soft edge runs from not passing to passing: smooth (a gentle "
+            "S), or linear (a straight line — brightness as coverage, as a key's).",
 }
 
 
@@ -1993,6 +1997,8 @@ def declare_mattes(r: Registry, names: Iterable[str]) -> list[str]:
             got = _attr(st, _MATTE_ATTR.get(key, key))
             if key == "from":
                 r.enum(pid, label, *got, list(MATTE_FROM), group=MATTE_GROUP, tip=tip)
+            elif key == "ramp":
+                r.enum(pid, label, *got, list(KEY_RAMPS), group=MATTE_GROUP, tip=tip)
             elif key == "invert":
                 r.toggle(pid, label, *got, group=MATTE_GROUP, tip=tip)
             else:
