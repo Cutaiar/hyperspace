@@ -125,7 +125,7 @@ def test_a_loadable_load_lands_every_base_and_replaces_every_route(rig):
     reg["view.bright"].set(3.3)                         # a view base off default
     reg["fx.on"].set(not reg["fx.on"].value)            # an fx toggle (plan 36 T3: the
     #                                                     effects are the startup loadable patch's)
-    reg["dream.fade"].set(2.0)                          # a dream value
+    reg["dream.k"].set(0.5)                             # a dream value
     table.add(Binding("hand:7", "view.speed", "push", 0.3))    # a hand route
     keys = [b.to_json() for b in table.bindings
             if b.op not in routing.MOD_OPS and b.layer != "preset"]
@@ -138,7 +138,7 @@ def test_a_loadable_load_lands_every_base_and_replaces_every_route(rig):
     assert reg.snapshot(part="patch") == expected(lib, values)
     assert rig.view.shape == 4 and reg["lfo.1.depth"].value == 0.25
     assert reg["view.bright"].value == lib.defaults("view")["view.bright"]
-    assert reg["dream.fade"].value == lib.defaults("dream")["dream.fade"]
+    assert reg["dream.k"].value == lib.defaults("dream")["dream.k"]
     assert [b.to_json() for b in table.routes()] == routes   # exactly the file's, disabled too
     assert [b.to_json() for b in table.bindings
             if b.op not in routing.MOD_OPS and b.layer != "preset"] == keys
@@ -150,28 +150,42 @@ def test_a_loadable_with_per_frame_echo_ids_is_read_in_seconds(rig):
     """Plan 14 WP6: a loadable patch file that still names the per-frame
     `dream.decay` / `dream.every` loads as 60 Hz frames in seconds — its
     values, a hand push on the decay (the same throw of decays), a desk
-    knob on it — and the load says so, once."""
+    knob on it — and the load says so, once. Plan 90 H2: its look-back is
+    public parts, so the seconds land on them — the fade on the trail's
+    (the same log range), the gap as the delay's rate — said by the
+    look-back's own notes."""
     from hyperspace.lookback import decay_per_frame, fade_of_decay
 
+    graph = {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"},
+                                         {"kind": "composite", "blend": "add"}],
+             "wires": [{"from": "shape", "to": "scene.geometry"},
+                       {"from": "pattern", "to": "shape.faces"},
+                       {"from": "scene", "to": "lookback.image"},
+                       {"from": "scene", "to": "composite.under"},
+                       {"from": "lookback", "to": "composite.over"},
+                       {"from": "composite", "to": "output.all.image"}]}
     put(rig.home, "OLDWAKE", values={"dream.on": True, "dream.decay": 0.93, "dream.every": 2},
         routes=[{"source": "hand:right.z", "target": "dream.decay", "op": "push",
                  "value": -0.12}],
-        desk=[{"source": "cc:*:17", "target": "dream.decay", "op": "abs", "feedback": "ring"}])
+        desk=[{"source": "cc:*:17", "target": "dream.decay", "op": "abs", "feedback": "ring"}],
+        graph=graph)
     assert rig.loaded_patch.load("OLDWAKE") == []
     reg, table = rig.reg, rig.router.table
-    assert reg["dream.fade"].value == pytest.approx(fade_of_decay(0.93))
-    assert reg["dream.gap"].value == pytest.approx(2 / 60, abs=1e-6)
-    assert len(rig.loaded_patch.notes) == 1 and "look-back read in seconds" in rig.loaded_patch.notes[0]
+    assert reg["fx.trail.fade"].value == pytest.approx(fade_of_decay(0.93))
+    assert reg["delay.hz"].value == pytest.approx(30.0)           # every 2 frames at 60 Hz
+    said = [n for n in rig.loaded_patch.notes if "(plan 90)" not in n]
+    assert len(said) == 1 and "look-back read in seconds" in said[0]
+    assert any(n.startswith("lookback is public parts now") for n in rig.loaded_patch.notes)
     (row,) = table.routes()
-    assert row.target == "dream.fade" and row.value < 0          # reach in: longer, as before
+    assert row.target == "fx.trail.fade" and row.value < 0      # reach in: longer, as before
     # the throw spans as far as the old one (0.87 … 0.99 a frame), in
     # fade's own (log) norm about the base: reach in lasts, pull back snaps
-    p = reg["dream.fade"]
+    p = reg["fx.trail.fade"]
     ends = [decay_per_frame(p._raw_value(p.norm + row.value * (u - 0.5))) for u in (0.0, 1.0)]
     assert ends[0] > 0.975 and ends[1] < 0.9, ends
     span = abs(p._raw_norm(fade_of_decay(0.99)) - p._raw_norm(fade_of_decay(0.87)))
     assert abs(row.value) == pytest.approx(span, abs=1e-3)
-    assert any(b.target == "dream.fade" and b.source == "cc:*:17" for b in table.desk())
+    assert any(b.target == "fx.trail.fade" and b.source == "cc:*:17" for b in table.desk())
 
 
 def test_a_loadable_load_never_touches_a_meta_param(rig):
@@ -550,8 +564,8 @@ def test_module_labels_are_dropped_and_a_missing_id_is_the_build_value(rig):
     assert lib.current("dream") is None and lib.current("camera") is None
     assert lib.current("fx") is None and not lib.is_dirty("dream")
     assert reg["dream.mix"].base == pytest.approx(0.25)
-    assert reg["dream.echoes"].base == lib._fresh_of("dream")["dream.echoes"]
-    assert reg["dream.echoes"].base != wake["values"]["dream.echoes"]   # no default.json
+    assert reg["dream.k"].base == lib._fresh_of("dream")["dream.k"]
+    assert reg["dream.k"].base != wake["values"]["dream.k"]   # no default.json
     doc = rig.loaded_patch.document("LABELS")
     assert "modules" not in doc and doc["schema"] == "hyperspace.loadable/12"
     reg["dream.mix"].set(0.3)
@@ -1170,11 +1184,15 @@ def _is_device_knob(b: Binding) -> bool:
     return b.kind == "cc" and b.number in apc40.DEVICE_KNOBS
 
 
-def wake_knobs(home) -> list[str]:
-    """WAKE's eight device knobs, D1–D8, as the corpus file has them."""
+def wake_knobs(home) -> list[tuple[str, str]]:
+    """WAKE's eight device knobs, D1–D8, as the corpus file has them — as
+    (source, target), through the look-back's migration (plan 90 H2: its
+    knobs retarget onto the public parts, a knob on darken or contrast
+    copied onto the dream's and the part's, so eleven rows)."""
     doc = json.loads((home / "loadable" / "party-wake.json").read_text())
-    by_source = {d["source"]: d["target"] for d in doc["desk"]}
-    return [by_source[s] for s in DEVICE_KNOBS]
+    assert [d["source"] for d in doc["desk"] if d["source"] in DEVICE_KNOBS] == DEVICE_KNOBS
+    desk = graphmigrate.forward(doc, {}).doc["desk"]
+    return [(d["source"], d["target"]) for d in desk if d["source"] in DEVICE_KNOBS]
 
 
 def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(owner_home):
@@ -1216,11 +1234,13 @@ def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(
     # the pad the owner had re-aimed is the bank's now, on both layers
     kind, ch, n = OWNER_PAD["source"].split(":")
     assert [b.target for b in table.dispatch(kind, int(ch), int(n))] == ["preset.select"]
-    # NIGHT THREE (WAKE's eight device knobs): quiet, the eight kept
+    # NIGHT THREE (WAKE's eight device knobs): quiet, the eight kept (plan 90
+    # H2: saved from WAKE as it opens now, its knobs on the look-back's parts)
     lib.warning = ""
     lib.load("loadable", "NIGHT THREE")
     assert loaded_patch.desk_notes == [] and lib.warning == ""
-    assert [b.target for b in table.desk() if _is_device_knob(b)] == wake_knobs(home)
+    assert [(b.source, b.target) for b in table.desk() if _is_device_knob(b)] == \
+        wake_knobs(home)
     assert not lib.is_dirty("loadable")
     # an undo's restore of a desk meets the same rule (`set_desk(load=False)`)
     notes = table.set_desk([*old_shape_pads(), OWNER_PAD], load=False)
@@ -1296,7 +1316,8 @@ def test_a_users_desk_is_untouched_by_the_recut(owner_home):
     knob = loadable.device_knob(*OWNER_KNOB)
     assert dials() == {knob.source: knob.target}                         # D3 alone, learned
     lib.load("loadable", "NIGHT THREE")
-    assert list(dials().values()) == wake_knobs(home)
+    assert sorted((b.source, b.target) for b in table.desk() if _is_device_knob(b)) == \
+        sorted(wake_knobs(home))
     assert not lib.is_dirty("loadable")
     lib.poll()
     assert _files(home) == before

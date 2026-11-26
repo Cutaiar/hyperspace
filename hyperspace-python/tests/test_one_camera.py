@@ -53,11 +53,20 @@ EYE = {"eye.fov": 30.0, "eye.distance": 5.0}
 CAMERA_AT = [40, 50]
 
 
+def without_lookback(doc: dict) -> dict:
+    """`doc` without the retired look-back's knobs (plan 90 H2:
+    `graphmigrate.LB_GONE`; a load drops them and says so, a note these
+    tests of the eye are not about)."""
+    gone = {f"dream.{k}" for k in graphmigrate.LB_GONE}
+    return {**doc, "values": {k: v for k, v in doc["values"].items() if k not in gone}}
+
+
 def old_loadable(src: Path = TRIP, *, marked: bool = True) -> dict:
     """A corpus loadable patch as it was before `/9`: `/7`, no eye in its values
     (and, unmarked, its depths still measured along the linear ranges'
-    words — wave 0 T1's marker gone)."""
-    doc = json.loads(src.read_text())
+    words — wave 0 T1's marker gone); without the retired look-back's knobs
+    (`without_lookback`)."""
+    doc = without_lookback(json.loads(src.read_text()))
     doc["schema"] = graphmigrate.WIRED_SCHEMA
     doc["values"] = {k: v for k, v in doc["values"].items() if not k.startswith("eye.")}
     if not marked:
@@ -578,7 +587,8 @@ def _library(tmp_path: Path) -> Path:
     (loadable_dir / "trip-old.json").write_text(loadable.dumps(old_loadable()))
     (loadable_dir / "trip-unmarked.json").write_text(
         loadable.dumps({**old_loadable(marked=False), "name": "TRIP UNMARKED"}))
-    shutil.copyfile(CORPUS / "loadable" / "dial.json", loadable_dir / "dial.json")
+    (loadable_dir / "dial.json").write_text(loadable.dumps(without_lookback(
+        json.loads((CORPUS / "loadable" / "dial.json").read_text()))))
     _write(lib / "projects" / "rig.hyp.json", old_show())
     (lib / "patches").mkdir()
     shutil.copyfile(OLD_PATCH, lib / "patches" / "acid-wash.json")

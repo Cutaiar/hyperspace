@@ -105,19 +105,24 @@ def _view(**kw) -> View:
 
 def test_the_default_graph_for_one_default_view_is_todays_frame_in_order():
     """One output, the factory frame with its look-back drawn
-    (`graphmigrate.wired_wiring`, the old words' on: plan 36 T4) — the
-    shape into the scene, the cover, the hands (a geometry, A3) into their
-    own layer, the look-back, the composite adding it onto the scene, its
-    end, the capture, the output — every node after what it depends on,
-    each name once, in the new ids (plan 35 T4), a geometry's time counted
-    in whatever draws it (the hands' in their layer's: they are in no
-    scene)."""
-    g = G.build_graph([_view()], wired_wiring(G.Wiring(), "trail"))
-    assert _names(g) == ["pattern", "shape", "hands", "scene", "lookback(cover)", "hands.layer",
-                         "lookback", "composite", "shown(composite)", "lookback(capture)",
+    (`graphmigrate.wired_wiring`, the old words' on: plan 36 T4) — plan 90
+    H2: the look-back made public parts — the shape into the scene, the
+    cover, the hands (a geometry, A3) into their own layer, the delay's
+    stack read by the trail, cut by the matte and the cover, the composite
+    adding it onto the scene, its end, the record (fade, its key, the
+    resize) written into the delay after every end, the output — every node
+    after what it depends on, each name once, in the new ids (plan 35 T4), a
+    geometry's time counted in whatever draws it (the hands' in their
+    layer's: they are in no scene)."""
+    E = ("fade", "trail")
+    g = G.build_graph([_view()], wired_wiring(G.Wiring(), "trail"), (), E)
+    assert _names(g) == ["pattern", "shape", "hands", "scene", "scene(cover)", "hands.layer",
+                         "delay", "trail", "matte", "cut", "cut.2", "composite",
+                         "shown(composite)", "fade", "fade(key)", "resize", "delay(write)",
                          "output.1"]
-    assert g.timed == ["scene", "lookback(cover)", "hands.layer", "lookback", "composite",
-                       "shown(composite)", "lookback(capture)", "output.1"]
+    assert g.timed == ["scene", "scene(cover)", "hands.layer", "matte", "cut", "cut.2",
+                       "composite", "shown(composite)", "fade(key)", "resize", "delay(write)",
+                       "output.1"]
     assert g.key == (1,) and g.wiring == wired_wiring(G.Wiring(), "trail")
     seen: list[G.Node] = []
     for n in g.order:
@@ -126,53 +131,63 @@ def test_the_default_graph_for_one_default_view_is_todays_frame_in_order():
         seen.append(n)
     assert len({n.name for n in g.order}) == len(g.order)
     # the wiring: the scene from the shape, the layer from the hands, the
-    # look-back held back by the scene and the cover, the composite adding
-    # it onto the scene, the end from the composite, the capture from the
-    # scene, the output after the capture with the end on its image port
-    # and the hands' layer over it
+    # trail reading the delay's stack, cut by the scene's matte and the
+    # cover, the composite adding it onto the scene, the end from the
+    # composite, the record from the scene, the output with the end on its
+    # image port and the hands' layer over it
     assert g.nodes["scene"].inputs == {"geometry": g.nodes["shape"]}
     assert g.nodes["hands.layer"].inputs == {"geometry": g.nodes["hands"]}
     assert g.nodes["hands.layer"].readout == "downstream" and "hands" not in g.in_scene()
-    assert g.nodes["lookback"].inputs == {"occluder": g.nodes["scene"],
-                                          "cover": g.nodes["lookback(cover)"]}
+    assert g.nodes["trail"].inputs["stack"] is g.nodes["delay"]
+    assert g.nodes["cut"].inputs == {"image": g.nodes["trail"], "mask": g.nodes["matte"]}
+    assert g.nodes["matte"].inputs == {"image": g.nodes["scene"]}
+    assert g.nodes["cut.2"].inputs == {"image": g.nodes["cut"], "mask": g.nodes["scene(cover)"]}
     comp = g.nodes["composite"]
     assert comp.blend == "add" and comp.inputs == {
-        "under": g.nodes["scene"], "over": g.nodes["lookback"], "depth": None}
+        "under": g.nodes["scene"], "over": g.nodes["cut.2"], "depth": None}
     end = g.nodes["shown(composite)"]
     assert end.inputs == {"image": comp}
     assert end.after == (g.nodes["hands.layer"],)
-    assert g.nodes["lookback(capture)"].inputs == {"image": g.nodes["scene"]}
+    assert g.nodes["fade"].inputs["image"] is g.nodes["scene"]
+    assert g.nodes["delay(write)"].inputs == {"image": g.nodes["resize"]}
     out = g.nodes["output.1"]
-    assert out.index == 0 and out.after == (g.nodes["lookback(capture)"],)
+    assert out.index == 0
     assert out.inputs == {"image": end, "hands": g.nodes["hands.layer"],
                           "readout": g.nodes["hands.layer"], "depth": None}
     assert out.blend == "over" and g.outputs == [out]
     assert [n.KIND for n in g.order] == ["pattern", "geometry", "geometry", "scene", "layer",
-                                         "layer", "history", "composite", "shown", "history",
-                                         "output"]
+                                         "layer", "delay", "effect", "matte", "cut", "cut",
+                                         "composite", "shown", "effect", "key", "resize",
+                                         "delay", "output"]
     assert "Graph(pattern → shape → hands → scene" in repr(g)
+    # the old words' off: no look-back drawn — the scene, its end, the output
+    g = G.build_graph([_view()], wired_wiring(G.Wiring()))
+    assert _names(g) == ["pattern", "shape", "hands", "scene", "hands.layer", "shown(scene)",
+                         "output.1"]
 
 
 def test_a_through_output_is_a_composite_and_its_end():
     """Plan 35 T4 (row 377): the hands through the effects are an output's
-    wiring — a composite laying the layer over the look-back (or over
-    nothing, the picture muted); the hands only where some output's wiring
-    lays them. Plan 36 T1: its end is always itself (no stand-down, so no
-    end for the look-back no window shows) and the composite is told the
-    window it is for (`mute_hands`). Plan 36 T4: the look-back drawn (the
-    old words' on) — the trail added onto the scene, `composite.3`."""
-    g = graph([Shows(through=True), Shows(scene=False, through=True)], look="trail")
-    assert _names(g) == ["pattern", "shape", "hands", "scene", "lookback(cover)", "hands.layer",
-                         "lookback", "composite.3", "composite", "shown(composite)",
-                         "composite.2", "shown(composite.2)", "lookback(capture)",
-                         "output.1", "output.2"]
+    wiring — a composite laying the layer over the look-back's picture (or
+    over nothing, the picture muted); the hands only where some output's
+    wiring lays them. Plan 36 T1: its end is always itself (no stand-down)
+    and the composite is told the window it is for (`mute_hands`). Plan 36
+    T4: the look-back drawn (the old words' on) — the trail added onto the
+    scene, `composite.3` (plan 90 H2: the trail is the public parts', cut
+    by `cut.2`)."""
+    g = graph([Shows(through=True), Shows(scene=False, through=True)], look="trail",
+              effects=("fade", "trail"))
+    assert _names(g) == ["pattern", "shape", "hands", "scene", "scene(cover)", "hands.layer",
+                         "delay", "trail", "matte", "cut", "cut.2", "composite.3", "composite",
+                         "shown(composite)", "composite.2", "shown(composite.2)", "fade",
+                         "fade(key)", "resize", "delay(write)", "output.1", "output.2"]
+    assert g.nodes["composite.3"].inputs == {"under": g.nodes["scene"],
+                                             "over": g.nodes["cut.2"], "depth": None}
     assert g.nodes["composite"].inputs == {"under": g.nodes["composite.3"],
                                            "over": g.nodes["hands.layer"], "depth": None}
     assert g.nodes["composite.2"].inputs == {"under": None, "over": g.nodes["hands.layer"],
                                              "depth": None}
     assert g.nodes["composite.2"].blend == "over"
-    assert g.nodes["lookback(capture)"].after[:2] == tuple(
-        g.nodes[n] for n in ("shown(composite)", "shown(composite.2)"))
     assert g.nodes["composite"].mute_hands == (0,)
     assert g.nodes["composite.2"].mute_hands == (1,)
     # each output's image port is its end; through, the hands go before the
@@ -214,12 +229,14 @@ def test_ports_are_typed_and_the_graph_checks_its_wiring():
     scene = g.add(G.Scene("scene", geometry=shape))
     cover = g.add(G.Cover("cover", scene=scene))
     assert (scene.OUTPUT, cover.OUTPUT, shape.OUTPUT) == (G.IMAGE, G.MASK, G.GEOMETRY)
+    # (plan 90 H2: the look-back's history node is retired; a cut takes the
+    # same two types)
     with pytest.raises(TypeError, match="takes image, 'cover' makes mask"):
-        G.History("history", occluder=cover, cover=cover)
+        G.CutNode("cut", image=cover, mask=cover)
     with pytest.raises(TypeError, match="takes mask"):
-        G.History("history", occluder=scene, cover=scene)
+        G.CutNode("cut", image=scene, mask=scene)
     with pytest.raises(ValueError, match="no port \\['picture'\\]"):
-        G.History("history", picture=scene)
+        G.Composite("c", picture=scene)
     with pytest.raises(ValueError, match="two nodes named 'scene'"):
         g.add(G.Scene("scene", geometry=shape))
     loose = G.Scene("loose", geometry=G.Shape("other"))
@@ -236,7 +253,7 @@ def test_ports_are_typed_and_the_graph_checks_its_wiring():
     # A4: a geometry's time is its scene's call (the consumer edge): the
     # node itself is never told it is in a scene
     assert not two.inputs["geometry"].TIMED and two.inputs["geometry"].SOLID
-    assert G.Capture("capture", image=scene, after=(cover,)).deps() == [scene, cover]
+    assert G.Shown("shown", image=scene, after=(cover,)).deps() == [scene, cover]
     assert _names(g) == ["shape", "scene", "cover"]
 
 
@@ -248,13 +265,13 @@ def test_order_puts_dependencies_first_and_ties_in_insertion_order():
     shape = g.add(G.Shape("shape"))
     scene = g.add(G.Scene("scene", geometry=shape))
     hands = g.add(G.HandsLayer("hands.layer"))
-    cover = g.add(G.Cover("lookback(cover)", scene=scene))
-    history = g.add(G.History("lookback", occluder=scene, cover=cover))
-    end = g.add(G.Shown("shown(lookback)", after=(hands,), image=history))
+    cover = g.add(G.Cover("scene(cover)", scene=scene))
+    cut = g.add(G.CutNode("cut", image=scene, mask=cover))
+    end = g.add(G.Shown("shown(cut)", after=(hands,), image=cut))
     g.add(G.Output("output.1", 0, after=(end,), image=end, hands=hands))
-    assert _names(g) == ["shape", "scene", "hands.layer", "lookback(cover)", "lookback",
-                         "shown(lookback)", "output.1"]
-    assert g.timed == ["scene", "hands.layer", "lookback(cover)", "lookback", "shown(lookback)",
+    assert _names(g) == ["shape", "scene", "hands.layer", "scene(cover)", "cut",
+                         "shown(cut)", "output.1"]
+    assert g.timed == ["scene", "hands.layer", "scene(cover)", "cut", "shown(cut)",
                        "output.1"]
 
 
@@ -298,30 +315,33 @@ def test_the_hands_in_the_scene_are_its_first_geometry_and_a_glass_still_gets_th
 
 
 def test_the_history_is_wired_to_the_scene_or_the_scene_with_the_hands():
-    """`Wiring.history`: the capture takes the scene (today), or a
+    """`Wiring.history`: what the look-back recorded — plan 90 H2: what the
+    delay records, through the migrated fade — the scene (today), or a
     composite of the hands' layer over the scene — with the layer's blend,
     and the layer drawn even when no output lays it on."""
-    g = graph([Shows()], look="trail")
-    assert g.nodes["lookback(capture)"].inputs["image"] is g.nodes["scene"]
-    g = graph([Shows()], G.Wiring(history="scene+hands", blend="depth"), look="trail")
-    held = g.nodes["lookback(capture)"].inputs["image"]
+    E = ("fade", "trail")
+    g = graph([Shows()], look="trail", effects=E)
+    assert g.nodes["fade"].inputs["image"] is g.nodes["scene"]
+    g = graph([Shows()], G.Wiring(history="scene+hands", blend="depth"), look="trail", effects=E)
+    held = g.nodes["fade"].inputs["image"]
     assert held is g.nodes["composite"] and held.blend == "depth"
     assert held.inputs == {"under": g.nodes["scene"], "over": g.nodes["hands.layer"],
                            "depth": g.nodes["scene"]}
-    g = graph([Shows(hands=False)], G.Wiring(history="scene+hands"), look="trail")
+    g = graph([Shows(hands=False)], G.Wiring(history="scene+hands"), look="trail", effects=E)
     assert "hands.layer" in g.nodes and g.nodes["output.1"].inputs["hands"] is None
     # with the hands in the scene the scene holds them already
-    g = graph([Shows()], G.Wiring(hands="scene", history="scene+hands"), look="trail")
-    assert g.nodes["lookback(capture)"].inputs["image"] is g.nodes["scene"]
+    g = graph([Shows()], G.Wiring(hands="scene", history="scene+hands"), look="trail",
+              effects=E)
+    assert g.nodes["fade"].inputs["image"] is g.nodes["scene"]
     # …even when a glass (scene off, hands on) makes the hands' layer: it
     # is never laid over a scene that holds the hands (no doubled echoes;
     # plan 36 T4: the one composite adds the trail)
     g = graph([Shows(), Shows(scene=False)], G.Wiring(hands="scene", history="scene+hands"),
-              look="trail")
+              look="trail", effects=E)
     assert "hands.layer" in g.nodes
     assert [c.name for c in g.nodes.values() if isinstance(c, G.Composite)] == ["composite"]
-    assert g.nodes["composite"].inputs["over"] is g.nodes["lookback"]
-    assert g.nodes["lookback(capture)"].inputs["image"] is g.nodes["scene"]
+    assert g.nodes["composite"].inputs["over"] is g.nodes["cut.2"]
+    assert g.nodes["fade"].inputs["image"] is g.nodes["scene"]
 
 
 def test_depth_aware_wiring_hands_each_composite_and_output_the_scenes_depth():

@@ -1133,7 +1133,7 @@ def test_reordering_the_run_is_rewiring(tmp_path):
     assert e.place_effect(("wobble", "acid.image"), "acid") == "acid is on that cable already"
 
 
-FRAME0 = (("shape", "scene.geometry"), ("scene", "lookback.image"))
+FRAME0 = (("shape", "scene.geometry"),)
 
 
 def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
@@ -1842,7 +1842,7 @@ def test_a_slot_comes_off_and_the_later_ones_close_up(tmp_path):
                "nodes": [{"kind": "effect", "file": "acid", "slots": 3}],
                "wires": [{"from": "scene", "to": "acid.image"},
                          {"from": "acid", "to": "output.all.image"},
-                         {"from": "lookback", "to": "acid.slot.2.image"},
+                         {"from": "channel.a", "to": "acid.slot.2.image"},
                          {"from": "acid.slot.2", "to": "output.2.image"},
                          {"from": "scene", "to": "acid.slot.3.image"},
                          {"from": "acid.slot.3", "to": "output.3.image"}]}
@@ -1854,7 +1854,7 @@ def test_a_slot_comes_off_and_the_later_ones_close_up(tmp_path):
     assert spec.notes == () and spec.slots == (G.SlotAt("acid", 2),)
     assert {(w.src, w.dst) for w in spec.wires} == {
         ("scene", "acid.image"), ("acid", "output.all.image"),
-        ("lookback", "output.2.image"),                  # (closed over the slot gone)
+        ("channel.a", "output.2.image"),                 # (closed over the slot gone)
         ("scene", "acid.slot.2.image"), ("acid.slot.2", "output.3.image")}
     assert e.drop_node("rout:acid.slot.2") is None
     spec = rig.loaded_patch.graph.spec
@@ -1870,7 +1870,7 @@ def test_a_keyed_later_slot_keeps_its_knobs_when_it_numbers_down(tmp_path):
                "nodes": [{"kind": "effect", "file": "acid", "slots": 3}],
                "wires": [{"from": "scene", "to": "acid.image"},
                          {"from": "acid", "to": "output.all.image"},
-                         {"from": "lookback", "to": "acid.slot.2.image"},
+                         {"from": "channel.a", "to": "acid.slot.2.image"},
                          {"from": "acid.slot.2", "to": "output.2.image"},
                          {"from": "scene", "to": "acid.slot.3.image"},
                          {"from": "acid.slot.3", "to": "output.3.image"}],
@@ -1890,7 +1890,7 @@ def test_a_refused_slot_removal_leaves_every_key_as_it_was(tmp_path, monkeypatch
                "nodes": [{"kind": "effect", "file": "acid", "slots": 3}],
                "wires": [{"from": "scene", "to": "acid.image"},
                          {"from": "acid", "to": "output.all.image"},
-                         {"from": "lookback", "to": "acid.slot.2.image"},
+                         {"from": "channel.a", "to": "acid.slot.2.image"},
                          {"from": "acid.slot.2", "to": "output.2.image"},
                          {"from": "scene", "to": "acid.slot.3.image"},
                          {"from": "acid.slot.3", "to": "output.3.image"}],
@@ -1938,8 +1938,7 @@ OWNERS = {"frame": "wired", "nodes": [], "wires": [
     {"from": "channel.a", "to": "backdrop.image"},
     {"from": "shape", "to": "scene.geometry"},
     {"from": "scene", "to": "backdrop.scene"},
-    {"from": "backdrop", "to": "lookback.image"},
-    {"from": "lookback", "to": "plasma.image"},
+    {"from": "backdrop", "to": "plasma.image"},
     {"from": "plasma", "to": "kaleido.image"},
     {"from": "kaleido", "to": "output.all.image"},
     {"from": "hands.layer", "to": "output.all.hands"},
@@ -1948,16 +1947,17 @@ OWNERS = {"frame": "wired", "nodes": [], "wires": [
 
 def test_the_owners_sequence(tmp_path):
     """The owner's gestures of 2026-10-24, each now a plain delete: the
-    scene off the backdrop, the look-back off the first effect, each
-    effect's way out, the last one off All outputs — every one lands, and
-    then nothing reaches the look-back."""
+    scene off the backdrop, the backdrop off the first effect (plan 90 H2:
+    the look-back between them retired), each effect's way out, the last
+    one off All outputs — every one lands, and then nothing reaches the
+    backdrop."""
     from hyperspace import graph as G
     rig, e, _ = wired_rig(tmp_path, OWNERS)
-    for src, dst in (("scene", "backdrop/scene"), ("lookback", "plasma/image"),
+    for src, dst in (("scene", "backdrop/scene"), ("backdrop", "plasma/image"),
                      ("plasma", "kaleido/image"), ("kaleido", "output.all/image")):
         assert e.unwire(f"rout:{src}", f"rin:{dst}") is None, (src, dst)
     spec = rig.loaded_patch.graph.spec
-    assert "lookback" not in G.reaches(spec)
+    assert "backdrop" not in G.reaches(spec)
     assert ("kaleido", "output.all.image") not in wired_wires(rig)
 
 
@@ -2319,8 +2319,7 @@ def _drag_to(rig, probe, nid, centre_to, cmd=False, steps=12):
 
 RUN = (*FRAME0, ("lookback", "output.all.image"))
 # every node at hand on one screen: the run along y = 0, the free node below
-PLACES = {"render:lookback": [0, 0], "render:output.all": [700, 0], "render:scene": [-400, 0],
-          "render:shape": [-800, 0]}
+PLACES = {"render:scene": [0, 0], "render:output.all": [700, 0], "render:shape": [-800, 0]}
 
 
 def _free_node_rig(rig, monkeypatch, entry: dict, nid: str, *more, effects=("acid", "wobble.2")):
@@ -2815,7 +2814,7 @@ def test_a_group_made_taken_apart_and_remade_by_the_mouse(rig, monkeypatch):
     from test_graphview import _in_editor
     pairs = (*FRAME0, ("lookback", "acid.image"), ("acid", "wobble.image"),
              ("wobble", "output.all.image"))
-    places = {"render:shape": [-800, 0], "render:scene": [-400, 0], "render:lookback": [0, 0],
+    places = {"render:shape": [-800, 0], "render:scene": [0, 0],
               "render:acid": [320, 0], "render:wobble": [640, 0], "render:output.all": [960, 0],
               "render:hands": [-800, 900]}      # (out of the box drawn round the two)
     _gs, probe = _drag_rig(rig, monkeypatch, *pairs, layout=places, effects=("acid", "wobble"), on=("acid", "wobble"))

@@ -136,10 +136,10 @@ def test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none():
     # (plan 39's segment pins `fg`/`bg` are ports of the one segment node,
     # never a canvas node of their own, as the scene's depth pin is; plan
     # 89's effect slots are ports of the effect's one node too; plan 90 H2:
-    # the look-back is retired — only a migration's read still parses one, and
-    # the page never draws it)
+    # the look-back and its echo pins are retired — only a migration's read
+    # still parses them, and the page never draws one)
     for kind, made in G.WIRED_MAKES.items():
-        if made == G.IMAGE and kind not in (G.GROUND, G.DEPTH_PORT, "slot", G.LOOKBACK,
+        if made == G.IMAGE and kind not in (G.GROUND, G.DEPTH_PORT, "slot", G.LOOKBACK, "echo",
                                             *G.SEGMENT_PINS):
             assert graphview.THUMBS[kind] == graphview.PICTURE, kind
     # SM3: a matte makes a mask and a segment's own output is its matte: in grey

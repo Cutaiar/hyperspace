@@ -817,14 +817,14 @@ def _object_state(deck) -> dict:
 
     r = deck.renderer
     return {"params": {p.id: repr(p.get()) for p in deck.reg if part_of(p) == "patch"},
-            "ghost": asdict(r.ghost.state), "dream": repr(asdict(r.lookback.state)),
+            "ghost": asdict(r.ghost.state), "dream": repr(asdict(r.dreamer.state)),
             "view": repr(deck.view.pose())}
 
 
 @pytest.mark.empty_frame
 def test_deck_2_on_another_loadable_moves_nothing_of_the_on_air_deck(ctx, tmp_path):
     """Review finding 1: two different looks. Every corpus loadable patch landed on deck
-    2, with its ghost, look-back and view values moved besides, leaves deck 1's
+    2, with its ghost, dream and view values moved besides, leaves deck 1's
     params, its objects and, at xfade 0, its picture byte for byte. Only the
     room's mirror reaches both."""
     from hyperspace.render import Renderer

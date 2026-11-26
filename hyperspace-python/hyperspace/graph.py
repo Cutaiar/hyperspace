@@ -5283,6 +5283,14 @@ class CutNode(Node):
             if amount < 1.0:
                 said += f" · amount {amount:.2f}"
             self.said = said
+            # (plan 90 H2: made here, in order, where it is read at the
+            # frame's size — as an effect folds in its `run` — never pulled
+            # half-way through another node's pass: its mask pass binds its
+            # own target and texture units, and a cut of the faces' cover
+            # inside an effect's pass drew that effect black)
+            if self._own(frame) is None and (frame.graph is None
+                                             or frame.graph.at_frame(self)):
+                self.made(frame)
 
 
 # (the values of a segment with none this frame: read, never written)
