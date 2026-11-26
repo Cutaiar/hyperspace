@@ -846,6 +846,9 @@ class DelayPair:
         self.holds = False
         self.wrote = False
         self.idle = 0
+        # plan 90 (H1): the frames a reader keeps of it (`stack.DelayStack`),
+        # made on a reader's first ask (`Renderer.delay_stack`), else None
+        self.stack = None
 
     def target(self, ctx: moderngl.Context, size: tuple[int, int]) -> moderngl.Framebuffer:
         """The write side at `size`: made again only when missing or of
@@ -887,6 +890,10 @@ class DelayPair:
         self._free(self.write)
         self.read = self.write = None
         self.holds = self.wrote = False
+        stack = getattr(self, "stack", None)
+        if stack is not None:
+            stack.release()
+            self.stack = None
 
 
 class FaceTarget:
@@ -1993,7 +2000,7 @@ class Renderer:
         graph = self._graph_for(views)
         # plan 34 D: each delay's pair turns — last frame's write is now
         # what its delay reads
-        self._turn_delays(graph)
+        self._turn_delays(graph, t)
         # plan 36 T4: a ring no look-back of this graph holds forgets its
         # history (it starts clean when one is drawn again); the dream
         # forgets `D` with no dream node, so the worker sleeps
@@ -3039,6 +3046,59 @@ class Renderer:
         self._segmenters = {}
         self._stopped = []
 
+    def delay_stack(self, name: str):
+        """Plan 90 (H1): delay `name`'s stack (`stack.DelayStack`), made on a
+        reader's first ask — it fills from the next turn — and kept while a
+        reader asks each frame; None when the delay has no pair yet."""
+        from .stack import DelayStack
+
+        pair = self.delay_pair(name)
+        if getattr(pair, "stack", None) is None:
+            pair.stack = DelayStack()
+        pair.stack.idle = 0
+        return pair.stack
+
+    def _turn_stack(self, name: str, pair: DelayPair, committed: bool, reset: bool,
+                    t: float | None) -> None:
+        """Plan 90 (H1): a delay's stack at the turn — its clock moves; the
+        frame its pair just committed is kept (`DelayStack.commit`) at the
+        depth and gap its knobs say (`ViewState.delays`); a load forgets it
+        (R19). One no reader asked for in `SIZED_KEEP_FRAMES` is released.
+        Never raises: a stack that cannot be kept says why on `error`."""
+        from .stack import BUDGET, OVER_BUDGET, frame_bytes
+
+        stack = getattr(pair, "stack", None)
+        if stack is None:
+            return
+        stack.idle += 1
+        if stack.idle > SIZED_KEEP_FRAMES:
+            stack.release()
+            pair.stack = None
+            return
+        stack.tick(t)
+        if reset:
+            stack.reset()
+        if not committed or pair.read is None:
+            return
+        st = (getattr(getattr(self, "_view_now", None), "delays", None) or {}).get(name)
+        depth = int(getattr(st, "depth", 1))
+        gap = float(getattr(st, "gap", 0.0))
+        size = tuple(pair.read[0].size)
+        others = sum(frame_bytes(p.stack.size) * p.stack.depth
+                     for n, p in (getattr(self, "_delays", None) or {}).items()
+                     if n != name and getattr(p, "stack", None) is not None
+                     and p.stack.tex is not None)
+        need = frame_bytes(size) * depth
+        if others + need > BUDGET:
+            stack.release()
+            stack.error = OVER_BUDGET.format(name=name, depth=depth, w=size[0], h=size[1],
+                                             mb=need / 2**20, budget=BUDGET / 2**20)
+            return
+        try:
+            stack.commit(self.ctx, pair.read[1], size, depth, gap)
+        except Exception as e:  # noqa: BLE001 — a stack must not take the frame down
+            stack.error = f"{name}: {type(e).__name__}: {e}"[:160]
+
     def reset_delays(self) -> None:
         """R19 (final review, row 354): a loadable patch load landed a new section —
         at the next turn every pair holds nothing (as on its first frame),
@@ -3047,7 +3107,7 @@ class Renderer:
         textures are kept; only what they hold is forgotten."""
         self.__dict__["_delays_reset"] = True
 
-    def _turn_delays(self, graph: Graph) -> None:
+    def _turn_delays(self, graph: Graph, t: float | None = None) -> None:
         """Once a frame, before the graph runs: every pair turns (a pair
         written last frame now reads it; one not written holds nothing). A
         pair whose delay is in no node of `graph` counts a frame idle and
@@ -3066,7 +3126,9 @@ class Renderer:
         held = {n.name for n in getattr(graph, "nodes", {}).values() if isinstance(n, Delay)}
         for name in list(pairs):
             pair = pairs[name]
+            committed = pair.wrote
             pair.turn()
+            self._turn_stack(name, pair, committed and not reset, reset, t)
             if name in held:
                 pair.idle = 0
                 continue

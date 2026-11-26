@@ -113,7 +113,10 @@ from .view import (
     SEGMENT_LEARN,
     SEGMENT_MODES,
     SEGMENT_QUALITY,
+    DELAY_DEPTH,
+    DELAY_GAP,
     CutState,
+    DelayState,
     KeyState,
     MatteState,
     ResizeState,
@@ -156,6 +159,8 @@ F_KEYS = 8
 # loadable patch's, declared while its graph holds the entry (declare_mattes)
 # `cut` (plan 39 T3): each cut node's invert and amount, the loadable patch's,
 # declared while its graph holds the entry (declare_cuts)
+# `delay` (plan 90 H1): each delay node's depth and gap, the loadable patch's,
+# declared while its graph holds the delay (declare_delays)
 # `segment` (plan 39 T4): each segment node's mode, level, feather, smooth,
 # switch and motion's sense and learn, the loadable patch's, declared while its
 # graph holds the entry (declare_segments)
@@ -174,7 +179,7 @@ F_KEYS = 8
 # changes what its own `axis:L.*` / `axis:R.*` routes do. The pad's feel (`desk.pad.*`)
 # is about the hardware, and stays the meta controller's
 PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
-                      "backdrop", "switch", "resize", "matte", "cut", "segment", "key", "ghost",
+                      "backdrop", "switch", "resize", "matte", "cut", "segment", "delay", "key", "ghost",
                       "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "mod")
 # `grip` (plan 60, the hand rig): a patch's own, each deck's — the owner, 2026-11-10,
 # testing it: "this really should be per preset". The on-air deck's acts on the one world
@@ -1971,6 +1976,80 @@ def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 90 (H1): the delays' depth and gap ----
+DELAY_GROUP = "delay"
+_DELAY_KEYS = ("depth", "gap")
+_DELAY_ID = re.compile(r"delay(?:\.(?:[2-9]|[1-9][0-9]+))?\.(" + "|".join(_DELAY_KEYS) + ")")
+
+
+def delay_ids(name: str) -> list[str]:
+    """Delay node `name`'s params (`delay.2` → `delay.2.depth`, `delay.2.gap`)."""
+    return [f"{name}.{k}" for k in _DELAY_KEYS]
+
+
+def is_delay_id(pid: str) -> bool:
+    """Is `pid` one of a delay's values — one that exists only while a loadable
+    patch's graph holds that delay (plan 90 H1)? Sorted against the graph a load
+    lands, as a cut's are."""
+    return bool(_DELAY_ID.fullmatch(pid))
+
+
+def _delay_state(r: Registry) -> dict[str, DelayState]:
+    """The states the delay params write, delay name → `DelayState`: the view
+    state's (`ViewState.delays`), kept by `build_registry` as `r.delay_state`;
+    a dict of the registry's own for one built without a view (as `_cut_state`)."""
+    state = getattr(r, "delay_state", None)
+    if not isinstance(state, dict):
+        state = vars(r)["delay_state"] = {}
+    return state
+
+
+_DELAY_TIPS = {
+    "depth": "How many past frames {name} keeps: 1 is last frame's picture alone; more "
+             "make a stack an echo (Read) or a trail (Trail) reads. Depth × gap is how "
+             "far back it reaches.",
+    "gap": "Seconds between the frames {name} keeps: 0 keeps every frame. A longer gap "
+           "reaches further back with the same depth.",
+}
+
+
+def declare_delays(r: Registry, names: Iterable[str]) -> list[str]:
+    """The delays' params (plan 90 H1), as `declare_cuts` does the cuts': for
+    each delay `names` holds, `depth` (1 … 64, whole) and `gap` (seconds) —
+    group `delay` (a patch group: the loadable patch's); the depth is a count,
+    not modulatable — over a `DelayState` made when first declared and kept
+    while the name stays; those of every delay no longer named dropped, with
+    their states. Returns the ids that appeared or went."""
+    state = _delay_state(r)
+    want = {n: delay_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == DELAY_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        if st is None:
+            st = state[name] = DelayState()
+        for pid, key in zip(ids, _DELAY_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _DELAY_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key == "depth":
+                r.continuous(pid, label, *got, lo=DELAY_DEPTH[0], hi=DELAY_DEPTH[1],
+                             integer=True, fmt=lambda v: f"{int(v)}", group=DELAY_GROUP,
+                             modulatable=False, tip=tip)
+            else:
+                r.continuous(pid, label, *got, lo=DELAY_GAP[0], hi=DELAY_GAP[1],
+                             fmt=lambda v: f"{v:.3f} s", group=DELAY_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
 # ---- plan 87: black is clear, on any picture node ----
 KEY_GROUP = "key"
 KEY_PREFIX = "key."
@@ -2591,6 +2670,15 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.cut_state = cuts
+    # plan 90 (H1): the delays' depth and gap likewise (`ViewState.delays`)
+    delays = getattr(view, "delays", None)
+    if not isinstance(delays, dict):
+        delays = {}
+        try:
+            view.delays = delays
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    vars(r)["delay_state"] = delays       # (as `_key_state`)
     # plan 39 T4: the segments' values likewise (`ViewState.segments`)
     segments = getattr(view, "segments", None)
     if not isinstance(segments, dict):

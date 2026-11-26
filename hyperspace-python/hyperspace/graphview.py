@@ -493,6 +493,8 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "matte": _resize_owner,
     # plan 39 T3: `cut[.<n>].<key>` on its cut's node (the resize's rule)
     "cut": _resize_owner,
+    # plan 90 (H1): `delay[.<n>].<key>` on its delay's node (the resize's rule)
+    "delay": _resize_owner,
     # plan 39 T4: `segment[.<n>].<key>` on its segment's node (the resize's rule)
     "segment": _resize_owner,
     "ghost": _hands_owner,

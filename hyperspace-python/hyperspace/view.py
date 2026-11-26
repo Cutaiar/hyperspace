@@ -131,6 +131,24 @@ class CutState:
     amount: float = 1.0
 
 
+# plan 90 (H1): a delay's depth — how many past frames it keeps, the stack its
+# readers take (`@takes stack`); 1 is the plain z⁻¹ of plan 34
+DELAY_DEPTH = (1, 64)
+DELAY_GAP = (0.0, 0.25)    # seconds between the frames it keeps (0: every frame)
+
+
+@dataclass
+class DelayState:
+    """One delay node's values (plan 90 H1, `delay[.n].*`: params.declare_delays),
+    read once a frame by the renderer (`ViewState.delays`, `graph.Frame.delays`):
+    `depth` the frames it keeps (1 the one before this, plan 34's z⁻¹), `gap`
+    the seconds between them (0 every frame). A value, never a rebuild: a
+    depth change makes its stack again, clean."""
+
+    depth: int = 1
+    gap: float = 0.0
+
+
 # plan 39 T4 (W4): a segment's modes — a person model (the worker's), a
 # background model (motion: GLSL on the frame thread), and any subject
 # (declared, refused in words until a later build) — and the model's levels
@@ -280,6 +298,9 @@ class ViewState(writes.Observed):
     # plan 39 T3: each cut node's values (`cut[.n].*`, declared from the
     # loadable patch's graph: params.declare_cuts) — cut name → its state
     cuts: dict[str, CutState] = field(default_factory=dict)
+    # plan 90 (H1): each delay node's depth and gap (`delay[.n].*`, declared from
+    # the loadable patch's graph: params.declare_delays) — delay name → its state
+    delays: dict[str, DelayState] = field(default_factory=dict)
     # plan 87: each keyed node's black is clear (`key.<node>.*`, declared from
     # the loadable patch's graph `"keys"`: params.declare_keys) — node → its state
     keys: dict[str, KeyState] = field(default_factory=dict)

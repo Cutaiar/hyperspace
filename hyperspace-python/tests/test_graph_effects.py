@@ -447,9 +447,10 @@ def test_the_value_port_type_exists_and_no_node_uses_it():
 
     from hyperspace import modgraph
 
-    # (plan 67 F1: the field, a fifth)
-    assert G.VALUE == "value" and G.PORT_TYPES == (G.IMAGE, G.MASK, G.GEOMETRY, G.VALUE, G.FIELD)
-    assert len(set(G.PORT_TYPES)) == 5
+    # (plan 67 F1: the field, a fifth; plan 90 H1: the stack, a sixth)
+    assert G.VALUE == "value" and G.PORT_TYPES == (G.IMAGE, G.MASK, G.GEOMETRY, G.VALUE, G.FIELD,
+                                                   G.STACK)
+    assert len(set(G.PORT_TYPES)) == 6
     src = Path(G.__file__).read_text()
     doc = src[src.index('VALUE = "value"'):src.index("PORT_TYPES =")]
     assert "palette" in doc and "lights" in doc and "sample" in doc and "plan 29" in doc
