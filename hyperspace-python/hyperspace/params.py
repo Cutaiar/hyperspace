@@ -103,6 +103,7 @@ from .tapers import Taper
 from .tapers import clamp as _clamp
 from .view import (
     KEY_MEASURES,
+    KEY_RAMPS,
     MATTE_FEATHER,
     MATTE_FROM,
     RESIZE_ASPECTS,
@@ -2056,10 +2057,11 @@ KEY_PREFIX = "key."
 KEY_FEATHER = MATTE_FEATHER         # the most px a key's feather blurs by (masks.MAX_FEATHER)
 # `key.<node>.<k>`: the knobs of a node the loadable patch's graph keys
 # (`"keys"`), in the panel's order
-_KEY_KEYS = ("level", "soft", "measure", "feather", "keep", "invert")
+_KEY_KEYS = ("level", "soft", "measure", "feather", "keep", "invert", "ramp")
 _KEY_ID = re.compile(r"key\.(.+)\.(" + "|".join(_KEY_KEYS) + ")")
 _KEY_WORDS = {"level": "clear level", "soft": "clear softness", "measure": "clear measure",
-              "feather": "clear feather", "keep": "keep colour", "invert": "white is clear"}
+              "feather": "clear feather", "keep": "keep colour", "invert": "white is clear",
+              "ramp": "clear ramp"}
 _KEY_TIPS = {
     "level": "Black is clear on {name}: at or below this brightness a pixel is clear.",
     "soft": "How far above the level a pixel of {name} takes to become solid: 0 a hard "
@@ -2073,6 +2075,9 @@ _KEY_TIPS = {
             "(only the alpha comes from the brightness). Off, colour goes with alpha and "
             "the edges dim. Not used with white is clear.",
     "invert": "{name}'s white is clear instead of its black.",
+    "ramp": "How {name} goes from clear to solid between the level and level + softness: "
+            "smooth eases in and out; linear rises straight — at level 0 and softness 1, "
+            "a pixel's brightness is how much it covers (a light laid on, as a glow is).",
 }
 
 
@@ -2143,6 +2148,8 @@ def declare_keys(r: Registry, names: Iterable[str]) -> list[str]:
             got = _attr(st, key)
             if key == "measure":
                 r.enum(pid, label, *got, list(KEY_MEASURES), group=KEY_GROUP, tip=tip)
+            elif key == "ramp":
+                r.enum(pid, label, *got, list(KEY_RAMPS), group=KEY_GROUP, tip=tip)
             elif key in ("keep", "invert"):
                 r.toggle(pid, label, *got, group=KEY_GROUP, tip=tip)
             elif key == "feather":

@@ -97,6 +97,10 @@ class MatteState:
 # plan 87, black is clear: what a keyed node measures a pixel's brightness
 # by — the largest of r, g, b, or Rec. 709 luma — by index (`key.<node>.measure`)
 KEY_MEASURES = ("peak", "luma")
+# plan 90 (H1): the key's ramp from clear to solid — smooth (plan 87's), or
+# linear: at level 0, soft 1 on peak, a pixel's brightness *is* its coverage
+# (the look-back's and the dream's old rule, as a choice of the key's)
+KEY_RAMPS = ("smooth", "linear")
 
 
 @dataclass
@@ -116,6 +120,7 @@ class KeyState:
     keep: bool = True
     feather: float = 0.0
     invert: bool = False
+    ramp: int = 0                # plan 90 (H1): an index into `KEY_RAMPS`
 
 
 @dataclass

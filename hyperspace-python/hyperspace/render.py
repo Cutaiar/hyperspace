@@ -2538,7 +2538,7 @@ class Renderer:
         if mode != KEY_OFF:
             uniforms.update(u_measure=int(key.measure), u_level=float(key.level),
                             u_soft=float(key.soft), u_keep=int(key.keep),
-                            u_invert=int(key.invert))
+                            u_invert=int(key.invert), u_ramp=int(getattr(key, "ramp", 0)))
         ctx.disable(moderngl.BLEND)
         try:
             src.use(location=0)
