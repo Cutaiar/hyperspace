@@ -9118,9 +9118,34 @@ Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in se
 
 **911. The Kinect demo patch.** (Mac) Copy `loadable/kinect` (its README), 910's entry with `colors`, nothing within half a metre of the sensor. Load `kinect/kinect-mirror`, step the switch 1–5, then channel B to slot 2. *Pass:* each look as the README's table says, steady over a minute. *Fail:* depth that goes blank on a cycle with a clear view (row 1130's device), or a look that is black with you in front.
 
+## FV. The Kinect's control panel (row 1170, 2026-11-25)
+
+Headless: `tests/test_kinect_control.py` (requests on the device's thread in order, a failed one said, pending ones dropped at close and reconnect, the snapshot, a motor that will not open, nothing sent on open), `tests/test_ui_kinect.py` (the pane at `SIDE_MIN` and `SIDE_W`, every control with an id, the tilt sent only on release / go / level). A restart after pulling (a new module and new fields on `KinectDevice`). All of it ran over a stand-in sensor: **none of it has met a Kinect.**
+
+Setup for all: (Mac, G Hub not running) 910's entry in the device list; its node (`room`, under controllers) is on GRAPH with **patch only** on, and with no cable to it; select it. Stand where the sensor sees you.
+
+**950. The pane and its telemetry.** *Pass:* the status says `connected`; model reads `1414` (with any other reading the pane says the motor is left closed: the audio is never opened); depth about 30 fps and the frame count climbing; the share of pixels read, nearest and median depth change as you step towards the sensor; points follows; tilt reads about the angle the sensor sits at (1.0° on the owner's unit) with `stopped`; accel is about 9.8 m/s² in total and its axes change when the sensor is tipped by hand. *Fail:* a model that reads `unknown` or a wrong number, an accelerometer that never moves, a stalled frame rate while the pane is open (the tilt poll is a blocking transfer, a few times a second).
+
+**951. Nothing moves by itself.** Quit, unplug and replug the Kinect, launch the app with the pane closed and then open it. *Pass:* the sensor does not tilt, the LED does not change, at launch, on reconnect, or by opening the pane. *Fail:* any motion or light change that was not a click.
+
+**952. Tilt.** Drag the tilt slider across its range and hold it. *Pass:* the sensor does not move while you drag; on release it tilts to the target, `moving` then `stopped` (or `limit` at the end); **go** sends again, **level** returns to 0°; a target past ±31° lands on ±31°. *Fail:* motion while dragging, no motion on release, a stalled depth stream during a tilt.
+
+**953. LED and infrared.** Step the LED through all six. *Pass:* off, green, red, yellow, blinking green, blinking red/yellow, as named. Move the infrared brightness (starts at 30) and release. *Pass:* it reads back what the sensor took; the depth picture's noise changes with it. *Fail:* a colour that is another's, or a brightness that does not read back.
+
+**954. Video.** Choose colour, then infrared, then off. *Pass:* each starts within a few seconds, `/color` or `/ir` appears in MEDIA, depth keeps streaming (note whether depth and infrared together hold: they share the IR camera, and this is the control most likely to misbehave); with colour on, switch auto exposure off and the exposure slider enables; set an exposure and the colour picture darkens or brightens; auto white balance and auto flicker toggle without error. *Fail:* depth that stops after a video change, a stream that never comes up (**restart** should bring it), controls that stay disabled with colour up.
+
+**955. Restart and reconnect.** Press **restart**, then **reconnect**, then pull the USB with a tilt pending (queue one with **go** and pull immediately), and replug. *Pass:* restart counts up by one and streams resume; reconnect closes and reopens within a few seconds, the cloud returns, the reconnect count rises; after a replug the sensor does not then tilt to the old target. *Fail:* a pending request sent to the new connection, a hang on quit with requests queued.
+
+**956. The motor missing, and placement.** Set `motor = false` on the entry (or open the Kinect with the motor part unreachable). *Pass:* the camera streams as before, the pane says why the motor is not open, tilt and LED are greyed with that word, infrared and video still work. Then move near / far / centre / step / mirror: the cloud follows at once; the pane says they are for this run; reopen the device and they are the entry's again. *Fail:* a lost camera, or a placement that is still changed after a reopen.
+
+**958. A route drives the infrared.** (ROUTING ▸ sinks) Add a sink row from an LFO (or a param) to the Kinect's channel 0. *Pass:* the infrared slider greys with "driven by a sink row", the depth picture's noise follows the LFO without a stall, and the slider is yours again once the row is deleted; a row on channel 1 changes the colour picture's exposure only with colour up and auto exposure off (the pane says why otherwise). *Fail:* the sensor stalling, a USB error under a fast LFO, or the tilt or LED moving.
+
+**957. The radar.** (the pane's first block) Stand in the middle of the sensor's view, then move to its left edge, then hold a hand a metre away. *Pass:* a grey fan from the bottom centre with arcs at 0.8 and 4 m; white dots where the sensor reads something, your outline at about your range (a wall at 3 m is a line 3 m out) and on your side, mirrored as the cloud is, following you at about 4 Hz and gone when you step out of the view; move **near**, **far** and **centre** and a red wireframe moves over it at once, and is there with nothing connected; close the pane and the CPU use of the app does not change with it open. *Fail:* dots on the wrong side or at the wrong range, a wall that is curved (the focal is wrong), a floor or ceiling drawn as a wall, or the block drawn past the pane's edge at either width. Not checked by eye anywhere yet: the colours, the labels' places, how the dots read.
+
 ## What no test covers
 
 Only a person can settle these:
+- the Kinect's control panel on a real sensor (950–957): the tests use a stand-in sensor and a stand-in libfreenect; the motor, the LED, the camera's flags and exposure, infrared with depth, the libusb model read and the accelerometer have never met hardware;
 - what macOS does to screens across a real replug, and to two of one model (600, 601): the tests list stand-in screens in either order;
 - the dream's look (9) and the default hand feel (16);
 - a spawned dream patch's picture with a worker running (497): the tests read
