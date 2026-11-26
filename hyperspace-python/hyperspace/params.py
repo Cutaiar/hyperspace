@@ -586,14 +586,16 @@ class Param:
         bases less their drift, so the fingerprint a mark would buy reads the
         same as the one held (`undo._same_fp`), and a dive that wrote three
         params a frame made every stack take one every frame. A move that is
-        not drift (a kind with none, a base or a move that is not a number)
+        not drift (a kind with none, a base or a move that is not a number, one
+        that starts or ends at a limit or past it, where the norm clamps)
         marks as every write does."""
         if self.kind is not Kind.CONTINUOUS:
             self.put(v)
             writes.mark()
             return
         old = self._norm_of(self.get())
-        was = self._norm_of(self.base)
+        was_raw = self.base
+        was = self._norm_of(was_raw)
         self.put(v)
         if self._base is not None:
             cur = self._norm_of(self.get())
@@ -608,8 +610,19 @@ class Param:
             if self.wrap:                       # the short way round
                 moved = (moved + 0.5) % 1.0 - 0.5
             self._drift += moved
-            return
+            if self.interior(was_raw) and self.interior(self.base):
+                return
         writes.mark()
+
+    def interior(self, v) -> bool:
+        """Is `v` strictly inside the param's range? The norm clamps, so at a
+        limit and past it the norm is the same whatever the raw value is, and
+        a move there is not drift in raw terms (a flight can carry a base
+        past a limit): undo reads those moves for itself."""
+        try:
+            return 0.0 < self._norm_of(v) < 1.0
+        except (TypeError, ValueError):
+            return False
 
     def nudge(self, delta: float) -> float:
         """Add `delta` to the base, wrapped or clamped into range; returns

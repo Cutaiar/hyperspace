@@ -213,8 +213,12 @@ def _followed(p, a, b) -> bool:
     da, db = (a[1] if isinstance(a, tuple) else 0.0), (b[1] if isinstance(b, tuple) else 0.0)
     if da == db:
         return False
-    return _same_own(p, a[0] if isinstance(a, tuple) else a, da,
-                     b[0] if isinstance(b, tuple) else b, db)
+    va, vb = (a[0] if isinstance(a, tuple) else a), (b[0] if isinstance(b, tuple) else b)
+    # at a limit or past it the norm is one whatever the raw value: drift says nothing of the move
+    interior = getattr(p, "interior", None)
+    if interior is None or not (interior(va) and interior(vb)):
+        return False
+    return _same_own(p, va, da, vb, db)
 
 
 def own(p, v, then: float):
