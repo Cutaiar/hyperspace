@@ -68,6 +68,31 @@ class ResizeState:
     crop_h: float = 1.0
 
 
+# plan 34 D: how often a delay takes its picture — in frames, in Hz, or in
+# tempo units (the LFOs' divisions: a sixteenth … four bars), each a count of
+# beats of the tempo clock (4/4: a bar is 4 beats)
+DELAY_EVERY = ("frames", "Hz", "1/16", "1/8", "1/4", "1/2", "1 bar", "2 bars", "4 bars")
+DELAY_BEATS = {"1/16": 0.25, "1/8": 0.5, "1/4": 1.0, "1/2": 2.0,
+               "1 bar": 4.0, "2 bars": 8.0, "4 bars": 16.0}
+DELAY_FRAMES_MAX = 120
+DELAY_HZ = (0.1, 120.0)
+
+
+@dataclass
+class DelayState:
+    """One delay node's values (`delay[.n].*`: params.declare_delays), read
+    once a frame by the renderer (`ViewState.delay`, `graph.Frame.delays`):
+    `every` an index into `DELAY_EVERY`; `frames` (1…`DELAY_FRAMES_MAX`) the
+    frames between two pictures taken when it is "frames" — 1 is every frame,
+    the last frame's, as a delay always was; `hz` the pictures a second when
+    it is "Hz". Between two pictures the delay holds the last one. A value,
+    never a rebuild."""
+
+    every: int = 0
+    frames: int = 1
+    hz: float = 10.0
+
+
 # plan 39 T2 (W2): a matte's sources — what makes a pixel pass: its
 # brightness, its own coverage (how a cut picture becomes a mask again), or
 # its closeness to a keyed hue (a chroma key)
@@ -274,6 +299,9 @@ class ViewState(writes.Observed):
     # plan 34 Z: each resize node's values (`resize[.n].*`, declared from the
     # loadable patch's graph: params.declare_resizes) — resize name → its state
     resize: dict[str, ResizeState] = field(default_factory=dict)
+    # plan 34 D: each delay node's rate (`delay[.n].*`, declared from the
+    # loadable patch's graph: params.declare_delays) — delay name → its state
+    delay: dict[str, DelayState] = field(default_factory=dict)
     # plan 39 T2: each matte node's values (`matte[.n].*`, declared from the
     # loadable patch's graph: params.declare_mattes) — matte name → its state
     mattes: dict[str, MatteState] = field(default_factory=dict)
