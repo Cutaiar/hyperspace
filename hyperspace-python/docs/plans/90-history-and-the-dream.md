@@ -585,3 +585,27 @@ look-back and echoes migrated onto them, and `History`, `Capture`, `EchoNode`, t
 - **Q22: Depth is the only count**; the trail reads all the stack holds.
 
 Every question of §6, §7.5 and §8.1 is answered. H1 starts.
+
+## 9. H1 built (2026-11-26)
+
+Rows 1171–1174, hand checks 959–962 (group GF).
+
+- **The delay's stack.** `delay[.n].depth` (1–64) keeps the pictures a delay takes, newest
+  first, in a half-float texture array beside its pair (`stack.DelayStack`), copied in at the
+  turn; made on a reader's ask, grown never shrunk, all stacks within 1 GiB. Its own picture is
+  unchanged: every delay test, and 2916 sweep renders of every effect equal to `main`'s.
+- **One cadence.** Main's #514 gave the delay its rate (frames, Hz, tempo) the same day;
+  §4.2's **Gap** was dropped for it — a stack keeps exactly what the delay takes — so
+  there is one cadence, and §4.4's time base is the delay's rate (seconds per entry are its
+  ages, kept per entry).
+- **The `stack` port**, typed in `graph` and `fx`, takes a delay and nothing else; a delay
+  still makes a picture for every other port (so no wire type changed on GRAPH).
+- **Read** (At, Between) and **Trail** (Level, Fade, Lay), effect files `@takes stack stack`.
+  Time Displace is `Line → read.at` (`stack-slit`): H4 is now docs, the #488 proof and its close.
+- **Curve** (Q15, named for the lane modifier per plan 67 §3.2) and **the key's linear ramp**
+  (Q19), both public, both general.
+- **Examples** `stack-echo`, `stack-trail`, `stack-slit`; checked in the app
+  (`tools/drive_stack.py`): nothing unreached, every effect in the run, the delay's rate and
+  Depth on its pane.
+
+**Next: H2**, the look-back and its echoes onto the delay and Trail, migrated.

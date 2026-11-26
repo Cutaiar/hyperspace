@@ -9110,6 +9110,18 @@ Headless: `tests/test_catalog.py` (the counts, six faces at every corner, every 
 Headless: `tests/test_graph_head.py` (a shut menu builds nothing, every verb under its id, the chip's words, every chip and warning inside the page at three widths, no message moving the canvas).
 
 **940. The head with less on it.** (laptop, GRAPH, the window wide and then narrow) Edit for a few minutes: open **areas** and jump; open **canvas**, switch patch only and gpu cost, drag output behind's slider; refuse a cable and read the warning. *Pass:* nothing used every minute is behind a menu; the canvas chip tells you why nodes are missing without opening it; both menus open under their chips and a click on the canvas shuts them. Say whether a control should come back out. *Fail:* a warning cut or not seen, the canvas jumping as a message comes or goes, or a chip past the page's edge.
+## GF. The delay's stack: Read, Trail, Curve, the linear key (rows 1171–1174, 2026-11-26)
+
+Headless: `tests/test_delay_stack.py` (Read at each step back, a fraction blended or nearest, past what it keeps its oldest, the delay's rate kept, a depth driven down kept, a slit-scan's two moments, Trail by age, a stack port refusing anything but a delay), `tests/test_curve_and_ramp.py` (Curve is the old contrast, the linear ramp is peak); `tools/drive_stack.py` (the three examples in the app: nothing unreached, the delay's four knobs on the pane). Speed is the Mac's to say: off it, GL is software.
+
+**959. A deep delay costs what it should.** (Mac, GRAPH, **gpu cost** on) Load `field-examples/stack-trail`, then raise the delay's **depth** to 64 and its rate to every frame. *Pass:* the trail lengthens; `delay(write)` and Trail on SYSTEM stay under a millisecond at the window's size; the frame rate does not move. Lower depth to 4 and back to 16: the trail shortens and comes back at once (a stack only grows). *Fail:* a stall at a depth change, a dropped frame rate, or an empty trail for more than a moment.
+
+**960. An echo and a slit-scan.** (Mac) Load `field-examples/stack-echo`: a ghost of the shape two thirds of a second behind; push the sub band and the ghost falls further back. Load `field-examples/stack-slit`: the shape smeared through time across the frame; lift your right hand and the direction turns. *Pass:* both as their Markdown says, smooth (Between on blend), no seam or flicker at the frame's edges. *Fail:* a ghost that jumps between moments, a slit that tears, or a black frame after a load.
+
+**961. A trail laid over.** (Mac) In `stack-trail`, set Trail's **lay** to over and key the scene (its menu: black is clear, **clear ramp** linear, level 0, softness 1). *Pass:* each copy covers the older ones only where it is bright — the old look-back's tracers. *Fail:* opaque copies (the black covering), or a trail that disappears.
+
+**962. Curve and the linear ramp by eye.** (Mac) Add a Curve after anything bright and sweep **shape** from −1 to 1: lifted, as is at 0, then only the brightest parts. Key a channel on MEDIA with **ramp** linear. *Pass:* Curve never touches pure black or white, and Invert keeps a see-through picture see-through; the linear key fades in evenly where the smooth one eases. *Fail:* a colour shift at Shape 0, or a key that is not see-through on black.
+
 ## FT. The Kinect (row 1130, 2026-11-24)
 
 Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).

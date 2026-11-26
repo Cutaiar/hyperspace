@@ -446,6 +446,21 @@ the model; its roundup (`plans/67-roundup.md`) the effects measured against it.
 | **Hue cycle is retired into Hue turn + fields**: its bands — a diagonal mixed with rings, × Spread — are Line, Rings, two Scales, Combine and a Scale (Spread), wired into Hue turn's Turn at a depth of 360; Hue turn keeps the rest (the clock's turn in YIQ, Paint, Saturation to 2), one op because Paint mixes two results of one input. Every saved Hue cycle opens as that patch, the picture to the GPU's rounding. **No schema bump**: the rewrite is keyed on the retired file, not a version, so it runs on any file still naming it; a build from before reads Hue turn as an effect it lacks; both Macs run one build. A desk knob that spanned Spread spans the bands' × (−4 … 4) and the load says so. | `shaders/fx/hueturn.glsl`, `graphmigrate.retire_hue_cycle`, `graphmigrate.hue_turns`, `graphmigrate.RETIRED_SPECS`, `tests/test_hue_turn.py` | owner (2026-11-25: "migrate exactly, new ops", "new op: Hue turn", "accept, and say so"); rows 1122–1128 |
 | **Every effect that changes for fields ships a field example** — a loadable patch and a short Markdown — in `loadable/field-examples/`, the one place patches are saved. | `loadable/field-examples/`, `tests/test_field_examples.py` | owner (2026-11-23) |
 
+## History and the dream (plan 90)
+
+The owner (2026-11-25/26): the dream subsystem is legacy, "rebuilding a lot of stuff
+privately that has become public utility"; "reduce the degree by which the dream / echo
+subsystem is duplicitous of the other primitives". Plan 90 (`plans/90-history-and-the-dream.md`)
+is the design and its answers; H1 the first piece.
+
+| Decision | Where | Who |
+|---|---|---|
+| **The past is one maker, the delay.** A delay's Depth is how many of the pictures it takes (at its own rate, plan 34 D) it keeps as a stack for a reader; its own picture is still the last it took, byte for byte. The look-back becomes a delay of depth 32 (H2). No second cadence: the stack keeps what the delay takes | `stack.DelayStack`, `Renderer.delay_stack`, `view.DelayState.depth`, `params.declare_delays` | owner (2026-11-26, Q20: "merge, call it Delay"); row 1171 |
+| **A stack is stored in a half-float texture array** beside the delay's pair, copied in at the turn, made on a reader's ask, grown never shrunk, all stacks within 1 GiB | `stack.py`, `Renderer._turn_stack` | owner (Q4, as recommended); row 1171 |
+| **The stack's readers and the dream are effect files.** Read (At steps back; a field on At is a time displace) and Trail (by age, over by alpha or added) take a stack on a `stack` port, which takes a delay and nothing else; only they declare the stack. Depth is the one count | `read.glsl`, `trail.glsl`, `fx.STACK_HEAD`, `graph.STACK_IS_A_DELAYS` | owner (Q21, Q22); row 1172 |
+| **Curve is a picture's remap**, named and knobbed as the lane modifier `curve` (plan 67 §3.2: one name per operation); the old contrast is Shape log₄(contrast) | `curve.glsl` | owner (Q15, Remap); row 1173 |
+| **Black is clear has a ramp choice**, smooth (the default) or linear: at level 0, softness 1 on peak a pixel's brightness is its coverage — the look-back's and the dream's private rule, made a key's | `glsl.KEY_RAMP`, `key.<node>.ramp`, `media_tex.Key.ramp` | owner (Q19); row 1174 |
+
 ## Recursive geometry (plan 64)
 
 | Decision | Where | Who |

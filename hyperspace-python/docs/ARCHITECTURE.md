@@ -346,6 +346,27 @@ rewritten on load by the ladder's last step, keyed on its file
 (`graphmigrate.hue_turns`; a fragment's, `patches.forward`), and the steps
 before it still place it where an old stack ran it (`graphmigrate.RETIRED_SPECS`).
 
+**The past is the delay's stack** (plan 90 H1, plan 67 §7.1: history is a stack of
+T). A delay's **Depth** (`delay[.n].depth`) is how many of the pictures it takes — at
+its own rate, plan 34 D's `every` / `frames` / `hz` — it keeps for a reader; its own
+picture stays the last it took, byte for byte. The stack (`stack.DelayStack`) sits
+beside the pair and never replaces it: at the turn (`Renderer._turn_delays`) a pair
+that took a picture hands it to its stack, one GPU copy (`stack.copy_layer`,
+`glCopyTexSubImage3D` through PyOpenGL) into a layer of a half-float **texture array**
+— one sampler for every entry (the Mac's GL has sixteen units), not a 3D texture
+(2048 px deep at most, and its filtering would blend the ring's seam). A stack is
+made only on a reader's ask (`Renderer.delay_stack`) and released when none has asked
+for `SIZED_KEEP_FRAMES`; it only grows (a Depth driven down reads fewer); all stacks
+together hold at most `stack.BUDGET` (1 GiB), past it refused in words. Each entry
+keeps its age in seconds on the stack's own clock. A **stack port** (`graph.STACK`,
+`fx.STACK`) takes a delay and nothing else (`STACK_IS_A_DELAYS`); an effect file
+reads one by saying so (`// @takes stack stack`), and only such a file declares the
+stack and its helpers (`fx.STACK_HEAD`: `stack_frame`, `stack_at`), bound on unit 2
+(the hook's: a stack reader has no hook). The readers are files: **Read** (an echo:
+the frame At steps back; a field on At is a time displace) and **Trail** (the kept
+frames laid oldest first, weighted `level · ½^(age / fade)`, over by alpha or added).
+The look-back's ring, its echoes and the dream move onto them in H2–H3.
+
 **Running with no input** (R15, row 1114). An effect or slot nothing is wired
 into is never built — unless it is a generator, which `graph.runs_unfed` alone
 decides: a file with no input port (`@takes image none`: Point, Rings … the
