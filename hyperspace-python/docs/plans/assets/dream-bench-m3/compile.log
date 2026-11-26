@@ -1,0 +1,509 @@
+machine arm64 · system Darwin · macos 26.6 · python 3.14.4 · torch 2.14.0 · torchvision 0.29.0 · chip Apple M3 Max · memory 64 GB · device mps · weights /Users/dallman/Hyperspace/weights
+googlenet conv1        eager            fp32 step    456×256: p50    1.96  p99    5.18 ms
+googlenet conv1        eager            fp32 step    960×540: p50    4.69  p99    4.93 ms
+googlenet conv1        eager            fp32 step    1920×1080: p50   15.88  p99   18.30 ms
+googlenet conv2        eager            fp32 step    456×256: p50    2.15  p99    2.32 ms
+googlenet conv2        eager            fp32 step    960×540: p50    5.88  p99    6.32 ms
+googlenet conv2        eager            fp32 step    1920×1080: p50   20.68  p99   22.03 ms
+googlenet conv3        eager            fp32 step    456×256: p50    2.56  p99    2.68 ms
+googlenet conv3        eager            fp32 step    960×540: p50    7.49  p99    8.06 ms
+googlenet conv3        eager            fp32 step    1920×1080: p50   27.65  p99   29.65 ms
+googlenet inception3a  eager            fp32 step    456×256: p50    3.58  p99    4.19 ms
+googlenet inception3a  eager            fp32 step    960×540: p50    9.45  p99    9.82 ms
+googlenet inception3a  eager            fp32 step    1920×1080: p50   34.78  p99   36.89 ms
+googlenet inception3b  eager            fp32 step    456×256: p50    4.63  p99    5.05 ms
+googlenet inception3b  eager            fp32 step    960×540: p50   11.77  p99   12.20 ms
+googlenet inception3b  eager            fp32 step    1920×1080: p50   42.78  p99   43.43 ms
+googlenet inception4a  eager            fp32 step    456×256: p50    5.78  p99    6.82 ms
+googlenet inception4a  eager            fp32 step    960×540: p50   13.14  p99   13.52 ms
+googlenet inception4a  eager            fp32 step    1920×1080: p50   46.90  p99   47.32 ms
+googlenet inception4b  eager            fp32 step    456×256: p50    7.20  p99   10.03 ms
+googlenet inception4b  eager            fp32 step    960×540: p50   14.11  p99   14.63 ms
+googlenet inception4b  eager            fp32 step    1920×1080: p50   50.09  p99   50.61 ms
+googlenet inception4c  eager            fp32 step    456×256: p50    8.24  p99    8.74 ms
+googlenet inception4c  eager            fp32 step    960×540: p50   15.09  p99   15.59 ms
+googlenet inception4c  eager            fp32 step    1920×1080: p50   53.16  p99   55.25 ms
+googlenet inception4d  eager            fp32 step    456×256: p50    9.40  p99   10.21 ms
+googlenet inception4d  eager            fp32 step    960×540: p50   16.10  p99   16.48 ms
+googlenet inception4d  eager            fp32 step    1920×1080: p50   56.25  p99   56.68 ms
+googlenet inception4e  eager            fp32 step    456×256: p50   10.75  p99   11.54 ms
+googlenet inception4e  eager            fp32 step    960×540: p50   17.37  p99   17.98 ms
+googlenet inception4e  eager            fp32 step    1920×1080: p50   61.29  p99   63.78 ms
+googlenet inception5a  eager            fp32 step    456×256: p50   12.09  p99   14.90 ms
+googlenet inception5a  eager            fp32 step    960×540: p50   18.39  p99   19.24 ms
+googlenet inception5a  eager            fp32 step    1920×1080: p50   62.61  p99   63.24 ms
+googlenet inception5b  eager            fp32 step    456×256: p50   13.33  p99   14.07 ms
+googlenet inception5b  eager            fp32 step    960×540: p50   19.06  p99   19.89 ms
+googlenet inception5b  eager            fp32 step    1920×1080: p50   64.57  p99   64.97 ms
+googlenet conv1        fold             fp32 step    456×256: p50    1.78  p99    1.87 ms
+googlenet conv1        fold             fp32 step    960×540: p50    4.45  p99    4.82 ms
+googlenet conv1        fold             fp32 step    1920×1080: p50   14.44  p99   16.02 ms
+googlenet conv2        fold             fp32 step    456×256: p50    2.11  p99    3.02 ms
+googlenet conv2        fold             fp32 step    960×540: p50    5.55  p99    5.92 ms
+googlenet conv2        fold             fp32 step    1920×1080: p50   18.72  p99   20.26 ms
+googlenet conv3        fold             fp32 step    456×256: p50    2.45  p99    2.74 ms
+googlenet conv3        fold             fp32 step    960×540: p50    6.98  p99    7.65 ms
+googlenet conv3        fold             fp32 step    1920×1080: p50   24.76  p99   25.58 ms
+googlenet inception3a  fold             fp32 step    456×256: p50    3.08  p99    3.21 ms
+googlenet inception3a  fold             fp32 step    960×540: p50    8.61  p99    8.90 ms
+googlenet inception3a  fold             fp32 step    1920×1080: p50   31.43  p99   31.89 ms
+googlenet inception3b  fold             fp32 step    456×256: p50    3.61  p99    4.09 ms
+googlenet inception3b  fold             fp32 step    960×540: p50   10.51  p99   11.17 ms
+googlenet inception3b  fold             fp32 step    1920×1080: p50   38.54  p99   39.06 ms
+googlenet inception4a  fold             fp32 step    456×256: p50    4.15  p99    4.88 ms
+googlenet inception4a  fold             fp32 step    960×540: p50   11.76  p99   12.40 ms
+googlenet inception4a  fold             fp32 step    1920×1080: p50   42.47  p99   43.02 ms
+googlenet inception4b  fold             fp32 step    456×256: p50    4.50  p99    5.24 ms
+googlenet inception4b  fold             fp32 step    960×540: p50   12.67  p99   13.07 ms
+googlenet inception4b  fold             fp32 step    1920×1080: p50   45.05  p99   45.55 ms
+googlenet inception4c  fold             fp32 step    456×256: p50    5.05  p99    5.55 ms
+googlenet inception4c  fold             fp32 step    960×540: p50   13.54  p99   13.95 ms
+googlenet inception4c  fold             fp32 step    1920×1080: p50   47.92  p99   48.39 ms
+googlenet inception4d  fold             fp32 step    456×256: p50    5.72  p99    6.40 ms
+googlenet inception4d  fold             fp32 step    960×540: p50   14.52  p99   15.00 ms
+googlenet inception4d  fold             fp32 step    1920×1080: p50   50.80  p99   51.44 ms
+googlenet inception4e  fold             fp32 step    456×256: p50    6.44  p99    7.15 ms
+googlenet inception4e  fold             fp32 step    960×540: p50   15.79  p99   16.10 ms
+googlenet inception4e  fold             fp32 step    1920×1080: p50   54.77  p99   55.32 ms
+googlenet inception5a  fold             fp32 step    456×256: p50    7.04  p99    7.66 ms
+googlenet inception5a  fold             fp32 step    960×540: p50   16.62  p99   16.92 ms
+googlenet inception5a  fold             fp32 step    1920×1080: p50   56.73  p99   57.17 ms
+googlenet inception5b  fold             fp32 step    456×256: p50    7.54  p99    8.22 ms
+googlenet inception5b  fold             fp32 step    960×540: p50   17.39  p99   17.74 ms
+googlenet inception5b  fold             fp32 step    1920×1080: p50   58.60  p99   59.07 ms
+googlenet conv1        fold+cl          fp32 step    456×256: p50    2.01  p99    2.83 ms
+googlenet conv1        fold+cl          fp32 step    960×540: p50    5.38  p99    5.75 ms
+googlenet conv1        fold+cl          fp32 step    1920×1080: p50   18.42  p99   19.89 ms
+googlenet conv2        fold+cl          fp32 step    456×256: p50    2.27  p99    4.51 ms
+googlenet conv2        fold+cl          fp32 step    960×540: p50    6.90  p99    7.30 ms
+googlenet conv2        fold+cl          fp32 step    1920×1080: p50   30.63  p99   31.57 ms
+googlenet conv3        fold+cl          fp32 step    456×256: p50    2.74  p99    2.85 ms
+googlenet conv3        fold+cl          fp32 step    960×540: p50    8.42  p99    8.65 ms
+googlenet conv3        fold+cl          fp32 step    1920×1080: p50   37.04  p99   38.23 ms
+googlenet inception3a  fold+cl          fp32 step    456×256: p50    3.57  p99    4.04 ms
+googlenet inception3a  fold+cl          fp32 step    960×540: p50   11.00  p99   11.40 ms
+googlenet inception3a  fold+cl          fp32 step    1920×1080: p50   46.51  p99   48.44 ms
+googlenet inception3b  fold+cl          fp32 step    456×256: p50    4.22  p99    4.84 ms
+googlenet inception3b  fold+cl          fp32 step    960×540: p50   13.40  p99   13.96 ms
+googlenet inception3b  fold+cl          fp32 step    1920×1080: p50   56.06  p99   57.57 ms
+googlenet inception4a  fold+cl          fp32 step    456×256: p50    4.88  p99    5.07 ms
+googlenet inception4a  fold+cl          fp32 step    960×540: p50   15.14  p99   15.66 ms
+googlenet inception4a  fold+cl          fp32 step    1920×1080: p50   61.55  p99   62.66 ms
+googlenet inception4b  fold+cl          fp32 step    456×256: p50    5.29  p99    5.83 ms
+googlenet inception4b  fold+cl          fp32 step    960×540: p50   16.30  p99   18.79 ms
+googlenet inception4b  fold+cl          fp32 step    1920×1080: p50   65.17  p99   65.76 ms
+googlenet inception4c  fold+cl          fp32 step    456×256: p50    5.84  p99    6.39 ms
+googlenet inception4c  fold+cl          fp32 step    960×540: p50   17.32  p99   17.95 ms
+googlenet inception4c  fold+cl          fp32 step    1920×1080: p50   68.74  p99   69.42 ms
+googlenet inception4d  fold+cl          fp32 step    456×256: p50    6.55  p99    8.53 ms
+googlenet inception4d  fold+cl          fp32 step    960×540: p50   18.55  p99   19.06 ms
+googlenet inception4d  fold+cl          fp32 step    1920×1080: p50   72.51  p99   74.27 ms
+googlenet inception4e  fold+cl          fp32 step    456×256: p50    7.29  p99    8.19 ms
+googlenet inception4e  fold+cl          fp32 step    960×540: p50   19.98  p99   20.44 ms
+googlenet inception4e  fold+cl          fp32 step    1920×1080: p50   77.31  p99   77.99 ms
+googlenet inception5a  fold+cl          fp32 step    456×256: p50    8.11  p99    9.09 ms
+googlenet inception5a  fold+cl          fp32 step    960×540: p50   21.03  p99   22.36 ms
+googlenet inception5a  fold+cl          fp32 step    1920×1080: p50   80.39  p99   81.22 ms
+googlenet inception5b  fold+cl          fp32 step    456×256: p50    9.13  p99    9.81 ms
+googlenet inception5b  fold+cl          fp32 step    960×540: p50   21.92  p99   22.30 ms
+googlenet inception5b  fold+cl          fp32 step    1920×1080: p50   82.61  p99   83.33 ms
+googlenet conv1        inductor         fp32 step    456×256: p50    1.76  p99    3.02 ms  (compile 0.74 s)
+googlenet conv1        inductor         fp32 step    960×540: p50    4.50  p99    4.92 ms  (compile 0.07 s)
+W1125 23:55:05.784000 40133 torch/_inductor/utils.py:1806] [0/0] Not enough SMs to use max_autotune_gemm mode
+googlenet conv1        inductor         fp32 step    1920×1080: p50   14.13  p99   14.79 ms  (compile 0.47 s)
+googlenet conv2        inductor         fp32 step    456×256: p50    2.15  p99    2.63 ms  (compile 0.09 s)
+googlenet conv2        inductor         fp32 step    960×540: p50    5.36  p99    5.73 ms  (compile 0.1 s)
+googlenet conv2        inductor         fp32 step    1920×1080: p50   17.42  p99   18.09 ms  (compile 0.38 s)
+googlenet conv3        inductor         fp32 step    456×256: p50    3.04  p99    3.88 ms  (compile 0.1 s)
+googlenet conv3        inductor         fp32 step    960×540: p50    9.29  p99    9.92 ms  (compile 0.11 s)
+googlenet conv3        inductor         fp32 step    1920×1080: p50   33.87  p99   34.27 ms  (compile 0.53 s)
+googlenet inception3a  inductor         fp32 step    456×256: p50    3.61  p99    4.11 ms  (compile 0.22 s)
+googlenet inception3a  inductor         fp32 step    960×540: p50   11.23  p99   11.85 ms  (compile 0.2 s)
+googlenet inception3a  inductor         fp32 step    1920×1080: p50   41.00  p99   41.80 ms  (compile 1.3 s)
+googlenet inception3b  inductor         fp32 step    456×256: p50    4.33  p99    5.57 ms  (compile 0.28 s)
+googlenet inception3b  inductor         fp32 step    960×540: p50   13.61  p99   14.19 ms  (compile 0.28 s)
+googlenet inception3b  inductor         fp32 step    1920×1080: p50   49.26  p99   49.70 ms  (compile 1.78 s)
+googlenet inception4a  inductor         fp32 step    456×256: p50    4.79  p99    5.11 ms  (compile 2.59 s)
+googlenet inception4a  inductor         fp32 step    960×540: p50   14.82  p99   15.23 ms  (compile 2.55 s)
+googlenet inception4a  inductor         fp32 step    1920×1080: p50   53.41  p99   53.86 ms  (compile 2.59 s)
+googlenet inception4b  inductor         fp32 step    456×256: p50    5.31  p99    5.74 ms  (compile 3.17 s)
+googlenet inception4b  inductor         fp32 step    960×540: p50   16.18  p99   16.72 ms  (compile 3.17 s)
+googlenet inception4b  inductor         fp32 step    1920×1080: p50   56.73  p99   57.17 ms  (compile 3.28 s)
+googlenet inception4c  inductor         fp32 step    456×256: p50    5.80  p99    8.10 ms  (compile 0.54 s)
+googlenet inception4c  inductor         fp32 step    960×540: p50   17.33  p99   17.74 ms  (compile 0.57 s)
+googlenet inception4c  inductor         fp32 step    1920×1080: p50   60.01  p99   60.46 ms  (compile 3.71 s)
+googlenet inception4d  inductor         fp32 step    456×256: p50    6.24  p99    7.02 ms  (compile 4.43 s)
+googlenet inception4d  inductor         fp32 step    960×540: p50   18.46  p99   19.03 ms  (compile 4.31 s)
+googlenet inception4d  inductor         fp32 step    1920×1080: p50   63.49  p99   64.08 ms  (compile 4.3 s)
+googlenet inception4e  inductor         fp32 step    456×256: p50    6.84  p99    7.18 ms  (compile 5.06 s)
+googlenet inception4e  inductor         fp32 step    960×540: p50   19.83  p99   20.42 ms  (compile 4.9 s)
+googlenet inception4e  inductor         fp32 step    1920×1080: p50   67.96  p99   68.51 ms  (compile 4.95 s)
+googlenet inception5a  inductor         fp32 step    456×256: p50    7.32  p99    8.20 ms  (compile 5.52 s)
+googlenet inception5a  inductor         fp32 step    960×540: p50   20.86  p99   21.41 ms  (compile 5.53 s)
+googlenet inception5a  inductor         fp32 step    1920×1080: p50   70.33  p99   70.78 ms  (compile 5.58 s)
+googlenet inception5b  inductor         fp32 step    456×256: p50    7.90  p99    8.44 ms  (compile 6.26 s)
+googlenet inception5b  inductor         fp32 step    960×540: p50   21.64  p99   21.95 ms  (compile 6.13 s)
+googlenet inception5b  inductor         fp32 step    1920×1080: p50   72.57  p99   73.40 ms  (compile 6.14 s)
+googlenet conv1        fold+inductor    fp32 step    456×256: p50    1.94  p99    2.23 ms  (compile 0.08 s)
+googlenet conv1        fold+inductor    fp32 step    960×540: p50    4.47  p99    4.67 ms  (compile 0.08 s)
+googlenet conv1        fold+inductor    fp32 step    1920×1080: p50   14.13  p99   14.77 ms  (compile 0.14 s)
+googlenet conv2        fold+inductor    fp32 step    456×256: p50    2.42  p99    4.92 ms  (compile 0.08 s)
+googlenet conv2        fold+inductor    fp32 step    960×540: p50    5.28  p99    5.62 ms  (compile 0.09 s)
+googlenet conv2        fold+inductor    fp32 step    1920×1080: p50   17.24  p99   17.70 ms  (compile 0.3 s)
+googlenet conv3        fold+inductor    fp32 step    456×256: p50    3.05  p99    3.97 ms  (compile 0.09 s)
+googlenet conv3        fold+inductor    fp32 step    960×540: p50    9.18  p99    9.51 ms  (compile 0.1 s)
+googlenet conv3        fold+inductor    fp32 step    1920×1080: p50   33.54  p99   34.16 ms  (compile 0.42 s)
+googlenet inception3a  fold+inductor    fp32 step    456×256: p50    3.54  p99    3.81 ms  (compile 0.15 s)
+googlenet inception3a  fold+inductor    fp32 step    960×540: p50   11.16  p99   11.73 ms  (compile 0.15 s)
+googlenet inception3a  fold+inductor    fp32 step    1920×1080: p50   40.82  p99   41.31 ms  (compile 0.93 s)
+googlenet inception3b  fold+inductor    fp32 step    456×256: p50    4.33  p99    5.13 ms  (compile 0.2 s)
+googlenet inception3b  fold+inductor    fp32 step    960×540: p50   13.55  p99   13.96 ms  (compile 0.21 s)
+googlenet inception3b  fold+inductor    fp32 step    1920×1080: p50   49.11  p99   50.16 ms  (compile 1.29 s)
+googlenet inception4a  fold+inductor    fp32 step    456×256: p50    4.89  p99    5.02 ms  (compile 1.77 s)
+googlenet inception4a  fold+inductor    fp32 step    960×540: p50   15.06  p99   15.76 ms  (compile 1.79 s)
+googlenet inception4a  fold+inductor    fp32 step    1920×1080: p50   53.92  p99   54.85 ms  (compile 1.83 s)
+googlenet inception4b  fold+inductor    fp32 step    456×256: p50    5.36  p99    5.58 ms  (compile 2.16 s)
+googlenet inception4b  fold+inductor    fp32 step    960×540: p50   16.34  p99   16.66 ms  (compile 2.18 s)
+googlenet inception4b  fold+inductor    fp32 step    1920×1080: p50   57.31  p99   57.91 ms  (compile 2.26 s)
+googlenet inception4c  fold+inductor    fp32 step    456×256: p50    5.85  p99    6.30 ms  (compile 0.36 s)
+googlenet inception4c  fold+inductor    fp32 step    960×540: p50   17.52  p99   17.96 ms  (compile 0.37 s)
+googlenet inception4c  fold+inductor    fp32 step    1920×1080: p50   60.68  p99   61.26 ms  (compile 2.47 s)
+googlenet inception4d  fold+inductor    fp32 step    456×256: p50    6.37  p99    6.68 ms  (compile 2.87 s)
+googlenet inception4d  fold+inductor    fp32 step    960×540: p50   18.86  p99   19.44 ms  (compile 2.86 s)
+googlenet inception4d  fold+inductor    fp32 step    1920×1080: p50   64.39  p99   64.95 ms  (compile 2.87 s)
+googlenet inception4e  fold+inductor    fp32 step    456×256: p50    6.99  p99    7.46 ms  (compile 3.38 s)
+googlenet inception4e  fold+inductor    fp32 step    960×540: p50   20.47  p99   21.20 ms  (compile 3.37 s)
+googlenet inception4e  fold+inductor    fp32 step    1920×1080: p50   69.25  p99   71.22 ms  (compile 3.37 s)
+googlenet inception5a  fold+inductor    fp32 step    456×256: p50    7.45  p99    7.80 ms  (compile 3.72 s)
+googlenet inception5a  fold+inductor    fp32 step    960×540: p50   21.28  p99   21.82 ms  (compile 3.75 s)
+googlenet inception5a  fold+inductor    fp32 step    1920×1080: p50   71.76  p99   72.22 ms  (compile 3.82 s)
+googlenet inception5b  fold+inductor    fp32 step    456×256: p50    7.95  p99    8.83 ms  (compile 4.21 s)
+googlenet inception5b  fold+inductor    fp32 step    960×540: p50   22.16  p99   22.59 ms  (compile 4.28 s)
+googlenet inception5b  fold+inductor    fp32 step    1920×1080: p50   73.96  p99   75.21 ms  (compile 4.24 s)
+googlenet conv1        fold+cl+inductor fp32 step    456×256: p50    3.16  p99    3.69 ms  (compile 0.17 s)
+googlenet conv1        fold+cl+inductor fp32 step    960×540: p50    6.31  p99    6.74 ms  (compile 0.16 s)
+googlenet conv1        fold+cl+inductor fp32 step    1920×1080: p50   21.74  p99   22.38 ms  (compile 0.18 s)
+googlenet conv2        fold+cl+inductor fp32 step    456×256: p50    2.54  p99    3.30 ms  (compile 0.32 s)
+googlenet conv2        fold+cl+inductor fp32 step    960×540: p50    7.48  p99    7.70 ms  (compile 0.32 s)
+googlenet conv2        fold+cl+inductor fp32 step    1920×1080: p50   26.66  p99   26.97 ms  (compile 0.36 s)
+googlenet conv3        fold+cl+inductor fp32 step    456×256: p50    3.05  p99    4.00 ms  (compile 0.33 s)
+googlenet conv3        fold+cl+inductor fp32 step    960×540: p50    9.22  p99    9.88 ms  (compile 0.34 s)
+googlenet conv3        fold+cl+inductor fp32 step    1920×1080: p50   33.33  p99   33.87 ms  (compile 0.38 s)
+googlenet inception3a  fold+cl+inductor fp32 step    456×256: p50    3.41  p99    3.90 ms  (compile 0.83 s)
+googlenet inception3a  fold+cl+inductor fp32 step    960×540: p50   11.09  p99   11.79 ms  (compile 0.83 s)
+googlenet inception3a  fold+cl+inductor fp32 step    1920×1080: p50   40.49  p99   41.02 ms  (compile 0.84 s)
+googlenet inception3b  fold+cl+inductor fp32 step    456×256: p50    4.18  p99    4.54 ms  (compile 1.16 s)
+googlenet inception3b  fold+cl+inductor fp32 step    960×540: p50   13.48  p99   15.16 ms  (compile 1.14 s)
+googlenet inception3b  fold+cl+inductor fp32 step    1920×1080: p50   48.78  p99   49.32 ms  (compile 1.17 s)
+googlenet inception4a  fold+cl+inductor fp32 step    456×256: p50    4.68  p99    4.87 ms  (compile 1.6 s)
+googlenet inception4a  fold+cl+inductor fp32 step    960×540: p50   14.81  p99   15.29 ms  (compile 1.59 s)
+googlenet inception4a  fold+cl+inductor fp32 step    1920×1080: p50   53.05  p99   53.84 ms  (compile 1.62 s)
+googlenet inception4b  fold+cl+inductor fp32 step    456×256: p50    5.14  p99    5.30 ms  (compile 1.97 s)
+googlenet inception4b  fold+cl+inductor fp32 step    960×540: p50   15.91  p99   16.69 ms  (compile 1.94 s)
+googlenet inception4b  fold+cl+inductor fp32 step    1920×1080: p50   56.29  p99   56.71 ms  (compile 1.97 s)
+googlenet inception4c  fold+cl+inductor fp32 step    456×256: p50    5.64  p99    5.99 ms  (compile 2.2 s)
+googlenet inception4c  fold+cl+inductor fp32 step    960×540: p50   17.04  p99   17.71 ms  (compile 2.21 s)
+googlenet inception4c  fold+cl+inductor fp32 step    1920×1080: p50   59.74  p99   60.28 ms  (compile 2.21 s)
+googlenet inception4d  fold+cl+inductor fp32 step    456×256: p50    6.04  p99    7.04 ms  (compile 2.57 s)
+googlenet inception4d  fold+cl+inductor fp32 step    960×540: p50   18.20  p99   18.91 ms  (compile 2.5 s)
+googlenet inception4d  fold+cl+inductor fp32 step    1920×1080: p50   63.28  p99   64.22 ms  (compile 2.53 s)
+googlenet inception4e  fold+cl+inductor fp32 step    456×256: p50    6.75  p99    7.50 ms  (compile 2.85 s)
+googlenet inception4e  fold+cl+inductor fp32 step    960×540: p50   19.64  p99   20.24 ms  (compile 2.93 s)
+googlenet inception4e  fold+cl+inductor fp32 step    1920×1080: p50   67.42  p99   68.75 ms  (compile 2.85 s)
+googlenet inception5a  fold+cl+inductor fp32 step    456×256: p50    7.08  p99    7.60 ms  (compile 3.4 s)
+googlenet inception5a  fold+cl+inductor fp32 step    960×540: p50   20.56  p99   20.74 ms  (compile 3.39 s)
+googlenet inception5a  fold+cl+inductor fp32 step    1920×1080: p50   69.93  p99   70.81 ms  (compile 3.4 s)
+googlenet inception5b  fold+cl+inductor fp32 step    456×256: p50    7.70  p99    8.75 ms  (compile 3.67 s)
+googlenet inception5b  fold+cl+inductor fp32 step    960×540: p50   21.43  p99   21.86 ms  (compile 3.67 s)
+googlenet inception5b  fold+cl+inductor fp32 step    1920×1080: p50   71.75  p99   72.46 ms  (compile 3.69 s)
+googlenet conv1        fold+cl+step     fp32 step    456×256: p50    1.83  p99    2.25 ms  (compile 0.48 s)
+googlenet conv1        fold+cl+step     fp32 step    960×540: p50    5.01  p99    5.47 ms  (compile 0.4 s)
+googlenet conv1        fold+cl+step     fp32 step    1920×1080: p50   18.94  p99   19.25 ms  (compile 0.49 s)
+googlenet conv2        fold+cl+step     fp32 step    456×256: p50    1.92  p99    2.76 ms  (compile 0.47 s)
+googlenet conv2        fold+cl+step     fp32 step    960×540: p50    6.66  p99    6.90 ms  (compile 0.48 s)
+googlenet conv2        fold+cl+step     fp32 step    1920×1080: p50   24.90  p99   26.02 ms  (compile 0.53 s)
+googlenet conv3        fold+cl+step     fp32 step    456×256: p50    2.26  p99    2.92 ms  (compile 0.5 s)
+googlenet conv3        fold+cl+step     fp32 step    960×540: p50    7.95  p99    8.43 ms  (compile 0.5 s)
+googlenet conv3        fold+cl+step     fp32 step    1920×1080: p50   29.97  p99   30.65 ms  (compile 0.59 s)
+googlenet inception3a  fold+cl+step     fp32 step    456×256: p50    3.20  p99    5.13 ms  (compile 0.96 s)
+googlenet inception3a  fold+cl+step     fp32 step    960×540: p50   10.14  p99   10.52 ms  (compile 0.96 s)
+googlenet inception3a  fold+cl+step     fp32 step    1920×1080: p50   38.16  p99   38.66 ms  (compile 1.01 s)
+googlenet inception3b  fold+cl+step     fp32 step    456×256: p50    3.65  p99    5.75 ms  (compile 1.31 s)
+googlenet inception3b  fold+cl+step     fp32 step    960×540: p50   12.17  p99   12.54 ms  (compile 1.28 s)
+googlenet inception3b  fold+cl+step     fp32 step    1920×1080: p50   45.67  p99   46.86 ms  (compile 1.33 s)
+googlenet inception4a  fold+cl+step     fp32 step    456×256: p50    4.27  p99    5.08 ms  (compile 1.8 s)
+googlenet inception4a  fold+cl+step     fp32 step    960×540: p50   14.01  p99   14.43 ms  (compile 1.79 s)
+googlenet inception4a  fold+cl+step     fp32 step    1920×1080: p50   51.30  p99   51.95 ms  (compile 1.85 s)
+googlenet inception4b  fold+cl+step     fp32 step    456×256: p50    4.75  p99    5.05 ms  (compile 2.14 s)
+googlenet inception4b  fold+cl+step     fp32 step    960×540: p50   15.07  p99   15.52 ms  (compile 2.13 s)
+googlenet inception4b  fold+cl+step     fp32 step    1920×1080: p50   54.56  p99   55.01 ms  (compile 2.19 s)
+googlenet inception4c  fold+cl+step     fp32 step    456×256: p50    5.15  p99    5.80 ms  (compile 2.4 s)
+googlenet inception4c  fold+cl+step     fp32 step    960×540: p50   16.30  p99   16.82 ms  (compile 2.38 s)
+googlenet inception4c  fold+cl+step     fp32 step    1920×1080: p50   57.95  p99   58.63 ms  (compile 2.49 s)
+googlenet inception4d  fold+cl+step     fp32 step    456×256: p50    5.63  p99    6.01 ms  (compile 2.68 s)
+googlenet inception4d  fold+cl+step     fp32 step    960×540: p50   17.39  p99   21.12 ms  (compile 2.67 s)
+googlenet inception4d  fold+cl+step     fp32 step    1920×1080: p50   61.35  p99   62.15 ms  (compile 2.75 s)
+googlenet inception4e  fold+cl+step     fp32 step    456×256: p50    6.23  p99    6.93 ms  (compile 3.07 s)
+googlenet inception4e  fold+cl+step     fp32 step    960×540: p50   18.92  p99   19.40 ms  (compile 3.07 s)
+googlenet inception4e  fold+cl+step     fp32 step    1920×1080: p50   65.51  p99   67.40 ms  (compile 3.12 s)
+googlenet inception5a  fold+cl+step     fp32 step    456×256: p50    6.75  p99    7.17 ms  (compile 3.51 s)
+googlenet inception5a  fold+cl+step     fp32 step    960×540: p50   19.87  p99   20.46 ms  (compile 3.53 s)
+googlenet inception5a  fold+cl+step     fp32 step    1920×1080: p50   68.39  p99   68.80 ms  (compile 3.59 s)
+googlenet inception5b  fold+cl+step     fp32 step    456×256: p50    7.24  p99    7.71 ms  (compile 3.77 s)
+googlenet inception5b  fold+cl+step     fp32 step    960×540: p50   20.76  p99   21.33 ms  (compile 3.92 s)
+googlenet inception5b  fold+cl+step     fp32 step    1920×1080: p50   70.50  p99   72.29 ms  (compile 3.87 s)
+googlenet conv1        eager            fp16 step    456×256: p50    1.67  p99    1.88 ms
+googlenet conv1        eager            fp16 step    960×540: p50    3.72  p99    4.77 ms
+googlenet conv1        eager            fp16 step    1920×1080: p50   11.85  p99   12.38 ms
+googlenet conv2        eager            fp16 step    456×256: p50    2.01  p99    2.64 ms
+googlenet conv2        eager            fp16 step    960×540: p50    4.84  p99    5.13 ms
+googlenet conv2        eager            fp16 step    1920×1080: p50   16.23  p99   16.71 ms
+googlenet conv3        eager            fp16 step    456×256: p50    2.38  p99    2.60 ms
+googlenet conv3        eager            fp16 step    960×540: p50    6.15  p99    6.60 ms
+googlenet conv3        eager            fp16 step    1920×1080: p50   21.42  p99   22.03 ms
+googlenet inception3a  eager            fp16 step    456×256: p50    3.63  p99    3.92 ms
+googlenet inception3a  eager            fp16 step    960×540: p50    7.94  p99    8.34 ms
+googlenet inception3a  eager            fp16 step    1920×1080: p50   27.69  p99   28.17 ms
+googlenet inception3b  eager            fp16 step    456×256: p50    4.46  p99    5.18 ms
+googlenet inception3b  eager            fp16 step    960×540: p50    9.79  p99   10.23 ms
+googlenet inception3b  eager            fp16 step    1920×1080: p50   33.88  p99   34.48 ms
+googlenet inception4a  eager            fp16 step    456×256: p50    5.95  p99    6.90 ms
+googlenet inception4a  eager            fp16 step    960×540: p50   11.03  p99   11.47 ms
+googlenet inception4a  eager            fp16 step    1920×1080: p50   37.72  p99   38.34 ms
+googlenet inception4b  eager            fp16 step    456×256: p50    7.46  p99    8.95 ms
+googlenet inception4b  eager            fp16 step    960×540: p50   11.89  p99   12.32 ms
+googlenet inception4b  eager            fp16 step    1920×1080: p50   40.14  p99   40.56 ms
+googlenet inception4c  eager            fp16 step    456×256: p50    8.36  p99    9.36 ms
+googlenet inception4c  eager            fp16 step    960×540: p50   12.73  p99   13.34 ms
+googlenet inception4c  eager            fp16 step    1920×1080: p50   42.64  p99   42.89 ms
+googlenet inception4d  eager            fp16 step    456×256: p50    9.72  p99   10.38 ms
+googlenet inception4d  eager            fp16 step    960×540: p50   13.67  p99   14.48 ms
+googlenet inception4d  eager            fp16 step    1920×1080: p50   45.44  p99   45.91 ms
+googlenet inception4e  eager            fp16 step    456×256: p50   10.77  p99   11.41 ms
+googlenet inception4e  eager            fp16 step    960×540: p50   14.84  p99   15.30 ms
+googlenet inception4e  eager            fp16 step    1920×1080: p50   48.96  p99   49.31 ms
+googlenet inception5a  eager            fp16 step    456×256: p50   11.76  p99   12.44 ms
+googlenet inception5a  eager            fp16 step    960×540: p50   16.03  p99   16.80 ms
+googlenet inception5a  eager            fp16 step    1920×1080: p50   50.88  p99   51.49 ms
+googlenet inception5b  eager            fp16 step    456×256: p50   13.28  p99   14.35 ms
+googlenet inception5b  eager            fp16 step    960×540: p50   17.37  p99   18.62 ms
+googlenet inception5b  eager            fp16 step    1920×1080: p50   52.71  p99   53.12 ms
+googlenet conv1        fold             fp16 step    456×256: p50    1.80  p99    4.16 ms
+googlenet conv1        fold             fp16 step    960×540: p50    3.59  p99    4.25 ms
+googlenet conv1        fold             fp16 step    1920×1080: p50   11.10  p99   11.50 ms
+googlenet conv2        fold             fp16 step    456×256: p50    2.03  p99    2.34 ms
+googlenet conv2        fold             fp16 step    960×540: p50    4.74  p99    4.86 ms
+googlenet conv2        fold             fp16 step    1920×1080: p50   15.30  p99   15.89 ms
+googlenet conv3        fold             fp16 step    456×256: p50    2.35  p99    2.57 ms
+googlenet conv3        fold             fp16 step    960×540: p50    5.83  p99    6.02 ms
+googlenet conv3        fold             fp16 step    1920×1080: p50   20.14  p99   20.78 ms
+googlenet inception3a  fold             fp16 step    456×256: p50    2.88  p99    3.40 ms
+googlenet inception3a  fold             fp16 step    960×540: p50    7.50  p99    7.82 ms
+googlenet inception3a  fold             fp16 step    1920×1080: p50   25.94  p99   26.41 ms
+googlenet inception3b  fold             fp16 step    456×256: p50    3.34  p99    4.26 ms
+googlenet inception3b  fold             fp16 step    960×540: p50    9.07  p99    9.57 ms
+googlenet inception3b  fold             fp16 step    1920×1080: p50   31.48  p99   31.85 ms
+googlenet inception4a  fold             fp16 step    456×256: p50    4.00  p99    5.05 ms
+googlenet inception4a  fold             fp16 step    960×540: p50   10.29  p99   10.80 ms
+googlenet inception4a  fold             fp16 step    1920×1080: p50   35.02  p99   35.48 ms
+googlenet inception4b  fold             fp16 step    456×256: p50    4.38  p99    5.05 ms
+googlenet inception4b  fold             fp16 step    960×540: p50   11.09  p99   11.61 ms
+googlenet inception4b  fold             fp16 step    1920×1080: p50   37.29  p99   37.83 ms
+googlenet inception4c  fold             fp16 step    456×256: p50    5.01  p99    5.88 ms
+googlenet inception4c  fold             fp16 step    960×540: p50   11.81  p99   13.17 ms
+googlenet inception4c  fold             fp16 step    1920×1080: p50   39.61  p99   40.03 ms
+googlenet inception4d  fold             fp16 step    456×256: p50    5.77  p99    7.09 ms
+googlenet inception4d  fold             fp16 step    960×540: p50   12.71  p99   13.05 ms
+googlenet inception4d  fold             fp16 step    1920×1080: p50   42.08  p99   42.70 ms
+googlenet inception4e  fold             fp16 step    456×256: p50    6.27  p99    6.67 ms
+googlenet inception4e  fold             fp16 step    960×540: p50   13.81  p99   14.23 ms
+googlenet inception4e  fold             fp16 step    1920×1080: p50   45.43  p99   46.01 ms
+googlenet inception5a  fold             fp16 step    456×256: p50    6.84  p99    7.34 ms
+googlenet inception5a  fold             fp16 step    960×540: p50   14.56  p99   15.05 ms
+googlenet inception5a  fold             fp16 step    1920×1080: p50   47.34  p99   47.68 ms
+googlenet inception5b  fold             fp16 step    456×256: p50    7.54  p99    8.44 ms
+googlenet inception5b  fold             fp16 step    960×540: p50   15.25  p99   15.51 ms
+googlenet inception5b  fold             fp16 step    1920×1080: p50   48.82  p99   49.23 ms
+googlenet conv1        fold+cl          fp16 step    456×256: p50    1.74  p99    2.34 ms
+googlenet conv1        fold+cl          fp16 step    960×540: p50    3.75  p99    4.00 ms
+googlenet conv1        fold+cl          fp16 step    1920×1080: p50   12.09  p99   12.75 ms
+googlenet conv2        fold+cl          fp16 step    456×256: p50    2.05  p99    2.83 ms
+googlenet conv2        fold+cl          fp16 step    960×540: p50    5.29  p99    5.65 ms
+googlenet conv2        fold+cl          fp16 step    1920×1080: p50   22.80  p99   23.99 ms
+googlenet conv3        fold+cl          fp16 step    456×256: p50    2.40  p99    3.50 ms
+googlenet conv3        fold+cl          fp16 step    960×540: p50    6.46  p99    6.76 ms
+googlenet conv3        fold+cl          fp16 step    1920×1080: p50   28.05  p99   28.83 ms
+googlenet inception3a  fold+cl          fp16 step    456×256: p50    3.06  p99    4.71 ms
+googlenet inception3a  fold+cl          fp16 step    960×540: p50    8.86  p99    9.39 ms
+googlenet inception3a  fold+cl          fp16 step    1920×1080: p50   36.14  p99   37.57 ms
+googlenet inception3b  fold+cl          fp16 step    456×256: p50    3.76  p99    4.48 ms
+googlenet inception3b  fold+cl          fp16 step    960×540: p50   10.88  p99   11.25 ms
+googlenet inception3b  fold+cl          fp16 step    1920×1080: p50   43.86  p99   45.21 ms
+googlenet inception4a  fold+cl          fp16 step    456×256: p50    4.32  p99    5.22 ms
+googlenet inception4a  fold+cl          fp16 step    960×540: p50   12.52  p99   13.29 ms
+googlenet inception4a  fold+cl          fp16 step    1920×1080: p50   48.82  p99   49.50 ms
+googlenet inception4b  fold+cl          fp16 step    456×256: p50    4.90  p99    5.66 ms
+googlenet inception4b  fold+cl          fp16 step    960×540: p50   13.50  p99   13.80 ms
+googlenet inception4b  fold+cl          fp16 step    1920×1080: p50   51.86  p99   52.68 ms
+googlenet inception4c  fold+cl          fp16 step    456×256: p50    5.51  p99    6.27 ms
+googlenet inception4c  fold+cl          fp16 step    960×540: p50   14.40  p99   15.03 ms
+googlenet inception4c  fold+cl          fp16 step    1920×1080: p50   54.77  p99   55.62 ms
+googlenet inception4d  fold+cl          fp16 step    456×256: p50    6.37  p99    7.14 ms
+googlenet inception4d  fold+cl          fp16 step    960×540: p50   15.52  p99   16.05 ms
+googlenet inception4d  fold+cl          fp16 step    1920×1080: p50   58.14  p99   58.91 ms
+googlenet inception4e  fold+cl          fp16 step    456×256: p50    7.06  p99    7.53 ms
+googlenet inception4e  fold+cl          fp16 step    960×540: p50   16.85  p99   17.26 ms
+googlenet inception4e  fold+cl          fp16 step    1920×1080: p50   62.42  p99   63.31 ms
+googlenet inception5a  fold+cl          fp16 step    456×256: p50    8.11  p99    9.38 ms
+googlenet inception5a  fold+cl          fp16 step    960×540: p50   17.84  p99   18.30 ms
+googlenet inception5a  fold+cl          fp16 step    1920×1080: p50   65.17  p99   66.22 ms
+googlenet inception5b  fold+cl          fp16 step    456×256: p50    8.54  p99    9.46 ms
+googlenet inception5b  fold+cl          fp16 step    960×540: p50   18.60  p99   19.42 ms
+googlenet inception5b  fold+cl          fp16 step    1920×1080: p50   67.44  p99   85.98 ms
+googlenet conv1        inductor         fp16 step    456×256: p50    1.87  p99    3.45 ms  (compile 0.24 s)
+googlenet conv1        inductor         fp16 step    960×540: p50    3.92  p99    5.98 ms  (compile 0.25 s)
+googlenet conv1        inductor         fp16 step    1920×1080: p50   11.35  p99   12.08 ms  (compile 0.25 s)
+googlenet conv2        inductor         fp16 step    456×256: p50    2.09  p99    3.56 ms  (compile 0.43 s)
+googlenet conv2        inductor         fp16 step    960×540: p50    4.55  p99    6.58 ms  (compile 0.46 s)
+googlenet conv2        inductor         fp16 step    1920×1080: p50   14.11  p99   14.54 ms  (compile 0.44 s)
+googlenet conv3        inductor         fp16 step    456×256: p50    2.66  p99    4.56 ms  (compile 0.81 s)
+googlenet conv3        inductor         fp16 step    960×540: p50    7.49  p99    7.79 ms  (compile 0.56 s)
+googlenet conv3        inductor         fp16 step    1920×1080: p50   26.72  p99   26.98 ms  (compile 0.57 s)
+googlenet inception3a  inductor         fp16 step    456×256: p50    3.28  p99    4.95 ms  (compile 1.53 s)
+googlenet inception3a  inductor         fp16 step    960×540: p50    9.28  p99    9.77 ms  (compile 1.34 s)
+googlenet inception3a  inductor         fp16 step    1920×1080: p50   33.42  p99   33.73 ms  (compile 1.41 s)
+googlenet inception3b  inductor         fp16 step    456×256: p50    3.97  p99    4.58 ms  (compile 2.01 s)
+googlenet inception3b  inductor         fp16 step    960×540: p50   11.65  p99   11.96 ms  (compile 1.96 s)
+googlenet inception3b  inductor         fp16 step    1920×1080: p50   41.12  p99   41.68 ms  (compile 1.99 s)
+googlenet inception4a  inductor         fp16 step    456×256: p50    4.43  p99    4.88 ms  (compile 2.78 s)
+googlenet inception4a  inductor         fp16 step    960×540: p50   12.77  p99   13.25 ms  (compile 2.79 s)
+googlenet inception4a  inductor         fp16 step    1920×1080: p50   45.03  p99   45.54 ms  (compile 2.73 s)
+googlenet inception4b  inductor         fp16 step    456×256: p50    4.85  p99    5.26 ms  (compile 3.77 s)
+googlenet inception4b  inductor         fp16 step    960×540: p50   13.94  p99   14.22 ms  (compile 3.6 s)
+googlenet inception4b  inductor         fp16 step    1920×1080: p50   48.18  p99   48.66 ms  (compile 3.64 s)
+googlenet inception4c  inductor         fp16 step    456×256: p50    6.21  p99    7.91 ms  (compile 4.26 s)
+googlenet inception4c  inductor         fp16 step    960×540: p50   14.79  p99   15.04 ms  (compile 4.29 s)
+googlenet inception4c  inductor         fp16 step    1920×1080: p50   51.04  p99   51.28 ms  (compile 4.21 s)
+googlenet inception4d  inductor         fp16 step    456×256: p50    5.78  p99    6.94 ms  (compile 4.77 s)
+googlenet inception4d  inductor         fp16 step    960×540: p50   15.97  p99   16.30 ms  (compile 4.61 s)
+googlenet inception4d  inductor         fp16 step    1920×1080: p50   54.38  p99   55.42 ms  (compile 4.74 s)
+googlenet inception4e  inductor         fp16 step    456×256: p50    6.88  p99    8.13 ms  (compile 5.54 s)
+googlenet inception4e  inductor         fp16 step    960×540: p50   17.29  p99   17.52 ms  (compile 5.43 s)
+googlenet inception4e  inductor         fp16 step    1920×1080: p50   58.65  p99   60.38 ms  (compile 5.36 s)
+googlenet inception5a  inductor         fp16 step    456×256: p50    7.48  p99    8.02 ms  (compile 6.15 s)
+googlenet inception5a  inductor         fp16 step    960×540: p50   18.17  p99   18.39 ms  (compile 6.09 s)
+googlenet inception5a  inductor         fp16 step    1920×1080: p50   60.83  p99   62.00 ms  (compile 6.05 s)
+googlenet inception5b  inductor         fp16 step    456×256: p50    7.62  p99    9.83 ms  (compile 7.25 s)
+googlenet inception5b  inductor         fp16 step    960×540: p50   19.41  p99   22.92 ms  (compile 7.1 s)
+googlenet inception5b  inductor         fp16 step    1920×1080: p50   62.75  p99   64.40 ms  (compile 7.49 s)
+googlenet conv1        fold+inductor    fp16 step    456×256: p50    1.80  p99    2.49 ms  (compile 0.19 s)
+googlenet conv1        fold+inductor    fp16 step    960×540: p50    4.32  p99    4.93 ms  (compile 0.2 s)
+googlenet conv1        fold+inductor    fp16 step    1920×1080: p50   11.39  p99   12.02 ms  (compile 0.19 s)
+googlenet conv2        fold+inductor    fp16 step    456×256: p50    2.09  p99    2.73 ms  (compile 0.35 s)
+googlenet conv2        fold+inductor    fp16 step    960×540: p50    5.54  p99    6.38 ms  (compile 0.39 s)
+googlenet conv2        fold+inductor    fp16 step    1920×1080: p50   13.57  p99   14.04 ms  (compile 0.41 s)
+googlenet conv3        fold+inductor    fp16 step    456×256: p50    2.64  p99    3.34 ms  (compile 0.44 s)
+googlenet conv3        fold+inductor    fp16 step    960×540: p50    7.45  p99    7.78 ms  (compile 0.43 s)
+googlenet conv3        fold+inductor    fp16 step    1920×1080: p50   26.28  p99   26.89 ms  (compile 0.44 s)
+googlenet inception3a  fold+inductor    fp16 step    456×256: p50    3.13  p99    3.43 ms  (compile 0.98 s)
+googlenet inception3a  fold+inductor    fp16 step    960×540: p50    9.14  p99    9.49 ms  (compile 0.97 s)
+googlenet inception3a  fold+inductor    fp16 step    1920×1080: p50   32.67  p99   32.99 ms  (compile 0.96 s)
+googlenet inception3b  fold+inductor    fp16 step    456×256: p50    3.87  p99    4.06 ms  (compile 1.4 s)
+googlenet inception3b  fold+inductor    fp16 step    960×540: p50   11.61  p99   14.58 ms  (compile 1.45 s)
+googlenet inception3b  fold+inductor    fp16 step    1920×1080: p50   40.92  p99   42.22 ms  (compile 1.38 s)
+googlenet inception4a  fold+inductor    fp16 step    456×256: p50    4.46  p99    4.73 ms  (compile 1.88 s)
+googlenet inception4a  fold+inductor    fp16 step    960×540: p50   12.77  p99   13.03 ms  (compile 1.85 s)
+googlenet inception4a  fold+inductor    fp16 step    1920×1080: p50   44.82  p99   45.23 ms  (compile 1.84 s)
+googlenet inception4b  fold+inductor    fp16 step    456×256: p50    4.93  p99    5.25 ms  (compile 2.34 s)
+googlenet inception4b  fold+inductor    fp16 step    960×540: p50   13.92  p99   14.08 ms  (compile 2.28 s)
+googlenet inception4b  fold+inductor    fp16 step    1920×1080: p50   47.98  p99   48.39 ms  (compile 2.29 s)
+googlenet inception4c  fold+inductor    fp16 step    456×256: p50    5.35  p99    5.87 ms  (compile 2.51 s)
+googlenet inception4c  fold+inductor    fp16 step    960×540: p50   14.97  p99   15.36 ms  (compile 2.51 s)
+googlenet inception4c  fold+inductor    fp16 step    1920×1080: p50   51.24  p99   51.86 ms  (compile 2.52 s)
+googlenet inception4d  fold+inductor    fp16 step    456×256: p50    5.84  p99    6.04 ms  (compile 2.92 s)
+googlenet inception4d  fold+inductor    fp16 step    960×540: p50   16.12  p99   16.47 ms  (compile 2.87 s)
+googlenet inception4d  fold+inductor    fp16 step    1920×1080: p50   54.74  p99   55.12 ms  (compile 2.9 s)
+googlenet inception4e  fold+inductor    fp16 step    456×256: p50    6.44  p99    6.63 ms  (compile 3.31 s)
+googlenet inception4e  fold+inductor    fp16 step    960×540: p50   17.63  p99   17.81 ms  (compile 3.28 s)
+googlenet inception4e  fold+inductor    fp16 step    1920×1080: p50   59.28  p99   59.73 ms  (compile 3.38 s)
+googlenet inception5a  fold+inductor    fp16 step    456×256: p50    6.89  p99    7.09 ms  (compile 3.6 s)
+googlenet inception5a  fold+inductor    fp16 step    960×540: p50   18.60  p99   18.80 ms  (compile 3.66 s)
+googlenet inception5a  fold+inductor    fp16 step    1920×1080: p50   61.82  p99   62.24 ms  (compile 3.67 s)
+googlenet inception5b  fold+inductor    fp16 step    456×256: p50    7.40  p99    8.01 ms  (compile 4.1 s)
+googlenet inception5b  fold+inductor    fp16 step    960×540: p50   19.42  p99   19.76 ms  (compile 4.12 s)
+googlenet inception5b  fold+inductor    fp16 step    1920×1080: p50   63.88  p99   64.32 ms  (compile 4.15 s)
+googlenet conv1        fold+cl+inductor fp16 step    456×256: p50    2.00  p99    4.36 ms  (compile 0.2 s)
+googlenet conv1        fold+cl+inductor fp16 step    960×540: p50    4.63  p99    4.88 ms  (compile 0.19 s)
+googlenet conv1        fold+cl+inductor fp16 step    1920×1080: p50   15.39  p99   15.57 ms  (compile 0.2 s)
+googlenet conv2        fold+cl+inductor fp16 step    456×256: p50    2.32  p99    3.21 ms  (compile 0.36 s)
+googlenet conv2        fold+cl+inductor fp16 step    960×540: p50    5.85  p99    5.98 ms  (compile 0.35 s)
+googlenet conv2        fold+cl+inductor fp16 step    1920×1080: p50   19.78  p99   22.29 ms  (compile 0.36 s)
+googlenet conv3        fold+cl+inductor fp16 step    456×256: p50    2.65  p99    3.66 ms  (compile 0.36 s)
+googlenet conv3        fold+cl+inductor fp16 step    960×540: p50    7.31  p99    7.61 ms  (compile 0.37 s)
+googlenet conv3        fold+cl+inductor fp16 step    1920×1080: p50   25.29  p99   25.65 ms  (compile 0.38 s)
+googlenet inception3a  fold+cl+inductor fp16 step    456×256: p50    3.15  p99    3.26 ms  (compile 0.86 s)
+googlenet inception3a  fold+cl+inductor fp16 step    960×540: p50    9.05  p99    9.35 ms  (compile 0.83 s)
+googlenet inception3a  fold+cl+inductor fp16 step    1920×1080: p50   32.30  p99   32.70 ms  (compile 0.84 s)
+googlenet inception3b  fold+cl+inductor fp16 step    456×256: p50    3.82  p99    3.97 ms  (compile 1.19 s)
+googlenet inception3b  fold+cl+inductor fp16 step    960×540: p50   11.06  p99   11.25 ms  (compile 1.15 s)
+googlenet inception3b  fold+cl+inductor fp16 step    1920×1080: p50   39.36  p99   39.80 ms  (compile 1.16 s)
+googlenet inception4a  fold+cl+inductor fp16 step    456×256: p50    4.26  p99    4.50 ms  (compile 1.63 s)
+googlenet inception4a  fold+cl+inductor fp16 step    960×540: p50   12.41  p99   12.67 ms  (compile 1.6 s)
+googlenet inception4a  fold+cl+inductor fp16 step    1920×1080: p50   43.66  p99   43.98 ms  (compile 1.61 s)
+googlenet inception4b  fold+cl+inductor fp16 step    456×256: p50    4.72  p99    4.92 ms  (compile 1.98 s)
+googlenet inception4b  fold+cl+inductor fp16 step    960×540: p50   13.48  p99   13.66 ms  (compile 1.95 s)
+googlenet inception4b  fold+cl+inductor fp16 step    1920×1080: p50   46.62  p99   46.97 ms  (compile 1.96 s)
+googlenet inception4c  fold+cl+inductor fp16 step    456×256: p50    5.19  p99    5.47 ms  (compile 2.22 s)
+googlenet inception4c  fold+cl+inductor fp16 step    960×540: p50   14.54  p99   15.07 ms  (compile 2.2 s)
+googlenet inception4c  fold+cl+inductor fp16 step    1920×1080: p50   49.76  p99   50.17 ms  (compile 2.22 s)
+googlenet inception4d  fold+cl+inductor fp16 step    456×256: p50    5.66  p99    6.06 ms  (compile 2.54 s)
+AGX: exceeded compiled variants footprint limit
+googlenet inception4d  fold+cl+inductor fp16 step    960×540: p50   15.57  p99   15.80 ms  (compile 2.51 s)
+googlenet inception4d  fold+cl+inductor fp16 step    1920×1080: p50   52.92  p99   53.32 ms  (compile 2.51 s)
+googlenet inception4e  fold+cl+inductor fp16 step    456×256: p50    6.15  p99    6.58 ms  (compile 2.87 s)
+googlenet inception4e  fold+cl+inductor fp16 step    960×540: p50   16.99  p99   17.32 ms  (compile 2.84 s)
+googlenet inception4e  fold+cl+inductor fp16 step    1920×1080: p50   57.38  p99   57.86 ms  (compile 2.85 s)
+googlenet inception5a  fold+cl+inductor fp16 step    456×256: p50    6.63  p99    7.14 ms  (compile 3.22 s)
+googlenet inception5a  fold+cl+inductor fp16 step    960×540: p50   17.87  p99   18.15 ms  (compile 3.25 s)
+googlenet inception5a  fold+cl+inductor fp16 step    1920×1080: p50   59.78  p99   60.22 ms  (compile 3.26 s)
+googlenet inception5b  fold+cl+inductor fp16 step    456×256: p50    7.20  p99    7.52 ms  (compile 3.54 s)
+googlenet inception5b  fold+cl+inductor fp16 step    960×540: p50   18.60  p99   18.97 ms  (compile 3.55 s)
+googlenet inception5b  fold+cl+inductor fp16 step    1920×1080: p50   61.63  p99   61.92 ms  (compile 3.55 s)
+googlenet conv1        fold+cl+step     fp16 step    456×256: p50    1.27  p99    1.47 ms  (compile 0.39 s)
+googlenet conv1        fold+cl+step     fp16 step    960×540: p50    3.67  p99    3.78 ms  (compile 0.38 s)
+googlenet conv1        fold+cl+step     fp16 step    1920×1080: p50   13.34  p99   13.47 ms  (compile 0.44 s)
+googlenet conv2        fold+cl+step     fp16 step    456×256: p50    1.80  p99    2.39 ms  (compile 0.5 s)
+googlenet conv2        fold+cl+step     fp16 step    960×540: p50    5.17  p99    5.41 ms  (compile 0.5 s)
+googlenet conv2        fold+cl+step     fp16 step    1920×1080: p50   18.85  p99   19.13 ms  (compile 0.54 s)
+googlenet conv3        fold+cl+step     fp16 step    456×256: p50    1.97  p99    2.62 ms  (compile 0.51 s)
+googlenet conv3        fold+cl+step     fp16 step    960×540: p50    6.27  p99    6.44 ms  (compile 0.52 s)
+googlenet conv3        fold+cl+step     fp16 step    1920×1080: p50   22.99  p99   23.25 ms  (compile 0.56 s)
+googlenet inception3a  fold+cl+step     fp16 step    456×256: p50    2.67  p99    3.28 ms  (compile 0.97 s)
+googlenet inception3a  fold+cl+step     fp16 step    960×540: p50    8.34  p99    8.50 ms  (compile 0.97 s)
+googlenet inception3a  fold+cl+step     fp16 step    1920×1080: p50   30.69  p99   31.02 ms  (compile 1.0 s)
+googlenet inception3b  fold+cl+step     fp16 step    456×256: p50    3.27  p99    4.17 ms  (compile 1.3 s)
+googlenet inception3b  fold+cl+step     fp16 step    960×540: p50   10.28  p99   10.78 ms  (compile 1.29 s)
+googlenet inception3b  fold+cl+step     fp16 step    1920×1080: p50   37.25  p99   37.68 ms  (compile 1.37 s)
+googlenet inception4a  fold+cl+step     fp16 step    456×256: p50    3.90  p99    4.03 ms  (compile 1.79 s)
+googlenet inception4a  fold+cl+step     fp16 step    960×540: p50   11.98  p99   12.36 ms  (compile 1.77 s)
+googlenet inception4a  fold+cl+step     fp16 step    1920×1080: p50   43.28  p99   43.64 ms  (compile 1.82 s)
+googlenet inception4b  fold+cl+step     fp16 step    456×256: p50    4.31  p99    5.09 ms  (compile 2.2 s)
+googlenet inception4b  fold+cl+step     fp16 step    960×540: p50   12.93  p99   13.62 ms  (compile 2.12 s)
+googlenet inception4b  fold+cl+step     fp16 step    1920×1080: p50   46.25  p99   46.68 ms  (compile 2.14 s)
+googlenet inception4c  fold+cl+step     fp16 step    456×256: p50    4.76  p99    4.84 ms  (compile 2.39 s)
+googlenet inception4c  fold+cl+step     fp16 step    960×540: p50   14.01  p99   14.24 ms  (compile 2.4 s)
+googlenet inception4c  fold+cl+step     fp16 step    1920×1080: p50   49.31  p99   49.60 ms  (compile 2.42 s)
+googlenet inception4d  fold+cl+step     fp16 step    456×256: p50    5.17  p99    5.55 ms  (compile 2.67 s)
+googlenet inception4d  fold+cl+step     fp16 step    960×540: p50   15.21  p99   15.76 ms  (compile 2.65 s)
+googlenet inception4d  fold+cl+step     fp16 step    1920×1080: p50   52.54  p99   52.97 ms  (compile 2.71 s)
+googlenet inception4e  fold+cl+step     fp16 step    456×256: p50    5.65  p99    5.77 ms  (compile 3.04 s)
+googlenet inception4e  fold+cl+step     fp16 step    960×540: p50   16.49  p99   17.94 ms  (compile 3.05 s)
+googlenet inception4e  fold+cl+step     fp16 step    1920×1080: p50   56.64  p99   56.96 ms  (compile 3.05 s)
+googlenet inception5a  fold+cl+step     fp16 step    456×256: p50    6.18  p99    6.28 ms  (compile 3.47 s)
+googlenet inception5a  fold+cl+step     fp16 step    960×540: p50   17.46  p99   17.69 ms  (compile 3.49 s)
+googlenet inception5a  fold+cl+step     fp16 step    1920×1080: p50   59.55  p99   59.84 ms  (compile 3.49 s)
+googlenet inception5b  fold+cl+step     fp16 step    456×256: p50    6.69  p99    7.07 ms  (compile 3.74 s)
+googlenet inception5b  fold+cl+step     fp16 step    960×540: p50   18.29  p99   18.57 ms  (compile 3.77 s)
+googlenet inception5b  fold+cl+step     fp16 step    1920×1080: p50   61.47  p99   61.85 ms  (compile 3.78 s)
+
+wrote docs/plans/assets/dream-bench-m3/compile.json
