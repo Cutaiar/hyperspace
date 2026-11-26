@@ -143,6 +143,22 @@ def test_tracers_lay_the_trail_on_the_scene_where_it_went(tmp_path):
     assert _traced_values(rig) == (8, 1, 30.0, True, 1)          # 8 at 30 Hz, laid add
 
 
+def test_tracers_land_as_one_folded_look_back_group(tmp_path):
+    """The owner (2026-11-26, plan 90 H2): the tracers are one primitive —
+    picture in, picture out — folded in a group named as a migrated
+    look-back's is, its parts a `+` away; in the starter's one undo step.
+    With the dream the dream stays outside (H3 groups it)."""
+    from hyperspace import graphmigrate
+    rig, e, _ = wired_rig(tmp_path, SCENE)
+    e.loaded_patch = rig.loaded_patch                 # (as GRAPH's Edit is: `render_edit`)
+    assert e.starter("tracers") is None
+    assert e.starter("tracers+dream") is None
+    got = [(g["name"], g["nodes"], g["open"]) for g in rig.loaded_patch.groups]
+    assert got == [
+        (graphmigrate.LB_GROUP, ["render:delay", "render:trail", "render:composite"], False),
+        (graphmigrate.LB_GROUP, ["render:delay.2", "render:trail.2"], False)]
+
+
 def test_tracers_and_dream(tmp_path):
     rig, e, pushed = wired_rig(tmp_path, SCENE)
     assert e.starter("tracers+dream") is None
@@ -258,10 +274,12 @@ def test_a_starter_lands_at_the_point_as_one_undo_step(page):
         assert lay["render:composite"] == [300 + 2 * graphview.COL_W, 350]
         assert len(lay) == len(was[1]) + 3              # nothing else placed or moved
         assert u.stack[-1].label == "starter: tracers"
+        assert [g["name"] for g in lib.loaded_patch.groups] == ["look-back"]
         assert u.undo()
     finally:
         undo.install(None)
     assert (lib.loaded_patch.graph.spec.to_json(), dict(lib.loaded_patch.layout)) == was
+    assert lib.loaded_patch.groups == []
 
 
 # ---------------------------------------------------------------- feedback (wave 0 E1, 2026-11-02)

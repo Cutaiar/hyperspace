@@ -359,7 +359,7 @@ def _preset_rig(ctx, tmp_path):
     seed(tmp_path)                   # (the corpus: the loadable patches the build once shipped)
     lib = Library(tmp_path, period=0.0)
     reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install,
-                         dream=r.lookback.state, fx=r.fx.state)
+                         dream=r.dreamer.state, fx=r.fx.state)
     control.library = lib
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
@@ -401,8 +401,8 @@ def test_every_corpus_loadable_renders_opaque_in_window_mode(ctx, tmp_path, name
     """Plan 14 WP1: the render window is a Pepper's Ghost screen — in window
     mode (and fullscreen, the same opaque ground) every pixel of the final
     frame is alpha 255 for every corpus loadable patch, and for a loadable patch with
-    cut-through, faces, points, the look-back and every effect on, through
-    the FX chain and the look-back composite."""
+    cut-through, faces, points and every effect on, through the FX chain
+    (the look-back is retired, plan 90: a saved one is its parts)."""
     b = _preset_rig(ctx, tmp_path)
     first = _corpus_loadables()[0] if name in STRESS else name
     path = b.lib.path_of("loadable", first)
@@ -416,8 +416,7 @@ def test_every_corpus_loadable_renders_opaque_in_window_mode(ctx, tmp_path, name
 
         declare(b.reg, b.r.fx.state, b.r.fx.state.hold(None))
         values = {"view.faces": True, "view.cut_through": True, "view.lines": True,
-                  "view.points": True, "fx.on": True, "fx.mix": 1.0, "dream.on": True,
-                  "dream.echoes": 6, "dream.gap": 0.0}
+                  "view.points": True, "fx.on": True, "fx.mix": 1.0, "dream.on": True}
         for fx_name in b.r.fx.state.specs:
             values[f"fx.{fx_name}.on"] = True
             values[f"fx.{fx_name}.mix"] = 1.0

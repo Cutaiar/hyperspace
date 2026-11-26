@@ -465,6 +465,7 @@ is the design and its answers; H1 the first piece, H2 the look-back retired onto
 | **The tracers starters are public parts**: Delay (8, 30 Hz) → Trail (add) → Composite (add) | `graphview.render_starter` | owner (Q28); row 1177 |
 | **A migrated look-back draws whatever the master switch says**, as it did: where `fx.on` is off or `fx.mix` below 1 the migration turns them on and to 1 and keeps the patch's other effects as they drew | `graphmigrate.retire_lookbacks` | (rec), the owner to confirm; row 1178 |
 | **A live graph has no look-back.** A wire or entry naming one is refused in words; only the ladder's earlier steps read an old one. `scene.cover` goes into any mask port | `graph.LOOKBACK_RETIRED`, `_wire_error` | (rec); row 1179 |
+| **A look-back is one folded group**, detail on demand: a migrated one's parts and the tracers starter's land in a group `look-back`, picture in and picture out, `+` to the parts | `graphmigrate.LB_GROUP`, `retire_lookbacks`, `render_starter` | owner ("detail on demand"); row 1180 |
 
 ## Recursive geometry (plan 64)
 

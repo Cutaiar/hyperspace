@@ -9122,7 +9122,7 @@ Headless: `tests/test_delay_stack.py` (Read at each step back, a fraction blende
 
 **962. Curve and the linear ramp by eye.** (Mac) Add a Curve after anything bright and sweep **shape** from −1 to 1: lifted, as is at 0, then only the brightest parts. Key a channel on MEDIA with **ramp** linear. *Pass:* Curve never touches pure black or white, and Invert keeps a see-through picture see-through; the linear key fades in evenly where the smooth one eases. *Fail:* a colour shift at Shape 0, or a key that is not see-through on black.
 
-## GG. The look-back retired onto public parts (rows 1175–1179, 2026-11-26)
+## GG. The look-back retired onto public parts (rows 1175–1180, 2026-11-26)
 
 Headless: `tests/test_lookback_migration.py` (every mapping, rows and their ranges, echo pins, a second look-back, the master switch, the fragment ladder, the corpus whole, an old file through the library's own load and save), `tests/test_lookback_parts_exact.py` (the migrated chain against the old trail pass, to a level), `tests/test_matte_peak.py`, `tests/test_graph_starters.py`; `tools/lookback_proof.py` (each repository look-back through `main`'s code and this one).
 
@@ -9135,6 +9135,8 @@ Headless: `tests/test_lookback_migration.py` (every mapping, rows and their rang
 **966. Golden frames re-recorded.** (Mac) `uv run python tools/golden_frames.py` lists what moved: expect the states of `party-tracer`, `party-wake` (and their `history+hands` wiring), the fixtures `echo-faces`, `kinetic-clay`'s, and the signatures naming `lookback(cover)` (now `scene(cover)`); nothing else. Look at the contact sheet, then `--record --only` those. *Pass:* only those move, and by eye as 963. *Fail:* any other golden moving.
 
 **967. Your library, migrated.** (Mac) `uv run python tools/migrate_library.py` over a copy of `~/Hyperspace` (it backs up first). *Pass:* every file holding a look-back reads "public parts now", no "unknown id"; read the notes for rows on the gap (left out) and on the master switch; open three of them and compare with 963. *Fail:* an unknown id, a file that does not open, or a note you cannot follow.
+
+**968. The look-back is one group.** (Mac) Load `party-tracer`, then on GRAPH add starters ▸ tracers on a picture cable. *Pass:* each is one folded box, **look-back**, picture in and the wake out (the old file's also takes the occluder and the cover); `+` opens it to the delay, the Trail and the rest, and folding it again hides them; one undo takes the starter's group away with its nodes. *Fail:* the parts loose on the canvas, a second group, or a cable that goes nowhere when folded.
 
 ## FT. The Kinect (row 1130, 2026-11-24)
 

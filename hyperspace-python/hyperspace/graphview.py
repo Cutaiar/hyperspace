@@ -6667,6 +6667,12 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     if why is None and looks:
         _set_after_landing(edit, order[1], on=True, lay=TRACERS_LAY)
         _set_delay_after_landing(edit, order[0], depth=TRACERS_DEPTH, every=1, hz=TRACERS_HZ)
+        # (the owner, 2026-11-26: one primitive, picture in and picture out,
+        # folded as a migrated look-back is — the dream outside, H3's)
+        members = order[:2] + ([comp.name] if not dreams else [])
+        if edit._groups() is not None:
+            edit.land_group({"name": graphmigrate.LB_GROUP,
+                             "nodes": [f"render:{m}" for m in members]})
     return why
 
 

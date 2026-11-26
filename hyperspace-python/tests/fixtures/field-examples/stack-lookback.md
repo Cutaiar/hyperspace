@@ -5,6 +5,10 @@ copies of the last second and a half — drawn by ordinary nodes: this is what a
 look-back opens as since plan 90 (H2). Where the shape is bright, the wake behind it is
 held back a little (shape hides wake, 0.3).
 
+**On GRAPH** it is one folded group, **look-back** — the picture in, the wake out
+(and the occluder and the faces' cover in) — as every saved look-back now opens and the
+tracers starter lands; **+** opens it to the parts below.
+
 **How it is wired.**
 
 ```

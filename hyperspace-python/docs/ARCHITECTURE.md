@@ -366,7 +366,8 @@ frames laid oldest first, weighted `level · ½^(age / fade)`, over by alpha or 
 **The look-back is retired onto them** (H2, row 1175): a saved `lookback` opens as
 Curve → Fade (keyed, peak/linear) → Resize (512) → Delay ═► Trail → Cut (a Matte of
 its occluder) → Cut (its cover), its echo pins as Reads (`graphmigrate.lookbacks`,
-the ladder's last step). A live graph refuses a look-back in words
+the ladder's last step), folded in one group `look-back` (row 1180; the tracers
+starter lands its parts so too). A live graph refuses a look-back in words
 (`graph.LOOKBACK_RETIRED`); only the ladder's earlier steps read an old one. The
 dream moves onto them in H3.
 

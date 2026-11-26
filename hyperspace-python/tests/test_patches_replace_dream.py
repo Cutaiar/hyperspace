@@ -376,8 +376,10 @@ def test_a_group_of_the_dream_alone_goes_with_it(rig):  # noqa: F811
     assert entry["nodes"] == ["render:dream"]
     sheet_up(rig, slug)
     assert ui_routing.settle_sheet(rig.panel, True) is None
-    assert [g["nodes"] for g in rig.lib.loaded_patch.groups] == [["render:dream"]]
-    assert rig.lib.loaded_patch.groups[0]["id"] != entry["id"]
+    # (but the look-back party-wake opens folded in: plan 90 H2)
+    mine = [g for g in rig.lib.loaded_patch.groups if g["name"] != graphmigrate.LB_GROUP]
+    assert [g["nodes"] for g in mine] == [["render:dream"]]
+    assert mine[0]["id"] != entry["id"]
 
 
 def test_wire_as_saved_puts_the_replacing_dream_on_the_hosts_picture(rig):  # noqa: F811

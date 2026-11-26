@@ -344,7 +344,11 @@ def test_every_corpus_loadable_is_its_sources_seven_and_round_trips(tmp_path):
     tools/migrate_library.py makes of its source (`--to`: load the old file,
     save) — so the migration can be re-run from the sources and lands the
     same files, up to the defaults a source does not name that moved since
-    (`_as_before_calming`)."""
+    (`_as_before_calming`). Since plan 90 (H2) the files are kept as saved
+    before it — old look-back files the tests open — so a resave is the file
+    with the look-back retired (`graphmigrate.lookbacks`): the retired
+    `dream.*` knobs gone, and party-tracer's and party-wake's look-backs
+    their parts with the notes that say so; that resave is a fixed point."""
     paths = sorted((CORPUS / "loadable").glob("*.json"))
     assert len(paths) == 25
     assert sorted(p.name for p in SOURCES.glob("*.json")) == [p.name for p in paths]
@@ -352,6 +356,15 @@ def test_every_corpus_loadable_is_its_sources_seven_and_round_trips(tmp_path):
         data = path.read_bytes()
         assert json.loads(data)["schema"] == SAVED, path.name
         again, notes, _ = headless.resave(path, tmp_path / f"f{k}")
-        assert again == data and notes == [], path.name
+        held = "lookback" in json.loads(data)["graph"]["wires"].__repr__()
+        assert [n for n in notes if "plan 90" not in n] == [], path.name
+        assert bool(notes) == held, path.name
+        if not held:
+            assert json.loads(again) == M.lookbacks(json.loads(data))[0], path.name
+        assert b"dream.echo_mix" not in again and b'"lookback' not in again, path.name
+        (tmp_path / f"g{k}.json").write_bytes(again)
+        twice, notes2, _ = headless.resave(tmp_path / f"g{k}.json", tmp_path / f"h{k}")
+        assert twice == again and notes2 == [], path.name
         made, _, _ = headless.resave(SOURCES / path.name, tmp_path / f"s{k}")
-        assert _as_before_calming(made, SOURCES / path.name, data) == json.loads(data), path.name
+        assert (_as_before_calming(made, SOURCES / path.name, again)
+                == json.loads(again)), path.name

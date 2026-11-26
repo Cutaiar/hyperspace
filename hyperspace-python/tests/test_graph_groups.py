@@ -187,7 +187,10 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
             moved.parent.mkdir(parents=True)
             moved.write_bytes(data)
             again, _, _ = headless.resave(moved, tmp_path / f"g{k}")
-        assert again == data and b'"groups"' not in again, path.name
+        # (no groups, but the folded look-back a saved one opens as: plan 90 H2)
+        assert again == data, path.name
+        assert {g["name"] for g in json.loads(again).get("groups", [])} <= {
+            graphmigrate.LB_GROUP}, path.name
 
 
 def test_a_member_the_graph_lacks_is_dropped_with_a_note(tmp_path):
@@ -753,12 +756,13 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
     app = headless.make_app(seed(tmp_path))
     app.lib.load("loadable", path.stem)
     pre, table = app.loaded_patch, app.router.table
-    assert pre.groups == []
+    # (none, but the group a saved look-back opens folded in: plan 90 H2)
+    assert {g["name"] for g in pre.groups} <= {graphmigrate.LB_GROUP}
     before = _stripped(pre.document("x"))
     e = graphview.Edit(table, app.reg, app.router, graph=pre.graph)
     e.loaded_patch = pre
     rng = random.Random(path.stem)
-    seen: set[str] = set()
+    seen: set[str] = {g["id"] for g in pre.groups}
 
     def group_some() -> dict | None:
         held = sorted(pre._held_canvas())

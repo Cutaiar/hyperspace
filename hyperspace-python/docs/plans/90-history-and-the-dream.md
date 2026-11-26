@@ -715,7 +715,7 @@ look-back at 512 × 320, depth 32, is 42 MB, far inside it.
 
 ## 11. H2 built (2026-11-26)
 
-Rows 1175–1179, hand checks 963–967 (group GG). As §10.2–§10.5, with three things found on the way:
+Rows 1175–1180, hand checks 963–968 (group GG). As §10.2–§10.5, with three things found on the way:
 
 - **The look-back is public parts.** `graphmigrate.lookbacks` (the loadable ladder's last step, after
   `hue_turns`) and `patches._retire_lookbacks` (the fragment ladder's): §10.2's chain, each part the
@@ -741,7 +741,11 @@ Rows 1175–1179, hand checks 963–967 (group GG). As §10.2–§10.5, with thr
   clock (copies of a moving shape one frame apart) and by the 512 × 320 sharp copies against the
   ring's 408 × 256 mip-blurred ones. `tools/fx_sweep.py`: 2916 renders of every effect, 0 differ.
 - **Example** `stack-lookback`: party-tracer as it opens now.
+- **One group** (the owner, mid-build: "detail on demand", row 1180): a migrated look-back's parts
+  land folded in one group, **look-back** — picture in, wake out, `+` to the parts; the tracers
+  starter lands its parts the same. H3 does the same for the dream.
 
-**Next: H3**, the dream as a hooked effect file, its `dream.*` ids to `fx.dream.*`, `darken`,
-`contrast` and `res` with it.
+**Next: H3** (its own session), the dream as a hooked effect file, its `dream.*` ids to
+`fx.dream.*`, `darken`, `contrast` and `res` with it — and, as row 1180, a saved dream's parts
+folded in one group.
 

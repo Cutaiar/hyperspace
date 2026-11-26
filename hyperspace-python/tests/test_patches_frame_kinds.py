@@ -261,7 +261,8 @@ def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
     entry = ui_graph.group_nodes(rig.panel, ["render:dream", "render:composite", "render:acid"])
     assert entry["nodes"] == ["render:dream", "render:composite", "render:acid"]
     rig.reg["dream.mix"].set_value(0.31)
-    assert ui_graph.save_patch(rig.panel, "group.1", "dream wash", "") is None
+    # (party-wake opens with its look-back folded as group.1: plan 90 H2)
+    assert ui_graph.save_patch(rig.panel, entry["id"], "dream wash", "") is None
     doc = rig.lib.read_patch("dream-wash")
     assert patches.check(doc) == []
     assert {patches.entry_name(n) for n in doc["nodes"]} == {"dream", "composite", "acid"}

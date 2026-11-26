@@ -2315,6 +2315,11 @@ LB_RESIZE = 5                    # `view.RESIZE_SIDES[5]`: 512 on the long side 
 LB_MATTE = {"from": 3, "key": 0.125, "soft": 0.125, "ramp": 1, "invert": False, "feather": 0.0}
 LB_KEY = {"measure": 0, "level": 0.0, "soft": 1.0, "keep": True, "feather": 0.0,
           "invert": False, "ramp": 1}
+# the owner (2026-11-26): a look-back's parts land folded in one group of that
+# name — detail on demand, picture in and picture out (a loadable patch's
+# `groups`; a fragment's spawn groups what it lands itself)
+LB_GROUP = "look-back"
+LB_ROLES = ("curve", "fade", "resize", "delay", "deep", "trail", "matte", "cut", "cover_cut")
 LOOKBACK_NOTE = ("{old} is public parts now (plan 90): {chain} — the same look, what it keeps "
                  "at 512 on the long side; save to keep it")
 LB_ECHO_NOTE = "{pin} is {read} now (plan 90): a Read of {delay}, at {at}, nearest"
@@ -2813,6 +2818,33 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
                     continue
                 q["from"] = src
             out_ports.append(q)
+    if ports is None and parts:
+        groups = list(out_rest.get(GROUPS_KEY) or []) if isinstance(
+            out_rest.get(GROUPS_KEY), list) else []
+        top = max((group_number(g.get("id")) for g in groups if isinstance(g, dict)),
+                  default=0)
+        groups = [dict(g) if isinstance(g, dict) else g for g in groups]
+        made = 0
+        for old in parts:
+            members = [f"render:{parts[old][r]}" for r in LB_ROLES if r in parts[old]]
+            held = {m for g in groups if isinstance(g, dict) for m in g.get("nodes") or ()}
+            # (a group of the file held the look-back — its node is the delay's
+            # now: the parts join it, a node being in one group at most)
+            home = next((g for g in groups if isinstance(g, dict)
+                         and f"render:{parts[old]['delay']}" in (g.get("nodes") or ())), None)
+            if home is not None:
+                home["nodes"] = [*home["nodes"], *(m for m in members if m not in held)]
+                continue
+            members = [m for m in members if m not in held]
+            if not members:
+                continue
+            top += 1
+            made += 1
+            groups.append({"id": f"group.{top}",
+                           "name": LB_GROUP if made == 1 else f"{LB_GROUP} {made}",
+                           "nodes": members, "open": False})
+        if groups:
+            out_rest[GROUPS_KEY] = groups
     return out_nodes, out_wires, out_rest, out_ports, out_keys, notes
 
 

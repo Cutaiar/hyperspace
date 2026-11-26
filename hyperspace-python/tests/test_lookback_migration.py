@@ -292,3 +292,55 @@ def test_the_parts_draw_whatever_the_master_switch_said():
     assert v["fx.mix"] == 1.0 and v["fx.acid.mix"] == pytest.approx(0.4)
     assert v["fx.acid.on"] is True
     assert any("fx.mix" in n and "parts too" in n for n in notes)
+
+
+# ---------------------------------------------------------------- one group (owner, plan 90 H2)
+
+def test_a_look_back_lands_folded_in_one_group_of_its_parts():
+    """The owner (2026-11-26): the parts a look-back becomes are detail on
+    demand — one folded group, picture in and picture out, `+` away from
+    the parts. Its number is past every group the file named; the Reads
+    of its echo pins are the patch's, not the group's."""
+    doc = {"schema": "hyperspace.loadable/12", "name": "t",
+           "graph": {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid"}],
+                     "wires": [{"from": "scene", "to": "lookback.image"},
+                               {"from": "scene", "to": "lookback.occluder"},
+                               {"from": "lookback", "to": "acid.image"},
+                               {"from": "lookback.echo.2", "to": "shape.faces"},
+                               {"from": "acid", "to": "output.all.image"}]},
+           "values": {"dream.echoes": 8},
+           "groups": [{"id": "group.4", "name": "mine", "nodes": ["render:acid"], "open": True}]}
+    got, _ = graphmigrate.lookbacks(doc)
+    assert got["groups"][0] == doc["groups"][0]
+    g = got["groups"][1]
+    assert g["id"] == "group.5" and g["name"] == graphmigrate.LB_GROUP and g["open"] is False
+    assert g["nodes"] == ["render:fade", "render:resize", "render:delay", "render:trail",
+                          "render:matte", "render:cut"]   # (no faces: no cover cut)
+    assert doc["groups"] == [{"id": "group.4", "name": "mine", "nodes": ["render:acid"],
+                              "open": True}]        # (pure)
+
+
+def test_an_old_look_back_file_opens_with_its_group(tmp_path):
+    from hyperspace import headless
+    raw, notes, _ = headless.resave(TRACER, tmp_path / "a")
+    groups = json.loads(raw)["groups"]
+    assert [(g["name"], g["open"]) for g in groups] == [(graphmigrate.LB_GROUP, False)]
+    assert "render:trail" in groups[0]["nodes"] and "render:cut.2" in groups[0]["nodes"]
+    assert not [n for n in notes if n.startswith("groups:")], notes
+
+
+def test_a_look_back_a_group_of_the_file_held_brings_its_parts_into_it():
+    """Old files could group the look-back itself (`render:lookback`): its
+    parts join that group — a node is in one group at most — and no
+    second group is made."""
+    doc = {"schema": "hyperspace.loadable/12", "name": "t",
+           "graph": {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid"}],
+                     "wires": [{"from": "scene", "to": "lookback.image"},
+                               {"from": "lookback", "to": "acid.image"},
+                               {"from": "acid", "to": "output.all.image"}]},
+           "values": {"dream.echoes": 8},
+           "groups": [{"id": "group.1", "name": "mine",
+                       "nodes": ["render:acid", "render:lookback"], "open": True}]}
+    got, _ = graphmigrate.lookbacks(doc)
+    assert got["groups"] == [{"id": "group.1", "name": "mine", "open": True, "nodes": [
+        "render:acid", "render:delay", "render:fade", "render:resize", "render:trail"]}]

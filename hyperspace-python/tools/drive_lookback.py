@@ -9,7 +9,7 @@ printed beside the frames.
 
 with `stack-lookback` copied into `<h>/library/loadable/field-examples/` first.
 Prints one line per patch: its frame, its load notes, `graphview.unreached`
-and `ui_fx.groups`."""
+and `ui_fx.groups`; first, folded, the loadable patch's groups (the look-back's one)."""
 
 from hyperspace import graphview, ui_fx
 
@@ -25,6 +25,8 @@ def script(d, panel):
         notes = [x[:90] for x in getattr(lp, "notes", [])]
         yield from d.wait(60)
         n += 60
+        print(f"[lookback] {name} frame {n}: folded, groups "
+              f"{[(g['name'], g['open'], len(g['nodes'])) for g in lp.groups]}", flush=True)
         panel.select_graph_node("render:trail")
         yield from d.park()
         yield from d.wait(40)
