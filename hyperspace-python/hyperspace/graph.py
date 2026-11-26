@@ -6429,10 +6429,6 @@ class Effect(Node):
     def reads(self, frame: Frame) -> bool:
         src = self.inputs["image"]
         if src is None:
-            # (plan 90 H2: a stack reader — Trail, Read — reads what its delay does)
-            stack = self.inputs.get(STACK_PORT)
-            if stack is not None:
-                return stack.reads(frame) and self.on(frame)
             return self.generates(frame) and self.on(frame)
         return src.reads(frame)
 
