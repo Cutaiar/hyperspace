@@ -534,3 +534,44 @@ recursions a performer draws, and the dream's own hold for the dream.
     coverage mid-ramp). Add a **linear** shape to the key — the classic luma-as-alpha, useful on
     any light-on-black picture — or accept the difference? [Rec] **add the linear shape**: a
     choice of the key's, appended, general.
+
+## 8. The owner's goal, restated (2026-11-26): less duplication — overrules §4 and §7 where they differ
+
+> "Recommendations look okay, generally. My goal is to reduce the degree by which the dream /
+> echo subsystem is duplicitous of the other primitives we have in the system."
+
+§3–§7's recommendations stand (Q15 Remap, Q16 drop, Q17 one Hold, Q18 16 : 10, Q19 linear
+key: accepted as recommended). Asked of §7's design in turn — *what is still a second copy of
+something the house has?* [V] — three things are:
+
+| Still a copy | Of what | Instead [Rec] |
+| --- | --- | --- |
+| **Record** beside **Delay** | a delay is a stack one deep (plan 67 §7.1): two nodes that remember past frames, two buffers, two write passes, two "runs after every reader" rules (`Capture.after`, `DelayWrite`) | **one maker, the Delay**, with **Depth** (1 today's) and **Gap** (0 today's). Its output is a stack; a stack wired where a picture is taken is promoted to its newest entry (plan 67 §1 rule 4), so every saved delay draws as it does. The look-back is a Delay of depth 32. In audio terms, a multi-tap delay: an echo is a tap |
+| **Read**, **Trail** and the **dream** as node classes of their own (`EchoNode`, `History`, `DreamNode`, `Dreamer`, `DREAM_FS`) | the effect: a file with knobs, `on`, `mix`, `blend` from the one library, a strip on the FX pane, a preview, fields into any knob (#497), a Python half where it needs one (`// @hook`, plan 63's Mandelbrot) | **all three are effect files.** Read and Trail are plain GLSL taking a stack (`// @takes image stack`: fx binds a `sampler2DArray` and the stack's count and ages, read through `_lib.glsl`'s `stack_at`). The dream is `dream.glsl` with a Python half: its hook submits the input when the worker is idle and binds the newest result; the file returns it; the effect's own `mix` and `blend` lay it back. Read's **At** takes a field because every effect knob does — that *is* Time Displace, with no line of its own |
+| The **LOOKBACK page / pane section** (`ui_lookback`), the `dream.*` prefix split (`LOOKBACK_KEYS`, `is_lookback_knob`, `dream_owner`, `DREAM_SHARE`, `declare_lookbacks`), GRAPH's look-back area, echo pins and dream starters | the FX pane's strips, the effect's `fx.<file>.*` ids, GRAPH's ordinary nodes | **retired**: the readers and the dream are drawn, saved and routed as every effect is; the Delay as the delay is |
+| Trail's **Count** beside the Delay's **Depth** | two knobs for "how many" | **Depth alone**: the trail reads all its stack holds (`dream.echoes` → Depth) |
+
+**What remains new**, and why it cannot be an existing thing: the **stack** as a port type
+(a picture is one entry; a field is space, not time), the Delay's Depth and Gap, and the
+binding of a stack into an effect file. Everything else the dream and the echoes did is a
+public primitive's.
+
+**What remains the dream's own**, and why: the net's gradient pass, its octaves and its
+Hold (§7.2) — the recursion that makes it a dream — and its worker thread. Its ids move to
+`fx.dream.*` (`dream.layer` → `fx.dream.layer`, …), its `mix` / `blend` / `on` are the
+effect's, and "one live dream" is said by its hook on a second instance.
+
+**The build, again:** H1 the stack type, the Delay's Depth and Gap on a texture array, the
+stack binding in fx, Read and Trail as files, picture Remap, the key's linear shape; H2 the
+look-back and echoes migrated onto them, and `History`, `Capture`, `EchoNode`, the atlas,
+`ui_lookback` and the prefix split deleted; H3 the dream as a hooked file, migrated, and
+`DreamNode`, `Dreamer`, `DREAM_FS` deleted; H4 Time Displace as Read + a field, #488 closed.
+
+### 8.1 Questions
+
+20. **One maker**: the look-back merged into the **Delay** (Depth, Gap; a stack promoted to its
+    newest where a picture is taken)? Its name **Delay** [Rec] — the word the graph and audio
+    already use — or Look-back.
+21. **Readers and the dream are effect files**, their knobs `fx.<file>.*` (saved `dream.*` and
+    `dream.<n>.*` ids migrated), the LOOKBACK page retired into the FX pane? [Rec] yes.
+22. **Depth is the only count**: the trail reads all the stack holds? [Rec] yes.
