@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-24
+## v1.3 — 2026-11-25
 
 ### Panel
 
@@ -24,6 +24,7 @@
 - Ctrl-C in the terminal quits the app as Esc or Q do: no traceback, the audio and devices are closed and the window spots saved; a second Ctrl-C more than 2 s later quits at once (#456)
 - Nudge chips each open their own popup, and a patch strip's save chip no longer covers ▶ in a narrow pane (#414)
 - Sliders show what they hold: a centred value (−1…+1) fills from 0 and a multiplier from 1, each with a detent a drag snaps to within 6 px, and a whole-number one (Taps, Segments) has a tick per step; the pad's knobs read the same (#469)
+- The control window costs about a third less CPU a frame (median 5.8 → 3.9 ms on a busy patch): the panel keeps what hasn't changed and draws in C++, ⌘Z's bookkeeping only looks for changes on a frame where something was written, and the pane's switcher and footer are cheaper; nothing on screen moves; restart after pulling (#502, #506, #510, #512)
 
 ### Displays
 
@@ -106,11 +107,16 @@
 - Tidy (the chip, now **Turbo Tidy**, with flames on hover) lays GRAPH out left to right by signal flow — controllers and audio, then modulation, picture makers, effects, outputs — with about half the cable crossings; a cable that runs backward is drawn as a sling under (or over) the nodes it spans, and a tidied graph is wider and taller than before (#463)
 - Adding an effect opens **effects…**, a picker of tiles grouped by family: each shows the effect over a test card and plays its loop on hover, search finds by name or tip and Enter takes the first match; it replaces the effects ▸ submenu in the add menu and a cable's insert ▸ (#461)
 - An effect that isn't wired yet still shows a thumbnail, through its input or the test card, and only effects that read a second picture (Blend, Displace) have an `aux` port; a saved aux wire still loads (#461)
-- A **gpu cost** chip on GRAPH's head marks every render node by its GPU time: the costlier, the brighter, with a badge ("#1 · 2.10 ms" for the top three) and the frame's total under the head; a node that drew nothing says "made nothing"; off by default and costs nothing when off (#470)
+- A **gpu cost** chip on GRAPH's head marks every render node by its GPU time: the costlier, the brighter, with a badge ("#1 · 2.10 ms" for the top three) and the frame's total under the head; a node that drew nothing says "made nothing"; off by default and costs nothing when off; its badges sit on the node's top edge, never half hidden under it (#470, #496)
 - **black is clear**, on any picture node's menu (or MEDIA for a channel), makes the picture's dark parts see-through, so fire on black no longer covers the scene with a black box; tune it with `key.<node>.level`, `soft`, `feather`, `keep` and `invert`, and a composite can now lay **screen** (#479)
 - The copy node is gone: an effect runs on more pictures through its own slots, extra port rows on the one node sharing its knobs — **add slot** / **remove slot k** on its menu, **slot on ▸** in the picker, or select it and press ⌘C then ⌘V; saved copies turn into slots at load (patches move to `/12`) (#478, #487)
 - Selecting the hands node shows the whole HANDS page; the shape's node holds `camera.*` and the first scene's holds `eye.*`, and the separate camera node is gone (#486)
 - Nodes with nothing to say say nothing: no grey "point … here" chip on a node with no params, and no "not live" lines on picture nodes (#484)
+- A slimmer GRAPH head: the eight area chips move into an **areas** menu, and expand all, patched only, patch only, output behind, tint cables and gpu cost into a **canvas** menu whose chip says what's on ("canvas: patched only · patch only"); the counts and warnings sit beside them, and nothing runs off the page's edge (#511)
+- A node's buttons (+, −, all ports, group folds) appear when you hover, select or press it, or move focus with the keys or a pad; off hover their words stay, faint, and no node changes size (#505)
+- Zoomed far out (words under 6 px), nodes keep their size, wired pins, cables and thumbnails but drop the unreadable words, + / − and unwired pins, and a node off the canvas draws only its wired pins — zoom in to reach them (#507)
+- Node thumbnails refresh at 25 Hz, spread over the frames, instead of every frame, and field thumbnails measure their range once every 30 frames as meant, not every few — which had stalled the GPU nearly every frame (#495, #508)
+- A delay node can take its picture less often: **every** picks frames, Hz or a tempo step (1/16 … 4 bars), with **frames** (1–120) and **hz** (0.1–120), and it holds the last picture between takes; saved with the patch as `delay[.n].every` / `.frames` / `.hz` (#514)
 
 ### Effects
 
@@ -124,10 +130,15 @@
 - Fields: a new green **field** wire and field nodes — **Point**, **Line**, **Rings**, **Spokes**, **Cells**, **Noise**, **To field**, **Waveform**, **Combine** and **Cell action** — build a distortion by hand, and Displace takes a field and gains **Split**; Wave and Blocks can be rebuilt this way, and five examples (`field-rings-lens`, `field-line-shear`, `field-self-bend`, `field-wave`, `field-blocks`) are in the library's `loadable/field-examples/` (#489, #490, #491)
 - A field node with nothing in its input says **wire a field into its input** instead of "reaches nothing", and the FX pane groups it under **fed by nothing**; a field node's thumbnail fills its square, so a small field no longer shows flat grey (#492)
 - **Noise** gains **Out flow** and **Drift**, **Scale** is a new field op, and a `field-trip` example rebuilds Trip warp from fields, near but not identical, while the Trip warp effect stays as it was (#493)
+- Any effect's knob can take a field: drop a field cable on the knob's row on GRAPH and it becomes value + depth × field at each pixel; the cable's menu has **depth ▸** (1, or ±⅛, ¼, ½ or all of the knob's range); choices, counts, clock rates and Mandelbrot's knobs refuse, saying why; example `field-knob`; restart after pulling (#497)
+- A picture effect with nothing wired into its input now says **fed by nothing — wire its input** on GRAPH and in the FX pane, as field nodes do, and a Mandelbrot with nothing in is no longer drawn faint (#501)
+- New **Colour** generator: one flat colour set on an HSV volume (Hue, Saturation, Value), with **Spin** to turn the hue on its own; wire it straight into an output, a composite or an aux (#501)
+- Hue cycle is retired: saved looks load as the new **Hue turn** effect turned by a band field (Line + Rings), within 2 levels of the old picture; a desk row on Spread now spans −4 … 4 and a row on Rings is dropped, and the load says so; example `hue-cycle`; restart after pulling (#509)
 
 ### Shapes
 
 - Nine fractals to zoom into forever with the same detail at every depth: the Sierpinski tetrahedron and 5-cell, the octahedron and icosahedron flakes, the Menger sponge, and Cantor dust and the Vicsek cross in 3D and 4D; VIEW's **Additive** switch draws one on the GPU, unsorted and glowing, instead of sorted (#460)
+- Fractals now draw **Additive** by default, which takes a heavy fractal patch's scene from about 21 ms to 8 ms a frame (#495)
 - A fist grabs a fractal as an object from outside; once you're inside it, the fist holds the space and moving it flies you through the fractal's 4D space, with no jump at any depth (#460)
 - A patch saves where you are inside a fractal (its dive) and loading it takes you back; a broken saved dive is refused with a note and the rest of the patch still loads (#460)
 - A **fractal** section (in **sections ▾**) holds a fractal's controls: where you are, **Detail**, **Reach**, **Near**, **Additive** (moved from VIEW) and **To the top**; Detail, Reach and Near are saved in a fractal patch (#466)
@@ -144,6 +155,8 @@
 - **Listen to video sound** says on its hover and under the toggle that the off-air look reacts to the on-air video's sound too (#416)
 - NDI between two Macs from the panel: MEDIA ▸ Live ▸ **Send output N** sends that output as `<this Mac> out N` (kept per Mac), and **Find NDI** on the other Mac lists it as `ndi:<Mac> out 1` to put in a channel — no config.toml edit or restart (#476)
 - Drag image or video files onto either window, or ⌘V an image, and they fill the next empty cells of the channel picked on MEDIA (a pasted image is saved in `<home>/media/`), one undo step (#477)
+- An Xbox 360 Kinect is a device: `kind = "kinect"` gives its live point cloud (`cloud:<role>`) and its depth picture as a media source (`kinect:<role>/depth`, colour too with `colors = true`), with a demo patch in `loadable/kinect/kinect-mirror`; needs `brew install libfreenect`, Logitech G Hub closed, and a restart (#503)
+- Select a Kinect's node on GRAPH and the side pane drives it by hand — tilt, LED, IR brightness, video off / colour / infrared, exposure, restart and reconnect, and near / far / centre / step / mirror for this run — with its telemetry and a top-down radar of what it reads; not yet tried on a real Kinect (#513)
 
 ### Hands
 
@@ -193,7 +206,10 @@
 - Fields: `graph.FIELD`, `// @makes field` / `// @takes <port> field`, `FieldEffect` and `FieldPicture`, the shared field pieces in `_lib.glsl` and `tools/fx_sweep.py` to prove a move byte for byte (#489); `shaders/fx/cellaction.glsl`, `tests/wavepatch.py` and `tests/blockspatch.py` (#490, #491)
 - `loadable.retaper_note`, `node_desk.PAD_BUTTONS` and `Bindings.node_buttons` (#468); `library.Install.save_named` (#481); `library.strays` and `NO_LIBRARY` (#480); `tools/copy_patches.py` (#482); `hands` joins `library.RETIRED_MODULES` (#485); `OWNERS["camera"]` is `"shape"` and `_eye_owner` (#486); `publish.ask_ndi` / `take_ask` with `<home>/publish.here.json` (#476); `ui_media.intake` / `paste` (#477)
 - `graph.unfed` and `graph.hungry_fields`, and `FxChain.field_range` for field thumbnails (#492); `tests/trippatch.py` (#493); `geometry.PLASTIC`, `_star_crossings` and an optional `geom()["corners"]` (#498)
-- Vercel builds both web projects again: the ignore step now builds whenever it can't compare, after every production deploy had failed since 2026-11-03; the old web app's link is `hyperspace-legacy.vercel.app` (#500)
+- Vercel builds both web projects again: the ignore step now builds whenever it can't compare, after every production deploy had failed since 2026-11-03; the old web app's only address is `hyperspace-legacy.vercel.app` (#500, #515)
+- `writes.py` (`Observed`, `ObservedDict`, `ObservedList`) marks param writes so `Undo.tick` fingerprints only a written frame, and `tests/conftest.py::undo_oracle` fails any change nothing marked; `hands/core.py` and `sequencer.py` may import `writes` (#506, #510); `imgui_gl.ControlRenderer` draws the panel in C++, with `tests/test_ui_on_change.py` on its memos (#502); `draw.icon(kept=, slot=)` (#512)
+- `graph.runs_unfed` is the one rule for running with no input, `graph.hungry` replaces `hungry_fields`, and `graph.FED_BY_NOTHING` (#501); a wired knob's pass gets its own program reading `knob_at`, `graphview.knob_pin`, and an optional `"depth"` on a wire (#497); `graphmigrate.hue_turns` / `retire_hue_cycle`, with `huecycle.glsl` kept in `shaders/fx/retired/` as the oracle (#509)
+- `ui_graph.Sketch` and `FAR_PX` (#507); `outputs.THUMB_HZ` and `PreviewTextures.due` (#508); `ui_graph.cost_badge_rect` (#496); `kinect.py` (libfreenect through ctypes, `KinectDevice.request`, a frozen `Telemetry`) and `ui_kinect.py` (#503, #513); `view.DelayState`, `graph.delay_due`, `params.declare_delays` and `DELAY_GROUP` (#514)
 
 ## v1.2 — 2026-11-02
 
