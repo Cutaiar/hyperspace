@@ -6630,28 +6630,33 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
         order += [delay.name, trail]
         new.append((delay.name, f"{trail}.stack"))
         head, ins = trail, [f"{delay.name}.image", *ins]
-    dream_parts: tuple[str, str, str] | None = None
+    dream_parts: tuple[str, str, str | None] | None = None
     if dreams:
         # plan 90 (H3, Q31): the dream's chain, as a saved dream opens — a
-        # Resize keyed (brightness is coverage), the dream, a Fade at its mix
+        # Resize keyed (brightness is coverage), the dream, a Fade at its mix,
+        # laid over. On the tracers, added: the trail's own alpha is its
+        # coverage, so no key and no Fade — with no dream result the trail is
+        # added as it was (Devin on #523)
         resize = rgraph.ResizeAt(_next(spec, "resize"))
         doc["nodes"].append(resize.to_json())
         got = _new_node(edit, spec, doc, "effect", "dream")
         if isinstance(got, str):
             return got
         dream = got[0]
-        got = _new_node(edit, spec, doc, "effect", "fade")
-        if isinstance(got, str):
-            return got
-        fade = got[0]
-        doc[rgraph.KEYS_KEY] = sorted({*doc.get(rgraph.KEYS_KEY, ()), resize.name})
-        order += [resize.name, dream, fade]
-        new += [(resize.name, f"{dream}.image"), (dream, f"{fade}.image")]
+        fade = None
+        if not looks:
+            got = _new_node(edit, spec, doc, "effect", "fade")
+            if isinstance(got, str):
+                return got
+            fade = got[0]
+            doc[rgraph.KEYS_KEY] = sorted({*doc.get(rgraph.KEYS_KEY, ()), resize.name})
+        order += [resize.name, dream, *([fade] if fade else [])]
+        new += [(resize.name, f"{dream}.image"), *([(dream, f"{fade}.image")] if fade else [])]
         if head is not None:
             new.append((head, f"{resize.name}.image"))
         else:
             ins = [f"{resize.name}.image", *ins]
-        head = fade
+        head = fade or dream
         dream_parts = (resize.name, dream, fade)
     new.append((head, f"{comp.name}.over"))
     if src is not None:
@@ -6678,11 +6683,12 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
         resize, dream, fade = dream_parts
         gm = graphmigrate
         _set_after_landing(edit, dream, on=True, mix=1.0, blend=0)
-        _set_after_landing(edit, fade, on=True, mix=1.0, level=gm.DREAM_DEFAULTS["mix"])
         _set_delay_after_landing(edit, resize, size=gm.DREAM_RESIZE[gm.DREAM_DEFAULTS["res"]],
                                  aspect=0, fit=0, filter=0)
-        _set_params_after_landing(edit, {f"key.{resize}.{k}": x
-                                         for k, x in gm.DREAM_KEY.items()})
+        if fade is not None:
+            _set_after_landing(edit, fade, on=True, mix=1.0, level=gm.DREAM_DEFAULTS["mix"])
+            _set_params_after_landing(edit, {f"key.{resize}.{k}": x
+                                             for k, x in gm.DREAM_KEY.items()})
     # (the owner, 2026-11-26: one primitive, picture in and picture out, folded
     # as a migrated look-back or dream is — "trail", or "dream" with a dream)
     if edit._groups() is not None:

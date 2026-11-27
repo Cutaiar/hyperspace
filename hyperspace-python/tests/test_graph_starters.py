@@ -157,21 +157,21 @@ def test_tracers_land_as_one_folded_group_and_the_dream_its_own(tmp_path):
     assert got == [
         ("trail", ["render:delay", "render:trail", "render:composite"], False),
         (graphmigrate.DREAM_GROUP, ["render:delay.2", "render:trail.2", "render:resize",
-                                    "render:dream", "render:fade", "render:composite.2"],
-         False)]
+                                    "render:dream", "render:composite.2"], False)]
 
 
 def test_tracers_and_dream(tmp_path):
-    """Plan 90 H3 (Q31): the trail dreamed by the dream's own chain — a
-    keyed Resize, the dream, a Fade at the dream's mix — added on."""
+    """Plan 90 H3 (Q31): the trail through a Resize into the dream, added on.
+    The trail's own alpha is its coverage — no key, no Fade (Devin on #523):
+    with no dream result the trail is added as it was, faint pixels kept."""
     rig, e, pushed = wired_rig(tmp_path, SCENE)
     assert e.starter("tracers+dream") is None
     assert wired_wires(rig) == TRACED - {("trail", "composite.over")} | {
-        ("trail", "resize.image"), ("resize", "dream.image"), ("dream", "fade.image"),
-        ("fade", "composite.over")}
+        ("trail", "resize.image"), ("resize", "dream.image"), ("dream", "composite.over")}
     assert {"kind": "composite", "blend": "add"} in _entries(rig)
+    assert "resize" not in rig.loaded_patch.graph.spec.keys
     assert pushed == ["starter: tracers + dream"]
-    assert e.placed == ("delay", "trail", "resize", "dream", "fade", "composite")
+    assert e.placed == ("delay", "trail", "resize", "dream", "composite")
 
 
 def test_a_second_tracers_is_its_own_parts(tmp_path):
