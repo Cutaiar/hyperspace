@@ -89,8 +89,10 @@ float key_measure(int measure, vec3 rgb) {
     return measure == 1 ? dot(rgb, vec3(0.2126, 0.7152, 0.0722))
                         : max(rgb.r, max(rgb.g, rgb.b));
 }
-float key_between(float lo, float hi, float m, int ramp) {
-    return ramp == 1 ? clamp((m - lo) / (hi - lo), 0.0, 1.0) : smoothstep(lo, hi, m);
+// (`width` > 0 given, not the upper edge: a width too small to move `lo` in
+// float32 would make the linear ramp 0 / 0 at `lo` — Devin on #520)
+float key_between(float lo, float width, float m, int ramp) {
+    return ramp == 1 ? clamp((m - lo) / width, 0.0, 1.0) : smoothstep(lo, lo + width, m);
 }
 """
 
@@ -105,7 +107,7 @@ uniform int u_ramp;        // view.KEY_RAMPS: 0 smooth, 1 linear (plan 90: brigh
 float key_ramp(vec3 rgb) {
     float m = key_measure(u_measure, rgb);
     float k = u_soft <= 0.0 ? (m > u_level ? 1.0 : 0.0)
-                            : key_between(u_level, u_level + u_soft, m, u_ramp);
+                            : key_between(u_level, u_soft, m, u_ramp);
     return u_invert != 0 ? 1.0 - k : k;
 }
 """
