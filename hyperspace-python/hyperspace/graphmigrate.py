@@ -2825,13 +2825,13 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
                   default=0)
         groups = [dict(g) if isinstance(g, dict) else g for g in groups]
         made = 0
-        for old in parts:
-            members = [f"render:{parts[old][r]}" for r in LB_ROLES if r in parts[old]]
+        for role in parts.values():
+            members = [f"render:{role[r]}" for r in LB_ROLES if r in role]
             held = {m for g in groups if isinstance(g, dict) for m in g.get("nodes") or ()}
             # (a group of the file held the look-back — its node is the delay's
             # now: the parts join it, a node being in one group at most)
             home = next((g for g in groups if isinstance(g, dict)
-                         and f"render:{parts[old]['delay']}" in (g.get("nodes") or ())), None)
+                         and f"render:{role['delay']}" in (g.get("nodes") or ())), None)
             if home is not None:
                 home["nodes"] = [*home["nodes"], *(m for m in members if m not in held)]
                 continue
