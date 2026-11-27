@@ -101,7 +101,7 @@ void main() {
     } else {
         v = key_measure(u_from == 3 ? 0 : 1, c.rgb);    // peak, or luma
     }
-    float m = u_soft > 0.0 ? key_between(u_key - u_soft, u_key + u_soft, v, u_ramp)
+    float m = u_soft > 0.0 ? key_between(u_key - u_soft, 2.0 * u_soft, v, u_ramp)
                            : (v >= u_key ? 1.0 : 0.0);
     if (u_invert != 0) m = 1.0 - m;
     f_color = vec4(m, 0.0, 0.0, 1.0);
