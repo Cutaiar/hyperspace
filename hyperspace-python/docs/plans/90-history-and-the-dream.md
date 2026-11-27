@@ -776,3 +776,43 @@ afterwards, without needing to think about darkening, contrasts, masks". Measure
 33. **Old dream presets** (module presets of the retired `dream` group, `<library>/patches/dream/`).
     **Answer: retired** — left on disk, no longer listed or opened; the library says once that they
     were the retired dream group's. (An `fx` group preset would reset every effect's values.)
+
+### 12.2 H3 built (2026-11-27)
+
+Rows 1181–1185, hand checks 969–975 (group GH).
+
+- **The dream is an effect file.** `shaders/fx/dream.glsl` (`// @hook dream`) and its Python half
+  `dreamhook.py` (no torch): pull the newest result, submit the input — read back once, at its own
+  size — only when the worker takes a job and at most once a frame, with the knobs (the worker reads
+  no registry); the file returns the result, the effect's `mix` (1) and `blend` (mix) lay it back.
+  The worker dreams RGBA: Hold blends rgba (1 holds nothing), the gradient gated by the held alpha —
+  alpha is coverage (§7.2); the stability clamp only below Hold 1, its ceiling by the gate's
+  coverage. One live dream, a second passing through, said by its hook; what a hook says is its
+  node's words. Deleted: `DreamNode`, `DreamAt`, the `dream` kind (an old entry reads as the effect),
+  `Dreamer`, `DreamState`, `DREAM_FS`, the `dream.*` params, the worker's mask, the LOOKBACK page.
+- **Saved dreams** open as their chain, folded as **dream** (`graphmigrate.dreams`, the ladder's last
+  step; `split_retired`; `patches._retire_dreams`): Resize (keyed, the old mask's 4 × brightness) →
+  Dream → Hue turn / Palette / Curve where off neutral or driven → Fade (mix × (1 − darken)) →
+  Composite over. Ids to `fx.dream.*` or the parts, rows and macros with their reach; `res`,
+  `mask_decay`, `tint_from` said. A dream off and undriven drew nothing: left out, said. The master
+  switch compensated as H2's (`master_switch`, now shared). Old dream presets retired (Q33).
+- **Starters** land the same chain folded (**dream**); the tracers' group is **trail** (Q29).
+- **Found on the way.** `split_retired` (the golden rig's and `wired_of`'s road) must end as the
+  ladder does, or a rig draws the old dream's entry as a bare effect over the whole picture
+  (`dream_proof` caught it: acid-scene lit 100 %). `deck.dreams` read `output.all` as an instance
+  (the app run caught it). A file's whole-number knobs saved as floats land whole.
+- **Proof.** `tests/test_dream_effect.py` (the effect through the real renderer, a numpy worker),
+  `tests/test_dream_migration.py` (every mapping; party-wake through the library's own load and
+  save, byte-stable on a second save; every corpus and loadable file with no old dream left).
+  `tools/dream_proof.py`: the six repository files holding a dream through the base's code and this
+  branch's, a numpy worker in each recipe — mean difference ≤ 1 level, lit share within 2 points.
+  `tools/fx_sweep.py`: 2979 renders of every effect file on the base and here, 0 differ.
+  `tools/drive_dream.py` in the real app: party-wake and `dream-wake` open folded as trail and
+  dream, nothing unreached, the dream's node saying it has no worker (none in the cloud), the
+  starter landing its folded group.
+- **Example** `dream-wake`: party-wake as it opens now. `stack-lookback` re-saved in today's shape.
+- **Not checked here:** the real worker (torch on the Mac, 970); golden frames (972); the owner's
+  library (973).
+
+**Next: H4** — Time Displace as Read + a field on At (already `stack-slit`, H1): docs, a proof
+against #488's own shader as a test fixture, and #488 closed.

@@ -303,3 +303,30 @@ def test_an_old_frame_as_the_whole_ladder_ends_it_has_its_dream_as_parts():
     files = [e.get("file") or e.get("kind") for e in sec["nodes"]]
     assert "dream" in files and {"kind": "dream"} not in sec["nodes"]
     assert "resize" in files and "composite" in files
+
+
+def test_an_old_dream_file_loads_whole_through_the_library(tmp_path):
+    """End to end (REVIEW.md: a format change opens an old file whole): the
+    corpus's party-wake, through the library's own load and save, no unknown
+    id, no `dream.*` left; saved again, the same bytes and nothing said."""
+    from hyperspace import headless
+    raw, notes, _ = headless.resave(HERE / "corpus/loadable/party-wake.json", tmp_path / "a")
+    assert any("dream is public parts" in n for n in notes)
+    assert not any("unknown id" in n or n.startswith("graph:") for n in notes), notes
+    doc = json.loads(raw)
+    assert not [k for k in doc["values"] if k.startswith("dream.")]
+    assert {"kind": "dream"} not in doc["graph"]["nodes"]
+    assert {"kind": "effect", "file": "dream"} in doc["graph"]["nodes"]
+    assert [g["name"] for g in doc["groups"]] == ["trail", "dream"]
+    again = tmp_path / "again.json"
+    again.write_bytes(raw)
+    raw2, notes2, _ = headless.resave(again, tmp_path / "b")
+    assert raw2 == raw and notes2 == []
+
+
+@pytest.mark.parametrize("path", sorted((HERE / "corpus/loadable").glob("*.json")) + sorted(
+    (HERE.parent / "loadable").rglob("*.json")), ids=lambda p: p.stem)
+def test_every_saved_look_migrates_to_no_old_dream(path):
+    fwd = GM.forward(json.loads(path.read_text()), {})
+    assert {"kind": "dream"} not in fwd.doc["graph"]["nodes"]
+    assert not [k for k in fwd.doc.get("values", {}) if k.startswith("dream.")], path
