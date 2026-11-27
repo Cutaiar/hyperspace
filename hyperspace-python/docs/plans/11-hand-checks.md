@@ -9122,6 +9122,12 @@ Headless: `tests/test_delay_stack.py` (Read at each step back, a fraction blende
 
 **962. Curve and the linear ramp by eye.** (Mac) Add a Curve after anything bright and sweep **shape** from −1 to 1: lifted, as is at 0, then only the brightest parts. Key a channel on MEDIA with **ramp** linear. *Pass:* Curve never touches pure black or white, and Invert keeps a see-through picture see-through; the linear key fades in evenly where the smooth one eases. *Fail:* a colour shift at Shape 0, or a key that is not see-through on black.
 
+## GG. Matte on peak (row 1176, 2026-11-26)
+
+Headless: `tests/test_matte_peak.py`.
+
+**964. Matte on peak, linear.** (laptop, GRAPH) Add a Matte on the scene, **from** peak, **ramp** linear, key ⅛, soft ⅛, into a Cut's mask. *Pass:* the mask is white on the shape's lines and fades to black a quarter of the way down its brightness; smooth eases the same edge. A matte saved before (luma, smooth) looks as it did. *Fail:* any matte saved before that looks different.
+
 ## FT. The Kinect (row 1130, 2026-11-24)
 
 Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).

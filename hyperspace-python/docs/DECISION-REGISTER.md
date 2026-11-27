@@ -1017,6 +1017,7 @@ here; overturn → the change, then the same.
 | 1172 | The stack's readers are effect files: Read (At steps back, a field on At a time displace; Between) and Trail (Level, Fade half-life, Lay over / add), `@takes stack stack`, bound on unit 2; only they declare the stack | 960, 961 | owner — 2026-11-26 (plan 90 Q21, Q13) |
 | 1173 | Curve, a picture's remap with the lane modifier `curve`'s name and knobs (Shape 4^shape, Invert); contrast c is Shape log₄ c | 962 | owner — 2026-11-26 (plan 90 Q15) |
 | 1174 | Black is clear's ramp, appended: smooth (the default) or linear — brightness as coverage at level 0, softness 1 on peak | 962 | owner — 2026-11-26 (plan 90 Q19) |
+| 1176 | Matte gains Key's peak measure (`matte.from` 3, appended) and its ramp (`matte.ramp`: smooth, linear); one measure and one ramp for Key and Matte, written once (`glsl.KEY_SHAPE`) | 964 | owner — 2026-11-26 (plan 90 Q23) |
 
 "—": no hand check shows it; tests only.
 
@@ -16260,3 +16261,9 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **What.** `key.<node>.ramp` (appended: smooth, plan 87's and the default; linear), on graph keys and channel keys alike (`glsl.KEY_RAMP`, `media_tex.Key.ramp`, MEDIA's key rows). At level 0, softness 1 on peak, linear makes a pixel's brightness its coverage exactly — the look-back's and the dream's private rule (`POST_FS`, `DREAM_FS`), which H2 and H3 retire.
 - **Answer.** owner, 2026-11-26 (plan 90 Q19): the linear shape, appended, general.
 - **Judge it.** 962.
+
+### 1176. Matte's peak and ramp
+
+- **What.** `matte.from` gains peak (index 3, appended: a saved 0–2 keeps its source); `matte.ramp` (smooth, linear) is Key's ramp. The measure (peak, Rec. 709 luma) and the ramp between two values are written once (`glsl.KEY_SHAPE`: `key_measure`, `key_between`) and read by Key's pass and Matte's (plan 67 §3.11). A matte with the defaults draws as before (`tests/test_matte_peak.py`).
+- **Answer.** owner, 2026-11-26 (plan 90 Q23). The alternative, a mask union op (`max` of two masks), is used by nothing else.
+- **Judge it.** 964.

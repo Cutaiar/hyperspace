@@ -460,6 +460,7 @@ is the design and its answers; H1 the first piece.
 | **The stack's readers and the dream are effect files.** Read (At steps back; a field on At is a time displace) and Trail (by age, over by alpha or added) take a stack on a `stack` port, which takes a delay and nothing else; only they declare the stack. Depth is the one count | `read.glsl`, `trail.glsl`, `fx.STACK_HEAD`, `graph.STACK_IS_A_DELAYS` | owner (Q21, Q22); row 1172 |
 | **Curve is a picture's remap**, named and knobbed as the lane modifier `curve` (plan 67 §3.2: one name per operation); the old contrast is Shape log₄(contrast) | `curve.glsl` | owner (Q15, Remap); row 1173 |
 | **Black is clear has a ramp choice**, smooth (the default) or linear: at level 0, softness 1 on peak a pixel's brightness is its coverage — the look-back's and the dream's private rule, made a key's | `glsl.KEY_RAMP`, `key.<node>.ramp`, `media_tex.Key.ramp` | owner (Q19); row 1174 |
+| **One measure and one ramp for every key.** Matte gains Key's peak measure and its ramp; the GLSL is written once | `glsl.KEY_SHAPE`, `matte[.n].from` / `.ramp` | owner (Q23); row 1176 |
 
 ## Recursive geometry (plan 64)
 
