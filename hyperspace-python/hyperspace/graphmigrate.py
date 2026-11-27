@@ -1167,17 +1167,24 @@ def wired_of(wiring: G.Wiring, *, placements: bool = True, look: str = "off") ->
 
 def split_retired(section: Any, look: str, rest: dict | None = None) -> Any:
     """`split_lookback`, and the look-back it drew made public parts
-    (`retire_lookbacks`, plan 90 H2): an old frame as the whole ladder ends
+    (`retire_lookbacks`, plan 90 H2; its dream too, `retire_dreams`, H3): an old frame as the whole ladder ends
     it — `rest` the file's other keys (its values and rows: a contrast a row
     drives brings a Curve), none for a caller with no file (`wired_of`). A
     section with no look-back as it is."""
     out = split_lookback(section, look)
     if not isinstance(out, dict):
         return out
-    nodes, wires, _, _, keys, notes = retire_lookbacks(
+    nodes, wires, rest2, _, keys, notes = retire_lookbacks(
         list(out.get("nodes") or []), list(out.get("wires") or []), dict(rest or {}),
         keys=list(out.get(G.KEYS_KEY) or []))
-    if not notes:
+    # (plan 90 H3: and the dream it drew, its parts — on where the look was the
+    # dream drawn, whatever a caller with no file's values says)
+    if look == "dream":
+        vals = dict(rest2.get("values") or {})
+        vals.setdefault("dream.on", True)
+        rest2 = {**rest2, "values": vals}
+    nodes, wires, _, _, keys, dream_notes = retire_dreams(nodes, wires, rest2, keys=keys)
+    if not notes and not dream_notes:
         return out
     return {**out, "nodes": nodes, "wires": wires, **({G.KEYS_KEY: keys} if keys else {})}
 

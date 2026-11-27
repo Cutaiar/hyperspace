@@ -287,3 +287,13 @@ def test_old_dream_presets_are_retired_left_on_disk_and_said_once(tmp_path):
     lib.groups()
     assert lib.warning == ""                       # once
     assert old.exists()                            # left on disk
+
+
+def test_an_old_frame_as_the_whole_ladder_ends_it_has_its_dream_as_parts():
+    """`split_retired` (the golden rig's and `wired_of`'s road) ends as the
+    ladder does: the dream an old "dream" look drew is its parts too — on,
+    since that look was the dream drawn."""
+    sec = GM.split_retired(GM.wired_of(G.Wiring(), placements=False), "dream")
+    files = [e.get("file") or e.get("kind") for e in sec["nodes"]]
+    assert "dream" in files and {"kind": "dream"} not in sec["nodes"]
+    assert "resize" in files and "composite" in files

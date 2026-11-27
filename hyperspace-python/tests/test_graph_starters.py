@@ -143,11 +143,11 @@ def test_tracers_lay_the_trail_on_the_scene_where_it_went(tmp_path):
     assert _traced_values(rig) == (8, 1, 30.0, True, 1)          # 8 at 30 Hz, laid add
 
 
-def test_tracers_land_as_one_folded_look_back_group(tmp_path):
+def test_tracers_land_as_one_folded_group_and_the_dream_its_own(tmp_path):
     """The owner (2026-11-26, plan 90 H2): the tracers are one primitive —
     picture in, picture out — folded in a group named as a migrated
-    look-back's is, its parts a `+` away; in the starter's one undo step.
-    With the dream the dream stays outside (H3 groups it)."""
+    look-back's is ("trail", Q29), its parts a `+` away; in the starter's one
+    undo step. H3: tracers + dream fold whole, as "dream"."""
     from hyperspace import graphmigrate
     rig, e, _ = wired_rig(tmp_path, SCENE)
     e.loaded_patch = rig.loaded_patch                 # (as GRAPH's Edit is: `render_edit`)
@@ -155,17 +155,23 @@ def test_tracers_land_as_one_folded_look_back_group(tmp_path):
     assert e.starter("tracers+dream") is None
     got = [(g["name"], g["nodes"], g["open"]) for g in rig.loaded_patch.groups]
     assert got == [
-        (graphmigrate.LB_GROUP, ["render:delay", "render:trail", "render:composite"], False),
-        (graphmigrate.LB_GROUP, ["render:delay.2", "render:trail.2"], False)]
+        ("trail", ["render:delay", "render:trail", "render:composite"], False),
+        (graphmigrate.DREAM_GROUP, ["render:delay.2", "render:trail.2", "render:resize",
+                                    "render:dream", "render:fade", "render:composite.2"],
+         False)]
 
 
 def test_tracers_and_dream(tmp_path):
+    """Plan 90 H3 (Q31): the trail dreamed by the dream's own chain — a
+    keyed Resize, the dream, a Fade at the dream's mix — added on."""
     rig, e, pushed = wired_rig(tmp_path, SCENE)
     assert e.starter("tracers+dream") is None
     assert wired_wires(rig) == TRACED - {("trail", "composite.over")} | {
-        ("trail", "dream.image"), ("dream", "composite.over")}
+        ("trail", "resize.image"), ("resize", "dream.image"), ("dream", "fade.image"),
+        ("fade", "composite.over")}
+    assert {"kind": "composite", "blend": "add"} in _entries(rig)
     assert pushed == ["starter: tracers + dream"]
-    assert e.placed == ("delay", "trail", "dream", "composite")
+    assert e.placed == ("delay", "trail", "resize", "dream", "fade", "composite")
 
 
 def test_a_second_tracers_is_its_own_parts(tmp_path):
@@ -179,13 +185,36 @@ def test_a_second_tracers_is_its_own_parts(tmp_path):
 
 
 def test_dream_on_a_picture(tmp_path):
+    """Plan 90 H3 (Q31): the chain a saved dream opens as — Resize (keyed:
+    brightness is coverage) → Dream → Fade (its mix) → Composite over the
+    picture — folded in one group, "dream"."""
+    from hyperspace import graphmigrate
     rig, e, pushed = wired_rig(tmp_path, SCENE)
+    e.loaded_patch = rig.loaded_patch
     assert e.starter("dream") is None
     assert wired_wires(rig) == CHAIN - {("scene", ALL)} | {
-        ("scene", "dream.image"), ("scene", "composite.under"),
-        ("dream", "composite.over"), ("composite", ALL)}
+        ("scene", "resize.image"), ("resize", "dream.image"), ("dream", "fade.image"),
+        ("fade", "composite.over"), ("scene", "composite.under"), ("composite", ALL)}
     assert {"kind": "composite"} in _entries(rig)         # (blend over)
-    assert pushed == ["starter: dream on a picture"] and e.placed == ("dream", "composite")
+    assert pushed == ["starter: dream on a picture"]
+    assert e.placed == ("resize", "dream", "fade", "composite")
+    reg = rig.reg
+    assert reg["fx.dream.on"].value is True and reg["fx.fade.level"].value == pytest.approx(0.7)
+    assert reg["resize.size"].value == graphmigrate.DREAM_RESIZE[2]
+    assert reg["key.resize.soft"].value == pytest.approx(0.25)
+    assert "resize" in rig.loaded_patch.graph.spec.keys
+    assert [(g["name"], g["nodes"]) for g in rig.loaded_patch.groups] == [
+        ("dream", ["render:resize", "render:dream", "render:fade", "render:composite"])]
+
+
+def test_a_second_dream_is_its_own_parts(tmp_path):
+    """Plan 90 H3: a dream is an effect — a second lands as its own parts,
+    and its hook says "one live dream" as it runs."""
+    rig, e, _ = wired_rig(tmp_path, SCENE)
+    assert e.starter("dream") is None
+    assert e.starter("dream") is None
+    got = wired_wires(rig)
+    assert ("resize.2", "dream.2.image") in got and ("fade.2", "composite.2.over") in got
 
 
 def test_channel_to_backdrop(tmp_path):
@@ -232,8 +261,6 @@ def test_a_scene_feeding_two_ports_leaves_the_composite_unwired(tmp_path):
 
 
 @pytest.mark.parametrize("which,section", [
-    ("tracers+dream", {"frame": "wired", "nodes": [{"kind": "dream"}]}),
-    ("dream", {"frame": "wired", "nodes": [{"kind": "dream"}]}),
     ("backdrop", {"frame": "wired", "nodes": [{"kind": "backdrop"}]}),
 ])
 def test_one_of_each_is_refused_in_words(tmp_path, which, section):
@@ -274,7 +301,7 @@ def test_a_starter_lands_at_the_point_as_one_undo_step(page):
         assert lay["render:composite"] == [300 + 2 * graphview.COL_W, 350]
         assert len(lay) == len(was[1]) + 3              # nothing else placed or moved
         assert u.stack[-1].label == "starter: tracers"
-        assert [g["name"] for g in lib.loaded_patch.groups] == ["look-back"]
+        assert [g["name"] for g in lib.loaded_patch.groups] == ["trail"]
         assert u.undo()
     finally:
         undo.install(None)

@@ -6602,8 +6602,6 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
                              "and the backdrop's picture (wire it into a picture port)")
     looks = which in ("tracers", "tracers+dream")
     dreams = which in ("tracers+dream", "dream")
-    if dreams and "dream" in before:
-        return IN_ALREADY.format(label=label_of("dream"))
     unwired: list[str] = []
     if cable is None:
         src, dst, n = _scene_feed(doc)
@@ -6617,6 +6615,8 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
         wires = [x for x in wires if x["to"] != dst]
     order: list[str] = []
     new: list[tuple[str, str]] = []
+    ins = [f"{comp.name}.under"]
+    head = None
     if looks:
         # plan 90 (H2, Q28): the look-back's tracers from public parts — a
         # delay keeping `TRACERS_DEPTH` pictures at `TRACERS_HZ`, a Trail
@@ -6629,16 +6629,30 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
         doc["nodes"].append(delay.to_json())
         order += [delay.name, trail]
         new.append((delay.name, f"{trail}.stack"))
-        head, ins = trail, [f"{delay.name}.image", f"{comp.name}.under"]
-    else:
-        head, ins = "dream", ["dream.image", f"{comp.name}.under"]
+        head, ins = trail, [f"{delay.name}.image", *ins]
+    dream_parts: tuple[str, str, str] | None = None
     if dreams:
-        if looks:
-            new.append((head, "dream.image"))
-            ins = [x for x in ins if x != "dream.image"]
-        doc["nodes"].append({"kind": "dream"})
-        order.append("dream")
-        head = "dream"
+        # plan 90 (H3, Q31): the dream's chain, as a saved dream opens — a
+        # Resize keyed (brightness is coverage), the dream, a Fade at its mix
+        resize = rgraph.ResizeAt(_next(spec, "resize"))
+        doc["nodes"].append(resize.to_json())
+        got = _new_node(edit, spec, doc, "effect", "dream")
+        if isinstance(got, str):
+            return got
+        dream = got[0]
+        got = _new_node(edit, spec, doc, "effect", "fade")
+        if isinstance(got, str):
+            return got
+        fade = got[0]
+        doc[rgraph.KEYS_KEY] = sorted({*doc.get(rgraph.KEYS_KEY, ()), resize.name})
+        order += [resize.name, dream, fade]
+        new += [(resize.name, f"{dream}.image"), (dream, f"{fade}.image")]
+        if head is not None:
+            new.append((head, f"{resize.name}.image"))
+        else:
+            ins = [f"{resize.name}.image", *ins]
+        head = fade
+        dream_parts = (resize.name, dream, fade)
     new.append((head, f"{comp.name}.over"))
     if src is not None:
         new = [(src, p) for p in ins] + new
@@ -6655,16 +6669,38 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
             + (f" → {dst}" if dst else "")
             + (" — left unwired: " + "; ".join(unwired) if unwired else ""))
     why = _started(edit, doc, before, *order, label=label, said=said)
-    if why is None and looks:
+    if why is not None:
+        return why
+    if looks:
         _set_after_landing(edit, order[1], on=True, lay=TRACERS_LAY)
         _set_delay_after_landing(edit, order[0], depth=TRACERS_DEPTH, every=1, hz=TRACERS_HZ)
-        # (the owner, 2026-11-26: one primitive, picture in and picture out,
-        # folded as a migrated look-back is — the dream outside, H3's)
-        members = order[:2] + ([comp.name] if not dreams else [])
-        if edit._groups() is not None:
-            edit.land_group({"name": graphmigrate.LB_GROUP,
-                             "nodes": [f"render:{m}" for m in members]})
-    return why
+    if dream_parts is not None:
+        resize, dream, fade = dream_parts
+        gm = graphmigrate
+        _set_after_landing(edit, dream, on=True, mix=1.0, blend=0)
+        _set_after_landing(edit, fade, on=True, mix=1.0, level=gm.DREAM_DEFAULTS["mix"])
+        _set_delay_after_landing(edit, resize, size=gm.DREAM_RESIZE[gm.DREAM_DEFAULTS["res"]],
+                                 aspect=0, fit=0, filter=0)
+        _set_params_after_landing(edit, {f"key.{resize}.{k}": x
+                                         for k, x in gm.DREAM_KEY.items()})
+    # (the owner, 2026-11-26: one primitive, picture in and picture out, folded
+    # as a migrated look-back or dream is — "trail", or "dream" with a dream)
+    if edit._groups() is not None:
+        edit.land_group({"name": graphmigrate.DREAM_GROUP if dreams else graphmigrate.LB_GROUP,
+                         "nodes": [f"render:{m}" for m in order]})
+    return None
+
+
+def _set_params_after_landing(edit: Edit, values: dict) -> None:
+    """Params `values` (whole ids) set after the landing that declared them,
+    in the same undo step — as `_set_after_landing` does an effect's (plan 90
+    H3: a dream starter's key on its Resize)."""
+    reg = getattr(edit.graph, "reg", None) or edit.reg
+    if reg is None:
+        return
+    for pid, value in values.items():
+        if pid in reg:
+            reg[pid].set(value)
 
 
 def _set_delay_after_landing(edit: Edit, name: str, **values) -> None:
