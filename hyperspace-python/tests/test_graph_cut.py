@@ -123,8 +123,9 @@ def test_a_cut_is_a_picture_wherever_one_is_taken():
                                   *FACTORY_FRAME, nodes=nodes))
         assert not spec.notes, (dst, spec.notes)
     # … and never a mask
-    spec = _read(("channel.a", "cut.image"), ("cut", "lookback.cover"),
-                 ("scene", "lookback.image"), ("lookback", "output.2.image"))
+    spec = _read(("channel.a", "cut.image"), ("cut", "cut.2.mask"),
+                 ("scene", "cut.2.image"), ("cut.2", "output.2.image"),
+                 nodes=(CUT, {"kind": "cut", "instance": 2}))
     assert spec.notes and "put a matte between" in spec.notes[0], spec.notes
 
 

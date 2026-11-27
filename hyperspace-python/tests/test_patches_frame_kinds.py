@@ -2,10 +2,11 @@
 the rest are held by a patch, so a "dream + fx + composite" patch exists.
 
 - what is refused still is the rig's (`FIXTURE_KINDS`) and the look's one camera;
-- a frame kind's params are the ones the canvas says are its, the look-back's
-  and the dream's split by key, the band scene's no node's;
-- what can be made twice is renamed (hands 1 lands as `hands.2`, a look-back
-  as `lookback.2`); what a frame holds one of keeps its name, and a host that
+- a frame kind's params are the ones the canvas says are its, every `dream.*`
+  the dream's (plan 90 H2: the look-back's knobs are retired, its trail is
+  public parts), the band scene's no node's;
+- what can be made twice is renamed (hands 1 lands as `hands.2`, a trail's
+  delay as `delay.2`); what a frame holds one of keeps its name, and a host that
   already has it refuses the spawn in words, nothing landed (the dream's is
   the sheet's since P2: tests/test_patches_replace_dream.py);
 - a spawn into an empty frame is the frame: every corpus loadable patch, whole.
@@ -24,7 +25,16 @@ from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as G
-from hyperspace import graphview, headless, params, patches, ui_graph, ui_routing, undo
+from hyperspace import (
+    graphmigrate,
+    graphview,
+    headless,
+    params,
+    patches,
+    ui_graph,
+    ui_routing,
+    undo,
+)
 from hyperspace.library import PATCHES
 from hyperspace.patches import Host, spawn
 from hyperspace.routing import Bindings
@@ -41,7 +51,8 @@ def rig(shell_rig):  # noqa: F811
 
 
 def wake_doc() -> dict:
-    return loadable("party-wake")
+    """party-wake as it opens (plan 90 H2: its look-back public parts)."""
+    return graphmigrate.forward(loadable("party-wake"), {}).doc
 
 
 def cut(name: str = "wake", ids=None) -> dict:
@@ -104,17 +115,13 @@ def test_save_still_refuses_the_camera_and_a_lane_envelope_in_words():
 
 # ---------------------------------------------------------------- whose params
 
-def test_the_leaf_and_params_share_the_look_backs_keys():
-    assert patches.is_lookback_key is params.is_lookback_key
-
-
 def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
     """Over the whole registry: where `patches._param_rows` gives a frame
     kind's param an owner it is the node the canvas puts it on
     (`graphview.OWNERS`, the dream's on the dream's since P2); no frame kind
     owns a shared meta group's param."""
     app = headless.make_app(tmp_path)
-    frame_kinds = ("scene", "shape", "backdrop", "pattern", "lookback", "dream")
+    frame_kinds = ("scene", "shape", "backdrop", "pattern", "dream")
     mem = patches._Members(frame_kinds)
     owned = 0
     for p in app.reg:
@@ -131,15 +138,16 @@ def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
     assert owned > 50
 
 
-def test_the_dream_and_a_look_back_split_dream_by_key():
+def test_the_dream_owns_every_dream_key_and_the_trails_parts_their_own():
+    """Plan 90 H2: no look-back splits `dream.*` — the dream owns it all,
+    `darken` and `contrast` included; the trail's parts own their own."""
     only_dream = patches._Members(("dream",))
-    only_look = patches._Members(("lookback",))
-    for member, yes, no in ((only_dream, "dream.mix", "dream.fade"),
-                            (only_look, "dream.fade", "dream.mix")):
-        assert member.owns(yes) and not member.owns(no)
-    second = patches._Members(("lookback.2",))
-    assert second.owns("dream.2.fade") and not second.owns("dream.fade")
-    assert not second.owns("dream.2.mix")
+    for pid in ("dream.mix", "dream.darken", "dream.contrast", "dream.k"):
+        assert only_dream.owns(pid), pid
+    assert not only_dream.owns("fx.trail.level") and not only_dream.owns("delay.depth")
+    trail, delay = patches._Members(("trail",)), patches._Members(("delay",))
+    assert trail.owns("fx.trail.level") and not trail.owns("dream.mix")
+    assert delay.owns("delay.depth") and not delay.owns("fx.trail.level")
 
 
 def test_a_frame_kinds_values_lift_and_keep_their_ids():
@@ -163,8 +171,8 @@ def test_a_dream_and_a_composite_lift_as_a_patch():
     assert {e["kind"] for e in doc["nodes"]} == {"dream", "composite"}
     assert doc["wires"] == [{"from": "dream", "to": "composite.over"}]
     assert {(p["id"], p["was"]) for p in doc["ports"]} == {
-        ("in", "scene"), ("in.2", "lookback"), ("out", "output.all.image")}
-    assert "dream.mix" in doc["values"] and "dream.fade" not in doc["values"]
+        ("in", "scene"), ("in.2", "cut.2"), ("out", "output.all.image")}
+    assert "dream.mix" in doc["values"] and "fx.trail.fade" not in doc["values"]
 
 
 def test_a_dream_patch_spawns_where_the_host_has_no_dream():
@@ -253,7 +261,8 @@ def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
     entry = ui_graph.group_nodes(rig.panel, ["render:dream", "render:composite", "render:acid"])
     assert entry["nodes"] == ["render:dream", "render:composite", "render:acid"]
     rig.reg["dream.mix"].set_value(0.31)
-    assert ui_graph.save_patch(rig.panel, "group.1", "dream wash", "") is None
+    # (party-wake opens with its look-back folded as group.1: plan 90 H2)
+    assert ui_graph.save_patch(rig.panel, entry["id"], "dream wash", "") is None
     doc = rig.lib.read_patch("dream-wash")
     assert patches.check(doc) == []
     assert {patches.entry_name(n) for n in doc["nodes"]} == {"dream", "composite", "acid"}
@@ -292,30 +301,28 @@ def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
         undo.install(None)
 
 
-def test_a_look_back_lands_as_a_second_look_back_with_its_own_knobs(rig):
-    """A look-back is made twice: `lookback.2`, `dream.2.*`; the host's
-    `dream.*` untouched. The section keeps the second one's entry though a
-    wire names it (it is what declares it)."""
+def test_a_trails_delay_lands_as_a_second_delay_with_its_own_knobs(rig):
+    """What can be made twice is renamed (plan 90 H2: the look-back's trail
+    is public parts, and its delay is such a part): `delay.2`, `delay.2.*`;
+    the host's `delay.*` untouched. Wire as saved reads it in where the
+    first one's picture came from."""
     on_graph(rig, "party-wake")
-    doc, refused = patches.lift(*rig.lib.loaded_patch.parts(), ["render:lookback"])
+    doc, refused = patches.lift(*rig.lib.loaded_patch.parts(), ["render:delay"])
     assert refused == []
     doc["name"] = "ring"
-    doc["values"] = {**doc["values"], "dream.gap": 3.0}
+    doc["values"] = {**doc["values"], "delay.depth": 3}
     doc["ports"] = [p for p in doc["ports"] if "to" in p]     # (its outlet's port is taken)
     slug = put(rig, doc)
-    host_gap = rig.reg["dream.gap"].value
+    host_depth = rig.reg["delay.depth"].value
     assert spawned(rig, slug) is None, ui_graph._state(rig.panel).get("note")
     spec = rig.lib.loaded_patch.graph.spec
-    assert "lookback.2" in patches.spec_names(spec)
-    assert rig.reg["dream.2.gap"].value == pytest.approx(3.0)
-    assert rig.reg["dream.gap"].value == host_gap
-    # wired: `_land` keeps the entry (it declares it), and the section reads
+    assert "delay.2" in patches.spec_names(spec)
+    assert rig.reg["delay.2.depth"].value == 3
+    assert rig.reg["delay.depth"].value == host_depth
     e = ui_graph.group_edit(rig.panel)
     assert e.wire_as_saved(rig.lib.loaded_patch.groups[-1]["id"]) is None, e.said
-    assert any(w.src == "scene" and w.dst == "lookback.2.image" for w in
+    assert any(w.src == "resize" and w.dst == "delay.2.image" for w in
                rig.lib.loaded_patch.graph.spec.wires)
-    assert any(x.get("kind") == "lookback" and x.get("instance") == 2
-               for x in rig.lib.loaded_patch.graph.spec.to_json()["nodes"])
 
 
 def test_hands_one_lifts_as_a_new_hands():

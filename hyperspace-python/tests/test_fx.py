@@ -282,7 +282,7 @@ def test_the_shared_helpers_are_written_once(ctx):
                 + "\nout vec4 f; void main() { f = vec4(hsv(0.1, 1.0, 1.0), luma(pal(0.0, "
                   "vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0)))); }")
     defs = re.compile(r"(?m)^(?:const\s+\w+\s+(TAU|LUMA)\b|vec3\s+(hsv|hsv2rgb|pal|hue_rotate|rotate_hue)\s*\()")
-    for text in (PATTERNS_GLSL.read_text(), (FX_DIR / "_lib.glsl").read_text(), lookback.post_fs("")):
+    for text in (PATTERNS_GLSL.read_text(), (FX_DIR / "_lib.glsl").read_text(), lookback.post_fs("", lookback.DREAM_FS)):
         assert not defs.search(text), defs.search(text).group(0)
     assert lookback.QUAD_VS is glsl.QUAD_VS
     assert "_common" in FxState()._scan()
@@ -449,8 +449,11 @@ def shell(tmp_path):
     @contextmanager
     def made():
         st = FxState()
+        dreamer = SimpleNamespace(state=DreamState())
+        # (plan 90 H2: the dream's state is `dreamer.state`; `lookback` the same
+        # object for a rig that still reads the old name)
         stand_in = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""),
-                                   lookback=SimpleNamespace(state=DreamState()))
+                                   dreamer=dreamer, lookback=dreamer)
         with build_rig(tmp_path, renderer=stand_in) as rig:
             imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
             yield rig, st, stand_in
@@ -1421,8 +1424,11 @@ def browsed_spec(section=BROWSED):
     """`section` as the wired frame a load of it is (what `Panel.graph_now`
     hands the FX pane)."""
     from hyperspace import graph as G
-    from hyperspace.graphmigrate import renamed, wired_section
-    return G.read_graph(wired_section(renamed(section), G.read_graph(section)))
+    from hyperspace.graphmigrate import placed_wires, renamed, split_lookback, wired_section
+    # (plan 90 H2: through the ladder's last steps — the look-back the old words
+    # drew with the dream off draws its picture untouched, so no look-back node)
+    return G.read_graph(split_lookback(placed_wires(
+        wired_section(renamed(section), G.read_graph(section))), "off"))
 EMPTY_GRAPH = "no effects in the graph — add one on graph (right-click the canvas)"
 
 
@@ -1609,7 +1615,7 @@ def test_an_old_loadable_loads_its_retired_ids_without_a_note(tmp_path):
     assert app.loaded_patch.load_doc(doc) == []
     assert not [n for n in app.loaded_patch.notes if "unknown" in n], app.loaded_patch.notes
     spec = app.loaded_patch.graph.spec
-    # (plan 35 T3: a wired frame — the run from the look-back into All
+    # (plan 35 T3: a wired frame — the run into All
     # outputs, the channels in the new ids)
     assert G.run_back(spec, "output.all.image") == ("warp", "acid")   # warp's lower
     assert G.run_of(spec, "pattern", "shape.faces") == ("kaleido",)

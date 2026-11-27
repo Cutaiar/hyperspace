@@ -25,12 +25,24 @@ from conftest import CORPUS, OWNER_PAD, OWNER_ROW, boot_home, far_pads, old_shap
 from legacy_chain import LegacyChain  # tests/legacy_chain.py — the frozen reference
 from test_analyzer import fixture_wavs, frames  # noqa: F401 — the fixture, re-exported
 
-from hyperspace import apc40, envelope, hands, lfo, loadable, routing, sequencer, tempo
+from hyperspace import (
+    apc40,
+    envelope,
+    graphmigrate,
+    hands,
+    lfo,
+    loadable,
+    routing,
+    sequencer,
+    tempo,
+)
+from hyperspace import graph as G
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, default_params
 from hyperspace.control import Control
 from hyperspace.deck import Mix, register_xfade
+from hyperspace.fx import FxState
 from hyperspace.geometry import RATE
 from hyperspace.library import Library
 from hyperspace.offline import load_wav
@@ -97,6 +109,22 @@ def corpus_doc(stem: str) -> dict:
     shipped until the library went one-tier, 2026-10-28), as its /7 file
     reads — test data the app never sees."""
     return json.loads((CORPUS / "loadable" / f"{stem}.json").read_text())
+
+
+def opened_doc(stem: str) -> dict:
+    """A corpus loadable patch as a load opens it (plan 90 H2: through the
+    loadable ladder, `graphmigrate.forward` — its look-back public parts,
+    its retired look-back knobs gone or on those parts)."""
+    return graphmigrate.forward(corpus_doc(stem), {}).doc
+
+
+def landed_ids(reg, doc: dict) -> set[str]:
+    """The registry's ids once `doc`'s graph has landed on it: its nodes'
+    own params declared (a delay's, a cut's, a keyed node's — plan 90 H2:
+    a migrated look-back's parts are such nodes), as a load settles them."""
+    section = loadable.GraphSection(reg)
+    section._settle(G.read_graph(doc["graph"], effects=set(FxState().specs)))
+    return set(reg.ids())
 
 
 def corpus_stems() -> list[str]:
@@ -1923,7 +1951,8 @@ def _instance_one(pid: str) -> str:
 def test_every_corpus_loadable_names_real_params_with_one_owner(tmp_path):
     """The routes of every corpus loadable patch (the files the build shipped, held
     to this check while it did) land on params the full registry has,
-    modulatable, with a scale it has too, and one owner per target."""
+    modulatable, with a scale it has too, and one owner per target — each
+    file as it opens (plan 90 H2: `opened_doc`)."""
     from hyperspace.graphmigrate import retired  # (plan 33 T7: read as wires)
 
     r = rig(tmp_path=tmp_path, full=True)
@@ -1931,7 +1960,8 @@ def test_every_corpus_loadable_names_real_params_with_one_owner(tmp_path):
     stems = corpus_stems()
     assert "legacy6" in stems and "lfo-breathe" in stems and "party-tumble" in stems
     for name in stems:
-        doc = corpus_doc(name)
+        doc = opened_doc(name)
+        ids = landed_ids(r.reg, doc)
         routes = [Binding.from_json(d) for d in doc["routes"]]
         for b in routes:
             target = _instance_one(b.target)
@@ -1946,13 +1976,16 @@ def test_a_converted_loadables_values_are_bases_a_loadable_would_save(tmp_path):
     """Was test_a_routing_presets_values_are_bases_a_theme_would_save (audit
     R1, decided (c)): a routing loadable patch could set any base its rows assume;
     made loadable patches (plan 13 WP5), every id in their `values` is a real,
-    persisted, non-alias patch param — a base a loadable patch save writes."""
+    persisted, non-alias patch param — a base a loadable patch save writes
+    (plan 90 H2: each file as it opens, `opened_doc`)."""
     from hyperspace.graphmigrate import retired  # (plan 33 T7: read as wires)
 
     r = rig(tmp_path=tmp_path, full=True)
     ids = set(r.reg.ids())
     for key in corpus_stems():
-        for pid in corpus_doc(key)["values"]:
+        doc = opened_doc(key)
+        ids = landed_ids(r.reg, doc)
+        for pid in doc["values"]:
             if retired(pid):
                 continue
             pid = _instance_one(pid)

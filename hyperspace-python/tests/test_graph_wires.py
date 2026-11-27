@@ -47,10 +47,13 @@ def unrescaled(notes: list[str]) -> list[str]:
     """A load's notes less plan 86's: a fixture from before the effect tapers has no
     units marker, and its rescaled depths are said (`loadable.retaper_note`). And
     less plan 67's: a fixture from before Hue cycle's retirement says it is Hue
-    turn now (`graphmigrate.HUE_TURN_NOTE`)."""
+    turn now (`graphmigrate.HUE_TURN_NOTE`). And less plan 90's: a fixture whose
+    old values drew a look-back says it is public parts now
+    (`graphmigrate.LOOKBACK_NOTE`)."""
     head = loadable.RETAPER_NOTE.partition("{count}")[0]
     hue = graphmigrate.HUE_TURN_NOTE.partition("{new}")[2][:40]
-    return [n for n in notes if not n.startswith(head) and hue not in n]
+    lb = graphmigrate.LOOKBACK_NOTE.partition("{chain}")[0].partition("{old}")[2]
+    return [n for n in notes if not n.startswith(head) and hue not in n and lb not in n]
 
 
 
@@ -279,8 +282,8 @@ def test_an_edit_lands_the_wire_through_the_loadable_and_says_its_refusals(tmp_p
     save writes; a wire that would be refused is refused in the note's
     words and nothing changes; dragging again into the same port replaces
     the wire; `unwire` takes it out. Plan 35 G: in the wired frame's ids —
-    the hands geometry `hands`, its layer `hands.layer`, the look-back
-    `lookback` — every wire of the frame an ordinary wire."""
+    the hands geometry `hands`, its layer `hands.layer`, the scene `scene`
+    — every wire of the frame an ordinary wire."""
     rig, stub, edit, pushed = _edit_rig(tmp_path)
     rig.loaded_patch.save_as("Base")
     base = rig.loaded_patch.graph.doc                  # (plan 36 T3: the startup loadable patch's /7)
@@ -309,8 +312,8 @@ def test_an_edit_lands_the_wire_through_the_loadable_and_says_its_refusals(tmp_p
     assert not [w for w in rig.loaded_patch.graph.spec.wires if w.node == "output.2"]
     # (plan 35 G: no default edge is left to refuse — a wire the section
     # does not have is the one refusal)
-    assert edit.unwire("lookback", "output.1.image") == graphview.NO_SUCH_WIRE.format(
-        wire="lookback → output.1.image")
+    assert edit.unwire("scene", "output.1.image") == graphview.NO_SUCH_WIRE.format(
+        wire="scene → output.1.image")
     # plan 36 T3: a D1 placement is the wires it stood for once loaded, so
     # a wire out of the effect is one more wire — the rest as it was
     put(rig.home, "Placed", graph={"nodes": [{"kind": "effect", "file": "palette",
@@ -611,7 +614,8 @@ def test_the_fixtures_load_clean_through_a_scratch_library(tmp_path):
 
 
 def test_the_words_say_the_wires():
-    """OUTPUT's "shows:" line and LOOKBACK's history line say the wires."""
+    """OUTPUT's "shows:" line says the wires. (Plan 90 H2: LOOKBACK's
+    history line, `lookback_words`, is retired with the look-back.)"""
     from hyperspace.ui import output_shows
 
     spec = G.read_graph(_fixture("wired-outputs")["graph"])
@@ -630,12 +634,6 @@ def test_the_words_say_the_wires():
     spec = G.read_graph(_fixture("hands-glass-only")["graph"])
     w = wired_wiring(spec.wiring())
     assert output_shows(S(), True, True, 1.0, w, n=2)[0].endswith(" · hands 2 over output 2")
-    # (plan 36 T4: a look-back drawn, the old words' on; what the history
-    # held laid under it is the composite's under now, while it records
-    # the scene)
-    assert G.lookback_words(wired_wiring(G.read_graph(
-        {"wires": _wires(("hands", "history.image"))}).wiring(), "trail")
-                            ) == "history: the scene"
 
 
 # ---------------------------------------------------------------- GL

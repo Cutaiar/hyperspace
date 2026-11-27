@@ -111,7 +111,7 @@ def boot(renderer=None) -> SimpleNamespace:
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(demo.HOME, period=0.0)
-    kw = {} if renderer is None else {"dream": renderer.lookback.state, "fx": renderer.fx.state}
+    kw = {} if renderer is None else {"dream": renderer.dreamer.state, "fx": renderer.fx.state}
     reg = build_registry(view, control, audio, lib.install, **kw)
     lib.attach(reg)
     return SimpleNamespace(chain=chain, control=control, audio=audio, view=view, lib=lib, reg=reg)
@@ -321,9 +321,7 @@ def shots(name: str, speed: bool = False, closed: bool = False) -> None:
             imgui.begin_combo, imgui.selectable = real_combo, real_sel
 
     draw(40)
-    lb = renderer.lookback
-    what = (f"{len(lb.thumbnails())} echoes at {lb.echo[0]}×{lb.echo[1]}, the stand-in's "
-            f"frame {renderer.dreamer.dream_frame} as the dream")
+    what = f"the stand-in's frame {renderer.dreamer.dream_frame} as the dream"
     try:
         if speed:
             speed_sheet()

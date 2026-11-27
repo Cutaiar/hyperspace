@@ -515,7 +515,7 @@ def test_a_value_moved_in_the_resaved_file_moves_the_picture(ctx, tmp_path):
 
 
 def _rig(ctx, timer_ctx=None):
-    """A renderer with an effect on, the look-back on and the hands on
+    """A renderer with an effect on, the echoes on (a delay and a Trail) and the hands on
     (test_outputs' rig), and a framebuffer."""
     from test_outputs import fbo, rig
 
@@ -552,19 +552,19 @@ def test_each_node_has_a_rolling_median_in_ms(ctx):
     assert r.stats["gpu_ms"] == {}                 # nothing read back yet
     _frames(ctx, r, f, 6)
     ms = r.stats["gpu_ms"]
-    # (plan 36 T4: the "add" composite laying the trail on — its one pass
-    # is timed as the look-back's)
-    assert r._graph.timed == ["scene", "lookback(cover)", "hands.layer", "lookback",
-                              "composite", "shown(warp)", "lookback(capture)", "output.1"]
+    # (plan 90 H2: the echoes are a delay read by a Trail — its write after
+    # the ends, the trail an effect with a line of its own)
+    assert r._graph.timed == ["scene", "hands.layer", "composite", "shown(warp)",
+                              "delay(write)", "output.1"]
     # plan 30 D0 (decision 5): the effect that ran has its own line, before its end
-    assert list(ms) == ["scene", "lookback(cover)", "hands.layer", "lookback", "composite",
-                        "warp", "shown(warp)", "lookback(capture)", "output.1"]
+    assert list(ms) == ["scene", "hands.layer", "trail", "composite", "warp", "shown(warp)",
+                        "delay(write)", "output.1"]
     assert all(v >= 0.0 for v in ms.values())
     assert sum(ms.values()) > 0.0       # (a driver may report a tiny pass as 0)
     assert r.stats["gpu_note"] == ""
     assert all(len(w) == 6 for w in r.timer._ms.values())     # read LAG frames late
     # the old counts are still there
-    assert r.stats["chain_runs"] == 1 and r.stats["captures"] == 1 and r.stats["layer"]
+    assert r.stats["chain_runs"] == 1 and r.stats["layer"]
     # the window rolls
     _frames(ctx, r, f, PassTimer.WINDOW + 5)
     assert all(len(w) == PassTimer.WINDOW for w in r.timer._ms.values())

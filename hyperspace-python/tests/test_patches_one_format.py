@@ -17,6 +17,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -106,16 +107,19 @@ def test_the_corpus_is_in_the_one_shape():
 def test_the_loadables_ladder_is_one_function_the_load_reads_through():
     """A whole loadable patch's steps (`seven`, `nine`, `ten`) are one function,
     `graphmigrate.forward`, which the load runs: an `/11` with no copy comes
-    out as it was but for its schema (plan 89's `/12`), a `/2` `/7`-shaped
-    and said."""
+    out as it was but for its schema (plan 89's `/12`) and the retired
+    look-back knobs it names with no look-back to draw them (plan 90 H2:
+    dropped quietly, the ladder's last step), a `/2` `/7`-shaped and said."""
     import inspect
 
     from hyperspace import graphmigrate, loadable
     assert "graphmigrate.forward(" in inspect.getsource(loadable.LoadedPatch.load_doc)
     new = json.loads((CORPUS / "loadable" / "party-trip.json").read_text())
     fwd = graphmigrate.forward(copy.deepcopy(new), {})
-    assert fwd.doc == {**new, "schema": graphmigrate.TWELVE_SCHEMA}
-    assert fwd.notes == () and fwd.migrated == ""
+    kept = {k: v for k, v in new["values"].items() if not graphmigrate.lookback_retired(k)}
+    assert len(kept) == len(new["values"]) - 5            # echo_mix, fade, echoes, gap, occlude
+    assert fwd.doc == {**new, "schema": graphmigrate.TWELVE_SCHEMA, "values": kept}
+    assert fwd.notes == () and fwd.migrated == "" and fwd.migrate_notes == ()
     old = json.loads((ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
                       / "party-trip.json").read_text())
     fwd = graphmigrate.forward(old, {})
@@ -125,13 +129,22 @@ def test_the_loadables_ladder_is_one_function_the_load_reads_through():
 
 # ---------------------------------------------------------------- end to end
 
+# a retired look-back knob's line in a saved file (plan 90 H2)
+RETIRED_LINE = re.compile(rb'^ *"dream\.(?:echo_mix|fade|echoes|gap|occlude)": [^\n]*,\n',
+                          re.MULTILINE)
+
+
 def test_a_corpus_loadable_round_trips_byte_for_byte_through_the_one_loader(tmp_path):
     for k, name in enumerate(("party-trip", "party-noita", "seq-demo")):
         data = (CORPUS / "loadable" / f"{name}.json").read_bytes()
         again, notes, _ = headless.resave(CORPUS / "loadable" / f"{name}.json", tmp_path / str(k))
-        # (plan 89: an `/11` with no copy resaves as itself but for the schema)
+        # (plan 89: an `/11` with no copy resaves as itself but for the schema;
+        # plan 90 H2: less its retired look-back knobs, which drew nothing
+        # with no look-back — dropped quietly)
         data = data.replace(b'"hyperspace.loadable/11"', b'"hyperspace.loadable/12"')
-        assert again == data and notes == [], name
+        data, gone = RETIRED_LINE.subn(b"", data)
+        assert gone == 5, name
+        assert again == data and notes == [], (name, notes)
 
 
 def test_a_module_preset_lives_and_loads_as_a_patch_of_its_group(tmp_path):
@@ -142,8 +155,10 @@ def test_a_module_preset_lives_and_loads_as_a_patch_of_its_group(tmp_path):
     assert lib.list("dream") == ["default", "tracer-only", "wake"]
     # never among the spawnable patches, and refused by name at GRAPH's door
     assert lib.list(PATCHES) == []
-    assert lib.load("dream", "wake") == []
-    assert reg["dream.echoes"].value == 24 and reg["dream.mix"].value == pytest.approx(0.5)
+    assert lib.load("dream", "wake") == [] and not lib.warning
+    # (plan 90 H2: its retired look-back knobs land quietly — they drew nothing)
+    assert "dream.echoes" not in reg
+    assert reg["dream.k"].value == pytest.approx(0.08) and reg["dream.mix"].value == pytest.approx(0.5)
     assert lib.current("dream") == "wake" and not lib.is_dirty("dream")
     # a save writes the one shape into the group's folder, the old text to the trash
     reg["dream.mix"].set_value(0.9)
@@ -152,6 +167,7 @@ def test_a_module_preset_lives_and_loads_as_a_patch_of_its_group(tmp_path):
     doc = json.loads(path.read_text())
     assert doc["schema"] == "hyperspace.patch/3" and doc["group"] == "dream"
     assert doc["values"]["dream.mix"] == pytest.approx(0.9)
+    assert "dream.echoes" not in doc["values"]
     assert set(doc) == {"schema", "name", "group", "values"}
     assert lib.list(PATCHES) == []
     with pytest.raises(LibraryError, match="a patch of the dream group"):
@@ -166,13 +182,14 @@ def test_an_old_module_preset_in_its_folder_opens_end_to_end(tmp_path):
     (folder / "old.json").write_text(json.dumps(OLD_MODULE))
     app = headless.make_app(tmp_path)
     assert app.lib.list("dream") == ["OLD"]
-    assert app.lib.load("dream", "OLD") == []
+    assert app.lib.load("dream", "OLD") == [] and not app.lib.warning
     assert app.reg["dream.mix"].value == pytest.approx(0.25)
-    assert app.reg["dream.echoes"].value == 12
+    assert "dream.echoes" not in app.reg          # (plan 90 H2: retired, landed quietly)
     # a re-save writes it in today's words, where it was
     path = app.lib.overwrite("dream")
     assert path == folder / "old.json"
-    assert json.loads(path.read_text())["schema"] == "hyperspace.patch/3"
+    saved = json.loads(path.read_text())
+    assert saved["schema"] == "hyperspace.patch/3" and "dream.echoes" not in saved["values"]
 
 
 def test_an_old_patch_1_reads_as_its_2_through_the_library(tmp_path):

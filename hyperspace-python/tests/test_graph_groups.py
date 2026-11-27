@@ -157,15 +157,40 @@ def test_a_loadable_with_groups_round_trips_through_document_and_load_doc(tmp_pa
 def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     """The grouped fixture (party-noita and one group; `/9` since plan 43
     C2) loaded and saved untouched is the same bytes — and so is every
-    corpus loadable patch, with no groups (a `/9` without the key)."""
+    corpus loadable patch, with no groups (a `/9` without the key). (Plan
+    90 H2: the look-back's five retired knobs go quietly from a file that
+    draws none; a corpus file holding a look-back is rewritten once on load
+    — its look-back public parts — and that save then resaves byte for
+    byte.)"""
     raw = FIXTURE.read_bytes()
     assert json.loads(raw)["schema"] == "hyperspace.loadable/12"
+    # (plan 90 H2: the look-back's five retired knobs, `graphmigrate.LB_GONE`,
+    # go quietly from a patch that draws no look-back — the rest is the same
+    # bytes)
+    def unretired(data: bytes) -> bytes:
+        doc = json.loads(data)
+        for key in graphmigrate.LB_GONE:
+            doc.get("values", {}).pop(f"dream.{key}", None)
+        return loadable.dumps(doc).encode()
+
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
-    assert notes == [] and again == raw
+    assert notes == [] and again == unretired(raw)
     for k, path in enumerate(CORPUS_LOADABLES):
         data = path.read_bytes()
         again, _, _ = headless.resave(path, tmp_path / f"f{k}")
-        assert again == data and b'"groups"' not in again, path.name
+        if not graphmigrate.lookbacks(json.loads(data))[1]:
+            data = unretired(data)
+        else:
+            assert b'"lookback' not in again, path.name
+            data = again
+            moved = tmp_path / f"m{k}" / path.name
+            moved.parent.mkdir(parents=True)
+            moved.write_bytes(data)
+            again, _, _ = headless.resave(moved, tmp_path / f"g{k}")
+        # (no groups, but the folded look-back a saved one opens as: plan 90 H2)
+        assert again == data, path.name
+        assert {g["name"] for g in json.loads(again).get("groups", [])} <= {
+            graphmigrate.LB_GROUP}, path.name
 
 
 def test_a_member_the_graph_lacks_is_dropped_with_a_note(tmp_path):
@@ -242,7 +267,8 @@ def test_a_grouped_loadable_builds_the_graph_of_its_ungrouped_twin(tmp_path):
     of it the same `graph.signature`. The loadable patches with no main run are
     named (T1's `NO_RUN`): none has an effect, so each is proved with every
     node a group may hold grouped instead (review fix) — party-tracer's and
-    party-wake's look-back, composite (and dream); wave 3 P1: the other
+    party-wake's look-back (plan 90 H2: its public parts, which the load
+    makes of it and says so), composite (and dream); wave 3 P1: the other
     fourteen's frame nodes too, which a patch now holds (`patches.select`)."""
     assert NO_RUN == {"big-blue-wave", "ember-orbit", "hands-orbit", "hands-play",
                       "hex-engine", "inverse-halo", "legacy6", "party-faces", "party-field",
@@ -265,7 +291,8 @@ def test_a_grouped_loadable_builds_the_graph_of_its_ungrouped_twin(tmp_path):
             others.append(path.stem)
         want = G.signature(G.build_graph(_views(), flat.wiring()))
         app.loaded_patch.load_doc(grouped_twin(doc, ids))
-        assert app.loaded_patch.notes == [], path.stem
+        said = [n for n in app.loaded_patch.notes if "(plan 90)" not in n]
+        assert said == [], path.stem
         assert app.loaded_patch.groups[0]["nodes"] == ids, path.stem
         spec = app.loaded_patch.graph.spec
         assert spec.to_json() == flat.to_json(), path.stem
@@ -729,12 +756,13 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
     app = headless.make_app(seed(tmp_path))
     app.lib.load("loadable", path.stem)
     pre, table = app.loaded_patch, app.router.table
-    assert pre.groups == []
+    # (none, but the group a saved look-back opens folded in: plan 90 H2)
+    assert {g["name"] for g in pre.groups} <= {graphmigrate.LB_GROUP}
     before = _stripped(pre.document("x"))
     e = graphview.Edit(table, app.reg, app.router, graph=pre.graph)
     e.loaded_patch = pre
     rng = random.Random(path.stem)
-    seen: set[str] = set()
+    seen: set[str] = {g["id"] for g in pre.groups}
 
     def group_some() -> dict | None:
         held = sorted(pre._held_canvas())

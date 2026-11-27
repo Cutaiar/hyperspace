@@ -79,13 +79,24 @@ def old_style(sec: Any) -> bool:
 def shown(src: Any = None, *shows: Shows, look: str = "off", **kw) -> dict:
     """`section(src)` with output k's overrides for `shows[k - 1]` — and
     (plan 36 T4) an old-style look-back split last, as `look` says the old
-    values had it (`graphmigrate.look_of`: "off" draws none)."""
+    values had it (`graphmigrate.look_of`: "off" draws none), and (plan 90
+    H2) made public parts (`graphmigrate.retire_lookbacks`)."""
     sec = section(src, **kw)
     for k, sh in enumerate(shows):
         if sh != Shows():
             sec = M.with_output_wires(sec, k + 1, sh)
     out = M.placed_wires(sec)
-    return M.split_lookback(out, look) if old_style(out) else out
+    if not old_style(out):
+        return out
+    # (plan 90 H2: and the look-back it drew made public parts, as
+    # `graphmigrate.wired_of` makes it — a live read refuses a look-back)
+    out = M.split_lookback(out, look)
+    nodes, wires, _, _, keys, notes = M.retire_lookbacks(
+        list(out.get("nodes") or []), list(out.get("wires") or []), {},
+        keys=list(out.get(G.KEYS_KEY) or []))
+    if not notes:
+        return out
+    return {**out, "nodes": nodes, "wires": wires, **({G.KEYS_KEY: keys} if keys else {})}
 
 
 def wiring(src: Any = None, *shows: Shows, **kw) -> G.Wiring:

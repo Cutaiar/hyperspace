@@ -4,9 +4,11 @@ the dream owning its own params.
 - a spawn holding a dream into a host with one puts up the sheet: one press,
   one undo step, what the host's loses said in words; every other
   single-instance node stays refused;
-- `dream.*` is drawn where the save has it: a look-back's knobs on the
-  look-back, the rest on the dream, through `graphview.OWNERS`, a node's
-  `node_params`, the pane's sections and `patches._param_rows`.
+- `dream.*` is drawn where the save has it: on the dream, through
+  `graphview.OWNERS`, a node's `node_params`, the pane's sections and
+  `patches._param_rows` (plan 90 H2: the look-back's knobs are retired, its
+  trail public parts whose knobs are their own; party-wake opens with its
+  dream fed by the last of them, `cut.2`).
 """
 
 from __future__ import annotations
@@ -22,7 +24,16 @@ from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as G
-from hyperspace import graphview, headless, params, patches, ui_graph, ui_lookback, ui_routing, undo
+from hyperspace import (
+    graphmigrate,
+    graphview,
+    headless,
+    patches,
+    ui_graph,
+    ui_lookback,
+    ui_routing,
+    undo,
+)
 from hyperspace.patches import Host, spawn
 
 KEY = patches.replace_key("dream")
@@ -81,15 +92,16 @@ def test_a_dream_on_the_loadable_is_replaceable():
 def test_one_press_replaces_the_hosts_dream_as_one_undo_step(rig):  # noqa: F811
     """The ask, through the doors: the sheet says what the host's dream loses,
     Spawn lands the patch's in its place — one dream, the patch's values and
-    wires, the look-back's knobs untouched, its host cables gone and the pins
-    open (D2), its rows staying — and one ⌘Z puts all of it back."""
+    wires, the trail's parts' knobs untouched (plan 90 H2: the look-back's
+    were), its host cables gone and the pins open (D2), its rows staying —
+    and one ⌘Z puts all of it back."""
     on_graph(rig, "party-wake")
     slug = dreamy(rig, **{"dream.mix": 0.31, "dream.hue": 12.0})
     reg = rig.reg
     reg["dream.mix"].set_value(0.8)
-    fade, echoes = reg["dream.fade"].base, reg["dream.echo_mix"].base
+    fade, echoes = reg["fx.trail.fade"].base, reg["fx.trail.level"].base
     host_wires = wires(rig)
-    assert ("lookback", "dream.image") in host_wires and ("dream", "composite.over") in host_wires
+    assert ("cut.2", "dream.image") in host_wires and ("dream", "composite.over") in host_wires
     before, home = state(rig), files(rig.lib.home)
     u = watch(rig)
     try:
@@ -97,7 +109,7 @@ def test_one_press_replaces_the_hosts_dream_as_one_undo_step(rig):  # noqa: F811
         landing, choices = sheet_up(rig, slug)
         assert choices[KEY] == "patch"
         assert state(rig) == before and len(u.stack) == n        # nothing lands until the press
-        assert landing.loses[0] == ("its wires: lookback → dream.image, "
+        assert landing.loses[0] == ("its wires: cut.2 → dream.image, "
                                     "dream → composite.over")
         assert any("setting" in line for line in landing.loses)
         said = ui_graph._state(rig.panel)["said"]
@@ -110,18 +122,18 @@ def test_one_press_replaces_the_hosts_dream_as_one_undo_step(rig):  # noqa: F811
         spec = rig.lib.loaded_patch.graph.spec
         assert [nm for nm in patches.spec_names(spec) if nm.startswith("dream")] == ["dream"]
         now = wires(rig)
-        assert ("lookback", "dream.image") not in now
+        assert ("cut.2", "dream.image") not in now
         assert ("dream", "composite.over") not in now
         assert ("dream", "composite.2.over") in now               # the patch's own wire
         assert reg["dream.mix"].base == pytest.approx(0.31)
         assert reg["dream.hue"].base == pytest.approx(12.0)
-        assert reg["dream.fade"].base == fade                     # the look-back's: not the patch's
-        assert reg["dream.echo_mix"].base == echoes
+        assert reg["fx.trail.fade"].base == fade                  # the trail's: not the patch's
+        assert reg["fx.trail.level"].base == echoes
         group = rig.lib.loaded_patch.groups[-1]
         assert "render:dream" in group["nodes"]
         assert {p["id"] for p in graphview.open_ports(spec, group)} >= {"in"}
         head = ui_graph._state(rig.panel)["said"]
-        assert "replaced this loadable patch's dream: its wires: lookback → dream.image" in head
+        assert "replaced this loadable patch's dream: its wires: cut.2 → dream.image" in head
         assert files(rig.lib.home) == home                        # nothing written
         # its result drawn: the canvas holds the patch's dream, with its knobs
         frame(rig.panel, "graph")
@@ -204,11 +216,11 @@ def test_a_macro_on_anything_else_keeps_its_hold(rig):  # noqa: F811
     slug = dreamy(rig)
     table = rig.router.table
     doc = table.macros_doc()
-    doc["macro.1"] = {"label": "", "subs": [{"base": "dream.fade", "from": 0.1, "to": 0.9}]}
+    doc["macro.1"] = {"label": "", "subs": [{"base": "fx.trail.fade", "from": 0.1, "to": 0.9}]}
     assert table.set_macros(doc, rig.reg) == []
     sheet_up(rig, slug)
     assert ui_routing.settle_sheet(rig.panel, True) is None
-    assert [s.base for s in table.macros["macro.1"].subs] == ["dream.fade"]
+    assert [s.base for s in table.macros["macro.1"].subs] == ["fx.trail.fade"]
 
 
 def test_the_sheet_is_stale_when_another_loadable_loads_under_it(rig):  # noqa: F811
@@ -364,8 +376,10 @@ def test_a_group_of_the_dream_alone_goes_with_it(rig):  # noqa: F811
     assert entry["nodes"] == ["render:dream"]
     sheet_up(rig, slug)
     assert ui_routing.settle_sheet(rig.panel, True) is None
-    assert [g["nodes"] for g in rig.lib.loaded_patch.groups] == [["render:dream"]]
-    assert rig.lib.loaded_patch.groups[0]["id"] != entry["id"]
+    # (but the look-back party-wake opens folded in: plan 90 H2)
+    mine = [g for g in rig.lib.loaded_patch.groups if g["name"] != graphmigrate.LB_GROUP]
+    assert [g["nodes"] for g in mine] == [["render:dream"]]
+    assert mine[0]["id"] != entry["id"]
 
 
 def test_wire_as_saved_puts_the_replacing_dream_on_the_hosts_picture(rig):  # noqa: F811
@@ -375,7 +389,7 @@ def test_wire_as_saved_puts_the_replacing_dream_on_the_hosts_picture(rig):  # no
     assert ui_routing.settle_sheet(rig.panel, True) is None
     g = rig.lib.loaded_patch.groups[-1]
     assert ui_graph.wire_as_saved(rig.panel, g["id"]) is None
-    assert {("lookback", "dream.image"), ("dream", "composite.over")} <= set(wires(rig))
+    assert {("cut.2", "dream.image"), ("dream", "composite.over")} <= set(wires(rig))
 
 
 def test_the_edit_lands_no_replace_nobody_asked_for(rig):  # noqa: F811
@@ -410,7 +424,7 @@ def test_a_splice_elsewhere_replaces_and_splices_in_one_step(rig):  # noqa: F811
         assert len(u.stack) == n + 1
         now = wires(rig)
         assert ("composite", "dream.image") in now and ("dream", "output.all.image") in now
-        assert ("lookback", "dream.image") not in now
+        assert ("cut.2", "dream.image") not in now
     finally:
         undo.install(None)
 
@@ -419,18 +433,18 @@ def test_a_splice_elsewhere_replaces_and_splices_in_one_step(rig):  # noqa: F811
 
 def test_the_canvas_and_the_save_agree_on_dream_over_the_whole_registry(tmp_path):
     """Every `dream.*` param, `graphview.OWNERS` and `patches._param_rows`
-    name the same node, a second look-back's knobs its own."""
+    name the same node: the dream (plan 90 H2: no look-back takes a share)."""
     app = headless.make_app(tmp_path)
     rule = graphview.OWNERS["dream"]
-    mem = patches._Members(("lookback", "lookback.2", "dream"))
+    mem = patches._Members(("dream",))
     seen = 0
     for p in app.reg:
         if p.group == "dream" and not p.alias:
             seen += 1
-            assert rule(p.id, None) == patches._owner(p.id, mem.param_rows, ()), p.id
-    assert seen > 20
-    assert rule("dream.2.fade", None) == "lookback.2"
-    assert rule("dream.fade", None) == "lookback"
+            assert rule(p.id, None) == "dream", p.id
+            assert patches._owner(p.id, mem.param_rows, ()) == "dream", p.id
+    assert seen > 15
+    assert rule("dream.darken", None) == "dream" and rule("dream.contrast", None) == "dream"
     assert rule("dream.mix", None) == "dream" and rule("dream.on", None) == "dream"
 
 
@@ -438,26 +452,27 @@ def ports_of(view, nid: str) -> set[str]:
     return {p.param for p in view.node(nid).ports if p.param}
 
 
-def test_the_dream_node_draws_its_params_and_the_look_back_its(rig):  # noqa: F811
+def test_the_dream_node_draws_its_params_and_the_trail_its(rig):  # noqa: F811
+    """Plan 90 H2: the dream draws every `dream.*`; the trail's knobs are the
+    trail's (an effect's own), none of the dream's."""
     on_graph(rig, "party-wake")
     view = ui_graph._state(rig.panel)["view"]
-    on_dream, on_look = ports_of(view, "render:dream"), ports_of(view, "render:lookback")
-    assert {"dream.mix", "dream.hue", "dream.k"} <= on_dream
-    assert {"dream.fade", "dream.echo_mix", "dream.darken"} <= on_look
-    assert not {p for p in on_dream if params.is_lookback_knob(p)}
-    assert not {p for p in on_look if not params.is_lookback_knob(p)}
+    assert view.node("render:lookback") is None
+    on_dream, on_trail = ports_of(view, "render:dream"), ports_of(view, "render:trail")
+    assert {"dream.mix", "dream.hue", "dream.k", "dream.darken"} <= on_dream
+    assert not {p for p in on_dream if not p.startswith("dream.")}
+    assert {"fx.trail.level", "fx.trail.fade"} <= on_trail
+    assert not {p for p in on_trail if p.startswith("dream.")}
 
 
 def test_a_node_the_section_lacks_leaves_the_params_to_the_group_node(rig):  # noqa: F811
-    """A look-back and no dream: the dream's rows sit on `group:dream`, as any
-    param of a node the section does not name does; the look-back's stay."""
+    """No dream: the dream's rows sit on `group:dream`, as any param of a
+    node the section does not name does."""
     on_graph(rig, "party-noita")
     spec = rig.lib.loaded_patch.graph.spec
     assert "dream" not in patches.spec_names(spec)
     view = ui_graph._state(rig.panel)["view"]
-    if view.node("render:lookback") is not None:
-        assert not {p for p in ports_of(view, "render:lookback")
-                    if not params.is_lookback_knob(p)}
+    assert view.node("render:lookback") is None
     assert "dream.mix" in ports_of(view, "group:dream")
 
 
@@ -465,18 +480,18 @@ def test_a_nodes_selected_params_are_its_own(rig):  # noqa: F811
     on_graph(rig, "party-wake")
     panel = rig.panel
     dream = ui_graph.node_params(panel, "render:dream")
-    look = ui_graph.node_params(panel, "render:lookback")
-    assert "dream.mix" in dream and "dream.on" in dream and "dream.fade" not in dream
-    assert "dream.fade" in look and "dream.mix" not in look
-    assert not set(dream) & set(look)
-    assert set(dream) | set(look) >= {p.id for p in rig.reg
-                                      if p.group == "dream" and not p.alias
-                                      and p.id.count(".") == 1}
+    trail = ui_graph.node_params(panel, "render:trail")
+    assert "dream.mix" in dream and "dream.on" in dream and "dream.darken" in dream
+    assert "fx.trail.fade" in trail and "dream.mix" not in trail
+    assert not set(dream) & set(trail)
+    assert set(dream) >= {p.id for p in rig.reg
+                          if p.group == "dream" and not p.alias and p.id.count(".") == 1}
 
 
 def test_the_panes_sections_are_the_same_split():
-    for pid in ui_lookback.SECTIONS["look-back"]:
-        assert graphview.OWNERS["dream"](pid, None) == "lookback", pid
+    """The pane has the dream's section alone (plan 90 H2: its look-back
+    half is gone), every knob of it the dream's."""
+    assert set(ui_lookback.SECTIONS) == {"dream"}
     for pid in ui_lookback.SECTIONS["dream"]:
         assert graphview.OWNERS["dream"](pid, None) == "dream", pid
 
@@ -484,9 +499,10 @@ def test_the_panes_sections_are_the_same_split():
 @pytest.mark.parametrize("name", ["party-wake", "party-noita"])
 def test_a_saved_loadable_is_unmoved_by_who_draws_its_params(rig, name):  # noqa: F811
     """Behaviour-neutral: the section and every `dream.*` value read back as
-    the file has them, the row ids as they were."""
+    the file has them, the row ids as they were — the file as it opens
+    (plan 90 H2: its look-back made public parts by the ladder's last step)."""
     path = CORPUS / "loadable" / f"{name}.json"
-    file = json.loads(path.read_text())
+    file = graphmigrate.forward(json.loads(path.read_text()), {}).doc
     on_graph(rig, name)
     for k, v in file.get("values", {}).items():
         if k.startswith("dream.") and k in rig.reg:

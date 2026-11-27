@@ -192,7 +192,6 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     declare_cuts,
     declare_delays,
     declare_keys,
-    declare_lookbacks,
     declare_mattes,
     declare_resizes,
     declare_segments,
@@ -202,8 +201,6 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     is_delay_id,
     is_instance_id,
     is_key_id,
-    is_lookback_id,
-    is_lookback_knob,
     is_matte_id,
     is_meta_id,
     is_resize_id,
@@ -497,16 +494,15 @@ class GraphSection:
     def names(self, spec: GraphSpec | None) -> dict[str, Any]:
         """The node instances `spec` declares (None: none), by kind — what a landing
         settles: ``fx`` (the effect instances that exist, `FxState.held`'s word),
-        ``switch``, ``resize``, ``lookback``, and (plan 39 T2–T4) ``matte``, ``cut``,
+        ``switch``, ``resize``, ``delay``, and (plan 39 T2–T4) ``matte``, ``cut``,
         ``segment``; (plan 87) ``key``, the nodes keyed."""
         if spec is None:
-            return {"fx": frozenset(), "switch": [], "resize": [], "delay": [], "lookback": [],
+            return {"fx": frozenset(), "switch": [], "resize": [], "delay": [],
                     "matte": [], "cut": [], "segment": [], "key": []}
         return {"fx": frozenset(spec.effect_names()),
                 "switch": [sw.name for sw in spec.switches],
                 "resize": [z.name for z in spec.resizes],
                 "delay": [d.name for d in spec.delays],
-                "lookback": [lb.name for lb in spec.lookbacks],
                 # plan 39 T2–T4: the mattes, cuts and segments, by their entries
                 "matte": [m.name for m in spec.mattes],
                 "cut": [c.name for c in spec.cuts],
@@ -537,8 +533,6 @@ class GraphSection:
         declare_segments(reg, names["segment"])
         # plan 87: each keyed node's black is clear, by the section's `keys`
         declare_keys(reg, names["key"])
-        # plan 36 T4: each extra look-back's own ring and trail, by its entry
-        declare_lookbacks(reg, names["lookback"])
 
     def free_doc(self) -> dict | None:
         """The section in the free graph's words (plan 33 M; plan 35 T3: the
@@ -720,7 +714,7 @@ def dumps(doc: dict) -> str:
                 and all(isinstance(v.get(k, []), list) for k in ("nodes", "wires", "keys"))):
             # row 394: the wired frame every save writes — the marker, then
             # the nodes and the wires, one a line; plan 87's keyed nodes on
-            # one line after them
+            # one line after them (plan 90 H2: every migrated look-back has one)
             halves = [f'"{FRAME_KEY}": {json.dumps(v[FRAME_KEY])}']
             for part in ("nodes", "wires"):
                 if part not in v:
@@ -998,7 +992,7 @@ class LoadedPatch:
                   if k in reg and reg[k].group in PATCH_GROUPS
                   and reg[k].group != modifiers.GROUP and reg[k].persist
                   and not is_instance_id(k) and not is_switch_id(k)
-                  and not is_resize_id(k) and not is_delay_id(k) and not is_lookback_id(k)
+                  and not is_resize_id(k) and not is_delay_id(k)
                   and not is_matte_id(k) and not is_cut_id(k)
                   and not is_segment_id(k) and not is_key_id(k)}
         doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PATCH, "values": values,
@@ -1119,7 +1113,7 @@ class LoadedPatch:
                 # a modifier's param is set by its entry (`modifiers`), never here
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
             elif (is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid) or is_delay_id(pid)
-                  or is_lookback_id(pid) or is_matte_id(pid) or is_cut_id(pid)
+                  or is_matte_id(pid) or is_cut_id(pid)
                   or is_segment_id(pid) or is_key_id(pid)
                   or graphmigrate.effect_of(pid) is not None):
                 # (plan 33 S: a switch's `select` too — its graph declares it;

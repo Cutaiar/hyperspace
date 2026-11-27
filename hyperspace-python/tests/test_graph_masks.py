@@ -10,7 +10,8 @@ name. `matte[.n]` makes one from a picture: by its brightness, its coverage
 or a keyed hue, at `key`, `soft` about it, `invert`, `feather`.
 
 What it must keep honest: no node of plan 36 or earlier changes
-(`scene.cover → lookback.cover` as it was, every factory preset's
+(`scene.cover` into a mask port as it was — plan 90 H2: a cut's, the
+look-back's `lookback.cover` retired —, every factory preset's
 `graph.signature` — `test_graph_frame.py` — unmoved); the matte's three
 sources, its knobs, its one channel; the promotion at the consumer's size
 and the right way up; an unwired matte makes nothing; `masks.py` is a
@@ -43,6 +44,7 @@ from hyperspace.view import MatteState, ResizeState
 MATTE = {"kind": "matte"}
 MATTE2 = {"kind": "matte", "instance": 2}
 RESIZE = {"kind": "resize"}
+CUT = {"kind": "cut"}
 ACID2 = {"kind": "effect", "file": "acid", "instance": 2}
 WHITE, BLACK = (255, 255, 255), (0, 0, 0)
 FIXTURE = Path(__file__).parent / "fixtures" / "presets" / "mask-as-picture.json"
@@ -128,22 +130,23 @@ def test_a_matte_must_be_declared():
 
 @pytest.mark.parametrize("dst", ["output.2.image", "output.3.hands", "acid.2.image",
                                  "acid.2.aux", "composite.over", "switch.in1", "shape.faces",
-                                 "delay.image", "resize.image", "lookback.occluder"])
+                                 "delay.image", "resize.image", "cut.image"])
 def test_a_mask_goes_where_a_picture_is_taken(dst):
-    nodes = [MATTE, ACID2, {"kind": "composite"}, {"kind": "switch"}, {"kind": "delay"}, RESIZE]
+    nodes = [MATTE, ACID2, {"kind": "composite"}, {"kind": "switch"}, {"kind": "delay"}, RESIZE,
+             CUT]
     spec = G.read_graph(wired(("channel.a", "matte.image"), ("matte", dst), *FACTORY_FRAME,
                               nodes=nodes))
     assert not spec.notes, spec.notes
 
 
 def test_a_picture_into_a_mask_port_names_the_matte():
-    spec = _read(("channel.a", "lookback.cover"), ("lookback", "output.2.image"),
-                 ("scene", "lookback.image"), nodes=())
-    assert spec.notes == (("wire channel.a → lookback.cover — channel.a makes a picture, "
-                           "lookback.cover takes a mask — put a matte between"),)
+    spec = _read(("channel.a", "cut.mask"), ("cut", "output.2.image"),
+                 ("scene", "cut.image"), nodes=(CUT,))
+    assert spec.notes == (("wire channel.a → cut.mask — channel.a makes a picture, "
+                           "cut.mask takes a mask — put a matte between"),)
     # through a matte it stands
-    _spec(("channel.a", "matte.image"), ("matte", "lookback.cover"),
-          ("lookback", "output.2.image"), ("scene", "lookback.image"))
+    _spec(("channel.a", "matte.image"), ("matte", "cut.mask"),
+          ("cut", "output.2.image"), ("scene", "cut.image"), nodes=(MATTE, CUT))
 
 
 def test_a_mask_is_still_no_geometry_and_no_depth():
@@ -156,14 +159,15 @@ def test_a_mask_is_still_no_geometry_and_no_depth():
 
 
 def test_the_scene_cover_is_as_it_was():
-    """No node of plan 36 changes: the cover goes into `lookback.cover`
-    straight, no promotion between; elsewhere it is still refused in the
+    """No node of plan 36 changes: the cover goes into a mask port
+    straight (plan 90 H2: a cut's — the look-back's `lookback.cover` is
+    retired), no promotion between; elsewhere it is still refused in the
     pin's words."""
-    spec = _spec(("scene.cover", "lookback.cover"), ("scene", "lookback.image"),
-                 ("lookback", "output.2.image"), nodes=())
+    spec = _spec(("scene.cover", "cut.mask"), ("scene", "cut.image"),
+                 ("cut", "output.2.image"), nodes=(CUT,))
     g = G.build_graph(_views(), spec.wiring())
-    cover = g.nodes["lookback(cover)"]
-    assert isinstance(cover, G.Cover) and g.nodes["lookback"].inputs["cover"] is cover
+    cover = g.nodes["scene(cover)"]
+    assert isinstance(cover, G.Cover) and g.nodes["cut"].inputs["mask"] is cover
     assert not [n for n in g.nodes.values() if isinstance(n, G.MaskPicture)]
     spec = _read(("scene.cover", "output.2.image"), nodes=())
     assert spec.notes == ("wire scene.cover → output.2.image — scene.cover is "
@@ -185,8 +189,8 @@ def test_a_matte_is_built_only_when_reached_and_fed():
 def test_a_mask_into_picture_ports_is_read_through_one_picture():
     spec = _spec(("channel.a", "matte.image"), ("matte", "output.2.image"),
                  ("matte", "acid.2.image"), ("acid.2", "output.3.image"),
-                 ("matte", "lookback.cover"), ("scene", "lookback.image"),
-                 ("lookback", "output.1.image"), nodes=[MATTE, ACID2])
+                 ("matte", "cut.mask"), ("scene", "cut.image"),
+                 ("cut", "output.1.image"), nodes=[MATTE, ACID2, CUT])
     g = G.build_graph(_views(3), spec.wiring(), (), ("acid.2",))
     matte = g.nodes["matte"]
     assert isinstance(matte, G.MatteNode) and matte.inputs["image"] is g.nodes["channel.a"]
@@ -196,7 +200,7 @@ def test_a_mask_into_picture_ports_is_read_through_one_picture():
     (acid,) = [n for n in g.nodes.values() if isinstance(n, G.Effect)]
     assert acid.inputs["image"] is pic
     # a mask port takes the mask as it is
-    assert g.nodes["lookback"].inputs["cover"] is matte
+    assert g.nodes["cut"].inputs["mask"] is matte
     assert len([n for n in g.nodes.values() if isinstance(n, G.MaskPicture)]) == 1
     order = [n.name for n in g.order]
     assert order.index("channel.a") < order.index("matte") < order.index("matte(picture)")
@@ -502,53 +506,37 @@ def test_a_matte_reading_nothing_makes_nothing(ctx):
     assert (out[..., :3] == 0).all()
 
 
-def test_a_matte_into_the_look_back_cover_draws(ctx):
-    pairs = [("channel.a", "matte.image"), ("matte", "lookback.cover"),
-             ("scene", "lookback.image"), ("lookback", "output.2.image")]
-    r = _renderer(ctx, _media(a=Still(_halves(BLACK, WHITE))), pairs)
+def test_a_matte_into_a_cuts_mask_draws(ctx):
+    """(Plan 90 H2: the look-back's cover, which this drew into, is retired:
+    a cut's mask port takes it.)"""
+    pairs = [("channel.a", "matte.image"), ("matte", "cut.mask"),
+             ("scene", "cut.image"), ("cut", "output.2.image")]
+    r = _renderer(ctx, _media(a=Still(_halves(BLACK, WHITE))), pairs, (MATTE, CUT))
     _draw(ctx, r, _s())
-    assert r._graph.nodes["lookback"].inputs["cover"] is r._graph.nodes["matte"]
+    assert r._graph.nodes["cut"].inputs["mask"] is r._graph.nodes["matte"]
 
 
-def test_an_own_sized_mask_lands_on_the_cover_where_its_picture_shows_it(ctx):
-    """Review fix (Important 1): `lookback.cover` fetches its mask 1:1 by the
-    frame's pixel, so a matte of a 64×36 resize is handed to it refitted by
-    cover to the 160×90 frame (`MatteNode.image`, `MaskPasses.fit`): the
-    cover the look-back binds equals the promoted picture on output 1, pixel
-    for pixel, and the native mask stays 64×36."""
+def test_an_own_sized_mask_cuts_where_its_picture_shows_it(ctx):
+    """Review fix (Important 1), on the cut (plan 90 H2: the look-back,
+    whose cover fetched the mask 1:1, is retired): a matte of a 64×36
+    resize cuts the 160×90 frame by cover (`CUT_FS`), so the cut keeps the
+    picture exactly where the promoted mask on output 1 is white, and the
+    native mask stays 64×36."""
     px = _rgba(160, 90, (20, 20, 20))
     px[:30, 100:, :3] = 230                  # bright in the top right only
     pairs = [("channel.a", "resize.image"), ("resize", "matte.image"),
-             ("matte", "lookback.cover"), ("scene", "lookback.image"),
-             ("lookback", "output.2.image"), ("matte", "output.1.image")]
-    r = _renderer(ctx, _media(a=Still(px)), pairs, (MATTE, RESIZE))
-    seen = []
-    from hyperspace import lookback as L
-
-    real = L.Lookback.trail
-
-    def spy(self, target, cover=None, *a, **k):
-        if cover is not None:
-            w, h = cover.size
-            seen.append((cover.size, cover.components,
-                         np.frombuffer(cover.read(), np.uint8).reshape(h, w)[::-1].astype(int)))
-        return real(self, target, cover, *a, **k)
-
-    L.Lookback.trail = spy
-    try:
-        size = (160, 90)
-        vs = [View(Switches(), size, target=_fbo(ctx, *size)) for _ in range(2)]
-        r.draw_outputs(_s(resize=ResizeState(size=2)), *size, 1.0, vs, t_now=2.0)
-        assert ctx.error == "GL_NO_ERROR"
-    finally:
-        L.Lookback.trail = real
+             ("matte", "cut.mask"), ("channel.b", "cut.image"),
+             ("cut", "output.2.image"), ("matte", "output.1.image")]
+    r = _renderer(ctx, _media(a=Still(px), b=Still(_rgba(160, 90, WHITE))), pairs,
+                  (MATTE, RESIZE, CUT))
+    size = (160, 90)
+    vs = [View(Switches(), size, target=_fbo(ctx, *size)) for _ in range(2)]
+    r.draw_outputs(_s(resize=ResizeState(size=2)), *size, 1.0, vs, t_now=2.0)
+    assert ctx.error == "GL_NO_ERROR"
     assert _mask(r).size == (64, 36)
-    assert seen, "the look-back bound no cover"
-    got_size, comps, cover = seen[-1]
-    assert got_size == size and comps == 1
-    shown = _px(vs[0].target)[..., 0]
-    assert np.abs(cover - shown).max() <= 1
-    assert cover[10, 150] == 255 and cover[80, 10] == 0 and cover[10, 10] == 0
+    shown, cut = _px(vs[0].target)[..., 0].astype(int), _px(vs[1].target)[..., 0].astype(int)
+    assert np.abs(cut - shown).max() <= 1
+    assert shown[10, 150] == 255 and shown[80, 10] == 0 and shown[10, 10] == 0
 
 
 def test_the_cut_pass_cuts(ctx):

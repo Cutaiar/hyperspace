@@ -28,8 +28,11 @@ def strip(tmp_path, monkeypatch, sel: str, fx_dir=None):
     `fx_dir`'s), effect `sel`'s strip open in the fx section, a Driver
     recording every control."""
     st = FxState() if fx_dir is None else FxState(fx_dir)
+    dreamer = SimpleNamespace(state=DreamState())
+    # (plan 90 H2: the dream's state is `dreamer.state`; `lookback` the same
+    # object for a rig that still reads the old name)
     stand_in = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""),
-                               lookback=SimpleNamespace(state=DreamState()))
+                               dreamer=dreamer, lookback=dreamer)
     with build_rig(tmp_path, renderer=stand_in) as r:
         r.panel.desk = False
         st.set_instances({})                # every file, once: the effect's params declared

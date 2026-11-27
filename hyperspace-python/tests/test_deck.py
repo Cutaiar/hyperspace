@@ -644,7 +644,7 @@ def test_a_renderer_and_a_stand_in_state_together_are_refused(tmp_path):
 
     lib = Library(seed(tmp_path / "home"), period=0.0)
     chain = Analyzer(Analyser())
-    renderer = SimpleNamespace(lookback=SimpleNamespace(state=DreamState()),
+    renderer = SimpleNamespace(dreamer=SimpleNamespace(state=DreamState()),
                                fx=SimpleNamespace(state=FxState()),
                                ghost=SimpleNamespace(state=GhostState()))
     for kw in ({"dream": DreamState()}, {"fx": FxState()}, {"ghost": GhostState()},

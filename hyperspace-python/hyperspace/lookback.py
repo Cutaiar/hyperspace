@@ -1,124 +1,42 @@
-"""Look-back — the frame history and the age-weighted composite (plan 07, WP6a).
+"""The dream's GL half and its values (plan 07 WP6, plan 36 T4) — and the old
+look-back's units, which a load still converts.
 
-Plan 36 T4 (W4): look-back and dream are two nodes now. `Lookback` is one
-look-back's ring and trail — picture in, trail out (the echoes' wake,
-premultiplied, laid over nothing: D3) — one per look-back node
-(`Renderer.ring`); `Dreamer` is the dream node's buffer `D` and its copy
-path to the worker, apart from any look-back: it submits the node's input
-and lays `D` over it (DREAM_FS). What follows describes the one-shader
-look-back they were split from: its arithmetic is the trail pass's, and an
-"add" composite of a look-back over a picture is that shader's bytes.
+Plan 90 (H2): the look-back is retired. Its ring, its atlas and its trail pass
+(`Lookback`, `POST_FS`) are public parts now — a delay keeping its pictures
+(`stack.DelayStack`), read by the Trail and Read effect files — and a saved
+look-back opens as them (`graphmigrate.lookbacks`). What stays here until H3:
 
-The renderer draws the scene into a texture (render.py, SceneTarget) and
-hands it here twice a frame: once to *composite* it onto the window over
-the history, once to *capture* it into the history. The history is a ring
-of downsampled frames — the echoes — plus one more buffer, the dream ``D``,
-that a worker (WP6b, dream.py) fills asynchronously through the
-LookbackSource slot below. With no worker the echoes alone are the
-plain tracer; with one, ``D`` is the dreamed wake and the echoes a raw
-trail under it.
+- `DreamState`, the `dream.*` params' object: the dream node's own knobs and
+  the shared `darken`, `contrast` and `res` it still reads (Q26: a migrated
+  look-back's parts got copies of those values).
+- `Dreamer`, the dream node's GL half: its buffer `D` and the copy path to
+  the worker (`LookbackSource`, dream.py). Once a frame while `dream.on` it
+  pulls a finished result into `D` and submits its input, downsampled to
+  `dream.res` on its short side and read back once; `lay` draws the input
+  with `D` over it at `dream.mix`, re-hued, (de)saturated, tinted and graded
+  (`DREAM_FS`): ``grade(c) = pow(c, contrast) · (1 − darken)``, coverage the
+  graded buffer's own peak brightness, premultiplied over.
+- The look-back's per-frame units, read as 60 Hz frames (plan 14 WP6):
+  ``dream.decay`` → a fade in seconds, ``dream.every`` → a gap in seconds
+  (`migrate_values`, `migrate_row`) — `loadable.echo_seconds` runs them on
+  an old file before the ladder, whose last step makes the look-back public
+  parts.
 
-The composite, per pixel (the spike's ``composite()`` in
-tools/dream_bench/common.py, made per-layer):
+The dream slot (WP6b):
 
-    grade(c)  = pow(c, contrast) · (1 − darken)         a power curve keeps
-                                                        black black; above 1
-                                                        only the bright,
-                                                        high-contrast regions
-                                                        of a layer read
-    chroma(c) = mix(own, lum(c) · tint_rgb, tint)       the dream buffer only:
-                own = mix(lum(c), rotate(c, hue), sat)  its colours re-hued and
-                                                        (de)saturated about the
-                                                        grey axis, then crossed
-                                                        into a tint of its
-                                                        luminance — a chosen
-                                                        colour, or the scene's
-                                                        own mean hue
-    layer i   = colour grade(L_i.rgb) at weight w_i,
-                w_i = echo_mix · ½^(age_i / fade)   (echoes, age in seconds;
-                                                    fade is the half-life)
-                w_D = mix, on grade(chroma(D))  (the dream buffer)
-    wake      = layers over one another, oldest → newest, premultiplied:
-                wake ← wake·(1 − a_i) + grade(L_i)·w_i,
-                a_i = w_i · max(grade(L_i))     the layer's own luminance is
-                                                its coverage — a black pixel
-                                                covers nothing
-    wake     ×= 1 − occlude · max(min(4 · max(scene.rgb), 1), faces)
-                                                the render over the wake: where
-                                                this frame drew a face (its
-                                                coverage mask, render.py — the
-                                                fills are a few percent alpha,
-                                                so their light would barely
-                                                cover) or anything bright, the
-                                                wake beneath is held back
-                                                (occlude 0 is the old additive
-                                                glow over it)
-    out.rgb   = min(scene.rgb + wake, 1)        additive under the scene, so
-                                                the wireframe stays white-hot
-    out.a     = scene.a ∪ wake.a                (a + b − a·b)
-
-Alpha is what makes overlay mode work (overlay.py clears the ground to
-see-through): the scene texture is premultiplied — colour Σ c·a over a
-black ground at ``bg_alpha`` — and so are the echoes cut from it, so a
-layer's colour never exceeds its coverage and the wake tints the desktop
-only where content is or was. With an opaque ground ``scene.a`` is 1 and
-the union is 1: exactly today's frame plus the wake. With the pipeline off
-the post pass is a copy and the output is bit-identical to drawing the
-scene straight to the window (tests/test_render.py asserts it).
-
-The chroma stage is what makes the dream sit with the scene. The net's
-gradient paints in its own primaries — red, green and blue activation
-blobs whatever the frame's palette — so ``D`` is re-coloured here, on
-the way in, every frame: a hue rotation and a saturation scale on its
-own colours (sat 0 is greyscale), then a ``tint`` cross-fade to its
-luminance times one colour. That colour is either ``tint_hue`` /
-``tint_sat`` or, with ``tint_from`` on "scene", the hue of the scene's
-mean colour at ``tint_sat`` — a scene with no chroma tints grey. The
-mean is taken on the host from the newest echo at capture: with a
-worker attached those pixels are read back for it anyway (the copy path
-below), and without one scene mode does that read itself, one sync
-point a frame. It is a frame stale by construction, which no eye sees.
-The echoes are cut from the scene and already match it, so they pass
-untouched. Chroma runs before the grade, so darken and contrast read
-the same on every layer.
-
-Echo time is seconds, not frames (plan 14 WP6). The ring keeps its own
-clock, advanced once a frame by the renderer's time (`tick`): an echo's
-age is the seconds since its capture, its weight halves every ``fade``
-seconds, and a capture is taken every ``gap`` seconds — so a 120 Hz
-screen keeps the same trail as a 60 Hz one (twice the frames, each
-fading half as much). A frame whose clock did not move (a test or a
-tool drawing at one fixed time) counts as one frame at REF_HZ, 60 Hz.
-The old per-frame ``dream.decay`` and ``dream.every`` are read as 60 Hz
-frames and converted (`migrate_values`: decay 0.93 a frame is a fade of
-0.159 s, every 2 frames a gap of 1/30 s), so a saved look is the same at
-60 Hz as it was.
-
-The history lives in one atlas texture, MAX_ECHOES slots of the echo size
-stacked vertically, so a slot is an FBO viewport (no per-layer copies, no
-array-texture attachment moderngl cannot make) and the composite samples
-one texture in a loop. Echo size is ``dream.res`` on the short side, the
-render's aspect kept, rounded to 8 px; 32 slots at 400×256 are 12.5 MiB.
-
-The dream slot (WP6b builds against this; the copy path is the spike's
-recommendation, ~1 ms round trip at 256 px):
-
-    LookbackSource.submit(frame, frame_index)   after every capture, the
-        newest echo as a (h, w, 4) uint8 array, rows bottom-up as GL reads
-        them. The array is the source's own if it has ``buffer(shape)`` (a
-        torch host alias: glReadPixels lands straight in the tensor's
-        memory), else a numpy array this module keeps.
+    LookbackSource.submit(frame, frame_index)   after every submit, the
+        input as a (h, w, 4) uint8 array, rows bottom-up as GL reads them.
+        The array is the source's own if it has ``buffer(shape)`` (a torch
+        host alias: glReadPixels lands straight in the tensor's memory),
+        else a numpy array this module keeps.
     LookbackSource.latest() → (pixels, frame_index) | None   the newest
-        finished result, same layout, RGB premultiplied by the content
-        mask (the compositor derives alpha from luminance, so where the
-        mask is 0 the desktop stays clear); the frame index says which
-        submit it answers, and a result already shown is skipped.
-    Lookback.read_into(array) / write_from(array)   the two GL legs
-        themselves, for a worker that drives them itself.
+        finished result, same layout, RGB premultiplied by the content mask;
+        the frame index says which submit it answers, and a result already
+        shown is skipped.
 
-Ordering rule: the read waits for the render (glReadPixels is a sync
-point, ~0.4 ms); the write is a plain texture upload before the
-composite. A result lands a frame or two after its submit by design.
+Ordering rule: the read waits for the render (glReadPixels is a sync point,
+~0.4 ms); the write is a plain texture upload before the lay. A result lands
+a frame or two after its submit by design.
 """
 
 from __future__ import annotations
@@ -133,18 +51,6 @@ import numpy as np
 
 from . import writes
 from .glsl import FALLBACK, QUAD_VS, common, gl_error
-
-MAX_ECHOES = 32
-# a look-back's own knobs among `dream.*` (`dream.<key>`, `dream.<n>.<key>`), the
-# rest the dream node's: `params.is_lookback_knob`, `patches._param_rows`
-LOOKBACK_KEYS = ("echo_mix", "fade", "echoes", "gap", "darken", "contrast", "occlude", "res")
-
-
-def is_lookback_key(key: str) -> bool:
-    """Is `key`, of `dream.<key>` or `dream.<n>.<key>`, a look-back's? The one
-    test: `params.is_lookback_knob` and `patches.dream_owner` ask here."""
-    return key in LOOKBACK_KEYS
-
 
 RES = [128, 192, 256, 384]              # dream.res: the echo's short side, px
 # dream.layer's choices in their stored order: a loadable patch saves the index, so
@@ -226,7 +132,6 @@ LAYER_INFO: dict[str, tuple[str, str, str]] = {
 }
 OCTAVES = ["1", "2 alt", "3 alt"]       # one octave a frame, in rotation (spike D)
 TINT_FROM = ["colour", "scene"]         # dream.tint_from: the tint's hue source
-OCCLUDE_GAIN = 4.0                      # scene brightness × this = its coverage of the wake
 REF_HZ = 60.0                           # the frame rate the old per-frame units meant
 FADE_LO, FADE_HI = 0.02, 10.0           # dream.fade: an echo's half-life, seconds (log)
 GAP_LO, GAP_HI = 0.0, 0.25              # dream.gap: seconds between captures (0 = every frame)
@@ -375,11 +280,8 @@ class DreamState(writes.Observed):
     on: bool = False          # plan 36 T4: the dream node's own — off, it passes through
     # the composite
     mix: float = 0.7          # the dream buffer's opacity
-    echo_mix: float = 0.4     # the echoes' opacity (times ½^(age / fade))
-    fade: float = 0.2252      # an echo's half-life, seconds (0.95 a frame at 60 Hz)
     darken: float = 0.1       # 0 as bright as the frame … 1 black
     contrast: float = 1.0     # power curve on every layer; 1 is neutral
-    occlude: float = 1.0      # 0 the wake adds over the render … 1 the render covers it
     # the dream buffer's chroma, before the grade
     hue: float = 0.0          # degrees of hue rotation on the net's own colours
     sat: float = 1.0          # their saturation; 0 is greyscale, 1 as the net painted
@@ -387,8 +289,6 @@ class DreamState(writes.Observed):
     tint_from: int = 0        # index into TINT_FROM: a chosen colour, or the scene's hue
     tint_hue: float = 200.0   # the tint colour's hue, degrees
     tint_sat: float = 1.0     # …and saturation; 0 tints grey
-    echoes: int = 8           # ring depth; 0 = only the dream buffer
-    gap: float = 0.033333     # seconds between captures (every 2 frames at 60 Hz)
     res: int = 2              # index into RES → 256
     # the dream worker's (WP6b) — declared here so loadable patches carry them
     steps: int = 2
@@ -417,81 +317,6 @@ uniform sampler2D u_scene;   // mipmapped: trilinear is a proper box-ish downsam
 in vec2 v_uv;
 out vec4 f_color;
 void main() { f_color = texture(u_scene, v_uv); }
-"""
-
-# the trail pass's fragment shader body — source string 2; string 1 is
-# shaders/_common.glsl (hue_rotate, LUMA), prepended by post_fs(). Plan 36
-# T4: the echoes alone — the dream buffer is the dream node's (DREAM_FS).
-# Built in four variants (`TRAIL_VARIANTS`): without TRAIL_ADD it writes the
-# trail itself, premultiplied with its alpha (the look-back's picture); with
-# it, it adds the trail onto `u_scene` in the same pass, the union of the
-# two alphas — an "add" composite laying the look-back on (`graph.Composite`),
-# the one-shader look-back's statements and bytes; TRAIL_OCC, an occluder
-# wired. Variants, not a uniform: a branch on the output moved a rounding
-POST_FS = f"""
-#line 1 2
-uniform sampler2D u_scene;   // what the trail is added onto (TRAIL_ADD), fetched exactly
-uniform sampler2D u_ring;    // the history atlas, MAX_ECHOES slots stacked in v
-uniform sampler2D u_cover;   // the faces' coverage mask at the scene's size (render.py)
-uniform int u_has_cover;     // 0 = no mask this frame: brightness alone covers
-uniform sampler2D u_occ;     // whose brightness covers (the occluder port; TRAIL_OCC)
-uniform ivec2 u_origin;      // the target viewport's origin (gl_FragCoord is window-relative)
-uniform int u_n;             // echoes this frame, oldest first
-uniform float u_w[MAX_ECHOES];    // echo weight: echo_mix · ½^(age / fade)
-uniform float u_off[MAX_ECHOES];  // the echo's slot origin in atlas v
-uniform float u_slot;        // one slot's height in atlas v
-uniform float u_pad;         // half a texel in v: a slot never bleeds into its neighbour
-uniform float u_darken;
-uniform float u_contrast;
-uniform float u_occlude;     // 0 the wake adds over the render … 1 the render covers it
-in vec2 v_uv;
-out vec4 f_color;
-
-const float OCCLUDE_GAIN = {OCCLUDE_GAIN};
-
-vec3 grade(vec3 c) {{
-    return pow(max(c, vec3(1e-6)), vec3(u_contrast)) * (1.0 - u_darken);
-}}
-
-// one layer over the wake so far, premultiplied; coverage is the graded
-// layer's own luminance (a black pixel covers nothing), so the wake
-// never paints a transparent ground opaque
-void layer(vec4 t, float w, inout vec3 wake, inout float wa) {{
-    vec3 c = grade(t.rgb);
-    float a = w * max(c.r, max(c.g, c.b));
-    wake = wake * (1.0 - a) + c * w;
-    wa = wa + a - wa * a;
-}}
-
-void main() {{
-#ifdef TRAIL_ADD
-    vec4 scene = texelFetch(u_scene, ivec2(gl_FragCoord.xy) - u_origin, 0);
-#endif
-    vec3 wake = vec3(0.0);
-    float wa = 0.0;
-    float y = clamp(v_uv.y, u_pad, 1.0 - u_pad) * u_slot;
-    for (int i = 0; i < u_n; i++)
-        layer(texture(u_ring, vec2(v_uv.x, u_off[i] + y)), u_w[i], wake, wa);
-    // the render over the wake: where this frame drew, the wake beneath is
-    // held back — by the faces' geometry (drawn at a few percent alpha, so
-    // their brightness would barely cover) and by brightness (the wireframe)
-#ifdef TRAIL_OCC
-    vec3 occ = texelFetch(u_occ, ivec2(gl_FragCoord.xy) - u_origin, 0).rgb;
-    float cover = min(max(occ.r, max(occ.g, occ.b)) * OCCLUDE_GAIN, 1.0);
-#else
-    float cover = 0.0;
-#endif
-    if (u_has_cover != 0)
-        cover = max(cover, texelFetch(u_cover, ivec2(gl_FragCoord.xy) - u_origin, 0).r);
-    cover *= u_occlude;
-    wake *= 1.0 - cover;
-    wa *= 1.0 - cover;
-#ifdef TRAIL_ADD
-    f_color = vec4(min(scene.rgb + wake, 1.0), scene.a + wa - scene.a * wa);
-#else
-    f_color = vec4(wake, wa);
-#endif
-}}
 """
 
 # plan 36 T4: the dream node's pass — its input with the dream buffer laid
@@ -531,17 +356,12 @@ void main() {
 """
 
 
-TRAIL_VARIANTS = ((True, True), (True, False), (False, True), (False, False))   # (add, occ)
-
-
-def post_fs(shared: str, body: str = POST_FS, add: bool = True, occ: bool = True) -> str:
+def post_fs(shared: str, body: str) -> str:
     """A pass's fragment shader over `shared`, the helpers from
     shaders/_common.glsl — read when the programs are built, so an edit
-    lands on the next rebuild like everywhere else. `body` is the trail's
-    (POST_FS, its variant by `add` and `occ`) or the dream's (DREAM_FS)."""
-    defs = "".join(f"#define {d}\n" for d, on in (("TRAIL_ADD", add), ("TRAIL_OCC", occ)) if on)
-    return (f"\n#version 330\n#define MAX_ECHOES {MAX_ECHOES}\n{defs}#line 1 1\n{shared}\n"
-            f"{body}")
+    lands on the next rebuild like everywhere else. `body` is the dream's
+    (DREAM_FS; plan 90 H2: the look-back's trail pass is retired)."""
+    return f"\n#version 330\n#line 1 1\n{shared}\n{body}"
 
 
 def tint_colour(hue: float, sat: float) -> tuple[float, float, float]:
@@ -572,385 +392,12 @@ def mean_colour(pixels: np.ndarray) -> tuple[float, float, float]:
     return (float(m[0]), float(m[1]), float(m[2]))
 
 
-def fit_atlas(size: tuple[int, int], max_tex: int) -> tuple[int, int]:
-    """The echo size shrunk, aspect kept and 8-px rounded down, so the atlas
-    (MAX_ECHOES slots stacked) is at most `max_tex` on each side."""
-    ew, eh = size
-    k = min(1.0, max_tex / (eh * MAX_ECHOES), max_tex / ew)
-    if k >= 1.0:
-        return size
-    return max(8, int(ew * k) // 8 * 8), max(8, int(eh * k) // 8 * 8)
-
-
 def echo_size(res: int, w: int, h: int) -> tuple[int, int]:
     """The echo's size: `res` on the short side, the render's aspect, 8-px rounded."""
     w, h = max(w, 1), max(h, 1)
     if w >= h:
         return max(8, round(res * w / h / 8) * 8), res
     return res, max(8, round(res * h / w / 8) * 8)
-
-
-def _max_texture(ctx: moderngl.Context) -> int:
-    """The driver's GL_MAX_TEXTURE_SIZE (16384 on Apple silicon)."""
-    try:
-        return int(ctx.info["GL_MAX_TEXTURE_SIZE"])
-    except Exception:  # noqa: BLE001 — a context without the query: the common floor
-        return 8192
-
-
-class Lookback:
-    """One look-back's history ring and its trail pass, on one GL context
-    (plan 36 T4: the ring alone — the dream buffer is `Dreamer`'s). A
-    renderer keeps one per look-back node (`Renderer.ring`): `lookback`,
-    `lookback.2` … each its own echoes, gap, res and clock."""
-
-    def __init__(self, ctx: moderngl.Context, state: DreamState | None = None,
-                 name: str = "lookback"):
-        self.ctx = ctx
-        self.state = state if state is not None else DreamState()
-        self.name = name
-        self.frame = 0                 # frames captured
-        self.clock = 0.0               # the echoes' clock, seconds (tick)
-        self._t_last: float | None = None   # the renderer time the last tick saw
-        self._dt = 1.0 / REF_HZ        # the last tick's step
-        self._ticked = False           # tick() ran for the frame being drawn
-        self._due: float | None = None      # the clock's next capture; None: now
-        self.echo = (0, 0)             # slot size (w, h)
-        self.atlas: moderngl.Texture | None = None
-        self._fbo: moderngl.Framebuffer | None = None
-        self._captures: list[tuple[int, float]] = []   # (slot, clock), oldest first
-        self._next = 0                 # the slot the next downsample lands in
-        self._w = np.zeros(MAX_ECHOES, dtype="f4")
-        self._off = np.zeros(MAX_ECHOES, dtype="f4")
-        self.error = ""                # _common.glsl did not compile: on the fallback
-        self.ring_error = ""           # the history textures could not be made (_ensure)
-        self._made_res = -1            # the `dream.res` the ring was made at (`echo_slot`)
-        self._made_for = (0, 0)        # the render size the last `_ensure` was asked for
-        self.wrote: tuple[int, int] | None = None   # (frame, slot) of the last downsample
-        self._build_programs()
-
-    def _build_programs(self) -> None:
-        ctx = self.ctx
-        self._posts: dict[tuple[bool, bool], tuple] = {}
-        self.error = ""
-        for add, occ in TRAIL_VARIANTS:
-            try:
-                prog = ctx.program(vertex_shader=QUAD_VS,
-                                   fragment_shader=post_fs(common(), add=add, occ=occ))
-            except Exception as e:  # noqa: BLE001 — a bad edit must not kill the show
-                self.error = gl_error(e, {1: "_common.glsl:", 2: "post pass line "})
-                prog = ctx.program(vertex_shader=QUAD_VS,
-                                   fragment_shader=post_fs(FALLBACK, add=add, occ=occ))
-            for name, value in (("u_scene", 0), ("u_ring", 1), ("u_cover", 3), ("u_occ", 4),
-                                ("u_slot", 1.0 / MAX_ECHOES)):
-                if name in prog:
-                    prog[name].value = value
-            self._posts[(add, occ)] = (prog, ctx.vertex_array(prog, []))
-        self._post = self._posts[(True, True)][0]     # the one-shader look-back's
-        self._down = ctx.program(vertex_shader=QUAD_VS, fragment_shader=DOWN_FS)
-        self._down_vao = ctx.vertex_array(self._down, [])
-        self._down["u_scene"].value = 0
-        if self.echo[1]:
-            self._set_pad()
-
-    def _set_pad(self) -> None:
-        for prog, _ in self._posts.values():
-            prog["u_pad"].value = 0.5 / self.echo[1]
-
-    def on_reload(self) -> None:
-        """Hot-swap hook (hotreload.py), and the renderer's call when
-        _common.glsl is saved: recompile the programs; the ring persists.
-        The old programs go only once the new ones exist."""
-        old = [x for pair in self._posts.values() for x in reversed(pair)]
-        old += [self._down_vao, self._down]
-        self._build_programs()
-        for res in old:
-            res.release()
-
-    # ---- the ring ----
-
-    def max_texture(self) -> int:
-        """The driver's GL_MAX_TEXTURE_SIZE (16384 on Apple silicon)."""
-        return _max_texture(self.ctx)
-
-    def _ensure(self, w: int, h: int) -> bool:
-        """The atlas at the echo size for this render size, the slot shrunk
-        (aspect kept) so the atlas fits the driver's largest texture — a
-        portrait window at res 384 would otherwise ask for a 36 864 px tall
-        atlas and raise every frame. False, with the reason on
-        `ring_error`, when the texture cannot be made: nothing is captured
-        then (plan 14 WP1)."""
-        size = fit_atlas(echo_size(RES[max(0, min(self.state.res, len(RES) - 1))], w, h),
-                         self.max_texture())
-        self._made_for = (w, h)        # (plan 34 E: `remaking` asks of this size)
-        if size == self.echo and self.atlas is not None:
-            self._made_res = self.state.res      # the same ring at the new res: kept
-            return True
-        self.release_ring()
-        ew, eh = size
-        try:
-            self.atlas = self.ctx.texture((ew, eh * MAX_ECHOES), 4)
-            self.atlas.repeat_x = self.atlas.repeat_y = False
-            self._fbo = self.ctx.framebuffer(color_attachments=[self.atlas])
-        except Exception as e:  # noqa: BLE001 — no history this frame, never a stuck ring
-            self.release_ring()
-            self.ring_error = f"look-back: no history at {ew}×{eh}: {e}"[:160]
-            return False
-        self.ring_error = ""
-        self.echo = size
-        self._made_res = self.state.res
-        self._fbo.use()
-        self.ctx.clear(0.0, 0.0, 0.0, 0.0)
-        self._captures.clear()
-        self._next = 0
-        self._set_pad()
-        return True
-
-    def release_ring(self) -> None:
-        for res in (self._fbo, self.atlas):
-            if res is not None:
-                res.release()
-        self._fbo = self.atlas = None
-        self.echo = (0, 0)
-
-    def slot_viewport(self, slot: int) -> tuple[int, int, int, int]:
-        ew, eh = self.echo
-        return (0, slot * eh, ew, eh)
-
-    # ---- the clock: echo time in seconds (plan 14 WP6) ----
-
-    def tick(self, t: float | None = None) -> None:
-        """Once a frame, before the trail (the look-back node's `run`):
-        advance the echoes' clock by the renderer's time since the last
-        tick. A time that did not move forward (a frozen test clock, a
-        first frame) counts as one frame at REF_HZ, so a tool drawing at
-        t = 0 sees the old 60 Hz frames."""
-        if t is not None and self._t_last is not None and t > self._t_last:
-            dt = float(t) - self._t_last
-        else:
-            dt = 1.0 / REF_HZ
-        if t is not None:
-            self._t_last = float(t)
-        self._dt = dt
-        self.clock += dt
-        self._ticked = True
-
-    def now(self) -> float:
-        """The clock of the frame being drawn: this frame's tick, or — a
-        caller that drives the trail and the capture without one — one
-        REF_HZ frame past the last capture's."""
-        return self.clock if self._ticked else self.clock + 1.0 / REF_HZ
-
-    def layers(self, now: float | None = None) -> list[tuple[int, float]]:
-        """(slot, age in seconds) of the echoes to composite, oldest first —
-        the newest `echoes` captures, aged against `now` (default: the
-        frame being drawn)."""
-        n = max(0, min(int(self.state.echoes), MAX_ECHOES))
-        if n == 0 or not self._captures:
-            return []
-        now = self.now() if now is None else now
-        return [(slot, now - t) for slot, t in self._captures[-n:]]
-
-    def weights(self, now: float | None = None) -> list[tuple[int, float]]:
-        """(slot, weight) per echo, oldest first: echo_mix · ½^(age / fade)."""
-        s = self.state
-        fade = max(float(s.fade), 1e-6)
-        return [(slot, s.echo_mix * 0.5 ** (age / fade)) for slot, age in self.layers(now)]
-
-    # ---- the frame: tick → trail → capture ----
-
-    def wants_cover(self) -> bool:
-        """Whether this look-back's trail is held back by the faces'
-        coverage mask (render.py draws it): while the render occludes
-        (plan 36 T4: a look-back drawn is on — no `dream.on` gate)."""
-        return float(self.state.occlude) > 0.0
-
-    def trail(self, target: moderngl.Framebuffer, cover: moderngl.Texture | None = None,
-              occluder: moderngl.Texture | None = None,
-              under: moderngl.Texture | None = None) -> None:
-        """The trail pass into `target`'s viewport (plan 36 T4): the echoes,
-        weighted by age, graded, held back by `cover` (the faces' coverage
-        mask at the frame's size) and by `occluder`'s brightness (None: by
-        none) — premultiplied, with its alpha. With `under` (a picture at
-        the frame's size) the trail is added onto it in the same pass, the
-        alphas' union: an "add" composite of the look-back over `under`,
-        byte for byte the one-shader look-back's frame."""
-        s, ctx = self.state, self.ctx
-        p, vao = self._posts[(under is not None, occluder is not None)]
-        x, y, _, _ = target.viewport
-        target.use()
-        ctx.disable(moderngl.BLEND)      # the texture is already composited; write it
-        if under is not None:
-            under.use(location=0)
-        if cover is not None:
-            cover.use(location=3)
-        if occluder is not None:
-            occluder.use(location=4)
-        p["u_has_cover"].value = int(cover is not None)
-        n = 0
-        if self.atlas is not None:
-            self.atlas.use(location=1)
-            for slot, wgt in self.weights():
-                self._w[n], self._off[n] = wgt, slot / MAX_ECHOES
-                n += 1
-        p["u_origin"].value = (x, y)
-        p["u_n"].value = n
-        if n:
-            p["u_w"].write(self._w.tobytes())
-            p["u_off"].write(self._off.tobytes())
-        p["u_darken"].value = float(s.darken)
-        p["u_contrast"].value = float(s.contrast)
-        p["u_occlude"].value = float(s.occlude)
-        vao.render(moderngl.TRIANGLES, vertices=3)
-        ctx.enable(moderngl.BLEND)
-
-    def composite(self, scene: moderngl.Texture, target: moderngl.Framebuffer,
-                  cover: moderngl.Texture | None = None,
-                  occluder: moderngl.Texture | None = None) -> None:
-        """`scene` with the trail added on (`trail` with `under`), held back
-        by `occluder`'s brightness — `scene`'s own when None, as the
-        one-shader look-back was."""
-        self.trail(target, cover, occluder if occluder is not None else scene, under=scene)
-
-    def capture(self, scene: moderngl.Texture, target: moderngl.Framebuffer) -> None:
-        """After every reader of the trail: this frame into the ring (on the
-        cadence). `target` is bound again on every return, a raise
-        included: `_ensure` binds the atlas, and the early return on a
-        frame off the cadence once left it bound for good (plan 14 WP1)."""
-        if not self._ticked:
-            self.tick(None)            # driven without the renderer: one REF_HZ frame
-        try:
-            self._capture(scene, target)
-        finally:
-            self._ticked = False
-            target.use()
-
-    def _due_now(self) -> bool:
-        """Whether this frame's capture is committed to the ring: one every
-        `gap` seconds of the echoes' clock, the first a gap after the look-back
-        came on; a frame within half a frame of its due time is on time, so
-        a gap of exactly N frames commits every Nth frame at any rate."""
-        gap = max(float(self.state.gap), 0.0)
-        clock, dt = self.clock, self._dt
-        if self._due is None:
-            self._due = clock - dt + gap
-        if clock + dt / 2 < self._due:
-            return False
-        self._due += gap
-        if self._due <= clock + dt / 2 - dt:       # fell behind (a stall): from now
-            self._due = clock + gap
-        return True
-
-    def _capture(self, scene: moderngl.Texture, target: moderngl.Framebuffer) -> None:
-        _, _, w, h = target.viewport
-        if not self._ensure(w, h):
-            return
-        self.frame += 1
-        if not self._due_now():
-            return
-        # the slot's previous occupant is the oldest capture
-        slot = self._next
-        self._captures = [c for c in self._captures if c[0] != slot]
-        self._downsample(scene, slot)
-        # (plan 34 E: an echo that took this slot before the capture now
-        # reads nothing rather than this frame's picture)
-        self.wrote = (self.frame, slot)
-        self._captures.append((slot, self.clock))
-        self._next = (slot + 1) % MAX_ECHOES
-
-    def idle(self) -> None:
-        """Not in this frame's graph: forget the history so a look-back
-        drawn again starts clean (the renderer, `Renderer._idle_rings`)."""
-        self._captures.clear()
-        self._due = None
-
-    def _downsample(self, scene: moderngl.Texture, slot: int) -> None:
-        scene.build_mipmaps()            # sets LINEAR_MIPMAP_LINEAR on the texture
-        self._fbo.use()
-        self.ctx.viewport = self.slot_viewport(slot)
-        self.ctx.disable(moderngl.BLEND)
-        scene.use(location=0)
-        self._down_vao.render(moderngl.TRIANGLES, vertices=3)
-        self.ctx.enable(moderngl.BLEND)
-
-    # ---- the ring's frames ----
-
-    def newest(self) -> int | None:
-        """The slot holding the newest commit, or None before the first."""
-        if self.atlas is None:
-            return None
-        if self._captures:
-            return self._captures[-1][0]
-        return None
-
-    def held(self) -> int:
-        """How many commits the ring holds (plan 34 E: an echo's words)."""
-        return len(self._captures)
-
-    def echo_slot(self, k: int) -> int | None:
-        """The atlas slot of the k-th newest commit (`lookback.echo.<k>`,
-        plan 34 E, row 361; 1 the newest), or None while the ring does not
-        hold it: fewer than k commits since it was made, no ring
-        (`ring_error`), or a `dream.res` the ring is about to be made again
-        for — its echoes are gone this frame, and come back one commit at
-        a time."""
-        if self.atlas is None or not 1 <= k <= len(self._captures):
-            return None
-        if self.remaking():
-            return None
-        return self._captures[-k][0]
-
-    def remaking(self) -> bool:
-        """Whether this frame's capture will make the ring again for a
-        `dream.res` change (plan 34 E): the echo size the new res makes at
-        the last capture's size is not the ring's. A res whose size comes
-        out the same (clamped, capped by `fit_atlas`) keeps the ring."""
-        res = self.state.res
-        if self.atlas is None or res == getattr(self, "_made_res", res):
-            return False
-        w, h = getattr(self, "_made_for", (0, 0))
-        if not w or not h:
-            return False
-        size = fit_atlas(echo_size(RES[max(0, min(res, len(RES) - 1))], w, h),
-                         self.max_texture())
-        return size != self.echo
-
-    def read_into(self, array: np.ndarray, slot: int | None = None) -> None:
-        """glReadPixels of one echo into `array` ((h, w, 4) uint8, any
-        writable buffer), rows bottom-up."""
-        if self._fbo is None:
-            raise RuntimeError("lookback: no history yet")
-        if slot is None:
-            slot = self.newest()
-            if slot is None:
-                raise RuntimeError("lookback: nothing captured yet")
-        self._fbo.read_into(array, viewport=self.slot_viewport(slot), components=4)
-
-    def write_slot(self, slot: int, array: np.ndarray, at: float | None = None) -> None:
-        """Put pixels straight into an echo slot (tests, tools); with `at`,
-        the echoes' clock it was taken at (seconds), it also counts as a
-        capture."""
-        ew, eh = self.echo
-        self.atlas.write(array, viewport=(0, slot * eh, ew, eh))
-        if at is not None:
-            self._captures = [c for c in self._captures if c[0] != slot]
-            self._captures.append((slot, float(at)))
-            self._captures.sort(key=lambda c: c[1])
-            self._next = (slot + 1) % MAX_ECHOES
-
-    # ---- what the panel shows ----
-
-    def thumbnails(self) -> list[dict[str, Any]]:
-        """The echoes newest first, as imgui image coordinates into the atlas
-        (v flipped: GL rows are bottom-up) with their age and weight."""
-        if self.atlas is None:
-            return []
-        out = []
-        for (slot, age), (_, wgt) in zip(reversed(self.layers()), reversed(self.weights())):
-            v0, v1 = (slot + 1) / MAX_ECHOES, slot / MAX_ECHOES
-            out.append({"slot": slot, "age": age, "weight": wgt, "uv0": (0.0, v0),
-                        "uv1": (1.0, v1)})
-        return out
 
 
 class Dreamer:
@@ -1003,7 +450,9 @@ class Dreamer:
         self._down["u_scene"].value = 0
 
     def on_reload(self) -> None:
-        """As `Lookback.on_reload`: the programs again; `D` persists."""
+        """Hot-swap hook (hotreload.py), and the renderer's call when
+        _common.glsl is saved: the programs again; `D` persists. The old
+        programs go only once the new ones exist."""
         old = (self._vao, self._down_vao, self._prog, self._down)
         self._build_programs()
         for res in old:

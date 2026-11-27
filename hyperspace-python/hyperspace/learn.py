@@ -103,7 +103,6 @@ from .params import (
     Kind,
     Param,
     Registry,
-    is_lookback_knob,
     is_per_deck_meta_id,
 )
 from .routing import (
@@ -258,26 +257,19 @@ _MEDIA = ("view.media_alpha", "view.media_scale", "view.media_mode", "view.media
           "view.media_rate",      # plan 32: the faces' media channel (was view.bmp_*)
           "view.bmp_alpha")       # …and the factory knob 7's alias of view.media_alpha
 _ROTATE = ("rot.rate.", "view.plane.")
-# plan 36 T4 (W4): a look-back's knobs (`params.is_lookback_knob`) show while
-# the graph draws a look-back; every other `dream.*` is the dream node's,
-# shown while a dream is drawn and `dream.on`
+# plan 36 T4 (W4): `dream.*` is the dream node's, shown while a dream is drawn
+# and `dream.on` (plan 90 H2: the look-back's knobs are its parts')
 
 
 def drawn_of(spec) -> frozenset[str] | None:
     """The nodes graph `spec` (a `graph.GraphSpec`) names in its wires —
-    a pin as its node (`lookback.echo.3` the look-back) — what decides
-    whether a look-back's or the dream's knobs can show (plan 36 T4). None
+    a pin as its node — what decides
+    whether the dream's knobs can show (plan 36 T4). None
     with no graph to ask."""
     if spec is None:
         return None
     names = {n for w in spec.all_wires() for n in (w.src, w.node)}
     return frozenset({*names, *(pin_node(n) for n in names if pin_node(n) is not None)})
-
-
-def _lookback_of(pid: str) -> str:
-    """The look-back a look-back knob is of: `dream.2.fade` → `lookback.2`."""
-    parts = pid.split(".")
-    return "lookback" if len(parts) == 2 else f"lookback.{parts[1]}"
 
 
 def faces_media(spec, selects=None) -> bool | None:
@@ -330,9 +322,6 @@ def cannot_show(pid: str, values, media: bool | None = None,
             name = ".".join(parts[1:-1])
             return f"{name} off" if off(f"fx.{name}.on") else None
         return None
-    if is_lookback_knob(pid):
-        return ("no look-back" if drawn is not None and _lookback_of(pid) not in drawn
-                else None)
     if pid.startswith("dream.") and pid != "dream.on":
         if drawn is not None and "dream" not in drawn:
             return "no dream"
@@ -417,8 +406,6 @@ def _switched_on(pid: str, values, drawn: frozenset[str] | None = None) -> bool:
     if pid.startswith("fx.") and pid.count(".") >= 2 and not pid.endswith(".on"):
         name = pid.split(".", 1)[1].rsplit(".", 1)[0]
         return bool(values.get("fx.on")) and bool(values.get(f"fx.{name}.on"))
-    if is_lookback_knob(pid):
-        return drawn is not None and _lookback_of(pid) in drawn
     if pid.startswith("dream.") and pid != "dream.on":
         return bool(values.get("dream.on")) and (drawn is None or "dream" in drawn)
     return False

@@ -118,9 +118,17 @@ def test_scene_chain_on_a_blank_loadable(tmp_path):
     assert e.said == graphview.STARTER_SAID
 
 
+# plan 90 (H2, Q28): a delay keeping 8 pictures at 30 Hz, a Trail laying them
+# added, a composite adding the trail under the picture — public parts alone
 TRACED = CHAIN - {("scene", ALL)} | {
-    ("scene", "lookback.image"), ("scene", "lookback.occluder"),
-    ("scene", "composite.under"), ("lookback", "composite.over"), ("composite", ALL)}
+    ("scene", "delay.image"), ("delay", "trail.stack"),
+    ("scene", "composite.under"), ("trail", "composite.over"), ("composite", ALL)}
+
+
+def _traced_values(rig, delay="delay", trail="trail"):
+    reg = rig.reg
+    return (reg[f"{delay}.depth"].value, reg[f"{delay}.every"].value, reg[f"{delay}.hz"].value,
+            reg[f"fx.{trail}.on"].value, reg[f"fx.{trail}.lay"].value)
 
 
 def test_tracers_lay_the_trail_on_the_scene_where_it_went(tmp_path):
@@ -128,17 +136,46 @@ def test_tracers_lay_the_trail_on_the_scene_where_it_went(tmp_path):
     assert e.starter("tracers") is None
     assert wired_wires(rig) == TRACED
     assert {"kind": "composite", "blend": "add"} in _entries(rig)
-    assert pushed == ["starter: tracers"] and e.placed == ("lookback", "composite")
+    assert {"kind": "delay"} in _entries(rig)
+    assert {"kind": "effect", "file": "trail"} in _entries(rig)
+    assert pushed == ["starter: tracers"] and e.placed == ("delay", "trail", "composite")
     assert "left unwired" not in e.said
+    assert _traced_values(rig) == (8, 1, 30.0, True, 1)          # 8 at 30 Hz, laid add
+
+
+def test_tracers_land_as_one_folded_look_back_group(tmp_path):
+    """The owner (2026-11-26, plan 90 H2): the tracers are one primitive —
+    picture in, picture out — folded in a group named as a migrated
+    look-back's is, its parts a `+` away; in the starter's one undo step.
+    With the dream the dream stays outside (H3 groups it)."""
+    from hyperspace import graphmigrate
+    rig, e, _ = wired_rig(tmp_path, SCENE)
+    e.loaded_patch = rig.loaded_patch                 # (as GRAPH's Edit is: `render_edit`)
+    assert e.starter("tracers") is None
+    assert e.starter("tracers+dream") is None
+    got = [(g["name"], g["nodes"], g["open"]) for g in rig.loaded_patch.groups]
+    assert got == [
+        (graphmigrate.LB_GROUP, ["render:delay", "render:trail", "render:composite"], False),
+        (graphmigrate.LB_GROUP, ["render:delay.2", "render:trail.2"], False)]
 
 
 def test_tracers_and_dream(tmp_path):
     rig, e, pushed = wired_rig(tmp_path, SCENE)
     assert e.starter("tracers+dream") is None
-    assert wired_wires(rig) == TRACED - {("lookback", "composite.over")} | {
-        ("lookback", "dream.image"), ("dream", "composite.over")}
+    assert wired_wires(rig) == TRACED - {("trail", "composite.over")} | {
+        ("trail", "dream.image"), ("dream", "composite.over")}
     assert pushed == ["starter: tracers + dream"]
-    assert e.placed == ("lookback", "dream", "composite")
+    assert e.placed == ("delay", "trail", "dream", "composite")
+
+
+def test_a_second_tracers_is_its_own_parts(tmp_path):
+    """No look-back to have one of: each tracers is its own delay and trail."""
+    rig, e, _ = wired_rig(tmp_path, SCENE)
+    assert e.starter("tracers") is None
+    assert e.starter("tracers") is None
+    got = wired_wires(rig)
+    assert ("delay.2", "trail.2.stack") in got and ("trail.2", "composite.2.over") in got
+    assert _traced_values(rig, "delay.2", "trail.2") == (8, 1, 30.0, True, 1)
 
 
 def test_dream_on_a_picture(tmp_path):
@@ -169,18 +206,18 @@ def test_tracers_on_a_cable_take_its_picture(tmp_path):
     assert e.starter("tracers", ("acid", ALL)) is None
     assert wired_wires(rig) == {
         ("shape", "scene.geometry"), ("scene", "acid.image"),
-        ("acid", "lookback.image"), ("acid", "lookback.occluder"),
-        ("acid", "composite.under"), ("lookback", "composite.over"), ("composite", ALL)}
+        ("acid", "delay.image"), ("delay", "trail.stack"),
+        ("acid", "composite.under"), ("trail", "composite.over"), ("composite", ALL)}
     assert pushed == ["starter: tracers"]
 
 
 def test_no_scene_wires_what_it_can_and_says_the_rest(tmp_path):
     rig, e, pushed = wired_rig(tmp_path, {"frame": "wired"})
     assert e.starter("tracers") is None
-    assert wired_wires(rig) == {("lookback", "composite.over")}
-    assert "left unwired: lookback.image, lookback.occluder, composite.under" in e.said
+    assert wired_wires(rig) == {("delay", "trail.stack"), ("trail", "composite.over")}
+    assert "left unwired: delay.image, composite.under" in e.said
     assert "the composite's picture" in e.said
-    assert e.placed == ("lookback", "composite") and len(pushed) == 1
+    assert e.placed == ("delay", "trail", "composite") and len(pushed) == 1
 
 
 def test_a_scene_feeding_two_ports_leaves_the_composite_unwired(tmp_path):
@@ -195,7 +232,7 @@ def test_a_scene_feeding_two_ports_leaves_the_composite_unwired(tmp_path):
 
 
 @pytest.mark.parametrize("which,section", [
-    ("tracers", {"frame": "wired", "nodes": [{"kind": "lookback"}]}),
+    ("tracers+dream", {"frame": "wired", "nodes": [{"kind": "dream"}]}),
     ("dream", {"frame": "wired", "nodes": [{"kind": "dream"}]}),
     ("backdrop", {"frame": "wired", "nodes": [{"kind": "backdrop"}]}),
 ])
@@ -232,14 +269,17 @@ def test_a_starter_lands_at_the_point_as_one_undo_step(page):
         e = ui_graph.render_edit(page.panel)
         assert ui_graph.add_render(page.panel, e, "starter", "tracers", (400.0, 300.0)) is None
         lay = lib.loaded_patch.layout
-        assert lay["render:lookback"] == [300, 350]
-        assert lay["render:composite"] == [300 + graphview.COL_W, 350]
-        assert len(lay) == len(was[1]) + 2              # nothing else placed or moved
+        assert lay["render:delay"] == [300, 350]
+        assert lay["render:trail"] == [300 + graphview.COL_W, 350]
+        assert lay["render:composite"] == [300 + 2 * graphview.COL_W, 350]
+        assert len(lay) == len(was[1]) + 3              # nothing else placed or moved
         assert u.stack[-1].label == "starter: tracers"
+        assert [g["name"] for g in lib.loaded_patch.groups] == ["look-back"]
         assert u.undo()
     finally:
         undo.install(None)
     assert (lib.loaded_patch.graph.spec.to_json(), dict(lib.loaded_patch.layout)) == was
+    assert lib.loaded_patch.groups == []
 
 
 # ---------------------------------------------------------------- feedback (wave 0 E1, 2026-11-02)
@@ -256,13 +296,12 @@ FB_SAID = ("feedback: scene → composite over → output.all.image; composite �
 
 
 def test_feedback_is_a_starter_a_picture_cable_offers():
-    """Its key names no node kind (`echo` is the look-back's frame): the
-    starter is "feedback", its decay the `fade` effect."""
+    """Its key names no node kind: the starter is "feedback", its decay the
+    `fade` effect."""
     from hyperspace import graph as G
     assert ("feedback", "feedback") in graphview.STARTERS
     assert "feedback" in graphview.CABLE_STARTERS
-    assert "feedback" not in G.NODE_KINDS and "echo" in G.NODE_KINDS   # (why not "echo")
-    assert graphview.label_of("echo.1").startswith("Echo")
+    assert "feedback" not in G.NODE_KINDS
     assert graphview.FEEDBACK_FILE == "fade" and graphview.FEEDBACK_LEVEL == 0.75
 
 
@@ -348,14 +387,16 @@ def test_picture_feeds_names_the_cables_feedback_goes_after(tmp_path):
     menu's "add feedback after"), read off the spec's wires with no copy
     of the section (review 3); [] for one feeding nothing; None for a
     geometry, a window and a node whose picture is a pin."""
-    section = {"frame": "wired", "nodes": [{"kind": "composite"}, {"kind": "segment"}],
-               "wires": [*SCENE["wires"], {"from": "scene", "to": "lookback.image"}]}
+    section = {"frame": "wired", "nodes": [{"kind": "composite"}, {"kind": "segment"},
+                                           {"kind": "delay"}],
+               "wires": [*SCENE["wires"], {"from": "scene", "to": "delay.image"},
+                         {"from": "delay", "to": "output.2.image"}]}
     _, e, _ = wired_rig(tmp_path, section)
     import copy as copy_mod
     deep, real = [], copy_mod.deepcopy
     copy_mod.deepcopy = lambda x, *a, **k: (deep.append(1), real(x, *a, **k))[1]
     try:
-        assert graphview.picture_feeds(e, "scene") == [("scene", ALL), ("scene", "lookback.image")]
+        assert graphview.picture_feeds(e, "scene") == [("scene", ALL), ("scene", "delay.image")]
     finally:
         copy_mod.deepcopy = real
     assert deep == []
@@ -444,8 +485,9 @@ def test_the_menus_offer_feedback(page, monkeypatch):
     page.lib.loaded_patch.new((0.0, 0.0))
     e = ui_graph.render_edit(panel)
     assert e.add_node("composite") is None                  # feeds nothing
-    assert e.wire("scene", "lookback.image") is None        # the scene feeds two
-    assert e.wire("lookback", "composite.over") is None     # the look-back feeds one
+    assert e.add_node("resize") is None
+    assert e.wire("scene", "resize.image") is None          # the scene feeds two
+    assert e.wire("resize", "composite.over") is None       # the resize feeds one
     frame(panel, "graph")
     view = ui_graph._state(panel)["view"]
     items: list[tuple[str, bool]] = []
@@ -460,8 +502,8 @@ def test_the_menus_offer_feedback(page, monkeypatch):
 
     drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:scene"), m))
     assert menus == [ui_graph.FEEDBACK_AFTER]
-    assert ("→ output.all.image", True) in items and ("→ lookback.image", True) in items
-    drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:lookback"), m))
+    assert ("→ output.all.image", True) in items and ("→ resize.image", True) in items
+    drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:resize"), m))
     assert (ui_graph.FEEDBACK_AFTER, True) in items and menus == []
     drawn(lambda m: ui_graph.render_node_menu(panel, view.node("render:composite"), m))
     assert (f"{ui_graph.FEEDBACK_AFTER}: {graphview.FEEDBACK_FEEDS_NOTHING}", False) in items

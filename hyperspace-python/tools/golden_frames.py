@@ -806,7 +806,10 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
         # (plan 36 T4: an old file's frame, written here as the migration
         # writes it, ends with its look-back split as its values had it)
         values = source_doc(loaded_patch, slug).get("values") or {}
-        wired = graphmigrate.split_lookback(wired, graphmigrate.look_of(values))
+        # (plan 90 H2: and, as the ladder's last step, the look-back made its
+        # public parts — the same names the load gave them, its values landed)
+        wired = graphmigrate.split_retired(wired, graphmigrate.look_of(values),
+                                           _rest_of(source_doc(loaded_patch, slug)))
     return wired
 
 
@@ -1314,6 +1317,12 @@ def variant_section(fields: dict, run: tuple[str, ...]) -> dict:
     return {"nodes": nodes, "wires": wires}
 
 
+def _rest_of(doc: dict) -> dict:
+    """A loadable patch's keys but its graph, name and schema: what the
+    ladder's last step reads beside the section (plan 90 H2)."""
+    return {k: v for k, v in doc.items() if k not in ("graph", "schema", "name")}
+
+
 def signature_case(loader: Loader, key: str):
     """(the states, the old spec, the old section, the effect instances,
     the wired section, the cloud roles) of case `key`. A WIRED variant is
@@ -1324,29 +1333,31 @@ def signature_case(loader: Loader, key: str):
     slug, _, variant = key.partition("/")
     spec, section, effects, wired = loader.load(slug)
     # (plan 36 T4: the look-back as the old file's values had it)
-    look = graphmigrate.look_of(source_doc(loader.loaded_patch, slug).get("values"))
+    src = source_doc(loader.loaded_patch, slug)
+    look = graphmigrate.look_of(src.get("values"))
+    rest = _rest_of(src)
     files = {e.partition(".")[0] for e in effects}
     solo = dict(SOLO + SOLO_FX)
     if variant == "states":
-        return STATES, spec, section, effects, wired, (), look
+        return STATES, spec, section, effects, wired, (), look, rest
     if variant in solo:
-        return ((variant, solo[variant]),), spec, section, effects, wired, (), look
+        return ((variant, solo[variant]),), spec, section, effects, wired, (), look, rest
     cloud = next((c for c in CLOUDED if c[0] == variant), None)
     if cloud is not None:
         return (tuple((n, dict(STATES)[n]) for n in cloud[2]), spec, section, effects, wired,
-                ("scan",), look)
+                ("scan",), look, rest)
     _, fields, names, _ = next(v for v in WIRED if v[0] == variant)
     run = tuple(spec.wiring().run or ())
     vsection = variant_section(fields, run)
     vspec = read_graph(vsection, effects=files)
     assert vspec.wiring() == replace(Wiring(**fields), run=run), (key, vspec.wiring())
-    vwired = graphmigrate.split_lookback(
-        graphmigrate.wired_section(graphmigrate.renamed(vsection), vspec), look)
+    vwired = graphmigrate.split_retired(
+        graphmigrate.wired_section(graphmigrate.renamed(vsection), vspec), look, rest)
     return (tuple((n, dict(STATES)[n]) for n in names), vspec, vsection, effects, vwired, (),
-            look)
+            look, rest)
 
 
-def frame_graphs(states, spec, section, effects, wired=None, clouds=(), look="off"):
+def frame_graphs(states, spec, section, effects, wired=None, clouds=(), look="off", rest=None):
     """(the wired frame's graph, the wired section) for one case (see
     above). `wired`: the frame as the load wired it — checked here to be
     `wired_section` of the old section, so the proof is the load's — None,
@@ -1355,7 +1366,7 @@ def frame_graphs(states, spec, section, effects, wired=None, clouds=(), look="of
     made = graphmigrate.wired_section(graphmigrate.renamed(section or {}), spec)
     placed = graphmigrate.placed_wires(made, files)
     # (plan 36 T4: the look-back split last, as the load's migration does)
-    split = graphmigrate.split_lookback(placed, look)
+    split = graphmigrate.split_retired(placed, look, rest)
     if wired is None:
         wired = split
     assert read_graph(split, effects=files).to_json() == read_graph(wired, effects=files).to_json()
@@ -1367,7 +1378,7 @@ def frame_graphs(states, spec, section, effects, wired=None, clouds=(), look="of
     for k, (_, sw) in enumerate(states):
         wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
     if late is not None:
-        wired = graphmigrate.split_lookback(graphmigrate.placed_wires(wired, files), look)
+        wired = graphmigrate.split_retired(graphmigrate.placed_wires(wired, files), look, rest)
     got = read_graph(wired, effects=files)
     assert not got.notes, got.notes
     mutes_on = [View(Switches(), (W, H)) for _ in states]

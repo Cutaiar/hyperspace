@@ -174,15 +174,21 @@ def test_a_refused_wire_in_a_seven_is_dropped_with_a_note_not_defaulted(tmp_path
 def test_a_seven_is_never_migrated_or_filled_in(tmp_path):
     """A `/7` frame with no pattern wire, no cover and no hands wire loads
     with none of them (the migration's hidden edges are an old file's);
-    no note says it was migrated."""
+    no note says it was migrated. Plan 90 H2: its look-back, retired at any
+    version, is public parts — Fade → Resize → Delay ═► Trail where its
+    picture went, no Cut (no occluder or cover wired), said in the look-back's
+    own note; nothing else is added."""
     section = {"frame": "wired", "nodes": [], "wires": [
         {"from": "shape", "to": "scene.geometry"},
         {"from": "scene", "to": "lookback.image"},
         {"from": "lookback", "to": "output.all.image"}]}
     app = _app_with(tmp_path, "lean", {"schema": SEVEN, "values": {}, "graph": section})
     assert app.loaded_patch.migrated == "", app.loaded_patch.migrated
+    assert [n for n in app.loaded_patch.notes if "(plan 90)" not in n] == []
     got = _pairs(app.loaded_patch.document("lean")["graph"])
-    assert got == _pairs(section)
+    assert sorted(got) == sorted([
+        ("shape", "scene.geometry"), ("scene", "fade.image"), ("fade", "resize.image"),
+        ("resize", "delay.image"), ("delay", "trail.stack"), ("trail", "output.all.image")])
 
 
 # ---------------------------------------------------------------- effects only where named
@@ -236,10 +242,16 @@ def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
     doc = json.loads((FIXTURES / "acid-scene.json").read_text())
     app = _app_with(tmp_path, "acid-scene", doc)
     said = M.MIGRATED_NOTE.format(old="hyperspace.preset/2", new=SAVED)
-    assert app.loaded_patch.migrated == said and unrescaled(app.loaded_patch.notes) == []     # (not a problem; plan 86: an old file's depths said)
+    # (not a problem; plan 86: an old file's depths said; plan 90 H2: its look-back
+    # is public parts now, said)
+    assert app.loaded_patch.migrated == said
+    rest = unrescaled(app.loaded_patch.notes)
+    assert len(rest) == 1 and rest[0].startswith("lookback is public parts now (plan 90)")
     # (the strip says a load's first note before the migration line, `_warn`: this
-    # fixture is from before the effect tapers, so its rescaled depths, plan 86)
-    assert app.lib.warning == f"{app.lib.warning.split()[0]} acid-scene: {app.loaded_patch.notes[0]}"
+    # fixture is from before the effect tapers, so its rescaled depths, plan 86;
+    # the look-back's note the one more)
+    assert app.lib.warning == (f"{app.lib.warning.split()[0]} acid-scene: "
+                               f"{app.loaded_patch.notes[0]} (+1 more)")
     assert app.loaded_patch.document("acid-scene")["schema"] == SAVED
 
 
@@ -250,7 +262,8 @@ def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
     ("palette-glass", [("huecycle", "palette.image"), ("palette", "output.2.image")]),
     # after the scene: every picture wire from the scene reads acid.2 (plan
     # 36 T4: the look-back on — it records acid.2, and the trail and the
-    # dream are added onto it)
+    # dream are added onto it; plan 90 H2: the ladder's last step makes it
+    # public parts, below)
     ("acid-scene", [("scene", "acid.2.image"), ("acid.2", "composite.under"),
                     ("acid.2", "lookback.image")]),
     # after the hands' layer: its picture into All outputs, not the guide
@@ -266,7 +279,14 @@ def test_placements_become_the_wires_they_stood_for(slug, want):
     assert not any(k in e for e in section["nodes"] for k in G.PLACE_KEYS)
     for pair in want:
         assert pair in _pairs(section), (slug, pair, _pairs(section))
-    assert G.read_graph(section).notes == ()
+    # plan 90 H2: a look-back is no live node — the ladder's last step makes
+    # it public parts, on the same picture, and that graph reads clean
+    done, _ = M.lookbacks(out)
+    assert "lookback" not in json.dumps(done["graph"])
+    if any(t.startswith("lookback.") for _, t in want):
+        recorded = next(f for f, t in want if t == "lookback.image")
+        assert (recorded, "fade.image") in _pairs(done["graph"])
+    assert G.read_graph(done["graph"]).notes == ()
 
 
 def test_a_seven_frame_reads_no_placement():
@@ -324,7 +344,11 @@ def test_every_corpus_loadable_is_its_sources_seven_and_round_trips(tmp_path):
     tools/migrate_library.py makes of its source (`--to`: load the old file,
     save) — so the migration can be re-run from the sources and lands the
     same files, up to the defaults a source does not name that moved since
-    (`_as_before_calming`)."""
+    (`_as_before_calming`). Since plan 90 (H2) the files are kept as saved
+    before it — old look-back files the tests open — so a resave is the file
+    with the look-back retired (`graphmigrate.lookbacks`): the retired
+    `dream.*` knobs gone, and party-tracer's and party-wake's look-backs
+    their parts with the notes that say so; that resave is a fixed point."""
     paths = sorted((CORPUS / "loadable").glob("*.json"))
     assert len(paths) == 25
     assert sorted(p.name for p in SOURCES.glob("*.json")) == [p.name for p in paths]
@@ -332,6 +356,15 @@ def test_every_corpus_loadable_is_its_sources_seven_and_round_trips(tmp_path):
         data = path.read_bytes()
         assert json.loads(data)["schema"] == SAVED, path.name
         again, notes, _ = headless.resave(path, tmp_path / f"f{k}")
-        assert again == data and notes == [], path.name
+        held = "lookback" in json.loads(data)["graph"]["wires"].__repr__()
+        assert [n for n in notes if "plan 90" not in n] == [], path.name
+        assert bool(notes) == held, path.name
+        if not held:
+            assert json.loads(again) == M.lookbacks(json.loads(data))[0], path.name
+        assert b"dream.echo_mix" not in again and b'"lookback' not in again, path.name
+        (tmp_path / f"g{k}.json").write_bytes(again)
+        twice, notes2, _ = headless.resave(tmp_path / f"g{k}.json", tmp_path / f"h{k}")
+        assert twice == again and notes2 == [], path.name
         made, _, _ = headless.resave(SOURCES / path.name, tmp_path / f"s{k}")
-        assert _as_before_calming(made, SOURCES / path.name, data) == json.loads(data), path.name
+        assert (_as_before_calming(made, SOURCES / path.name, again)
+                == json.loads(again)), path.name
