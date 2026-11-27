@@ -402,3 +402,24 @@ def test_the_master_switch_keeps_wire_declared_and_default_mix_effects_as_they_d
     got, _ = graphmigrate.lookbacks(doc)
     assert got["values"]["fx.mix"] == 1.0
     assert got["values"]["fx.acid.mix"] == pytest.approx(0.25)
+
+
+def test_a_fragment_with_no_dream_keeps_its_rows_onto_the_hosts_dream():
+    """Devin on #522 (second pass): only the dream's values are the host's in
+    a fragment with no dream — a row from the fragment's own LFO onto
+    `dream.contrast` may drive the host's, and keeps doing so beside the
+    Curve it now drives too."""
+    doc = {"schema": patches.SCHEMA, "name": "f",
+           "nodes": [{"kind": "composite", "blend": "add"}],
+           "wires": [{"from": "lookback", "to": "composite.over"}],
+           "ports": [{"id": "in", "type": "image", "to": "lookback.image", "was": "scene"},
+                     {"id": "out", "type": "image", "from": "composite",
+                      "was": "output.all.image"}],
+           "lfos": [{"id": "lfo.1"}],
+           "routes": [{"source": "lfo:1", "target": "dream.contrast", "op": "push",
+                       "value": 0.2}],
+           "values": {"dream.echoes": 4, "dream.contrast": 1.0}}
+    got = patches.forward(doc)
+    targets = sorted(r["target"] for r in got["routes"])
+    assert targets == ["dream.contrast", "fx.curve.shape"], got["routes"]
+    assert "dream.contrast" not in got["values"]

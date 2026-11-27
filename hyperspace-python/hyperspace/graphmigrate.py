@@ -2697,7 +2697,9 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
             return None
         lb, k = got
         role = parts.get(lb)
-        keep = [pid] if lb == "lookback" and k in LB_SHARED and keep_shared else []
+        # (a row may drive the host's dream from a fragment with none — only
+        # its values are the host's: Devin on #522, second pass)
+        keep = [pid] if lb == "lookback" and k in LB_SHARED else []
         if role is None:
             return keep
         new = {"echo_mix": [f"fx.{role['trail']}.level"] if "trail" in role else [],
