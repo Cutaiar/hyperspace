@@ -139,7 +139,7 @@ class Key:
     """A keyed node's black is clear (plan 87, `key.<node>.*`,
     `view.KeyState`) as a key pass reads it, held to its ranges: `measure`
     an index into `view.KEY_MEASURES`, `level` and `soft` the ramp, `keep`
-    keep colour, `feather` px, `invert`. Hashable: part of a frame cache key."""
+    keep colour, `feather` px, `invert`, `ramp` (plan 90: smooth or linear). Hashable: part of a frame cache key."""
 
     measure: int = 0
     level: float = 0.02
@@ -147,6 +147,7 @@ class Key:
     keep: bool = True
     feather: float = 0.0
     invert: bool = False
+    ramp: int = 0                   # plan 90 (H1): an index into `view.KEY_RAMPS`
 
 
 def key_of(state: Any) -> Key:
@@ -157,7 +158,8 @@ def key_of(state: Any) -> Key:
                soft=min(max(float(getattr(state, "soft", 0.1)), 0.0), 1.0),
                keep=bool(getattr(state, "keep", True)),
                feather=max(float(getattr(state, "feather", 0.0)), 0.0),
-               invert=bool(getattr(state, "invert", False)))
+               invert=bool(getattr(state, "invert", False)),
+               ramp=int(getattr(state, "ramp", 0) or 0))
 
 
 @dataclass

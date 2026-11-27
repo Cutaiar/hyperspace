@@ -190,7 +190,7 @@ def test_the_example_is_a_patch():
     (lambda d: d["wires"].append({"from": "cloud.1", "to": "acid.aux"}),
      "wire cloud.1 → acid.aux: cloud.1 is the meta controller's; left out"),
     (lambda d: d["ports"][0].update(type="colour"),
-     "port in: type 'colour' is not one of image, mask, geometry, value, field"),
+     "port in: type 'colour' is not one of image, mask, geometry, value, field, stack"),
     (lambda d: d["wires"].append({"from": "acid", "to": "zoomblur.image"}),
      "wire acid → zoomblur.image crosses the edge: a port says it"),
     (lambda d: d["values"].update({"view.bright": 0.8}),

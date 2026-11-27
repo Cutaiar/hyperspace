@@ -200,8 +200,13 @@ any other."""
 # into a field port is refused, the converter is a To field (`tofield`)
 FIELD = "field"
 FIELD_PORT = "field"     # an effect's third port, the field it reads (`fx.FIELD_PORT`)
-PORT_NAMES = ("image", "aux", FIELD_PORT)   # plan 67 P3: an effect's own; a knob's is its key
-PORT_TYPES = (IMAGE, MASK, GEOMETRY, VALUE, FIELD)
+# plan 90 (H1): a stack — a delay's past frames, kept (`stack.DelayStack`) —
+# and the port an effect reads one on (`fx.STACK_PORT`: Read, Trail). A delay
+# makes it; a picture port takes a delay as its newest frame, as it always did
+STACK = "stack"
+STACK_PORT = "stack"
+PORT_NAMES = ("image", "aux", FIELD_PORT, STACK_PORT)   # plan 67 P3: an effect's own; a knob's is its key
+PORT_TYPES = (IMAGE, MASK, GEOMETRY, VALUE, FIELD, STACK)
 
 # ---------------------------------------------------------------- the wiring
 
@@ -765,7 +770,7 @@ WIRE_TAKES: dict[str, dict[str, str]] = {
     "delay": {"image": IMAGE}, "resize": {"image": IMAGE}, "echo": {}, "dream": {},
 }
 TYPE_WORDS = {IMAGE: "a picture", GEOMETRY: "geometry", MASK: "a mask", FIELD: "a field",
-              None: "nothing"}
+              STACK: "a stack of past frames", None: "nothing"}
 
 
 def effect_ports(name: str) -> tuple[str, dict[str, str]]:
@@ -2026,6 +2031,9 @@ WIRED_FROM_WORDS = ("scene, scene.cover, scene.depth, shape, hands …, hands.la
 # converter's name; the promotion runs the other way only
 PICTURE_INTO_MASK = "{src} makes a picture, {dst} takes a mask — put a matte between"
 PICTURE_INTO_FIELD = "{src} makes a picture, {dst} takes a field — put a To field (tofield) between"
+# plan 90 (H1): a stack is a delay's — its past frames, kept at its Depth
+STACK_IS_A_DELAYS = ("{dst} takes a stack of past frames, which a delay keeps — wire a delay "
+                     "into it (its Depth the frames it keeps)")
 # plan 36 T4 (W4): the words for what the split took away
 CAPTURE_IS_IMAGE = ("{node}.capture is gone (plan 36): a look-back records what is wired "
                     "into {node}.image, and a composite lays its trail")
@@ -2116,9 +2124,12 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
         return PICTURE_INTO_MASK.format(src=w.src, dst=w.dst)
     if makes == IMAGE and want == FIELD:
         return PICTURE_INTO_FIELD.format(src=w.src, dst=w.dst)
+    # plan 90 (H1): a stack port takes a delay, and nothing else
+    if want == STACK and src_kind != "delay":
+        return STACK_IS_A_DELAYS.format(dst=w.dst)
     # plan 39 T2 (W1): a mask goes where a picture is taken — it reads as one;
     # plan 67 F1: so does a field, as grey
-    if makes != want and not (makes in (MASK, FIELD) and want == IMAGE):
+    if makes != want and not (makes in (MASK, FIELD) and want == IMAGE) and want != STACK:
         return f"{w.src} makes {TYPE_WORDS[makes]}, {w.dst} takes {TYPE_WORDS[want]}"
     for name, k in ((w.src, src_kind), (node, kind)):
         if k == "slot":
@@ -2871,7 +2882,7 @@ def _through_missing(raw: Any, ctx: _WireCtx, d1: list[Wire], wires: tuple[Wire,
 # the ports a picture goes into (a geometry port or the history's cover is no
 # picture): what `reaches` follows
 _PICTURE_PORTS = frozenset({"image", "aux", "under", "over", "media", "faces",
-                            "hands", "readout", *SWITCH_PORTS})
+                            "hands", "readout", STACK_PORT, *SWITCH_PORTS})
 
 
 # R15's words, the one phrase every place says them in: the builder's dormant
@@ -4513,10 +4524,31 @@ class Delay(Node):
     def reads(self, frame: Frame) -> bool:
         return self._read(frame) is not None
 
+    def values(self, frame: Frame):
+        """Its rate and (plan 90 H1) its depth this frame (`Frame.delays`),
+        else the defaults (every frame, depth 1)."""
+        return (getattr(frame.root, "delays", None) or {}).get(self.name) or _DELAY_DEFAULT
+
+    def stack(self, frame: Frame) -> dict[str, Any] | None:
+        """Plan 90 (H1): what a reader of its stack binds this frame — its kept
+        frames at its depth, newest first, with their ages (`DelayStack.read`)
+        — or None while it keeps none. Asking keeps the stack (a reader's ask
+        makes it, `Renderer.delay_stack`); it fills from the next frame."""
+        get = getattr(frame.r, "delay_stack", None)
+        if get is None:
+            return None
+        got = get(self.name).read(int(getattr(self.values(frame), "depth", 1)))
+        return got
+
     def run(self, frame: Frame) -> None:
         tex = self._read(frame)
         self.said = (f"last frame's · {tex.size[0]}×{tex.size[1]} half-float"
                      if tex is not None else "nothing yet")
+        pair = (getattr(frame.r, "_delays", None) or {}).get(self.name)
+        st = getattr(pair, "stack", None)
+        if st is not None:
+            depth = int(getattr(self.values(frame), "depth", 1))
+            self.said = st.error or f"{self.said} · keeps {min(len(st.entries), depth)} of {depth}"
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         """Last frame's picture laid into `dst` by cover — or the ground
@@ -6351,8 +6383,12 @@ class Effect(Node):
                  after: tuple[Node, ...] = (), placed: str | None = None):
         # plan 67 F1: a file that reads a field has a third port, `field`
         # (an instance's own ports, shadowing the class's: set, not declared);
-        if FIELD_PORT in effect_ports(name)[1]:
+        takes = effect_ports(name)[1]
+        if FIELD_PORT in takes:
             self.__dict__["INPUTS"] = {**Effect.INPUTS, FIELD_PORT: FIELD}
+        # plan 90 (H1): one that reads a stack (`@takes stack stack`) a port for it
+        if takes.get(STACK_PORT) == STACK:
+            self.__dict__["INPUTS"] = {**self.INPUTS, STACK_PORT: STACK}
         # plan 67 P3: a knob wired to a field — its port gains an input when a
         # wire lands (`_Build._fields`), so an unwired node is as it was
         self.depths: dict[str, float] = {}      # knob → its wire's depth
@@ -6497,6 +6533,12 @@ class Effect(Node):
         field = _field_of(self.inputs.get(FIELD_PORT), frame)
         if field is not None:
             kw["field"] = field
+        # plan 90 (H1): the stack on its stack port, a delay's kept frames
+        src = self.inputs.get(STACK_PORT)
+        if isinstance(src, Delay):
+            got = src.stack(frame)
+            if got is not None:
+                kw["stack"] = got
         knobs = self._knobs(frame)
         if knobs:
             kw["knobs"] = knobs
@@ -7556,13 +7598,21 @@ class _Build:
         todo, seen = [name], {name}
         while todo:
             at = todo.pop()
-            if self.laid_over(at):
+            if self.laid_over(at) or self._stacked(at):
                 return True
             for w in self.wires:
                 if w.src == at and w.node not in seen and _kind(w.node) == "switch":
                     seen.add(w.node)
                     todo.append(w.node)
         return False
+
+    def _stacked(self, name: str) -> bool:
+        """Plan 90 (H1): whether `name`'s picture goes into a delay a stack
+        reader reads — its coverage is then kept for the reader's over (Devin
+        on #519: keyed black recorded opaque covered the older copies)."""
+        delays = {w.node for w in self.wires
+                  if w.src == name and w.port == "image" and _kind(w.node) == "delay"}
+        return any(w.src in delays and w.port == STACK_PORT for w in self.wires)
 
     def _make(self, name: str) -> Node | None:
         kind = _kind(name)
@@ -7808,6 +7858,7 @@ class _Build:
                 writes.append(self._keep(DelayWrite(f"{d.name}(write)", d.name, image=src)))
         self._aux()
         self._fields()
+        self._stacks()
         # the run: All outputs' picture back through its effects (what
         # `frame.fx_on` asks, as of the pipelines' runs)
         run: list[Effect] = []
@@ -7971,6 +8022,23 @@ class _Build:
                     continue
                 node.inputs[w.port] = src
                 node.depths[w.port] = w.depth
+
+    def _stacks(self) -> None:
+        """Plan 90 (H1): each wire into an effect's `stack` port on that port —
+        a delay, read as the frames it keeps. A delay feeds no loop: what it
+        holds was written frames ago."""
+        for w in self.wires:
+            if w.port != STACK_PORT or _kind(w.node) not in ("effect", "slot"):
+                continue
+            target, src = self.made.get(w.node), self.node(w.src)
+            if isinstance(target, KeyNode):          # plan 87: keyed, its stack is the effect's
+                target = target.inputs["image"]
+            if isinstance(src, KeyNode):             # a keyed delay keeps its stack under
+                src = src.inputs["image"]            # its key (Devin on #519)
+            if (not isinstance(target, Effect) or target not in self.built
+                    or STACK_PORT not in target.INPUTS or not isinstance(src, Delay)):
+                continue
+            target.inputs[STACK_PORT] = src
 
     def _split(self, layers: tuple[HandsLayer, ...]) -> None:
         """How each layer splits its guide out (`HandsLayer.split`): always

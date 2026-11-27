@@ -30,8 +30,8 @@ def test_each_example_has_its_markdown_and_names_itself():
         doc = json.loads(p.read_text())
         assert doc["name"] == p.stem and doc["schema"] == "hyperspace.loadable/11"
         assert p.with_suffix(".md").is_file(), p.stem
-        # every example wires a field into a field port
-        assert any(w["to"].endswith(".field") for w in doc["graph"]["wires"]), p.stem
+        # every example wires a field into a field port, or (plan 90) a stack
+        assert any(w["to"].endswith((".field", ".stack")) for w in doc["graph"]["wires"]), p.stem
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.stem)
@@ -66,7 +66,7 @@ def test_the_markdown_names_only_what_exists(path):
     for file, knob in re.findall(r"fx\.([a-z_]+)\.([a-z_]+)", text):
         assert file in held, (file, path.stem)
         assert knob in {"on", "mix", "speed"} | {p.key for p in specs[file].params}, (file, knob)
-    for name in re.findall(r"`([a-z_]+)\.(?:image|field|aux)`", text):
+    for name in re.findall(r"`([a-z_]+)\.(?:image|field|aux|stack)`", text):
         assert name in held or name in ("scene",), name
 
 

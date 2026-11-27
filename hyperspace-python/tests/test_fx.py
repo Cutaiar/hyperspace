@@ -318,6 +318,8 @@ def test_each_effect_changes_the_frame(ctx, name):
         st.values[name].update(mix=1.0, hue_from=155.0, hue_to=245.0)
     if name == "fade":                     # its level starts at 1 (today's picture): turn it down
         st.values[name]["level"] = 0.5
+    if name == "curve":                    # plan 90: shape 0 is the picture as it was: bend it
+        st.values[name]["shape"] = 0.8
     img = render(ctx, st)
     assert ctx.error == "GL_NO_ERROR"
     diff = np.abs(img[..., :3].astype(int) - base[..., :3]).sum()

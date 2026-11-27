@@ -916,7 +916,8 @@ def _selected(panel, st: dict, state) -> None:
 KEY_SWITCH = "media.{c}.key"
 # plan 87: black is clear's knobs (`key.channel.<c>.*`), two to a row under
 # its switch while the channel is keyed
-KEY_ROWS = (("level", "level", "soft", "soft"), ("measure", "measure", "feather", "feather"))
+KEY_ROWS = (("level", "level", "soft", "soft"), ("measure", "measure", "feather", "feather"),
+            ("ramp", "ramp", None, None))
 
 
 def keyed(panel, c: str) -> bool:
@@ -955,7 +956,8 @@ def _key(panel, c: str) -> None:
             imgui.table_next_column()
             panel.half(pre + left, ll)
             imgui.table_next_column()
-            panel.half(pre + right, rl)
+            if right is not None:
+                panel.half(pre + right, rl)
         imgui.end_table()
     panel._check(pre + "keep", "keep colour")
     imgui.same_line()

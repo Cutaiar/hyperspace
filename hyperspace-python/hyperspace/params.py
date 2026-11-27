@@ -102,10 +102,12 @@ from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
 from .tapers import clamp as _clamp
 from .view import (
+    DELAY_DEPTH,
     DELAY_EVERY,
     DELAY_FRAMES_MAX,
     DELAY_HZ,
     KEY_MEASURES,
+    KEY_RAMPS,
     MATTE_FEATHER,
     MATTE_FROM,
     RESIZE_ASPECTS,
@@ -162,6 +164,8 @@ F_KEYS = 8
 # loadable patch's, declared while its graph holds the entry (declare_mattes)
 # `cut` (plan 39 T3): each cut node's invert and amount, the loadable patch's,
 # declared while its graph holds the entry (declare_cuts)
+# `delay` (plan 90 H1): each delay node's depth and gap, the loadable patch's,
+# declared while its graph holds the delay (declare_delays)
 # `segment` (plan 39 T4): each segment node's mode, level, feather, smooth,
 # switch and motion's sense and learn, the loadable patch's, declared while its
 # graph holds the entry (declare_segments)
@@ -1741,8 +1745,9 @@ def declare_switches(r: Registry, names: Iterable[str]) -> list[str]:
 
 # ---- plan 34 D: the delays' rate ----
 DELAY_GROUP = "delay"
-_DELAY_KEYS = ("every", "frames", "hz")
-_DELAY_ID = re.compile(r"delay(?:\.(?:[2-9]|[1-9][0-9]+))?\.(every|frames|hz)")
+# (plan 90 H1: `depth`, appended — how many of its pictures it keeps for a stack reader)
+_DELAY_KEYS = ("every", "frames", "hz", "depth")
+_DELAY_ID = re.compile(r"delay(?:\.(?:[2-9]|[1-9][0-9]+))?\.(every|frames|hz|depth)")
 
 
 def delay_ids(name: str) -> list[str]:
@@ -1775,13 +1780,16 @@ _DELAY_TIPS = {
               "every frame (last frame's picture), 3 every third, 5 every fifth — a "
               "coarser, more diffused look-back.",
     "hz": "The pictures a second {name} takes, when it runs in Hz, whatever the frame rate.",
+    "depth": "How many of the pictures {name} takes it keeps, newest first, for what reads "
+             "its stack — an echo (Read) or a trail (Trail). 1 is the one it shows. With "
+             "its rate, how far back they reach.",
 }
 
 
 def declare_delays(r: Registry, names: Iterable[str]) -> list[str]:
     """The delays' params (plan 34 D), as `declare_resizes` does the resizes':
     for each delay `names` holds, `every` (an enum over `DELAY_EVERY`),
-    `frames` (1–`DELAY_FRAMES_MAX`) and `hz` — group `delay` (a patch group:
+    `frames` (1–`DELAY_FRAMES_MAX`), `hz` and (plan 90 H1) `depth` — group `delay` (a patch group:
     the loadable patch's), over a `DelayState` made when first declared and
     kept while the name stays; those of every delay no longer named dropped,
     with their states. Returns the ids that appeared or went."""
@@ -1809,6 +1817,12 @@ def declare_delays(r: Registry, names: Iterable[str]) -> list[str]:
             elif key == "frames":
                 r.continuous(pid, label, *got, lo=1, hi=DELAY_FRAMES_MAX, integer=True,
                              fmt=lambda v: f"{int(v)}", group=DELAY_GROUP, tip=tip)
+            elif key == "depth":
+                # (plan 90 H1: modulatable — a stack only grows, `DelayStack.ensure`,
+                # so a depth driven down keeps what it holds)
+                r.continuous(pid, label, *got, lo=DELAY_DEPTH[0], hi=DELAY_DEPTH[1],
+                             integer=True, fmt=lambda v: f"{int(v)}", group=DELAY_GROUP,
+                             tip=tip)
             else:
                 r.continuous(pid, label, *got, lo=DELAY_HZ[0], hi=DELAY_HZ[1],
                              fmt=lambda v: f"{v:.1f} Hz", group=DELAY_GROUP, tip=tip)
@@ -2067,10 +2081,11 @@ KEY_PREFIX = "key."
 KEY_FEATHER = MATTE_FEATHER         # the most px a key's feather blurs by (masks.MAX_FEATHER)
 # `key.<node>.<k>`: the knobs of a node the loadable patch's graph keys
 # (`"keys"`), in the panel's order
-_KEY_KEYS = ("level", "soft", "measure", "feather", "keep", "invert")
+_KEY_KEYS = ("level", "soft", "measure", "feather", "keep", "invert", "ramp")
 _KEY_ID = re.compile(r"key\.(.+)\.(" + "|".join(_KEY_KEYS) + ")")
 _KEY_WORDS = {"level": "clear level", "soft": "clear softness", "measure": "clear measure",
-              "feather": "clear feather", "keep": "keep colour", "invert": "white is clear"}
+              "feather": "clear feather", "keep": "keep colour", "invert": "white is clear",
+              "ramp": "clear ramp"}
 _KEY_TIPS = {
     "level": "Black is clear on {name}: at or below this brightness a pixel is clear.",
     "soft": "How far above the level a pixel of {name} takes to become solid: 0 a hard "
@@ -2084,6 +2099,9 @@ _KEY_TIPS = {
             "(only the alpha comes from the brightness). Off, colour goes with alpha and "
             "the edges dim. Not used with white is clear.",
     "invert": "{name}'s white is clear instead of its black.",
+    "ramp": "How {name} goes from clear to solid between the level and level + softness: "
+            "smooth eases in and out; linear rises straight — at level 0 and softness 1, "
+            "a pixel's brightness is how much it covers (a light laid on, as a glow is).",
 }
 
 
@@ -2154,6 +2172,8 @@ def declare_keys(r: Registry, names: Iterable[str]) -> list[str]:
             got = _attr(st, key)
             if key == "measure":
                 r.enum(pid, label, *got, list(KEY_MEASURES), group=KEY_GROUP, tip=tip)
+            elif key == "ramp":
+                r.enum(pid, label, *got, list(KEY_RAMPS), group=KEY_GROUP, tip=tip)
             elif key in ("keep", "invert"):
                 r.toggle(pid, label, *got, group=KEY_GROUP, tip=tip)
             elif key == "feather":

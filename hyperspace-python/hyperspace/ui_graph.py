@@ -6227,7 +6227,9 @@ def _drag_tip(text: str) -> None:
 # graphview.IMAGE / GEOMETRY / MASK to its own)
 CREATE = {graphview.VALUE: _value_drag, graphview.TRIGGER: _value_drag,
           graphview.IMAGE: _create_render, graphview.GEOMETRY: _create_render,
-          graphview.MASK: _create_render, graphview.FIELD: _create_render}
+          graphview.MASK: _create_render, graphview.FIELD: _create_render,
+          # plan 90: a delay dragged onto a reader's stack pin, or the other way
+          rgraph.STACK: _create_render}
 
 
 def _drag_type(view: graphview.View, a: str, b: str) -> str:

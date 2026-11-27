@@ -1,0 +1,209 @@
+"""A delay's stack — the frames before this one, kept (plan 90 H1).
+
+Plan 67 §7.1 made the past one primitive: a stack of T, read at an index or
+summed over them. Plan 90 made the delay its one maker (the owner,
+2026-11-26: "merge, call it Delay"): a delay of depth 1 is plan 34's z⁻¹,
+and a deeper one keeps that many past frames for the readers that take a
+stack (`// @takes stack stack`: Read, Trail).
+
+The stack sits beside the delay's half-float pair (`render.DelayPair`) and
+never replaces it. The pair paints and swaps exactly as it always has, so a
+delay's picture is last frame's whatever its depth, and a saved delay draws
+byte for byte. At the frame's turn, a pair that committed a frame hands it
+to the stack (`commit`): a GPU copy (`glCopyTexSubImage3D`, core since GL
+1.2) of the pair's read side into one layer of a 2D texture array. So:
+
+- a reader never sees this frame (the commit happens at the turn, before
+  the graph runs, whatever order its passes take);
+- a stack is made only when a reader asks for it (`Renderer.delay_stack`),
+  so a delay nobody reads as a stack costs nothing more;
+- one sampler holds every entry: a list of 2D textures would need a unit
+  each, and the Mac's GL has sixteen.
+
+A texture array, not a 3D texture: GL_MAX_3D_TEXTURE_SIZE is 2048 (a 4K
+frame would not fit), and filtering in depth would blend the ring's newest
+entry into its oldest at the seam. A read between two entries is two fetches
+and a mix, in the reader (`fx.STACK_HEAD`).
+
+Time is the stack's own clock, in seconds, moved once a frame by the
+renderer's time (`tick`); a frame whose time did not move counts one frame
+at REF_HZ (as the look-back's ring, plan 14 WP6), so a test drawing at one
+fixed time still sees frames go by, and a reader knows each kept frame's age.
+that clock. What it keeps is what the delay takes: every frame, or at the
+delay's own rate (plan 34 D, `delay[.n].every`: frames, Hz or the tempo),
+so a delay that takes a picture every 1/30 s keeps one every 1/30 s.
+"""
+
+from __future__ import annotations
+
+import weakref
+from typing import Any
+
+import moderngl
+
+REF_HZ = 60.0                  # what a frame whose time did not move counts as
+MAX_DEPTH = 64                 # the most frames a stack keeps (`view.DELAY_DEPTH`)
+# the most one deck's stacks together may hold (plan 90 Q4; a deck each since
+# Devin on #519, so the two decks never starve each other: 2 GiB at most on a
+# context) — 1 GiB: 32 half-float frames at 1080p are 531 MB
+BUDGET = 1 << 30
+OVER_BUDGET = ("{name}: a stack of {depth} at {w}×{h} is {mb:.0f} MB, past the "
+               "{budget:.0f} MB a deck's stacks may hold — fewer frames, or a resize before it")
+KEEPS_WHAT_FITS = ("{name}: keeps {keep} of {depth} frames at {w}×{h} — more is past the "
+                   "{budget:.0f} MB a deck's stacks may hold; a resize before it keeps more")
+
+
+def frame_bytes(size: tuple[int, int]) -> int:
+    """One entry's bytes: RGBA half float, as the delay's pair."""
+    return int(size[0]) * int(size[1]) * 8
+
+
+# every stack holding a texture, by the context it is on: the two decks' renderers
+# are siblings on one context (`Renderer.sibling`), so the budget is the context's,
+# not a renderer's (Devin on #519)
+# (kept across a hot reload of this module: the stacks alive hold their
+# textures through it — Devin on #519)
+_LIVE: weakref.WeakSet = globals().get("_LIVE") or weakref.WeakSet()
+
+
+def held(ctx: Any, but: Any = None, owner: Any = None) -> int:
+    """The bytes every stack on `ctx` holds, `but` one left out — of one deck's
+    renderer when `owner` is given (its `id`): each deck has a budget of its own,
+    so a deck that filled its own never starves the deck faded in (Devin on #519)."""
+    return sum(st.bytes() for st in list(_LIVE)
+               if st is not but and st.tex is not None and st.ctx is ctx
+               and (owner is None or getattr(st, "owner", None) == owner))
+
+
+class DelayStack:
+    """One delay's kept frames: a texture array of `depth` layers at the
+    pair's size, and `entries`, (layer, clock) newest first."""
+
+    def __init__(self) -> None:
+        self.tex: moderngl.TextureArray | None = None
+        self.size = (0, 0)
+        self.depth = 0
+        self.entries: list[tuple[int, float]] = []
+        self.clock = 0.0               # seconds (`tick`)
+        self._t_last: float | None = None
+        self.dt = 1.0 / REF_HZ         # the last tick's step
+        self.idle = 0                  # frames no reader has asked (`Renderer`)
+        self.error = ""                # why it holds nothing (a budget, a driver)
+        self.ctx: Any = None           # the context its texture is on (`held`)
+        self.owner: Any = None         # the `id` of the renderer (deck) whose it is
+
+    # ---- time ----
+
+    def tick(self, t: float | None) -> None:
+        """Once a frame, at the turn: the clock moves by the renderer's
+        time since the last tick, or one REF_HZ frame if it did not move."""
+        if t is not None and self._t_last is not None and t > self._t_last:
+            dt = float(t) - self._t_last
+        else:
+            dt = 1.0 / REF_HZ
+        if t is not None:
+            self._t_last = float(t)
+        self.dt = dt
+        self.clock += dt
+
+    # ---- the frames ----
+
+    def ensure(self, ctx: moderngl.Context, size: tuple[int, int], depth: int) -> bool:
+        if self.tex is not None:
+            _LIVE.add(self)                    # (a stack from before a reload counts again)
+        return self._ensure(ctx, size, depth)
+
+    def _ensure(self, ctx: moderngl.Context, size: tuple[int, int], depth: int) -> bool:
+        """The array at `size` with room for `depth` layers, made again — clean
+        — when the size changed or the depth grew past its room. A smaller
+        depth keeps it (a reader reads fewer: `read`), so a hand or an LFO on
+        Depth never wipes what it holds on the way down. False, with the
+        reason on `error`, when it cannot be."""
+        size = (int(size[0]), int(size[1]))
+        depth = max(1, min(int(depth), MAX_DEPTH))
+        if self.tex is not None and size == self.size and depth <= self.depth:
+            return True
+        self.release()
+        try:
+            tex = ctx.texture_array((size[0], size[1], depth), 4, dtype="f2")
+            tex.repeat_x = tex.repeat_y = False
+            tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        except Exception as e:  # noqa: BLE001 — no stack this frame, never a stuck one
+            self.error = f"no stack at {size[0]}×{size[1]}×{depth}: {e}"[:160]
+            return False
+        self.tex, self.size, self.depth, self.error = tex, size, depth, ""
+        self.ctx = ctx
+        _LIVE.add(self)
+        return True
+
+    def bytes(self) -> int:
+        """What its texture holds, bytes (0 with none)."""
+        return frame_bytes(self.size) * self.depth if self.tex is not None else 0
+
+    def commit(self, ctx: moderngl.Context, src: moderngl.Framebuffer, size: tuple[int, int],
+               depth: int) -> bool:
+        """The picture the pair just took (`src`, its read side at `size`),
+        drawn one frame ago, onto the stack. True if kept."""
+        at = self.clock - self.dt
+        if not self.ensure(ctx, size, depth) or self.tex is None:
+            return False
+        used = {layer for layer, _ in self.entries}
+        if len(self.entries) >= self.depth:
+            layer = self.entries[-1][0]                   # the oldest goes
+            self.entries = self.entries[:-1]
+        else:
+            layer = next(i for i in range(self.depth) if i not in used)
+        copy_layer(src, self.tex, layer, self.size)
+        self.entries.insert(0, (layer, at))
+        return True
+
+    def reset(self) -> None:
+        """Hold nothing (a load, R19), and give back its room: the next commit
+        makes it again at the depth the new look asks for, so an old deep stack
+        never counts against the next look's budget (Devin on #519)."""
+        self.release()
+
+    def release(self) -> None:
+        if self.tex is not None:
+            try:
+                self.tex.release()
+            except Exception:  # noqa: BLE001, S110 — a lost context: nothing to free
+                pass
+        self.tex = None
+        self.size = (0, 0)
+        self.depth = 0
+        self.entries = []
+        _LIVE.discard(self)
+
+    # ---- what a reader binds ----
+
+    def read(self, depth: int | None = None) -> dict[str, Any] | None:
+        """What a reader binds this frame — the array, and per entry newest
+        first its layer and its age in seconds, at most `depth` of them — or
+        None while it holds nothing."""
+        if self.tex is None or not self.entries:
+            return None
+        n = len(self.entries) if depth is None else max(1, min(int(depth), len(self.entries)))
+        got = self.entries[:n]
+        return {"tex": self.tex, "layers": [float(layer) for layer, _ in got],
+                "ages": [self.clock - at for _, at in got], "size": self.size}
+
+
+def copy_layer(src: moderngl.Framebuffer, dst: moderngl.TextureArray, layer: int,
+               size: tuple[int, int]) -> None:
+    """`src`'s colour, `size` from its corner, into layer `layer` of `dst`: one
+    GPU copy (`glCopyTexSubImage3D`), the read framebuffer and the array's
+    binding put back as they were, so moderngl's own state is untouched."""
+    from OpenGL import GL
+
+    w, h = int(size[0]), int(size[1])
+    read_was = GL.glGetIntegerv(GL.GL_READ_FRAMEBUFFER_BINDING)
+    array_was = GL.glGetIntegerv(GL.GL_TEXTURE_BINDING_2D_ARRAY)
+    try:
+        GL.glBindFramebuffer(GL.GL_READ_FRAMEBUFFER, src.glo)
+        GL.glReadBuffer(GL.GL_COLOR_ATTACHMENT0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D_ARRAY, dst.glo)
+        GL.glCopyTexSubImage3D(GL.GL_TEXTURE_2D_ARRAY, 0, 0, 0, int(layer), 0, 0, w, h)
+    finally:
+        GL.glBindTexture(GL.GL_TEXTURE_2D_ARRAY, int(array_was))
+        GL.glBindFramebuffer(GL.GL_READ_FRAMEBUFFER, int(read_was))

@@ -21,7 +21,7 @@ from hyperspace import glsl, graphview, masks, media_tex, view
 from hyperspace import graph as G
 from hyperspace.params import KEY_GROUP, Kind, Registry, declare_keys, is_key_id, key_ids
 
-KNOBS = ("level", "soft", "measure", "feather", "keep", "invert")
+KNOBS = ("level", "soft", "measure", "feather", "keep", "invert", "ramp")
 
 # the fit pass as it was before plan 87, word for word: a channel nothing
 # keys must be its bytes (every saved look, every golden)
@@ -83,7 +83,8 @@ def test_the_knobs_are_declared_while_a_node_is_keyed():
     got = declare_keys(r, ["scene", "acid.2"])
     assert set(got) == set(key_ids("scene")) | set(key_ids("acid.2"))
     assert key_ids("scene") == [f"key.scene.{k}" for k in KNOBS]
-    level, soft, measure, feather, keep, invert = (r[i] for i in key_ids("scene"))
+    level, soft, measure, feather, keep, invert, ramp = (r[i] for i in key_ids("scene"))
+    assert ramp.choices == ["smooth", "linear"] and ramp.value == 0     # (plan 90 H1)
     assert all(p.group == KEY_GROUP and p.persist and p.modulatable
                for p in (level, soft, measure, feather, keep, invert))
     assert (level.value, soft.value, feather.value) == (0.02, 0.1, 0.0)

@@ -85,11 +85,13 @@ uniform float u_level;
 uniform float u_soft;
 uniform int u_keep;
 uniform int u_invert;
+uniform int u_ramp;        // view.KEY_RAMPS: 0 smooth, 1 linear (plan 90: brightness as coverage)
 float key_ramp(vec3 rgb) {
     float m = u_measure == 1 ? dot(rgb, vec3(0.2126, 0.7152, 0.0722))
                              : max(rgb.r, max(rgb.g, rgb.b));
-    float k = u_soft > 0.0 ? smoothstep(u_level, u_level + u_soft, m)
-                           : (m > u_level ? 1.0 : 0.0);
+    float k = u_soft <= 0.0 ? (m > u_level ? 1.0 : 0.0)
+            : u_ramp == 1 ? clamp((m - u_level) / u_soft, 0.0, 1.0)
+                          : smoothstep(u_level, u_level + u_soft, m);
     return u_invert != 0 ? 1.0 - k : k;
 }
 """

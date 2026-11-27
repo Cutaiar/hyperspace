@@ -879,7 +879,7 @@ HOVERS: dict[str, str] = {
     "slot": "One more picture through the same effect, with its knobs.",
     "composite": "Lays one picture over another.",
     "switch": "Picks one of eight.",
-    "delay": "Last frame's picture.",
+    "delay": "Last frame's picture; and, at its Depth, the frames before it, a stack Read and Trail take.",
     "resize": "A crop at its own size.",
     "matte": ("Makes a mask of its picture — by brightness, coverage or a keyed hue. Wired "
               "where a picture goes, the mask shows white where it passes."),
@@ -3914,7 +3914,8 @@ def kept_words(row: Any) -> str:
 
 # ---- plan 40 T3: a spawn's open pins, a patch's boundary in words ----
 
-PICTURE_NOUNS = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask", FIELD: "field"}
+PICTURE_NOUNS = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask", FIELD: "field",
+                 rgraph.STACK: "stack"}   # plan 90 (Devin on #519: a saved stack inlet)
 OPEN_PIN = "{id} · open (was {was})"
 
 
@@ -4130,7 +4131,7 @@ def real_pin(view: View, pin: str) -> str:
 # looked up by name (`_render`; a plain-words refusal from them becomes a
 # `Refusal`). `RENDER_NOT_YET` is said only by an Edit without them.
 
-RENDER_TYPES = (IMAGE, GEOMETRY, MASK, FIELD)
+RENDER_TYPES = (IMAGE, GEOMETRY, MASK, FIELD, rgraph.STACK)   # plan 90: a saved stack inlet too
 RENDER_NOT_YET = "render cables: not yet"
 # the words a refusal says
 NOT_A_PORT = "not a port"

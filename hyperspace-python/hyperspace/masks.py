@@ -395,7 +395,8 @@ class MaskPasses:
                     "u_scaled": int(tuple(src.size) != size), "u_origin": (0, 0),
                     "u_measure": int(k.measure), "u_level": float(k.level),
                     "u_soft": float(k.soft), "u_keep": int(bool(k.keep)),
-                    "u_invert": int(bool(k.invert))}
+                    "u_invert": int(bool(k.invert)),
+                    "u_ramp": int(getattr(k, "ramp", 0))}
         out, fbo = self.frame_target(key, size)
         if k.feather > 0.0:
             ramp, rfbo = self.frame_target((key, "ramp"), size, components=1)

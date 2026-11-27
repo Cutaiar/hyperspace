@@ -76,6 +76,9 @@ DELAY_BEATS = {"1/16": 0.25, "1/8": 0.5, "1/4": 1.0, "1/2": 2.0,
                "1 bar": 4.0, "2 bars": 8.0, "4 bars": 16.0}
 DELAY_FRAMES_MAX = 120
 DELAY_HZ = (0.1, 120.0)
+# plan 90 (H1): how many of the pictures it takes a delay keeps — the stack its
+# readers take (`@takes stack`: Read, Trail); 1 is plan 34's z⁻¹ alone
+DELAY_DEPTH = (1, 64)
 
 
 @dataclass
@@ -85,12 +88,15 @@ class DelayState:
     `every` an index into `DELAY_EVERY`; `frames` (1…`DELAY_FRAMES_MAX`) the
     frames between two pictures taken when it is "frames" — 1 is every frame,
     the last frame's, as a delay always was; `hz` the pictures a second when
-    it is "Hz". Between two pictures the delay holds the last one. A value,
-    never a rebuild."""
+    it is "Hz". Between two pictures the delay holds the last one. Plan 90
+    (H1): `depth` how many of the pictures it takes it keeps for a reader of
+    its stack, the newest first (1: the one it shows). A value, never a
+    rebuild."""
 
     every: int = 0
     frames: int = 1
     hz: float = 10.0
+    depth: int = 1
 
 
 # plan 39 T2 (W2): a matte's sources — what makes a pixel pass: its
@@ -122,6 +128,10 @@ class MatteState:
 # plan 87, black is clear: what a keyed node measures a pixel's brightness
 # by — the largest of r, g, b, or Rec. 709 luma — by index (`key.<node>.measure`)
 KEY_MEASURES = ("peak", "luma")
+# plan 90 (H1): the key's ramp from clear to solid — smooth (plan 87's), or
+# linear: at level 0, soft 1 on peak, a pixel's brightness *is* its coverage
+# (the look-back's and the dream's old rule, as a choice of the key's)
+KEY_RAMPS = ("smooth", "linear")
 
 
 @dataclass
@@ -141,6 +151,7 @@ class KeyState:
     keep: bool = True
     feather: float = 0.0
     invert: bool = False
+    ramp: int = 0                # plan 90 (H1): an index into `KEY_RAMPS`
 
 
 @dataclass

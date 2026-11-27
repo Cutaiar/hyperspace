@@ -107,7 +107,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import moderngl
 import numpy as np
@@ -143,7 +143,11 @@ RELOAD_EVERY = 30               # frames between mtime checks of the folder
 # test holds them equal); NONE is a port the file does not have
 PICTURE, FIELD, NONE = "image", "field", "none"
 FIELD_PORT = "field"            # the third port: a field an effect reads (unit 3)
-TAKES_PORTS = ("image", FIELD_PORT)
+# plan 90 (H1): a stack — a delay's kept frames (`graph.STACK`) — read on the
+# `stack` port, bound on unit 2 (the hook's: a file that reads a stack has no hook)
+STACK = STACK_PORT = "stack"
+STACK_UNIT = 2
+TAKES_PORTS = ("image", FIELD_PORT, STACK_PORT)
 FIELD_UNIT = 3                  # its texture unit (0 the input, 1 the aux, 2 a hook's)
 # plan 63: `// @hook <name>` — an effect with a Python half. The module runs
 # the pass (`run(chain, name, prog, vao, src, dst)`, every uniform of the
@@ -438,7 +442,7 @@ def ports(spec: EffectSpec) -> tuple[str, dict[str, str]]:
 # 0 … 3 are the input, the aux, a hook's and the field port's
 KNOB_UNIT0 = 4
 KNOB_UNITS = 12
-PORT_NAMES = ("image", "aux", FIELD_PORT)      # no knob's key may be a port's
+PORT_NAMES = ("image", "aux", FIELD_PORT, STACK_PORT)      # no knob's key may be a port's
 
 
 def knob_refusal(spec: EffectSpec, key: str) -> str | None:
@@ -621,10 +625,11 @@ def parse(name: str, source: str) -> EffectSpec:
                 elif key == "takes":
                     port, _, typ = val.partition(" ")
                     typ = typ.strip()
-                    if port not in TAKES_PORTS or typ not in (PICTURE, FIELD, NONE):
+                    if port not in TAKES_PORTS or typ not in (PICTURE, FIELD, NONE, STACK) \
+                            or (typ == STACK) != (port == STACK_PORT):
                         raise SpecError(f"{name}:{n}: @takes {val!r}: a port "
                                         f"({' or '.join(TAKES_PORTS)}) and a type "
-                                        f"(image, field or none)")
+                                        f"(image, field or none; the stack port a stack)")
                     spec.takes[port] = typ
                 elif key == "hook":
                     if val not in HOOKS:
@@ -688,6 +693,9 @@ def parse(name: str, source: str) -> EffectSpec:
         raise SpecError(f"{name}: no 'vec4 effect(vec2 uv)'")
     _check_clocks(name, spec)
     _check_pads(name, spec)
+    if spec.takes.get(STACK_PORT) == STACK and spec.hook:
+        # (plan 90 H1: the stack is bound on the hook's unit)
+        raise SpecError(f"{name}: a file that reads a stack has no @hook")
     spec.aux = reads_aux(source)
     return spec
 
@@ -1182,6 +1190,45 @@ out vec4 f_color;
 HEAD_UNIFORMS = frozenset(re.findall(r"^uniform\s+\w+\s+(u_\w+)\s*;", FS_HEAD, re.MULTILINE))
 
 
+# plan 90 (H1): the head's part for a file that reads a stack (`@takes stack
+# stack`), after its clocks — the stack and its helpers, declared only there,
+# so every other file's source is as it was. MAX_STACK is `stack.MAX_DEPTH`
+MAX_STACK = 64
+STACK_HEAD = f"""uniform sampler2DArray u_stack;   // the stack on the `stack` port (unit {STACK_UNIT})
+uniform int u_stack_n;            // the frames it holds, newest first (0: none)
+uniform float u_stack_layer[{MAX_STACK}]; // each one's layer in the array, newest first
+uniform float u_stack_age[{MAX_STACK}];   // …and its age, seconds
+uniform vec2 u_stack_size;        // its frames' own size, px (Devin on #519: fitted by cover)
+
+// where `uv` of this pass lands in a frame of the stack: fitted by cover, as
+// a delay's own picture is (`graph.OWN_FIT`) — a square stack in a wide frame
+// is cropped top and bottom, never stretched
+vec2 stack_uv(vec2 uv) {{
+    if (u_stack_size.x <= 0.0 || u_stack_size.y <= 0.0) return uv;
+    float k = (u_stack_size.x / u_stack_size.y) / (u_res.x / u_res.y);
+    return k > 1.0 ? vec2(0.5 + (uv.x - 0.5) / k, uv.y) : vec2(uv.x, 0.5 + (uv.y - 0.5) * k);
+}}
+
+// the k-th newest frame it holds (0 the newest), clamped into what it holds;
+// transparent black while it holds none
+vec4 stack_frame(int k, vec2 uv) {{
+    if (u_stack_n <= 0) return vec4(0.0);
+    k = clamp(k, 0, u_stack_n - 1);
+    return texture(u_stack, vec3(stack_uv(uv), u_stack_layer[k]));
+}}
+
+// `steps` frames back (0 the newest), clamped into what it holds: between two,
+// both blended by how far between, or (`nearest`) the nearer alone
+vec4 stack_at(float steps, vec2 uv, bool nearest) {{
+    if (u_stack_n <= 0) return vec4(0.0);
+    float x = clamp(steps, 0.0, float(u_stack_n - 1));
+    if (nearest) return stack_frame(int(floor(x + 0.5)), uv);
+    int k = int(floor(x));
+    return mix(stack_frame(k, uv), stack_frame(k + 1, uv), x - float(k));
+}}
+"""
+
+
 def clock_declarations(clocks) -> str:
     """The `uniform float u_…;` lines for an effect's `@clock`s, part of
     the head (string 0), so a compile error's line numbers are the file's."""
@@ -1270,7 +1317,8 @@ void main() {
 
 
 def fragment_source(lib: str, effect: str, shared: str | None = None, clocks=(),
-                    makes: str = PICTURE, knobs: tuple[str, str] = ("", "")) -> str:
+                    makes: str = PICTURE, knobs: tuple[str, str] = ("", ""),
+                    stack: bool = False) -> str:
     """The whole fragment shader of an effect: the head (with the file's
     `@clock` uniforms declared), the shared helpers, the lib, the file,
     the tail — a field maker's own (plan 67 F1: `FIELD_TAIL`). `knobs`
@@ -1281,7 +1329,9 @@ def fragment_source(lib: str, effect: str, shared: str | None = None, clocks=(),
     tail = FIELD_TAIL if makes == FIELD else FS_TAIL
     head, defs = knobs
     defs = f"#line 1 3\n{defs}" if defs else ""
-    return (f"{FS_HEAD}{clock_declarations(clocks)}{head}#line 1 1\n{shared}\n#line 1 2\n{lib}\n"
+    stacked = STACK_HEAD if stack else ""      # plan 90 (H1)
+    return (f"{FS_HEAD}{clock_declarations(clocks)}{stacked}{head}#line 1 1\n{shared}\n"
+            f"#line 1 2\n{lib}\n"
             f"{defs}#line 1 3\n{effect}\n#line 1 4\n{tail}")
 
 
@@ -1445,7 +1495,8 @@ class FxChain:
                 aux: moderngl.Texture | None = None,
                 res: tuple[int, int] | None = None,
                 field: moderngl.Texture | None = None,
-                knobs: dict[str, tuple[moderngl.Texture, float]] | None = None) -> None:
+                knobs: dict[str, tuple[moderngl.Texture, float]] | None = None,
+                stack: dict | None = None) -> None:
         """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
         program over `src` into `dst`'s viewport, every uniform set, the
         clocks moved first (once per frame time,
@@ -1467,7 +1518,10 @@ class FxChain:
         each such knob reads `value + depth × field` at every pixel, through a
         program of its own (`_program`), its field bound from `KNOB_UNIT0` on.
         A knob that takes no field (`knob_refusal`) is left out: its wire was
-        refused in words before it got here."""
+        refused in words before it got here. `stack` (plan 90 H1): a delay's
+        kept frames on the effect's `stack` port (`stack.DelayStack.read`: the
+        array, each frame's layer and age newest first), bound on
+        unit 2; None, and the file's `stack_at` reads transparent black."""
         self.state.advance_to(t)
         spec = self.state.specs.get(name)
         given = knobs or {}
@@ -1500,6 +1554,8 @@ class FxChain:
             if field is not None:
                 field.use(location=FIELD_UNIT)
                 self._set(prog, "u_field_on", 1)
+            if "u_stack" in prog:                 # plan 90 (H1)
+                self._bind_stack(prog, stack)
             v = self.state.values[name]
             for i, key in enumerate(wired):     # plan 67 P3: each knob's field and depth
                 tex, depth = knobs[key]
@@ -1516,6 +1572,27 @@ class FxChain:
             vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
             ctx.enable(moderngl.BLEND)
+
+    @staticmethod
+    def _bind_stack(prog: moderngl.Program, stack: dict | None) -> None:
+        """Plan 90 (H1): a stack reader's stack uniforms — what `stack` holds
+        (at most MAX_STACK frames, newest first), or none."""
+        layers = np.zeros(MAX_STACK, dtype="f4")
+        ages = np.zeros(MAX_STACK, dtype="f4")
+        n = 0
+        if stack is not None:
+            got = list(zip(stack["layers"], stack["ages"], strict=True))[:MAX_STACK]
+            n = len(got)
+            for i, (layer, age) in enumerate(got):
+                layers[i], ages[i] = layer, age
+            stack["tex"].use(location=STACK_UNIT)
+        FxChain._set(prog, "u_stack", STACK_UNIT)
+        FxChain._set(prog, "u_stack_n", n)
+        size = stack.get("size", (0, 0)) if stack else (0, 0)
+        FxChain._set(prog, "u_stack_size", (float(size[0]), float(size[1])))
+        for name, arr in (("u_stack_layer", layers), ("u_stack_age", ages)):
+            if name in prog:
+                cast(moderngl.Uniform, prog[name]).write(arr.tobytes())
 
     def show_field(self, tex: moderngl.Texture, dst: moderngl.Framebuffer,
                    gain: float = 1.0, raw: bool = False) -> None:
@@ -1608,7 +1685,8 @@ class FxChain:
             self.errors[spec.name] = str(e)
             return None
         src = fragment_source(st.lib, source, st.common, getattr(spec, "clocks", ()),
-                              getattr(spec, "makes", PICTURE), knob_declarations(spec, knobs))
+                              getattr(spec, "makes", PICTURE), knob_declarations(spec, knobs),
+                              stack=getattr(spec, "takes", {}).get(STACK_PORT) == STACK)
         # the file: every instance of it runs one program (A4); with knobs
         # wired to a field, one per set of them
         key = spec.name if not knobs else f"{spec.name}|{','.join(knobs)}"

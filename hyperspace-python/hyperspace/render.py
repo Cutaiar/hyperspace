@@ -856,6 +856,10 @@ class DelayPair:
         self.cell: Any = None
         self.phase = 0.0                # Hz: cycles run, advanced by dt × the rate now
         self.last_t: float | None = None
+        # plan 90 (H1): the pictures it took, kept for a reader of its stack
+        # (`stack.DelayStack`), made on a reader's first ask
+        # (`Renderer.delay_stack`), else None
+        self.stack = None
 
     def target(self, ctx: moderngl.Context, size: tuple[int, int]) -> moderngl.Framebuffer:
         """The write side at `size`: made again only when missing or of
@@ -902,6 +906,10 @@ class DelayPair:
         self.holds = self.wrote = self.kept = self.holds_any = False
         self.cell = self.last_t = None
         self.phase = 0.0
+        stack = getattr(self, "stack", None)
+        if stack is not None:
+            stack.release()
+            self.stack = None
 
 
 class FaceTarget:
@@ -2011,7 +2019,7 @@ class Renderer:
         graph = self._graph_for(views)
         # plan 34 D: each delay's pair turns — last frame's write is now
         # what its delay reads
-        self._turn_delays(graph)
+        self._turn_delays(graph, t)
         # plan 36 T4: a ring no look-back of this graph holds forgets its
         # history (it starts clean when one is drawn again); the dream
         # forgets `D` with no dream node, so the worker sleeps
@@ -2559,7 +2567,7 @@ class Renderer:
         if mode != KEY_OFF:
             uniforms.update(u_measure=int(key.measure), u_level=float(key.level),
                             u_soft=float(key.soft), u_keep=int(key.keep),
-                            u_invert=int(key.invert))
+                            u_invert=int(key.invert), u_ramp=int(getattr(key, "ramp", 0)))
         ctx.disable(moderngl.BLEND)
         try:
             src.use(location=0)
@@ -3072,6 +3080,68 @@ class Renderer:
         self._segmenters = {}
         self._stopped = []
 
+    def delay_stack(self, name: str):
+        """Plan 90 (H1): delay `name`'s stack (`stack.DelayStack`), made on a
+        reader's first ask — it fills from the next turn — and kept while a
+        reader asks each frame; None when the delay has no pair yet."""
+        from .stack import DelayStack
+
+        pair = self.delay_pair(name)
+        if getattr(pair, "stack", None) is None:
+            pair.stack = DelayStack()
+        pair.stack.owner = id(self)            # this deck's budget (`stack.held`)
+        pair.stack.idle = 0
+        return pair.stack
+
+    def _turn_stack(self, name: str, pair: DelayPair, committed: bool, reset: bool,
+                    t: float | None) -> None:
+        """Plan 90 (H1): a delay's stack at the turn — its clock moves; the
+        picture its pair just took (at the delay's own rate, `graph.delay_due`)
+        is kept (`DelayStack.commit`) at its depth (`ViewState.delay`); a load forgets it
+        (R19). One no reader asked for in `SIZED_KEEP_FRAMES` is released.
+        Never raises: a stack that cannot be kept says why on `error`."""
+        from . import stack as _stack
+        from .stack import KEEPS_WHAT_FITS, OVER_BUDGET, frame_bytes
+
+        stack = getattr(pair, "stack", None)
+        if stack is None:
+            return
+        stack.idle += 1
+        if stack.idle > SIZED_KEEP_FRAMES:
+            stack.release()
+            pair.stack = None
+            return
+        stack.tick(t)
+        if reset:
+            stack.reset()
+        if not committed or pair.read is None:
+            return
+        st = (getattr(getattr(self, "_view_now", None), "delay", None) or {}).get(name)
+        depth = int(getattr(st, "depth", 1))
+        size = tuple(pair.read[0].size)
+        # (this deck's stacks on this context: each deck a budget of its own, so
+        # neither starves the other in a crossfade — Devin on #519)
+        others = _stack.held(self.ctx, but=stack, owner=id(self))
+        # past the budget it keeps the frames that fit, never none (the owner on
+        # the Mac, hand check 960: past depth 36 the whole picture went black)
+        room = max(0, (_stack.BUDGET - others) // frame_bytes(size))
+        keep = min(depth, room)
+        if stack.size == size and stack.depth > room:
+            stack.release()                     # its old room is more than fits now
+        if keep < 1:
+            stack.release()
+            stack.error = OVER_BUDGET.format(name=name, depth=depth, w=size[0], h=size[1],
+                                             mb=frame_bytes(size) * depth / 2**20,
+                                             budget=_stack.BUDGET / 2**20)
+            return
+        stack.error = "" if keep == depth else KEEPS_WHAT_FITS.format(
+            name=name, keep=keep, depth=depth, w=size[0], h=size[1],
+            budget=_stack.BUDGET / 2**20)
+        try:
+            stack.commit(self.ctx, pair.read[1], size, keep)
+        except Exception as e:  # noqa: BLE001 — a stack must not take the frame down
+            stack.error = f"{name}: {type(e).__name__}: {e}"[:160]
+
     def reset_delays(self) -> None:
         """R19 (final review, row 354): a loadable patch load landed a new section —
         at the next turn every pair holds nothing (as on its first frame),
@@ -3080,7 +3150,7 @@ class Renderer:
         textures are kept; only what they hold is forgotten."""
         self.__dict__["_delays_reset"] = True
 
-    def _turn_delays(self, graph: Graph) -> None:
+    def _turn_delays(self, graph: Graph, t: float | None = None) -> None:
         """Once a frame, before the graph runs: every pair turns (a pair
         written last frame now reads it; one not written holds nothing). A
         pair whose delay is in no node of `graph` counts a frame idle and
@@ -3099,7 +3169,9 @@ class Renderer:
         held = {n.name for n in getattr(graph, "nodes", {}).values() if isinstance(n, Delay)}
         for name in list(pairs):
             pair = pairs[name]
+            committed = pair.wrote
             pair.turn()
+            self._turn_stack(name, pair, committed and not reset, reset, t)
             if name in held:
                 pair.idle = 0
                 continue

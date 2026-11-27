@@ -1013,6 +1013,10 @@ here; overturn → the change, then the same.
 | 1160 | GRAPH's head is two rows: the deck row as it was, then **patches**, **Turbo Tidy**, an **areas** menu, a **canvas** menu (expand all, patched only, patch only, output behind, tint cables, gpu cost, the counts), the missing devices and what the page says. The canvas chip's words are the toggles that are on; it is lit while tint or gpu cost is | 940 | (rec) the layout; the owner agreed only to "a slimmer GRAPH head" (2026-11-24) |
 | 1130 | A `kinect` device publishes `cloud:<role>` and the pictures `kinect:<role>/depth` and `/color`; its placement (`centre`, `mirror`, `near`, `far`, `step`) is its device entry's, never a param. No schema bump for the `kinect:` media kind: both Macs run one build | 910, 911 | owner — 2026-11-24 (the device); (rec) its shape |
 | 1170 | A Kinect's side pane in GRAPH (`ui_kinect.py`) holds its manual controls (tilt, LED, infrared brightness, video, exposure and the auto flags, stream restart / reconnect, placement for this run) and its telemetry. Every libfreenect call is on the device's thread through `KinectDevice.request`; nothing is sent on open or by itself; placement is not saved back to the device list | 950, 951, 952, 953, 954, 955, 956, 957, 958 | owner — 2026-11-25 |
+| 1171 | A delay keeps the pictures it takes (at its rate) as a stack for a reader, `delay[.n].depth` 1–64, in a half-float texture array beside its pair, copied in at the turn, made on a reader's ask, grown never shrunk, a deck's stacks within 1 GiB (past it, the frames that fit); its own picture unchanged. A `stack` port takes a delay alone | 959, 960 | owner — 2026-11-26 (plan 90 Q20, Q4, Q22) |
+| 1172 | The stack's readers are effect files: Read (At steps back, a field on At a time displace; Between) and Trail (Level, Fade half-life, Lay over / add), `@takes stack stack`, bound on unit 2; only they declare the stack | 960, 961 | owner — 2026-11-26 (plan 90 Q21, Q13) |
+| 1173 | Curve, a picture's remap with the lane modifier `curve`'s name and knobs (Shape 4^shape, Invert); contrast c is Shape log₄ c | 962 | owner — 2026-11-26 (plan 90 Q15) |
+| 1174 | Black is clear's ramp, appended: smooth (the default) or linear — brightness as coverage at level 0, softness 1 on peak | 962 | owner — 2026-11-26 (plan 90 Q19) |
 
 "—": no hand check shows it; tests only.
 
@@ -16225,3 +16229,34 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Built.** `kinect.Sensor.apply` / `poll` / `info`, `kinect.Telemetry`, `KinectDevice.request` / `place`, `ui_kinect.py`; `tests/test_kinect_control.py`, `tests/test_ui_kinect.py`. A build from before reads the same files: no param, no schema.
 - **Radar.** The pane's first block is a top-down view (`ui_kinect.radar_geometry`, `radar_points`): the sensor's own fan (its calibrated focal) with arcs at its 0.8–4 m working range, in grey; what it reads now, as dots and lines, from libfreenect's millimetres (`kinect.radar_profile`: the nearest reading in each of 80 columns, over a band of rows round the axis; about 30 µs, no trigonometry, no cells); and your `near` / `far` / `centre` as a red wireframe on top, drawn with no sensor too. About 40 draw calls a frame. The thread measures for the pane (this, the share, nearest and median) only while the pane has looked in the last 2 s (`KinectDevice.watch`), so an unwatched Kinect pays for none of it. Read-only. There is no angular (horizontal) crop setting: `Options` has none, so none is drawn.
 - **Judge it.** 950, 951, 952, 953, 954, 955, 956, 957, 958.
+
+### 1171. The past is the delay's stack
+
+- **What.** A delay keeps the pictures it takes as a stack for a reader: `delay[.n].depth` (1–64, appended to plan 34 D's `every`, `frames`, `hz`), the newest first. Its own picture is unchanged — the last it took, byte for byte (2916 sweep renders of every effect equal to `main`'s, and every delay test). `stack.DelayStack` sits beside the pair: at the turn a pair that took a picture hands it to the stack, one GPU copy (`copy_layer`) into a layer of a half-float texture array; each entry keeps its age in seconds.
+- **Answer.** owner, 2026-11-26 (plan 90 Q20): "merge, call it Delay" — one maker of the past. Q4 (storage) and Q22 (Depth the one count) as recommended. Main's #514 gave the delay its rate the same day; plan 90's own Gap was dropped for it, so there is one cadence.
+- **Why a texture array.** A reader takes every entry through one sampler: a list of 2D textures would need a unit each (the Mac's GL has sixteen). Not a 3D texture: `GL_MAX_3D_TEXTURE_SIZE` is 2048 (4K would not fit) and filtering in depth would blend the ring's newest into its oldest. moderngl 5.12 cannot attach an array layer; the copy goes through PyOpenGL, binding put back.
+- **Made on a reader's ask.** `Renderer.delay_stack` makes it; a delay nobody reads as a stack costs nothing more. Released after `SIZED_KEEP_FRAMES` unasked; reset by a load (R19). It only grows: a Depth driven down (it is modulatable, so the side pane draws it) reads fewer and keeps what it holds; driven past its room it is made again, clean. Each deck's stacks within `stack.BUDGET` (1 GiB; 32 frames at 1080p are 531 MB, `stack.held` by context and renderer): the decks are siblings on one GL context, and a budget each means a deck that filled its own never leaves the deck faded in with nothing to read (2 GiB at most on the context; Devin on #519), past it the delay keeps the frames that fit and says so (`KEEPS_WHAT_FITS`: the owner on the Mac, hand checks 960–961, saw the picture go black past depths 36 and 53 when an over-budget stack was dropped whole). A load gives back a stack's room, not only what it holds. A keyed delay hands its stack on from under its key; a keyed picture recorded into a read stack keeps its alpha (`_Build._stacked`). A reader fits a stack of another shape by cover, as the delay's own picture is (`fx.stack_uv`) (Devin on #519).
+- **Typed.** `graph.STACK` / `fx.STACK`; a `stack` port takes a delay and nothing else (`STACK_IS_A_DELAYS`). A delay still makes a picture for every other port.
+- **To reverse.** Drop `depth` and the stack port; no saved file but the examples holds them.
+- **Built.** `stack.py`, `Renderer.delay_stack` / `_turn_stack`, `graph.Delay.stack`, `Effect._kw`, `_Build._stacks`; `tests/test_delay_stack.py`. No schema move: `delay[.n].depth` is a new id a build from before drops with a note.
+- **Judge it.** 959, 960.
+
+### 1172. Read and Trail: the stack's readers are effect files
+
+- **What.** `read.glsl` — At (0–63 steps back, a field on it is a time displace), Between (blend, nearest) — and `trail.glsl` — Level, Fade (half-life, seconds), Lay (over by alpha, add) — each `// @takes image none` and `// @takes stack stack`. Only a file that takes a stack declares it (`fx.STACK_HEAD`: `u_stack`, the count, each entry's layer and age, `stack_frame`, `stack_at`), bound on unit 2, the hook's (a stack reader has no hook; parsed so).
+- **Answer.** owner, 2026-11-26 (plan 90 Q21): the readers and the dream are effect files, so they have knobs, mix, blend, previews, fields on knobs and the FX pane for nothing. Q13: Time Displace is Read with a field on At (`stack-slit`).
+- **Trail's arithmetic** is the look-back's trail pass with each frame's alpha as its coverage, which Black is clear makes from brightness (row 1174): H2 proves the look-back's saved looks against it.
+- **Built.** `read.glsl`, `trail.glsl`; `tests/test_delay_stack.py`; examples `stack-echo`, `stack-echoes` (six spaced echoes: the delay's rate is the spacing), `stack-trail`, `stack-slit` (`tests/fixtures/field-examples/`, the Drive's `loadable/field-examples/`).
+- **Judge it.** 960, 961.
+
+### 1173. Curve: a picture's remap
+
+- **What.** `curve.glsl`: Shape −1 … 1 (each straight channel to the power 4^shape, premultiplied again after: black stays black, alpha untouched — Devin on #519), Invert — the lane modifier `curve`'s name and knobs (plan 67 §3.2: one name per operation, in every kind). The look-back's and the dream's contrast `pow(c, contrast)` is Shape log₄(contrast), within one level (`tests/test_curve_and_ramp.py`).
+- **Answer.** owner, 2026-11-26 (plan 90 Q15): a public remap, not the dream's grade. Named Curve, not "Remap", because §3.2 writes the ops to the modifiers' names.
+- **Judge it.** 962.
+
+### 1174. Black is clear's ramp: smooth or linear
+
+- **What.** `key.<node>.ramp` (appended: smooth, plan 87's and the default; linear), on graph keys and channel keys alike (`glsl.KEY_RAMP`, `media_tex.Key.ramp`, MEDIA's key rows). At level 0, softness 1 on peak, linear makes a pixel's brightness its coverage exactly — the look-back's and the dream's private rule (`POST_FS`, `DREAM_FS`), which H2 and H3 retire.
+- **Answer.** owner, 2026-11-26 (plan 90 Q19): the linear shape, appended, general.
+- **Judge it.** 962.
