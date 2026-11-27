@@ -471,6 +471,7 @@ is the design and its answers; H1 the first piece, H2 the look-back retired onto
 | **The starters fold too**: dream on a picture and tracers + dream land that chain as **dream**; the tracers as **trail** (the look-back's group, renamed). A second dream is its own parts | `graphview.render_starter` | owner (Q29, Q31); row 1183 |
 | **Old dream presets are retired**: left on disk, never listed or opened, said once | `library.RETIRED_MODULES` | owner (Q33); row 1184 |
 | **The LOOKBACK page is retired into the FX pane**: the dream's knobs are its strip; its hook's words its node's | `ui_pane.SECTIONS`, `FxChain.said` | owner (Q21); row 1185 |
+| **Time Displace is Read with a field on At** (H4): no node, no file. #488's shader, kept as a test fixture over the stack, equals `Line → Read.at` to rounding wherever its age is held; #488 is closed | `read.glsl`, `field-examples/stack-slit` | owner (Q13); row 1186 |
 
 ## Recursive geometry (plan 64)
 
