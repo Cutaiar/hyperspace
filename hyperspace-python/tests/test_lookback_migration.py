@@ -442,3 +442,20 @@ def test_a_fragment_with_no_dream_drops_a_desk_row_onto_the_hosts_dream():
     got = patches.forward(doc)
     assert [r["target"] for r in got["desk"]] == ["fx.curve.shape"], got["desk"]
     assert patches.check(got) == []
+
+
+@pytest.mark.parametrize("bad", [{"routes": [{"source": "cc:0:1", "target": [], "op": "abs"}]},
+                                 {"lfos": 1}], ids=["list-target", "lfos-a-number"])
+def test_a_malformed_fragment_migrates_and_is_refused_by_check(bad):
+    """Devin on #522 (fourth pass): the filter of rows onto the host's dream
+    reads the file before `check` does — a malformed one must pass through
+    to be refused in words (a LibraryError), never raise and stop the list."""
+    doc = {"schema": patches.SCHEMA, "name": "f",
+           "nodes": [{"kind": "composite", "blend": "add"}],
+           "wires": [{"from": "lookback", "to": "composite.over"}],
+           "ports": [{"id": "in", "type": "image", "to": "lookback.image", "was": "scene"},
+                     {"id": "out", "type": "image", "from": "composite",
+                      "was": "output.all.image"}],
+           "values": {"dream.echoes": 4}, **bad}
+    got = patches.forward(doc)
+    assert patches.check(got) != []

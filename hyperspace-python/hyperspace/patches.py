@@ -345,13 +345,18 @@ def _retire_lookbacks(doc: dict) -> dict:
     # its copy onto the part stays. Devin on #522, third pass)
     shared = {f"dream.{k}" for k in graphmigrate.LB_SHARED}
     if not any(isinstance(e, dict) and e.get("kind") == "dream" for e in nodes2):
-        m = _members_of(out)
+        # (a malformed file passes through untouched, for `check` to refuse in
+        # words — never raised here: Devin on #522, fourth pass)
+        try:
+            m = _members_of(out)
+        except (TypeError, ValueError, AttributeError):
+            return out
         for key in ("routes", "desk"):
             rows = out.get(key)
             if isinstance(rows, list):
                 out[key] = [r for r in rows if not (
-                    isinstance(r, dict) and r.get("target") in shared
-                    and not m.owns(r["target"])
+                    isinstance(r, dict) and isinstance(r.get("target"), str)
+                    and r["target"] in shared and not m.owns(r["target"])
                     and not (isinstance(r.get("source"), str) and m.own_lane(r["source"])))]
     return out
 
