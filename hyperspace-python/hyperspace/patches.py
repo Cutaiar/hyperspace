@@ -339,6 +339,20 @@ def _retire_lookbacks(doc: dict) -> dict:
         out["ports"] = ports2
     if keys2:
         out["keys"] = keys2
+    # (a row kept onto the host's dream — the look-back's shared knobs — is
+    # the fragment's only where its source is: a desk knob onto a dream the
+    # fragment does not hold is nothing of the patch's, refused by `check`;
+    # its copy onto the part stays. Devin on #522, third pass)
+    shared = {f"dream.{k}" for k in graphmigrate.LB_SHARED}
+    if not any(isinstance(e, dict) and e.get("kind") == "dream" for e in nodes2):
+        m = _members_of(out)
+        for key in ("routes", "desk"):
+            rows = out.get(key)
+            if isinstance(rows, list):
+                out[key] = [r for r in rows if not (
+                    isinstance(r, dict) and r.get("target") in shared
+                    and not m.owns(r["target"])
+                    and not (isinstance(r.get("source"), str) and m.own_lane(r["source"])))]
     return out
 
 

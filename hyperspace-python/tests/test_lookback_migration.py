@@ -406,8 +406,8 @@ def test_the_master_switch_keeps_wire_declared_and_default_mix_effects_as_they_d
 
 def test_a_fragment_with_no_dream_keeps_its_rows_onto_the_hosts_dream():
     """Devin on #522 (second pass): only the dream's values are the host's in
-    a fragment with no dream — a row from the fragment's own LFO onto
-    `dream.contrast` may drive the host's, and keeps doing so beside the
+    a fragment with no dream — a row from the fragment's own LFO (voice 1,
+    lane `lfo:0`) onto `dream.contrast` may drive the host's, and keeps doing so beside the
     Curve it now drives too."""
     doc = {"schema": patches.SCHEMA, "name": "f",
            "nodes": [{"kind": "composite", "blend": "add"}],
@@ -415,11 +415,30 @@ def test_a_fragment_with_no_dream_keeps_its_rows_onto_the_hosts_dream():
            "ports": [{"id": "in", "type": "image", "to": "lookback.image", "was": "scene"},
                      {"id": "out", "type": "image", "from": "composite",
                       "was": "output.all.image"}],
-           "lfos": [{"id": "lfo.1"}],
-           "routes": [{"source": "lfo:1", "target": "dream.contrast", "op": "push",
+           "lfos": [1],
+           "routes": [{"source": "lfo:0", "target": "dream.contrast", "op": "push",
                        "value": 0.2}],
            "values": {"dream.echoes": 4, "dream.contrast": 1.0}}
     got = patches.forward(doc)
     targets = sorted(r["target"] for r in got["routes"])
     assert targets == ["dream.contrast", "fx.curve.shape"], got["routes"]
     assert "dream.contrast" not in got["values"]
+    assert patches.check(got) == []
+
+
+def test_a_fragment_with_no_dream_drops_a_desk_row_onto_the_hosts_dream():
+    """Devin on #522 (third pass): a row whose source is not the fragment's
+    own (a desk knob) onto the host's dream is nothing of the patch's —
+    `patches.check` refused the whole file. It goes; its copy onto the part
+    stays, and a row from the fragment's own LFO keeps both (above)."""
+    doc = {"schema": patches.SCHEMA, "name": "f",
+           "nodes": [{"kind": "composite", "blend": "add"}],
+           "wires": [{"from": "lookback", "to": "composite.over"}],
+           "ports": [{"id": "in", "type": "image", "to": "lookback.image", "was": "scene"},
+                     {"id": "out", "type": "image", "from": "composite",
+                      "was": "output.all.image"}],
+           "desk": [{"source": "cc:0:48", "target": "dream.contrast", "op": "abs"}],
+           "values": {"dream.echoes": 4, "dream.contrast": 1.0}}
+    got = patches.forward(doc)
+    assert [r["target"] for r in got["desk"]] == ["fx.curve.shape"], got["desk"]
+    assert patches.check(got) == []
