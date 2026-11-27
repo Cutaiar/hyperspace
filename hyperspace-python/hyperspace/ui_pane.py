@@ -118,7 +118,6 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("view", "view", ("view",), _paged("view")),
     ("fractal", "fractal", ("view",), _paged("fractal")),
     ("fx", "fx", ("fx",), _fx),
-    ("lookback", "lookback", ("dream",), _paged("lookback")),
     ("faces", "faces", ("pattern",), _paged("faces")),
     ("media", "media", ("media", "backdrop"), _paged("media")),
     ("lfo", "lfo", ("lfo", "tempo"), _paged("lfo")),

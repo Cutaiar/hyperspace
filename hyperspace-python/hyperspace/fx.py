@@ -112,7 +112,7 @@ from typing import Any, cast
 import moderngl
 import numpy as np
 
-from . import mandel, tapers, writes
+from . import dreamhook, mandel, tapers, writes
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 
 FX_DIR = Path(__file__).parent / "shaders" / "fx"
@@ -154,7 +154,8 @@ FIELD_UNIT = 3                  # its texture unit (0 the input, 1 the aux, 2 a 
 # file set) and the effect's drives (`advance(spec, values, dt)`, while it
 # is live). One so far: the Mandelbrot, whose reference orbit, render size
 # and tile pre-passes a fragment shader alone cannot hold.
-HOOKS = {"mandel": mandel}
+# Plan 90 H3: the dream (`dreamhook`), whose worker runs on its own thread.
+HOOKS = {"mandel": mandel, "dream": dreamhook}
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _DIRECTIVE = re.compile(
@@ -1366,6 +1367,12 @@ class FxChain:
         self._frame = 0
         self.opaque = False     # the ground is opaque: every pass writes alpha 1 (Renderer.draw)
         self.mandel = None      # plan 63: `mandel.Gl`, the hook's GL objects, made on first use
+        # plan 90 H3: the dream's — its GL objects (`dreamhook.Gl`), the worker
+        # it hands pictures to (app.py; a deck fade lends it), and what each
+        # hooked instance last said (its node shows it)
+        self.dream = None
+        self.dream_source = None
+        self.said: dict[str, str] = {}
         self._build_copy()
 
     def _build_copy(self) -> None:
@@ -1381,6 +1388,7 @@ class FxChain:
         if gl is not None:
             gl.release()
             self.mandel = None
+        dreamhook.release(self)
         self._copy_vao.release()
         self._copy.release()
         self._build_copy()
@@ -1393,6 +1401,7 @@ class FxChain:
         if self._frame % RELOAD_EVERY == 0:
             self.state.poll()
         mandel.tick(self)       # plan 63: the hook's objects for gone instances, or a reload
+        dreamhook.tick(self)    # plan 90 H3: a holder that stopped lets the worker go
 
     def pool(self, size: tuple[int, int], n: int = 2
              ) -> list[tuple[moderngl.Texture, moderngl.Framebuffer]]:
@@ -1436,6 +1445,7 @@ class FxChain:
         if gl is not None:
             gl.release()
             self.mandel = None
+        dreamhook.release(self)                 # plan 90 H3: the dream's
         shown = getattr(self, "_show_field", None)     # plan 67 F1
         if shown is not None:
             shown[2].release()

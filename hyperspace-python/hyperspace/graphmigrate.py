@@ -50,6 +50,7 @@ import copy
 import functools
 import math
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -2614,47 +2615,10 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
     # patch's other effects drawn as they were: off where the master was, their
     # own mix × the master's)
     if parts:
-        was_on = values.get("fx.on", True) is not False
-        mix = _num(values.get("fx.mix", 1.0), 1.0)
-        ours = {f"fx.{n}." for role in parts.values() for k, n in role.items()
-                if k in ("curve", "fade", "trail")} | {f"fx.{r}." for r in pins.values()}
-        # (every effect the patch declares — an entry, a wire's end, a slot's
-        # wire: Devin on #522 — but the parts)
-        declared = {G.instance_name(e["file"], e.get("instance", 1)
-                                    if isinstance(e.get("instance", 1), int) else 1)
-                    for e in out_nodes if isinstance(e, dict) and e.get("kind") == "effect"
-                    and isinstance(e.get("file"), str)}
-        for w in wires:
-            for end in (w.get("from"), w.get("to")) if isinstance(w, dict) else ():
-                if isinstance(end, str) and _lb_of(end) is None:
-                    base = _effect_base(end)
-                    if G.wire_node_kind(base, wired=True) == "effect":
-                        declared.add(base)
-        others = sorted(declared - {p[3:-1] for p in ours})
-        what = []
-        if not was_on:
-            values["fx.on"] = True
-            what.append("fx.on is on")
-            for o in others:
-                if values.get(f"fx.{o}.on") is True:
-                    values[f"fx.{o}.on"] = False
-        if mix != 1.0:
-            values["fx.mix"] = 1.0
-            what.append(f"fx.mix is 1 (was {mix:g})")
-            for o in others:
-                # (a file's own mix where the patch names none: its spec's)
-                own = values.get(f"fx.{o}.mix")
-                if not isinstance(own, (int, float)) or isinstance(own, bool):
-                    own = (specs or {}).get(G.split_instance(o)[0],
-                                            (DEFAULT_ORDER, DEFAULT_MIX))[1]
-                values[f"fx.{o}.mix"] = own * mix
-        if what:
-            notes.append(LB_MASTER_NOTE.format(what=" and ".join(what)))
-            for key in _ROW_LISTS:
-                for r in rest.get(key) or []:
-                    if isinstance(r, dict) and r.get("target") in ("fx.on", "fx.mix"):
-                        notes.append(LB_MASTER_ROW_NOTE.format(
-                            row=f"{key} {r.get('source')} → {r['target']}", pid=r["target"]))
+        ours = {n for role in parts.values() for k, n in role.items()
+                if k in ("curve", "fade", "trail")} | set(pins.values())
+        master_switch(values, ours, out_nodes, wires, rest, specs, notes, LB_MASTER_NOTE,
+                      LB_MASTER_ROW_NOTE, skip=lambda end: _lb_of(end) is not None)
     # every other look-back knob (a patch with none, or `dream.<n>.*` of none drawn)
     for k in list(values):
         got = _lb_param(k)
@@ -2875,6 +2839,56 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
         if groups:
             out_rest[GROUPS_KEY] = groups
     return out_nodes, out_wires, out_rest, out_ports, out_keys, notes
+
+
+def master_switch(values: dict, ours: set[str], out_nodes: list, wires: list, rest: dict,
+                  specs: Specs | None, notes: list[str], note: str, row_note: str,
+                  skip: Callable[[str], bool] = lambda end: False) -> None:
+    """Plan 90 (H2, H3): parts that are effects where the retired node drew
+    whatever `fx.on` and `fx.mix` said — so the master is on and at 1, and the
+    patch's other effects drawn as they were: off where the master was, their
+    own mix × the master's (a file's own mix where the patch names none: its
+    spec's). `ours` the parts' instance names; `skip` a wire end that is no
+    effect of the patch (the retired node's own). In place, said (`note`,
+    `row_note` for a row on the master)."""
+    was_on = values.get("fx.on", True) is not False
+    mix = _num(values.get("fx.mix", 1.0), 1.0)
+    # (every effect the patch declares — an entry, a wire's end, a slot's
+    # wire: Devin on #522 — but the parts)
+    declared = {G.instance_name(e["file"], e.get("instance", 1)
+                                if isinstance(e.get("instance", 1), int) else 1)
+                for e in out_nodes if isinstance(e, dict) and e.get("kind") == "effect"
+                and isinstance(e.get("file"), str)}
+    for w in wires:
+        for end in (w.get("from"), w.get("to")) if isinstance(w, dict) else ():
+            if isinstance(end, str) and not skip(end):
+                base = _effect_base(end)
+                if G.wire_node_kind(base, wired=True) == "effect":
+                    declared.add(base)
+    others = sorted(declared - ours)
+    what = []
+    if not was_on:
+        values["fx.on"] = True
+        what.append("fx.on is on")
+        for o in others:
+            if values.get(f"fx.{o}.on") is True:
+                values[f"fx.{o}.on"] = False
+    if mix != 1.0:
+        values["fx.mix"] = 1.0
+        what.append(f"fx.mix is 1 (was {mix:g})")
+        for o in others:
+            own = values.get(f"fx.{o}.mix")
+            if not isinstance(own, (int, float)) or isinstance(own, bool):
+                own = (specs or {}).get(G.split_instance(o)[0],
+                                        (DEFAULT_ORDER, DEFAULT_MIX))[1]
+            values[f"fx.{o}.mix"] = own * mix
+    if what:
+        notes.append(note.format(what=" and ".join(what)))
+        for key in _ROW_LISTS:
+            for r in rest.get(key) or []:
+                if isinstance(r, dict) and r.get("target") in ("fx.on", "fx.mix"):
+                    notes.append(row_note.format(
+                        row=f"{key} {r.get('source')} → {r['target']}", pid=r["target"]))
 
 
 def lookbacks(doc: dict, specs: Specs | None = None) -> tuple[dict, list[str]]:

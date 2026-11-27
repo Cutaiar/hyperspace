@@ -106,6 +106,7 @@ from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
 from .deck import KEYS, MOUSE, Deck, DeckHooksMade, Fade, MetaController, Mix, register_xfade
+from .deck import dreams as deck_dreams
 from .devicelist import DeviceList
 from .displays import COPY as DISPLAYS_COPY
 from .displays import FILE as DISPLAYS_FILE
@@ -1278,15 +1279,16 @@ def dream_error(e: Exception) -> str:
     return f"dream worker off: {type(e).__name__}: {e}"[:200]
 
 
-def _open_dream(reg: Registry, cfg: dict) -> tuple[object | None, str]:
-    """The look-back's dream worker (dream.py, torch), only when [dream]
-    enabled; with the reason it is off when it would not start (the SYSTEM
-    and LOOKBACK pages show it), "" otherwise."""
+def _open_dream(cfg: dict) -> tuple[object | None, str]:
+    """The dream worker (dream.py, torch), only when [dream] enabled; with
+    the reason it is off when it would not start (the SYSTEM page and the
+    dream effect's node say it), "" otherwise. Plan 90 H3: it reads no
+    registry — the dream effect hands it its knobs with each picture."""
     if not cfg.get("dream", {}).get("enabled", False):
         return None, ""
     try:
         from . import dream
-        return dream.DreamWorker(reg, cfg["dream"]), ""
+        return dream.DreamWorker(cfg["dream"]), ""
     except Exception as e:  # noqa: BLE001 — no torch, no GPU: the plain tracer runs
         print(f"dream: {e}", file=sys.stderr)
         return None, dream_error(e)
@@ -2233,8 +2235,6 @@ def main(argv: list[str] | None = None) -> None:
     # its, and the renderer reads its frames
     media = _open_media(str(lib_root) if lib_root != home and not unknown else "", home)
     renderer.media = media.state
-    # dream.* drives the renderer's look-back (lookback.py); the post pass
-    # runs inside renderer.draw
     panels: list = []                  # app.restart raises the panel's flag; frame() polls it
     # an analyzer loadable patch carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
@@ -2373,9 +2373,9 @@ def main(argv: list[str] | None = None) -> None:
         media.state.resolver.builtin[PANEL_GRAPH] = PanelSource(
             panel.canvas_tap, on_page=lambda: panel.canvas_px is not None)
         panel.hand_settings = hand_settings
-        dream_io, panel.dream_error = _open_dream(reg, cfg)
-        if dream_io is not None:            # what the dream node dreams with (plan 36 T4)
-            renderer.dreamer.source = dream_io
+        dream_io, panel.dream_error = _open_dream(cfg)
+        if dream_io is not None:            # what the dream effect dreams with (plan 90 H3)
+            renderer.fx.dream_source = dream_io
         renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
         # …closed with the adapters, at quit and restart — deck 2's too (plan 44 D4)
         segmenters = _Closer(lambda: _close_each([r.close for r in rendering]))
@@ -2574,12 +2574,11 @@ def main(argv: list[str] | None = None) -> None:
     panel.watchdog, panel.render_watch = watchdog, render_watch
 
     def dream_check(on: Deck, name: str | None) -> None:
-        # a loadable patch that asks for the dream — a dream node on (plan 36 T4:
-        # `dream.on`) with a mix above 0 — with no worker to dream: the
-        # dream passes its picture through. Said on the banner (until
-        # dismissed), logged once. Echoes alone are a normal mode. The deck
-        # it landed on, either (plan 44 D5a)
-        if on.reg["dream.on"].base and on.reg["dream.mix"].base > 0 and dream_io is None:
+        # a loadable patch that asks for the dream — the dream effect in its
+        # graph, on (plan 90 H3) — with no worker to dream: the dream passes
+        # its picture through. Said on the banner (until dismissed), logged
+        # once. The deck it landed on, either (plan 44 D5a)
+        if dream_io is None and deck_dreams(on):
             why = panel.dream_error or "[dream] enabled = false in config.toml"
             render_watch.warn(f"{name} turns the dream on, but there is no dream worker ({why}); "
                               "the dream passes its picture through")

@@ -749,3 +749,30 @@ Rows 1175–1180, hand checks 963–968 (group GG). As §10.2–§10.5, with thr
 `fx.dream.*`, `darken`, `contrast` and `res` with it — and, as row 1180, a saved dream's parts
 folded in one group.
 
+
+## 12. H3: the dream as an effect file (2026-11-27)
+
+### 12.1 Questions, and the owner's answers
+
+The owner, relayed from the dream-bench session (2026-11-26/27): a dream "that runs at 4 ms or
+less … just allows me to dream onto a bitmap and then do whatever I want with that bitmap
+afterwards, without needing to think about darkening, contrasts, masks". Measured on the M3 Max
+(`tools/dream_bench/g_layers.py`): about 5 ms a megapixel a step at best; conv3_3 9 ms at 456 × 256,
+36 ms at 960 × 540 — the size the dream is handed decides its cost.
+
+29. **Group names.** H2's group was "look-back". **Answer: "trail"** for the tracers and a migrated
+    look-back (a delay and a Trail), **"dream"** for every group holding a dream (tracers + dream
+    included).
+30. **What the dream makes.** **Answer: the dreamed bitmap** — `@mix 1`, `@blend mix`: its output is
+    the dreamed picture at its input's size, its alpha the held coverage. Laying it on anything is a
+    Composite after it. No new blend mode.
+31. **What a saved dream opens as.** **Answer: one folded chain**, the same for the starters:
+    Resize (keyed: brightness is coverage, as the old mask) → Dream → Hue turn / Palette / Curve, each
+    only where its old value is off neutral → Fade (level = mix × (1 − darken)) → Composite over the
+    input, in one group **dream**. Every old dream keeps its size (so its cost), its grade on the
+    dream alone, and its lay at its mix.
+32. **Hold's default.** **Answer: 1, stateless** — a fresh dream dreams each input anew, at no extra
+    cost. A saved dream keeps its own Hold (the old default, 0.05, written where a file left it out).
+33. **Old dream presets** (module presets of the retired `dream` group, `<library>/patches/dream/`).
+    **Answer: retired** — left on disk, no longer listed or opened; the library says once that they
+    were the retired dream group's. (An `fx` group preset would reset every effect's values.)

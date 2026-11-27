@@ -311,10 +311,6 @@
     "hyperspace/ui_lfo.py": {
       "reportOptionalMemberAccess": 1
     },
-    "hyperspace/ui_lookback.py": {
-      "reportCallIssue": 1,
-      "reportOptionalMemberAccess": 1
-    },
     "hyperspace/ui_media.py": {
       "reportOptionalMemberAccess": 1
     },

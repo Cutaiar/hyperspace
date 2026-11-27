@@ -56,9 +56,10 @@ And the three that wrap what exists (A1's call, registered):
   saved look-back is those parts on load (`graphmigrate.lookbacks`). The
   section reader still reads one — the ladder's steps before the last read
   old frames — and a live frame refuses it in words (`LOOKBACK_RETIRED`).
-- **Dream** (`DreamNode`; plan 36 T4, W4): picture in → dreamed picture
-  out — its input to the worker, `D` laid over it (`lookback.Dreamer`);
-  `dream.on` off passes its input through. One live dream (D2).
+- **The dream** is an effect file (plan 90 H3: `shaders/fx/dream.glsl`,
+  its Python half `dreamhook.py`); an old `{"kind": "dream"}` entry reads as
+  it (`legacy_dream`), and a saved one is its folded chain on load
+  (`graphmigrate.dreams`).
 - **Output** (`Output`): one render output — `fit`, flip, the hands over,
   the readout, the dim — exactly `Renderer._compose`, so an output in
   another context gets the same five-step `outputs.Handoff`.
@@ -452,13 +453,14 @@ _PLACE_NODE = re.compile(rf"scene|history|lookback|hands(?:\.{_INSTANCE})?(?:\.l
 # plan 33 G: the wire ends that are no effect — `frame`, the pipeline end
 # `fx`, the faces' `shape`, `pattern`, `backdrop`, `switch` — so no effect
 # file may take them, and no effect's place is one of them. Plan 34 L: and
-# feedback's `delay`, `resize`, `echo` (`echo.<k>`) and `dream`. Plan 35 F:
+# feedback's `delay`, `resize` and `echo` (`echo.<k>`; plan 90 H3: `dream`
+# is an effect file now, its own name). Plan 35 F:
 # and the wired frame's `copy` (`copy.<n>`; plan 89: read only to migrate it
 # to an effect's slot) and the source word `ground`.
 # Plan 39 T2: and the mask node `matte` (`matte.<n>`); T3: and `cut` (`cut.<n>`);
 # T4: and `segment` (`segment.<n>`)
 RESERVED = ("frame", "fx", "pattern", "shape", "backdrop", "switch", "delay", "resize", "echo",
-            "dream", "copy", "ground", "matte", "cut", "segment")
+            "copy", "ground", "matte", "cut", "segment")
 _PLACE_EFFECT = re.compile(rf"(?!(?:{'|'.join(RESERVED)})(?![a-z0-9_]))"
                            rf"[a-z][a-z0-9_]*(?:\.{_INSTANCE})?")
 PLACE_WORDS = {"after": "scene, hands, hands.2 …, history, output.1 …, or an effect",
@@ -733,11 +735,9 @@ _SEGMENT_PIN = re.compile(rf"(segment(?:\.{_INSTANCE})?)\.(fg|bg|mask)")
 _ECHO = re.compile(r"echo\.[1-9][0-9]*")
 # plan 36 T4 (W4): a look-back's instances (`lookback`, `lookback.2` …), its
 # echo outputs — pins, frames of its own ring (`lookback.echo.3`,
-# `lookback.2.echo.1`) — and the dream's (`dream`; a second, `dream.2`, is
-# named only to be refused: one live dream at a time, D2)
+# `lookback.2.echo.1`) — plan 90 H3: the dream is an effect file (`dream`)
 _LOOKBACK = re.compile(rf"lookback(?:\.{_INSTANCE})?")
 _ECHO_PIN = re.compile(rf"(lookback(?:\.{_INSTANCE})?)\.echo\.([1-9][0-9]*)")
-_DREAM = re.compile(rf"dream(?:\.{_INSTANCE})?")
 SWITCH_PORTS = tuple(f"in{i}" for i in range(1, 9))
 # what each kind of wireable node makes, and the ports a wire may go into
 # (port → type). The scene's and a layer's geometry ports and the
@@ -752,8 +752,8 @@ WIRE_MAKES = {"scene": IMAGE, "history": IMAGE, "layer": IMAGE, "effect": IMAGE,
               "frame": IMAGE, "pattern": IMAGE, "switch": IMAGE,
               "fx": None, "shape": None, "backdrop": None,
               # plan 34 L: last frame's picture, a picture at a size of its
-              # own, a look-back frame and the dream buffer
-              "delay": IMAGE, "resize": IMAGE, "echo": IMAGE, "dream": IMAGE}
+              # own, a look-back frame
+              "delay": IMAGE, "resize": IMAGE, "echo": IMAGE}
 WIRE_TAKES: dict[str, dict[str, str]] = {
     "output": {"image": IMAGE, "hands": IMAGE, "readout": IMAGE},
     "history": {"image": IMAGE, "cover": MASK},
@@ -767,8 +767,8 @@ WIRE_TAKES: dict[str, dict[str, str]] = {
     "fx": {"image": IMAGE}, "pattern": {"media": IMAGE}, "shape": {"faces": IMAGE},
     "backdrop": {"image": IMAGE}, "switch": {p: IMAGE for p in SWITCH_PORTS},
     # plan 34 L: what a delay keeps for next frame, what a resize crops; an
-    # echo and the dream read the look-back, never a wire
-    "delay": {"image": IMAGE}, "resize": {"image": IMAGE}, "echo": {}, "dream": {},
+    # echo reads the look-back, never a wire
+    "delay": {"image": IMAGE}, "resize": {"image": IMAGE}, "echo": {},
 }
 TYPE_WORDS = {IMAGE: "a picture", GEOMETRY: "geometry", MASK: "a mask", FIELD: "a field",
               STACK: "a stack of past frames", None: "nothing"}
@@ -780,7 +780,7 @@ def effect_ports(name: str) -> tuple[str, dict[str, str]]:
     A file not in this build is a picture effect's."""
     return _fx.ports_of(split_instance(name)[0])
 WIRE_FROM_WORDS = ("scene, hands …, history, frame, pattern, an effect, a composite, "
-                   "a switch, a delay, a resize, echo.1 …, dream or a channel (media.a …)")
+                   "a switch, a delay, a resize, echo.1 … or a channel (media.a …)")
 WIRE_TO_WORDS = ("output.1 … (image, hands, readout), history.image, fx.image, "
                  "shape.faces, backdrop.image, pattern.media, an effect's image or aux, "
                  "a composite's under / over, a switch's in1 … in8, or a delay's or a "
@@ -860,7 +860,7 @@ def wire_node_kind(name: Any, wired: bool = False) -> str | None:
         return None
     if name in ("scene", "history", "cover"):
         return name
-    if name in ("frame", "fx", "pattern", "shape", "backdrop", "dream"):
+    if name in ("frame", "fx", "pattern", "shape", "backdrop"):
         return name
     for kind, pat in (("layer", _LAYER), ("ghost", _GHOST), ("output", _OUTPUT),
                       ("composite", _COMPOSITE), ("media", _MEDIA), ("switch", _SWITCH),
@@ -1201,36 +1201,18 @@ def _echo_entry(e: dict) -> EchoAt:
 NODE_KINDS["echo"] = _echo_entry
 
 
-@dataclass(frozen=True)
-class DreamAt:
-    """The dream (plan 36 T4, W4; was plan 34's dream-buffer source):
-    picture in → dreamed picture out — `dream`. One live dream at a time
-    (D2: one worker, one GPU job): a second (`{"kind": "dream", "instance":
-    2}`) may be declared, but a wire to or from it is refused in words."""
-
-    n: int = 1
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
-            raise ValueError(f"dream instance {self.n!r}: a whole number from 1")
-
-    @property
-    def name(self) -> str:
-        return "dream" if self.n == 1 else f"dream.{self.n}"
-
-    def to_json(self) -> dict:
-        d: dict[str, Any] = {"kind": "dream"}
-        if self.n != 1:
-            d["instance"] = self.n
-        return d
-
-
-def _dream_entry(e: dict) -> DreamAt:
+# plan 90 (H3): the dream node is retired — the dream is an effect file of that
+# name (`shaders/fx/dream.glsl`). An old entry (`{"kind": "dream"}`) reads as
+# that effect, the same name and port (`dream.image`), so a migration's read of
+# an old section still reads it; the ladder's last step (`graphmigrate.dreams`)
+# makes a saved dream its folded chain on load
+def legacy_dream(e: dict) -> dict:
+    """A `{"kind": "dream", "instance"?: n}` entry as the dream effect's."""
     _entry_keys(e, "dream", ("instance",))
-    return DreamAt(_instance(e))
-
-
-NODE_KINDS["dream"] = _dream_entry
+    out: dict[str, Any] = {"kind": "effect", "file": "dream"}
+    if "instance" in e:
+        out["instance"] = e["instance"]
+    return out
 
 
 # ---------------------------------------------------------------- the wired frame (plan 35 F, V2)
@@ -1618,7 +1600,7 @@ def _wired_kind(name: str) -> str | None:
     """`wire_node_kind(name, wired=True)`: a wired frame's kinds. `frame`
     and `fx` are named so `wire_error` can say they are gone; an old id
     (`new_id(name) != name`) and the cover are no node."""
-    if name in ("scene", "shape", "backdrop", "pattern", "lookback", "dream", "frame", "fx",
+    if name in ("scene", "shape", "backdrop", "pattern", "lookback", "frame", "fx",
                 GROUND):
         return name
     if name in PINS or _SEGMENT_PIN.fullmatch(name):
@@ -1633,7 +1615,7 @@ def _wired_kind(name: str) -> str | None:
                       # plan 36 T4: a look-back's echo pin is an echo; `echo.<k>`
                       # (plan 34's own node) only an old frame's, read to migrate
                       ("echo", _ECHO_PIN), ("echo", _ECHO), ("lookback", _LOOKBACK),
-                      ("dream", _DREAM), ("matte", _MATTE),
+                      ("matte", _MATTE),
                       ("cut", _CUT), ("segment", _SEGMENT)):
         if pat.fullmatch(name):
             return kind
@@ -1809,7 +1791,7 @@ del _cls
 # Plan 35 F: and the frame's kinds — but a wire of a wired frame naming one
 # of those declares it. (Plan 89: an effect's slots are its entry's `slots`,
 # `_WireCtx.slots`, never an entry of their own)
-DECLARED = ("composite", "switch", "delay", "resize", "echo", "dream", "matte",
+DECLARED = ("composite", "switch", "delay", "resize", "echo", "matte",
             "cut", "segment", *FRAME_KINDS)
 
 
@@ -1845,12 +1827,10 @@ class _WireCtx:
     # the wires are not known, the run is not checked (a drag on the canvas)
     switches: frozenset[str] = frozenset()
     wires: tuple[Wire, ...] | None = None
-    # plan 34 L: the delays, resizes and echoes declared (their names), and
-    # whether the dream is
+    # plan 34 L: the delays, resizes and echoes declared (their names)
     delays: frozenset[str] = frozenset()
     resizes: frozenset[str] = frozenset()
     echoes: frozenset[str] = frozenset()
-    dream: bool = False
     # plan 35 F: whether the section is a wired frame (its wires in the new
     # ids, `WIRED_TAKES`; `ghosts` then holds the hands nodes' new names,
     # `hands`, `hands.2` …). Plan 89: and the effects' slots past the
@@ -1875,7 +1855,6 @@ class _WireCtx:
         (a frame kind's: none here — a wire of a wired frame declares it)."""
         return {"composite": self.composites, "switch": self.switches, "delay": self.delays,
                 "resize": self.resizes, "echo": self.echoes,
-                "dream": frozenset({"dream"}) if self.dream else frozenset(),
                 "lookback": self.lookbacks, "matte": self.mattes,
                 "cut": self.cuts, "segment": self.segments}.get(kind, frozenset())
 
@@ -1985,14 +1964,14 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
 # which goes into the scene alone (several wires, `MANY_PORTS`); the
 # backdrop lays `scene` over `image`; a look-back records its `image`
 # (plan 36 T4: and makes the trail, held back by `occluder`'s brightness and
-# the `cover` mask), the dream dreams its `image`; a
+# the `cover` mask); a
 # slot is an effect's (plan 89); an output and All outputs take a picture, the hands
 # over it and the guide over all; `ground` makes nothing, as a picture
 WIRED_MAKES = {"scene": IMAGE, "shape": GEOMETRY, "hands": GEOMETRY, "layer": IMAGE,
                "guide": IMAGE, "lookback": IMAGE, "channel": IMAGE, "backdrop": IMAGE,
                "slot": IMAGE, "output": None, GROUND: IMAGE, "effect": IMAGE,
                "composite": IMAGE, "pattern": IMAGE, "switch": IMAGE, "delay": IMAGE,
-               "resize": IMAGE, "echo": IMAGE, "dream": IMAGE,
+               "resize": IMAGE, "echo": IMAGE,
                # plan 36 T2: the scene's pins (`PINS`)
                "cover": MASK, DEPTH_PORT: IMAGE,
                # plan 39 T2: a matte makes a mask of its picture; T3: a cut,
@@ -2006,7 +1985,6 @@ WIRED_TAKES: dict[str, dict[str, str]] = {
     "hands": {}, "layer": {"hands": GEOMETRY}, "guide": {"hands": GEOMETRY}, "channel": {},
     GROUND: {}, "cover": {}, DEPTH_PORT: {},
     "lookback": {"image": IMAGE, "occluder": IMAGE, "cover": MASK},
-    "dream": {"image": IMAGE},
     "backdrop": {"image": IMAGE, "scene": IMAGE},
     "slot": {"image": IMAGE, "aux": IMAGE},
     "output": {"image": IMAGE, "hands": IMAGE, "guide": IMAGE, DEPTH_PORT: IMAGE},
@@ -2020,13 +1998,13 @@ WIRED_TAKES: dict[str, dict[str, str]] = {
     "segment": {"image": IMAGE}, **{k: {} for k in SEGMENT_PINS},
 }
 WIRED_TO_WORDS = ("output.1 …, output.all (image, hands, guide, depth), scene.geometry, "
-                  "shape.faces, backdrop.image / scene, dream.image, hands.layer.hands …, "
+                  "shape.faces, backdrop.image / scene, hands.layer.hands …, "
                   "hands.guide.hands …, "
                   "pattern.media, an effect's or its slot's image or aux, a composite's under "
                   "/ over / depth, a switch's in1 … in8, a delay's, a resize's, a "
                   "matte's or a segment's image, or a cut's image / mask")
 WIRED_FROM_WORDS = ("scene, scene.cover, scene.depth, shape, hands …, hands.layer …, "
-                    "hands.guide …, dream, backdrop, pattern, "
+                    "hands.guide …, backdrop, pattern, "
                     "an effect, an effect's slot (acid.slot.2 …), a composite, a switch, "
                     "a delay, a resize, a matte, a cut, segment.fg / .bg / .mask, a channel (channel.a …) or ground")
 # plan 39 T2 (W1, decision 2): a picture into a mask port is refused with the
@@ -2041,8 +2019,6 @@ CAPTURE_IS_IMAGE = ("{node}.capture is gone (plan 36): a look-back records what 
                     "into {node}.image, and a composite lays its trail")
 ECHO_IS_A_PIN = ("{name} is the old name (plan 36): a look-back's frames are its own "
                  "outputs — lookback.echo.{k}")
-ONE_DREAM = ("{name}: one live dream at a time (one worker, one GPU job) — wire dream, "
-             "or turn it off with dream.on")
 ECHO_RANGE = "{name}: a look-back holds {most} frames (echo.1 the newest … echo.{most})"
 # the look-back paints into what reads it (plan 28): the words for a wire
 # laying it over, either frame's
@@ -2093,8 +2069,6 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
             return ECHO_IS_A_PIN.format(name=name, k=split_instance(name)[1])
         if k == "echo" and echo_of(name) is not None and echo_of(name)[1] > OLD_ECHOES:
             return ECHO_RANGE.format(name=name, most=OLD_ECHOES)
-        if k == "dream" and name != "dream":
-            return ONE_DREAM.format(name=name)
     if kind in ("effect", "slot") and port not in takes:
         why = knob_refusal(effect_of(node) or node, port)   # plan 67 P3: a knob, in words
         if why is not None:
@@ -2575,12 +2549,6 @@ class GraphSpec:
         return self._of("echo")
 
     @property
-    def dream(self) -> DreamAt | None:
-        """The dream's node, when the section declares it (plan 34 L; plan
-        36 T4: the one live dream, `dream`)."""
-        return next((got for k, got in self.others if k == "dream" and got.n == 1), None)
-
-    @property
     def lookbacks(self) -> tuple[LookbackAt, ...]:
         """The look-backs the section declares by an entry (plan 36 T4:
         `lookback` may be, `lookback.<n>` must be), by instance."""
@@ -2710,6 +2678,8 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
     for e in entries:
         if not isinstance(e, dict) or not isinstance(e.get("kind"), str):
             raise GraphError(f"a node that names no kind: {e!r}"[:120])
+        if e["kind"] == "dream":
+            e = legacy_dream(e)               # plan 90 (H3): the dream effect's entry
         kind = e["kind"]
         reader = NODE_KINDS.get(kind)
         if reader is None:
@@ -2825,7 +2795,6 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
                    cuts=frozenset(c.name for c in spec.cuts),
                    segments=frozenset(x.name for x in spec.segments),
                    echoes=frozenset(e.name for e in spec.echoes),
-                   dream=spec.dream is not None,
                    placed={e.name: e.where for e in effects_at if e.placed},
                    wired=wired, slots=frozenset(x.name for x in spec.slots),
                    lookbacks=frozenset({"lookback", *(lb.name for lb in spec.lookbacks)}),
@@ -4684,86 +4653,6 @@ class DelayWrite(Node):
                 rebind(frame.target, frame.vp)
 
 
-class DreamNode(Node):
-    """`dream` (plan 36 T4, W4): picture in → dreamed picture out. Its
-    `image` goes to the dream worker at its own cadence — every frame while
-    `dream.on`, downsampled to `dream.res` and read back once
-    (`lookback.Dreamer.submit`) — and its picture is that input with the
-    worker's result `D` laid over at `dream.mix`, re-hued, (de)saturated,
-    tinted (`dream.hue`, `sat`, `tint` …) and graded (`dream.darken`,
-    `contrast`). `dream.on` off passes the input through untouched and
-    submits nothing, so the worker sleeps; so does a dream with no worker,
-    or before its first result has landed. It pulls its own results (no
-    look-back is needed anywhere). One live dream at a time (D2): the
-    graph refuses a wire on a second."""
-
-    KIND = "dream"
-    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
-    OUTPUT = IMAGE
-
-    def passes(self, frame: Frame) -> bool:
-        """Whether this frame's picture is its input, untouched (`Dreamer.shows`)."""
-        return not frame.r.dreamer.shows()
-
-    def run(self, frame: Frame) -> None:
-        d = frame.r.dreamer
-        if not d.state.on:
-            d.idle()
-            self.said = "off: the picture passes through, the worker idle"
-            return
-        d.pull()
-        src = self.inputs["image"]
-        if src is not None and d.wants_input():
-            tex = picture(frame, src)
-            if tex is not None:
-                with frame.timed(self.name):
-                    d.submit(tex, *frame.size)
-        if d.ring_error:
-            self.said = d.ring_error
-        elif d.source is None:
-            self.said = "no dream worker: the picture passes through"
-        elif d.dream_frame < 0:
-            self.said = "waiting for the dream worker"
-        else:
-            w, h = d.size
-            self.said = f"{w}×{h} · the dream worker's, a frame or two late"
-
-    def reads(self, frame: Frame) -> bool:
-        src = self.inputs["image"]
-        return (not self.passes(frame)) or (src is not None and src.reads(frame))
-
-    def own_size(self, frame: Frame) -> tuple[int, int] | None:
-        src = self.inputs["image"]
-        return src.own_size(frame) if self.passes(frame) and src is not None else None
-
-    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
-        src = self.inputs["image"]
-        if self.passes(frame):
-            if src is not None:
-                src.paint(frame, dst)
-                return
-            rect = tuple(dst.viewport)
-            dst.use()
-            frame.ctx.viewport = rect
-            frame.ctx.clear(0.0, 0.0, 0.0, 0.0, viewport=rect)
-            return
-        under = picture(frame, src) if src is not None else None
-        frame.r.dreamer.lay(under, dst)
-
-    def image(self, frame: Frame) -> moderngl.Texture | None:
-        src = self.inputs["image"]
-        if self.passes(frame):
-            return src.image(frame) if src is not None else None
-        if self.name not in frame.data:
-            tex, fbo = frame.r._frame_target(frame.key(self.name), frame.size, dtype="f2")
-            fbo.viewport = (0, 0, *frame.size)
-            self.paint(frame, fbo)
-            frame.data[self.name] = tex
-        return frame.data[self.name]
-
-
-# ---------------------------------------------------------------- the resize
-
 def resize_size(side: int, aspect: str, src: tuple[int, int]) -> tuple[int, int]:
     """A resize's own size (plan 34 Z, row 368): `side` square, or `src`'s
     orientation with its long side `side` and its short side in proportion
@@ -4788,6 +4677,7 @@ def _pick(values: tuple, i: Any) -> Any:
 
 # (the values of a resize with none this frame: read, never written)
 _RESIZE_DEFAULT = ResizeState()
+
 
 
 class ResizeNode(Node):
@@ -6194,6 +6084,11 @@ class Effect(Node):
         return runs_unfed(self.effect)
 
     def run(self, frame: Frame) -> None:
+        # plan 90 H3: what a hooked effect's Python half said last (the dream's
+        # worker, waiting, one live dream) — its node's line on GRAPH
+        said = getattr(frame.r.fx, "said", None)
+        if isinstance(said, dict) and self.effect in said:
+            self.said = said[self.effect]
         # plan 33 R: folded here only where something reads it at the
         # frame's size — one only the faces or the pattern's layer read is
         # made at their size, when they pull it (`Graph.at_frame`)
@@ -6452,6 +6347,9 @@ class Effect(Node):
         with frame.timed(self.name):
             frame.r.fx.run_one(self.effect, tex, dst, frame.t, **kw)
         frame.stats.setdefault("effects", []).append(self.name)
+        said = getattr(frame.r.fx, "said", None)       # (plan 90 H3: a hook's words)
+        if isinstance(said, dict) and self.effect in said:
+            self.said = said[self.effect]
 
 
 def _field_of(node: Node | None, frame: Frame) -> moderngl.Texture | None:
@@ -7500,8 +7398,6 @@ class _Build:
             if seg is None or which == "mask":
                 return seg
             return self._keep(SegmentPin(name, which, segment=seg))
-        if kind == "dream":
-            return self._keep(DreamNode(name, image=self._from(f"{name}.image")))
         if kind is not None and kind not in ("output", GROUND):
             self.g.dormant[name] = f"no {name} in this build"
         return None

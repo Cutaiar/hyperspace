@@ -34,7 +34,7 @@ what the output is.
 
 Every control is a registry param, drawn with the panel's own widgets,
 so right-click → Learn and a performer's ownership work on them like on
-anything else. A function over the Panel, like ui_lookback: no state of
+anything else. A function over the Panel, like ui_fx: no state of
 its own but the open strip's id (`panel._lfo_open`); a save of this file lands live (hotreload.MODULES). Without a
 clock and LFOs attached (headless tests, a Panel built without app.py)
 the page says so and draws nothing else.

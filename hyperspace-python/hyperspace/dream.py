@@ -1,30 +1,37 @@
-"""The dream worker — temporal Deep Dream on the GPU behind the look-back
-slot (plan 07, WP6b; the spike is docs/plans/assets/06-lookback-perf.md).
+"""The dream worker — temporal Deep Dream on the GPU behind the dream effect
+(plan 07, WP6b; the spike is docs/plans/assets/06-lookback-perf.md; plan
+90 H3: the effect file `shaders/fx/dream.glsl`, its Python half
+`dreamhook.py`).
 
 Off by default; ``[dream] enabled = true`` in config.toml opens it and
-app.py hangs it on ``renderer.dreamer.source`` (plan 36 T4: the dream
-node's). Nothing in the core imports this module — like midi.py and bridge.py it depends on the core,
-never the reverse — and without torch it is never touched: the look-back
-stays the plain tracer lookback.py draws on its own.
+app.py hangs it on ``renderer.fx.dream_source``. Nothing in the core
+imports this module — like midi.py and bridge.py it depends on the core,
+never the reverse — and without torch it is never touched: the dream
+effect passes its picture through, said.
 
-One running buffer ``D`` on the device, the spike's recipe:
+The picture it is handed is RGBA, premultiplied, its alpha the coverage
+(plan 90 §7.2: alpha is coverage — key a picture with black is clear to
+dream only where it is lit). One running buffer ``D`` on the device, rgba:
 
-    D ← D·(1 − k) + frame·k                  blend the newest echo in
-    M ← max(M·mask_decay, blur(lum(frame))·4)  the content-history mask
-    s times:  x = roll(D, ±jitter)           the net sees a moved grid,
+    D ← D·(1 − k) + frame·k                  Hold: blend the newest picture in
+    s times:  x = roll(D.rgb, ±jitter)       the net sees a moved grid,
               g = ∂ mean(layer(x)) / ∂x      so texture coheres instead
-              g = roll⁻¹(g) / std(g) · M     of locking to pixel noise
-              D = clamp(D + step·g, 0, 1)
-    out = D·M                                 premultiplied: black where
-                                              content never was
+              g = roll⁻¹(g) / std(g) · D.a   of locking to pixel noise; the
+              D.rgb = clamp(D.rgb + step·g)  gate is the held coverage
+    out = D                                   rgba, as it came in
 
-Persistent content accumulates steps and dreams deep; content that moved
-fades at ``k``, which *is* the age-proportional wake. Octaves run one
+At Hold (``k``) 1 it holds nothing: each picture is dreamed anew. Lower,
+persistent content accumulates steps and dreams deep; content that moved
+fades at ``k`` — its coverage with it (the old mask's linger merged into
+Hold, plan 90 Q17). The knobs come with each picture (`submit`'s
+``params``, the effect's `fx.dream.*`): nothing here reads a registry. Octaves run one
 scale a frame in rotation ("2 alt", "3 alt") with the reference engine's
 lost-detail reinjection — the same cost as one octave. The stability
-rule from the spike, ``step × steps / k`` under a ceiling (STABLE_RATIO),
-is a guard here: a larger push is clamped to it and the status line says
-so; a buffer that still goes non-finite is reset to the frame and counted.
+rule from the spike, ``step × steps / k`` under a ceiling, is a guard
+here while Hold is below 1 (1.5 where the gate leaves some of the picture
+out, 0.5 where it covers all of it: `ceiling`): a larger push is clamped
+to it and the status line says so; a buffer that still goes non-finite is
+reset to the frame and counted.
 
 Threading. ``submit`` never blocks the frame loop: it hands the frame to
 the worker thread and returns; a frame that arrives while the worker is
@@ -84,7 +91,7 @@ import torch
 import torch.nn.functional as F
 
 from . import library
-from .lookback import LAYERS, OCTAVES
+from .dreamhook import OCTAVES, params_of
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
@@ -117,23 +124,33 @@ TRUNKS: dict[str, tuple[str, Any]] = {
 GOOGLENET_LAST = "inception5b"
 WEIGHTS = {"vgg16": "VGG16_Weights", "googlenet": "GoogLeNet_Weights"}
 
-# step × steps / k at most. The spike's unmasked rule is 0.5; with the
-# content mask on (always, here) the ground cannot fill and the ceiling is
-# saturation, ~0.06 at k 0.08 and 2 steps (spike, UI ranges) — 1.5. The
-# recommended default (0.03 × 2 / 0.08 = 0.75) sits inside it.
+# step × steps / k at most. The spike's unmasked rule is 0.5; gated (the
+# coverage leaving some of the picture out) the ground cannot fill and the
+# ceiling is saturation, ~0.06 at k 0.08 and 2 steps (spike, UI ranges) —
+# 1.5. A gate that covers everything is the unmasked case (`ceiling`)
 STABLE_RATIO = 1.5
+UNGATED_RATIO = 0.5
+EVERYWHERE = 0.999      # a gate whose least coverage is this covers everything
 OCTAVE_SCALE = 1.5
-MASK_GAIN = 4.0
-MASK_BLUR = 9
 SLOTS = 3               # input slots: consuming, pending, being written
 OUTPUTS = 3             # output ring: published, handed out, being written
 HISTORY = 1.0           # seconds of step times the status p50 covers
 
 
-def guard_step(step: float, steps: int, k: float) -> tuple[float, bool]:
-    """The effective step size under the stability rule, and whether it bit."""
+def ceiling(gate_min: float) -> float:
+    """The stability ceiling for a gate whose least coverage is `gate_min`:
+    the unmasked rule where it covers everything, the gated one otherwise."""
+    return UNGATED_RATIO if gate_min >= EVERYWHERE else STABLE_RATIO
+
+
+def guard_step(step: float, steps: int, k: float,
+               ratio: float = STABLE_RATIO) -> tuple[float, bool]:
+    """The effective step size under the stability rule, and whether it bit.
+    At Hold 1 nothing is held, so nothing can run away: no clamp."""
+    if float(k) >= 1.0:
+        return float(step), False
     steps = max(1, int(steps))
-    limit = STABLE_RATIO * max(float(k), 1e-6) / steps
+    limit = ratio * max(float(k), 1e-6) / steps
     if step > limit:
         return limit, True
     return float(step), False
@@ -329,12 +346,12 @@ class Job:
 
 
 class DreamWorker:
-    """The look-back slot's dream: a LookbackSource on its own thread.
+    """The dream effect's worker: a `dreamhook.Source` on its own thread.
 
     `cfg` is the ``[dream]`` section. `step_fn(D, mask, params) → D`
     replaces the net for tests; `alias` forces the copy path (None =
-    probe). Reads ``dream.*`` from the registry on every submit, so a
-    lane riding ``dream.step`` lands on the next frame.
+    probe). Its knobs come with each picture (`submit`'s ``params``), so a
+    lane riding ``fx.dream.step`` lands on the next job.
     """
 
     # how many times the worker has been lent (`lend`): a job for an earlier
@@ -343,11 +360,10 @@ class DreamWorker:
     lent = 0
     _dreaming = 0                         # …and the lend `D` belongs to
 
-    def __init__(self, reg, cfg: dict | None = None, *, step_fn: Callable | None = None,
+    def __init__(self, cfg: dict | None = None, *, step_fn: Callable | None = None,
                  alias: bool | None = None, start: bool = True):
         from .config import DEFAULTS
 
-        self.reg = reg
         c = {**DEFAULTS["dream"], **(cfg or {})}
         self.device = self._pick_device(str(c.get("device", "auto")))
         self.dtype = torch.float16 if str(c.get("precision", "fp32")) == "fp16" else torch.float32
@@ -371,7 +387,6 @@ class DreamWorker:
         self.layer = ""                       # the loaded trunk's layer name
         self._failed_layer = ""               # a layer that could not be had
         self.D: torch.Tensor | None = None
-        self.M: torch.Tensor | None = None
         self.calls = 0
         # the hand-off
         self._cv = threading.Condition()
@@ -420,9 +435,17 @@ class DreamWorker:
         self._writing = 0                     # unreachable with three slots
         return self._slots[0].host
 
-    def submit(self, frame: np.ndarray, frame_index: int) -> None:
-        """Hand the newest echo to the worker; never waits. A frame still
-        waiting is dropped for this one."""
+    def ready(self) -> bool:
+        """Whether a picture handed over now is taken at the next job: none
+        is waiting (plan 90 Q8: the effect reads back only then)."""
+        with self._cv:
+            return self._pending is None
+
+    def submit(self, frame: np.ndarray, frame_index: int,
+               params: dict[str, Any] | None = None) -> None:
+        """Hand the newest picture to the worker, with the effect's knobs
+        (`dreamhook.params_of`; None: the defaults); never waits. A picture
+        still waiting is dropped for this one."""
         shape = tuple(frame.shape)
         if shape != self.shape:
             self._resize(shape)
@@ -433,7 +456,7 @@ class DreamWorker:
             slot = self._slots[self._writing]
             np.copyto(slot.host, frame)
         self._writing = -1
-        job = Job(slot, int(frame_index), self._params(), self.lent)
+        job = Job(slot, int(frame_index), dict(params) if params else params_of({}), self.lent)
         self.submitted = job.frame
         with self._cv:
             if self._pending is not None:
@@ -448,36 +471,16 @@ class DreamWorker:
         self._handed = got[0]                 # the worker leaves this one alone now
         return got[1], got[2]
 
-    def lend(self, reg) -> None:
-        """Plan 44 D4 (§2, row 558): the one worker now dreams for the deck
-        whose registry is `reg`: its `dream.*` are read from the next submit
-        on, and the dream restarts — `D` is the last deck's memory (the fade
-        covers it), and a job already running for that deck publishes
-        nothing the new deck would take for its own."""
+    def lend(self, reg=None) -> None:
+        """Plan 44 D4 (§2, row 558): the one worker now dreams for another
+        deck (`reg`, its registry: unread since plan 90 H3 — the knobs come
+        with each picture), and the dream restarts — `D` is the last deck's
+        memory (the fade covers it), and a job already running for that deck
+        publishes nothing the new deck would take for its own."""
         with self._cv:
-            self.reg = reg
             self.lent += 1
             self._pending = None
             self._latest = None
-
-    # ---- params, from the registry each submit ----
-
-    def _params(self) -> dict[str, Any]:
-        reg = self.reg
-
-        def val(name, default):
-            p = reg.get(f"dream.{name}") if reg is not None else None
-            return default if p is None else p.value
-
-        return {
-            "steps": int(val("steps", 2)),
-            "step": float(val("step", 0.03)),
-            "k": float(val("k", 0.05)),
-            "jitter": int(val("jitter", 8)),
-            "mask_decay": float(val("mask_decay", 0.99)),
-            "octaves": int(val("octaves", 0)),
-            "layer": LAYERS[max(0, min(int(val("layer", 1)), len(LAYERS) - 1))],
-        }
 
     # ---- buffers ----
 
@@ -541,18 +544,11 @@ class DreamWorker:
         return True
 
     def _frame_tensor(self, slot: Slot) -> torch.Tensor:
-        """(h, w, 4) uint8 in the slot → (1, 3, h, w) [0, 1] on the device.
-        Rows stay bottom-up throughout: the net does not mind, and the
-        result goes back in the same layout."""
+        """(h, w, 4) uint8 in the slot → (1, 4, h, w) [0, 1] rgba on the
+        device. Rows stay bottom-up throughout: the net does not mind, and
+        the result goes back in the same layout."""
         t = slot.dev if slot.dev is not None else torch.from_numpy(slot.host).to(self.device)
-        return t[:, :, :3].permute(2, 0, 1).unsqueeze(0).to(self.dtype).div(255.0).contiguous()
-
-    def _update_mask(self, frame: torch.Tensor, decay: float) -> torch.Tensor:
-        lum = frame.float().mean(1, keepdim=True)
-        lum = F.avg_pool2d(lum, MASK_BLUR, stride=1, padding=MASK_BLUR // 2)
-        lum = (lum * MASK_GAIN).clamp_(0.0, 1.0)
-        self.M = lum if self.M is None else torch.maximum(self.M * decay, lum)
-        return self.M.to(frame.dtype)
+        return t.permute(2, 0, 1).unsqueeze(0).to(self.dtype).div(255.0).contiguous()
 
     def _process(self, job: Job) -> None:
         p = job.params
@@ -561,25 +557,27 @@ class DreamWorker:
         if job.lent != self.lent:             # an earlier deck's (`lend`)
             return
         frame = self._frame_tensor(job.slot)
-        if self.D is None or self.D.shape != frame.shape or self._dreaming != job.lent:
-            self.D, self.M = frame.clone(), None
+        k = min(max(float(p["k"]), 1e-6), 1.0)
+        if (k >= 1.0 or self.D is None or self.D.shape != frame.shape
+                or self._dreaming != job.lent):
+            held = frame                      # Hold 1, or a fresh start: the picture
             self._dreaming = job.lent
-        k = p["k"]
-        D = self.D * (1.0 - k) + frame * k
-        mask = self._update_mask(frame, p["mask_decay"])
-        step, self.clamped = guard_step(p["step"], p["steps"], k)
+        else:
+            held = self.D * (1.0 - k) + frame * k
+        rgb, gate = held[:, :3], held[:, 3:4]
+        ratio = ceiling(float(gate.min()))
+        step, self.clamped = guard_step(p["step"], p["steps"], k, ratio)
         if self.step_fn is not None:
-            D = self.step_fn(D, mask, {**p, "step": step})
+            rgb = self.step_fn(rgb, gate, {**p, "step": step})
         else:
             n_oct = max(1, min(int(p["octaves"]), len(OCTAVES) - 1) + 1)
             scale = OCTAVE_SCALE ** ((n_oct - 1) - self.calls % n_oct)
-            D = dream_octave(D, self.net, scale, p["steps"], step, p["jitter"], mask)
-        D = D.detach()
+            rgb = dream_octave(rgb, self.net, scale, p["steps"], step, p["jitter"], gate)
+        D = torch.cat([rgb.detach(), gate], dim=1)
         bad = ~torch.isfinite(D).all()
-        # the output: D premultiplied by the mask, alpha the mask, as uint8
+        # the output: D as it came in — rgba, premultiplied, its alpha the coverage
         out = self._pick_output()
-        rgba = torch.cat([D * mask, mask], dim=1)[0].permute(1, 2, 0).mul(255.0).round()
-        rgba = rgba.clamp_(0.0, 255.0).to(torch.uint8)
+        rgba = D[0].permute(1, 2, 0).mul(255.0).round().clamp_(0.0, 255.0).to(torch.uint8)
         if out.dev is not None:
             out.dev.copy_(rgba)
             torch.mps.synchronize()
@@ -589,7 +587,7 @@ class DreamWorker:
             np.copyto(out.host, pixels)
             pixels = out.host
         if bool(bad.item()):
-            self.D, self.M = frame.clone(), None
+            self.D = None
             self.nan_resets += 1
             return
         self.D = D

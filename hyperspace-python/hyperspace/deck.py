@@ -70,10 +70,10 @@ from . import envelope, geometry, grip, lfo, poi, sequencer, tempo, totem
 from . import undo as undos
 from .fx import FxState
 from .ghost import GhostState
+from .graph import split_instance
 from .learn import Learn
 from .library import DeckInstall, Marks, MetaMarks
 from .loadable import LoadedPatch
-from .lookback import DreamState
 from .outputs import Offscreen, View, preview_size
 from .params import MetaRegistry, Registry, build_registry, part_of
 from .players import THERE, UNPLUGGED, Duty, Players
@@ -220,7 +220,7 @@ class Deck:
     @classmethod
     def build(cls, *, library, control, audio, table: Callable[[Registry], Bindings],
               renderer=None, media=None, restart: Callable[[], Any] | None = None,
-              dream=None, fx=None, ghost=None,
+              fx=None, ghost=None,
               clock: tempo.Clock | None = None, lfos: lfo.LFOs | None = None,
               sources: Sources | None = None,
               meta_reg: MetaRegistry | None = None,
@@ -237,8 +237,8 @@ class Deck:
         wired to each other first (the band hooks, `control.library`);
         `table(reg)` loads the binding table and declares the desk's
         params on `reg`. `renderer` (the app's; None headless) supplies the
-        look-back's, the effects' and the hands' states;
-        headless, `dream` / `fx` / `ghost` stand in for them (a fresh one
+        effects' and the hands' states;
+        headless, `fx` / `ghost` stand in for them (a fresh one
         each when None) — given with a renderer they are a ValueError,
         since the renderer's states are the ones it draws. `media` is the channels' `MediaState`, `restart`
         the `app.restart` param's callback, `clock` / `lfos` a clock and
@@ -271,12 +271,11 @@ class Deck:
         params once a frame; a deck built beside it passes False. `warm`: build every shape's geometry
         on a background thread once the startup loadable patch has landed."""
         if renderer is not None:
-            given = [k for k, v in (("dream", dream), ("fx", fx), ("ghost", ghost))
-                     if v is not None]
+            given = [k for k, v in (("fx", fx), ("ghost", ghost)) if v is not None]
             if given:
                 raise ValueError(f"Deck.build: {', '.join(given)} given with a renderer, "
                                  "whose own states the deck's params must drive")
-            dream, fx, ghost = renderer.dreamer.state, renderer.fx.state, renderer.ghost.state
+            fx, ghost = renderer.fx.state, renderer.ghost.state
         # one clock for every deck (plan 44 §2): a clock other than the shared
         # sources' is refused before anything registers on it
         if (sources is not None and clock is not None and sources.clock is not None
@@ -287,7 +286,6 @@ class Deck:
         on_deck = library.on_deck()      # this deck's bank and loadable patches (plan 44 D5a)
         s = ViewState()
         reg = build_registry(s, control, audio, on_deck.install,
-                             dream=dream if dream is not None else DreamState(),
                              fx=fx if fx is not None else FxState(),
                              ghost=ghost if ghost is not None else GhostState(),
                              media=media, restart=restart, meta_reg=meta_reg)
@@ -432,8 +430,6 @@ class Deck:
             *([(r, "render", "Renderer"),
                (r.scene, "render", "SceneTarget"),
                (r.cover, "render", "CoverTarget"),
-               (r.dreamer, "lookback", "Dreamer"),
-               (r.dreamer.state, "lookback", "DreamState"),
                (r.fx, "fx", "FxChain"),
                (r.fx.state, "fx", "FxState"),
                (r.ghost, "ghost", "Ghost"),
@@ -1126,11 +1122,17 @@ def _spec_of(deck):
     return getattr(getattr(deck, "graph", None), "spec", None)
 
 
-def _dreams(deck) -> bool:
-    """Does this deck's look use the dream worker now: a dream node in its
-    graph, turned on?"""
+def dreams(deck) -> bool:
+    """Does this deck's look use the dream worker now: a dream (plan 90 H3: the
+    effect file `dream`, any instance) in its graph, turned on?"""
     spec = deck.graph.spec
-    return spec is not None and spec.dream is not None and bool(deck.renderer.dreamer.state.on)
+    if spec is None:
+        return False
+    names = {e.name for e in spec.effects if e.file == "dream"}
+    for w in spec.wires or ():
+        names |= {x for x in (w.src, w.node) if split_instance(x)[0] == "dream"}
+    values = deck.renderer.fx.state.values
+    return any(bool(values.get(n, {}).get("on")) for n in names)
 
 
 class Fade:
@@ -1199,7 +1201,7 @@ class Fade:
 
     def lend(self) -> None:
         """One dream worker (§2, row 558): at rest the on-air deck's, and in a fade
-        the deck coming in's while its look has a dream on (`_dreams`) — from
+        the deck coming in's while its look has a dream on (`dreams`) — from
         `LEND_AT` on and until the fader reaches an end, so a fader nudged or
         jittering at the bottom of its throw never wipes the on-air deck's dream,
         and on air moving at the middle, where neither deck stops being drawn,
@@ -1211,7 +1213,7 @@ class Fade:
         rest = self.rest
         coming = self.decks[1] if rest is self.decks[0] else self.decks[0]
         share = k if coming is self.off_air else 1.0 - k
-        take = k > 0.0 and _dreams(coming) and (self.lent_to is coming or share >= LEND_AT)
+        take = k > 0.0 and dreams(coming) and (self.lent_to is coming or share >= LEND_AT)
         to = coming if take else rest
         if to is self.lent_to:
             return
@@ -1219,7 +1221,7 @@ class Fade:
         if self.dream is None:
             return
         for d in self.decks:
-            d.renderer.dreamer.source = self.dream if d is to else None
+            d.renderer.fx.dream_source = self.dream if d is to else None
         self.dream.lend(to.reg)
 
     def ask_warm(self, deck: Deck) -> None:
