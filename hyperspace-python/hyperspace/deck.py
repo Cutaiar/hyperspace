@@ -70,7 +70,7 @@ from . import envelope, geometry, grip, lfo, poi, sequencer, tempo, totem
 from . import undo as undos
 from .fx import FxState
 from .ghost import GhostState
-from .graph import split_instance
+from .graph import wire_node_kind
 from .learn import Learn
 from .library import DeckInstall, Marks, MetaMarks
 from .loadable import LoadedPatch
@@ -1130,7 +1130,8 @@ def dreams(deck) -> bool:
         return False
     names = {e.name for e in spec.effects if e.file == "dream"}
     for w in spec.wires or ():
-        names |= {x for x in (w.src, w.node) if split_instance(x)[0] == "dream"}
+        names |= {x for x in (w.src, w.node) if x.partition(".")[0] == "dream"
+                  and wire_node_kind(x, wired=True) == "effect"}
     values = deck.renderer.fx.state.values
     return any(bool(values.get(n, {}).get("on")) for n in names)
 

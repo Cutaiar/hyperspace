@@ -201,3 +201,19 @@ def test_the_node_says_what_its_hook_said(ctx):
     r = _rig(ctx)
     _draw(ctx, r, 1.0)
     assert r._graph.nodes["dream"].said == dreamhook.NO_WORKER
+
+
+def test_a_deck_dreams_when_its_graph_holds_a_dream_on():
+    """`deck.dreams` (the lend and the app's banner): any wire end, `output.all`
+    included, is read without a fault (found by the app run)."""
+    from types import SimpleNamespace as NS
+
+    from hyperspace.deck import dreams
+
+    spec = G.read_graph(wired(("colour", "dream.image"), ("dream", "output.all.image")),
+                        effects=set(FxState().specs))
+    values = {"dream": {"on": True}}
+    deck = NS(graph=NS(spec=spec), renderer=NS(fx=NS(state=NS(values=values))))
+    assert dreams(deck)
+    values["dream"]["on"] = False
+    assert not dreams(deck)
