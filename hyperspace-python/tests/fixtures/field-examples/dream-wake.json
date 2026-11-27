@@ -19,6 +19,7 @@
   {"kind": "effect", "file": "hueturn"},
   {"kind": "effect", "file": "curve", "instance": 2},
   {"kind": "effect", "file": "fade", "instance": 2},
+  {"kind": "effect", "file": "fade", "instance": 3},
   {"kind": "composite", "instance": 2}
  ],
  "wires": [
@@ -28,7 +29,8 @@
   {"from": "dream", "to": "hueturn.image"},
   {"from": "hueturn", "to": "curve.2.image"},
   {"from": "curve.2", "to": "fade.2.image"},
-  {"from": "fade.2", "to": "composite.2.over"},
+  {"from": "fade.2", "to": "fade.3.image"},
+  {"from": "fade.3", "to": "composite.2.over"},
   {"from": "scene", "to": "curve.image"},
   {"from": "curve", "to": "fade.image"},
   {"from": "fade", "to": "resize.image"},
@@ -362,7 +364,7 @@
   "key.resize.2.measure": 0,
   "key.resize.2.level": 0.0,
   "key.resize.2.soft": 0.25,
-  "key.resize.2.keep": true,
+  "key.resize.2.keep": false,
   "key.resize.2.feather": 0.0,
   "key.resize.2.invert": false,
   "key.resize.2.ramp": 1,
@@ -375,9 +377,12 @@
   "fx.dream.jitter": 8,
   "fx.dream.layer": 1,
   "fx.dream.octaves": 1,
+  "fx.fade.3.on": true,
+  "fx.fade.3.mix": 1.0,
+  "fx.fade.3.level": 0.5,
   "fx.fade.2.on": true,
   "fx.fade.2.mix": 1.0,
-  "fx.fade.2.level": 0.5,
+  "fx.fade.2.level": 1.0,
   "fx.hueturn.on": true,
   "fx.hueturn.mix": 1.0,
   "fx.hueturn.speed": 0.0,
@@ -409,7 +414,7 @@
   {"source": "hand:right.y", "target": "fx.trail.level", "op": "push", "value": 0.45},
   {"source": "hand:right.z", "target": "fx.trail.fade", "op": "push", "value": -0.3},
   {"source": "hand:right.roll", "target": "fx.hueturn.turn", "op": "position"},
-  {"source": "hand:right.pitch", "target": "fx.fade.2.level", "op": "push", "value": 0.5}
+  {"source": "hand:right.pitch", "target": "fx.fade.3.level", "op": "push", "value": 0.5}
  ],
  "desk": [
   {"source": "cc:0:48", "target": "view.bright", "op": "abs", "feedback": "ring"},
@@ -442,7 +447,7 @@
   {"source": "cc:*:19", "target": "fx.curve.shape", "op": "abs", "feedback": "ring"},
   {"source": "cc:*:20", "target": "cut.amount", "op": "abs", "feedback": "ring"},
   {"source": "cc:*:20", "target": "cut.2.amount", "op": "abs", "feedback": "ring"},
-  {"source": "cc:*:21", "target": "fx.fade.2.level", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:21", "target": "fx.fade.3.level", "op": "abs", "feedback": "ring"},
   {"source": "cc:*:22", "target": "fx.hueturn.sat", "op": "abs", "feedback": "ring"},
   {"source": "cc:*:23", "target": "fx.dream.k", "op": "abs", "feedback": "ring"}
  ],
@@ -456,6 +461,6 @@
  },
  "groups": [
   {"id": "group.1", "name": "trail", "nodes": ["render:curve", "render:fade", "render:resize", "render:delay", "render:trail", "render:matte", "render:cut", "render:cut.2"], "open": false},
-  {"id": "group.2", "name": "dream", "nodes": ["render:resize.2", "render:dream", "render:hueturn", "render:curve.2", "render:fade.2", "render:composite.2"], "open": false}
+  {"id": "group.2", "name": "dream", "nodes": ["render:resize.2", "render:dream", "render:hueturn", "render:curve.2", "render:fade.2", "render:fade.3", "render:composite.2"], "open": false}
  ]
 }

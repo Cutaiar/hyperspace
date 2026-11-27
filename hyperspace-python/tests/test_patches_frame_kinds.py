@@ -44,7 +44,7 @@ CORPUS_LOADABLES = sorted((CORPUS / "loadable").glob("*.json"))
 # dream as it opens (plan 90 H3), Resize → Dream → Hue turn → Curve → Fade →
 # Composite over the last Cut's picture
 DREAM_CUT = ["render:resize.2", "render:dream", "render:hueturn", "render:curve.2",
-             "render:fade.2", "render:composite.2"]
+             "render:fade.2", "render:fade.3", "render:composite.2"]
 
 
 @pytest.fixture()
@@ -172,13 +172,14 @@ def test_a_dream_and_a_composite_lift_as_a_patch():
     assert patches.check(doc) == []
     assert doc["schema"] == patches.SCHEMA == "hyperspace.patch/3"   # (plan 89's, no other)
     assert {patches.entry_name(e) for e in doc["nodes"]} == {
-        "resize", "dream", "hueturn", "curve", "fade", "composite"}
+        "resize", "dream", "hueturn", "curve", "fade", "fade.2", "composite"}
     assert {"kind": "effect", "file": "dream"} in doc["nodes"]
     assert doc["wires"] == [{"from": "resize", "to": "dream.image"},
                             {"from": "dream", "to": "hueturn.image"},
                             {"from": "hueturn", "to": "curve.image"},
                             {"from": "curve", "to": "fade.image"},
-                            {"from": "fade", "to": "composite.over"}]
+                            {"from": "fade", "to": "fade.2.image"},       # the darken, the mix
+                            {"from": "fade.2", "to": "composite.over"}]
     assert {(p["id"], p["was"]) for p in doc["ports"]} == {
         ("in", "cut.2"), ("in.2", "cut.2"), ("out", "composite.over")}
     assert "fx.dream.mix" in doc["values"] and "fx.trail.fade" not in doc["values"]
@@ -266,7 +267,8 @@ def test_the_edit_refuses_a_landing_with_a_taken_node_as_well(rig):
 
 def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
     """The ask, end to end: on party-wake its dream group (plan 90 H3: Resize
-    → Dream → Hue turn → Curve → Fade → Composite, folded as "dream") saved
+    → Dream → Hue turn → Curve → Fade (darken) → Fade (mix) → Composite,
+    folded as "dream") saved
     as a patch; back on party-wake it lands beside the host's as a second
     dream, never refused; on party-noita (no dream) spawned as one undo step,
     its values landed, its pins open, nothing wired to the host (D2); ⌘Z
@@ -280,7 +282,7 @@ def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
     doc = rig.lib.read_patch("dream-wash")
     assert patches.check(doc) == []
     assert {patches.entry_name(n) for n in doc["nodes"]} == {
-        "resize", "dream", "hueturn", "curve", "fade", "composite"}
+        "resize", "dream", "hueturn", "curve", "fade", "fade.2", "composite"}
     assert doc["values"]["fx.dream.k"] == pytest.approx(0.31)
 
     # back on its own loadable patch it is a second dream: no sheet to replace one

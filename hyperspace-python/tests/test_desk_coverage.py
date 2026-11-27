@@ -118,7 +118,7 @@ def test_a_library_loadable_that_named_a_template_is_reported_with_its_own_rows(
     (row,) = [r for r in rows if r.name == "TEMPLATED"]
     cells = {c.glyph: (c.status, c.target) for c in row.cells}
     assert cells["D1"] == (tool.DARK, "")
-    assert cells["D2"] == (tool.MAPPED, "fx.fade.2.level")
+    assert cells["D2"] == (tool.MAPPED, "fx.fade.3.level")     # the dream's mix (plan 90 H3)
     assert cells["K2"] == (tool.DARK, "")
     assert cells["K3"] == (tool.MAPPED, "view.pattern_mix")
     assert cells["S1"] == (tool.DARK, "")

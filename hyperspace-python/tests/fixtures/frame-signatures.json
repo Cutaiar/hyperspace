@@ -36622,42 +36622,42 @@
          "over",
          [
           "Effect",
-          "fade.2",
+          "fade.3",
           [
            [
             "image",
             [
              "Effect",
-             "curve.2",
+             "fade.2",
              [
               [
                "image",
                [
                 "Effect",
-                "hueturn",
+                "curve.2",
                 [
                  [
                   "image",
                   [
                    "Effect",
-                   "dream",
+                   "hueturn",
                    [
                     [
                      "image",
                      [
-                      "KeyNode",
-                      null,
+                      "Effect",
+                      "dream",
                       [
                        [
                         "image",
                         [
-                         "ResizeNode",
+                         "KeyNode",
                          null,
                          [
                           [
                            "image",
                            [
-                            "CutNode",
+                            "ResizeNode",
                             null,
                             [
                              [
@@ -36669,15 +36669,59 @@
                                 [
                                  "image",
                                  [
-                                  "Effect",
-                                  "trail",
+                                  "CutNode",
+                                  null,
                                   [
                                    [
-                                    "stack",
+                                    "image",
                                     [
-                                     "Delay",
+                                     "Effect",
+                                     "trail",
+                                     [
+                                      [
+                                       "stack",
+                                       [
+                                        "Delay",
+                                        null,
+                                        []
+                                       ]
+                                      ]
+                                     ]
+                                    ]
+                                   ],
+                                   [
+                                    "mask",
+                                    [
+                                     "MatteNode",
                                      null,
-                                     []
+                                     [
+                                      [
+                                       "image",
+                                       [
+                                        "Scene",
+                                        null,
+                                        [
+                                         [
+                                          "geometry",
+                                          [
+                                           "Shape",
+                                           null,
+                                           [
+                                            [
+                                             "faces",
+                                             [
+                                              "PatternNode",
+                                              "",
+                                              []
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ]
+                                        ]
+                                       ]
+                                      ]
+                                     ]
                                     ]
                                    ]
                                   ]
@@ -36686,11 +36730,11 @@
                                 [
                                  "mask",
                                  [
-                                  "MatteNode",
+                                  "Cover",
                                   null,
                                   [
                                    [
-                                    "image",
+                                    "scene",
                                     [
                                      "Scene",
                                      null,
@@ -36710,41 +36754,6 @@
                                           ]
                                          ]
                                         ]
-                                       ]
-                                      ]
-                                     ]
-                                    ]
-                                   ]
-                                  ]
-                                 ]
-                                ]
-                               ]
-                              ]
-                             ],
-                             [
-                              "mask",
-                              [
-                               "Cover",
-                               null,
-                               [
-                                [
-                                 "scene",
-                                 [
-                                  "Scene",
-                                  null,
-                                  [
-                                   [
-                                    "geometry",
-                                    [
-                                     "Shape",
-                                     null,
-                                     [
-                                      [
-                                       "faces",
-                                       [
-                                        "PatternNode",
-                                        "",
-                                        []
                                        ]
                                       ]
                                      ]
@@ -36984,42 +36993,42 @@
             "over",
             [
              "Effect",
-             "fade.2",
+             "fade.3",
              [
               [
                "image",
                [
                 "Effect",
-                "curve.2",
+                "fade.2",
                 [
                  [
                   "image",
                   [
                    "Effect",
-                   "hueturn",
+                   "curve.2",
                    [
                     [
                      "image",
                      [
                       "Effect",
-                      "dream",
+                      "hueturn",
                       [
                        [
                         "image",
                         [
-                         "KeyNode",
-                         null,
+                         "Effect",
+                         "dream",
                          [
                           [
                            "image",
                            [
-                            "ResizeNode",
+                            "KeyNode",
                             null,
                             [
                              [
                               "image",
                               [
-                               "CutNode",
+                               "ResizeNode",
                                null,
                                [
                                 [
@@ -37031,15 +37040,59 @@
                                    [
                                     "image",
                                     [
-                                     "Effect",
-                                     "trail",
+                                     "CutNode",
+                                     null,
                                      [
                                       [
-                                       "stack",
+                                       "image",
                                        [
-                                        "Delay",
+                                        "Effect",
+                                        "trail",
+                                        [
+                                         [
+                                          "stack",
+                                          [
+                                           "Delay",
+                                           null,
+                                           []
+                                          ]
+                                         ]
+                                        ]
+                                       ]
+                                      ],
+                                      [
+                                       "mask",
+                                       [
+                                        "MatteNode",
                                         null,
-                                        []
+                                        [
+                                         [
+                                          "image",
+                                          [
+                                           "Scene",
+                                           null,
+                                           [
+                                            [
+                                             "geometry",
+                                             [
+                                              "Shape",
+                                              null,
+                                              [
+                                               [
+                                                "faces",
+                                                [
+                                                 "PatternNode",
+                                                 "",
+                                                 []
+                                                ]
+                                               ]
+                                              ]
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ]
+                                        ]
                                        ]
                                       ]
                                      ]
@@ -37048,11 +37101,11 @@
                                    [
                                     "mask",
                                     [
-                                     "MatteNode",
+                                     "Cover",
                                      null,
                                      [
                                       [
-                                       "image",
+                                       "scene",
                                        [
                                         "Scene",
                                         null,
@@ -37072,41 +37125,6 @@
                                              ]
                                             ]
                                            ]
-                                          ]
-                                         ]
-                                        ]
-                                       ]
-                                      ]
-                                     ]
-                                    ]
-                                   ]
-                                  ]
-                                 ]
-                                ],
-                                [
-                                 "mask",
-                                 [
-                                  "Cover",
-                                  null,
-                                  [
-                                   [
-                                    "scene",
-                                    [
-                                     "Scene",
-                                     null,
-                                     [
-                                      [
-                                       "geometry",
-                                       [
-                                        "Shape",
-                                        null,
-                                        [
-                                         [
-                                          "faces",
-                                          [
-                                           "PatternNode",
-                                           "",
-                                           []
                                           ]
                                          ]
                                         ]
@@ -37313,42 +37331,42 @@
          "over",
          [
           "Effect",
-          "fade.2",
+          "fade.3",
           [
            [
             "image",
             [
              "Effect",
-             "curve.2",
+             "fade.2",
              [
               [
                "image",
                [
                 "Effect",
-                "hueturn",
+                "curve.2",
                 [
                  [
                   "image",
                   [
                    "Effect",
-                   "dream",
+                   "hueturn",
                    [
                     [
                      "image",
                      [
-                      "KeyNode",
-                      null,
+                      "Effect",
+                      "dream",
                       [
                        [
                         "image",
                         [
-                         "ResizeNode",
+                         "KeyNode",
                          null,
                          [
                           [
                            "image",
                            [
-                            "CutNode",
+                            "ResizeNode",
                             null,
                             [
                              [
@@ -37360,15 +37378,59 @@
                                 [
                                  "image",
                                  [
-                                  "Effect",
-                                  "trail",
+                                  "CutNode",
+                                  null,
                                   [
                                    [
-                                    "stack",
+                                    "image",
                                     [
-                                     "Delay",
+                                     "Effect",
+                                     "trail",
+                                     [
+                                      [
+                                       "stack",
+                                       [
+                                        "Delay",
+                                        null,
+                                        []
+                                       ]
+                                      ]
+                                     ]
+                                    ]
+                                   ],
+                                   [
+                                    "mask",
+                                    [
+                                     "MatteNode",
                                      null,
-                                     []
+                                     [
+                                      [
+                                       "image",
+                                       [
+                                        "Scene",
+                                        null,
+                                        [
+                                         [
+                                          "geometry",
+                                          [
+                                           "Shape",
+                                           null,
+                                           [
+                                            [
+                                             "faces",
+                                             [
+                                              "PatternNode",
+                                              "",
+                                              []
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ]
+                                        ]
+                                       ]
+                                      ]
+                                     ]
                                     ]
                                    ]
                                   ]
@@ -37377,11 +37439,11 @@
                                 [
                                  "mask",
                                  [
-                                  "MatteNode",
+                                  "Cover",
                                   null,
                                   [
                                    [
-                                    "image",
+                                    "scene",
                                     [
                                      "Scene",
                                      null,
@@ -37401,41 +37463,6 @@
                                           ]
                                          ]
                                         ]
-                                       ]
-                                      ]
-                                     ]
-                                    ]
-                                   ]
-                                  ]
-                                 ]
-                                ]
-                               ]
-                              ]
-                             ],
-                             [
-                              "mask",
-                              [
-                               "Cover",
-                               null,
-                               [
-                                [
-                                 "scene",
-                                 [
-                                  "Scene",
-                                  null,
-                                  [
-                                   [
-                                    "geometry",
-                                    [
-                                     "Shape",
-                                     null,
-                                     [
-                                      [
-                                       "faces",
-                                       [
-                                        "PatternNode",
-                                        "",
-                                        []
                                        ]
                                       ]
                                      ]
@@ -37626,42 +37653,42 @@
          "over",
          [
           "Effect",
-          "fade.2",
+          "fade.3",
           [
            [
             "image",
             [
              "Effect",
-             "curve.2",
+             "fade.2",
              [
               [
                "image",
                [
                 "Effect",
-                "hueturn",
+                "curve.2",
                 [
                  [
                   "image",
                   [
                    "Effect",
-                   "dream",
+                   "hueturn",
                    [
                     [
                      "image",
                      [
-                      "KeyNode",
-                      null,
+                      "Effect",
+                      "dream",
                       [
                        [
                         "image",
                         [
-                         "ResizeNode",
+                         "KeyNode",
                          null,
                          [
                           [
                            "image",
                            [
-                            "CutNode",
+                            "ResizeNode",
                             null,
                             [
                              [
@@ -37673,15 +37700,59 @@
                                 [
                                  "image",
                                  [
-                                  "Effect",
-                                  "trail",
+                                  "CutNode",
+                                  null,
                                   [
                                    [
-                                    "stack",
+                                    "image",
                                     [
-                                     "Delay",
+                                     "Effect",
+                                     "trail",
+                                     [
+                                      [
+                                       "stack",
+                                       [
+                                        "Delay",
+                                        null,
+                                        []
+                                       ]
+                                      ]
+                                     ]
+                                    ]
+                                   ],
+                                   [
+                                    "mask",
+                                    [
+                                     "MatteNode",
                                      null,
-                                     []
+                                     [
+                                      [
+                                       "image",
+                                       [
+                                        "Scene",
+                                        null,
+                                        [
+                                         [
+                                          "geometry",
+                                          [
+                                           "Shape",
+                                           null,
+                                           [
+                                            [
+                                             "faces",
+                                             [
+                                              "PatternNode",
+                                              "",
+                                              []
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ]
+                                        ]
+                                       ]
+                                      ]
+                                     ]
                                     ]
                                    ]
                                   ]
@@ -37690,11 +37761,11 @@
                                 [
                                  "mask",
                                  [
-                                  "MatteNode",
+                                  "Cover",
                                   null,
                                   [
                                    [
-                                    "image",
+                                    "scene",
                                     [
                                      "Scene",
                                      null,
@@ -37714,41 +37785,6 @@
                                           ]
                                          ]
                                         ]
-                                       ]
-                                      ]
-                                     ]
-                                    ]
-                                   ]
-                                  ]
-                                 ]
-                                ]
-                               ]
-                              ]
-                             ],
-                             [
-                              "mask",
-                              [
-                               "Cover",
-                               null,
-                               [
-                                [
-                                 "scene",
-                                 [
-                                  "Scene",
-                                  null,
-                                  [
-                                   [
-                                    "geometry",
-                                    [
-                                     "Shape",
-                                     null,
-                                     [
-                                      [
-                                       "faces",
-                                       [
-                                        "PatternNode",
-                                        "",
-                                        []
                                        ]
                                       ]
                                      ]
@@ -38137,6 +38173,13 @@
     ]
    ],
    [
+    "Effect",
+    "fade.3",
+    [
+     "image"
+    ]
+   ],
+   [
     "Composite",
     null,
     [
@@ -38315,30 +38358,30 @@
                      "over",
                      [
                       "Effect",
-                      "fade.2",
+                      "fade.3",
                       [
                        [
                         "image",
                         [
                          "Effect",
-                         "dream",
+                         "fade.2",
                          [
                           [
                            "image",
                            [
-                            "KeyNode",
-                            null,
+                            "Effect",
+                            "dream",
                             [
                              [
                               "image",
                               [
-                               "ResizeNode",
+                               "KeyNode",
                                null,
                                [
                                 [
                                  "image",
                                  [
-                                  "CutNode",
+                                  "ResizeNode",
                                   null,
                                   [
                                    [
@@ -38350,50 +38393,59 @@
                                       [
                                        "image",
                                        [
-                                        "Effect",
-                                        "trail",
-                                        [
-                                         [
-                                          "stack",
-                                          [
-                                           "Delay",
-                                           null,
-                                           []
-                                          ]
-                                         ]
-                                        ]
-                                       ]
-                                      ],
-                                      [
-                                       "mask",
-                                       [
-                                        "MatteNode",
+                                        "CutNode",
                                         null,
                                         [
                                          [
                                           "image",
                                           [
                                            "Effect",
-                                           "acid.2",
+                                           "trail",
+                                           [
+                                            [
+                                             "stack",
+                                             [
+                                              "Delay",
+                                              null,
+                                              []
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ],
+                                         [
+                                          "mask",
+                                          [
+                                           "MatteNode",
+                                           null,
                                            [
                                             [
                                              "image",
                                              [
-                                              "Scene",
-                                              null,
+                                              "Effect",
+                                              "acid.2",
                                               [
                                                [
-                                                "geometry",
+                                                "image",
                                                 [
-                                                 "Shape",
+                                                 "Scene",
                                                  null,
                                                  [
                                                   [
-                                                   "faces",
+                                                   "geometry",
                                                    [
-                                                    "PatternNode",
-                                                    "",
-                                                    []
+                                                    "Shape",
+                                                    null,
+                                                    [
+                                                     [
+                                                      "faces",
+                                                      [
+                                                       "PatternNode",
+                                                       "",
+                                                       []
+                                                      ]
+                                                     ]
+                                                    ]
                                                    ]
                                                   ]
                                                  ]
@@ -38407,34 +38459,34 @@
                                          ]
                                         ]
                                        ]
-                                      ]
-                                     ]
-                                    ]
-                                   ],
-                                   [
-                                    "mask",
-                                    [
-                                     "Cover",
-                                     null,
-                                     [
+                                      ],
                                       [
-                                       "scene",
+                                       "mask",
                                        [
-                                        "Scene",
+                                        "Cover",
                                         null,
                                         [
                                          [
-                                          "geometry",
+                                          "scene",
                                           [
-                                           "Shape",
+                                           "Scene",
                                            null,
                                            [
                                             [
-                                             "faces",
+                                             "geometry",
                                              [
-                                              "PatternNode",
-                                              "",
-                                              []
+                                              "Shape",
+                                              null,
+                                              [
+                                               [
+                                                "faces",
+                                                [
+                                                 "PatternNode",
+                                                 "",
+                                                 []
+                                                ]
+                                               ]
+                                              ]
                                              ]
                                             ]
                                            ]
@@ -38722,30 +38774,30 @@
                         "over",
                         [
                          "Effect",
-                         "fade.2",
+                         "fade.3",
                          [
                           [
                            "image",
                            [
                             "Effect",
-                            "dream",
+                            "fade.2",
                             [
                              [
                               "image",
                               [
-                               "KeyNode",
-                               null,
+                               "Effect",
+                               "dream",
                                [
                                 [
                                  "image",
                                  [
-                                  "ResizeNode",
+                                  "KeyNode",
                                   null,
                                   [
                                    [
                                     "image",
                                     [
-                                     "CutNode",
+                                     "ResizeNode",
                                      null,
                                      [
                                       [
@@ -38757,50 +38809,59 @@
                                          [
                                           "image",
                                           [
-                                           "Effect",
-                                           "trail",
-                                           [
-                                            [
-                                             "stack",
-                                             [
-                                              "Delay",
-                                              null,
-                                              []
-                                             ]
-                                            ]
-                                           ]
-                                          ]
-                                         ],
-                                         [
-                                          "mask",
-                                          [
-                                           "MatteNode",
+                                           "CutNode",
                                            null,
                                            [
                                             [
                                              "image",
                                              [
                                               "Effect",
-                                              "acid.2",
+                                              "trail",
+                                              [
+                                               [
+                                                "stack",
+                                                [
+                                                 "Delay",
+                                                 null,
+                                                 []
+                                                ]
+                                               ]
+                                              ]
+                                             ]
+                                            ],
+                                            [
+                                             "mask",
+                                             [
+                                              "MatteNode",
+                                              null,
                                               [
                                                [
                                                 "image",
                                                 [
-                                                 "Scene",
-                                                 null,
+                                                 "Effect",
+                                                 "acid.2",
                                                  [
                                                   [
-                                                   "geometry",
+                                                   "image",
                                                    [
-                                                    "Shape",
+                                                    "Scene",
                                                     null,
                                                     [
                                                      [
-                                                      "faces",
+                                                      "geometry",
                                                       [
-                                                       "PatternNode",
-                                                       "",
-                                                       []
+                                                       "Shape",
+                                                       null,
+                                                       [
+                                                        [
+                                                         "faces",
+                                                         [
+                                                          "PatternNode",
+                                                          "",
+                                                          []
+                                                         ]
+                                                        ]
+                                                       ]
                                                       ]
                                                      ]
                                                     ]
@@ -38814,34 +38875,34 @@
                                             ]
                                            ]
                                           ]
-                                         ]
-                                        ]
-                                       ]
-                                      ],
-                                      [
-                                       "mask",
-                                       [
-                                        "Cover",
-                                        null,
-                                        [
+                                         ],
                                          [
-                                          "scene",
+                                          "mask",
                                           [
-                                           "Scene",
+                                           "Cover",
                                            null,
                                            [
                                             [
-                                             "geometry",
+                                             "scene",
                                              [
-                                              "Shape",
+                                              "Scene",
                                               null,
                                               [
                                                [
-                                                "faces",
+                                                "geometry",
                                                 [
-                                                 "PatternNode",
-                                                 "",
-                                                 []
+                                                 "Shape",
+                                                 null,
+                                                 [
+                                                  [
+                                                   "faces",
+                                                   [
+                                                    "PatternNode",
+                                                    "",
+                                                    []
+                                                   ]
+                                                  ]
+                                                 ]
                                                 ]
                                                ]
                                               ]
@@ -39096,30 +39157,30 @@
                      "over",
                      [
                       "Effect",
-                      "fade.2",
+                      "fade.3",
                       [
                        [
                         "image",
                         [
                          "Effect",
-                         "dream",
+                         "fade.2",
                          [
                           [
                            "image",
                            [
-                            "KeyNode",
-                            null,
+                            "Effect",
+                            "dream",
                             [
                              [
                               "image",
                               [
-                               "ResizeNode",
+                               "KeyNode",
                                null,
                                [
                                 [
                                  "image",
                                  [
-                                  "CutNode",
+                                  "ResizeNode",
                                   null,
                                   [
                                    [
@@ -39131,50 +39192,59 @@
                                       [
                                        "image",
                                        [
-                                        "Effect",
-                                        "trail",
-                                        [
-                                         [
-                                          "stack",
-                                          [
-                                           "Delay",
-                                           null,
-                                           []
-                                          ]
-                                         ]
-                                        ]
-                                       ]
-                                      ],
-                                      [
-                                       "mask",
-                                       [
-                                        "MatteNode",
+                                        "CutNode",
                                         null,
                                         [
                                          [
                                           "image",
                                           [
                                            "Effect",
-                                           "acid.2",
+                                           "trail",
+                                           [
+                                            [
+                                             "stack",
+                                             [
+                                              "Delay",
+                                              null,
+                                              []
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ],
+                                         [
+                                          "mask",
+                                          [
+                                           "MatteNode",
+                                           null,
                                            [
                                             [
                                              "image",
                                              [
-                                              "Scene",
-                                              null,
+                                              "Effect",
+                                              "acid.2",
                                               [
                                                [
-                                                "geometry",
+                                                "image",
                                                 [
-                                                 "Shape",
+                                                 "Scene",
                                                  null,
                                                  [
                                                   [
-                                                   "faces",
+                                                   "geometry",
                                                    [
-                                                    "PatternNode",
-                                                    "",
-                                                    []
+                                                    "Shape",
+                                                    null,
+                                                    [
+                                                     [
+                                                      "faces",
+                                                      [
+                                                       "PatternNode",
+                                                       "",
+                                                       []
+                                                      ]
+                                                     ]
+                                                    ]
                                                    ]
                                                   ]
                                                  ]
@@ -39188,34 +39258,34 @@
                                          ]
                                         ]
                                        ]
-                                      ]
-                                     ]
-                                    ]
-                                   ],
-                                   [
-                                    "mask",
-                                    [
-                                     "Cover",
-                                     null,
-                                     [
+                                      ],
                                       [
-                                       "scene",
+                                       "mask",
                                        [
-                                        "Scene",
+                                        "Cover",
                                         null,
                                         [
                                          [
-                                          "geometry",
+                                          "scene",
                                           [
-                                           "Shape",
+                                           "Scene",
                                            null,
                                            [
                                             [
-                                             "faces",
+                                             "geometry",
                                              [
-                                              "PatternNode",
-                                              "",
-                                              []
+                                              "Shape",
+                                              null,
+                                              [
+                                               [
+                                                "faces",
+                                                [
+                                                 "PatternNode",
+                                                 "",
+                                                 []
+                                                ]
+                                               ]
+                                              ]
                                              ]
                                             ]
                                            ]
@@ -39454,30 +39524,30 @@
                      "over",
                      [
                       "Effect",
-                      "fade.2",
+                      "fade.3",
                       [
                        [
                         "image",
                         [
                          "Effect",
-                         "dream",
+                         "fade.2",
                          [
                           [
                            "image",
                            [
-                            "KeyNode",
-                            null,
+                            "Effect",
+                            "dream",
                             [
                              [
                               "image",
                               [
-                               "ResizeNode",
+                               "KeyNode",
                                null,
                                [
                                 [
                                  "image",
                                  [
-                                  "CutNode",
+                                  "ResizeNode",
                                   null,
                                   [
                                    [
@@ -39489,50 +39559,59 @@
                                       [
                                        "image",
                                        [
-                                        "Effect",
-                                        "trail",
-                                        [
-                                         [
-                                          "stack",
-                                          [
-                                           "Delay",
-                                           null,
-                                           []
-                                          ]
-                                         ]
-                                        ]
-                                       ]
-                                      ],
-                                      [
-                                       "mask",
-                                       [
-                                        "MatteNode",
+                                        "CutNode",
                                         null,
                                         [
                                          [
                                           "image",
                                           [
                                            "Effect",
-                                           "acid.2",
+                                           "trail",
+                                           [
+                                            [
+                                             "stack",
+                                             [
+                                              "Delay",
+                                              null,
+                                              []
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ],
+                                         [
+                                          "mask",
+                                          [
+                                           "MatteNode",
+                                           null,
                                            [
                                             [
                                              "image",
                                              [
-                                              "Scene",
-                                              null,
+                                              "Effect",
+                                              "acid.2",
                                               [
                                                [
-                                                "geometry",
+                                                "image",
                                                 [
-                                                 "Shape",
+                                                 "Scene",
                                                  null,
                                                  [
                                                   [
-                                                   "faces",
+                                                   "geometry",
                                                    [
-                                                    "PatternNode",
-                                                    "",
-                                                    []
+                                                    "Shape",
+                                                    null,
+                                                    [
+                                                     [
+                                                      "faces",
+                                                      [
+                                                       "PatternNode",
+                                                       "",
+                                                       []
+                                                      ]
+                                                     ]
+                                                    ]
                                                    ]
                                                   ]
                                                  ]
@@ -39546,34 +39625,34 @@
                                          ]
                                         ]
                                        ]
-                                      ]
-                                     ]
-                                    ]
-                                   ],
-                                   [
-                                    "mask",
-                                    [
-                                     "Cover",
-                                     null,
-                                     [
+                                      ],
                                       [
-                                       "scene",
+                                       "mask",
                                        [
-                                        "Scene",
+                                        "Cover",
                                         null,
                                         [
                                          [
-                                          "geometry",
+                                          "scene",
                                           [
-                                           "Shape",
+                                           "Scene",
                                            null,
                                            [
                                             [
-                                             "faces",
+                                             "geometry",
                                              [
-                                              "PatternNode",
-                                              "",
-                                              []
+                                              "Shape",
+                                              null,
+                                              [
+                                               [
+                                                "faces",
+                                                [
+                                                 "PatternNode",
+                                                 "",
+                                                 []
+                                                ]
+                                               ]
+                                              ]
                                              ]
                                             ]
                                            ]
@@ -40015,6 +40094,13 @@
     ]
    ],
    [
+    "Effect",
+    "fade.3",
+    [
+     "image"
+    ]
+   ],
+   [
     "Composite",
     null,
     [
@@ -40246,42 +40332,42 @@
          "over",
          [
           "Effect",
-          "fade.2",
+          "fade.3",
           [
            [
             "image",
             [
              "Effect",
-             "curve.2",
+             "fade.2",
              [
               [
                "image",
                [
                 "Effect",
-                "hueturn",
+                "curve.2",
                 [
                  [
                   "image",
                   [
                    "Effect",
-                   "dream",
+                   "hueturn",
                    [
                     [
                      "image",
                      [
-                      "KeyNode",
-                      null,
+                      "Effect",
+                      "dream",
                       [
                        [
                         "image",
                         [
-                         "ResizeNode",
+                         "KeyNode",
                          null,
                          [
                           [
                            "image",
                            [
-                            "CutNode",
+                            "ResizeNode",
                             null,
                             [
                              [
@@ -40293,15 +40379,67 @@
                                 [
                                  "image",
                                  [
-                                  "Effect",
-                                  "trail",
+                                  "CutNode",
+                                  null,
                                   [
                                    [
-                                    "stack",
+                                    "image",
                                     [
-                                     "Delay",
+                                     "Effect",
+                                     "trail",
+                                     [
+                                      [
+                                       "stack",
+                                       [
+                                        "Delay",
+                                        null,
+                                        []
+                                       ]
+                                      ]
+                                     ]
+                                    ]
+                                   ],
+                                   [
+                                    "mask",
+                                    [
+                                     "MatteNode",
                                      null,
-                                     []
+                                     [
+                                      [
+                                       "image",
+                                       [
+                                        "Scene",
+                                        null,
+                                        [
+                                         [
+                                          "geometry",
+                                          [
+                                           "Hands",
+                                           1,
+                                           []
+                                          ]
+                                         ],
+                                         [
+                                          "geometry.2",
+                                          [
+                                           "Shape",
+                                           null,
+                                           [
+                                            [
+                                             "faces",
+                                             [
+                                              "PatternNode",
+                                              "",
+                                              []
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ]
+                                        ]
+                                       ]
+                                      ]
+                                     ]
                                     ]
                                    ]
                                   ]
@@ -40310,11 +40448,11 @@
                                 [
                                  "mask",
                                  [
-                                  "MatteNode",
+                                  "Cover",
                                   null,
                                   [
                                    [
-                                    "image",
+                                    "scene",
                                     [
                                      "Scene",
                                      null,
@@ -40342,49 +40480,6 @@
                                           ]
                                          ]
                                         ]
-                                       ]
-                                      ]
-                                     ]
-                                    ]
-                                   ]
-                                  ]
-                                 ]
-                                ]
-                               ]
-                              ]
-                             ],
-                             [
-                              "mask",
-                              [
-                               "Cover",
-                               null,
-                               [
-                                [
-                                 "scene",
-                                 [
-                                  "Scene",
-                                  null,
-                                  [
-                                   [
-                                    "geometry",
-                                    [
-                                     "Hands",
-                                     1,
-                                     []
-                                    ]
-                                   ],
-                                   [
-                                    "geometry.2",
-                                    [
-                                     "Shape",
-                                     null,
-                                     [
-                                      [
-                                       "faces",
-                                       [
-                                        "PatternNode",
-                                        "",
-                                        []
                                        ]
                                       ]
                                      ]
@@ -40793,6 +40888,13 @@
     ]
    ],
    [
+    "Effect",
+    "fade.3",
+    [
+     "image"
+    ]
+   ],
+   [
     "Composite",
     null,
     [
@@ -40947,42 +41049,42 @@
          "over",
          [
           "Effect",
-          "fade.2",
+          "fade.3",
           [
            [
             "image",
             [
              "Effect",
-             "curve.2",
+             "fade.2",
              [
               [
                "image",
                [
                 "Effect",
-                "hueturn",
+                "curve.2",
                 [
                  [
                   "image",
                   [
                    "Effect",
-                   "dream",
+                   "hueturn",
                    [
                     [
                      "image",
                      [
-                      "KeyNode",
-                      null,
+                      "Effect",
+                      "dream",
                       [
                        [
                         "image",
                         [
-                         "ResizeNode",
+                         "KeyNode",
                          null,
                          [
                           [
                            "image",
                            [
-                            "CutNode",
+                            "ResizeNode",
                             null,
                             [
                              [
@@ -40994,15 +41096,59 @@
                                 [
                                  "image",
                                  [
-                                  "Effect",
-                                  "trail",
+                                  "CutNode",
+                                  null,
                                   [
                                    [
-                                    "stack",
+                                    "image",
                                     [
-                                     "Delay",
+                                     "Effect",
+                                     "trail",
+                                     [
+                                      [
+                                       "stack",
+                                       [
+                                        "Delay",
+                                        null,
+                                        []
+                                       ]
+                                      ]
+                                     ]
+                                    ]
+                                   ],
+                                   [
+                                    "mask",
+                                    [
+                                     "MatteNode",
                                      null,
-                                     []
+                                     [
+                                      [
+                                       "image",
+                                       [
+                                        "Scene",
+                                        null,
+                                        [
+                                         [
+                                          "geometry",
+                                          [
+                                           "Shape",
+                                           null,
+                                           [
+                                            [
+                                             "faces",
+                                             [
+                                              "PatternNode",
+                                              "",
+                                              []
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ]
+                                        ]
+                                       ]
+                                      ]
+                                     ]
                                     ]
                                    ]
                                   ]
@@ -41011,11 +41157,11 @@
                                 [
                                  "mask",
                                  [
-                                  "MatteNode",
+                                  "Cover",
                                   null,
                                   [
                                    [
-                                    "image",
+                                    "scene",
                                     [
                                      "Scene",
                                      null,
@@ -41035,41 +41181,6 @@
                                           ]
                                          ]
                                         ]
-                                       ]
-                                      ]
-                                     ]
-                                    ]
-                                   ]
-                                  ]
-                                 ]
-                                ]
-                               ]
-                              ]
-                             ],
-                             [
-                              "mask",
-                              [
-                               "Cover",
-                               null,
-                               [
-                                [
-                                 "scene",
-                                 [
-                                  "Scene",
-                                  null,
-                                  [
-                                   [
-                                    "geometry",
-                                    [
-                                     "Shape",
-                                     null,
-                                     [
-                                      [
-                                       "faces",
-                                       [
-                                        "PatternNode",
-                                        "",
-                                        []
                                        ]
                                       ]
                                      ]
@@ -41357,42 +41468,42 @@
             "over",
             [
              "Effect",
-             "fade.2",
+             "fade.3",
              [
               [
                "image",
                [
                 "Effect",
-                "curve.2",
+                "fade.2",
                 [
                  [
                   "image",
                   [
                    "Effect",
-                   "hueturn",
+                   "curve.2",
                    [
                     [
                      "image",
                      [
                       "Effect",
-                      "dream",
+                      "hueturn",
                       [
                        [
                         "image",
                         [
-                         "KeyNode",
-                         null,
+                         "Effect",
+                         "dream",
                          [
                           [
                            "image",
                            [
-                            "ResizeNode",
+                            "KeyNode",
                             null,
                             [
                              [
                               "image",
                               [
-                               "CutNode",
+                               "ResizeNode",
                                null,
                                [
                                 [
@@ -41404,15 +41515,59 @@
                                    [
                                     "image",
                                     [
-                                     "Effect",
-                                     "trail",
+                                     "CutNode",
+                                     null,
                                      [
                                       [
-                                       "stack",
+                                       "image",
                                        [
-                                        "Delay",
+                                        "Effect",
+                                        "trail",
+                                        [
+                                         [
+                                          "stack",
+                                          [
+                                           "Delay",
+                                           null,
+                                           []
+                                          ]
+                                         ]
+                                        ]
+                                       ]
+                                      ],
+                                      [
+                                       "mask",
+                                       [
+                                        "MatteNode",
                                         null,
-                                        []
+                                        [
+                                         [
+                                          "image",
+                                          [
+                                           "Scene",
+                                           null,
+                                           [
+                                            [
+                                             "geometry",
+                                             [
+                                              "Shape",
+                                              null,
+                                              [
+                                               [
+                                                "faces",
+                                                [
+                                                 "PatternNode",
+                                                 "",
+                                                 []
+                                                ]
+                                               ]
+                                              ]
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ]
+                                        ]
                                        ]
                                       ]
                                      ]
@@ -41421,11 +41576,11 @@
                                    [
                                     "mask",
                                     [
-                                     "MatteNode",
+                                     "Cover",
                                      null,
                                      [
                                       [
-                                       "image",
+                                       "scene",
                                        [
                                         "Scene",
                                         null,
@@ -41445,41 +41600,6 @@
                                              ]
                                             ]
                                            ]
-                                          ]
-                                         ]
-                                        ]
-                                       ]
-                                      ]
-                                     ]
-                                    ]
-                                   ]
-                                  ]
-                                 ]
-                                ],
-                                [
-                                 "mask",
-                                 [
-                                  "Cover",
-                                  null,
-                                  [
-                                   [
-                                    "scene",
-                                    [
-                                     "Scene",
-                                     null,
-                                     [
-                                      [
-                                       "geometry",
-                                       [
-                                        "Shape",
-                                        null,
-                                        [
-                                         [
-                                          "faces",
-                                          [
-                                           "PatternNode",
-                                           "",
-                                           []
                                           ]
                                          ]
                                         ]
@@ -41787,6 +41907,13 @@
     ]
    ],
    [
+    "Effect",
+    "fade.3",
+    [
+     "image"
+    ]
+   ],
+   [
     "Composite",
     null,
     [
@@ -41935,42 +42062,42 @@
          "over",
          [
           "Effect",
-          "fade.2",
+          "fade.3",
           [
            [
             "image",
             [
              "Effect",
-             "curve.2",
+             "fade.2",
              [
               [
                "image",
                [
                 "Effect",
-                "hueturn",
+                "curve.2",
                 [
                  [
                   "image",
                   [
                    "Effect",
-                   "dream",
+                   "hueturn",
                    [
                     [
                      "image",
                      [
-                      "KeyNode",
-                      null,
+                      "Effect",
+                      "dream",
                       [
                        [
                         "image",
                         [
-                         "ResizeNode",
+                         "KeyNode",
                          null,
                          [
                           [
                            "image",
                            [
-                            "CutNode",
+                            "ResizeNode",
                             null,
                             [
                              [
@@ -41982,15 +42109,59 @@
                                 [
                                  "image",
                                  [
-                                  "Effect",
-                                  "trail",
+                                  "CutNode",
+                                  null,
                                   [
                                    [
-                                    "stack",
+                                    "image",
                                     [
-                                     "Delay",
+                                     "Effect",
+                                     "trail",
+                                     [
+                                      [
+                                       "stack",
+                                       [
+                                        "Delay",
+                                        null,
+                                        []
+                                       ]
+                                      ]
+                                     ]
+                                    ]
+                                   ],
+                                   [
+                                    "mask",
+                                    [
+                                     "MatteNode",
                                      null,
-                                     []
+                                     [
+                                      [
+                                       "image",
+                                       [
+                                        "Scene",
+                                        null,
+                                        [
+                                         [
+                                          "geometry",
+                                          [
+                                           "Shape",
+                                           null,
+                                           [
+                                            [
+                                             "faces",
+                                             [
+                                              "PatternNode",
+                                              "",
+                                              []
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ]
+                                        ]
+                                       ]
+                                      ]
+                                     ]
                                     ]
                                    ]
                                   ]
@@ -41999,11 +42170,11 @@
                                 [
                                  "mask",
                                  [
-                                  "MatteNode",
+                                  "Cover",
                                   null,
                                   [
                                    [
-                                    "image",
+                                    "scene",
                                     [
                                      "Scene",
                                      null,
@@ -42023,41 +42194,6 @@
                                           ]
                                          ]
                                         ]
-                                       ]
-                                      ]
-                                     ]
-                                    ]
-                                   ]
-                                  ]
-                                 ]
-                                ]
-                               ]
-                              ]
-                             ],
-                             [
-                              "mask",
-                              [
-                               "Cover",
-                               null,
-                               [
-                                [
-                                 "scene",
-                                 [
-                                  "Scene",
-                                  null,
-                                  [
-                                   [
-                                    "geometry",
-                                    [
-                                     "Shape",
-                                     null,
-                                     [
-                                      [
-                                       "faces",
-                                       [
-                                        "PatternNode",
-                                        "",
-                                        []
                                        ]
                                       ]
                                      ]
@@ -42370,6 +42506,13 @@
    [
     "Effect",
     "fade.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade.3",
     [
      "image"
     ]
@@ -42548,42 +42691,42 @@
          "over",
          [
           "Effect",
-          "fade.2",
+          "fade.3",
           [
            [
             "image",
             [
              "Effect",
-             "curve.2",
+             "fade.2",
              [
               [
                "image",
                [
                 "Effect",
-                "hueturn",
+                "curve.2",
                 [
                  [
                   "image",
                   [
                    "Effect",
-                   "dream",
+                   "hueturn",
                    [
                     [
                      "image",
                      [
-                      "KeyNode",
-                      null,
+                      "Effect",
+                      "dream",
                       [
                        [
                         "image",
                         [
-                         "ResizeNode",
+                         "KeyNode",
                          null,
                          [
                           [
                            "image",
                            [
-                            "CutNode",
+                            "ResizeNode",
                             null,
                             [
                              [
@@ -42595,15 +42738,59 @@
                                 [
                                  "image",
                                  [
-                                  "Effect",
-                                  "trail",
+                                  "CutNode",
+                                  null,
                                   [
                                    [
-                                    "stack",
+                                    "image",
                                     [
-                                     "Delay",
+                                     "Effect",
+                                     "trail",
+                                     [
+                                      [
+                                       "stack",
+                                       [
+                                        "Delay",
+                                        null,
+                                        []
+                                       ]
+                                      ]
+                                     ]
+                                    ]
+                                   ],
+                                   [
+                                    "mask",
+                                    [
+                                     "MatteNode",
                                      null,
-                                     []
+                                     [
+                                      [
+                                       "image",
+                                       [
+                                        "Scene",
+                                        null,
+                                        [
+                                         [
+                                          "geometry",
+                                          [
+                                           "Shape",
+                                           null,
+                                           [
+                                            [
+                                             "faces",
+                                             [
+                                              "PatternNode",
+                                              "",
+                                              []
+                                             ]
+                                            ]
+                                           ]
+                                          ]
+                                         ]
+                                        ]
+                                       ]
+                                      ]
+                                     ]
                                     ]
                                    ]
                                   ]
@@ -42612,11 +42799,11 @@
                                 [
                                  "mask",
                                  [
-                                  "MatteNode",
+                                  "Cover",
                                   null,
                                   [
                                    [
-                                    "image",
+                                    "scene",
                                     [
                                      "Scene",
                                      null,
@@ -42636,41 +42823,6 @@
                                           ]
                                          ]
                                         ]
-                                       ]
-                                      ]
-                                     ]
-                                    ]
-                                   ]
-                                  ]
-                                 ]
-                                ]
-                               ]
-                              ]
-                             ],
-                             [
-                              "mask",
-                              [
-                               "Cover",
-                               null,
-                               [
-                                [
-                                 "scene",
-                                 [
-                                  "Scene",
-                                  null,
-                                  [
-                                   [
-                                    "geometry",
-                                    [
-                                     "Shape",
-                                     null,
-                                     [
-                                      [
-                                       "faces",
-                                       [
-                                        "PatternNode",
-                                        "",
-                                        []
                                        ]
                                       ]
                                      ]
@@ -42983,6 +43135,13 @@
    [
     "Effect",
     "fade.2",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade.3",
     [
      "image"
     ]

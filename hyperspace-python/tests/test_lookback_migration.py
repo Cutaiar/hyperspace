@@ -408,7 +408,9 @@ def test_a_fragment_with_no_dream_keeps_its_rows_onto_the_hosts_dream():
     """Devin on #522 (second pass): only the dream's values are the host's in
     a fragment with no dream — a row from the fragment's own LFO (voice 1,
     lane `lfo:0`) onto `dream.contrast` may drive the host's, and keeps doing so beside the
-    Curve it now drives too."""
+    Curve it now drives too. Plan 90 H3: the host's dream has no contrast any more
+    (an effect, `fx.dream.*`), so that copy is left out, said — the row drives the
+    Curve alone."""
     doc = {"schema": patches.SCHEMA, "name": "f",
            "nodes": [{"kind": "composite", "blend": "add"}],
            "wires": [{"from": "lookback", "to": "composite.over"}],
@@ -421,7 +423,7 @@ def test_a_fragment_with_no_dream_keeps_its_rows_onto_the_hosts_dream():
            "values": {"dream.echoes": 4, "dream.contrast": 1.0}}
     got = patches.forward(doc)
     targets = sorted(r["target"] for r in got["routes"])
-    assert targets == ["dream.contrast", "fx.curve.shape"], got["routes"]
+    assert targets == ["fx.curve.shape"], got["routes"]
     assert "dream.contrast" not in got["values"]
     assert patches.check(got) == []
 

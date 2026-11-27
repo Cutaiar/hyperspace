@@ -225,3 +225,77 @@ def test_the_lookback_pages_slot_keeps_its_index_and_shows_fx():
     from hyperspace import ui, ui_pane
     assert ui.PAGE_KEYS[5] == "lookback" and ui.PAGE_KEYS.index("fx") == 6
     assert ui_pane.section_of("lookback") == "fx"
+
+
+# ---------------------------------------------------------------- a migrated dream, drawn
+
+def _migrated(ctx, *, on=True, routes=(), source=None, value=0.125, frames=3):
+    """An old dream (`{"kind": "dream"}`) on a dim Colour, opened as its chain
+    (`graphmigrate.dreams`) and drawn — the output's centre, and the Colour's own."""
+    from test_graph_faces import _faces, _fbo, _px
+
+    from hyperspace import graphmigrate as GM
+    from hyperspace.outputs import Switches, View
+    from hyperspace.render import Renderer
+    from hyperspace.view import KeyState, ResizeState
+
+    old = {"schema": GM.TWELVE_SCHEMA, "name": "t",
+           "graph": {"frame": "wired", "nodes": [{"kind": "effect", "file": "colour"},
+                                                 {"kind": "dream"}],
+                     "wires": [{"from": "colour", "to": "dream.image"},
+                               {"from": "dream", "to": "output.1.image"},
+                               {"from": "colour", "to": "output.2.image"}]},
+           "values": {"dream.on": on}, "routes": list(routes)}
+    doc, _ = GM.dreams(old)
+    r = Renderer(ctx)
+    r.ghost.state.on = False
+    spec = G.read_graph(doc["graph"], effects=set(FxState().specs))
+    assert not spec.notes, spec.notes
+    r.wiring = spec.wiring()
+    r.fx.dream_source = source
+    count: dict = {}
+    for e in doc["graph"]["nodes"]:
+        if e.get("kind") == "effect":
+            count[e["file"]] = max(count.get(e["file"], 1), e.get("instance", 1))
+    r.fx.state.set_instances(count)
+    s = _faces()
+    keys: dict = {}
+    for k, v in doc["values"].items():
+        if k.startswith("fx."):
+            name, _, key = k[3:].rpartition(".")
+            r.fx.state.values[name][key] = v
+        elif k.startswith("key."):
+            node, _, key = k[4:].rpartition(".")
+            keys.setdefault(node, {})[key] = v
+        elif k.startswith("resize"):
+            node, _, key = k.rpartition(".")
+            st = s.resize.setdefault(node, ResizeState())
+            setattr(st, key, v)
+    for node, kw in keys.items():
+        s.keys[node] = KeyState(**kw)
+    r.fx.state.values["colour"].update({"on": True, "hue": 0.0, "saturation": 0.0,
+                                       "value": value})
+    for i in range(frames):
+        vs = [View(Switches(), (32, 24), target=_fbo(ctx, 32, 24)) for _ in range(2)]
+        r.draw_outputs(s, 32, 24, 1.0, vs, t_now=1.0 + i / 60)
+    return [_px(v.target)[12, 16] for v in vs]
+
+
+def test_a_migrated_dream_with_no_worker_leaves_its_picture_as_it_was(ctx):
+    """Devin on #523: the chain with no dream result must be its input — the
+    keyed copy laid over its own source by its alpha (premultiplied) is the
+    source again, dim or bright."""
+    for value in (0.125, 0.6):
+        out, src = _migrated(ctx, value=value)
+        assert np.abs(out[:3] - src[:3]).max() <= 2, (value, out, src)
+
+
+def test_a_migrated_dream_switched_off_by_its_row_leaves_its_picture(ctx):
+    out, src = _migrated(ctx, on=False, routes=[{"source": "key:d", "target": "dream.on",
+                                                 "op": "toggle"}])
+    assert np.abs(out[:3] - src[:3]).max() <= 2, (out, src)
+
+
+def test_a_migrated_dream_lays_its_answer_over_where_it_is_lit(ctx):
+    out, src = _migrated(ctx, value=0.6, source=Fake(lambda px: np.full_like(px, 255)))
+    assert out[0] > src[0] + 40                    # the dream (white) at its mix, over
