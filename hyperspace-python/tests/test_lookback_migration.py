@@ -344,3 +344,61 @@ def test_a_look_back_a_group_of_the_file_held_brings_its_parts_into_it():
     got, _ = graphmigrate.lookbacks(doc)
     assert got["groups"] == [{"id": "group.1", "name": "mine", "open": True, "nodes": [
         "render:acid", "render:delay", "render:fade", "render:resize", "render:trail"]}]
+
+
+# ---------------------------------------------------------------- Devin on #522
+
+def test_a_fragment_with_no_dream_keeps_none_of_the_dreams_values():
+    """A saved look-back fragment holds the dream's shared knobs (darken,
+    contrast, res) from its lift; with no dream node in it they are the
+    host's, and `patches.check` refuses a fragment setting them — so they go
+    with the look-back (its parts hold the converted copies)."""
+    doc = {"schema": patches.SCHEMA, "name": "f",
+           "nodes": [{"kind": "composite", "blend": "add"}],
+           "wires": [{"from": "lookback", "to": "composite.over"}],
+           "ports": [{"id": "in", "type": "image", "to": "lookback.image", "was": "scene"},
+                     {"id": "out", "type": "image", "from": "composite",
+                      "was": "output.all.image"}],
+           "values": {"dream.echoes": 4, "dream.darken": 0.2, "dream.contrast": 1.0,
+                      "dream.res": 2}}
+    got = patches.forward(doc)
+    assert not [k for k in got["values"] if k.startswith("dream.")], got["values"]
+    assert got["values"]["fx.fade.level"] == pytest.approx(0.8)
+    assert patches.check(got) == []
+
+
+def test_a_look_back_into_a_look_back_takes_the_first_ones_parts():
+    doc = {"schema": "hyperspace.loadable/12", "name": "t",
+           "graph": {"frame": "wired",
+                     "wires": [{"from": "scene", "to": "lookback.image"},
+                               {"from": "lookback", "to": "lookback.2.image"},
+                               {"from": "lookback.2", "to": "output.all.image"},
+                               {"from": "shape", "to": "scene.geometry"},
+                               {"from": "pattern", "to": "shape.faces"}]},
+           "values": {}}
+    got, _ = graphmigrate.lookbacks(doc)
+    wires = got["graph"]["wires"]
+    assert not [w for w in wires if "lookback" in w["from"] or "lookback" in w["to"]], wires
+    assert {"from": "trail", "to": "fade.2.image"} in wires
+    spec = G.read_graph(got["graph"], effects={"fade", "trail"})
+    assert not spec.notes, spec.notes
+
+
+def test_the_master_switch_keeps_wire_declared_and_default_mix_effects_as_they_drew():
+    """An effect declared by a wire alone is the patch's too: switched off
+    where the master was; one with no saved mix is at its file's mix (here
+    acid's 1), scaled by the master's."""
+    doc = {"schema": "hyperspace.loadable/12", "name": "t",
+           "graph": {"frame": "wired",
+                     "wires": [{"from": "scene", "to": "acid.image"},
+                               {"from": "acid", "to": "lookback.image"},
+                               {"from": "lookback", "to": "output.all.image"},
+                               {"from": "shape", "to": "scene.geometry"},
+                               {"from": "pattern", "to": "shape.faces"}]},
+           "values": {"fx.on": False, "fx.acid.on": True}}
+    got, _ = graphmigrate.lookbacks(doc)
+    assert got["values"]["fx.on"] is True and got["values"]["fx.acid.on"] is False
+    doc["values"] = {"fx.mix": 0.25, "fx.acid.on": True}
+    got, _ = graphmigrate.lookbacks(doc)
+    assert got["values"]["fx.mix"] == 1.0
+    assert got["values"]["fx.acid.mix"] == pytest.approx(0.25)

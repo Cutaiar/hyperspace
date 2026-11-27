@@ -2391,7 +2391,7 @@ def lookback_retired(pid: Any) -> bool:
 
 
 def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = None,
-                     keys: list | None = None
+                     keys: list | None = None, specs: Specs | None = None
                      ) -> tuple[list, list, dict, list | None, list | None, list[str]]:
     """A section's `nodes` and `wires`, the document's other keys (`rest`),
     a fragment's `ports` and the section's `keys` (black is clear's), with
@@ -2399,7 +2399,10 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
     rest, ports, keys, notes). Pure: the inputs are untouched, and handed
     back as they are when no look-back is named. The retired knobs
     (`LB_GONE`, `dream.<n>.*`) of a patch with no look-back drew nothing:
-    their values go quietly, a row on one is left out, said."""
+    their values go quietly, a row on one is left out, said.An effect's own mix, where the file
+    names none, is its spec's (`specs`; `DEFAULT_MIX` without one). A
+    fragment (`ports` given) holding no dream keeps none of the dream's
+    shared knobs: they are the host's there (`patches.check`)."""
     olds: list[str] = []
     for e in nodes:
         if isinstance(e, dict) and e.get("kind") == "lookback":
@@ -2468,6 +2471,9 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
 
     notes: list[str] = []
     out_nodes = [e for e in nodes if not (isinstance(e, dict) and e.get("kind") == "lookback")]
+    # (Devin on #522: a fragment with no dream does not own the dream's knobs)
+    keep_shared = ports is None or any(isinstance(e, dict) and e.get("kind") == "dream"
+                                       for e in nodes)
     out_keys = list(keys) if keys is not None else None
     new_wires: list[dict] = []
     ends: dict[str, str] = {}          # a look-back → the part its picture is now
@@ -2563,7 +2569,7 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
         new_wires += wl
         # (its values: the parts', each from the look-back's own)
         for k in LB_KEYS:
-            if k in LB_GONE or old != "lookback":
+            if k in LB_GONE or old != "lookback" or not keep_shared:
                 values.pop(pre + k, None)
         darken = _num(v["darken"], LB_DEFAULTS["darken"])
         if curve_on:
@@ -2612,10 +2618,19 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
         mix = _num(values.get("fx.mix", 1.0), 1.0)
         ours = {f"fx.{n}." for role in parts.values() for k, n in role.items()
                 if k in ("curve", "fade", "trail")} | {f"fx.{r}." for r in pins.values()}
-        others = sorted({G.instance_name(e["file"], e.get("instance", 1)
-                                         if isinstance(e.get("instance", 1), int) else 1)
-                         for e in out_nodes if isinstance(e, dict) and e.get("kind") == "effect"
-                         and isinstance(e.get("file"), str)} - {p[3:-1] for p in ours})
+        # (every effect the patch declares — an entry, a wire's end, a slot's
+        # wire: Devin on #522 — but the parts)
+        declared = {G.instance_name(e["file"], e.get("instance", 1)
+                                    if isinstance(e.get("instance", 1), int) else 1)
+                    for e in out_nodes if isinstance(e, dict) and e.get("kind") == "effect"
+                    and isinstance(e.get("file"), str)}
+        for w in wires:
+            for end in (w.get("from"), w.get("to")) if isinstance(w, dict) else ():
+                if isinstance(end, str) and _lb_of(end) is None:
+                    base = _effect_base(end)
+                    if G.wire_node_kind(base, wired=True) == "effect":
+                        declared.add(base)
+        others = sorted(declared - {p[3:-1] for p in ours})
         what = []
         if not was_on:
             values["fx.on"] = True
@@ -2627,9 +2642,12 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
             values["fx.mix"] = 1.0
             what.append(f"fx.mix is 1 (was {mix:g})")
             for o in others:
+                # (a file's own mix where the patch names none: its spec's)
                 own = values.get(f"fx.{o}.mix")
-                if isinstance(own, (int, float)) and not isinstance(own, bool):
-                    values[f"fx.{o}.mix"] = own * mix
+                if not isinstance(own, (int, float)) or isinstance(own, bool):
+                    own = (specs or {}).get(G.split_instance(o)[0],
+                                            (DEFAULT_ORDER, DEFAULT_MIX))[1]
+                values[f"fx.{o}.mix"] = own * mix
         if what:
             notes.append(LB_MASTER_NOTE.format(what=" and ".join(what)))
             for key in _ROW_LISTS:
@@ -2640,7 +2658,7 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
     # every other look-back knob (a patch with none, or `dream.<n>.*` of none drawn)
     for k in list(values):
         got = _lb_param(k)
-        if got is not None and (got[1] in LB_GONE or got[0] != "lookback"):
+        if got is not None and (got[1] in LB_GONE or got[0] != "lookback" or not keep_shared):
             del values[k]
 
     out_wires: list[Any] = []
@@ -2659,7 +2677,18 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
             else:
                 continue
         out_wires.append(w)
-    out_wires = [*new_wires, *out_wires]
+    # (a part's input from a look-back or its echo — one look-back into
+    # another: Devin on #522 — is that look-back's end or Read, made by now)
+    fed: list[dict] = []
+    for w in new_wires:
+        f = _lb_of(w.get("from"))
+        if f is not None:
+            src = pins.get((f[0], f[2])) if f[2] is not None else ends.get(f[0])
+            if src is None:
+                continue
+            w = {**w, "from": src}
+        fed.append(w)
+    out_wires = [*fed, *out_wires]
 
     def retarget(pid: str) -> list[str] | None:
         """Where a row on look-back knob `pid` goes: the ids, [] dropped, None not one."""
@@ -2668,7 +2697,7 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
             return None
         lb, k = got
         role = parts.get(lb)
-        keep = [pid] if lb == "lookback" and k in LB_SHARED else []
+        keep = [pid] if lb == "lookback" and k in LB_SHARED and keep_shared else []
         if role is None:
             return keep
         new = {"echo_mix": [f"fx.{role['trail']}.level"] if "trail" in role else [],
@@ -2848,7 +2877,7 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
     return out_nodes, out_wires, out_rest, out_ports, out_keys, notes
 
 
-def lookbacks(doc: dict) -> tuple[dict, list[str]]:
+def lookbacks(doc: dict, specs: Specs | None = None) -> tuple[dict, list[str]]:
     """A whole loadable patch with every look-back made public parts
     (`retire_lookbacks`) — (the document, the notes); the document itself
     when it names none."""
@@ -2860,7 +2889,7 @@ def lookbacks(doc: dict) -> tuple[dict, list[str]]:
     keys = section.get(G.KEYS_KEY)
     nodes, wires, rest2, _, keys2, notes = retire_lookbacks(
         list(section.get("nodes", [])), list(section.get("wires", [])), rest,
-        keys=list(keys) if isinstance(keys, list) else None)
+        keys=list(keys) if isinstance(keys, list) else None, specs=specs)
     # (a patch with no look-back may still lose its retired knobs, quietly)
     if (not notes and rest2 == rest and nodes == section.get("nodes", [])
             and wires == section.get("wires", [])):
@@ -2965,6 +2994,6 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     doc, hue_notes = hue_turns(doc)
     migrate_notes += hue_notes
     # plan 90 (H2): the look-back made public parts, whatever the version
-    doc, lb_notes = lookbacks(doc)
+    doc, lb_notes = lookbacks(doc, specs)
     migrate_notes += lb_notes
     return Forward(doc, tuple(notes), tuple(migrate_notes), migrated, frozenset(from_show))
