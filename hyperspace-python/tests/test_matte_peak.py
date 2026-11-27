@@ -139,3 +139,15 @@ def test_a_narrow_ramp_has_a_coverage_at_its_level(ctx, ramp):
     assert np.isfinite(got) and got == 0.0
     assert _key(ctx, 0.5, 1e-8, 0.75, ramp) == 1.0
     assert _key(ctx, 0.25, 0.5, 0.5, ramp) == pytest.approx(0.5, abs=1e-6)
+
+
+def test_a_narrow_smooth_matte_keeps_its_edges(ctx):
+    """Devin on #520 (second pass): the smooth ramp's upper edge is the key
+    plus the softness, not the lower edge plus twice it — rebuilt from a
+    rounded lower edge, an alpha Matte keyed at 1, softness 1.49e-7, gave an
+    opaque pixel about 0.35 where the old pass gave 0.5."""
+    opaque = _flat((255, 255, 255))
+    r = _renderer(ctx, _media(a=Still(opaque)))
+    _draw(ctx, r, _s(source=1, key=1.0, soft=1.4901161193847656e-7))
+    got = _mask_px(_mask(r))
+    assert np.abs(got.astype(int) - 128).max() <= 1, np.unique(got)
