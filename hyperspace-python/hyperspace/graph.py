@@ -4154,6 +4154,9 @@ class Scene(Node):
     def _run(self, frame: Frame) -> None:
         r, ctx = frame.r, frame.ctx
         r.scene.ensure(frame.size, frame.samples)
+        # (Devin on #521: the faces the last pass left are this frame's only
+        # if a shape draws them again — the cover of a scene with none is empty)
+        r._face_verts, r._copies, r._cover_cells = 0, 0, None
         for unit in range(4):
             r._blank.use(location=unit)
         geometries = self.geometries()
@@ -5835,6 +5838,9 @@ class Cover(Node):
     INPUTS: ClassVar[dict[str, str]] = {"scene": IMAGE}
     OUTPUT = MASK
     REFS: ClassVar[frozenset[str]] = frozenset({"scene"})   # the face buffer, not the picture
+    # (Devin on #521: drawn only where a consumer pulls it — behind a
+    # switch's unpicked input its scene is not run, and its mask is not made)
+    MAKES = True
 
     # plan 36 T4: the look-backs whose `cover` it is (set by the build)
     wanted_by: tuple[str, ...] = (LOOKBACK,)
@@ -5846,7 +5852,9 @@ class Cover(Node):
             frame.cover = frame.r._draw_cover(frame.w, frame.h)
 
     def image(self, frame: Frame) -> moderngl.Texture | None:
-        return frame.cover
+        # (the root frame's: a frame at another size, made before the cover
+        # was drawn — a resize's, the faces' — reads the one mask too)
+        return frame.root.cover
 
 
 class HandsLayer(Node):
