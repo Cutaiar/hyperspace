@@ -167,6 +167,12 @@ def test_new_parts_take_the_next_free_instances():
 
 # ---------------------------------------------------------------- ids and rows
 
+def test_whole_number_knobs_land_whole():
+    out, _, _ = migrated(doc({"dream.steps": 2.0, "dream.jitter": 8.0, "dream.layer": 3.0}))
+    v = out["values"]
+    assert [type(v[f"fx.dream.{k}"]) for k in ("steps", "jitter", "layer")] == [int] * 3
+
+
 def test_the_workers_ids_move_to_the_effects():
     out, _, _ = migrated(doc({"dream.layer": 4, "dream.octaves": 2, "dream.jitter": 3,
                               "dream.step": 0.02, "dream.steps": 3, "dream.k": 0.1}))

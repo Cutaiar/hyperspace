@@ -3124,8 +3124,9 @@ def retire_dreams(nodes: list, wires: list, rest: dict, ports: list | None = Non
         values.update({f"key.{r}.{k}": x for k, x in DREAM_KEY.items()})
         values.update({f"fx.{d}.on": bool(v["on"]), f"fx.{d}.mix": 1.0, f"fx.{d}.blend": 0,
                        f"fx.{d}.k": min(max(_num(v["k"], 0.05), NEW_K[0]), NEW_K[1])})
-        for k in DREAM_WORKER:
-            values[f"fx.{d}.{k}"] = v[k]
+        for k in DREAM_WORKER:          # (whole numbers but strength: an old file's 2.0 is 2)
+            values[f"fx.{d}.{k}"] = (_num(v[k], DREAM_DEFAULTS[k]) if k == "step"
+                                     else round(_num(v[k], DREAM_DEFAULTS[k])))
         mix, darken = _num(v["mix"], 0.7), _num(v["darken"], 0.1)
         values.update({f"fx.{f}.on": True, f"fx.{f}.mix": 1.0,
                        f"fx.{f}.level": min(max(mix * (1.0 - darken), 0.0), 1.0)})

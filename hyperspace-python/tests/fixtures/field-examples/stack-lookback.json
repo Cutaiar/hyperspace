@@ -161,24 +161,6 @@
   "cloud.scale": 0.3,
   "cloud.bright": 1.0,
   "cloud.colors": true,
-  "dream.on": false,
-  "dream.mix": 0.0,
-  "dream.darken": 0.0,
-  "dream.contrast": 1.0,
-  "dream.hue": 0.0,
-  "dream.sat": 1.0,
-  "dream.tint": 0.0,
-  "dream.tint_from": 0,
-  "dream.tint_hue": 200.0,
-  "dream.tint_sat": 1.0,
-  "dream.res": 2,
-  "dream.steps": 2.0,
-  "dream.step": 0.03,
-  "dream.k": 0.05,
-  "dream.layer": 1,
-  "dream.octaves": 0,
-  "dream.mask_decay": 0.99,
-  "dream.jitter": 8.0,
   "fx.on": true,
   "fx.mix": 1.0,
   "fx.face_map": 0,
@@ -398,7 +380,6 @@
   {"source": "hand:right.z", "target": "fx.trail.fade", "op": "push", "value": -0.3},
   {"source": "hand:right.roll", "target": "cut.amount", "op": "push", "value": 0.6},
   {"source": "hand:right.roll", "target": "cut.2.amount", "op": "push", "value": 0.6},
-  {"source": "hand:right.pitch", "target": "dream.contrast", "op": "push", "value": 0.3},
   {"source": "hand:right.pitch", "target": "fx.curve.shape", "op": "push", "value": 0.270505}
  ],
  "desk": [
@@ -427,9 +408,7 @@
   {"source": "cc:*:16", "target": "fx.trail.level", "op": "abs", "feedback": "ring"},
   {"source": "cc:*:17", "target": "fx.trail.fade", "op": "abs", "feedback": "ring"},
   {"source": "cc:*:18", "target": "delay.depth", "op": "abs", "feedback": "ring"},
-  {"source": "cc:*:20", "target": "dream.darken", "op": "abs", "feedback": "ring"},
   {"source": "cc:*:20", "target": "fx.fade.level", "op": "abs", "feedback": "ring"},
-  {"source": "cc:*:21", "target": "dream.contrast", "op": "abs", "feedback": "ring"},
   {"source": "cc:*:21", "target": "fx.curve.shape", "op": "abs", "feedback": "ring"},
   {"source": "cc:*:22", "target": "cut.amount", "op": "abs", "feedback": "ring"},
   {"source": "cc:*:22", "target": "cut.2.amount", "op": "abs", "feedback": "ring"},
@@ -441,7 +420,7 @@
   "fx.depth": "taper"
  },
  "groups": [
-  {"id": "group.1", "name": "look-back", "nodes": ["render:curve", "render:fade", "render:resize", "render:delay", "render:trail", "render:matte", "render:cut", "render:cut.2"], "open": false}
+  {"id": "group.1", "name": "trail", "nodes": ["render:curve", "render:fade", "render:resize", "render:delay", "render:trail", "render:matte", "render:cut", "render:cut.2"], "open": false}
  ],
  "media": {
   "channels": {}
