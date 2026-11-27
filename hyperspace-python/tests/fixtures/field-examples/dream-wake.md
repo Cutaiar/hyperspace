@@ -13,13 +13,13 @@ each to the parts below.
 **How it is wired.**
 
 ```
-… trail ─▶ cut ─▶ cut.2 ─┬─▶ resize.2 (keyed) ─▶ dream ─▶ hueturn ─▶ curve.2 ─▶ fade.2 ─▶ composite.2.over
+… trail ─▶ cut ─▶ cut.2 ─┬─▶ resize.2 (keyed) ─▶ dream ─▶ hueturn ─▶ curve.2 ─▶ fade.2 ─▶ fade.3 ─▶ composite.2.over
                          └──────────────────────────────────────────────────────────────▶ composite.2.under
 scene ─▶ composite.under          composite.2 ─▶ composite.over          composite ─▶ output.all
 ```
 
 - **Resize 2** (`resize.2.size` 512 on the long side), keyed (`key.resize.2.*`: peak, linear
-  ramp, level 0, softness ¼, keep colour): the size the dream works at — so its cost —
+  ramp, level 0, softness ¼, colour premultiplied): the size the dream works at — so its cost —
   and where it may dream: four times the trail's brightness is its coverage, the old
   dream's mask.
 - **Dream** (`fx.dream.*`: layer conv3_3, 2 passes of strength 0.03, jitter 8, scales
@@ -28,12 +28,14 @@ scene ─▶ composite.under          composite.2 ─▶ composite.over         
 - **Hue turn** (`fx.hueturn.sat` 1.2, turn 0, paint 0, still): the old dream saturation.
 - **Curve 2** (`fx.curve.2.shape` 0): the old dream contrast — straight here, in the patch
   because a desk knob drives it.
-- **Fade 2** (`fx.fade.2.level` 0.5): the old dream's mix × (1 − darken).
+- **Fade 2** (`fx.fade.2.level` 1): the old dream's darken (1 − darken), here 0 — in the patch
+  because a desk knob drives it.
+- **Fade 3** (`fx.fade.3.level` 0.5): the old dream's mix.
 - **Composite 2** (over): the dream laid on the trail; **Composite** (add) the whole wake
   under the scene.
 
 **Play it.** The right hand as party-wake's: roll turns the dream's hue, pitch its
-brightness; the desk's knobs 18 and 19 the trail's and the dream's grade.
+brightness; the desk's knobs 18 and 19 the trail's and the dream's darken and contrast.
 
 **Try.** Set the dream's **Hold** to 1: it follows the trail at once and dreams shallow.
 Lower Resize 2 to 256: four times cheaper, coarser forms. Wire the dream straight into

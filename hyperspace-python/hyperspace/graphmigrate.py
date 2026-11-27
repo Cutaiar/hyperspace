@@ -2669,7 +2669,9 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
             return None
         lb, k = got
         role = parts.get(lb)
-        keep = [pid] if lb == "lookback" and k in LB_SHARED and keep_shared else []
+        # (a row may drive the host's dream from a fragment with none — only
+        # its values are the host's: Devin on #522, second pass)
+        keep = [pid] if lb == "lookback" and k in LB_SHARED else []
         if role is None:
             return keep
         new = {"echo_mix": [f"fx.{role['trail']}.level"] if "trail" in role else [],
@@ -2954,11 +2956,14 @@ OLD_HUE = (-180.0, 180.0)
 # Resize's long side nearest it (`view.RESIZE_SIDES`: 4 is 256, 5 is 512; Q18)
 DREAM_RESIZE = {0: 4, 1: 4, 2: 5, 3: 5}
 # the old mask was clamp(4 · blur(brightness)): black is clear on the peak, linear,
-# from 0 to a quarter — what stays rgb ≤ alpha (premultiplied)
-DREAM_KEY = {"measure": 0, "level": 0.0, "soft": 0.25, "keep": True, "feather": 0.0,
+# from 0 to a quarter — premultiplied (keep colour off): the copy laid over its own
+# source by its alpha is that source again, so a dream with no result (off, no
+# worker, waiting) leaves its picture as it was (Devin on #523); the old output was
+# the dream × its mask, premultiplied too
+DREAM_KEY = {"measure": 0, "level": 0.0, "soft": 0.25, "keep": False, "feather": 0.0,
              "invert": False, "ramp": 1}
 DREAM_GROUP = "dream"            # Q29
-DREAM_ROLES = ("resize", "dream", "hueturn", "palette", "curve", "fade", "composite")
+DREAM_ROLES = ("resize", "dream", "hueturn", "palette", "curve", "darken", "fade", "composite")
 DREAM_NOTE = ("{old} is public parts now (plan 90): {chain} — the dream on a picture of its "
               "own size, its colour and grade on it alone, laid over its input at its mix; "
               "save to keep it")
@@ -2970,6 +2975,8 @@ DREAM_LINGER_NOTE = ("{old}'s linger (dream.mask_decay {was:g}) merges into Hold
 DREAM_SCENE_TINT_NOTE = ("{old}'s tint from the scene keeps its chosen colour ({hue:g}°) on "
                          "{palette} (plan 90 Q16)")
 DREAM_ROW_NOTE = "{row}: {old} has no part now (plan 90): left out"
+DREAM_DARKEN_NOTE = ("{row}: dream.darken is the level of its Fade now ({fade}.level, 1 − "
+                     "darken): the row is kept, its throw runs the other way (plan 90)")
 DREAM_K_NOTE = ("{row}: dream.k ran 0.03 … 0.3 straight, Hold 0.03 … 1 on a log throw — the row "
                 "is kept, its throw spans the new range (plan 90)")
 DREAM_MASTER_NOTE = ("the dream's parts are effects, which fx.on and fx.mix switch and scale: "
@@ -3095,19 +3102,24 @@ def retire_dreams(nodes: list, wires: list, rest: dict, ports: list | None = Non
         hue_on = hue != 0.0 or sat != 1.0 or bool({"dream.hue", "dream.sat"} & driven)
         tint_on = tint != 0.0 or bool({"dream.tint", "dream.tint_hue", "dream.tint_sat"} & driven)
         curve_on = contrast != 1.0 or "dream.contrast" in driven
+        # (the darken a Fade of its own, the mix another: a desk row on either
+        # moves one level — Devin on #523)
+        darken_on = _num(v["darken"], 0.1) != 0.0 or "dream.darken" in driven
         role["resize"] = free("resize")
         role["dream"] = free("dream")
         for want, kind in ((hue_on, "hueturn"), (tint_on, "palette"), (curve_on, "curve")):
             if want:
                 role[kind] = free(kind)
+        if darken_on:
+            role["darken"] = free("fade")
         role["fade"] = free("fade")
         role["composite"] = free("composite")
         out_nodes.append(entry("resize", role["resize"], False))
-        for kind in ("dream", "hueturn", "palette", "curve", "fade"):
+        for kind in ("dream", "hueturn", "palette", "curve", "darken", "fade"):
             if kind in role:
-                out_nodes.append(entry(kind, role[kind], True))
+                out_nodes.append(entry("fade" if kind == "darken" else kind, role[kind], True))
         out_nodes.append(entry("composite", role["composite"], False))
-        chain = [r for r in ("resize", "dream", "hueturn", "palette", "curve", "fade")
+        chain = [r for r in ("resize", "dream", "hueturn", "palette", "curve", "darken", "fade")
                  if r in role]
         for a, b in itertools.pairwise(chain):
             new_wires.append(_w(role[a], f"{role[b]}.image"))
@@ -3129,7 +3141,11 @@ def retire_dreams(nodes: list, wires: list, rest: dict, ports: list | None = Non
                                      else round(_num(v[k], DREAM_DEFAULTS[k])))
         mix, darken = _num(v["mix"], 0.7), _num(v["darken"], 0.1)
         values.update({f"fx.{f}.on": True, f"fx.{f}.mix": 1.0,
-                       f"fx.{f}.level": min(max(mix * (1.0 - darken), 0.0), 1.0)})
+                       f"fx.{f}.level": min(max(mix, 0.0), 1.0)})
+        if "darken" in role:
+            dk = role["darken"]
+            values.update({f"fx.{dk}.on": True, f"fx.{dk}.mix": 1.0,
+                           f"fx.{dk}.level": min(max(1.0 - darken, 0.0), 1.0)})
         if "hueturn" in role:
             h = role["hueturn"]
             values.update({f"fx.{h}.on": True, f"fx.{h}.mix": 1.0, f"fx.{h}.speed": 0.0,
@@ -3155,11 +3171,13 @@ def retire_dreams(nodes: list, wires: list, rest: dict, ports: list | None = Non
             notes.append(DREAM_LINGER_NOTE.format(old="dream", was=_num(v["mask_decay"], 0.99),
                                                   dream=d))
         labels = {"resize": "Resize, keyed", "dream": "Dream", "hueturn": "Hue turn",
-                  "palette": "Palette", "curve": "Curve", "fade": "Fade",
+                  "palette": "Palette", "curve": "Curve", "darken": "Fade (darken)",
+                  "fade": "Fade (mix)",
                   "composite": "Composite over"}
         notes.append(DREAM_NOTE.format(old="dream", chain=" → ".join(
             f"{labels[k]} ({role[k]})" for k in DREAM_ROLES if k in role)))
-        ours = {role[k] for k in ("dream", "hueturn", "palette", "curve", "fade") if k in role}
+        ours = {role[k] for k in ("dream", "hueturn", "palette", "curve", "darken", "fade")
+                if k in role}
         master_switch(values, ours, out_nodes, wires, rest, specs, notes, DREAM_MASTER_NOTE,
                       DREAM_MASTER_ROW_NOTE, skip=lambda end: old_end(end) is not None)
     for k in list(values):
@@ -3187,22 +3205,19 @@ def retire_dreams(nodes: list, wires: list, rest: dict, ports: list | None = Non
             return None
         if k in DREAM_WORKER or k in ("on", "k"):
             return f"fx.{role['dream']}.{k}"
-        return {"mix": f"fx.{role['fade']}.level", "darken": f"fx.{role['fade']}.level",
+        return {"mix": f"fx.{role['fade']}.level", "darken": f"fx.{role.get('darken')}.level",
                 "contrast": f"fx.{role.get('curve')}.shape",
                 "hue": f"fx.{role.get('hueturn')}.turn", "sat": f"fx.{role.get('hueturn')}.sat",
                 "tint": f"fx.{role.get('palette')}.mix",
                 "tint_hue": f"fx.{role.get('palette')}.a2_hue",
                 "tint_sat": f"fx.{role.get('palette')}.a2_sat"}[k]
 
-    mix0, darken0 = _num(v["mix"], 0.7), _num(v["darken"], 0.1)
     k0 = min(max(_num(v["k"], 0.05), OLD_K[0]), OLD_K[1])
 
     def norm(k: str, x: float) -> float:
         """An old fader position of knob `k` as the new part's."""
-        if k == "mix":
-            return x * (1.0 - darken0)
         if k == "darken":
-            return mix0 * (1.0 - x)
+            return 1.0 - x
         if k == "hue":
             return (x + 0.5) % 1.0
         if k == "k":
@@ -3214,10 +3229,8 @@ def retire_dreams(nodes: list, wires: list, rest: dict, ports: list | None = Non
 
     def depth(k: str, x: float) -> float:
         """An old push depth of knob `k` as the new part's, about the file's value."""
-        if k == "mix":
-            return x * (1.0 - darken0)
         if k == "darken":
-            return -x * mix0
+            return -x
         if k == "k":     # (d norm = d k / (k ln(hi / lo)), at the file's k)
             return x * (OLD_K[1] - OLD_K[0]) / (k0 * math.log(NEW_K[1] / NEW_K[0]))
         if k == "contrast":
@@ -3244,6 +3257,8 @@ def retire_dreams(nodes: list, wires: list, rest: dict, ports: list | None = Non
                 out["value"] = round(norm(k, val), 6)
         if k == "k" and op in ("abs", "abs14", "position", "push"):
             notes.append(DREAM_K_NOTE.format(row=label))
+        if k == "darken" and op in ("abs", "abs14", "position"):
+            notes.append(DREAM_DARKEN_NOTE.format(row=label, fade=f"fx.{role['darken']}"))
         return [out]
 
     def macros(ms: dict) -> dict:

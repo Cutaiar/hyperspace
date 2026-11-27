@@ -792,11 +792,16 @@ Rows 1181–1185, hand checks 969–975 (group GH).
   `Dreamer`, `DreamState`, `DREAM_FS`, the `dream.*` params, the worker's mask, the LOOKBACK page.
 - **Saved dreams** open as their chain, folded as **dream** (`graphmigrate.dreams`, the ladder's last
   step; `split_retired`; `patches._retire_dreams`): Resize (keyed, the old mask's 4 × brightness) →
-  Dream → Hue turn / Palette / Curve where off neutral or driven → Fade (mix × (1 − darken)) →
+  Dream → Hue turn / Palette / Curve where off neutral or driven → Fade (1 − darken, where off
+  neutral or driven) → Fade (mix) →
   Composite over. Ids to `fx.dream.*` or the parts, rows and macros with their reach; `res`,
   `mask_decay`, `tint_from` said. A dream off and undriven drew nothing: left out, said. The master
   switch compensated as H2's (`master_switch`, now shared). Old dream presets retired (Q33).
 - **Starters** land the same chain folded (**dream**); the tracers' group is **trail** (Q29).
+- **From Devin's review of #523.** The darken and the mix each a Fade of their own (two absolute
+  desk rows set one level before; a darken row's throw runs the other way now, said). The key is
+  premultiplied (keep colour off): the copy laid over its own source by its alpha is the source
+  again, so a dream off or with no worker leaves its picture exactly as it was.
 - **Found on the way.** `split_retired` (the golden rig's and `wired_of`'s road) must end as the
   ladder does, or a rig draws the old dream's entry as a bare effect over the whole picture
   (`dream_proof` caught it: acid-scene lit 100 %). `deck.dreams` read `output.all` as an instance

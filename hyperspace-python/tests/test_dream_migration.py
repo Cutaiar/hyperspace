@@ -46,13 +46,16 @@ def into(g, port):
 # ---------------------------------------------------------------- the chain
 
 def test_a_default_dream_is_resize_dream_fade_composite_over_its_input():
+    """The darken (its default 0.1) and the mix each a Fade of their own: a
+    desk row on either moves one level (Devin on #523)."""
     out, notes, g = migrated(doc())
-    assert sorted(node_files(g)) == ["composite", "dream", "fade", "resize"]
+    assert sorted(node_files(g)) == ["composite", "dream", "fade", "fade", "resize"]
     assert {"kind": "dream"} not in g["nodes"]
     assert into(g, "resize.image") == ["scene"]
     assert into(g, "dream.image") == ["resize"]
     assert into(g, "fade.image") == ["dream"]
-    assert into(g, "composite.over") == ["fade"]
+    assert into(g, "fade.2.image") == ["fade"]
+    assert into(g, "composite.over") == ["fade.2"]
     assert into(g, "composite.under") == ["scene"]
     assert into(g, "output.all.image") == ["composite"]
     assert g["keys"] == ["resize"]                    # brightness is coverage, as the mask
@@ -60,7 +63,8 @@ def test_a_default_dream_is_resize_dream_fade_composite_over_its_input():
     assert v["fx.dream.on"] is True and v["fx.dream.mix"] == 1.0 and v["fx.dream.blend"] == 0
     assert v["fx.dream.k"] == 0.05                    # the old default, written (Q32)
     assert v["fx.dream.layer"] == 1 and v["fx.dream.steps"] == 2
-    assert v["fx.fade.level"] == pytest.approx(0.7 * 0.9)      # mix × (1 − darken)
+    assert v["fx.fade.level"] == pytest.approx(0.9)            # 1 − darken
+    assert v["fx.fade.2.level"] == pytest.approx(0.7)          # mix
     assert v["resize.size"] == 5                      # res 256 short → 512 long (16 : 10)
     assert v["key.resize.measure"] == 0 and v["key.resize.ramp"] == 1
     assert v["key.resize.soft"] == pytest.approx(0.25)          # 4 × brightness, as the mask
@@ -75,7 +79,7 @@ def test_it_folds_in_one_group_named_dream():
     out, _, _ = migrated(doc())
     (grp,) = out[GM.GROUPS_KEY]
     assert grp["name"] == GM.DREAM_GROUP == "dream" and grp["open"] is False
-    assert set(grp["nodes"]) == {"render:resize", "render:dream", "render:fade",
+    assert set(grp["nodes"]) == {"render:resize", "render:dream", "render:fade", "render:fade.2",
                                  "render:composite"}
 
 
@@ -98,7 +102,8 @@ def test_grades_off_neutral_are_parts_in_the_old_order():
     assert v["fx.palette.mix"] == 0.5 and v["fx.palette.a2_hue"] == 30.0
     assert v["fx.palette.a2_sat"] == 0.8 and v["fx.palette.a1_val"] == 0.0
     assert v["fx.curve.shape"] == pytest.approx(math.log(2.0) / math.log(4.0))
-    assert v["fx.fade.level"] == pytest.approx(0.5)
+    assert v["fx.fade.level"] == pytest.approx(0.5)            # the mix (darken 0: no Fade)
+    assert "fx.fade.2.level" not in v
 
 
 def test_a_negative_hue_turns_the_other_way_round_the_wheel():
@@ -191,8 +196,8 @@ def test_rows_follow_their_knob():
     assert got["lfo:1"]["target"] == "fx.dream.step" and got["lfo:1"]["value"] == 0.2
     assert got["lfo:2"]["target"] == "fx.hueturn.turn"          # a driven hue brings Hue turn
     assert "hueturn" in node_files(g)
-    assert got["lfo:3"]["target"] == "fx.fade.level"
-    assert got["lfo:3"]["value"] == pytest.approx(0.4 * 0.9)    # × (1 − darken)
+    assert got["lfo:3"]["target"] == "fx.fade.2.level"          # the mix's own Fade
+    assert got["lfo:3"]["value"] == pytest.approx(0.4)          # its own range: as it was
     assert "lfo:4" not in got and any("dream.res" in n for n in notes)
 
 
@@ -330,3 +335,19 @@ def test_every_saved_look_migrates_to_no_old_dream(path):
     fwd = GM.forward(json.loads(path.read_text()), {})
     assert {"kind": "dream"} not in fwd.doc["graph"]["nodes"]
     assert not [k for k in fwd.doc.get("values", {}) if k.startswith("dream.")], path
+
+
+def test_desk_rows_on_mix_and_darken_each_move_their_own_fade():
+    """Devin on #523: absolute desk rows on the old mix and darken each land
+    on a Fade of their own — never one level two knobs set. The darken's
+    runs the other way now (a level is 1 − darken; a row cannot turn its
+    throw over), said."""
+    rows = [{"source": "cc:0:18", "target": "dream.darken", "op": "abs"},
+            {"source": "cc:0:19", "target": "dream.mix", "op": "abs"},
+            {"source": "lfo:0", "target": "dream.darken", "op": "push", "value": 0.3}]
+    out, notes, _ = migrated(doc({"dream.darken": 0.0}, desk=rows[:2], routes=rows[2:]))
+    got = {r["source"]: r for r in out["desk"] + out["routes"]}
+    assert got["cc:0:18"]["target"] == "fx.fade.level"           # the darken's
+    assert got["cc:0:19"]["target"] == "fx.fade.2.level"         # the mix's
+    assert got["lfo:0"]["value"] == pytest.approx(-0.3)          # a push turned over
+    assert any("cc:0:18" in n and "other way" in n for n in notes)

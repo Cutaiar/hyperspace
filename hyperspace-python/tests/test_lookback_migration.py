@@ -402,3 +402,62 @@ def test_the_master_switch_keeps_wire_declared_and_default_mix_effects_as_they_d
     got, _ = graphmigrate.lookbacks(doc)
     assert got["values"]["fx.mix"] == 1.0
     assert got["values"]["fx.acid.mix"] == pytest.approx(0.25)
+
+
+def test_a_fragment_with_no_dream_keeps_its_rows_onto_the_hosts_dream():
+    """Devin on #522 (second pass): only the dream's values are the host's in
+    a fragment with no dream — a row from the fragment's own LFO (voice 1,
+    lane `lfo:0`) onto `dream.contrast` may drive the host's, and keeps doing so beside the
+    Curve it now drives too. Plan 90 H3: the host's dream has no contrast any more
+    (an effect, `fx.dream.*`), so that copy is left out, said — the row drives the
+    Curve alone."""
+    doc = {"schema": patches.SCHEMA, "name": "f",
+           "nodes": [{"kind": "composite", "blend": "add"}],
+           "wires": [{"from": "lookback", "to": "composite.over"}],
+           "ports": [{"id": "in", "type": "image", "to": "lookback.image", "was": "scene"},
+                     {"id": "out", "type": "image", "from": "composite",
+                      "was": "output.all.image"}],
+           "lfos": [1],
+           "routes": [{"source": "lfo:0", "target": "dream.contrast", "op": "push",
+                       "value": 0.2}],
+           "values": {"dream.echoes": 4, "dream.contrast": 1.0}}
+    got = patches.forward(doc)
+    targets = sorted(r["target"] for r in got["routes"])
+    assert targets == ["fx.curve.shape"], got["routes"]
+    assert "dream.contrast" not in got["values"]
+    assert patches.check(got) == []
+
+
+def test_a_fragment_with_no_dream_drops_a_desk_row_onto_the_hosts_dream():
+    """Devin on #522 (third pass): a row whose source is not the fragment's
+    own (a desk knob) onto the host's dream is nothing of the patch's —
+    `patches.check` refused the whole file. It goes; its copy onto the part
+    stays, and a row from the fragment's own LFO keeps both (above)."""
+    doc = {"schema": patches.SCHEMA, "name": "f",
+           "nodes": [{"kind": "composite", "blend": "add"}],
+           "wires": [{"from": "lookback", "to": "composite.over"}],
+           "ports": [{"id": "in", "type": "image", "to": "lookback.image", "was": "scene"},
+                     {"id": "out", "type": "image", "from": "composite",
+                      "was": "output.all.image"}],
+           "desk": [{"source": "cc:0:48", "target": "dream.contrast", "op": "abs"}],
+           "values": {"dream.echoes": 4, "dream.contrast": 1.0}}
+    got = patches.forward(doc)
+    assert [r["target"] for r in got["desk"]] == ["fx.curve.shape"], got["desk"]
+    assert patches.check(got) == []
+
+
+@pytest.mark.parametrize("bad", [{"routes": [{"source": "cc:0:1", "target": [], "op": "abs"}]},
+                                 {"lfos": 1}], ids=["list-target", "lfos-a-number"])
+def test_a_malformed_fragment_migrates_and_is_refused_by_check(bad):
+    """Devin on #522 (fourth pass): the filter of rows onto the host's dream
+    reads the file before `check` does — a malformed one must pass through
+    to be refused in words (a LibraryError), never raise and stop the list."""
+    doc = {"schema": patches.SCHEMA, "name": "f",
+           "nodes": [{"kind": "composite", "blend": "add"}],
+           "wires": [{"from": "lookback", "to": "composite.over"}],
+           "ports": [{"id": "in", "type": "image", "to": "lookback.image", "was": "scene"},
+                     {"id": "out", "type": "image", "from": "composite",
+                      "was": "output.all.image"}],
+           "values": {"dream.echoes": 4}, **bad}
+    got = patches.forward(doc)
+    assert patches.check(got) != []
