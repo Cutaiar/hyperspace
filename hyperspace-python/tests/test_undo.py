@@ -54,7 +54,7 @@ class FakeOut:
         self.sent.append(msg)
 
 
-def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None, sources=None):
+def boot(home, show: str | None = None, *, fx=None, ghost=None, sources=None):
     """app.main's construction order, headless, over `home` — seeded with
     the corpus first (conftest.seed: the shipped loadable patches and the party
     show, which the home then opens with its startup loadable patch, TUMBLE).
@@ -109,7 +109,7 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None, sour
         return r.midi
 
     deck = Deck.build(library=lib, control=control, audio=audio, table=load_table,
-                      dream=dream, fx=fx, ghost=ghost,
+                      fx=fx, ghost=ghost,
                       # shared sources bring their one clock (plan 44 §2)
                       clock=(sources.clock if sources is not None and sources.clock
                              is not None else tempo.Clock(now=lambda: r.t)),
@@ -1025,7 +1025,7 @@ def test_an_idle_app_makes_no_step(tmp_path):
     except Exception:  # noqa: BLE001 — no GL here: the frame runs without the draw
         renderer = None
     if renderer is not None:
-        r = boot(tmp_path / "home", fx=renderer.fx.state, dream=renderer.dreamer.state,
+        r = boot(tmp_path / "home", fx=renderer.fx.state,
                  ghost=renderer.ghost.state)
     else:
         r = boot(tmp_path / "home")

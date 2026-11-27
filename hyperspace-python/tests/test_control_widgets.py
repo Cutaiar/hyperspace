@@ -16,7 +16,6 @@ from ui_driver import Driver
 
 from hyperspace import fx, ui, ui_fields
 from hyperspace.fx import FxState, SpecError, parse
-from hyperspace.lookback import DreamState
 from hyperspace.ui_fields import BIPOLAR, UNIPOLAR, UNITY, polarity, shape_of, ticks
 
 HEAD = "vec4 effect(vec2 uv) { return src(uv); }\n"
@@ -28,11 +27,7 @@ def strip(tmp_path, monkeypatch, sel: str, fx_dir=None):
     `fx_dir`'s), effect `sel`'s strip open in the fx section, a Driver
     recording every control."""
     st = FxState() if fx_dir is None else FxState(fx_dir)
-    dreamer = SimpleNamespace(state=DreamState())
-    # (plan 90 H2: the dream's state is `dreamer.state`; `lookback` the same
-    # object for a rig that still reads the old name)
-    stand_in = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""),
-                               dreamer=dreamer, lookback=dreamer)
+    stand_in = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""))
     with build_rig(tmp_path, renderer=stand_in) as r:
         r.panel.desk = False
         st.set_instances({})                # every file, once: the effect's params declared

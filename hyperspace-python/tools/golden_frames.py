@@ -284,7 +284,6 @@ from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import features, skeleton
 from hyperspace.library import Library
 from hyperspace.loadable import LoadedPatch
-from hyperspace.lookback import DreamState
 from hyperspace.media import ids as media_ids
 from hyperspace.media.channels import MediaState
 from hyperspace.media.source import FETCHING
@@ -399,14 +398,13 @@ class Rig:
         (`headless.show_seed`, an old show's eye) open, as the migration's
         resave opens it."""
         self.t = T0
-        self.view, self.fx, self.dream, self.ghost = (ViewState(), FxState(), DreamState(),
-                                                      GhostState())
+        self.view, self.fx, self.ghost = ViewState(), FxState(), GhostState()
         chain = Analyzer(Analyser(48_000), default_params(), layout=legacy_layout())
         # plan 32: the channels the `media.*` params write and the loadable patch's
         # bins fill, as app.main makes them (here over the golden stills)
         self.media = MediaState(GoldenMedia())
         self.reg = reg = build_registry(self.view, Control(chain), SimpleNamespace(chain=chain),
-                                        None, self.dream, self.fx, ghost=self.ghost,
+                                        None, self.fx, ghost=self.ghost,
                                         media=self.media)
         self.clock = tempo.Clock(now=lambda: self.t)
         tempo.register(reg, self.clock)
@@ -475,7 +473,7 @@ class Rig:
             self.seq.run = True
             self.seq.restart()
         self.ctx = ctx
-        r = self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx, ghost=self.ghost)
+        r = self.renderer = Renderer(ctx, fx=self.fx, ghost=self.ghost)
         # plan 26 A4: the loadable patch's graph (none for a corpus preset: the
         # default wiring) onto this renderer, as app.py attaches it
         loaded_patch.graph.attach(r)
@@ -1236,7 +1234,7 @@ class Loader:
         self.view, self.fx = ViewState(), FxState()
         chain = Analyzer(Analyser(48_000), default_params(), layout=legacy_layout())
         reg = build_registry(self.view, Control(chain), SimpleNamespace(chain=chain), None,
-                             DreamState(), self.fx, ghost=GhostState())
+                             self.fx, ghost=GhostState())
         clock = tempo.Clock(now=lambda: T0)
         tempo.register(reg, clock)
         lfo.register(reg, lfo.LFOs(), clock)

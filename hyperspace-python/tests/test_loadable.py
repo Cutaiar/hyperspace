@@ -33,7 +33,6 @@ from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.library import F_KEYS, SLOTS, Library, LibraryError, bank_doc
 from hyperspace.loadable import LoadedPatch
-from hyperspace.lookback import DreamState
 from hyperspace.params import PATCH_GROUPS, build_registry, part_of
 from hyperspace.routing import Binding, Bindings, Router, bindings_path
 from hyperspace.view import ViewState
@@ -52,7 +51,7 @@ def boot(home, show: str | None = "house"):
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, audio, lib.install, dream=DreamState(), fx=FxState())
+    reg = build_registry(view, control, audio, lib.install, fx=FxState())
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
     lib.on_load("band", control.scene_loaded)
@@ -107,7 +106,7 @@ def boot_registry():
     loadable patch file may name (tests/test_stroke_space.py)."""
     chain = Analyzer(Analyser())
     reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain),
-                         dream=DreamState(), fx=FxState())
+                         fx=FxState())
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)

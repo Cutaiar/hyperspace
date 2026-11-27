@@ -562,7 +562,6 @@ def boot_home(home, *, corpus: bool = True):
     from hyperspace.control import Control
     from hyperspace.fx import FxState
     from hyperspace.library import Library
-    from hyperspace.lookback import DreamState
     from hyperspace.params import build_registry
     from hyperspace.view import ViewState
 
@@ -573,7 +572,7 @@ def boot_home(home, *, corpus: bool = True):
     view = ViewState()
     lib = Library(home, period=0.0)
     reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install,
-                         dream=DreamState(), fx=FxState())
+                         fx=FxState())
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
     lib.on_load("band", control.scene_loaded)

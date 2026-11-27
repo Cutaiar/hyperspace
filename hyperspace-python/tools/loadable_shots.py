@@ -49,7 +49,6 @@ from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import DEFAULT_DOFS, PINCHES, default_range
 from hyperspace.library import LOADABLE, Library
 from hyperspace.loadable import LoadedPatch
-from hyperspace.lookback import DreamState
 from hyperspace.params import Kind, build_registry
 from hyperspace.render import Renderer, ViewState
 from hyperspace.routing import Bindings, Router
@@ -184,10 +183,10 @@ class Stage:
         a party loadable patch's upper-case slot name (tools/orbit_demo.py)."""
         self.t = 0.0
         self.view = ViewState()
-        self.fx, self.dream = FxState(), DreamState()
+        self.fx = FxState()
         chain = Analyzer(Analyser(48_000), default_params(), layout=legacy_layout())
         self.reg = build_registry(self.view, Control(chain), SimpleNamespace(chain=chain),
-                                  None, self.dream, self.fx)
+                                  None, self.fx)
         self.clock = tempo.Clock(now=lambda: self.t)
         self.lfos = lfo.LFOs()
         tempo.register(self.reg, self.clock)
@@ -218,7 +217,7 @@ class Stage:
         self.io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=self.src,
                           out=NullOut(), clock=lambda: self.t)
         self.clock.trigger(0.0)
-        self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx) if ctx is not None else None
+        self.renderer = Renderer(ctx, fx=self.fx) if ctx is not None else None
         if self.renderer is not None:
             # plan 36 T3: a bare renderer draws the app's empty frame; the
             # loadable patch's graph onto it, as app.py attaches it

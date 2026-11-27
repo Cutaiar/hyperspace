@@ -235,8 +235,7 @@ def app(tmp_path):
     from hyperspace.control import Control
     from hyperspace.fx import FxState
     from hyperspace.library import Library
-    from hyperspace.lookback import DreamState
-    from hyperspace.params import build_registry
+        from hyperspace.params import build_registry
     from hyperspace.view import ViewState
 
     chain = Analyzer(Analyser())
@@ -244,7 +243,7 @@ def app(tmp_path):
     view = ViewState()
     lib = Library(tmp_path, period=0.0)
     reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install,
-                         dream=DreamState(), fx=FxState())
+                         fx=FxState())
     control.library = lib
     clock = tempo.Clock(now=lambda: 0.0)
     lfos = LFOs()

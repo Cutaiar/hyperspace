@@ -319,7 +319,12 @@ DEFAULT_NAMES = {"band": "Balanced"}
 # untouched: the effects are the graph's (the FX page, D10, stays)
 # plan 40 T5: `fx`; 2026-11-23: `hands` — nobody used a hands setup (no patch or preset
 # names one); the feel keeps its defaults and a patch that wants other ones says so itself
-RETIRED_MODULES = ("fx", "hands")
+# plan 90 H3 (Q33): `dream` — the dream is an effect, its group gone; an old dream
+# preset is left on disk, never listed or opened, and said once (`DREAM_RETIRED`)
+RETIRED_MODULES = ("fx", "hands", "dream")
+DREAM_RETIRED = ("{n} preset{s} of the retired dream group (patches/dream/) left as {they} "
+                 "{were}: the dream is an effect now (plan 90) — a saved patch's dream opens "
+                 "as its parts")
 
 # working-directory files that move into the library home on first run
 MIGRATED_FILES = ("config.toml", "midi_map.json")
@@ -2383,7 +2388,20 @@ class Library:
                 if (root / PATCHES).is_dir():
                     out.update(d.name for d in (root / PATCHES).iterdir()
                                if d.is_dir() and not d.name.startswith("."))
+        self._say_dream_retired()
         return sorted(out - set(RETIRED_MODULES))
+
+    def _say_dream_retired(self) -> None:
+        """Plan 90 H3 (Q33): once, the old dream presets left on disk, if any."""
+        if self.__dict__.get("_dream_said"):
+            return
+        self.__dict__["_dream_said"] = True
+        n = sum(len(list((root / PATCHES / "dream").glob("*.json")))
+                for root in self._roots() if (root / PATCHES / "dream").is_dir())
+        if n:
+            self.say(warning=DREAM_RETIRED.format(n=n, s="" if n == 1 else "s",
+                                                  they="it" if n == 1 else "they",
+                                                  were="was" if n == 1 else "were"))
 
     def group_dir(self, root: Path, group: str) -> Path:
         """Where `group`'s files live under `root` (plan 50): a document

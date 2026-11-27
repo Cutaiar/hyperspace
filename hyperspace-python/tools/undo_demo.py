@@ -60,7 +60,6 @@ from hyperspace.hands.core import features
 from hyperspace.learn import Learn
 from hyperspace.library import LOADABLE, TRASH, Library, Marks
 from hyperspace.loadable import LoadedPatch
-from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
@@ -140,7 +139,7 @@ def boot() -> SimpleNamespace:
     view = ViewState()
     seed(HOME)
     lib = Library(HOME, period=0.0)
-    reg = build_registry(view, control, audio, lib.install, dream=DreamState(), fx=FxState(),
+    reg = build_registry(view, control, audio, lib.install, fx=FxState(),
                          ghost=GhostState())
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})

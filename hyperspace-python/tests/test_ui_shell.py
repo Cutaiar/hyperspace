@@ -77,8 +77,7 @@ def build_rig(tmp_path, renderer=None):
     # show, which the home then opens as a fresh one did until 2026-10-28
     seed(tmp_path)
     lib = Library(tmp_path, period=0.0)
-    live = {} if renderer is None else {"dream": renderer.dreamer.state,
-                                        "fx": renderer.fx.state}
+    live = {} if renderer is None else {"fx": renderer.fx.state}
     reg = build_registry(view, control, audio, lib.install, **live)
     lib.on_layout("band", control.apply_layout)
     # the rig has everything app.py gives the panel, so every page is

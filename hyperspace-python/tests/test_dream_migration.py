@@ -64,7 +64,8 @@ def test_a_default_dream_is_resize_dream_fade_composite_over_its_input():
     assert v["resize.size"] == 5                      # res 256 short → 512 long (16 : 10)
     assert v["key.resize.measure"] == 0 and v["key.resize.ramp"] == 1
     assert v["key.resize.soft"] == pytest.approx(0.25)          # 4 × brightness, as the mask
-    assert v["composite.blend"] == "over" or g["nodes"][-1].get("blend", "over") == "over"
+    comp = next(e for e in g["nodes"] if e["kind"] == "composite")
+    assert comp.get("blend", "over") == "over"
     assert not any(k.startswith("dream.") for k in v)
     assert any("public parts" in n for n in notes)
     G.read_graph(g, effects={"dream", "fade", "hueturn", "palette", "curve"})
@@ -257,3 +258,32 @@ def test_a_fragment_holding_a_dream_is_its_parts():
     assert {p.get("was") for p in ins} == {"scene"}
     assert [p["from"] for p in out["ports"] if "from" in p] == ["composite"]
     assert not any(k.startswith("dream.") for k in out["values"])
+
+
+# ---------------------------------------------------------------- old dream presets (Q33)
+
+def test_old_dream_presets_are_retired_left_on_disk_and_said_once(tmp_path):
+    from types import SimpleNamespace as NS
+
+    from hyperspace.analysis import Analyser
+    from hyperspace.analyzer import Analyzer
+    from hyperspace.control import Control
+    from hyperspace.library import RETIRED_MODULES, Library
+    from hyperspace.params import build_registry
+    from hyperspace.view import ViewState
+
+    folder = tmp_path / "patches" / "dream"
+    folder.mkdir(parents=True)
+    old = folder / "wake.json"
+    old.write_text(json.dumps({"schema": "hyperspace.patch/2", "name": "wake",
+                               "group": "dream", "values": {"dream.k": 0.08}}))
+    chain = Analyzer(Analyser())
+    reg = build_registry(ViewState(), Control(chain), NS(chain=chain))
+    lib = Library(tmp_path)
+    lib.attach(reg)
+    assert "dream" in RETIRED_MODULES and "dream" not in lib.groups()
+    assert "dream" in lib.warning and "1 preset" in lib.warning
+    lib.warning = ""
+    lib.groups()
+    assert lib.warning == ""                       # once
+    assert old.exists()                            # left on disk

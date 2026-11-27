@@ -209,14 +209,13 @@ def _app(media=None, view=None):
     from hyperspace.control import Control
     from hyperspace.fx import FxState
     from hyperspace.library import Library
-    from hyperspace.lookback import DreamState
-    from hyperspace.params import build_registry
+        from hyperspace.params import build_registry
 
     home = Path(tempfile.mkdtemp(prefix="hyperspace-switch-"))
     chain = Analyzer(Analyser())
     lib = Library(home, period=0.0)
     reg = build_registry(view, Control(chain), SimpleNamespace(chain=chain), lib.install,
-                         dream=DreamState(), fx=FxState(), media=media)
+                         fx=FxState(), media=media)
     clock = tempo.Clock(now=lambda: 0.0)
     lfos = lfo.LFOs(seed=1)
     tempo.register(reg, clock)

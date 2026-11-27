@@ -444,16 +444,11 @@ def shell(tmp_path):
     from test_ui_shell import build_rig
 
     from hyperspace.app import CONTROL_SIZE
-    from hyperspace.lookback import DreamState
-
+    
     @contextmanager
     def made():
         st = FxState()
-        dreamer = SimpleNamespace(state=DreamState())
-        # (plan 90 H2: the dream's state is `dreamer.state`; `lookback` the same
-        # object for a rig that still reads the old name)
-        stand_in = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""),
-                                   dreamer=dreamer, lookback=dreamer)
+        stand_in = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""))
         with build_rig(tmp_path, renderer=stand_in) as rig:
             imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
             yield rig, st, stand_in
