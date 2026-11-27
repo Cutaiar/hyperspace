@@ -209,7 +209,7 @@ def _app(media=None, view=None):
     from hyperspace.control import Control
     from hyperspace.fx import FxState
     from hyperspace.library import Library
-        from hyperspace.params import build_registry
+    from hyperspace.params import build_registry
 
     home = Path(tempfile.mkdtemp(prefix="hyperspace-switch-"))
     chain = Analyzer(Analyser())

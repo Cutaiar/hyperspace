@@ -8,7 +8,7 @@
   "view.pattern_mix": 0.25,
   "view.bmp_alpha": 1.0,
   "view.inst_amp": 0.25,
-  "dream.mix": 0.5
+  "view.media_alpha": 0.5
  },
  "routes": [],
  "desk": [
@@ -20,7 +20,7 @@
   {"source": "cc:4:7", "target": "view.bright", "op": "abs", "ring": 0},
   {"source": "cc:5:7", "target": "view.speed", "op": "abs", "ring": 0},
   {"source": "cc:6:7", "target": "view.inst_amp", "op": "abs", "ring": 0},
-  {"source": "cc:7:7", "target": "dream.mix", "op": "abs", "ring": 0}
+  {"source": "cc:7:7", "target": "view.media_alpha", "op": "abs", "ring": 0}
  ],
  "macros": {},
  "modules": {}

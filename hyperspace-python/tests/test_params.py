@@ -726,21 +726,22 @@ def test_the_first_instance_keeps_todays_id_and_extras_carry_a_marker():
 
 def test_every_node_param_today_reads_as_its_first_instance():
     """No loadable patch or binding migrates for a single-instance graph: every
-    effect's, the hands' and the dream's params as registered today read
+    effect's (the dream's among them, plan 90 H3) and the hands' params as
+    registered today read
     back as instance 1 under their own id, their group is their id's
     first segment (so an extra instance lands in the same part of a
     loadable patch), and no effect file or key is purely decimal (which would
     read as a marker)."""
     from hyperspace.fx import FxState
     from hyperspace.ghost import GhostState
-    from hyperspace.lookback import DreamState
     from hyperspace.params import instance_of
 
     chain = Analyzer(Analyser())
     fx = FxState()
     reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), None,
-                         DreamState(), fx, ghost=GhostState())
-    nodes = [f"fx.{name}" for name in fx.names()] + ["ghost", "dream"]
+                         fx=fx, ghost=GhostState())
+    nodes = [f"fx.{name}" for name in fx.names()] + ["ghost"]
+    assert "fx.dream" in nodes
     assert len(nodes) > 2
     assert not any(name.isdecimal() for name in fx.names())
     seen = set()

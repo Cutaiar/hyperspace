@@ -32,18 +32,23 @@ def test_the_new_kinds_read_and_round_trip():
     assert spec.delays == (G.DelayAt(1), G.DelayAt(2))
     assert spec.resizes == (G.ResizeAt(1),)
     assert spec.echoes == (G.EchoAt(3),)
-    assert spec.dream == G.DreamAt()
+    # (plan 90 H3: an old `{"kind": "dream"}` reads as the dream effect's entry)
+    assert G.EffectAt("dream", 1) in spec.effects
+    assert {"kind": "effect", "file": "dream"} in spec.to_json()["nodes"]
     assert G.DelayAt(2).to_json() == {"kind": "delay", "instance": 2}
     assert G.EchoAt(3).to_json() == {"kind": "echo", "index": 3}
-    assert G.DreamAt().to_json() == {"kind": "dream"} and G.DreamAt().n == 1
-    assert G.read_graph(section(RUN)).dream is None
+    assert G.legacy_dream({"kind": "dream"}) == {"kind": "effect", "file": "dream"}
+    assert G.legacy_dream({"kind": "dream", "instance": 2}) == {
+        "kind": "effect", "file": "dream", "instance": 2}
 
 
 def test_the_new_names_are_reserved_kinds():
     for name, kind in (("delay", "delay"), ("delay.2", "delay"), ("resize", "resize"),
-                       ("resize.3", "resize"), ("echo.7", "echo"), ("dream", "dream")):
+                       ("resize.3", "resize"), ("echo.7", "echo")):
         assert G.wire_node_kind(name) == kind
-    assert {"delay", "resize", "echo", "dream"} <= set(G.RESERVED)
+    assert {"delay", "resize", "echo"} <= set(G.RESERVED)
+    # (plan 90 H3: the dream is an effect's name, no reserved kind)
+    assert G.wire_node_kind("dream") == "effect" and "dream" not in G.RESERVED
     with pytest.raises(ValueError):
         G.EffectAt("resize", 1, after="scene")
 
@@ -52,7 +57,6 @@ def test_the_new_names_are_reserved_kinds():
     (("scene", "delay.2.image"), "delay.2", '{"kind": "delay"}'),
     (("media.a", "resize.image"), "resize", '{"kind": "resize"}'),
     (("echo.3", "output.2.image"), "echo.3", '{"kind": "echo", "index": 3}'),
-    (("dream", "output.2.image"), "dream", '{"kind": "dream"}'),
 ])
 def test_a_wire_into_an_undeclared_node_is_refused(pair, name, entry):
     w = G.Wire(*pair)
@@ -76,7 +80,7 @@ def test_two_of_one_instance_are_unreadable():
     for entry, words in (({"kind": "delay"}, "two delay nodes of instance 1"),
                          ({"kind": "resize", "instance": 2}, "two resize nodes of instance 2"),
                          ({"kind": "echo", "index": 3}, "two echo nodes of instance 3"),
-                         ({"kind": "dream"}, "two dream nodes of instance 1")):
+                         ({"kind": "dream"}, "two effect nodes dream instance 1")):
         with pytest.raises(G.GraphError, match=words):
             G.read_graph(section(RUN, nodes=[entry, dict(entry)]))
 

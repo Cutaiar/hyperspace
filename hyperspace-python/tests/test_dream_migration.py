@@ -141,13 +141,13 @@ def test_a_dream_off_but_driven_keeps_its_parts_off():
 
 
 def test_an_unfed_dream_wires_what_it_can():
-    out, _, g = migrated(doc(wires=[{"from": "dream", "to": "output.all.image"}]))
+    _, _, g = migrated(doc(wires=[{"from": "dream", "to": "output.all.image"}]))
     assert into(g, "resize.image") == [] and into(g, "composite.under") == []
     assert into(g, "output.all.image") == ["composite"]
 
 
 def test_a_second_dream_drew_nothing_left_out_said():
-    out, notes, g = migrated(doc(nodes=[{"kind": "dream"}, {"kind": "dream", "instance": 2}]))
+    _, notes, g = migrated(doc(nodes=[{"kind": "dream"}, {"kind": "dream", "instance": 2}]))
     assert node_files(g).count("dream") == 1
     assert any("dream.2" in n for n in notes)
 
@@ -288,7 +288,7 @@ def test_old_dream_presets_are_retired_left_on_disk_and_said_once(tmp_path):
     lib = Library(tmp_path)
     lib.attach(reg)
     assert "dream" in RETIRED_MODULES and "dream" not in lib.groups()
-    assert "dream" in lib.warning and "1 preset" in lib.warning
+    assert "dream" in lib.warning and "1 file of the retired dream group" in lib.warning
     lib.warning = ""
     lib.groups()
     assert lib.warning == ""                       # once

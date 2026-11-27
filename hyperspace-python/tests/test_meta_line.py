@@ -267,9 +267,10 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
         assert {k: doc["values"][k] for k in LOOK} == LOOK, rel
         assert "modules" not in doc and "ghost.mirror" not in doc["values"], rel
         assert json.loads((backups[0] / rel).read_text())["schema"] == graphmigrate.EYE_SCHEMA
-    lean, gone = re.subn(rb'^ *"dream\.(?:echo_mix|fade|echoes|gap|occlude)": [^\n]*,\n', b"",
+    # (plan 90 H2, H3: every `dream.*` goes, the dream off and undriven)
+    lean, gone = re.subn(rb'^ *"dream\.[a-z_]+": [^\n]*,\n', b"",
                          (CORPUS / "legacy6.json").read_bytes(), flags=re.MULTILINE)
-    assert gone == 5
+    assert gone == 23
     assert (lib / "loadable" / "legacy6.json").read_bytes() == lean
     assert not show.exists()
     doc = json.loads((lib / "installs" / "rig.json").read_text())

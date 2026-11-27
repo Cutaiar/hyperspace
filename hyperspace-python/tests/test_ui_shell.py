@@ -60,7 +60,7 @@ class FakeLeap:
 @contextmanager
 def build_rig(tmp_path, renderer=None):
     """The panel with everything app.py gives it, on a headless imgui
-    context. With a `renderer` the registry's `dream.*` and `fx.*` are its
+    context. With a `renderer` the registry's `fx.*` are its
     own states and the panel draws over it, as in the app."""
     ctx = imgui.create_context()
     pctx = implot.create_context()      # the band editor plots (ui_bands.py)
@@ -384,7 +384,7 @@ def test_a_render_error_and_the_dream_error_show_in_the_red_banner(rig, monkeypa
     frame(rig.panel)
     assert drawn[-1] == "dream worker off: FileNotFoundError: vgg16 weights"
     assert not any("render window" in s for s in drawn)
-    # the dream's reason dismisses too (SYSTEM and LOOKBACK keep it)
+    # the dream's reason dismisses too (SYSTEM keeps it)
     rig.panel.dismiss_alerts()
     assert rig.panel.alerts() == []
 
@@ -412,14 +412,6 @@ def test_system_page_shows_the_dream_error_and_the_stall_log(rig, monkeypatch, t
     wd.close()
 
 
-def test_the_lookback_page_says_why_the_worker_is_off(rig, monkeypatch):
-
-    drawn = _drawn(monkeypatch)
-    rig.panel.dream_error = "dream worker off: torch is not installed — run `uv sync`"
-    frame(rig.panel, "lookback")
-    assert rig.panel.dream_error in drawn
-
-
 def test_page_param_is_ui_state_not_a_loadable(rig):
     p = rig.reg["ui.page"]
     assert p.group == "ui" and not p.persist and not p.modulatable
@@ -431,7 +423,7 @@ def test_page_param_is_ui_state_not_a_loadable(rig):
 
 # the sections `ui.page` focuses with a `_page_<key>` body of their own
 # (plan 49 stage 3: GRAPH is always drawn, the fx section is `ui_fx.page`'s)
-DRAWN = [k for k in PAGE_KEYS if k not in ("fx", "graph", "playlist")]   # (playlist: GRAPH's deck row)
+DRAWN = [k for k in PAGE_KEYS if k not in ("fx", "graph", "playlist", "lookback")]   # (playlist: GRAPH's deck row; lookback: shows fx, row 1185)
 
 
 def _page_scroll(rig, monkeypatch) -> dict[str, float]:
@@ -723,35 +715,6 @@ def test_the_ghost_more_popup_has_mirror_and_tethers(rig, monkeypatch):
     rig.reg["ghost.guide"].set(1)
     _, lines, _ = _ghost_more(rig, monkeypatch)
     assert "with a guide on" not in lines
-
-
-class StandInWorker:
-    """In the dream worker's place on the look-back page: it answers each
-    submit with the frame it was given, one submit late (so a dream frame
-    shows and its thumbnail is drawn), and says `line` as its status."""
-
-    def __init__(self, line: str):
-        self.line = line
-        self.pending = self.done = None
-
-    def submit(self, frame, frame_index):
-        self.done, self.pending = self.pending, (frame.copy(), frame_index)
-
-    def latest(self):
-        return self.done
-
-    def status(self) -> str:
-        return self.line
-
-
-# the worker's status at its shortest, and with everything it can say at
-# once (dream.DreamWorker.status: drops, NaN resets, the clamp, and an
-# error cut at 120 characters); and app.dream_error's line with no worker
-WORKER_SHORT = "mps · alias · conv3_3 fp32 · 11.3 ms · 1 behind"
-WORKER_LONG = ("cuda · staging · inception4e fp16 · 1234.5 ms · 12 behind · 3456 dropped · "
-               "12 nan reset(s) · step clamped · " + ("RuntimeError: " + "out of memory " * 9)[:120])
-NO_TORCH = ("dream worker off: torch is not installed — run `uv sync`, "
-            "then launch with `uv run hyperspace`")
 
 
 # the VIEW page's field row (plan 20 WP6): the controls it rearranged
@@ -1553,9 +1516,10 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
     assert panel._learn_hint() == "move a hand…"
     lrn.arm(None)
     # not modulatable: a knob may still set it, a hand may not
-    # (plan 90 H2: `dream.gap` retired with the look-back; the dream's res)
-    assert not rig.reg["dream.res"].modulatable
-    _, items = menu(panel, monkeypatch, "dream.res", "lookback")
+    # (plan 90 H3: `dream.res`, the one such knob a page drew, retired with the
+    # old dream; none is left on a page, so a drawn knob stands in, made one)
+    monkeypatch.setattr(rig.reg["view.bright"], "modulatable", False)
+    _, items = menu(panel, monkeypatch, "view.bright", "view")
     assert _learn_items(items) == ["Learn desk"]
     # a file path: nothing to learn (a knob cannot set a path)
     path = _a_file_path(rig, monkeypatch)
@@ -1718,8 +1682,7 @@ def test_a_rows_label_opens_its_params_menu(rig, monkeypatch):
     for page, pid in (("camera", "camera.zoom"),      # a `_row`
                       ("view", "view.bright"),        # a `_fader`
                       ("audio", "master.gain"),       # a fader with no desk row, the panel's
-                      ("lfo", "tempo.bpm"),           # a `half`, in a table cell
-                      ("lookback", "dream.tint_hue")):
+                      ("lfo", "tempo.bpm")):          # a `half`, in a table cell
         labels.clear()
         page_frame(panel, page)
         page_frame(panel)

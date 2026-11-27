@@ -58,7 +58,10 @@ def unrescaled(notes: list[str]) -> list[str]:
     # (plan 90 H2: and the look-back made public parts, said of a fixture
     # whose old values drew one)
     lb = M.LOOKBACK_NOTE.partition("{chain}")[0].partition("{old}")[2]
-    return [n for n in notes if not n.startswith(head) and hue not in n and lb not in n]
+    # (plan 90 H3: and a row on an old dream knob no part takes, left out)
+    row = M.DREAM_ROW_NOTE.partition("{old}")[2]
+    return [n for n in notes if not n.startswith(head) and hue not in n and lb not in n
+            and row not in n]
 
 
 
@@ -243,7 +246,7 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
         assert saved[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()     # (row 394)
         line = json.dumps(saved[loadable.GRAPH_KEY]["nodes"][0])
         assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {line}' in loadable.dumps(saved)
-    assert rig.reg["fx.acid.2.on"].value and rig.reg["dream.on"].value
+    assert rig.reg["fx.acid.2.on"].value and rig.reg["fx.dream.on"].value   # (plan 90 H3)
 
 
 def test_no_corpus_loadable_places_an_effect_and_the_default_graph_is_identical():

@@ -1,42 +1,37 @@
-"""WP6b — the dream worker: the LookbackSource contract, the hand-off,
+"""WP6b — the dream worker: the `dreamhook.Source` contract, the hand-off,
 the guards, the copy paths, the config gate, and the real pipeline.
 
+Plan 90 H3: the dream is the effect file `dream` (`shaders/fx/dream.glsl`,
+its Python half `dreamhook.py`); the worker reads no registry — the knobs
+come with each picture (`submit`'s ``params``, `dreamhook.params_of`) — and
+its pictures are RGBA, premultiplied, the alpha the gradient's gate.
+
 The worker itself needs torch — a main dependency since decision 23 (a),
-so a plain ``uv sync`` has it; those tests still skip without it. The fast ones inject a step function in place of the
-net, so they need no weights and no GPU; the end-to-end one loads VGG16
-conv3_3 for real and is marked slow.
+so a plain ``uv sync`` has it; those tests still skip without it. The fast
+ones inject a step function in place of the net, so they need no weights
+and no GPU; the end-to-end one loads VGG16 conv3_3 for real and is marked
+slow.
 """
 
 from __future__ import annotations
 
 import sys
 import time
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
-from hyperspace import config
-from hyperspace.lookback import DreamState, LookbackSource, echo_size
+from hyperspace import config, dreamhook
+from hyperspace.dreamhook import params_of
 from hyperspace.view import ViewState
 
 
-def registry(dream=None):
-    from hyperspace.analysis import Analyser
-    from hyperspace.analyzer import Analyzer
-    from hyperspace.control import Control
-    from hyperspace.params import build_registry
-
-    chain = Analyzer(Analyser())
-    return build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), None,
-                          dream=dream)
-
-
 def blob(h, w, level=200):
-    """A frame with one bright block on a black ground, rows bottom-up like GL."""
+    """A frame with one bright block on a clear ground, rows bottom-up like
+    GL, premultiplied: the alpha (the gate) is the block's coverage."""
     f = np.zeros((h, w, 4), np.uint8)
     f[h // 3: 2 * h // 3, w // 3: 2 * w // 3, :3] = level
-    f[..., 3] = 255
+    f[h // 3: 2 * h // 3, w // 3: 2 * w // 3, 3] = 255
     return f
 
 
@@ -60,7 +55,8 @@ def test_core_does_not_import_the_worker():
     sys.modules.pop("hyperspace.dream", None)
     for m in ("hyperspace.params", "hyperspace.control", "hyperspace.analyzer",
               "hyperspace.routing", "hyperspace.render", "hyperspace.lookback",
-              "hyperspace.config", "hyperspace.hotreload", "hyperspace.ui_lookback"):
+              "hyperspace.config", "hyperspace.hotreload", "hyperspace.dreamhook",
+              "hyperspace.fx"):
         importlib.import_module(m)
     assert "hyperspace.dream" not in sys.modules
     # no module under hyperspace/ imports torch at the top except dream.py
@@ -99,15 +95,17 @@ def test_open_dream_off_imports_nothing():
     from hyperspace import app
 
     sys.modules.pop("hyperspace.dream", None)
-    assert app._open_dream(registry(), {"dream": {"enabled": False}}) == (None, "")
-    assert app._open_dream(registry(), {}) == (None, "")
+    assert app._open_dream({"dream": {"enabled": False}}) == (None, "")
+    assert app._open_dream({}) == (None, "")
     assert "hyperspace.dream" not in sys.modules
 
 
 def test_hotreload_order():
+    """dream.py imports dreamhook (its layers, `params_of`): reloaded after
+    it, and before the renderer that draws the effect."""
     from hyperspace.hotreload import MODULES
 
-    assert MODULES.index("dream") == MODULES.index("lookback") + 1
+    assert MODULES.index("dreamhook") < MODULES.index("dream")
     assert MODULES.index("dream") < MODULES.index("render")
 
 
@@ -115,10 +113,24 @@ def test_guard_step():
     pytest.importorskip("torch")
     from hyperspace.dream import STABLE_RATIO, guard_step
 
-    assert guard_step(0.03, 2, 0.08) == (0.03, False)          # the default
+    assert guard_step(0.03, 2, 0.08) == (0.03, False)
     step, clamped = guard_step(0.06, 3, 0.03)                  # a lane pushed it
     assert clamped and step == pytest.approx(STABLE_RATIO * 0.03 / 3)
     assert guard_step(0.01, 1, 0.3) == (0.01, False)
+    step, clamped = guard_step(0.06, 3, 0.03, ratio=0.5)       # an ungated picture
+    assert clamped and step == pytest.approx(0.5 * 0.03 / 3)
+    # at Hold 1 nothing is held, so nothing runs away: never clamped
+    assert guard_step(5.0, 10, 1.0) == (5.0, False)
+    assert guard_step(5.0, 10, 1.5) == (5.0, False)
+
+
+def test_the_ceiling_is_the_ungated_rule_only_where_the_gate_covers_everything():
+    pytest.importorskip("torch")
+    from hyperspace.dream import STABLE_RATIO, UNGATED_RATIO, ceiling
+
+    assert UNGATED_RATIO == 0.5 and STABLE_RATIO == 1.5
+    assert ceiling(1.0) == 0.5 and ceiling(0.999) == 0.5
+    assert ceiling(0.99) == 1.5 and ceiling(0.0) == 1.5
 
 
 # ---------------------------------------------------------------- the worker, faked
@@ -131,43 +143,53 @@ def dream_mod():
     return dream
 
 
-def make_worker(dream_mod, reg, step_fn=None, **kw):
+def make_worker(dream_mod, step_fn=None, **kw):
     cfg = {"enabled": True, "device": kw.pop("device", "auto")}
-    w = dream_mod.DreamWorker(reg, cfg, step_fn=step_fn, **kw)
-    return w
+    return dream_mod.DreamWorker(cfg, step_fn=step_fn, **kw)
 
 
-def identity(D, mask, params):
-    return D
+def identity(rgb, gate, params):
+    return rgb
 
 
 def test_source_conformance(dream_mod):
-    w = make_worker(dream_mod, registry(), identity)
+    w = make_worker(dream_mod, identity)
     try:
-        assert isinstance(w, LookbackSource)
+        assert isinstance(w, dreamhook.Source)
         assert w.path in ("alias", "staging")
     finally:
         w.close()
 
 
-def test_round_trip_is_masked_rgb_at_echo_size(dream_mod):
-    d = DreamState(k=0.5)
-    w = make_worker(dream_mod, registry(d), identity)
+def test_ready_says_whether_a_job_is_waiting(dream_mod):
+    w = make_worker(dream_mod, identity, start=False)
     try:
-        h, wd = echo_size(128, 400, 256)[::-1]
+        assert w.ready()
+        w.submit(blob(16, 24), 1)
+        assert not w.ready()
+        w.lend()
+        assert w.ready() and w._pending is None
+    finally:
+        w.close()
+
+
+def test_round_trip_is_rgba_as_it_came_in(dream_mod):
+    w = make_worker(dream_mod, identity)
+    try:
+        h, wd = 128, 200
         buf = w.buffer((h, wd, 4))
         assert buf.shape == (h, wd, 4) and buf.dtype == np.uint8 and buf.flags.writeable
         assert w.latest() is None
         np.copyto(buf, blob(h, wd))
         t0 = time.perf_counter()
-        w.submit(buf, 7)
+        w.submit(buf, 7, params_of({}))
         assert time.perf_counter() - t0 < 0.005, "submit must not wait for the worker"
         got = wait_for(w.latest)
         pixels, idx = got
         assert idx == 7 and w.submitted == 7 and w.answered == 7
         assert pixels.shape == (h, wd, 4) and pixels.dtype == np.uint8
-        # premultiplied by the content mask: black ground stays black, the
-        # block is lit and carries the mask in alpha
+        # rgba as it came in: the clear ground stays clear, the block is lit
+        # and keeps its coverage in alpha
         assert pixels[:8, :8].max() == 0 and pixels[-8:, -8:].max() == 0
         cy, cx = h // 2, wd // 2
         assert pixels[cy, cx, :3].min() > 150 and pixels[cy, cx, 3] == 255
@@ -177,7 +199,7 @@ def test_round_trip_is_masked_rgb_at_echo_size(dream_mod):
         w.submit(buf, 8)
         assert wait_for(lambda: w.latest() if w.latest()[1] == 8 else None)[1] == 8
         assert w.stats()["behind"] == 0 and w.error == ""
-        # a foreign array (the dreamer's own staging) is copied in
+        # a foreign array (not one of the worker's buffers) is copied in
         w.submit(blob(h, wd, 90), 9)
         assert wait_for(lambda: w.latest() if w.latest()[1] == 9 else None)[1] == 9
         assert "0 behind" in w.status()
@@ -185,12 +207,37 @@ def test_round_trip_is_masked_rgb_at_echo_size(dream_mod):
         w.close()
 
 
-def test_latest_wins_under_a_slow_worker(dream_mod):
-    def slow(D, mask, params):
-        time.sleep(0.05)
-        return D
+def test_hold_blends_the_newest_picture_in_rgba(dream_mod):
+    """Hold (`k`) below 1 keeps the last dream: rgb and coverage alike fade
+    at k (the old mask's linger is Hold's, plan 90 Q17)."""
+    w = make_worker(dream_mod, identity, start=False)
+    try:
+        h, wd = 32, 48
+        held = params_of({"k": 0.5})
+        for i, frame in enumerate((blob(h, wd, 200), np.zeros((h, wd, 4), np.uint8)), 1):
+            w.submit(frame, i, held)
+            job, w._pending = w._pending, None
+            w._process(job)
+        pixels, idx = w.latest()
+        cy, cx = h // 2, wd // 2
+        assert idx == 2
+        assert abs(int(pixels[cy, cx, 0]) - 100) <= 1
+        assert abs(int(pixels[cy, cx, 3]) - 128) <= 1
+        # at Hold 1 each picture is dreamed anew
+        w.submit(np.zeros((h, wd, 4), np.uint8), 3, params_of({"k": 1.0}))
+        job, w._pending = w._pending, None
+        w._process(job)
+        assert w.latest()[0].max() == 0
+    finally:
+        w.close()
 
-    w = make_worker(dream_mod, registry(), slow)
+
+def test_latest_wins_under_a_slow_worker(dream_mod):
+    def slow(rgb, gate, params):
+        time.sleep(0.05)
+        return rgb
+
+    w = make_worker(dream_mod, slow)
     try:
         h, wd = 32, 48
         t0 = time.perf_counter()
@@ -213,24 +260,34 @@ def test_latest_wins_under_a_slow_worker(dream_mod):
 def test_stability_clamp_shows(dream_mod):
     seen = {}
 
-    def spy(D, mask, params):
+    def spy(rgb, gate, params):
         seen.update(params)
-        return D
+        return rgb
 
-    d = DreamState(step=0.06, steps=3, k=0.03)
-    w = make_worker(dream_mod, registry(d), spy)
+    w = make_worker(dream_mod, spy)
     try:
         h, wd = 32, 48
-        w.submit(blob(h, wd), 1)
+        pushed = params_of({"step": 0.06, "steps": 3, "k": 0.03})
+        w.submit(blob(h, wd), 1, pushed)
         assert w.drain(5.0)
+        # the gate leaves the ground out: the gated ceiling
         assert w.clamped and seen["step"] == pytest.approx(dream_mod.STABLE_RATIO * 0.03 / 3)
         assert "step clamped" in w.status()
-        # a live change lands on the next submit — the params are read each time
-        d.step = 0.01
-        w.submit(blob(h, wd), 2)
+        # a live change lands on the next submit — the knobs come with each picture
+        w.submit(blob(h, wd), 2, {**pushed, "step": 0.01})
         assert w.drain(5.0)
         assert not w.clamped and seen["step"] == pytest.approx(0.01)
         assert "clamped" not in w.status()
+        # a gate that covers everything is the unmasked rule
+        lit = np.full((h, wd, 4), 255, np.uint8)
+        w.lend()                                 # start afresh: nothing held
+        w.submit(lit, 3, pushed)
+        assert w.drain(5.0)
+        assert w.clamped and seen["step"] == pytest.approx(dream_mod.UNGATED_RATIO * 0.03 / 3)
+        # at Hold 1 nothing clamps
+        w.submit(lit, 4, {**pushed, "k": 1.0})
+        assert w.drain(5.0)
+        assert not w.clamped and seen["step"] == pytest.approx(0.06)
     finally:
         w.close()
 
@@ -239,13 +296,13 @@ def test_nan_resets_the_buffer(dream_mod):
     torch = pytest.importorskip("torch")
     calls = []
 
-    def poison(D, mask, params):
+    def poison(rgb, gate, params):
         calls.append(1)
         if len(calls) == 2:
-            return D * float("nan")
-        return D
+            return rgb * float("nan")
+        return rgb
 
-    w = make_worker(dream_mod, registry(), poison)
+    w = make_worker(dream_mod, poison)
     try:
         h, wd = 32, 48
         for i in range(1, 4):
@@ -261,7 +318,7 @@ def test_nan_resets_the_buffer(dream_mod):
 
 
 def test_fallback_copy_path(dream_mod):
-    w = make_worker(dream_mod, registry(), identity, alias=False)
+    w = make_worker(dream_mod, identity, alias=False)
     try:
         assert w.path == "staging" and not w.alias
         h, wd = 32, 48
@@ -284,7 +341,7 @@ def test_alias_copy_path_is_the_tensor(dream_mod):
     torch = pytest.importorskip("torch")
     if not torch.backends.mps.is_available() or not hasattr(torch.mps, "_host_alias_storage"):
         pytest.skip("no MPS host alias here")
-    w = make_worker(dream_mod, registry(), identity)
+    w = make_worker(dream_mod, identity)
     try:
         assert w.path == "alias"
         buf = w.buffer((16, 24, 4))
@@ -296,7 +353,7 @@ def test_alias_copy_path_is_the_tensor(dream_mod):
 
 
 def test_resize_rebuilds(dream_mod):
-    w = make_worker(dream_mod, registry(), identity)
+    w = make_worker(dream_mod, identity)
     try:
         w.submit(blob(32, 48), 1)
         assert w.drain(5.0) and w.D.shape[-2:] == (32, 48)
@@ -311,18 +368,18 @@ def test_resize_rebuilds(dream_mod):
 def test_missing_net_means_no_dream(dream_mod, tmp_path, monkeypatch):
     """No weights and no way to get them: the status says so, nothing is
     published, and the worker stays alive."""
-    d = DreamState(layer=0)
     cfg = {"enabled": True, "weights_dir": str(tmp_path)}
     monkeypatch.setattr(dream_mod, "load_state",
                         lambda arch, wd: (_ for _ in ()).throw(OSError("offline")))
-    w = dream_mod.DreamWorker(registry(d), cfg)
+    w = dream_mod.DreamWorker(cfg)
     try:
-        w.submit(blob(32, 48), 1)
+        layer0 = params_of({"layer": 0})
+        w.submit(blob(32, 48), 1, layer0)
         assert w.drain(10.0)
         assert w.latest() is None and w.net is None
         assert "no conv2_2" in w.status() and "offline" in w.error
         # not retried every frame; a layer change is
-        w.submit(blob(32, 48), 2)
+        w.submit(blob(32, 48), 2, layer0)
         assert w.drain(5.0) and w.stats()["alive"]
     finally:
         w.close()
@@ -331,7 +388,7 @@ def test_missing_net_means_no_dream(dream_mod, tmp_path, monkeypatch):
 # ---------------------------------------------------------------- every layer
 
 def test_every_layer_has_a_trunk(dream_mod):
-    from hyperspace.lookback import LAYER_INFO, LAYERS
+    from hyperspace.dreamhook import LAYER_INFO, LAYERS
 
     assert set(dream_mod.TRUNKS) == set(LAYERS)
     for name, (arch, _) in dream_mod.TRUNKS.items():
@@ -364,14 +421,14 @@ def test_cuts_end_on_the_named_layer(dream_mod):
 
 
 def test_every_layer_dreams_at_the_smallest_size(dream_mod):
-    """Every trunk gives a finite, non-zero step at the smallest frame the
-    worker makes (128 px short side at the third octave's 2.25 scale, the
-    jitter shrunk with it), random weights on the CPU."""
+    """Every trunk gives a finite, non-zero step at a small picture (128 px
+    short side at the third octave's 2.25 scale, the jitter shrunk with it),
+    random weights on the CPU."""
     import torch
 
-    from hyperspace.lookback import LAYERS, RES
+    from hyperspace.dreamhook import LAYERS
 
-    h = max(16, round(RES[0] / dream_mod.OCTAVE_SCALE ** 2))
+    h = max(16, round(128 / dream_mod.OCTAVE_SCALE ** 2))
     w = round(h * 1280 / 820)
     stacks = {arch: dream_mod.net_stack(arch, None) for arch in ("vgg16", "googlenet")}
     for s in stacks.values():
@@ -407,8 +464,8 @@ def test_a_layer_change_reads_no_weights_twice(dream_mod, monkeypatch, tmp_path)
     a = dream_mod.build_trunk("conv1_1", tmp_path, None, None, stacks)
     b = dream_mod.build_trunk("conv5_3", tmp_path, None, None, stacks)
     assert a[0] is b[0]                    # the same conv1_1, not a copy
-    w = dream_mod.DreamWorker(registry(), {"enabled": True, "weights_dir": str(tmp_path),
-                                           "device": "cpu"}, start=False)
+    w = dream_mod.DreamWorker({"enabled": True, "weights_dir": str(tmp_path),
+                               "device": "cpu"}, start=False)
     for name in ("conv3_3", "conv5_3", "conv2_2"):
         assert w._ensure_net(name) and w.layer == name
     assert reads == ["vgg16", "googlenet", "vgg16"] and list(w.stacks) == ["vgg16"]
@@ -418,9 +475,9 @@ def test_a_layer_change_reads_no_weights_twice(dream_mod, monkeypatch, tmp_path)
 
 @pytest.mark.slow
 def test_end_to_end_offscreen(dream_mod, tmp_path):
-    """Renderer + the dream node + DreamWorker on a rotating 24-cell at the
-    spike's defaults (plan 36 T4: `scene → dream → output.all.image`, no
-    look-back anywhere): the dream shows, the black ground stays black."""
+    """Renderer + the dream effect + DreamWorker on a rotating 24-cell at the
+    effect's defaults (`scene → dream → output.all.image`, no look-back
+    anywhere): the dream shows and the worker keeps up."""
     torch = pytest.importorskip("torch")
     moderngl = pytest.importorskip("moderngl")
     if not torch.backends.mps.is_available():
@@ -431,21 +488,24 @@ def test_end_to_end_offscreen(dream_mod, tmp_path):
         ctx = moderngl.create_context(standalone=True)
     except Exception as e:  # noqa: BLE001
         pytest.skip(f"no standalone GL context available: {e}")
+    from hyperspace import graph as G
+    from hyperspace.fx import FxState
     from hyperspace.render import Renderer
 
     W, H = 1280, 820
 
-    from hyperspace import graph as G
-
-    alone = G.read_graph({"frame": "wired", "nodes": [{"kind": "dream"}], "wires": [
-        {"from": "shape", "to": "scene.geometry"}, {"from": "scene", "to": "dream.image"},
-        {"from": "dream", "to": "output.all.image"}]})
+    alone = G.read_graph({"frame": "wired", "nodes": [{"kind": "effect", "file": "dream"}],
+                          "wires": [{"from": "shape", "to": "scene.geometry"},
+                                    {"from": "scene", "to": "dream.image"},
+                                    {"from": "dream", "to": "output.all.image"}]},
+                         effects=set(FxState().specs))
     assert not alone.notes, alone.notes
 
-    def rig(dream):
+    def rig():
         fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
-        r = Renderer(ctx, dream)
+        r = Renderer(ctx)
         r.wiring = alone.wiring()
+        r.fx.state.values["dream"]["on"] = True
         s = ViewState(shape=10, faces=True, pattern=2, bright=1.3, speed=3.0)
         s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
         s.yaw, s.pitch = 0.4, 0.25
@@ -462,28 +522,22 @@ def test_end_to_end_offscreen(dream_mod, tmp_path):
         ctx.finish()
         return np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(H, W, 4).copy()
 
-    d = DreamState(on=True)        # (plan 90 H2: no echoes to switch off)
-    fbo, r, s = rig(d)
-    reg = registry(d)
-    w = dream_mod.DreamWorker(reg, {"enabled": True, "weights_dir": str(tmp_path)})
+    fbo, r, s = rig()
+    w = dream_mod.DreamWorker({"enabled": True, "weights_dir": str(tmp_path)})
     try:
-        r.dreamer.source = w
+        r.fx.dream_source = w
         with_dream = run(fbo, r, s, w)
         st = w.stats()
         print(f"\ndream: {w.status()}")
         assert w.error == "" and w.layer == "conv3_3" and w.nan_resets == 0
-        assert r.dreamer.dream_frame >= 85 and w.calls >= 85
+        assert w.calls >= 85
         assert st["ms"] < 60.0
     finally:
         w.close()
         fbo.release()
-    fbo, r, s = rig(DreamState(on=True))
+    fbo, r, s = rig()                       # no worker: the picture passes through
     undreamed = run(fbo, r, s, None)
     fbo.release()
     a, b = with_dream[..., :3].astype(int), undreamed[..., :3].astype(int)
     diff = np.abs(a - b)
-    assert diff.mean() > 1.0, f"the dream layer must contribute ({diff.mean():.2f})"
-    # the black ground stays black: the mask keeps the dream off it
-    for corner in (with_dream[:16, :16], with_dream[:16, -16:], with_dream[-16:, :16],
-                   with_dream[-16:, -16:]):
-        assert corner[..., :3].max() == 0
+    assert diff.mean() > 1.0, f"the dream must contribute ({diff.mean():.2f})"

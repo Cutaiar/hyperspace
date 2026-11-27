@@ -32,7 +32,7 @@ imports torch.
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 import moderngl
 import numpy as np
@@ -51,37 +51,37 @@ OCTAVES = ["1", "2 alt", "3 alt"]       # one scale a job, in rotation (spike D)
 # MPS); "slower" is over 25 ms a job there, where conv3_3 takes about 19
 LAYER_INFO: dict[str, tuple[str, str, str]] = {
     "conv1_1": ("VGG16", "flat colour, fine dots",
-                "The first layer: colours pushed to a few flat, bold ones under a fine "
-                "mesh of dots. Almost no shapes of its own."),
+                ("The first layer: colours pushed to a few flat, bold ones under a fine "
+                 "mesh of dots. Almost no shapes of its own.")),
     "conv1_2": ("VGG16", "colour split, fine dots",
-                "Colours split into a fine red-and-blue dot mesh along every edge. Still "
-                "no shapes of its own."),
+                ("Colours split into a fine red-and-blue dot mesh along every edge. Still "
+                 "no shapes of its own.")),
     "conv2_1": ("VGG16", "fine hatching",
                 "Fine hatching and moiré, muted colour: the picture looks engraved."),
     "conv2_2": ("VGG16", "dense neon cells",
-                "A dense mesh of small neon cells, green and magenta, that fills whatever "
-                "is lit. Strong and busy."),
+                ("A dense mesh of small neon cells, green and magenta, that fills whatever "
+                 "is lit. Strong and busy.")),
     "conv3_1": ("VGG16", "woven stripes", "Short stripes woven at angles, a fine textile texture."),
     "conv3_2": ("VGG16", "fine maze",
                 "A fine maze of little loops and stripes; the start of the classic swirl."),
     "conv3_3": ("VGG16", "small loops, the classic",
-                "Small loops, rings and swirls woven together: the classic Deep Dream "
-                "texture, and the default."),
+                ("Small loops, rings and swirls woven together: the classic Deep Dream "
+                 "texture, and the default.")),
     "conv4_1": ("VGG16", "soft rings", "Soft rings and dots, spaced out over a smoother ground."),
     "conv4_2": ("VGG16", "eyelets and scales",
                 "Eye-like rings and scale-like cells, larger than conv3's."),
     "conv4_3": ("VGG16", "blots and eyes, slower",
-                "Bigger blots with eye-like rings where lines meet. Slower: about 27 ms a "
-                "job at 256 px."),
+                ("Bigger blots with eye-like rings where lines meet. Slower: about 27 ms a "
+                 "job at 256 px.")),
     "conv5_1": ("VGG16", "large swirls, slower",
-                "The deepest VGG layers: large soft swirls and blobs, detail gathered at "
-                "the corners. Slower: about 28 ms a job."),
+                ("The deepest VGG layers: large soft swirls and blobs, detail gathered at "
+                 "the corners. Slower: about 28 ms a job.")),
     "conv5_2": ("VGG16", "large swirls, slower",
-                "Large soft swirls and blobs, like conv5_1, a little looser. Slower: "
-                "about 30 ms a job."),
+                ("Large soft swirls and blobs, like conv5_1, a little looser. Slower: "
+                 "about 30 ms a job.")),
     "conv5_3": ("VGG16", "largest blobs, slower",
-                "VGG's last layer: the largest blobs and swirls; by its depth, the most "
-                "object-like VGG gets. Slower: about 30 ms a job."),
+                ("VGG's last layer: the largest blobs and swirls; by its depth, the most "
+                 "object-like VGG gets. Slower: about 30 ms a job.")),
     "conv1": ("GoogLeNet", "coarse colour dots",
               "GoogLeNet's first layer: a coarse grid of bold coloured dots."),
     "conv2": ("GoogLeNet", "rainbow ripples", "Fine wavy lines in rainbow fringes, like moiré."),
@@ -95,19 +95,19 @@ LAYER_INFO: dict[str, tuple[str, str, str]] = {
     "inception4b": ("GoogLeNet", "curls and stars",
                     "Curls and small starbursts; the start of the creature-like forms."),
     "inception4c": ("GoogLeNet", "shells and spirals",
-                    "Big shell- and fan-like spirals. Deep Dream's well-known eyes, dog faces "
-                    "and pagodas come from around here (4c to 5a) given time and strength."),
+                    ("Big shell- and fan-like spirals. Deep Dream's well-known eyes, dog faces "
+                     "and pagodas come from around here (4c to 5a) given time and strength.")),
     "inception4d": ("GoogLeNet", "creature textures",
-                    "Patchy, fur- and skin-like textures with the odd eye; object-like parts "
-                    "given time."),
+                    ("Patchy, fur- and skin-like textures with the odd eye; object-like parts "
+                     "given time.")),
     "inception4e": ("GoogLeNet", "large soft forms",
                     "Larger, softer wavy forms; less fine texture than 4c and 4d."),
     "inception5a": ("GoogLeNet", "faint relief, slower",
-                    "Deep and coarse: a faint relief at the default strength, larger forms "
-                    "with more. Slower: about 28 ms a job."),
+                    ("Deep and coarse: a faint relief at the default strength, larger forms "
+                     "with more. Slower: about 28 ms a job.")),
     "inception5b": ("GoogLeNet", "faint relief, slower",
-                    "GoogLeNet's last block: the faintest at the default strength, the "
-                    "largest forms. Slower: about 29 ms a job."),
+                    ("GoogLeNet's last block: the faintest at the default strength, the "
+                     "largest forms. Slower: about 29 ms a job.")),
 }
 DREAM_UNIT = 2              # the result's texture unit (fx: 2 is a hook's)
 
@@ -260,12 +260,11 @@ def run(chain, name: str, prog: moderngl.Program, vao: moderngl.VertexArray,
         on = int(gl.shown >= 0)
         w, h = gl.size
         _say(chain, name, DREAMING.format(w=w, h=h) if on else WAITING)
-    if on:
+    if on and gl.result is not None:
         gl.result.use(location=DREAM_UNIT)
-    if "u_dream" in prog:
-        prog["u_dream"].value = DREAM_UNIT
-    if "u_dream_on" in prog:
-        prog["u_dream_on"].value = on
+    for k, x in (("u_dream", DREAM_UNIT), ("u_dream_on", on)):
+        if k in prog:
+            cast(moderngl.Uniform, prog[k]).value = x
     vao.render(moderngl.TRIANGLES, vertices=3)
 
 
@@ -274,7 +273,8 @@ def _pull(gl: Gl, source: Any) -> None:
     if got is None:
         return
     pixels, index = got
-    if index == gl.shown or tuple(np.shape(pixels)[:2]) != (gl.size[1], gl.size[0]):
+    if (gl.result is None or index == gl.shown
+            or tuple(np.shape(pixels)[:2]) != (gl.size[1], gl.size[0])):
         return
     gl.result.write(np.ascontiguousarray(pixels, dtype=np.uint8))
     gl.shown = index
@@ -284,13 +284,15 @@ def _submit(chain, gl: Gl, source: Any, src: moderngl.Texture, name: str) -> Non
     """`src` copied 1:1 into the RGBA8 target, read back once, handed over."""
     ctx = chain.ctx
     copy = chain._copy
+    if gl.fbo is None:
+        return
     gl.fbo.use()
     ctx.viewport = (0, 0, *gl.size)
     ctx.disable(moderngl.BLEND)
     src.use(location=0)
     for k, v in (("u_scaled", 0), ("u_origin", (0, 0))):
         if k in copy:
-            copy[k].value = v
+            cast(moderngl.Uniform, copy[k]).value = v
     chain._copy_vao.render(moderngl.TRIANGLES, vertices=3)
     buf = gl.buffer(source)
     gl.fbo.read_into(buf, components=4)

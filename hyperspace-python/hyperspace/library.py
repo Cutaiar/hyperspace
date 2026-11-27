@@ -322,9 +322,9 @@ DEFAULT_NAMES = {"band": "Balanced"}
 # plan 90 H3 (Q33): `dream` — the dream is an effect, its group gone; an old dream
 # preset is left on disk, never listed or opened, and said once (`DREAM_RETIRED`)
 RETIRED_MODULES = ("fx", "hands", "dream")
-DREAM_RETIRED = ("{n} preset{s} of the retired dream group (patches/dream/) left as {they} "
-                 "{were}: the dream is an effect now (plan 90) — a saved patch's dream opens "
-                 "as its parts")
+DREAM_RETIRED = ("{n} file{s} of the retired dream group (patches/dream/) left as {they} "
+                 "{were}: the dream is an effect now (plan 90) — a loadable patch's dream "
+                 "opens as its parts")
 
 # working-directory files that move into the library home on first run
 MIGRATED_FILES = ("config.toml", "midi_map.json")

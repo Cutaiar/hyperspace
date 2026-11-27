@@ -314,12 +314,13 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     # no copies) — and the eight media channels, their bins empty (plan 32 T10:
     # the channels' params on their own nodes); plan 35 G: the backdrop's
     # group node too (no backdrop in the section: it idles like any group);
-    # plan 36 T4: one more, the frame drawing no look-back (its params' node idles);
-    # plan 60: the grip's group node, the grip off
-    assert sum(n.idle for n in view.nodes) == 25
+    # plan 60: the grip's group node, the grip off (plan 90 H3: the dream's
+    # params' group node is gone with the `dream.*` params — the dream is an
+    # effect, its knobs `fx.dream.*`)
+    assert sum(n.idle for n in view.nodes) == 24
     k = len({n.area for n in view.nodes if not n.idle})
-    assert st["said"] == (f"laid out {len(view.nodes) - 25} nodes in {k} areas, every one "
-                          "collapsed · 25 idle off the canvas")
+    assert st["said"] == (f"laid out {len(view.nodes) - 24} nodes in {k} areas, every one "
+                          "collapsed · 24 idle off the canvas")
     assert st["idle_open"] == set() and st["open"] == set() and rig.lib.loaded_patch.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)
@@ -755,7 +756,6 @@ def test_the_areas_run_by_primitive(rig):
     V = graphview.VNode
     for ref, want in ((G.Readout("hands.guide"), graphview.SCENE_AREA),
                       (G.BackdropNode("backdrop"), graphview.SCENE_AREA),
-                      (G.DreamNode("dream"), graphview.EFFECTS_AREA),
                       (G.Composite("composite"), graphview.EFFECTS_AREA),
                       (G.SwitchNode("switch"), graphview.MEDIA),
                       (G.Delay("delay"), graphview.MEDIA),

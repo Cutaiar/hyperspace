@@ -524,17 +524,18 @@ class _Dream:
 
 def _fading(dreams=(True, True)):
     def deck(name, on):
-        spec = SimpleNamespace(dream="node" if on else None)
+        effects = [SimpleNamespace(name="dream", file="dream")] if on else []
+        spec = SimpleNamespace(effects=effects, wires=[])
         return SimpleNamespace(reg=f"reg {name}", graph=SimpleNamespace(spec=spec),
-                               renderer=SimpleNamespace(
-                                   dreamer=SimpleNamespace(source=None,
-                                                           state=SimpleNamespace(on=True))))
+                               renderer=SimpleNamespace(fx=SimpleNamespace(
+                                   dream_source=None,
+                                   state=SimpleNamespace(values={"dream": {"on": True}}))))
 
     a, b = deck("a", dreams[0]), deck("b", dreams[1])
     dream = _Dream()
     mix = Mix()
     pointer = Pointer(a)
-    a.renderer.dreamer.source = dream
+    a.renderer.fx.dream_source = dream
     return SimpleNamespace(a=a, b=b, fade=Fade(a, b, mix, None, dream=dream, pointer=pointer),
                            mix=mix, pointer=pointer, dream=dream)
 
@@ -548,7 +549,7 @@ def test_the_lend_goes_once_across_a_whole_fade_and_is_not_restarted_at_the_midd
         f.fade.lend()
     assert f.dream.lent == ["reg b"]              # at LEND_AT, and never again
     assert f.fade.lent_to is f.b and f.fade.rest is f.b
-    assert f.b.renderer.dreamer.source is f.dream and f.a.renderer.dreamer.source is None
+    assert f.b.renderer.fx.dream_source is f.dream and f.a.renderer.fx.dream_source is None
     for x in np.linspace(1.0, 0.0, 101):          # and back the same way
         f.mix.xfade = float(x)
         if x <= 0.5 - MIDDLE:
@@ -636,7 +637,7 @@ def _warming(dreams=(False, False)):
 
 
 def _land(deck):
-    deck.graph.spec = SimpleNamespace(dream=None)
+    deck.graph.spec = SimpleNamespace(effects=[], wires=[])
 
 
 def test_a_save_lands_no_new_graph_so_it_asks_for_no_warm_draw():

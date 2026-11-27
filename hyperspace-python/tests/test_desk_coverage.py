@@ -106,8 +106,9 @@ def test_every_corpus_loadables_numbers_are_in_the_report(tool, tmp_path):
 def test_a_library_loadable_that_named_a_template_is_reported_with_its_own_rows(tool, tmp_path):
     """`--library` copies a library's loadable patches into the scratch home (the
     source is only read): plan 44 D3 retired the desk templates, so the
-    fixture loadable patch that named one is its own rows — D2 the dream (on), K3
-    the pattern mix (faces on) — and every other control dark."""
+    fixture loadable patch that named one is its own rows — D2 the dream (on;
+    plan 90 H3: its `dream.mix` row follows its knob, the dream's Fade's level),
+    K3 the pattern mix (faces on) — and every other control dark."""
     lib = tmp_path / "lib"
     shutil.copytree(FIXTURES, lib)
     before = sorted(p.read_bytes() for p in lib.rglob("*.json"))
@@ -117,7 +118,7 @@ def test_a_library_loadable_that_named_a_template_is_reported_with_its_own_rows(
     (row,) = [r for r in rows if r.name == "TEMPLATED"]
     cells = {c.glyph: (c.status, c.target) for c in row.cells}
     assert cells["D1"] == (tool.DARK, "")
-    assert cells["D2"] == (tool.MAPPED, "dream.mix")
+    assert cells["D2"] == (tool.MAPPED, "fx.fade.2.level")
     assert cells["K2"] == (tool.DARK, "")
     assert cells["K3"] == (tool.MAPPED, "view.pattern_mix")
     assert cells["S1"] == (tool.DARK, "")
@@ -176,16 +177,17 @@ def test_cannot_show_is_the_rule_by_group():
 
 PARAMS = [("view.bright", "view"), ("view.speed", "view"), ("view.pattern", "view"),
           ("view.pattern_mix", "view"), ("camera.zoom", "camera"), ("fx.kaleido.mix", "fx"),
-          ("fx.kaleido.segments", "fx"), ("fx.plasma.level", "fx"), ("dream.mix", "dream"),
+          ("fx.kaleido.segments", "fx"), ("fx.plasma.level", "fx"), ("fx.dream.mix", "fx"),
           ("band.0.post", "band"), ("lfo.1.depth", "lfo"), ("tempo.bpm", "tempo")]
 VALUES = {"view.bright": 2.0, "view.speed": 0.5, "view.pattern": 0, "view.pattern_mix": 1.0,
           "camera.zoom": 1.0, "view.faces": True, "fx.on": True, "fx.kaleido.on": True,
           "fx.kaleido.mix": 1.0, "fx.kaleido.segments": 6, "fx.plasma.on": False,
-          "fx.plasma.level": 0.2, "dream.on": False, "dream.mix": 0.5, "band.0.post": 3.0,
+          "fx.plasma.level": 0.2, "fx.dream.on": False, "fx.dream.mix": 0.5,
+          "band.0.post": 3.0,
           "lfo.1.depth": 0.0, "tempo.bpm": 120.0}
 DEFAULTS = {"view.bright": 1.0, "view.speed": 0.5, "view.pattern": 0, "view.pattern_mix": 1.0,
             "camera.zoom": 1.0, "fx.kaleido.mix": 1.0, "fx.kaleido.segments": 6,
-            "fx.plasma.level": 0.2, "dream.mix": 0.3, "lfo.1.depth": 0.0}
+            "fx.plasma.level": 0.2, "fx.dream.mix": 0.3, "lfo.1.depth": 0.0}
 
 
 def test_ranked_puts_the_loadables_own_params_first_in_tiers():
@@ -198,7 +200,7 @@ def test_ranked_puts_the_loadables_own_params_first_in_tiers():
     # the rest by group, the patch groups first, each in registry order:
     # the plasma is off and the dream is off (dead), so not this loadable patch's;
     # a shared meta param off its value is not "moved" (the loadable patch never sets it)
-    assert rest == [("dream", ["dream.mix"]), ("fx", ["fx.plasma.level"]),
+    assert rest == [("fx", ["fx.plasma.level", "fx.dream.mix"]),
                     ("lfo", ["lfo.1.depth"]), ("band", ["band.0.post"]),
                     ("tempo", ["tempo.bpm"])]
     every = [p for p, _ in used] + [p for _, ids in rest for p in ids]
@@ -206,12 +208,12 @@ def test_ranked_puts_the_loadables_own_params_first_in_tiers():
 
 
 def test_ranked_is_pure_and_never_offers_a_dead_param_as_the_loadables():
-    args = (PARAMS, dict(VALUES), dict(DEFAULTS), {"dream.mix"}, set())
+    args = (PARAMS, dict(VALUES), dict(DEFAULTS), {"fx.dream.mix"}, set())
     a = ranked(*args)
     assert ranked(*args) == a and args[1] == VALUES          # the same answer, nothing moved
-    assert "dream.mix" not in [p for p, _ in a[0]]           # routed, but the dream is off
-    used, _rest = ranked(PARAMS, {**VALUES, "dream.on": True}, DEFAULTS, {"dream.mix"}, set())
-    assert used[0] == ("dream.mix", ROUTED)
+    assert "fx.dream.mix" not in [p for p, _ in a[0]]           # routed, but the dream is off
+    used, _rest = ranked(PARAMS, {**VALUES, "fx.dream.on": True}, DEFAULTS, {"fx.dream.mix"}, set())
+    assert used[0] == ("fx.dream.mix", ROUTED)
     # a caller's own rule
     used, _ = ranked(PARAMS, VALUES, DEFAULTS, set(), set(), shows=lambda pid: "no")
     assert used == []

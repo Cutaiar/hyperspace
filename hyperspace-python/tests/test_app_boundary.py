@@ -98,8 +98,8 @@ def test_a_shut_gate_opens_nothing(monkeypatch):
     r2.open_all()
     assert r2.get("leap").status.startswith("error: RuntimeError: no hands setup")
     # the dream worker is not a device: its gate is app's, as before
-    assert app._open_dream(_registry(), {"dream": {"enabled": False}}) == (None, "")
-    assert app._open_dream(_registry(), {}) == (None, "")            # off by default
+    assert app._open_dream({"dream": {"enabled": False}}) == (None, "")
+    assert app._open_dream({}) == (None, "")            # off by default
 
 
 def test_the_pad_gate_is_open_by_default(tmp_path):
@@ -152,7 +152,7 @@ def test_a_broken_adapter_is_a_note_not_a_crash(monkeypatch, capsys):
     assert [d.status for d in rig] == ["error: RuntimeError: boom"] * 3
     assert all(rig.adapter(k) is None for k in ("midi", "bridge", "hands"))
     assert notes == ["midi: boom", "bridge: boom", "hands: boom"]
-    assert app._open_dream(reg, {"dream": {"enabled": True}}) == (
+    assert app._open_dream({"dream": {"enabled": True}}) == (
         None, "dream worker off: RuntimeError: boom")
     # torch missing (no `dream` extra): dream.py's own `import torch`
     # fails, and the reason names the fix
@@ -160,7 +160,7 @@ def test_a_broken_adapter_is_a_note_not_a_crash(monkeypatch, capsys):
     monkeypatch.delitem(sys.modules, "hyperspace.dream")
     monkeypatch.delattr(hyperspace, "dream", raising=False)
     monkeypatch.setitem(sys.modules, "torch", None)
-    off, why = app._open_dream(reg, {"dream": {"enabled": True}})
+    off, why = app._open_dream({"dream": {"enabled": True}})
     assert off is None
     assert why == ("dream worker off: torch is not installed — run `uv sync`, "
                    "then launch with `uv run hyperspace`")
@@ -633,7 +633,7 @@ def test_cmd_brackets_go_back_and_forward_through_the_pages_visited():
     g = app.glfw
     log: list[str] = []
     h = _host(log)
-    for page in (4, 9):                     # the rail: view → camera → routing
+    for page in (4, 8):                     # the rail: view → camera → routing
         h.panel.page = page
         app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
 

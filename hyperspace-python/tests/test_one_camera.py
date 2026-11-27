@@ -55,17 +55,18 @@ CAMERA_AT = [40, 50]
 
 def without_lookback(doc: dict) -> dict:
     """`doc` without the retired look-back's knobs (plan 90 H2:
-    `graphmigrate.LB_GONE`; a load drops them and says so, a note these
-    tests of the eye are not about)."""
-    gone = {f"dream.{k}" for k in graphmigrate.LB_GONE}
-    return {**doc, "values": {k: v for k, v in doc["values"].items() if k not in gone}}
+    `graphmigrate.LB_GONE`) and the old dream's (H3: every `dream.*`, a dream
+    off and undriven being left out) — a load drops them, which these tests
+    of the eye are not about."""
+    return {**doc, "values": {k: v for k, v in doc["values"].items()
+                              if not k.startswith("dream.")}}
 
 
 def old_loadable(src: Path = TRIP, *, marked: bool = True) -> dict:
     """A corpus loadable patch as it was before `/9`: `/7`, no eye in its values
     (and, unmarked, its depths still measured along the linear ranges'
-    words — wave 0 T1's marker gone); without the retired look-back's knobs
-    (`without_lookback`)."""
+    words — wave 0 T1's marker gone); without the retired look-back's and
+    dream's knobs (`without_lookback`)."""
     doc = without_lookback(json.loads(src.read_text()))
     doc["schema"] = graphmigrate.WIRED_SCHEMA
     doc["values"] = {k: v for k, v in doc["values"].items() if not k.startswith("eye.")}

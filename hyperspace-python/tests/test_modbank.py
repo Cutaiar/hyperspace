@@ -235,7 +235,7 @@ def app(tmp_path):
     from hyperspace.control import Control
     from hyperspace.fx import FxState
     from hyperspace.library import Library
-        from hyperspace.params import build_registry
+    from hyperspace.params import build_registry
     from hyperspace.view import ViewState
 
     chain = Analyzer(Analyser())

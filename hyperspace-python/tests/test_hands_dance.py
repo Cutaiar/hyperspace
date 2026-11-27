@@ -236,7 +236,9 @@ ROUTES = {                    # the fixture's rows: source → the param it posi
     "hand:right.curl.ring": "pattern.mod.2", "hand:right.curl.pinky": "pattern.mod.3",
     "hand:left.spread": "pattern.mod.4", "hand:right.spread": "pattern.mod.5",
     "hand:left.energy": "view.inst_amp", "hand:right.energy": "view.speed",
-    "hand:left.flick": "view.bright", "hand:right.flick": "dream.mix",
+    # (plan 90 H3: the right flick rode `dream.mix`; a file with no dream drawn
+    # leaves that row out, so it rides another plain knob)
+    "hand:left.flick": "view.bright", "hand:right.flick": "view.lines_alpha",
     "hands:gap": "camera.zoom", "hands:twist": "camera.yaw",
 }
 

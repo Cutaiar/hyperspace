@@ -3183,7 +3183,7 @@ def retire_dreams(nodes: list, wires: list, rest: dict, ports: list | None = Non
     def retarget(pid: str) -> str | None:
         """Where a row on old dream knob `pid` goes; None: left out."""
         k = _dream_key(pid)
-        if not built or k in DREAM_GONE:
+        if not built or k is None or k in DREAM_GONE:
             return None
         if k in DREAM_WORKER or k in ("on", "k"):
             return f"fx.{role['dream']}.{k}"
@@ -3232,7 +3232,7 @@ def retire_dreams(nodes: list, wires: list, rest: dict, ports: list | None = Non
         k = _dream_key(old)
         label = f"{where} {r.get('source')} → {old}"
         new = retarget(old)
-        if new is None:
+        if new is None or k is None:
             notes.append(DREAM_ROW_NOTE.format(row=label, old=old))
             return []
         out = {**r, "target": new}

@@ -36,7 +36,9 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "desk-faders"
 FADER = apc40.CC_FADER
 GLYPHS = [f"S{k + 1}" for k in range(8)]
 TARGETS = ("view.points_alpha", "view.lines_alpha", "view.pattern_mix", "view.bmp_alpha",
-           "view.bright", "view.speed", "view.inst_amp", "dream.mix")
+           "view.bright", "view.speed", "view.inst_amp", "view.media_alpha")
+# (plan 90 H3: S8 rode `dream.mix`; a file with no dream drawn leaves that row
+# out, so the fixture's S8 rides another plain knob)
 SHIFT_TARGETS = (*(f"band.{i}.post" for i in range(6)), "master.dyn", "master.trim")
 
 
@@ -110,7 +112,7 @@ def test_every_corpus_loadable_leaves_the_faders_dark_and_shift_lights_the_audio
 def test_track_fader_is_a_loadable_layer_row_with_soft_pickup():
     """`loadable.track_fader(k, pid)` is the row a loadable patch's desk binds track
     fader k with: the patch layer's, `abs`, no feedback, soft pickup."""
-    b = loadable.track_fader(8, "dream.mix")
+    b = loadable.track_fader(8, "view.media_alpha")
     assert (b.source, b.op, b.layer, b.feedback, b.pickup) == (
         f"cc:7:{FADER}", "abs", "preset", None, True)
 

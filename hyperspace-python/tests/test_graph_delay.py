@@ -404,7 +404,8 @@ def test_nothing_of_plan_33_has_an_own_size(ctx):
     size — so the `Effect` own-size path and the refit never run for the
     693 goldens (row 368). (Plan 90 H2: but one — a fixture whose old values
     drew a look-back lands it as public parts, and the resize before its
-    delay keeps 512 on the long side by design (Q24): the one own size.)"""
+    delay keeps 512 on the long side by design (Q24): the one own size; H3:
+    and a migrated dream's Resize, its old res.)"""
     from hyperspace.render import Renderer
 
     vs = [View(Switches(), (240, 150))]
@@ -427,6 +428,13 @@ def test_nothing_of_plan_33_has_an_own_size(ctx):
             frame.root = frame
             writes = [m.inputs["image"] for m in g.nodes.values()
                       if isinstance(m, G.DelayWrite)]
+            # (plan 90 H3: a migrated dream's Resize, keyed, keeps its old res by
+            # design)
+            for m in g.nodes.values():
+                if isinstance(m, G.Effect) and m.effect.partition(".")[0] == "dream":
+                    src = m.inputs.get("image")
+                    writes.append(src.inputs.get("image") if isinstance(src, G.KeyNode)
+                                  else src)
             for n in g.nodes.values():
                 if isinstance(n, G.ResizeNode) and any(n is w for w in writes):
                     continue                    # (the migrated look-back's, Q24)

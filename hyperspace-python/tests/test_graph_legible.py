@@ -956,9 +956,10 @@ def test_every_nodes_side_panel_draws(rig):
     # plan 35 T5: and every frame kind and plan 34's nodes, declared (faint)
     e = graphview.Edit(graph=rig.lib.loaded_patch.graph, push=lambda label: None)
     # (plan 36 T2: the pattern is in already — the faces' wire says it;
-    # plan 90 H2: the look-back and its echoes' items are retired)
-    for kind, f in (("backdrop", None), ("guide", None),
-                    ("dream", None), ("delay", None), ("resize", None), ("composite", None)):
+    # plan 90 H2: the look-back and its echoes' items are retired;
+    # plan 90 H3: the dream is an effect file)
+    for kind, f in (("backdrop", None), ("guide", None), ("effect", "dream"),
+                    ("delay", None), ("resize", None), ("composite", None)):
         assert e.add_node(kind, f) is None, kind
     frame(rig.panel, "graph")
     st["idle_open"] = set(graphview.AREAS) | {graphview.OTHER}
@@ -988,9 +989,8 @@ def test_every_node_has_a_label_and_a_hover(rig):
     assert graphview.label_of("output.all") == "All outputs"
     assert graphview.label_of("output.2") == "Output 2"
     assert graphview.label_of("output.2", [NS(n=2, name="projector")]) == "projector"
-    # (plan 90 H2: the dream's knobs, `dream.*`, are its own id's — no look-back
-    # shares the prefix, so no params line)
-    assert graphview.hover_of("dream").endswith(" · id dream")
+    # (plan 90 H3: the dream is an effect, its knobs `fx.dream.*`, said)
+    assert graphview.hover_of("dream").endswith(" · id dream · params fx.dream.*")
     assert graphview.hover_of("output.2").endswith(" · id output.2")
     for fixture in fixtures:
         st = load_fixture(rig, fixture)
@@ -1031,9 +1031,8 @@ def test_home_page_maps_each_node_kind(rig):
     assert home(V("render:backdrop", "render", "Backdrop",
                   ref=G.BackdropNode("backdrop"))) == "media"
     assert home(view.node("render:shape")) == "view"
-    # (party-trip draws no dream — its stand-in; plan 90 H2: the LOOKBACK page
-    # is the dream's alone, the look-back retired)
-    assert home(V("render:dream", "render", "Dream", ref=G.DreamNode("dream"))) == "lookback"
+    # (plan 90 H3: the dream is an effect, homed on FX like any; the LOOKBACK
+    # page is retired)
     assert home(view.node("render:output.all")) == "output"
     # plan 89: an effect with a slot (party-trip's through output) is one
     # node — FX with it selected, its slot's ports on it

@@ -217,3 +217,11 @@ def test_a_deck_dreams_when_its_graph_holds_a_dream_on():
     assert dreams(deck)
     values["dream"]["on"] = False
     assert not dreams(deck)
+
+
+def test_the_lookback_pages_slot_keeps_its_index_and_shows_fx():
+    """Row 1185: the LOOKBACK page retires into the FX pane — its `ui.page`
+    slot stays where a saved `set` row has it (never reorder), and shows fx."""
+    from hyperspace import ui, ui_pane
+    assert ui.PAGE_KEYS[5] == "lookback" and ui.PAGE_KEYS.index("fx") == 6
+    assert ui_pane.section_of("lookback") == "fx"

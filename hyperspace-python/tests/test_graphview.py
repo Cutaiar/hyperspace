@@ -178,7 +178,7 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     assert owner_of(view, "fx.palette.mix") == "render:palette"
     assert owner_of(view, "fx.mix") == "group:fx"            # (no pipeline end to own it)
     assert owner_of(view, "fx.trail.fade") == "render:trail"
-    assert owner_of(view, "dream.mix") == "group:dream"      # (P2: the dream's; none here)
+    assert owner_of(view, "dream.mix") is None             # (plan 90 H3: no dream.* now)
     assert owner_of(view, "camera.zoom") == "render:shape"   # (its world pose: not a camera)
     assert owner_of(view, "eye.fov") == "render:scene"       # (the eye its geometries are seen through)
     assert owner_of(view, "eye.distance") == "render:scene"

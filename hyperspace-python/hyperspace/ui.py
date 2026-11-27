@@ -868,7 +868,9 @@ META_SECTIONS = ("output", "audio", "analyzer", "hands")
 # look off air's routes. The owner accepts this (2026-11-06, row 790) and wants it said.
 VIDEO_SOUND_REACHES = "Off air reacts to on air's video sound."
 
-PAGE_KEYS = ["output", "view", "faces", "media", "camera", "fx", "audio", "analyzer",
+# (plan 90 H3: `lookback`'s slot is kept — the page retired into the FX pane,
+# so it shows fx: `ui_pane.RETIRED_SLOTS`)
+PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
              "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist",
              "fractal"]
 
