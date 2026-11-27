@@ -103,3 +103,39 @@ def test_a_saved_matte_draws_as_it_did(ctx):
     t = np.clip((v - 0.3) / 0.4, 0.0, 1.0)
     want = t * t * (3.0 - 2.0 * t) * 255.0
     assert np.abs(row - want).max() <= 1.0
+
+
+
+def _key(ctx, level, soft, m, ramp) -> float:
+    """Key's ramp (`glsl.KEY_RAMP`, peak) for one grey pixel `m`, read back as float."""
+    prog = ctx.program(
+        vertex_shader="#version 330\nin vec2 p; void main() { gl_Position = vec4(p, 0, 1); }",
+        fragment_shader="#version 330\n" + glsl.KEY_RAMP + """
+uniform float m;
+out vec4 o;
+void main() { o = vec4(key_ramp(vec3(m))); }""")
+    for k, v in (("u_measure", 0), ("u_level", level), ("u_soft", soft), ("u_keep", 0),
+                 ("u_invert", 0), ("u_ramp", ramp), ("m", m)):
+        if k in prog:                 # (the compiler drops a uniform it can fold)
+            prog[k].value = v
+    vbo = ctx.buffer(np.array([-1, -1, 3, -1, -1, 3], "f4").tobytes())
+    vao = ctx.vertex_array(prog, [(vbo, "2f", "p")])
+    fbo = ctx.framebuffer(color_attachments=[ctx.texture((1, 1), 4, dtype="f4")])
+    fbo.use()
+    vao.render()
+    got = float(np.frombuffer(fbo.read(components=4, dtype="f4"), "f4")[0])
+    for x in (fbo, vao, vbo, prog):
+        x.release()
+    return got
+
+
+@pytest.mark.parametrize("ramp", [0, 1])
+def test_a_narrow_ramp_has_a_coverage_at_its_level(ctx, ramp):
+    """Devin on #520: a softness too small to move the upper edge in float32
+    (level 0.5, softness 1e-8) gave 0 / 0 at the level. The ramp takes its
+    width, as the old linear branch divided by the softness itself."""
+    assert np.float32(0.5) + np.float32(1e-8) == np.float32(0.5)     # (the edge does not move)
+    got = _key(ctx, 0.5, 1e-8, 0.5, ramp)
+    assert np.isfinite(got) and got == 0.0
+    assert _key(ctx, 0.5, 1e-8, 0.75, ramp) == 1.0
+    assert _key(ctx, 0.25, 0.5, 0.5, ramp) == pytest.approx(0.5, abs=1e-6)
