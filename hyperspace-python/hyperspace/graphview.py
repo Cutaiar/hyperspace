@@ -7514,6 +7514,12 @@ def render_drop(edit: Edit, node: str) -> str | None:
                                                             names)]
     gone = _take_out(doc, names)
     doc["wires"] += [x for x in joined if x not in doc["wires"]]
+    # (plan 87: a deleted node keyed black is clear is no longer keyed)
+    keys = [k for k in doc.get(rgraph.KEYS_KEY, []) if k not in names]
+    if keys:
+        doc[rgraph.KEYS_KEY] = keys
+    else:
+        doc.pop(rgraph.KEYS_KEY, None)
     if doc == before:
         return f"{label} is not in the patch's graph"
     _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])

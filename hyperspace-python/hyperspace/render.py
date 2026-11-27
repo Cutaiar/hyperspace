@@ -3694,7 +3694,20 @@ class Renderer:
 
     def _draw_cover(self, w: int, h: int) -> moderngl.Texture:
         """The faces again, solid, into the coverage mask — from the vertices
-        the scene pass left in the face buffer."""
+        the scene pass left in the face buffer. Plan 90 (H2): the framebuffer
+        and viewport bound before are bound again after — a cut takes the
+        cover now, pulled in the middle of another node's pass (an effect
+        painting into its consumer), where the look-back's trail pass bound
+        its own target after."""
+        ctx = self.ctx
+        was, vp = ctx.fbo, tuple(ctx.viewport)
+        try:
+            return self._draw_cover_pass()
+        finally:
+            was.use()
+            ctx.viewport = vp
+
+    def _draw_cover_pass(self) -> moderngl.Texture:
         ctx = self.ctx
         self.cover.ensure(self.scene.size)
         self.cover.fbo.use()

@@ -2111,7 +2111,8 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
             return KNOB_FIELDS_MOST.format(node=node, most=_fx.KNOB_UNITS)
     # plan 36 T2: a pin goes where its kind is taken, a depth port takes the
     # scene's depth alone, a layer's or a guide's hands a hands node
-    if PINS.get(w.src) == "scene" and not (src_kind == "cover" and port == "cover") and not (
+    # (plan 90 H2: the cover into any mask port — a cut's mask, a mask's)
+    if PINS.get(w.src) == "scene" and not (src_kind == "cover" and want == MASK) and not (
             src_kind == DEPTH_PORT and port == DEPTH_PORT):
         return f"{w.src} is {PIN_WORDS[w.src]}"
     if (port == DEPTH_PORT and kind in ("composite", "output")
@@ -4508,6 +4509,7 @@ class Delay(Node):
     INPUTS: ClassVar[dict[str, str]] = {}
     OUTPUT = IMAGE
     TIMED = False                 # no pass of its own: its write's is `delay(write)`
+    read_as_stack = False         # plan 90 H2: a reader takes it as a stack (`_Build._stacks`)
 
     def _read(self, frame: Frame) -> moderngl.Texture | None:
         """The read side's texture while the pair holds a frame, else None
@@ -4657,6 +4659,13 @@ class DelayWrite(Node):
         src = self.inputs["image"]
         if get is None or src is None:
             return
+        # (plan 90 H2: a delay a reader takes as a stack keeps it whether or
+        # not that reader is drawn this frame — the scene off on every output
+        # still records, as the look-back did)
+        g = frame.graph
+        held = g.nodes.get(self.delay) if g is not None else None
+        if getattr(held, "read_as_stack", False) and getattr(r, "delay_stack", None) is not None:
+            r.delay_stack(self.delay)
         try:
             held = self.held(frame)
             pair = get(self.delay)
@@ -5441,6 +5450,14 @@ class CutNode(Node):
             if amount < 1.0:
                 said += f" · amount {amount:.2f}"
             self.said = said
+            # (plan 90 H2: made here, in order, where it is read at the
+            # frame's size — as an effect folds in its `run` — never pulled
+            # half-way through another node's pass: its mask pass binds its
+            # own target and texture units, and a cut of the faces' cover
+            # inside an effect's pass drew that effect black)
+            if self._own(frame) is None and (frame.graph is None
+                                             or frame.graph.at_frame(self)):
+                self.made(frame)
 
 
 # (the values of a segment with none this frame: read, never written)
@@ -5809,10 +5826,10 @@ class SegmentPin(Node):
 # ---------------------------------------------------------------- layers
 
 class Cover(Node):
-    """The faces' coverage mask (`render.CoverTarget`): the scene's faces
-    again, solid, one channel — only while a look-back it is wired into
-    occludes (`Lookback.wants_cover`). Reads the face buffer the scene pass left,
-    so it runs after the scene it masks."""
+    """The faces' coverage mask (`render.CoverTarget`), `scene.cover`: the
+    scene's faces again, solid, one channel — made where a wire takes it
+    (plan 90 H2: a cut's mask too, not the look-back's alone). Reads the face
+    buffer the scene pass left, so it runs after the scene it masks."""
 
     KIND = "layer"
     INPUTS: ClassVar[dict[str, str]] = {"scene": IMAGE}
@@ -5823,10 +5840,10 @@ class Cover(Node):
     wanted_by: tuple[str, ...] = (LOOKBACK,)
 
     def run(self, frame: Frame) -> None:
-        frame.cover = None
-        if any(frame.r.ring(n, _ring_state(frame, n)).wants_cover() for n in self.wanted_by):
-            with frame.timed(self.name):
-                frame.cover = frame.r._draw_cover(frame.w, frame.h)
+        # (plan 90 H2: built only where something reads it — a look-back's
+        # cover or a cut's mask — so drawn whenever built)
+        with frame.timed(self.name):
+            frame.cover = frame.r._draw_cover(frame.w, frame.h)
 
     def image(self, frame: Frame) -> moderngl.Texture | None:
         return frame.cover
@@ -6234,7 +6251,16 @@ class Composite(Node):
         if over is None or self.muted(frame):
             return
         try:
-            tex = over.image(frame)
+            # (plan 90 H2: `dst`'s pool texture held while `over` is made — an
+            # effect laid over, made on this ask, must never take the texture
+            # this composite is painting into: `Effect._aux`'s guard)
+            held = frame.data.setdefault("fx#held", set())
+            guard = {id(t) for t, f in frame.pool(0) if f is dst} - held
+            held |= guard
+            try:
+                tex = over.image(frame)
+            finally:
+                held -= guard
             if tex is None:
                 return
             with frame.timed(self.name):
@@ -8041,6 +8067,7 @@ class _Build:
                     or STACK_PORT not in target.INPUTS or not isinstance(src, Delay)):
                 continue
             target.inputs[STACK_PORT] = src
+            src.read_as_stack = True
 
     def _split(self, layers: tuple[HandsLayer, ...]) -> None:
         """How each layer splits its guide out (`HandsLayer.split`): always

@@ -1018,6 +1018,7 @@ here; overturn → the change, then the same.
 | 1173 | Curve, a picture's remap with the lane modifier `curve`'s name and knobs (Shape 4^shape, Invert); contrast c is Shape log₄ c | 962 | owner — 2026-11-26 (plan 90 Q15) |
 | 1174 | Black is clear's ramp, appended: smooth (the default) or linear — brightness as coverage at level 0, softness 1 on peak | 962 | owner — 2026-11-26 (plan 90 Q19) |
 | 1176 | Matte gains Key's peak measure (`matte.from` 3, appended) and its ramp (`matte.ramp`: smooth, linear); one measure and one ramp for Key and Matte, written once (`glsl.KEY_SHAPE`) | 964 | owner — 2026-11-26 (plan 90 Q23) |
+| 1179 | `scene.cover` goes into any mask port (a cut's mask), made where a wire takes it; a cut is made in its own run; a delay read as a stack records whether or not its reader is drawn; a composite never paints into the texture its `over` is made in; a wired frame's `keys` save on one line and go with their node | — | (rec) — found building plan 90 H2 |
 
 "—": no hand check shows it; tests only.
 
@@ -16267,3 +16268,8 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **What.** `matte.from` gains peak (index 3, appended: a saved 0–2 keeps its source); `matte.ramp` (smooth, linear) is Key's ramp. The measure (peak, Rec. 709 luma) and the ramp between two values are written once (`glsl.KEY_SHAPE`: `key_measure`, `key_between`) and read by Key's pass and Matte's (plan 67 §3.11). A matte with the defaults draws as before (`tests/test_matte_peak.py`).
 - **Answer.** owner, 2026-11-26 (plan 90 Q23). The alternative, a mask union op (`max` of two masks), is used by nothing else.
 - **Judge it.** 964.
+
+### 1179. The faces' cover, any mask port; four graph fixes
+
+- **What.** `scene.cover` goes into any mask port, a cut's first (it went into `lookback.cover` alone); the Cover node is built only where a wire takes it, and drawn then (`render._draw_cover` binds the framebuffer and viewport it found again after). A cut is made in its own `run`, in order, where it is read at the frame's size — as an effect folds in its `run` — never pulled half-way through another node's pass: a trail cut by the cover under Plasma drew black (`tests/test_cover_into_a_cut.py`). A delay a Trail or Read takes as a stack is marked so by the build (`Delay.read_as_stack`), and its write asks for the stack every frame, drawn or not. A composite holds its target's pool texture while its `over` is made, so an effect made on that ask never takes it. A wired frame's `keys` save on one line after its wires; a deleted node leaves them (`tests/test_graph_fixes_h2.py`).
+- **Answer.** Found building plan 90's H2 (the look-back's retirement exercises each); recorded here, each on its own.
