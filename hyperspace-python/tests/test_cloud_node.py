@@ -411,3 +411,30 @@ def test_the_cloud_is_copied_as_the_shape_is(ctx, tmp_path):
     assert not (one == two).all()
     none = _draw(ctx, r, vs, _view({"instances": 0}), reg)
     assert r.stats["clouds"]["cloud"] == 0 and not none[..., :3].any()
+
+
+def test_fit_frames_the_whole_cloud(ctx, tmp_path):
+    """Fit gives each copy room for the cloud's own reach (its turned box), as it gives
+    a shape room for any shape's: the fitted knot's every point is on screen, with its
+    dot, where the shape's extent would push some off."""
+    reg = registry(tmp_path)
+    r = _clouded(ctx, reg)
+    vs = views(ctx, S())
+    s = _view({"size": 1.0, "inst_fit": True})
+    _draw(ctx, r, vs, s, reg)
+    st = s.clouds["cloud"]
+    rows = r._copies_of(G._Sized(st, 0.0), W, H, np.zeros((0, 3)),
+                        eye_matrix(W, H, EYE_FOV, EYE_DISTANCE), 1.0)
+    pts = reg.clouds["cloud:scan"].points.astype(np.float64)
+    box = np.array([[x, y, z] for x in (pts[:, 0].min(), pts[:, 0].max())
+                    for y in (pts[:, 1].min(), pts[:, 1].max())
+                    for z in (pts[:, 2].min(), pts[:, 2].max())])
+    from hyperspace.field import SHAPE_EXTENT
+    sized = G._Sized(st, SHAPE_EXTENT * float(np.linalg.norm(box, axis=1).max()))
+    (cx, cy, k, _), = r._copies_of(sized, W, H, box, eye_matrix(W, H, EYE_FOV, EYE_DISTANCE),
+                                   1.0)
+    xy, cw = _project(pts * k + np.array([cx, cy, 0.0]), 1.0)
+    assert (cw > 0).all()
+    assert ((xy[:, 0] >= 0) & (xy[:, 0] < W) & (xy[:, 1] >= 0) & (xy[:, 1] < H)).all()
+    assert k < rows[0][2]                    # smaller than a shape-sized copy's
+    assert r.stats["clouds"]["cloud"] == reg.clouds["cloud:scan"].n

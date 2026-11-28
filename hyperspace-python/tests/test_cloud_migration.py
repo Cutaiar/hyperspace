@@ -202,3 +202,30 @@ def test_thirteen_is_pure_and_says_the_rows_on_the_shared_look():
     fwd = M.forward({**out, "schema": M.THIRTEEN_SCHEMA}, {}, clouds=("scan", "desk", "x"))
     assert [e for e in fwd.doc["graph"]["nodes"] if e["kind"] == "cloud"] == \
         [e for e in out["graph"]["nodes"] if e["kind"] == "cloud"]
+
+
+def test_the_first_save_over_a_file_before_the_wired_frame_backs_it_up(tmp_path):
+    """A file before `/7` names no scene: the migration makes its frame, scene and
+    all (`graphmigrate.seven`), and its clouds with it — so its first rewrite keeps it."""
+    app, _, home = _app(tmp_path)
+    src = Path(__file__).parent / "fixtures" / "factory-sources" / "presets" / "party-trip.json"
+    old = json.loads(src.read_text())
+    assert M.schema_version(old) < M.SEVEN and "graph" not in old
+    path = home / "loadable" / "ancient.json"
+    path.write_text(src.read_text())
+    assert app.loaded_patch.load("ancient") is not None
+    assert [c.device for c in app.loaded_patch.graph.spec.clouds] == ["scan"]
+    app.loaded_patch.save_as("ancient")
+    assert path.with_name(f"{path.name}.bak-v{CLOUDS_BACKUP}").read_text() == src.read_text()
+
+
+def test_the_device_menu_lists_the_renderers_clouds():
+    """device ▸ reads the graph section's renderer (`edit.render` is its last graph)."""
+    from types import SimpleNamespace as NS
+
+    from hyperspace import graphview
+    devs = [NS(kind="cloud", role="scan"), NS(kind="kinect", role="room"), NS(kind="midi", role="x")]
+    gs = NS(renderer=NS(cloud_source=devs))
+    e = graphview.Edit(graph=gs, render=NS(nodes={}))
+    assert graphview.cloud_devices(e) == ["scan", "room"]
+    assert graphview.cloud_devices(graphview.Edit(graph=NS(renderer=None))) == []

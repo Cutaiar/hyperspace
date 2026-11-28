@@ -298,3 +298,21 @@ def test_the_clouds_an_old_file_drew_are_this_macs_cloud_devices(tmp_path):
     assert doc["schema"] == "hyperspace.loadable/13"
     assert {"kind": "cloud", "device": "room"} in doc["graph"]["nodes"]
     assert {"from": "cloud", "to": "scene.geometry"} == doc["graph"]["wires"][0]
+
+
+def test_the_clouds_are_the_checked_list_and_an_empty_list_is_the_list(tmp_path):
+    """As the app reads it (`config.listed_devices`): a role trimmed, a duplicate dropped;
+    a list that reads, even empty, is the list — the config's seed is not read then."""
+    tool = _tool()
+    lib, home = tmp_path / "lib", tmp_path / "home"
+    lib.mkdir()
+    home.mkdir()
+    (home / "config.toml").write_text('[[devices]]\nrole = "seed"\nkind = "cloud"\nfile = "x.npz"\n')
+    (lib / "devices.json").write_text(json.dumps({"schema": "devices/1", "devices": []}))
+    assert tool.cloud_roles_of(lib, home) == ()
+    (lib / "devices.json").write_text(json.dumps({"schema": "devices/1", "devices": [
+        {"role": " scan ", "kind": "cloud", "file": "x.npz"},
+        {"role": "scan", "kind": "cloud", "file": "y.npz"}]}))
+    assert tool.cloud_roles_of(lib, home) == ("scan",)
+    (lib / "devices.json").write_text("{ not json")
+    assert tool.cloud_roles_of(lib, home) == ("seed",)

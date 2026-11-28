@@ -133,24 +133,28 @@ def configured_library(home: Path) -> Path:
 
 def cloud_roles_of(library: Path, home: Path) -> tuple[str, ...]:
     """Plan 93: the cloud devices' roles this Mac draws, in list order — the
-    shared device list's (``<library>/devices.json``, `devicelist`), else the
-    config's ``[[devices]]`` seed — the kinds `graph.CLOUD_DEVICES` (a cloud, a
-    Kinect): what a loadable patch from before ``/13`` drew a point cloud for in
-    its scene (`graphmigrate.thirteen`). None found is none."""
+    shared device list's (``<library>/devices.json``, `devicelist`), checked as
+    the app checks it (`config.listed_devices`: roles trimmed, a duplicate or a
+    bad entry dropped), and authoritative once it reads, even empty; only with
+    no list that reads, the config's ``[[devices]]`` seed (checked by
+    `config.load`) — the kinds `graph.CLOUD_DEVICES` (a cloud, a Kinect): what a
+    loadable patch from before ``/13`` drew a point cloud for in its scene
+    (`graphmigrate.thirteen`). None found is none."""
     from hyperspace import config, devicelist
     from hyperspace.graph import CLOUD_DEVICES
-    raw: list = []
+    entries: list[dict] | None = None
     listed = library / "devices.json"
     if listed.is_file():
         try:
             raw, _ = devicelist._parse(listed.read_bytes())
+            entries = config.listed_devices(raw, home)[0]
         except (OSError, ValueError):
-            raw = []
-    if not raw and (home / config.FILE).is_file():
-        got = config.load(home / config.FILE).get("devices")
-        raw = got if isinstance(got, list) else []
-    return tuple(str(e.get("role")) for e in raw
-                 if isinstance(e, dict) and e.get("kind") in CLOUD_DEVICES and e.get("role"))
+            entries = None
+    if entries is None:
+        entries = (config.devices(config.load(home / config.FILE))
+                   if (home / config.FILE).is_file() else [])
+    return tuple(str(e["role"]) for e in entries
+                 if e.get("kind") in CLOUD_DEVICES and e.get("role"))
 
 
 def loadable_files(library: Path) -> list[Path]:

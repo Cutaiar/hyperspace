@@ -7230,8 +7230,9 @@ def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
 def cloud_devices(edit: Edit) -> list[str]:
     """The roles a cloud node's device ▸ offers (plan 93): this Mac's cloud
     devices (`graph.cloud_roles` of the renderer's `cloud_source`), listed,
-    open or not; none without a renderer."""
-    r = getattr(edit, "render", None)
+    open or not; none without a renderer. (The renderer is the graph
+    section's, `GraphSection.renderer`: `edit.render` is its last graph.)"""
+    r = getattr(edit.graph, "renderer", None)
     return list(rgraph.cloud_roles(getattr(r, "cloud_source", None)))
 
 

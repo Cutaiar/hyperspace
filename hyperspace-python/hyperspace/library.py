@@ -1915,8 +1915,10 @@ def kept_look(path: Path) -> tuple[dict[str, Any], BusCuts]:
 def _clouds_owed(text: str | None) -> bool:
     """Plan 93: whether loadable patch text `text` is from before `/13` and is
     one its load may have rewritten for its clouds (`graphmigrate.thirteen`): a
-    wired section that names the scene, or a cloud wire cut in its `bus` — so
-    its first rewrite keeps it beside itself (`CLOUDS_BACKUP`)."""
+    wired section that names the scene, a cloud wire cut in its `bus`, or a
+    file before the wired frame (`/7`), whose scene the migration makes
+    (`graphmigrate.seven`) — so its first rewrite keeps it beside itself
+    (`CLOUDS_BACKUP`)."""
     try:
         doc = json.loads(text) if text else None
     except ValueError:
@@ -1926,6 +1928,8 @@ def _clouds_owed(text: str | None) -> bool:
     version = graphmigrate.schema_version(doc)
     if version is not None and version >= graphmigrate.THIRTEEN:
         return False
+    if version is None or version < graphmigrate.SEVEN:
+        return True
     bus = doc.get(graphmigrate.BUS_KEY)
     if any(is_old_cloud_wire(w) for w in BusCuts.read(bus).cut):
         return True

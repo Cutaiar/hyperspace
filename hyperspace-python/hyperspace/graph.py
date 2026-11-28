@@ -138,6 +138,7 @@ import moderngl
 import numpy as np
 
 from . import fx as _fx
+from .field import SHAPE_EXTENT
 from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix, turn_matrix
 from .outputs import View
 from .view import (
@@ -4018,6 +4019,17 @@ class _CloudGL:
 
 
 _CLOUD_DEFAULT = CloudState()
+
+
+class _Sized:
+    """A cloud's state as the copies' layout reads it (`field.field`): itself,
+    and `inst_extent`, the cells the cloud's widest reach takes at scale 1."""
+
+    def __init__(self, state: CloudState, extent: float):
+        self._state, self.inst_extent = state, extent
+
+    def __getattr__(self, name: str):
+        return getattr(self._state, name)
 # what a cloud node says of itself on GRAPH (`PointCloud.said`)
 CLOUD_NO_DEVICE = "no device: pick one on its menu"
 CLOUD_NOT_LISTED = "{role} is not listed on this Mac"
@@ -4096,7 +4108,12 @@ class PointCloud(Node):
             # box turned — its own units, before its copy's scale
             box = np.array([[x, y, z] for x in slot["box"][:, 0] for y in slot["box"][:, 1]
                             for z in slot["box"][:, 2]], dtype=np.float64) @ turn.T
-            inst = r._copies_of(st, w, h, box, vp, frame.dpr)
+            # (Fit gives each copy room for the cloud's own widest reach, as
+            # it gives a shape room for any shape's: `field.SHAPE_EXTENT` per
+            # unit of radius, the radius the turned box's farthest corner)
+            reach = float(np.linalg.norm(box, axis=1).max()) if len(box) else 1.0
+            inst = r._copies_of(_Sized(st, SHAPE_EXTENT * max(reach, 1e-3)), w, h, box, vp,
+                                frame.dpr)
             p = gl.prog
             p["u_vp"].write(np.asarray(vp, dtype="f4").T.tobytes())
             p["u_px"].value = (float(max(w, 1)), float(max(h, 1)))
