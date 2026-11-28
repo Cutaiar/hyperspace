@@ -1,6 +1,6 @@
 # Plan 92 — any number of scenes, shapes, backdrops and patterns
 
-**A design, not a build** (2026-11-28). Nothing here is built. **Revised the same day
+**A design, then a build** (2026-11-28). Phase 1 is built (§8), phase 2 (§9). **Revised the same day
 (§6, §7):** the owner's answers — one world, a scene a camera onto it, a point cloud a
 geometry like any other — overrule §3–§5 where they differ. Tags: **[V]** read in the
 code, **[M]** measured in this session, **[Rec]** a recommendation.
@@ -281,3 +281,90 @@ Starts once §7.1's work is on `main`.
 - **Tests.** `tests/test_backdrops_numbered.py`; hand check 982.
 
 Next: phase 2, the one world and a second camera.
+
+## 9. Phase 2: the one world and a second camera (2026-11-28, rows 1216–1219)
+
+### 9.1 The build note [V]
+
+What changes, read in the code before building:
+
+- **The section.** `scene` is declared by a wire, as today; `scene.<n>` by its entry,
+  `{"kind": "scene", "instance": n}` (`graph.SceneAt(n)`, `NUMBERED_FRAME_KINDS` gains
+  `scene`, `entry_declares`). Its pins are `scene.<n>.cover` and `scene.<n>.depth`
+  (`graph.scene_pin`, `pin_node`); its `geometry` takes several wires in their order
+  (`graph.is_many_port`, which the four `in MANY_PORTS` sites in `graphview` and `patches`
+  now ask). A wire to an undeclared one says `no scene.2 node in this graph (add one: …)`.
+- **The renderer.** The per-scene state that was renderer-wide moves onto a
+  `render.ScenePass` per scene: its `SceneTarget`, its `CoverTarget`, the face state its
+  shape's draw leaves for its cover (`_face_verts`, `_copies`, the copies' rows, `_scene_mats`,
+  `_cover_cells`), what the shape's `prepare` hands it (`_pic`, `_face_layer`,
+  `_face_plain`), its ground (`scene_ground`) and its eye. `Renderer.scene_pass(name)`
+  makes one current for a scene's run and its cover's; the renderer's old fields are the
+  current pass's (properties), the first scene's outside any run — so every caller that
+  read `r.scene` or `r._pic` reads the scene being drawn, and nothing else moved.
+- **Pose once, draw per eye.** `Renderer.draw_scene` is split: `pose_shape` (the CPU half —
+  `shapeframe.frame`, the 4D turn and projection, the painter sort, the depth cue, every
+  vertex array) and `draw_posed` (the eye's matrix, the copies it sees, the clear, the
+  draws, the depth pass). `graph.Shape.posed` makes the pose on the first ask of a frame and
+  keeps it in the root frame's data; each scene draws it through its own eye, uploading the
+  vertices once (`Renderer._in_bufs`). `draw_scene` is the two in a row, so every caller
+  of it (the wire thumbnail, the tests) is as before.
+- **The eye.** `geometry.eye_matrix` takes `yaw` / `pitch`, an orbit about the world
+  origin, still looking at it (`eye_turn`, `eye_position`); at 0, 0 it is the matrix it always
+  was. A scene past the first has an `EyeState` (`view.py`; `ViewState.eyes`, `Frame.eyes`)
+  and four params, `eye.<n>.fov`, `.distance`, `.yaw`, `.pitch`
+  (`params.declare_scenes`, declared from the landing as a matte's, sorted on load by
+  `is_eye_id`). A new one is the default eye: on the world's origin (§7, Q5). The first
+  keeps `eye.fov` and `eye.distance` and gains nothing (row 1217).
+- **World objects through each eye.** The hands are settled once a frame
+  (`Ghost.settle`), then drawn through the scene's eye (`ghost.Settled.through`, from the
+  calibration it keeps); a point cloud's matrix is the scene's eye (`graph.eye_of_frame`).
+- **GRAPH.** `scene` leaves `graphview.ONCE`: the picker adds the next scene
+  (`next_scene`), its geometry wires copied from the first's in their order
+  (`_seen_copied`), its eye on the origin. A delete is any node's. `eye.<n>.*` sits on its
+  scene's node (`graphview._eye_owner`, `param_ids`).
+- **Patches.** `scene` leaves `patches.ONE_PER_FRAME`; a patch's scene spawns as the next
+  number (the ordinary rename), a numbered scene carrying its `eye.<n>.*` renamed with it
+  (`patches._param_rows`, `_Renamer.param`). The first scene carries no param, as before:
+  `eye.*` is the look's.
+- **The file format: no bump** (row 1219). No saved id moves: the first scene's every id
+  (`eye.fov`, `eye.distance`, `scene.cover`, `scene.depth`) is as it was, and no
+  show gains a value on re-save (the corpus round-trips byte for byte). What an older build
+  makes of a file this branch writes: a section holding `scene.2` is refused in words
+  ("scene node: no key 'instance' (it takes nothing)"), drawn black as any section it cannot
+  read; both Macs run one build.
+
+### 9.2 Still open
+
+- **The first eye's orbit** (row 1217). `eye.yaw` / `eye.pitch` would be two new saved ids
+  on every show; left out, so the first camera stands where it always stood. A later
+  change can add them (a re-save then writes them: a format addition, no rename).
+- **The see-through order from another side** (row 1218). The painter sort is the shape's
+  own (the 4D `w` of a 4D shape, the default eye's depth of a 3D one), made once — the owner's
+  "its sort runs once". Seen from behind, a 3D shape's see-through faces keep the front's
+  order. A fractal's walk is cut for the first scene's eye. The rig's box (`world.box`,
+  the poi) is the first scene's.
+- **The hands' own pictures through a second eye** (row 1218, Devin on #528). Solid hands in
+  a scene go through its eye; a hands layer or guide is one picture, made through the first
+  eye, so laid over `scene.2` (or depth-composited with `scene.2.depth`) it is from the
+  other camera. Which consumer's eye a shared layer takes is still to decide.
+- **Hand checks 983–984** on the Mac, and GRAPH's **gpu cost** chip over two scenes.
+
+### 9.3 Built
+
+As §9.1. **The proof:** `tests/test_scenes_numbered.py::test_two_outputs_show_one_tesseract_from_two_angles_posed_once`
+— one tesseract seen by `scene` and `scene.2`, each into its own output: two different
+pictures, the first the one-scene frame pixel for pixel, the second what the first scene's
+eye draws standing at the same orbit, and `Renderer.stats["posed"]` 1 for the frame.
+
+- **The picture.** [`assets/92-phase2/two-cameras.png`](assets/92-phase2/two-cameras.png): one tesseract, posed once, through `eye.*` and `eye.2.*` (yaw 60°, pitch 25°).
+- **Tests.** `tests/test_scenes_numbered.py`; the spies on the scene pass in
+  `tests/test_render.py`, `test_graph_faces.py` and `test_graph_switch.py` watch
+  `draw_posed` (what the graph's shape calls now); `test_patches_frame_kinds.py` expects
+  the scene to land as `scene.2`. Hand checks 983, 984.
+- **Devin on #528.** A keyed scene's cover masks its own pass (`Cover.of_scene`); a lift or
+  spawn never makes a numbered scene the first; GRAPH draws every scene's pins.
+- **Restart** after pulling: the renderer's per-scene state and the view's `eyes` are new
+  fields on live objects.
+
+Next: phase 3, shape and pattern instances.

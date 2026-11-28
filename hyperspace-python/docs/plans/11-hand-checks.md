@@ -9186,6 +9186,14 @@ Headless: `tests/test_backdrops_numbered.py` (declared, drawn as the first at it
 
 **982. Two backdrops.** (Mac, GRAPH) Add **backdrop** from the picker on a show that has one, wire a channel into `backdrop.2.image`, the scene into `backdrop.2.scene` and `backdrop.2` into output 2; turn **Backdrop 2 alpha**. *Pass:* output 1 is as it was; output 2 shows the scene over the second picture at its own alpha; delete `backdrop.2` and output 2 shows the scene alone; save, reopen, and both are there. *Fail:* the first backdrop's alpha moving the second's, a second refused, or the show changing on reopen.
 
+## GM. The one world and a second camera (plan 92 phase 2, rows 1216–1219, 2026-11-28)
+
+Headless: `tests/test_scenes_numbered.py` (declared, the pins, two targets, the eye's orbit, one tesseract from two angles posed once, the picker, a delete, a spawn).
+
+**983. Two cameras on one tesseract.** (Mac, GRAPH) On a show with the shape in the scene, add **scene** from the picker: `scene.2` appears seeing what the scene sees. Wire `scene.2` into output 2 and turn **Eye 2 yaw** to about 60°, then **Eye 2 pitch**. *Pass:* output 1 is as it was; output 2 shows the same tesseract, turning in step with output 1, seen from the side and then from above; **Eye 2 distance** moves only output 2; hands wired into both scenes are seen from both sides; delete `scene.2` and output 2 goes black; save, reopen, and `scene.2` is there with its eye. *Fail:* the first eye moving with the second's knobs, the two outputs out of step, or the show changing on reopen.
+
+**984. One shape, its work once.** (Mac, SYSTEM / GRAPH's **gpu cost** chip) Over a 600-cell with a pattern on its faces, note the frame time with one scene, then add `scene.2` into output 2. *Pass:* the second scene costs its draw (about the scene's own GPU line again), not a second shape's CPU: the frame's CPU time barely moves; the faces' picture is the same in both. *Fail:* the CPU time doubling, or output 2's faces showing another picture.
+
 ## FT. The Kinect (row 1130, 2026-11-24)
 
 Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).

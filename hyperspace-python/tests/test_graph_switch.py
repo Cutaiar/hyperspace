@@ -326,13 +326,13 @@ def test_a_migrated_view_media_route_still_switches_the_faces(ctx):
     r = _on_renderer(ctx, app, m)
     vs = _views(ctx, (160, 120))
     seen = []
-    real = r.draw_scene
+    real = r.draw_posed          # (plan 92 phase 2: the graph's shape draws a pose)
 
-    def spy(s, *a, **kw):
+    def spy(ps, s, *a, **kw):
         seen.append(r._face_media(s))
-        return real(s, *a, **kw)
+        return real(ps, s, *a, **kw)
 
-    r.draw_scene = spy
+    r.draw_posed = spy
     lanes = _Lanes()
     shown = []
     for k, u in enumerate((0.0, 0.25, 0.0)):

@@ -608,13 +608,13 @@ def test_one_raising_frame_does_not_strand_the_next(ctx):
     s = ViewState(shape=3, planes=[True] * 6)
     r.draw(s, 160, 100, t_now=0.0)
     before = _pixels(win)
-    real = r.draw_scene
+    real = r.draw_posed              # (plan 92 phase 2: the graph's shape draws a pose)
 
     def once(*a, **k):
-        r.draw_scene = real
+        r.draw_posed = real
         raise RuntimeError("one bad frame")
 
-    r.draw_scene = once
+    r.draw_posed = once
     s.ang = [a + 0.3 for a in s.ang]
     with pytest.raises(RuntimeError):
         r.draw(s, 160, 100, t_now=1.0)
@@ -1538,14 +1538,14 @@ def test_a_face_pass_that_raises_leaves_the_frame_and_the_window_bound(ctx):
     s = _face_view(card, pattern=2)
     r.draw(s, 160, 100, t_now=0.0)
     before = _pixels(win)
-    real = r.draw_scene
+    real = r.draw_posed              # (plan 92 phase 2: the graph's shape draws a pose)
 
     def once(*a, **k):
-        r.draw_scene = real
+        r.draw_posed = real
         assert r._pic is r.face_pic.tex              # the picture was handed over…
         raise RuntimeError("one bad frame")
 
-    r.draw_scene = once
+    r.draw_posed = once
     with pytest.raises(RuntimeError, match="one bad frame"):
         r.draw(s, 160, 100, t_now=1.0)
     assert ctx.fbo is win and ctx.viewport == (0, 0, 160, 100) and r._pic is None   # …and taken back

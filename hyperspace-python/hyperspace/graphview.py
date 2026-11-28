@@ -130,7 +130,7 @@ from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
 from .groupwords import group_title
-from .params import PATCH_GROUPS, Kind, Param, Registry, rename_keys
+from .params import PATCH_GROUPS, Kind, Param, Registry, eye_prefix, rename_keys
 from .routing import (
     MOD_OPS,
     PAIR_SCHEME,
@@ -416,11 +416,12 @@ def _effect_owner(pid: str, ctx: _Ctx) -> str | None:
 
 
 def _eye_owner(pid: str, ctx: _Ctx) -> str | None:
-    """`eye.*` (the fov and the distance) is the first scene's: a scene is its geometries
-    and the eye they are seen through. With no scene in the frame, the group's node."""
-    scenes = sorted((n for n in ctx.names if kind_of(n) == "scene"),
-                    key=lambda n: (len(n), n))      # `scene`, `scene.2`, …
-    return scenes[0] if scenes else None
+    """Each scene is a camera (plan 92 phase 2): `eye.*` (its fov, distance,
+    yaw and pitch) is the first scene's, `eye.<n>.*` scene `scene.<n>`'s. With
+    that scene not in the frame, the group's node."""
+    seg = pid.split(".")
+    name = f"scene.{seg[1]}" if len(seg) >= 3 and seg[1].isdecimal() else "scene"
+    return name if name in ctx.names else None
 
 
 def _output_owner(pid: str, ctx: _Ctx) -> str | None:
@@ -866,7 +867,8 @@ LABELS: dict[str, str] = {
 # own `@tip` when it has one)
 HOVERS: dict[str, str] = {
     "shape": "The polytope. Its faces show the faces pattern, or the picture wired into faces.",
-    "scene": "Draws the shape and any hands wired into it, through the camera.",
+    "scene": ("A camera onto the world: draws what is wired into its geometry, through its "
+              "own eye (eye.* the first scene's, eye.2.* scene 2's)."),
     "hands": ("The tracked hands as geometry: wire them into a scene, or draw them alone as "
               "a hands layer."),
     "layer": "The hands drawn alone, to lay over a picture or put through effects.",
@@ -1180,8 +1182,9 @@ def param_ids(reg, nid: str) -> list[str]:
     ids = [p.id for p in reg if not p.alias and (p.id == pre or _under(p.id, pre))]
     # plan 87: a keyed node's black is clear knobs (`key.<name>.*`) after its own
     ids += [p.id for p in reg if _under(p.id, f"key.{name}")]
-    if name == "scene":         # the eye is the first scene's (`_eye_owner`): it was the camera
-        ids += [p.id for p in reg if not p.alias and p.id.startswith("eye.")]   # node's, which
+    if kind_of(name) == "scene":   # each scene's eye is its own (`_eye_owner`, plan 92
+        # phase 2): it was the camera node's — `eye.*` the first's, `eye.<n>.*` scene n's
+        ids += [p.id for p in reg if not p.alias and _under(p.id, eye_prefix(name))]
     return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
 
 
@@ -1743,10 +1746,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if kind == "segment":                    # plan 39 T5: every instance's three pins
             for p, typ in rgraph.SEGMENT_PINS.items():
                 add_port(n, VPort(f"rout:{name}.{p}", p, OUT, typ))
-        for pin, owner in rgraph.PINS.items():   # plan 36 T2: the scene's cover and depth
-            if owner == name and kind != "segment":
-                typ = rgraph.WIRED_MAKES[kind_of(pin)]
-                add_port(n, VPort(f"rout:{pin}", pin.rpartition(".")[2], OUT, typ))
+        if kind == "scene":                      # plan 36 T2: the scene's cover and depth
+            for p in ("cover", "depth"):         # (plan 92 phase 2: every scene's own)
+                typ = rgraph.WIRED_MAKES[p if p == "cover" else rgraph.DEPTH_PORT]
+                add_port(n, VPort(f"rout:{name}.{p}", p, OUT, typ))
         if isinstance(r, rgraph.PointCloud):
             # plan 93: what its device is doing, in words (none picked, not
             # listed here, waiting) — its body's first line
@@ -3910,7 +3913,7 @@ def open_ports(spec, entry: Mapping) -> list[dict]:
     for p in ports:
         if not isinstance(p, Mapping) or p.get("type") not in RENDER_TYPES:
             continue
-        if isinstance(p.get("to"), str) and p["to"] in rgraph.MANY_PORTS:
+        if isinstance(p.get("to"), str) and rgraph.is_many_port(p["to"]):
             # (wave 3 P1: the scene's geometry takes several; its other wires
             # leave this one open)
             free = not any(w.dst == p["to"] and w.src == p.get("was") for w in wires)
@@ -5391,7 +5394,7 @@ class Edit:
             else:
                 node = canvas_node(was.rpartition(".")[0])
                 w = {"from": p["from"], "to": was}
-                if was in into and was not in rgraph.MANY_PORTS:
+                if was in into and not rgraph.is_many_port(was):
                     if not take_over or was in landed:
                         refused.append(PORT_TAKEN.format(port=was))
                         continue
@@ -5798,7 +5801,7 @@ PICKER_GROUPS = tuple(dict.fromkeys(PICKER_GROUP.values()))
 # the frame kinds the picker adds once each (a second add says so): drawn
 # disabled while the section has one (plan 92: the backdrop is any number;
 # the scene, the shape and the pattern to follow)
-ONCE = ("scene", "shape", "pattern")
+ONCE = ("shape", "pattern")
 
 
 def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
@@ -6047,7 +6050,7 @@ def _node_name(e: dict) -> str | None:
     # (`lookback` may be declared again: `lookback.2` — an old frame's, which a
     # load makes public parts)
     if kind in ("composite", "switch", "delay", "resize", "matte", "cut", "segment",
-                "lookback", "cloud", "handmask", "backdrop"):
+                "lookback", "cloud", "handmask", "backdrop", "scene"):
         return kind if n == 1 else f"{kind}.{n}"
     if kind in rgraph.FRAME_KINDS:
         return kind
@@ -6135,7 +6138,7 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
         _keep_declared(doc, [x["from"] for x in gone])
         return _land(edit, doc, f"wire {w}", f"wired {w}", dry, bus_cuts=_bus_cuts(edit).joining(w))
     wires = doc.get("wires", [])
-    if d in rgraph.MANY_PORTS:
+    if rgraph.is_many_port(d):
         # several wires go in, drawn in section order — a hands node's
         # before the shape's, the order the frame is written in (plan 35 F)
         keep = [x for x in wires if (x["from"], x["to"]) != (s, d)]
@@ -6272,6 +6275,26 @@ ADDED = {
 
 
 BACKDROP_ADDED = "{name} added: wire a picture into {name}.image and the scene into {name}.scene"
+# plan 92 phase 2: a scene past the first — a second camera onto the one world
+SCENE_ADDED = ("{name} added: a camera onto the world, its eye ({eye}.*) on the world's "
+               "centre; it sees what scene sees ({seen}) — wire it into a picture port")
+
+
+def next_scene(doc: Mapping) -> int:
+    """The scene an add makes (plan 92 phase 2): 1 while section `doc` names
+    none (by an entry or a wire), else one past the highest it names."""
+    held = [rgraph.split_instance(n)[1] for n in _named(doc) if kind_of(n) == "scene"]
+    return max(held, default=0) + 1
+
+
+def _seen_copied(doc: dict, name: str) -> list[str]:
+    """Scene `name` sees what the first scene sees (the owner, 2026-11-28,
+    plan 92 Q5): each wire into `scene.geometry` copied into
+    `<name>.geometry`, in its order; the sources copied."""
+    seen = [x["from"] for x in doc.get("wires", []) if x.get("to") == "scene.geometry"]
+    doc["wires"] = [*doc.get("wires", []),
+                    *({"from": src, "to": f"{name}.geometry"} for src in seen)]
+    return seen
 
 
 def next_backdrop(doc: Mapping) -> int:
@@ -6349,7 +6372,8 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
                                                "scene.geometry, or add its layer")
     if kind == "slot":
         return add_slot(edit, file or "")
-    if kind in ("effect", "switch", "composite", "delay", "resize", "backdrop", *ADD_SAID):
+    if kind in ("effect", "switch", "composite", "delay", "resize", "backdrop", "scene",
+                *ADD_SAID):
         got = _new_node(edit, spec, doc, kind, file, **settings)
         if isinstance(got, str):
             return got
@@ -6947,7 +6971,7 @@ def _onto(doc: dict, s: str, d: str, name: str, inlet: str | None = None) -> Non
         _entry_name(e) == name and e.get("instance", 1) == 1
         and not any(k in e for k in (*rgraph.PLACE_KEYS, "slots")))]
     wires = doc.get("wires", [])
-    if d in rgraph.MANY_PORTS:
+    if rgraph.is_many_port(d):
         kept = [x for x in wires if (x["from"], x["to"]) != (s, d)]
     else:
         kept = [x for x in wires if x["to"] != d]
@@ -7029,7 +7053,7 @@ def _splice(doc: dict, s: str, d: str, into: str, out: str) -> None:
         return f"{where}.image" == d
     _unplace(doc, into_d)
     wires = doc.get("wires", [])
-    if d in rgraph.MANY_PORTS:
+    if rgraph.is_many_port(d):
         kept = [x for x in wires if (x["from"], x["to"]) != (s, d)]
     else:
         kept = [x for x in wires if x["to"] != d]
@@ -7076,6 +7100,14 @@ def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
         at = rgraph.BackdropAt(next_backdrop(doc))
         doc["nodes"].append(at.to_json())
         return at.name, BACKDROP_ADDED.format(name=at.name)
+    if kind == "scene":
+        sc = rgraph.SceneAt(next_scene(doc))
+        doc["nodes"].append(sc.to_json())
+        if sc.n == 1:
+            return sc.name, f"{label_of('scene')} added: {ADDED['scene']}"
+        seen = _seen_copied(doc, sc.name)
+        return sc.name, SCENE_ADDED.format(name=sc.name, eye=eye_prefix(sc.name),
+                                           seen=", ".join(seen) or "nothing yet")
     if kind == "effect":
         files = edit.graph.files() if hasattr(edit.graph, "files") else None
         if not file or (files is not None and file not in files):

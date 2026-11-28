@@ -206,10 +206,9 @@ def test_a_host_with_a_dream_takes_another_and_its_single_instance_nodes_are_sai
     assert landing.renames["dream"] == "dream.2"
     whole, _ = patches.lift(*p, ["render:scene", "render:shape", "render:dream"])
     landing = spawn({**whole, "name": "x"}, Host.of(*p[:2]))
-    assert landing.taken == ("scene", "shape")
-    assert all(patches.entry_name(e) in landing.taken or e.get("file") == "dream"
-               for e in landing.nodes)
-    assert landing.refusal == patches.TAKEN_WORDS.format(name="x", nodes="scene, shape")
+    # (plan 92 phase 2: the scene is any number — it lands as `scene.2`)
+    assert landing.taken == ("shape",) and landing.renames["scene"] == "scene.2"
+    assert landing.refusal == patches.TAKEN_WORDS.format(name="x", nodes="shape")
 
 
 def test_the_host_having_only_a_second_dream_leaves_the_first_free():
@@ -518,4 +517,4 @@ def test_a_new_loadable_holds_a_scene_so_a_whole_frame_is_refused_there(tmp_path
     whole, _ = patches.lift(*p, everything(p))
     landing = spawn({**whole, "name": "x"},
                     Host.of(app.loaded_patch.graph.spec, app.router.table))
-    assert set(landing.taken) == {"scene", "shape"}
+    assert set(landing.taken) == {"shape"}       # (plan 92 phase 2: a scene is `scene.2`)
