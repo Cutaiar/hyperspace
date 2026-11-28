@@ -350,7 +350,7 @@ ONE_WINDOW = ("whether output 1 has a window is the display rows' to say, on the
               "(and --laptop always opens one), so this isn't read: publish it, and leave it no row")
 DIM_FLOOR = 0.1          # the config cannot launch an output black
 # an entry's `through` is the loadable patch's wiring — read, ignored, said once
-THROUGH_IS_WIRING = ("config: [[output.screens]] output {n}: through is wiring now (plan 35) — "
+THROUGH_IS_WIRING = ("config: [[output.screens]] output {n}: through is wiring now — "
                      "OUTPUT's 'hands through the effects' writes it into the patch")
 
 # `[[devices]]`: the old per-adapter tables, in their poll
@@ -950,7 +950,7 @@ def load(path: Path | None = None) -> dict:
     # an absolute path. A leftover `git` key (the old git switch, removed) is said once
     if "git" in cfg["library"]:
         cfg["library"].pop("git")
-        note = ("config: [library] git is gone (plan 25) — patches are shared "
+        note = ("config: [library] git is gone — patches are shared "
                 "through [library] path; remove the line")
         _note(cfg, note)
         print(note, file=sys.stderr)

@@ -138,7 +138,7 @@ RETIRED = ("fx.select", "view.media", "backdrop.channel", "backdrop.history")
 # the retired values a wire says now, not a switch: a row that
 # drives one is dropped, said once (`DRIVEN_RETIRED_NOTE`)
 WIRE_RETIRED = ("backdrop.history",)
-DRIVEN_RETIRED_NOTE = ("{pid} is a wire now (plan 35): its route is dropped — pick what the "
+DRIVEN_RETIRED_NOTE = ("{pid} is a wire now: its route is dropped — pick what the "
                        "look-back records on LOOKBACK")
 CHANNELS = "abcdefgh"
 # an effect no spec is to hand for: EffectSpec's own defaults
@@ -1200,7 +1200,7 @@ def _wired_wiring(wiring: G.Wiring, look: str = "off") -> G.Wiring:
 # picture (`graph.Node.REFS`: an output's readout and depth, a composite's
 # depth): an effect placed after the source never sat on them
 _REF_PORTS = frozenset({"guide", G.DEPTH_PORT})
-PLACED_NOWHERE = "{name} {key} {where!r} — {why}: it drew nothing, so it is not wired (plan 36)"
+PLACED_NOWHERE = "{name} {key} {where!r} — {why}: it drew nothing, so it is not wired"
 
 
 def _insert_on(wires: list, src: str, port: str, name: str) -> list:
@@ -1247,7 +1247,7 @@ def placed_wires(section: Any, files: set[str] | None = None,
     if notes is not None:
         # (a placement the read refused stood nowhere: its entry is kept,
         # on no wire, and said)
-        notes += [f"{n}: not wired (plan 36)" for n in refused]
+        notes += [f"{n}: not wired" for n in refused]
     if not pending and not refused:
         return section
     reached = G.reaches(spec)
@@ -1333,8 +1333,8 @@ def section_effects(section: Any) -> set[str]:
     return out
 
 
-MIGRATED_NOTE = "{old} migrated to {new} (plan 36): every edge drawn as it ran — save to keep it"
-SLOTS_MIGRATED_NOTE = ("{old} migrated to {new} (plan 89): each copy is a slot of its effect "
+MIGRATED_NOTE = "{old} migrated to {new}: every edge drawn as it ran — save to keep it"
+SLOTS_MIGRATED_NOTE = ("{old} migrated to {new}: each copy is a slot of its effect "
                        "now — save to keep it")
 
 
@@ -1441,9 +1441,8 @@ def look_of(values: dict | None) -> str:
 # the dream's alone from here on
 LIVE_LOOK_NOTES = {
     "dream.on": ("dream.on is driven: dream.on now switches only the dream; the trail is "
-                 "the drawn look-back (plan 36)"),
-    "dream.mix": ("dream.mix is driven from 0: the dream is drawn so it can be pushed in "
-                  "(plan 36)"),
+                 "the drawn look-back"),
+    "dream.mix": ("dream.mix is driven from 0: the dream is drawn so it can be pushed in"),
 }
 
 
@@ -1806,9 +1805,9 @@ def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) 
 # ---------------------------------------------------------------- copies as slots
 
 COPY_DROPPED = ("{name}: a copy of {of!r}, which is no effect instance of this graph — "
-                "dropped with its wires (plan 89)")
+                "dropped with its wires")
 COPY_PAST_SLOTS = ("{name}: a copy of {of}, past the {most} slots one effect has — dropped "
-                   "with its wires (plan 89)")
+                   "with its wires")
 
 
 def copy_name(e: Any) -> str | None:
@@ -1992,7 +1991,7 @@ HUE_CYCLE_DEFAULTS = {"spread": 0.8, "rings": 0.5}
 RETIRED_SPECS: dict[str, tuple[int, float]] = {HUE_CYCLE: (85, 1.0)}
 HUE_TURN_DEPTH = 360.0
 HUE_SPREAD_SPAN = 4.0            # Spread ran 0 … 4; the band's Scale × runs −4 … 4
-HUE_TURN_NOTE = ("{old} is Hue turn now ({new}): Hue cycle is retired (plan 67), its bands "
+HUE_TURN_NOTE = ("{old} is Hue turn now ({new}): Hue cycle is retired, its bands "
                  "Line, Rings, Scale and Combine wired into Turn — the same picture; save to keep it")
 HUE_ABS_NOTE = ("{row}: a row that placed Hue cycle's Spread (0 … 4) places the bands' Scale × "
                 "now (−4 … 4): its middle is still, below it the bands turn the other way")
@@ -3362,7 +3361,7 @@ def dreams(doc: dict, specs: Specs | None = None) -> tuple[dict, list[str]]:
 
 # what a load says of a file naming a desk template (retired;
 # `loadable.TEMPLATE_RETIRED` is this)
-TEMPLATE_RETIRED = ("desk template {name!r}: desk templates are retired (plan 44 D3) — "
+TEMPLATE_RETIRED = ("desk template {name!r}: desk templates are retired — "
                     "this patch's own desk rows only")
 
 

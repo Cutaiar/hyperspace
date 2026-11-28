@@ -321,7 +321,7 @@ DEFAULT_NAMES = {"band": "Balanced"}
 # preset is left on disk, never listed or opened, and said once (`DREAM_RETIRED`)
 RETIRED_MODULES = ("fx", "hands", "dream")
 DREAM_RETIRED = ("{n} file{s} of the retired dream group (patches/dream/) left as {they} "
-                 "{were}: the dream is an effect now (plan 90) — a loadable patch's dream "
+                 "{were}: the dream is an effect now — a loadable patch's dream "
                  "opens as its parts")
 
 # working-directory files that move into the library home on first run
@@ -1032,7 +1032,7 @@ class Install:
     def _take(self, doc: dict, path: Path | None, where: str = "the install") -> None:
         if doc.get("schema") == PROJECT_V1:
             raise LibraryError(f"{where} is a schema-1 show, which this build does not read "
-                               "(no old-schema support, 2026-10-25)")
+                               "(no old-schema support)")
         if str(doc.get("schema") or "").startswith(f"{INSTALL_SCHEMA.rpartition('/')[0]}/"):
             if doc["schema"] != INSTALL_SCHEMA:
                 raise LibraryError(NEWER_WORDS.format(file=where, schema=doc["schema"]))
@@ -3360,7 +3360,7 @@ class Library:
             if not (any(hit(n) for n in bank) or hit(doc.get("startup"))):
                 continue
             if doc.get("schema") not in (INSTALL_SCHEMA, PROJECT_SCHEMA):
-                left.append(f"{label} (a {doc.get('schema')} show: plan 13's migration owns it)")
+                left.append(f"{label} (a {doc.get('schema')} show: the migration owns it)")
                 continue
             if self._to_trash(show) is None:
                 left.append(f"{label} (it could not be kept in the trash)")
