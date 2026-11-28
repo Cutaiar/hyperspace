@@ -4450,11 +4450,14 @@ class MediaNode(Node):
             with frame.timed(self.name):
                 if fit is None:
                     frame.data[key] = None
-                elif self.keyed is None:
-                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame))
                 else:
-                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame),
-                                          key=frame.r.key_of(frame.clear(self.keyed)))
+                    # plan 92 (Devin on #527): a later backdrop's partial fit in a
+                    # target of its own (`scope`); the first's as it always was
+                    scope = ({"scope": self.alpha_of}
+                             if self.alpha_of not in (None, "backdrop_alpha") else {})
+                    if self.keyed is not None:
+                        scope["key"] = frame.r.key_of(frame.clear(self.keyed))
+                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame), **scope)
         return frame.data[key]
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:

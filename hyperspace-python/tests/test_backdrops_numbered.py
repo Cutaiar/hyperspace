@@ -235,3 +235,39 @@ def test_node_mode_lists_only_its_own_backdrops_params():
     assert "backdrop.alpha" not in two
     assert graphview.param_ids(reg, "render:acid") == ["fx.acid.mix"]
     assert graphview.param_ids(reg, "render:matte") == ["matte.key"]
+
+
+def test_two_backdrops_on_one_channel_keep_their_own_alphas(ctx):
+    """Devin on #527: one channel under two backdrops at different partial
+    alphas, laid one over the other — each keeps its own fit (a target per
+    backdrop, `Renderer._media_fit`'s `scope`), so the frame is the one with
+    the second backdrop reading an identical copy of the channel instead."""
+    from test_black_is_clear import Still, _media, _renderer, _section
+    from test_media_render import Switches, View, _draw, _fbo, _rgba
+
+    from hyperspace import view
+    from hyperspace.graphmigrate import wired_wiring
+    pics = []
+    for second in ("channel.a", "channel.b"):
+        m = _media(a=Still(_rgba(16, 9, (255, 255, 255))), b=Still(_rgba(16, 9, (255, 255, 255))))
+        for c in "ab":
+            m.channels[c].fit = 2
+        r = _renderer(ctx, m)
+        nodes = [{"kind": "composite"}, {"kind": "backdrop"}, {"kind": "backdrop", "instance": 2}]
+        # (Devin's order: backdrop.2 alone on All outputs, fitted first; then
+        # output 2 fits the first backdrop and repaints backdrop.2 over it)
+        wires = (("channel.a", "backdrop.image"), (second, "backdrop.2.image"),
+                 ("backdrop.2", "output.all.image"),
+                 ("backdrop", "composite.under"), ("backdrop.2", "composite.over"),
+                 ("composite", "output.2.image"))
+        r.wiring = wired_wiring(G.read_graph(_section(None, wires, nodes)).wiring())
+        s = view.ViewState(lines=False, points=False, faces=False, backdrop_alpha=0.75,
+                           backdrops={"backdrop.2": BackdropState(alpha=0.25)})
+        vs = [View(Switches(), (96, 64), target=_fbo(ctx, 96, 64)) for _ in range(2)]
+        pics.append(_draw(ctx, r, s, size=(96, 64), views=vs, frames=2))
+    for one, two in zip(*pics, strict=True):
+        assert np.array_equal(one, two)
+    # backdrop.2 at its own 0.25 on output 2 (it lies opaque over its ground):
+    # white × 0.25, never the first's 0.75 (191, the shared fit, before the fix)
+    assert abs(int(pics[0][1][..., 0].mean()) - 64) <= 1
+
