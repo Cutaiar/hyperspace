@@ -1183,8 +1183,8 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     for chip in _depth_chips(router, b):          # read-only: the macro's subscriber
         imgui.text_colored(ui.DIM, chip)
         if imgui.is_item_hovered():
-            ui.tooltip("A macro's depth subscriber scales this route "
-                              "(plan 13 §2.4); edited with the macro, not here")
+            ui.tooltip("A macro's depth subscriber scales this route"
+                              "; edited with the macro, not here")
         imgui.same_line()
     scale = _param_combo(panel, "##scale", b.scale,
                          -(BAR_W + gate_w + sp * (2 if gate_w else 1)),

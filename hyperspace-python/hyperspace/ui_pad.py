@@ -777,7 +777,7 @@ def totem_word(reg) -> tuple[str, str] | None:
     if state is None or "totem.on" not in reg:
         return None
     from . import totem
-    tip = ("The Joy-Con as a 4D totem (plan 47, an experiment) — click to switch it "
+    tip = ("The Joy-Con as a 4D totem (an experiment) — click to switch it "
            f"{'off' if state.on else 'on'}. Its gyro turns three planes, one per axis "
            "(x → YZ, y → XZ, z → XY); X / Y / B throw x / y / z into W (XW, YW, ZW); "
            "A (or ↓; a Joy-Con's − or +) resets the shape to the world's axes from where the pad is; a "
@@ -814,7 +814,7 @@ def poi_word(reg, pad=None) -> tuple[str, str] | None:
     if state is None or "poi.on" not in reg:
         return None
     from . import poi
-    tip = ("A DualSense as the handle of a poi (plan 47, an experiment; a Joy-Con's sensors "
+    tip = ("A DualSense as the handle of a poi (an experiment; a Joy-Con's sensors "
            "move no position) — click to "
            f"switch it {'off' if state.on else 'on'}. The shape is the weight on the "
            "string: swing the pad and it flies round. Length · weight · springiness; "

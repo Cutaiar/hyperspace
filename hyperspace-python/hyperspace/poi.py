@@ -328,7 +328,7 @@ def register(reg, state: PoiState, cfg: dict | None = None) -> None:
         state.say(f"on — {readout(state)}" if v else "off")
     reg.toggle(f"{GROUP}.on", "Poi", lambda: state.on, set_on, group=GROUP,
                persist=False, modulatable=False,
-               tip="A DualSense as the handle of a poi (an experiment, plan 47): the shape "
+               tip="A DualSense as the handle of a poi (an experiment): the shape "
                    "is the weight on its string, swung by the pad. A resets. A Joy-Con "
                    "doesn't drive it: its sensors move no position.")
 

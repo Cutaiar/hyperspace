@@ -2734,7 +2734,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
     # and an old loadable patch's value lands on the real one (LoadedPatch.load_doc)
     r.continuous(BMP_ALPHA, "Media alpha (knob 7)", *_attr(view, "media_alpha"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"media alpha {v:.2f}", group=g, alias=True,
-                 tip="The factory desk's knob 7 from before plan 32: Media alpha.")
+                 tip="The factory desk's old knob 7: Media alpha.")
     r.aliases[BMP_ALPHA] = lambda p: r.get("view.media_alpha")
     r.continuous("view.media_scale", "Media size", *_attr(view, "media_scale"),
                  lo=0.05, hi=2.0, fmt=lambda v: f"media size {v:.2f}", group=g)
@@ -2785,8 +2785,8 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                group=g, tip="At the clip's end: loop, play back (pingpong), or hold the "
                             "last frame (once).")
         r.toggle(f"media.{c}.audio", f"{c.upper()} audio", *_attr(ch, "play_audio"), group=g,
-                 tip="Play the video's own sound, read at the playhead (plan 45). Forward "
-                     "play only for now, with an occasional click; other rates stutter.")
+                 tip="Play the video's own sound, read at the playhead. Forward "
+                     "play only, with an occasional click; other rates stutter.")
         r.continuous(f"media.{c}.gain", f"{c.upper()} gain", *_attr(ch, "gain"),
                      taper=tapers.T_MEDIA_GAIN, fmt=tapers.fmt_level, group=g,
                      tip="The channel's sound level, off to +6 dB; unity at the notch.")

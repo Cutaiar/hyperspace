@@ -204,7 +204,7 @@ NO_VOICE_NOTE = "{vid}: {why} — not spawned, nor its routes"
 NO_INPUT_NOTE = "{mid}: its input {k} read {vid}, which did not spawn — left empty"
 CROSSES_WORDS = "wire {wire} crosses the edge: a port says it"
 # a copy entry in a `/3` (a `/2`'s is moved by the ladder, `_slots_step`)
-COPY_GONE_WORDS = ("{name} is gone (plan 89): an effect draws on another picture by a slot "
+COPY_GONE_WORDS = ("{name} is gone: an effect draws on another picture by a slot "
                    "of its own; left out")
 # a node entry of a kind that is no node a section declares but names a
 # thing a patch may not hold (`check`): said as that thing
@@ -1108,7 +1108,7 @@ def check(doc: Any) -> list[str]:
         if str(pid).startswith(modmod.PREFIX):
             out.append(f"{pid} is a modifier's: set in its entry")
         elif not m.owns(pid):
-            out.append(f"{pid} is the host's: a patch drives a host param, never sets it (D5)")
+            out.append(f"{pid} is the host's: a patch drives a host param, never sets it")
     ids: set[str] = set()
     for d in doc.get("modifiers") or ():
         try:

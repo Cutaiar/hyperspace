@@ -505,15 +505,15 @@ FADER_SHIFT_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
     for ch, pid in zip(apc40.TRACK_FADERS, apc40.SHIFT_FADERS))
 # the label `remap_factory`'s note gives each source it moved or added;
 # a source not named here gets the default label
-APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 44",
-                  f"cc:0:{apc40.CC_MASTER}": "plan 44",
-                  f"note:0:{apc40.N_OVERDUB}": "plan 15",
-                  **{f"note:{k}:{apc40.N_CLIPSTOP}": "plan 15" for k in range(8)},
-                  **{source: "plan 19" for _k, source in _FAR_PADS},
-                  **{source: "plan 24" for source, *_ in TOGGLE_DESK_ROWS},
-                  **{source: "plan 24" for source, *_ in FADER_SHIFT_ROWS},
-                  f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}": "plan 24",
-                  SEQ_PAGE_SOURCE: "plan 31"}
+APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "crossfade",
+                  f"cc:0:{apc40.CC_MASTER}": "crossfade",
+                  f"note:0:{apc40.N_OVERDUB}": "clip row",
+                  **{f"note:{k}:{apc40.N_CLIPSTOP}": "clip row" for k in range(8)},
+                  **{source: "far pads" for _k, source in _FAR_PADS},
+                  **{source: "desk" for source, *_ in TOGGLE_DESK_ROWS},
+                  **{source: "desk" for source, *_ in FADER_SHIFT_ROWS},
+                  f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}": "desk",
+                  SEQ_PAGE_SOURCE: "seq page"}
 # HOLD, TAKE and DROP are gone: a row learned on
 # one drops at the next load, with a note and the file's backup
 GONE_TARGETS = frozenset(("output.hold", "output.take", "output.drop"))
@@ -1469,7 +1469,7 @@ def old_words(rows: list[Binding]) -> tuple[list[Binding], list[str]]:
     for b in rows:
         source, target = nsew(b.source), OVERLAY_ALIASES.get(b.target, b.target)
         if (source, target) != (b.source, b.target):
-            notes.append(f"renamed {b.source} → {b.target} to {source} → {target} (plan 57)")
+            notes.append(f"renamed {b.source} → {b.target} to {source} → {target} (old words)")
             b = replace(b, source=source, target=target)
         out.append(b)
     return out, notes
@@ -1528,16 +1528,16 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40", seen: str = "
         hit = APC_REMAP.get(key) if profile == "apc40" else None    # (the APC40's numbers)
         if hit is not None:
             target, op, value = hit
-            plan = APC_REMAP_PLAN.get(b.source, "plan 09")
-            notes.append(f"remapped {b.source}: {b.target} → {target} (the APC40 map "
-                         f"of {plan})")
+            plan = APC_REMAP_PLAN.get(b.source, "base")
+            notes.append(f"remapped {b.source}: {b.target} → {target} (the APC40 map: "
+                         f"{plan})")
             moved_theme = moved_theme or b.target == "theme.next"
             b = replace(b, target=target, op=op, value=value)
-            if plan == "plan 19":
+            if plan == "far pads":
                 b = replace(b, layer=None, feedback="led", on=apc40.GREEN, off=0)
         elif key in FADER_SHIFT_ROWS and b.layer is None:
             notes.append(f"moved {b.source} → {b.target} to the SHIFT layer (the APC40 "
-                         "map of plan 24: the track faders are the patches')")
+                         "map: the track faders are the patches')")
             b = replace(b, layer="global")
         elif key in PAD_REMAP and PAD_REMAP[key][0] > seen:
             when, hit = PAD_REMAP[key]
@@ -1551,8 +1551,7 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40", seen: str = "
             b = replace(b, target=target, op=op, value=value)
         elif b.target in THEME_TO_BANK:
             target = THEME_TO_BANK[b.target]
-            notes.append(f"remapped {b.source}: {b.target} → {target} (the patch bank "
-                         "of plan 13)")
+            notes.append(f"remapped {b.source}: {b.target} → {target} (the patch bank)")
             b = replace(b, target=target)
         out.append(b)
     used = {b.source for b in out}
@@ -1563,8 +1562,8 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40", seen: str = "
                 or any(b.overlaps(new) for b in midi)):
             continue
         out.append(new)
-        notes.append(f"added {source} → {target} (the APC40 map of "
-                     f"{APC_REMAP_PLAN.get(source, 'plan 09')})")
+        notes.append(f"added {source} → {target} (the APC40 map: "
+                     f"{APC_REMAP_PLAN.get(source, 'base')})")
     # a reserved control with no row of the meta controller's (deleted: Learn may not
     # put one back) gets the factory's again; a row the owner changed stays
     for f in factory_desk(profile):
@@ -1580,7 +1579,7 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40", seen: str = "
         if source in used or (new.key_name, new.modifiers) in chords:
             continue
         out.append(new)
-        notes.append(f"added {source} → {target} (the keys of plans 09, 11 and 15)")
+        notes.append(f"added {source} → {target} (the factory keys)")
     return out, notes
 
 
@@ -1711,10 +1710,10 @@ def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
     if p is None:
         part = part_of_id(pid)
         if part == "shared_meta":
-            return "a meta controller param, never a patch's (plan 13 D9)"
+            return "a meta controller param, never a patch's"
         return None if part == "patch" else "not part of a patch"
     if part_of(p) == "shared_meta":
-        return "a meta controller param, never a patch's (plan 13 D9)"
+        return "a meta controller param, never a patch's"
     if p.alias:
         return "an alias, not part of a patch"
     if part_of(p) != "patch" or not p.persist:
@@ -1760,7 +1759,7 @@ def migrate_scales(rows: Iterable[Binding], macros: dict[str, Macro]) -> list[st
             continue
         if not is_macro(b.scale):
             notes.append(f"dropped the scale {b.scale} of {b.source} → {b.target}: a route's "
-                         "scale is a meta controller param (decision register row 18 (a)); a macro "
+                         "scale is a meta controller param; a macro "
                          "attenuates a route as its depth subscriber")
             b.scale = None
             continue
@@ -1769,7 +1768,7 @@ def migrate_scales(rows: Iterable[Binding], macros: dict[str, Macro]) -> list[st
         if sub not in m.subs:
             m.subs.append(sub)
         notes.append(f"moved {b.source} → {b.target} × {b.scale} to a depth subscriber "
-                     f"of {b.scale} (plan 13 §2.4)")
+                     f"of {b.scale}.")
         b.scale = None
     return notes
 
@@ -1802,8 +1801,7 @@ def sort_layers(rows: Iterable[Binding], profile: str = "apc40"
     # user put on its note would keep the latch off the desk for good
     shift = [b for b in rows if b.is_midi and b.overlaps(_SHIFT) and b.target != SHIFT_PARAM]
     for b in shift:
-        notes.append(f"dropped {b.source} → {b.target}: SHIFT is the desk's layer latch "
-                     "(plan 13 D4)")
+        notes.append(f"dropped {b.source} → {b.target}: SHIFT is the desk's layer latch")
     rows = [b for b in rows if not any(b is x for x in shift)]
     for b in rows:
         if not b.is_midi:
@@ -1817,7 +1815,7 @@ def sort_layers(rows: Iterable[Binding], profile: str = "apc40"
             b.layer = "preset"
         n += 1
     if n:
-        notes.insert(0, f"sorted {n} MIDI rows into the desk's layers (plan 13 §3.2)")
+        notes.insert(0, f"sorted {n} MIDI rows into the desk's layers")
     for f in factory:
         if f.layer != "global" and f.source != SHIFT_SOURCE:
             continue
@@ -1825,7 +1823,7 @@ def sort_layers(rows: Iterable[Binding], profile: str = "apc40"
             continue
         rows.append(f)
         where = "the global layer" if f.layer else "invariant"
-        notes.append(f"added {f.source} → {f.target} ({where}, plan 13 §3.2)")
+        notes.append(f"added {f.source} → {f.target} ({where})")
     return rows, notes
 
 
@@ -3006,7 +3004,7 @@ class Bindings:
                 if (b.source, b.target, b.op, float(b.value)) in RETIRED_DESK_ROWS:
                     continue
                 notes.append(f"dropped {b.source} → {b.target}: that control is "
-                             "invariant, the meta controller's (plan 13 D6)")
+                             "invariant, the meta controller's")
             elif (why := meta_row_refusal(b)) is not None:
                 notes.append(f"dropped {b.source} → {b.target}: {why}")
             else:

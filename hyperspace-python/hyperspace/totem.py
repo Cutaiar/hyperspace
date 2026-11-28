@@ -173,7 +173,7 @@ def register(reg, state: TotemState) -> None:
             state.say(f"on — {readout(state)}" if v else "off")
     reg.toggle(f"{GROUP}.on", "Totem", lambda: state.on, set_on, group=GROUP,
                persist=False, modulatable=False,
-               tip="The Joy-Con as a 4D totem (an experiment, plan 47): its gyro turns "
+               tip="The Joy-Con as a 4D totem (an experiment): its gyro turns "
                    "three of the six rotation planes, and a DualSense's tilt moves the shape (a Joy-Con's "
                    "moves nothing). X / Y / B "
                    "throw the x / y / z turn into the W planes; A (a Joy-Con's − or +) resets.")
