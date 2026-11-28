@@ -494,6 +494,8 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "cut": _resize_owner,
     # plan 39 T4: `segment[.<n>].<key>` on its segment's node (the resize's rule)
     "segment": _resize_owner,
+    # `handmask[.<n>].<key>` on its hand mask's node (the resize's rule)
+    "handmask": _resize_owner,
     "ghost": _hands_owner,
     "cloud": _cloud_owner,
     "fx": _effect_owner,
@@ -851,7 +853,7 @@ LABELS: dict[str, str] = {
     "backdrop": "Backdrop", "pattern": "Faces pattern",
     "channel": "Channel", "composite": "Composite", "switch": "Switch", "delay": "Delay",
     "resize": "Resize", "slot": "slot",
-    "matte": "Matte", "cut": "Cut", "segment": "Segment",
+    "matte": "Matte", "cut": "Cut", "segment": "Segment", "handmask": "Hand mask",
     "output": "Output", rgraph.ALL_OUTPUTS: "All outputs", rgraph.GROUND: "Ground",
 }
 # … and its hover, one line (V's hover column; an effect says its file's
@@ -882,6 +884,8 @@ HOVERS: dict[str, str] = {
             "elsewhere. Lay it over another picture to show that one through the hole."),
     "segment": ("Cuts its picture into a foreground and a background — a person, or what "
                 "moves — with the matte between them as a mask."),
+    "handmask": ("A mask of the shape your two thumbs and index fingers make on screen. "
+                 "Wire hands into it, and it into a cut's mask."),
     "echo": "The k-th newest look-back frame.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
     rgraph.ALL_OUTPUTS: ("The meta controller's bus: a window shows it by a cable from here, unless the "
@@ -1036,7 +1040,7 @@ THUMBS: dict[str, str] = {
     "layer": PICTURE, "guide": PICTURE,
     # plan 39 at the plan 37 merge: a cut is its picture. SM3 (row 777): a
     # matte's is its mask, and a segment's its matte (fg, bg are its pins)
-    "cut": PICTURE, "matte": MASK_PIC, "segment": MASK_PIC,
+    "cut": PICTURE, "matte": MASK_PIC, "segment": MASK_PIC, "handmask": MASK_PIC,
     "shape": SCENE_PIC, "cloud": SCENE_PIC, "hands": LAYER_PIC,
     "output": WINDOW_PIC,
 }
@@ -1311,6 +1315,7 @@ FRAME_CLASS: dict[str, type] = {
     "composite": rgraph.Composite, "switch": rgraph.SwitchNode,
     "delay": rgraph.Delay, "resize": rgraph.ResizeNode,
     "matte": rgraph.MatteNode, "cut": rgraph.CutNode, "segment": rgraph.SegmentNode,
+    "handmask": rgraph.HandMaskNode,
     "output": rgraph.Output, rgraph.ALL_OUTPUTS: rgraph.Output,
     rgraph.GROUND: GroundNode,
 }
@@ -1361,6 +1366,11 @@ def _cut_said(name: str, into: dict[str, str]) -> str:
     return f"{into['image']} cut by {m}" if m else CUT_NO_MASK
 
 
+def _handmask_said(name: str, into: dict[str, str]) -> str:
+    src = into.get("hands")
+    return f"the polygon {src}'s fingertips make" if src else rgraph.HANDMASK_UNWIRED
+
+
 def _segment_said(name: str, into: dict[str, str]) -> str:
     src = into.get("image")
     return f"{src} into it: no worker runs until it is reached" if src else SEGMENT_UNWIRED
@@ -1374,7 +1384,8 @@ CUT_NO_PICTURE = "nothing wired into its image: no picture"
 CUT_NO_MASK = "no mask wired: its picture through, whole"
 SEGMENT_UNWIRED = "nothing wired into its image: no worker runs"
 STAND_IN_SAID: dict[str, Callable[[str, dict[str, str]], str]] = {
-    "matte": _matte_said, "cut": _cut_said, "segment": _segment_said}
+    "matte": _matte_said, "cut": _cut_said, "segment": _segment_said,
+    "handmask": _handmask_said}
 
 
 def _built(rnodes: Iterable[rgraph.Node]) -> dict[str, rgraph.Node]:
@@ -5916,7 +5927,7 @@ PICKER_GROUP: dict[str, str] = {
     # segment there too (what a channel's picture is cut into), the mask
     # nodes in their own group, masks ▸
     "channel": "media", "segment": "media",
-    "matte": "masks", "cut": "masks",
+    "matte": "masks", "cut": "masks", "handmask": "masks",
     "effect": "effects",
     "slot": "slot on",
 }
@@ -5935,7 +5946,7 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     R28's switch over the channels, plan 34's resize and delay); media ▸
     (2026-10-31: channel a … channel h, each the channel's letter as its
     file — picking one makes nothing, the channels always exist; then
-    plan 39's segment); masks ▸ (plan 39's matte and cut); every
+    plan 39's segment); masks ▸ (plan 39's matte and cut, the hand mask); every
     effect file this build has; and (plan 89) one more slot on each effect
     instance in the section."""
     gs = edit.graph
@@ -5952,7 +5963,8 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     # media ▸ the eight channels (2026-10-31) and plan 39 T5 (W6)'s segment;
     # masks ▸ the matte and the cut
     out += [("channel", c, f"channel {c}") for c in rgraph.MEDIA_CHANNELS]
-    out += [("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut")]
+    out += [("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut"),
+            ("handmask", None, "hand mask")]
     out += [("effect", f, f) for f in sorted(files or ())]
     out += [("slot", name, f"slot on {name}") for name in _instances(spec)]
     return out
@@ -6171,7 +6183,7 @@ def _node_name(e: dict) -> str | None:
     # (`lookback` may be declared again: `lookback.2` — an old frame's, which a
     # load makes public parts)
     if kind in ("composite", "switch", "delay", "resize", "matte", "cut", "segment",
-                "lookback", "cloud"):
+                "lookback", "cloud", "handmask"):
         return kind if n == 1 else f"{kind}.{n}"
     if kind in rgraph.FRAME_KINDS:
         return kind
@@ -6413,6 +6425,8 @@ ADD_SAID = {
     # plan 93: a point cloud, its device picked on its menu
     "cloud": ("{name} added: pick its device on its menu (device ▸) and wire it into "
               "scene.geometry"),
+    "handmask": ("{name} added: wire hands into {name}.hands — it makes a mask of the polygon "
+                 "their thumbs and index fingers make; wire it into a cut's mask"),
 }
 
 
@@ -6945,7 +6959,7 @@ def drop_refusal(name: str, label: str | None = None) -> str | None:
         return SCENE_NODE.format(label=label)
     if kind in ("layer", "guide"):
         return HANDS_NODE.format(label=label)
-    if kind == "matte":
+    if kind in ("matte", "handmask"):
         return MASK_NODE.format(label=label)
     if kind in ("output", rgraph.ALL_OUTPUTS):
         return OUTPUT_NODE.format(label=label)
@@ -7221,7 +7235,8 @@ def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
         return at.name, f"{at.name} added: wire a picture into {at.name}.image — {how}"
     if kind in ADD_SAID:                         # plan 39 T5 (W6)
         at = {"matte": rgraph.MatteAt, "cut": rgraph.CutAt,
-              "segment": rgraph.SegmentAt, "cloud": rgraph.CloudAt}[kind](_next(spec, kind))
+              "segment": rgraph.SegmentAt, "cloud": rgraph.CloudAt,
+              "handmask": rgraph.HandMaskAt}[kind](_next(spec, kind))
         doc["nodes"].append(at.to_json())
         return at.name, ADD_SAID[kind].format(name=at.name)
     return f"no node kind {kind!r}: the picker adds what its groups list"

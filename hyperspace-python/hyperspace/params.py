@@ -92,6 +92,9 @@ from .view import (
     DELAY_EVERY,
     DELAY_FRAMES_MAX,
     DELAY_HZ,
+    HANDMASK_EYES,
+    HANDMASK_FEATHER,
+    HANDMASK_GROW,
     KEY_MEASURES,
     KEY_RAMPS,
     MATTE_FEATHER,
@@ -107,6 +110,7 @@ from .view import (
     CloudState,
     CutState,
     DelayState,
+    HandMaskState,
     KeyState,
     MatteState,
     ResizeState,
@@ -151,6 +155,8 @@ F_KEYS = 8
 # loadable patch's, declared while its graph holds the entry (declare_mattes)
 # `cut` (plan 39 T3): each cut node's invert and amount, the loadable patch's,
 # declared while its graph holds the entry (declare_cuts)
+# `handmask`: each hand mask's camera, grow, feather and invert, the loadable
+# patch's, declared while its graph holds the entry (declare_handmasks)
 # `delay` (plan 90 H1): each delay node's depth and gap, the loadable patch's,
 # declared while its graph holds the delay (declare_delays)
 # `segment` (plan 39 T4): each segment node's mode, level, feather, smooth,
@@ -172,7 +178,7 @@ F_KEYS = 8
 # is about the hardware, and stays the meta controller's
 PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "fx", "media",
                       "backdrop", "switch", "resize", "matte", "cut", "segment", "key", "delay", "ghost",
-                      "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "mod")
+                      "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "handmask", "mod")
 # `grip` (plan 60, the hand rig): a patch's own, each deck's — the owner, 2026-11-10,
 # testing it: "this really should be per preset". The on-air deck's acts on the one world
 # `world` (plan 59): `world.reset`, over the one `world.World` both decks draw from
@@ -2227,6 +2233,90 @@ def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- the hand masks' values ----
+HANDMASK_GROUP = "handmask"
+_HANDMASK_KEYS = ("eye", "grow", "feather", "invert")
+_HANDMASK_ID = re.compile(r"handmask(?:\.(?:[2-9]|[1-9][0-9]+))?\.("
+                          + "|".join(_HANDMASK_KEYS) + ")")
+
+
+def handmask_ids(name: str) -> list[str]:
+    """Hand mask `name`'s params (`handmask.2` → `handmask.2.eye` …), in order."""
+    return [f"{name}.{k}" for k in _HANDMASK_KEYS]
+
+
+def is_handmask_id(pid: str) -> bool:
+    """Is `pid` one of a hand mask's values — one that exists only while a
+    loadable patch's graph holds that hand mask? A loadable patch load sorts
+    such ids against the graph it lands, as it does a cut's."""
+    return bool(_HANDMASK_ID.fullmatch(pid))
+
+
+def _handmask_state(r: Registry) -> dict[str, HandMaskState]:
+    """The states the hand mask params write, name → `HandMaskState`: the
+    view state's (`ViewState.handmasks`), kept by `build_registry` as
+    `r.handmask_state`; a dict of the registry's own for one built without a
+    view (as `_cut_state`)."""
+    state = getattr(r, "handmask_state", None)
+    if not isinstance(state, dict):
+        state = {}
+        vars(r)["handmask_state"] = state     # (as `_key_state`)
+    return state
+
+
+_HANDMASK_TIPS = {
+    "eye": "Whose camera {name} sees the fingertips through: the hands layer's (where "
+           "hands laid over a picture are drawn) or the scene's (where hands wired into "
+           "the scene are drawn).",
+    "grow": "Pushes {name}'s polygon out by this many pixels, or pulls it in (negative).",
+    "feather": "The width of {name}'s soft edge, in pixels: 0 keeps a crisp edge.",
+    "invert": "{name} passes outside the hands' polygon instead of inside it.",
+}
+
+
+def declare_handmasks(r: Registry, names: Iterable[str]) -> list[str]:
+    """The hand masks' params, as `declare_cuts` does the cuts': for each
+    hand mask `names` holds, `eye` (an enum over `HANDMASK_EYES`), `grow`
+    ±`HANDMASK_GROW` px, `feather` 0–`HANDMASK_FEATHER` px and `invert` —
+    group `handmask` (a patch group: the loadable patch's), modulatable —
+    over a `HandMaskState` made when first declared and kept while the name
+    stays; those of every hand mask no longer named dropped, with their
+    states. Returns the ids that appeared or went."""
+    state = _handmask_state(r)
+    want = {n: handmask_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == HANDMASK_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — a live state is kept across a hot
+        # reload of `view`, its params bound to it: `declare_cuts`')
+        if st is None:
+            st = state[name] = HandMaskState()
+        for pid, key in zip(ids, _HANDMASK_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _HANDMASK_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key == "eye":
+                r.enum(pid, label, *got, list(HANDMASK_EYES), group=HANDMASK_GROUP, tip=tip)
+            elif key == "invert":
+                r.toggle(pid, label, *got, group=HANDMASK_GROUP, tip=tip)
+            elif key == "grow":
+                r.continuous(pid, label, *got, lo=-HANDMASK_GROW, hi=HANDMASK_GROW,
+                             group=HANDMASK_GROUP, tip=tip)
+            else:
+                r.continuous(pid, label, *got, lo=0.0, hi=HANDMASK_FEATHER,
+                             group=HANDMASK_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
 # ---- plan 87: black is clear, on any picture node ----
 KEY_GROUP = "key"
 KEY_PREFIX = "key."
@@ -2742,6 +2832,15 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.cut_state = cuts
+    # the hand masks' values likewise (`ViewState.handmasks`)
+    handmasks = getattr(view, "handmasks", None)
+    if not isinstance(handmasks, dict):
+        handmasks = {}
+        try:
+            view.handmasks = handmasks
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    vars(r)["handmask_state"] = handmasks       # (as `_key_state`)
     # plan 39 T4: the segments' values likewise (`ViewState.segments`)
     segments = getattr(view, "segments", None)
     if not isinstance(segments, dict):

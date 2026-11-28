@@ -2037,9 +2037,10 @@ def test_the_picker_groups_by_primitive(tmp_path):
         ("channels", "pattern.media", "faces media"), ("channels", "backdrop.image", "backdrop"),
         ("resize", None, "resize"), ("delay", None, "delay"),
         # (media ▸ the eight channels, 2026-10-31, and plan 39 T5 (W6)'s
-        # segment; masks ▸ the matte and the cut)
+        # segment; masks ▸ the matte, the cut and the hand mask)
         *(("channel", c, f"channel {c}") for c in "abcdefgh"),
         ("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut"),
+        ("handmask", None, "hand mask"),
         *(("effect", f, f) for f in files),
         ("slot", "acid", "slot on acid"), ("slot", "acid.2", "slot on acid.2")]
     groups = [graphview.PICKER_GROUP[k] for k, _, _ in items]

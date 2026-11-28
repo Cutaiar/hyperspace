@@ -9172,6 +9172,14 @@ Headless: `tests/test_cloud_node.py` (the node wired, posed and copied as the sh
 
 **979. An old show still draws its cloud.** (Mac, before `tools/migrate_library.py`) Open a show saved before this build with its Kinect listed. *Pass:* the strip says it was migrated to /13, the cloud draws where it drew, a cloud whose wire the show had cut stays undrawn; the first save leaves `<file>.bak-v12-clouds` beside the file. The `cloud/*` goldens pass on the gate Mac. *Fail:* a cloud missing or doubled, or no backup.
 
+## GK. The hand mask (rows 1210–1214, 2026-11-28)
+
+Headless: `tests/test_graph_handmask.py` (the polygon from synthetic hands through either camera, the pass, the node built and wired, its knobs, a cut by it).
+
+**980. A frame made with two hands.** (Mac, the Leap tracking both hands) On GRAPH, masks ▸ hand mask; wire `hands` into its `hands`, the scene into a cut's `image`, the hand mask into the cut's `mask` and the cut into output 1, with the hands layer over it as usual. Make a frame with both thumbs and index fingers. *Pass:* the scene shows only inside the four fingertips, its corners on them as the hands layer draws them, following the hands without lag; taking one hand away cuts everything; crossing or turning the hands never makes a bow-tie; `grow`, `feather` and `invert` do what they say. *Fail:* the polygon off the fingertips, a corner on the wrong finger, or a flicker as a hand fades.
+
+**981. Through the scene's eye.** (Mac, 980's wiring) Wire the hands into `scene.geometry` too, zoom the patch's eye in, and set `handmask.eye` to scene. *Pass:* the polygon's corners sit on the fingertips drawn in the scene; with `eye` layer they sit on the hands layer's instead. *Fail:* either eye off its hands.
+
 ## FT. The Kinect (row 1130, 2026-11-24)
 
 Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).

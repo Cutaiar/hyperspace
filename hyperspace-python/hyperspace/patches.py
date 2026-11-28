@@ -150,7 +150,7 @@ KEYED = "keys"
 # what is a name but no node of a wired frame (an echo pin, `fx`, `frame`)
 MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "matte", "cut",
             "segment", "hands", "layer", "guide", "scene", "shape", "backdrop", "pattern",
-            "lookback", "cloud")
+            "lookback", "cloud", "handmask")
 # what a frame holds one of: never renamed by a spawn (`scene.2` is no node;
 # `dream.2` may be declared but no wire may touch it, D2 of plan 36), so a
 # host that already has one refuses the spawn in words (`Landing.taken`).

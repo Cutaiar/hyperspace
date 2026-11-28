@@ -144,6 +144,9 @@ from .outputs import View
 from .view import (
     DELAY_BEATS,
     DELAY_EVERY,
+    HANDMASK_EYES,
+    HANDMASK_FEATHER,
+    HANDMASK_GROW,
     KEY_RAMPS,
     MATTE_FEATHER,
     MATTE_FROM,
@@ -158,6 +161,7 @@ from .view import (
     CloudState,
     CutState,
     DelayState,
+    HandMaskState,
     KeyState,
     MatteState,
     ResizeState,
@@ -464,9 +468,9 @@ _PLACE_NODE = re.compile(rf"scene|history|lookback|hands(?:\.{_INSTANCE})?(?:\.l
 # and the wired frame's `copy` (`copy.<n>`; plan 89: read only to migrate it
 # to an effect's slot) and the source word `ground`.
 # Plan 39 T2: and the mask node `matte` (`matte.<n>`); T3: and `cut` (`cut.<n>`);
-# T4: and `segment` (`segment.<n>`)
+# T4: and `segment` (`segment.<n>`); and the hand mask (`handmask.<n>`)
 RESERVED = ("frame", "fx", "pattern", "shape", "backdrop", "switch", "delay", "resize", "echo",
-            "copy", "ground", "matte", "cut", "segment", "cloud")
+            "copy", "ground", "matte", "cut", "segment", "cloud", "handmask")
 _PLACE_EFFECT = re.compile(rf"(?!(?:{'|'.join(RESERVED)})(?![a-z0-9_]))"
                            rf"[a-z][a-z0-9_]*(?:\.{_INSTANCE})?")
 PLACE_WORDS = {"after": "scene, hands, hands.2 …, history, output.1 …, or an effect",
@@ -735,6 +739,7 @@ _RESIZE = re.compile(rf"resize(?:\.{_INSTANCE})?")
 _MATTE = re.compile(rf"matte(?:\.{_INSTANCE})?")         # plan 39 T2: `matte`, `matte.2` …
 _CUT = re.compile(rf"cut(?:\.{_INSTANCE})?")             # plan 39 T3: `cut`, `cut.2` …
 _SEGMENT = re.compile(rf"segment(?:\.{_INSTANCE})?")     # plan 39 T4: `segment`, `segment.2` …
+_HANDMASK = re.compile(rf"handmask(?:\.{_INSTANCE})?")   # the hand mask: `handmask`, `handmask.2` …
 _CLOUD = re.compile(rf"cloud(?:\.{_INSTANCE})?")         # plan 93: `cloud`, `cloud.2` …
 # plan 39 T4: a segment's pins — its foreground, its background, its matte
 # (`segment.fg`, `segment.2.mask` …)
@@ -1226,6 +1231,38 @@ NODE_KINDS["segment"] = _segment_entry
 
 
 @dataclass(frozen=True)
+class HandMaskAt:
+    """A hand mask the loadable patch's graph adds: the polygon a hands
+    node's thumbs and index fingers make on screen, as a mask — its camera,
+    grow, feather and invert values (`handmask[.n].*`), never the entry —
+    `handmask`, `handmask.2` …"""
+
+    n: int = 1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"handmask instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return "handmask" if self.n == 1 else f"handmask.{self.n}"
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "handmask"}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
+
+
+def _handmask_entry(e: dict) -> HandMaskAt:
+    _entry_keys(e, "handmask", ("instance",))
+    return HandMaskAt(_instance(e))
+
+
+NODE_KINDS["handmask"] = _handmask_entry
+
+
+@dataclass(frozen=True)
 class EchoAt:
     """A look-back frame as a source (plan 34 L, E): `echo.<n>`, the ring's
     n-th newest commit (1 the newest, `OLD_ECHOES` the oldest). No input:
@@ -1321,6 +1358,8 @@ SEGMENT_IS_ITS_PINS = ("{name} makes its pictures on its pins: {name}.fg (the fo
 DEPTH_TAKES = ("{dst} takes the scene's depth (scene.depth), for the hands laid "
                "depth-aware")
 LAYER_TAKES_HANDS = "{dst} takes a hands node (hands, hands.2 …): the hands it draws"
+HANDMASK_TAKES_HANDS = ("{dst} takes a hands node (hands, hands.2 …): the fingertips its "
+                        "polygon is made of")
 
 
 def entry_declares(kind: Any, n: Any = 1) -> bool:
@@ -1662,7 +1701,8 @@ def _wired_kind(name: str) -> str | None:
                       # (plan 34's own node) only an old frame's, read to migrate
                       ("echo", _ECHO_PIN), ("echo", _ECHO), ("lookback", _LOOKBACK),
                       ("matte", _MATTE),
-                      ("cut", _CUT), ("segment", _SEGMENT), ("cloud", _CLOUD)):
+                      ("cut", _CUT), ("segment", _SEGMENT), ("cloud", _CLOUD),
+                      ("handmask", _HANDMASK)):
         if pat.fullmatch(name):
             return kind
     if new_id(name) != name or name == "cover":
@@ -1838,7 +1878,7 @@ del _cls
 # of those declares it. (Plan 89: an effect's slots are its entry's `slots`,
 # `_WireCtx.slots`, never an entry of their own)
 DECLARED = ("composite", "switch", "delay", "resize", "echo", "matte",
-            "cut", "segment", "cloud", *FRAME_KINDS)
+            "cut", "segment", "cloud", "handmask", *FRAME_KINDS)
 
 
 def d1_wires(effects) -> list[Wire]:
@@ -1897,6 +1937,8 @@ class _WireCtx:
     segments: frozenset[str] = frozenset()
     # plan 93: the point clouds declared (their names)
     clouds: frozenset[str] = frozenset()
+    # the hand masks declared (their names)
+    handmasks: frozenset[str] = frozenset()
 
     def declared(self, kind: str) -> frozenset[str]:
         """The names of kind `kind` (one of `DECLARED`) the section declares
@@ -1905,7 +1947,7 @@ class _WireCtx:
                 "resize": self.resizes, "echo": self.echoes,
                 "lookback": self.lookbacks, "matte": self.mattes,
                 "cut": self.cuts, "segment": self.segments,
-                "cloud": self.clouds}.get(kind, frozenset())
+                "cloud": self.clouds, "handmask": self.handmasks}.get(kind, frozenset())
 
 
 FX_IMAGE_REFUSAL = ("fx.image takes the run from frame; to replace an output's picture "
@@ -2028,7 +2070,9 @@ WIRED_MAKES = {"scene": IMAGE, "shape": GEOMETRY, "hands": GEOMETRY, "layer": IM
                # — its foreground, background and matte are its pins
                "matte": MASK, "cut": IMAGE, "segment": None, **SEGMENT_PINS,
                # plan 93: a point cloud is geometry, as the shape (into a scene)
-               "cloud": GEOMETRY}
+               "cloud": GEOMETRY,
+               # the hand mask: the polygon its hands' fingertips make, a mask
+               "handmask": MASK}
 # plan 36 T2 (W2): every edge a port — a layer's and a guide's hands, the
 # look-back's cover mask, a composite's and an output's depth
 WIRED_TAKES: dict[str, dict[str, str]] = {
@@ -2048,17 +2092,20 @@ WIRED_TAKES: dict[str, dict[str, str]] = {
     # plan 39 T4 (W4): a segment the picture it cuts (its pins take nothing)
     "segment": {"image": IMAGE}, **{k: {} for k in SEGMENT_PINS},
     "cloud": {},
+    # the hand mask takes a hands node (its fingertips), as a hands layer does
+    "handmask": {"hands": GEOMETRY},
 }
 WIRED_TO_WORDS = ("output.1 …, output.all (image, hands, guide, depth), scene.geometry, "
                   "shape.faces, backdrop.image / scene, hands.layer.hands …, "
                   "hands.guide.hands …, "
                   "pattern.media, an effect's or its slot's image or aux, a composite's under "
                   "/ over / depth, a switch's in1 … in8, a delay's, a resize's, a "
-                  "matte's or a segment's image, or a cut's image / mask")
+                  "matte's or a segment's image, a cut's image / mask, or a hand mask's hands")
 WIRED_FROM_WORDS = ("scene, scene.cover, scene.depth, shape, hands …, hands.layer …, "
                     "hands.guide …, backdrop, pattern, "
                     "an effect, an effect's slot (acid.slot.2 …), a composite, a switch, "
-                    "a delay, a resize, a matte, a cut, segment.fg / .bg / .mask, a channel (channel.a …) or ground")
+                    "a delay, a resize, a matte, a cut, segment.fg / .bg / .mask, a hand mask, "
+                    "a channel (channel.a …) or ground")
 # plan 39 T2 (W1, decision 2): a picture into a mask port is refused with the
 # converter's name; the promotion runs the other way only
 PICTURE_INTO_MASK = "{src} makes a picture, {dst} takes a mask — put a matte between"
@@ -2150,6 +2197,8 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
         return DEPTH_TAKES.format(dst=w.dst)
     if kind in ("layer", "guide") and port == "hands" and src_kind != "hands":
         return LAYER_TAKES_HANDS.format(dst=w.dst)
+    if kind == "handmask" and port == "hands" and src_kind != "hands":
+        return HANDMASK_TAKES_HANDS.format(dst=w.dst)
     if makes == GEOMETRY and want != GEOMETRY and kind != "output":
         return GEOMETRY_INTO_SCENE.format(src=w.src)
     if makes == IMAGE and want == MASK:
@@ -2601,6 +2650,11 @@ class GraphSpec:
         return self._of("cloud")
 
     @property
+    def handmasks(self) -> tuple[HandMaskAt, ...]:
+        """The hand masks the section adds, by instance."""
+        return self._of("handmask")
+
+    @property
     def echoes(self) -> tuple[EchoAt, ...]:
         """The look-back frames the section reads (plan 34 L), by index."""
         return self._of("echo")
@@ -2852,6 +2906,7 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
                    cuts=frozenset(c.name for c in spec.cuts),
                    segments=frozenset(x.name for x in spec.segments),
                    clouds=frozenset(c.name for c in spec.clouds),
+                   handmasks=frozenset(x.name for x in spec.handmasks),
                    echoes=frozenset(e.name for e in spec.echoes),
                    placed={e.name: e.where for e in effects_at if e.placed},
                    wired=wired, slots=frozenset(x.name for x in spec.slots),
@@ -3528,6 +3583,14 @@ class Frame:
         `cut[.n].*` params') — a value, never a rebuild (getattr: a view
         state from before the cut has none)."""
         return getattr(self.root.s, "cuts", None) or {}
+
+    @property
+    def handmasks(self) -> dict[str, Any]:
+        """Each hand mask's values this frame (hand mask name → its
+        `view.HandMaskState`): the view state's (`ViewState.handmasks`, the
+        `handmask[.n].*` params') — a value, never a rebuild (getattr: a view
+        state from before the hand mask has none)."""
+        return getattr(self.root.s, "handmasks", None) or {}
 
     @property
     def segments(self) -> dict[str, Any]:
@@ -5147,6 +5210,155 @@ def mask_port(node: Node, frame: Frame) -> moderngl.Texture | None:
     if key not in frame.data:
         frame.data[key] = frame.r.mask_passes().fit(tex, frame.key(key), frame.size, flip=flip)
     return frame.data[key]
+
+
+# ---------------------------------------------------------------- the hand mask
+#
+# The polygon a hands node's fingertips make on screen, as a mask: each hand's
+# thumb tip and index tip (`ghost.HandPose.joints`, digit then joint, base to
+# tip) through the camera the hands are drawn with — the hands layer's (the
+# reference eye, `ghost.Settled.layer`) or the scene's (the loadable patch's
+# eye) — to the frame's pixels, the four filled as one closed polygon
+# (`masks.MaskPasses.polygon`). Both hands are needed: one alone makes no
+# polygon, and the mask passes nothing.
+
+# (digit, joint) of each fingertip the polygon is made of, per hand: the
+# thumb's tip and the index finger's (`HandPose.joints` is (5, 5, 3))
+HANDMASK_TIPS = ((0, 4), (1, 4))
+HANDMASK_SIDES = ("left", "right")
+HANDMASK_ONE_HAND = "one hand: both are needed for a polygon — no mask passes"
+HANDMASK_NO_HANDS = "no hands seen — no mask passes"
+HANDMASK_UNWIRED = "no hands wired into its hands — no mask passes"
+HANDMASK_BEHIND = "a fingertip behind the eye — no mask passes"
+
+
+def hand_polygon(now: Any, eye: int, size: tuple[int, int]
+                 ) -> tuple[np.ndarray | None, float, str]:
+    """The hand mask's polygon from a frame's settled hands `now` (a
+    `ghost.Settled`, or None): ``(points, strength, why)`` — `points` the
+    fingertips (`HANDMASK_TIPS` of the left hand, then the right's) as
+    (k, 2) pixels of a frame `size`, first row at the bottom (GL's), in order
+    round their centre so the polygon never crosses itself; `strength` the
+    fainter hand's fade (the mask fades as the hands do); `why` empty, or
+    why there is no polygon (`points` None). `eye` indexes `HANDMASK_EYES`:
+    0 the hands layer's camera (`now.layer`, the scene's when it has none),
+    1 the scene's. A hand with no fingers (a palm-only skeleton) counts as
+    none."""
+    if now is None:
+        return None, 0.0, HANDMASK_NO_HANDS
+    poses, vp = now[0], now[1]
+    if _pick(range(len(HANDMASK_EYES)), eye) == 0:
+        layer = getattr(now, "layer", None)
+        if layer is not None:
+            vp = layer[0]
+    seen = {p.side: p for p in poses
+            if len(getattr(p, "joints", ())) and float(getattr(p, "fade", 1.0)) > 0.0}
+    hands = [seen[k] for k in HANDMASK_SIDES if k in seen]
+    if len(hands) < len(HANDMASK_SIDES):
+        return None, 0.0, HANDMASK_ONE_HAND if hands else HANDMASK_NO_HANDS
+    q = np.array([p.joints[d, j] for p in hands for d, j in HANDMASK_TIPS], dtype=np.float64)
+    clip = np.c_[q, np.ones(len(q))] @ np.asarray(vp, dtype=np.float64).T
+    if not np.isfinite(clip).all() or (clip[:, 3] <= 1e-6).any():
+        return None, 0.0, HANDMASK_BEHIND
+    ndc = clip[:, :2] / clip[:, 3:4]
+    w, h = max(int(size[0]), 1), max(int(size[1]), 1)
+    px = (ndc + 1.0) * 0.5 * np.array([w, h], dtype=np.float64)
+    c = px.mean(axis=0)
+    px = px[np.argsort(np.arctan2(px[:, 1] - c[1], px[:, 0] - c[0]), kind="stable")]
+    strength = min(float(getattr(p, "fade", 1.0)) for p in hands)
+    return px, min(max(strength, 0.0), 1.0), ""
+
+
+# (the values of a hand mask with none this frame: read, never written)
+_HANDMASK_DEFAULT = HandMaskState()
+
+
+class HandMaskNode(Node):
+    """A hand mask: `handmask`, `handmask.2` …, the closed polygon its hands
+    node's thumbs and index fingers make on screen (`hand_polygon`), as a
+    one-channel mask at the frame's size — passing inside, `grow` px pushed
+    out (negative: in), its edge `feather` px wide, `invert`, through the
+    hands layer's camera or the scene's (`eye`): `ViewState.handmasks`, read
+    as `Frame.handmasks`, values, never a rebuild. The mask fades with the
+    fainter hand. The hands are the wire into its `hands` port, a hands
+    node: they need not be drawn anywhere else for the mask to follow them.
+
+    Made once a frame on the first ask (`made`, the root's data, into a frame
+    target keyed `(<name>#mask, size)`), like a matte's: a mask port binds it
+    (`mask_port`), a picture port reads it promoted (`MaskPicture`). With no
+    polygon this frame — one hand or none, nothing wired in — it is still
+    made, passing nothing (everything, inverted), so a cut by it cuts its
+    picture away rather than showing it whole."""
+
+    KIND = "handmask"
+    INPUTS: ClassVar[dict[str, str]] = {"hands": GEOMETRY}
+    OUTPUT = MASK
+    TIMED = True
+    MADE = "#mask"            # where this frame's mask is kept (`mask_made`)
+    refused = ""              # why it passes nothing, in words (`graphview.mask_words`)
+
+    def __init__(self, name: str, hands: Node | None = None, after: tuple[Node, ...] = ()):
+        super().__init__(name, after, hands=hands)
+
+    def state(self, frame: Frame) -> HandMaskState:
+        """This frame's values (`Frame.handmasks`), else the defaults."""
+        return frame.handmasks.get(self.name) or _HANDMASK_DEFAULT
+
+    def reads(self, frame: Frame) -> bool:
+        return True               # (a mask is made every frame: nothing, with no hands)
+
+    def polygon(self, frame: Frame) -> tuple[np.ndarray | None, float, str]:
+        """This frame's polygon (`hand_polygon`) at the frame's size."""
+        root = frame.root
+        hands = self.inputs["hands"]
+        if hands is None:
+            return None, 0.0, HANDMASK_UNWIRED
+        now = hands.now(root) if hasattr(hands, "now") else None
+        return hand_polygon(now, self.state(frame).eye, root.size)
+
+    def made(self, frame: Frame) -> moderngl.Texture | None:
+        """The mask, made once a frame (the root's data) at the frame's size."""
+        root = frame.root
+        key = self.name + "#mask"
+        if key in root.data:
+            return root.data[key]
+        st = self.state(frame)
+        pts, strength, _ = self.polygon(frame)
+        with frame.timed(self.name):
+            out = frame.r.mask_passes().polygon(
+                pts if pts is not None else (), key, root.size,
+                grow=min(max(float(st.grow), -HANDMASK_GROW), HANDMASK_GROW),
+                feather=min(max(float(st.feather), 0.0), HANDMASK_FEATHER),
+                strength=strength, invert=bool(st.invert))
+        root.data[key] = out
+        return out
+
+    def native(self, frame: Frame) -> moderngl.Texture | None:
+        """The mask as made, at the frame's size."""
+        return self.made(frame)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        """Its mask as a mask port binds it (`mask_port`)."""
+        return mask_port(self, frame)
+
+    def run(self, frame: Frame) -> None:
+        """What it says (GRAPH's summary)."""
+        pts, strength, why = self.polygon(frame)
+        st = self.state(frame)
+        self.refused = why
+        if pts is None:
+            self.said = why
+            return
+        said = f"{len(pts)}-sided polygon · {_pick(HANDMASK_EYES, st.eye)}'s eye"
+        if float(st.grow):
+            said += f" · grow {float(st.grow):+g} px"
+        if float(st.feather) > 0.0:
+            said += f" · feather {float(st.feather):g} px"
+        if strength < 1.0:
+            said += f" · {strength:.0%}"
+        if st.invert:
+            said += " · inverted"
+        self.said = said
 
 
 # (the values of a cut with none this frame: read, never written)
@@ -7514,6 +7726,10 @@ class _Build:
                 self.g.dormant[name] = f"{name} is fed by nothing here: wire its image"
                 return None
             return self._keep(SegmentNode(name, image=src))
+        if kind == "handmask":
+            # its hands are the wire into its `hands` (none: a mask that
+            # passes nothing, as a layer with none draws nothing)
+            return self._keep(HandMaskNode(name, hands=self._from(f"{name}.hands")))
         if kind in SEGMENT_PINS and segment_pin(name) is not None:
             # plan 39 T4: a segment's pin — the matte is the segment itself
             # (as `scene.depth` is the scene), each picture a node over it
