@@ -1,5 +1,13 @@
 # Plans
 
+> **This folder is history, not the source of truth.** Each plan records what
+> was intended when it was written. Much of it has since changed, been
+> overturned or was never built. For how the code works now, read the code,
+> [`ARCHITECTURE.md`](../ARCHITECTURE.md), [`DECISIONS.md`](../DECISIONS.md)
+> and [`DEBT.md`](../DEBT.md); see the root [`CLAUDE.md`](../../../CLAUDE.md).
+> Don't change code to match a plan without checking it against those first,
+> and don't cite a plan from code, tests or fixtures.
+
 What is left in `plans/`:
 
 - [`11-hand-checks.md`](11-hand-checks.md) — the hand checks: what only a person at the machine can verify, numbered 1–401 (plan 40's group AK, 394–401, the last; plan 33's group AC, 318–328; as of plan 31: group U is plan 24, group W plan 27, group V plan 26 — V follows W in the file, as plan 27's docs landed first; 219, B6's, sits at the end of W — group X plan 30, 220–231 and N8's 267–271; group Y plan 28, 232–266 and 272–276 (N7's 261–266, N9's 272–276); group Z the instanced field from `main`, 277–279, then plan 31, 280–295 (286–295 the APC40 page, on `plan-31-a1`)).

@@ -51,6 +51,11 @@ jobs:
       - name: Lint
         run: uv run ruff check .
 
+      - name: No history in code
+        # comments, tests and fixtures may not gain plan/row/PR references,
+        # narration, or large fixtures (CLAUDE.md, root)
+        run: python3 tools/prose_audit.py check
+
       - name: Types
         # the ratchet's one real pyright run (row 788), here rather than on a
         # fast-tier worker, where it was the longest test (22-55 s)

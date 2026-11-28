@@ -1,0 +1,1696 @@
+{
+ "markers": {
+  ".github/actions/setup/action.yml": {
+   "provenance": 2
+  },
+  ".github/workflows/sweeps.yml": {
+   "provenance": 1
+  },
+  ".github/workflows/tests.yml": {
+   "provenance": 3
+  },
+  "hyperspace-contact/index.html": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/analyzer.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/apc40.py": {
+   "provenance": 44
+  },
+  "hyperspace-python/hyperspace/app.py": {
+   "provenance": 185
+  },
+  "hyperspace-python/hyperspace/audio.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/hyperspace/bands.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/hyperspace/bridge.py": {
+   "provenance": 10
+  },
+  "hyperspace-python/hyperspace/config.py": {
+   "provenance": 53
+  },
+  "hyperspace-python/hyperspace/control.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/deck.py": {
+   "provenance": 77
+  },
+  "hyperspace-python/hyperspace/devicelist.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/devices.py": {
+   "provenance": 106
+  },
+  "hyperspace-python/hyperspace/displays.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/dkit/combobox_measure.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/dkit/combobox_select.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/dkit/combobox_tokens.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/dkit/comp_button.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/dkit/comp_combobox.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/dkit/dev/contour.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/dkit/dev/test_button.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/dkit/dev/test_combobox.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/dkit/dev/test_combobox_keys.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/dkit/dev/test_interaction.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/dkit/dev/test_layer.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/dkit/dev/test_menu_keys.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/dkit/dev/test_module_surface.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/dkit/draw.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/dkit/layer.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/dkit/menu.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/dkit/uictx.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/dream.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/hyperspace/dreamhook.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/envelope.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/field.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/fractal.py": {
+   "provenance": 30
+  },
+  "hyperspace-python/hyperspace/fractal_gl.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/fx.py": {
+   "provenance": 108
+  },
+  "hyperspace-python/hyperspace/gamepad.py": {
+   "provenance": 30
+  },
+  "hyperspace-python/hyperspace/generic.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/geometry.py": {
+   "provenance": 20
+  },
+  "hyperspace-python/hyperspace/ghost.py": {
+   "provenance": 71
+  },
+  "hyperspace-python/hyperspace/glsl.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/hyperspace/graph.py": {
+   "narration": 1,
+   "provenance": 599
+  },
+  "hyperspace-python/hyperspace/graphmigrate.py": {
+   "provenance": 197
+  },
+  "hyperspace-python/hyperspace/graphview.py": {
+   "provenance": 436
+  },
+  "hyperspace-python/hyperspace/grip.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/hyperspace/groupwords.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/hands/__init__.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/hands/core.py": {
+   "provenance": 34
+  },
+  "hyperspace-python/hyperspace/hands/device.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/hyperspace/hands/panel.py": {
+   "provenance": 17
+  },
+  "hyperspace-python/hyperspace/hands/room.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/hands/signal.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/headless.py": {
+   "provenance": 14
+  },
+  "hyperspace-python/hyperspace/hot_slots.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/hotplug.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/hotreload.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/idle_lights.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/kinect.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/learn.py": {
+   "provenance": 86
+  },
+  "hyperspace-python/hyperspace/lfo.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/library.py": {
+   "provenance": 300
+  },
+  "hyperspace-python/hyperspace/loadable.py": {
+   "provenance": 280
+  },
+  "hyperspace-python/hyperspace/lookback.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/mandel.py": {
+   "provenance": 30
+  },
+  "hyperspace-python/hyperspace/masks.py": {
+   "provenance": 16
+  },
+  "hyperspace-python/hyperspace/media/__init__.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/media/camera.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/media/channels.py": {
+   "provenance": 24
+  },
+  "hyperspace-python/hyperspace/media/folder.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/media/frame.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/media/ids.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/media/live.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/media/mixer.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/hyperspace/media/ndi.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/media/panel.py": {
+   "narration": 1,
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/media/publish.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/media/source.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/media/syphon.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/media/transport.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/media/video.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/media_tex.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/hyperspace/midi.py": {
+   "provenance": 71
+  },
+  "hyperspace-python/hyperspace/midiports.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/modbank.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/modgraph.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/modifiers.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/motion.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/node_desk.py": {
+   "narration": 1,
+   "provenance": 19
+  },
+  "hyperspace-python/hyperspace/nodemode.py": {
+   "provenance": 13
+  },
+  "hyperspace-python/hyperspace/offline.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/osc.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/outputs.py": {
+   "provenance": 53
+  },
+  "hyperspace-python/hyperspace/overlay.py": {
+   "provenance": 24
+  },
+  "hyperspace-python/hyperspace/pacing.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/pads/__init__.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/pads/gesture.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/pads/hid.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/pads/models.py": {
+   "provenance": 15
+  },
+  "hyperspace-python/hyperspace/pads/nintendo.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/pads/sony.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/hyperspace/palettecompat.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/params.py": {
+   "narration": 1,
+   "provenance": 178
+  },
+  "hyperspace-python/hyperspace/patches.py": {
+   "narration": 1,
+   "provenance": 72
+  },
+  "hyperspace-python/hyperspace/patterns.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/pinch.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/placement.py": {
+   "provenance": 10
+  },
+  "hyperspace-python/hyperspace/players.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/playlist.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/poi.py": {
+   "narration": 1,
+   "provenance": 9
+  },
+  "hyperspace-python/hyperspace/poi_guide.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/pointer.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/previews.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/render.py": {
+   "provenance": 218
+  },
+  "hyperspace-python/hyperspace/replay.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/routing.py": {
+   "provenance": 330
+  },
+  "hyperspace-python/hyperspace/routing_sources.py": {
+   "provenance": 27
+  },
+  "hyperspace-python/hyperspace/segment.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/seq_page.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/sequencer.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/shaders/fx/_lib.glsl": {
+   "provenance": 8
+  },
+  "hyperspace-python/hyperspace/shaders/fx/blend.glsl": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/shaders/fx/blocks.glsl": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/shaders/fx/cellaction.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/cells.glsl": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/shaders/fx/colour.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/combine.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/curve.glsl": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/shaders/fx/displace.glsl": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/shaders/fx/dream.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/edges.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/fade.glsl": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/shaders/fx/hueturn.glsl": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/shaders/fx/line.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/mandel.glsl": {
+   "provenance": 6
+  },
+  "hyperspace-python/hyperspace/shaders/fx/noise.glsl": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/shaders/fx/palette.glsl": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/shaders/fx/point.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/prism.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/read.glsl": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/shaders/fx/rings.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/scale.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/spokes.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/tofield.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/trail.glsl": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/shaders/fx/wave.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/fx/waveform.glsl": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/shaders/fx/zoomblur.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shaders/patterns.glsl": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/shapeframe.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/sharedfile.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/stack.py": {
+   "provenance": 14
+  },
+  "hyperspace-python/hyperspace/tapers.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/hyperspace/tempo.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/totem.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/ui.py": {
+   "provenance": 173
+  },
+  "hyperspace-python/hyperspace/ui_bands.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/ui_browse.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/ui_camera.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/ui_desk.py": {
+   "provenance": 27
+  },
+  "hyperspace-python/hyperspace/ui_diagram.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/ui_displays.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/ui_effect_picker.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/ui_fields.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/hyperspace/ui_fractal.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/hyperspace/ui_fx.py": {
+   "provenance": 33
+  },
+  "hyperspace-python/hyperspace/ui_graph.py": {
+   "provenance": 319
+  },
+  "hyperspace-python/hyperspace/ui_kinect.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/ui_lfo.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/ui_loadable.py": {
+   "provenance": 28
+  },
+  "hyperspace-python/hyperspace/ui_media.py": {
+   "provenance": 20
+  },
+  "hyperspace-python/hyperspace/ui_pad.py": {
+   "provenance": 12
+  },
+  "hyperspace-python/hyperspace/ui_pad_lab.py": {
+   "provenance": 27
+  },
+  "hyperspace-python/hyperspace/ui_pad_nvg.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/ui_pad_views.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/hyperspace/ui_pane.py": {
+   "provenance": 14
+  },
+  "hyperspace-python/hyperspace/ui_patterns.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/hyperspace/ui_players.py": {
+   "provenance": 12
+  },
+  "hyperspace-python/hyperspace/ui_playlist.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/hyperspace/ui_routing.py": {
+   "provenance": 72
+  },
+  "hyperspace-python/hyperspace/ui_seq.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/hyperspace/ui_strip.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/hyperspace/undo.py": {
+   "provenance": 46
+  },
+  "hyperspace-python/hyperspace/view.py": {
+   "provenance": 54
+  },
+  "hyperspace-python/hyperspace/watchdog.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/hyperspace/world.py": {
+   "provenance": 20
+  },
+  "hyperspace-python/pyproject.toml": {
+   "provenance": 11
+  },
+  "hyperspace-python/tests/blockspatch.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/conftest.py": {
+   "provenance": 40
+  },
+  "hyperspace-python/tests/fixtures/time-displace-488/timedisplace488.glsl": {
+   "provenance": 9
+  },
+  "hyperspace-python/tests/legacy_chain.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/live_lock.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/shader_lint.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_analyzer.py": {
+   "provenance": 13
+  },
+  "hyperspace-python/tests/test_analyzer_words.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_app_bands.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_app_boundary.py": {
+   "provenance": 60
+  },
+  "hyperspace-python/tests/test_app_relative.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_audio.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_audio_mix.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_aux_ports.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_base_chase.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_black_is_clear.py": {
+   "provenance": 15
+  },
+  "hyperspace-python/tests/test_blocks_patch.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_bridge.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_calm_lanes.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_camera.py": {
+   "provenance": 10
+  },
+  "hyperspace-python/tests/test_catalog.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tests/test_ci_layout.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_cloud_node.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_clouds.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_config.py": {
+   "provenance": 16
+  },
+  "hyperspace-python/tests/test_control.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_control_widgets.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_copy_patches.py": {
+   "narration": 2,
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_core.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_cover_into_a_cut.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_curve_and_ramp.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_deck.py": {
+   "provenance": 21
+  },
+  "hyperspace-python/tests/test_deck_crossfade.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_deck_fade.py": {
+   "provenance": 13
+  },
+  "hyperspace-python/tests/test_deck_words.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/tests/test_delay_stack.py": {
+   "provenance": 14
+  },
+  "hyperspace-python/tests/test_desk.py": {
+   "provenance": 54
+  },
+  "hyperspace-python/tests/test_desk_coverage.py": {
+   "provenance": 13
+  },
+  "hyperspace-python/tests/test_desk_faders.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_desk_findings.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_desk_templates.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tests/test_desk_trust.py": {
+   "provenance": 16
+  },
+  "hyperspace-python/tests/test_device_inputs.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tests/test_device_wants.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_devicelist.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_devices.py": {
+   "provenance": 15
+  },
+  "hyperspace-python/tests/test_dial.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/tests/test_displays.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_doc_numbers.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_dream.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_dream_effect.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_dream_migration.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_effect_picker.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_effect_previews.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_effect_slots.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tests/test_envelope.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_envelope_boundary.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_faces_map.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_field_examples.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/tests/test_field_lib.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_field_wire.py": {
+   "provenance": 19
+  },
+  "hyperspace-python/tests/test_format_lane.py": {
+   "provenance": 12
+  },
+  "hyperspace-python/tests/test_fractal.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_fractal_dive.py": {
+   "provenance": 22
+  },
+  "hyperspace-python/tests/test_fractal_gpu.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_fractal_grab.py": {
+   "provenance": 16
+  },
+  "hyperspace-python/tests/test_fx.py": {
+   "provenance": 47
+  },
+  "hyperspace-python/tests/test_fx_clock.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_fx_colour.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_fx_edges.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_fx_palette.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_fx_prismatic.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_gamepad.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_geometry.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_ghost.py": {
+   "provenance": 24
+  },
+  "hyperspace-python/tests/test_golden.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_golden_frames.py": {
+   "provenance": 53
+  },
+  "hyperspace-python/tests/test_gpu_cost.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tests/test_graph.py": {
+   "provenance": 29
+  },
+  "hyperspace-python/tests/test_graph_areas.py": {
+   "provenance": 44
+  },
+  "hyperspace-python/tests/test_graph_copy_paste.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_graph_cut.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_graph_delay.py": {
+   "provenance": 25
+  },
+  "hyperspace-python/tests/test_graph_edit.py": {
+   "provenance": 80
+  },
+  "hyperspace-python/tests/test_graph_effects.py": {
+   "provenance": 31
+  },
+  "hyperspace-python/tests/test_graph_faces.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/tests/test_graph_far.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_graph_feedback.py": {
+   "provenance": 15
+  },
+  "hyperspace-python/tests/test_graph_fit.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_graph_fixes_h2.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_graph_frame.py": {
+   "provenance": 16
+  },
+  "hyperspace-python/tests/test_graph_free.py": {
+   "provenance": 46
+  },
+  "hyperspace-python/tests/test_graph_groups.py": {
+   "provenance": 30
+  },
+  "hyperspace-python/tests/test_graph_head.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_graph_hot.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_graph_hover.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_graph_json.py": {
+   "provenance": 45
+  },
+  "hyperspace-python/tests/test_graph_legible.py": {
+   "provenance": 44
+  },
+  "hyperspace-python/tests/test_graph_masks.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/tests/test_graph_migrate.py": {
+   "provenance": 35
+  },
+  "hyperspace-python/tests/test_graph_patch_only.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tests/test_graph_placement.py": {
+   "provenance": 35
+  },
+  "hyperspace-python/tests/test_graph_resize.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tests/test_graph_segment.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_graph_seq.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_graph_starters.py": {
+   "provenance": 13
+  },
+  "hyperspace-python/tests/test_graph_switch.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_graph_wired.py": {
+   "provenance": 21
+  },
+  "hyperspace-python/tests/test_graph_wires.py": {
+   "provenance": 41
+  },
+  "hyperspace-python/tests/test_graphview.py": {
+   "provenance": 52
+  },
+  "hyperspace-python/tests/test_graphview_devices.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_grip.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tests/test_hand_names.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/tests/test_hands.py": {
+   "provenance": 33
+  },
+  "hyperspace-python/tests/test_hands_dance.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_hands_grab.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_hands_leap.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_hands_node.py": {
+   "provenance": 10
+  },
+  "hyperspace-python/tests/test_hands_orbit.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tests/test_hands_room.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_hands_tape.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/tests/test_hot_reload_app.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_hotplug.py": {
+   "narration": 1,
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_hotreload.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/tests/test_hue_turn.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_idle_lights.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_joycon_v0.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_kinect.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_kinect_control.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_kinetic_presets.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_knob_fields.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_layer_boundary.py": {
+   "narration": 1,
+   "provenance": 12
+  },
+  "hyperspace-python/tests/test_learn.py": {
+   "provenance": 53
+  },
+  "hyperspace-python/tests/test_lfo.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tests/test_lfo_boundary.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_library.py": {
+   "provenance": 65
+  },
+  "hyperspace-python/tests/test_library_folders.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_live_lock.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_loadable.py": {
+   "provenance": 97
+  },
+  "hyperspace-python/tests/test_loadable_folders.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tests/test_lookback.py": {
+   "provenance": 10
+  },
+  "hyperspace-python/tests/test_lookback_migration.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tests/test_lookback_parts_exact.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_macro_candidates.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/tests/test_macros.py": {
+   "provenance": 16
+  },
+  "hyperspace-python/tests/test_mandel.py": {
+   "provenance": 16
+  },
+  "hyperspace-python/tests/test_mask_thumbnails.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_matte_peak.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_media_audio.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_media_channels.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_media_core.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_media_faces_aux.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_media_folder.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_media_live.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_media_loadable.py": {
+   "provenance": 17
+  },
+  "hyperspace-python/tests/test_media_mixer.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_media_panel.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_media_publish.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_media_render.py": {
+   "provenance": 20
+  },
+  "hyperspace-python/tests/test_media_transport.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_media_varispeed.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_media_video.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_meta_controller.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_meta_line.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tests/test_meta_rule.py": {
+   "provenance": 11
+  },
+  "hyperspace-python/tests/test_midi.py": {
+   "provenance": 55
+  },
+  "hyperspace-python/tests/test_midi14.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_midiports.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_migrate_library.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_modbank.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_modgraph.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_modifiers.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_modulation.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_motion.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_move_library.py": {
+   "provenance": 10
+  },
+  "hyperspace-python/tests/test_ndi_loop.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_node_desk.py": {
+   "provenance": 15
+  },
+  "hyperspace-python/tests/test_node_mode_graph.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_node_mode_pad.py": {
+   "provenance": 11
+  },
+  "hyperspace-python/tests/test_nodemode.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_on_off_air.py": {
+   "provenance": 17
+  },
+  "hyperspace-python/tests/test_one_camera.py": {
+   "provenance": 15
+  },
+  "hyperspace-python/tests/test_one_mirror.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_osc.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_outputs.py": {
+   "provenance": 45
+  },
+  "hyperspace-python/tests/test_overlay.py": {
+   "provenance": 12
+  },
+  "hyperspace-python/tests/test_pacing.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_pad_learn.py": {
+   "provenance": 32
+  },
+  "hyperspace-python/tests/test_pads_examples.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_pads_hid.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_pads_joycon_real.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_pads_nintendo.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tests/test_pads_real.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_pair_consent.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/tests/test_paired_axes.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tests/test_palette.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_params.py": {
+   "provenance": 35
+  },
+  "hyperspace-python/tests/test_patches.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/tests/test_patches_frame_kinds.py": {
+   "provenance": 15
+  },
+  "hyperspace-python/tests/test_patches_one_format.py": {
+   "provenance": 15
+  },
+  "hyperspace-python/tests/test_patches_replace_dream.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_patterns.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_person_words.py": {
+   "provenance": 12
+  },
+  "hyperspace-python/tests/test_person_words_saved.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_placement.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/tests/test_plan31_32_merge.py": {
+   "provenance": 23
+  },
+  "hyperspace-python/tests/test_plan31_review.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tests/test_plan31_wiring.py": {
+   "provenance": 25
+  },
+  "hyperspace-python/tests/test_plan36_bus.py": {
+   "provenance": 10
+  },
+  "hyperspace-python/tests/test_plan36_edges.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/tests/test_plan36_lookback_dream.py": {
+   "provenance": 15
+  },
+  "hyperspace-python/tests/test_plan36_seven.py": {
+   "provenance": 20
+  },
+  "hyperspace-python/tests/test_plan39_graph.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_players.py": {
+   "provenance": 12
+  },
+  "hyperspace-python/tests/test_playlist.py": {
+   "provenance": 15
+  },
+  "hyperspace-python/tests/test_poi.py": {
+   "provenance": 18
+  },
+  "hyperspace-python/tests/test_poi_guide.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_poi_real.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tests/test_quit_signal.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_render.py": {
+   "provenance": 59
+  },
+  "hyperspace-python/tests/test_replay.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_retaper.py": {
+   "provenance": 14
+  },
+  "hyperspace-python/tests/test_root_frame.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_routing.py": {
+   "provenance": 164
+  },
+  "hyperspace-python/tests/test_routing_boundary.py": {
+   "provenance": 11
+  },
+  "hyperspace-python/tests/test_routing_sources.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tests/test_save_live.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_segment.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_seq_page.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_sequencer.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_set_hands_look.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tests/test_shader_time_lint.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/tests/test_shapes3d.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_shapes4d.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_shared_library.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_sinks.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_sort_register.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_step_continuity.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_stroke_space.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_thumb_rate.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_thumbnails.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tests/test_time_displace_488.py": {
+   "provenance": 9
+  },
+  "hyperspace-python/tests/test_tool_names.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_totem.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_trip_patch.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_type_ratchet.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_ui_bands.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_ui_desk.py": {
+   "provenance": 23
+  },
+  "hyperspace-python/tests/test_ui_fine.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/tests/test_ui_kept.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_ui_kinect.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_ui_lfo.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_ui_loadable.py": {
+   "provenance": 19
+  },
+  "hyperspace-python/tests/test_ui_media.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_ui_on_change.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_ui_output.py": {
+   "provenance": 17
+  },
+  "hyperspace-python/tests/test_ui_pad.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tests/test_ui_pane.py": {
+   "provenance": 14
+  },
+  "hyperspace-python/tests/test_ui_patterns.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_ui_players.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_ui_routing.py": {
+   "provenance": 47
+  },
+  "hyperspace-python/tests/test_ui_seq.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_ui_shell.py": {
+   "provenance": 83
+  },
+  "hyperspace-python/tests/test_undo.py": {
+   "provenance": 33
+  },
+  "hyperspace-python/tests/test_undo_hand.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_undo_latch.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_undo_stacks.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_unwired_thumbs.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_video_sound_path.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tests/test_view_phase.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_wait_green.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/test_watchdog.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tests/test_wave_patch.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/test_wire_take_over.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_world.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tests/test_writes.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/trippatch.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tests/ui_driver.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/uv_flow.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/walls.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/wavepatch.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tests/wiredframe.py": {
+   "provenance": 22
+  },
+  "hyperspace-python/tools/app_driver.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/box_demo.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tools/box_shot.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/calm_lanes.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/catalog_demo.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/ci_shard.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/cloud_fixture.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/compare_render.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/control_shots.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/copy_patches.py": {
+   "narration": 1,
+   "provenance": 1
+  },
+  "hyperspace-python/tools/desk_coverage.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tools/desk_shots.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/dial_demo.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tools/dim_shots.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tools/dream_bench/common.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/dream_layer_sheet.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/dream_proof.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tools/dream_shots.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/drive_control_widgets.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/drive_decks.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/drive_dream.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/drive_effect_picker.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/drive_gpu_cost.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/drive_hot_reload.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/drive_lookback.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/drive_node_mode.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/drive_node_mode_pad.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/drive_players.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/drive_playlist.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/drive_stack.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/drive_world_check.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/effect_previews.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/faces_page_shots.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/faces_sheets.py": {
+   "provenance": 8
+  },
+  "hyperspace-python/tools/flow_demo.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/followups_demo.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/fractal_bench.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/fractal_compare.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/fractal_dive_demo.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tools/fractal_grab_demo.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/fx_shots.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/fx_sweep.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/gen_test_audio.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/golden_frames.py": {
+   "provenance": 86
+  },
+  "hyperspace-python/tools/hands_probe.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/hands_tape.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/hid_probe.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tools/home_demo.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tools/instances_shots.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/label_menu_shot.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/layout_shots.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/learn_default_demo.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/learn_demo.py": {
+   "narration": 1,
+   "provenance": 12
+  },
+  "hyperspace-python/tools/learn_shot.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tools/loadable_shots.py": {
+   "provenance": 10
+  },
+  "hyperspace-python/tools/lookback_proof.py": {
+   "provenance": 7
+  },
+  "hyperspace-python/tools/mandel_bench.py": {
+   "provenance": 10
+  },
+  "hyperspace-python/tools/mandel_demo.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/meta_routes.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/migrate_library.py": {
+   "provenance": 23
+  },
+  "hyperspace-python/tools/move_library.py": {
+   "provenance": 11
+  },
+  "hyperspace-python/tools/orbit_demo.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tools/outputs_shots.py": {
+   "provenance": 19
+  },
+  "hyperspace-python/tools/pad_shots.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tools/pad_tape_excerpt.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/pattern_cost.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/pattern_sheet.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/placement_demo.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/poi_probe.py": {
+   "provenance": 6
+  },
+  "hyperspace-python/tools/record_golden.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tools/retaper_routes.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/routing_filter_shot.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/save_as_demo.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tools/sc3a_spike.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/set_hands_look.py": {
+   "provenance": 5
+  },
+  "hyperspace-python/tools/sheet_shots.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/slew_demo.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/sort_register.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/trim_sweep.py": {
+   "provenance": 1
+  },
+  "hyperspace-python/tools/turntable.py": {
+   "provenance": 3
+  },
+  "hyperspace-python/tools/type_ratchet.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/undo_demo.py": {
+   "provenance": 4
+  },
+  "hyperspace-python/tools/undo_shot.py": {
+   "provenance": 2
+  },
+  "hyperspace-python/tools/wait_green.py": {
+   "provenance": 2
+  },
+  "hyperspace-web/hyperspace.html": {
+   "provenance": 6
+  }
+ },
+ "fixtures": {
+  "hyperspace-python/tests/fixtures/frame-signatures.json": 599697,
+  "hyperspace-python/tests/fixtures/hands/rig.json": 5912393,
+  "hyperspace-python/tests/fixtures/hands/synthetic.json": 262701,
+  "hyperspace-python/tests/fixtures/pads/joycon-v0-moves.jsonl": 462169,
+  "hyperspace-python/tests/golden/audio/brickwalled-default.jsonl": 287279,
+  "hyperspace-python/tests/golden/audio/brickwalled-dyn0.jsonl": 287358,
+  "hyperspace-python/tests/golden/audio/real-default.jsonl": 2853978,
+  "hyperspace-python/tests/golden/frames/frames.json": 277284
+ }
+}

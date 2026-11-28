@@ -4,6 +4,10 @@ Hyperspace is a live-visuals app: a 4D polytope driven by music, hands
 (an Ultraleap camera), an APC40 and LFOs, shown on a Pepper's Ghost glass
 and a projector. It is one Python process in `hyperspace-python/`.
 
+> Which docs are authoritative, and what code and tests may contain: the
+> root [`CLAUDE.md`](../../CLAUDE.md). The narrative sections below and
+> everything in `plans/` are history. Check them against the code.
+
 ## Where things are
 
 - **The app:** `hyperspace-python/` (package `hyperspace/`, tests in

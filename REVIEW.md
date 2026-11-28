@@ -89,6 +89,24 @@ In Claude Code, `/deep-review` runs this review on the current branch
   The fix is not better constants; it is not writing constants
   (`hyperspace/dkit/box.py`, `hyperspace/dkit/tokens.py:SPACE`).
 
+## Comments, tests and fixtures
+
+Per the root [`CLAUDE.md`](CLAUDE.md):
+
+- **No history in code.** Comments, docstrings, test names and fixtures
+  carry no plan numbers, register rows, PR numbers, dates, or notes to
+  future agents. `tools/prose_audit.py check` catches the marked ones. Look
+  for unmarked ones too: a paragraph arguing why the code is allowed to be
+  the way it is.
+- **A shortcut goes in `DEBT.md`.** A change that takes a shortcut adds a
+  DEBT entry and at most a `# DEBT: <slug>` pointer at the site. A
+  justification written into the source is a finding.
+- **Plans are not authority.** "Plan N said so" is not a reason a change is
+  right. The reason is ARCHITECTURE, DECISIONS or the behaviour itself. If a
+  plan's intent is still in force, it belongs in DECISIONS.
+- **Fixtures are data, and small.** A large new fixture comes with the tool
+  that generates it, or a reason it can't be generated.
+
 ## The base
 
 - **The branch is on current `main`.** `git fetch origin main`, then
