@@ -194,7 +194,7 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
                          {"kind": "effect", "file": "palette", "after": "teapot"}]}
     put(rig.home, "Odd", values={"view.bright": 3.0}, graph=section)
     rig.lib.load(LOADABLE, "Odd")
-    assert rig.loaded_patch.notes == [f"{teapot}: not wired (plan 36)"]
+    assert rig.loaded_patch.notes == [f"{teapot}: not wired"]
     assert G.in_scene_hands(stub.wiring) == [1] and rig.reg["view.bright"].value == 3.0
     saved = rig.loaded_patch.document("Odd")[loadable.GRAPH_KEY]
     assert saved == rig.loaded_patch.graph.free_doc()
@@ -354,7 +354,7 @@ def test_a_placement_with_nothing_to_sit_on_is_said_and_wired_nowhere():
     notes: list[str] = []
     got = M.placed_wires(sec, notes=notes)
     assert notes == [("acid.2 into 'output.2' — output 2 shows no picture: it drew nothing, "
-                      "so it is not wired (plan 36)")]
+                      "so it is not wired")]
     assert {"from": "hands.layer", "to": "palette.image"} in got["wires"]
     # (plan 90 H2: the old frame's look-back split as the old words' off had it
     # — none drawn — before a live read, which refuses one)

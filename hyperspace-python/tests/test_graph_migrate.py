@@ -456,7 +456,7 @@ def test_a_driven_backdrop_history_is_dropped_with_a_note(how):
     doc["routes" if how == "route" else "desk"] = [row, keep]
     out, notes = M.migrate(doc, SPECS)
     assert notes == [M.DRIVEN_RETIRED_NOTE.format(pid="backdrop.history")]
-    assert M.DRIVEN_RETIRED_NOTE == ("{pid} is a wire now (plan 35): its route is dropped — "
+    assert M.DRIVEN_RETIRED_NOTE == ("{pid} is a wire now: its route is dropped — "
                                      "pick what the look-back records on LOOKBACK")
     rows = out["routes" if how == "route" else "desk"]
     assert [r["target"] for r in rows] == ["fx.acid.mix"]
