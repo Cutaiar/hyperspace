@@ -40,3 +40,31 @@ fix deletes the entry and its pointers.
 - **What it does now:** `subject` is one of the `segment.mode` choices but makes no matte: `_make` refuses it with "subject is not in this build".
 - **The proper fix:** a subject-segmentation worker alongside the person worker.
 - **Cost while it stays:** choosing `subject` yields no matte; `fg` is the input whole and `bg` nothing.
+
+### combobox-popup-ring-clip
+
+- **Where:** `hyperspace/dkit/comp_combobox.py:RING_PAD` (and `combobox`, which sizes and places the popup window with it)
+- **What it does now:** `RING_PAD` is 0.0, so the popup window ends at the trigger's edge. ImGui clips a window's draw list to the window, so the 3px focus ring drawn outside the field's box is cut off square when the list is open (visible only when the field was reached by Tab). Inflating the window by 6 on every side fixes the clip but leaves artifacts at the panel's top and bottom edges on a Retina Mac.
+- **The proper fix:** do not put the trigger inside the popup. Draw the list as an ordinary window with `no_focus_on_appearing`, so the parent input keeps the caret, and hand-roll the dismissal and z-order the popup stack provides.
+- **Cost while it stays:** a cosmetic clipped ring.
+
+### shadow-triple-box-blur
+
+- **Where:** `hyperspace/dkit/draw.py:_blur_layers` (used by `shadow`)
+- **What it does now:** approximates a CSS blur with integer-expansion rounded rects weighted by a Gaussian. Chromium (Skia) blurs with three box passes, so the two shapes diverge most against the box's own edge. Half-step layers were tried and do not close the gap.
+- **The proper fix:** model the triple box blur in the layer weights.
+- **Cost while it stays:** a residual of a few levels at soft shadows (up to 7 levels on the two rows against the box's own edge for shadow-md).
+
+### scrim-backdrop-blur
+
+- **Where:** `hyperspace/dkit/layer.py:SCRIM` (the `blur` entry) and `scrim`; module docstring, "THE BLUR"
+- **What it does now:** the browser's modal scrim carries `backdrop-filter: blur(4px)`. A draw list cannot read back the frame, so the kit paints only the 10% black wash; `SCRIM["blur"]` records the gap as a number. A dkit modal reads as less separated from the page than the browser's.
+- **The proper fix:** render the page to an offscreen target, blur it and composite (a renderer change). Alternatively a heavier wash, which is an app design decision.
+- **Cost while it stays:** modals are less visually separated from the page than the browser's.
+
+### select-closed-typeahead
+
+- **Where:** `hyperspace/dkit/interact.py:select`; `hyperspace/dkit/menu.py` (`KEY_MODEL`, pointer site)
+- **What it does now:** on the real Select, typing a character with the panel shut and the trigger focused sets the value to the first label with that prefix, without opening. `interact.select` reads no characters, so a focused closed Select ignores typing. The open panel's typeahead works.
+- **The proper fix:** read `input_queue_characters` in the trigger path of `interact.select` and run `next_match` over the items.
+- **Cost while it stays:** a keyboard parity gap with the browser's Select.

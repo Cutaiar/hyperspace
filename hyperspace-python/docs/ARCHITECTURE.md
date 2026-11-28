@@ -960,6 +960,8 @@ desk).
 | `mod:` | a modifier's number (`mod:2` is `mod.2`; plan 28 N1) | the modifier's node in the pass (`Router._step_modifier` → `feeds["mod"]`); labels `<n> <kind>`, rests 0; NaN while its input is not live; a `threshold`'s lane is a trigger and a gate (`Router.lane_kinds`) | performer |
 | `<role>:` (a new device's) | an OSC address without its `/`: `phone:x`, `phone:1/fader3` | the OSC device's feed → `Router.feed("<role>")`, names, labels, rests; its `hits` as rows under the same scheme in its `act` | performer (axes); a hit row: `fire`, `toggle`, `step`, `set`, `abs`, `momentary` on the base (`osc.fire`) |
 
+**`hand:` lanes only append.** A `hand:` lane is addressed by name, mapped to its index by `hands.core.Layout.index` and published as `router.names["hand"]`, so a row keeps its axis whatever order or subset `[hands] dofs` lists. `hand:<i>` still reads as the lane at index i, so every lane added (the dance sources, the grab switches, the room lanes) goes after the existing ones and no older lane moves.
+
 A **sink row** runs the other way: its source is `param:<id>` (the
 param's effective norm) or `lane:<i>` / `lane:*`, its target a sink
 port `<role>:<channel>` (`bridge:3`), its op `send` (`routing.SINK_OP`).
@@ -1651,7 +1653,13 @@ value or trigger cable becomes the table's own call (`Bindings.add`,
 modifier input), so undo, the loadable patch's dirt, the referee and the
 meta controller / loadable patch split are the table's; an image cable becomes a new
 `graph` section, read back through `read_graph` and landed by
-`GraphSection.land` (one undo step, the renderer rebuilt). Positions
+`GraphSection.land` (one undo step, the renderer rebuilt). `Edit` sends a
+request by the type of the pins it joins. Value and trigger pins are handled
+by `connect_value`, `disconnect_value` and `remove_value_node`. Image,
+geometry or mask pins, render cables and render nodes go to `Edit.wire`,
+`Edit.unwire` and `Edit.remove_render_node` (with an optional
+`Edit.wire_refusal` for the drag's feedback), looked up by name through
+`Edit._render`; an `Edit` without them answers `RENDER_NOT_YET`. Positions
 live in the loadable patch's `layout` (the look's nodes) and the show's (the
 meta controller's). The page writes no param but through those calls. Apart from
 output 1's backdrop and the node thumbnails below, it draws nothing of the
@@ -2004,7 +2012,11 @@ what the library calls loaded.
 
 **Hot reload.** `hotreload.MODULES` lists every package module but the
 cold core, leaves first; a save re-executes the changed module and every
-one after it, then re-classes live instances in place. `app`,
+one after it, then re-classes live instances in place. A dataclass
+instance re-classed this way is given any newly added field that has a
+default (`hotreload._backfill_dataclass`); `Deck.build` does not re-run, so
+what a new `Deck` field should hold on a running deck arrives only with a
+restart. `app`,
 `hotreload`, `hot_slots`, `offline`, `watchdog` and `segment` (plan 39: its worker
 threads outlive a reload) need a restart; `masks` reloads before `render`,
 which drops its cached passes (`Renderer.on_reload`).
