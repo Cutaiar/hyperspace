@@ -2644,7 +2644,7 @@ class Renderer:
     key_of = staticmethod(key_of)
 
     def _media_fit(self, c: str, size: tuple[int, int], alpha: float = 1.0,
-                   key: Key | None = None) -> moderngl.Texture | None:
+                   key: Key | None = None, scope: str = "") -> moderngl.Texture | None:
         """Channel `c` fitted to a frame of `size` (`media.<c>.fit`: cover,
         contain, stretch), premultiplied by `alpha`: one pass into a
         texture of the renderer's (`_frame_target`, one per channel and
@@ -2654,19 +2654,24 @@ class Renderer:
         node's black is clear, `graph.MediaNode`) keys it in the same pass,
         into a target of its own; with a feather, the ramp alone first into
         a one-channel target, blurred by `MaskPasses.feather`, and the pass
-        reads that. Leaves its target bound."""
+        reads that. Plan 92 (Devin on #527): `scope`, the alpha's owner past the
+        first backdrop (`backdrop.2`), gives a partial fit a target of its own —
+        two backdrops on one channel at different alphas never share one (the
+        owner, not the raw alpha, so a modulated alpha makes no new target).
+        Leaves its target bound."""
         ch = getattr(getattr(self, "media", None), "channels", {}).get(c)
         fit = int(getattr(ch, "fit", 0) or 0)
         size = (int(size[0]), int(size[1]))
         alpha = min(max(float(alpha), 0.0), 1.0)
         now = self._media_frame_now()
-        cache = ("fit", c, size, alpha, fit, key)
+        cache = ("fit", c, size, alpha, fit, key, scope if alpha < 1.0 else "")
         if cache in now:
             return now[cache]
         src = self.media_texture(c)
         # (plan 33 R: fitted at another size than the frame's — a branch on
         # the faces — it is a target of its own, `(name, size)`)
-        name = f"media.{c}" if alpha >= 1.0 else f"media.{c}@alpha"
+        name = (f"media.{c}" if alpha >= 1.0 else f"media.{c}@alpha"
+                + (f"@{scope}" if scope else ""))
         if key is not None:
             name += "@key"
         at = getattr(self, "_frame_size", None)

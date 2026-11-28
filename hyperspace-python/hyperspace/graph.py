@@ -4606,11 +4606,14 @@ class MediaNode(Node):
             with frame.timed(self.name):
                 if fit is None:
                     frame.data[key] = None
-                elif self.keyed is None:
-                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame))
                 else:
-                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame),
-                                          key=frame.r.key_of(frame.clear(self.keyed)))
+                    # plan 92 (Devin on #527): a later backdrop's partial fit in a
+                    # target of its own (`scope`); the first's as it always was
+                    scope = ({"scope": self.alpha_of}
+                             if self.alpha_of not in (None, "backdrop_alpha") else {})
+                    if self.keyed is not None:
+                        scope["key"] = frame.r.key_of(frame.clear(self.keyed))
+                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame), **scope)
         return frame.data[key]
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
@@ -7882,34 +7885,32 @@ class _Build:
             geos = [self.node(w.src) for w in self.into.get(f"{name}.geometry", ())]
             return self._keep(Scene(name, geometries=[x for x in geos if x is not None],
                                     ground=0.0 if self.laid_over(name) else None))
-        if kind == "backdrop" and name != BACKDROP:
-            # plan 92: a backdrop past the first — any picture under, a
-            # channel's too, through the one composite; its alpha its own
-            # (`backdrop.<n>.alpha`, `Frame.backdrops`)
-            wired = self._one(f"{name}.image") is not None
-            return self._keep(Composite(name, blend="over", over=self._from(f"{name}.scene"),
-                                        under=self._from(f"{name}.image"),
-                                        under_alpha_of=name if wired else None))
         if kind == "backdrop":
-            over = self._from("backdrop.scene")
-            if self.back_channel:
+            # plan 92: every backdrop the same way — the first's alpha the
+            # view's (`backdrop_alpha`), a later one's its own (`backdrop.<n>.alpha`,
+            # `Frame.backdrops`, by its name: `alpha_of`)
+            alpha = "backdrop_alpha" if name == BACKDROP else name
+            over = self._from(f"{name}.scene")
+            chan = self._back_channel(name)
+            if chan:
                 # a channel straight in: the plan 32 backdrop, node for node
-                media = MediaNode(channel_name(self.back_channel), self.back_channel,
-                                  alpha_of="backdrop_alpha")
-                keyed = channel_name(self.back_channel) in getattr(self.wiring, "keys", ())
+                # (a later backdrop's its own node: `channel.a(backdrop.2)`)
+                media = MediaNode(channel_name(chan) if name == BACKDROP
+                                  else f"{channel_name(chan)}({name})", chan, alpha_of=alpha)
+                keyed = channel_name(chan) in getattr(self.wiring, "keys", ())
                 if keyed:
                     # plan 87: keyed, its black shows the ground under it
-                    media.keyed = channel_name(self.back_channel)
+                    media.keyed = channel_name(chan)
                     media.keeps_alpha = True
                 under = self._keep(media)
-                back = Composite(BACKDROP, blend="over", over=over, under=under)
+                back = Composite(name, blend="over", over=over, under=under)
                 # (and the scene laid on it adds its own coverage over the holes)
                 back.keeps_alpha = keyed
                 return self._keep(back)
-            wired = self._one("backdrop.image") is not None
-            return self._keep(Composite(BACKDROP, blend="over", over=over,
-                                        under=self._from("backdrop.image"),
-                                        under_alpha_of="backdrop_alpha" if wired else None))
+            wired = self._one(f"{name}.image") is not None
+            return self._keep(Composite(name, blend="over", over=over,
+                                        under=self._from(f"{name}.image"),
+                                        under_alpha_of=alpha if wired else None))
         if kind in ("lookback", "echo"):
             # plan 90 (H2): retired — a saved one is public parts on load
             # (`graphmigrate.lookbacks`); one reaching the build draws nothing
@@ -8057,6 +8058,14 @@ class _Build:
 
     # ---- the frame
 
+    def _back_channel(self, backdrop: str) -> str:
+        """The channel wired straight into `backdrop`'s image ("" none, or a
+        picture that is not a channel's own): the first's is `back_channel`."""
+        if backdrop == BACKDROP:
+            return self.back_channel
+        back = self._one(f"{backdrop}.image")
+        return back.src.partition(".")[2] if back is not None and _kind(back.src) == "channel" else ""
+
     def _by_name(self, name: str) -> bool:
         """Whether every reached wire out of channel `name` goes where the
         channel is read by its letter, never by a node (plan 35 T4, carried
@@ -8064,7 +8073,9 @@ class _Build:
         `backdrop.image` (the backdrop's own `MediaNode`) — so the reach
         makes no second, unread node of it."""
         outs = [w for w in self.wires if w.src == name]
-        return bool(outs) and all(w.dst in ("pattern.media", "backdrop.image") for w in outs)
+        return bool(outs) and all(w.dst == "pattern.media"
+                                  or (_kind(w.node) == "backdrop" and w.port == "image")
+                                  for w in outs)
 
     def build(self) -> None:
         g = self.g

@@ -261,14 +261,17 @@ Starts once §7.1's work is on `main`.
   `backdrop.<n>` by its entry `{"kind": "backdrop", "instance": n}` (`entry_declares`,
   `NUMBERED_FRAME_KINDS`, which phases 2–3 extend). A wire to an undeclared one says
   `no backdrop.2 node in this graph (add one: {"kind": "backdrop", "instance": 2})`.
-- **The build.** The first is unchanged node for node (its plan 32 channel path,
-  `ViewState.backdrop_alpha`). `backdrop.<n>` is `Composite(name, over=<name>.scene,
-  under=<name>.image)`, its alpha read by `graph.alpha_of` from `Frame.backdrops`. A
-  scene into any backdrop's `scene` is laid over (`laid_over`), its ground see-through.
+- **The build.** Every backdrop by the first's path (the first unchanged node for node):
+  its own `scene` over its own `image`; a channel straight in its own keyed channel node
+  (`channel.a(backdrop.2)`, `_back_channel`), any other picture laid at its alpha — the
+  first's `ViewState.backdrop_alpha`, a later one's read by `graph.alpha_of` from
+  `Frame.backdrops`. A scene into any backdrop's `scene` is laid over (`laid_over`), its
+  ground see-through. (Devin on #527: a keyed channel's holes stay see-through.)
 - **The params.** `backdrop.alpha` stays the view's; `params.declare_backdrops` declares
   `backdrop.<n>.alpha` on a `view.BackdropState`, from the landing (`loadable._settle`),
   sorted on load and on a new patch as a matte's (`is_backdrop_id`). Each sits on its node
-  (`graphview.OWNERS["backdrop"]`).
+  (`graphview.OWNERS["backdrop"]`), and node mode lists only its own (`graphview.param_ids`
+  skips a later instance's ids, for every numbered kind — Devin on #527).
 - **GRAPH and patches.** The picker, the backdrop starter and the cable menu add the next
   (`graphview.next_backdrop`; `ONCE` lost `backdrop`); a delete joins its scene on as before.
   A patch's backdrop spawns as the next one, its alpha renamed (`ONE_PER_FRAME` lost
