@@ -1159,6 +1159,16 @@ def params_of(name: str) -> str:
     return rgraph.param_prefix(name)
 
 
+def _under(pid: str, pre: str) -> bool:
+    """Is `pid` a param `<pre>.<key>` of the node whose prefix is `pre` — not of a
+    later instance's (`fx.acid.2.mix` is acid.2's, never acid's; `backdrop.2.alpha`
+    backdrop.2's): `patches._owning_row`'s rule, a number right after the
+    prefix being the instance's (Devin on #527)."""
+    if not pid.startswith(pre + "."):
+        return False
+    return not pid[len(pre) + 1:].split(".", 1)[0].isdecimal()
+
+
 def param_ids(reg, nid: str) -> list[str]:
     """The registry ids under canvas node `nid`: the ids with `params_of`'s prefix, the continuous
     ones first and then the rest, each run in registry order; an alias left out.
@@ -1167,11 +1177,9 @@ def param_ids(reg, nid: str) -> list[str]:
     mode's rows both read this, so a node has one list of params."""
     name = nid.partition(":")[2] if nid.startswith("render:") else nid
     pre = params_of(name)
-    head = pre + "."
-    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))]
+    ids = [p.id for p in reg if not p.alias and (p.id == pre or _under(p.id, pre))]
     # plan 87: a keyed node's black is clear knobs (`key.<name>.*`) after its own
-    keyed = f"key.{name}."
-    ids += [p.id for p in reg if p.id.startswith(keyed)]
+    ids += [p.id for p in reg if _under(p.id, f"key.{name}")]
     if name == "scene":         # the eye is the first scene's (`_eye_owner`): it was the camera
         ids += [p.id for p in reg if not p.alias and p.id.startswith("eye.")]   # node's, which
     return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
