@@ -353,6 +353,7 @@ As §9.1. **The proof:** `tests/test_scenes_numbered.py::test_two_outputs_show_o
 pictures, the first the one-scene frame pixel for pixel, the second what the first scene's
 eye draws standing at the same orbit, and `Renderer.stats["posed"]` 1 for the frame.
 
+- **The picture.** [`assets/92-phase2/two-cameras.png`](assets/92-phase2/two-cameras.png): one tesseract, posed once, through `eye.*` and `eye.2.*` (yaw 60°, pitch 25°).
 - **Tests.** `tests/test_scenes_numbered.py`; the spies on the scene pass in
   `tests/test_render.py`, `test_graph_faces.py` and `test_graph_switch.py` watch
   `draw_posed` (what the graph's shape calls now); `test_patches_frame_kinds.py` expects

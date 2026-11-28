@@ -26,6 +26,7 @@ from hyperspace.view import EyeState, ViewState
 
 SIZE = (160, 100)
 TURN = math.radians(60)
+TESSERACT = 3                     # (geometry.SHAPES[3], the tesseract)
 
 
 def _two(*extra: dict, nodes=({"kind": "scene", "instance": 2},)) -> dict:
@@ -170,17 +171,17 @@ def test_two_outputs_show_one_tesseract_from_two_angles_posed_once(ctx):
     """The proof (plan 92 §7.2): one tesseract seen by two scenes, each into
     its own output through its own eye — two angles on the one object — and
     its CPU half (turn, projection, sort) made once that frame."""
-    s = ViewState(shape=0, eyes={"scene.2": EyeState(eye_yaw=TURN)})
+    s = ViewState(shape=TESSERACT, eyes={"scene.2": EyeState(eye_yaw=TURN)})
     r, (front, side) = _draw(ctx, s, _two())
     assert r.stats.get("posed") == 1                       # once a frame, not once a scene
     assert (front[..., :3] > 0).sum() > 100 and (side[..., :3] > 0).sum() > 100
     assert not np.array_equal(front, side)                 # two angles
     # each is what one scene draws through that eye: the first, at rest…
-    _, (alone,) = _draw(ctx, ViewState(shape=0), _one(), n=1)
+    _, (alone,) = _draw(ctx, ViewState(shape=TESSERACT), _one(), n=1)
     assert np.array_equal(front, alone)
     # …and the second, the tesseract seen from 60° round: the same as the
     # first scene's eye standing there (the orbit is the eye's alone)
-    _, (turned,) = _draw(ctx, ViewState(shape=0, eyes={"scene.2": EyeState(eye_yaw=TURN)}),
+    _, (turned,) = _draw(ctx, ViewState(shape=TESSERACT, eyes={"scene.2": EyeState(eye_yaw=TURN)}),
                          {"frame": "wired", "nodes": [{"kind": "scene", "instance": 2}],
                           "wires": [{"from": "shape", "to": "scene.2.geometry"},
                                     {"from": "scene.2", "to": "output.1.image"}]}, n=1)
@@ -188,19 +189,19 @@ def test_two_outputs_show_one_tesseract_from_two_angles_posed_once(ctx):
 
 
 def test_a_second_scene_at_the_default_eye_draws_as_the_first(ctx):
-    _, (a, b) = _draw(ctx, ViewState(shape=0, faces=True), _two())
+    _, (a, b) = _draw(ctx, ViewState(shape=TESSERACT, faces=True), _two())
     assert np.array_equal(a, b)
 
 
 def test_each_scene_has_its_own_target(ctx):
-    r, _ = _draw(ctx, ViewState(shape=0), _two())
+    r, _ = _draw(ctx, ViewState(shape=TESSERACT), _two())
     one, two = r.scene_pass_of("scene"), r.scene_pass_of("scene.2")
     assert one is not two and one.target.tex is not None and two.target.tex is not None
     assert one.target.tex is not two.target.tex and r.scene is one.target
     # a graph without the second scene lets its targets go
     from hyperspace.outputs import Switches, View
     r.wiring = G.read_graph(_one()).wiring()
-    r.draw_outputs(ViewState(shape=0), *SIZE, 1.0,
+    r.draw_outputs(ViewState(shape=TESSERACT), *SIZE, 1.0,
                    [View(Switches(), SIZE, target=_fbo(ctx, *SIZE))], t_now=2.0)
     assert "scene.2" not in r._scene_passes()
 
