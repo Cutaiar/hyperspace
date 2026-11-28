@@ -2,12 +2,15 @@
 (plan 27 B4's `devices.PointCloud`, `DeviceRegistry.clouds`) drawn as
 points in the shared camera.
 
-The renderer is handed the device registry (`Renderer.cloud_source`); a
-listed `cloud` device puts a point-cloud node (`graph.PointCloud`, kind
-`cloud`) into the default scene, solid, before the see-through shape. The
-fixture recording (`tests/fixtures/clouds/knot.npz`, B4's) is played by a
-real `cloud` device from a scratch home; no sensor. The pictures with the
-shape are `tests/test_golden_frames.py`'s (`cloud/*`).
+Plan 93: the node is the loadable patch's own (`{"kind": "cloud", "device":
+<role>}`), drawn where a wire puts it into the scene, solid, before the
+see-through shape; posed and copied as the shape is. The renderer is handed
+the device registry (`Renderer.cloud_source`); a file from before `/13`
+drew a cloud per listed device, which `graphmigrate.thirteen` says as those
+nodes and wires (`with_clouds` here). The fixture recording
+(`tests/fixtures/clouds/knot.npz`, B4's) is played by a real `cloud` device
+from a scratch home; no sensor. The pictures with the shape are
+`tests/test_golden_frames.py`'s (`cloud/*`).
 """
 
 from __future__ import annotations
@@ -22,10 +25,11 @@ from test_outputs import H, W, px, rig, views
 
 from hyperspace import devices
 from hyperspace import graph as G
+from hyperspace import graphmigrate as M
 from hyperspace import outputs as O
-from hyperspace.geometry import EYE_DISTANCE, EYE_FOV, eye_matrix
+from hyperspace.geometry import EYE_DISTANCE, EYE_FOV, eye_matrix, turn_matrix
 from hyperspace.graphmigrate import wired_wiring
-from hyperspace.view import ViewState
+from hyperspace.view import CloudState, ViewState
 
 FIXTURE = Path(__file__).parent / "fixtures" / "clouds" / "knot.npz"
 S = O.Switches
@@ -47,21 +51,29 @@ def registry(home: Path, file: str = "clouds/knot.npz", copy: bool = True,
     return reg
 
 
+def with_clouds(wiring: G.Wiring, roles=("scan",)) -> G.Wiring:
+    """`wiring` (the old words) wired, with a cloud node per role wired into its
+    scene, as a file from before `/13` is read with those devices listed
+    (`thirteen`)."""
+    doc, _, n = M.thirteen({"graph": M.wired_of(wiring)}, tuple(roles))
+    assert n == len(roles)
+    return G.read_graph(doc["graph"]).wiring()
+
+
 # ---------------------------------------------------------------- no GL
 
 
-def test_a_listed_cloud_is_the_scenes_first_geometry_and_none_listed_changes_nothing():
-    """`build_graph(…, wired_wiring(clouds))`: one `cloud` node per listed role, named
-    by the naming rule (`cloud`, `cloud.2`), solid, the scene's first
-    geometries (before the hands and the shape), each its own timed line;
-    with none the graph is today's, node for node."""
+def test_a_wired_cloud_is_the_scenes_first_geometry_and_none_changes_nothing():
+    """A cloud node per role wired first into the scene (an old file's clouds,
+    `thirteen`), named by the naming rule (`cloud`, `cloud.2`), solid, the
+    scene's first geometries (before the hands and the shape), each its own
+    timed line; with none the graph is today's, node for node."""
     vs = [O.View(S(), (W, H))]
     plain = G.build_graph(vs)
-    assert [n.name for n in G.build_graph(vs, None, ()).order] == \
+    assert [n.name for n in G.build_graph(vs, None).order] == \
         [n.name for n in plain.order]
-    assert plain.clouds == () and not any(n.KIND == G.CLOUD_KIND for n in plain.order)
-    g = G.build_graph(vs, wired_wiring(G.Wiring(hands="scene")), ("scan", "lidar"))
-    assert g.clouds == ("scan", "lidar")
+    assert not any(n.KIND == G.CLOUD_KIND for n in plain.order)
+    g = G.build_graph(vs, with_clouds(G.Wiring(hands="scene"), ("scan", "lidar")))
     scene = g.nodes["scene"]
     geoms = scene.geometries()
     assert [n.name for n in geoms] == ["cloud", "cloud.2", "hands", "shape"]
@@ -91,27 +103,60 @@ def test_the_listed_roles_are_the_cloud_devices_of_the_registry(tmp_path):
     assert G.cloud_roles(missing) == ("scan",) and missing.clouds == {}
 
 
-def test_the_cloud_params_are_the_looks_and_default_to_a_cloud_at_the_shapes_size():
-    """cloud.* — a patch group (plan 43 §6, plan 44 D3: how a cloud is
-    drawn is the look's, saved and landed by a loadable patch); the scale
-    puts the fixture (±3 units) at about the shape's size (radius 1)."""
+def test_the_cloud_params_are_numbered_and_default_to_a_cloud_at_the_shapes_size():
+    """cloud[.n].* — a patch group, declared as the graph names its clouds
+    (plan 93, `declare_clouds`): the first keeps plan 26 A4b's four ids, then
+    the shape's pose and copies under the same keys (`camera.*`, `view.inst_*`
+    by the one pair of helpers); the scale puts the fixture (±3 units) at
+    about the shape's size (radius 1)."""
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
-    from hyperspace.params import PATCH_GROUPS, build_registry
+    from hyperspace.params import PATCH_GROUPS, build_registry, declare_clouds
 
     chain = Analyzer(Analyser())
     view = ViewState()
     reg = build_registry(view, Control(chain), NS(chain=chain))
-    assert "cloud" in PATCH_GROUPS
+    assert "cloud" in PATCH_GROUPS and not [p for p in reg if p.group == "cloud"]
+    declare_clouds(reg, ["cloud", "cloud.2"])
     ids = [p.id for p in reg if p.group == "cloud"]
-    assert ids == ["cloud.size", "cloud.scale", "cloud.bright", "cloud.colors"]
+    assert ids[:4] == ["cloud.size", "cloud.scale", "cloud.bright", "cloud.colors"]
+    assert ids[4:16] == [f"cloud.{k}" for k in (
+        "yaw", "pitch", "pan.x", "pan.y", "instances", "inst_layout", "inst_motion",
+        "inst_amp", "inst_rate", "inst_fit", "inst_spacing", "inst_persp")]
+    assert ids[16:] == [f"cloud.2.{k}" for k in (x.partition(".")[2] for x in ids[:16])]
+    for k in ("yaw", "pitch", "pan.x", "instances", "inst_layout", "inst_spacing"):
+        mine, shapes = reg[f"cloud.2.{k}"], reg[f"camera.{k}" if k in ("yaw", "pitch", "pan.x")
+                                                 else f"view.{k}"]
+        assert (mine.lo, mine.hi, mine.kind, mine.choices) == \
+            (shapes.lo, shapes.hi, shapes.kind, shapes.choices), k
     assert reg["cloud.size"].value == 2.0 and reg["cloud.scale"].value == 0.3
     assert reg["cloud.bright"].value == 1.0 and reg["cloud.colors"].value is True
-    reg["cloud.scale"].set(0.5)
-    assert view.cloud_scale == 0.5
+    assert reg["cloud.instances"].value == 1
+    reg["cloud.2.scale"].set(0.5)
+    reg["cloud.2.yaw"].set(0.25)
+    assert view.clouds["cloud.2"].scale == 0.5 == view.clouds["cloud.2"].zoom
+    assert view.clouds["cloud.2"].yaw == 0.25 and view.clouds["cloud"].scale == 0.3
+    declare_clouds(reg, ["cloud"])
+    assert "cloud.2.size" not in reg and list(view.clouds) == ["cloud"]
     pts = devices.read_clouds(FIXTURE).points
     assert 0.8 < float(np.abs(pts).max()) * 0.3 < 1.0
+
+
+def test_a_clouds_copies_integrate_their_rate_as_the_shapes():
+    s = ViewState()
+    s.clouds["cloud"] = CloudState(inst_rate=2.0)
+    s.integrate(0.5)
+    assert s.clouds["cloud"].inst_phase == pytest.approx(1.0)
+    s.seed_phases(3.0)
+    assert s.clouds["cloud"].inst_phase == pytest.approx(6.0)
+
+
+def test_a_cloud_naming_no_device_or_one_not_listed_says_so():
+    assert G.cloud_said("", None) == G.CLOUD_NO_DEVICE
+    devs = [NS(kind="cloud", role="scan")]
+    assert G.cloud_said("lidar", devs) == G.CLOUD_NOT_LISTED.format(role="lidar")
+    assert G.cloud_said("scan", devs) == G.CLOUD_WAITING.format(role="scan")
 
 
 # ---------------------------------------------------------------- GL
@@ -119,11 +164,20 @@ def test_the_cloud_params_are_the_looks_and_default_to_a_cloud_at_the_shapes_siz
 moderngl = pytest.importorskip("moderngl")
 
 
-def _view(**kw) -> ViewState:
+def _view(cloud: dict | None = None, **kw) -> ViewState:
     s = ViewState(instances=0)          # no shape: the cloud alone on the ground
     for k, v in kw.items():
         setattr(s, k, v)
+    s.clouds["cloud"] = CloudState(**(cloud or {}))
     return s
+
+
+def _clouded(ctx, reg=None, roles=("scan",)):
+    """A rig whose wiring draws a cloud node per role (`with_clouds`)."""
+    r = rig(ctx, effects=(), hands=False)
+    r.wiring = with_clouds(r.old_wiring, roles)
+    r.cloud_source = reg
+    return r
 
 
 def _draw(ctx, r, vs, s, reg=None, frames=3, t0=2.0, dt=0.0):
@@ -154,20 +208,19 @@ def test_the_node_draws_the_fixtures_points_where_the_shared_camera_puts_them(ct
     under a point's centre is the colour of one of the points whose dot
     covers it — and the ground far from every point is untouched."""
     reg = registry(tmp_path)
-    r = rig(ctx, effects=(), hands=False)
-    r.cloud_source = reg
+    r = _clouded(ctx, reg)
     vs = views(ctx, S())
     s = _view()
     pic = _draw(ctx, r, vs, s, reg)
-    assert r._graph.clouds == ("scan",) and "cloud" in r._graph.nodes
+    assert "cloud" in r._graph.nodes
     cloud = reg.clouds["cloud:scan"]
     assert r.stats["clouds"] == {"cloud": cloud.n} and cloud.n >= 96
-    xy, cw = _project(cloud.points, s.cloud_scale)
+    xy, cw = _project(cloud.points, s.clouds["cloud"].scale)
     assert (cw > 0).all()
     inside = (xy[:, 0] > 3) & (xy[:, 0] < W - 3) & (xy[:, 1] > 3) & (xy[:, 1] < H - 3)
     assert inside.sum() > 0.9 * cloud.n
     cols = np.rint(np.clip(cloud.colors, 0, 1) * 255).astype(int)
-    rad = s.cloud_size
+    rad = s.clouds["cloud"].size
     checked = 0
     for k in np.flatnonzero(inside)[::7]:
         x, y = int(xy[k, 0]), int(xy[k, 1])
@@ -186,7 +239,7 @@ def test_the_node_draws_the_fixtures_points_where_the_shared_camera_puts_them(ct
     assert len(far) > 1000
     assert (pic[far[:, 1], far[:, 0], :3] == 0).all()
     # the colours switched off: every point white × the brightness
-    pic2 = _draw(ctx, r, vs, _view(cloud_colors=False, cloud_bright=0.5), reg)
+    pic2 = _draw(ctx, r, vs, _view({"colors": False, "bright": 0.5}), reg)
     x, y = (int(v) for v in xy[np.flatnonzero(inside)[0]])
     assert np.abs(pic2[y, x, :3] - 128).max() <= 1
 
@@ -199,18 +252,20 @@ def test_a_missing_cloud_draws_nothing_and_raises_nothing(ctx, tmp_path):
     s = _view(instances=1, shape=10)
     want = _draw(ctx, rig(ctx, effects=(), hands=False), views(ctx, S()), s)
     missing = registry(tmp_path, copy=False)
-    r = rig(ctx, effects=(), hands=False)
-    r.cloud_source = missing
+    r = _clouded(ctx, missing)
     got = _draw(ctx, r, views(ctx, S()), s, missing)
     assert "cloud" in r._graph.nodes and r.stats["clouds"] == {"cloud": 0}
     assert "cloud_error" not in r.stats
     assert (got == want).all()
 
-    r2 = rig(ctx, effects=(), hands=False)
-    r2.cloud_source = devices.DeviceRegistry([], devices.Context(home=tmp_path))
-    got2 = _draw(ctx, r2, views(ctx, S()), s)
-    assert not any(n.KIND == G.CLOUD_KIND for n in r2._graph.order)
-    assert (got2 == want).all()
+    r2 = _clouded(ctx, devices.DeviceRegistry([], devices.Context(home=tmp_path)))
+    got2 = _draw(ctx, r2, views(ctx, S()), s)        # (a node whose device is not listed)
+    assert r2.stats["clouds"] == {"cloud": 0} and (got2 == want).all()
+    r4 = rig(ctx, effects=(), hands=False)              # no cloud node: the devices add none
+    r4.cloud_source = registry(tmp_path)
+    got4 = _draw(ctx, r4, views(ctx, S()), s, r4.cloud_source)
+    assert not any(n.KIND == G.CLOUD_KIND for n in r4._graph.order)
+    assert (got4 == want).all()
 
     class Raising:
         def __iter__(self):
@@ -220,8 +275,7 @@ def test_a_missing_cloud_draws_nothing_and_raises_nothing(ctx, tmp_path):
         def clouds(self):
             raise RuntimeError("the registry is mid-change")
 
-    r3 = rig(ctx, effects=(), hands=False)
-    r3.cloud_source = Raising()
+    r3 = _clouded(ctx, Raising())
     assert (_draw(ctx, r3, views(ctx, S()), s) == want).all()
 
 
@@ -230,8 +284,7 @@ def test_the_buffer_is_uploaded_only_when_the_frame_id_moves(ctx, tmp_path):
     frame, not per drawn frame; a graph rebuilt for new switches keeps the
     buffer."""
     reg = registry(tmp_path)
-    r = rig(ctx, effects=(), hands=False)
-    r.cloud_source = reg
+    r = _clouded(ctx, reg)
     s = _view()
     _draw(ctx, r, views(ctx, S()), s, reg, frames=4, dt=1 / 60)      # 0.05 s: frame 0
     slot = r._cloud_gl.slots["cloud"]
@@ -247,26 +300,26 @@ def test_a_point_in_front_of_the_shape_hides_it_and_one_behind_is_hidden(ctx, tm
     points in front of the shape's surface are drawn over its strokes,
     and the shape's bright strokes are laid over the points behind it."""
     reg = registry(tmp_path)
-    s = _view(instances=1, shape=10, bright=1.6, cloud_scale=0.6, cloud_size=6.0)
+    s = _view({"scale": 0.6, "size": 6.0}, instances=1, shape=10, bright=1.6)
     alone = _draw(ctx, rig(ctx, effects=(), hands=False), views(ctx, S()), s)
-    r = rig(ctx, effects=(), hands=False)
-    r.cloud_source = reg
+    r = _clouded(ctx, reg)
     both = _draw(ctx, r, views(ctx, S()), s, reg)
     cloud = reg.clouds["cloud:scan"]
-    xy, _ = _project(cloud.points, s.cloud_scale)
+    look = s.clouds["cloud"]
+    xy, _ = _project(cloud.points, look.scale)
     cols = np.rint(np.clip(cloud.colors, 0, 1) * 255).astype(int)
     front = back = 0
     for k in range(cloud.n):
         x, y = int(xy[k, 0]), int(xy[k, 1])
         if not (0 <= x < W and 0 <= y < H) or alone[y, x, :3].sum() < 30:
             continue                     # only where the shape drew something
-        near = np.linalg.norm(xy - (x + 0.5, y + 0.5), axis=1) < s.cloud_size + 0.75
+        near = np.linalg.norm(xy - (x + 0.5, y + 0.5), axis=1) < look.size + 0.75
         is_point = np.abs(cols[near] - both[y, x, :3]).max(axis=1).min() <= 2
         # the eye at z = +distance: a point with a larger z is nearer
-        if cloud.points[k, 2] * s.cloud_scale > NEAR_Z:
+        if cloud.points[k, 2] * look.scale > NEAR_Z:
             front += 1
             assert is_point, k
-        elif cloud.points[k, 2] * s.cloud_scale < -NEAR_Z:
+        elif cloud.points[k, 2] * look.scale < -NEAR_Z:
             back += not is_point
     assert front > 0 and back > 0
 
@@ -277,8 +330,7 @@ def test_the_per_node_timer_names_the_cloud(ctx, tmp_path):
     from hyperspace.render import PassTimer
 
     reg = registry(tmp_path)
-    r = rig(ctx, effects=(), hands=False)
-    r.cloud_source = reg
+    r = _clouded(ctx, reg)
     _draw(ctx, r, views(ctx, S()), _view(), reg, frames=2)
     assert r._graph.timed[:2] == ["cloud", "scene"]
     if not r.timer.on:
@@ -292,8 +344,7 @@ def test_a_hot_reload_rebuilds_the_clouds_program_and_the_picture_is_the_same(ct
     """`Renderer.on_reload` releases the clouds' GL objects; the next frame
     makes them again from graph.py's source and draws the same picture."""
     reg = registry(tmp_path)
-    r = rig(ctx, effects=(), hands=False)
-    r.cloud_source = reg
+    r = _clouded(ctx, reg)
     vs = views(ctx, S())
     before = _draw(ctx, r, vs, _view(), reg)
     old = r._cloud_gl
@@ -301,3 +352,62 @@ def test_a_hot_reload_rebuilds_the_clouds_program_and_the_picture_is_the_same(ct
     assert r._cloud_gl is None and old.slots == {}
     after = _draw(ctx, r, vs, _view(), reg)
     assert r._cloud_gl is not old and (after == before).all()
+
+
+def _lit(pic) -> np.ndarray:
+    """The lit pixels' (x, y), as floats."""
+    ys, xs = np.nonzero(pic[..., :3].sum(axis=2) > 0)
+    return np.c_[xs, ys].astype(np.float64)
+
+
+def test_the_cloud_is_posed_as_the_shape_is(ctx, tmp_path):
+    """Plan 93: the cloud's turn is the shape's turntable (`turn_matrix`: yaw,
+    then pitch) and its pan moves it in world units, y down: each point drawn
+    where the CPU's projection of the posed point puts it."""
+    reg = registry(tmp_path)
+    r = _clouded(ctx, reg)
+    vs = views(ctx, S())
+    pose = {"yaw": 0.7, "pitch": -0.4, "pan": [0.3, -0.2], "size": 1.0}
+    pic = _draw(ctx, r, vs, _view(pose), reg)
+    cloud = reg.clouds["cloud:scan"]
+    turned = cloud.points.astype(np.float64) @ turn_matrix(0.7, -0.4).T
+    xy, _ = _project(turned + np.array([0.3, 0.2, 0.0]) / 0.3, 0.3)
+    lit = _lit(pic)
+    # every point drawn is within a dot of a projected posed point, and the
+    # other way round
+    d = np.min(np.linalg.norm(lit[:, None] - (xy[None] - 0.5), axis=2), axis=1)
+    assert len(lit) > 50 and np.percentile(d, 99) < 2.5
+    inside = (xy[:, 0] > 2) & (xy[:, 0] < W - 2) & (xy[:, 1] > 2) & (xy[:, 1] < H - 2)
+    d2 = np.min(np.linalg.norm(xy[inside][:, None] - 0.5 - lit[None], axis=2), axis=1)
+    assert np.percentile(d2, 99) < 2.5
+    assert not (pic == _draw(ctx, r, vs, _view({"size": 1.0}), reg)).all()
+
+
+def test_the_cloud_is_copied_as_the_shape_is(ctx, tmp_path):
+    """Plan 93: `instances` copies of the cloud at the shape's lattice
+    (`Renderer._copies_of`, the field's rows): two copies draw the points twice,
+    one copy at each row's centre and scale; 0 draws nothing."""
+    from hyperspace.geometry import EYE_NEAR  # noqa: F401 — (the eye the rows are culled by)
+
+    reg = registry(tmp_path)
+    r = _clouded(ctx, reg)
+    vs = views(ctx, S())
+    one = _draw(ctx, r, vs, _view({"size": 1.0}), reg)
+    assert r.stats["clouds"]["cloud"] == reg.clouds["cloud:scan"].n
+    two_s = _view({"size": 1.0, "instances": 2, "scale": 0.1})
+    two = _draw(ctx, r, vs, two_s, reg)
+    n = reg.clouds["cloud:scan"].n
+    assert r.stats["clouds"]["cloud"] == 2 * n
+    rows = r._copies_of(two_s.clouds["cloud"], W, H, np.zeros((0, 3)),
+                        eye_matrix(W, H, EYE_FOV, EYE_DISTANCE), 1.0)
+    assert len(rows) == 2 and rows[0][0] != rows[1][0]
+    lit = _lit(two)
+    for cx, cy, k, _ in rows:          # each copy's points about its own centre
+        q = (reg.clouds["cloud:scan"].points.astype(np.float64) * k
+             + np.array([cx, cy, 0.0]))
+        xy, _ = _project(q, 1.0)
+        near = np.min(np.linalg.norm(xy[:, None] - 0.5 - lit[None], axis=2), axis=1)
+        assert np.percentile(near, 95) < 2.5
+    assert not (one == two).all()
+    none = _draw(ctx, r, vs, _view({"instances": 0}), reg)
+    assert r.stats["clouds"]["cloud"] == 0 and not none[..., :3].any()

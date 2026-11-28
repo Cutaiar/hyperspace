@@ -568,6 +568,10 @@ def _carry(src: Deck, dst: Deck) -> None:
     sv, dv = src.view, dst.view
     dv.ang, dv.body, dv.held = list(sv.ang), copy.copy(sv.body), sv.held
     dv.inst_phase, dv.media_phase = sv.inst_phase, sv.media_phase
+    for name, c in getattr(dv, "clouds", {}).items():      # plan 93: as the shape's field
+        got = getattr(sv, "clouds", {}).get(name)
+        if got is not None:
+            c.inst_phase = got.inst_phase
     dst.reg.take_running(src.reg)
     dst.router.take_running(src.router)
     theirs = src.router._banks()

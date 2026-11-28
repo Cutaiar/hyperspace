@@ -42,7 +42,7 @@ this one read the same rows, so an edit on either is on both next frame.
   window ``render:output.<n>`` always; ``render:camera`` — the shared
   camera (`camera.*`, `eye.*`), the look's one orbit camera (plan 43 C2:
   its params and its position are the loadable patch's), always there, which
-  draws through every scene and so has no picture port; a cloud, the meta controller's; a node the section
+  draws through every scene and so has no picture port; a node the section
   declares or wires that reaches nothing (`unreached`) ``faint``
   ("reaches nothing");
 - ``channel`` — the eight media channels (``render:channel.<c>``, plan 32
@@ -431,7 +431,9 @@ def _output_owner(pid: str, ctx: _Ctx) -> str | None:
 
 
 def _cloud_owner(pid: str, ctx: _Ctx) -> str | None:
-    return ctx.first_cloud
+    # plan 93: `cloud[.<n>].<key>` on its cloud's node (`cloud.pan.x` is cloud 1's)
+    seg = pid.split(".")
+    return f"cloud.{seg[1]}" if len(seg) >= 3 and seg[1].isdecimal() else "cloud"
 
 
 def _media_owner(pid: str, ctx: _Ctx) -> str | None:
@@ -508,7 +510,6 @@ class _Ctx:
     names: set[str] = field(default_factory=set)          # the render graph's node names
     effects: list[str] = field(default_factory=list)      # effect instances, longest first
     effect_node: dict[str, str] = field(default_factory=dict)
-    first_cloud: str | None = None
 
 
 def render_owner(p: Param, ctx: _Ctx) -> str | None:
@@ -819,7 +820,7 @@ def _port_type(kind: str) -> str:
 # the owner's ids (V2, row 373). The canvas draws the section itself: a
 # node per name (`frame_names`), a cable per wire, All outputs and each
 # window always, the eight channels (idle while empty and unwired, plan 28
-# N9's idle line), the look's camera and the meta controller's clouds. Each node's `ref` is the
+# N9's idle line) and the look's camera. Each node's `ref` is the
 # render node the renderer built for that name, else a stand-in of its
 # kind (`_stand_in`: never built into a graph, never run), so its area, its
 # side panel and its page are its kind's whatever was built. A node the
@@ -862,7 +863,8 @@ HOVERS: dict[str, str] = {
               "a hands layer."),
     "layer": "The hands drawn alone, to lay over a picture or put through effects.",
     "guide": "The hands' labels and tethers, laid over last and never bent.",
-    "cloud": "A listed cloud device, drawn in every scene.",
+    "cloud": ("Points from a cloud device you pick on its menu — a shape with only "
+              "vertices: wire it into a scene to see it."),
     "camera": "The shared eye every scene draws through.",
     "backdrop": "Lays the scene over a picture, at backdrop alpha.",
     "pattern": ("What the faces show unless a picture is wired into them, and its media "
@@ -925,11 +927,9 @@ def wanted_windows(spec, bus_cuts=None) -> list[int]:
     return sorted(want)
 
 
-# plan 36 T2 (W2): a listed cloud's wire into the scene, the meta controller's too
-CLOUD_SAID = ("this cloud's wire into the scene — cut it and the scene "
-              "draws no cloud with this patch (a patch saves its cuts)")
-CLOUD_IDLE = "nothing reaches the scene: the cloud is not drawn"
-CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geometry"
+# plan 93: a point cloud's device pick (its node's menu, `set_cloud_device`)
+CLOUD_DEVICE_SAID = "{cloud}: {device}"
+CLOUD_NO_SUCH = "no {cloud} node in this patch"
 # plan 36 T5 (W5): the picker's starters ▸ — each a pre-wired group, one
 # undo step, every node and cable ordinary after it. (key, the item's words)
 STARTERS = (("scene", "scene chain"), ("tracers", "tracers"),
@@ -1077,8 +1077,6 @@ def kind_of(name: str) -> str | None:
         return rgraph.ALL_OUTPUTS
     if name == CAMERA:
         return CAMERA
-    if name == rgraph.CLOUD_KIND or name.startswith(f"{rgraph.CLOUD_KIND}."):
-        return "cloud"
     kind = rgraph.wire_node_kind(name, wired=True)
     return None if kind in ("frame", "fx") else kind
 
@@ -1095,12 +1093,10 @@ def _takes(kind: str | None, name: str | None = None) -> dict[str, str]:
 
 
 def _makes(kind: str | None, name: str | None = None) -> str | None:
-    """What a canvas kind puts out (`graph.WIRED_MAKES`; a cloud geometry);
-    with `name`, an effect's is its file's (plan 67 F1: a field maker's field)."""
+    """What a canvas kind puts out (`graph.WIRED_MAKES`); with `name`, an
+    effect's is its file's (plan 67 F1: a field maker's field)."""
     if kind == "effect" and name:
         return rgraph.effect_ports(name)[0]
-    if kind == "cloud":
-        return GEOMETRY
     return rgraph.WIRED_MAKES.get(kind or "")
 
 
@@ -1148,7 +1144,7 @@ def params_of(name: str) -> str:
     kind = kind_of(name)
     if kind == "slot":
         return f"fx.{rgraph.effect_of(name)}"
-    if kind in (rgraph.ALL_OUTPUTS, "cloud", None):
+    if kind in (rgraph.ALL_OUTPUTS, None):
         return name
     return rgraph.param_prefix(name)
 
@@ -1339,7 +1335,8 @@ def _stand_in(name: str, spec=None) -> rgraph.Node | None:
     if kind == "channel":
         return rgraph.MediaNode(name, rest)
     if kind == "cloud":
-        return rgraph.PointCloud(name, "")
+        c = next((c for c in (getattr(spec, "clouds", None) or ()) if c.name == name), None)
+        return rgraph.PointCloud(name, c.device if c is not None else "")
     if kind in ("output", rgraph.ALL_OUTPUTS):
         return rgraph.Output(name, int(rest) - 1 if rest.isdecimal() else -1)
     if kind in (CAMERA, "slot"):
@@ -1660,14 +1657,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     frame = frame_of(spec, render_graph)
     built = _built(rnodes)
     # the canvas's names: the eight channels always (plan 32 T10: what a
-    # wire starts from), the meta controller's clouds, the section's names, All outputs
-    # and every window the renderer drew (and any a wire names)
+    # wire starts from), the section's names (plan 93: its clouds among them),
+    # All outputs and every window the renderer drew (and any a wire names)
     names: list[str] = [rgraph.channel_name(c) for c in rgraph.MEDIA_CHANNELS]
-    # (plan 36 T2: every listed cloud, built or not — one whose wire the
-    # show has cut is drawn too, to join again)
-    roles = tuple(getattr(render_graph, "clouds", ()) or ())
-    names += [rgraph.cloud_name(i) for i in range(len(roles))]
-    names += [r.name for r in rnodes if isinstance(r, rgraph.PointCloud)]
     names += frame_names(frame)
     outs = {r.name for r in rnodes if isinstance(r, rgraph.Output)}
     outs |= {n for n in names if kind_of(n) == "output"}
@@ -1730,8 +1722,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             if owner == name and kind != "segment":
                 typ = rgraph.WIRED_MAKES[kind_of(pin)]
                 add_port(n, VPort(f"rout:{pin}", pin.rpartition(".")[2], OUT, typ))
-        if isinstance(r, rgraph.PointCloud) and ctx.first_cloud is None:
-            ctx.first_cloud = name
+        if isinstance(r, rgraph.PointCloud):
+            # plan 93: what its device is doing, in words (none picked, not
+            # listed here, waiting) — its body's first line
+            r.said = rgraph.cloud_said(r.role, devices)
     ctx.names = set(refs)
     ctx.effect_node = {name: name for name in refs if kind_of(name) == "effect"}
     ctx.effects = sorted(ctx.effect_node, key=len, reverse=True)   # `acid.2` before `acid`
@@ -1969,19 +1963,6 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             view.cables.append(VCable(cable_id(f"bus:{w.src}>{w.node}/{w.port}"), src, dst,
                                       IMAGE, ref=w, kind="render", dormant=shut or idle,
                                       off=shut, label=said))
-    # plan 36 T2 (W2): each listed cloud's wire into the scene — the meta controller's,
-    # standing until the show cuts it, cut and joined like a bus cable;
-    # dormant while nothing reaches the scene (the cloud is not built)
-    for i in range(len(roles)):
-        w = rgraph.cloud_wire(i)
-        src, dst = f"rout:{w.src}", f"rin:{w.node}/{w.port}"
-        if not standing.has(w) or src not in view.pins or dst not in view.pins:
-            continue
-        idle = "scene" in gone
-        view.cables.append(VCable(cable_id(f"cloud:{w.src}>{w.node}/{w.port}"), src, dst,
-                                  GEOMETRY, ref=w, kind="render", dormant=idle,
-                                  label=CLOUD_IDLE if idle else CLOUD_SAID))
-
     # ---- what is patched; the nodes in column order ----
     hit = {c.src_port for c in view.cables} | {c.dst_port for c in view.cables}
     for n in nodes.values():
@@ -1994,10 +1975,12 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 nodes[nid].wires += 1
     # row 1170: a Kinect's point cloud is its own kind of cloud — made of the sensor's depth by
     # the sensor's own calibration, so not one to take for any cloud's — and is titled so
+    # (plan 93: by the device the cloud node names)
     sensor_roles = {str(getattr(d, "role", "")) for d in kinects}
-    for i, role in enumerate(roles):
-        cloud = nodes.get(f"render:{rgraph.cloud_name(i)}")
-        if cloud is not None and role in sensor_roles:
+    for name, r in refs.items():
+        cloud = nodes.get(f"render:{name}")
+        if (cloud is not None and isinstance(r, rgraph.PointCloud)
+                and r.role and r.role in sensor_roles):
             cloud.label = cloud.label.replace(LABELS["cloud"], KINECT_CLOUD, 1)
     # plan 28 N9: each node's area, and which sit with nothing in and out
     named = {b.scale for b in routes if b.scale} | {b.when for b in routes if b.when}
@@ -4312,7 +4295,7 @@ class Edit:
     def drop_node(self, node: str) -> str | None:
         """Delete a render node — any node of the section (plan 35 G): its
         entry and every wire on it go, in one undo step; a window's wires
-        go (it is the meta controller's); the camera and a cloud are the meta controller's."""
+        go (it is the meta controller's); the camera is the look's one."""
         return render_drop(self, node)
 
     remove_render_node = drop_node          # N3's name for it (`remove_node`)
@@ -4330,6 +4313,11 @@ class Edit:
         """Plan 87: black is clear on picture node `node`, or off — the
         section's `keys` (`render_key`)."""
         return render_key(self, node, on)
+
+    def set_cloud_device(self, node: str, device: str) -> str | None:
+        """Plan 93: point-cloud node `node` names `device` ("" none), by hand
+        (`set_cloud_device`)."""
+        return set_cloud_device(self, node, device)
 
     # ---- what a pin is ----
 
@@ -5825,8 +5813,7 @@ def onto_words(view: View, c: VCable) -> str:
 # edits it as it stands — every node and wire of it deletes (the old
 # frame's own nodes, its run and its default edges were refused; there
 # are none now). What stays refused: a type error, a loop, the meta controller's own —
-# a window (delete takes its wires: `OUTPUT_UNWIRED`) and a cloud
-# (`NOT_REMOVABLE`) — and the look's one camera (`CAMERA_KEPT`, plan 43 C2).
+# a window (delete takes its wires: `OUTPUT_UNWIRED`) — and the look's one camera (`CAMERA_KEPT`, plan 43 C2).
 
 
 KNOB_DEPTH_STEPS = (1.0, 0.5, 0.25, 0.125)     # plan 67 P3: shares of a knob's range
@@ -5897,8 +5884,7 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     name — `hands.2`, `acid.2`, `output.2.hands`, `scene.geometry` —,
     None), or (None, why it is no name a wire may use). Plan 35 G: the
     canvas's names are the section's (V2), so a pin is its name; the
-    camera (the look's one, plan 43 C2) and a cloud (the meta controller's) are no
-    name a section says.
+    camera (the look's one, plan 43 C2) is no name a section says.
     (`render_graph` is no longer asked: kept for the callers' signature.)"""
     head, _, rest = pin.partition(":")
     if head not in ("rout", "rin", "render") or not rest:
@@ -5908,12 +5894,8 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     if head == "rout" and _bus_source(name):
         return name, None                    # plan 36 T1: All outputs' bus pin
     kind = kind_of(name)
-    if head == "rout" and kind == "cloud":
-        return name, None                    # plan 36 T2: a cloud's wire is the meta controller's
     if kind == CAMERA:
         return None, CAMERA_KEPT.format(label=label_of(name))
-    if kind == "cloud":
-        return None, NOT_REMOVABLE.format(label=label_of(name))
     if kind is None:
         return None, f"no node {name!r}"
     if head == "rin":
@@ -5926,7 +5908,7 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
 PICKER_GROUP: dict[str, str] = {
     "starter": "starters",
     "scene": "scene", "shape": "scene", "hands": "scene", "layer": "scene", "guide": "scene",
-    "backdrop": "scene",
+    "backdrop": "scene", "cloud": "scene",
     "pattern": "pictures", "composite": "pictures", "switch": "pictures",
     "channels": "pictures", "resize": "pictures", "delay": "pictures",
     # 2026-10-31: the eight channels under media ▸ (they always exist: the
@@ -5962,7 +5944,7 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     out: list[tuple[str, str | None, str]] = [("starter", k, w) for k, w in STARTERS]
     out += [("scene", None, "scene"), ("shape", None, "shape"), ("hands", None, "hands"),
             ("layer", None, "hands layer"), ("guide", None, "hands guide"),
-            ("backdrop", None, "backdrop")]
+            ("backdrop", None, "backdrop"), ("cloud", None, "point cloud")]
     out += [("pattern", None, "faces pattern"), ("composite", None, "composite"),
             ("switch", None, "switch"),
             *(("channels", port, label) for port, label in CHANNEL_SWITCH_PORTS),
@@ -6189,7 +6171,7 @@ def _node_name(e: dict) -> str | None:
     # (`lookback` may be declared again: `lookback.2` — an old frame's, which a
     # load makes public parts)
     if kind in ("composite", "switch", "delay", "resize", "matte", "cut", "segment",
-                "lookback"):
+                "lookback", "cloud"):
         return kind if n == 1 else f"{kind}.{n}"
     if kind in rgraph.FRAME_KINDS:
         return kind
@@ -6267,13 +6249,6 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
         return f"{d} is a node, not a port: a wire goes into {rgraph.WIRED_TO_WORDS}"
     w = rgraph.Wire(s, d)
     doc = _doc(edit) if doc is None else doc
-    if kind_of(s) == "cloud":
-        # plan 36 T2: a cloud's one wire is the meta controller's, into the scene
-        if not rgraph.is_cloud_wire(w):
-            return CLOUD_INTO_SCENE.format(cloud=s)
-        if getattr(edit, "loaded_patch", None) is None:
-            return BUS_NO_SHOW
-        return _land(edit, doc, f"wire {w}", f"wired {w}", dry, bus_cuts=_bus_cuts(edit).joining(w))
     if _bus_source(s):
         if not rgraph.is_bus(w):
             return BUS_SAME_PORT.format(port=s.rpartition(".")[2])
@@ -6355,13 +6330,12 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
 def _cut_bus(edit: Edit, w: rgraph.Wire) -> str | None:
     """Plan 36 T1: the meta controller's bus cable `w` cut in the open show — one undo
     step, the loadable patch untouched; the window shows nothing on that port
-    until the cable is joined again or the loadable patch wires the port. Plan 36
-    T2: and a cloud's wire into the scene (`graph.is_fixture_wire`), the same way."""
+    until the cable is joined again or the loadable patch wires the port."""
     bus_cuts = _bus_cuts(edit)
     if not bus_cuts.has(w):
         return NO_SUCH_WIRE.format(wire=str(w))
-    what = "the cloud's wire" if rgraph.is_cloud_wire(w) else "the bus cable"
-    return _land(edit, _doc(edit), f"cut {w}", f"cut {what} {w}", bus_cuts=bus_cuts.cutting(w))
+    return _land(edit, _doc(edit), f"cut {w}", f"cut the bus cable {w}",
+                 bus_cuts=bus_cuts.cutting(w))
 
 
 def _new_instance(spec, file: str) -> int:
@@ -6436,6 +6410,9 @@ ADD_SAID = {
             "the picture where the mask passes, see-through elsewhere"),
     "segment": ("{name} added: wire a picture into {name}.image — its pins are {name}.fg, "
                 "{name}.bg and {name}.mask"),
+    # plan 93: a point cloud, its device picked on its menu
+    "cloud": ("{name} added: pick its device on its menu (device ▸) and wire it into "
+              "scene.geometry"),
 }
 
 
@@ -7244,10 +7221,36 @@ def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
         return at.name, f"{at.name} added: wire a picture into {at.name}.image — {how}"
     if kind in ADD_SAID:                         # plan 39 T5 (W6)
         at = {"matte": rgraph.MatteAt, "cut": rgraph.CutAt,
-              "segment": rgraph.SegmentAt}[kind](_next(spec, kind))
+              "segment": rgraph.SegmentAt, "cloud": rgraph.CloudAt}[kind](_next(spec, kind))
         doc["nodes"].append(at.to_json())
         return at.name, ADD_SAID[kind].format(name=at.name)
     return f"no node kind {kind!r}: the picker adds what its groups list"
+
+
+def cloud_devices(edit: Edit) -> list[str]:
+    """The roles a cloud node's device ▸ offers (plan 93): this Mac's cloud
+    devices (`graph.cloud_roles` of the renderer's `cloud_source`), listed,
+    open or not; none without a renderer."""
+    r = getattr(edit, "render", None)
+    return list(rgraph.cloud_roles(getattr(r, "cloud_source", None)))
+
+
+def set_cloud_device(edit: Edit, name: str, device: str) -> str | None:
+    """Plan 93 (the owner, 2026-11-28: named by hand, as a channel node names
+    its channel): cloud node `name`'s entry names `device` (a role, "" none),
+    one undo step. Nothing is picked when a device connects; a role this Mac
+    does not list is kept, and the node says so (`graph.cloud_said`)."""
+    doc = _doc(edit)
+    nodes = doc.get("nodes", [])
+    at = next((i for i, e in enumerate(nodes) if e.get("kind") == "cloud"
+               and _node_name(e) == name), None)
+    if at is None:
+        return CLOUD_NO_SUCH.format(cloud=name)
+    n = rgraph.split_instance(name)[1]
+    entry = rgraph.CloudAt(n, str(device or "")).to_json()
+    doc["nodes"] = [*nodes[:at], entry, *nodes[at + 1:]]
+    said = CLOUD_DEVICE_SAID.format(cloud=name, device=device or "no device")
+    return _land(edit, doc, f"device {name}", said)
 
 
 def render_insert(edit: Edit, cable, kind: str, file: str | None = None,
@@ -7476,7 +7479,7 @@ def render_drop(edit: Edit, node: str) -> str | None:
     fed, and the note says so). A window
     is the meta controller's: its wires go, and it shows its ground (`OUTPUT_UNWIRED`,
     said, no refusal; with none, `NOTHING_TO_DELETE`); All outputs the
-    same. The camera and a cloud are the meta controller's (`spec_name`)."""
+    same. The camera is the look's one (`spec_name`)."""
     name, why = spec_name(node, edit.render)
     if name is None:
         return why

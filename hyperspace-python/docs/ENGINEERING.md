@@ -914,23 +914,32 @@ node publishes or reads one**
 (`tests/test_graph_effects.py::test_the_value_port_type_exists_and_no_node_uses_it`);
 `modgraph.RENDER_VALUE` names it on the modulation side.
 
-**The point cloud** (`graph.PointCloud`, plan 26 A4b). `app.main` hands
-the renderer the device registry (`Renderer.cloud_source`); each listed
-`cloud` device (§5) adds a node `cloud` (`cloud.2` …) as the default
-scene's first geometry. It draws the latest frame of `cloud:<role>` as
-one instanced quad per point through the eye — a hard round dot, alpha
-1, depth tested and written, a whole number of pixels across — before
-the see-through shape, so a dot in front of an edge hides it and an edge
-in front of a dot is drawn over it. Its world transform is one uniform
-scale about the world origin, `cloud.scale`; the shape's `camera.*` and
-`rot.*` do not move it. The look is the group `cloud`, the loadable patch's since plan 44 D3:
-`cloud.size` (radius, logical px, 0.5–12, 2), `cloud.scale` (0.01–10,
-0.3: the fixture knot at about the shape's size), `cloud.bright` (0–2,
-1), `cloud.colors` (the source's colours, on; off or none, white) — no
-panel row: Learn and ROUTING reach them. The points are uploaded only
-when the cloud's (frame id, publish time) moves; a listed device whose
-file is missing keeps its node, which draws nothing. With no `cloud`
-entry the graph is node for node the one before.
+**The point cloud** (`graph.PointCloud`, plan 26 A4b; plan 93: the
+show's node). `app.main` hands the renderer the device registry
+(`Renderer.cloud_source`). A cloud node is the loadable patch's own —
+added from GRAPH (scene ▸ point cloud), `{"kind": "cloud", "device":
+<role>}`, `cloud`, `cloud.2` … — naming the device it draws by hand
+(device ▸ on its node; nothing is picked when a device connects), and in a
+scene only where a wire puts it into `scene.geometry`. It draws the latest
+frame of `cloud:<role>` as one instanced quad per point through the eye — a
+hard round dot, alpha 1, depth tested and written, a whole number of
+pixels across — before the see-through shape, so a dot in front of an edge
+hides it and an edge in front of a dot is drawn over it. It is a shape
+with only vertices: its pose is the shape's (`cloud.yaw`, `.pitch` —
+`geometry.turn_matrix`, the shape's turntable — `.pan.x`, `.pan.y` in
+world units, y down, and `cloud.scale` as its zoom) and so are its copies
+(`cloud.instances` and `cloud.inst_*`, laid out by `Renderer._copies_of`,
+one draw per copy, its brightness × the copy's alpha). Its look: `.size`
+(radius, logical px, 0.5–12, 2), `.scale` (0.01–10, 0.3: the fixture knot
+at about the shape's size), `.bright` (0–2, 1), `.colors` (the source's
+colours, on; off or none, white). Each cloud's params are its own
+(`params.declare_clouds`: `cloud.size`, `cloud.2.size` …), declared as the
+graph names it, the pose and copies by the shape's own helpers. The points
+are uploaded only when the cloud's (frame id, publish time) moves; a node
+naming no device, or one not listed, draws nothing and says so on GRAPH
+(`graph.cloud_said`). A loadable patch from before `/13` is read with a
+cloud node and wire per cloud device this Mac lists that its scene drew,
+a cut wire staying cut (`graphmigrate.thirteen`).
 
 In the frame's terms: the face picture (only while an effect is aimed at
 the faces, made by the shape before the scene's target is bound) → the
@@ -1333,8 +1342,7 @@ decimal, or it would read as a marker.
 The rule as built (plan 26 A4): `fx.<file>.<n>.*` for an effect (the
 effect named `acid.2` in `FxState`), `ghost.<n>.*` for a hands node,
 its layer `hands.<n>` and readout `readout.<n>` (node names, not param
-prefixes), and a point cloud's nodes `cloud.<n>` (which share `cloud.*`
-for now). No `dream` instance exists yet. A load sorts the instance ids
+prefixes), and a point cloud's nodes `cloud.<n>` (`cloud.<n>.*`, plan 93). No `dream` instance exists yet. A load sorts the instance ids
 in a loadable patch's `values` (`params.is_instance_id`) against the graph it
 lands, so an id whose node is not in the graph is an unknown id with a
 note. `fx.parse` refuses a `@param` key of digits alone, and

@@ -151,10 +151,9 @@ def views(shows, size=(10, 10)) -> list[View]:
     return [View(Switches(), size) for _ in shows]
 
 
-def graph(shows, src: Any = None, effects: tuple[str, ...] = (), clouds: tuple[str, ...] = (),
-          size=(10, 10), **kw) -> G.Graph:
+def graph(shows, src: Any = None, effects: tuple[str, ...] = (), size=(10, 10), **kw) -> G.Graph:
     """The frame `src` draws on one window per state of `shows`."""
-    return G.build_graph(views(shows, size), wiring(src, *shows, **kw), tuple(clouds),
+    return G.build_graph(views(shows, size), wiring(src, *shows, **kw),
                          tuple(effects))
 
 

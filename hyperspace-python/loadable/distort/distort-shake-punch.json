@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/12",
+ "schema": "hyperspace.loadable/13",
  "name": "distort-shake-punch",
  "note": "The frame snaps in and out about its centre, hard. The sub band pushes Amount. The right hand's height brings in the colour split; the left hand's height moves the rate.",
  "graph": {

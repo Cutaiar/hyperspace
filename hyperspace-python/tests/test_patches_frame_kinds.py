@@ -84,15 +84,15 @@ def put(rig, doc: dict, slug: str | None = None) -> str:
 
 @pytest.mark.parametrize("name", ["scene", "shape", "backdrop", "pattern", "lookback",
                                   "lookback.2", "dream", "hands", "hands.layer", "hands.guide",
-                                  "hands.2", "acid", "composite.2", "segment"])
+                                  "hands.2", "acid", "composite.2", "segment",
+                                  "cloud", "cloud.2"])
 def test_a_patch_holds_the_frames_kinds(name):
     assert patches.held_words(name) is None
 
 
 @pytest.mark.parametrize("name, words", [
     ("output.all", patches.WINDOW_WORDS), ("output.2", patches.WINDOW_WORDS),
-    ("channel.a", patches.CHANNEL_WORDS), ("cloud", patches.FIXTURE_WORDS),
-    ("cloud.2", patches.FIXTURE_WORDS), ("camera", patches.CAMERA_WORDS),
+    ("channel.a", patches.CHANNEL_WORDS), ("camera", patches.CAMERA_WORDS),
     ("fx", patches.NOT_HELD_WORDS), ("lookback.echo.1", patches.NOT_HELD_WORDS),
 ])
 def test_the_meta_and_the_one_camera_stay_refused(name, words):

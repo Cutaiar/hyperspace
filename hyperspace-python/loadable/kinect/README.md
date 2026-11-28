@@ -17,8 +17,9 @@ It needs a device with the role `room` in the library's `devices.json`:
 the colour camera. Stand 1–3 m away, with nothing close in front of the
 sensor: an object filling its view at a few centimetres gave no reading over
 most of the picture, and on 2026-11-24 the whole depth went blank for 3–6 s
-in every 14 (in libfreenect's own library too). The cloud node is the meta
-controller's, drawn in every scene, so it has no wire in this file.
+in every 14 (in libfreenect's own library too). The cloud node is the patch's
+own (plan 93): `{"kind": "cloud", "device": "room"}`, wired into the scene. A
+device listed under another role is picked on the node's menu (device ▸).
 
 | Switch | Look | What it uses |
 | --- | --- | --- |

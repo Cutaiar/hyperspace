@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/12",
+ "schema": "hyperspace.loadable/13",
  "name": "INVERSE HALO",
  "note": "a slow starfruit turning inside out under haloed rings",
  "graph": {"frame": "wired",
@@ -135,10 +135,6 @@
   "camera.pan.y": 0.0,
   "eye.fov": 47.611887036915434,
   "eye.distance": 3.7777777777777777,
-  "cloud.size": 2.0,
-  "cloud.scale": 0.3,
-  "cloud.bright": 1.0,
-  "cloud.colors": true,
   "dream.on": false,
   "dream.mix": 0.7,
   "dream.echo_mix": 0.4,

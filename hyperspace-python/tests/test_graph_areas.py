@@ -309,18 +309,19 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
-    # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off)
+    # party-trip: 8 macros, 3 LFOs, and acid and palette (off)
     # — once each since plan 89 (their through slots on their own nodes,
     # no copies) — and the eight media channels, their bins empty (plan 32 T10:
     # the channels' params on their own nodes); plan 35 G: the backdrop's
     # group node too (no backdrop in the section: it idles like any group);
     # plan 60: the grip's group node, the grip off (plan 90 H3: the dream's
     # params' group node is gone with the `dream.*` params — the dream is an
-    # effect, its knobs `fx.dream.*`)
-    assert sum(n.idle for n in view.nodes) == 24
+    # effect, its knobs `fx.dream.*`; plan 93: no cloud params' group node —
+    # a cloud's params are declared with its node)
+    assert sum(n.idle for n in view.nodes) == 23
     k = len({n.area for n in view.nodes if not n.idle})
-    assert st["said"] == (f"laid out {len(view.nodes) - 24} nodes in {k} areas, every one "
-                          "collapsed · 24 idle off the canvas")
+    assert st["said"] == (f"laid out {len(view.nodes) - 23} nodes in {k} areas, every one "
+                          "collapsed · 23 idle off the canvas")
     assert st["idle_open"] == set() and st["open"] == set() and rig.lib.loaded_patch.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)
@@ -373,7 +374,7 @@ def test_the_idle_macros_line_expands_to_show_them_and_the_picker_still_offers_t
     lay = ui_graph.areas_of(st, view)
     ids = lay.idle[graphview.MODULATION]
     assert ui_graph.idle_line(view, ids) == "8 idle macros · 3 idle LFOs"
-    assert ui_graph.idle_line(view, lay.idle[graphview.SCENE_AREA]) == "2 idle param groups"
+    assert ui_graph.idle_line(view, lay.idle[graphview.SCENE_AREA]) == "1 idle param group"
     line = lay.lines[graphview.MODULATION]
     assert all(lay.nodes[i] == line for i in ids)            # shut: they sit at the line
     ui_graph.toggle_idle(st, graphview.MODULATION)

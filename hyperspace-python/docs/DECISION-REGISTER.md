@@ -1029,6 +1029,15 @@ here; overturn → the change, then the same.
 | 1184 | Old dream presets (`patches/dream/`, the retired `dream` group's) are retired: left on disk, never listed or opened, said once by the library (`library.RETIRED_MODULES`, `DREAM_RETIRED`) | 973 | owner — 2026-11-27 (plan 90 Q33) |
 | 1185 | The LOOKBACK page is retired into the FX pane: the dream's knobs are its effect strip; what its hook says (no worker, waiting, one live dream, its size) is its node's words on GRAPH | 969 | owner — 2026-11-26 (plan 90 Q21) |
 | 1186 | Time Displace is Read with a field on At (plan 90 §4.8): no node or file of its own. #488's shader, kept as a test fixture over the delay's stack, equals `Line → Read.at` to within 2 levels wherever its age is one the stack holds; younger than the newest frame #488 blended toward the picture now, which a stack holds none of — Read reads its newest, and a slit-scan wanting now composites the picture. #488 closed | 976 | owner — 2026-11-26 (plan 90 Q13) |
+| 1201 | The point cloud is the show's node, a shape with only vertices (plan 93): added from GRAPH, numbered like every node, saved in the frame and in patches, deleted like any; its device named by hand on its node (nothing picked when a device connects; an absent one draws nothing and says so); seen only where `cloud.<n> → scene.geometry` is wired; params numbered as every node's, declared and dropped as the frame names them; the shape's pose and copies by the shape's code; old shows draw as before | 977, 978, 979 | owner — 2026-11-28 (plan 92 §7.1) |
+| 1202 | A cloud's device is a word on its entry (`{"kind": "cloud", "device": "scan"}`, written only when set), picked on its node's menu (device ▸: this Mac's cloud and Kinect roles, and none) — the way an effect's entry carries its `slots` — not a param | 977 | (rec) — pending the owner |
+| 1203 | The loadable patch goes `/12` → `/13`, and the migration (`graphmigrate.thirteen`) uses the cloud devices this Mac lists at load (`tools/migrate_library.py`: the library's device list, else the config's seed): the old standing wire left no trace in a file, so a file with no cloud node could not be told from a new one without a bump. A file opened where no cloud is listed gains none (it drew none), and its shared cloud look, belonging to no node, is dropped | 979 | (rec) — pending the owner |
+| 1204 | A cloud's copies are the shape's rows (`Renderer._copies_of`, field path), one draw of the cloud per copy, its scale the row's (× `cloud.scale`, the shape's zoom) and its brightness × the row's alpha — the points stay opaque, as the solid hands | 978 | (rec) — pending the owner |
+| 1205 | A cloud has the shape's home pose (`yaw`, `pitch`, `pan.*`, `scale`) and no world offset of its own: plan 59's grab and physics move the shape's object only, as before | 978 | (rec) — pending the owner |
+| 1206 | Migrated clouds past the first take the old shared look's values (`cloud.size` … copied to `cloud.<n>.*`); a route or desk row on the shared look stays on the first cloud's id, said in the load's notes (`CLOUD_ROWS_NOTE`) — a row is not duplicated behind the owner | 979 | (rec) — pending the owner |
+| 1207 | No `hyperspace.patch` bump: a patch fragment never held a cloud, so nothing old needs reading; an older build reading a fragment that holds one refuses the entry in words — both Macs run one build | — | (rec) — pending the owner |
+| 1208 | The first save over a loadable patch from before `/13` keeps it beside itself (`<file>.bak-v12-clouds`, `routing.backup`; no backup, no write), on top of the trash copy every overwrite makes. The 61 checked-in `/12` files had their schema line moved and the unused shared cloud look dropped; the Kinect demo (`loadable/kinect/kinect-mirror.json`) got its cloud node naming `room` | 979 | (rec) — pending the owner |
+| 1209 | **Open**: whether a cloud device that connects should be offered on a cloud node that names none (a chip, never a pick). Built: nothing is offered — the owner's "manual configuration is fine for now" | 977 | (rec) — open, for the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -16355,3 +16364,56 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Proof.** `tests/test_time_displace_488.py`: #488's shader as it was (`tests/fixtures/time-displace-488/timedisplace488.glsl`, from `ccr-956dc2aa-r1kaqe`), one change — the past it reads, the delay's stack for the look-back's atlas — drawn beside `Line → Read.at` over one delay of a moving hue, At = `(Span / 2 − a₀) / g` and the wire's depth `Span / (g · aspect)`: within 2 levels at every column whose age the stack holds (a mapping 10 % off fails it). The one difference: an age younger than the newest frame, where #488 blended toward the picture now; Read reads its newest there (§4.8: "At below 0 reads the newest").
 - **Answer.** owner, 2026-11-26 (plan 90 Q13: "close #488; its slit-scan is … `read.at`").
 - **Judge it.** 976.
+
+### 1201. The point cloud is the show's node
+
+- **What.** `graph.CloudAt` (`{"kind": "cloud"}`, a declared kind like a matte), `graph.PointCloud` drawn where a wire puts it into a scene, `params.declare_clouds` (`cloud[.n].*`: the look, then the shape's pose and copies by `_turn_params` and `_copy_params`), `view.CloudState` (the shape's attribute names, so `field.field`, `Renderer._copies_of` and `geometry.turn_matrix` serve it unchanged), GRAPH's picker (scene ▸ point cloud) and node menu (device ▸), patches hold it. The meta controller's standing cloud wire, `Graph.clouds` and the four static `cloud.*` params are gone.
+- **Answer.** owner, 2026-11-28 (plan 92 §7.1: "a point cloud is literally just a list of vertices, the same way a shape would be … a special type of shape that has no edges, only vertices").
+- **Judge it.** 977, 978, 979.
+
+### 1202. A cloud's device is its entry's word
+
+- **What.** `CloudAt.device`, written as `"device"` only when set; `graphview.set_cloud_device` (one undo step) behind the node's device ▸, which lists `graph.cloud_roles` of the renderer's registry and none. A role this Mac does not list is kept, and the node says so.
+- **Other option.** An enum param over the listed roles: its choices would move with the device list, and a saved index would name another device on the other Mac.
+- **Answer.** (rec) — pending the owner.
+
+### 1203. `/13`, migrated with this Mac's clouds
+
+- **What.** `graphmigrate.THIRTEEN_SCHEMA`, `thirteen` in `forward` before `/13`; `LoadedPatch._cloud_roles` (the renderer's registry, else `migrate_clouds`), `headless.resave(clouds=)`, `migrate_library.cloud_roles_of`. Said on load: "/12 migrated to /13 (plan 93): the point cloud the meta controller drew is the patch's own now".
+- **Other option.** Keyed on the file with no bump (plan 90's way): impossible here — no key in an old file says it relied on the standing wire.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 979.
+
+### 1204. A cloud's copies
+
+- **What.** `PointCloud.draw`: the rows of `Renderer._copies_of(state, …)`, culled by the cloud's bounding box turned, each drawn with `u_model = T(row) · k · R(yaw, pitch)` and `u_bright × alpha`.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 978.
+
+### 1205. No world offset for a cloud
+
+- **What.** `world.offset_matrix("shape")` stays the shape's; a cloud's pose is its params alone.
+- **Answer.** (rec) — pending the owner.
+
+### 1206. The shared look, split
+
+- **What.** `thirteen` copies `cloud.size`, `.scale`, `.bright`, `.colors` onto each later cloud made; rows stay on `cloud.*`, said (`CLOUD_ROWS_NOTE`).
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 979.
+
+### 1207. No patch fragment bump
+
+- **What.** `patches.MAY_HOLD` gains `cloud`; `FIXTURE_NODES` and `FIXTURE_KINDS` lose it; `hyperspace.patch/3` stays.
+- **Answer.** (rec) — pending the owner.
+
+### 1208. A backup beside a pre-`/13` patch
+
+- **What.** `library.CLOUDS_BACKUP`, `_clouds_owed` in `Library.save_as`: a pre-`/13` file that names a scene or cuts a cloud wire is kept as `<file>.bak-v12-clouds` before its first rewrite, once. `tests/test_cloud_migration.py`.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 979.
+
+### 1209. Nothing offered when a cloud device connects (open)
+
+- **What.** A cloud node naming no device says "no device: pick one on its menu" and draws nothing; a device that connects is not offered.
+- **Answer.** (rec) — open, for the owner.
+- **Judge it.** 977.

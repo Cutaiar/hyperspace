@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/12",
+ "schema": "hyperspace.loadable/13",
  "name": "distort-wave-rows",
  "note": "A sine counted up the frame slides the rows past each other. The sub band pushes Amount. The right hand's height brings in the colour split; the left hand's height moves how many waves.",
  "graph": {

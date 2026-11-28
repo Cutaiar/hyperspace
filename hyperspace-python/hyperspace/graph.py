@@ -24,8 +24,9 @@ decisions"):
   solid geometry, settled once a frame (`Hands.run`) and drawn by
   whatever holds them — the scene, the hands' layer, or both; one node
   per instance (`ghost`, `ghost.2`, A4), solid or as lines. The point
-  cloud (`PointCloud`, kind `cloud`, plan 26 A4b) draws a cloud device's
-  points, solid, in the scene of any graph built while one is listed.
+  cloud (`PointCloud`, kind `cloud`, plan 26 A4b; plan 93 the patch's own
+  node, `CloudAt`) draws the points of the cloud device it names, solid,
+  posed and copied as the shape, where a wire puts it into a scene.
 - **Scene** (`Scene`): any number of geometries into one colour + depth
   target (`render.SceneTarget`): the solid geometry first (the hands,
   depth written), then the sorted see-through shape, depth-tested against
@@ -137,7 +138,7 @@ import moderngl
 import numpy as np
 
 from . import fx as _fx
-from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix
+from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix, turn_matrix
 from .outputs import View
 from .view import (
     DELAY_BEATS,
@@ -153,6 +154,7 @@ from .view import (
     SEGMENT_LEARN,
     SEGMENT_MODES,
     SEGMENT_QUALITY,
+    CloudState,
     CutState,
     DelayState,
     KeyState,
@@ -378,6 +380,9 @@ class Wiring:
     # plan 87: the picture nodes keyed, black is clear (`GraphSpec.keys`):
     # each built wrapped in a `KeyNode` (a channel keyed in its own fit pass)
     keys: tuple[str, ...] = ()
+    # plan 93: a wired frame's point clouds (`CloudAt`: each one's number and
+    # the device it names), by instance — what `PointCloud` reads
+    clouds: tuple[CloudAt, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.backdrop, str) or (
@@ -460,7 +465,7 @@ _PLACE_NODE = re.compile(rf"scene|history|lookback|hands(?:\.{_INSTANCE})?(?:\.l
 # Plan 39 T2: and the mask node `matte` (`matte.<n>`); T3: and `cut` (`cut.<n>`);
 # T4: and `segment` (`segment.<n>`)
 RESERVED = ("frame", "fx", "pattern", "shape", "backdrop", "switch", "delay", "resize", "echo",
-            "copy", "ground", "matte", "cut", "segment")
+            "copy", "ground", "matte", "cut", "segment", "cloud")
 _PLACE_EFFECT = re.compile(rf"(?!(?:{'|'.join(RESERVED)})(?![a-z0-9_]))"
                            rf"[a-z][a-z0-9_]*(?:\.{_INSTANCE})?")
 PLACE_WORDS = {"after": "scene, hands, hands.2 …, history, output.1 …, or an effect",
@@ -729,6 +734,7 @@ _RESIZE = re.compile(rf"resize(?:\.{_INSTANCE})?")
 _MATTE = re.compile(rf"matte(?:\.{_INSTANCE})?")         # plan 39 T2: `matte`, `matte.2` …
 _CUT = re.compile(rf"cut(?:\.{_INSTANCE})?")             # plan 39 T3: `cut`, `cut.2` …
 _SEGMENT = re.compile(rf"segment(?:\.{_INSTANCE})?")     # plan 39 T4: `segment`, `segment.2` …
+_CLOUD = re.compile(rf"cloud(?:\.{_INSTANCE})?")         # plan 93: `cloud`, `cloud.2` …
 # plan 39 T4: a segment's pins — its foreground, its background, its matte
 # (`segment.fg`, `segment.2.mask` …)
 _SEGMENT_PIN = re.compile(rf"(segment(?:\.{_INSTANCE})?)\.(fg|bg|mask)")
@@ -1132,6 +1138,59 @@ def _cut_entry(e: dict) -> CutAt:
 NODE_KINDS["cut"] = _cut_entry
 
 
+# plan 93: a point cloud's device word on its entry — a role this Mac's device
+# list may hold (`[[devices]]`, a `cloud` or `kinect` kind), or "" for none
+CLOUD_DEVICE_KEY = "device"
+
+
+@dataclass(frozen=True)
+class CloudAt:
+    """A point-cloud node the loadable patch's graph adds (plan 93, the owner,
+    2026-11-28): a shape with only vertices — the latest points of the cloud
+    device it names (`device`, a role, picked by hand on its node: "" none),
+    drawn where it is wired (`cloud → scene.geometry`), posed and copied as
+    the shape is (`cloud[.n].*`, values, not the graph) — `cloud`,
+    `cloud.2` …"""
+
+    n: int = 1
+    device: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"cloud instance {self.n!r}: a whole number from 1")
+        if not isinstance(self.device, str):
+            raise ValueError(f"cloud {self.n}: device {self.device!r}, a device's role")  # noqa: TRY004
+
+    @property
+    def name(self) -> str:
+        return cloud_name(self.n)
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "cloud"}
+        if self.n != 1:
+            d["instance"] = self.n
+        if self.device:
+            d[CLOUD_DEVICE_KEY] = self.device
+        return d
+
+
+def _cloud_entry(e: dict) -> CloudAt:
+    _entry_keys(e, "cloud", ("instance", CLOUD_DEVICE_KEY))
+    device = e.get(CLOUD_DEVICE_KEY, "")
+    if not isinstance(device, str):
+        raise GraphError(f"cloud node: device {device!r}, a device's role")
+    return CloudAt(_instance(e), device)
+
+
+def cloud_name(n: int) -> str:
+    """Point-cloud node `n`'s name (from 1, plan 93): `cloud`, `cloud.2` … (the
+    naming rule's marker form)."""
+    return "cloud" if n == 1 else f"cloud.{n}"
+
+
+NODE_KINDS["cloud"] = _cloud_entry
+
+
 @dataclass(frozen=True)
 class SegmentAt:
     """A segment node the loadable patch's graph adds (plan 39 T4, W4): its `image`
@@ -1339,14 +1398,12 @@ FRAME_KIND_UNWIRED = ("{kind} node: only in a wired frame (plan 35: the section 
 # A loadable patch's own wire into a window's port takes that port: the bus cable
 # into it is then neither drawn nor read (`window_ports`, the one rule).
 # `BusCuts` is the show's word on its own wires — which of the meta controller's
-# defaults it has cut — and `present` the wires that stand; any other
-# fixture-owned wire (plan 36 T2: a cloud's) is one more set of defaults.
+# defaults it has cut — and `present` the wires that stand.
 #
 # Plan 36 T2 (W2): a window's fourth port, `depth` — the scene's depth the
-# hands are laid against depth-aware — rides the bus like the others. And
-# a cloud device is the meta controller's, so its wire into the scene is too:
-# `cloud → scene.geometry`, `cloud.2 → scene.geometry` … one per listed
-# cloud device (`cloud_wires`), standing until the show cuts it.
+# hands are laid against depth-aware — rides the bus like the others. (Plan
+# 36 T2 made a cloud's wire into the scene the meta controller's too; plan 93
+# made the cloud the patch's node and its wire an ordinary one.)
 
 BUS_PORTS = ("image", "hands", "guide", "depth")   # the ports a bus cable feeds, per window
 
@@ -1364,33 +1421,21 @@ def is_bus(w: Wire) -> bool:
             and w.src == f"{ALL_OUTPUTS}.{w.port}")
 
 
-def cloud_name(i: int) -> str:
-    """The point-cloud node of the `i`-th listed cloud device (from 0):
-    `cloud`, `cloud.2` … (the naming rule's marker form)."""
-    return "cloud" if i == 0 else f"cloud.{i + 1}"
-
-
-def cloud_wire(i: int) -> Wire:
-    """Plan 36 T2: the meta controller's wire of the `i`-th cloud into the scene."""
-    return Wire(cloud_name(i), "scene.geometry")
-
-
-def cloud_wires(roles) -> tuple[Wire, ...]:
-    """The meta controller's cloud wires for the listed cloud devices `roles`, in order."""
-    return tuple(cloud_wire(i) for i in range(len(tuple(roles))))
-
-
-def is_cloud_wire(w: Wire) -> bool:
-    """Whether `w` is a cloud's wire into the scene (the meta controller's, plan 36 T2)."""
+def is_old_cloud_wire(w: Wire) -> bool:
+    """Whether `w` is a cloud's wire into the scene as the meta controller owned
+    it before plan 93 (plan 36 T2: one per listed cloud device, cut in a loadable
+    patch's ``bus``) — read only to migrate a file older than `/13`
+    (`graphmigrate.thirteen`): a cloud's wire is the patch's own since."""
     head, _, n = w.src.partition(".")
     return (w.dst == "scene.geometry" and head == "cloud"
             and (not n or (n.isdecimal() and int(n) >= 2)))
 
 
 def is_fixture_wire(w: Wire) -> bool:
-    """Whether `w` is one of the meta controller's own wires (plan 36: a bus cable, a
-    cloud's wire) — the show's to cut and join, never a loadable patch's."""
-    return is_bus(w) or is_cloud_wire(w)
+    """Whether `w` is one of the meta controller's own wires — a bus cable (plan
+    36; plan 93: a cloud's wire is the patch's own) — the loadable patch's to cut
+    and join, never a wire of its section."""
+    return is_bus(w)
 
 
 @dataclass(frozen=True)
@@ -1616,7 +1661,7 @@ def _wired_kind(name: str) -> str | None:
                       # (plan 34's own node) only an old frame's, read to migrate
                       ("echo", _ECHO_PIN), ("echo", _ECHO), ("lookback", _LOOKBACK),
                       ("matte", _MATTE),
-                      ("cut", _CUT), ("segment", _SEGMENT)):
+                      ("cut", _CUT), ("segment", _SEGMENT), ("cloud", _CLOUD)):
         if pat.fullmatch(name):
             return kind
     if new_id(name) != name or name == "cover":
@@ -1792,7 +1837,7 @@ del _cls
 # of those declares it. (Plan 89: an effect's slots are its entry's `slots`,
 # `_WireCtx.slots`, never an entry of their own)
 DECLARED = ("composite", "switch", "delay", "resize", "echo", "matte",
-            "cut", "segment", *FRAME_KINDS)
+            "cut", "segment", "cloud", *FRAME_KINDS)
 
 
 def d1_wires(effects) -> list[Wire]:
@@ -1849,6 +1894,8 @@ class _WireCtx:
     cuts: frozenset[str] = frozenset()
     # plan 39 T4: the segments declared (their names)
     segments: frozenset[str] = frozenset()
+    # plan 93: the point clouds declared (their names)
+    clouds: frozenset[str] = frozenset()
 
     def declared(self, kind: str) -> frozenset[str]:
         """The names of kind `kind` (one of `DECLARED`) the section declares
@@ -1856,7 +1903,8 @@ class _WireCtx:
         return {"composite": self.composites, "switch": self.switches, "delay": self.delays,
                 "resize": self.resizes, "echo": self.echoes,
                 "lookback": self.lookbacks, "matte": self.mattes,
-                "cut": self.cuts, "segment": self.segments}.get(kind, frozenset())
+                "cut": self.cuts, "segment": self.segments,
+                "cloud": self.clouds}.get(kind, frozenset())
 
 
 FX_IMAGE_REFUSAL = ("fx.image takes the run from frame; to replace an output's picture "
@@ -1977,7 +2025,9 @@ WIRED_MAKES = {"scene": IMAGE, "shape": GEOMETRY, "hands": GEOMETRY, "layer": IM
                # plan 39 T2: a matte makes a mask of its picture; T3: a cut,
                # its picture cut by a mask; T4: a segment, nothing of its own
                # — its foreground, background and matte are its pins
-               "matte": MASK, "cut": IMAGE, "segment": None, **SEGMENT_PINS}
+               "matte": MASK, "cut": IMAGE, "segment": None, **SEGMENT_PINS,
+               # plan 93: a point cloud is geometry, as the shape (into a scene)
+               "cloud": GEOMETRY}
 # plan 36 T2 (W2): every edge a port — a layer's and a guide's hands, the
 # look-back's cover mask, a composite's and an output's depth
 WIRED_TAKES: dict[str, dict[str, str]] = {
@@ -1996,6 +2046,7 @@ WIRED_TAKES: dict[str, dict[str, str]] = {
     "cut": {"image": IMAGE, "mask": MASK},
     # plan 39 T4 (W4): a segment the picture it cuts (its pins take nothing)
     "segment": {"image": IMAGE}, **{k: {} for k in SEGMENT_PINS},
+    "cloud": {},
 }
 WIRED_TO_WORDS = ("output.1 …, output.all (image, hands, guide, depth), scene.geometry, "
                   "shape.faces, backdrop.image / scene, hands.layer.hands …, "
@@ -2469,7 +2520,7 @@ class GraphSpec:
             return Wiring(draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
                           blend=self.laid, placed=placed, wires=self.wires,
                           composites=self.composites(), wired=True, slots=self.slots,
-                          laid_on=self.laid_on, keys=self.keys)
+                          laid_on=self.laid_on, keys=self.keys, clouds=self.clouds)
         run, wires = None, self.wires
         if any(w.src == "frame" or w.dst == "fx.image" for w in wires):
             # plan 33 R: the section says the run (every loadable patch loaded on
@@ -2542,6 +2593,11 @@ class GraphSpec:
     def segments(self) -> tuple[SegmentAt, ...]:
         """The segment nodes the section adds (plan 39 T4), by instance."""
         return self._of("segment")
+
+    @property
+    def clouds(self) -> tuple[CloudAt, ...]:
+        """The point-cloud nodes the section adds (plan 93), by instance."""
+        return self._of("cloud")
 
     @property
     def echoes(self) -> tuple[EchoAt, ...]:
@@ -2794,6 +2850,7 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
                    mattes=frozenset(m.name for m in spec.mattes),
                    cuts=frozenset(c.name for c in spec.cuts),
                    segments=frozenset(x.name for x in spec.segments),
+                   clouds=frozenset(c.name for c in spec.clouds),
                    echoes=frozenset(e.name for e in spec.echoes),
                    placed={e.name: e.where for e in effects_at if e.placed},
                    wired=wired, slots=frozenset(x.name for x in spec.slots),
@@ -3443,6 +3500,14 @@ class Frame:
         return getattr(self.root.s, "mattes", None) or {}
 
     @property
+    def clouds(self) -> dict[str, Any]:
+        """Plan 93: each point cloud's look, pose and copies this frame (cloud
+        name → its `view.CloudState`): the view state's (`ViewState.clouds`,
+        the `cloud[.n].*` params') — a value, never a rebuild (getattr: a view
+        state from before plan 93 has none)."""
+        return getattr(self.root.s, "clouds", None) or {}
+
+    @property
     def keys(self) -> dict[str, Any]:
         """Plan 87: each keyed node's black is clear this frame (node name →
         its `view.KeyState`): the view state's (`ViewState.keys`, the
@@ -3830,12 +3895,13 @@ class Hands(Node):
 # `renderer.ghost.source`); this module never imports `devices`: the
 # source is duck-typed — iterable of devices with `kind` and `role`, and
 # a `clouds` mapping ``cloud:<role>`` → the latest cloud with `points`,
-# `colors`, `frame`, `t`, `n`. The look is the `cloud.*` shared meta params
-# (`ViewState.cloud_*`). A role with no device, a device not open, or a
-# frame not yet published draws nothing and raises nothing.
+# `colors`, `frame`, `t`, `n`. Plan 93: the node is the loadable patch's own
+# (`CloudAt`, `{"kind": "cloud", "device": <role>}`), seen where it is wired
+# into a scene; its look, pose and copies are its `cloud[.n].*` params
+# (`ViewState.clouds`). No device named, a role with no device, a device not
+# open, or a frame not yet published draws nothing and raises nothing.
 
-# the device kind a point-cloud node is made for (the ruling of this run:
-# clouds follow the device list; A4's graph JSON has no `cloud` node kind)
+# the node kind (plan 93: a declared kind, `CloudAt`)
 CLOUD_KIND = "cloud"
 # the device kinds that publish a cloud: a recording, a Kinect (plan 29)
 CLOUD_DEVICES = ("cloud", "kinect")
@@ -3886,8 +3952,9 @@ _CLOUD_CORNERS = np.array([(-1, -1), (1, -1), (-1, 1), (1, -1), (1, 1), (-1, 1)]
 
 def cloud_roles(source) -> tuple[str, ...]:
     """The roles of the `CLOUD_DEVICES` `source` lists (a device registry,
-    duck-typed), in list order — listed, open or not: what the default
-    graph gains a point-cloud node for. None (no registry) is none."""
+    duck-typed), in list order — listed, open or not: what a cloud node's
+    device pick offers (plan 93) and what an old loadable patch's clouds are
+    migrated to (`graphmigrate.thirteen`). None (no registry) is none."""
     if source is None:
         return ()
     try:
@@ -3911,7 +3978,8 @@ class _CloudGL:
 
     def upload(self, name: str, cloud) -> dict:
         """`cloud` into node `name`'s buffers when its (frame, t) moved;
-        the slot: `vao`, `n`, `key`, `uploads` (a count, for the tests)."""
+        the slot: `vao`, `n`, `key`, `box` (plan 93: its lo and hi, its own
+        units), `uploads` (a count, for the tests)."""
         slot = self.slots.get(name)
         key = (int(cloud.frame), float(cloud.t))
         if slot is not None and slot["key"] == key:
@@ -3933,6 +4001,9 @@ class _CloudGL:
                 buf.orphan(max(arr.nbytes, 12))
                 buf.write(arr)
         slot["n"], slot["key"] = n, key
+        # plan 93: its bounding box in its own units (lo, hi), for the copies' cull
+        slot["box"] = (np.stack([pts.min(axis=0), pts.max(axis=0)]).astype(np.float64)
+                       if n else np.zeros((2, 3)))
         slot["uploads"] += 1
         return slot
 
@@ -3946,21 +4017,30 @@ class _CloudGL:
         self.prog.release()
 
 
+_CLOUD_DEFAULT = CloudState()
+# what a cloud node says of itself on GRAPH (`PointCloud.said`)
+CLOUD_NO_DEVICE = "no device: pick one on its menu"
+CLOUD_NOT_LISTED = "{role} is not listed on this Mac"
+CLOUD_WAITING = "{role}: waiting for points"
+
+
 class PointCloud(Node):
-    """A point-cloud geometry (plan 26 A4b): the latest frame of
-    ``cloud:<role>`` (`Renderer.cloud_source.clouds`, plan 27 B4) as
-    round points in the shared camera — the eye (`eye.*`) and the cloud's
-    own world transform, a uniform scale about the world origin
-    (`cloud.scale`): the shape's `camera.*` and `rot.*` are the shape's,
-    not the cloud's. Solid, like the hands: drawn into the scene before
-    the see-through shape, depth tested and depth written, so the shape's
-    strokes in front of a point draw over it and a point in front of them
-    hides them. `cloud.size` is each point's radius in logical px (a
-    whole number of framebuffer pixels across, as A2's points),
-    `cloud.bright` and `cloud.colors` its colour. The buffer is uploaded
-    only when the cloud's frame id (or its publish time, for a device
-    re-opened) moves. Its draw is its own SYSTEM line (the node's name);
-    a cloud that is missing draws nothing and costs nothing else."""
+    """A point-cloud geometry (plan 26 A4b; plan 93, the owner, 2026-11-28: a
+    shape with only vertices): the latest frame of ``cloud:<role>``
+    (`Renderer.cloud_source.clouds`, plan 27 B4) — `role` the device its
+    entry names, "" none — as round points in the shared camera. Posed and
+    copied as the shape is, by the shape's own code (`view.CloudState` has the
+    shape's names): each copy of `Renderer._copies_of` (the field's rows,
+    culled by the cloud's turned box) draws the cloud once at its centre and
+    scale (the scale `cloud.scale`, the pan `cloud.pan.*`), turned by
+    `geometry.turn_matrix` (`cloud.yaw` / `.pitch`, the shape's turntable).
+    Solid, like the hands: drawn into the scene before the see-through
+    shape, depth tested and depth written. `size` is each point's radius in
+    logical px (a whole number of framebuffer pixels across, as A2's
+    points), `bright` × the copy's alpha and `colors` its colour. The buffer
+    is uploaded only when the cloud's frame id (or its publish time, for a
+    device re-opened) moves. Its draw is its own SYSTEM line (the node's
+    name); a cloud that is missing draws nothing and costs nothing else."""
 
     KIND = CLOUD_KIND
     OUTPUT = GEOMETRY
@@ -3977,15 +4057,19 @@ class PointCloud(Node):
         return f"{CLOUD_KIND}:{self.role}"
 
     def cloud(self, frame: Frame):
-        """This frame's cloud, or None (no registry, no device, nothing
-        published yet)."""
+        """This frame's cloud, or None (no device named, no registry, no
+        device, nothing published yet)."""
         src = getattr(frame.r, "cloud_source", None)
-        if src is None:
+        if src is None or not self.role:
             return None
         try:
             return (getattr(src, "clouds", None) or {}).get(self.source)
         except Exception:  # noqa: BLE001 — a source that raises is a cloud not there
             return None
+
+    def state(self, frame: Frame) -> CloudState:
+        """This frame's look, pose and copies (`Frame.clouds`), else the defaults."""
+        return frame.clouds.get(self.name) or _CLOUD_DEFAULT
 
     def prepare(self, frame: Frame) -> None:
         """Nothing before the scene's target is bound."""
@@ -3996,30 +4080,42 @@ class PointCloud(Node):
         cloud = self.cloud(frame)
         if cloud is None or not getattr(cloud, "n", 0):
             return
-        r, ctx, s = frame.r, frame.ctx, frame.s
+        r, ctx = frame.r, frame.ctx
+        st = self.state(frame)
         try:
             gl = getattr(r, "_cloud_gl", None)
             if gl is None:
                 gl = r._cloud_gl = _CloudGL(ctx)
             slot = gl.upload(self.name, cloud)
-            vp = eye_matrix(frame.w, frame.h, getattr(s, "eye_fov", EYE_FOV),
-                            getattr(s, "eye_distance", EYE_DISTANCE))
-            k = float(getattr(s, "cloud_scale", 0.3))
+            w, h = frame.size
+            vp = eye_matrix(frame.w, frame.h, getattr(frame.s, "eye_fov", EYE_FOV),
+                            getattr(frame.s, "eye_distance", EYE_DISTANCE))
+            turn = turn_matrix(float(st.yaw), float(st.pitch))
+            # the copies, as the shape's (`Renderer._copies_of`, the field's
+            # path: the scale and the pan in each row), culled by the cloud's
+            # box turned — its own units, before its copy's scale
+            box = np.array([[x, y, z] for x in slot["box"][:, 0] for y in slot["box"][:, 1]
+                            for z in slot["box"][:, 2]], dtype=np.float64) @ turn.T
+            inst = r._copies_of(st, w, h, box, vp, frame.dpr)
             p = gl.prog
             p["u_vp"].write(np.asarray(vp, dtype="f4").T.tobytes())
-            p["u_model"].write(np.diag([k, k, k, 1.0]).astype("f4").T.tobytes())
-            w, h = frame.size
             p["u_px"].value = (float(max(w, 1)), float(max(h, 1)))
             # radius in framebuffer px (× dpr), the diameter a whole number
             # of pixels — draw_scene's points (A2's rounding)
-            rad = max(float(getattr(s, "cloud_size", 2.0)), 0.0) * frame.dpr
+            rad = max(float(st.size), 0.0) * frame.dpr
             p["u_size"].value = math.floor(2.0 * rad + 0.5) / 2.0
-            p["u_bright"].value = max(float(getattr(s, "cloud_bright", 1.0)), 0.0)
-            p["u_colors"].value = 1.0 if getattr(s, "cloud_colors", True) else 0.0
+            p["u_colors"].value = 1.0 if st.colors else 0.0
+            bright = max(float(st.bright), 0.0)
             ctx.enable(moderngl.DEPTH_TEST | moderngl.BLEND)
             ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
-            slot["vao"].render(moderngl.TRIANGLES, vertices=6, instances=slot["n"])
-            drawn[self.name] = slot["n"]
+            model = np.eye(4)
+            for cx, cy, k, alpha in inst:
+                model[:3, :3] = float(k) * turn
+                model[0, 3], model[1, 3] = float(cx), float(cy)
+                p["u_model"].write(model.astype("f4").T.tobytes())
+                p["u_bright"].value = bright * float(alpha)
+                slot["vao"].render(moderngl.TRIANGLES, vertices=6, instances=slot["n"])
+            drawn[self.name] = slot["n"] * len(inst)
         except Exception as e:  # noqa: BLE001 — a cloud must not take the scene down
             frame.stats["cloud_error"] = f"{self.name}: {type(e).__name__}: {e}"[:160]
         finally:
@@ -4028,12 +4124,22 @@ class PointCloud(Node):
             ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
 
-def cloud_nodes(g: Graph, roles: tuple[str, ...] | list[str]) -> list[PointCloud]:
-    """One point-cloud node per listed role, added to `g`: the first is
-    `cloud`, the next `cloud.2`, … (the naming rule's marker form). Each
-    reads the `cloud.*` params (a second instance's own params are A4's)."""
-    return [g.add(PointCloud(CLOUD_KIND if i == 0 else f"{CLOUD_KIND}.{i + 1}", role))
-            for i, role in enumerate(roles)]
+def cloud_said(role: str, source) -> str:
+    """What cloud node naming device `role` says of itself (plan 93), from
+    the device registry `source` (duck-typed, as `cloud_roles`): none named,
+    a role this Mac does not list, one listed and not yet publishing — or ""
+    when its points are there (the node's GPU line says the rest)."""
+    if not role:
+        return CLOUD_NO_DEVICE
+    if role not in cloud_roles(source):
+        return CLOUD_NOT_LISTED.format(role=role)
+    try:
+        got = (getattr(source, "clouds", None) or {}).get(f"{CLOUD_KIND}:{role}")
+    except Exception:  # noqa: BLE001 — a source that raises is a cloud not there
+        got = None
+    if got is None or not getattr(got, "n", 0):
+        return CLOUD_WAITING.format(role=role)
+    return ""
 
 
 # ---------------------------------------------------------------- end point cloud
@@ -6751,7 +6857,6 @@ class Graph:
         self.wiring = wiring if wiring is not None else EMPTY
         self.nodes: dict[str, Node] = {}
         self.order: list[Node] = []
-        self.clouds: tuple[str, ...] = ()        # the cloud roles the default graph drew (A4b)
         self.effects: tuple[str, ...] = ()       # the effect instances of its runs (D0)
         # plan 80: the instances that run with no input (`runs_unfed`), as the
         # build was asked them — the graph's key, the builder reads the rule
@@ -6976,7 +7081,7 @@ def _upstream(node: Node) -> set[int]:
 
 # ---------------------------------------------------------------- the wired frame (plan 35 B)
 
-def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[str, ...] = (),
+def build_graph(views: list[View], wiring: Wiring | None = None,
                 effects: tuple[str, ...] = (), bus_cuts: BusCuts | None = None,
                 generators: tuple[str, ...] = ()) -> Graph:
     """A wired frame as a graph (plan 35 B, rows 372 and 379): only what the
@@ -6996,7 +7101,7 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     drawing the hands node wired into its `hands` (none: empty) — a guide
     is its layer's split-out picture while that layer is built on the same
     hands, as the default graph's in-scene readout was; the clouds by the
-    meta controller's wires into the scene (`cloud_wire`, while standing); a
+    section's wires into the scene, as the shape (plan 93); a
     composite's and an output's depth the wire into its `depth`, an
     output's hands laid as their layer's `laid` says; effects, their slots,
     composites, switches, channels, the pattern, plan 34's delays and ring
@@ -7020,7 +7125,6 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     if not wiring.wired:
         raise ValueError(UNWIRED_WIRING)
     g = Graph(graph_key(views), wiring)
-    g.clouds = tuple(clouds)
     g.effects = tuple(effects)
     # plan 80: the effects that run with nothing wired in (`generators_of`),
     # kept as part of the key — `_Build` reads the rule itself (`runs_unfed`)
@@ -7129,11 +7233,8 @@ class _Build:
                              if back is not None and _kind(back.src) == "channel" else "")
         self.made: dict[str, Node | None] = {}       # a wire's name → what it reads as
         self.built: list[Node] = []                  # every node made, in order
-        # plan 36 T2: a cloud is in the scene by the meta controller's wire into it
-        # (`cloud_wire`), while the show has not cut it — and the scene is
-        # reached by the section's own wires
-        self.clouds = ([PointCloud(cloud_name(i), role) for i, role in enumerate(g.clouds)
-                        if self.bus_cuts.has(cloud_wire(i))] if "scene" in self.reached else [])
+        # plan 93: each point cloud the section declares, by name → the device it names
+        self.cloud_roles = {c.name: c.device for c in getattr(wiring, "clouds", ())}
         # the layers' blends (plan 36 T2: `laid` is the hands entry's own word,
         # how its layer is laid on wherever an output lays it — not one
         # global over every output)
@@ -7278,6 +7379,13 @@ class _Build:
         if kind == "hands":
             n = split_instance(name)[1]
             return self._keep(Hands(wired_hands_name(n), draw=self.draws.get(n, "solid")))
+        if kind == "cloud":
+            # plan 93: a declared cloud, the device its entry names ("" none:
+            # built, drawing nothing — its node says why)
+            if name not in self.cloud_roles:
+                self.g.dormant[name] = f"no {name} node in this graph (add one: {{\"kind\": \"cloud\"}})"
+                return None
+            return self._keep(PointCloud(name, self.cloud_roles[name]))
         if kind == "layer":
             # plan 36 T2: the hands it draws are the wire into its `hands`
             # (none: an empty layer)
@@ -7307,8 +7415,7 @@ class _Build:
             return self.node("scene")             # (a depth is its scene's: `Node.depth`)
         if kind == "scene":
             geos = [self.node(w.src) for w in self.into.get("scene.geometry", ())]
-            return self._keep(Scene("scene", geometries=[*self.clouds,
-                                                         *(x for x in geos if x is not None)],
+            return self._keep(Scene("scene", geometries=[x for x in geos if x is not None],
                                     ground=0.0 if self.laid_over("scene") else None))
         if kind == "backdrop":
             over = self._from("backdrop.scene")
@@ -7552,7 +7659,8 @@ class _Build:
         # nodes, the run, each through's composite and slots, the
         # capture's picture, the ends, the writes, the capture, the outputs
         made = self.made
-        roots: list[Node | None] = [*self.clouds, made.get("pattern"), made.get("shape")]
+        roots: list[Node | None] = [*(n for n in self.built if isinstance(n, PointCloud)),
+                                    made.get("pattern"), made.get("shape")]
         roots += [n for n in self.built if isinstance(n, Hands)]
         roots += [made.get("scene"), self.cover]
         roots += [n for n in self.built if isinstance(n, MediaNode) and n.alpha_of]

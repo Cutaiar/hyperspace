@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/12",
+ "schema": "hyperspace.loadable/13",
  "name": "kinect-mirror",
  "note": "Stand 1 to 3 m from the Kinect. Look (switch select) 1 is everything; 2 you as a cloud of points around the tesseract, the picture bent by your depth; 3 a window cut to your body; 4 neon outlines that trail; 5 the raw depth. Channel B slot 2 puts the colour camera on the faces (colors = true); Cloud colours tints the points with it. Bass fattens the points, mids bend harder, treble spins the hue.",
  "values": {
@@ -159,9 +159,17 @@
     "kind": "effect",
     "file": "scale",
     "instance": 3
+   },
+   {
+    "kind": "cloud",
+    "device": "room"
    }
   ],
   "wires": [
+   {
+    "from": "cloud",
+    "to": "scene.geometry"
+   },
    {
     "from": "line",
     "to": "scale.image"

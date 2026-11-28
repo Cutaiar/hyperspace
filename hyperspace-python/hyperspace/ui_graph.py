@@ -4603,8 +4603,8 @@ def _delete_render_cable(panel, st: dict, view: graphview.View, c) -> None:
 def _delete_render_node(panel, st: dict, view: graphview.View, n) -> None:
     """Delete pressed on a render node: any node of the section out of the
     graph with its wires (plan 35 G); a window keeps itself, its wires
-    gone (said, accepted as an edit: the node stays drawn); the camera and
-    a cloud are the meta controller's, refused in words."""
+    gone (said, accepted as an edit: the node stays drawn); the camera is
+    the look's one, refused in words."""
     if _render_said(panel, render_edit(panel), lambda e: e.drop_node(n.id), st) is None:
         st.setdefault("dropped", set()).add(n.id)
         ed.accept_deleted_item(False)
@@ -4773,8 +4773,8 @@ def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | N
 
 def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
     """A render node's menu items: a hands node drawn solid or as lines, a
-    composite's blend, an effect's slots (plan 89: **add slot**, **remove
-    slot k**), black is clear on any picture node (plan 87), a picture
+    composite's blend, a point cloud's **device ▸** (plan 93), an effect's
+    slots (plan 89: **add slot**, **remove slot k**), black is clear on any picture node (plan 87), a picture
     node's "add feedback after" (wave 0 E1:
     `_feedback_after_menu`, `add_feedback_after`), delete."""
     e = render_edit(panel)
@@ -4788,6 +4788,16 @@ def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
         for how in rgraph.BLENDS:
             m.item(f"laid {how}", lambda how=how: _render_said(
                 panel, e, lambda e, how=how: e.set_node(name, blend=how)))
+    if kind == "cloud":
+        # plan 93: the device it draws, named by hand (nothing is picked when a
+        # device connects): this Mac's cloud devices, and none
+        now = next((c.device for c in (getattr(e.graph.spec, "clouds", None) or ())
+                    if c.name == name), "") if e.graph is not None else ""
+        with m.sub(CLOUD_DEVICE_ITEM):
+            for role in [*graphview.cloud_devices(e), ""]:
+                m.item(role or "none", lambda role=role: _render_said(
+                    panel, e, lambda e, role=role: e.set_cloud_device(name, role)),
+                    checked=role == now)
     if kind == "effect":
         # plan 89: one more picture through the effect, on its own node; and
         # each slot past the first taken off again
@@ -4811,6 +4821,8 @@ def render_node_menu(panel, n, m: ui_menu.Menu) -> None:
 
 
 FEEDBACK_AFTER = "add feedback after"
+# plan 93: a point cloud's menu: the device it draws
+CLOUD_DEVICE_ITEM = "device"
 # plan 89: an effect's menu item for one more slot, and what it says
 SLOT_ITEM = "add slot"
 SLOT_TIP = ("One more picture through this effect: its own image and aux in and its own "

@@ -155,6 +155,7 @@ from .graph import (
     GraphSpec,
     Wiring,
     channel_name,
+    cloud_roles,
     read_graph,
 )
 from .library import (
@@ -189,6 +190,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     SWITCH_GROUP,
     UNITS,
     UNITS_KEY,
+    declare_clouds,
     declare_cuts,
     declare_delays,
     declare_keys,
@@ -197,6 +199,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     declare_segments,
     declare_switches,
     fx_files,
+    is_cloud_id,
     is_cut_id,
     is_delay_id,
     is_instance_id,
@@ -233,10 +236,11 @@ EYE_SCHEMA = graphmigrate.EYE_SCHEMA
 # labels, no desk template — what every save writes
 LOOK_SCHEMA = graphmigrate.LOOK_SCHEMA
 # plan 57 (FQ4): `/11` is `/10` under `hyperspace.loadable`. Plan 89: `/12` is
-# `/11` with an effect's copies as its slots — what every save writes
-SAVE_SCHEMA = graphmigrate.TWELVE_SCHEMA
+# `/11` with an effect's copies as its slots. Plan 93: `/13` is `/12` with the
+# point clouds the patch's own nodes — what every save writes
+SAVE_SCHEMA = graphmigrate.THIRTEEN_SCHEMA
 KIND = graphmigrate.LOADABLE_KIND
-VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
 # plan 44 D3: the loadable patch's bus cuts, `{"cut": [{"from", "to"}, …]}` — the
 # meta controller's cables from All outputs into a window that this loadable patch cuts
 # (`graph.BusCuts`); no key: every cable stands
@@ -498,7 +502,7 @@ class GraphSection:
         ``segment``; (plan 87) ``key``, the nodes keyed."""
         if spec is None:
             return {"fx": frozenset(), "switch": [], "resize": [], "delay": [],
-                    "matte": [], "cut": [], "segment": [], "key": []}
+                    "matte": [], "cut": [], "segment": [], "key": [], "cloud": []}
         return {"fx": frozenset(spec.effect_names()),
                 "switch": [sw.name for sw in spec.switches],
                 "resize": [z.name for z in spec.resizes],
@@ -507,6 +511,8 @@ class GraphSection:
                 "matte": [m.name for m in spec.mattes],
                 "cut": [c.name for c in spec.cuts],
                 "segment": [x.name for x in spec.segments],
+                # plan 93: the point clouds, by their entries
+                "cloud": [c.name for c in spec.clouds],
                 # plan 87: the nodes the graph keys (black is clear)
                 "key": list(getattr(spec, "keys", ()))}
 
@@ -533,6 +539,8 @@ class GraphSection:
         declare_segments(reg, names["segment"])
         # plan 87: each keyed node's black is clear, by the section's `keys`
         declare_keys(reg, names["key"])
+        # plan 93: each point cloud's look, pose and copies, by its entry, as a matte's
+        declare_clouds(reg, names.get("cloud", []))
 
     def free_doc(self) -> dict | None:
         """The section in the free graph's words (plan 33 M; plan 35 T3: the
@@ -994,7 +1002,7 @@ class LoadedPatch:
                   and not is_instance_id(k) and not is_switch_id(k)
                   and not is_resize_id(k) and not is_delay_id(k)
                   and not is_matte_id(k) and not is_cut_id(k)
-                  and not is_segment_id(k) and not is_key_id(k)}
+                  and not is_segment_id(k) and not is_key_id(k) and not is_cloud_id(k)}
         doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PATCH, "values": values,
                "routes": [], "macros": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
@@ -1073,7 +1081,8 @@ class LoadedPatch:
         fwd = graphmigrate.forward(doc, gs.specs(), eye=getattr(show, "old_eye", None),
                                    camera_at=getattr(show, "camera_at", None),
                                    look=getattr(show, "old_look", None),
-                                   cuts=getattr(show, "old_cuts", None))
+                                   cuts=getattr(show, "old_cuts", None),
+                                   clouds=self._cloud_roles(gs))
         doc, migrated, from_show = fwd.doc, fwd.migrated, set(fwd.from_show)
         migrate_notes = list(fwd.migrate_notes)
         notes += fwd.notes
@@ -1114,7 +1123,7 @@ class LoadedPatch:
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
             elif (is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid) or is_delay_id(pid)
                   or is_matte_id(pid) or is_cut_id(pid)
-                  or is_segment_id(pid) or is_key_id(pid)
+                  or is_segment_id(pid) or is_key_id(pid) or is_cloud_id(pid)
                   or graphmigrate.effect_of(pid) is not None):
                 # (plan 33 S: a switch's `select` too — its graph declares it;
                 # plan 34 Z: and a resize's values (plan 39 T2: a matte's, T3: a
@@ -1597,6 +1606,15 @@ class LoadedPatch:
         shader folder's once."""
         state = self._graph_section().fx
         return fx_files(state if state is not None else self.reg)
+
+    def _cloud_roles(self, gs) -> tuple[str, ...]:
+        """This Mac's cloud devices' roles, in list order (plan 93: what an old
+        file's clouds are made nodes for, `graphmigrate.thirteen`): the
+        renderer's device registry's (`cloud_source`), else what a tool with
+        no registry said (`migrate_clouds`: `headless.resave`), else none."""
+        r = getattr(gs, "renderer", None)
+        got = cloud_roles(getattr(r, "cloud_source", None))
+        return got or tuple(self.__dict__.get("migrate_clouds", ()))
 
     def _graph_section(self) -> GraphSection:
         """The graph section's lander; made here for a `LoadedPatch` from

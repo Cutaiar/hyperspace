@@ -67,7 +67,7 @@ def _pics(seed, n):
 
 
 def _migrated(values):
-    doc = {"schema": "hyperspace.loadable/12", "name": "t",
+    doc = {"schema": "hyperspace.loadable/13", "name": "t",
            "graph": {"frame": "wired", "nodes": [{"kind": "composite", "blend": "add"}],
                      "wires": [{"from": "channel.a", "to": "lookback.image"},
                                {"from": "channel.b", "to": "lookback.occluder"},

@@ -431,7 +431,7 @@ def test_the_run_draws_what_the_one_block_chain_drew(ctx, monkeypatch, effects):
 
         def bare(vs, o=old):
             from test_outputs import _stack_names
-            g = G.build_graph(vs, wired_wiring(thru), (), tuple(sorted(o.fx.state.specs)))
+            g = G.build_graph(vs, wired_wiring(thru), tuple(sorted(o.fx.state.specs)))
             g.run = tuple(_stack_names(o))           # (the stack's: `o.wiring`'s run)
             for n in g.order:
                 if isinstance(n, G.Shown):
