@@ -221,6 +221,32 @@ class CutState:
     amount: float = 1.0
 
 
+# the hand mask (`handmask[.n]`): the camera its hands are seen through — the
+# hands layer's (the meta controller's reference eye, where a hands layer laid
+# over a picture draws them) or the scene's (the loadable patch's eye, where
+# hands wired into the scene draw)
+HANDMASK_EYES = ("layer", "scene")
+HANDMASK_GROW = 64.0      # the most px a hand mask grows (or shrinks) its polygon by
+HANDMASK_FEATHER = 32.0   # the most px a hand mask's soft edge spans
+
+
+@dataclass
+class HandMaskState:
+    """One hand mask's values (`handmask[.n].*`: params.declare_handmasks),
+    read once a frame by the renderer (`ViewState.handmasks`,
+    `graph.Frame.handmasks`): `eye` an index into `HANDMASK_EYES` (whose
+    camera the fingertips are projected through), `grow` px the polygon is
+    pushed out (negative: pulled in), `feather` the soft edge's width in px
+    (0: a one-pixel anti-aliased edge), `invert`. The defaults pass the
+    quadrilateral the thumbs and index fingers make, as the hands layer
+    shows them. A value, never a rebuild."""
+
+    eye: int = 0
+    grow: float = 0.0
+    feather: float = 0.0
+    invert: bool = False
+
+
 # plan 39 T4 (W4): a segment's modes — a person model (the worker's), a
 # background model (motion: GLSL on the frame thread), and any subject
 # (declared, refused in words until a later build) — and the model's levels
@@ -366,6 +392,9 @@ class ViewState(writes.Observed):
     # plan 39 T3: each cut node's values (`cut[.n].*`, declared from the
     # loadable patch's graph: params.declare_cuts) — cut name → its state
     cuts: dict[str, CutState] = field(default_factory=dict)
+    # the hand masks' values (`handmask[.n].*`, declared from the loadable
+    # patch's graph: params.declare_handmasks) — hand mask name → its state
+    handmasks: dict[str, HandMaskState] = field(default_factory=dict)
     # plan 87: each keyed node's black is clear (`key.<node>.*`, declared from
     # the loadable patch's graph `"keys"`: params.declare_keys) — node → its state
     keys: dict[str, KeyState] = field(default_factory=dict)

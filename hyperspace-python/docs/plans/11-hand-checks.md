@@ -9162,12 +9162,6 @@ Headless: `tests/test_time_displace_488.py` (#488's own shader as a fixture agai
 
 **976. A slit-scan by hand.** (laptop) Load `field-examples/stack-slit` and move: the frame is a smear of moments, the left edge the newest. Swap the Line on Read's At for Rings, then Spokes; turn the wire's depth down to 0 (an echo at At) and up. *Pass:* each is a time displace as #488's was — rings from the centre out, spokes round it — and nothing of #488's is missing that you used. *Fail:* a field that does nothing on At, or a look you could only make with #488.
 
-## GL. Any number of backdrops (plan 92 phase 1, row 1215, 2026-11-28)
-
-Headless: `tests/test_backdrops_numbered.py` (declared, drawn as the first at its alpha, its param, the picker, a delete, a spawn).
-
-**982. Two backdrops.** (Mac, GRAPH) Add **backdrop** from the picker on a show that has one, wire a channel into `backdrop.2.image`, the scene into `backdrop.2.scene` and `backdrop.2` into output 2; turn **Backdrop 2 alpha**. *Pass:* output 1 is as it was; output 2 shows the scene over the second picture at its own alpha; delete `backdrop.2` and output 2 shows the scene alone; save, reopen, and both are there. *Fail:* the first backdrop's alpha moving the second's, a second refused, or the show changing on reopen.
-
 ## GJ. The point cloud as a show's node (rows 1201–1209, 2026-11-28)
 
 Headless: `tests/test_cloud_node.py` (the node wired, posed and copied as the shape), `tests/test_cloud_migration.py` (an old show end to end, a cut wire, the backup), `tests/test_plan36_edges.py` (added, named, wired, deleted on GRAPH).
@@ -9177,6 +9171,20 @@ Headless: `tests/test_cloud_node.py` (the node wired, posed and copied as the sh
 **978. A cloud posed and copied.** (Mac, 977's cloud wired) Turn its Yaw and Pitch, move its Pan, raise Instances to 4, then Layout to a 3D lattice. *Pass:* the cloud turns and moves as the shape does under Camera, and its copies lie on the shape's lattice; the shape does not move. *Fail:* a copy off the lattice, or the shape moving with the cloud's knobs.
 
 **979. An old show still draws its cloud.** (Mac, before `tools/migrate_library.py`) Open a show saved before this build with its Kinect listed. *Pass:* the strip says it was migrated to /13, the cloud draws where it drew, a cloud whose wire the show had cut stays undrawn; the first save leaves `<file>.bak-v12-clouds` beside the file. The `cloud/*` goldens pass on the gate Mac. *Fail:* a cloud missing or doubled, or no backup.
+
+## GK. The hand mask (rows 1210–1214, 2026-11-28)
+
+Headless: `tests/test_graph_handmask.py` (the polygon from synthetic hands through either camera, the pass, the node built and wired, its knobs, a cut by it).
+
+**980. A frame made with two hands.** (Mac, the Leap tracking both hands) On GRAPH, masks ▸ hand mask; wire `hands` into its `hands`, the scene into a cut's `image`, the hand mask into the cut's `mask` and the cut into output 1, with the hands layer over it as usual. Make a frame with both thumbs and index fingers. *Pass:* the scene shows only inside the four fingertips, its corners on them as the hands layer draws them, following the hands without lag; taking one hand away cuts everything; crossing or turning the hands never makes a bow-tie; `grow`, `feather` and `invert` do what they say. *Fail:* the polygon off the fingertips, a corner on the wrong finger, or a flicker as a hand fades.
+
+**981. Through the scene's eye.** (Mac, 980's wiring) Wire the hands into `scene.geometry` too, zoom the patch's eye in, and set `handmask.eye` to scene. *Pass:* the polygon's corners sit on the fingertips drawn in the scene; with `eye` layer they sit on the hands layer's instead. *Fail:* either eye off its hands.
+
+## GL. Any number of backdrops (plan 92 phase 1, row 1215, 2026-11-28)
+
+Headless: `tests/test_backdrops_numbered.py` (declared, drawn as the first at its alpha, its param, the picker, a delete, a spawn).
+
+**982. Two backdrops.** (Mac, GRAPH) Add **backdrop** from the picker on a show that has one, wire a channel into `backdrop.2.image`, the scene into `backdrop.2.scene` and `backdrop.2` into output 2; turn **Backdrop 2 alpha**. *Pass:* output 1 is as it was; output 2 shows the scene over the second picture at its own alpha; delete `backdrop.2` and output 2 shows the scene alone; save, reopen, and both are there. *Fail:* the first backdrop's alpha moving the second's, a second refused, or the show changing on reopen.
 
 ## FT. The Kinect (row 1130, 2026-11-24)
 

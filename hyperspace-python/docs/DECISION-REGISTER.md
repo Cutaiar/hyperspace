@@ -1039,6 +1039,11 @@ here; overturn → the change, then the same.
 | 1207 | No `hyperspace.patch` bump: a patch fragment never held a cloud, so nothing old needs reading; an older build reading a fragment that holds one refuses the entry in words — both Macs run one build | — | (rec) — pending the owner |
 | 1208 | The first save over a loadable patch from before `/13` keeps it beside itself (`<file>.bak-v12-clouds`, `routing.backup`; no backup, no write), on top of the trash copy every overwrite makes. The 61 checked-in `/12` files had their schema line moved and the unused shared cloud look dropped; the Kinect demo (`loadable/kinect/kinect-mirror.json`) got its cloud node naming `room` | 979 | (rec) — pending the owner |
 | 1209 | **Open**: whether a cloud device that connects should be offered on a cloud node that names none (a chip, never a pick). Built: nothing is offered — the owner's "manual configuration is fine for now" | 977 | (rec) — open, for the owner |
+| 1210 | A **hand mask** node (`handmask`, `handmask.2` …): a hands node in on its `hands` port, a mask out — the closed polygon the two thumb tips and two index tips make on screen, at the frame's size. Only a hands node may be wired in (refused in words otherwise); the hands need not be drawn anywhere for the mask to follow them. On GRAPH under masks ▸ | 980 | owner asked for it (2026-11-28); the shape (rec) — pending the owner |
+| 1211 | The four fingertips are joined in order **round their centre**, not in a fixed order (left thumb → left index → right index → right thumb), so the polygon never crosses itself however the hands turn. The pass fills even-odd, so it takes any order and up to `masks.MAX_POLYGON` (8) vertices | 980 | (rec) — pending the owner |
+| 1212 | The fingertips are projected through the **hands layer's camera** by default (`handmask.eye` layer: the reference eye, where hands laid over a picture are drawn), or the scene's (`eye` scene: the patch's eye, for hands wired into the scene) — so the mask lands on the hands as they are seen | 981 | (rec) — pending the owner |
+| 1213 | With **no polygon** (one hand, none, a fingertip behind the eye, nothing wired in) the mask is still made and passes nothing (everything when inverted), so a cut by it cuts its picture away rather than showing it whole; the node says why. The mask fades with the fainter hand. Its knobs: `eye`, `grow` ±64 px, `feather` 0–32 px (a one-pixel anti-aliased edge at 0), `invert` — values on the signed distance, no blur pass | 980, 981 | (rec) — pending the owner |
+| 1214 | No `hyperspace.loadable` bump for the new node kind: an older build reading a patch that holds a hand mask refuses its graph section in words and draws it black (plan 39's precedent) — both Macs run one build | — | (rec) — pending the owner |
 | 1215 | Plan 92 phase 1, any number of backdrops: the first keeps `backdrop.alpha` on `ViewState` (a static param, always there) and its plan 32 channel path node for node; `backdrop.<n>` (n ≥ 2) is declared by its entry, draws through the one composite whatever is under it (a channel's too, as any picture), its alpha `backdrop.<n>.alpha` on a `BackdropState` (`declare_backdrops`); the picker, the starter and a spawn take the next number; no schema bump (an older build refuses the entry in words) | 982 | (rec) — the owner's "no only-one rule" (2026-11-28) built; the details pending |
 
 "—": no hand check shows it; tests only.
@@ -16426,6 +16431,35 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **What.** A cloud node naming no device says "no device: pick one on its menu" and draws nothing; a device that connects is not offered.
 - **Answer.** (rec) — open, for the owner.
 - **Judge it.** 977.
+
+### 1210. The hand mask
+
+- **What.** `graph.HandMaskNode`, `graph.HandMaskAt`, `graph.hand_polygon`, `masks.POLYGON_FS` / `MaskPasses.polygon`; `params.declare_handmasks` (group `handmask`, a patch group); `graphview` LABELS, HOVERS, PICKER_GROUP (masks ▸), ADD_SAID. The tips are `HandPose.joints[0, 4]` (thumb) and `[1, 4]` (index) of each hand (`graph.HANDMASK_TIPS`). `tests/test_graph_handmask.py`.
+- **Answer.** owner asked for it (2026-11-28); the shape (rec) — pending the owner.
+- **Judge it.** 980.
+
+### 1211. Round the centre
+
+- **What.** `hand_polygon` sorts the four pixels by their angle about their mean. A fixed order would make a bow-tie when the hands cross or turn over; the even-odd fill would then pass two triangles.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 980.
+
+### 1212. The layer's eye by default
+
+- **What.** `handmask.eye` (`view.HANDMASK_EYES`: layer, scene). Layer reads `ghost.Settled.layer`, falling back to the scene's camera when a settle has none.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 981.
+
+### 1213. No polygon passes nothing
+
+- **What.** `HandMaskNode.made` always makes its mask; `hand_polygon` says why there is none (`HANDMASK_ONE_HAND`, `HANDMASK_NO_HANDS`, `HANDMASK_BEHIND`, `HANDMASK_UNWIRED`), shown on the node. Strength is the fainter hand's fade. Not built: holding the last polygon while a hand drops out.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 980, 981.
+
+### 1214. No loadable bump for the hand mask
+
+- **What.** `NODE_KINDS["handmask"]` is new; `read_graph` on an older build raises `unknown node kind 'handmask'` and the section is not read.
+- **Answer.** (rec) — pending the owner.
 
 ### 1215. Any number of backdrops (plan 92 phase 1)
 
