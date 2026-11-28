@@ -331,6 +331,7 @@ def shards(out: str, target: int) -> int:
         first = u["files"][0]["path"].replace("hyperspace-python/", "")
         u["id"] = f"s{i:03d}"
         u["label"] = first if len(u["files"]) == 1 else f"{first} +{len(u['files']) - 1}"
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
     Path(out).write_text(json.dumps(units, indent=1) + "\n")
     agents = sum(len(u["files"][0]["chunks"] or [0]) for u in units)
     print(f"shards: {len(units)} units, {agents} worker agents, "
