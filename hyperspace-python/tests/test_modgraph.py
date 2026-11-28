@@ -1,4 +1,4 @@
-"""modgraph.py (plan 28 N0): the modulation graph as data, its order and its
+"""modgraph.py: the modulation graph as data, its order and its
 loops — proved without a Router, then the edges `Router.build_modgraph`
 makes from a route, a macro subscriber and a scale."""
 
@@ -166,7 +166,7 @@ def test_a_route_a_macro_sub_and_a_scale_are_the_edges_the_design_names():
 
 def test_modgraph_is_a_leaf():
     """Like graph.py: modgraph.py imports nothing from the package but the
-    leaves `motion` and `tapers` (plan 28 N0)."""
+    leaves `motion` and `tapers`."""
     tree = ast.parse((PKG / "modgraph.py").read_text())
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.level:
@@ -178,7 +178,7 @@ def test_modgraph_is_a_leaf():
 
 
 def test_a_param_the_pass_lands_is_applied_once_a_frame():
-    """`Param.apply` is idempotent within a frame (plan 28 N0): a param
+    """`Param.apply` is idempotent within a frame: a param
     `Router.modulate` lands early — a `scale` a lane's push reads — is
     skipped by `reg.apply()`, so it is not let go and its offset not
     doubled; a toggle nothing reads lands in `reg.apply()` once. An

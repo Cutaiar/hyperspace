@@ -1,4 +1,4 @@
-"""NDI between two Macs from the panel (2026-11-22): an output's sender
+"""NDI between two Macs from the panel: an output's sender
 turned on and off while the app runs, remembered per Mac, and the device
 list's `ndi` entry made from MEDIA ▸ Live — no config.toml edit, no restart."""
 

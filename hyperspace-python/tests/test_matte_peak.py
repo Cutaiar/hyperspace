@@ -1,11 +1,11 @@
-"""Plan 90 (H2, Q23): Matte gains Key's `peak` measure and its `linear` ramp.
+"""Matte gains Key's `peak` measure and its `linear` ramp.
 
-One measure list and one ramp for the two (plan 67 §3.11: "one key: measure,
-then threshold") — the GLSL that measures a pixel and ramps it is written once
+One measure list and one ramp for the two ("one key: measure,
+then threshold"): the GLSL that measures a pixel and ramps it is written once
 (`glsl.KEY_SHAPE`) and read by Key's pass (`glsl.KEY_RAMP`) and Matte's
 (`masks.MATTE_FS`). Appended choices: a saved `matte.from` 0–2 and every matte
 without a `ramp` draw as they did. The look-back's occluder, `min(4 · peak, 1)`,
-is a Matte on peak, linear, key ⅛, soft ⅛ (plan 90 §10.2)."""
+is a Matte on peak, linear, key ⅛, soft ⅛."""
 
 from __future__ import annotations
 
@@ -131,7 +131,7 @@ void main() { o = vec4(key_ramp(vec3(m))); }""")
 
 @pytest.mark.parametrize("ramp", [0, 1])
 def test_a_narrow_ramp_has_a_coverage_at_its_level(ctx, ramp):
-    """Devin on #520: a softness too small to move the upper edge in float32
+    """A softness too small to move the upper edge in float32
     (level 0.5, softness 1e-8) gave 0 / 0 at the level. The ramp takes its
     width, as the old linear branch divided by the softness itself."""
     assert np.float32(0.5) + np.float32(1e-8) == np.float32(0.5)     # (the edge does not move)
@@ -142,7 +142,7 @@ def test_a_narrow_ramp_has_a_coverage_at_its_level(ctx, ramp):
 
 
 def test_a_narrow_smooth_matte_keeps_its_edges(ctx):
-    """Devin on #520 (second pass): the smooth ramp's upper edge is the key
+    """The smooth ramp's upper edge is the key
     plus the softness, not the lower edge plus twice it — rebuilt from a
     rounded lower edge, an alpha Matte keyed at 1, softness 1.49e-7, gave an
     opaque pixel about 0.35 where the old pass gave 0.5."""

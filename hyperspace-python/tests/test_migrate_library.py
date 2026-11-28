@@ -1,5 +1,5 @@
-"""Row 394: tools/migrate_library.py — a library's loadable patches rewritten as
-the newest schema (plan 44 D3: `hyperspace.preset/10`) once, through the
+"""tools/migrate_library.py — a library's loadable patches rewritten as
+the newest schema (`hyperspace.preset/10`) once, through the
 app's own load and save, a picture check on the golden rig deciding what
 is written.
 
@@ -126,7 +126,7 @@ def test_apply_backs_up_migrates_and_leaves_seven_and_the_rest_alone(tmp_path, c
 
 
 def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
-    """Plan 36 T3: `--to FOLDER` writes every loadable patch that passed — the `/9`
+    """`--to FOLDER` writes every loadable patch that passed — the `/9`
     already there too — into FOLDER under its own name; the library is
     read, never written, and no backup is made (how the corpus's `/7` were
     made from their sources)."""
@@ -244,7 +244,7 @@ def test_the_real_picture_check_passes_an_old_loadable(tmp_path, capsys):
 
 
 def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
-    """Plan 48 stage 2: the tool lists ``presets/`` every folder down, as
+    """The tool lists ``presets/`` every folder down, as
     the library does — ``party/`` and ``party/deep/`` migrated in place,
     a hidden folder (``.cache``) never read; ``--to`` keeps the folders."""
     lib = _library(tmp_path)

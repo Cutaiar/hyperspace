@@ -148,7 +148,7 @@ def stand(state: FxState, name: str, phase: float) -> None:
 
 def jump(chain: FxChain, src, dst, name: str, param: str, before: float, after: float,
          phase: float, t: float = 100.0, aux=None, w: int = W, h: int = H) -> float:
-    """The step alone, px (register row 580): effect `name`'s field over
+    """The step alone, px: effect `name`'s field over
     the UV source already in `src` (and `aux`, when given, on its aux
     input) with `param` at `before`, then at `after`. The effect's clocks
     stand where `phase` at `before` left them (`stand`, once); `t` is the

@@ -1,4 +1,4 @@
-"""Plan 67 P3 (§3.9) — any knob takes a field: `value + depth × field(uv)` per
+"""Any knob takes a field: `value + depth × field(uv)` per
 pixel, on a port named by the knob's key (`wave.amount`).
 
 Held here:
@@ -347,7 +347,7 @@ def test_a_field_wired_only_into_a_knob_reaches_on_graph_and_the_fx_pane():
 
 
 def test_a_depth_changed_alone_reaches_the_picture(ctx):
-    """Devin's review of #497: a wire's depth is not part of what the wire is,
+    """A wire's depth is not part of what the wire is,
     so a wiring that differs only in a depth compared equal and the renderer
     kept its cached graph, drawing the old depth. Change the depth alone after
     a frame is drawn: the next frame draws the new one."""
@@ -376,7 +376,7 @@ def test_a_depth_changed_alone_reaches_the_picture(ctx):
 
 
 def test_deleting_a_field_node_before_a_knob_keeps_the_depth_or_lets_go(tmp_path):
-    """Devin's review of #497: a node deleted out of a chain is bypassed — what
+    """A node deleted out of a chain is bypassed — what
     fed it wired on into what it fed. Into a knob the bypass keeps the cable's
     depth; where what fed it is a picture (To field's input), a knob or field
     port cannot take it, so that cable goes and the deletion lands."""
@@ -402,7 +402,7 @@ def test_deleting_a_field_node_before_a_knob_keeps_the_depth_or_lets_go(tmp_path
 
 
 def test_deleting_a_converter_keeps_the_effect_its_cable_alone_named(tmp_path):
-    """Devin's second review of #497: Wave named only by the cable from To
+    """Wave named only by the cable from To
     field into its Waves (a loaded patch's wires, no entry) — deleting To field
     drops that cable, which may not take the picture that fed To field; Wave
     stays on the canvas, unwired, by an entry, its knobs kept."""
@@ -425,7 +425,7 @@ def test_deleting_a_converter_keeps_the_effect_its_cable_alone_named(tmp_path):
 
 def test_a_slot_reads_its_effects_knob_fields():
     """A slot is its effect on another picture, with the effect's knobs: a
-    field on the effect's knob reaches the slot too (plan 67; Hue turn's band,
+    field on the effect's knob reaches the slot too (Hue turn's band,
     under "hands through the effects"), unless the slot has its own wired."""
     from hyperspace import graph as G
     from hyperspace.outputs import Switches

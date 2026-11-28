@@ -365,7 +365,7 @@ def test_a_pad_entry_with_a_tape_plays_it(tmp_path, monkeypatch):
     assert not missing.on and "tape" in missing.tape_note
 
 
-# ---- the review's findings (2026-11-01), each as the test that would have caught it ----
+# ---- regressions, each as the test that would have caught it ----
 
 EDGE_GUID = "030000004c050000f20d000000010000"
 XBOX_GUID = "030000005e040000130b000009050000"
@@ -539,7 +539,7 @@ def test_outputs_go_quiet_when_the_reader_stops():
     assert tuple(last[sony.C_RGB:sony.C_RGB + 3]) == (9, 9, 9)
 
 
-def test_the_old_gamepad_table_checks_plan_42s_keys(tmp_path):
+def test_the_old_gamepad_table_checks_its_keys(tmp_path):
     from hyperspace import config
     p = tmp_path / "config.toml"
     p.write_text('[gamepad]\nhid = "false"\ncontroller = "wiimote"\nplayer = 9\n')

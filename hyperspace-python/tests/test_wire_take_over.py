@@ -1,4 +1,4 @@
-"""Wave 3 P3 (row 524, the owner's yes): the take-over chip beside **wire as
+"""The take-over chip beside **wire as
 saved**.
 
 The plain chip never takes a port over. The second chip is drawn only while a
@@ -315,7 +315,7 @@ def test_taking_another_groups_cable_opens_that_groups_pin(rig):  # noqa: F811
     assert edit(rig).take_over_of(GID).words == ("Delay 2 → All outputs",)
 
 
-# ---------------------------------------------------------------- the plain chip's path (row 665)
+# ---------------------------------------------------------------- the plain chip's path
 
 def test_the_plain_chip_lands_on_a_free_all_outputs():
     e, gs, pushed = on_section({"nodes": EFFECTS}, OUT)

@@ -1,4 +1,4 @@
-"""Plan 48: loadable patch folders, stage 1 — the library lists loadable patches every
+"""Loadable patch folders, stage 1 — the library lists loadable patches every
 folder down under ``loadable/``, a loadable patch's name is folder-qualified
 (``party/B``), the bank points at a loadable patch by that name (a bare name is a
 top-level file, so every older show reads as it did), a save writes back
@@ -85,7 +85,7 @@ def test_the_list_is_every_folder_down_by_qualified_name(lib_dirs):
     r = make(lib_dirs)
     listing = r.lib.list(LOADABLE)
     assert "A" in listing and "party/B" in listing and "party/deep/C" in listing
-    # the conflict copy keeps plan 25's rule, in its folder: listed by its stem
+    # the conflict copy keeps its rule, in its folder: listed by its stem
     assert "party/b (Dan's conflicted copy)" in listing
     assert not [n for n in listing if "X" in n or "cache" in n]   # a hidden folder is no loadable patch
     assert len(listing) == 4
@@ -208,7 +208,7 @@ def test_a_folder_slot_on_an_older_build_is_a_filled_slot_that_loads_nothing(lib
     files = {p.name[:-5]: p for p in lib_dirs.loaded_patch.glob("*.json")}     # the old, flat walk
     index = {json.loads(p.read_text())["name"]: p for p in files.values()}
 
-    def old_path_of(name):                       # library.path_of before plan 48
+    def old_path_of(name):                       # library.path_of before folders
         return index.get(name) or files.get(slug(name))
 
     assert old_path_of("party/B") is None and old_path_of("party/deep/C") is None
@@ -566,7 +566,7 @@ def test_a_slot_whose_folder_went_while_the_app_was_shut_finds_its_patch(lib_dir
 
 
 def test_a_missing_patch_whose_folder_is_still_there_is_not_guessed(lib_dirs):
-    """Review of #444: with its folder still on disk, a file gone from it was
+    """With its folder still on disk, a file gone from it was
     deleted or moved out, and a leaf alone cannot tell which — a slot naming it
     loads nothing, never another folder's patch of the same name. A bare name
     (the top level is always there) the same."""
@@ -591,7 +591,7 @@ def test_two_loadables_of_one_name_are_not_guessed_between(lib_dirs):
 
 
 def test_a_patch_edited_and_then_moved_is_followed_and_applied_again(lib_dirs):
-    """Review of #444: the edit is not lost. The move is followed (the name, the
+    """The edit is not lost. The move is followed (the name, the
     slots) and, its mtime having moved, the file is applied again."""
     r = make(lib_dirs)
     p = lib_dirs.loaded_patch
@@ -608,7 +608,7 @@ def test_a_patch_edited_and_then_moved_is_followed_and_applied_again(lib_dirs):
 
 
 def test_a_library_before_the_migration_follows_a_move_too(tmp_path):
-    """Review of #444: a library whose patches are still in `presets/`. Its folders
+    """A library whose patches are still in `presets/`. Its folders
     are no part of a name there (`_prefix` reads under `loadable/`), so the moved
     file keeps its name, and a load and a save find it where it now is — no second
     file."""

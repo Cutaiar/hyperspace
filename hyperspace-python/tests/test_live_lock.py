@@ -1,7 +1,7 @@
 """The live-device lock (tests/live_lock.py, conftest's
 `pytest_runtest_protocol` and `pytest_runtest_setup`): live tests of two
 pytest processes take turns, and so do two workers of one `--dist load`
-run (row 605); a waiter skips, saying why, after a bounded wait behind
+run; a waiter skips, saying why, after a bounded wait behind
 another run or a holder that names none, and waits on behind its own
 run; the wait is outside the per-test timeout; the lock comes free when
 a test raises. A live test's fixture wider than the test is an error by
@@ -318,7 +318,7 @@ def test_two():
 
 
 def test_two_workers_of_one_load_run_take_turns_and_neither_skips(tmp_path):
-    """`--dist load` (row 605) hands the two live tests to two workers at
+    """`--dist load` hands the two live tests to two workers at
     once: the lock runs them one after the other, and the second, waiting
     past `WAIT_S` (0.3 s in the inner run) on its own run's holder, is not
     skipped."""
@@ -360,7 +360,7 @@ def test_a_plain_test_beside_it():
 @pytest.mark.parametrize("args", [("-p", "no:xdist"), ("-n", "2", "--dist", "load")],
                          ids=["serial", "xdist"])
 def test_a_live_test_on_a_module_scoped_fixture_is_an_error_by_name(tmp_path, args):
-    """Row 589's caveat: the lock is per test, so a module- or
+    """The lock is per test, so a module- or
     session-scoped fixture would open its device outside it. The test is
     an error by name before the fixture is set up — under xdist too — and
     the rest of the run goes on."""

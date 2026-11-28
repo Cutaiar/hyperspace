@@ -1,4 +1,4 @@
-"""The SEQ page (ui_seq.py, plan 31 U): draws with and without a
+"""The SEQ page (ui_seq.py): draws with and without a
 sequencer, every widget has its own imgui id, a click on a cell is an
 undoable param write, the playhead and the length show on the grid, and
 the envelope strips add and remove extras as undo steps."""

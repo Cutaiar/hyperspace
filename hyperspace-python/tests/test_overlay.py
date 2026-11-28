@@ -81,7 +81,7 @@ def test_meta_settings_never_persist_or_modulate(rig):
         assert not r[pid].persist, pid
         assert not r[pid].modulatable, pid
     # ground and opacity are still saved (SC2 moves them, with the migration), and as the
-    # meta controller's no lane may drive them (row 775)
+    # meta controller's no lane may drive them
     for pid in ("output.bg", "output.alpha"):
         assert r[pid].persist and not r[pid].modulatable, pid
     saved = r.snapshot("output")
@@ -89,7 +89,7 @@ def test_meta_settings_never_persist_or_modulate(rig):
 
 
 def test_dim_is_a_meta_setting_that_starts_bright(rig):
-    """Plan 15 WP3 (decision 28): the master dim is the operator's — 1 on a
+    """The master dim is the operator's — 1 on a
     fresh Output whatever the config says (there is no key), never saved,
     never modulated, the meta controller's by group, no `overlay.*` alias — and it
     is not a window-system setting: `apply` pushes nothing for it."""
@@ -285,7 +285,7 @@ def test_monitor_chosen_beforehand_is_the_target(rig):
 
 def test_follow_window_is_the_first_choice_and_reads_back_as_itself(rig):
     """monitor −1 — the screen the window is on — is a choice of its own,
-    not screen 0 (audit P3): the readout says so, and choosing a screen by
+    not screen 0: the readout says so, and choosing a screen by
     name then going back to it covers the window's own screen again."""
     p = rig.reg["output.monitor"]
     assert rig.out.monitor == -1 and p.text() == "follow window"
@@ -321,7 +321,7 @@ def test_backend_error_is_reported_not_raised(rig):
 
 
 def test_windowed_rect_is_the_saved_rect_while_fullscreen_or_overlay(rig):
-    """What the launch placement remembers (plan 16 WP4, fork F6): the
+    """What the launch placement remembers: the
     plain window's rect, never the cover of a screen — and reading it
     moves nothing."""
     home = (100, 100, 1280, 820)
@@ -365,7 +365,7 @@ def test_headless_output_has_no_window_to_push_to():
     assert reg["output.monitor"].names == ["follow window", "screen"]
 
 
-# ---- decision 21 (a): overlay only when the config asks ----
+# ---- overlay only when the config asks ----
 
 @pytest.fixture()
 def gated():
@@ -385,8 +385,7 @@ def test_overlay_refuses_every_road_while_the_config_shuts_it(gated):
     """The APC40's MASTER select is a row on `overlay.on` (apc40.DEFAULT_MAP);
     the panel sets `output.overlay`; a loadable patch restores values. Every
     one lands on the one param, and it stays off — the window never leaves
-    window mode. (The T key was a road too, until it left for GRAPH's tidy:
-    `routing.RETIRED_KEY_ROWS`, 2026-11-11.)"""
+    window mode. (The T key is no road: it is retired, `routing.RETIRED_KEY_ROWS`.)"""
     from hyperspace import apc40, routing
 
     r, out = gated.reg, gated.out
@@ -423,7 +422,7 @@ def test_fullscreen_still_works_while_overlay_is_shut(gated):
     assert gated.out.bg_alpha == 1.0
 
 
-# ---- plan 21 WP4: the per-output switches ----
+# ---- the per-output switches ----
 
 def _slots(*names, missing=()):
     from hyperspace.outputs import Slot, Switches
@@ -433,8 +432,8 @@ def _slots(*names, missing=()):
 
 
 def test_the_output_switches_are_meta_settings():
-    """Fork F4: output.N.scene / .hands / .dim are meta settings (plan 35 T4:
-    the two mutes, no `.through`) —
+    """output.N.scene / .hands / .dim are meta settings (the two mutes, no
+    `.through`) —
     group `output` (the meta controller's), never persisted (no loadable patch, show or
     undo step holds them: `undo.watched` needs persist), not modulatable
     (no lane rides them) — and they write the output's `Switches`, which
@@ -500,7 +499,7 @@ def test_one_output_has_no_dim_of_its_own():
 
 
 def test_output_switches_are_picture_and_hands():
-    """Plan 35 O (row 374): a window's two mutes — `output.N.scene`
+    """A window's two mutes — `output.N.scene`
     (labelled "picture": the id is kept for the bindings) and `.hands` —
     with its mirror, and no `.through`: "hands through the effects" is the
     loadable patch's wiring now. A mute says what it ignores."""

@@ -1,5 +1,4 @@
-"""Plan 43 C2 — one orbit camera (the owner, 2026-11-02; register rows 555,
-572–576): the eye (`eye.fov`, `eye.distance`) is the loadable patch's beside
+"""One orbit camera: the eye (`eye.fov`, `eye.distance`) is the loadable patch's beside
 `camera.*`, modulatable; every save is `hyperspace.preset/9` and records
 the spin's pose (`pose`, `view.body` folded in), which a load sets; an old
 loadable patch takes the eye its old show held; the hands' calibration is fitted
@@ -54,8 +53,8 @@ CAMERA_AT = [40, 50]
 
 
 def without_lookback(doc: dict) -> dict:
-    """`doc` without the retired look-back's knobs (plan 90 H2:
-    `graphmigrate.LB_GONE`) and the old dream's (H3: every `dream.*`, a dream
+    """`doc` without the retired look-back's knobs (`graphmigrate.LB_GONE`)
+    and the old dream's (every `dream.*`, a dream
     off and undriven being left out) — a load drops them, which these tests
     of the eye are not about."""
     return {**doc, "values": {k: v for k, v in doc["values"].items()
@@ -65,7 +64,7 @@ def without_lookback(doc: dict) -> dict:
 def old_loadable(src: Path = TRIP, *, marked: bool = True) -> dict:
     """A corpus loadable patch as it was before `/9`: `/7`, no eye in its values
     (and, unmarked, its depths still measured along the linear ranges'
-    words — wave 0 T1's marker gone); without the retired look-back's and
+    words); without the retired look-back's and
     dream's knobs (`without_lookback`)."""
     doc = without_lookback(json.loads(src.read_text()))
     doc["schema"] = graphmigrate.WIRED_SCHEMA
@@ -93,7 +92,7 @@ def _write(path: Path, doc: dict) -> Path:
 
 
 def test_the_eye_is_the_looks_and_the_pose_is_no_base(tmp_path):
-    """Row 555: the eye leaves the meta controller for the patch part, ids
+    """The eye leaves the meta controller for the patch part, ids
     kept; the pose's ids are the six phases, which stay `persist=False` —
     no base, so no undo step and no dirty dot as the turn moves."""
     assert "eye" in PATCH_GROUPS and "eye" not in SHARED_META_GROUPS
@@ -177,7 +176,7 @@ def test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_bac
     pose = view.pose()
     path = rig.loaded_patch.save_as("FRAMED")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.loadable/12" == loadable.SAVE_SCHEMA   # (plan 44 D3)
+    assert doc["schema"] == "hyperspace.loadable/12" == loadable.SAVE_SCHEMA
     assert doc["values"]["eye.fov"] == 31.0 and doc["values"]["eye.distance"] == 6.0
     assert list(doc[loadable.POSE_KEY]) == list(POSE_IDS)
     assert [doc[loadable.POSE_KEY][k] for k in POSE_IDS] == pytest.approx(pose, abs=1e-6)
@@ -304,7 +303,7 @@ def test_an_old_show_hands_its_eye_to_old_loadables_and_keeps_none_itself(tmp_pa
     bak = home / "projects" / "rig.hyp.json.bak-v2-eye"
     assert bak.read_bytes() == before
     pr.save()
-    # (plan 44 D3: a /2 show's first write keeps it as .bak-v2-look too)
+    # (a /2 show's first write keeps it as .bak-v2-look too)
     assert sorted(p.name for p in show.parent.glob("rig.hyp.json.bak-*")) == [
         bak.name, "rig.hyp.json.bak-v2-look"]
     # a fresh launch: the show holds no eye now, but its `.bak-v2-eye` does
@@ -340,7 +339,7 @@ def test_a_bank_autosave_before_the_tool_still_hands_old_loadables_the_eye(tmp_p
 
 def test_the_tool_copies_nothing_when_nothing_it_reads_is_retapered(tmp_path, monkeypatch):
     """Review 2.7: a dry run reads the library itself (no retapered copy)
-    — and since plan 44 D3 retired the desk templates, a left-over unmarked
+    — and since desk templates are retired, a left-over unmarked
     one makes no copy either: nothing a load reads is retapered."""
     tool = _tool()
     made = []
@@ -392,7 +391,7 @@ def test_show_without_eye_is_pure():
 
 
 def test_a_hand_axis_learns_onto_the_eye_and_breathes_the_framing(tmp_path):
-    """Row 574 (row 182 overturned): Learn and the referee accept a
+    """Learn and the referee accept a
     performer on the eye; a lane's offset rides on the base, in the fov's
     own linear range (its taper unchanged, review 4)."""
     chain = Analyzer(Analyser())
@@ -509,7 +508,7 @@ def test_the_camera_node_is_the_looks():
 
 
 def test_the_hands_calibration_is_the_meta_reference_eye():
-    """Row 575, no GL: the box is fitted into the world against the rig's
+    """No GL: the box is fitted into the world against the rig's
     reference eye whatever the loadable patch's; through a zoomed eye the hands'
     picture scales about the centre as the shape's does (the scene's
     camera), and the reference eye's picture — a layer's — does not move."""
@@ -593,7 +592,7 @@ def _library(tmp_path: Path) -> Path:
     _write(lib / "projects" / "rig.hyp.json", old_show())
     (lib / "patches").mkdir()
     shutil.copyfile(OLD_PATCH, lib / "patches" / "acid-wash.json")
-    # (plan 44 D3: a desk template left over — never read, never rewritten)
+    # (a desk template left over — never read, never rewritten)
     _write(lib / "desk" / "old-desk.json", {"schema": "hyperspace.desk/1", "name": "old desk",
                                             "desk": [{"source": "cc:0:49", "target":
                                                       "fx.warp.speed", "op": "set",
@@ -623,7 +622,7 @@ def test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_loadable(tmp_pa
     assert _tree(lib) == before and not list(home.glob("library-backup-*"))
     assert "show: rig (the library's one show) — eye.distance 5, eye.fov 30" in out
     assert "retaper first: 1 document(s)" in out and "patch acid-wash.json" in out
-    assert "desk old-desk.json" not in out                  # (plan 44 D3: retired)
+    assert "desk old-desk.json" not in out                  # (retired)
     assert "show rig.hyp.json → installs/rig.json" in out
     assert "would rewrite 2 as /12, leave 1 untouched (already /12), skip 0" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
@@ -733,7 +732,7 @@ def _span(pic) -> tuple[int, int]:
 
 
 def test_hands_in_the_scene_scale_with_the_shape_and_a_layer_keeps_its_size(ctx):
-    """Row 575 / hand check 433, drawn: widening the loadable patch's eye (47.6° →
+    """Drawn: widening the loadable patch's eye (47.6° →
     60°, out, so nothing leaves the frame) shrinks the shape, and the hands
     drawn in the scene shrink with it by the same ratio; the hands drawn
     as a layer are the same picture, pixel for pixel, whatever the eye."""

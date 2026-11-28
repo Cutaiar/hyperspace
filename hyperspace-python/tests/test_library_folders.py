@@ -1,4 +1,4 @@
-"""Plan 48 stage 2: the library's folder operations — `Library.move` (a
+"""The library's folder operations — `Library.move` (a
 loadable patch into another folder, its bytes kept, the bank and every show
 following), `make_folder`, `rename_folder` (every loadable patch inside keeps its
 leaf, the slots follow) and `remove_folder` (an empty folder only), and
@@ -129,7 +129,7 @@ def test_remove_folder_takes_an_empty_folder_only(lib_dirs):  # noqa: F811
     assert lib.held("party") == ["b (Dan's conflicted copy).json", "b.json", "deep/"]
 
 
-# ---------------------------------------------------------------- review of #349
+# ---------------------------------------------------------------- refusals and case
 
 def test_a_folder_named_like_a_loadable_file_is_refused_and_never_listed(lib_dirs):  # noqa: F811
     r = make(lib_dirs)

@@ -3,9 +3,9 @@
 They are files for the owner's library, not part of the app (nothing ships:
 DECISIONS "One tier"), so nothing else reads them. Each must land through the
 library's own load with no unknown id and no note: a route dropped at load is
-a gesture that does nothing on stage. (Plan 90 H2: kinetic-clay holds a
-look-back, which opens as public parts with the migration's own note; its
-rows and values land retargeted, none dropped.) Each is opened from where its README
+a gesture that does nothing on stage. kinetic-clay holds a look-back, which
+opens as public parts with the migration's own note; its rows and values land
+retargeted, none dropped. Each is opened from where its README
 copies it: the library's `loadable/kinetic/`, by its folder-qualified name.
 The README's own command is run too (`readme_copy`): it must land the files
 in the library `[library] path` names, as desktop startup reads it
@@ -38,7 +38,7 @@ def test_there_are_six():
 
 
 def test_only_comet_turns_the_grip_on(tmp_path):
-    """The grip is a patch's own (plan 60): comet is thrown, so it carries
+    """The grip is a patch's own: comet is thrown, so it carries
     the grip's values; clay's grab is its own turn rows, and the grip with
     them would turn the shape twice over."""
     on = [p.stem for p in FILES if json.loads(p.read_text())["values"].get("grip.on")]
@@ -58,8 +58,8 @@ def test_a_kinetic_preset_opens_with_no_note(path, tmp_path):
     missing = app.loaded_patch.load(f"kinetic/{path.stem}")
     assert missing == []
     assert _only_look_back_notes(app.lib.warning)
-    # (plan 90 H2: what lands is the document as the look-back's migration
-    # rewrites it — every row and value of it, none dropped)
+    # what lands is the document as the look-back's migration rewrites it:
+    # every row and value of it, none dropped
     fwd = graphmigrate.forward(doc, {})
     assert len(fwd.doc["routes"]) == len(doc["routes"])
     doc = fwd.doc

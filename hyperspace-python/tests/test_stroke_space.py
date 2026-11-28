@@ -1,8 +1,8 @@
-"""Plan 26 A2b — the stroke-space toggle (owner, 2026-10-14).
+"""The stroke-space toggle.
 
 `view.screen_strokes` off (the default): strokes in world space — the line
-width and the point radius are × camera.zoom, the pre-A2 formula, so the
-edges and the dots grow and shrink with the shape. On: screen space — A2's
+width and the point radius are × camera.zoom, the world-space formula, so the
+edges and the dots grow and shrink with the shape. On: screen space — a
 fixed pixel weight. At zoom 1 the two are the same frame byte for byte.
 """
 
@@ -60,7 +60,7 @@ def test_at_zoom_1_both_modes_draw_the_same_frame(ctx, lines, points):
 
 @pytest.mark.parametrize("zoom", [0.5, 2.0])
 def test_world_space_scales_the_width_and_radius_by_the_zoom(ctx, monkeypatch, zoom):
-    """World space is the pre-A2 arithmetic: width × zoom before the 1 px
+    """World space scales with the zoom: width × zoom before the 1 px
     floor (the sub-pixel part folded into alpha), radius × zoom before the
     whole-pixel rounding; screen space is the same at every zoom. On one
     copy (the field as it always was) the CPU does it, as before; the

@@ -1,4 +1,4 @@
-"""Wave 2 T2 (register rows 607–608): holding Shift while dragging a
+"""Holding Shift while dragging a
 continuous slider or fader on the panel moves the value a tenth as far;
 letting Shift go mid-drag goes back to coarse without a jump; the drag is
 one undo step; a toggle and an integer slider are untouched; the tooltip
@@ -184,7 +184,7 @@ def test_the_tooltip_says_fine_while_shift_is_held(view_page, monkeypatch):
 def test_shift_joining_mid_drag_does_not_step_back(view_page):
     """⇧ pressed in the same frame the mouse moves: that frame's movement
     counts at the fine rate from where the grab was — not lost, and the
-    grab never steps back to last frame's value (review, PR #348)."""
+    grab never steps back to last frame's value."""
     r, d = view_page
     p = r.reg["view.inst_persp"]
     x0, y0, x1, y1 = d.rect("view.inst_persp")
@@ -209,7 +209,7 @@ def test_shift_joining_mid_drag_does_not_step_back(view_page):
 
 def test_a_shift_press_on_a_log_slider_writes_nothing(view_page):
     """`view.inst_spacing` is a log range: a press that has not moved
-    leaves its base bit-for-bit, so no undo step opens (review, PR #348)."""
+    leaves its base bit-for-bit, so no undo step opens."""
     r, d = view_page
     p = r.reg["view.inst_spacing"]
     u = undo.Undo(r.reg, r.router.table)
@@ -236,7 +236,7 @@ def test_a_tapered_slider_keeps_a_base_between_detents_on_a_shift_press(tmp_path
     """`Panel._slider` on a tapered param (as MEDIA draws a channel's gain)
     with a base between detents — where a lane or a drive left it: a ⇧
     press does not snap it to a detent; a ⇧ drag then walks a tenth as far
-    as a plain one (review, PR #348)."""
+    as a plain one."""
     with build_rig(tmp_path) as r:
         imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
 
@@ -271,7 +271,7 @@ def test_a_tapered_slider_keeps_a_base_between_detents_on_a_shift_press(tmp_path
         assert fine == pytest.approx(plain * ui.FINE, abs=1)
 
 
-# ---- what T2 left out (row 731): the sliders drawn straight from imgui ----
+# ---- the sliders drawn straight from imgui ----
 
 
 def rows_frame(r, rows):
@@ -371,7 +371,7 @@ def test_the_readout_and_the_fill_are_the_values_through_a_fine_drag(route, monk
 
 
 def test_a_depth_a_file_left_out_of_range_comes_in_without_a_jump(route):
-    """Row 608's no-jump holds for 1.5 on a ±1 slider: it creeps in, no further out."""
+    """A fine drag does not jump: it holds for 1.5 on a ±1 slider: it creeps in, no further out."""
     _, d, b = route
     b.value = 1.5
     d.run(d.wait(1))

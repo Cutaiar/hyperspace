@@ -1,6 +1,6 @@
-"""Plan 30 D1: placing an effect on any image edge from the loadable patch.
+"""Placing an effect on any image edge from the loadable patch.
 
-Plan 36 T3 (W3): a placement is an old section's word only — the one-way
+A placement is an old section's word only — the one-way
 migration writes it as the wires it stood for (`graphmigrate.placed_wires`)
 and the builder places nothing. These tests read old sections, migrate them
 (`wired_wiring`, `wiredframe`: the retired switch states laid on first, as
@@ -43,22 +43,22 @@ from hyperspace.outputs import Switches, View
 
 S = Switches
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
-# the corpus loadable patches' sources (plan 36 T3: the corpus files are their `/7`)
+# the corpus loadable patches' sources (the corpus files are their `/7`)
 SOURCES = Path(__file__).resolve().parent / "fixtures" / "factory-sources" / "presets"
 PLACED = ("palette-hands", "palette-glass", "acid-scene")
 RUN = ("warp", "acid", "acid.2", "palette", "palette.2")
 FILES = {"warp", "acid", "palette", "kaleido"}
 
 def unrescaled(notes: list[str]) -> list[str]:
-    """A load's notes less plan 86's: a fixture from before the effect tapers has no
+    """A load's notes less the retaper note: a fixture from before the effect tapers has no
     units marker, and its rescaled depths are said (`loadable.retaper_note`)."""
     head = loadable.RETAPER_NOTE.partition("{count}")[0]
-    # (plan 67: and Hue cycle's retirement, said of a fixture from before it)
+    # (and Hue cycle's retirement, said of a fixture from before it)
     hue = M.HUE_TURN_NOTE.partition("{new}")[2][:40]
-    # (plan 90 H2: and the look-back made public parts, said of a fixture
+    # (and the look-back made public parts, said of a fixture
     # whose old values drew one)
     lb = M.LOOKBACK_NOTE.partition("{chain}")[0].partition("{old}")[2]
-    # (plan 90 H3: and a row on an old dream knob no part takes, left out)
+    # (and a row on an old dream knob no part takes, left out)
     row = M.DREAM_ROW_NOTE.partition("{old}")[2]
     return [n for n in notes if not n.startswith(head) and hue not in n and lb not in n
             and row not in n]
@@ -66,7 +66,7 @@ def unrescaled(notes: list[str]) -> list[str]:
 
 
 def _run(placed=(), effects=RUN) -> tuple[str, ...]:
-    """The run a loadable patch's wires give these effects (plan 33 R: the
+    """The run a loadable patch's wires give these effects (the
     migration's, every effect not placed, in the order given)."""
     names = {e.name for e in placed}
     return tuple(e for e in effects if e not in names)
@@ -78,8 +78,8 @@ def _wiring(*placed, effects=RUN) -> G.Wiring:
 
 def _graph(views, *placed, effects=RUN, look="trail"):
     """`views` (a window's `Switches`, or a `Shows` its output's wiring:
-    plan 35 T4, `tests/wiredframe.py`) over the run with `placed` placed —
-    plan 36 T4: the look-back drawn (`look`), as the old words with it on."""
+    `tests/wiredframe.py`) over the run with `placed` placed —
+    the look-back drawn (`look`), as the old words with it on."""
     if all(isinstance(v, Shows) for v in views):
         return graph(views, _wiring(*placed, effects=effects), effects=effects, look=look)
     return G.build_graph(views, wired_wiring(_wiring(*placed, effects=effects), look),
@@ -178,8 +178,8 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
         "acid.2 into 'palette' — that makes a loop (acid.2 into palette after acid.2)")
     assert spec.wiring().placed == (G.EffectAt("warp", 1, after="hands"),)
     assert G.EffectAt("acid", 2) in spec.effects
-    # the migration: the run is its wires (plan 33 R), the two placements
-    # in a loop take no other place (plan 36 T3: no build-time placement)
+    # the migration: the run is its wires, the two placements
+    # in a loop take no other place (no build-time placement)
     w = G.Wiring(placed=(G.EffectAt("palette", 1, after="acid.2"),
                          G.EffectAt("acid", 2, into="palette")), run=RUN)
     g = G.build_graph([View(S(), (10, 10))], wired_wiring(w), effects=RUN)
@@ -207,7 +207,7 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
     (instance 1 named only by its file when placed); each fixture's section
     is its spec's JSON; loaded from a scratch library it lands with the
     migration's note alone and a clean dot, each placement the wires it
-    stood for (plan 36 T3), and a save writes the section back one node per
+    stood for, and a save writes the section back one node per
     line, no placement in it."""
     section = {"nodes": [
         {"kind": "effect", "file": "acid", "instance": 2, "after": "scene"},
@@ -219,7 +219,7 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
     assert [(e.name, e.where) for e in spec.wiring().placed] == [
         ("acid.2", ("after", "scene")), ("palette", ("after", "hands")),
         ("palette.2", ("into", "output.2"))]
-    # plan 33 R21: an unplaced instance 1 is the file kept on no wire (it was
+    # an unplaced instance 1 is the file kept on no wire (it was
     # refused while instance 1 was the stack's, always there)
     kept = G.read_graph({"nodes": [{"kind": "effect", "file": "palette"}]})
     assert kept.effects == (G.EffectAt("palette", 1),) and not kept.wiring().placed
@@ -243,32 +243,32 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
         assert not rig.lib.is_dirty(LOADABLE), slug
         saved = rig.loaded_patch.document(slug)
         assert not any(k in n for n in saved[loadable.GRAPH_KEY]["nodes"] for k in G.PLACE_KEYS)
-        assert saved[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()     # (row 394)
+        assert saved[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()
         line = json.dumps(saved[loadable.GRAPH_KEY]["nodes"][0])
         assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {line}' in loadable.dumps(saved)
-    assert rig.reg["fx.acid.2.on"].value and rig.reg["fx.dream.on"].value   # (plan 90 H3)
+    assert rig.reg["fx.acid.2.on"].value and rig.reg["fx.dream.on"].value
 
 
 def test_no_corpus_loadable_places_an_effect_and_the_default_graph_is_identical():
     """No corpus loadable patch places an effect (nor its source carries a graph); with no
     placement the frame is D0's — every effect in every run (the through
-    outputs' copies too, plan 35 T4), no placed node, the readout split as
+    outputs' copies too), no placed node, the readout split as
     before, the pool two — and a wiring whose placements were all refused
     builds the same graph."""
-    for path in sorted((CORPUS / "loadable").glob("*.json")):          # (plan 36 T3: /7)
+    for path in sorted((CORPUS / "loadable").glob("*.json")):          # (/7)
         nodes = json.loads(path.read_text())["graph"]["nodes"]
         assert not any(k in e for e in nodes for k in G.PLACE_KEYS), path.name
     for path in sorted(SOURCES.glob("*.json")):                          # (their sources)
         assert "graph" not in json.loads(path.read_text()), path.name
     shows = [Shows(through=True), Shows(scene=False, through=True), Shows()]
-    plain = graph(shows, G.Wiring(run=RUN), effects=RUN)     # (plan 33: by wires)
+    plain = graph(shows, G.Wiring(run=RUN), effects=RUN)     # (by wires)
     assert G.Wiring().placed == () and plain.dormant == {} and plain.notes == []
     assert not [n for n in plain.order if isinstance(n, G.Effect)
                 and n.placed in ("after", "into")]
     assert plain.nodes["hands.layer"].readout == "downstream" and plain.pool == 2
     for k in (1, 2, 3):
         assert _run_names(plain, _end(plain, k)) == list(RUN)
-    assert "lookback" not in plain.nodes          # (plan 36 T4: the old words' off)
+    assert "lookback" not in plain.nodes          # (the old words' off)
     assert plain.nodes["output.3"].inputs["hands"] is plain.nodes["hands.layer"]
     refused = G.read_graph({"nodes": [{"kind": "effect", "file": "palette",
                                        "after": "teapot"}]}, effects=FILES)
@@ -280,7 +280,7 @@ def test_no_corpus_loadable_places_an_effect_and_the_default_graph_is_identical(
 
 
 def test_a_placed_effect_is_not_in_the_chain_run():
-    """A placed effect has no node in any run; migrated (plan 36 T3) it sits
+    """A placed effect has no node in any run; migrated it sits
     on its edge as wires — after the hands' layer for every consumer of the
     layer (a through composite, an output laying it over) but the readout;
     after an effect of the run (the original: one instance is one node);
@@ -314,7 +314,7 @@ def test_after_scene_and_into_the_history_in_the_graph():
     """`after: scene`: the history, the capture (or the history's
     composite) read the effect; the cover (the face buffer) and the
     depth ports still read the scene. `into: history`: the history alone,
-    the capture keeping the scene. (Plan 90 H2: the look-back drawn is its
+    the capture keeping the scene. (The look-back drawn is its
     public parts — the history is the composite adding the trail, its
     occluder the matte, its capture the fade the delay records through.)"""
     vs = [View(S(), (10, 10))]
@@ -327,7 +327,7 @@ def test_after_scene_and_into_the_history_in_the_graph():
     g = placed(G.EffectAt("acid", 2, after="scene"))
     a2, scene = g.nodes["acid.2"], g.nodes["scene"]
     assert a2.inputs["image"] is scene and a2.makes and not a2.see_through
-    # (plan 36 T4: the trail added onto it, held back by it, and recording it)
+    # (the trail added onto it, held back by it, and recording it)
     assert g.nodes["composite"].inputs["under"] is a2
     assert g.nodes["matte"].inputs["image"] is a2
     assert g.nodes["fade"].inputs["image"] is a2
@@ -343,7 +343,7 @@ def test_after_scene_and_into_the_history_in_the_graph():
 
 
 def test_a_placement_with_nothing_to_sit_on_is_said_and_wired_nowhere():
-    """Plan 36 T3: a placement on a picture the frame does not have — an
+    """A placement on a picture the frame does not have — an
     output wired to show nothing — drew nothing: the migration wires it
     nowhere and says so; one after a node nothing reads (no hands laid) is
     wired after it, unread — no node built; the rest is the run."""
@@ -356,7 +356,7 @@ def test_a_placement_with_nothing_to_sit_on_is_said_and_wired_nowhere():
     assert notes == [("acid.2 into 'output.2' — output 2 shows no picture: it drew nothing, "
                       "so it is not wired")]
     assert {"from": "hands.layer", "to": "palette.image"} in got["wires"]
-    # (plan 90 H2: the old frame's look-back split as the old words' off had it
+    # (the old frame's look-back split as the old words' off had it
     # — none drawn — before a live read, which refuses one)
     g = G.build_graph([View(S(), (10, 10))] * 2,
                       G.read_graph(M.split_lookback(got, "off")).wiring(), effects=RUN)
@@ -366,7 +366,7 @@ def test_a_placement_with_nothing_to_sit_on_is_said_and_wired_nowhere():
 
 def test_the_words_say_the_placements():
     """`graph_words` of an old section (the words an old file's placements
-    had) and `placement_words`; a `/7` frame has none (plan 36 T3)."""
+    had) and `placement_words`; a `/7` frame has none."""
     spec = G.read_graph({"nodes": [
         {"kind": "effect", "file": "acid", "instance": 2, "after": "scene"},
         {"kind": "effect", "file": "palette", "after": "hands"},
@@ -439,7 +439,7 @@ def test_after_hands_folds_the_hands_layer_and_not_the_shape(ctx):
     pal = g.nodes["palette"]
     assert [c[0] for c in calls] == ["palette"] * 2      # once a frame
     assert all(c[1] is folded.ghost.tex and c[2] == {"opaque": 0} for c in calls)
-    assert folded.stats["effects"] == ["palette"] and pal.placed == "wire"   # (plan 36 T3)
+    assert folded.stats["effects"] == ["palette"] and pal.placed == "wire"
     names = g.timed_in(G.Frame(folded, ctx, None, 1, 1, 1.0, 0.0, [], (1, 1), 0, None,
                                (0, 0, 1, 1), stats={"effects": ["palette"]}))
     assert names.index("hands.layer") < names.index("palette")
@@ -465,7 +465,7 @@ def test_into_output_2_folds_one_output_only(ctx):
     assert same_bytes(ctx, a1, b1) and np.array_equal(a1, a2)
     assert not np.array_equal(a2, b2)
     assert r.stats["effects"] == ["warp", "palette"]
-    # (plan 36 T3: the palette a wire into output 2's picture, no fold)
+    # (the palette a wire into output 2's picture, no fold)
     assert _run_names(r._graph, _end(r._graph, 2))[-1] == "palette"
 
 
@@ -473,7 +473,7 @@ def test_after_scene_feeds_the_history_the_folded_picture(ctx):
     """A second acid after the scene: what the history records is the
     effect's folded picture, the picture the trail is added onto the same
     one, and the effect ran once a frame for both; the frame differs from
-    the one without it. (Plan 90 H2: the look-back drawn is its public
+    the one without it. (The look-back drawn is its public
     parts — the capture is the fade the delay records through, the history
     the composite adding the trail.)"""
     import numpy as np
@@ -547,7 +547,7 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
         real(name, src, dst, t, **kw)
 
     r.fx.run_one = run_one
-    # (plan 35 T4: the glass's state — the scene off, the hands over — is
+    # (the glass's state — the scene off, the hands over — is
     # its output's wiring; the scene holding hands 1, the layer is hands 2's)
     pv = View(wire_switches(r, S(), Thru(scene=False, through=False))[1], (W, H),
               presenter=object())
@@ -577,7 +577,7 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
 
 def test_a_placed_effect_alone_bends_no_pipeline(ctx):
     """With only a placed effect on, `fx_on` is off: no chain runs — and
-    the placed effect still runs. Plan 36 T1: the through output shows its
+    the placed effect still runs. The through output shows its
     own chain as wired (its copy reads through), no stand-down to the
     run's end."""
     from test_outputs import keep_run, rig, run, wviews
@@ -595,7 +595,7 @@ def test_a_placed_effect_alone_bends_no_pipeline(ctx):
 
 def test_into_a_through_output_folds_its_chain_every_frame(ctx):
     """The palette into output 2, a hands-through glass with the scene off,
-    and no effect of the run on. Plan 36 T1 (no stand-down): the output
+    and no effect of the run on. The output
     shows its chain as wired — the hands alone through the run's copy —
     so the palette folds it this frame, nothing is dormant, and with an
     effect of the run on it folds it still."""
@@ -607,7 +607,7 @@ def test_into_a_through_output_folds_its_chain_every_frame(ctx):
     r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),), run=("warp",))
     run(ctx, r, wviews(ctx, r, S(), glass), frames=2)
     g = r._graph
-    assert _run_names(g, _end(g, 2))[-1] == "palette"     # (plan 36 T3: a wire, no fold)
+    assert _run_names(g, _end(g, 2))[-1] == "palette"     # (a wire, no fold)
     assert r.stats["routes"][1][0] is not None
     assert "palette" in r.stats["effects"]
     assert "palette" not in g.dormant and not g.stood

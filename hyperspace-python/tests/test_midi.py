@@ -81,7 +81,7 @@ def push(r, *msgs):
 
 
 def shift(r):
-    """Latch SHIFT (plan 13 D4): the global layer comes up."""
+    """Latch SHIFT: the global layer comes up."""
     push(r, note(apc40.N_SHIFT), note(apc40.N_SHIFT, 0))
 
 
@@ -109,9 +109,9 @@ def test_power_up_sends_mode_sysex(rig):
 # ---------------------------------------------------------------- knobs
 
 def test_device_knob_drives_selected_band_under_shift(rig):
-    """The band strip is the global layer's (plan 13 §3.2): dead until
-    SHIFT is up. A device knob is an endless encoder the ring re-bases
-    (D7), so it continues from the ring it was just sent — no pickup —
+    """The band strip is the global layer's: dead until
+    SHIFT is up. A device knob is an endless encoder the ring re-bases,
+    so it continues from the ring it was just sent — no pickup —
     and a band switch re-draws the ring, which re-bases it again."""
     reg, control = rig.reg, rig.control
     atk = reg["band.sel.atk"]
@@ -144,7 +144,7 @@ def test_pickup_catches_when_knob_reaches_value(rig):
 
 
 def test_a_fader_moved_while_its_row_is_disabled_has_to_pick_up_again(rig):
-    """Audit R13: a disabled row's messages are passed over, and the fader
+    """A disabled row's messages are passed over, and the fader
     travels without its param. Re-enabled, its next message must not write
     the whole distance: the row picks up again from where the fader is."""
     b = rig.reg["view.bright"]
@@ -188,7 +188,7 @@ def test_relative_encoder_steps_shape(rig):
 def test_faders_on_channels_pick_their_band(rig):
     for x in rig.midi.bindings:
         x.pickup = False
-    shift(rig)                  # the audio strip is the SHIFT layer's (plan 24 C2, decision 17)
+    shift(rig)                  # the audio strip is the SHIFT layer's
     push(rig, cc(apc40.CC_FADER, 0, channel=2))
     assert rig.audio.chain.params[2].post == 0.0
     assert rig.audio.chain.params[1].post == 1.0
@@ -293,7 +293,7 @@ def test_loadable_row_lights_the_active_loadable(rig):
     assert rig.loaded_patch.active == 2
     leds = {(m.channel, m.note): m.velocity for m in rig.out.sent if m.type == "note_on"}
     assert leds[(2, apc40.N_CLIP[0])] == apc40.GREEN
-    # a slot that holds another loadable patch is amber, not dark (plan 19 WP2)
+    # a slot that holds another loadable patch is amber, not dark
     assert leds[(0, apc40.N_CLIP[0])] == apc40.YELLOW
 
 
@@ -314,7 +314,7 @@ def test_ring_feedback_is_change_gated(rig):
 
 
 def test_ring_shows_the_base_and_never_chases_a_performer(rig):
-    """Plan 09 WP2: a knob on a performed param is a scene-setter. The
+    """A knob on a performed param is a scene-setter. The
     ring tracks p.norm — the base — so a performer moving the effective
     value sends nothing, the base moving does, and the knob itself turns
     the base while the performer's offset stays exactly where it was."""
@@ -381,7 +381,7 @@ def test_selected_band_rings_follow_the_selection(rig):
 # ---------------------------------------------------------------- learn
 
 def test_learn_binds_next_message_into_the_loadable_layer(rig, tmp_path):
-    """Plan 13 §3.3: the learned row is a patch-layer row in the live
+    """The learned row is a patch-layer row in the live
     table — the file is not written (tests/test_learn.py has the rest)."""
     m = rig.midi
     path = tmp_path / "midi_map.json"
@@ -428,7 +428,7 @@ def test_learn_takes_over_a_key_from_its_old_param(rig):
 
 
 def test_unbind_removes_only_loadable_layer_rows_and_writes_no_file(rig):
-    """Plan 13 WP5: right-click → Unbind is an edit of the loaded patch —
+    """Right-click → Unbind is an edit of the loaded patch —
     its desk rows on the param go (the knob and the step buttons), no file
     is written, the loadable patch's dot lights; a param only the meta controller maps (an
     invariant fader, a global-layer knob) is refused with the reason in
@@ -481,13 +481,12 @@ def test_a_hand_learn_reaches_the_shared_learn_object(rig):
     assert "learned view.inst_amp" in m.learner.last
 
 
-# ------------------------------------- plan 17 WP2: a learn listens to one source
+# ------------------------------------- a learn listens to one source
 
 def test_a_knob_bump_during_a_hand_learn_does_its_own_job(rig):
     """Armed for a hand ("Learn hand ▸ left"), the desk is not listening
     for the learn: K1 turns and Brightness moves, a pad toggles its param,
-    the learn is still armed and no row was added or replaced (plan 17 §1
-    row 2: it used to take the param, or kill the learn)."""
+    the learn is still armed and no row was added or replaced."""
     m, lrn, bright = rig.midi, rig.midi.learner, rig.reg["view.bright"]
     for x in m.bindings:
         x.pickup = False
@@ -497,8 +496,7 @@ def test_a_knob_bump_during_a_hand_learn_does_its_own_job(rig):
     low = bright.norm
     push(rig, cc(0x30, 110))
     assert bright.norm > low and bright.norm == pytest.approx(110 / 127, abs=0.02)
-    # a patch-layer pad (activator 1; the render toggles are invariant
-    # since plan 24 C1)
+    # a patch-layer pad (activator 1; the render toggles are invariant)
     plane = rig.reg["view.plane.ZW"].value
     pad = next(b for b in m.table.desk() if b.target == "view.plane.ZW" and b.kind == "note")
     push(rig, note(pad.number, channel=pad.channel or 0), note(pad.number, 0, channel=pad.channel or 0))
@@ -508,13 +506,13 @@ def test_a_knob_bump_during_a_hand_learn_does_its_own_job(rig):
     # the hand then completes it; the knob had no part in it
     lrn.learn_source("hand:left.roll")
     assert lrn.learning is None and m.table.owner("view.depth4").source == "hand:left.roll"
-    # no knob learned: depth's one desk row is the fresh layer's D1 (apc40.SCENE, plan 19 WP3)
+    # no knob learned: depth's one desk row is the fresh layer's D1 (apc40.SCENE)
     assert [b.source for b in m.table.desk() if b.target == "view.depth4" and b.is_midi] \
         == ["cc:*:16"]
 
 
 def test_an_invariant_control_works_through_a_desk_learn(rig):
-    """Fork 6: armed for the desk, an invariant control is not a candidate
+    """Armed for the desk, an invariant control is not a candidate
     — it does its one job. A fader moves its param, SHIFT latches (and
     latches back), TAP taps, and the learn is still armed, unrefused, the
     table untouched; a release is never a candidate; then a knob the
@@ -581,7 +579,7 @@ def test_close_returns_to_generic_mode(rig):
     assert not rig.midi.on
 
 
-# ------------------------------------------------------ plan 15 WP1: undo
+# ------------------------------------------------------ undo
 
 def test_an_unbind_is_one_undo_step(tmp_path):
     """Right-click → Unbind is one undo step: every patch-layer row it
@@ -621,7 +619,7 @@ def test_an_unbind_is_one_undo_step(tmp_path):
 # ---------------------------------------------------------------- the master dim
 
 def test_the_crossfader_dims_with_soft_pickup(rig):
-    """Plan 15 WP3, plan 44 D5d: MASTER is the master dim on both layers, CC 0
+    """MASTER is the master dim on both layers, CC 0
     black. A launch is at full with the fader wherever it was left: parked
     at the left it does nothing — it cannot black the rig out by being
     touched — until it is brought up to the value; then it follows."""
@@ -629,7 +627,7 @@ def test_the_crossfader_dims_with_soft_pickup(rig):
     b = next(x for x in rig.midi.bindings if x.source == f"cc:0:{apc40.CC_MASTER}")
     assert (b.target, b.op, b.layer, b.pickup, b.feedback) == ("output.dim", "abs", None,
                                                                True, None)
-    # invariant (D6): a loadable patch's row on the control would never act
+    # invariant: a loadable patch's row on the control would never act
     assert rig.midi.table.is_invariant(Binding(b.source, "view.bright", "abs", layer="preset"))
     assert dim.value == 1.0 and not b.caught
     for v in (0, 0, 3, 40, 90, 120):               # parked at black, then on the way up
@@ -657,18 +655,18 @@ def test_the_crossfader_dims_with_soft_pickup(rig):
     assert dim.value == pytest.approx(40 / 127, abs=PICKUP_TOL)
 
 
-# ------------------------------------------- plan 15 WP4: the hold, the bar, the blink
+# ------------------------------------------- the hold, the bar, the blink
 
 STOP = apc40.N_CLIPSTOP
-# the bar's buttons: clip stops 1–7 — track 8's is the desk's SAVE since
-# plan 24 C1 (decision 18), invariant, so no bar takes it
+# the bar's buttons: clip stops 1–7 — track 8's is the desk's SAVE,
+# invariant, so no bar takes it
 BAR = range(7)
 
 
 def bar_rig(rig):
     """The rig with a clock the test moves, the clip-stop row (less SAVE's
     button) learned as a
-    SAVE AS bar (the factory map's until 2026-10-09; the op is the table's
+    SAVE AS bar (the op is the table's
     for any buttons an owner puts on it), and a counter on the bar's
     target: `fires` grows by one each time `preset.save_new` fires (the
     save itself still runs)."""
@@ -703,7 +701,7 @@ def leds(rig, n, channel=0, since=0):
 
 def test_a_hold_fires_once_at_the_hold_time_while_held(rig):
     """A `hold` row fires when its button has been down HOLD_S — while it
-    is still down (fork 14) — and never again for that press."""
+    is still down — and never again for that press."""
     at, fires = bar_rig(rig)
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     rows = [b for b in rig.midi.bindings if b.op == "hold"]
@@ -785,7 +783,7 @@ def test_the_bar_is_one_control(rig):
     at(9.0)
     assert fires == [0.6, 3.75]
     # the same press on either layer (invariant), and SHIFT's state at the
-    # press is what counts (D12)
+    # press is what counts
     shift(rig)
     at(10.0, note(STOP, channel=5))
     at(10.7)
@@ -793,7 +791,7 @@ def test_the_bar_is_one_control(rig):
 
 
 def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
-    """The velocities sent, and for how long: dark at rest (fork 15); the
+    """The velocities sent, and for how long: dark at rest; the
     whole bar lit while any of it is held; on the save the bar and the new
     slot's pad blink for BLINK_S (2: the protocol's blink for a plain
     button and green blink on the grid); then the bar is dark and the pad
@@ -853,10 +851,10 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     at(10.65 + midi.BLINK_S)
     assert pr.bank[1] == "TRIP 3"
     assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 2, 0]] * len(BAR)
-    # (the cleared slot's pad went from amber to dark first: plan 19 WP2)
+    # (the cleared slot's pad went from amber to dark first)
     assert leds(rig, pad, 1, mark) == [0, apc40.GREEN_BLINK, apc40.GREEN]
     at(12.5, note(STOP, 0, channel=6))
-    # a full bank: only the bar blinks — no pad came on (plan 19 WP1: the
+    # a full bank: only the bar blinks — no pad came on (the
     # bank is twenty-four, so the far slots are filled first)
     for k in range(8, len(pr.bank)):
         if pr.bank[k] is None:
@@ -870,7 +868,7 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     assert [m.velocity for m in rig.out.sent[mark:]                 # TRIP 3's pad: amber
             if m.type == "note_on" and m.note == pad] == [apc40.YELLOW]
     # a fire that answers False did nothing (a save that failed): the bar
-    # goes dark at the hold time and nothing blinks (review of PR #87)
+    # goes dark at the hold time and nothing blinks
     at(30.0)
     mark = len(rig.out.sent)
     count = len(fires)
@@ -895,7 +893,7 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     assert [leds(rig, STOP, k, mark)[-1] for k in BAR] == [0] * len(BAR)
 
 
-# ------------------------------------------- plan 18 WP2: knob smoothing
+# ------------------------------------------- knob smoothing
 
 TICK = 1 / 64               # a frame, exact in binary: so are the sums below
 GLIDE = 0.125               # desk.slew for these tests: eight frames
@@ -1228,7 +1226,7 @@ def test_a_glide_on_a_hand_owned_param_moves_the_return_value(rig):
 
 
 def test_a_param_that_moves_on_its_own_is_written_at_once(rig):
-    """Review of PR #98: `rot.phase.*` is the integrator's angle and moves
+    """`rot.phase.*` is the integrator's angle and moves
     every frame while its plane turns, so a glide on it would look
     foreign-written the next poll, be dropped, and never arrive. The first
     message finds that out (one partial step); from then on the knob
@@ -1258,7 +1256,7 @@ def test_a_param_that_moves_on_its_own_is_written_at_once(rig):
 
 
 def test_a_load_from_a_pad_ends_a_glide_before_it_steps(rig):
-    """Review of PR #98: a knob message and a pad that loads a loadable patch in
+    """A knob message and a pad that loads a loadable patch in
     one poll. The load's desk replacement is followed before the glides
     step, so the glide the knob just aimed is gone and the value the load
     left stands — even though it equals what the glide last saw."""
@@ -1276,7 +1274,7 @@ def test_a_load_from_a_pad_ends_a_glide_before_it_steps(rig):
 
 
 def test_closing_the_adapter_lands_every_glide(rig):
-    """Review of PR #98: nothing is left between detents when the app
+    """Nothing is left between detents when the app
     quits inside the glide's time."""
     dim = rig.reg["output.dim"]
     push(rig, cc(apc40.CC_MASTER, 127))
@@ -1288,10 +1286,10 @@ def test_closing_the_adapter_lands_every_glide(rig):
     assert dim.norm == 0.5 and rig.midi._slews == {}
 
 
-# ------------------------------------------- plan 19 WP2: the bank's lights
+# ------------------------------------------- the bank's lights
 
 def test_a_bank_pad_is_green_loaded_amber_filled_and_dark_empty(rig, monkeypatch):
-    """Fork 5: the velocities sent for a bank pad's three states — GREEN
+    """The velocities sent for a bank pad's three states — GREEN
     (1) for the loaded patch's slot, YELLOW (5) for a slot that holds
     another loadable patch, 0 for an empty one — on rows 1, 4 and 5 alike, and
     the same under SHIFT. A load moves the green; a cleared slot goes
@@ -1344,14 +1342,14 @@ def test_a_bank_pad_is_green_loaded_amber_filled_and_dark_empty(rig, monkeypatch
     assert not [m for m in rig.out.sent if m.type == "note_on" and m.velocity == apc40.YELLOW
                 and m.note in (apc40.N_CLIP[1], apc40.N_CLIP[2])
                 and rig.reg["scene.select"].value != m.channel + 8 * (m.note == apc40.N_CLIP[2])]
-    # fork 5's way back: no "filled" velocity, and a filled pad is dark again
+    # the way back: no "filled" velocity, and a filled pad is dark again
     monkeypatch.setattr(apc40, "filled_of", lambda number, on: None)
     rig.midi.redraw()
     assert [led(k) for k in (2, 20, 0)] == [apc40.GREEN, 0, 0]
 
 
 def test_save_as_blinks_the_new_pad_on_row_four(rig):
-    """Plan 15 row 42, now on rows 4–5 too: with F1–F8 and slot 9 full the
+    """With F1–F8 and slot 9 full the
     hold on the clip-stop row lands in slot 10 — row 4, pad 2 — and that
     pad blinks green with the bar for BLINK_S (`blink_of`), then shows
     green; the pad of the loadable patch that was up falls to amber. The same
@@ -1397,10 +1395,10 @@ def test_save_as_blinks_the_new_pad_on_row_four(rig):
     assert leds(rig, n11, ch11, mark) == [apc40.GREEN_BLINK, apc40.GREEN]
 
 
-# --------------------------------- plan 19 WP3: the fresh layer's device knobs
+# --------------------------------- the fresh layer's device knobs
 
 def test_a_knob_on_the_pattern_steps_through_every_pattern(rig):
-    """The gate for D4 (plan 19 WP3): `view.pattern` is an enum on an
+    """`view.pattern` is an enum on an
     absolute knob. Turned from one end to the other and back, it lands on
     every pattern, one step at a time, in order — never a skip, never a
     jump back — each value where `set_norm` puts it, and the ring follows
@@ -1434,7 +1432,7 @@ def test_a_knob_on_the_pattern_steps_through_every_pattern(rig):
     assert rig.view.pattern == 0
 
 
-# ------------------------------- 2026-10-09: hold an empty bank pad to save into it
+# ------------------------------- hold an empty bank pad to save into it
 
 def test_holding_an_empty_bank_pad_saves_into_that_slot(rig):
     """The bank pads carry the save: `preset.select` declares `held`, so
@@ -1453,7 +1451,7 @@ def test_holding_an_empty_bank_pad_saves_into_that_slot(rig):
 
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     pad = apc40.N_CLIP[0]
-    # free but for SAVE on track 8's (plan 24 C1, decision 18)
+    # free but for SAVE on track 8's
     assert [b.target for b in rig.midi.bindings if b.kind == "note" and b.number == STOP] \
         == ["desk.save"]
     assert [b.target for b in rig.midi.table.route("note", 5, pad)] == ["preset.select"]
@@ -1500,7 +1498,7 @@ def test_two_empty_pads_held_together_each_save_into_their_own_slot(rig):
     assert pr.bank[6] is not None and pr.bank[7] is not None and pr.bank[6] != pr.bank[7]
 
 
-# ------------------------------------------- wave 2 T3: the fine button
+# ------------------------------------------- the fine button
 
 FINE = apc40.FINE[0]        # SEND B
 
@@ -1639,7 +1637,7 @@ def test_a_row_on_send_b_takes_it_and_a_reconnect_lets_go_of_fine(rig):
 
 
 def test_a_fine_detent_during_a_glide_starts_from_where_the_glide_was_going(rig):
-    """Review of #344, 1: a coarse detent starts a glide and the ring (so
+    """A coarse detent starts a glide and the ring (so
     the encoder) shows its target; a fine detent then lands the glide
     there and moves on from it — never back from the value in flight."""
     mix = rig.reg["view.pattern_mix"]
@@ -1655,7 +1653,7 @@ def test_a_fine_detent_during_a_glide_starts_from_where_the_glide_was_going(rig)
 
 
 def test_a_coarse_message_in_the_releases_batch_does_not_jump(rig):
-    """Review of #344, 2: the encoder has wandered a few steps past the
+    """The encoder has wandered a few steps past the
     param's ring during fine; a coarse message that arrives in the same
     batch as the release is read as pickup, and the ring re-bases after."""
     mix = rig.reg["view.pattern_mix"]
@@ -1673,7 +1671,7 @@ def test_a_coarse_message_in_the_releases_batch_does_not_jump(rig):
 
 
 def test_fine_reaches_both_ends_and_wraps_a_circular_param(rig):
-    """Review of #344, 3: at an end stop the encoder sends its end again
+    """At an end stop the encoder sends its end again
     for each detent; each one is a step that way."""
     mix = rig.reg["view.pattern_mix"]
     mix.set_norm(0.99)
@@ -1695,7 +1693,7 @@ def test_fine_reaches_both_ends_and_wraps_a_circular_param(rig):
 
 
 def test_an_off_row_on_send_b_gives_way_to_fine(rig):
-    """Review of #344, 7: a row on SEND B switched off on the ROUTING page
+    """A row on SEND B switched off on the ROUTING page
     does not take it; switched on, it does."""
     lines = rig.reg["view.lines"]
     b = Binding(f"note:0:{FINE}", "view.lines", "toggle", feedback="led", enabled=False)
@@ -1710,7 +1708,7 @@ def test_an_off_row_on_send_b_gives_way_to_fine(rig):
 
 
 def test_a_row_landing_on_send_b_while_held_still_lets_go_of_fine(rig):
-    """Review of #344, 5: the release goes to the press that held FINE."""
+    """The release goes to the press that held FINE."""
     push(rig, note(FINE))
     rig.midi.table.bindings.append(
         Binding(f"note:0:{FINE}", "view.lines", "toggle", feedback="led"))
@@ -1720,7 +1718,7 @@ def test_a_row_landing_on_send_b_while_held_still_lets_go_of_fine(rig):
 
 def test_a_load_while_fine_is_held_keeps_the_release_on_a_desk_that_does_not_re_base(
         rig, monkeypatch):
-    """Review of #344, round 2: a load under a held FINE must not forget
+    """A load under a held FINE must not forget
     the knobs fine moved where rings do not re-base — their release still
     lets go of the catch, so the first coarse turn picks up, not jumps."""
     monkeypatch.setattr(apc40, "RING_REBASES_KNOB", False)

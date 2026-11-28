@@ -174,7 +174,7 @@ def test_the_renderer_copies_a_wired_node_25_times_a_second(ctx):
 def test_a_copy_that_ends_past_a_beat_does_not_use_it_up(start):
     """A copy is made some ms after it is taken. Timed by its end, one taken
     just before a beat and done just after it used that beat up too: at 25 fps
-    every other frame skipped (Devin's review of #508)."""
+    every other frame skipped."""
     r = Run(25.0)
     r.t += start
     for _ in range(50):

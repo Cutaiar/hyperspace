@@ -1,4 +1,4 @@
-"""Plan 55: players and duties. A row acts only on the `Deck` its player is on,
+"""Players and duties. A row acts only on the `Deck` its player is on,
 and no patch can affect another by way of a controller.
 
 Two players, two fake pads, two decks with different patches: each moves only
@@ -132,7 +132,7 @@ def test_a_patch_names_a_player_and_bare_is_player_1():
 
 
 def test_the_list_publishes_what_it_did_under_the_default_players():
-    """Plan 27 B6 to the letter with nobody registered: first pad bare, the rest by role."""
+    """The role rule to the letter with nobody registered: first pad bare, the rest by role."""
     pads = [{"role": r, "kind": "gamepad", "enabled": True, "usb": False}
             for r in ("pad", "p2", "edge")]
     want = {"pad": "", "p2": "p2", "edge": "edge"}
@@ -175,7 +175,7 @@ def _swap_step(players, pads):
 
 
 def test_swapping_two_pads_collides_at_no_step():
-    """Finding 2: the first step used to refuse a working pad."""
+    """The first step does not refuse a working pad."""
     players, pads = Players(), [_pad("pad"), _pad("p2")]
     assert _swap_step(players, pads) == {"pad": "", "p2": "p2"}
     players.hold("pad", 2)
@@ -210,7 +210,7 @@ def _swapped(rig):
 
 
 def test_at_p2_is_player_2_even_with_a_primary_spelled_p2(rig):
-    """Finding 1: `axis@p2` followed player 1's pad, and the pad feeding it drove nothing."""
+    """`axis@p2` followed player 1's pad, and the pad feeding it drove nothing."""
     devs = _swapped(rig)
     prim = devs.primaries()
     assert "axis" not in prim
@@ -242,7 +242,7 @@ def test_a_pair_step_on_at_p2_fires_from_player_2_s_pad_only(rig):
 
 
 def test_the_readers_ask_who_publishes_a_player_s_name(rig):
-    """Finding 6: drawn on player 2's pad, and that pad's state said, whatever its role."""
+    """Drawn on player 2's pad, and that pad's state said, whatever its role."""
     devs = _swapped(rig)
     one = rig.one
     _routes(one, (TWO_STICK, PX))
@@ -257,13 +257,13 @@ def test_the_readers_ask_who_publishes_a_player_s_name(rig):
 
 
 def test_a_primary_called_p2_keeps_its_alias_while_nobody_else_is_p2():
-    """Plan 27 B6's rule stands where it collides with nothing."""
+    """The role rule stands where it collides with nothing."""
     d = devices.PadDevice("p2", io=Stick())
     assert devices.DeviceRegistry(devices=[d]).primaries()["axis"] == "p2"
 
 
 def test_a_list_change_that_changes_a_player_moves_the_pointer(rig):
-    """Finding 3: `p2` off air; disable `pad`, `p2` is the primary, so player 1's, on air."""
+    """`p2` off air; disable `pad`, `p2` is the primary, so player 1's, on air."""
     meta, one, two = rig.meta, rig.one, rig.two
     meta.move_player(2, Duty.OFF_AIR)
     assert meta.pointer("p2").deck is two
@@ -389,7 +389,7 @@ def test_registering_goes_to_that_player_s_deck_and_tells_the_list(rig):
 
 
 def test_an_off_air_player_stays_with_the_off_air_deck_when_on_air_moves(rig):
-    """What D5c does as the fader passes the middle."""
+    """What the meta controller does as the fader passes the middle."""
     meta, one, two = rig.meta, rig.one, rig.two
     meta.move_player(2, Duty.OFF_AIR)
     meta.on_air_pointer.deck = two
@@ -532,7 +532,7 @@ def test_a_view_hides_a_read_and_not_a_write():
 
 
 def test_a_view_pops_and_defaults_as_it_writes():
-    """Finding 5: the inherited ones read first, so a hidden scheme stayed, or was overwritten."""
+    """The inherited ones read first, so a hidden scheme stayed, or was overwritten."""
     shared = {"axis": 1}
     v = Layered({}, shared, frozenset({"axis"}))
     assert v.setdefault("axis", 9) == 1 and shared["axis"] == 1
@@ -633,7 +633,7 @@ def test_a_duty_change_mid_press_lets_go_on_the_deck_left(rig):
 
 
 def test_an_osc_press_ends_on_the_deck_it_was_made_on(rig):
-    """The press road D5a left: it knew its registry, and only asked when lost."""
+    """The press road knows its registry, and only asks when lost."""
     one, two = rig.one, rig.two
     source = "phone:hit"
     one.table.row_schemes = (*one.table.row_schemes, "phone")   # what its device tells the table
@@ -651,7 +651,7 @@ def test_an_osc_press_ends_on_the_deck_it_was_made_on(rig):
 
 
 def test_an_osc_device_closed_after_a_move_takes_its_lanes_with_it(rig):
-    """Finding 5, where it was live: `close` pops through a router's views."""
+    """Where it was live: `close` pops through a router's views."""
     one, two = rig.one, rig.two
     one.sources.feed("phone", [0.5])
     rig.devs.holders()["phone"] = rig.meta.pointer("p2")
@@ -764,7 +764,7 @@ def test_mapping_a_controller_on_the_other_deck_moves_it_there(rig):
 
 
 def test_the_same_axis_learned_again_on_the_other_deck_moves_it_too(rig):
-    """Finding 7: it said "learned", and the pad stayed away with the row dead."""
+    """It said "learned", and the pad stayed away with the row dead."""
     meta, two = rig.meta, rig.two
     two.learn.mapped = lambda b: rig.devs.mapped(two, b)
     _routes(two, (TWO_STICK, PX))
@@ -922,7 +922,7 @@ def test_the_pad_device_carries_the_totem_to_the_player_s_deck(shared):
 
 
 def test_the_pad_with_the_camera_job_is_the_first_on_its_deck(rig, monkeypatch):
-    """Finding 8: with everyone on air the first pad's alone, as ever; a player off
+    """With everyone on air the first pad's alone, as ever; a player off
     air has a stick that orbits; the only pad given to player 2 keeps its job."""
     meta, one, two = rig.meta, rig.one, rig.two
     steered = []
@@ -998,7 +998,7 @@ def test_the_poi_leaves_a_deck_at_home_and_writes_only_the_next(shared):
 
 
 def test_a_poi_whose_sensors_dropped_still_leaves_its_deck_at_home(shared):
-    """Finding 4: `driving` was None by then, so the old deck stayed displaced and
+    """`driving` is None by then, so the old deck stayed displaced and
     its homes went to the new one."""
     one, two, swing = shared.one, shared.two, shared.swing
     one.reg[PX].set(0.25)
@@ -1068,7 +1068,7 @@ def _run_sticks(r, *, players):
         router.modulate(None, DT, k * DT)
         r.deck.reg.apply()
         # (`preset.select` reads the deck off air's slot once there are two decks: a pad's
-        # light, row 700, nothing of this deck's)
+        # light, nothing of this deck's)
         out.append({p.id: repr(p.value) for p in r.deck.reg
                     if p.group not in ("ui", "panel") and p.id != "preset.select"})
     return out
@@ -1083,7 +1083,7 @@ def test_every_player_on_air_is_to_the_bit_what_no_players_was(tmp_path):
 
 
 def test_every_corpus_loadable_lands_as_before_with_players_and_a_list(tmp_path):
-    """D5a's walk, its proof extended: a registry whose controllers are all player
+    """A walk with its proof extended: a registry whose controllers are all player
     1's, on air, on deck 1."""
     home = tmp_path / "home"
     plain = _walk(boot(home))
@@ -1240,7 +1240,7 @@ def test_a_rename_moves_the_holder_the_seat_and_the_pointer(tmp_path, monkeypatc
     assert json.loads((tmp_path / FILE).read_text())["controllers"] == {"foo-2": 2}
 
 
-# ---- a move on the meta stack (row 740, amended) ----
+# ---- a move on the meta stack ----
 
 
 def _here_meta(rig):
@@ -1293,7 +1293,7 @@ def test_a_duty_move_is_one_step_and_the_file_follows(rig, tmp_path):
 
 
 def test_moving_nobody_makes_no_step(rig):
-    """Review of #417: the default holder too, whose file would otherwise change."""
+    """The default holder too, whose file would otherwise change."""
     _here_meta(rig)
     steps = len(rig.meta.undo.stack)
     rig.meta.move_player(2, Duty.ON_AIR)
@@ -1441,7 +1441,7 @@ def test_a_controller_given_while_it_was_gone_goes_back_as_it_came(rig):
 
 
 def test_the_question_belongs_to_each_step_given_there_then_given_gone(rig):
-    """Review of #417: given while there, then again while lost. The second goes back as
+    """Given while there, then again while lost. The second goes back as
     it came; the first was there then and isn't now, so it refuses."""
     _here_meta(rig)
     meta = rig.meta
@@ -1537,7 +1537,7 @@ def _reopening_rig(rig, monkeypatch, clock):
 
 
 def test_a_controller_just_reopened_is_no_unplugged_one(rig, monkeypatch):
-    """Review of #417: giving a pad reopens it, and it reads as lost until polled. ⌘Z at
+    """Giving a pad reopens it, and it reads as lost until polled. ⌘Z at
     once does what the board promised, and redo after an undo's relist too."""
     _here_meta(rig)
     clock = [0.0]
@@ -1602,7 +1602,7 @@ def test_the_registry_says_where_a_controller_is():
         THERE, UNPLUGGED, THERE, UNLISTED]
 
 
-# ---- a section takes back only its own (row 800, the review of #417) ----
+# ---- a section takes back only its own ----
 
 
 def _tune(rig):
@@ -1672,7 +1672,7 @@ def test_one_stack_one_order_each_place_taking_its_own_in_turn(rig):
     assert meta.players.get(2).duty == Duty.OFF_AIR
 
 
-# ---- a moved controller goes back to its side (the review of #417) ----
+# ---- a moved controller goes back to its side ----
 
 
 def test_a_moved_controller_mapped_off_air_never_lands_on_the_room_s_deck(rig):
@@ -1741,7 +1741,7 @@ def test_main_tells_the_meta_controller_where_a_controller_is():
 
 
 def test_a_deck_s_cmd_z_does_not_reach_a_move(rig):
-    """Pressing it never crosses over (plan 44 D5b)."""
+    """Pressing it never crosses over."""
     meta, one = rig.meta, rig.one
     undo.where(lambda: False)
     rig.tick = lambda n=30: _settle(rig, n)

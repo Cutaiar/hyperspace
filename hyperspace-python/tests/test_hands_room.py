@@ -1,4 +1,4 @@
-"""The room lanes (plan 51, hands/room.py): the palm's orientation in the
+"""The room lanes (hands/room.py): the palm's orientation in the
 room's frame, whatever the sensor's mount and whatever the camera does.
 
 The proof is tape-driven: hand poses written as a real tape file, played
@@ -582,7 +582,7 @@ def test_a_hot_reloaded_handsio_makes_its_room_state(tmp_path):
 
 
 def test_a_route_turns_the_one_camera_one_for_one_across_the_seam(tmp_path):
-    """What O2 builds on: a position row onto the wrapping `camera.yaw`, depth
+    """What the orbit builds on: a position row onto the wrapping `camera.yaw`, depth
     1 — the palm's angle is the camera's, and the seam lands where it left."""
     app = make_app(tmp_path)
     app.table.add(Binding("hand:right.room.yaw", "camera.yaw", "position"))
@@ -649,7 +649,7 @@ def test_a_dropped_wire_lands_one_for_one_with_no_feel(tmp_path):
         e = graphview.Edit(table, reg, rig.router, view)
         assert e.refusal("out:hand:right.room.yaw", "mod:camera.yaw") is None
         row = e.connect("out:hand:right.room.yaw", "mod:camera.yaw")
-        # O2: a wrapping target lands the orbit, clutched by the same hand's fist;
+        # a wrapping target lands the orbit, clutched by the same hand's fist;
         # this test goes on to prove the position row a chip click makes of it
         assert (row.op, row.value, row.motion, row.when) == ("turn", 1.0, None, "hand:right.grab")
         row.op, row.when = "position", None

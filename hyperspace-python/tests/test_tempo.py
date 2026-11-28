@@ -50,7 +50,7 @@ def test_bpm_follows_the_last_eight_taps():
 
 
 def test_a_tap_on_a_never_triggered_clock_leaves_the_downbeat_alone():
-    """Decision register row 1 (a): a tap never moves the downbeat, before
+    """A tap never moves the downbeat, before
     the first trigger as after it. Only the tempo changes, and beat(t) stays
     continuous through the change."""
     c = Clock(now=lambda: 0.0)
@@ -177,7 +177,7 @@ def test_tick_is_the_default_time():
 # ---------------------------------------------------------------- params
 
 def test_a_performer_on_tap_tempo_is_dormant_but_one_on_the_lfo_trigger_fires():
-    """Decision register row 2 (c): tempo.tap is not modulatable — a band on
+    """tempo.tap is not modulatable — a band on
     it would tap on every transient — while lfo.trigger stays ownable and
     fires on the rising edge."""
     from hyperspace.lfo import LFOs
@@ -208,7 +208,7 @@ def test_register_declares_the_tempo_group():
     register(reg, c)                            # idempotent, like hands.register
     bpm, tap, nudge = reg["tempo.bpm"], reg["tempo.tap"], reg["tempo.nudge"]
     assert bpm.kind is Kind.CONTINUOUS and bpm.persist and bpm.lo == 20 and bpm.hi == 300
-    assert tap.kind is Kind.TRIGGER and not tap.modulatable   # decision register row 2 (c)
+    assert tap.kind is Kind.TRIGGER and not tap.modulatable
     assert nudge.kind is Kind.CONTINUOUS and not nudge.persist and (nudge.lo, nudge.hi) == (-0.5, 0.5)
     assert {p.group for p in reg.group("tempo")} == {"tempo"}
     bpm.set_value(100.0)

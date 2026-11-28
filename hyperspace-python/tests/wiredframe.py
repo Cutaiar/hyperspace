@@ -1,4 +1,4 @@
-"""Plan 35 T4: the retired switch states as wiring, for the tests.
+"""The retired switch states as wiring, for the tests.
 
 The pipelines are gone: a frame is its wires (`graph.build_graph`), and
 what an output's three switches used to give it — the scene, the hands
@@ -35,9 +35,9 @@ def section(src: Any = None, **kw) -> dict:
         src = G.Wiring()
     if isinstance(src, G.Wiring):
         if src.wired:
-            # (plan 36 T3: `wiring_of` and a renderer hand a wired one —
-            # its section is its wires, as the canvas reads it)
-            # (plan 89: an effect's slots on its entry)
+            # `wiring_of` and a renderer hand a wired one: its section is
+            # its wires, as the canvas reads it; an effect's slots are on
+            # its entry
             most: dict[str, int] = {}
             for x in src.slots:
                 most[x.effect] = max(most.get(x.effect, 1), x.k)
@@ -48,16 +48,16 @@ def section(src: Any = None, **kw) -> dict:
                               for e, k in sorted(most.items())),
                 others=tuple(("composite", c) for c in src.composites),
                 wires=tuple(src.wires), wired=True).to_json()
-        # (plan 36 T3: D1's placements are written as wires in `shown`,
-        # after the states — the builder placed on each output's state)
+        # placements are written as wires in `shown`, after the states;
+        # the builder placed on each output's state
         return M.wired_of(src, placements=False)
     if isinstance(src, G.GraphSpec):
         src = src.to_json()
     if src.get(G.FRAME_KEY) == G.WIRED_FRAME:
         return src
     if not has_frame_run(G.read_graph(src)):
-        # (a section from before plan 33's run: the load's migration, which
-        # writes each wire D1 would write short as the entry it stood for)
+        # a section from before the frame run: the load's migration, which
+        # writes each wire that was written short as the entry it stood for
         values = {"backdrop.history": True} if kw.get("backdrop_history") else {}
         doc, _ = M.migrate({"values": values, "graph": src}, {})
         return doc["graph"]
@@ -65,8 +65,8 @@ def section(src: Any = None, **kw) -> dict:
 
 
 def old_style(sec: Any) -> bool:
-    """Whether a wired section is in the words before plan 36 T4: its
-    look-back recording `lookback.capture`, or plan 34's `echo.<k>` nodes —
+    """Whether a wired section is in the old words: its
+    look-back recording `lookback.capture`, or `echo.<k>` nodes —
     what the migration's last step rewrites (`graphmigrate.split_lookback`)."""
     if not isinstance(sec, dict):
         return False
@@ -78,9 +78,9 @@ def old_style(sec: Any) -> bool:
 
 def shown(src: Any = None, *shows: Shows, look: str = "off", **kw) -> dict:
     """`section(src)` with output k's overrides for `shows[k - 1]` — and
-    (plan 36 T4) an old-style look-back split last, as `look` says the old
-    values had it (`graphmigrate.look_of`: "off" draws none), and (plan 90
-    H2) made public parts (`graphmigrate.retire_lookbacks`)."""
+    an old-style look-back split last, as `look` says the old values had it
+    (`graphmigrate.look_of`: "off" draws none), and made public parts
+    (`graphmigrate.retire_lookbacks`)."""
     sec = section(src, **kw)
     for k, sh in enumerate(shows):
         if sh != Shows():
@@ -88,8 +88,8 @@ def shown(src: Any = None, *shows: Shows, look: str = "off", **kw) -> dict:
     out = M.placed_wires(sec)
     if not old_style(out):
         return out
-    # (plan 90 H2: and the look-back it drew made public parts, as
-    # `graphmigrate.wired_of` makes it — a live read refuses a look-back)
+    # the look-back it drew is made public parts, as `graphmigrate.wired_of`
+    # makes it: a live read refuses a look-back
     out = M.split_lookback(out, look)
     nodes, wires, _, _, keys, notes = M.retire_lookbacks(
         list(out.get("nodes") or []), list(out.get("wires") or []), {},
@@ -134,11 +134,11 @@ def wire_switches(r, *states) -> list[Switches]:
     `Switches`: their dim and mirror, every mute on."""
     base = getattr(r, "_wiredframe_base", None)
     if base is None or getattr(r.wiring, "wired", False) is False:
-        # (plan 36 T3: a renderer's own wiring is the empty frame; the
-        # tests' rigs mean today's frame by it, said here as `Wiring()`)
+        # a renderer's own wiring is the empty frame; the tests' rigs mean
+        # the current frame by it, said here as `Wiring()`
         base = r._wiredframe_base = r.wiring if r.wiring is not G.EMPTY else G.Wiring()
     shows = [s.shows if isinstance(s, Thru) else Shows(s.scene, s.hands) for s in states]
-    # (plan 36 T4: old words' look-back as the renderer's `dream.on` had it)
+    # the old words' look-back as the renderer's `dream.on` had it
     st = getattr(getattr(r, "lookback", None), "state", None)
     look = (M.look_of({"dream.on": bool(st.on), "dream.mix": st.mix}) if st is not None
             else "off")
@@ -158,12 +158,11 @@ def graph(shows, src: Any = None, effects: tuple[str, ...] = (), clouds: tuple[s
                          tuple(effects))
 
 
-# ---- the wired frame's round trip, for the tests (row 394) ----
+# ---- the wired frame's round trip, for the tests ----
 #
-# Until row 394 a save below `/6` wrote a wired frame back in plan 33's words
-# by its round trip (`graphmigrate.unwired`); no save does now, so the
-# production code is gone. Tests written in plan 33's words still read a
-# landed frame back that way to compare it, so the round trip lives here.
+# Tests written in the pre-wired-frame words read a landed frame back in
+# those words to compare it. No save writes them, so the round trip
+# lives here and not in production code.
 
 
 def has_frame_run(spec) -> bool:
@@ -186,15 +185,15 @@ def _old_dst(dst: Any) -> Any:
 
 def _canonical(section: dict, files: set[str] | None) -> dict | None:
     try:
-        # (plan 36 T4: a frame before the split, read as the migration reads one)
+        # a frame before the split, read as the migration reads one
         return G.read_graph(section, effects=files, placements=True).to_json()
     except G.GraphError:
         return None
 
 
 def _unsplit(section: dict) -> dict:
-    """Plan 36 T4's look-back split undone, for the round trip below: a
-    frame in the words before T4 again (`graphmigrate.split_lookback`
+    """The look-back split undone, for the round trip below: a
+    frame in the old words again (`graphmigrate.split_lookback`
     backwards) — the "add" composite laying the trail (or a dream of it) on
     `X` is `X → lookback.image` and the look-back read in its place, its
     record `lookback.capture`; a frame with no look-back at all (the old
@@ -256,7 +255,7 @@ def _unsplit(section: dict) -> dict:
 
 
 def unwired(section: Any, specs: M.Specs | None = None) -> tuple[dict, bool] | None:
-    """A wired frame's round trip (plan 35 M, row 384): (the section in the
+    """A wired frame's round trip: (the section in the
     old ids that `migrate` writes as exactly this frame, the
     `backdrop.history` its capture wire says), or None when there is none —
     the frame was edited, or it says what no section before it can (a slot,
@@ -275,7 +274,7 @@ def unwired(section: Any, specs: M.Specs | None = None) -> tuple[dict, bool] | N
     if not isinstance(section, dict) or section.get(G.FRAME_KEY) != G.WIRED_FRAME:
         return None
     files = M._files(specs)
-    section = _unsplit(section)              # (plan 36 T4: before the split)
+    section = _unsplit(section)              # before the split
     want = _canonical(section, files)
     if want is None:
         return None
@@ -310,7 +309,7 @@ def unwired(section: Any, specs: M.Specs | None = None) -> tuple[dict, bool] | N
         node = b.rpartition(".")[0] if isinstance(b, str) else None
         if (a, b) in run_pairs or node == G.ALL_OUTPUTS or a == G.GROUND:
             continue
-        # (plan 36 T2: the hidden edges' wires, which `drawn_edges` writes)
+        # the hidden edges' wires, which `drawn_edges` writes
         if (a, b) == ("pattern", "shape.faces") or a in G.PINS or (
                 isinstance(b, str) and b.endswith(".hands") and M._kind(node) in ("layer",
                                                                                "guide")):

@@ -1,9 +1,9 @@
-"""The type ratchet (tools/type_ratchet.py, row 788) and the import walls' glob (tests/walls.py).
+"""The type ratchet (tools/type_ratchet.py) and the import walls' glob (tests/walls.py).
 
 A new pyright complaint fails, an old one doesn't, and no rule's total rises unless someone
 says `--raise-baseline`. The one test that runs pyright runs it for real. In the fast tier on a Mac; on
 CI in tests.yml's `lint and types` job, beside the fast tier's shards rather than on one of their workers,
-where it was the longest test (row 870; ENGINEERING §16, CI).
+where it would be the longest test (ENGINEERING §16, CI).
 """
 
 from __future__ import annotations
@@ -354,7 +354,7 @@ def test_no_new_complaint_in_the_app():
     assert report.version == pin, "the pin and the baseline disagree: see the tool's docstring"
     grown, gone = ratchet.compare(ratchet.limits(baseline, sync), report.counts())
     assert not grown, "new type complaints:\n" + "\n".join(ratchet.describe_new(grown, report))
-    if gone:                            # an old rule's fix isn't a failure: see row 788
+    if gone:                            # an old rule's fix isn't a failure
         warnings.warn(f"{sync} sync, under the baseline: {gone}", stacklevel=1)
 
 

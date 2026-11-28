@@ -1,10 +1,10 @@
-"""Plan 36 T3 (W3, D5): nothing loads that isn't in the file — schema `/7`.
+"""Nothing loads that isn't in the file — schema `/7`.
 
 - A `/7` is read as it is: nothing is added, a section-less (or empty) one
   is black and the strip says so, a refused wire is dropped and said.
 - An effect exists only where the section names it (`FxState.hold`):
   absent from the build, the FX page and the registry otherwise.
-- D1's `into` / `after` are the wires they stood for (`placed_wires`); a
+- An old frame's `into` / `after` are the wires they stood for (`placed_wires`); a
   `/7` frame reads no placement key.
 - The hands entries and `laid` are always written.
 - `/4`–`/6` are read only through the one-way migration to `/7`
@@ -30,19 +30,19 @@ from hyperspace.outputs import Switches, View
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
-# the corpus loadable patches' sources (plan 36 T3: the corpus files are their `/7`)
+# the corpus loadable patches' sources (the corpus files are their `/7`)
 SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 SIZE = (240, 150)
 SEVEN = M.WIRED_SCHEMA
-SAVED = M.SAVE_SCHEMA          # plan 43 C2: what a save writes (a /7 read, a /9 written)
+SAVED = M.SAVE_SCHEMA          # what a save writes (a /7 read, a /9 written)
 # today's frame: what a section-less old loadable patch migrates to (`wired_of(Wiring())`;
-# plan 36 T4: its look-back off in the old values — none drawn)
+# its look-back off in the old values — none drawn)
 TODAY = [("shape", "scene.geometry"), ("scene", "output.all.image"),
          ("hands.layer", "output.all.hands"), ("hands.layer", "output.all.guide"),
          ("pattern", "shape.faces"), ("hands", "hands.layer.hands")]
 
 def unrescaled(notes: list[str]) -> list[str]:
-    """A load's notes less plan 86's: a fixture from before the effect tapers has no
+    """A load's notes less the retaper note: a fixture from before the effect tapers has no
     units marker, and its rescaled depths are said (`loadable.retaper_note`)."""
     head = loadable.RETAPER_NOTE.partition("{count}")[0]
     return [n for n in notes if not n.startswith(head)]
@@ -57,11 +57,10 @@ def _pairs(section: dict) -> list[tuple[str, str]]:
     return [(w["from"], w["to"]) for w in section.get("wires") or []]
 
 
-# the params whose shipped default moved with the calmer defaults of
-# 2026-10-31 (DECISIONS, "Shipped effect defaults are calm"): every
-# effect's speed, its amount-like faders and an LFO's depth. The corpus
-# files were migrated before that, so where a source names none of these
-# the corpus holds the old default and a migration today lands the new.
+# the params whose shipped default is the calm one (DECISIONS, "Shipped
+# effect defaults are calm"): every effect's speed, its amount-like faders
+# and an LFO's depth. Where a corpus source names none of these, the corpus
+# holds the old default and a migration today lands the new.
 CALMED = {"fx.acid.bend", "fx.acid.twist", "fx.acid.breathe", "fx.deconverge.amount",
           "fx.deconverge.radial", "fx.displace.amount", "fx.doublevision.amount",
           "fx.fractals.amount", "fx.glimmer.amount", "fx.plasma.level",
@@ -107,7 +106,7 @@ def _build(app, n: int = 2) -> G.Graph:
 def test_a_section_less_seven_loads_black_and_says_so(tmp_path, graph):
     """No section, an empty one or the bare marker: the empty frame — the
     outputs and nothing else, no effect held — and the strip's note says
-    so. Nothing is filled in (the factory frame was, before W3)."""
+    so. Nothing is filled in."""
     doc = {"schema": SEVEN, "values": {"view.bright": 1.0},
            **({"graph": graph} if graph is not None else {})}
     app = _app_with(tmp_path, "bare", doc)
@@ -174,7 +173,7 @@ def test_a_refused_wire_in_a_seven_is_dropped_with_a_note_not_defaulted(tmp_path
 def test_a_seven_is_never_migrated_or_filled_in(tmp_path):
     """A `/7` frame with no pattern wire, no cover and no hands wire loads
     with none of them (the migration's hidden edges are an old file's);
-    no note says it was migrated. Plan 90 H2: its look-back, retired at any
+    no note says it was migrated. Its look-back, retired at any
     version, is public parts — Fade → Resize → Delay ═► Trail where its
     picture went, no Cut (no occluder or cover wired), said in the look-back's
     own note; nothing else is added."""
@@ -223,7 +222,7 @@ def test_the_migration_drops_the_values_of_effects_not_in_the_section():
     out, _ = M.seven(doc, {"acid": (10, 1.0), "palette": (20, 1.0)})
     assert out["schema"] == SEVEN
     assert out["values"] == {"fx.on": True, "fx.acid.on": True, "fx.acid.bend": 0.2}
-    assert ("scene", "acid.image") in _pairs(out["graph"])     # (plan 36 T4: no look-back)
+    assert ("scene", "acid.image") in _pairs(out["graph"])     # (no look-back)
 
 
 # ---------------------------------------------------------------- old files, one way
@@ -242,14 +241,14 @@ def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
     doc = json.loads((FIXTURES / "acid-scene.json").read_text())
     app = _app_with(tmp_path, "acid-scene", doc)
     said = M.MIGRATED_NOTE.format(old="hyperspace.preset/2", new=SAVED)
-    # (not a problem; plan 86: an old file's depths said; plan 90 H2: its look-back
-    # is public parts now, said; H3: and its dream, said)
+    # (not a problem; an old file's depths said; its look-back
+    # is public parts now, said; and its dream, said)
     assert app.loaded_patch.migrated == said
     rest = unrescaled(app.loaded_patch.notes)
     assert len(rest) == 2 and rest[0].startswith("lookback is public parts now:")
     assert rest[1].startswith("dream is public parts now:")
     # (the strip says a load's first note before the migration line, `_warn`: this
-    # fixture is from before the effect tapers, so its rescaled depths, plan 86;
+    # fixture is from before the effect tapers, so its rescaled depths;
     # the look-back's and the dream's notes the two more)
     assert app.lib.warning == (f"{app.lib.warning.split()[0]} acid-scene: "
                                f"{app.loaded_patch.notes[0]} (+2 more)")
@@ -258,13 +257,12 @@ def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
 
 @pytest.mark.parametrize("slug, want", [
     # into output 2: on its picture, All outputs' by the bus cable it rode
-    # (plan 67: Hue cycle as `seven` places it, before its retirement — the
-    # ladder's last step — makes it Hue turn)
+    # (Hue cycle as `seven` places it; the ladder's last step makes it
+    # Hue turn)
     ("palette-glass", [("huecycle", "palette.image"), ("palette", "output.2.image")]),
-    # after the scene: every picture wire from the scene reads acid.2 (plan
-    # 36 T4: the look-back on — it records acid.2, and the trail and the
-    # dream are added onto it; plan 90 H2: the ladder's last step makes it
-    # public parts, below)
+    # after the scene: every picture wire from the scene reads acid.2 (the
+    # look-back on — it records acid.2, and the trail and the dream are
+    # added onto it; the ladder's last step makes it public parts, below)
     ("acid-scene", [("scene", "acid.2.image"), ("acid.2", "composite.under"),
                     ("acid.2", "lookback.image")]),
     # after the hands' layer: its picture into All outputs, not the guide
@@ -280,7 +278,7 @@ def test_placements_become_the_wires_they_stood_for(slug, want):
     assert not any(k in e for e in section["nodes"] for k in G.PLACE_KEYS)
     for pair in want:
         assert pair in _pairs(section), (slug, pair, _pairs(section))
-    # plan 90 H2: a look-back is no live node — the ladder's last step makes
+    # a look-back is no live node — the ladder's last step makes
     # it public parts, on the same picture, and that graph reads clean
     done, _ = M.lookbacks(out)
     assert "lookback" not in json.dumps(done["graph"])
@@ -345,8 +343,8 @@ def test_every_corpus_loadable_is_its_sources_seven_and_round_trips(tmp_path):
     tools/migrate_library.py makes of its source (`--to`: load the old file,
     save) — so the migration can be re-run from the sources and lands the
     same files, up to the defaults a source does not name that moved since
-    (`_as_before_calming`). Since plan 90 (H2) the files are kept as saved
-    before it — old look-back files the tests open — so a resave is the file
+    (`_as_before_calming`). The files are kept as saved
+    with their old look-backs, which the tests open, so a resave is the file
     with the look-back retired (`graphmigrate.lookbacks`): the retired
     `dream.*` knobs gone, and party-tracer's and party-wake's look-backs
     their parts with the notes that say so; that resave is a fixed point."""
@@ -361,7 +359,7 @@ def test_every_corpus_loadable_is_its_sources_seven_and_round_trips(tmp_path):
         assert [n for n in notes if not M.is_parts_note(n)] == [], path.name
         assert bool(notes) == held, path.name
         if not held:
-            # (plan 90 H3: and the dream's old ids gone, `graphmigrate.dreams`)
+            # (and the dream's old ids gone, `graphmigrate.dreams`)
             assert json.loads(again) == M.dreams(M.lookbacks(json.loads(data))[0])[0], path.name
         assert b"dream.echo_mix" not in again and b'"lookback' not in again, path.name
         (tmp_path / f"g{k}.json").write_bytes(again)

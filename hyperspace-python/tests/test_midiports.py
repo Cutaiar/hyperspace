@@ -1,4 +1,4 @@
-"""Looking for MIDI ports (audit R15, register row 791): CoreMIDI's refusal stays
+"""Looking for MIDI ports: CoreMIDI's refusal stays
 a sentence and never reaches RtMidi, whose answer to it is an abort."""
 
 from __future__ import annotations
@@ -214,7 +214,7 @@ def test_only_midiports_lists_ports_and_only_two_modules_open_one():
 def test_a_real_refusal_is_a_sentence_and_the_process_lives():
     """The real thing, in a process of its own: a sandbox keeps it from the MIDI server, so
     CoreMIDI truly refuses and no port of this machine is reached. Bare RtMidi dies here
-    (exit 134, by hand on 2026-11-06); a change to either side shows up as this failing."""
+    (exit 134); a change to either side shows up as this failing."""
     deny = '(version 1)(allow default)(deny mach-lookup (global-name-regex #"midi"))'
     code = "from hyperspace.midiports import port_names as p; s = p(); print(s.why); print(s.inputs)"
     got = subprocess.run(["sandbox-exec", "-p", deny, sys.executable, "-c", code], text=True,

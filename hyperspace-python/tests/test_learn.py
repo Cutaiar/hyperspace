@@ -1,5 +1,5 @@
 """learn.py — the armed param and the held question, shared by every
-adapter (plan 11 WP5, audit B3 and B4). A hand completes a learn with no
+adapter. A hand completes a learn with no
 MIDI adapter anywhere; a `band.sel.*` alias learns onto the band it
 stands for; the referee's refusal is held for the prompt."""
 
@@ -32,8 +32,8 @@ def rig(tmp_path):
 
 def test_learn_source_writes_a_position_route_without_any_midi(rig, tmp_path):
     """A hand completing a learn: a `position` row at depth 1 through the
-    table's referee, into the table and no file (plan 13 §3.3: the loaded
-    loadable patch's) — no MidiIO exists here (B3). On an owned target it is held
+    table's referee, into the table and no file (the loaded
+    loadable patch's) — no MidiIO exists here. On an owned target it is held
     in `pending`; a new learn forgets it."""
     lrn, t = rig.learn, rig.table
     lrn.arm("view.inst_amp")
@@ -58,7 +58,7 @@ def test_learn_source_writes_a_position_route_without_any_midi(rig, tmp_path):
 
 def test_a_learned_axis_drives_one_param(rig):
     """Learning an axis onto another param moves it — its other performer
-    rows go, push or position (plan 18 fork 7), and the status line names
+    rows go, push or position, and the status line names
     the params they were on; another axis's rows stay. A row of this axis
     that is switched off goes too (as a switched-off position row always
     did), so a learn never leaves the route in the table twice. Learning
@@ -112,9 +112,9 @@ def test_the_prompts_answer_replaces_or_keeps(rig):
 
 
 def test_a_learn_on_a_band_sel_alias_is_refused_as_the_bands_are(rig):
-    """B4: `band.sel.*` is a non-modulatable alias the router skips, and the
-    route would go on the band it stands for. A band is the meta controller's
-    (register row 743), so the learn is refused in words, whichever is selected."""
+    """`band.sel.*` is a non-modulatable alias the router skips, and the
+    route would go on the band it stands for. A band is the meta controller's,
+    so the learn is refused in words, whichever is selected."""
     lrn, t, reg = rig.learn, rig.table, rig.reg
     assert reg["band.sel.thr"].alias and not reg["band.sel.thr"].modulatable
     rig.control.selb = 2
@@ -127,11 +127,11 @@ def test_a_learn_on_a_band_sel_alias_is_refused_as_the_bands_are(rig):
     assert reg.real(reg["band.sel.thr"]) is reg["band.2.thr"]
     assert Learn(reg, t).target_for("band.sel.thr").id == "band.2.thr"
     reg.real_of = None
-    reg.meta_reg.real_of = None           # (plan 44 D3: the meta controller declares the rule)
+    reg.meta_reg.real_of = None           # the meta controller declares the rule
     assert Learn(reg, t).target_for("band.sel.thr").id == "band.sel.thr"
 
 
-# ------------------------------------------- plan 18 WP3: a learn's default
+# ------------------------------------------- a learn's default
 
 def played(rig, u: float, rest: float, lane: int = 3) -> None:
     """One frame of the modulation pass with the hand lane `lane` reading
@@ -146,8 +146,8 @@ def played(rig, u: float, rest: float, lane: int = 3) -> None:
 
 
 def learned(rig, pid: str, source: str = "hand:3", **kw) -> Binding:
-    """A completed learn's row. It lands with the default feel (the owner,
-    2026-10-31: every new route is a spring), checked here and then taken
+    """A completed learn's row. It lands with the default feel (every new
+    route is a spring), checked here and then taken
     off: the tests below read the row's arithmetic frame by frame, and the
     spring's travel is test_motion's."""
     rig.learn.arm(pid)
@@ -160,7 +160,7 @@ def learned(rig, pid: str, source: str = "hand:3", **kw) -> Binding:
 
 
 def test_every_learned_row_is_the_smooth_spring_but_an_envelopes(rig):
-    """The owner, 2026-10-31, after the show of the 30th: every new route
+    """Every new route
     is a spring — the named `smooth`, no bounce — whatever its op and
     target: a push (centred or not), the position fader on a one-sided
     param, the fader on a toggle, an enum, a whole-number param. Only an
@@ -295,15 +295,13 @@ def test_a_discrete_target_keeps_the_position_row(rig):
 
 
 def test_a_band_lane_and_an_lfo_land_as_calm_pushes_about_the_base(rig):
-    """The owner, after the show of 2026-10-30: band routes far too hot.
-    A lane reads `band / CEIL` (≈ 0.385 nominal), so the `position` row it
-    used to land on a one-sided param parked it at ~38 % of its throw and
-    threw the base away; an LFO (0 … 1) as the fader swept the whole
-    throw. Now a lane is a push about the base at `LANE_DEPTH` (0.12) and
+    """A lane reads `band / CEIL` (≈ 0.385 nominal), so a `position` row on a
+    one-sided param would park it at ~38 % of its throw and throw the base
+    away; an LFO (0 … 1) as the fader would sweep the whole throw. So a
+    lane is a push about the base at `LANE_DEPTH` (0.12) and
     an LFO a push at `PUSH_DEPTH` (0.25), on any continuous target —
     centred or not — with no rest of their own; a discrete target keeps
-    the fader, as a push never crosses its hysteresis. The two depths in
-    the owner's numbers: a nominal band adds 0.12 · 0.385 ≈ 0.046 of the
+    the fader, as a push never crosses its hysteresis. The two depths: a nominal band adds 0.12 · 0.385 ≈ 0.046 of the
     throw, where a push at 0.5 added 0.19."""
     from hyperspace.bands import CEIL
     from hyperspace.learn import LANE_DEPTH, LANE_SCHEME, row_for
@@ -345,7 +343,7 @@ def test_a_band_lane_and_an_lfo_land_as_calm_pushes_about_the_base(rig):
 
 
 def test_a_whole_number_param_keeps_the_position_row(rig):
-    """Review of PR #100: a whole-number param is stepped too. A push of
+    """A whole-number param is stepped too. A push of
     0.25 about `fx.dream.steps` (1–3) is a quarter of a step each way and
     never reaches the next one — the learn would land and do nothing — so
     it keeps the fader, which reaches every step."""
@@ -388,9 +386,9 @@ def test_centred_target_reads_the_declared_range(rig):
 
 
 def test_no_target_is_refused_or_flagged(rig):
-    """Rate-type params under a hand are allowed (the owner, 2026-10-04):
+    """Rate-type params under a hand are allowed:
     every modulatable continuous param in the registry but the meta
-    controller's (register row 743) takes a learn from each kind of axis —
+    controller's takes a learn from each kind of axis —
     nothing refused, nothing held, nothing warned about — and lands by the
     one table."""
     lrn, t = rig.learn, rig.table
@@ -485,7 +483,7 @@ def test_the_two_default_depths_agree():
     assert PUSH_DEPTH == HandSettings().learn_depth == 0.25
 
 
-# ------------------------------------------ plan 13 WP4: into the loaded patch
+# ------------------------------------------ into the loaded patch
 
 def desk_rig(home):
     """The app's construction (tests/test_loadable.boot: the startup loadable patch
@@ -512,7 +510,7 @@ def untouched(r) -> bool:
 
 
 def test_a_knob_learn_writes_a_desk_row_into_the_loaded_loadable(tmp_path):
-    """Plan 13 §3.3, D5: a knob learn is a patch-layer row in the live
+    """A knob learn is a patch-layer row in the live
     table — the control's old patch row and the param's previous knob
     go, the global row on the same knob stays — the loaded patch is dirty
     and bindings.json is untouched; saving the loadable patch writes the row, and
@@ -552,7 +550,7 @@ def test_a_knob_learn_writes_a_desk_row_into_the_loaded_loadable(tmp_path):
 
 
 def test_a_knob_learn_replaces_an_any_channel_row_on_the_same_knob(tmp_path):
-    """Review of PR #67: a learn replaces every row of its own layer on the
+    """A learn replaces every row of its own layer on the
     same physical control (`Binding.overlaps`), an any-channel row
     included. `lfo-breathe`'s desk has ``cc:*:16`` on its Breathe macro;
     learning device knob 1 (``cc:0:16``) leaves one row there, and the knob
@@ -610,7 +608,7 @@ def test_a_hand_learn_writes_a_route_into_the_loaded_loadable(tmp_path):
 
 
 def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
-    """D5, D6, and plan 17 fork 6. With the global layer up a desk learn
+    """With the global layer up a desk learn
     is refused in the same words as ever — nothing changes (the table, the
     layer, the param, the file, the loadable patch's dot) — and now **stays
     armed**: SHIFT, pressed while it is armed, latches (an invariant
@@ -659,7 +657,7 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     before = rows()
     push(r, note(apc40.N_OVERDUB), note(apc40.N_OVERDUB, 0))
     assert lib.current("loadable") == lib.install.startup and lrn.learning == "view.depth4"
-    # nothing learned: depth's one desk row is the fresh layer's D1 (apc40.SCENE, plan 19 WP3)
+    # nothing learned: depth's one desk row is the fresh layer's D1 (apc40.SCENE)
     assert [b.source for b in table.desk() if b.target == "view.depth4" and b.is_midi] \
         == ["cc:*:16"]
     assert not lib.is_dirty("loadable") and untouched(r)
@@ -674,7 +672,7 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
 
 
 def test_accepts_by_want():
-    """Plan 17 WP2: a learn says what may complete it. `desk` accepts a
+    """A learn says what may complete it. `desk` accepts a
     cc / note / pitch source and no hand; `hand:left` accepts that hand's
     axes and switches by name, and not the other hand's, a number or the
     desk; None accepts anything; nothing armed accepts nothing. `arm(None)`
@@ -683,7 +681,7 @@ def test_accepts_by_want():
     desk = ("cc:0:48", "cc:*:16", "note:3:53", "pitch:0:0")
     left = ("hand:left.roll", "hand:left.pinch.index", "hand:left.present")
     other = ("hand:right.y", "hand:7", "lane:0", "lfo:1", "ext:2", "key:B")
-    # plan 27 B2: what can be armed is the device registry's; a Learn
+    # what can be armed is the device registry's; a Learn
     # handed none offers today's rig's
     assert lrn.wants() == ("desk", "hand:left", "hand:right", "pad", "pair", "pair (spring)")
     assert not any(lrn.accepts(s) for s in (*desk, *left, *other))      # nothing armed
@@ -705,7 +703,7 @@ def test_accepts_by_want():
     assert not any(lrn.accepts(s) for s in pad)
     lrn.arm("view.bright", "hand:right")
     lrn.learn_source("hand:left.roll")                       # the wrong hand: not taken
-    assert not lrn.learn_control("cc:0:48")                  # nor the desk (review of PR #96)
+    assert not lrn.learn_control("cc:0:48")                  # nor the desk
     assert lrn.learning == "view.bright" and lrn.want == "hand:right"
     with pytest.raises(ValueError, match="no such want"):
         lrn.arm("view.bright", "hand:both")
@@ -722,7 +720,7 @@ def test_accepts_by_want():
 
 
 def test_learn_control_needs_no_adapter(tmp_path):
-    """Fork 7: the desk learn is the learn object's. A bare `Learn` over a
+    """The desk learn is the learn object's. A bare `Learn` over a
     table — no MidiIO anywhere — and `learn_control("cc:*:18", apc40)`: a
     patch-layer ring row, the table's `redraw_serial` bumped (an adapter,
     if there is one, redraws), one undo step, no file. The op comes from
@@ -746,7 +744,7 @@ def test_learn_control_needs_no_adapter(tmp_path):
         == ("cc:*:18", "abs", "preset", "ring", apc40.RING_VOLUME)
     assert table.redraw_serial > serial and table.desk_serial == desk_serial
     assert lrn.learning is None and not lrn.refused
-    # its old knob lets go and is named: D1, the fresh layer's (apc40.SCENE, plan 19 WP3)
+    # its old knob lets go and is named: D1, the fresh layer's (apc40.SCENE)
     assert lrn.last == "learned view.depth4 ← D3 (device knob 3) (into the patch); D1 let go"
     assert (table.path.read_bytes() if table.path.exists() else None) == on_disk
     settle(r)
@@ -783,7 +781,7 @@ def test_learn_control_needs_no_adapter(tmp_path):
     assert not lrn.learn_control("cc:0:21", apc40) and lrn.learning is None
 
 
-# ------------------------------------------------------ plan 15 WP1: undo
+# ------------------------------------------------------ undo
 
 def test_a_learn_is_one_undo_step(tmp_path):
     """A learn landing is one undo step, by either adapter: a hand's (the
@@ -807,7 +805,7 @@ def test_a_learn_is_one_undo_step(tmp_path):
     u.clear()
     was = routes()
     # a hand learn: the axis moves to the new param — its old rows go, the
-    # position and the push (plan 18 fork 7), and one ⌘Z brings both back
+    # position and the push, and one ⌘Z brings both back
     lrn.arm("view.speed")
     lrn.learn_source("hand:3")
     assert table.owner("view.speed").source == "hand:3" and table.owner("view.inst_amp") is None
@@ -852,7 +850,7 @@ def test_a_learn_is_one_undo_step(tmp_path):
     assert u.redo() and any(b.target == target for b in table.desk())
 
 
-# ------------------------------------------------------ plan 17 WP1: one Unbind
+# ------------------------------------------------------ one Unbind
 
 def bound_rig(home):
     """The app's construction with the undo (tests/test_undo.boot: TUMBLE
@@ -888,7 +886,7 @@ def left(table, pid) -> list:
 
 
 def test_unbind_removes_the_loadables_desk_rows_and_every_route(tmp_path):
-    """Plan 17 WP1, fork 4: one Unbind removes what is bound to the param
+    """One Unbind removes what is bound to the param
     in the loaded patch — its knob, its two step buttons, the hand route
     and the disabled LFO route (its depth subscriber with it) — and never
     a meta row. The loadable patch is dirty; no file is written. It needs no
@@ -902,7 +900,7 @@ def test_unbind_removes_the_loadables_desk_rows_and_every_route(tmp_path):
     gone = lrn.unbind((pid, pid))                            # an id given twice is one id
     assert len(gone) == 5 and not lrn.refused
     assert left(table, pid) == [r.meta_row]                   # the keys' rows are not Unbind's
-    assert table.redraw_serial > serial                      # an adapter redraws: dark (D8)
+    assert table.redraw_serial > serial                      # an adapter redraws: dark
     assert not table.depth_subs(routes[1]) and not table.macros["macro.1"].subs
     assert lrn.last.startswith(f"unbound {pid} from ") and " and LFO" not in lrn.last
     assert lrn.last.count(",") == 3 and " and " in lrn.last  # five rows named
@@ -937,7 +935,7 @@ def test_unbind_by_kind(tmp_path):
     assert not [b for b in table.desk() if b.target == pid]
     # the drawn alias and its band: the desk row on the alias, the route on the band
     r.control.selb = 2
-    # (rows no door lets in since row 743: one a hot reload left in the table)
+    # (rows no door lets in: one a hot reload left in the table)
     table.bindings.append(Binding("cc:0:20", "band.sel.thr", "abs", layer="preset"))
     table.bindings.append(Binding("lane:0", "band.2.thr", "push", 0.2))
     gone = lrn.unbind(("band.sel.thr", "band.2.thr"))
@@ -945,7 +943,7 @@ def test_unbind_by_kind(tmp_path):
     assert not table.routes_to("band.2.thr")
     assert not [b for b in table.desk() if b.target == "band.sel.thr"]
     assert lrn.last.startswith("unbound band.2.thr from ")
-    # a MIDI row is never a "route", whatever its op (review of PR #93): a
+    # a MIDI row is never a "route", whatever its op: a
     # meta row with a performer op stays, and is a refusal, not an item
     odd = Binding("cc:0:118", "view.zoom_rate", "push")           # no layer: the meta controller's
     mine = Binding("cc:0:117", "view.zoom_rate", "position", layer="preset")
@@ -999,7 +997,7 @@ def test_unbind_is_one_undo_step_and_none_when_nothing_goes(tmp_path):
     assert u.stack == [] and len(u.redos) == 1               # and the redo is not spent
 
 
-# ------------------------------------------------ plan 17 WP4: click a control, then a param
+# ------------------------------------------------ click a control, then a param
 
 def test_pick_then_param_maps_through_the_learn(tmp_path):
     """`pick("cc:*:18")`, `map_picked("view.speed", apc40)`: the row
@@ -1060,7 +1058,7 @@ def test_pick_then_param_maps_through_the_learn(tmp_path):
 
 
 def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_path):
-    """D5, D6: `ui_desk.mappable` gives the reason before the click, and
+    """`ui_desk.mappable` gives the reason before the click, and
     `map_picked` refuses in the knob learn's words — the table untouched,
     no undo step, no learn left armed, the control still picked."""
     from test_undo import boot, labels, settle
@@ -1078,7 +1076,7 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     settle(r)
     u.clear()
     before = rows()
-    # MASTER: the track faders are layered since plan 24 C2 (decision 17)
+    # MASTER: the track faders are layered
     s3 = control("SM")
     # one rule, asked before the click and refused by after it (`learn.blocked`)
     assert learn.blocked(table, s3.source) == "invariant"
@@ -1088,11 +1086,10 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     assert not lrn.map_picked("view.speed", apc40)
     assert lrn.refused and lrn.last == "SM (MASTER fader) is invariant (the meta controller's) — not learned"
     assert lrn.control == s3.source and lrn.learning is None and rows() == before
-    # every invariant control of D6: MASTER (S1–S8 are layered since plan 24
-    # C2), the bank row, SHIFT, TAP,
+    # every invariant control: MASTER (S1–S8 are layered), the bank row, SHIFT, TAP,
     # METRONOME, NUDGE, the transport, the crossfader, OVERDUB (the clip-stop
-    # row is free since 2026-10-09);
-    # and since plan 19 WP2 clip rows 4 and 5, the bank's slots 9–24
+    # row is free),
+    # clip rows 4 and 5, and the bank's slots 9–24
     for glyph in ("SM", "G1·1", "G1·8", "⇧", "B20", "B12", "B21", "B22", "B13", "B14",
                   "X", "B11", "G4·1", "G5·8"):
         c = control(glyph)
@@ -1126,7 +1123,7 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
 
 
 def test_a_hand_learn_onto_a_setting_is_refused_in_words(rig):
-    """Plan 21 R12: `ghost.mirror`, `.guide`, `.tethers` and `.style` are
+    """`ghost.mirror`, `.guide`, `.tethers` and `.style` are
     not modulatable. A hand completing a learn armed on one (the panel
     never offers Learn hand there; a bare arm can still get here) makes no
     row, holds no question, ends the learn and says why in a line the
@@ -1151,7 +1148,7 @@ def test_a_hand_learn_onto_a_setting_is_refused_in_words(rig):
 
 
 def test_no_absolute_knob_can_be_learned_onto_the_bank(tmp_path):
-    """Audit R14, moot since row 746 (closed by row 792): `preset.select`'s 24 choices
+    """`preset.select`'s 24 choices
     would spread a knob mostly over empty slots, and no door lands one. `preset.*` is meta,
     one per `Deck`, so `learn_control` refuses it in the rule's words, still table-clean;
     a hand or a stick is refused the same way; the desk rows' combo doesn't offer it; and

@@ -1,4 +1,4 @@
-"""The modulator bank (modbank.py, plan 31 B): voices with stable ids, the
+"""The modulator bank (modbank.py): voices with stable ids, the
 LFOs as one of N. Ids are one past the highest and never compact, a gap
 publishes NaN so a route from a removed voice goes dormant, a change of
 membership rebuilds the patch through the registry's serial, and the
@@ -173,7 +173,7 @@ def test_an_lfo_owning_another_with_gaps_lands_the_same_frame():
     reg, c, lfos = rig([1, 3, 7])
     three, seven = lfos.voice(3), lfos.voice(7)
     three.shape, three.rate = SHAPES.index("sine"), 1.0
-    three.depth = 1.0                           # the full swing: an LFO's depth ships at 0.5 since the calmer defaults (2026-10-31)
+    three.depth = 1.0                           # the full swing: an LFO's depth defaults to 0.5
     seven.depth = 0.0
     seven.shape, seven.rate = SHAPES.index("square"), 1.0
     reg["lfo.7.depth"].set(0.0)
@@ -262,7 +262,7 @@ def test_a_loadable_without_the_key_loads_four_lfos(app):
     app.lfos.set([1, 3])
     doc = app.loaded_patch.document("old")
     assert doc["lfos"] == [1, 3]
-    del doc["lfos"]                              # as a file from before plan 31 wrote it
+    del doc["lfos"]                              # a file written without the key
     app.loaded_patch.load_doc(doc)
     assert app.lfos.ids() == [1, 2, 3, 4] and "lfo.2.depth" in app.reg
     assert "lfos" not in app.loaded_patch.document("again")   # the default writes no key

@@ -1,4 +1,4 @@
-"""`panel:graph` (2026-11-02): the GRAPH canvas as a media source. The id,
+"""`panel:graph`: the GRAPH canvas as a media source. The id,
 the source's frames — each with a lease on its texture — and its status
 (`fetching`, `ready`, the hold, `off page`, `lost`) over a fake tap and
 clock, the shared base it has with a live feed (holders under a lock),
@@ -353,9 +353,9 @@ def test_canvas_px_is_recorded_while_the_panel_draws(tmp_path):
         _origin, size, scale, page, omit = px
         assert size[0] >= 80 and size[1] >= 80 and scale == (1.0, 1.0)
         assert page.startswith("CONTROLS/##page_") and "/" not in page[len("CONTROLS/"):]
-        assert omit[1] > omit[0]                      # plan 49: the pane, selected or not
+        assert omit[1] > omit[0]                      # the pane, selected or not
         frame(panel, "view")
-        assert panel.canvas_px is not None            # plan 49 stage 3: GRAPH is always drawn
+        assert panel.canvas_px is not None            # GRAPH is always drawn
         panel.open = False
         frame(panel)
         assert panel.canvas_px is None                # the panel hidden: no canvas

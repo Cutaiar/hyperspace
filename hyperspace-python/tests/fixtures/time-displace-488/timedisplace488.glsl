@@ -1,11 +1,10 @@
-// Plan 90 H4: PR #488's Time Displace (plan 66 stage 3a), its shader as it was
-// (`origin/ccr-956dc2aa-r1kaqe:hyperspace-python/hyperspace/shaders/fx/timedisplace.glsl`)
-// with one change only: the past it reads. #488 bound the look-back's atlas and its
-// frames' ages through a Python half (`timedisplace.py`); here the delay's stack is
-// bound on the file's `stack` port (`stack_frame`, `u_stack_n`, `u_stack_age`), and the
-// "Look-back" knob that named a ring is gone (the wire names it). The field, the walk
-// over the ages and the blend between frames are #488's, line for line.
-// tests/test_time_displace_488.py draws it beside Line → Read.at (H1's `stack-slit`).
+// An earlier Time Displace shader, with one change only: the past it reads. The
+// original bound the look-back's atlas and its frames' ages through a Python half;
+// here the delay's stack is bound on the file's `stack` port (`stack_frame`,
+// `u_stack_n`, `u_stack_age`), and the "Look-back" knob that named a ring is gone
+// (the wire names it). The field, the walk over the ages and the blend between
+// frames are the original's, line for line.
+// tests/test_time_displace_488.py draws it beside Line → Read.at (`stack-slit`).
 
 // @label Time Displace (#488)
 // @order 21
@@ -20,8 +19,7 @@
 // @tip into its aux (black now, white Span ago). The past is a look-back's frames: that
 // @tip look-back's capture must be wired, or it shows its input. At Span 0 it is its input.
 
-// plan 66 stage 3a. The Python half (`timedisplace.py`) binds the look-back's
-// atlas and, newest first, every frame it holds: its slot and its age in
+// The look-back's frames come newest first, each with its slot and its age in
 // seconds. The ring holds 32 frames, one every `dream.gap` seconds (1/30 s by
 // default: about a second), so a Span longer than that reads the oldest frame
 uniform float u_span;    // @param 0 8 1 amount "Span" How far back the field's whole value reaches, in seconds. The look-back holds 32 of its frames, one every Echo time apart: raise that to reach further.
@@ -59,7 +57,7 @@ float when(vec2 uv) {
     return f;
 }
 
-// the k-th newest frame (#488: the look-back's atlas slot; here the delay's stack)
+// the k-th newest frame (the delay's stack slot)
 vec4 past(int k, vec2 uv) { return stack_frame(k, uv); }
 
 vec4 effect(vec2 uv) {

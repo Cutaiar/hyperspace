@@ -1,4 +1,4 @@
-"""Plan 39 T4 — the segment worker (segment.py): a person matte off the
+"""The segment worker (segment.py): a person matte off the
 frame thread, on the dream worker's pattern.
 
 The worker with a fake backend: `submit` never blocks and the latest wins
@@ -9,10 +9,9 @@ and the next good result clears it; the thread sleeps until a submit and
 a reason string, never an exception; a backend that will not open is said.
 The real backends — Apple Vision and torchvision's LR-ASPP — run once each
 on a synthetic frame in the `live` tier (`pytest --all`), never on a
-camera. Vision runs every job under an `objc.autorelease_pool` (2026-11-01:
-without one, on the worker's plain Python thread, each job leaked its
-frame's NSData copy — ~1 MB — for the life of the process, 140 GB over a
-half-hour set with two segment nodes); the fast tier checks the pool is
+camera. Vision runs every job under an `objc.autorelease_pool`: without
+one, on the worker's plain Python thread, each job leaks its frame's NSData
+copy (~1 MB) for the life of the process. The fast tier checks the pool is
 entered around the run, the live tier that three hundred jobs leave the
 process's memory where it was."""
 
@@ -253,7 +252,7 @@ def test_vision_runs_each_job_under_an_autorelease_pool():
 @pytest.mark.skipif(sys.platform != "darwin", reason="Apple Vision is macOS only")
 def test_vision_frees_each_jobs_memory():
     """Three hundred Vision jobs on the worker's thread leave the process's
-    memory where it was (2026-11-01: ~1 MB a job leaked without the pool;
+    memory where it was (without the pool a job leaks ~1 MB;
     the slack allowed here is a tenth of that)."""
     import resource
 

@@ -1,4 +1,4 @@
-"""Plan 40 T1 (P1, D5): the patch as data — `patches.py` and the library's
+"""The patch as data — `patches.py` and the library's
 `patches` kind.
 
 No GL, no imgui: a corpus loadable patch's parts are landed headless from its file
@@ -81,7 +81,7 @@ def land(p, landing, *, as_saved: bool = True):
     sec = spec.to_json()
     wires = [*sec.get("wires", []), *copy.deepcopy(list(landing.wires))]
     for port in landing.ports if as_saved else ():
-        # (plan 67 P3: a field into a knob keeps its depth, as `Edit._saved_pins` lands it)
+        # (a field into a knob keeps its depth, as `Edit._saved_pins` lands it)
         depth = {G.WIRE_DEPTH: port[G.WIRE_DEPTH]} if G.WIRE_DEPTH in port else {}
         if "to" in port:
             wires.append({"from": port["was"], "to": port["to"], **depth})
@@ -144,7 +144,7 @@ def test_patches_is_a_leaf():
 def test_the_meta_nodes_are_graphviews_not_removable():
     """`FIXTURE_NODES` restates the render nodes the GRAPH page refuses to delete
     (`graphview.spec_name`): the clouds as the rig's (`NOT_REMOVABLE`), the
-    camera as the look's one (`CAMERA_KEPT`, plan 43 C2); the two lists
+    camera as the look's one (`CAMERA_KEPT`); the two lists
     agree, and the patch reads a name's kind as the canvas does."""
     assert set(patches.FIXTURE_NODES) == {graphview.CAMERA, "cloud"}
     for name in ("camera", "cloud", "cloud.2"):
@@ -209,7 +209,7 @@ def test_check_refuses_each_refusable_thing_in_words(edit, said):
 
 
 def test_a_wire_across_the_edge_is_refused_even_where_a_port_says_it():
-    """D2, plan 36: a crossing is a port, an open pin — a wire in the file
+    """A crossing is a port, an open pin — a wire in the file
     would be landed by a spawn, an attachment by its saved name."""
     doc = example()
     doc["wires"] += [{"from": "scene", "to": "acid.image"},
@@ -401,7 +401,7 @@ def test_spawn_into_a_host_that_holds_warp_renames_every_reference():
     assert landing.group == {"name": "noita core", "patch": "noita-core", "open": False,
                              "nodes": ["render:doublevision.2", "render:fractals.2",
                                        "render:warp.2"]}
-    assert "id" not in landing.group                    # T2 numbers the groups
+    assert "id" not in landing.group    # the caller numbers the groups
     # its desk knobs are noita's own: six desk conflicts; the right hand's
     # axes already drive noita's params: one-axis-one-param conflicts
     kinds = [c.kind for c in landing.conflicts]
@@ -637,7 +637,7 @@ def test_a_patch_cut_from_every_corpus_loadables_main_run_round_trips():
     assert len(done) >= 6, done
 
 
-# ---------------------------------------------------------------- plan 40 T2: the one classifier
+# ---------------------------------------------------------------- the one classifier
 
 def test_select_is_the_lifts_rule_and_refuses_a_group():
     """`select` (factored out of `lift` for the GRAPH page's Group): the
@@ -766,14 +766,14 @@ def test_patches_list_rename_and_delete_as_loadables_do(lib):
 
 
 def test_a_patch_saved_in_the_old_pad_words_reads_in_todays():
-    """Review of #435: a pair route saved before bindings/4 must not go silently dead."""
+    """A pair route saved before bindings/4 must not go silently dead."""
     p = read({"nodes": [], "routes": [{"source": "pair:UP/DOWN", "target": "view.zoom"},
                                       {"source": "pad:A", "target": "deck.chase"}]})
     assert [r["source"] for r in p.routes] == ["pair:hat.N/hat.S", "pad:S"]
 
 
 def test_a_field_wire_into_a_knob_keeps_its_depth_through_a_lift_and_a_spawn():
-    """Plan 67 P3: a field into a knob says its depth (`graph.WIRE_DEPTH`); a
+    """A field into a knob says its depth (`graph.WIRE_DEPTH`); a
     patch lifted with that wire inside keeps it, renamed with its nodes, and an
     inlet carrying one across the region's edge keeps it as the port's, landed
     on the wire a spawn makes."""
@@ -791,7 +791,7 @@ def test_a_field_wire_into_a_knob_keeps_its_depth_through_a_lift_and_a_spawn():
 
 
 def test_a_field_outlet_into_a_knob_keeps_its_depth():
-    """Devin's review of #497: a patch holding the field but not the knob it
+    """A patch holding the field but not the knob it
     feeds saves the wire as an outlet; the outlet keeps the depth, as an inlet
     does, and **wire as saved** lands it back at that depth."""
     noita = copy.deepcopy(loadable("party-noita"))

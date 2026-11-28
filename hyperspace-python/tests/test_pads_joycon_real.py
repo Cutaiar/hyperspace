@@ -1,4 +1,4 @@
-"""A real Joy-Con (L), over Bluetooth on macOS (2026-11-02, the owner's):
+"""A real Joy-Con (L), over Bluetooth on macOS:
 half a second of each of the probe's steps
 (`tests/fixtures/pads/joycon-bt-excerpt.jsonl`, cut by
 `tools/pad_tape_excerpt.py`) decoded through the calibration its flash

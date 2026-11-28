@@ -316,8 +316,7 @@ def test_a_live_settings_object_marks_after_a_reload_of_its_module():
 def test_a_param_declared_again_under_its_id_is_looked_at(rig):
     """A shader reload builds a new value and declares its param again over it:
     nothing is written, and the last effect's ids keep their order. A look that
-    trusted the ids kept the old base, and the next edit's undo put it back
-    (Devin's review of #506)."""
+    trusted the ids kept the old base, and the next edit's undo put it back."""
     new = Box(b=3.0)
     rig.tick(0.0)
     assert not looked(rig, 1.0)

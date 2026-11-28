@@ -1,9 +1,8 @@
-"""K3 (register row 578): `view.inst_rate` and `view.media_rate` are
+"""`view.inst_rate` and `view.media_rate` are
 integrated by the host (`ViewState.integrate`) into `inst_phase` and
 `media_phase`; the draw reads the phase, never t × rate. A knob step on
 either changes how fast the motion goes and never where it is — the same
-rule as the turn, the pattern clock (row 99) and an effect's `@clock`
-(row 560). Pure numpy: no GL.
+rule as the turn, the pattern clock and an effect's `@clock`. Pure numpy: no GL.
 """
 
 from __future__ import annotations

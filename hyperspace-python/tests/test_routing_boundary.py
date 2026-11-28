@@ -2,10 +2,10 @@
 (`Bindings.add` / `bind` / `enable` / `replace_owner`), and
 `Router.modulate` never checks ownership — so the model holds only if
 `Router.modulate` is the one place a performer's offset is written
-(ARCHITECTURE §3.2, audit B8). An AST walk over the package holds that.
-WP8 adds the import boundary and the frame-order test here. Plan 44 D2
-extends the wall and the pin to routing_sources.py, the router's shared
-half (`Sources`): below routing, and writing no param.
+(ARCHITECTURE §3.2). An AST walk over the package holds that.
+The import boundary and the frame-order test live here too. The wall and
+the pin extend to routing_sources.py, the router's shared half
+(`Sources`): below routing, and writing no param.
 """
 
 import ast
@@ -59,7 +59,7 @@ def test_only_router_modulate_calls_param_modulate():
 
 # the calls that write a param (a Param's writers and the registry's
 # commit): the shared sources make none — what they hold is read by each
-# deck's pass, which writes its own registry (plan 44 D2). `step` is left
+# deck's pass, which writes its own registry. `step` is left
 # out: a Follower's `step` (motion.py) is arithmetic, not a write
 WRITES = {"modulate", "set", "set_norm", "nudge", "fire", "toggle", "apply", "restore",
           "begin_frame", "snapshot"}
@@ -81,25 +81,24 @@ def test_the_shared_sources_write_no_param(path):
     assert not names & {"Registry", "Param", "reg"}, names & {"Registry", "Param", "reg"}
 
 
-# ---- the import boundary (audit R11) ----
+# ---- the import boundary ----
 
 # what routing.py may never import, at module level or lazily: the panel,
 # the host, and every adapter that feeds it — they point at the table, the
-# table points at the registry (ARCHITECTURE §1). Plan 44 D2: the same wall
+# table points at the registry (ARCHITECTURE §1). The same wall
 # holds for routing_sources.py, which sits below routing (routing imports
 # it back), so it may import neither routing nor the registry it never
 # writes, nor anything that imports them
 ABOVE = ("ui", "app", "hands", "midi", "bridge", "learn", "dream", "hotreload", "library")
 SOURCES_ABOVE = (*ABOVE, "routing", "params", "loadable", "undo", "deck", "devices")
-# Globbed (row 788): a split stays behind its own family's wall, and a name on a wall means its
+# Globbed: a split stays behind its own family's wall, and a name on a wall means its
 # split too, `ui` meaning `ui_pane`, as test_app_boundary's gated check does.
 FILES = family("routing")
 SOURCES = family("routing_sources")
 # the lazy imports each family is allowed: name resolution for key and pad
 # rows (§1's "only lazily to resolve names") — pinned so a new one is a
-# decision (the Library `Router.load_patch` took went with it, plan 13
-# WP5). Plan 44 D2 moved that resolution (`_resolve`, behind
-# `Sources.code`) into routing_sources.py, so routing.py has none now
+# decision. Name resolution (`_resolve`, behind `Sources.code`) lives in
+# routing_sources.py, so routing.py has none
 LAZY = {"routing": set(), "routing_sources": {"glfw", "gamepad"}}
 
 
@@ -153,7 +152,7 @@ def test_a_name_on_a_wall_means_its_split_too():
 @pytest.mark.parametrize("path", FILES, ids=shown)
 def test_importing_routing_pulls_in_no_adapter_or_panel(path):
     """Fresh interpreter: `import hyperspace.routing` — and its shared
-    half, plan 44 D2 — leaves the panel, the host and every adapter out of
+    half — leaves the panel, the host and every adapter out of
     sys.modules; the shared half pulls in no registry and no table."""
     import subprocess
     import sys

@@ -1,4 +1,4 @@
-"""Plan 53 N1b: node mode drawn. A row that acts is a cable, of its own kind and colour,
+"""Node mode drawn. A row that acts is a cable, of its own kind and colour,
 in its own bundle, on the deck whose patch says so, faint when its player is elsewhere.
 """
 
@@ -167,7 +167,7 @@ def test_a_node_mode_cable_with_no_row_is_passed_over_by_a_group(rig):
 
 
 def test_a_route_at_rest_says_so_and_comes_back(rig):
-    """The owner, row 711: the cable's words, and it is faint while it rests."""
+    """The cable's words, and it is faint while it rests."""
     node, params = pick_node(rig.one)
     route = Binding("lane:0", params[0], "push", 0.5)
     rig.one.table.set_routes([*rig.one.table.routes(), route])
@@ -537,7 +537,7 @@ def test_the_desk_asks_once_a_draw_not_once_a_control(panel_rig, monkeypatch):
     assert asked.count("away") <= 2 and asked.count("rows") <= 3
 
 
-# …an effect with a slot, made as the picker makes one (plan 89: no copy node)
+# …an effect with a slot, made as the picker makes one (no copy node)
 
 
 def _effect_with_slot(rig) -> tuple[str, object]:
@@ -553,7 +553,7 @@ def _effect_with_slot(rig) -> tuple[str, object]:
 
 
 def test_node_mode_on_an_effect_with_a_slot_lands_on_its_one_set_of_knobs(rig):
-    """Plan 89: the slot is the effect's own node's — node mode points at the
+    """The slot is the effect's own node's — node mode points at the
     effect, and its cables land on the effect's own params' ports (no pin of
     a node of its own, as a copy's needed)."""
     node, spec = _effect_with_slot(rig)
@@ -634,8 +634,8 @@ def test_a_selected_cable_says_node_mode_in_words_and_offers_leave(rig, panel_ri
 
 
 def test_a_node_with_no_params_gets_no_point_chip(panel_rig, monkeypatch):
-    """A grey "point apc40 here" on a node the controller cannot enter is noise
-    (the owner, 2026-11-23): the refusal "has no params to point at" hides the chip."""
+    """A grey "point apc40 here" on a node the controller cannot enter is noise:
+    the refusal "has no params to point at" hides the chip."""
     from hyperspace import nodemode
     nd = _nd(node="render:other")
     nd.refusal = lambda *_a: nodemode.NO_PARAMS.format(node="acid")

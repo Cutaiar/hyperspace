@@ -1,4 +1,4 @@
-"""The poi's guide (plan 47, the poi: hyperspace/poi_guide.py): the
+"""The poi's guide (hyperspace/poi_guide.py): the
 handle, the string and the weight's marker where they are in the world,
 drawn over each output that shows the hands — and nothing at all with the
 poi or the guide off."""
@@ -142,7 +142,7 @@ def test_the_tip_projects_inside_the_picture_at_rest():
 
 
 def test_the_renderer_tells_the_poi_what_the_frame_shows_whether_or_not_the_guide_draws():
-    """Row 817: the box is the frame's, through this view's eye, with nothing
+    """The box is the frame's, through this view's eye, with nothing
     drawn and no GL touched (the poi's guide switched off)."""
     state = poi.PoiState(on=True, guide=False)
     view = SimpleNamespace(pan=(0.0, 0.0), zoom=1.0, eye_fov=50.0, eye_distance=6.0)

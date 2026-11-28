@@ -189,8 +189,8 @@ def test_a_spring_written_as_hz_and_damping_reads_as_the_same_spring():
 
 
 def test_an_old_shows_stick_spring_ids_read_as_todays():
-    """A show saved before 2026-10-29 holds `desk.pad.hz` / `.damp`; its
-    meta controller reads them as today's duration and bounce, each on its own."""
+    """A show saved with `desk.pad.hz` / `.damp`: its meta controller
+    reads them as the duration and bounce, each on its own."""
     from hyperspace import routing
     old = {"desk.pad.hz": 2.0, "desk.pad.damp": 0.7, "desk.pad.feel": 2, "view.bright": 0.4}
     new = routing.renamed_session(old)
@@ -384,7 +384,7 @@ def test_a_stick_let_go_glides_home_through_its_route(rig):
 
 def test_felt_is_none_while_the_feel_is_off_and_follows_when_on(rig):
     r, t = rig.router, rig.table
-    gp.publish(r)                        # the pad's names and rests (plan 27 B2: the pad's)
+    gp.publish(r)                        # the pad's names and rests
     assert r.felt("axis", [1.0, 0.5, 0.5, 0.5, 0.0, 0.0], DT) is None
     t.pad_feel = Motion("follow", atk=0.0, rel=0.4)
     out = r.felt("axis", [1.0, 0.5, 0.5, 0.5, 0.0, 0.0], DT)
@@ -400,8 +400,8 @@ def test_the_feel_chip_cycles_auto_follow_spring_still_and_keeps_knobs():
     m = next_feel(None)
     assert m.mode == "follow"
     m = next_feel(Motion("follow", atk=0.1, rel=0.9))
-    # the step onto spring is the smooth spring a new route is made with
-    # (the owner, 2026-10-31), not the dataclass's bouncier default knobs
+    # the step onto spring is the smooth spring a new route is made with,
+    # not the dataclass's bouncier default knobs
     assert m == Motion("spring", atk=0.1, rel=0.9, dur=0.5, bounce=0.0)
     assert (m.dur, m.bounce) == (DEFAULT_ROUTE_FEEL.dur, DEFAULT_ROUTE_FEEL.bounce)
     assert next_feel(m).mode == "off"

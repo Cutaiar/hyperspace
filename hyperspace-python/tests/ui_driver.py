@@ -129,7 +129,7 @@ class Driver:
 
     def reveal(self, key: str) -> Action:
         """Scroll a control into view if its section's body has it scrolled
-        out, or cut by its edge (plan 49: a section can be taller than the
+        out, or cut by its edge (a section can be taller than the
         pane; a control out of view is drawn, but takes no click)."""
         self.revealing = key
         yield

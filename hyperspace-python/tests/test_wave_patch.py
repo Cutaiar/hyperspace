@@ -1,4 +1,4 @@
-"""Plan 67, rule 5 ("a convenience is a patch, not a fork"): Wave is
+"""A convenience is a patch, not a fork: Wave is
 `point → line/rings/spokes → waveform → combine ← its .2 → displace`, and that patch draws
 every Wave look as `wave.glsl` does — so a Wave can be taken apart and rebuilt
 from primitives, and the file stays for speed (one pass instead of five) and
@@ -126,7 +126,7 @@ def test_every_wave_look_is_the_patch_up_to_rounding(ctx):
     assert len(differ) <= total // 10, f"{len(differ)} of {total} not byte for byte: {differ[:5]}"
 
 
-DISTORT = Path(__file__).resolve().parents[1] / "loadable" / "distort"   # (main's #482 moved them)
+DISTORT = Path(__file__).resolve().parents[1] / "loadable" / "distort"
 SAVED = sorted(p for p in DISTORT.glob("*.json")
                if any(k.startswith("fx.wave.") for k in json.loads(p.read_text())["values"])
                and "shake" not in p.stem and "blocks" not in p.stem and "all-three" not in p.stem)

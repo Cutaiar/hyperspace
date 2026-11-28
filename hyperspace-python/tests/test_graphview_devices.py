@@ -1,13 +1,12 @@
-"""Plan 28 N5 — controllers as nodes; the APC40 as two nodes (decision 12).
+"""Controllers as nodes; the APC40 as two nodes.
 
 Presentation only: the rows, their layers and their homes are what the
-table holds (D1, D4–D6, D12); nothing in apc40.py or midi.py is touched.
+table holds; nothing in apc40.py or midi.py is touched.
 The desk is a real `devices.MidiDevice` over a stand-in adapter that
 carries the APC40 profile (its `LAYOUT` is the device's ports), on the
 shell rig's factory table (tests/test_ui_shell.py), so the invariant, the
-global and the patch layer are the factory's. (Plan 24 C3's desk templates are
-retired, plan 44 D3.) Every loadable patch is the corpus's or made here in the rig's
-scratch library: no loadable patch is edited or added."""
+global and the patch layer are the factory's. Every loadable patch is the
+corpus's or made here in the rig's scratch library: no loadable patch is edited or added."""
 
 
 import pytest
@@ -156,7 +155,7 @@ def test_invariant_controls_are_ports_on_the_first_node_only(rig):
 
 
 def test_a_drag_from_the_shift_node_into_base_is_refused_whatever_the_latch(rig):
-    """D5: the global layer is never a Learn target, so a cable dragged
+    """The global layer is never a Learn target, so a cable dragged
     from an *apc40 (SHIFT)* port onto a param's `base` stub is refused in
     words — the hover's `refusal` and the drop's `connect` agree — with
     SHIFT latched or not, and the table is unchanged."""
@@ -179,14 +178,14 @@ def test_a_drag_from_the_shift_node_into_base_is_refused_whatever_the_latch(rig)
         assert why == res
         assert table.bindings == rows and all(a is b for a, b in zip(table.bindings, rows))
     rig.reg["desk.shift"].set(False)
-    # the same control from the first node is the desk learn, as before
+    # the same control from the first node is the desk learn
     first = f"out:{port.addr}"
     assert view.owner(first) is not None
     assert ed.refusal(first, f"base:{pid}") is None
 
 
 def test_a_shadowed_layered_row_leaves_the_invariant_port_on_the_first_node(rig):
-    """A global-layer row on an invariant control (D6: it never acts) is
+    """A global-layer row on an invariant control (it never acts) is
     drawn off from that control's port on *apc40*: the SHIFT node gains no
     invariant control."""
     rig.lib.load("loadable", "party-trip")
@@ -202,7 +201,7 @@ def test_a_shadowed_layered_row_leaves_the_invariant_port_on_the_first_node(rig)
 
 
 # ---------------------------------------------------------------- desk templates
-# (plan 44 D3: retired — no library held one; a loadable patch names none)
+# (no library holds one; a loadable patch names none)
 
 def test_a_corpus_loadable_draws_no_template_node(rig):
     """Every corpus loadable patch has a plain desk section: no template node."""

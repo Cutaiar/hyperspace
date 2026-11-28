@@ -1,4 +1,4 @@
-"""Plan 26 A3: the hands as a geometry node — in the scene or as a layer,
+"""The hands as a geometry node — in the scene or as a layer,
 composited anywhere; the history as wiring.
 
 The hands (`ghost.py`'s styles) draw through the shape's eye after the
@@ -8,7 +8,7 @@ geometry inside the scene, drawn before the see-through shape, so the
 shape's depth puts a hand in front of or behind it; as a layer they have
 their own colour and depth, and a depth-aware composite hides the layer
 where the shape's visible surface is nearer. The history captures what
-it is wired to (plan 90 H2: a delay, the look-back retired). `tests/test_graph.py` holds the graphs' shapes;
+it is wired to (a delay). `tests/test_graph.py` holds the graphs' shapes;
 `tests/test_golden_frames.py` the pictures, byte for byte.
 
 Offscreen renders from synthetic hands (`fake_hands`, test_ghost's pose);
@@ -70,7 +70,7 @@ def test_the_default_calibration_puts_the_hands_where_the_ghost_camera_did(size)
         assert abs(old[:, k].min() - new[:, k].min()) < PX[size]
         assert abs(old[:, k].max() - new[:, k].max()) < PX[size]
     # the calibration is the room's, not the output's: it takes no aspect
-    # (nor, since plan 43 C2, any eye) — the same world whatever the output
+    # (nor any eye) — the same world whatever the output
     import inspect
     assert list(inspect.signature(G.calibration).parameters) == ["box", "m", "units"]
 
@@ -116,9 +116,8 @@ FRONT, BEHIND = -400.0, 400.0
 def _rig(ctx, wiring=None, z0=None, *, effects=(), shape=True, **kw):
     r = rig(ctx, effects=effects, **kw)
     if wiring is not None:
-        # (plan 33 R23: the rig's run kept; plan 36 T4: its look-back drawn
-        # while the rig's echoes are on, as the old words had it — plan 90
-        # H2: as its public parts, `test_outputs.with_echoes`)
+        # the rig's run kept; with echoes on, the history is drawn as its
+        # public parts, `test_outputs.with_echoes`
         if kw.get("echoes"):
             with_echoes(r, keep_run(r, wiring))
         else:
@@ -187,8 +186,8 @@ def test_hands_in_the_scene_are_solid_and_in_front_of_or_behind_the_shape(ctx):
 def test_the_scene_holds_the_hands_so_the_effects_bend_them_and_the_history_keeps_them(ctx):
     """In the scene the hands are part of the picture: an effect bends
     them with the shape and the echoes hold them — what the default graph
-    never does (its history is the bare scene). (Plan 90 H2: the echoes are
-    the migrated look-back's delay, `test_outputs.with_echoes`.)"""
+    never does (its history is the bare scene). (The echoes are
+    a delay, `test_outputs.with_echoes`.)"""
     bare = _rig(ctx, hands=False, echoes=True)
     _draw(ctx, bare, views(ctx, S()), frames=6)
     want = history(bare)[1]
@@ -206,10 +205,10 @@ def test_the_scene_holds_the_hands_so_the_effects_bend_them_and_the_history_keep
 
 def test_a_glass_without_the_scene_still_gets_the_hands_layer(ctx):
     """The same hands in the scene on one output and a clean layer on
-    another (decision 3): the glass (scene off) shows the hands' layer
-    exactly as the default graph's glass does (plan 35 T4: the glass's
+    another: the glass (scene off) shows the hands' layer
+    exactly as the default graph's glass does (the glass's
     state is its output's wiring — a mute on an in-scene preset shows its
-    ground and the guide, check 347)."""
+    ground and the guide)."""
     ra, rb = _rig(ctx, Wiring(hands="scene")), _rig(ctx)
     a = _draw(ctx, ra, views(ctx, *wire_switches(ra, S(), S(scene=False))))
     b = _draw(ctx, rb, views(ctx, *wire_switches(rb, S(), S(scene=False))))
@@ -299,7 +298,7 @@ def test_the_presenter_carries_the_hands_the_readout_and_the_dim_in_every_wiring
         assert any(p[0][..., :3].max() > 100 for p in got)
     # the hand-off itself: hands over on the glass, the readout everywhere
     r = _rig(ctx, Wiring(hands="scene"), guide=1, dim=0.5)
-    sws = wire_switches(r, S(), S(), S(scene=False))     # (plan 35 T4: the glass's wiring)
+    sws = wire_switches(r, S(), S(), S(scene=False))     # the glass's wiring
     pv1 = O.View(sws[1], (W, H), presenter=object())
     pv2 = O.View(sws[2], (W, H), presenter=object())
     _draw(ctx, r, [views(ctx, sws[0])[0], pv1, pv2], frames=2)
@@ -362,7 +361,7 @@ def test_the_mirror_and_an_output_flip_each_flip_the_hands_once(ctx):
 
 def test_the_hands_have_their_own_line_when_the_scene_draws_them(ctx):
     """Per-node GPU timing: inside the scene the hands' draw is its own
-    line (`hands`, plan 35 T4's name), beside the scene's; as a layer it
+    line (`hands`), beside the scene's; as a layer it
     is the layer's (`hands.layer`), as before."""
     from hyperspace.render import PassTimer
 

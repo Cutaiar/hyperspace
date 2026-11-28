@@ -1,10 +1,10 @@
-"""Plan 36 T1 (W1, decision D1): outputs show only their own wires; All
+"""Outputs show only their own wires; All
 outputs is a drawn bus.
 
 A window's port takes its own wire, else All outputs' by the meta controller's bus
 cable `output.all.<port> → output.<n>.<port>` (`graph.window_ports`) —
-nothing else reaches it. The bus cuts are the loaded patch's (plan 44 D3:
-`loadable.LoadedPatch.bus`, `graph.BusCuts`; plan 36 T1 kept them in the show):
+nothing else reaches it. The bus cuts are the loaded patch's
+(`loadable.LoadedPatch.bus`, `graph.BusCuts`):
 every cable present by default, drawn on GRAPH as ordinary render cables,
 cut and joined there, saved in the loadable patch's file under `bus`. A drag changes the one wire it lands (`render_wire`): no placement,
 guide or other wire moves with it. The install's repro is the first test:
@@ -32,7 +32,7 @@ def _views(n: int = 2) -> list[View]:
 
 def _party(tmp_path):
     """The headless app on the factory `party-trip`, and a GRAPH edit on it
-    holding the loadable patches (their bus cuts, plan 44 D3), its undo steps counted."""
+    holding the loadable patches (their bus cuts), its undo steps counted."""
     app = make_app(tmp_path)
     app.lib.load("loadable", "party-trip")
     pushed: list[str] = []
@@ -106,7 +106,7 @@ def test_rewiring_output_1_changes_that_one_port_and_nothing_else(tmp_path):
 # ---------------------------------------------------------------- the loadable patch's bus cuts
 
 def test_cutting_a_bus_cable_persists_in_the_loadable_and_empties_the_port(tmp_path):
-    """Plan 44 D3: delete on a bus cable cuts it in the loaded patch — one
+    """Delete on a bus cable cuts it in the loaded patch — one
     undo step, the graph section untouched, the loadable patch dirty and the show
     not: window 1 shows nothing on its hands port (no cable drawn there,
     nothing read) while window 2 keeps its own. The cut is saved in the
@@ -165,7 +165,7 @@ def test_a_window_port_is_its_own_wire_else_the_bus_cable_else_nothing():
     same port while the bus cable stands; cut, nothing — no other fallback."""
     wires = [G.Wire("lookback", "output.all.image"), G.Wire("hands.layer", "output.all.hands"),
              G.Wire("scene", "output.1.image")]
-    # (plan 36 T2: and the depth the hands are laid against, the fourth port)
+    # (and the depth the hands are laid against, the fourth port)
     assert G.window_ports(wires, 1) == {"image": wires[2], "hands": wires[1], "guide": None,
                                         "depth": None}
     assert G.window_ports(wires, 2) == {"image": wires[0], "hands": wires[1], "guide": None,
@@ -223,7 +223,7 @@ def test_deleting_a_window_takes_its_bus_cables_too(tmp_path):
 
 def test_an_undo_puts_a_cut_bus_cable_back(tmp_path):
     """A cut is one undo step of the app's (`undo.push(…, load=True)`, the
-    library's marks: plan 44 D3, the loadable patch's cuts): undone, the cable
+    library's marks; the cuts are the loadable patch's): undone, the cable
     stands again."""
     from test_graph_edit import free_rig
     from test_undo import settle
@@ -239,7 +239,7 @@ def test_an_undo_puts_a_cut_bus_cable_back(tmp_path):
 
 def test_a_cut_cable_draws_what_a_ground_wire_draws_and_rebuilds():
     """On the golden rig (two synthetic hands): the renderer reads the bus
-    cuts off its `bus_source` (plan 44 D3: the loadable patches) — cutting window 2's hands and guide cables
+    cuts off its `bus_source` (the loadable patches) — cutting window 2's hands and guide cables
     builds a new graph, and window 2 draws pixel for pixel what window 3,
     wired `ground` into those ports, draws; with every cable standing the
     two differ (the layer is laid over). Skips without a standalone GL
@@ -307,7 +307,7 @@ def test_through_refuses_a_window_with_no_picture_or_its_own_hands(tmp_path):
 
 
 def test_through_writes_only_the_wires_it_names(tmp_path):
-    """OUTPUT's "hands through the effects" (plan 36 T1, no `_Wiring._put`
+    """OUTPUT's "hands through the effects" (no `_Wiring._put`
     rule): on, the chain into the window's picture and `ground` on its
     hands — its guide untouched, still the bus cable; off, exactly those
     back out."""

@@ -1,5 +1,4 @@
-"""Plan 67 (the owner, 2026-11-25: "migrate exactly, new ops"; "new op: Hue
-turn") — Hue cycle retired. Its bands were a field it hid; they are Line,
+"""Hue cycle is retired. Its bands were a field it hid; they are Line,
 Rings, Scale and Combine now, wired into Hue turn's Turn at a depth of 360,
 and every saved Hue cycle is rewritten so on load (`graphmigrate.hue_turns`).
 
@@ -218,7 +217,7 @@ def test_a_patch_fragment_is_retired_through_its_ladder():
 
 def test_an_old_file_loads_retired_and_resaves_as_itself(tmp_path):
     """End to end (REVIEW.md: a format change opens an old file whole): a `/2`
-    party-trip from before plan 33, through the library's own load and save."""
+    party-trip from an older format, through the library's own load and save."""
     from hyperspace import headless
     old = Path(__file__).parent / "fixtures" / "plan33-v4-saves" / "factory--party-trip.json"
     assert "huecycle" in old.read_text()
@@ -239,7 +238,7 @@ def test_no_saved_look_names_hue_cycle(path):
     assert "huecycle" not in path.read_text(), path
 
 
-# ---------------------------------------------------------------- Devin's review of #509
+# ---------------------------------------------------------------- the rename reaches keys and sections
 
 def test_black_is_clear_follows_the_rename():
     """The section's `keys` and the `key.<node>.*` knobs name the node too."""

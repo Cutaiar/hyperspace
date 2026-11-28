@@ -1,5 +1,5 @@
 # ruff: noqa: F811 — `rig` is test_ui_shell's fixture, taken as each test's argument
-"""The APC40 drawn on screen (plan 14 WP7, decision 25 (a)).
+"""The APC40 drawn on screen.
 
 The layout (`apc40.LAYOUT`): one entry per control the protocol names,
 none overlapping, a unique short glyph each, and a glyph for every MIDI
@@ -105,7 +105,7 @@ def _shipped_midi_rows() -> list[str]:
 
 def test_every_midi_row_shipped_has_a_glyph():
     """DEFAULT_MAP, the factory meta table and every corpus loadable patch's desk
-    (tests/corpus: the loadable patches the build shipped until 2026-10-28)."""
+    (tests/corpus: the loadable patches the build ships)."""
     srcs = _shipped_midi_rows()
     assert len(srcs) > 200
     assert [s for s in srcs if apc40.glyph(s) is None] == []
@@ -123,10 +123,10 @@ def test_the_diagram_lights_the_loaded_loadables_desk_and_the_invariant_controls
     assert table.layer == "preset" and table.desk()
     inv = _glyphs(table.invariant_rows())
     assert "⇧" in inv and "SM" in inv
-    assert "S1" not in inv          # the track faders are layered since plan 24 C2 (decision 17)
+    assert "S1" not in inv          # the track faders are layered
     frame(panel, "routing")
     lit = ui_desk.lit_cached(panel, table)
-    fine = {_fine_control().glyph}                            # the adapter's, drawn (row 732)
+    fine = {_fine_control().glyph}                            # the adapter's, drawn
     assert set(lit) == _glyphs(b for b in table.desk() if b.enabled) | inv | fine
     assert "D1" in lit and lit["D1"].layer == "preset"        # TRIP's device knobs
     # SHIFT: the global layer's rows instead of the loadable patch's
@@ -164,8 +164,8 @@ def test_the_hover_names_glyph_param_layer_and_akais_name(rig):
     dark = next(c for c in apc40.LAYOUT if c.glyph == "B7")        # device ◀: no row
     assert "B7" not in ui_desk.lit(table)
     assert "unmapped — dark" in ui_desk.label(table, dark, None)
-    # the clip-stop row is free since 2026-10-09 (an empty bank pad held saves)
-    # but for track 8's, the desk's SAVE since plan 24 C1 (decision 18)
+    # the clip-stop row is free (an empty bank pad holds saves)
+    # but for track 8's, the desk's SAVE
     assert ui_desk.lit(table)["G6·8"].target == "desk.save"
     for k in range(1, 8):
         c = next(c for c in apc40.LAYOUT if c.glyph == f"G6·{k}")
@@ -218,7 +218,7 @@ def test_the_close_chip_closes_the_desk_and_never_leaves_the_window_empty(rig):
 
 
 def test_the_desk_does_not_jump_when_the_sheet_comes_up(rig, monkeypatch):
-    """Plan 16 WP7: the sheet is off at launch, and the frame `/` first
+    """The sheet is off at launch, and the frame `/` first
     brings it up the desk is already where it stays — above the sheet's
     real height, not the height imgui gives a window it has not laid out."""
     panel = rig.panel
@@ -268,7 +268,7 @@ def test_the_routing_rows_print_the_glyph(rig, monkeypatch):
     assert "device knob 1" not in texts                       # Akai's names: tooltips only
 
 
-# ------------------------------------------- plan 17 WP4: the desk, big
+# ------------------------------------------- the desk, big
 
 def test_the_desk_takes_the_room_it_has():
     """`room` (fork 1): left of the panel and never under `MIN_W`; the
@@ -369,13 +369,13 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
         assert st["unit"][0] >= ui_desk.LABEL_UNIT and st["unit"][1] <= st["unit"][0]
         lit = ui_desk.lit_cached(panel, table)
         says = {g: ui_desk.text(reg, b) for g, b in lit.items()}
-        # an empty bank slot's pad is mapped but drawn dark: no label (plan 19 WP2)
+        # an empty bank slot's pad is mapped but drawn dark: no label
         empty = {g for g, b in lit.items() if ui_desk.empty(reg, b)}
         assert empty and all(g.split("·")[0] in ("G4", "G5") for g in empty)
         assert all(says.pop(g) == "" for g in empty)
         assert len(lit) > 80 and all(says.values())
         # a label for every lit control (the clip-stop row is free: dark,
-        # but for track 8's SAVE, plan 24 C1)
+        # but for track 8's SAVE)
         assert set(st["labels"]) == set(says.values()), layer
         assert not [g for g in says if g in {f"G6·{k}" for k in range(1, 8)}]
         assert len(st["labels"]) == len(says), layer
@@ -442,7 +442,7 @@ def test_a_controls_text(rig):
     assert text(reg, Binding("note:3:54", "scene.select", "set", 3.0)) == names[3]
     bank = reg["preset.select"].names
     assert text(reg, Binding("note:4:53", "preset.select", "set", 4.0)) == bank[4]
-    # a bank pad of rows 4–5 (plan 19 WP2): a filled slot its loadable patch's name,
+    # a bank pad of rows 4–5: a filled slot its loadable patch's name,
     # an empty one nothing at all — not "SLOT 10"
     assert rig.lib.install.bank[8] and rig.lib.install.bank[9] is None
     assert text(reg, Binding("note:0:56", "preset.select", "set", 8.0)) == bank[8]
@@ -450,7 +450,7 @@ def test_a_controls_text(rig):
     assert text(reg, Binding("note:0:94", "view.bright", "step", 3.0)) == "Brightness +3"
     assert text(reg, Binding("note:0:95", "view.bright", "step", -3.0)) == "Brightness -3"
     assert text(reg, Binding("cc:0:48", "view.bright", "abs")) == "Brightness"
-    # (plan 36 T3: an effect's params exist only where the graph names it)
+    # (an effect's params exist only where the graph names it)
     from hyperspace.fx import declare
 
     declare(reg, reg.fx_state, reg.fx_state.hold(None))
@@ -490,7 +490,7 @@ def test_a_controls_text(rig):
 
 
 def test_a_filled_pad_is_amber_and_an_empty_one_has_no_label(rig, monkeypatch):
-    """Plan 19 WP2, fork 5, on screen as on the device: a bank pad is the
+    """On screen as on the device: a bank pad is the
     loaded patch's (green), a filled slot's (amber at `FILLED` strength,
     its loadable patch's name in the bright ink) or an empty slot's — drawn as a
     dark control, its glyph and no label, on both layers. Its hover and
@@ -541,7 +541,7 @@ def test_a_filled_pad_is_amber_and_an_empty_one_has_no_label(rig, monkeypatch):
     panel.learn.pick(None)
 
 
-# ------------------------------------------- plan 17 WP4: the desk, clickable
+# ------------------------------------------- the desk, clickable
 
 def _control(glyph: str) -> apc40.Control:
     return next(c for c in apc40.LAYOUT if c.glyph == glyph)
@@ -733,8 +733,7 @@ def test_the_panel_opens_beside_a_four_by_three_desk():
 def test_the_pad_alone_takes_only_its_own_width():
     """With only the pad diagram up, the column is the pad's width, not
     the desk's slice: the panel takes everything right of it, and the pad
-    window ends one gap short of the panel (the owner, 2026-11-07: the
-    split for the pad left the graph too little room)."""
+    window ends one gap short of the panel, so the graph keeps its room."""
     from hyperspace import ui_pad
     for display in (CONTROL_SIZE, (1480, 900), (1000, 606)):
         pad_w = ui_pad.room(display, None)[2]
@@ -744,7 +743,7 @@ def test_the_pad_alone_takes_only_its_own_width():
         assert pw == pad_w and abs(px + pw + ui_desk.EDGE - x) <= 1.0, (display, px, pw, x)
 
 
-# ---------------------------------------------------------------- FINE (row 732)
+# ---------------------------------------------------------------- FINE
 
 def _fine_control() -> apc40.Control:
     number, ch = apc40.FINE

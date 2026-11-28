@@ -1,4 +1,4 @@
-"""Plan 90 (H2, §10.2–§10.3) — the look-back retired onto public parts.
+"""The look-back retired onto public parts.
 
 A saved look-back (`lookback`, `lookback.<n>`), its echo pins and its knobs
 (`dream.*`, `dream.<n>.*`) are rewritten on load (`graphmigrate.lookbacks`, the
@@ -294,10 +294,10 @@ def test_the_parts_draw_whatever_the_master_switch_said():
     assert any("fx.mix" in n and "parts too" in n for n in notes)
 
 
-# ---------------------------------------------------------------- one group (owner, plan 90 H2)
+# ---------------------------------------------------------------- one group
 
 def test_a_look_back_lands_folded_in_one_group_of_its_parts():
-    """The owner (2026-11-26): the parts a look-back becomes are detail on
+    """The parts a look-back becomes are detail on
     demand — one folded group, picture in and picture out, `+` away from
     the parts. Its number is past every group the file named; the Reads
     of its echo pins are the patch's, not the group's."""
@@ -346,7 +346,7 @@ def test_a_look_back_a_group_of_the_file_held_brings_its_parts_into_it():
         "render:acid", "render:delay", "render:fade", "render:resize", "render:trail"]}]
 
 
-# ---------------------------------------------------------------- Devin on #522
+# ---------------------------------------------------------------- a fragment with no dream
 
 def test_a_fragment_with_no_dream_keeps_none_of_the_dreams_values():
     """A saved look-back fragment holds the dream's shared knobs (darken,
@@ -405,10 +405,10 @@ def test_the_master_switch_keeps_wire_declared_and_default_mix_effects_as_they_d
 
 
 def test_a_fragment_with_no_dream_keeps_its_rows_onto_the_hosts_dream():
-    """Devin on #522 (second pass): only the dream's values are the host's in
+    """Only the dream's values are the host's in
     a fragment with no dream — a row from the fragment's own LFO (voice 1,
     lane `lfo:0`) onto `dream.contrast` may drive the host's, and keeps doing so beside the
-    Curve it now drives too. Plan 90 H3: the host's dream has no contrast any more
+    Curve it now drives too. The host's dream has no contrast
     (an effect, `fx.dream.*`), so that copy is left out, said — the row drives the
     Curve alone."""
     doc = {"schema": patches.SCHEMA, "name": "f",
@@ -429,7 +429,7 @@ def test_a_fragment_with_no_dream_keeps_its_rows_onto_the_hosts_dream():
 
 
 def test_a_fragment_with_no_dream_drops_a_desk_row_onto_the_hosts_dream():
-    """Devin on #522 (third pass): a row whose source is not the fragment's
+    """A row whose source is not the fragment's
     own (a desk knob) onto the host's dream is nothing of the patch's —
     `patches.check` refused the whole file. It goes; its copy onto the part
     stays, and a row from the fragment's own LFO keeps both (above)."""
@@ -449,7 +449,7 @@ def test_a_fragment_with_no_dream_drops_a_desk_row_onto_the_hosts_dream():
 @pytest.mark.parametrize("bad", [{"routes": [{"source": "cc:0:1", "target": [], "op": "abs"}]},
                                  {"lfos": 1}], ids=["list-target", "lfos-a-number"])
 def test_a_malformed_fragment_migrates_and_is_refused_by_check(bad):
-    """Devin on #522 (fourth pass): the filter of rows onto the host's dream
+    """The filter of rows onto the host's dream
     reads the file before `check` does — a malformed one must pass through
     to be refused in words (a LibraryError), never raise and stop the list."""
     doc = {"schema": patches.SCHEMA, "name": "f",

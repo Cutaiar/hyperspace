@@ -290,7 +290,7 @@ def test_the_finish_wait_starts_when_the_run_appears(gh):
 def test_the_real_waits_are_the_scripts_and_on_a_monotonic_clock():
     tool = _tool()
     assert (tool.APPEAR_S, tool.FINISH_S, tool.SILENT_S) == (10 * 60, 30 * 60, 5 * 60)
-    assert (tool.APPEAR_POLL_S, tool.FINISH_POLL_S) == (5, 5)   # row 870: a merge waits one poll past green at most
+    assert (tool.APPEAR_POLL_S, tool.FINISH_POLL_S) == (5, 5)   # a merge waits one poll past green at most
     assert inspect.signature(tool.wait).parameters["clock"].default is time.monotonic
 
 

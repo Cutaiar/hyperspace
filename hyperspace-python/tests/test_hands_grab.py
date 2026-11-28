@@ -1,9 +1,9 @@
-"""Plan 24 C5 (H1): cause and effect — the grab switch.
+"""Cause and effect: the grab switch.
 
-`hand:<side>.grab` is a closed fist read from C4's per-finger curls
+`hand:<side>.grab` is a closed fist read from the per-finger curls
 (`hands.fist`) through a `Gate` — Schmitt + debounce like the pinches —
 published as a gate like them, after every older lane, and shown on the
-HANDS page. The proof the owner asked for: their intended mapping
+HANDS page. The proof: the intended mapping
 (`position` rows from the right hand's yaw / pitch / roll onto
 `camera.yaw`, `camera.pitch` and `rot.phase.XY`, each gated by the grab)
 is a fixture loadable patch, loaded through a scratch library and played by
@@ -71,7 +71,7 @@ def test_the_grab_is_a_schmitt_trigger_with_a_debounce():
 
 def test_the_grab_lanes_follow_every_older_lane():
     """`hand:<i>` from an older loadable patch still reads the lane it did: the
-    thirty-eight lanes before C5 keep their places, the two grabs follow."""
+    thirty-eight lanes before the grabs keep their places, the two grabs follow."""
     names = hands.default_addresses()
     lay = hands.Layout(HandSettings.from_config({}).axes)
     assert names[38:40] == ["left.grab", "right.grab"] == [hands.grab_name(s) for s in hands.SIDES]

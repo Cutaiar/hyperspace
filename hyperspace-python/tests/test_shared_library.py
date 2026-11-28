@@ -1,4 +1,4 @@
-"""Plan 25: the shared library folder — `[library] path` puts the library
+"""The shared library folder — `[library] path` puts the library
 (loadable patches, shows, module groups, the trash) in a folder of its own, the machine files stay in the home, a missing folder is never created
 and refuses every write, writes are atomic, and a cloud client's conflict
 copy is listed beside the file it copies.
@@ -81,7 +81,7 @@ def test_a_save_lands_in_the_library_and_last_show_in_the_machine_home(tmp_path)
     assert not lib_root.exists()
 
 
-# ---------------------------------------------------------------- D5: missing
+# ---------------------------------------------------------------- missing
 
 @pytest.fixture()
 def gone(tmp_path):
@@ -103,7 +103,7 @@ def test_a_missing_library_is_said_and_never_created(gone):
 
 
 def test_a_missing_library_lists_nothing(gone):
-    """One tier (2026-10-28): nothing ships with the app, so a missing
+    """One tier: nothing ships with the app, so a missing
     library lists nothing and opens the unsaved `untitled` show."""
     lib = gone.lib
     assert lib.list(LOADABLE) == [] and all(lib.list(g) == [] for g in lib.groups())
@@ -230,7 +230,7 @@ def test_two_files_of_one_name_neither_canonical_both_list(tmp_path):
     assert idx["Wide"] == folder / "a-copy.json" and idx["b-copy"] == folder / "b-copy.json"
 
 
-# ---------------------------------------------------------------- one place (2026-11-23)
+# ---------------------------------------------------------------- one place
 
 def test_no_library_path_is_no_library_and_the_home_gets_nothing(tmp_path):
     """No [library] path: the library is `NO_LIBRARY` under the home — never a folder, so
@@ -276,7 +276,7 @@ def test_ensure_home_makes_the_home_and_no_library_in_it(tmp_path):
 
 
 def test_strays_name_no_folder_when_there_is_no_library(tmp_path):
-    """Review of #480: with no library (none set, config.toml unread, the folder gone) the
+    """With no library (none set, config.toml unread, the folder gone) the
     words name no destination — the tool would fill a folder that is not the library."""
     home = tmp_path / "home"
     (home / "loadable").mkdir(parents=True)

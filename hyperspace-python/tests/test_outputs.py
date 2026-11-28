@@ -1,4 +1,4 @@
-"""Plan 21: the compose path — a picture per output on one GL context.
+"""The compose path — a picture per output on one GL context.
 
 The pure half first (`outputs.fit`, the module's imports), then the
 renderer's half on offscreen targets standing in for the windows: the
@@ -8,13 +8,13 @@ a frame and the effects once per distinct picture an output shows, and a
 failing view, end or hands pass never costs the other views, the first
 target's binding or the dim.
 
-Plan 35 T4: the pipelines and the through switch are gone. A window's
+There are no pipelines and no through switch. A window's
 `Switches` are its mutes (the picture, the hands) and its look; "hands
 through the effects" is its output's wiring — a state that puts the hands
 through is a `Thru` (`tests/wiredframe.py`), written into the renderer's
 wiring (`wviews`) with every mute on, as the golden tool draws its states.
 
-Plan 90 H2: the look-back is retired. "Echoes" here are a tracer from public
+There is no look-back. "Echoes" here are a tracer from public
 parts (`with_echoes`: a delay keeping `ECHOES` frames read by a trail, added
 on the scene); the history is that delay's stack.
 
@@ -38,7 +38,7 @@ from hyperspace.outputs import Switches, fit
 
 
 def test_the_pipelines_and_the_through_switch_are_gone():
-    """Plan 35 T4 (row 377): no route table and no through switch — what a
+    """No route table and no through switch — what a
     window shows is what is wired into it, through its two mutes."""
     for name in ("route", "PIPELINES", "SCENE", "SCENE_HANDS", "HANDS", "NAMES"):
         assert not hasattr(O, name), name
@@ -125,10 +125,10 @@ def _src(guide: bool = False, tmp=None):
 def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, guide=0,
         alpha=1.0, faces=False):
     """A renderer with `effects` on, the ghost hands on (synthetic), the
-    master dim and the ground as asked. Plan 33 R23: the run as a load
-    lands it (`graphmigrate.wiring_of`). `faces`: hueturn on as well, on
-    no wire — what was aimed at the faces until plan 33 draws only where a
-    wire puts it (tests/test_graph_faces.py), so it changes no byte."""
+    master dim and the ground as asked. The run is as a load lands it
+    (`graphmigrate.wiring_of`). `faces`: hueturn on as well, on no wire;
+    faces draw only where a wire puts them (tests/test_graph_faces.py), so
+    it changes no byte."""
     from hyperspace.fx import FxState
     from hyperspace.graphmigrate import specs_of, state_values, wiring_for
     from hyperspace.render import Renderer
@@ -137,8 +137,8 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
     for n in effects:
         fx.values[n]["on"] = True
     r = Renderer(ctx, fx=fx)
-    # (plan 36 T3: the run in the old words, for `keep_run`; the renderer
-    # takes it wired, as a load lands it)
+    # (the run in the old words, for `keep_run`; the renderer takes it
+    # wired, as a load lands it)
     r.old_wiring = wiring_for(state_values(fx), specs_of(fx), wired=False)
     r.wiring = wired_wiring(r.old_wiring)
     if faces:
@@ -154,11 +154,10 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
 
 def with_echoes(r, words) -> None:
     """`r` wired with `words` (the old unwired words, `graphmigrate.wired_of`)
-    and a tracer of their history from public parts (plan 90 H2: the
-    look-back is retired) — as the tracers starter spawns one: the history's
-    picture into a delay (keeping `ECHOES`, every frame: `scene_view`'s), its
-    stack into a trail laid add, the trail added onto the run's picture by a
-    composite (blend add). The history is the scene, or with
+    and a tracer of their history from public parts — as the tracers starter
+    spawns one: the history's picture into a delay (keeping `ECHOES`, every
+    frame: `scene_view`'s), its stack into a trail laid add, the trail added
+    onto the run's picture by a composite (blend add). The history is the scene, or with
     `history="scene+hands"` the composite the words lay the hands on. The
     section is kept whole as the base `wire_switches` wires the windows'
     states over (a `Wiring` keeps no delay entry, only the wires to it)."""
@@ -190,8 +189,8 @@ def with_echoes(r, words) -> None:
 
 
 def wired(r, section: dict):
-    """`section` (a loadable patch's graph section, plan 28 N4's words) as a load
-    lands it over `r`'s effects: plan 33 R23, `graphmigrate` — the run the
+    """`section` (a loadable patch's graph section) as a load
+    lands it over `r`'s effects (`graphmigrate`): the run the
     effects on make, beside the section's own wires."""
     from hyperspace.graphmigrate import specs_of, state_values, wiring_for
 
@@ -200,8 +199,8 @@ def wired(r, section: dict):
 
 
 def keep_run(r, wiring):
-    """`wiring` (a placement, a hands node: plan 26–30's words) with `r`'s
-    run kept — the run the rig's effects landed as (plan 33 R23); a wiring
+    """`wiring` (a placement, a hands node) with `r`'s
+    run kept — the run the rig's effects landed as; a wiring
     that says a run of its own keeps it."""
     from dataclasses import replace
 
@@ -276,7 +275,7 @@ def views(ctx, *switches, sizes=None, bg=1.0):
 
 def wviews(ctx, r, *states, sizes=None, bg=1.0):
     """One offscreen view per state (`views`), `r` wired for them first
-    (plan 35 T4, `wiredframe.wire_switches`: a `Thru` is its output's
+    (`wiredframe.wire_switches`: a `Thru` is its output's
     wiring, a `Switches` the window's mutes)."""
     return views(ctx, *wire_switches(r, *states), sizes=sizes, bg=bg)
 
@@ -311,10 +310,10 @@ def today(ctx, r, frames=4, t0=2.0, spin=0.05, samples=0, size=(W, H)):
 
 
 def _stack_names(r) -> list[str]:
-    """The effects the retired stack ran (plan 33 T7 removed `FxChain.run`):
+    """The effects the retired stack ran:
     the run's, in its order, those live."""
     st = r.fx.state
-    old = getattr(r, "old_wiring", None) or r.wiring        # (plan 36 T3: the old words')
+    old = getattr(r, "old_wiring", None) or r.wiring        # (the old words')
     return [n for n in (getattr(old, "run", None) or ()) if st.live(n)]
 
 
@@ -351,8 +350,8 @@ def _stack_run(r, target, t) -> list[str]:
 
 def _copy(r, tex, dst):
     """`tex` copied 1:1 into `dst` (the chain's copy pass): what the parent's
-    look-back drew with no echo — the scene untouched (plan 90 H2: the
-    look-back is retired, so the reference no longer runs it)."""
+    look-back drew with no echo — the scene untouched (the
+    reference runs no look-back)."""
     ctx = r.ctx
     dst.use()
     ctx.viewport = (0, 0, *dst.size)
@@ -362,7 +361,7 @@ def _copy(r, tex, dst):
 
 
 def _parent_draw(r, s, w, h, t):
-    """`Renderer.draw` as it was on the parent commit (plan 20 + WP5),
+    """`Renderer.draw` as it was on the parent commit,
     verbatim but for `self` → `r` and the look-back drawing nothing (`_copy`):
     the reference the default view must match byte for byte."""
     from hyperspace.render import _samples_of
@@ -389,8 +388,8 @@ def _parent_draw(r, s, w, h, t):
         fx.opaque = getattr(r, "bg_alpha", 1.0) >= 1.0
 
         def composite(dst):
-            # (plan 36 T4: the parent's post pass with the look-back off — a
-            # copy, the pass with no echo; plan 90 H2: the look-back retired)
+            # (the parent's post pass with the look-back off — a
+            # copy, the pass with no echo)
             _copy(r, r.scene.tex, dst)
             target.viewport = (vx, vy, vw, vh)
         if _stack_active(r):
@@ -434,11 +433,8 @@ def test_one_default_output_is_todays_frame_byte_for_byte(ctx, case, samples):
     """`Renderer.draw` — one default view on the bound framebuffer — is the
     parent commit's frame byte for byte: effects on and off, the face
     target, the hands off and on (with the guide), the dim, MSAA, an opaque
-    ground and overlay's (plan 90 H2: the look-back case is gone with the
-    look-back). Nothing is allocated for
-    outputs and the one pipeline writes straight to the target. (A wider
-    matrix — 320 cases with tethers — was diffed against the parent
-    commit's own code while building; see the PR.)"""
+    ground and overlay's. Nothing is allocated for
+    outputs and the one pipeline writes straight to the target."""
     import numpy as np
 
     kw = CASES[case]
@@ -457,8 +453,8 @@ def test_one_default_output_is_todays_frame_byte_for_byte(ctx, case, samples):
     assert ctx.error == "GL_NO_ERROR"
     assert want[..., :3].max() > 50
     assert np.array_equal(got, want), np.abs(got - want).max()
-    # nothing extra made (plan 36 T4: the scene shown straight paints its
-    # texture 1:1 with the show program, where the look-back's copy pass was)
+    # nothing extra made (the scene shown straight paints its
+    # texture 1:1 with the show program)
     assert r._frames == {}
     assert r.stats["direct"]
     assert r.stats["chain_runs"] == (1 if _stack_active(r) else 0)
@@ -509,16 +505,16 @@ def test_two_outputs_with_the_same_switches_run_the_chain_once(ctx):
     (O.Switches(scene=False, hands=False), Thru(scene=False), 1),
 ])
 def test_outputs_that_differ_run_one_chain_per_distinct_input(ctx, glass, projector, runs):
-    """The plan's table of two-output combinations: `Renderer.stats`
+    """The two-output combinations: `Renderer.stats`
     counts the chain runs — at most two for two outputs, one when they
-    agree. (Plan 35 T4: two windows each wired through have a copy chain
+    agree. (Two windows each wired through have a copy chain
     each, so "the same state: one" is no case — the same picture is one
     end, `test_the_frame_through_a_texture_is_the_same_bytes`.)"""
     r = rig(ctx)
     run(ctx, r, wviews(ctx, r, glass, projector), frames=2)
     assert r.stats["chain_runs"] == runs
     assert len(r.stats["ends"]) == runs
-    # (plan 35 T4: the layer is drawn while the wiring lays it — a window's
+    # (the layer is drawn while the wiring lays it — a window's
     # hands mute is read at its output, and never rebuilds the graph)
     assert r.stats["layer"] is True
 
@@ -547,8 +543,7 @@ def test_the_four_scene_and_hands_states_show_their_pictures(ctx):
 
 def test_the_history_is_written_once_a_frame_whatever_the_switches(ctx, monkeypatch):
     """The echoes' delay writes once a frame, however many outputs show
-    what and whichever of them reads it (plan 90 H2: the look-back's capture
-    was this; its history is a delay now)."""
+    what and whichever of them reads it (the history is a delay)."""
     from hyperspace.graph import DelayWrite
 
     S = O.Switches
@@ -590,11 +585,11 @@ def test_the_echoes_carry_on_with_the_scene_off_everywhere(ctx):
 
 
 def test_the_history_holds_what_it_is_wired_to_and_the_default_graph_wires_it_as_today(ctx):
-    """Plan 26 A3: the history captures the image it is wired to. The
+    """The history captures the image it is wired to. The
     default graph wires it to the bare scene, so in every switch state
-    its echoes hold no hands, as before A3; wired to the scene with the
-    hands' layer (`Wiring.history`) they hold the hands. (Plan 35 T4: its
-    picture a `composite`; plan 90 H2: the history is a delay,
+    its echoes hold no hands; wired to the scene with the
+    hands' layer (`Wiring.history`) they hold the hands. (Its
+    picture is a `composite`; the history is a delay,
     `with_echoes`.)"""
     import numpy as np
 
@@ -744,7 +739,7 @@ def test_a_raising_pipeline_leaves_its_views_on_the_ground_and_the_rest_drawn(ct
     want_hands = run(ctx, rig(ctx, dim=0.5), views(ctx, S(scene=False)))[0]
     r = rig(ctx, dim=0.5)
     with monkeypatch.context() as m:
-        # plan 30 D0: the frame's effects run one pass each (`FxChain.run_one`)
+        # the frame's effects run one pass each (`FxChain.run_one`)
         m.setattr(FxChain, "run_one",
                   lambda self, *a: (_ for _ in ()).throw(RuntimeError("chain")))
         broken, hands = run(ctx, r, (vs := views(ctx, S(), S(scene=False))))
@@ -840,7 +835,7 @@ def test_the_presenter_handoff(ctx):
 
 
 def test_a_renderer_from_before_the_outputs_still_draws_and_reloads(ctx):
-    """Hot reload: a Renderer made before plan 21 has no frame textures,
+    """Hot reload: a Renderer made before the outputs existed has no frame textures,
     show program or stats; draw_outputs and on_reload make them."""
     S = O.Switches
     r = rig(ctx)
@@ -853,21 +848,21 @@ def test_a_renderer_from_before_the_outputs_still_draws_and_reloads(ctx):
     assert r._frames and r.stats["ends"] == ["shown(warp)"]
 
 
-# ---------------------------------------------------------------- WP2: hands through effects
+# ---------------------------------------------------------------- hands through effects
 
-# the eight states (plan 35 T4: each its output's wiring, `Thru`, every
+# the eight states (each its output's wiring, `Thru`, every
 # window's mutes on — as the golden rig draws them)
 EIGHT = [Thru(scene=a, hands=b, through=c)
          for a in (True, False) for b in (True, False) for c in (False, True)]
 
 
 def test_each_of_the_eight_states_shows_its_picture(ctx):
-    """The plan's table, warp + kaleido on, all eight on one frame:
+    """Warp + kaleido on, all eight on one frame:
     3 = 4 and 7 = 8 byte for byte (six pictures); 1 is today's frame and
     holds the hands undistorted; 2 and 6 differ from 1 and 5 where the
     hands are (the effects bend them); 5 is the hands alone on the
     ground; 6 is the hands alone through the chain, with no scene; 7 is
-    black. Three pictures through the effects (plan 35 T4: the run, and
+    black. Three pictures through the effects (the run, and
     the copies of the two through outputs that show a hand), three chain
     runs."""
     import numpy as np
@@ -900,7 +895,7 @@ def test_two_pipelines_show_the_same_echoes(ctx):
     through: both composite the history as it was before this frame's
     capture (the delay's write), so away from the hands the two scenes are
     the same picture
-    (review of PR #120: a capture between the two composites gave the
+    (a capture between the two composites would give the
     second a doubled current frame and echoes a frame older)."""
     import numpy as np
     from test_ghost import hand_mask
@@ -926,8 +921,7 @@ def test_through_bends_the_hands_with_the_shape(ctx):
 
     S = O.Switches
     r = rig(ctx)
-    # the warp at the amount this was written against: it ships at 0.2
-    # since the calmer defaults (2026-10-31), which bends the hands too
+    # the warp ships at 0.2, which bends the hands too
     # little here to clear the fifth below
     r.fx.state.values["warp"]["amount"] = 0.5
     over, through = run(ctx, r, wviews(ctx, r, S(scene=False), Thru(scene=False)))
@@ -940,7 +934,7 @@ def test_through_bends_the_hands_with_the_shape(ctx):
 
 def test_through_with_no_effect_on_is_hands_over(ctx):
     """With no effect on, a through window draws what the hands over draws.
-    Plan 36 T1: it shows its own chain as wired (no stand-down to the
+    It shows its own chain as wired (no stand-down to the
     shared end): its composite is an end of its own, no chain runs."""
     import numpy as np
 
@@ -968,7 +962,7 @@ def test_through_with_no_hand_showing_draws_the_same(ctx):
             sw = [S(hands=False), Thru(hands=False)]
         a, b = run(ctx, r, wviews(ctx, r, *sw))
         assert np.array_equal(a, b), src
-        # (plan 36 T1: the through window shows its own chain, as wired —
+        # (the through window shows its own chain, as wired —
         # no stand-down to the shared end — and draws the same picture)
         want = (["shown(warp)"] if src == "hands switch off"
                 else ["shown(warp)", "shown(warp.slot.2)"])
@@ -1069,7 +1063,7 @@ def test_the_presenter_handoff_carries_the_readout(ctx):
 
 @pytest.mark.parametrize("style", range(1, 9))
 def test_every_style_behaves_as_the_hands_in_every_state(ctx, style):
-    """Plan 21 WP6: a style is drawn into the same hands' layer, so the
+    """A style is drawn into the same hands' layer, so the
     eight states hold for it as for HANDS — 3 = 4 and 7 = 8, six pictures,
     the style alone on the ground in 5, bent by the effects in 2 and 6 —
     and with the guide on and a through pipeline the guide is the readout
@@ -1094,7 +1088,7 @@ def test_every_style_behaves_as_the_hands_in_every_state(ctx, style):
         assert np.array_equal(through[solid], over[solid])
 
 
-# ---------------------------------------------------------------- WP3: the presenter
+# ---------------------------------------------------------------- the presenter
 
 def _presented(ctx, r, pairs, frames=4):
     """Each (switches, size) twice in one frame: a target view and a
@@ -1103,7 +1097,7 @@ def _presented(ctx, r, pairs, frames=4):
     shows its handoff into a framebuffer of that size. Returns
     [(target picture, presented picture)]."""
     pres = O.Presenter(ctx)
-    # (plan 35 T4: each state's two windows wired for it, `wire_switches`)
+    # (each state's two windows wired for it, `wire_switches`)
     sws = wire_switches(r, O.Switches(), *(sw for sw, _ in pairs for _ in (0, 1)))
     vs = [O.View(sws[0], (W, H), target=fbo(ctx))]
     for i, (_, size) in enumerate(pairs):
@@ -1124,7 +1118,7 @@ def _presented(ctx, r, pairs, frames=4):
 
 @pytest.mark.parametrize("effects", [(), ("warp", "kaleido")])
 def test_the_presenter_shows_what_a_target_view_shows(ctx, effects):
-    """WP3's presenter follows the `Handoff`'s five steps with its own
+    """The presenter follows the `Handoff`'s five steps with its own
     programs: for every switch state, at the frame's size and letterboxed
     into another shape, with ghost.alpha, the guide's readout layer and
     master × own dim, its picture is the target view's, byte for byte."""
@@ -1194,7 +1188,7 @@ def test_a_capped_frame_is_drawn_smaller_and_shown_whole_on_output_one(ctx):
     assert r.scene.size == (2 * W, 2 * H) and r.stats["direct"] is True
 
 
-# ---------------------------------------------------------------- plan 23 WP1: the flip
+# ---------------------------------------------------------------- the flip
 
 def _mirror(pic, fx, fy):
     """`pic` (top row first) mirrored as an output flip would."""

@@ -1,15 +1,15 @@
-"""Wave 3 P1: frame kinds in patches — a look-back, the scene and the rest
-are held by a patch, and so is the dream (plan 90 H3: an effect, any number
+"""Frame kinds in patches — a look-back, the scene and the rest
+are held by a patch, and so is the dream (an effect, any number
 of instances), so a "dream + fx + composite" patch exists.
 
 - what is refused still is the rig's (`FIXTURE_KINDS`) and the look's one camera;
 - a frame kind's params are the ones the canvas says are its, every
-  `fx.dream.*` the dream's (plan 90 H2: the look-back's knobs are retired, its
+  `fx.dream.*` the dream's (the look-back's knobs are retired, its
   trail is public parts), the band scene's no node's;
 - what can be made twice is renamed (hands 1 lands as `hands.2`, a trail's
   delay as `delay.2`); what a frame holds one of keeps its name, and a host that
   already has it refuses the spawn in words, nothing landed (the dream is an
-  effect since plan 90 H3: a second one lands as `dream.2`);
+  effect: a second one lands as `dream.2`);
 - a spawn into an empty frame is the frame: every corpus loadable patch, whole.
 """
 
@@ -41,7 +41,7 @@ from hyperspace.routing import Bindings
 
 CORPUS_LOADABLES = sorted((CORPUS / "loadable").glob("*.json"))
 # the wired-frame nodes of party-wake a "dream + fx + composite" cut names: its
-# dream as it opens (plan 90 H3), Resize → Dream → Hue turn → Curve → Fade →
+# dream as it opens, Resize → Dream → Hue turn → Curve → Fade →
 # Composite over the last Cut's picture
 DREAM_CUT = ["render:resize.2", "render:dream", "render:hueturn", "render:curve.2",
              "render:fade.2", "render:fade.3", "render:composite.2"]
@@ -54,7 +54,7 @@ def rig(shell_rig):  # noqa: F811
 
 
 def wake_doc() -> dict:
-    """party-wake as it opens (plan 90 H2: its look-back public parts)."""
+    """party-wake as it opens (its look-back public parts)."""
     return graphmigrate.forward(loadable("party-wake"), {}).doc
 
 
@@ -122,7 +122,7 @@ def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
     """Over the whole registry: where `patches._param_rows` gives a frame
     kind's param an owner it is the node the canvas puts it on
     (`graphview.OWNERS`); no frame kind owns a shared meta group's param.
-    (Plan 90 H3: the dream is an effect, no frame kind.)"""
+    (The dream is an effect, no frame kind.)"""
     app = headless.make_app(tmp_path)
     frame_kinds = ("scene", "shape", "backdrop", "pattern")
     mem = patches._Members(frame_kinds)
@@ -142,7 +142,7 @@ def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
 
 
 def test_the_dream_owns_its_knobs_and_the_trails_parts_their_own():
-    """Plan 90 H3: the dream is an effect — it owns its `fx.dream.*`, no
+    """The dream is an effect — it owns its `fx.dream.*`, no
     other part's; the trail's parts own their own."""
     only_dream = patches._Members(("dream",))
     for pid in ("fx.dream.on", "fx.dream.mix", "fx.dream.k", "fx.dream.layer"):
@@ -170,7 +170,7 @@ def test_a_frame_kinds_values_lift_and_keep_their_ids():
 def test_a_dream_and_a_composite_lift_as_a_patch():
     doc = cut()
     assert patches.check(doc) == []
-    assert doc["schema"] == patches.SCHEMA == "hyperspace.patch/3"   # (plan 89's, no other)
+    assert doc["schema"] == patches.SCHEMA == "hyperspace.patch/3"   # (no other)
     assert {patches.entry_name(e) for e in doc["nodes"]} == {
         "resize", "dream", "hueturn", "curve", "fade", "fade.2", "composite"}
     assert {"kind": "effect", "file": "dream"} in doc["nodes"]
@@ -196,7 +196,7 @@ def test_a_dream_patch_spawns_where_the_host_has_no_dream():
 
 
 def test_a_host_with_a_dream_takes_another_and_its_single_instance_nodes_are_said():
-    """Plan 90 H3: a dream is never refused for a second dream — it lands as
+    """A dream is never refused for a second dream — it lands as
     the next instance; `Landing.taken` names the single-instance nodes the
     host has, refused in words."""
     p = parts(wake_doc())
@@ -217,7 +217,7 @@ def test_the_host_having_only_a_second_dream_leaves_the_first_free():
 
 
 def test_a_second_dream_is_held_and_lands_as_the_next_instance():
-    """Plan 90 H3: any number of dreams (the hook passes all but one through,
+    """Any number of dreams (the hook passes all but one through,
     said): `dream.2` is saved like any effect, and lands renamed where the
     host already has it."""
     spec = G.read_graph({"frame": "wired",
@@ -266,7 +266,7 @@ def test_the_edit_refuses_a_landing_with_a_taken_node_as_well(rig):
 
 
 def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
-    """The ask, end to end: on party-wake its dream group (plan 90 H3: Resize
+    """The ask, end to end: on party-wake its dream group (Resize
     → Dream → Hue turn → Curve → Fade (darken) → Fade (mix) → Composite,
     folded as "dream") saved
     as a patch; back on party-wake it lands beside the host's as a second
@@ -316,7 +316,7 @@ def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
 
 
 def test_a_trails_delay_lands_as_a_second_delay_with_its_own_knobs(rig):
-    """What can be made twice is renamed (plan 90 H2: the look-back's trail
+    """What can be made twice is renamed (the look-back's trail
     is public parts, and its delay is such a part): `delay.2`, `delay.2.*`;
     the host's `delay.*` untouched. Wire as saved reads it in where the
     first one's picture came from."""
@@ -468,8 +468,8 @@ def test_a_whole_loadable_spawned_into_an_empty_frame_is_that_loadable(path):
     nothing in it, its pins wired as saved, is the section again (hands one
     number on: the empty frame's own hands 1 is the meta controller's; `spec_names` is
     what a load would hold). What is left out is the rig's alone. The literal
-    "a load is a spawn into an empty frame" of plan 50 is therefore true of
-    the graph; `LoadedPatch.load_doc` stays the replace landing (row 660)."""
+    "a load is a spawn into an empty frame" is therefore true of
+    the graph; `LoadedPatch.load_doc` stays the replace landing."""
     doc = json.loads(path.read_text())
     p = parts(doc)
     spec = p[0]

@@ -1,4 +1,4 @@
-"""The MEDIA page (plan 32 U, ui_media.py): the missing banner, the
+"""The MEDIA page (ui_media.py): the missing banner, the
 library, the eight channels with their bins, the backdrop's and the
 faces' pickers.
 
@@ -161,7 +161,7 @@ def test_live_feeds_and_this_mac_are_their_own_tabs(rig):
 
 
 def test_the_live_tab_draws_find_ndi_and_send_output_chips(rig):
-    """2026-11-22: under the Live list, Find NDI and a Send chip per
+    """Under the Live list, Find NDI and a Send chip per
     windowed output — drawn, and with no output asked for until clicked."""
     from hyperspace.outputs import Slot
     attach(rig, FakeFolder())

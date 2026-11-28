@@ -1,4 +1,4 @@
-"""The Joy-Con as a 4D totem (plan 47, an experiment: hyperspace/totem.py):
+"""The Joy-Con as a 4D totem (an experiment: hyperspace/totem.py):
 the gyro integrated into three of the six planes, X / Y / B throwing an
 axis into W, A resetting to the world's axes, the tilt onto the pan — and
 nothing at all while it is off."""
@@ -301,7 +301,7 @@ def real_reports():
 
 
 def test_real_bytes_a_still_joycon_holds_and_a_turn_right_turns_the_shape_right():
-    """The owner's Joy-Con (L) over Bluetooth (the plan 46 tape): through
+    """The owner's Joy-Con (L) over Bluetooth (a recorded tape): through
     the flash's calibration and the (L)'s axis map, as the app reads it."""
     windows, cal = real_reports()
     amap = nintendo.AXIS_MAP
@@ -335,7 +335,7 @@ def test_real_bytes_a_still_joycon_holds_and_a_turn_right_turns_the_shape_right(
     assert reg["camera.pan.y"].value < -0.3                # the far end up: the shape up
 
 
-# ---- the review fixes (PR #330's code review) ----
+# ---- review fixes ----
 
 def device(reg, role="pad"):
     dev = PadDevice(role, {}, Context(reg=reg), io=FakePad())
@@ -578,7 +578,7 @@ def test_the_totem_names_the_pad_by_its_device_role():
     assert router.calls[-1]["skip"] == totem.SKIP
 
 
-# ---- the second review (PR #335) ----
+# ---- review fixes, second round ----
 
 def tape(tmp_path, times, gyro_z=2000):
     """A DualSense USB tape: one report at each of `times`, the gyro's z
@@ -785,7 +785,7 @@ def test_learn_on_the_frame_the_totem_takes_the_pad_lands_none_of_its_buttons():
     assert totem.will_drive(state, dead.io, "p2") is False
 
 
-# ---- the third review (PR #335) ----
+# ---- review fixes, third round ----
 
 def test_the_same_pad_back_after_lost_s_takes_over_afresh():
     reg, state, _ = rig()

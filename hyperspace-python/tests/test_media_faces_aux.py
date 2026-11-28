@@ -1,4 +1,4 @@
-"""Plan 32 T7 — the faces read a media channel (`view.media`, where the one
+"""The faces read a media channel (`view.media`, where the one
 bitmap file was), every effect gets a second picture input (`aux`), and the
 two effects that use it (`displace`, `blend`).
 
@@ -83,7 +83,7 @@ def test_an_aux_wire_leaves_the_effect_in_its_run():
     from wiredframe import Shows, graph
 
     effects = ("acid", "blend", "palette")
-    shows = [Shows(), Shows(through=True)]        # (plan 35 T4: a copy of blend through)
+    shows = [Shows(), Shows(through=True)]        # (a copy of blend through)
     base = graph(shows, stacked(effects), effects=effects, size=(96, 64))
     spec = G.read_graph({"wires": [{"from": "media.a", "to": "blend.aux"}]})
     assert spec.notes == ()
@@ -141,10 +141,9 @@ def _renderer(ctx, media=None, wires=()):
 
 
 def test_faces_show_channel(ctx):
-    """A red still on channel c wired into the pattern's layer (plan 33 R:
-    `media.c → pattern.media`, where `view.media = 3` was): the faces are
-    red where the bitmap was drawn; unwired is the frame with no media (plan
-    33 T7: `view.media` is retired — the wire is the layer)."""
+    """A red still on channel c wired into the pattern's layer (`media.c →
+    pattern.media`): the faces are red where the bitmap was drawn;
+    unwired is the frame with no media (the wire is the layer)."""
     m = _media(c=Still(_rgba(16, 9)))
     plain = _draw(ctx, _renderer(ctx), _faces(), size=(160, 120))
     off = _draw(ctx, _renderer(ctx, m), _faces(), size=(160, 120))
@@ -229,7 +228,7 @@ def test_aux_wired_from_channel(ctx):
 
     r = _renderer(ctx, m)
     r.fx.state.values["blend"].update(on=True, mix=1.0, mode=0)
-    # (plan 33 R23: blend in the run, as a load lands it, its aux wired)
+    # (blend in the run, as a load lands it, its aux wired)
     r.wiring = wired_wiring(wired(r, {"wires": [{"from": "media.a", "to": "blend.aux"}]}))
     from hyperspace.view import ViewState
 

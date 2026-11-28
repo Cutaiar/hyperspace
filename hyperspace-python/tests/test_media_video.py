@@ -1,4 +1,4 @@
-"""Plan 32 T3: video files on their own thread, and the scrub proxies."""
+"""Video files on their own thread, and the scrub proxies."""
 
 from __future__ import annotations
 

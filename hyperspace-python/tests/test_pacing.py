@@ -1,4 +1,4 @@
-"""What paces the loop (SC3a, `hyperspace/pacing.py`), over a stand-in window
+"""What paces the loop (`hyperspace/pacing.py`), over a stand-in window
 system and clock. tests/test_root_frame.py runs the real thing."""
 
 from __future__ import annotations
@@ -62,8 +62,8 @@ def _rate(pacer, clock, frames=2000, swap_s=0.0, swapped=True) -> float:
 # ---------------------------------------------------------------- the floor
 
 def test_a_swap_that_does_not_wait_cannot_run_the_loop_away():
-    """Locked, a hidden or occluded window: the swap returns at once. This is the
-    bug SC3a fixes in today's app (1,360–1,720 fps, locked)."""
+    """Locked, a hidden or occluded window: the swap returns at once. Without a
+    floor the loop runs away (1,360–1,720 fps, locked)."""
     pacer, _, clock = _pacer()
     pacer.choose(["w1"], "root")
     assert 235.0 < _rate(pacer, clock) < 245.0
@@ -92,7 +92,7 @@ def test_a_healthy_loop_never_waits_however_uneven():
 
 
 def test_the_floor_believes_no_displays_refresh():
-    """Row 782: `get_video_mode` doesn't decide the swap's rate. A 120 fps loop on
+    """`get_video_mode` doesn't decide the swap's rate. A 120 fps loop on
     displays saying 60, 0 or nothing stays at 120, and they aren't even asked."""
     for hz in ((60,), (0,), (60, 60)):
         pacer, g, clock = _pacer(hz)
@@ -190,7 +190,7 @@ def test_the_first_live_window_paces_and_the_old_one_stops_waiting():
 
 
 def test_a_window_already_gone_is_not_touched():
-    """A destroyed window can't be made current: SC3b hands over after closing."""
+    """A destroyed window can't be made current: the pacer hands over after closing."""
     pacer, g, _ = _pacer()
     pacer.choose(["a", "b"], "root")
     g.log.clear()

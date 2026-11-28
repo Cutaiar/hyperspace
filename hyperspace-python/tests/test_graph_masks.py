@@ -1,5 +1,5 @@
 
-"""Plan 39 T2 — the mask wire (W1) and `matte` (W2).
+"""The mask wire and `matte`.
 
 A mask is a pattern — a pixel passes or it does not — on its own `mask`
 wire, a one-channel 8-bit texture at its maker's size; never a picture's
@@ -9,9 +9,8 @@ passes, black elsewhere, at the consumer's size, fitted by cover:
 name. `matte[.n]` makes one from a picture: by its brightness, its coverage
 or a keyed hue, at `key`, `soft` about it, `invert`, `feather`.
 
-What it must keep honest: no node of plan 36 or earlier changes
-(`scene.cover` into a mask port as it was — plan 90 H2: a cut's, the
-look-back's `lookback.cover` retired —, every factory preset's
+What it must keep honest: no existing node changes
+(`scene.cover` into a cut's mask port as it was, every factory preset's
 `graph.signature` — `test_graph_frame.py` — unmoved); the matte's three
 sources, its knobs, its one channel; the promotion at the consumer's size
 and the right way up; an unwired matte makes nothing; `masks.py` is a
@@ -159,10 +158,8 @@ def test_a_mask_is_still_no_geometry_and_no_depth():
 
 
 def test_the_scene_cover_is_as_it_was():
-    """No node of plan 36 changes: the cover goes into a mask port
-    straight (plan 90 H2: a cut's — the look-back's `lookback.cover` is
-    retired), no promotion between; elsewhere it is still refused in the
-    pin's words."""
+    """The cover goes into a cut's mask port straight, no promotion
+    between; elsewhere it is refused in the pin's words."""
     spec = _spec(("scene.cover", "cut.mask"), ("scene", "cut.image"),
                  ("cut", "output.2.image"), nodes=(CUT,))
     g = G.build_graph(_views(), spec.wiring())
@@ -485,7 +482,7 @@ def test_the_promote_pass_fits_by_cover(ctx):
 
 
 def test_an_asymmetric_picture_lands_the_right_way_up(ctx):
-    """The orientation risk (spec "Risks"): a still bright in its top-left
+    """The orientation risk : a still bright in its top-left
     quarter only (rows top first, as media is) — the matte, promoted onto
     the window, is white top-left only."""
     px = _rgba(64, 48, (20, 20, 20))
@@ -507,8 +504,7 @@ def test_a_matte_reading_nothing_makes_nothing(ctx):
 
 
 def test_a_matte_into_a_cuts_mask_draws(ctx):
-    """(Plan 90 H2: the look-back's cover, which this drew into, is retired:
-    a cut's mask port takes it.)"""
+    """A cut's mask port takes a matte."""
     pairs = [("channel.a", "matte.image"), ("matte", "cut.mask"),
              ("scene", "cut.image"), ("cut", "output.2.image")]
     r = _renderer(ctx, _media(a=Still(_halves(BLACK, WHITE))), pairs, (MATTE, CUT))
@@ -517,8 +513,7 @@ def test_a_matte_into_a_cuts_mask_draws(ctx):
 
 
 def test_an_own_sized_mask_cuts_where_its_picture_shows_it(ctx):
-    """Review fix (Important 1), on the cut (plan 90 H2: the look-back,
-    whose cover fetched the mask 1:1, is retired): a matte of a 64×36
+    """On the cut: a matte of a 64×36
     resize cuts the 160×90 frame by cover (`CUT_FS`), so the cut keeps the
     picture exactly where the promoted mask on output 1 is white, and the
     native mask stays 64×36."""
@@ -540,7 +535,7 @@ def test_an_own_sized_mask_cuts_where_its_picture_shows_it(ctx):
 
 
 def test_the_cut_pass_cuts(ctx):
-    """`CUT_FS` (T3's `cut` is its caller): where the mask passes the
+    """`CUT_FS` (called by `cut`): where the mask passes the
     picture, elsewhere transparent black at amount 1, half at 0.5; invert
     keeps the hole."""
     from hyperspace.render import Renderer
@@ -562,7 +557,7 @@ def test_the_cut_pass_cuts(ctx):
 
 
 def test_the_cut_pass_fits_its_mask_by_cover(ctx):
-    """Review fix: CUT_FS fits the mask into the picture by cover, as the
+    """CUT_FS fits the mask into the picture by cover, as the
     promotion does — a 16×4 mask passing its right quarter, over an 8×8
     picture, has that quarter cropped off (all cut); stretched, the last two
     columns would stay."""
@@ -602,7 +597,7 @@ def test_the_cut_pass_reads_its_picture_byte_for_byte(ctx):
 
 
 def test_a_reload_drops_the_mask_passes(ctx):
-    """Review fix (Important 2): `Renderer.on_reload` releases the cached
+    """`Renderer.on_reload` releases the cached
     `MaskPasses`, so the next ask compiles `masks.py` as it is now."""
     from hyperspace.render import Renderer
 

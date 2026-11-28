@@ -1,4 +1,4 @@
-"""Plan 44 D5b: three undo stacks, by the owner's design of 2026-11-04.
+"""Three undo stacks.
 
 One per `Deck`, scoped to its loadable patch, and one for the meta controller. ⌘Z goes by
 where you are, never by the newest of all stacks; a load is a step on its deck's
@@ -235,7 +235,7 @@ def test_a_load_is_a_step_on_its_decks_stack_and_recovers_a_mistake(rig):
 
 
 def test_a_decks_undo_never_relands_the_meta_controllers_strip(rig):
-    """The shared meta groups' labels are the meta controller's one strip (row 689): a
+    """The shared meta groups' labels are the meta controller's one strip: a
     load undone on a deck leaves the analyzer's name and reference alone, and its
     own stack puts them back."""
     lib, reg = rig.lib, rig.reg
@@ -389,7 +389,7 @@ def pane(tmp_path, monkeypatch):
 
 
 def test_the_meta_sections_are_named_and_exist():
-    """The owner's three, and audio, which holds the master faders (row 692)."""
+    """The owner's three, and audio, which holds the master faders."""
     assert {"analyzer", "hands", "output"} <= set(META_SECTIONS)
     assert set(META_SECTIONS) <= set(PAGE_KEYS)
     assert not {"view", "graph", "routing", "lfo", "loadable"} & set(META_SECTIONS)
@@ -417,7 +417,7 @@ def test_where_you_are_is_the_section_under_the_mouse(pane):
 
 def test_the_panel_says_when_the_person_is_working_it(pane):
     """The real panel, by the mouse: a move is nothing; a press, and the frame of its
-    release, is the person's own; the frame after is nothing again (row 753)."""
+    release, is the person's own; the frame after is nothing again."""
     _r, d = pane
     d.run(d.move("pane.sections"), d.wait(2))
     assert not undo._hand

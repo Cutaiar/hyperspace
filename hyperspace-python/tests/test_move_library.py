@@ -1,7 +1,6 @@
-"""tools/move_library.py (plan 25 D8): an existing library copied into a
+"""tools/move_library.py: an existing library copied into a
 shared folder — never over a file, the machine files left behind, nothing
-in the home touched. All on tmp_path. (The hidden lists' union went with
-hidden loadable patches, 2026-10-28: a `hidden.json` is a machine file now.)"""
+in the home touched. All on tmp_path. (A `hidden.json` is a machine file.)"""
 
 import importlib.util
 import json
@@ -119,7 +118,7 @@ def test_main_prints_the_config_lines_and_never_edits_config(tmp_path, capsys, m
 
 
 def test_a_loadable_folder_is_copied_every_folder_down_hidden_ones_not(tmp_path):
-    """Plan 48 stage 2: ``loadable/`` is walked as the library lists it —
+    """``loadable/`` is walked as the library lists it —
     ``party/`` and ``party/deep/`` copied, ``loadable/.hidden/`` never; the
     other groups stay one level down."""
     home = a_home(tmp_path)
@@ -137,7 +136,7 @@ def test_a_loadable_folder_is_copied_every_folder_down_hidden_ones_not(tmp_path)
     assert (dest / "loadable" / "party" / "deep" / "c.json").read_text() == '{"name": "C"}'
 
 
-# ---------------------------------------------------------------- the home cleared (2026-11-23)
+# ---------------------------------------------------------------- the home cleared
 
 def test_main_moves_the_copied_folders_out_of_the_home(tmp_path, capsys):
     """The shared folder is the one place: after the copy, every folder the copy drew from
@@ -189,7 +188,7 @@ def test_keep_and_dry_run_leave_the_home_as_it_was(tmp_path):
 
 
 def test_group_patches_are_copied_before_their_folder_is_cleared(tmp_path):
-    """Review of #480: a patch of one group sits in ``patches/<group>/`` (plan 50) — copied,
+    """A patch of one group sits in ``patches/<group>/`` — copied,
     in a mixed folder and in one of group patches alone, before the folder goes aside."""
     for only_groups in (False, True):
         home = a_home(tmp_path / str(only_groups))
@@ -205,7 +204,7 @@ def test_group_patches_are_copied_before_their_folder_is_cleared(tmp_path):
 
 
 def test_an_old_layout_home_is_refused_and_left_alone(tmp_path):
-    """Review of #480: `presets/` copied into a library that reads `loadable/` would never
+    """`presets/` copied into a library that reads `loadable/` would never
     show — the tool says to run the one migration first and touches nothing."""
     home = a_home(tmp_path)
     (home / "presets").mkdir()
@@ -220,7 +219,7 @@ def test_an_old_layout_home_is_refused_and_left_alone(tmp_path):
 
 
 def test_shows_and_a_hidden_presets_cache_are_no_old_layout(tmp_path):
-    """Review of #480: only loadable patches in ``presets/`` stop the copy — a ``projects/``
+    """Only loadable patches in ``presets/`` stop the copy — a ``projects/``
     show is read from either folder, and a hidden cache or a backup is no patch."""
     home = a_home(tmp_path)
     (home / "projects").mkdir()
@@ -235,7 +234,7 @@ def test_shows_and_a_hidden_presets_cache_are_no_old_layout(tmp_path):
 
 
 def test_backups_of_the_home_are_never_copied(tmp_path):
-    """Review of #480: migrate_library.py's ``library-backup-<stamp>/`` holds the home's
+    """migrate_library.py's ``library-backup-<stamp>/`` holds the home's
     machine files (bindings.json, windows.json) — never copied into the shared folder."""
     home = a_home(tmp_path)
     for b in ("library-backup-20261123-120000", "presets-backup-1"):
@@ -249,7 +248,7 @@ def test_backups_of_the_home_are_never_copied(tmp_path):
 
 
 def test_an_old_show_behind_an_install_of_its_name_is_kept_back(tmp_path, capsys):
-    """Review of #480: ``projects/party.hyp.json`` and ``installs/party.json`` are one entry,
+    """``projects/party.hyp.json`` and ``installs/party.json`` are one entry,
     the install opened — so a show copied beside one (in the shared folder, or the home's
     own) would never show: said as a conflict, and kept in the archive."""
     home = a_home(tmp_path)

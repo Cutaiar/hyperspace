@@ -1,4 +1,4 @@
-"""Plan 37 C1 (P1, D2): nodes are pictures — a live thumbnail on every
+"""Nodes are pictures — a live thumbnail on every
 picture node of the GRAPH page.
 
 `outputs.PreviewTextures` keeps a small texture per node name, made at
@@ -44,8 +44,8 @@ class Clock:
         return self.t
 
 def party(rig):
-    """`test_graph_legible.party` over the corpus: party-trip is test data
-    since 2026-10-28, seeded into the rig's home first (never over a file)."""
+    """`test_graph_legible.party` over the corpus: party-trip is test data,
+    seeded into the rig's home first (never over a file)."""
     seed(rig.lib.home, "loadable")
     return _party(rig)
 
@@ -133,11 +133,11 @@ def test_a_thumbnails_size_is_its_long_side_at_the_pictures_aspect():
 # ---------------------------------------------------------------- the table
 
 def test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none():
-    # (plan 39's segment pins `fg`/`bg` are ports of the one segment node,
-    # never a canvas node of their own, as the scene's depth pin is; plan
-    # 89's effect slots are ports of the effect's one node too; plan 90 H2:
-    # the look-back and its echo pins are retired — only a migration's read
-    # still parses them, and the page never draws one)
+    # (the segment pins `fg`/`bg` are ports of the one segment node,
+    # never a canvas node of their own, as the scene's depth pin is; the
+    # effect slots are ports of the effect's one node too; the look-back and
+    # its echo pins are retired — only a migration's read still parses
+    # them, and the page never draws one)
     for kind, made in G.WIRED_MAKES.items():
         if made == G.IMAGE and kind not in (G.GROUND, G.DEPTH_PORT, "slot", G.LOOKBACK, "echo",
                                             *G.SEGMENT_PINS):
@@ -151,7 +151,7 @@ def test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none():
     assert graphview.thumb_of(G.ALL_OUTPUTS) is None
     assert graphview.thumb_of(graphview.CAMERA) is None
     assert graphview.thumb_of("lfo.1") is None and graphview.thumb_of("mod.1") is None
-    # a kind the table does not name (plan 39's, say) whose node makes a picture
+    # a kind the table does not name (a segment pin, say) whose node makes a picture
     assert graphview.thumb_of("acid.3", G.Effect("acid.3")) == graphview.PICTURE
 
 
@@ -175,7 +175,7 @@ def _renderer(ctx):
     assert not r.fx.compile_all()
     # the scene through an effect to output 1; into output 2 a composite of
     # that effect a frame late (a delay) under a trail of the scene (a second
-    # delay's stack; plan 90 H2: the look-back's trail is retired) picked by a
+    # delay's stack) picked by a
     # switch: painted and made nodes, and the stateful kinds
     r.wiring = _wire(("shape", "scene.geometry"), ("scene", "kaleido.image"),
                      ("kaleido", "output.1.image"), ("kaleido", "delay.image"),
@@ -321,8 +321,8 @@ def test_the_page_wants_the_picture_nodes_it_draws_on_screen(rig):
     # off screen: nothing
     st["seen_rect"] = ((5000.0, 5000.0), (6000.0, 6000.0))
     assert ui_graph.thumb_wants(st, view, lambda nid: ((0.0, 0.0), (10.0, 10.0))) == {}
-    # hidden by preset only: not wanted (and so never copied). Since
-    # 2026-10-31 preset only keeps every channel, so party-trip leaves no
+    # hidden by preset only: not wanted (and so never copied). preset only keeps
+    # every channel, so party-trip leaves no
     # picture node off: one is left off by hand, as a folded group's member is
     st["seen_rect"] = everywhere
     st["patch_only"] = True
@@ -343,7 +343,7 @@ def test_on_screen_is_any_overlap():
 
 def test_the_page_draws_a_thumbnail_on_every_picture_node_collapsed_or_not(rig, monkeypatch):
     """Headless draw: each picture node drawn asks for its body's picture
-    (`_body_of`), collapsed and expanded (D2), wants its thumbnail, and a
+    (`_body_of`), collapsed and expanded, wants its thumbnail, and a
     picture node's lines are gone from its body; a text node draws as
     before."""
     st = party(rig)
@@ -409,8 +409,8 @@ def test_the_system_page_says_the_thumbnails(rig, monkeypatch):
 
 
 def test_a_node_behind_an_unpicked_switch_input_is_not_made(ctx):
-    """Review: a composite only the switch's unpicked input reads made
-    nothing this frame (plan 33 S) — its thumbnail is not copied, its
+    """A composite only the switch's unpicked input reads made
+    nothing this frame — its thumbnail is not copied, its
     channel is not read for it, and it dims, then goes black a second
     later; picked again, it is copied again."""
     from test_graph_faces import Still, _media, _rgba

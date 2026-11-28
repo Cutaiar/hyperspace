@@ -1,14 +1,12 @@
-"""Plans 31 and 32 together (register row 340, hand check 317): one
-schema ladder, ``/4`` = ``/3`` + media (D1), read whole by a load. Row 394
-(the owner, 2026-10-25): a save is always ``/6``, carrying both families
-and the bins — D1's lowest-schema save and D3's "left out at its default"
-are gone with it.
+"""The pattern/envelope family and the media family together: one schema
+ladder, ``/4`` = ``/3`` + media, read whole by a load. A save is always
+``/6``, carrying both families and the bins; it never saves at the lowest
+schema that fits and never leaves a value out at its default.
 
-`fixtures/merge-31-32/` holds what each branch's own code wrote for the
-same state, before the merge: ``v3-only.json`` by plan 31's head
-(615d4fb, `test_plan31_wiring.make_app`, two steps on and an envelope's
-attack moved), ``media-free.json`` by plan 32's head (3ad7842,
-`test_loadable.boot`, one view value moved)."""
+`fixtures/merge-31-32/` holds what each family's own code wrote for the
+same state: ``v3-only.json`` (`test_plan31_wiring.make_app`, two steps on
+and an envelope's attack moved), ``media-free.json`` (`test_loadable.boot`,
+one view value moved)."""
 
 from dataclasses import replace
 from pathlib import Path
@@ -33,8 +31,7 @@ def app(tmp_path):
 
 def _backdrop(app, c: str | None) -> None:
     """Channel `c` under the scene (None: none) as the GRAPH page lands it
-    (plan 33 T7: the wire `media.<c> → backdrop.image`, where
-    `backdrop.channel` was)."""
+    (the wire `media.<c> → backdrop.image`)."""
     from hyperspace import graph as G
 
     gs = app.loaded_patch.graph
@@ -43,7 +40,7 @@ def _backdrop(app, c: str | None) -> None:
         return
     old = {"wires": [{"from": "frame", "to": "fx.image"},
                      {"from": f"media.{c}", "to": "backdrop.image"}]}
-    # (plan 36 T3: a GRAPH landing is a wired frame — the old words wired)
+    # a GRAPH landing is a wired frame
     from hyperspace import graphmigrate as M
 
     section = M.wired_section(M.renamed(old), G.read_graph(old))
@@ -67,7 +64,7 @@ def _pattern_and_bin(app) -> None:
 
 
 def test_the_ladder_is_one_list():
-    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)   # (… plan 40 T2: /8; plan 43 C2: /9)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
     assert (loadable.SCHEMA, loadable.SCHEMA_V3, loadable.MEDIA_SCHEMA) == (V2, V3, V4)
     assert loadable.SAVE_SCHEMA == V6
 
@@ -81,8 +78,8 @@ def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):
     # channel under the scene is the graph's wire)
     from hyperspace import graphmigrate as M
 
-    # (plan 60, row 859: the grip at its defaults, never used, is left out;
-    # plan 64, row 902: a fractal's settings are its `fractal` key's)
+    # (the grip at its defaults, never used, is left out; a fractal's
+    # settings are its `fractal` key's)
     assert doc["values"] == {k: v for k, v in reg.snapshot(part="patch").items()
                              if not k.startswith("grip.") and k not in loadable.FRACTAL_PIDS}
     assert not [k for k in doc["values"] if M.retired(k)]
@@ -100,17 +97,15 @@ def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):
     assert _backdrop_of(app) == "a"
     assert reg.media.channels["a"].bin[0] == CLIP
     # and stable through a load (once a load has read the file's integers
-    # back as floats, as every loadable patch since plan 13 does)
+    # back as floats, as every loadable patch does)
     again = app.loaded_patch.save_as("both").read_bytes()
     assert app.loaded_patch.load("both") == []
     assert app.loaded_patch.save_as("both").read_bytes() == again
 
 
 def test_an_older_build_refuses_the_combined_save(app):
-    """A build before plan 35 (2 … 5), one of plan 31 alone (2, 3) and one
-    from before both (2,) refuse the `/6` whole rather than strip half of it
-    on a re-save (row 394: both Macs are on the newest build, so none
-    should be asked to)."""
+    """A build reading only (2 … 5), (2, 3) or (2,) refuses the `/6` whole
+    rather than strip half of it on a re-save."""
     _pattern_and_bin(app)
     app.loaded_patch.save_as("both")
     lib = app.lib
@@ -126,8 +121,8 @@ def test_an_older_build_refuses_the_combined_save(app):
 
 
 def test_what_each_branch_wrote_loads_and_saves_as_6(app, tmp_path):
-    """The files plan 31's head (a pattern, `/3`) and plan 32's (one view
-    value, `/2`) wrote for the same state load with what they said and save
+    """The files the pattern family's code (a pattern, `/3`) and the media
+    family's (one view value, `/2`) wrote for the same state load with what they said and save
     `/6` with it."""
     import json
 
@@ -149,10 +144,9 @@ def test_what_each_branch_wrote_loads_and_saves_as_6(app, tmp_path):
 
 
 def test_a_media_value_is_saved_wherever_it_stands(app):
-    """Row 394: a media value is written whatever it is — at the group's
-    default module's value or at the build default — so a reload lands it
-    rather than the module's (D3's "left out at its default" was the
-    lowest-schema save's)."""
+    """A media value is written whatever it is — at the group's default
+    module's value or at the build default — so a reload lands it rather
+    than the module's."""
     reg, lib = app.reg, app.lib
     build = reg["view.media_alpha"].value
     reg["view.media_alpha"].set(0.5)

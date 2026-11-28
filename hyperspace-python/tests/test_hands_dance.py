@@ -1,10 +1,10 @@
-"""Plan 24 C4 (H2): inputs that reward dancing — `hand:*.curl.<digit>`,
+"""Inputs that reward dancing — `hand:*.curl.<digit>`,
 `hand:*.spread`, `hand:*.energy`, `hand:*.flick`, `hands:gap`,
 `hands:twist` — routable sources beside the twelve axes, which stay.
 
 The shaping in signal.py (`unit`, `Smooth`, `Flick`), the geometry in
 core.py, the layout (the new `hand` lanes after the switches, the `hands`
-scheme with its own rests), and the proof the owner asked for: a fixture
+scheme with its own rests), and the proof: a fixture
 loadable patch that routes every new source onto a param, loaded through a scratch
 library and played by synthetic hands on a tape — each param moves.
 No corpus loadable patch is touched."""
@@ -236,8 +236,8 @@ ROUTES = {                    # the fixture's rows: source → the param it posi
     "hand:right.curl.ring": "pattern.mod.2", "hand:right.curl.pinky": "pattern.mod.3",
     "hand:left.spread": "pattern.mod.4", "hand:right.spread": "pattern.mod.5",
     "hand:left.energy": "view.inst_amp", "hand:right.energy": "view.speed",
-    # (plan 90 H3: the right flick rode `dream.mix`; a file with no dream drawn
-    # leaves that row out, so it rides another plain knob)
+    # (a file with no dream drawn leaves a `dream.mix` row out, so the right
+    # flick rides another plain knob)
     "hand:left.flick": "view.bright", "hand:right.flick": "view.lines_alpha",
     "hands:gap": "camera.zoom", "hands:twist": "camera.yaw",
 }
@@ -428,7 +428,7 @@ def test_the_hands_page_shows_every_new_source(monkeypatch, tmp_path):
             drawn.clear()
             frame(rig.panel, "hands")
         got = {a: v for a, v, _ in drawn}
-        room = {f"hand:{s}.room.{k}" for s in hands.SIDES for k in hands.ROOM}     # plan 51
+        room = {f"hand:{s}.room.{k}" for s in hands.SIDES for k in hands.ROOM}
         assert set(got) == {f"hand:{n}" for n in NEW} | room | {"hands:gap", "hands:twist"}
         assert got["hand:right.curl.index"] == pytest.approx(1.0, abs=1e-3)
         assert max(x for *_, x in drawn) <= CONTROL_SIZE[0]
@@ -437,7 +437,7 @@ def test_the_hands_page_shows_every_new_source(monkeypatch, tmp_path):
 def test_a_frame_that_measures_no_speed_lets_the_energy_fall():
     """A fresh frame too far after the last (`SPEED_GAP_S`) measures no
     speed: the energy's target drops to 0 and it decays, rather than
-    holding the last move's level (plan 24 C5, a C4 review item)."""
+    holding the last move's level."""
     d = hc.Dance()
     at = lambda x: features(hand("right", at=(x, 200.0, 0.0)))
     d.step(1 / FPS, 0.0, True, at(0.0), None)

@@ -1,4 +1,4 @@
-"""Plan 53 N1a: node mode on a desk, over two `Deck`s and fake ports.
+"""Node mode on a desk, over two `Deck`s and fake ports.
 
 The rows come from what the patch saved (`nodemode`), for the player's first desk, on the
 deck that desk is on. They are never in the table's rows, never in the file, and no patch
@@ -132,7 +132,7 @@ def _dropdown(deck) -> str:
 
 
 def test_a_knob_on_a_dropdown_picks_a_choice_per_stretch_and_its_ring_says_which(rig):
-    """Plan 86 (row 1061): a dropdown fills the knob after the node's continuous
+    """A dropdown fills the knob after the node's continuous
     params, and the knob's throw is its choices in order (`Param.set_norm`)."""
     node, params = pick_node(rig.one, 1)
     enum = _dropdown(rig.one)
@@ -175,9 +175,9 @@ def test_a_node_whose_continuous_params_fill_the_desk_leaves_its_dropdown_over(r
 
 
 def test_a_saved_row_on_a_dropdown_moves_no_continuous_param_off_its_knob(rig):
-    """Review of #468: a patch-layer row on K1 aimed at the node's dropdown reserved K1
-    once dropdowns filled, and moved every continuous param a knob along. They fill as
-    before dropdowns did (the row on K1 under node mode, as any patch-layer row there);
+    """A patch-layer row on K1 aimed at the node's dropdown does not reserve K1
+    or move every continuous param a knob along. Dropdowns fill as
+    continuous params do (the row on K1 under node mode, as any patch-layer row there);
     a dropdown that has a row keeps out of the fill."""
     node, params = pick_node(rig.one, 2)
     enum = _dropdown(rig.one)
@@ -302,11 +302,11 @@ def test_a_fader_filled_picks_up_and_a_full_desk_is_knobs_then_faders(rig, monke
     assert b.caught
 
 
-# ---------------------------------------------------------------- row 609: FINE
+# ---------------------------------------------------------------- FINE
 
 
 def test_fine_and_node_mode_on_the_same_knob(rig):
-    """Row 609: SEND B stays FINE. A knob node mode fills creeps while held, and takes up
+    """SEND B stays FINE. A knob node mode fills creeps while held, and takes up
     from where it is when let go: the ring goes out again, so no jump."""
     node, params = pick_node(rig.one)
     rig.one.loaded_patch.point_node_mode(1, "midi", node)
@@ -589,7 +589,7 @@ def test_the_seq_page_and_node_mode_stand_together(rig):
         t.set_page(None)
 
 
-# ---------------------------------------------------------------- review of #396
+# ---------------------------------------------------------------- what the fill skips
 
 
 def _generic_above(rig):
@@ -725,7 +725,7 @@ def _on_first_param(rig, source, op):
 
 
 def test_a_qualified_modulator_route_rests_as_a_plain_one_does(rig):
-    """The owner, row 711: a qualified LFO counts. Filled, and held off, one rule for both."""
+    """A qualified LFO counts. Filled, and held off, one rule for both."""
     b, pid = _on_first_param(rig, "lfo@launch:0", "push")
     assert b.is_modulator_route and b.scheme == "lfo"
     assert pid in {r.target for r in rig.nd1.rows()}
@@ -802,8 +802,7 @@ def test_under_asks_what_dispatch_does_on_an_any_channel_row(rig, monkeypatch):
     assert rig.nd1.under(saved) and _dispatch_agrees(rig, saved)
 
 
-# ---------------------------------------------------------------- second review of #396:
-# what the fill counts as taken is what `dispatch` does
+# ---------------------------------------------------------------- what the fill counts as taken is what `dispatch` does
 
 
 def _fader_row(params, invariant=False):
@@ -927,9 +926,8 @@ def test_a_narrower_list_gives_above_layers_the_same_answer(rig):
                     == t.above_layers("cc", ch, number, DESK))
 
 
-# ---------------------------------------------------------------- the owner, 2026-11-06, row 711:
-# "LFOs and audio routes be allowed to be overwritten for node mode, as long as they come back
-# when you disengage node mode"
+# ---------------------------------------------------------------- LFO and audio routes may be overwritten for node mode
+# and come back when node mode disengages
 
 
 def _modulated(rig, deck=None):
@@ -1080,8 +1078,7 @@ def test_nothing_changes_for_a_table_with_nothing_pointed(rig):
     assert rig.one.router._modgraph_key() == before
 
 
-# ---------------------------------------------------------------- Dillon's desk (2026-11-06):
-# he "cares mostly about the clip launch buttons" and "the meta controls on the APC"
+# ---------------------------------------------------------------- a desk that cares mostly about the clip launch buttons and the APC meta controls
 
 
 def test_node_mode_never_takes_a_clip_pad_master_the_crossfader_or_a_meta_control(rig):
@@ -1117,7 +1114,7 @@ def test_node_mode_never_takes_a_clip_pad_master_the_crossfader_or_a_meta_contro
 
 
 # ---------------------------------------------------------------- a chase commit across a visit
-# (row 711's "as long as they come back", plan 52's ledger)
+# (a route overwritten for node mode comes back; the ledger holds it)
 
 
 def _at(deck, level: float) -> None:
@@ -1198,7 +1195,7 @@ def test_a_knob_turned_in_a_visit_stays_where_it_was_left(rig):
 
 
 def test_a_route_deleted_in_a_visit_is_a_row_lost(rig):
-    """Plan 52: a param none of whose rows is left forgets its ledger, visit or no visit."""
+    """A param none of whose rows is left forgets its ledger, visit or no visit."""
     node, p, route = _committed(rig)
     deck = rig.one
     rig.nd1.enter(DESK, node)

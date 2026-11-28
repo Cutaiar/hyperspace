@@ -1,8 +1,8 @@
-"""WP6a — what survives of the look-back's tests: the render window's
-opaque ground (plan 14 WP1) through every corpus loadable patch, and the
+"""What survives of the look-back's tests: the render window's
+opaque ground through every corpus loadable patch, and the
 dream layer menu's words.
 
-The look-back and the old dream node are retired (plan 90 H2, H3): the
+The look-back and the old dream node are retired: the
 dream is the effect file `dream` (tests/test_dream_effect.py), a saved one
 opens as its parts (tests/test_dream_migration.py), and the legacy unit
 converters in `hyperspace/lookback.py` are tested in tests/test_loadable.py.
@@ -63,7 +63,7 @@ class Rig:
 # ---------------------------------------------------------------- the opaque ground
 
 def test_cut_through_never_cuts_an_opaque_ground(ctx):
-    """Plan 14 WP1 (the Pepper's Ghost rig): on an opaque ground — window
+    """On an opaque ground — window
     and fullscreen — faces leave every pixel at alpha 255 whether
     cut-through is on (the default) or off; the fills still draw."""
     rig = Rig(ctx, 256, 256, bg_alpha=Output(None, None).bg_alpha)   # window mode: 1
@@ -156,11 +156,11 @@ STRESS = ["effects", "multiply"]
 
 @pytest.mark.parametrize("name", _corpus_loadables() + STRESS)
 def test_every_corpus_loadable_renders_opaque_in_window_mode(ctx, tmp_path, name):
-    """Plan 14 WP1: the render window is a Pepper's Ghost screen — in window
+    """The render window is a Pepper's Ghost screen — in window
     mode (and fullscreen, the same opaque ground) every pixel of the final
     frame is alpha 255 for every corpus loadable patch, and for a loadable patch with
     cut-through, faces, points and every effect on, through the FX chain
-    (the look-back is retired, plan 90: a saved one is its parts)."""
+    (the look-back is retired: a saved one is its parts)."""
     b = _preset_rig(ctx, tmp_path)
     first = _corpus_loadables()[0] if name in STRESS else name
     path = b.lib.path_of("loadable", first)
@@ -168,8 +168,7 @@ def test_every_corpus_loadable_renders_opaque_in_window_mode(ctx, tmp_path, name
     b.loaded_patch.load(json.loads(path.read_text())["name"])
     assert b.lib.current("loadable") is not None
     if name in STRESS:
-        # (plan 36 T3: every effect file exists for the stress, as before a
-        # graph landed — `FxState.hold(None)`)
+        # (every effect file exists for the stress — `FxState.hold(None)`)
         from hyperspace.fx import declare
 
         declare(b.reg, b.r.fx.state, b.r.fx.state.hold(None))
@@ -179,7 +178,7 @@ def test_every_corpus_loadable_renders_opaque_in_window_mode(ctx, tmp_path, name
             values[f"fx.{fx_name}.on"] = True
             values[f"fx.{fx_name}.mix"] = 1.0
         assert b.reg.restore(values) == []
-        # plan 33 R23: every effect in the run, as a load of these values lands it
+        # every effect in the run, as a load of these values lands it
         from hyperspace.graphmigrate import wiring_of
         b.r.wiring = wiring_of(b.r.fx.state)
         if name == "multiply":

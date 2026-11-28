@@ -1,4 +1,4 @@
-"""Plan 36 T5 (W5): a new loadable patch that starts somewhere, and the picker's
+"""A new loadable patch that starts somewhere, and the picker's
 starters.
 
 **new** on the PRESET strip makes the scene chain — `shape →
@@ -105,8 +105,8 @@ def test_the_starters_are_their_own_submenu_first():
     assert graphview.PICKER_GROUPS[0] == "starters"
     assert [w for _, w in graphview.STARTERS] == [
         "scene chain", "tracers", "tracers + dream", "dream on a picture",
-        "feedback",                                     # (wave 0 E1: the delay loop)
-        "channel to backdrop", "cut-out"]               # (plan 39 T5: the cut-out)
+        "feedback",                                     # the delay loop
+        "channel to backdrop", "cut-out"]
 
 
 def test_scene_chain_on_a_blank_loadable(tmp_path):
@@ -118,7 +118,7 @@ def test_scene_chain_on_a_blank_loadable(tmp_path):
     assert e.said == graphview.STARTER_SAID
 
 
-# plan 90 (H2, Q28): a delay keeping 8 pictures at 30 Hz, a Trail laying them
+# a delay keeping 8 pictures at 30 Hz, a Trail laying them
 # added, a composite adding the trail under the picture — public parts alone
 TRACED = CHAIN - {("scene", ALL)} | {
     ("scene", "delay.image"), ("delay", "trail.stack"),
@@ -144,10 +144,10 @@ def test_tracers_lay_the_trail_on_the_scene_where_it_went(tmp_path):
 
 
 def test_tracers_land_as_one_folded_group_and_the_dream_its_own(tmp_path):
-    """The owner (2026-11-26, plan 90 H2): the tracers are one primitive —
-    picture in, picture out — folded in a group named as a migrated
-    look-back's is ("trail", Q29), its parts a `+` away; in the starter's one
-    undo step. H3: tracers + dream fold whole, as "dream"."""
+    """The tracers are one primitive — picture in, picture out — folded in
+    a group named as a migrated look-back's is ("trail"), its parts a `+`
+    away; in the starter's one undo step. Tracers + dream fold whole, as
+    "dream"."""
     from hyperspace import graphmigrate
     rig, e, _ = wired_rig(tmp_path, SCENE)
     e.loaded_patch = rig.loaded_patch                 # (as GRAPH's Edit is: `render_edit`)
@@ -161,8 +161,8 @@ def test_tracers_land_as_one_folded_group_and_the_dream_its_own(tmp_path):
 
 
 def test_tracers_and_dream(tmp_path):
-    """Plan 90 H3 (Q31): the trail through a Resize into the dream, added on.
-    The trail's own alpha is its coverage — no key, no Fade (Devin on #523):
+    """The trail through a Resize into the dream, added on.
+    The trail's own alpha is its coverage — no key, no Fade:
     with no dream result the trail is added as it was, faint pixels kept."""
     rig, e, pushed = wired_rig(tmp_path, SCENE)
     assert e.starter("tracers+dream") is None
@@ -185,7 +185,7 @@ def test_a_second_tracers_is_its_own_parts(tmp_path):
 
 
 def test_dream_on_a_picture(tmp_path):
-    """Plan 90 H3 (Q31): the chain a saved dream opens as — Resize (keyed:
+    """The chain a saved dream opens as — Resize (keyed:
     brightness is coverage) → Dream → Fade (its mix) → Composite over the
     picture — folded in one group, "dream"."""
     from hyperspace import graphmigrate
@@ -208,7 +208,7 @@ def test_dream_on_a_picture(tmp_path):
 
 
 def test_a_second_dream_is_its_own_parts(tmp_path):
-    """Plan 90 H3: a dream is an effect — a second lands as its own parts,
+    """A dream is an effect — a second lands as its own parts,
     and its hook says "one live dream" as it runs."""
     rig, e, _ = wired_rig(tmp_path, SCENE)
     assert e.starter("dream") is None
@@ -309,7 +309,7 @@ def test_a_starter_lands_at_the_point_as_one_undo_step(page):
     assert lib.loaded_patch.groups == []
 
 
-# ---------------------------------------------------------------- feedback (wave 0 E1, 2026-11-02)
+# ---------------------------------------------------------------- feedback
 #
 # A delay loop with a blend, spliced onto a picture cable by the insert
 # table: `picture → composite.over`, `composite → dst`, `composite →
@@ -376,7 +376,7 @@ def test_feedback_from_the_picker_takes_the_scene_s_one_picture(tmp_path):
     """The picker's starters ▸ feedback (no cable): the scene's one picture,
     as the tracers; with no scene the loop is made and its open ends said;
     a scene feeding several picture ports is refused in words — no dead
-    wire is added (review 2026-11-02, 8)."""
+    wire is added."""
     rig, e, _ = wired_rig(tmp_path, SCENE)
     assert e.add_node("starter", "feedback") is None
     assert wired_wires(rig) == FED_BACK
@@ -399,7 +399,7 @@ def test_feedback_from_the_picker_takes_the_scene_s_one_picture(tmp_path):
 
 def test_the_tracers_share_the_scene_feed_rule(tmp_path):
     """`_scene_feed` is the one rule for a picker starter's picture: the
-    tracers and dream branch says the count it returns (review 4)."""
+    tracers and dream branch says the count it returns."""
     assert graphview._scene_feed({"frame": "wired"}) == (None, None, 0)
     assert graphview._scene_feed(SCENE) == ("scene", ALL, 1)
     two = {"frame": "wired", "wires": [*SCENE["wires"], {"from": "scene", "to": "output.2.image"}]}
@@ -412,7 +412,7 @@ def test_the_tracers_share_the_scene_feed_rule(tmp_path):
 def test_picture_feeds_names_the_cables_feedback_goes_after(tmp_path):
     """`graphview.picture_feeds`: a picture node's cables out (the node
     menu's "add feedback after"), read off the spec's wires with no copy
-    of the section (review 3); [] for one feeding nothing; None for a
+    of the section; [] for one feeding nothing; None for a
     geometry, a window and a node whose picture is a pin."""
     section = {"frame": "wired", "nodes": [{"kind": "composite"}, {"kind": "segment"},
                                            {"kind": "delay"}],
@@ -435,7 +435,7 @@ def test_picture_feeds_names_the_cables_feedback_goes_after(tmp_path):
 
 def test_set_after_landing_is_the_one_post_landing_setter(tmp_path):
     """`_switch_on` and the feedback's level go through
-    `_set_after_landing` (review 5): a value set only where the registry
+    `_set_after_landing`: a value set only where the registry
     has the param, nothing with no registry."""
     rig, e, _ = wired_rig(tmp_path, SCENE)
     assert e.add_node("effect", "fade") is None
@@ -466,7 +466,7 @@ def test_feedback_undoes_in_one_step(tmp_path):
 def test_add_feedback_after_lays_the_loop_below_the_node_s_box(page):
     """`ui_graph.add_feedback_after` (the node menu's item): the starter on
     the cable out of the node, its three nodes laid left to right under
-    the node's real box as the editor draws it (review 6), one undo step;
+    the node's real box as the editor draws it, one undo step;
     with no box drawn, from where the menu opened."""
     from imgui_bundle import imgui_node_editor as ed
     lib = page.lib
@@ -553,7 +553,7 @@ def test_feedback_draws_and_its_trail_fades_to_clear(ctx):
     headless: it draws with no GL error; laid over (the default) the
     shape's frames stay calmer than the same loop laid add; after the
     shape goes the trail shows and fades frame on frame — its alpha too
-    (review 1: a trail that kept alpha 1 was an opaque black ghost), gone
+    (a trail that kept alpha 1 would be an opaque black ghost), gone
     within twenty."""
     from itertools import pairwise
 
@@ -592,11 +592,11 @@ def test_feedback_draws_and_its_trail_fades_to_clear(ctx):
 
 
 def test_a_fringe_and_an_interior_fade_at_one_rate(ctx):
-    """Review 7: a half-covered pixel decays as fast as a covered one. A
+    """A half-covered pixel decays as fast as a covered one. A
     still on channel a — white, opaque on the left, half see-through on
     the right — fed back for four frames, then nothing: each column's
-    picture falls by the same fraction a frame (0.75: the palette's
-    `rgb *= c.a` made the fringe fall by 0.75·a)."""
+    picture falls by the same fraction a frame (0.75; scaling rgb by
+    alpha would make the fringe fall by 0.75·a)."""
     import numpy as np
     from test_graph_delay import _frame
     from test_graph_faces import Still, _fbo, _media, _renderer, _rgba

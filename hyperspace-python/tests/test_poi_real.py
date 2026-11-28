@@ -1,14 +1,13 @@
-"""`tools/poi_probe.py` on the owner's Joy-Con (L) over Bluetooth (2026-11-02,
-`tests/fixtures/pads/joycon-poi-excerpt.jsonl`): a real pickup off the table
+"""`tools/poi_probe.py` on the owner's Joy-Con (L) over Bluetooth
+(`tests/fixtures/pads/joycon-poi-excerpt.jsonl`): a real pickup off the table
 and a real hold in the hand, through the app's exact path: the reader's
 per-report turn on the report clock (`hid.Turn`), the frame's newest sample,
 `poi.step`.
 
-These hold the poi to this tape, and the tool's own working. Row 786 is what
-the tape showed before row 817: the hand run to eight units and the shape off
-the screen. It stays on the screen now, and the pad going still stops the hand
-within a second. Where it ends is still drift: at the screen's edge,
-until A. No test says it stays near the centre, because it doesn't."""
+These hold the poi to this tape, and the tool's own working. The shape stays
+on the screen, and the pad going still stops the hand within a second. Where
+it ends is still drift: at the screen's edge, until A. No test says it stays
+near the centre, because it doesn't."""
 
 import dataclasses
 import importlib.util
@@ -85,8 +84,7 @@ def test_a_tape_with_no_calibration_beside_it_reads_nominal(tmp_path, capsys):
 
 
 def test_a_real_pickup_and_a_real_hold_keep_the_shape_and_the_hand_on_the_screen():
-    """Row 817: every frame of the owner's tape. Before it, the hold ran the
-    hand to eight units, the pan to 5.56 and the zoom to 0.085."""
+    """Every frame of the owner's tape stays on the screen."""
     hx, hy, hz = poi.DEFAULT_BOX
     octave = 2.0 ** (hz * poi.DEPTH_OCTAVES)
     for _, _, _, rig, n in _frames():
@@ -108,8 +106,8 @@ def test_with_the_output_a_small_square_the_tape_stays_on_that_screen(monkeypatc
 
 
 def test_the_pad_going_still_stops_the_hand_within_a_second():
-    """Row 817: from 33.6 s the pad is hardly turning with the attitude a few
-    degrees out. Before, that read as a push until 36.72 s."""
+    """From 33.6 s the pad is hardly turning with the attitude a few
+    degrees out; that does not read as a push."""
     stopped = None
     for _, note, t, rig, n in _frames():
         if note == "hold" and t >= 33.6 and n["still"] >= poi.STILL_S and n["speed"] == 0.0:
@@ -120,7 +118,7 @@ def test_the_pad_going_still_stops_the_hand_within_a_second():
 
 
 def test_no_pull_home_what_the_hold_gathered_stays():
-    """The owner, 2026-11-03: once it stops, the hand does not creep back."""
+    """Once it stops, the hand does not creep back."""
     ends = [list(n["wrist"]) for _, note, t, _, n in _frames() if note == "hold" and t >= 35.0]
     assert poi._norm(poi._sub(ends[0], ends[-1])) < 0.01    # (one blip's frame, at 35.13 s)
     assert poi._norm(ends[-1]) > 1.0

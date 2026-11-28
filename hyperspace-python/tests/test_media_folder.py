@@ -1,4 +1,4 @@
-"""The media folder (plan 32 T4): scan, watch, status, thumbnails, copies."""
+"""The media folder: scan, watch, status, thumbnails, copies."""
 
 import os
 import threading
@@ -344,7 +344,7 @@ def test_thumbnail_makes_go_on_the_thumbnail_worker(mk, monkeypatch):
     assert wait_for(lambda: names) and names[0].startswith("media-thumb-")
 
 
-# ---- the shared twin (row 809): a `local:`/`file:` id read through the
+# ---- the shared twin: a `local:`/`file:` id read through the
 # shared folder, and stored as the shared id by an assignment ----
 
 def test_local_id_reads_through_its_shared_twin(mk):
@@ -422,7 +422,7 @@ def test_prefer_shared_is_the_id_a_save_stores(mk):
     assert f.prefer_shared("camera:0") == "camera:0"
 
 
-# ---- end to end over the real folder (row 809): a patch loaded from disk
+# ---- end to end over the real folder: a patch loaded from disk
 # names `local:`, the file is only in the shared folder, and the channel
 # opens it while the MEDIA banner stays quiet ----
 

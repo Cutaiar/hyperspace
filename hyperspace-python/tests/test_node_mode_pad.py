@@ -1,8 +1,8 @@
-"""Plan 53 N2: node mode on a pad, over two `Deck`s and a stand-in pad on the real router.
+"""Node mode on a pad, over two `Deck`s and a stand-in pad on the real router.
 
 The same fill, rests and cables as a desk's (`node_desk`): what differs is that a pad's rows are
-routes, so `Router` runs them and the camera job stands down. No pad was plugged in for these;
-hand checks 635-638 are the real ones.
+routes, so `Router` runs them and the camera job stands down. No pad is plugged in for these;
+a real pad is a hand check.
 """
 
 from __future__ import annotations
@@ -288,11 +288,11 @@ def test_too_many_is_listed_not_paged(rig):
 # ---------------------------------------------------------------- what a row does
 
 
-# ---------------------------------------------------------------- row 1062: dropdowns on buttons
+# ---------------------------------------------------------------- dropdowns on buttons
 
 
 def dropdowns_for(deck, n=3) -> list[str]:
-    """Dropdowns no row of `deck` touches, for a node to hold (plan 86)."""
+    """Dropdowns no row of `deck` touches, for a node to hold."""
     used = {b.target for b in deck.table.bindings}
     out = nodemode.dropdowns(deck.reg, [p.id for p in deck.reg if p.id not in used
                                         and not p.id.startswith(("view.", "ghost.", "pad."))])
@@ -302,7 +302,7 @@ def dropdowns_for(deck, n=3) -> list[str]:
 
 
 def test_a_pads_dropdowns_go_on_its_bumpers_then_its_stick_clicks(tmp_path):
-    """The owner, 2026-11-23: bumpers, stick clicks, the middle buttons, then the D-pad
+    """Bumpers, stick clicks, the middle buttons, then the D-pad
     and the face. After the continuous params, which keep the sticks and the pairs."""
     p = _rig(tmp_path, MODELS["xbox"])
     clear_buttons(p.one)
@@ -489,7 +489,7 @@ def test_a_pad_gone_lets_go_and_the_camera_returns_when_it_comes_back(rig):
 
 @pytest.mark.parametrize("model", ["joycon-l", "joycon-r"])
 def test_a_joycons_stick_is_heard_where_the_mode_holds_it(tmp_path, model):
-    """#431: its stick reads NaN with the totem off, so a claim on it would be dead with the
+    """Its stick reads NaN with the totem off, so a claim on it would be dead with the
     view orbiting under it. `quiet_stick` stands down, and the pad window asks the same."""
     p = _rig(tmp_path, MODELS[model])
     reg = p.one.reg
@@ -511,7 +511,7 @@ def test_a_joycons_stick_is_heard_where_the_mode_holds_it(tmp_path, model):
 
 
 def test_a_joycons_saved_route_beside_the_mode_still_lets_go(tmp_path):
-    """Only what the mode holds stands down: a learned route on the other axis is as #431 has it."""
+    """Only what the mode holds stands down: a learned route on the other axis is left alone."""
     p = _rig(tmp_path, MODELS["joycon-l"])
     t, reg = p.one.table, p.one.reg
     aim = params_for(p.one, 1)[0]
@@ -539,7 +539,7 @@ def test_a_joycons_trigger_fills_with_no_camera_job_to_stand_down(tmp_path):
 
 
 def test_a_joycon_under_the_totem_hears_its_row(tmp_path):
-    """The owner's table on #431: with the totem on, the stick is free for a route."""
+    """With the totem on, the stick is free for a route."""
     p = _rig(tmp_path, MODELS["joycon-l"])
     reg = p.one.reg
     if "totem.on" not in reg:
@@ -558,7 +558,7 @@ def test_a_joycon_under_the_totem_hears_its_row(tmp_path):
 
 
 def test_the_totem_holds_no_axis_row_and_is_not_refused(rig):
-    """Plan 53's refusal is not built: the totem's skip is buttons, and a pole under it reads
+    """No refusal is needed: the totem's skip is buttons, and a pole under it reads
     as not pressed (`pole_free`), so nothing here needs one."""
     reg = rig.one.reg
     if "totem.on" not in reg:
@@ -574,7 +574,7 @@ def test_the_totem_holds_no_axis_row_and_is_not_refused(rig):
     assert q.eff_norm == pytest.approx(1.0, abs=1e-6)
 
 
-# ---------------------------------------------------------------- the owner's rest, row 711
+# ---------------------------------------------------------------- the owner's rest
 
 
 def _route_on(deck, pid):
@@ -736,7 +736,7 @@ def test_refusals_are_the_routes(rig):
 
 
 def test_a_chase_through_the_mode_commits_and_stays(rig):
-    """Plan 53 §3's pay-off: hold chase, push a stick, let go of chase, then of the stick."""
+    """Hold chase, push a stick, let go of chase, then of the stick."""
     pid = point(rig, *params_for(rig.one, 1))[0]
     reg = rig.one.reg
     q = reg[pid]
@@ -952,7 +952,7 @@ def test_a_joycons_window_says_the_row_and_the_device_agrees(shell_rig):  # noqa
     table.node_desk = None
 
 
-# ---------------------------------------------------------------- review fixes (#433)
+# ---------------------------------------------------------------- review fixes
 
 
 def test_a_control_a_gate_or_a_modifier_reads_is_no_freedom(rig):

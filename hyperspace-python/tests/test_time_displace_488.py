@@ -1,15 +1,15 @@
-"""Plan 90 H4: Time Displace is not a node — it is Read with a field on At
-(§4.8; H1's `stack-slit`). The proof, against PR #488's own shader kept as a
-test fixture (`tests/fixtures/time-displace-488/timedisplace488.glsl`: #488's
+"""Time Displace is not a node — it is Read with a field on At
+(§4.8; `stack-slit`). The proof, against the reference Time Displace shader kept as a
+test fixture (`tests/fixtures/time-displace-488/timedisplace488.glsl`: that
 file with only the past it reads swapped — the delay's stack for the look-back's
 atlas).
 
 Both drawn over one delay of a Colour generator whose hue moves each frame:
-#488's line field (`x` across the frame, `a = x · Span` seconds back, walked over
+the shader's line field (`x` across the frame, `a = x · Span` seconds back, walked over
 the frames' ages and blended between two) against `Line → Read.at` (At =
 `(Span / 2 − a₀) / g`, the wire's depth `Span / (g · aspect)`, with `a₀` the
 newest frame's age and `g` the spacing — a stack's index is its unit, seconds
-`a₀ + k · g`). Equal to rounding wherever `a ≥ a₀`. Where `a < a₀` #488 blended
+`a₀ + k · g`). Equal to rounding wherever `a ≥ a₀`. Where `a < a₀` the shader blended
 toward the picture *now*, which no stack holds: Read reads its newest there
 (§4.8, "At below 0 reads the newest"), and a slit-scan that must include now
 lays the picture over by a composite."""
@@ -93,7 +93,7 @@ def _run(ctx, fx_dir: Path, at: float, depth: float):
     return [_px(x.target)[SIZE[1] // 2, :, :3] for x in views], got["ages"]
 
 
-def test_read_with_a_line_on_at_is_488s_time_displace(ctx, tmp_path, monkeypatch):
+def test_read_with_a_line_on_at_matches_the_reference_time_displace(ctx, tmp_path, monkeypatch):
     d = _fx_dir(tmp_path, monkeypatch)
     _, ages = _run(ctx, d, 0.0, 0.0)                 # (the frames' ages, at this cadence)
     a0, g = ages[0], ages[1] - ages[0]
@@ -101,8 +101,8 @@ def test_read_with_a_line_on_at_is_488s_time_displace(ctx, tmp_path, monkeypatch
     aspect = SIZE[0] / SIZE[1]
     at, depth = (SPAN / 2 - a0) / g, SPAN / (g * aspect)
     (td, read), _ = _run(ctx, d, at, depth)
-    x = (np.arange(SIZE[0]) + 0.5) / SIZE[0]         # each column's centre, #488's x
-    held = x * SPAN >= a0 + 1e-3                     # where #488 reads the stack, not now
+    x = (np.arange(SIZE[0]) + 0.5) / SIZE[0]         # each column's centre, the shader's x
+    held = x * SPAN >= a0 + 1e-3                     # where the shader reads the stack, not now
     assert held.sum() > SIZE[0] * 0.8
     diff = np.abs(td.astype(int) - read.astype(int)).max(axis=1)
     assert diff[held].max() <= 2, diff[held]         # to rounding (8 bits, two lerps)
@@ -110,16 +110,16 @@ def test_read_with_a_line_on_at_is_488s_time_displace(ctx, tmp_path, monkeypatch
     assert np.abs(np.diff(td[held].astype(int), axis=0)).sum() > 0
 
 
-def test_where_488_blended_toward_now_read_reads_its_newest(ctx, tmp_path, monkeypatch):
+def test_where_the_reference_blended_toward_now_read_reads_its_newest(ctx, tmp_path, monkeypatch):
     """The one place the two differ (§4.8): an age younger than the newest
-    frame. #488 blended toward the picture now; a stack holds no now, so Read
+    frame. The shader blended toward the picture now; a stack holds no now, so Read
     reads its newest there — a slit-scan wanting now composites the picture."""
     d = _fx_dir(tmp_path, monkeypatch)
     _, ages = _run(ctx, d, 0.0, 0.0)
     a0, g = ages[0], ages[1] - ages[0]
     at, depth = (SPAN / 2 - a0) / g, SPAN / (g * SIZE[0] / SIZE[1])
     (td, read), _ = _run(ctx, d, at, depth)
-    first = 0                                        # the left edge: now, in #488
+    first = 0                                        # the left edge: now, in the shader
     assert (0.5 / SIZE[0]) * SPAN < a0
     (_, newest), _ = _run(ctx, d, 0.0, 0.0)          # Read at 0 everywhere: the newest frame
     assert np.abs(read[first].astype(int) - newest[first].astype(int)).max() <= 2

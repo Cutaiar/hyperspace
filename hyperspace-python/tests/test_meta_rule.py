@@ -1,4 +1,4 @@
-"""The hard rule (the owner, 2026-11-04; register rows 743–745): no row of a
+"""The hard rule: no row of a
 loadable patch may drive a meta controller param (`part_of(p) == "session"`). Every door
 refuses it in words, a saved one drops with a note and the next save removes it,
 and the meta controller's own rows stay.
@@ -75,7 +75,7 @@ def tool():
 # ------------------------------------------------- one predicate
 
 def test_the_id_and_the_param_say_the_same_of_every_param(tmp_path):
-    """Review of #371: the doors judge by id (a table has no registry), the panel
+    """The doors judge by id (a table has no registry), the panel
     by the param. Over a whole app's registry the two can never disagree."""
     app = headless.make_app(seed(tmp_path))
     assert not [p.id for p in app.reg if part_of(p) != part_of_id(p.id)]
@@ -198,7 +198,7 @@ def test_no_corpus_file_holds_a_row_on_a_meta_param():
 
 
 def test_party_tumble_keeps_its_other_rows_and_its_scale():
-    """A `scale` reads a meta param and never moves it (row 18 (a)): it stays."""
+    """A `scale` reads a meta param and never moves it; it stays."""
     doc = json.loads((ROOT / "tests/corpus/loadable/party-tumble.json").read_text())
     assert not [r for r in doc["routes"] if r["target"] == "master.gain"]
     assert sum(r.get("scale") == "master.gain" for r in doc["routes"]) == 6
@@ -246,7 +246,7 @@ def test_a_picked_control_is_refused_on_a_meta_param_and_stays_picked(tmp_path):
 
 
 def test_a_row_a_hot_reload_left_is_not_saved(tmp_path):
-    """Review of #371: the rule holds on the way in, so a row already in the
+    """The rule holds on the way in, so a row already in the
     live table (a hot reload) must not be written back by a save."""
     r = boot(tmp_path)
     table = r.router.table
@@ -258,7 +258,7 @@ def test_a_row_a_hot_reload_left_is_not_saved(tmp_path):
 
 
 def test_stick_drift_never_ends_a_learn_a_button_can_land(tmp_path):
-    """Review of #371: Learn pad on a meta param waits for a button, so the
+    """Learn pad on a meta param waits for a button, so the
     adapters ask `routable` before reading an axis."""
     r = boot(tmp_path)
     lrn = Learn(r.reg, r.router.table)
@@ -277,7 +277,7 @@ def test_stick_drift_never_ends_a_learn_a_button_can_land(tmp_path):
 
 
 def test_a_drag_from_an_invariant_control_says_invariant_not_the_rule(rig):
-    """Review of #371: a row on an invariant control is the meta controller's, so
+    """A row on an invariant control is the meta controller's, so
     the rule's words would say the opposite of the line."""
     table = rig.router.table
     view = graphview.build(table, rig.reg, rig.router, None, None, None)
@@ -372,8 +372,7 @@ def _lanes(n=64):
 
 
 def test_no_meta_param_says_a_lane_may_drive_it(rig):
-    """Row 775: over the whole panel's registry, by the one rule and no list of ids.
-    §9 counted 102 that said otherwise on a 6-band rig, 89 shared and 13 per deck."""
+    """Over the whole panel's registry, by the one rule and no list of ids."""
     reg = rig.reg
     meta = [p for p in reg if part_of(p) in META_PARTS]
     assert len(meta) > 102 and not [p.id for p in meta if p.modulatable]
@@ -397,14 +396,14 @@ def test_a_declaration_cannot_say_otherwise():
 
 
 def test_the_flag_changes_nothing_a_file_holds(rig):
-    """Nothing saved moves here: the saved half of row 776 waits for the migration, so
-    the same ids stay saved, those it will stop saving or move among them."""
+    """Nothing saved moves here: the same ids stay saved, those it will stop
+    saving or move among them."""
     reg = rig.reg
     held = reg.snapshot(part="shared_meta")
     for pid in ("master.gain", "band.0.post", "tempo.bpm", "output.bg",
                 "output.alpha", "scene.select"):
         assert reg[pid].persist and pid in held, pid
-    assert not reg["tempo.nudge"].persist and "tempo.nudge" not in held    # (plan 58 §8)
+    assert not reg["tempo.nudge"].persist and "tempo.nudge" not in held
 
 
 # (the rows act: each is the meta controller's, on a real table and a real adapter)
@@ -732,7 +731,7 @@ def test_the_tool_lists_every_row_that_would_drop_and_writes_nothing(tmp_path, c
 
 
 def test_a_malformed_row_names_its_file_and_the_report_goes_on(tmp_path, capsys):
-    """Review of #371: `{"value": null}` crashed the report's format; a row or a
+    """`{"value": null}` crashed the report's format; a row or a
     subscriber this build cannot read is the bad file's, named and passed over."""
     t = tool()
     lib = _library(tmp_path / "lib")

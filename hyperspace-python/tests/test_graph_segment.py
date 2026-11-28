@@ -1,6 +1,5 @@
 
-"""Plan 39 T4 — `segment`: any picture → foreground, background and mask
-(W4; decisions 3, 4, 5).
+"""`segment`: any picture → foreground, background and mask.
 
 `segment[.n]` takes the picture on its `image` port and makes three pins:
 `segment.fg` (the picture where the matte passes, cut away elsewhere),
@@ -15,8 +14,7 @@ picture whole on `fg`, nothing on `bg` and `mask`.
 The node is tested with a fake worker (as test_dream.py does): what it is
 fed and by which path (a count on each), the pins from a known matte, the
 orientation of a rows-top-first matte on every consumer (a cut, a window by
-the promotion; plan 90 H2: `lookback.cover`, bound by the mask port's refit,
-is retired), `on` off idling
+the promotion), `on` off idling
 the worker, a removed node closing it, the preview making none, motion on
 two stills, and the `/7` round trip of the entry and its values
 (`segment-motion`, the fixture the goldens draw). The GL tests use
@@ -170,7 +168,7 @@ def test_graph_py_never_imports_segment_py():
 
 
 def test_a_scene_through_a_segment_laid_over_keeps_its_see_through_ground():
-    """As through an effect or a cut (T3's rule): a scene into a segment
+    """As through an effect or a cut (the cut's rule): a scene into a segment
     whose fg (or bg) is laid over clears see-through, so before a matte,
     off, or in the preview the under shows where the scene draws nothing."""
     for pin in ("fg", "bg"):
@@ -224,7 +222,7 @@ def test_the_canvas_knows_the_segment():
 
     assert graphview.LABELS["segment"] == "Segment" and graphview.HOVERS["segment"]
     assert graphview.FRAME_CLASS["segment"] is G.SegmentNode
-    assert graphview.PICKER_GROUP["segment"] == "media"      # (plan 39 T5: W6's MEDIA)
+    assert graphview.PICKER_GROUP["segment"] == "media"
     stand = graphview._stand_in("segment.2")
     assert isinstance(stand, G.SegmentNode) and stand.name == "segment.2"
     owner = graphview.OWNERS["segment"]
@@ -526,11 +524,9 @@ def test_the_shortcut_for_a_channel_with_pixels_and_the_readback_for_one_without
 
 
 def test_a_rows_top_first_matte_lands_the_right_way_up_everywhere(ctx):
-    """The orientation risk (spec "Risks"): a worker's matte passing its
+    """The orientation risk: a worker's matte passing its
     top half (its array's first rows) keeps the top half of the picture on
-    a cut and shows white at the top on a window (the promotion). (Plan 90
-    H2: `lookback.cover`, the mask port that bound it by its refit, is
-    retired.)"""
+    a cut and shows white at the top on a window (the promotion)."""
     w = FakeWorker(_top())
     pairs = [("channel.a", "segment.image"), ("segment.fg", "output.2.image"),
              ("segment.mask", "output.3.image"), ("channel.a", "cut.image"),
@@ -640,7 +636,7 @@ def test_several_segments_are_several_workers(ctx):
 
 
 def test_the_preview_runs_no_worker_and_closing_it_leaves_the_programs(ctx):
-    """Plan 38's seam: a second renderer on the same context with no
+    """A second renderer on the same context with no
     `segment_cfg` (as `hold.mirror` makes the preview) builds the same
     graph, its segment passing its picture through and saying why, with no
     worker made; closing it leaves the program renderer's worker alive."""

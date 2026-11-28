@@ -1,5 +1,5 @@
 """The Joy-Con codec (pads/nintendo.py) and a Joy-Con through the hid road,
-gamepad.Pad and the pad device (plan 43) — fake hidapi devices, no
+gamepad.Pad and the pad device — fake hidapi devices, no
 controller and no threads. The bytes follow dekuNukem's notes; the first
 real ones are in test_pads_joycon_real.py."""
 
@@ -223,7 +223,7 @@ def test_the_newest_of_the_three_sensor_samples_is_read_and_the_battery_scales()
     assert f.accel == (7, 8, 9) and f.gyro == (10, 11, 12) and f.full and f.kind == sony.BT_IN
     assert len(nintendo.imu_samples(bytes(r))) == 3
     # byte 2's high nibble: 8 full … 2 critical, its low bit charging (0x4e
-    # read "low" on a real Joy-Con (L), 2026-11-02)
+    # read "low" on a real Joy-Con (L))
     assert nintendo.decode(full_report(battery=0x90), "l").charging == 1
     assert nintendo.decode(full_report(battery=0x81), "l").charging == 0
     assert nintendo.decode(full_report(battery=0x80), "l").battery == 10
@@ -521,7 +521,7 @@ def test_the_on_screen_layout_draws_only_what_a_joycon_has():
     assert models.MODELS["edge"].has_control("RX") and not models.MODELS["joycon-r"].has_control("LB")
 
 
-# ---- the pad window's readouts (plan 46: the Joy-Con drawn as itself) ----
+# ---- the pad window's readouts (the Joy-Con drawn as itself) ----
 
 def _drawn(view: str, pad, st=None):
     from hyperspace import ui_pad_lab, ui_pad_views
@@ -610,8 +610,8 @@ def test_the_lab_draws_a_joycon_as_itself():
 
 
 def test_only_the_left_joycon_can_reach_backs_factory_row():
-    """The generic chase is on `pad:VIEW`: the (L)'s − decodes to it until #365's
-    layout gives − to the totem, and no bit of the (R)'s report does (row 724)."""
+    """The generic chase is on `pad:VIEW`: the (L)'s − decodes to it until the
+    layout gives − to the totem, and no bit of the (R)'s report does."""
     left = nintendo.decode(full_report(b4=0x01), "l")
     assert [NAMES[i] for i, v in enumerate(left.buttons) if v] == ["VIEW"]
     every = nintendo.decode(full_report(b3=0xFF, b4=0xFF, b5=0xFF), "r")
@@ -731,7 +731,7 @@ def test_the_hub_opens_a_let_go_joycon_afresh_on_its_next_scan():
 
 
 def test_the_pro_reads_its_face_by_position_too():
-    """Review of #435: the Pro's A is the right button, B the bottom, X the top, Y the left
+    """The Pro's A is the right button, B the bottom, X the top, Y the left
     (byte 3's bits are the (R)'s), and it draws its own letters there."""
     def one(**bits):
         f = nintendo.decode(full_report(**bits), "pro")

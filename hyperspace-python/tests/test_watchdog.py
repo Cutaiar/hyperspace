@@ -1,4 +1,4 @@
-"""Plan 14 WP1 — the stall log (watchdog.py), headless.
+"""The stall log (watchdog.py), headless.
 
 A fake clock drives the stall rules without sleeping; one test runs the
 real thread over a frame that blocks, one sends the process SIGUSR1, and
@@ -319,7 +319,7 @@ def test_a_stall_that_holds_the_gil_is_caught_by_the_c_backstop(tmp_path):
     assert Watchdog(log).counts().get("raw dump", 0) >= 1
 
 
-# ---- plan 21 WP3: several render outputs ----
+# ---- several render outputs ----
 
 def _out_state(**kw):
     st = {"visible": True, "iconified": False, "focused": False, "monitor": "Projector",

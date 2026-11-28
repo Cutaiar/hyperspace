@@ -1,10 +1,10 @@
-"""Plan 22 B5: the macro candidates (kept as test fixtures in
-tests/fixtures/macro-candidates/ since plan 25 retired shared/; the owner
+"""The macro candidates (test fixtures in
+tests/fixtures/macro-candidates/; the owner
 has them in his library) load cleanly through the real road — copied into
 a library's loadable/, then `LoadedPatch.load` — with no note, no dropped row,
 every subscriber on a real param or a route the file carries. Whether
 the macros are any good is the
-owner's listening rig (docs/plans/22-macro-candidates.md), not a test's."""
+owner's listening rig, not a test's."""
 
 import json
 import shutil
@@ -22,21 +22,21 @@ from hyperspace.params import Kind
 
 CANDIDATES = Path(__file__).resolve().parent / "fixtures" / "macro-candidates"
 FILES = sorted(CANDIDATES.glob("*.json"))
-# wave 0 T1: the effects' speed and amount params are on tapers, and the
+# The effects' speed and amount params are on tapers, and the
 # candidates' base subscribers on them were migrated end for end
 # (tools/retaper_routes.py: each `from` / `to` lands the real value it did).
 # A macro's throw is linear in norm, so between its ends it now runs the
 # taper's curve: a macro resting at noon no longer lands the scene's own
 # value on such a param, and two macros sharing one (macro-breakdown-drop's
 # 1 and 3 on `fx.warp.amount`) no longer agree there — the owner re-sets
-# those by ear (docs/plans/22-macro-candidates.md). The checks below that
+# those by ear. The checks below that
 # assume the old agreement skip these params; test_retaper.py holds the ends.
 _FILES_OF_FX = FxState().files
 
 
 def _read(path: Path) -> dict:
     """The candidate as a load reads it: through the one ladder
-    (`graphmigrate.forward`) — plan 67: its Hue cycle retired, Hue turn and
+    (`graphmigrate.forward`): its Hue cycle retired, Hue turn and
     its bands' field nodes, as in the owner's library on load."""
     from hyperspace import graphmigrate
     specs = {n: (s.order, s.mix) for n, s in _FILES_OF_FX.items()}
@@ -44,7 +44,7 @@ def _read(path: Path) -> dict:
 
 
 def _not_hue(notes) -> list:
-    """`notes` less what the retirement of Hue cycle says (plan 67)."""
+    """`notes` less what the retirement of Hue cycle says."""
     return [n for n in notes if "Hue cycle" not in n]
 
 

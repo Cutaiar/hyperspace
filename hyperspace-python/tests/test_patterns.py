@@ -1,4 +1,4 @@
-"""Plan 22 B1: the face patterns' eight inputs mean one thing each, in every
+"""The face patterns' eight inputs mean one thing each, in every
 mode — the convention in hyperspace/patterns.py, which the registry, the
 shader's header and its named accessors are held to here, and which the
 rendered faces are held to by pixels (Renderer.pattern_tile: one face's
@@ -81,7 +81,7 @@ def test_the_factory_routes_put_lane_i_on_input_i():
 
 
 def test_the_factory_depth_reads_on_loud_music_and_never_pins_an_input():
-    """Plan 22 B3: the pattern rows push at routing.PATTERN_DEPTH, and the
+    """The pattern rows push at routing.PATTERN_DEPTH, and the
     FACES page's "+ SUB" offer routes at the same one. On the base of 1 an
     input rises by depth · out: a quiet band (out 0.4) still moves it, a
     band at nominal (out 1) by a third of a unit, and a kick transient near
@@ -250,7 +250,7 @@ def test_moving_speed_changes_the_rate_and_never_jumps_the_clock():
     assert r._pattern_clock(s, 3.0) == 0.0                # a clock run back re-anchors
 
 
-# ---- plan 22 B3: the bands themselves (u_levels), for the modes that draw them ----
+# ---- the bands themselves (u_levels), for the modes that draw them ----
 
 def test_only_meter_and_pulse_read_the_bands_and_they_show_them():
     """METER and PULSE draw the analyzer's bands whatever the routes; every

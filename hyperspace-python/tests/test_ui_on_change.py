@@ -1,4 +1,4 @@
-"""What the panel works out once and keeps (2026-11-25): each memo holds what a
+"""What the panel works out once and keeps: each memo holds what a
 fresh answer would be, and goes when what it was made of does."""
 
 from __future__ import annotations

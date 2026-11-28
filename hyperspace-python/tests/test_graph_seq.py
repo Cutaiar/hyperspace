@@ -1,4 +1,4 @@
-"""Plan 31 G1, the GRAPH page for the envelopes and the sequencer, headless.
+"""The GRAPH page for the envelopes and the sequencer, headless.
 
 The rig is test_plan31_wiring's: a real Registry and Router with the
 clock, four LFOs, the envelope bank and the sequencer, as app.main wires
@@ -226,7 +226,7 @@ def test_a_lane_envelope_is_refused_an_extra_one_goes(page):
 
 
 def test_a_picker_added_lfo_is_drawn_off_its_idle_line(page, monkeypatch):
-    """2026-10-31: a fresh LFO is idle (nothing in, nothing out), so its
+    """A fresh LFO is idle (nothing in, nothing out), so its
     area's idle line would hide it until opened — and preset only would
     too. The picker's add reveals it (`ui_graph.reveal_node`): drawn with
     the line closed, until it is deleted."""

@@ -1,8 +1,8 @@
-"""Plan 36 T6 (W6, D4): the **preset only** head chip, on by default.
+"""The **preset only** head chip, on by default.
 
 On, the canvas draws the loadable patch section's nodes, what is wired to them
 (less the controllers and the modulation), whatever feeds those, the
-windows and (2026-10-31) the eight media channels; off, today's canvas. A
+windows and the eight media channels; off, today's canvas. A
 drawing choice only: the state outlives a loadable patch load, and hiding a node
 lays nothing else out. A node the picker added this session stays drawn
 (`ui_graph.reveal_node`): never saved, forgotten when it is deleted."""
@@ -35,7 +35,7 @@ def drawn(st):
 
 def upstream(view, seeds):
     """`seeds` and whatever feeds them, to full depth (what `patch_only`
-    walks since 2026-10-31)."""
+    walks)."""
     feeds = {}
     for c in view.cables:
         a, b = (graphview.node_of(view, c.src_port), graphview.node_of(view, c.dst_port))
@@ -131,7 +131,7 @@ def test_a_routed_lfo_is_drawn_and_an_unrouted_one_is_hidden(rig):
 
 
 def test_what_feeds_the_section_is_drawn_to_full_depth_downstream_one_hop(rig):
-    """2026-10-31: LFO → modifier → param draws the LFO (two hops up);
+    """LFO → modifier → param draws the LFO (two hops up);
     what a controller bound to the section also drives (two hops, down)
     is not pulled in."""
     st = party(rig)
@@ -152,8 +152,8 @@ def test_what_feeds_the_section_is_drawn_to_full_depth_downstream_one_hop(rig):
 
 
 def test_the_channels_are_always_in_the_loadable_only_view(rig):
-    """The owner, after the show of 2026-10-30: with no channel wired to
-    the faces "you can't actually spawn one, it just doesn't exist". The
+    """With no channel wired to the faces
+    none could be spawned from the canvas. The
     eight channels are drawn like the outputs, wired or not, filled or
     empty."""
     st = party(rig)
@@ -219,7 +219,7 @@ def test_a_picker_added_node_is_drawn_before_it_has_a_cable(rig):
 
 
 def test_the_outputs_stay_drawn_with_nothing_wired_into_them(rig):
-    """The owner, 2026-10-27: cutting the wire into the outputs made All
+    """Cutting the wire into the outputs made All
     outputs and every window vanish, and nothing could be wired back.
     The outputs are where a picture is wired to: preset only draws them
     whatever reaches them."""

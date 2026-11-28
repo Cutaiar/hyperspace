@@ -1,7 +1,6 @@
-"""Plan 67: Trip warp as a patch — `noise (flow) × rings → scale`, `point →
+"""Trip warp as a patch — `noise (flow) × rings → scale`, `point →
 scale.2`, added (`combine.2`) → Displace — **near, not equal** to `warp.glsl`
-(the owner, 2026-11-24: "near patch, keep file"; `tests/trippatch.py` says
-why). warp.glsl stays and draws every saved Trip warp look as it did.
+(`tests/trippatch.py` says why). warp.glsl stays and draws every saved Trip warp look as it did.
 
 What is held:
 

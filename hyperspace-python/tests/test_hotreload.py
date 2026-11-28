@@ -126,7 +126,7 @@ def test_bad_save_keeps_last_good_until_fixed(pkg):
 
 
 def test_a_refused_target_strands_no_other_and_all_are_named(pkg):
-    """Row 802: one object refusing left every later target on its old class."""
+    """One object refusing must not leave every later target on its old class."""
     mod_a = importlib.import_module("hotpkg.mod_a")
     importlib.import_module("hotpkg.mod_b")
     first, later = mod_a.Thing(), mod_a.Thing()
@@ -220,7 +220,7 @@ def _triples(node) -> set[tuple[str, str]]:
 def _app_swap_targets() -> set[tuple[str, str]]:
     """Every (module, class) pair app.py hands the reloader, read from the
     source of the `HotReloader(targets=lambda: [...])` call itself so the
-    test and the app cannot drift apart — and, since plan 44 D1, the deck's
+    test and the app cannot drift apart — and the deck's
     own (`Deck.targets`, which that lambda splices in first)."""
     import ast
 
@@ -266,7 +266,7 @@ def _tree(name: str):
 
 
 def test_every_swap_target_lives_in_a_watched_module():
-    """Audit H1: a swap target whose module is not watched can never fire,
+    """A swap target whose module is not watched can never fire,
     and the class it names must be defined (not merely re-exported) there."""
     import ast
 
@@ -290,14 +290,13 @@ def test_every_package_module_but_the_cold_core_is_watched():
         if parts:
             names.add(".".join(parts))
     # offline is the tests' oracle harness; watchdog is cold like app — it
-    # must outlive whatever a reload does, being what diagnoses a freeze
-    # headless (row 394) is the tests' and tools/migrate_library.py's app,
+    # must outlive whatever a reload does, being what diagnoses a freeze;
+    # headless is the tests' and tools/migrate_library.py's app,
     # never the running app's
     # pinch is cold too: its AppKit monitor adds to the module it was made
     # in, so a reloaded copy would sum nothing
-    # segment (plan 39 T4) is cold: a worker module, its threads outlive a
-    # reload (masks went on MODULES, before render, at the 37/38/39 integration)
-    # hot_slots (row 802) is what a hot class's slots stand on across a reload
+    # segment is cold: a worker module, its threads outlive a reload
+    # hot_slots is what a hot class's slots stand on across a reload
     # imgui_gl holds the control window's backend: one live object, made at launch
     # dkit.dev is the kit's workbench (its tests, gallery, oracles): the app
     # never imports it
@@ -343,7 +342,7 @@ def test_the_watch_list_is_in_dependency_order():
 
 
 def test_outputs_is_watched_before_render():
-    """Plan 21 WP1: render.py imports `Switches`, `View` and `route` from
+    """render.py imports `Switches`, `View` and `route` from
     outputs.py, so a save of outputs.py reloads render.py after it."""
     order = _watched()
     assert "outputs" in order and order.index("outputs") < order.index("render")
@@ -389,7 +388,7 @@ A_ENUM_V3 = A_ENUM_V1.replace('B = "b"', 'B = "b"\n        C = "c"')
 
 
 def test_an_enum_a_reloaded_module_defines_keeps_its_identity(pkg):
-    """Audit H2: re-executing a module built a new Enum class, so every
+    """Re-executing a module built a new Enum class, so every
     live member stopped matching `is`. The reloader puts the first class
     back; a member added in the edit is reported and needs a restart."""
     write(pkg, "mod_a", A_ENUM_V1)

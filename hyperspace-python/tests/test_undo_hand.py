@@ -1,6 +1,6 @@
-"""What counts as the person's hand on the panel, row 757: on real ImGui with the app's io, the
+"""What counts as the person's hand on the panel: on real ImGui with the app's io, the
 real `Panel` and its real writers, over the real three stacks. A text field stays live with nobody
-at it, so it is no hand; its writers report their own write. Row 753's rule depends on the
+at it, so it is no hand; its writers report their own write. The undo latch's rule depends on the
 difference: a controller's change never moves focus.
 """
 
@@ -197,7 +197,7 @@ def test_a_controller_with_the_cursor_in_a_field_leaves_a_deck_latched(screen):
 
 
 def test_a_controller_with_the_cursor_in_a_field_opens_the_stack_in_focus(screen):
-    """Row 753: a controller's change opens the stack in focus, with or without a field."""
+    """A controller's change opens the stack in focus, with or without a field."""
     rig = screen.rig
     deck_has_the_focus(rig)
     rig.meta.point_panel(rig.two)
@@ -247,7 +247,7 @@ def test_a_scroll_in_a_field_is_no_hand(screen):
 
 def test_a_key_landing_on_a_controllers_frame_is_no_hand(screen):
     """A find field has no write to report: typing in it, with the APC riding on those very
-    frames, moves no focus. The limit row 757 first shipped with."""
+    frames, moves no focus."""
     rig = screen.rig
     deck_has_the_focus(rig)
     screen.field()
@@ -391,7 +391,7 @@ def test_a_typed_commit_joining_a_controllers_open_step_still_counts(screen):
 
 
 def test_a_held_step_is_still_not_opened_by_a_hand(screen):
-    """Row 753: a held step (`keep_open`) opens nothing, a hand on the panel or not."""
+    """A held step (`keep_open`) opens nothing, a hand on the panel or not."""
     rig = screen.rig
     deck_has_the_focus(rig)
     rig.meta.point_panel(rig.two)

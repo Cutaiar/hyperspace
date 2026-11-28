@@ -1,7 +1,6 @@
-"""WORDS (#407) renamed three strings that were never saved: `graphview.META_SECTION` from
-"session", `patches.CONTROL` from "rig", a cloud cable's id prefix from "rig:". Review asked
-whether any of them reaches a file, since a saved position or a cut lost to a rename would be
-a format change. None does; these hold that.
+"""Three strings are never saved: `graphview.META_SECTION` (once "session"),
+`patches.CONTROL` (once "rig"), a cloud cable's id prefix (once "rig:"). A saved position or
+a cut lost to a rename would be a format change; these hold that none reaches a file.
 
 The rest of the road, by reading: a cable's id goes through `ui_graph._id` to an int the
 node editor holds for this run, its settings file is off (the test below), selection and

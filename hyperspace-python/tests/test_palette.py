@@ -1,4 +1,4 @@
-"""Plan 30 N8: the palette as a colour compression (the owner, 2026-10-20).
+"""The palette as a colour compression.
 
 Mode 0 maps the whole HSV cylinder onto a closed slice of it — a hue arc
 ``hue_from → hue_to`` (up the wheel, through 360 when to < from), a
@@ -342,7 +342,7 @@ def test_a_full_snapshot_from_before_loads_with_no_note_and_no_dot(tmp_path):
     put(rig.home, "before-n8", values=old)
     assert rig.lib.load(LOADABLE, "before-n8") == [] and rig.loaded_patch.notes == []
     assert not rig.lib.is_dirty(LOADABLE)
-    # (plan 36 T3: the palette off, in no run, is not in the section — so
+    # (the palette off, in no run, is not in the section — so
     # it does not exist, and its old ids are dropped with it, said by none)
     assert "palette" not in rig.reg.fx_state.specs and "fx.palette.on" not in rig.reg
 

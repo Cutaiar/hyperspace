@@ -1,4 +1,4 @@
-"""The Ultraleap orbit (plan 51 O2): a clutch and `turn` rows onto the one camera.
+"""The Ultraleap orbit: a clutch and `turn` rows onto the one camera.
 
 Tape-driven through the real route path: hand poses as a real tape file, played
 through `TapeSource` and `HandsIO`, the fist read from the skeleton's curls, the
@@ -781,12 +781,12 @@ def test_another_decks_turn_keeps_no_step_on_this_undo(deck, tmp_path):
 # ------------------------------------------------------------ saved and held
 
 def test_a_save_has_the_row_and_the_turned_camera(deck, tmp_path):
-    """The camera route is the loadable patch's (plan 43 C2): saved, reloaded, it is there."""
+    """The camera route is the loadable patch's: saved, reloaded, it is there."""
     script = closing() + [fist(yaw=float(k)) for k in range(31)] + opening(yaw=30.0)
     Run(deck, tmp_path, script, steps=deck.undo)
     path = deck.loaded_patch.save_as("ORBIT")
     doc = json.loads(path.read_text())
-    assert doc["schema"].endswith("/12")                  # no schema move (plan 89's)
+    assert doc["schema"].endswith("/12")                  # no schema move
     assert doc["values"]["camera.yaw"] == pytest.approx(math.radians(30.0), abs=0.01)
     assert {"source": YAW, "target": "camera.yaw", "op": TURN_OP, "when": GRAB}.items() <= next(
         r for r in doc["routes"] if r["target"] == "camera.yaw").items()
@@ -799,7 +799,7 @@ def test_a_save_has_the_row_and_the_turned_camera(deck, tmp_path):
 
 def test_what_an_older_build_does_with_the_row(deck, tmp_path, monkeypatch):
     """An older build's `MOD_OPS` has no turn: the row goes with a note, the rest
-    of the file lands, and nothing is refused. So no schema move (row 683)."""
+    of the file lands, and nothing is refused. So no schema move."""
     deck.reg["camera.pitch"].set(0.5)
     deck.loaded_patch.save_as("ORBIT")
     monkeypatch.setattr(loadable, "MOD_OPS", ("push", "position"))
@@ -811,8 +811,8 @@ def test_what_an_older_build_does_with_the_row(deck, tmp_path, monkeypatch):
 
 
 def test_an_orbit_moves_the_deck_it_is_on_and_no_other(deck, tmp_path):
-    """Row 684 reversed (plan 44 D5d): a turn writes the base of the deck it acts on,
-    on air or off, and the deck beside it has its own camera. Plan 55: where the row
+    """A turn writes the base of the deck it acts on,
+    on air or off, and the deck beside it has its own camera. Where the row
     acts is the player's duty (`test_players`)."""
     beside = Deck.beside(deck.deck)
     other = beside.reg["camera.yaw"]
@@ -823,7 +823,7 @@ def test_an_orbit_moves_the_deck_it_is_on_and_no_other(deck, tmp_path):
     assert other.base == was and not beside.undo.stack
 
 
-# ------------------------------------------------------------ with the base chase (plan 52)
+# ------------------------------------------------------------ with the base chase
 
 def test_an_orbit_starting_under_a_held_chase_leaves_the_verb_on(deck, tmp_path):
     """The chase keeps its step; the orbit lands in it, and a fist ends no verb."""

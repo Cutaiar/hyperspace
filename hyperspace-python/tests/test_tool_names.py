@@ -6,11 +6,9 @@ so. The tools do not: several of them pick a look by NAME
 (`PATTERN_NAMES.index("bloom")`, `m.name == "hex"`), and nothing in the
 fast tier runs a tool, because each one opens a GL window and renders.
 
-So a respelling breaks them silently, which is exactly what happened when
-the interface stopped shouting (2026-11-10): four tools went on asking for
-`BLOOM`, `FCC`, `HEX` and `CUBIC`, and every one would have raised
-`ValueError` the next time somebody made a demo. The review caught it; this
-is the test that would have.
+So a respelling breaks them silently: a tool that goes on asking for
+`BLOOM`, `FCC`, `HEX` or `CUBIC` after the tables are lower case raises
+`ValueError` the next time it runs. This test catches that.
 
 It reads the tools as TEXT rather than importing them: importing a tool
 pulls in GL, and what is being checked is which names the source asks for,
@@ -108,7 +106,7 @@ def test_a_tool_that_takes_a_name_from_the_command_line_folds_its_case():
 
 @pytest.mark.parametrize("table", sorted(TABLES))
 def test_the_tables_themselves_are_lower_case(table):
-    """The interface's own rule (DECISIONS, 2026-11-10), so a name added
-    later cannot quietly bring the capitals back."""
+    """The interface's own rule (DECISIONS): a name added later cannot
+    quietly bring the capitals back."""
     odd = [n for n in TABLES[table] if n != n.lower()]
     assert not odd, f"{table} holds capitals: {sorted(odd)}"

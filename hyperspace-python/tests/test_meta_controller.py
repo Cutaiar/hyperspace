@@ -1,7 +1,7 @@
 # ruff: noqa: F811 — the fixture fake is test_app_boundary's, taken as an argument
-"""Plan 44 D5a: `deck.MetaController` owns the two `Deck`s and a pointer per holder.
+"""`deck.MetaController` owns the two `Deck`s and a pointer per holder.
 
-Everything in the app stays on deck 1 (the D1 and D2 same-state tests, the
+Everything in the app stays on deck 1 (the same-state tests, the
 frame's ORDER says nothing moved); here each handle is moved
 to deck 2 by hand, and no row or base crosses.
 """
@@ -426,8 +426,8 @@ def test_nothing_of_a_deck_s_view_is_a_second_copy(rig):
     assert one.loaded_patch.lib.loaded_patch is one.loaded_patch
     lib.status = "said"
     assert view.status == "said"
-    # as a reload makes them: new classes over new bases (row 802: this test kept the old
-    # bases, so it passed while the real swap refused; test_hot_reload_app.py runs that one)
+    # as a reload makes them: new classes over new bases (a test over the old
+    # bases passes while the real swap refuses; test_hot_reload_app.py runs that one)
     new_view = type("DeckLibrary", (DeckLibrarySlots, type("Library", (), {})), {})
     new_bank = type("DeckInstall", (DeckInstallSlots, type("Install", (), {})), {})
     bank = view.install
@@ -596,7 +596,7 @@ def test_main_points_every_holder_and_moves_none():
     assert ".point_panel(" not in src and "meta.point(" not in src
     (check,) = [n for n in ast.walk(ast.parse(src))
                 if isinstance(n, ast.FunctionDef) and n.name == "dream_check"]
-    # (plan 90 H3: the deck it landed on, by its graph: `deck.dreams`)
+    # the deck it landed on, by its graph: `deck.dreams`
     assert "deck_dreams(on)" in ast.unparse(check) and " reg[" not in ast.unparse(check)
 
 

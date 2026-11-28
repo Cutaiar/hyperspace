@@ -74,7 +74,7 @@ def build_rig(tmp_path, renderer=None):
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     # the corpus first (conftest.seed): the shipped loadable patches and the party
-    # show, which the home then opens as a fresh one did until 2026-10-28
+    # show, which the home then opens as a fresh one
     seed(tmp_path)
     lib = Library(tmp_path, period=0.0)
     live = {} if renderer is None else {"fx": renderer.fx.state}
@@ -85,14 +85,14 @@ def build_rig(tmp_path, renderer=None):
     # Output, the factory table in a Router, the clock and the LFOs
     settings = hands.HandSettings.from_config({})
     hands.register(reg, settings)
-    grips.register(reg, grips.GripState())  # plan 60: the HANDS page's grip section
+    grips.register(reg, grips.GripState())  # the HANDS page's grip section
     hands_io = hands.HandsIO(settings, {"out": ""}, source=FakeLeap(), clock=lambda: 0.0)
     clock, lfos = tempo.Clock(now=lambda: 0.0), lfo.LFOs()   # the LFO page (ui_lfo.py)
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
     output = Output(None, None)
     output.register(reg)
-    # four render outputs, the most the config allows (plan 21 WP4): the
+    # four render outputs, the most the config allows: the
     # OUTPUT page measured full, each with its switches and its own dim
     slots = [Slot(k + 1, name=nm, win=f"w{k + 1}")
              for k, nm in enumerate(("glass", "projector", "wall", "floor"))]
@@ -120,7 +120,7 @@ def build_rig(tmp_path, renderer=None):
     router = Router(reg, table)
     router.table.set_routes(routing.legacy6_routes())   # a house preset's performer rows
     loaded_patch = LoadedPatch(lib, reg, router)  # the bank and the preset strip, as app.py builds them
-    # plan 36 T3: nothing landed is the empty frame (every output black); the
+    # nothing landed is the empty frame (every output black); the
     # app always lands its startup loadable patch — here today's frame, as one would
     from hyperspace import graph as G
     from hyperspace import graphmigrate as M
@@ -154,7 +154,7 @@ def frame(panel, page=None):
 
 
 def head_menu(panel, key="graph.canvas"):
-    """One of GRAPH's head menus (2026-11-24: "graph.canvas", "graph.areas"),
+    """One of GRAPH's head menus ("graph.canvas", "graph.areas"),
     opened as a click on its chip opens it: one frame with the chip pressed."""
     real = ui.chip, ui.lit_chip
 
@@ -219,8 +219,7 @@ def graph_menus(monkeypatch, pick=None, once=True):
 
 def page_frame(panel, page=None):
     """One frame of a section's body alone, in a window the size the page
-    was: plan 49 stage 3 took the pages away, and a body's own layout and
-    widgets are tested so. The real route — GRAPH, the pane, `ui.page`
+    was: a body's own layout and widgets are tested so. The real route — GRAPH, the pane, `ui.page`
     focusing a section — is `frame` (tests/test_ui_pane.py)."""
     panel._body_frames = True           # `_mouse`'s frames are these from now on
     if page is not None:
@@ -247,7 +246,7 @@ def page_frame(panel, page=None):
 # ---------------------------------------------------------------- pages
 
 def test_the_panel_opens_on_graph_filling_the_window(tmp_path):
-    """The owner, 2026-10-26: the app opens on GRAPH with the desk down
+    """The app opens on GRAPH with the desk down
     and the panel the whole window, 12 px in from each edge."""
     with build_rig(tmp_path) as r:
         fresh = Panel(r.panel.control, r.panel.audio, r.view, registry=r.reg)
@@ -264,14 +263,14 @@ def test_the_panel_opens_on_graph_filling_the_window(tmp_path):
 def test_every_page_draws_with_a_library(rig):
     for k in range(len(PAGE_KEYS)):
         rig.reg["ui.page"].set(k)
-        assert rig.panel.page == k      # the focus: every slot keeps its index (plan 49)
+        assert rig.panel.page == k      # the focus: every slot keeps its index
         for _ in range(2):
             frame(rig.panel)
 
 
 def test_system_page_shows_a_config_error_and_notes(rig, monkeypatch):
     """A config.toml that would not parse, or that still says [overlay], is
-    reported on the SYSTEM page (audit L4), beside the other rig notices."""
+    reported on the SYSTEM page, beside the other rig notices."""
     import hyperspace.ui as ui_mod
 
     drawn: list[str] = []
@@ -293,11 +292,10 @@ def test_system_page_shows_a_config_error_and_notes(rig, monkeypatch):
 
 
 def test_system_page_shows_one_line_per_device(rig, monkeypatch):
-    """Plan 27 B1: every listed device — the pad, MIDI, the hands, the
+    """Every listed device — the pad, MIDI, the hands, the
     bridge — is one line on the SYSTEM page, `role · kind · status · n
     sources · last`, in the list's order; an `error: …` line is in the
-    warning colour. (Replaces the MIDI and bridge lines of audit P3; the
-    HANDS page keeps its own status.)"""
+    warning colour. (The HANDS page keeps its own status.)"""
     import hyperspace.ui as ui_mod
     from hyperspace import devices
 
@@ -354,7 +352,7 @@ def _drawn(monkeypatch) -> list[str]:
 
 
 def test_a_render_error_and_the_dream_error_show_in_the_red_banner(rig, monkeypatch, tmp_path):
-    """Plan 14 WP1: a live render error (the render window holding its last
+    """A live render error (the render window holding its last
     frame) and a dream worker that would not start are a red banner across
     the control window — drawn even with the panel hidden — not only a
     line on the SYSTEM page."""
@@ -422,8 +420,8 @@ def test_page_param_is_ui_state_not_a_loadable(rig):
 
 
 # the sections `ui.page` focuses with a `_page_<key>` body of their own
-# (plan 49 stage 3: GRAPH is always drawn, the fx section is `ui_fx.page`'s)
-DRAWN = [k for k in PAGE_KEYS if k not in ("fx", "graph", "playlist", "lookback")]   # (playlist: GRAPH's deck row; lookback: shows fx, row 1185)
+# (GRAPH is always drawn, the fx section is `ui_fx.page`'s)
+DRAWN = [k for k in PAGE_KEYS if k not in ("fx", "graph", "playlist", "lookback")]   # (playlist: GRAPH's deck row; lookback: shows fx)
 
 
 def _page_scroll(rig, monkeypatch) -> dict[str, float]:
@@ -513,7 +511,7 @@ def _ghost_more(rig, monkeypatch) -> tuple[list[str], list[str], tuple]:
 
 
 def test_the_hands_page_says_the_ghost_axes_are_unmeasured(rig, monkeypatch):
-    """Plan 21 WP5 R6: screentop's and HMD's ghost bases are reasoned, not
+    """Screentop's and HMD's ghost bases are reasoned, not
     seen; with the ghost on in such a mode the HANDS page says so — the
     "more ▸" chip turns to "! more ▸" and its popup carries the note.
     Desktop (the measured table) and the ghost off say nothing."""
@@ -535,7 +533,7 @@ def test_the_hands_page_says_the_ghost_axes_are_unmeasured(rig, monkeypatch):
 
 
 def test_the_hands_page_says_why_the_ghost_or_the_tracker_is_off(rig, monkeypatch):
-    """Plan 21 WP5 R2 / R10: `Ghost.error` (a pass that would not build or
+    """`Ghost.error` (a pass that would not build or
     draw, the tethers' labels) shows on the HANDS page; a tracker that
     would not open shows `app._open_hands`' note there instead of "tracker
     off", which is only for a tracker not asked for."""
@@ -637,10 +635,10 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
     (CONTROL_SIZE, 440),                      # a window that narrow: the groups wrap
 ])
 def test_the_ghost_controls_never_overlap_or_run_off_the_page(rig, monkeypatch, display, panel_w):
-    """The owner's report of 2026-10-05: with the ghost on, the opacity,
-    mirror and guide controls were drawn over the "Ghost hands" label —
-    `_label_cell` put the control at a fixed offset from the line's start
-    even mid-line. With every ghost control showing, no two of the ghost's
+    """With the ghost on, the opacity, mirror and guide controls must not
+    be drawn over the "Ghost hands" label: `_label_cell` places a control
+    relative to its own cell, not at a fixed offset from the line's start.
+    With every ghost control showing, no two of the ghost's
     items overlap and none runs past the page's right edge."""
     from hyperspace import placement
 
@@ -666,11 +664,10 @@ def test_the_ghost_controls_never_overlap_or_run_off_the_page(rig, monkeypatch, 
     else:
         # narrower: the row wraps rather than overlapping, and the lines it
         # takes are not a constant — a label's own width decides, and every
-        # label got narrower when they stopped being drawn in capitals
-        # (2026-11-10). The invariants above (no overlap, nothing past the
-        # right edge) are what the owner's report was about; this only says
-        # the controls still wrap onto their own lines instead of being
-        # squeezed onto one.
+        # label got narrower when they stopped being drawn in capitals.
+        # The invariants above (no overlap, nothing past the right edge)
+        # are the point; this only says the controls still wrap onto their
+        # own lines instead of being squeezed onto one.
         assert len(lines) >= 2, lines
 
 
@@ -717,13 +714,13 @@ def test_the_ghost_more_popup_has_mirror_and_tethers(rig, monkeypatch):
     assert "with a guide on" not in lines
 
 
-# the VIEW page's field row (plan 20 WP6): the controls it rearranged
+# the VIEW page's field row: the controls it rearranged
 FIELD_ROW = ("view.inst_layout", "view.inst_motion", "view.inst_amp", "view.inst_rate")
 ROT_RATES = tuple(f"rot.rate.{name}" for name in PLANES)
 
 
 def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
-    """The controls WP6 moved — the layout, motion, amp and rate, the six
+    """The controls the field row holds — the layout, motion, amp and rate, the six
     plane rates two to a row — each open their own binding menu on a
     right-click, and sit side by side inside the page without overlapping:
     on the kit (`ui_view`) the layout and motion Selects share a line and
@@ -816,7 +813,7 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
 
 
 def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, monkeypatch):
-    """Plan 15 WP3: the master dim is the OUTPUT page's first row, and on
+    """The master dim is the OUTPUT page's first row, and on
     every page the footer reads `dim NN%` while it is under full — a dark
     picture is never a mystery — and says nothing at full."""
     rows: list[str] = []
@@ -836,7 +833,7 @@ def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, mon
     drawn.clear()
     frame(rig.panel, "view")
     assert "·  dim black" in drawn
-    # a dim the driver refused is said on the OUTPUT page (review of PR #81)
+    # a dim the driver refused is said on the OUTPUT page
     rig.panel.renderer = SimpleNamespace(dim_error="dim: Error: refused", pattern_error="")
     drawn.clear()
     frame(rig.panel, "output")
@@ -846,8 +843,8 @@ def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, mon
 def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     """ROUTING is the one page whose list may outgrow the window: the rows
     scroll inside a child and the page itself never does, so the loadable patch
-    strip and the header stay put (by design; audit U1). Plan 28 N7: the
-    routes are GRAPH's now — forty of them draw no line here — and the
+    strip and the header stay put. The
+    routes are GRAPH's — forty of them draw no line here — and the
     child holds the desk, the macros, the meta controller and the sinks, which
     overflow it on their own."""
     reg, table = rig.reg, rig.router.table
@@ -876,7 +873,7 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
 
 
 def test_the_routing_page_fits_over_a_loaded_loadable_and_a_full_desk(rig, monkeypatch):
-    """Plan 13 decision 13: the one ROUTING page — head, routes, desk,
+    """The one ROUTING page — head, routes, desk,
     macros, meta controller — never scrolls itself, with the house show's first
     loadable patch loaded and with a full desk (every loadable patch control mapped, each macro
     subscribed), a refused learn and a dropped desk row in the head."""
@@ -891,7 +888,7 @@ def test_the_routing_page_fits_over_a_loaded_loadable_and_a_full_desk(rig, monke
                                      feedback="ring", layer="preset") for k in range(8)],
             *[Binding(f"note:{k}:{0x36}", "view.shape", "set", float(k), feedback="led",
                       layer="preset") for k in range(8)],
-            # the track faders: the loadable patch's own since plan 24 C2 (decision 17)
+            # the track faders: the loadable patch's own
             *[Binding(f"cc:{k}:7", "view.bright", "abs", layer="preset") for k in range(8)],
             Binding("cc:0:14", "view.bright", "abs")]         # MASTER: dropped, noted
     rig.lib.loaded_patch.desk_notes = table.set_desk(full)
@@ -968,7 +965,7 @@ def test_the_cheat_sheet_matches_the_tables_and_the_loop_keys():
 
     """ui.CHEATSHEET is the canonical human list (app.py): every key row in
     the factory table and every key the loop handles itself is on it, and
-    it names nothing that is neither (audit U2)."""
+    it names nothing that is neither."""
     sheet_keys, sheet_pads = _sheet_keys()
     table_keys = {b.key_name for b in keymap()}
     # the panel's own: the player board's O and the canvas's tidy (ui_graph.KEY)
@@ -995,7 +992,7 @@ def _windows(monkeypatch) -> list[str]:
 
 
 def test_the_cheat_sheet_is_off_at_launch_and_the_desk_is_on(rig, monkeypatch):
-    """Plan 16 WP1: a fresh panel draws the desk diagram and no legend —
+    """A fresh panel draws the desk diagram and no legend —
     the sheet was in the way at every launch. Its checkbox says how to get
     it back."""
     panel = rig.panel
@@ -1136,7 +1133,7 @@ def test_project_row_and_dirty_state(rig, tmp_path):
 
 
 def test_the_footer_says_what_was_undone(rig, monkeypatch):
-    """Plan 15 WP1: the footer's message slot shows, on every page, the
+    """The footer's message slot shows, on every page, the
     newest of the undo's status, the library's status and the library's
     warning for `MESSAGE_S` after it changes; a launch says nothing; a
     line too long for the room beside the show's name is cut, not wrapped."""
@@ -1190,7 +1187,7 @@ def test_the_footer_says_what_was_undone(rig, monkeypatch):
     assert cut.endswith("…") and cut.startswith("·  patch: a very long")
     assert imgui.calc_text_size(cut).x < ui.PANEL_W
     assert ui.fit_text("short", 500.0) == "short"
-    # …and shorter still while the dim readout (plan 15 WP3) shares the line
+    # …and shorter still while the dim readout shares the line
     reg["output.dim"].set(0.4)
     dimmed, readout = shown("view")
     assert dimmed.endswith("…") and len(dimmed) < len(cut) and readout == "·  dim 40%"
@@ -1202,7 +1199,7 @@ def test_the_footer_says_what_was_undone(rig, monkeypatch):
 
 
 def test_loadable_bank_and_strip_on_the_loadables_page(rig):
-    """Plan 13 WP2: the bank row loads and saves loadable patches by F-key param,
+    """The bank row loads and saves loadable patches by F-key param,
     the one preset strip shows what is loaded and its dirty dot."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     frame(panel, "loadable")
@@ -1249,7 +1246,7 @@ def test_modulated_params_draw_a_ghost(rig):
 
 
 def test_tooltip_names_the_performer(rig):
-    """Plan 09 WP2: the modulation line reads `base → effective` and, with
+    """The modulation line reads `base → effective` and, with
     a router attached, who is performing — the owner row's describe().
     Without a router, or on a param nothing in the table owns, it says
     only that the param is modulated."""
@@ -1284,7 +1281,7 @@ def test_ghost_on_a_compact_slider_and_a_fader_in_a_table(rig):
     frame(panel, "camera")
     assert panel.ghosts == 1
     # a half-width slider and a fader, both on the view page: a meta param's own
-    # pages draw no ghost, since no lane may drive one (row 775)
+    # pages draw no ghost, since no lane may drive one
     _hold(reg, {"view.points_alpha": 0.1, "view.bright": -0.1})
     frame(panel, "view")
     assert panel.ghosts == 2
@@ -1314,13 +1311,12 @@ def test_every_panel_attribute_the_frame_reads_is_a_real_panels(rig):
     assert rig.panel.restart_requested is False
 
 
-# ------------------------------------------------- plan 17: the right-click menu
+# ------------------------------------------------- the right-click menu
 
 def _a_file_path(rig, monkeypatch) -> str:
     """A file-path param (Kind.TEXT) drawn on the media page by the
-    panel's own widget (`Panel._path`), as `view.bmp_file` was until plan
-    32 took the one bitmap file away — no page draws a TEXT param of its
-    own now, and the widget's contract still holds. Returns its id."""
+    panel's own widget (`Panel._path`); no page draws a TEXT param of its
+    own, and the widget's contract holds. Returns its id."""
     view, pid = rig.view, "view.test_file"
     view.test_file = ""
     rig.reg.text(pid, "Test file", lambda: view.test_file,
@@ -1403,7 +1399,7 @@ def _learn_over(rig):
 
 
 def test_the_menu_lists_and_unbinds_with_no_midi_adapter(rig, monkeypatch):
-    """Plan 17 WP1: the menu reads the table, never the adapter. With
+    """The menu reads the table, never the adapter. With
     `panel.midi` None the desk row's line is drawn with its glyph and
     Akai's name, each route has its line, and one Unbind removes what the
     lines list: a plain item with one kind bound, a submenu (desk / route /
@@ -1462,7 +1458,7 @@ def test_unbind_is_not_offered_on_a_meta_only_param(rig, monkeypatch):
     assert "SM (MASTER fader) · invariant" in lines
     assert not any(i.startswith("Unbind") for i in items)
     meta_rows = [b.to_json() for b in table.midi() if b.layer != "preset"]
-    # (no door lets this row in since row 743: one a hot reload left in the table)
+    # (no door lets this row in: one a hot reload left in the table)
     table.bindings.append(Binding("lfo:0", "output.dim", "push", 0.1))
     lines, items = menu(panel, monkeypatch, "output.dim", "output", click="Unbind")
     assert "Unbind" in items and "Unbind ▸" not in items
@@ -1475,7 +1471,7 @@ def _learn_items(items: list[str]) -> list[str]:
 
 
 def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
-    """Plan 17 WP2, fork 5: the one "Learn" is **Learn desk** and **Learn
+    """The one "Learn" is **Learn desk** and **Learn
     hand ▸ left / right**. With a tracker: both; without: Learn desk only;
     a param a hand cannot drive (not modulatable): no hand item; a file
     path: neither. Each arms the learn with what it waits for; armed, the
@@ -1488,7 +1484,7 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
                                    "Learn hand/right"]
     assert "Learn" not in items
     # §3: unmapped, a rig with hands → Learn desk · Learn hand ▸ · Route a lane here…
-    # (and, the owner 2026-10-24, Route from ▸ after the Learn items)
+    # (and Route from ▸ after the Learn items)
     rig.router.table.unbind("view.speed")
     _, items = menu(panel, monkeypatch, "view.speed", "view")
     assert [i for i in items if "/" not in i] == ["Learn desk", "Learn hand ▸",
@@ -1516,8 +1512,7 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
     assert panel._learn_hint() == "move a hand…"
     lrn.arm(None)
     # not modulatable: a knob may still set it, a hand may not
-    # (plan 90 H3: `dream.res`, the one such knob a page drew, retired with the
-    # old dream; none is left on a page, so a drawn knob stands in, made one)
+    # (no page draws such a knob, so a drawn knob stands in, made one)
     monkeypatch.setattr(rig.reg["view.bright"], "modulatable", False)
     _, items = menu(panel, monkeypatch, "view.bright", "view")
     assert _learn_items(items) == ["Learn desk"]
@@ -1537,7 +1532,7 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
 
 
 def test_the_footer_says_what_a_learn_waits_for_and_what_it_did(rig, monkeypatch):
-    """Plan 17 WP2: an armed learn has the footer's message slot on every
+    """An armed learn has the footer's message slot on every
     page — what it waits for, in red — and what a learn or an unbind did
     shows there for `MESSAGE_S` like the undo's line: a refusal in the
     warning colour, also while the learn it refused stays armed, and the
@@ -1614,7 +1609,7 @@ def test_the_footer_says_what_a_learn_waits_for_and_what_it_did(rig, monkeypatch
     assert footer("view") == []
 
 
-# ------------------------------------------- plan 17 WP3: where the menu opens
+# ------------------------------------------- where the menu opens
 
 def _mouse(panel, x, y, button=None, down=False):
     """One frame with the mouse at (x, y), a button going down or up."""
@@ -1662,7 +1657,7 @@ def _popups(monkeypatch) -> tuple[list[str], list[str]]:
 
 
 def test_a_rows_label_opens_its_params_menu(rig, monkeypatch):
-    """Plan 17 WP3: a right-click on a row's label — the dummy `_row` and
+    """A right-click on a row's label — the dummy `_row` and
     `half` draw, the label line of a `_fader` — opens the menu the widget
     beside it draws: `open_popup_on_item_click` with the id `_ctx` uses,
     in the same id scope. Real mouse events over the real Panel: the popup
@@ -1694,7 +1689,7 @@ def test_a_rows_label_opens_its_params_menu(rig, monkeypatch):
         items.clear()
         _click(panel, rect, button=1)
         assert opened and set(opened) == {f"##ctx.{pid}"}, (pid, opened)
-        if not ui_routing.desk_target(reg[pid]):     # (the meta controller's: row 743)
+        if not ui_routing.desk_target(reg[pid]):     # (the meta controller's)
             assert "Learn desk" not in items and "Route a lane here…" not in items
         else:
             assert "Learn desk" in items and "Route a lane here…" in items
@@ -1707,7 +1702,7 @@ def test_a_rows_label_opens_its_params_menu(rig, monkeypatch):
 
 
 def test_every_meter_has_the_band_select_menu(rig, monkeypatch):
-    """Plan 17 WP3: one `_ctx` per meter — it was meter 0 only — each
+    """One `_ctx` per meter, each
     under its own key, so no two popups on the page share an id (the band
     combo's is the bare one). A real right-click on the fourth meter opens
     that meter's menu and selects nothing."""
@@ -1737,7 +1732,7 @@ def test_every_meter_has_the_band_select_menu(rig, monkeypatch):
     assert sel != 3
     _click(panel, rects[".3"], button=1)
     assert opened and set(opened) == {"##ctx.band.select.3"}
-    assert "Learn desk" not in items                  # the meta controller's (row 743)
+    assert "Learn desk" not in items                  # the meta controller's
     assert reg["band.select"].base == sel             # a right-click selects nothing
     # armed from a meter, the learn's red frame is on the meters too
     framed: list[str] = []
@@ -1751,7 +1746,7 @@ def test_every_meter_has_the_band_select_menu(rig, monkeypatch):
     assert reg["band.select"].base == 3
 
 
-# ------------------------------------------- plan 17 WP4: click a control, then a param
+# ------------------------------------------- click a control, then a param
 
 def _control(glyph: str):
     from hyperspace import apc40
@@ -1890,7 +1885,7 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
     # bright again: the same click now moves the fader
     _click(panel, rects["view.speed"])
     assert reg["view.speed"].base != speed and pushes == ["learn view.speed"]
-    # a row's label is the param's too (WP3): a click on the word maps
+    # a row's label is the param's too: a click on the word maps
     lrn.pick(_control("D8").source)
     frame(panel)
     depth = reg["view.depth4"].base
@@ -2044,8 +2039,7 @@ def test_the_footer_says_what_is_picked_and_a_click_lets_go(rig, monkeypatch):
 
 
 def test_the_click_wording_is_switched_on(rig, monkeypatch):
-    """WP2 wrote the click's wording behind `hasattr(ui_desk, "click")`;
-    WP4's `click` switches it on: the armed hint and ROUTING's desk
+    """With `ui_desk.click`, the armed hint and ROUTING's desk
     section both say a control can be clicked — and ROUTING's line still
     fits its child."""
     from hyperspace import ui_desk
@@ -2079,7 +2073,7 @@ def test_the_click_wording_is_switched_on(rig, monkeypatch):
 
 
 def test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on(rig, monkeypatch):
-    """Plan 21 WP6: the style combo leads the ghost's second line, the
+    """The style combo leads the ghost's second line, the
     guide beside it, while the ghost is on; off, it is not drawn. The page
     still fits with everything showing (test_the_hands_page_fits_with_every_ghost_line)."""
     combos: list[str] = []
@@ -2098,12 +2092,12 @@ def test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on(rig, monkeyp
     assert "ghost.style" not in combos
 
 
-# ---- plan 21 WP4: the OUTPUT page's blocks and the footer ----
+# ---- the OUTPUT page's blocks and the footer ----
 
 def _output_page(rig, monkeypatch, page="output", body=False) -> tuple[list[str], list[tuple]]:
     """Every text and checkbox label the section (and GRAPH and the footer,
-    but with `body`) draws, and each closed combo's words (plan 35 T6:
-    "shows:" is a picture combo), and each item's right edge against its
+    but with `body`) draws, and each closed combo's words ("shows:"
+    is a picture combo), and each item's right edge against its
     window's, at the control size."""
     import hyperspace.ui as ui_mod
 
@@ -2155,16 +2149,15 @@ def test_the_output_body_with_four_outputs_and_overlays_rows_stays_inside(rig, m
     for sl in rig.slots:
         sl.error = "present: RuntimeError: a long error that the page must cut to fit"
     drawn, edges = _output_page(rig, monkeypatch, body=True)
-    # (plan 35 T4: the two mutes; "through" is the loadable patch's wiring)
+    # (the two mutes; "through" is the loadable patch's wiring)
     assert drawn.count("picture") == 4 and drawn.count("through effects") == 0
     for s, right, edge in edges:
         assert right <= edge + 1, f"{s!r} runs past the page ({right} > {edge})"
 
 
 def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
-    """Plan 21 WP4 / fork F8: words, not a picture. Each output's "shows:"
-    line is what is wired into it through its mutes (plan 35 T4: the
-    retired route table's words, "hands through the effects" the output's
+    """Words, not a picture. Each output's "shows:"
+    line is what is wired into it through its mutes ("hands through the effects" is the output's
     wiring) with master × own dim; a mute that can do nothing says why; an
     output that did not open is one line."""
     from wiredframe import Shows, wiring
@@ -2174,7 +2167,7 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     from hyperspace.ui import output_shows
 
     # the words, as a pure function of the mutes, the wiring and the frame
-    # (plan 36 T3: today's frame by the migration; no wiring is the empty one)
+    # (today's frame by the migration; no wiring is the empty one)
     T = wiring(Wiring())
     assert output_shows(S(), False, True, 1.0, T) == ("scene + hands over the effects", "")
     assert output_shows(S(), False, False, 1.0, T) == ("scene", "")
@@ -2199,11 +2192,11 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     slots[1].error = "present: RuntimeError: lost the context"
     drawn, _ = _output_page(rig, monkeypatch, body=True)
     assert "1  glass" in drawn and "2  projector" in drawn
-    # plan 35 T6: each window's picture combo says its port's wire (the
+    # each window's picture combo says its port's wire (the
     # factory frame: none of its own), then why it is black, or its dim;
     # All outputs' combo first, its picture's source
     shows = [s for s in drawn if s.startswith("shows: ")]
-    # (plan 36 T4: the startup loadable patch's look-back off — the scene straight)
+    # (the startup loadable patch's look-back off — the scene straight)
     assert shows == ["shows: Scene", "shows: as All outputs",
                      "shows: as All outputs · 60%",
                      "shows: as All outputs · black — nothing switched on",
@@ -2225,8 +2218,7 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
 
 def test_the_output_page_with_one_output_has_no_dim_of_its_own(tmp_path, monkeypatch):
     """No list in the config: one block, "1", its two mutes — picture and
-    hands — ticked (plan 35 T4: no through), and no dim row of its own
-    (hand check Q1)."""
+    hands — ticked (no through), and no dim row of its own."""
     from hyperspace.overlay import register_switches as reg_sw
 
     with build_rig(tmp_path) as r:
@@ -2240,7 +2232,7 @@ def test_the_output_page_with_one_output_has_no_dim_of_its_own(tmp_path, monkeyp
         assert drawn[drawn.index("1"):drawn.index("1") + 3] == ["1", "picture", "hands"]
         assert "output.1.dim" not in r.reg and not any(s.startswith("paced") for s in drawn)
         assert [s for s in drawn if s.startswith("shows: ")] == [
-            "shows: Scene", "shows: as All outputs"]          # (plan 36 T4)
+            "shows: Scene", "shows: as All outputs"]
         assert r.reg["output.1.scene"].label == "Picture"
 
 
@@ -2268,7 +2260,7 @@ def test_the_footer_names_a_black_output(rig, monkeypatch):
 
 
 def test_a_long_tooltip_wraps_at_a_readable_width(rig):
-    """The owner, 2026-10-26: a hover's words wrap at `ui.TIP_CH`
+    """A hover's words wrap at `ui.TIP_CH`
     characters, and a % in them is drawn as itself."""
     for _ in range(2):                  # a tooltip takes its size a frame late
         imgui.new_frame()

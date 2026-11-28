@@ -1,4 +1,4 @@
-"""4D shapes and 3D shapes (plan 28, replacing plan 22's lifts and masks).
+"""4D shapes and 3D shapes.
 
 A shape says honestly what it is (`Shape.dims`). A 4D shape has real
 w-extent and the W planes turn it through w. A 3D shape sits at w = 0 and
@@ -48,11 +48,9 @@ FOUR_D = [i for i, s in enumerate(G.SHAPES) if s.dims == 4]
 
 @pytest.mark.parametrize("i", range(len(G.SHAPES)), ids=[s.name for s in G.SHAPES])
 def test_every_shape_draws_what_it_was_recorded_drawing(i):
-    # recorded on plan-22-integration @ 2d4ea11; plan 28 took the plan 22
-    # lifts off again (those rows back at w = 0) and added the catalog. A
-    # shape that changes on purpose: re-record its row (python
-    # tests/test_shapes4d.py --record) and say so in the commit; a
-    # polytope's row must never move
+    # the 3D shapes' rows are drawn at w = 0. A shape that changes on purpose:
+    # re-record its row (python tests/test_shapes4d.py --record) and say so in
+    # the commit; a polytope's row must never move
     assert digest(i) == json.loads(DIGESTS.read_text())[str(i)]
 
 

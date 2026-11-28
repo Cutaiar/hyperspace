@@ -1,4 +1,4 @@
-"""Plan 31 W1, the wiring: the envelopes as a second modulator bank, the
+"""The wiring: the envelopes as a second modulator bank, the
 sequencer stepping inside `Router.modulate` and firing them, and the lot
 carried by undo and the loadable patch — end to end through a real Router and
 Registry on a deterministic clock (`Clock(now=…)`, ticked by hand).
@@ -176,8 +176,8 @@ def test_the_global_trigger_fires_step_0_the_same_frame():
 
 def _square(r) -> None:
     """LFO 1 a square in Hz at the slowest rate, at the full swing: its
-    wave is +1 for ages (depth 1 — it ships at 0.5 since the calmer
-    defaults of 2026-10-31; a test below that wants another sets its own)."""
+    wave is +1 for ages (depth 1 — it ships at 0.5; a test below that wants
+    another sets its own)."""
     r.reg["lfo.1.depth"].set(1.0)
     r.reg["lfo.1.shape"].set(lfo.SHAPES.index("square"))
     r.reg["lfo.1.sync"].set(0)
@@ -403,10 +403,10 @@ def make_app(tmp_path, plan31: bool = True):
     """The app's registry, library, router and loadable patches over `tmp_path`,
     seeded with the corpus first (conftest.seed: the loadable patches the build once
     shipped, the dream module presets and the party show, so the home is
-    the one these tests were written on); `plan31` False is a build from
-    before plan 31 — no envelopes, no sequencer. (Row 394:
-    `hyperspace.headless.make_app`, so tools/migrate_library.py saves
-    through the same app without importing a test.)"""
+    the one these tests were written on); `plan31` False is a build with no
+    envelopes and no sequencer. (It lives in `hyperspace.headless.make_app`, so
+    tools/migrate_library.py saves through the same app without importing a
+    test.)"""
     from conftest import seed
 
     from hyperspace import headless
@@ -478,9 +478,9 @@ def test_nan_never_reaches_a_param_from_an_idle_bank():
     assert r.box.x == 0.0 and not math.isnan(r.reg["t.x"].value)
 
 
-# ---- plan 31 P: the envelopes and the sequencer in the loadable patch (row 394: /6) ----
+# ---- the envelopes and the sequencer in the loadable patch ----
 
-# (plan 43 C2: V6 is the save schema, named for the row it pinned)
+# V6 is the save schema (named for the version that first carried the envelopes)
 V2, V3, V6 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.loadable/12"
 
 
@@ -489,8 +489,8 @@ def _new_ids(doc) -> list[str]:
 
 
 def test_an_untouched_loadable_saves_as_6_with_every_value(app, tmp_path):
-    """Nothing of plan 31's touched: still `/6` (row 394: plan 31's
-    conditional `/3` is gone with the ladder), naming every env.* / seq.*
+    """Nothing of the envelopes or sequencer touched: the save schema is
+    unchanged, naming every env.* / seq.*
     value at its default beside every other performance value — the
     transport never — and a load and a re-save of it are byte for byte the
     same file."""
@@ -501,14 +501,14 @@ def test_an_untouched_loadable_saves_as_6_with_every_value(app, tmp_path):
     assert doc["schema"] == V6
     assert "lfos" not in doc and "envs" not in doc
     every = app.reg.snapshot(part="patch")
-    # (plan 36 T3: but an effect's only where the section names it)
+    # (but an effect's only where the section names it)
     from hyperspace import graphmigrate as M
 
     held = M.section_effects(doc["graph"])
-    # (plan 60, row 859: and the grip, at its defaults, is left out)
+    # (and the grip, at its defaults, is left out)
     assert doc["values"] == {k: v for k, v in every.items() if not k.startswith("mod.")
                              and not k.startswith("grip.")
-                             # (plan 64, row 902: a fractal's settings are its `fractal` key's)
+                             # (a fractal's settings are its `fractal` key's)
                              and k not in loadable.FRACTAL_PIDS
                              and M.effect_of(k) in (None, *held)}
     assert "seq.run" not in doc["values"] and _new_ids(doc)
@@ -516,7 +516,7 @@ def test_an_untouched_loadable_saves_as_6_with_every_value(app, tmp_path):
     first = path.read_bytes()
     assert first == loadable.dumps(doc).encode()
     # and stable through a load (once a load has read the file's integers
-    # back as floats, as every loadable patch since plan 13 does)
+    # back as floats, as every loadable patch does)
     assert app.loaded_patch.load("plain") == []
     again = app.loaded_patch.save_as("plain").read_bytes()
     assert app.loaded_patch.load("plain") == []
@@ -535,7 +535,7 @@ def test_an_untouched_loadable_saves_as_6_with_every_value(app, tmp_path):
     lambda a: a.router.table.set_routes([Binding("lfo:0", "seq.swing", "push", 0.5)]),
 ], ids=["step", "swing", "gate", "env-knob", "extra-env", "lfos", "env-route",
         "seq-target"])
-def test_anything_of_plan_31_saves_in_six(app, touch):
+def test_anything_of_the_envelopes_or_sequencer_saves_in_the_current_schema(app, touch):
     touch(app)
     doc = app.loaded_patch.document("new")
     assert doc["schema"] == V6 and next(iter(doc)) == "schema"
@@ -565,15 +565,15 @@ def test_a_3_round_trips_and_a_2_after_it_puts_the_defaults_back(app):
 
 def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
     """The library takes /2 … /6 (`loadable.VERSIONS`): a /2 and a /3 document
-    load to the same state (/2 → /3 is the identity); a build from before
-    plan 31, whose kind takes /2 alone, refuses this build's save whole
+    load to the same state (/2 → /3 is the identity); an older build
+    whose kind takes /2 alone refuses this build's save whole
     instead of loading it and stripping the pattern on its next save."""
     from dataclasses import replace
 
     from hyperspace import loadable
     from hyperspace.library import LibraryError
 
-    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)   # (… plan 40 T2: /8; plan 43 C2: /9)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
     app.reg["view.bright"].set(1.5)
     doc = {k: v for k, v in app.loaded_patch.document("p").items() if k != "graph"}
     doc["values"] = {k: v for k, v in doc["values"].items()
@@ -596,12 +596,12 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
         kinds["loadable"] = replace(kinds["loadable"], versions=loadable.VERSIONS)
 
 
-# ---- plan 31 P: the corpus's seq-demo ----
+# ---- the corpus's seq-demo ----
 
 def test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed(app):
     """The corpus's seq-demo: kick 1 and 5, snare 3 and 7, hats on every
     step at half a bar, one-shot envelopes on brightness, zoom and the
-    deconverge. It loads stopped (decision 8); with play pressed at the
+    deconverge. It loads stopped; with play pressed at the
     golden rig's clock — triggered at T0 = 2.0, play and a restart on the
     first frame, eight 60 Hz frames — the hashed frame is 117 ms into the
     kick; the hat that fired with it (70 ms) is over and the snare (step 3,

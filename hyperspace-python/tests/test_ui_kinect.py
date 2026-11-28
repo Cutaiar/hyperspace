@@ -1,4 +1,4 @@
-"""The Kinect's side pane (plan 29, row 1170): GRAPH's selected device node
+"""The Kinect's side pane: GRAPH's selected device node
 drawn at the pane's narrowest and widest, every control in it with an id,
 the tilt sent only on a deliberate action, a control the device cannot use
 shown disabled with its word. Over a stand-in device: no hardware."""
@@ -415,7 +415,7 @@ def test_the_fan_fits_the_radar_box_at_both_widths():
 
 
 def test_a_kinects_node_is_drawn_under_patch_only_though_no_cable_reaches_it(rig, monkeypatch):
-    """The owner saw no Kinect node with the sensor plugged in: its cloud is no lane, so
+    """A plugged-in Kinect shows its node: its cloud is no lane, so
     nothing wires it to the loadable patch, and the default "patch only" view drew
     only what reaches the patch. Its control panel is its node's pane, so it is drawn."""
     import time
@@ -526,7 +526,7 @@ def test_a_disabled_kinect_entry_stays_on_the_generic_pane(rig, monkeypatch):
 
 def test_auto_exposure_starts_as_the_sensor_treats_it_on(rig, monkeypatch):
     """With no flag history the checkbox shows auto exposure ON, as `Sensor.can` treats it, so
-    the first click turns it off and unlocks the slider (it used to turn it on)."""
+    the first click turns it off and unlocks the slider."""
     dev = Dev(flags={}, can={**OPEN, "exposure": "auto exposure is on"}, video="color")
     p = Pane(rig, monkeypatch, dev, ui_graph.SIDE_W)
     p.d.run(p.d.click("kinect.auto_exposure"), p.d.park())

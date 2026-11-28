@@ -1,4 +1,4 @@
-"""Plan 42's example patches (docs/plans/assets/42-controllers/patches/)
+"""The controller example patches
 are patches this build spawns: the touchpad's and the motion sensors'
 rows are control rows like a hand's.
 
@@ -40,7 +40,7 @@ NAMES = sorted(p.stem for p in HERE.glob("*.json"))
 # gone from the folder fails here rather than going unchecked
 EXPECTED = {"touch-burst", "shake-hit", "grab-tilt", "spin-spin", "snow-globe",
             "trigger-detent", "wind-up", "thumb-roll"}
-ROLE = "edge"            # the role plan 42's example config gives the Edge
+ROLE = "edge"            # the role the example config gives the Edge
 PAD_SCHEMES = {"touch": set(gesture.TOUCH_LANES), "motion": set(gesture.MOTION_LANES),
                "axis": set(gamepad.AXES) | set(gamepad.DIAL_LANES)}
 

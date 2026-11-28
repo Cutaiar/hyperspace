@@ -1,15 +1,12 @@
-"""The owner, 2026-11-06: "Session and rig need to go away." (register rows 778-780.) And
-"Presets need to go away": with the one migration, the panel says patches (plan 57, row 840).
+"""The panel says patches, not presets, and no longer says "session".
 
-"Rig" is off the list again (the owner, 2026-11-10, row 779): the cleanup is done, and
-with real meshes coming the word will mean rigging, as in computer graphics and animation.
-The strings it was taken out of stay as they were said.
+"Rig" is an ordinary word: it means rigging, as in computer graphics and animation.
 
 "Session" may not return in a string a person reads. Every string literal in `hyperspace/`
 is scanned, docstrings excluded: an f-string's pieces are read one by one, and comments
 are not read at all. The README is read whole. `LEFT` is what stays and why: each is a
 saved key or an attribute's name, so no person ever sees it. Add to it only for a string no
-person reads; say a new panel string as what it means (rows 778 and 779 list how).
+person reads; say a new panel string as what it means.
 
 The rest holds the words to the truth, since a false new word is worse than a kept old one,
 and to the pane's narrowest width.
@@ -111,7 +108,7 @@ def f(x):
 
 
 def test_a_bare_word_restored_beside_a_listed_key_is_caught():
-    """Review of #407: `ui._micro("session")` back in a file that lists "session"."""
+    """`ui._micro("session")` back in a file that lists "session"."""
     key = ("library.py", "session")
     more = _found() + Counter({key: 1})
     want = Counter({k: n for k, (n, _why) in LEFT.items()})
@@ -119,14 +116,14 @@ def test_a_bare_word_restored_beside_a_listed_key_is_caught():
 
 
 def test_rig_is_a_word_again():
-    """Row 779, the owner, 2026-11-10: a hand rig, a mesh's rig, rigging."""
+    """A hand rig, a mesh's rig, rigging."""
     assert not WORDS.search("the hand rig, a mesh's rigs, rigging")
 
 
 # ---------------------------------------------------------------- the words are true
 
 def test_a_show_is_not_said_to_hold_the_bus_cables():
-    """They are the loaded patch's since plan 44 D3 (`LoadedPatch.bus`), as `BUS_SAID` says."""
+    """They are the loaded patch's (`LoadedPatch.bus`), as `BUS_SAID` says."""
     assert "bus" not in ui_loadable.SHOW_LINE
     assert "patch is the look, with the bus cables" in ui_loadable.SHOW_TIP
     assert "(a patch saves its cuts)" in graphview.BUS_SAID
@@ -221,11 +218,11 @@ def test_routings_headings_stay_inside_the_pane(rig):  # noqa: F811
             assert right <= edge, (title, width)
 
 
-# ---------------------------------------------------------------- "preset" (row 840)
+# ---------------------------------------------------------------- "preset"
 
 PRESET = re.compile(r"(?<![._/#\w])presets?(?![/_\w]|\.\w)", re.IGNORECASE)
 # an id: all lowercase id characters (`preset.select`, the desk layer `preset`, a group): saved
-# names, which FQ4 left as they are. Anything else that stays is listed, and why
+# names, which stay as they are. Anything else that stays is listed, and why
 ID = re.compile(r"[a-z_.0-9{}]*")
 PRESET_LEFT: dict[tuple[str, str], tuple[int, str]] = {
 }

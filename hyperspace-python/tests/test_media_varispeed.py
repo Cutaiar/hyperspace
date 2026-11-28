@@ -1,4 +1,4 @@
-"""Plan 45 V4 — sync with video as master, and varispeed: the mixer's read
+"""Sync with video as master, and varispeed: the mixer's read
 head, slewed toward the transport and resampled by its speed.
 
 Deterministic, no audio device and no threads: the voices come from a real

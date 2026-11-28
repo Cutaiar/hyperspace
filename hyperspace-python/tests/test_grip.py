@@ -1,4 +1,4 @@
-"""Plan 60: the hand rig — the joint, the coupling, the throw, the shaped
+"""The hand rig — the joint, the coupling, the throw, the shaped
 inertia (precession), the skater effect, the box, the safety rules, and the
 `grip.*` params. Tape-driven (`hands/tape.py`) or pure; nothing on a sensor."""
 
@@ -400,7 +400,7 @@ def test_a_nan_puts_the_body_home_and_says_so_once(capsys):
 # ---------------------------------------------------------------- the params
 
 def test_off_the_grip_springs_the_shape_home_then_leaves_the_registries():
-    """The owner, 2026-11-10: the grip is a patch's own, so a look without it must
+    """The grip is a patch's own, so a look without it must
     not inherit a thrown shape. Off, it springs home (critically damped,
     `HOME_HZ`), lands on the exact identity, and its body and joint go."""
     w, st, gates = _rigged(1.0, zoom=1.0, pan=(0.0, 0.0))
@@ -478,7 +478,7 @@ def test_a_gate_reads_closed_at_half_and_open_when_away_or_unknown():
 
 
 def test_the_grip_params_are_a_patchs_own_saved_with_it():
-    """The owner, 2026-11-10: per preset, not shared across both decks."""
+    """Per preset, not shared across both decks."""
     reg = Registry()
     st = R.GripState()
     R.register(reg, st)
@@ -500,8 +500,8 @@ def test_the_grip_params_are_a_patchs_own_saved_with_it():
 
 def test_each_deck_has_its_own_grip_and_a_patch_without_one_loads_it_off(tmp_path):
     """Per preset: each deck its own grip, saved in the loadable patch; one whose
-    file names no `grip.*` (every look from before) loads with the grip off,
-    whatever the look before had."""
+    file names no `grip.*` (every older look) loads with the grip off,
+    whatever the previous look had."""
     from test_undo import boot
 
     from hyperspace.deck import Deck
@@ -534,7 +534,7 @@ def test_the_host_sets_the_grip_onto_the_world_before_its_frame():
     assert w.bodies["shape"].boxed
 
 
-# ---------------------------------------------------------------- the depth (row 856)
+# ---------------------------------------------------------------- the depth
 
 def test_a_turned_offset_turns_a_3d_shapes_depth_cue_and_leaves_a_4d_shapes_w():
     q = W.qexp([0.0, 1.3, 0.0])
@@ -561,7 +561,7 @@ def test_the_grip_imports_only_the_world():
     assert got == {"world", "writes"}       # (a leaf, as the world is)
 
 
-# ---------------------------------------------------------------- per preset (2026-11-10)
+# ---------------------------------------------------------------- per preset
 
 def test_a_new_look_with_the_grip_on_starts_with_the_shape_at_home():
     """A shape thrown in one grip look does not start the next one where it was
@@ -655,7 +655,7 @@ def test_headless_make_app_has_the_grip(tmp_path):
 
 
 def test_a_pad_button_is_no_lane_so_it_never_closes_a_clutch():
-    """Review of #443: `pad` is a row scheme (`routing_sources.ROW_SCHEMES`), never a
+    """`pad` is a row scheme (`routing_sources.ROW_SCHEMES`), never a
     lane, so `grip.clutch = "pad:S"` reads open; the tip offers lanes only."""
     from hyperspace.routing import Bindings, Router
     from hyperspace.routing_sources import ROW_SCHEMES

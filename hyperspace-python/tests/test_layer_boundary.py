@@ -1,6 +1,5 @@
-"""The two layers, mechanically (the owner, 2026-11-04, fourth round: "two layers of
-granularity and no others", which "must be completely consolidated and orthogonal, so that
-neither can leak into the other"; register rows 746, 747).
+"""The two layers, mechanically: two layers of granularity and no others, completely
+consolidated and orthogonal, so that neither can leak into the other.
 
 Three holds: every param is in exactly one layer, over the boot registry and the app's added
 groups; `preset.*`, `deck.chase`, `totem.*` and `poi.*` are meta and still one per `Deck`, so
@@ -211,7 +210,7 @@ def per_deck(reg) -> list[Param]:
 
 
 def test_the_sweep_names_what_was_in_neither(rig):
-    """Row 746's list: what `part_of` called None until now, by group."""
+    """What is in neither layer, by group: the per-deck meta groups."""
     groups = {p.group for p in per_deck(rig.one.reg)}
     assert groups == set(PER_DECK_META_GROUPS)
     assert sum(p.group == "preset" for p in rig.one.reg) == 23
@@ -314,7 +313,7 @@ def test_a_file_saved_after_it_holds_none_of_them(rig):
 
 
 def test_the_graph_offers_no_port_on_one(rig):
-    """Row 746: `graphview`'s params node lists what a route may land on, the layer's rule."""
+    """`graphview`'s params node lists what a route may land on, the layer's rule."""
     d = rig.one
     view = graphview.build(Bindings(), d.reg)    # (no rows: a row's own target gets a port)
     ids = {p.param for n in view.nodes for p in n.ports if p.param}
@@ -380,7 +379,7 @@ def test_a_pad_learn_on_a_load_still_lands_and_loads_off_air(rig):
     assert rig.two.loaded_patch.current == "TUMBLE" and _state(d) == theirs
 
 
-# ------------------------------------------------------------ review of #388
+# ------------------------------------------------------------ the class
 
 def _learned(d, pid, source=BUTTON, profile=apc40):
     d.learn.arm(pid, "desk")
@@ -389,8 +388,7 @@ def _learned(d, pid, source=BUTTON, profile=apc40):
 
 @pytest.mark.parametrize("pid", ROWS)
 def test_a_desk_learn_on_the_class_is_refused_and_says_where_the_road_is(rig, pid):
-    """Row 755: built and removed. "No new Learn road is needed for now: a preset's Learn desk
-    on a meta param stays refused" (the owner, seventh round). Nothing moves, on disk either."""
+    """A preset's Learn desk on a meta param stays refused. Nothing moves, on disk either."""
     d = rig.one
     rows = list(d.table.bindings)
     file = d.table.path.read_bytes() if d.table.path.exists() else None
@@ -427,8 +425,8 @@ def test_the_tuned_meta_params_refuse_without_the_road_words(rig):
 
 
 @pytest.mark.parametrize("pid", ["deck.chase", "totem.on", "poi.length", "preset.next"])
-def test_finding_1_a_macros_subscriber_on_the_class_is_a_meta_sub(pid):
-    """`Macro.meta_subs`, so `patches.check` and `tools/meta_routes.py` see it (row 744)."""
+def test_a_macros_subscriber_on_the_class_is_a_meta_sub(pid):
+    """`Macro.meta_subs`, so `patches.check` and `tools/meta_routes.py` see it."""
     base = Macro.from_json({"subs": [{"base": pid}]})
     depth = Macro.from_json({"subs": [{"depth": {"source": "lfo:0", "target": pid}}]})
     assert base.meta_subs() == [pid] and depth.meta_subs() == [pid]
@@ -437,14 +435,13 @@ def test_finding_1_a_macros_subscriber_on_the_class_is_a_meta_sub(pid):
 
 
 @pytest.mark.parametrize("pid", ["deck.chase", "totem.on", "poi.on", "poi.length"])
-def test_finding_3_a_patch_with_a_row_on_the_class_is_refused_whole(pid):
-    """Row 744's rule reaches the class. Read-only count, 2026-11-06: 0 of the Drive's 110
-    loadable patches and 8 patches hold such a row, so nothing is lost."""
+def test_a_patch_with_a_row_on_the_class_is_refused_whole(pid):
+    """The rule against a patch's row on a meta param reaches the class."""
     route = {"source": "lfo:0", "target": pid, "op": "push", "value": 0.2}
     assert any("no patch's row" in w for w in patches.check(_with(routes=[route])))
 
 
-def test_finding_2_a_load_lets_a_glide_on_the_class_arrive(tmp_path):
+def test_a_load_lets_a_glide_on_the_class_arrive(tmp_path):
     """A person's knob on a per-deck meta param: a load moves no such param, so its glide
     goes on, as `output.xfade`'s does (tests/test_desk.py). A load stops only a patch's."""
     from test_midi import cc
@@ -491,9 +488,8 @@ META_MODULES = _mods(
     "hotreload", "watchdog", "midiports", "midi", "apc40", "generic", "idle_lights", "gamepad", "pads", "hands", "bridge",
     "osc", "kinect", "totem", "poi", "poi_guide", "overlay", "audio", "analysis", "analyzer", "bands",
     "tempo", "seq_page", "node_desk", "replay", "imgui_gl", "pinch", "pacing", "world", "grip")
-# one module holding both layers' classes, which an import cannot tell apart. The list is the
-# finding, not a licence: splitting them is the structure audit's (draft #273), and until then
-# `META_NAMES` below stands guard over what a patch module takes from them
+# one module holding both layers' classes, which an import cannot tell apart. `META_NAMES`
+# below stands guard over what a patch module takes from them. DEBT: both-layers-modules
 BOTH_LAYERS = _mods("params", "routing", "routing_sources", "library", "undo", "learn",
                     "outputs", "groupwords", "hot_slots", "writes")
 # above both: the panel and the headless tools, which may read either
@@ -526,7 +522,7 @@ SURFACE_NAMES = {
     "patches": {"meta_refusal": "a patch file naming a meta param is refused (row 744)"},
     "nodemode": {"meta_refusal": "a node's meta params fill no degree of freedom"},
 }
-# …and the handles at run time. (`Install.session` goes with the shows, in plan 57 §5.)
+# …and the handles at run time.
 META_ATTRS = {"meta", "decks", "meta_stack", "push_meta", "players", "session", "meta_reg", "meta_table"}
 SURFACE_ATTRS = {
     ("dream", "w.meta"): "not ours: a model file's download record",

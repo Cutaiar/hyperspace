@@ -1,7 +1,7 @@
-"""Plan 44 D2 — `routing_sources.Sources`, the router's shared half, and
+"""`routing_sources.Sources`, the router's shared half, and
 what stays each router's own: an address resolved against the router's
 own table, the tables held weakly, one clock for every router, and a
-router from before D2 that a hot reload re-classes."""
+router built before the split that a hot reload re-classes."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def _pair():
 
 def test_each_router_resolves_an_address_against_its_own_tables_primaries():
     """``axis@pad:RT`` means the bare `axis` lanes only where `pad` is the
-    table's primary pad (plan 27 B6): two routers over one `Sources`, two
+    table's primary pad: two routers over one `Sources`, two
     tables with different primaries, two answers — no "first table"."""
     src, a, b = _pair()
     src.names["axis"] = {"RT": 5}
@@ -55,7 +55,7 @@ def test_each_router_reads_the_pad_feel_of_its_own_table():
 
 
 def test_a_routers_modifiers_stay_off_the_sources():
-    """Plan 44 D4 (row 591): each router's ``mod`` lanes are its own layer's:
+    """Each router's ``mod`` lanes are its own layer's:
     the shared sources never hold them, and the panel, reading through the
     router, sees its own deck's whichever pass ran last."""
     from types import SimpleNamespace
@@ -99,7 +99,7 @@ def test_a_routers_mod_vector_is_built_when_its_modifiers_change_and_never_per_f
 
 
 def test_sources_are_keyword_only():
-    """A caller from before D2 that handed a device registry as the third
+    """A caller that handed a device registry as the third
     argument is told so, rather than failing deep in `follow`."""
     with pytest.raises(TypeError):
         Router(Registry(), Bindings([]), Sources())
@@ -109,7 +109,7 @@ def test_the_sources_hold_the_tables_weakly():
     """A router dropped (the panel's router swap) lets its table go; the
     registry's rig facts are never written into it again."""
     src, a, b = _pair()
-    assert src.tables == [a.table.meta_table, b.table.meta_table]   # (plan 44 D3: via the meta controller)
+    assert src.tables == [a.table.meta_table, b.table.meta_table]   # via the meta controller
     del b
     gc.collect()
     assert src.tables == [a.table.meta_table]
@@ -126,7 +126,7 @@ def test_the_sources_hold_the_tables_weakly():
 
 
 def test_one_clock_for_every_router_over_the_sources():
-    """The sources own the clock (plan 44 §2): the first bank's clock
+    """The sources own the clock: the first bank's clock
     becomes it, the same clock again is fine, another is refused."""
     from hyperspace import lfo
 
@@ -141,10 +141,10 @@ def test_one_clock_for_every_router_over_the_sources():
 
 
 def test_a_router_from_before_the_split_survives_a_hot_reload():
-    """A Router built before plan 44 D2 kept its feeds, labels, names and
+    """A Router built before the split kept its feeds, labels, names and
     clock in its own __dict__ and has no sources; re-classed by a hot
     reload it gets sources of its own holding what it had been fed, and
-    its pass runs on them (audit H1's survival, as the restart is asked)."""
+    its pass runs on them."""
     reg = Registry()
     v = {"x": 0.5}
     reg.continuous("t.x", "x", lambda: v["x"], lambda x: v.__setitem__("x", x), group="view")

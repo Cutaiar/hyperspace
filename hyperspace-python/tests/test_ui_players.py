@@ -1,4 +1,4 @@
-"""The player select screen (wave 4 PS, plan 55): mouse-driven, by control id,
+"""The player select screen: mouse-driven, by control id,
 through the real panel and the real `MetaController`. Its decks stand in: what a
 pointer's move does to a row is `test_players.py`'s; here, that the board moved it."""
 
@@ -635,7 +635,7 @@ def _drop(d, grip, to):
 
 
 def test_cmd_z_over_the_board_is_the_meta_stack_s_and_the_latch_holds(rig, monkeypatch):
-    """Row 740, amended, under row 753: coming to it takes nothing back until a move."""
+    """Coming to it takes nothing back until a move."""
     r, d, meta = rig, rig.d, rig.meta
     stack = _real_stack(r, monkeypatch)
     _over(d)
@@ -802,7 +802,7 @@ def test_the_app_hands_the_panel_its_meta_controller():
     assert "panel.meta = meta" in inspect.getsource(app)
 
 
-# ---------------------------------------------------------------- adopting (CT1)
+# ---------------------------------------------------------------- adopting
 
 class Opened:
     """A stand-in's adapter, as a port that opened."""
@@ -983,7 +983,7 @@ def test_the_board_says_the_library_is_not_there_and_an_adopt_still_lands_this_r
 
 
 def test_the_same_cell_clicked_again_is_no_second_seat(tray):
-    """Review 5: a pad has no same-check, as two of a model are two seats. What stops a
+    """A pad has no same-check, as two of a model are two seats. What stops a
     phantom is the tray: it's gone from there the moment it's adopted."""
     r, d = tray, tray.d
     r.ports = []

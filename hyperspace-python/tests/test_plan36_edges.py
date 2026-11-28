@@ -1,4 +1,4 @@
-"""Plan 36 T2 (W2): every hidden edge is a port and a drawn, saved,
+"""Every hidden edge is a port and a drawn, saved,
 deletable cable.
 
 | was read by name                 | now a wire                                  | unwired      |
@@ -14,7 +14,7 @@ builder read by name; the migration (`graphmigrate.drawn_edges`) adds the
 wire to a `/4`–`/6` frame; the canvas draws it. The goldens are the proof
 that the migrated frames draw what they drew (tests/test_golden_frames.py).
 
-Plan 90 H2: the look-back is retired — the cover (`scene(cover)`) goes into
+The look-back is retired — the cover (`scene(cover)`) goes into
 any mask port (a cut's, here); the migration's rows still read an old
 frame's `lookback.cover`."""
 
@@ -30,11 +30,10 @@ from hyperspace.params import Registry
 from hyperspace.routing import Bindings
 
 SIZE = (240, 150)
-# (plan 90 H2: the scene shown straight — the look-back that stood between
-# is retired)
+# (the scene shown straight; the look-back that once stood between is retired)
 FRAME = [("shape", "scene.geometry"), ("scene", "output.all.image"),
          ("hands.layer", "output.all.hands"), ("hands.layer", "output.all.guide")]
-# a frame in the words before T4 (a `/6` file's: the look-back laid over
+# a frame in the old words (a `/6` file's: the look-back laid over
 # `lookback.image`, recording `lookback.capture`) — a migration's input
 OLD_FRAME = [("shape", "scene.geometry"), ("scene", "lookback.image"),
              ("lookback", "output.all.image"), *FRAME[2:], ("scene", "lookback.capture")]
@@ -113,7 +112,7 @@ def test_wired_faces_read_their_pattern_by_the_wire():
 
 def test_the_migration_wires_the_faces_pattern():
     assert ("pattern", "shape.faces") in pairs_of(migrated())
-    # a /6 wired frame from before T2 gains it on load …
+    # a /6 wired frame gains it on load …
     assert ("pattern", "shape.faces") in pairs_of(migrated(wired(*FRAME)))
     # … but never over a wire of its own into the faces
     got = pairs_of(migrated(wired(*FRAME, ("channel.b", "shape.faces"))))
@@ -148,7 +147,7 @@ def test_plain_faces_draw_no_pattern_and_the_wire_draws_it(ctx, bus_cuts):
 # ---------------------------------------------------------------- the scene's cover
 
 def test_unwired_a_mask_port_has_no_cover():
-    """(Plan 90 H2: the look-back's cover port is retired; a cut's mask is
+    """(The look-back's cover port is retired; a cut's mask is
     the cover's port now.)"""
     g = build(spec_of(*FRAME, *CUT, nodes=[{"kind": "cut"}]))
     assert g.nodes["cut"].inputs["mask"] is None
@@ -169,7 +168,7 @@ def test_wired_the_cover_is_the_scenes_faces_mask():
     assert spec.notes == ("wire scene.cover → acid.image — scene.cover is "
                           + G.PIN_WORDS["scene.cover"],)
     spec = G.read_graph(wired(*FRAME, *CUT, ("scene", "cut.mask"), nodes=[{"kind": "cut"}]))
-    # (plan 39 T2: the refusal names the converter)
+    # (the refusal names the converter)
     assert spec.notes == (("wire scene → cut.mask — scene makes a picture, "
                            "cut.mask takes a mask — put a matte between"),)
 
@@ -246,8 +245,8 @@ def test_an_unwired_layer_draws_nothing_on_the_golden_meta(ctx, bus_cuts):
     it, nothing — the frame is the one with no hands laid over at all."""
     from test_graph_frame import _draw, _land
 
-    # (plan 36 T4: the scene shown straight — a look-back drawn is on, and
-    # its trail would grow between the draws; plan 90 H2: it is retired)
+    # (the scene shown straight: a look-back would be on, and its trail
+    # would grow between the draws; the look-back is retired)
     plain = [("shape", "scene.geometry"), ("scene", "output.all.image")]
     _land(bus_cuts, wired(*plain, *FRAME[2:], ("pattern", "shape.faces"),
                           ("hands", "hands.layer.hands")))
@@ -275,7 +274,7 @@ def test_a_cloud_is_in_the_scene_by_the_meta_wire_and_cut_it_is_not():
     clouds = [n for n in g.nodes["scene"].geometries() if isinstance(n, G.PointCloud)]
     assert [c.name for c in clouds] == ["cloud.2"]
     assert G.is_fixture_wire(G.cloud_wire(1)) and not G.is_fixture_wire(G.Wire("hands", "scene.geometry"))
-    # (a show from before T2 cut nothing: every cloud's wire stands)
+    # (a show saved without cuts cut nothing: every cloud's wire stands)
     assert G.BusCuts.read({}).present(G.cloud_wires(("scan",))) == (G.cloud_wire(0),)
     assert G.BusCuts.read(bus_cuts.to_json()) == bus_cuts
 
@@ -301,7 +300,7 @@ def test_the_clouds_wire_is_cut_and_joined_on_graph(tmp_path):
                       G.bus_cuts_of(app.loaded_patch))
     c = cable(graphview.build(Bindings(), Registry(), None, None, g, spec),
               "cloud", "scene.geometry")
-    # (plan 44 D3: the cut is the loadable patch's, its dot the loadable patch's)
+    # (the cut is the loadable patch's, its dot the loadable patch's)
     assert e.unwire(c) is None and app.loaded_patch.bus.cut == {G.cloud_wire(0)}
     assert app.loaded_patch.graph.spec.to_json() == before and app.lib.is_dirty("loadable")
     assert e.wire("rout:cloud", "rin:scene/geometry") is None

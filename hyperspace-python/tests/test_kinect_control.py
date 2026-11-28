@@ -1,4 +1,4 @@
-"""The Kinect's manual controls and telemetry (plan 29, row 1170): requests
+"""The Kinect's manual controls and telemetry: requests
 served on the device's own thread, the snapshot it publishes, a motor that
 will not open, and nothing sent that was not asked. Over a stand-in sensor
 and a stand-in libfreenect: no hardware, no libfreenect."""
@@ -548,7 +548,7 @@ def test_the_radar_profile_is_the_nearest_millimetres_a_column_in_the_band_round
     p = kinect.radar_profile(d)
     assert len(p) == kinect.RADAR_COLS
     assert p[0] == 1800                              # the nearer of two, in column 4 (the first)
-    assert p[1] == 0                                 # row 100 is outside the band: the floor and ceiling are not read
+    assert p[1] == 0                                 # the 100th row is outside the band: the floor and ceiling are not read
     assert p[79] == 3000 and p[2] == 0               # nothing read is 0
     assert kinect.radar_profile(depth()) == (0,) * kinect.RADAR_COLS
     assert all(isinstance(v, int) for v in p)

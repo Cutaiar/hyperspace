@@ -1,4 +1,4 @@
-"""The PRESETS page (2026-10-28: one tier — nothing is factory, nothing is
+"""The PRESETS page (one tier — nothing is factory, nothing is
 hidden) — headless imgui over the controls rig (tests/test_ui_shell.py),
 on a home seeded with the corpus, which opens the party show.
 
@@ -30,7 +30,7 @@ from hyperspace.library import HOME_UNSET, LOADABLE, PATCHES, RETIRED_MODULES
 from hyperspace.ui import PAGE_KEYS
 
 ACID_WASH = Path(__file__).resolve().parent / "fixtures" / "patches" / "acid-wash.json"
-# what the page must never say (the owner, 2026-10-28): whole words, lower case
+# what the page must never say: whole words, lower case
 BANNED = r"\b(starts on|f[1-8]|hidden|factory|slots?|project|startup|module patches?)\b"
 
 
@@ -150,8 +150,7 @@ def test_the_trash_foot_shows_only_while_the_trash_holds_something_and_restores(
 
 
 def test_the_shows_row_is_never_covered(rig):  # noqa: F811
-    """The layout bug the owner hit once (the startup combo over the show's
-    name): the name, open ▾, save, as… and new share a row and none covers
+    """The name, open ▾, save, as… and new share a row and none covers
     another; the row sits under its own line."""
     panel = rig.panel
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
@@ -177,7 +176,7 @@ def _dirty(r):
 
 
 def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
-    """Plan 14 §1: right after a loadable patch loaded, no rail dot is lit and the
+    """Right after a loadable patch loaded, no rail dot is lit and the
     show is not unsaved — every dot compares against the loaded patch or
     show. An edit brings the loadable patch's back; a meta controller move the show's."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
@@ -196,7 +195,7 @@ def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
 
 
 def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noqa: F811
-    """Plan 19 WP5: the dot is a filled red disc 12 px across (`ui.DOT_R`),
+    """The dot is a filled red disc 12 px across (`ui.DOT_R`),
     centred on the name's line, right of the name; while it shows the
     save chip is the lit one (solid red) and reads "save" — one tier, the
     only word it has. The row does not grow. Saved: the dot goes and the
@@ -285,8 +284,8 @@ def test_the_loadable_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):
 
 @pytest.mark.parametrize("width", [258.0, 340.0, 600.0])
 def test_a_module_strip_does_not_overlap(rig, monkeypatch, width):  # noqa: F811
-    """Audit U10: plan 49's `strip_name_w` squeezes the name, and at 258 px the chips
-    now wrap, but `same_line(avail - w)` counts from the window's edge, so at 340 px the
+    """`strip_name_w` squeezes the name, and at 258 px the chips
+    wrap, but `same_line(avail - w)` counts from the window's edge, so at 340 px the
     save chip still covered ▶ by 6 px. Every module strip with its reset, and the
     loadable patches' strip, dirty, clear themselves and the strip's right edge: where
     it wraps, where it squeezes, and where it has room."""
@@ -320,7 +319,7 @@ def test_a_module_strip_does_not_overlap(rig, monkeypatch, width):  # noqa: F811
 
 
 def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
-    """Plan 35 T7 (row 387): `new` sits before `save` on the loadable patches' strip
+    """`new` sits before `save` on the loadable patches' strip
     and starts the blank loadable patch; `save` on the untitled loadable patch begins
     naming, since it has no file to write over."""
     from hyperspace import loadable
@@ -344,7 +343,7 @@ def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
 
 
 def test_new_then_save_never_writes_over_a_loadable_named_untitled(rig):  # noqa: F811
-    """R17 (final review): a loadable patch named `untitled` exists; New, then
+    """A loadable patch named `untitled` exists; New, then
     save, opens naming (the new loadable patch is unsaved, whatever its name) and
     the file is the bytes it was; `as…` on it prefills nothing. A save
     clears the flag: save on the saved loadable patch writes over it."""
@@ -403,7 +402,7 @@ def test_the_routing_head_draws_save_and_as_over_the_loadables(rig):  # noqa: F8
     assert lib.current("loadable") == "Mine" and (lib.home / "loadable" / "mine.json").is_file()
 
 
-# ------------------------------------------------------------ the trash (plan 19 WP4)
+# ------------------------------------------------------------ the trash
 
 def _trash_view(panel):
     st = _page(panel)
@@ -413,7 +412,7 @@ def _trash_view(panel):
 
 
 def test_old_trash_rows_say_so_and_nothing_to_empty_draws_no_chip(rig, monkeypatch):  # noqa: F811
-    """Plan 48 review: a row from the library's old trash carries
+    """A row from the library's old trash carries
     "patch · library" in itself; when only such rows are listed there is
     nothing "empty" would remove, so no chip to arm."""
     from hyperspace.library import Trashed
@@ -611,7 +610,7 @@ def test_save_as_and_new_work_the_show(rig, tmp_path):  # noqa: F811
 # ------------------------------------------------------------ the page's words
 
 def test_nothing_on_the_page_says_starts_on_f_keys_hidden_or_factory(rig, monkeypatch):  # noqa: F811
-    """The owner's ask, 2026-10-28: no "starts on", no F-key, no hidden, no
+    """No "starts on", no F-key, no hidden, no
     factory, no slot — in any text the page draws, any hover, any widget
     label, any rect key — with a loadable patch loaded, the trash holding a file,
     a patch in its fold and the show line drawn. The page says show and
@@ -644,7 +643,7 @@ def test_nothing_on_the_page_says_starts_on_f_keys_hidden_or_factory(rig, monkey
 # ------------------------------------------------------------ the footer's library lines
 
 def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
-    """Plan 15 WP4: the footer's slot shows a library line when its words
+    """The footer's slot shows a library line when its words
     change — and, for a line set through `Library.say`, when it is said
     again in the same words: a save-as that meets a full bank twice, a
     pad cleared, refilled and cleared again."""
@@ -679,7 +678,7 @@ def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
     lib.status = "show: something else"
     assert panel._message() == ("", False)
     # a panel kept across a hot reload remembers the lines as plain strings:
-    # they are not news (review of PR #87)
+    # they are not news
     panel._msg["seen"] = {"status": lib.status, "warning": lib.warning,
                           "undo": panel._msg["seen"]["undo"]}
     assert lib.warning and panel._message() == ("", False)
@@ -688,7 +687,7 @@ def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
 
 
 def test_a_line_said_twice_shows_twice(rig, monkeypatch):  # noqa: F811
-    """Plan 16 WP7: every line that reports something that just happened
+    """Every line that reports something that just happened
     goes through `Library.say`, so the same press giving the same words
     shows them again — an empty F-key, home on a show that names no
     startup loadable patch, a pad naming no file, a show saved twice."""
@@ -742,7 +741,6 @@ def test_a_line_assigned_every_frame_does_not_pin_the_footer(rig, monkeypatch): 
     assert abs(shown.index("") * 0.1 - ui.MESSAGE_S) < 0.25   # gone on time
     # a knob on `scene.select` sends the same scene many times in one turn:
     # said once, when it changes, and never again while it is the same
-    # (review of PR #92)
     scene = rig.reg["scene.select"]
     panel.control.library = lib                               # as app.py wires it
     clock[0] += ui.MESSAGE_S + 1

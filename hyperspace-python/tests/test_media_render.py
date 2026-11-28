@@ -1,8 +1,8 @@
-"""Plan 32 T6 — the render side of the media channels: `media_tex.MediaTextures`
+"""The render side of the media channels: `media_tex.MediaTextures`
 (the upload), the fitted `media.<c>` graph node, the backdrop under the scene,
 and the channels as wire ends.
 
-Plan 90 H2: the look-back is retired. Where the old words drew one ("trail")
+The look-back is retired. Where the old words drew one ("trail")
 the migration draws its public parts (`graphmigrate.wired_of`): the history
 is what feeds its fade (`… → fade → resize → delay → trail → cuts`), its
 picture added on by a composite; the tests of its occlusion over a backdrop
@@ -126,7 +126,7 @@ def test_no_backdrop_graph_unchanged():
     states = [{}, {"scene": False}, {"through": True}, {"hands": False},
               {"scene": False, "through": True}]
     one = G.build_graph([_view()], wired_wiring(G.Wiring()))
-    # (plan 36 T4: the old words' look-back off — none drawn)
+    # (the old words' look-back off: none drawn)
     assert _names(one) == ["pattern", "shape", "hands", "scene", "hands.layer", "shown(scene)",
                            "output.1"]
     for kw in states:
@@ -148,17 +148,16 @@ def test_the_backdrop_wiring_is_checked():
 
 def test_backdrop_history_toggle():
     """With a backdrop the scene is laid over the channel (`backdrop`,
-    plan 35 T4's name for `grounded`) before the history, so the effects
+    the old name `grounded`) before the history, so the effects
     bend both; the history takes the scene alone with `backdrop_history`
     off, the composite with it on — and the hands alone through the
-    effects have no backdrop. (Plan 90 H2: the history the migrated
+    effects have no backdrop. (The history is the migrated
     look-back's parts, its trail through its cuts.)"""
     from wiredframe import Shows, graph
 
     shows = [Shows(), Shows(scene=False, through=True)]
-    # (plan 36 T4: the look-back drawn — its trail added onto the backdrop's
-    # picture by `composite.2`, the through window's `composite` first; plan
-    # 90 H2: its trail is public parts, through `cut.2` last)
+    # (the look-back drawn: its trail is public parts, added onto the backdrop's
+    # picture, through `cut.2` last)
     parts = ("fade", "trail")                   # (the effects its parts run)
     off = graph(shows, G.Wiring(backdrop="a"), look="trail", effects=parts)
     on = graph(shows, G.Wiring(backdrop="a", backdrop_history=True), look="trail",
@@ -240,7 +239,7 @@ def _renderer(ctx, media=None, wires=()):
     r = Renderer(ctx)
     r.ghost.state.on = False
     r.media = media
-    # (plan 36 T3: the rig's words before the wired frame, kept for `_back`;
+    # (the rig's words before the wired frame, kept for `_back`;
     # the renderer takes them wired, as the migration writes them)
     r.old_wiring = G.Wiring(wires=tuple(wires))
     r.wiring = wired_wiring(r.old_wiring)
@@ -248,13 +247,13 @@ def _renderer(ctx, media=None, wires=()):
 
 
 def _back(r, c: str = "a", history: bool = False, look: str = "off"):
-    """`r` with channel `c` wired under the scene (plan 33 R: the section's
+    """`r` with channel `c` wired under the scene (the section's
     `media.<c> → backdrop.image`, as `GraphSpec.wiring` lands it — not
     `backdrop.channel`); "" unwires it. `history`: the look-back records the
-    backdrop too (plan 36 T3: a wire, `backdrop → lookback.image` — no
-    longer laid on per frame from `backdrop.history`). `look`: the old
-    words' look-back (plan 36 T4: "off" draws none, "trail" draws it — plan
-    90 H2: as its public parts, the history what feeds their fade)."""
+    backdrop too (a wire, `backdrop → lookback.image`, not
+    laid on per frame from `backdrop.history`). `look`: the old
+    words' look-back ("off" draws none, "trail" draws it as
+    its public parts, the history what feeds their fade)."""
     from dataclasses import replace
 
     r.old_wiring = replace(r.old_wiring, backdrop=c, backdrop_history=history and bool(c))
@@ -377,7 +376,7 @@ def test_a_texture_made_anew_under_a_reused_name_gets_its_own_wrapper(ctx):
     if again.glo != name:
         pytest.skip(f"GL did not reuse texture name {name} (got {again.glo})")
     assert wrap_s(name) == GL.GL_REPEAT       # a new object: GL's default, not the wrapper's
-    # the same generation: the stale wrapper, as before (what a frame of the
+    # the same generation: the stale wrapper (what a frame of the
     # old texture would still name)
     assert mt.texture("a", MediaFrame(None, 2.0, 2, texture=name, tex_size=(4, 2), tex_gen=1)) is old
     assert mt.wraps == 1 and wrap_s(name) == GL.GL_REPEAT
@@ -418,11 +417,11 @@ def test_backdrop_under_scene(ctx):
     # off again (unwired): the graph without it, the frame black
     (none,) = _draw(ctx, _back(r, ""), _empty())
     assert "backdrop" not in r._graph.nodes and (none[..., :3] == 0).all()
-    # (plan 33 T7: no `backdrop.channel` — the wire into `backdrop.image` is it)
+    # (no `backdrop.channel`: the wire into `backdrop.image` is it)
 
 
 def test_backdrop_needs_the_channels(ctx):
-    """A renderer with no media state draws no backdrop. Plan 36 T3: the
+    """A renderer with no media state draws no backdrop. The
     wire builds its node (what is wired is built, never read from the
     renderer's state), and it draws nothing."""
     r = _back(_renderer(ctx, None))
@@ -437,8 +436,8 @@ def test_the_graph_is_rebuilt_only_when_the_backdrop_changes(ctx):
     _draw(ctx, r, _empty(backdrop_alpha=0.3))
     assert r._graph is g                                    # alpha is per frame
     _draw(ctx, _back(r, "a", history=True, look="trail"), _empty())
-    # (plan 35 T4: what the history records is a wire of the graph's; plan
-    # 90 H2: the migrated look-back's, through its fade)
+    # (what the history records is a wire of the graph's: the migrated
+    # look-back's, through its fade)
     assert r._graph is not g
     assert r._graph.nodes["fade"].inputs["image"].name == "backdrop"
     _draw(ctx, _back(r, "b"), _empty())
@@ -510,8 +509,7 @@ def test_a_texture_frame_through_the_fit_pass(ctx):
                     reason="syphon-python is not installed")
 def test_a_syphon_frame_samples_through_the_fit_pass(ctx):
     """Syphon's texture as the server publishes it, sampled by the fit
-    pass: its colours land, the way up GL's (row 0 at the bottom). The
-    spike read it as 2D; it is a rectangle (an IOSurface's), so it is
+    pass: its colours land, the way up GL's (row 0 at the bottom). It is a rectangle (an IOSurface's), so it is
     blitted into the channel's own 2D texture on the GPU, never uploaded."""
     import gc
 
@@ -637,15 +635,15 @@ def test_render_thread_never_waits(ctx):
 # ---------------------------------------------------------------- an effect after the scene
 
 def test_an_effect_after_the_scene_sits_after_the_backdrop_too():
-    """D1's `after: scene` (the acid-scene fixture's placement) over a
+    """`after: scene` (the acid-scene fixture's placement) over a
     backdrop sits after `grounded` — the scene laid over the channel — so
     it bends both rather than folding the see-through scene opaque; with no
     backdrop the graph is the base's, node for node."""
     placed = (G.EffectAt("acid", 2, after="scene"),)
-    effects = ("acid", "acid.2", "fade", "trail")     # (plan 90 H2: the history's too)
+    effects = ("acid", "acid.2", "fade", "trail")     # (the history's too)
     vs = [_view()]
-    # (plan 36 T4: the look-back drawn, the old words' on — plan 90 H2: as
-    # its public parts, the history through its fade)
+    # (the look-back drawn, the old words' on: as its public parts, the
+    # history through its fade)
     base = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed), "trail"), effects=effects)
     assert base.nodes["acid.2"].inputs["image"] is base.nodes["scene"]
     on = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop="a"), "trail"),
@@ -722,9 +720,9 @@ def test_a_composite_lays_the_scene_and_its_effect_over_the_media(ctx):
 
 
 def test_a_half_transparent_scene_over_white_is_honest_on_an_opaque_window(ctx):
-    """Plan 39 T1 (alpha is honest; spike findings §1d): the scene's
+    """Alpha is honest: the scene's
     translucent faces laid into a composite's `over` (so the scene clears
-    to a zero ground, PR #240) over a white still, on an opaque window.
+    to a zero ground) over a white still, on an opaque window.
     `view.cut_through` is the see-through window's blend, not a ground's:
     on and off draw the same picture, and that picture is the premultiplied
     over of the scene drawn alone — `face + white × (1 − face.a)` — never
@@ -764,7 +762,7 @@ def test_a_half_transparent_scene_over_white_is_honest_on_an_opaque_window(ctx):
 
 
 def test_a_frozen_rectangle_frame_is_never_copied_again(ctx):
-    """Final review (T8 M2, B-M5): a Syphon channel frozen at rate 0 holds
+    """A Syphon channel frozen at rate 0 holds
     one frame (`MediaState.frame` returns `held`), and the channel's own 2D
     copy of a rectangle frame is made only when (texture, frame, t) moves
     — so the frozen picture holds, however long the server keeps writing
@@ -799,7 +797,7 @@ class Playing(Still):
 
 
 def test_the_media_page_previews_cost_two_small_uploads_a_frame(ctx):
-    """Final review B-I2: with the MEDIA page open and eight clips playing
+    """With the MEDIA page open and eight clips playing
     that nothing on the outputs reads, at most `PREVIEWS_PER_FRAME` (2)
     previews are uploaded a frame, each at most `PREVIEW_W` wide — never
     the full frame — each channel at most `PREVIEW_HZ` a second, round

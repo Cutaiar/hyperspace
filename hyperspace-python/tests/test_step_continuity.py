@@ -1,5 +1,4 @@
-"""A knob step is the same size an hour in as a second in (register row
-580; K4 of the post-show plan, after row 560).
+"""A knob step is the same size an hour in as a second in.
 
 The time lint (`tests/shader_lint.py`) reads products of a time and a
 param in the source; it cannot see a param that scales *space* where the
@@ -29,7 +28,7 @@ clock stopped at the same phase, early in a set and late in one.
   segments — changes it by the same amount whenever it moves, and passes
   however large that is; one whose change grows with the clock is twenty
   times its early size and more (warp's drift and scale, tripcolour's
-  pulse and RINGS' colour before K4: see the PR).
+  pulse and RINGS' colour).
 - **Aux.** An effect with an aux input (displace, blend) reads a second
   picture there, the UV map turned half a turn (`uv_flow.uv_mirror`), so
   its knobs move the field; every other effect ignores it.
@@ -102,7 +101,7 @@ def shipped() -> tuple[fx.FxState, Registry]:
 
 # choices that pick how an effect computes its picture, not what it shows: held
 # at their defaults here, since every setting of them is the same field (each
-# setting multiplies the passes this sweep runs). Plan 63's Mandelbrot: Size
+# setting multiplies the passes this sweep runs). Mandelbrot's Size
 # (its lines; a no-op at this test's 320×200), Tier (float32 direct or
 # perturbation, the same picture to float32's error) and Skip black (the inside
 # filled without iterating) — `tests/test_mandel.py` holds each to the picture
@@ -153,7 +152,7 @@ def effect_report(ctx, state: fx.FxState, r: Registry, name: str,
     """key → [(early, late)] step sizes, px, one pair per setting of the
     effect's choices, for effect `name` on `state`
     (declared on `r`): every amount-type param but the one stepped at half
-    its range, so the effect shows (their defaults are calm: PR #304); a
+    its range, so the effect shows (their defaults are calm); a
     second picture on the aux input (`uv_flow.uv_mirror`)."""
     spec = state.specs[name]
     v = state.values[name]

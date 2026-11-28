@@ -1,4 +1,4 @@
-"""Plan 59 — world objects: the pose, the registries, the step, the puppets and the render.
+"""World objects: the pose, the registries, the step, the puppets and the render.
 
 The world (`hyperspace/world.py`) holds the things drawn — the shape and the two
 hands — each with a home pose and an offset pose; bodies, joints, puppets and
@@ -183,7 +183,7 @@ def test_a_registry_takes_only_a_registered_object():
 def test_no_body_means_not_moved_and_removing_an_object_clears_every_registry():
     w = W.World.default()
     w.body("shape", W.Body(velocity=np.array([1.0, 0, 0, 0])))
-    w.joint("hand.left", W.Joint("hand.right", "shape"))   # plan 60's: no body, never moves
+    w.joint("hand.left", W.Joint("hand.right", "shape"))   # no body, never moves
     w.clip["hand.left"] = object()
     w.step(0.1)
     assert w["shape"].offset.position[0] > 0.09     # the body moved its offset
@@ -476,7 +476,7 @@ def test_an_offset_turn_and_z_reach_the_frame_and_the_cull(ctx):
 
 
 def test_fit_and_the_3d_lattices_take_no_offset(ctx):
-    """Register row 851: the field's own path carries the camera in each
+    """The field's own path carries the camera in each
     copy's row and its world transform stays the identity."""
     w = W.World.default()
     w["shape"].offset = W.Pose.turn3(W.qexp([0.0, 0.6, 0.0]), (0.3, 0.0, 0.4))

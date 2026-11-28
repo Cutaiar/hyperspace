@@ -1,12 +1,11 @@
-"""One macro concept (plan 13 D10, §2.4; decision register rows 12, 12b).
+"""One macro concept.
 
 A macro is a knob with subscribers: a base subscriber is a scene-setter
 that follows the macro's *base* (`Router.follow_macros`), a depth
 subscriber scales one route by the macro's *effective* value, last
 frame's (`Router.modulate`). Polarity is per subscriber; a performer on
 a macro moves its depth subscribers only; `scale: macro.N` migrates to a
-depth subscriber and a `scale` on anything else is left alone (register
-row 18, open).
+depth subscriber and a `scale` on anything else is left alone.
 """
 
 import json
@@ -31,9 +30,7 @@ def frame(router, reg):
 
 
 def test_a_new_base_subscriber_runs_from_where_the_param_sits_to_the_end_of_its_fader():
-    """Row 537 (the owner, 2026-10-28: "by default when you wire up a
-    macro, the From and To parameters start at the same value so there's
-    actually no range of motion"): `routing.base_sub` — what a macro's
+    """`routing.base_sub` — what a macro's
     cable on GRAPH and ROUTING's "+ base" both add — runs from the param's
     fader position to 1, or to 0 when it already sits at 1; never
     from = to. On the knob the param moves at once."""
@@ -82,9 +79,9 @@ def test_base_subscribers_of_opposite_polarity_move_opposite_ways():
 
 
 def test_a_performer_on_a_macro_moves_only_its_depth_subscribers():
-    """Row 12b: a hand owning macro.1 deepens the route its depth
+    """A hand owning macro.1 deepens the route its depth
     subscriber names — the same frame, from the macro's effective value
-    (plan 28 N0, decision 7: the macro's node runs before the route) —
+    (the macro's node runs before the route) —
     and leaves its base subscribers alone; the knob moves those."""
     r = rig()
     reg = r.reg
@@ -127,10 +124,9 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path):
     assert t.bindings[0].scale is None
     assert t.macros_doc() == {"macro.1": {"subs": [depth_sub("lfo:1", "fx.mix")]}}
     assert any("depth subscriber of macro.1" in n for n in t.notes)
-    # the route and its macro are a loadable patch's (plan 13 WP5): the table
+    # the route and its macro are a loadable patch's: the table
     # carries them as one, the same subscriber, the same depth (nothing
-    # reads `carried` since the one-tier library of 2026-10-28 retired
-    # plan 13 §6's migration; the next write leaves it out)
+    # reads `carried`; the next write leaves it out)
     made = t.carried
     assert made.macros == t.macros_doc() and "scale" not in json.dumps(made.routes)
     r = rig()
@@ -158,14 +154,14 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path):
 
 
 def test_a_scale_on_a_meta_param_is_left_alone():
-    """Decision register row 18 (a): a route keeps a `scale` that names a
+    """A route keeps a `scale` that names a
     shared meta param — the drive fader reaches the rotation as `scale:
     master.gain` on the six legacy6 rate rows — and nothing migrates it."""
     row = {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625,
            "scale": "master.gain"}
     t = Bindings.from_json({"schema": routing.SCHEMA_V2, "bindings": [row]})
     assert t.bindings[0].scale == "master.gain" and t.macros == {}
-    assert not any("scale" in n for n in t.notes)      # (it changes only by `bindings/4`, plan 57)
+    assert not any("scale" in n for n in t.notes)      # (it changes only by `bindings/4`)
     legacy6 = json.loads((CORPUS / "loadable" / "legacy6.json").read_text())
     assert sum(b.get("scale") == "master.gain" for b in legacy6["routes"]) == 6
     assert legacy6["macros"] == {}
@@ -174,7 +170,7 @@ def test_a_scale_on_a_meta_param_is_left_alone():
 
 
 def test_a_scale_on_a_patch_param_is_refused_with_a_note(tmp_path):
-    """Decision register row 18 (a): a `scale` naming a patch param
+    """A `scale` naming a patch param
     (one a loadable patch load could move under the route) is dropped with a note
     — in the live table and in a loadable patch's load — the depth kept; a macro's
     becomes a depth subscriber and a shared meta param's stays, as before."""
@@ -210,11 +206,11 @@ def test_a_scale_on_a_patch_param_is_refused_with_a_note(tmp_path):
 
 
 def test_a_base_subscriber_on_a_meta_param_is_dropped_with_a_note(tmp_path):
-    """D9, review of PR #67: a base subscriber names a patch param —
+    """A base subscriber names a patch param —
     persisted, not an alias — never a meta controller one, so a loadable patch load never
     writes a meta controller base through a macro. `set_macros` drops any other
     with a note (the load's notes, and the migration's), and a depth
-    subscriber on a route onto one goes with that route (register row 743)."""
+    subscriber on a route onto one goes with that route."""
     from test_loadable import boot, put
 
     r = boot(tmp_path)
@@ -267,7 +263,7 @@ def test_a_depth_range_crossing_zero_flips_the_route():
 
 
 def test_a_depth_subscriber_follows_its_route_when_the_row_moves():
-    """Review of PR #63: a subscriber names its route by (source, target),
+    """A subscriber names its route by (source, target),
     so re-pointing the row carries it along and removing the row drops it."""
     table = Bindings([Binding("lfo:1", "fx.mix", "push", 0.3)])
     table.set_macros({"macro.1": {"subs": [depth_sub("lfo:1", "fx.mix")]}})

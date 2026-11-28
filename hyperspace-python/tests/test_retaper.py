@@ -1,4 +1,4 @@
-"""Wave 0 T1: coarse and fine control through tapers — the effects' `speed`
+"""Coarse and fine control through tapers — the effects' `speed`
 on a signed exponential taper, their `amount` params on a zero-safe log
 taper, and every saved depth onto one measured along it, migrated in the
 same change (`params.retaper_depths`, tools/retaper_routes.py).
@@ -34,11 +34,11 @@ from hyperspace.routing import Binding
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "tests" / "corpus" / "loadable"
-# a patch fixture from before wave 0 T1 (no `units` marker): a push onto
+# a patch fixture from before the tapers (no `units` marker): a push onto
 # `fx.wobble.amount` and one onto `fx.acid.speed`, left as it was on purpose
 OLD_PATCH = ROOT / "tests" / "fixtures" / "patches" / "acid-wash.json"
 
-# PR #304's amount-type params, the ones the `amount` flag now marks, and the
+# the amount-type params, the ones the `amount` flag now marks, and the
 # ones every effect added since carries: an effect file's own `@param … amount`
 AMOUNTS = {"fx.acid.bend", "fx.acid.twist", "fx.acid.breathe", "fx.blocks.amount",
            "fx.cellaction.amount", "fx.deconverge.amount",
@@ -117,7 +117,7 @@ def test_the_amount_taper_is_off_at_zero_and_reaches_hi():
 # ---------------------------------------------------------------- the params
 
 def test_speed_and_the_amount_params_are_on_the_tapers_and_nothing_else_is(reg):
-    """Exactly PR #304's amount-type params carry the flag; every effect's
+    """Exactly the amount-type params carry the flag; every effect's
     `speed` is on `T_SPEED`; `mix`, the log shape params and the rest keep
     their ranges."""
     amounts = {p.id for p in reg if p.taper is not None and p.taper is not fx.T_SPEED}
@@ -305,11 +305,11 @@ def test_a_marked_document_is_left_alone_and_the_marker_is_what_a_save_writes(fi
 def test_an_old_loadable_loads_as_the_tool_rewrites_it(tmp_path):
     """End to end: a corpus loadable patch with the marker taken off and its depths
     put back to the numbers it held before this change loads through the
-    app (`LoadedPatch.load_doc` converts, and says so: plan 86) and saves
+    app (`LoadedPatch.load_doc` converts, and says so) and saves
     byte for byte as the tool writes it — which is the corpus file itself —
-    less the retired look-back knobs it names (plan 90 H2: with no look-back
+    less the retired look-back knobs it names (with no look-back
     they drew nothing, and the load drops them quietly; the tool leaves them)
-    and the old dream's (H3: off and undriven, it drew nothing either)."""
+    and the old dream's (off and undriven, it drew nothing either)."""
     t = _tool()
     data = (CORPUS / "party-acid.json").read_bytes()
     doc = json.loads(data)
@@ -325,7 +325,7 @@ def test_an_old_loadable_loads_as_the_tool_rewrites_it(tmp_path):
     old.write_text(loadable.dumps(doc))
     again, notes, _ = headless.resave(old, tmp_path / "scratch")
     _, moved = retaper_depths(json.loads(old.read_text()), FxState().files)
-    # (plan 90 H2, H3: every `dream.*` goes, the dream off and undriven)
+    # (every `dream.*` goes, the dream off and undriven)
     lean, gone = re.subn(rb'^ *"dream\.[a-z_]+": [^\n]*,\n', b"",
                          data, flags=re.MULTILINE)
     assert gone == 23
@@ -335,9 +335,9 @@ def test_an_old_loadable_loads_as_the_tool_rewrites_it(tmp_path):
 
 
 def test_a_file_written_without_the_marker_says_which_depths_it_rescaled(tmp_path, files):
-    """Plan 86 (row 1060): a loadable patch written by hand with no ``units`` key is
+    """A loadable patch written by hand with no ``units`` key is
     read as a file from before the tapers, and its depths onto the effects' speed and
-    amount params move under it (two agents' 0.12 read as 0.28, 2026-11-19). The
+    amount params move under it (two agents' 0.12 read as 0.28). The
     rescale stands, since old files depend on it; the load now says it, naming each
     route with its old and new depth, and a load of the marked file says nothing."""
     doc = json.loads((CORPUS / "party-acid.json").read_bytes())
@@ -372,7 +372,7 @@ def test_every_corpus_loadable_is_marked_and_a_run_on_the_corpus_is_a_no_op(file
 
 
 def test_an_overshooting_push_keeps_its_sign_and_its_overshoot(files):
-    """Review of #322 (4): a negative push from a base of 0 on an amount
+    """A negative push from a base of 0 on an amount
     reached nothing before and reaches nothing now, but its depth is kept
     (sign and size), never written 0, and the row is said to overshoot; a
     push past the top keeps its reach to the top plus its overshoot."""
@@ -391,7 +391,7 @@ def test_an_overshooting_push_keeps_its_sign_and_its_overshoot(files):
 
 
 def test_a_patch_carries_the_marker_and_an_old_one_is_read_as_it_was(tmp_path, files):
-    """Review of #322 (1, 2): `patches.lift` writes the marker and `check`
+    """`patches.lift` writes the marker and `check`
     takes it; the library's door (`Library.read_patch`, the one a spawn
     comes through) converts an unmarked patch's rows and leaves a marked
     one alone, so a spawn lands what the tool would write. `patches.read`
@@ -435,7 +435,7 @@ def test_a_patch_carries_the_marker_and_an_old_one_is_read_as_it_was(tmp_path, f
 
 
 def test_the_meta_table_is_read_as_it_was_marked_on_write_and_rewritten_once(tmp_path, files):
-    """Review of #322 (9): `Bindings.from_json` converts an unmarked file's
+    """`Bindings.from_json` converts an unmarked file's
     rows about the effect's default, counts it as a change (so `load` writes
     the file back once, backed up beside itself), `to_json` carries the
     marker and `dumps_doc` prints it; a factory table and the shipped
@@ -463,7 +463,7 @@ def test_the_meta_table_is_read_as_it_was_marked_on_write_and_rewritten_once(tmp
 
 
 def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(tmp_path, monkeypatch):
-    """Review of #322 (1, 3, 6, 9): a dry run writes nothing and makes no
+    """A dry run writes nothing and makes no
     backup; --write copies the library to the machine home first, keeps
     bindings.json beside itself, then rewrites every unmarked loadable patch, patch,
     desk template and the meta table as the app writes each, names a row

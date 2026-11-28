@@ -1,4 +1,4 @@
-"""What the pane's switcher and the footer keep (2026-11-24): each kept answer is the
+"""What the pane's switcher and the footer keep: each kept answer is the
 fresh one, and goes when what it was made of does."""
 
 from __future__ import annotations

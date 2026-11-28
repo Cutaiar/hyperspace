@@ -1,10 +1,10 @@
 # ruff: noqa: F811 — `rig` is test_midi's fixture, taken as each test's argument
-"""Plan 31 §A: the APC40's sequencer page, on the fake-port rig.
+"""The APC40's sequencer page, on the fake-port rig.
 
 SEND A latches a surface page whose rows shadow clip rows 1–5, the clip
 stops and scene launch 1–5 — invariant rows included — and are never
 saved or learned. The sequencer is registered here by hand
-(`sequencer.register`), as the app will once its wiring lands.
+(`sequencer.register`).
 """
 
 import pytest
@@ -81,7 +81,7 @@ def test_a_pad_toggles_a_step_and_loads_no_loadable(rig, seq):
     tap(rig, CLIP[0], channel=4)
     assert seq.lanes[0].steps[4] == 0.0
     # a loadable patch load (QUANT) leaves the page up; the pattern is the loadable patch's
-    # (decision 8), so the grid redraws to whatever the loaded one holds
+    # so the grid redraws to whatever the loaded one holds
     tap(rig, apc40.N_QUANT)
     assert lib.current("loadable") != before
     assert seq_page.page_of(rig.midi.table) is not None

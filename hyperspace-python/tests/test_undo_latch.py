@@ -1,5 +1,5 @@
-"""The undo latch, register row 753; the owner, 2026-11-06: "before you can start popping
-from that stack, you should have to push to that stack at least once after a focus event".
+"""The undo latch: before you can start popping from a stack, you have to push to that
+stack at least once after a focus event.
 
 Every rig is `test_undo_stacks`'s: `boot`, deck 2 and the real `MetaController`. `press` is
 ⌘Z through the `edit.undo` trigger, the road the key row takes.

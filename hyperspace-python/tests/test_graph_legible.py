@@ -1,14 +1,14 @@
-"""Plan 28 N7 — a legible graph: collapsed by default, one wire per node
+"""A legible graph: collapsed by default, one wire per node
 pair, GRAPH takes the routes.
 
-The owner's decisions of 2026-10-20: every node starts collapsed (its
+Every node starts collapsed (its
 title and at most five short lines, nothing per port); one wire between
 two nodes while either end is collapsed, however many params are mapped
 between them, the real cables appearing when both ends are expanded; and
 the GRAPH page takes over the routes and the modifiers from ROUTING,
 whose desk, macros, meta controller and sinks stay where they are.
 
-Headless, on the harness N2 and N3 used: the shell's rig
+Headless, on the shell's rig
 (tests/test_ui_shell.py) with the corpus's party-trip loaded, a render graph built by
 `graph.default_graph`, the APC40 as a real `devices.MidiDevice` over a
 stand-in adapter (tests/test_graphview_devices.py), and the page drawn
@@ -48,7 +48,7 @@ def rig(shell_rig):  # noqa: F811
 def party(rig):
     """party-trip (the corpus's, seeded into the scratch library) on the
     page: its rows, a render graph with effects, the APC40 listed. Returns
-    the page's state after two frames. Plan 35 T5: the canvas is the
+    the page's state after two frames. The canvas is the
     loadable patch's wired frame, so the frame the render graph is built from —
     acid and palette in the run, output 2 the hands through them — is
     landed as the loadable patch's graph too."""
@@ -104,16 +104,16 @@ def test_every_node_starts_collapsed_with_at_most_five_lines(rig):
     assert st["pin_xy"] and all(graphview.is_stub(p) for p in st["pin_xy"])
     desk = graphview.summary(view.node("device:apc40"))
     assert desk[0].endswith("patched") and " ports · " in desk[0]
-    # + main's 3D switch, Fit, spacing, depth; plan 32: view.media, and the
-    # factory knob 7's row on its alias view.bmp_alpha; plan 33 U: less the
-    # pattern's seven (view.pattern*, view.media_*), plus fx.face_map; plan
-    # 33 T7: less view.media (retired: the wire into pattern.media); less the
-    # eight pattern.mod.k, the faces pattern node's since 2026-10-27
-    assert graphview.summary(view.node("render:shape"))[0].startswith("53 params · ")   # (plan 64: Detail, Reach, Near, To the top; plan 81: Dive; 2026-11-23: +6, the camera.* pose)
+    # the count: main's 3D switch, Fit, spacing, depth, the factory knob 7's
+    # row on its alias view.bmp_alpha, fx.face_map, Detail, Reach, Near, To
+    # the top, Dive and the six camera.* pose params; not the pattern's
+    # (view.pattern*, view.media_*), view.media (the wire into
+    # pattern.media) or the eight pattern.mod.k, the faces pattern node's
+    assert graphview.summary(view.node("render:shape"))[0].startswith("53 params · ")
     assert st["wires"] < len(view.cables) / 3
     # a collapsed node takes its lines' room in the column, not its ports' —
-    # plan 37 C1: a picture node (the shape's is its scene's, faint) its
-    # thumbnail's instead, its lines moved to its hover
+    # a picture node (the shape's is its scene's, faint) its thumbnail's
+    # instead, its lines moved to its hover
     desk = view.node("device:apc40")
     assert desk.thumb is None and graphview.height(desk, collapsed=True) == (
         graphview.HEAD_H + graphview.ROW_H * len(graphview.summary(desk)))
@@ -151,7 +151,7 @@ def test_the_apc40_to_one_shader_is_one_bundle_while_collapsed(rig):
 
 def test_a_bundle_splits_into_its_cables_when_both_ends_expand(rig):
     """Expanding one end keeps the pair one wire; expanding both draws the
-    real cables, each to its port, through N3's paths unchanged (the
+    real cables, each to its port, through the paths unchanged (the
     patched ports are drawn, so every cable's pins are there)."""
     st = party(rig)
     view = st["view"]
@@ -185,7 +185,7 @@ def test_a_bundles_hover_and_side_pane_list_its_rows(rig, monkeypatch):
     pane, each route as ROUTING's own row (`ui_routing._row`, the one table)."""
     st = party(rig)
     # party-trip's eight lane → pattern.mod.k routes end on the faces pattern
-    # node (2026-10-27), so the analyzer → shape bundle is five more routes
+    # node, so the analyzer → shape bundle is five more routes
     # onto shape params nothing performs, to pass ten
     table = rig.router.table
     taken = {b.target for b in table.bindings}
@@ -201,7 +201,7 @@ def test_a_bundles_hover_and_side_pane_list_its_rows(rig, monkeypatch):
     assert b.count > 10 and all(c.kind == "route" for c in b.cables)
     tip = graphview.bundle_tip(view, b)
     head, body = tip.split("\n")[:2]
-    assert head == "analyzer  →  Shape"            # (plan 35 G: its label)
+    assert head == "analyzer  →  Shape"            # its label
     assert body.startswith(f"{b.count} cables: ")
     assert body.endswith(f", + {b.count - 10} more")
     assert body.count(" → ") == 10
@@ -318,19 +318,19 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     assert st["applied"]["render:scene"] == (900.0, 40.0)
     st["tidy"] = True
     frame(rig.panel, "graph")
-    idle = sum(n.idle for n in view.nodes)               # N9: the areas' words
-    k = len({n.area for n in view.nodes if not n.idle})     # (plan 35 G: by primitive)
+    idle = sum(n.idle for n in view.nodes)               # the areas' words
+    k = len({n.area for n in view.nodes if not n.idle})     # by primitive
     assert st["said"] == (f"laid out {len(view.nodes) - idle} nodes in {k} areas, every one "
                           f"collapsed · {idle} idle off the canvas")
     assert st["open"] == set() and rig.lib.loaded_patch.layout == {}
     auto = ui_graph.layout_of(st, view)
     assert all(st["applied"][n.id] == auto[n.id] for n in view.nodes
-               if not n.idle)                           # N9: an idle node is not placed
+               if not n.idle)                           # an idle node is not placed
     assert st["applied"]["render:scene"] != (900.0, 40.0)
 
 
 def test_t_tidies_the_graph(rig):
-    """T is the tidy's key (`ui_graph.KEY`, the owner 2026-11-11): one bare
+    """T is the tidy's key (`ui_graph.KEY`): one bare
     press lays the nodes out again, as the head's chip does. A modified T
     is not T, and neither is one typed into a field."""
     st = party(rig)
@@ -346,8 +346,8 @@ def test_t_tidies_the_graph(rig):
 
 
 def test_zero_fits_every_node_into_view(rig):
-    """0 asks for the fit a load asks for (`ask_fit`), where T tidies: the
-    owner's, 2026-11-11. It left the track restart to get here."""
+    """0 asks for the fit a load asks for (`ask_fit`), where T tidies. It
+    leaves the track restart alone."""
     party(rig)
     d = Driver(step=lambda: frame(rig.panel, "graph"))
     asked = []
@@ -388,7 +388,7 @@ def test_a_row_learned_onto_t_keeps_it(rig):
 def test_beside_shows_on_a_narrow_page_selected_or_not(rig, monkeypatch):
     """The details chip is drawn while the page is narrower than `WIDE`,
     labelled by what a click does; at `WIDE` or more the pane sits beside
-    the canvas with no chip. Plan 49: the pane is always on, so the page
+    the canvas with no chip. The pane is always on, so the page
     asks for the chip with or without a selection (`beside_chip`'s
     `selected` is the page's True)."""
     assert ui_graph.beside_chip(False, 500.0, False) is None
@@ -406,7 +406,7 @@ def test_beside_shows_on_a_narrow_page_selected_or_not(rig, monkeypatch):
     frame(rig.panel, "graph")
     assert ui_graph.TIDY_CHIP in chips and "expand all##graph" in chips
     imgui.internal.close_popup_to_level(0, False)
-    # a narrow control window's page, nothing selected: the chip (plan 49)
+    # a narrow control window's page, nothing selected: the chip
     imgui.get_io().display_size = imgui.ImVec2(ui.PANEL_W + 2 * ui.PANEL_EDGE, CONTROL_SIZE[1])
     frame(rig.panel, "graph")
     chips.clear()
@@ -426,7 +426,7 @@ def test_beside_shows_on_a_narrow_page_selected_or_not(rig, monkeypatch):
 
 
 def test_a_selection_never_resizes_the_canvas(rig, monkeypatch):
-    """The owner (2026-10-24): opening the details must not pan the graph.
+    """Opening the details must not pan the graph.
     The node editor re-centres its view whenever its canvas changes size
     (`CanvasSizeMode` has no "keep the top-left"), so the canvas is always
     the page's whole size and the details are laid over its right edge —
@@ -457,7 +457,7 @@ def test_a_selection_never_resizes_the_canvas(rig, monkeypatch):
 
 
 def test_a_right_click_on_the_details_opens_no_graph_menu(rig, monkeypatch):
-    """The owner (2026-10-24): a right-click on the details laid over the
+    """A right-click on the details laid over the
     canvas opened the canvas's menu, not the control's Learn menu. The node
     editor still sees a right-click there (the details are over its canvas),
     so the page notes that the mouse is over them (`st["over_details"]`)
@@ -562,15 +562,15 @@ def picked(st, pin):
 
 
 def test_the_smoothed_energy_times_band_patch_from_graph_alone(rig, monkeypatch):
-    """N1's patch — right hand energy, smoothed, times band 0, into acid
-    mix — built from the GRAPH page alone, as check 265 does it (the twin
-    of test_modifiers' ROUTING test): two modifiers from the picker, every
+    """A patch — right hand energy, smoothed, times band 0, into acid
+    mix — built from the GRAPH page alone, as the ROUTING test in test_modifiers
+    does it: two modifiers from the picker, every
     cable dropped through the page's own drop path with the nodes left
     collapsed — the hand's energy onto the smooth's stub, the smooth's out
     stub onto the combine's (a one-output node's stub is its output), band
     0 onto the combine, the combine's out stub onto the acid's — each port
     picked from the stub's menu; the combine's `how` on the side pane's
-    editor. Played, it is what N1's is."""
+    editor. Played, it is the patch the ROUTING page makes."""
     panel, reg, router = rig.panel, rig.reg, rig.router
     st = party(rig)
     router.table.set_routes([])                     # a loadable patch with no routes yet
@@ -683,7 +683,7 @@ def test_a_dormant_bundle_draws_faint_and_a_live_one_moves_without_a_rebuild(
 
 
 def test_a_bundles_menu_and_a_nodes_learn_menu_draw(rig, monkeypatch):
-    """The right-click menus N7 adds, drawn once each with every submenu
+    """The right-click menus, drawn once each with every submenu
     open: a bundle's (what it holds, expand both ends, delete disabled with
     the words) and a collapsed render node's learn ▸ group ▸ param."""
     st = party(rig)
@@ -738,10 +738,10 @@ def test_the_page_draws_in_every_state(rig):
     frame(rig.panel, "system")
 
 
-# ---------------------------------------------------------------- plan 33 T6: one selection
+# ---------------------------------------------------------------- one selection
 
 def test_selecting_an_effect_node_sets_the_shared_selection(rig):
-    """Plan 33 U: the effect selected on GRAPH is the panel's one selection
+    """The effect selected on GRAPH is the panel's one selection
     (`Panel.fx_selected`, shared with the FX page, saved nowhere), and
     `select_effect` — the FX page's "show on GRAPH" — selects that node on
     the canvas next frame (the side pane its strip) — one on its area's
@@ -768,7 +768,7 @@ def test_selecting_an_effect_node_sets_the_shared_selection(rig):
     assert graphview.EFFECTS_AREA in st["idle_open"]
 
 
-# ---------------------------------------------------------------- the owner, 2026-10-24: a node's controls
+# ---------------------------------------------------------------- a node's controls
 
 def pick(rig, st, nid):
     """Select node `nid` as a click on the canvas does — its area's idle
@@ -814,7 +814,7 @@ def undo_watch(rig):
 
 
 def test_a_media_nodes_params_are_rows_in_the_side_panel(rig, monkeypatch):
-    """The owner (2026-10-24): a media node's ports showed its params but
+    """A media node's ports showed its params but
     nothing edited them. Selected, the side panel draws each of its params
     as the panel's own row (`Panel._row`: the slider or the combo, its
     label's Learn menu) — rate, jog, position, loop, slot and fit."""
@@ -875,7 +875,7 @@ def test_a_big_node_folds_its_groups(rig, monkeypatch):
 
 
 def test_a_channel_side_pane_shows_its_sound(rig, monkeypatch):
-    """Plan 45 V2: a channel node's side pane holds the channel's two sound
+    """A channel node's side pane holds the channel's two sound
     params beside its transport — the play-audio toggle as its checkbox
     and the gain as a slider — and draws them inside the narrow pane."""
     st = party(rig)
@@ -889,8 +889,8 @@ def test_a_channel_side_pane_shows_its_sound(rig, monkeypatch):
 
 
 def test_the_faces_pattern_side_pane_shows_every_shader_input(rig, monkeypatch):
-    """The owner, 2026-10-27: the faces pattern node's side pane showed the
-    selector, the mix and the media, not the shader's own inputs. Now every
+    """The faces pattern node's side pane shows the selector, the mix and the
+    media and also the shader's own inputs: every
     `pattern.mod.k` (scale, glow, warp, speed, colour, sharp …) is a row on
     the pattern node's pane — after the selector and the mix, before the
     media — under `patterns.label(k)`; the shape's pane has none of them.
@@ -924,7 +924,7 @@ def test_the_faces_pattern_side_pane_shows_every_shader_input(rig, monkeypatch):
 
 
 def test_the_faces_pattern_group_starts_open_with_nothing_routed(rig, monkeypatch):
-    """The owner, 2026-10-27: the shader's inputs must be shown. With no
+    """The shader's inputs are shown. With no
     route onto the pattern node (party-trip's eight lane → pattern.mod
     routes removed), its pane is still over `FOLD_AT`: the node's primary
     group ("pattern": selector, mix, the eight) starts open, every row
@@ -953,11 +953,10 @@ def test_every_nodes_side_panel_draws(rig):
     side panel draws (its rows, its folds, its chip) without an imgui error
     — a toggle's checkbox, a trigger's chip and a combo beside the sliders."""
     st = party(rig)
-    # plan 35 T5: and every frame kind and plan 34's nodes, declared (faint)
+    # every frame kind and node kind, declared (faint)
     e = graphview.Edit(graph=rig.lib.loaded_patch.graph, push=lambda label: None)
-    # (plan 36 T2: the pattern is in already — the faces' wire says it;
-    # plan 90 H2: the look-back and its echoes' items are retired;
-    # plan 90 H3: the dream is an effect file)
+    # the pattern is in already — the faces' wire says it; the dream is an
+    # effect file
     for kind, f in (("backdrop", None), ("guide", None), ("effect", "dream"),
                     ("delay", None), ("resize", None), ("composite", None)):
         assert e.add_node(kind, f) is None, kind
@@ -974,7 +973,7 @@ def test_every_nodes_side_panel_draws(rig):
 
 
 def test_every_node_has_a_label_and_a_hover(rig):
-    """Plan 35 G (V's table): every render node of every graph fixture's
+    """Every render node of every graph fixture's
     view is titled by `label_of` and hovers `HOVERS`' line with its id (and
     its params' prefix where it differs) — never `frame`, `fx`,
     `grounded` or `capture`."""
@@ -983,13 +982,13 @@ def test_every_node_has_a_label_and_a_hover(rig):
     assert graphview.label_of("hands.2") == "Hands 2"
     assert graphview.label_of("channel.a") == "Channel A"
     assert graphview.label_of("hands.2.layer") == "Hands layer 2"
-    assert graphview.label_of("acid.slot.2") == "acid slot 2"          # (plan 89)
+    assert graphview.label_of("acid.slot.2") == "acid slot 2"
     assert graphview.label_of("acid.2.slot.3") == "acid 2 slot 3"
     assert graphview.label_of("acid.2") == "acid 2"
     assert graphview.label_of("output.all") == "All outputs"
     assert graphview.label_of("output.2") == "Output 2"
     assert graphview.label_of("output.2", [NS(n=2, name="projector")]) == "projector"
-    # (plan 90 H3: the dream is an effect, its knobs `fx.dream.*`, said)
+    # the dream is an effect, its knobs `fx.dream.*`, said
     assert graphview.hover_of("dream").endswith(" · id dream · params fx.dream.*")
     assert graphview.hover_of("output.2").endswith(" · id output.2")
     for fixture in fixtures:
@@ -1024,17 +1023,16 @@ def test_home_page_maps_each_node_kind(rig):
     assert key == "fx"
     sel(panel)
     assert panel.fx_selected == "acid"
-    # plan 35 G: the pattern and the backdrop are drawn where the section
+    # the pattern and the backdrop are drawn where the section
     # names them (party-trip's does not): by their stand-ins
     V = graphview.VNode
     assert home(V("render:pattern", "render", "Faces pattern", ref=G.PatternNode())) == "faces"
     assert home(V("render:backdrop", "render", "Backdrop",
                   ref=G.BackdropNode("backdrop"))) == "media"
     assert home(view.node("render:shape")) == "view"
-    # (plan 90 H3: the dream is an effect, homed on FX like any; the LOOKBACK
-    # page is retired)
+    # the dream is an effect, homed on FX like any
     assert home(view.node("render:output.all")) == "output"
-    # plan 89: an effect with a slot (party-trip's through output) is one
+    # an effect with a slot (party-trip's through output) is one
     # node — FX with it selected, its slot's ports on it
     n = next(n for n in view.nodes if any(".slot." in p.id for p in n.ports))
     key, sel = ui_graph.home_page(n)
@@ -1080,7 +1078,7 @@ def test_open_on_page_switches_page_and_selects(rig, monkeypatch):
 
 
 def test_the_switch_block_picks_an_input_with_one_click(rig, monkeypatch):
-    """The owner (2026-10-24): a switch had no control but Learn. Its side
+    """A switch has a control besides Learn. Its side
     panel opens on a row of chips — off, then 1 … 8, each named by what
     feeds that input ("3 · Channel C", "2 · —" for nothing) — the pick lit;
     one click sets `switch.select` through the param, one undo step. The
@@ -1118,7 +1116,7 @@ def test_the_switch_block_picks_an_input_with_one_click(rig, monkeypatch):
 
 
 def test_a_resize_nodes_params_are_rows_in_the_side_panel(rig, monkeypatch):
-    """Plan 34 T5: `resize[.n].*` are rows on the resize's node
+    """`resize[.n].*` are rows on the resize's node
     (`OWNERS["resize"]`), not a `group:resize` node of their own: eight
     rows drawn, an edit the param's own in one undo step, no home page."""
     from test_graph_areas import load_fixture
@@ -1146,7 +1144,7 @@ def test_a_resize_nodes_params_are_rows_in_the_side_panel(rig, monkeypatch):
 
 
 def test_the_side_column_width_is_clamped_and_this_macs(tmp_path):
-    """The owner (2026-10-27): the details column must be resizable. Its
+    """The details column is resizable. Its
     width is held between `SIDE_MIN` and what leaves `CANVAS_MIN` of canvas,
     laid out by `details_rect`, and remembered per Mac in ``ui.json`` —
     a missing, broken or wrong-typed file is no width at all, and a write
@@ -1218,11 +1216,11 @@ def test_the_side_column_takes_its_width_from_this_mac_and_a_drag(rig):
     assert st["details_rect"][1][0] == 520.0
 
 
-# ---------------------------------------------------------------- pin hit targets (2026-10-31)
+# ---------------------------------------------------------------- pin hit targets
 
 def test_a_pins_hit_target_is_finger_sized_at_any_zoom():
-    """The show of 2026-10-30: a cable's drag targets were far too small
-    zoomed out. A pin's hit rect is never under `MIN_PX` on screen: its
+    """A cable's drag targets stay big enough zoomed out. A pin's hit rect is
+    never under `MIN_PX` on screen: its
     drawn square zoomed well in, `MIN_PX` × the zoom otherwise, held to its
     row down and to the pins beside it across — never under the square
     even when those are smaller."""
@@ -1280,8 +1278,7 @@ def test_the_page_sets_each_stubs_hit_rect_outward_at_a_zoomed_out_canvas(rig, m
 
 
 def test_the_hands_node_draws_the_hands_page_as_its_selection(rig, monkeypatch):
-    """The hands node's selection IS the hands page (the owner, 2026-11-23: "you
-    click on the hands node and it doesn't actually show you anything"): the box,
+    """The hands node's selection IS the hands page: the box,
     pinches, axes, calibration and grip, with no library strip on the grip. A
     picture node's side pane is not given the page."""
     from hyperspace.hands import panel as ui_hands

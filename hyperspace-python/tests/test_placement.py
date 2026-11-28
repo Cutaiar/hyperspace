@@ -1,4 +1,4 @@
-"""placement.py: where the two windows open at launch (plan 16 WP4).
+"""placement.py: where the two windows open at launch.
 
 Fake screens throughout — no window system. The laptop is the primary
 screen; the projector sits to its right.
@@ -77,7 +77,7 @@ def test_an_off_screen_rect_falls_back():
 
 
 def test_a_config_monitor_beats_the_remembered_screen():
-    """Fork F4 (a): `monitor = 1` with the last position on screen 0 opens
+    """`monitor = 1` with the last position on screen 0 opens
     at the default spot on screen 1."""
     r, note = place("render", RENDER, BOTH, 1, entry(200, 100, 1000, 700, LAPTOP.name))
     assert r == (PROJECTOR.x + MARGIN, PROJECTOR.y + MARGIN, 1280, 820) and note == ""
@@ -116,7 +116,7 @@ def test_a_config_monitor_that_is_not_there_is_a_note():
 
 
 def test_what_names_a_later_output_in_the_notes():
-    """Plan 21 WP3: `place` is called once per render output; `what`
+    """`place` is called once per render output; `what`
     ("output 2 (projector)") names it in the notes and changes nothing else."""
     gone = entry(1900, 120, 1000, 700, PROJECTOR.name)
     for args in ((2, gone), (-1, {"x": "a"}), (-1, gone)):
@@ -164,7 +164,7 @@ def test_save_round_trips_and_render_is_a_list(tmp_path):
     # and what was saved is what opens
     assert place("control", CONTROL, BOTH, -1, doc["control"]) == ((300, 90, 960, 900), "")
     assert place("render", RENDER, BOTH, -1, doc["render"][0]) == ((1900, 120, 1280, 820), "")
-    # a second output is a second entry in the same schema (plan 21)
+    # a second output is a second entry in the same schema
     placement.save(tmp_path, None, [(1900, 120, 1280, 820), (10, 60, 640, 480)], BOTH)
     doc = placement.load(tmp_path)
     assert [e["screen"] for e in doc["render"]] == [PROJECTOR.name, LAPTOP.name]
@@ -283,10 +283,10 @@ def test_placement_imports_nothing_from_the_package():
             assert root not in {"hyperspace", "glfw", "moderngl", "imgui_bundle"}, mod
 
 
-# ---- GRAPH's start zoom (plan 58 SM2) ----
+# ---- GRAPH's start zoom ----
 
 @pytest.mark.parametrize(("height", "zoom"), [
-    (1080, 1.3),            # the show's 1080p display (the owner, 2026-11-07)
+    (1080, 1.3),            # the show's 1080p display
     (1050, 1.3),            # less its menu bar
     (985, 1.3),             # and a dock
     (960, 1.3),
@@ -364,11 +364,10 @@ def test_window_zoom_survives_a_screen_lookup_that_fails(monkeypatch):
     assert placement.window_zoom(_Windows((100, 100)), None) == placement.ZOOM_READ
 
 
-# ---- screens by name (row 771) ----
+# ---- screens by name ----
 #
 # `TV_L` is left of `TV_R` on the desk, whatever order the window system lists
-# them in. Dillon's #223 pinned the opposite of all of this: a case-blind
-# substring, and the first hit wins (its tests/test_placement.py:304).
+# them in. A name is exact, not a case-blind substring where the first hit wins.
 
 TV_L = Screen("MStar", 1728, 0, 1920, 1080)
 TV_R = Screen("MStar", 3648, 0, 1920, 1080)
@@ -523,7 +522,7 @@ def test_a_settled_name_places_the_window_on_that_screen():
     placement.settle(out, TWINS)
     assert place("control", CONTROL, TWINS, out["monitor"], None) == (
         placement.default_rect("control", CONTROL, TV_R), "")
-    # the configured screen against the remembered one, as an index does (fork F4)
+    # the configured screen against the remembered one, as an index does
     kept = entry(TV_R.x + 40, 60, 1000, 700, "MStar")
     assert place("render", RENDER, TWINS, 2, kept)[0] == (TV_R.x + 40, 60, 1000, 700)
     assert place("render", RENDER, TWINS, 1, kept)[0] == placement.default_rect(

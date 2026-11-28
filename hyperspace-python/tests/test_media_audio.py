@@ -1,4 +1,4 @@
-"""Plan 45 V1: a video's audio track decoded to memory, under the
+"""A video's audio track decoded to memory, under the
 transport's clock. The clips are synthesized here with PyAV (no committed
 fixture): a known tone in each channel, so the decode is checked by the
 frequency it recovers."""
@@ -322,7 +322,7 @@ def test_read_is_zeros_outside_what_is_held_and_never_raises(pcm_clip, opened):
 
 
 def test_read_into_the_readers_own_buffer(pcm_clip, opened):
-    """Plan 45 V2 (second review): `read(at, n, out=)` writes into the
+    """`read(at, n, out=)` writes into the
     reader's buffer — zeros where nothing is held, every stale sample
     overwritten — and returns its first n rows; the same samples as
     without `out`."""
@@ -384,7 +384,7 @@ def test_nothing_is_read_until_something_asks_for_sound(pcm_clip, opened, monkey
     assert not _audio_threads()
     assert opens == [str(pcm_clip)]                      # the picture's open, no other
     assert not s.audio.read(0, 512).any() and s.audio.nbytes == 0
-    s.audio.enable()                                     # V2's play-audio toggle
+    s.audio.enable()                                     # the play-audio toggle
     assert _until(lambda: s.audio.status == READY)
     assert opens == [str(pcm_clip)] * 2
     s.audio.disable()
@@ -809,7 +809,7 @@ def test_the_adapter_hands_out_a_source_with_a_soundtrack(pcm_clip):
 
     s = adapters.open_source("file:" + str(pcm_clip), R())
     assert isinstance(s.audio, video.Soundtrack)
-    assert video.VideoSource.audio is None                   # a source from before plan 45
+    assert video.VideoSource.audio is None                   # a source with no audio track
     assert s.audio.status == video.OFF and s.audio.read(0, 4).shape == (4, 2)
     assert not hasattr(adapters.MissingSource("file:/x"), "audio")
 

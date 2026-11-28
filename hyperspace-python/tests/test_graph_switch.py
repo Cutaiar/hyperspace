@@ -1,14 +1,14 @@
-"""Plan 33 T5 (S) — the switch: eight pictures in, one param picks, only
+"""The switch: eight pictures in, one param picks, only
 the picked one runs.
 
 `switch[.n]` takes eight `IMAGE` inputs `in1` … `in8` and passes the one
-`switch[.n].select` picks (off, 1–8: R11) through at its consumer's size —
-a cut, no pass of its own (row 352). Only the selected input's branch is
+`switch[.n].select` picks (off, 1–8) through at its consumer's size —
+a cut, no pass of its own. Only the selected input's branch is
 made each frame: the other seven run no pass and their channels upload
-nothing (Review Focus 2), and moving `select` never builds the graph
+nothing, and moving `select` never builds the graph
 again. The param is declared from the loadable patch's graph, as the effect
 instances are, and a route on the old `view.media` / `backdrop.channel`
-drives it after the migration (row 350, R19).
+drives it after the migration.
 
 The channels are the real `MediaState` over fake stills
 (test_graph_faces's). The GL half skips without a standalone context."""
@@ -45,7 +45,7 @@ def test_the_switch_node_is_eight_pictures_and_one_out():
 
 
 def test_the_switch_is_built_from_its_wires():
-    """A switch's wires are the wiring's now (T4 held them back): the
+    """A switch's wires are the wiring's: the
     switch is one node, each wired input on its port, its picture on what
     the switch feeds; an unwired input is None."""
     spec = G.read_graph(section(("frame", "fx.image"), ("media.a", "switch.in1"),
@@ -167,7 +167,7 @@ def _eight(ctx):
 
 
 def test_only_the_selected_input_is_made(ctx):
-    """Review Focus 2: at `select` 3 the frame runs acid.3's pass alone —
+    """At `select` 3 the frame runs acid.3's pass alone —
     the other seven effects run none — and only channel c is read and
     uploaded."""
     r, _ = _eight(ctx)
@@ -182,7 +182,7 @@ def test_only_the_selected_input_is_made(ctx):
 
 
 def test_select_changes_do_not_rebuild_the_graph(ctx):
-    """Review Focus 2: `select` stepped 1 → 8 over eight frames — the same
+    """`select` stepped 1 → 8 over eight frames — the same
     graph every frame, and each frame the one effect selected runs."""
     r, names = _eight(ctx)
     vs = _views(ctx)
@@ -199,8 +199,8 @@ def test_select_changes_do_not_rebuild_the_graph(ctx):
 
 def _app(media=None, view=None):
     """A registry over `view` (and `media`), the LFOs and a router, the
-    library and the loadable patches — the app's, as test_plan31_wiring.make_app
-    builds it, with the view state kept for the renderer."""
+    library and the loadable patches — the app's, as the wiring tests'
+    `make_app` builds it, with the view state kept for the renderer."""
     import tempfile
 
     from hyperspace import lfo, loadable, routing, tempo
@@ -304,7 +304,7 @@ def _faces_view():
 
 
 def test_a_migrated_view_media_route_still_switches_the_faces(ctx):
-    """T2's migrated preset: a /2 file with `view.media` 2 and a lane route
+    """A migrated preset: a /2 file with `view.media` 2 and a lane route
     on it (driven-media-v2). It loads with a switch over the eight
     channels into `pattern.media`, the route on `switch.select`, the select
     at 2 — so the faces show channel b at rest and channel c (index 3) once
@@ -415,7 +415,7 @@ def test_the_switch_onto_the_faces_is_a_cut(ctx):
 
 
 def test_a_route_on_a_removed_switch_select_goes_dormant_without_raising(ctx):
-    """Final review (10): a loadable patch with `switch.2` and an LFO route on
+    """A loadable patch with `switch.2` and an LFO route on
     `switch.2.select`; a GRAPH edit deletes `switch.2` and frames are
     drawn — nothing raises, the param is gone and the route stays in the
     table, dormant (on no param), as a route on a removed modifier does."""
@@ -451,7 +451,7 @@ def test_a_route_on_a_removed_switch_select_goes_dormant_without_raising(ctx):
 
 
 def test_a_switch_flicked_every_frame_reallocates_nothing(ctx):
-    """R29: a switch flicked every frame between two branches made at
+    """A switch flicked every frame between two branches made at
     different sizes (two channels of other sizes through their own acid
     into the pattern's media) for 100 frames: a sized texture
     (`Renderer._prune_sized`) is kept `SIZED_KEEP_FRAMES` frames after its

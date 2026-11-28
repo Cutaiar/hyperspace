@@ -163,7 +163,7 @@ def test_a_show_that_holds_the_old_id_still_opens_clean_and_keeps_it(tmp_path):
     assert state.mirror is True
     rig.reg["ghost.mirror"].set(False)
     rig.lib.install.save()
-    assert "ghost.2.mirror" not in json.loads(show.read_text())["tuning"]    # (plan 58 §9: no more)
+    assert "ghost.2.mirror" not in json.loads(show.read_text())["tuning"]
 
 
 def test_only_a_mirror_that_differs_is_said():
@@ -240,7 +240,7 @@ def test_a_real_hot_reload_keeps_every_node_on_the_one_mirror():
     assert out.stdout.strip() == "ok"
 
 
-# ---- what a window's Flip X gives instead of a second mirror (row 773, check 213)
+# ---- what a window's Flip X gives instead of a second mirror
 
 def _hands_only(ctx, second, *switches):
     """`hands-glass-only` through the real `draw_outputs`: hands in the scene,
@@ -277,7 +277,7 @@ def test_where_the_glass_also_shows_the_picture_flip_x_is_not_a_second_mirror(ct
     assert differ.mean() > 0.05                      # the picture flipped with it
 
 
-# ---- row 774's keep is no road the app takes: review of #408, second pass
+# ---- the registry's keep is no road the app takes
 
 def _shared_drops(caught) -> list[str]:
     """`Registry.remove`'s warnings among `caught`. Recorded, not raised as errors:
@@ -288,7 +288,7 @@ def _shared_drops(caught) -> list[str]:
 @pytest.mark.parametrize("deck", ["a", "b"])
 def test_deleting_a_band_by_the_apps_verb_leaves_it_on_neither_deck(two, deck):
     """`build_bands` closes over the `MetaRegistry` (`build_meta`), so `band.remove`
-    drops through it, not through the deck's registry that row 774 keeps from."""
+    drops through it, not through the deck's registry."""
     reg, chain = two.decks[deck].reg, two.rig.chain
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

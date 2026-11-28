@@ -1,11 +1,11 @@
-"""The ROUTING page (moved out of test_ui_bands.py, audit D5): the matrix
+"""The ROUTING page: the matrix
 over test_ui_shell's headless rig — routes, a live lane, edits landing in
 bindings.json, the referee's refusals, the Replace / Keep prompt, the
 macro scales, the preset strip through the library.
 
-Plan 28 N7: the routes and the modifiers are the GRAPH page's now —
+The routes and the modifiers are the GRAPH page's —
 ROUTING draws a pointer line there in their place, and its desk, macros,
-meta controller and sinks as before. The route rows are ROUTING's own function
+meta controller and sinks. The route rows are ROUTING's own function
 still (`ui_routing._row`), drawn by GRAPH's side pane (`ui_graph.route_rows`);
 the tests of a row's widgets draw them there (`rows`).
 """
@@ -79,7 +79,7 @@ def test_routing_page_live_lane_draws_ghost_and_bar(rig, tmp_path):
     assert bright.modulated
     assert ui_routing._live(panel, router, router.table.routes()[-1]) == pytest.approx(0.5)
     frame(panel, "routing")
-    assert panel.ghosts == 0                    # N7: ROUTING draws no route row now
+    assert panel.ghosts == 0                    # ROUTING draws no route row
     rows(panel)                                 # the row, as GRAPH's side pane draws it
     assert panel.ghosts == 1                    # the live bar's red hairline
     panel.audio.on = False
@@ -95,7 +95,7 @@ def test_routing_add_and_delete(rig, tmp_path):
     frame(panel, "routing")
     b = ui_routing.add_route(panel, "view.bright", depth=0.5)
     assert b.source == "lane:0" and b.op == "push" and b.value == 0.5
-    assert b.motion == DEFAULT_ROUTE_FEEL        # 2026-10-31: a new route is the smooth spring
+    assert b.motion == DEFAULT_ROUTE_FEEL        # a new route is the smooth spring
     assert router.table.routes_to("view.bright") == [b]
     frame(panel)
     reg["band.select"].set(3)
@@ -108,11 +108,10 @@ def test_routing_add_and_delete(rig, tmp_path):
 
 
 def test_route_a_lane_here_lands_at_lane_depth(rig, tmp_path):
-    """The owner, after the show of 2026-10-30: band routes far too hot.
-    "Route a lane here…" (`add_route` with no depth) is a push at
+    """"Route a lane here…" (`add_route` with no depth) is a push at
     `learn.LANE_DEPTH`, the depth a lane lands at from a GRAPH cable too
-    (`learn.row_for`) — it was a hand-written 0.5, 0.19 of the throw per
-    nominal band."""
+    (`learn.row_for`), not a hand-written 0.5 (0.19 of the throw per
+    nominal band)."""
     from hyperspace.learn import row_for
 
     panel, reg = rig.panel, rig.reg
@@ -131,7 +130,7 @@ def _on_disk(tmp_path):
 
 
 def test_routing_page_edits_change_the_loadable_not_bindings_json(rig, tmp_path):
-    """Plan 13 §3.3: a route deleted, added or edited on the page (or from
+    """A route deleted, added or edited on the page (or from
     the context menu) is the loaded patch's — the table changes, the
     loadable patch's dirty dot moves, and bindings.json is never written."""
     panel, lib = rig.panel, rig.panel.library
@@ -153,7 +152,7 @@ def test_routing_page_edits_change_the_loadable_not_bindings_json(rig, tmp_path)
     frame(panel)
     frame(panel)
     assert (path.read_text(), path.stat().st_mtime_ns) == before
-    assert _on_disk(tmp_path).routes() == []        # the file never holds a route (WP5)
+    assert _on_disk(tmp_path).routes() == []        # the file never holds a route
 
 
 def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
@@ -201,13 +200,13 @@ def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
 
 
 def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path, monkeypatch):
-    """Plan 09 WP5, exit criterion 3 without the mouse: a second performer
+    """A second performer
     on a target is a question, not an error. *Replace* swaps the owner (in
-    the loaded patch — no file is written, plan 13 §3.3); *Keep* leaves
+    the loaded patch — no file is written); *Keep* leaves
     the table untouched. The same modal
     serves the page's own edits (add, a retarget, a row waking up) and a
     hand learn the shared `Learn` is holding in `pending` — no MIDI adapter
-    anywhere (audit B3) — and it draws on whatever page is open. The owner
+    anywhere — and it draws on whatever page is open. The owner
     is named as its adapter names it."""
     from hyperspace.learn import Learn
 
@@ -324,7 +323,7 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path, m
 
 
 def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
-    """Plan 40 T3 (D3, D9): a spawn whose K1 collides (acid-wash into
+    """A spawn whose K1 collides (acid-wash into
     TRIP, where K1 is view.bright) puts up the conflict sheet in the
     same modal, ahead of any Replace / Keep question: its title, one row
     per conflict in words, every row on the patch; **keep all existing**
@@ -347,7 +346,7 @@ def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
     lrn.arm("view.speed")
     assert ui_graph.spawn(panel, "acid-wash", (0.0, 0.0)) is None
     landing, choices = ui_routing.sheet(panel)
-    assert choices == {0: "patch"}                                     # D9: the patch's
+    assert choices == {0: "patch"}                                     # the patch's
     assert ui_routing.conflict_words(landing.conflicts[0]) == ("K1", "fx.acid.speed",
                                                                "view.bright")
     assert ui_routing.sheet_title(panel, landing) == "spawn acid wash into TRIP"   # (its name)
@@ -393,7 +392,7 @@ def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
 
 
 def test_the_sheet_is_drawn_ahead_of_a_replace_question_up_with_it(rig, monkeypatch):
-    """Plan 40 T3 (D3): a Replace / Keep question and a spawn's conflict
+    """A Replace / Keep question and a spawn's conflict
     sheet up together — the modal draws the sheet (its **Spawn**, not
     **Replace**); once the sheet is answered the question comes next, in
     the same modal, still unanswered."""
@@ -427,7 +426,7 @@ def test_the_sheet_is_drawn_ahead_of_a_replace_question_up_with_it(rig, monkeypa
 
 def test_the_scale_choices_leave_out_the_macros_and_a_macro_shows_its_owner(
         rig, tmp_path, monkeypatch):
-    """Plan 13 §2.4: a macro scales a route as its depth subscriber, so the
+    """A macro scales a route as its depth subscriber, so the
     row's scale combo offers every other continuous param (master.gain
     among them) and no macro, and the row shows the macro as a read-only
     "× macro.N" chip. The macros are still targets like any other, and draw
@@ -467,7 +466,7 @@ def test_the_scale_choices_leave_out_the_macros_and_a_macro_shows_its_owner(
     fmts.clear()
     frame(panel)
     assert "100 % → 60 %" in fmts                  # the strip's slider, under a performer
-    assert panel.ghosts == 1                       # its ghost bar (N7: no route row here) …
+    assert panel.ghosts == 1                       # its ghost bar (no route row here) …
     rows(panel)
     assert panel.ghosts == 1                       # … and the row's live hairline, on GRAPH's pane
     router.feed("hand", None)
@@ -484,7 +483,7 @@ def test_the_routing_page_has_no_conflicting_ids(rig, tmp_path, monkeypatch):
     panel = rig.panel
     router = _with_router(rig, tmp_path)
     router.table.add(Binding("hand:0", "macro.2", "position"))
-    router.table.set_macros({                       # the subscriber lines too (plan 13 WP4)
+    router.table.set_macros({                       # the subscriber lines too
         "macro.1": {"subs": [{"base": "view.depth4"}, {"base": "view.speed"},
                              {"depth": {"source": "hand:0", "target": "macro.2"}}]},
         "macro.2": {"subs": [{"base": "view.depth4"}]}})
@@ -503,7 +502,7 @@ def test_the_routing_page_has_no_conflicting_ids(rig, tmp_path, monkeypatch):
     frame(panel, "routing")
     ids.clear()
     frame(panel)
-    assert len(ids) > 8 * 1                       # eight knobs (N7: the rows are GRAPH's)
+    assert len(ids) > 8 * 1                       # eight knobs (the rows are GRAPH's)
     dup = {i for i in ids if ids.count(i) > 1}
     assert not dup, f"conflicting ids {sorted(dup)}"
     ids.clear()
@@ -533,7 +532,7 @@ def _drawn(monkeypatch) -> tuple[list[str], list[str]]:
 
 
 def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, monkeypatch):
-    """Plan 13 decision 13: the page is the loaded patch — the head names
+    """The page is the loaded patch — the head names
     it (its dot, the layer, the last learn — a refusal among them — and the
     desk rows its load dropped), then its routes, its desk (each row, and
     each loadable patch control it leaves dark), its macros with their subscribers
@@ -550,7 +549,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, mo
     put(tmp_path, "SHOW",
         routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}],
         desk=[{"source": "cc:*:16", "target": "view.speed", "op": "abs", "feedback": "ring"},
-              # (scene launch 5: 1–4 are the invariant render toggles, plan 24 C1)
+              # (scene launch 5: 1–4 are the invariant render toggles)
               {"source": "note:0:86", "target": "view.points", "op": "toggle",
                "feedback": "led"},
               {"source": "cc:0:14", "target": "view.bright", "op": "abs"}],  # MASTER: dropped
@@ -571,12 +570,12 @@ def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, mo
     assert any(t.startswith("desk: dropped cc:0:14 → view.bright") and "invariant" in t
                for t in texts)
     assert "bindings" not in lib.kinds                         # no routing-preset strip
-    # the routes: a pointer to GRAPH (plan 28 N7), where each row is drawn —
+    # the routes: a pointer to GRAPH, where each row is drawn —
     # with the macro's chip
     assert ui_routing.POINTER in texts and "× macro.1" not in texts
     rows(panel)
     assert "view.bright" in previews and "× macro.1" in texts
-    # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G5·9
+    # the desk: its rows by glyph (D1 is device knob 1, G5·9
     # scene launch 5), and the controls it leaves dark
     assert {"desk  ·  patch layer", "D1", "G5·9"} <= set(texts)
     assert "device knob 1" not in texts                        # Akai's name: the tooltip
@@ -584,7 +583,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, mo
     assert "K1" in texts and "unmapped — dark" in texts
     dark = [f.source for f in ui_routing.unmapped(table)]
     assert "cc:0:48" in dark and "cc:*:16" not in dark and "cc:0:14" not in dark
-    assert "cc:0:7" in dark          # S1: the loadable patch's since plan 24 C2, and this one maps none
+    assert "cc:0:7" in dark          # S1: the loadable patch's, and this one maps none
     # the macros: both subscribers, the shared param marked on both lines
     assert "view.depth4" in previews and any(p.endswith("→ view.bright") for p in previews)
     assert texts.count("shared") >= 2
@@ -609,7 +608,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, mo
     assert lib.is_dirty("loadable")
     texts.clear()
     frame(panel)
-    # the head's dot: a disc since plan 19 WP5, no longer the "●" glyph
+    # the head's dot: a disc, not the "●" glyph
     assert "head.dot" in ui_loadable._state(panel)["rects"]
     assert (path.read_text(), path.stat().st_mtime_ns) == before   # no file written
     # SHIFT latched: the head says so
@@ -625,29 +624,29 @@ def test_route_a_lane_here_jumps_to_the_page(rig, tmp_path):
     frame(panel, "view")
     real = panel._real(reg["view.bright"])
     ui_routing.add_route(panel, real.id)
-    reg["ui.page"].set(PAGE_KEYS.index("graph"))      # plan 28 N7: the routes' page
+    reg["ui.page"].set(PAGE_KEYS.index("graph"))      # the routes' page
     assert panel.router.table.routes_to(real.id)
     frame(panel)
     assert panel.page == PAGE_KEYS.index("graph")
 
 
 def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
-    """Was test_routing_presets_step_load_save: the routing loadable patches' kind is
-    gone (plan 13 WP5) and what it held is loadable patches — stepped, loaded, saved
+    """The routing loadable patches' kind is gone and what it held is
+    loadable patches — stepped, loaded, saved
     and deleted on the one preset strip's library group, the routes with
     the rest of the loadable patch."""
     panel, lib = rig.panel, rig.panel.library
     router = rig.router                             # the one the rig's Loadable patches loads into
     frame(panel, "routing")
-    assert lib.kinds == ("patches", "playlists", "loadable")     # plan 40 T1: patches are spawned
+    assert lib.kinds == ("patches", "playlists", "loadable")     # patches are spawned
     listing = lib.list("loadable")
     assert {"legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"} <= set(listing)
     assert [k for k in lib.load("loadable", "lfo-breathe")
-            if not k.startswith(("env.", "seq."))] == []  # (plan 36 T3: the `/7`'s envelope ids, this rig has none)
+            if not k.startswith(("env.", "seq."))] == []  # (the `/7`'s envelope ids; this rig has none)
     assert rig.reg["lfo.1.sync"].value == 3         # lfo-breathe lands its bases: 1 bar
     assert lib.next("loadable") == listing[listing.index("lfo-breathe") + 1]
     lib.load("loadable", "legacy6")
-    assert rig.view.pattern_mod[0] == 1.0           # legacy6 lands its bases (1: plan 22 B3)
+    assert rig.view.pattern_mod[0] == 1.0           # legacy6 lands its bases (1)
     assert not lib.is_dirty("loadable")
     frame(panel)
     # an edit dirties; save as writes the whole loadable patch to the user folder
@@ -677,7 +676,7 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
 
 
 def test_the_base_picker_offers_patch_params_only(rig):
-    """D9, review of PR #67: a macro's "+ base" picker offers persisted,
+    """A macro's "+ base" picker offers persisted,
     non-alias patch params — never a meta controller one (the BPM, the
     drive, a band), an alias or a macro — and "+ base" adds one of those."""
     from hyperspace.params import part_of
@@ -707,7 +706,7 @@ def test_the_routing_heads_name_field_draws(rig):
     assert (rig.lib.home / "loadable" / "mine.json").exists()
 
 
-# ------------------------------------------------------ plan 15 WP1: undo
+# ------------------------------------------------------ undo
 
 def test_a_route_delete_and_a_replace_are_undo_steps(rig, tmp_path, monkeypatch):
     """The page's replacing actions each push one undo step before they
@@ -756,7 +755,7 @@ def test_a_route_delete_and_a_replace_are_undo_steps(rig, tmp_path, monkeypatch)
                 chip(label, *a, **k) or (label == "×" and in_desk and go == ["desk"]
                                          and not go.clear())))
             for _ in range(4):
-                if go:                      # N7: a route's × is on GRAPH's side pane
+                if go:                      # a route's × is on GRAPH's side pane
                     rows(panel) if what == "route" else frame(panel, "routing")
         assert not go, f"the page never drew a {what} ×"
         quiet()
@@ -805,7 +804,7 @@ def test_a_route_delete_and_a_replace_are_undo_steps(rig, tmp_path, monkeypatch)
     assert u.undo() and state() == was
 
 
-# ------------------------------------------------ plan 17 WP5: the filter
+# ------------------------------------------------ the filter
 
 def test_the_filter_matches_glyph_param_and_source(rig):
     """`matches`: lower-case, every typed word a substring of what the line
@@ -869,7 +868,7 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
     """TRIP with "kaleido" typed: the two desk lines (D3, D4) and the one
     macro that subscribes one are all the page draws, under the section
     titles; the meta controller, which has none, says so; the counts read "3 of N
-    rows" (plan 28 N7: the two kaleidoscope routes are GRAPH's now, and no
+    rows" (the two kaleidoscope routes are GRAPH's, and no
     route row is drawn here, filtered or not). No two widgets share an
     imgui id, and a × on a filtered line removes the row it is on."""
     from hyperspace import ui
@@ -913,7 +912,7 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
     for lst in (drawn, knobs, ids, texts, previews):
         lst.clear()
     frame(panel)
-    # the routes: none here (N7: GRAPH's)
+    # the routes: none here (GRAPH's)
     assert drawn == []
     # the desk: D3 and D4 and nothing else, no dark line
     assert {"D3", "D4"} <= set(texts) and "D1" not in texts and "D5" not in texts
@@ -971,7 +970,7 @@ def test_the_filter_is_ui_state(rig, tmp_path):
     """The filter's text lives in the page's state on the panel and nowhere
     else: no param holds it, a snapshot and a saved loadable patch do not carry it,
     typing it is no undo step and no dirty dot, a loadable patch load leaves it,
-    and one state write — what `goto` (WP4) does — clears it. A new panel
+    and one state write — what `goto` does — clears it. A new panel
     starts with none, and a state dict from before a hot reload gains the
     key."""
     from types import SimpleNamespace
@@ -1014,15 +1013,15 @@ def test_the_filter_is_ui_state(rig, tmp_path):
     st["filter"] = "nothing"
     assert ui_routing.found(panel, router)[0] == 0
     st["find"] = "kaleido"
-    assert ui_routing.found(panel, router)[0] == 2      # (N7: TRIP's two kaleido routes are GRAPH's)
+    assert ui_routing.found(panel, router)[0] == 2      # (TRIP's two kaleido routes are GRAPH's)
     st["filter"] = ""
-    # a loadable patch load leaves it (fork 9 (a))
+    # a loadable patch load leaves it
     lib.load("loadable", "MANDALA")
     frame(panel)
     assert st["find"] == "kaleido" and ui_routing._state(panel) is st
     n, m = ui_routing.found(panel, router)
     assert 0 < n < m
-    # what a desk click does (`goto`, WP4): the filter cleared, every row back
+    # what a desk click does (`goto`): the filter cleared, every row back
     ui_routing.goto(panel, "cc:*:18")
     frame(panel)
     assert ui_routing.found(panel, router) == (m, m)
@@ -1113,12 +1112,12 @@ def test_a_line_in_use_is_not_filtered_away_under_the_hand(rig, monkeypatch):
     texts, _ = _drawn(monkeypatch)
     knobs.clear()
     frame(panel)
-    assert len(knobs) == 8 and "×##find" not in chips and "+ route" not in chips  # (N7)
+    assert len(knobs) == 8 and "×##find" not in chips and "+ route" not in chips
     assert not any(t.endswith(" rows") for t in texts)
-    assert ui_routing.POINTER in texts           # N7: the unfiltered line
+    assert ui_routing.POINTER in texts           # the unfiltered line
 
 
-# ------------------------------------------- plan 17 WP4: the picked control's line
+# ------------------------------------------- the picked control's line
 
 def _many_routes(rig, n=30) -> None:
     """Enough routes that the desk and meta controller sections start under the fold."""
@@ -1171,7 +1170,7 @@ def _seen(got) -> bool:
 
 
 def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
-    """`goto` (fork 2): the rows' child scrolls to the picked control's
+    """`goto`: the rows' child scrolls to the picked control's
     line — its row on the layer that is up, its "unmapped — dark" line, an
     invariant row in the meta controller section — and frames it for as long as
     it is picked; the page itself never scrolls and is never changed. If
@@ -1214,7 +1213,7 @@ def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
     draw(3)
     assert got["child"][0] == at and st["marked"] == 1       # once: it does not keep pulling
     # an invariant control: its row in the meta controller section, further down
-    s3 = control("SM")                     # MASTER (S1–S8 are layered since plan 24 C2)
+    s3 = control("SM")                     # MASTER (S1–S8 are layered)
     lrn.pick(s3.source)
     ui_routing.goto(panel, s3.source)
     draw(2)
@@ -1271,7 +1270,7 @@ def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
 
 
 def test_a_desk_click_clears_a_filter_that_has_the_keyboard(rig, monkeypatch):
-    """Fork 9: a desk click clears the ROUTING filter even while its field
+    """A desk click clears the ROUTING filter even while its field
     has the keyboard — imgui writes a focused field's edit buffer back
     over a state write, so the clear holds until the field has let go.
     Real typing, a real click."""
@@ -1317,10 +1316,10 @@ def test_a_desk_click_clears_a_filter_that_has_the_keyboard(rig, monkeypatch):
 
 
 def test_the_head_has_the_same_dot_and_label(rig, tmp_path):
-    """Plan 19 WP5: ROUTING's head is the preset strip's save over the
+    """ROUTING's head is the preset strip's save over the
     same loadable patch — the same 12 px disc beside the name, the save chip lit
     while dirty and reading "save" (one tier: every loadable patch is yours).
-    Clicking it is `Library.overwrite`, as before."""
+    Clicking it is `Library.overwrite`."""
     from test_ui_shell import _click
 
     from hyperspace import ui
@@ -1366,7 +1365,7 @@ def test_a_routes_own_feel_draws_its_line_with_its_own_ids(rig, tmp_path, monkey
         ids.append(imgui.get_id(label))
         return real(label, *a, **k)
     monkeypatch.setattr(imgui, "slider_float", rec)
-    rows(panel)                                 # N7: the rows are GRAPH's side pane's
+    rows(panel)                                 # the rows are GRAPH's side pane's
     seen.clear()
     ids.clear()
     rows(panel)
@@ -1398,7 +1397,7 @@ def test_the_system_page_shows_the_sticks_feel(rig, tmp_path, monkeypatch):
 def test_neither_shift_nor_save_is_a_desk_target(rig, tmp_path):
     """`desk_target`: the one rule for the desk rows' target combo, "Learn
     desk" and "Learn pad". SHIFT's param is not one, and neither is the
-    desk's SAVE (plan 24 C1, review of PR #175): a learned toggle or key on
+    desk's SAVE: a learned toggle or key on
     `desk.save` would latch it, and every bank pad's tap would then make a
     new loadable patch."""
     router = _with_router(rig, tmp_path)
@@ -1413,7 +1412,7 @@ def test_neither_shift_nor_save_is_a_desk_target(rig, tmp_path):
 
 
 def test_the_routing_page_lists_the_sink_rows_with_the_others(rig, tmp_path, monkeypatch):
-    """Plan 27 B3: a sink row appears as the others do — a line in the
+    """A sink row appears as the others do — a line in the
     page's own `sinks` section (the meta controller's), its words the router's,
     found by the filter, an off row dimmed but listed."""
     router = _with_router(rig, tmp_path)
@@ -1428,11 +1427,11 @@ def test_the_routing_page_lists_the_sink_rows_with_the_others(rig, tmp_path, mon
     assert m >= 2 and n >= 1
 
 
-# ------------------------------- review: the page's cost a frame (35 fps → full rate)
+# ------------------------------- the page's cost a frame
 
 def test_the_routing_page_builds_its_source_list_once_a_draw(rig, monkeypatch):
     """The source combo's list is the same for every route row: the list of
-    rows (GRAPH's side pane since plan 28 N7, `ui_graph.route_rows`) builds
+    rows (GRAPH's side pane, `ui_graph.route_rows`) builds
     it once a draw, not once a row (21 rows × every binding per scheme was
     5 ms a frame on the rig)."""
     _many_routes(rig, 12)
@@ -1516,7 +1515,7 @@ def test_the_dark_controls_are_worked_out_again_only_when_the_table_changes(
 
 
 def test_the_routing_head_names_a_loop_the_patch_keeps_off(rig, tmp_path, monkeypatch):
-    """Plan 28 N0: a loop no delay breaks is named on ROUTING's head, in
+    """A loop no delay breaks is named on ROUTING's head, in
     words, while it stands; the routes it cuts stay listed."""
     panel = rig.panel
     router = _with_router(rig, tmp_path)

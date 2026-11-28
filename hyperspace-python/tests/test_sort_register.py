@@ -1,4 +1,4 @@
-"""tools/sort_register.py (row 606): the register's answer sheet and its
+"""tools/sort_register.py: the register's answer sheet and its
 numbered sections sorted, no text changed; an unnumbered `### ` and a tail
 after the last section do not break it or travel."""
 

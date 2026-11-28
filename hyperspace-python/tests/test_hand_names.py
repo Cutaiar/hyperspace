@@ -1,6 +1,5 @@
-"""Hand routes addressed by name (plan 13 WP5b, decision register row 20,
-audit N7): ``hand:right.roll`` reads the right roll wherever `[hands] dofs`
-puts it; a name the rig lacks is dormant, never another lane; ``hand:<i>``
+"""Hand routes addressed by name: ``hand:right.roll`` reads the right roll
+wherever `[hands] dofs` puts it; a name the rig lacks is dormant, never another lane; ``hand:<i>``
 still reads the lane at index i."""
 
 import math
@@ -145,7 +144,7 @@ def test_the_routing_page_offers_and_writes_names(app):
     gates = ui_routing._gates(app.router)
     assert gates[0] == ("hand:left.pinch.index", "L ind")
     assert gates[7] == ("hand:right.pinch.pinky", "R pin")
-    assert gates[-1] == ("hand:right.grab", "R grab")       # then the grabs (plan 24 C5)
+    assert gates[-1] == ("hand:right.grab", "R grab")       # then the grabs
     addrs = [s for s, _ in srcs]
     assert ui_routing._at(app.router, addrs, "hand:7") == addrs.index("hand:right.y")
     assert ui_routing._at(app.router, addrs, "hand:right.nosuch") == -1
@@ -153,7 +152,7 @@ def test_the_routing_page_offers_and_writes_names(app):
 
 
 def test_a_learn_knows_a_numbered_row_is_the_same_axis(app):
-    """Review of PR #70: a loadable patch saved with numbers keeps `hand:7`; a learn
+    """A loadable patch saved with numbers keeps `hand:7`; a learn
     writes `hand:right.y`. Learn compares the lanes, not the strings: a
     learn onto the same param refreshes the gate with no Replace / Keep
     question, and a learn of the right height elsewhere moves the numbered
@@ -170,7 +169,7 @@ def test_a_learn_knows_a_numbered_row_is_the_same_axis(app):
     assert old not in app.table.bindings                          # moved: one axis, one param
     assert app.table.owner("view.bright").source == "hand:right.y"
     assert app.learn.last.endswith("(into the patch; moved from fx.mix)")
-    # plan 18 WP3: the same holds whatever the numbered row's op — a
+    # the same holds whatever the numbered row's op — a
     # numbered push keeps its op and depth through a learn by name, and
     # moves like any other row of the axis
     push = app.table.add(Binding("hand:3", "view.speed", "push", 0.4))   # left.roll, by number

@@ -1,7 +1,7 @@
-"""The playlist (plan 44 D6, rows 705–709): for installs, with no guards against the operator.
+"""The playlist: for installs, with no guards against the operator.
 
-D6a: the file, and `Playing.tick` over stand-in decks and a stand-in meta controller.
-D6b: the same over the real two decks, the triggers and the frame.
+The file, and `Playing.tick` over stand-in decks and a stand-in meta controller.
+The same over the real two decks, the triggers and the frame.
 """
 
 from __future__ import annotations
@@ -310,8 +310,7 @@ def test_fade_seconds_come_from_the_entry_and_zero_is_a_cut():
 
 
 def test_no_guard_a_deck_with_an_open_step_is_written_over():
-    """Overrules plan 44 §6's "never written with an open step": the owner, 2026-11-04,
-    "it needs no guards against the operator"."""
+    """A step is written even while one is open: the playlist needs no guards against the operator."""
     p, meta, _ = playing("a")
     assert meta.off_air.undo.open
     p.play()
@@ -602,7 +601,7 @@ def test_it_is_a_watched_module_after_the_library():
     assert hotreload.MODULES.index("library") < hotreload.MODULES.index("playlist")
 
 
-# ------------------------------------------------------------------ the real decks (D6b)
+# ------------------------------------------------------------------ the real decks
 
 def _write_list(lib, *entries, name="cart"):
     playlist.save(lib, lst(*entries, name=name))
@@ -648,8 +647,7 @@ def test_on_the_real_decks_an_advance_loads_off_air_and_the_fader_takes_it_on_ai
 
 
 def test_a_dirty_deck_off_air_is_written_over(air):
-    """No guards (row 707): plan 44 §6's "the panel's deck is never touched while dirty" is
-    overruled."""
+    """No guards: the panel's deck is touched even while dirty."""
     p = _on_real(air, ("party-tumble", 10.0))
     air.two.reg["view.bright"].set(0.123)
     assert air.two.loaded_patch.is_dirty()
@@ -695,7 +693,7 @@ def test_a_patch_file_with_a_row_on_it_loses_the_row_and_says_so(air):
 
 
 def test_the_latch_on_an_install_load_and_fade_refuse_undo_until_a_change(air):
-    """Row 709. The panel on the deck on air: the load latches its stack and the fade does
+    """The panel on the deck on air: the load latches its stack and the fade does
     again, so a ⌘Z at a cart left running takes nothing back."""
     p = _on_real(air, ("party-tumble", 5.0, 0.2), ("party-wake", 5.0, 0.2))
     assert undo.installed() is air.one.undo
@@ -718,7 +716,7 @@ def test_the_latch_on_an_install_load_and_fade_refuse_undo_until_a_change(air):
 
 
 def test_a_change_opens_the_stack_and_undo_can_then_reach_a_load_the_playlist_made(air):
-    """Row 709, what the owner is asked: row 753's "all the way down", on an install."""
+    """What the owner is asked: "all the way down", on an install."""
     p = _on_real(air, ("party-tumble", 5.0, 0.0), ("party-wake", 5.0, 0.0))
     p.play()
     t = _run(air, 10.0, 1.0)                       # TUMBLE, on deck 2
@@ -743,10 +741,10 @@ def test_a_long_run_keeps_the_undo_stacks_bounded(air):
         assert len(stack.stack) <= undo.LIMIT
 
 
-# ------------------------------------------------------------------ the popup (D6b)
+# ------------------------------------------------------------------ the popup
 
 def test_the_playlist_is_no_section_of_the_pane():
-    """A playlist is the meta controller's (row 858): no pane chip, no menu row. Its
+    """A playlist is the meta controller's: no pane chip, no menu row. Its
     `PAGE_KEYS` slot stays, so saved bindings keep their indices; it shows the selection."""
     assert "playlist" not in ui_pane.KEYS and "playlist" not in ui_pane.TABS
     assert ui_pane.section_of("playlist") == ui_pane.SELECTION
@@ -784,7 +782,7 @@ def test_the_chip_opens_the_popup_and_it_works(tmp_path, monkeypatch):
         assert [e.loadable for e in playlist.read(r.panel.library, p.playlist.name).entries] == [
             "a-loadable-patch-with-rather-a-long-name"]
         d.run(d.move("playlist.next", frames=2))
-        assert ui_pane.where(r.panel) == ui_playlist.UNDER      # ⌘Z here: no stack (row 709)
+        assert ui_pane.where(r.panel) == ui_playlist.UNDER      # ⌘Z here: no stack
         d.run(d.click("playlist.next", frames=3))
         d.run(d.click("chip.playlist.play", frames=3))
         assert not p.on
@@ -938,8 +936,8 @@ def test_the_params_walk_too(air):
 
 
 def test_cmd_z_over_the_section_takes_back_nothing_and_says_so(air, monkeypatch):
-    """Row 709. Its edits are files, on no stack: not the meta stack, which would take back a master
-    fader on air, and not the deck's. As the player screen (rows 753, 757): no focus moves either."""
+    """Its edits are files, on no stack: not the meta stack, which would take back a master
+    fader on air, and not the deck's. As the player screen: no focus moves either."""
     meta = air.meta
     gain = air.one.reg["master.gain"]
     undo.by_hand(True)
@@ -985,12 +983,12 @@ def test_the_section_says_where_it_has_got_to():
     assert ui_playlist.where(p) == "cart: 1 of 2, a · next in 4:05"
 
 
-# ------------------------------------------------------------------ a cart left running (D6b)
+# ------------------------------------------------------------------ a cart left running
 
 @pytest.mark.parametrize("samples", [0, 4])
 def test_a_scene_target_lets_go_of_all_it_made(samples):
-    """Row 709. The colour renderbuffer was never kept, so never released: one a fade's rest,
-    10–15 MB each on the Mac, a leak since 2026-09 that a playlist's fades made a cart's end."""
+    """The colour renderbuffer was never kept, so never released: one a fade's rest,
+    10–15 MB each on the Mac, a leak a playlist's fades made a cart's end."""
     made = []
 
     class Res:
@@ -1016,7 +1014,7 @@ def test_a_scene_target_lets_go_of_all_it_made(samples):
 
 
 def test_a_dwell_typed_and_then_the_popup_dismissed_is_kept(tmp_path, monkeypatch):
-    """Review of #445: a click outside shuts the popup before the dwell field can
+    """A click outside shuts the popup before the dwell field can
     report it was left, so the typed value is kept pending and written as it shuts."""
     with build_rig(tmp_path) as r:
         r.panel.desk = False

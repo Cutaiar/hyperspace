@@ -1,4 +1,4 @@
-"""Plan 44 D3 — the meta controller / performance line made mechanical (schema `/10`).
+"""The meta controller / performance line made mechanical (schema `/10`).
 
 What crosses the line, and how each half is held:
 
@@ -238,7 +238,7 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     dry run writes nothing and says the cuts; --apply backs the library up,
     rewrites every loadable patch — folders too — as /10 with the show's look and
     cuts, and the show as /3 beside its .bak-v2-look; a second run has
-    nothing to do. (Plan 90 H2: the corpus's /12 legacy6 is rewritten too —
+    nothing to do. The corpus's /12 legacy6 is rewritten too,
     less the retired look-back knobs it names, which drew nothing.)"""
     lib = tmp_path / "Drive" / "Hyperspace"
     show = _old_show(lib)
@@ -267,7 +267,7 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
         assert {k: doc["values"][k] for k in LOOK} == LOOK, rel
         assert "modules" not in doc and "ghost.mirror" not in doc["values"], rel
         assert json.loads((backups[0] / rel).read_text())["schema"] == graphmigrate.EYE_SCHEMA
-    # (plan 90 H2, H3: every `dream.*` goes, the dream off and undriven)
+    # every `dream.*` goes, the dream off and undriven
     lean, gone = re.subn(rb'^ *"dream\.[a-z_]+": [^\n]*,\n', b"",
                          (CORPUS / "legacy6.json").read_bytes(), flags=re.MULTILINE)
     assert gone == 23
@@ -285,7 +285,7 @@ def test_a_newer_file_is_refused_as_an_older_build_refuses_a_ten(tmp_path):
     """The two-Macs rule, as this build sees it: a `/13`, a `/4` show and an install `/2` are
     refused, as a build from before refuses a `/12`; the words say what to do."""
     from hyperspace.library import Install, Library, LibraryError, migrate_doc
-    assert loadable.VERSIONS[-1] == 12                    # (plan 89)
+    assert loadable.VERSIONS[-1] == 12
     with pytest.raises(LibraryError, match="newer than this build"):
         migrate_doc({"schema": "hyperspace.project/4"}, "hyperspace.project")
     lib = Library(tmp_path)
@@ -295,7 +295,7 @@ def test_a_newer_file_is_refused_as_an_older_build_refuses_a_ten(tmp_path):
         Install(lib)._take({"schema": "hyperspace.install/2", "name": "x"}, None)
 
 
-# ---------------------------------------------------------------- review of #351
+# ---------------------------------------------------------------- loading
 
 
 def _two_decks():
@@ -417,7 +417,7 @@ def test_force_by_a_bare_stem_is_refused_when_two_folders_hold_it(tmp_path, monk
     assert tool._forced(n1, {"night"}, {"night": 1})                 # the only one: by stem
 
 
-# ---------------------------------------------------------------- review of #351, round 2
+# ---------------------------------------------------------------- loading, round 2
 
 
 def test_the_lead_is_named_and_no_stranger_can_be():
@@ -467,7 +467,7 @@ def test_the_ghost_groups_roads_leave_the_mirror_alone(tmp_path):
     assert lib.is_dirty("ghost")
     lib.reset("ghost")
     assert m.value is True and reg["ghost.alpha"].value == pytest.approx(0.6)
-    (rig.home / "patches" / "ghost").mkdir(parents=True, exist_ok=True)   # (plan 50)
+    (rig.home / "patches" / "ghost").mkdir(parents=True, exist_ok=True)
     (rig.home / "patches" / "ghost" / "dim.json").write_text(json.dumps(
         {"schema": "hyperspace.preset/1", "group": "ghost", "name": "dim",
          "values": {"ghost.alpha": 0.3, "ghost.mirror": False}}))
@@ -494,7 +494,7 @@ def test_a_second_table_shares_the_meta_rows_it_brings_and_refuses_another_file(
         Bindings([], meta_table=s, profile="launchpad")
 
 
-# ---------------------------------------------------------------- review of #351, round 3
+# ---------------------------------------------------------------- loading, round 3
 
 
 def test_a_mirror_from_before_the_room_is_given_one_never_declared_twice():

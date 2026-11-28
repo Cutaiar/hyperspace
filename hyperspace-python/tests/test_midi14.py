@@ -1,4 +1,4 @@
-"""14-bit CC rows, the listening learn, and Learn ▸ Player n (2026-11-07, the DDJ-FLX4).
+"""14-bit CC rows, the listening learn, and Learn ▸ Player n: the DDJ-FLX4.
 
 A DJ controller's faders and knobs send MIDI 1.0's 14-bit pair (CC n, then CC
 n + 32) and its jogs are relative encoders; the generic profile knows nothing of

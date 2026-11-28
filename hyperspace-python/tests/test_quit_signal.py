@@ -1,6 +1,6 @@
-"""Ctrl-C quits the app; it never dumps a traceback (2026-11-11).
+"""Ctrl-C quits the app; it never dumps a traceback.
 
-What happened, and must not again: with no SIGINT handler installed,
+Without a SIGINT handler installed,
 Ctrl-C at the terminal raised `KeyboardInterrupt` wherever the signal
 landed — three calls deep inside a panel draw — and `app.main` died with
 a traceback through everyone's frames. None of the teardown after the
@@ -10,17 +10,16 @@ shell was left printing `uv: Failed to get PID of child process`.
 
 `app._install_quit_signals` is the fix: a handler asks the loop to quit
 and the frame finishes, so the exit is the one a window close takes
-(`close_all`, audit P1). The test below is the rule, and it is deliberately
+(`close_all`). The test below is the rule, and it is deliberately
 end to end — the real `main` in a process of its own, a real SIGINT, and
 then the three things a traceback would have cost: the exit code, a clean
 stderr, and the `windows.json` only the teardown writes. A unit test of
-the handler could not have caught the original bug; this one fails on the
-build before the fix, every time.
+the handler could not catch a missing handler; this one fails without it, every time.
 
 The other half of the rule is what the app must *not* handle. SIGTERM is
 the kernel's: a Python handler runs only where the interpreter reaches a
 check point, so a main thread wedged in a driver call can take no signal
-at all, and handling SIGTERM would have turned a launcher's one kill — the
+at all, and handling SIGTERM would turn a launcher's one kill — the
 thing that always worked on a hung show — into a wait with nothing behind
 it. `test_one_sigterm_ends_an_app_wedged_in_a_native_call` is that rule,
 and it is the reason the handler below is SIGINT alone.
@@ -132,7 +131,7 @@ def test_sigterm_is_left_to_the_kernel_and_ends_the_real_app(quiet_on_a_mac, gl_
     """Nothing of ours handles SIGTERM, so a launcher's kill is the kernel's
     business and always lands. It costs the teardown — no `windows.json` —
     and that is the trade: see the wedged case below for what handling it
-    would have cost instead."""
+    would cost instead."""
     home = tmp_path / "home"
     p = _launch(home)
     _in_the_loop(p, home)
@@ -177,8 +176,8 @@ def test_one_sigterm_ends_an_app_wedged_in_a_native_call():
     may take SIGTERM away from it — not a handler, however graceful, and not
     a handler that arms a deadline, because the arming cannot happen either.
 
-    Measured 2026-11-11: with SIGTERM handled, this process sat through the
-    signal and outlived a one-second hard deadline that was never armed.
+    With SIGTERM handled, this process sits through the signal and outlives
+    a one-second hard deadline that is never armed.
     """
     p = subprocess.Popen([sys.executable, "-c", WEDGED], cwd=str(ROOT), text=True,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -200,7 +199,7 @@ def test_the_handlers_are_installed_before_the_windows_and_again_before_the_loop
     before `glfw.init`, so a Ctrl-C through the seconds of startup is a quit
     too; the second after everything is open, in case a driver installed a
     SIGINT handler of its own over ours. Moved below either line, Ctrl-C is
-    a traceback again for as long as it takes to get there."""
+    a traceback for as long as it takes to get there."""
     src = (ROOT / "hyperspace" / "app.py").read_text()
     assert src.index("quitting = _install_quit_signals()") < src.index("if not glfw.init():")
     assert src.index("_install_quit_signals(quitting)\n") < src.index("while not (quitting.asked")
@@ -241,8 +240,7 @@ def handler():
 def no_deadline_of_its_own():
     """A test of the backstop needs a process with no deadline running, and
     this is not one: pytest-timeout holds `ITIMER_REAL` for its own `--timeout`
-    (which is how the rule below came to be written — `_arm_hard_exit` found
-    it there and declined to take it over). Stand it down, and put it back to
+    (`_arm_hard_exit` finds it there and declines to take it over). Stand it down, and put it back to
     the microsecond after."""
     left = signal.setitimer(signal.ITIMER_REAL, 0)[0]
     try:

@@ -1,4 +1,4 @@
-"""Plan 67: a Trip warp look as a patch of primitives — the mapping the
+"""A Trip warp look as a patch of primitives — the mapping the
 comparison (`tests/test_trip_patch.py`) and the field example use.
 
     noise (Out flow: two drifting octaves)  ─▶ combine (multiply) ─▶ scale (× 0.4 Amount) ─┐
@@ -6,7 +6,7 @@ comparison (`tests/test_trip_patch.py`) and the field example use.
     point ─▶ scale.2 (× the zoom)  ─────────────────────────────▶ combine.2 (add) ◀────────┘
     combine.2 ─▶ displace.field (Amount 0.5);  the picture ─▶ displace.image
 
-Near, not equal (the owner, 2026-11-24: "near patch, keep file"): warp.glsl
+Near, not equal: warp.glsl
 counts in fractions of the frame's width and height, the field nodes in frame
 heights, so the patch's edge weight is round where the file's is an ellipse
 fitted to the frame, and its swim is as long across as up where the file's is

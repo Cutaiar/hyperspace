@@ -1,4 +1,4 @@
-"""The Joy-Con as a poi's handle (plan 47, the poi: hyperspace/poi.py):
+"""The Joy-Con as a poi's handle (hyperspace/poi.py):
 the shape is the weight on a string — it hangs, swings and flies as one
 would, the string's length, the weight and the springiness change how —
 and nothing at all while it is off."""
@@ -198,7 +198,7 @@ def carry(reg, state, pad, metres, seconds=1.0, axis=0, dt=DT):
 
 
 def test_a_hand_carried_a_metre_stays_there_and_a_resets_it_home():
-    """The owner, 2026-11-03: the Joy-Con moved a metre to one side moves
+    """The Joy-Con moved a metre to one side moves
     the shape that far and it stays — no pull back to the centre."""
     reg, state, _ = rig()
     pad = FakePad()
@@ -245,7 +245,7 @@ def shove(reg, state, pad, seconds=2.0, axis=0, g=0.5, dt=DT):
 
 
 def test_the_hand_and_the_weight_are_held_on_the_screen():
-    """Row 817, from #342: a carry past the edge stops the hand at it and the
+    """A carry past the edge stops the hand at it and the
     shape, an octave of zoom each way, while the weight itself swings on."""
     reg, state, _ = rig()
     pad = FakePad()
@@ -303,7 +303,7 @@ def test_the_string_swings_on_past_the_edge_at_ordinary_dials():
 
 
 def test_a_hard_swing_over_3_g_is_a_reading_not_a_still_pad():
-    """Finding 1 on #430: over `VALID_G` it read as a stalled pad, and zeroed
+    """Over `VALID_G` it read as a stalled pad, and zeroed
     the hand. It's the push of a swing: it pushes, and nothing stops."""
     reg, state, _ = rig()
     pad = FakePad()
@@ -332,7 +332,7 @@ def test_a_reading_with_no_gravity_is_not_still_and_a_stalled_pad_is():
 
 @pytest.mark.parametrize("rest", [0.93, 1.07, 1.15])
 def test_a_pad_resting_off_1_g_settles_on_what_it_reads_and_a_second_does_too(rest):
-    """Finding 2 on #430: a pad at 1.07 g could never be still, so never
+    """A pad at 1.07 g could never be still, so never
     learned, and a phantom push ran to the wall on a table. A restarted it."""
     reg, state, _ = rig()
     pad = FakePad()
@@ -358,7 +358,7 @@ def test_a_wrong_1_g_at_settling_cannot_lock_a_pad_out_of_still():
 
 @pytest.mark.parametrize("swing", [2.0, 4.0])
 def test_settling_mid_swing_takes_no_1_g_from_the_swing(swing):
-    """Second pass on #430: A pressed mid-swing. One raw sample of 2 g became
+    """A pressed mid-swing. One raw sample of 2 g became
     this pad's 1 g, and read as a phantom 1 g push every frame until A."""
     reg, state, _ = rig()
     pad = FakePad()
@@ -371,7 +371,6 @@ def test_settling_mid_swing_takes_no_1_g_from_the_swing(swing):
 
 
 def test_a_steady_lift_walks_the_1_g_no_further_than_the_limit():
-    """Finding 7 on #430."""
     reg, state, _ = rig()
     pad = FakePad()
     on(reg, state, pad, settle=120)
@@ -380,7 +379,7 @@ def test_a_steady_lift_walks_the_1_g_no_further_than_the_limit():
 
 
 def test_waiting_for_gravity_writes_the_shape_on_the_screen():
-    """Finding 6 on #430: a just-hung weight, a long string, invalid readings."""
+    """A just-hung weight, a long string, invalid readings."""
     reg, state, _ = rig(length=4.0)
     pad = FakePad()
     on(reg, state, pad, settle=1)
@@ -391,7 +390,7 @@ def test_waiting_for_gravity_writes_the_shape_on_the_screen():
 
 
 def test_the_hands_depth_wall_is_even_toward_and_away_from_the_eye():
-    """Second pass on #430: the shape's depth is `offset()`, the weight less
+    """The shape's depth is `offset()`, the weight less
     `HANDLE`, and a weight hanging from the tip has that equal to the wrist's:
     so the wrist's own wall is ±hz about home, not about `HANDLE`."""
     reg, state, _ = rig()
@@ -412,7 +411,7 @@ def test_the_hands_depth_wall_is_even_toward_and_away_from_the_eye():
 
 
 def test_with_depth_off_no_wall_stands_along_depth():
-    """Finding 10 on #430: no zoom shows it, so nothing is clipped for it."""
+    """No zoom shows it, so nothing is clipped for it."""
     reg, state, _ = rig()
     pad = FakePad()
     reg["poi.depth"].set(False)
@@ -426,9 +425,9 @@ def test_with_depth_off_no_wall_stands_along_depth():
 
 @pytest.mark.parametrize(("g", "seconds"), [(0.3, 1.0), (0.25, 1.5)])
 def test_a_smooth_carry_lands_past_its_zero_crossing(g, seconds):
-    """Finding 4 on #430: the hand read still where the push crossed zero, then
+    """The hand read still where the push crossed zero, then
     the slowing drove it back. `STILL_S` outlasts a carry this quick. A carry
-    slower than this can still lose it (hand check 633 says so)."""
+    slower than this can still lose it."""
     reg, state, _ = rig()
     pad = FakePad()
     on(reg, state, pad)
@@ -442,7 +441,7 @@ def test_a_smooth_carry_lands_past_its_zero_crossing(g, seconds):
 
 
 def test_a_steady_push_outlasts_half_a_second_then_reads_as_a_wrong_attitude():
-    """Finding 5 on #430: a push held dead steady with the pad not turning
+    """A push held dead steady with the pad not turning
     can't be told from a wrong attitude. It moves the hand for this long."""
     reg, state, _ = rig()
     pad = FakePad()
@@ -458,7 +457,7 @@ def test_a_steady_push_outlasts_half_a_second_then_reads_as_a_wrong_attitude():
 
 
 def test_sensor_samples_with_no_gravity_in_them_push_nothing_and_settle_nothing():
-    """From #342: the tape's connect reads zeros while the sensor is not yet on."""
+    """The tape's connect reads zeros while the sensor is not yet on."""
     reg, state, _ = rig()
     pad = FakePad()
     reg["poi.on"].set(True)
@@ -475,7 +474,7 @@ def test_sensor_samples_with_no_gravity_in_them_push_nothing_and_settle_nothing(
 
 
 def test_a_still_pad_whose_attitude_is_off_recovers_soon_and_the_hand_holds():
-    """Row 817: the tape's dead-lock. Dead still, 6° off, the push through the
+    """The tape's dead-lock. Dead still, 6° off, the push through the
     attitude reads 0.1 g, "not still", and only a still pad is corrected. The
     sensors alone end it within a second, not 1.5 s and a restart."""
     reg, state, _ = rig()
@@ -492,7 +491,7 @@ def test_a_still_pad_whose_attitude_is_off_recovers_soon_and_the_hand_holds():
 
 
 def test_the_one_g_this_pad_reads_is_learned_so_its_calibration_is_no_push():
-    """From #342: the owner's Joy-Con reads 1.022 g at rest."""
+    """The owner's Joy-Con reads 1.022 g at rest."""
     reg, state, _ = rig()
     pad = FakePad()
     on(reg, state, pad, settle=240)
@@ -502,7 +501,7 @@ def test_the_one_g_this_pad_reads_is_learned_so_its_calibration_is_no_push():
 
 
 def test_no_pull_home_the_hand_at_the_wall_stays_until_a():
-    """The owner, 2026-11-03: the box holds it, nothing draws it back."""
+    """The box holds it, nothing draws it back."""
     reg, state, _ = rig()
     pad = FakePad()
     on(reg, state, pad)
@@ -696,7 +695,7 @@ def test_a_reset_that_fires_both_leaves_the_pan_at_the_poi_hanging_from_zero():
 
 
 def test_real_bytes_a_still_joycon_hangs_the_shape_still():
-    """The owner's Joy-Con (L) over Bluetooth (the plan 46 tape), as the
+    """The owner's Joy-Con (L) over Bluetooth (the tape), as the
     app reads it: lying still, the weight hangs and does not wander."""
     windows, cal = real_reports()
     amap = nintendo.AXIS_MAP

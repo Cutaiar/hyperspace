@@ -1,8 +1,7 @@
-"""Register row 754 (plan 56): a person makes a row on a pair whose pole is
-already mapped, and it asks. The owner, 2026-11-06: "when you create the pair in
-general, it should tell you that part of this pair is already mapped. Then you
-should have to explicitly consent to either keeping both mappings on that control
-or the option to remove the existing mapping and let the pair take over that axis."
+"""A person makes a row on a pair whose pole is already mapped, and it asks.
+Creating a pair tells you that part of it is already mapped; you explicitly
+consent either to keeping both mappings on that control or to removing the
+existing mapping and letting the pair take over that axis.
 
 Each road over the real table, router, Learn and Edit; the panel's modal over
 the headless panel; the undo over `boot`'s real three stacks.
@@ -222,7 +221,7 @@ def test_arming_forgets_the_question(rig):
     assert rig.learn.pair_ask is None
 
 
-# ---- review of #387 ----
+# ---- review findings ----
 
 def test_the_same_pair_on_another_param_is_one_lane_and_asks_nothing(rig):
     clear_pad_rows(rig.table)
@@ -490,7 +489,7 @@ def depth(s) -> tuple[int, int]:
 
 def z(s, meta: bool) -> None:
     """A step taken off that stack, whichever a press would reach: the latch's
-    answer to a press (row 753) has its own test below."""
+    answer to a press has its own test below."""
     (s.meta.undo if meta else s.r.deck.undo).undo()
     go(s)
 
@@ -607,7 +606,7 @@ def test_a_meta_answer_leaves_the_other_decks_patch_alone(stacks):
 
 
 def test_under_the_latch_a_taken_meta_row_comes_back_over_a_meta_section(stacks):
-    """Row 753 shuts a stack you come to. The answer's meta push comes last, so that
+    """The latch shuts a stack you come to. The answer's meta push comes last, so that
     stack is in focus and open: the person's own click, then ⌘Z over a meta section."""
     s = stacks
     go(s)
@@ -650,7 +649,7 @@ def stacks_as_they_are(s) -> tuple:
 @pytest.mark.parametrize("choice", [KEEP_BOTH, TAKE_OVER])
 @pytest.mark.parametrize("hand", [False, True])
 def test_a_refused_landing_leaves_every_stack_and_latch_as_it_was(stacks, choice, hand):
-    """The referee refuses at the answer (row 743: a loadable patch's row on a meta param):
+    """The referee refuses at the answer (a loadable patch's row on a meta param):
     nothing is pushed, focus does not move, and no latch opens or shuts."""
     s = stacks
     go(s)

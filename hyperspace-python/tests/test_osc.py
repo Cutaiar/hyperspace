@@ -1,4 +1,4 @@
-"""The OSC device (plan 27 B4): the plan's acceptance — **a device added by a
+"""The OSC device: **a device added by a
 `[[devices]]` entry alone, with no edit to `app.py`**. A phone app's faders
 (``/x``, ``/y``) are continuous sources under the role (``phone:x``), its
 pads (``/hit``) triggers with a velocity delivered as rows; `lost` after a
@@ -344,7 +344,7 @@ def _names_osc(tree) -> list[str]:
 
 
 def test_only_osc_py_and_the_kind_table_name_the_osc_device():
-    """The plan's acceptance in code: the OSC device is named by `osc.py`
+    """The OSC device is named by `osc.py`
     and the registry's kind table (`devices.kinds`) — and by the hot
     reloader's watch list, which lists every module — and nowhere else;
     `app.py` not at all."""

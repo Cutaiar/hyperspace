@@ -1,4 +1,4 @@
-"""SM3 (register row 777): a matte and a segment show their mask on GRAPH.
+"""A matte and a segment show their mask on GRAPH.
 
 A mask is one channel, so `PreviewTextures` reads it as grey, white where it
 passes; a segment's worker keeps its rows top first, so its thumbnail is read
@@ -274,7 +274,7 @@ def test_a_mask_the_frame_did_not_ask_for_is_not_made_for_its_thumbnail(ctx, mon
 def test_a_mask_a_pictures_repaint_made_shows_whatever_the_order(ctx, monkeypatch):
     """A cut's thumbnail paints it, and that asks its matte. The matte's
     thumbnail, wanted first or last, shows that one: masks are copied last.
-    (The matte read in two places — plan 90 H2: by a second cut, where the
+    (The matte read in two places: by a second cut, where the
     retired look-back's cover read it.)"""
     made = _counting_mattes(monkeypatch)
     pairs = [("scene", "cut.2.image"), ("channel.a", "matte.image"),
@@ -438,7 +438,7 @@ def test_a_box_with_no_mask_says_why_on_the_page(shell_rig, monkeypatch):  # noq
 
 def test_a_taller_mask_node_keeps_a_saved_position_and_the_auto_layout_clears_it(shell_rig):  # noqa: F811
     """WYSIWYG: a saved position never moves. A patch with no saved layout (all
-    three fixtures holding a mask node, row 777's count) takes the auto layout,
+    three fixtures holding a mask node) takes the auto layout,
     which counts the thumbnail's height, so nothing overlaps there."""
     view = _segment_page(shell_rig)["view"]
     n = view.node("render:segment")
@@ -455,7 +455,7 @@ def test_a_taller_mask_node_keeps_a_saved_position_and_the_auto_layout_clears_it
 
 
 def test_no_shipped_patch_saves_a_layout_with_a_mask_node():
-    """Row 777's measure, kept honest: a corpus or fixture file with a matte or
+    """A corpus or fixture file with a matte or
     a segment and a saved layout would have to be looked at by eye."""
     root = Path(__file__).parent
     found = []

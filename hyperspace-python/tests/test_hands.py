@@ -286,8 +286,8 @@ def test_setup_is_registry_params_that_round_trip():
     hands.register(reg, s)
     hands.register(reg, s)                                   # idempotent
     ps = reg.group("hands")
-    # 9 settings (the learn depth is plan 18 WP3's), 13 per axis, and the
-    # selection with its alias (plan 13 WP3)
+    # 9 settings (the learn depth is the meta controller's), 13 per axis, and the
+    # selection with its alias
     assert len(ps) == 9 + 12 * 13 + 2 and not any(p.modulatable for p in ps)
     depth = reg["hands.learn_depth"]
     assert (depth.lo, depth.hi, depth.value, depth.text()) == (0.05, 1.0, 0.25, "0.25")
@@ -307,7 +307,7 @@ def test_setup_is_registry_params_that_round_trip():
 
 
 def test_the_hands_setup_strip_is_retired(tmp_path):
-    """2026-11-23 (the owner): nobody used a hands setup. The group lists no
+    """The group lists no
     module presets, a default file in its folder is no default, and a show that
     names a hands setup neither lists nor applies it; the feel keeps its defaults."""
     from hyperspace.library import RETIRED_MODULES
@@ -463,8 +463,8 @@ def _frame(app):
 
 
 def test_learn_takes_the_axis_that_moved_as_a_push_about_the_base(app):
-    """Until plan 18 WP3 `…_as_a_position_route`: the moved pitch — a
-    centred axis — now lands a push at the meta controller's learn depth."""
+    """The moved pitch — a centred axis — lands a push at the meta
+    controller's learn depth, not a position route."""
     r = rig()
     run(r, 1, hand(), learn=app.learn, router=app.router)
     app.learn.arm("view.inst_amp")
@@ -495,7 +495,7 @@ def test_learn_takes_the_axis_that_moved_as_a_push_about_the_base(app):
     _frame(app)
     assert p.eff_norm == pytest.approx(0.25, abs=1e-4)
     # into the loaded preset: the table has it, bindings.json does not
-    # (plan 13 §3.3 — a save of the loadable patch writes it)
+    # (a save of the loadable patch writes it)
     on_disk = Bindings.load(app.table.path, legacy_midi=None)
     assert on_disk.owner("view.inst_amp") is None
 
@@ -533,15 +533,14 @@ def _spied(app) -> list:
 
 
 def test_learn_passes_the_axiss_centredness_and_the_meta_depth(tmp_path):
-    """Plan 18 WP3, the adapter's half: a learn is told whether the axis
+    """The adapter's half: a learn is told whether the axis
     that won rests in the middle — its setup *now* (`hands.<axis>.bipolar`,
     "Centred"), not the feature table — and the meta controller's `hands.learn_depth`.
     Roll lands a push at 0.25; height on a one-sided param is still the
     fader; a roll whose "Centred" was switched off is one-sided too; at
     0.5 a push lands 0.5, a one-sided axis on a zero-centred range included.
 
-    And the owner's complaint in numbers ("lower hand sensitivity", "tame
-    rotation"), with the default dead zone: a roll learned onto
+    Rotation in numbers, with the default dead zone: a roll learned onto
     `rot.rate.XY` from 1× reads 1× level (it read 0×: the plane stopped),
     2.04× at 9° (4.16×) and 3.77× / −1.77× at ±18° (±11.09×)."""
     app, r = make_app(tmp_path / "roll"), rig()
@@ -576,7 +575,7 @@ def test_learn_passes_the_axiss_centredness_and_the_meta_depth(tmp_path):
     assert (b.op, b.value) == ("push", 0.5)
     assert (up.source, up.op, up.value, up.rest) == ("hand:right.y", "push", 0.5, None)
 
-    # rotation, in the plan's own figures (§1 row 2)
+    # rotation, in figures
     app, r = make_app(tmp_path / "rate"), rig()
     r.s.axes[ax(r, "right.roll")].deadzone = 0.04            # the default feel's dead zone
     rate = app.reg["rot.rate.XY"]
@@ -644,7 +643,7 @@ def test_a_panel_edit_moves_the_return_value_under_a_hand(app):
 
 
 def test_a_hand_leaving_the_box_releases_its_position_row(app):
-    """Audit B1: with the tracker on, the frame the hand is absent its
+    """With the tracker on, the frame the hand is absent its
     axes read NaN, the row calls nothing, and apply() writes the base
     back — the return spring shapes only the DAW output."""
     r = rig()
@@ -735,7 +734,7 @@ def test_a_return_spring_never_completes_a_learn(app):
 
 
 def test_hold_shapes_the_daw_output_but_never_latches_a_row(app):
-    """Audit N6: `rest = hold` keeps the last value on the DAW port; the
+    """`rest = hold` keeps the last value on the DAW port; the
     routing row still lets go, so the param returns to its base."""
     r = rig()                                        # every axis rests on hold
     k = ax(r, "right.y")
@@ -781,7 +780,7 @@ def test_a_learn_on_a_performed_param_is_held_for_the_prompt(app):
 
 
 def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
-    """Audit B3: Learn is the host's, not the MIDI adapter's. With no
+    """Learn is the host's, not the MIDI adapter's. With no
     MidiIO anywhere — `[midi] enabled = false`, or the adapter failed to
     open — right-click → Learn, move a hand, and the row lands."""
     chain = Analyzer(Analyser())
@@ -795,7 +794,7 @@ def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
         run(r, 1, hand(pos=(2.0 * k, 200.0, 0.0), direction=tilt(0.12 * k)),
             learn=learn, router=router)
     b = table.owner("view.inst_amp")
-    assert (b.source, b.op, b.value) == ("hand:right.pitch", "push", 0.25)   # plan 18 WP3
+    assert (b.source, b.op, b.value) == ("hand:right.pitch", "push", 0.25)
     assert b.motion == DEFAULT_ROUTE_FEEL
     b.motion = None                                   # the push's arithmetic, not its travel
     assert learn.learning is None and "learned view.inst_amp" in learn.last
@@ -997,7 +996,7 @@ def test_pinch_notes_may_sit_where_presence_is_off():
 def test_a_pinch_gates_the_axis_so_one_move_means_two_things(app):
     """The point of the switches: pinched hand-up-down positions the param,
     open hand-up-down leaves it alone, and letting go returns it to the
-    base — the hand grabs, and gives back (plan 09: hands never yield, and
+    base — the hand grabs, and gives back (hands never yield, and
     a position row springs back when the gate opens)."""
     r = rig()
     gate = 14 + 4                                   # R index, after 12 axes + 2 presence
@@ -1064,7 +1063,7 @@ def test_learning_while_pinched_gates_the_row_on_that_pinch(app):
 
 
 def test_a_hand_learn_writes_the_axis_by_name_on_any_dofs(app):
-    """Decision register row 20: a learn writes `hand:<name>` — the same
+    """A learn writes `hand:<name>` — the same
     row whatever lane the axis sits on — so a loadable patch saved on this rig
     plays on one whose `[hands] dofs` list is ordered differently."""
     r = rig(dofs=["yaw", "pitch"])                  # right pitch is lane 3 here, not 10
@@ -1076,7 +1075,7 @@ def test_a_hand_learn_writes_the_axis_by_name_on_any_dofs(app):
     b = app.table.owner("view.inst_amp")
     assert (b.source, b.when) == ("hand:right.pitch", "hand:right.pinch.index")
     assert app.router.lane(b.source) == ("hand", r.io.axis("right.pitch")) == ("hand", 3)
-    assert app.router.describe(b) == "R pitch pushes +0.25 while R ind"   # plan 18 WP3: a push
+    assert app.router.describe(b) == "R pitch pushes +0.25 while R ind"   # a push
 
 
 def test_learning_with_an_open_hand_leaves_the_row_ungated(app):
@@ -1132,7 +1131,7 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
     assert app.router.rest_of(f"hand:{r.io.axis('right.roll')}") == 0.5
 
 
-# ------------------------------------------------- one rig table (audit N1)
+# ------------------------------------------------- one rig table
 
 def test_one_defaults_table_for_the_meta(tmp_path):
     """config.load fills the [hands] section from hands.DEFAULTS (config has
@@ -1180,7 +1179,7 @@ def test_the_layout_is_one_object_published_once_and_rests_on_change():
     run(r, 1, hand(), router=router)
     lay = r.io.layout
     assert router.labels["hand"] is lay.names and router.gates["hand"] is lay.gates
-    assert router.names["hand"] is lay.index                 # name → lane (row 20)
+    assert router.names["hand"] is lay.index                 # name → lane
     assert r.io.lane_names is lay.names
     # every lane has one address name: the axes as dofs spells them, the
     # presence lanes, the pinch switches, the dance sources, the grabs
@@ -1264,7 +1263,7 @@ class Backend:
 
 
 def daw_rig(monkeypatch, names):
-    """The hands' DAW out as it runs since plan 27 B3: a `HandsIO` that opens
+    """The hands' DAW out as it runs: a `HandsIO` that opens
     no port, and the `hands-daw` sink — a `midi-out` device carrying its
     messages through a `bridge.OutPort` found by name — over a fake backend.
     `port` is the sink's port (what `io.out` was), `io` the instrument."""
@@ -1401,9 +1400,9 @@ def test_a_virtual_port_is_made_again_when_it_fails(monkeypatch):
 
 
 def test_the_hands_daw_sink_sends_what_the_instrument_made_and_no_port_is_opened(monkeypatch):
-    """Plan 27 B3: `HandsIO` opens no port whatever `[hands] out` says; the
+    """`HandsIO` opens no port whatever `[hands] out` says; the
     frame's DAW messages wait in `outbox` and the `hands-daw` sink sends
-    exactly them, in order — what `HandsIO._send` sent before."""
+    exactly them, in order."""
     r = daw_rig(monkeypatch, ["Fake DAW 1"])
     assert r.io.out is None and len(r.be.opened) == 1      # the sink's one port, not the hands'
     made = []
@@ -1425,10 +1424,10 @@ def test_an_injected_port_is_the_callers_and_never_reopened():
     assert r.io.out is None and r.io.out_name == ""
 
 
-# ---------------------------------------------------------------- the interaction box (plan 18 WP1)
+# ---------------------------------------------------------------- the interaction box
 
 BOX = {"x": (-200.0, 200.0), "y": (80.0, 400.0), "z": (-150.0, 150.0)}
-# a calibration file as a build before plan 18 wrote it — and not in this
+# a calibration file as an earlier build wrote it — and not in this
 # build's own formatting, so "the bytes are the same" proves nothing rewrote it
 OLD_FILE = ('{"schema": "hyperspace.hands/1",\n'
             '   "axes": {"right.y": {"lo": 150.0, "hi": 250.0},'
@@ -1485,7 +1484,7 @@ def same(a, b):
 
 def test_no_box_is_todays_presence():
     """No box (the default): a palm far outside every range is present and
-    reads 1.0, as before plan 18 — and a box that holds everything changes
+    reads 1.0 — and a box that holds everything changes
     no lane and no message, to the float."""
     r = rig()
     assert r.io.box is None and r.io.outside == {"left": None, "right": None}
@@ -1645,7 +1644,7 @@ def test_the_sweep_sets_the_box_with_its_margin_and_a_symmetric_x(tmp_path):
                                     f"{bx[1] - bx[0]:.0f} × {by[1] - by[0]:.0f} × "
                                     f"{bz[1] - bz[0]:.0f} mm")
     saved = json.loads((tmp_path / "hands.json").read_text())
-    assert saved["schema"] == "hyperspace.hands/3"      # /3 since plan 26 A2 (units)
+    assert saved["schema"] == "hyperspace.hands/3"      # /3 (units)
     assert saved["box"]["x"] == [round(-(xs[1] + m), 3), round(xs[1] + m, 3)]
     # the other hand, never swept, is inside on its own side
     run(r, 1, hand("left", pos=(-xs[1], 200.0, 0.0)), hand("right", pos=(xs[1], ys[1], zs[0])))
@@ -1739,7 +1738,7 @@ def test_the_first_rewrite_of_an_old_file_keeps_a_backup(tmp_path):
     r = rig(tmp_path)
     sweep(r, wide)                                    # the first save of this build
     assert bak.read_text() == OLD_FILE
-    assert json.loads(path.read_text())["schema"] == "hyperspace.hands/3"   # plan 26 A2
+    assert json.loads(path.read_text())["schema"] == "hyperspace.hands/3"
     assert "the old file kept as hands.json.bak-v1" in r.io.cal_note
     sweep(r, wide)                                    # a /3 file now: no second copy
     r.io.reset_ranges()
@@ -1958,7 +1957,7 @@ def test_hands_page_draws_the_box_and_a_hand_outside_it(tmp_path):
         imgui.destroy_context(ctx)
 
 
-# ------------------------------------- plan 17 WP2: a learn listens to one source
+# ------------------------------------- a learn listens to one source
 
 def rolled(deg):
     """A palm normal rolled by `deg` about the fingers' axis."""
@@ -1967,7 +1966,7 @@ def rolled(deg):
 
 
 def _wrong_hand_cases():
-    """Plan 17 §1 row 1's two measured cases, as frames of (left, right)
+    """Two measured cases, as frames of (left, right)
     hands (None: not in view). In both the left hand is the one meant and
     the right hand travels further."""
     # 1. the left hand rolls slowly on purpose while the right hand — the
@@ -1994,8 +1993,8 @@ def _play(r, app, frames) -> int | None:
 
 
 def test_a_hand_learn_listens_to_one_hand(tmp_path):
-    """The meta controller's "the Leap assigned a learn to the wrong hand" (plan 17
-    §1 row 1). A bare learn takes whichever axis of either hand travelled
+    """The meta controller's "the Leap assigned a learn to the wrong hand".
+    A bare learn takes whichever axis of either hand travelled
     furthest: in both cases that is the right hand's. Armed with
     "hand:left" only the left hand's axes can win — the left roll is
     learned, however far the right hand goes — and armed "hand:right" the

@@ -1,11 +1,10 @@
-"""The band editor (WP5b).
+"""The band editor.
 
 The geometry first — fit_box, drag_edge, pooled, band_under are pure
 and are checked against the analyzer's own f/q ↔ edges — then the
 registry writes, then the headless harness (test_ui_shell's rig, with
 an implot context) drawing the ANALYZER page at 1, 6 and 16 bands and
-around add / remove. The ROUTING
-page's tests are test_ui_routing.py (audit D5). A mouse can't be driven
+around add / remove. The ROUTING page's tests are test_ui_routing.py. A mouse can't be driven
 here, so the drag handlers' *effects* are what the tests call.
 """
 

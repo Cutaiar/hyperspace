@@ -1,10 +1,9 @@
-"""Plan 44 D5d: the two `Deck`s as the owner sees them. HOLD, TAKE and DROP are gone
-(the owner, 2026-11-04); two verbs remain, the crossfade and "copy on air to off air",
-and the panel may look at either deck.
+"""The two `Deck`s as the owner sees them. There is no HOLD, TAKE or DROP; two verbs
+remain, the crossfade and "copy on air to off air", and the panel may look at either deck.
 
 The absolute rule first: no patch reaches the other deck, by any road, either way
-round. Then what `test_hold.py` promised, as promises of the new model; each names the
-old test it replaces (DECISION-REGISTER row 697). Then the desk, the library verbs, the
+round. Then the promises a hold once made, as promises of this model; each names the
+test it replaces. Then the desk, the library verbs, the
 frame's first line and the head.
 """
 
@@ -275,9 +274,8 @@ def test_a_pad_press_on_the_off_air_deck_reaches_only_it(rig):
 
 @pytest.mark.empty_frame
 def test_on_gl_on_air_keeps_its_frame_while_the_other_deck_is_edited(ctx, tmp_path):
-    """Was `..._the_projector_keeps_the_held_frame_while_the_preview_shows_the_edit`:
-    a new loadable patch and a turned knob on the deck off air, and on air is the same bytes;
-    the fader across, the outputs show the edit. (Plan 90 H2: the edit is
+    """A new loadable patch and a turned knob on the deck off air, and on air is the same bytes;
+    the fader across, the outputs show the edit. (The edit is
     party-noita, which holds nothing timed — party-wake's look-back is a delay
     and a trail now, whose kept frames age a frame at each draw even on a
     clock that does not move, so no two of its pictures are the same bytes.)"""
@@ -299,8 +297,7 @@ def test_on_gl_on_air_keeps_its_frame_while_the_other_deck_is_edited(ctx, tmp_pa
 
 @pytest.mark.empty_frame
 def test_on_gl_a_bus_cable_cut_off_air_stays_off_the_picture_on_air(ctx, tmp_path):
-    """Was `..._a_bus_cable_cut_after_the_hold_stays_off_the_projector`: the cuts are
-    the loadable patch's (plan 44 D3), so each deck's renderer reads its own."""
+    """The cuts are the loadable patch's, so each deck's renderer reads its own."""
     rig = _gl(ctx, tmp_path / "rig")
     rig.two.loaded_patch.load("party-acid")
     before = _picture(ctx, rig.one)
@@ -328,8 +325,7 @@ def test_on_gl_a_graph_edit_off_air_leaves_the_wiring_on_air(ctx, tmp_path):
 
 @pytest.mark.empty_frame
 def test_on_gl_a_blank_graph_off_air_leaves_on_air_whole_and_a_fade_into_it_is_black(ctx, tmp_path):
-    """Was `..._a_blank_graph_landed_while_held_leaves_the_projector_whole`. And the
-    owner, 2026-11-04: a crossfade may fade into an empty deck, which is black."""
+    """A crossfade may fade into an empty deck, which is black."""
     rig = _gl(ctx, tmp_path / "rig", empty=True)
     assert rig.two.loaded_patch.current is None and rig.two.loaded_patch.graph.spec is None
     before = _picture(ctx, rig.one)
@@ -801,7 +797,7 @@ def _quiet(d):
 
 @pytest.mark.parametrize("verb", VERBS)
 def test_a_library_verb_from_either_deck_loads_off_air_and_the_room_is_as_it_was(rig, verb):
-    """The owner, 2026-11-06, row 700: a press "always loads into the off-air Deck, never
+    """A press "always loads into the off-air Deck, never
     touching the room". Whichever deck's param was pressed; nothing on air moves, its
     undo stack included; the off-air stack has the step; the status line says so."""
     _bank(rig, "party-wake", "party-tumble")
@@ -930,7 +926,7 @@ def test_the_pads_light_says_the_deck_off_air_from_both_decks_and_follows_the_fa
 
 
 def test_f_keys_and_home_load_off_air(rig):
-    """The keys sit on the picture, and go the same road (row 700's second question)."""
+    """The keys sit on the picture, and go the same road too."""
     import glfw
 
     _bank(rig, "party-wake", "party-tumble")
@@ -985,11 +981,11 @@ def test_the_panels_own_load_on_air_is_the_intentional_one(rig):
 
 
 def _library_verb(pid):
-    """`preset.*`: the whole group is refused now (row 746), which replaced row 752's list."""
+    """`preset.*`: the whole group is refused."""
     return pid.startswith("preset.")
 
 
-# ------------------------------------------- no patch's row can press any `preset.*` (row 746)
+# ------------------------------------------- no patch's row can press any `preset.*`
 
 CARRIED = ["preset.select", "preset.next", "preset.prev", "preset.home", "preset.load.0",
            "preset.list.next", "preset.list.prev"]
@@ -1048,7 +1044,7 @@ def test_a_learn_will_not_put_a_loadables_row_on_a_library_verb(rig):
     assert not desk_target(p) and pad_target(p)
     for pid in ("preset.save.0", "preset.save_new"):
         assert not desk_target(rig.one.reg[pid]) and pad_target(rig.one.reg[pid])
-    # (row 746: a desk Learn on one lands a person's row: tests/test_layer_boundary.py)
+    # (a desk Learn on one lands a person's row: tests/test_layer_boundary.py)
 
 
 SAVES = ["preset.save.0", "preset.save.7", "preset.save_new"]
@@ -1124,7 +1120,7 @@ def test_a_held_empty_pad_on_the_invariant_row_writes_its_file(rig):
 
 
 def test_the_edges_hold_to_save_still_saves(rig):
-    """The stopgap row 724 named: `pad@edge:MENU`, a hold, a person's, the meta controller's."""
+    """The stopgap `pad@edge:MENU`, a hold, a person's, the meta controller's."""
     row = Binding("pad@edge:MENU", "preset.save_new", "hold")
     assert is_meta_row(row) and rig.one.table.add(row) is row
     rig.one.table.primaries = {"pad": "edge"}
@@ -1137,7 +1133,7 @@ def test_the_edges_hold_to_save_still_saves(rig):
 
 
 def test_the_edges_own_layout_saves_on_any_table_and_a_brush_does_not(rig):
-    """Row 686: the row on the Edge's `Model`, by the real road, on the real library. No
+    """The row on the Edge's `Model`, by the real road, on the real library. No
     row in the table, and any role; a table's stopgap under it does not save twice."""
     from hyperspace.pads import models
     assert not [b for b in rig.one.table.of("pad") if b.bare == "pad:MENU" and b.target == "preset.save_new"]
@@ -1210,7 +1206,7 @@ def test_the_media_page_reads_the_channels_of_the_panels_deck(rig):
 
 
 def test_the_chase_on_the_deck_off_air_works_and_stays_there(rig):
-    """Row 656 went with the hold: nothing refuses a press."""
+    """Nothing refuses a press."""
     rig.two.reg[CHASE_PARAM].set(True)
     assert rig.two.reg.chasing and not rig.one.reg.chasing
     rig.two.reg[CHASE_PARAM].set(False)
@@ -1308,7 +1304,7 @@ def test_a_layered_row_on_a_reserved_control_never_acts_its_row_disabled():
 
 
 def test_the_words_after_a_press_name_cmd_z_only_where_it_is_true(rig):
-    """Finding 4, as row 753 settled it. With the panel on air the words name no ⌘Z; with
+    """With the panel on air the words name no ⌘Z; with
     the panel on the deck off air the load is a push on the stack in focus, so ⌘Z does
     take it back; a mouse in a meta section is ⌘Z elsewhere, so they do not say so."""
     _bank(rig, "party-wake", "party-tumble")

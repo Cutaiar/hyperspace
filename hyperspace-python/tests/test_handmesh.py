@@ -75,7 +75,7 @@ def test_each_finger_follows_the_tracked_bones(name, grip):
 @pytest.mark.parametrize("name", sorted(HM.MODELS))
 def test_spread_fingers_leave_the_palm_alone(name):
     """Spread fingers fan the tracker's metacarpals; the drawn palm keeps
-    its shape and its size (a spread once ballooned the whole hand)."""
+    its shape and its size."""
     def palm_of(p):
         m = G.mesh_model(p, name)
         return HM.bone_matrices(m, p.joints)[next(i for i, nm in enumerate(m.names)
@@ -202,7 +202,7 @@ def test_no_digit_drifts_a_finger_width_off(name, grip, kw):
     """Whatever the grip, no joint sits a finger's width (10 mm) from the
     tracked one. The synthetic hand's metacarpals are long enough to work
     the skinning's stretch clamp, so this is a bound, not the equality
-    above; off the rigid palm the pinky broke it at 12.6 mm open."""
+    above."""
     p = _pose("right", grip, **kw)
     m = G.mesh_model(p, name)
     R, mats = HM.rest_joints(m), HM.bone_matrices(m, p.joints)

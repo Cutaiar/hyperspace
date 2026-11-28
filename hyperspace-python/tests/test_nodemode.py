@@ -1,5 +1,5 @@
-"""Plan 57 (NM0): node mode's saved form, the fill it derives its rows from, and
-the cable kind. Over the corpus on a scratch home; no behaviour yet (N1, N2)."""
+"""Node mode's saved form, the fill it derives its rows from, and
+the cable kind. Over the corpus on a scratch home."""
 
 import json
 from pathlib import Path
@@ -313,7 +313,7 @@ def test_a_meta_param_is_never_filled(app):
 
 
 def test_a_desk_fills_continuous_params_then_dropdowns_and_a_pad_only_continuous(app):
-    """Plan 86 (rows 1061, 1062): no alias and no meta param, ever. A desk fills
+    """No alias and no meta param, ever. A desk fills
     the continuous params and then the dropdowns a knob can hold, after every
     continuous one, so a map made before dropdowns filled is the same map; a pad's
     rows are routes, and only continuous, modulatable params."""
@@ -344,7 +344,7 @@ def test_a_dropdown_with_one_choice_or_a_list_asked_each_time_is_not_filled(app)
 
 
 def test_a_node_of_only_dropdowns_lets_a_desk_and_a_pad_in(app):
-    """A pad fills a dropdown on a button (plan 86, row 1062), not on its sticks."""
+    """A pad fills a dropdown on a button, not on its sticks."""
     reg = app.reg
     ids = ["view.shape", "view.inst_layout"]
     assert nodemode.enter_refusal(reg, "render:view", ids) is None

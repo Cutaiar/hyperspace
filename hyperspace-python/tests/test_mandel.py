@@ -1,4 +1,4 @@
-"""Plan 63: the Mandelbrot effect (`shaders/fx/mandel.glsl`) and its Python
+"""The Mandelbrot effect (`shaders/fx/mandel.glsl`) and its Python
 half (`hyperspace/mandel.py`).
 
 The maths first, on the CPU against a float64 numpy oracle (`escape_counts`
@@ -255,8 +255,8 @@ def test_a_pan_moves_the_picture_the_same_on_screen_at_any_depth():
 
 def test_dive_doubles_and_every_drive_moves_by_the_view():
     """Dive doubles; on the Mandelbrot slice c is unused (R → ∞), so its
-    drive keeps plan 63's rate, one view height a second; z₀ there is an
-    off-screen term, moved by the view times its measured scale (plan 80),
+    drive keeps the view-height rate, one view height a second; z₀ there is an
+    off-screen term, moved by the view times its measured scale,
     never faster than the view."""
     spec = FxState().specs["mandel"]
     v = values(zoom=1e3, dive=0.25, c_drive_y=-1.0, z0_drive_x=0.5)
@@ -546,7 +546,7 @@ def test_a_drive_held_an_hour_moves_by_the_view_and_no_more():
     the distance the rate says, to 0.01% — float64 rounds each frame's tiny
     step the same way, so the speed is that little off, steadily, and nothing
     jumps (nearer 10¹³× the step nears the centre's last digit: the deep
-    tier's reach, row 881) — and a step of the drive an hour in moves the
+    tier's reach) — and a step of the drive an hour in moves the
     picture on screen as a step a second in does."""
     spec = FxState().specs["mandel"]
     v = values(zoom=1e9, centre_x=-0.75, pan_x=0.01)
@@ -584,7 +584,7 @@ def test_a_new_reference_redraws_the_same_picture(rig):
     assert mismatch(a, b) < 0.05
 
 
-# ---------------------------------------- review fixes (Devin, PR #462)
+# ---------------------------------------- deep periodicity
 
 def test_deep_periodicity_compares_parts_and_finds_no_false_inside(rig):
     """At Centre (0, 1), 10¹², every pixel escapes. Subtracting two float32 z's
@@ -658,9 +658,9 @@ def test_a_reload_of_fx_drops_them_too(rig):
     assert rig.chain.mandel is not None
 
 
-# ---------------------------------------------------------------- plan 80
+# ---------------------------------------------------------------- measured scale
 
-# 1. With nothing wired in, it draws (row 1000)
+# 1. With nothing wired in, it draws
 
 def test_it_says_it_is_a_generator_and_an_ordinary_effect_does_not():
     from hyperspace import fx
@@ -684,7 +684,7 @@ def _wired(ctx, pairs, values, flip=False):
     for name, v in values.items():
         r.fx.state.values[name].update(v)
     # a wired frame, as every saved patch is now: no migration adds a wire
-    # (Devin's review of #471: without the marker the old frame's migration
+    # (without the marker the old frame's migration
     # fed `scene` in, and the test never met the unwired case)
     spec = G.read_graph({"frame": "wired", "nodes": [],
                          "wires": [{"from": a, "to": b} for a, b in pairs]},
@@ -729,7 +729,7 @@ def test_with_nothing_wired_in_and_switched_off_it_draws_nothing(ctx):
     assert _drawn(ctx, r, s, vs).max() < 5
 
 
-# 2. The coloured inside is how fast a point settles (row 1001)
+# 2. The coloured inside is how fast a point settles
 
 def apart(a, b, rel=0.02) -> float:
     """The share of pixels whose counts differ by more than a step and more
@@ -833,7 +833,7 @@ def test_the_coloured_inside_in_the_direct_tier_is_the_oracle(rig):
     assert apart(got, n0) < 0.05
 
 
-# 3. An off-screen term's drive answers the picture, not the zoom alone (row 1002)
+# 3. An off-screen term's drive answers the picture, not the zoom alone
 
 def _brightness_change(v, key, delta, w=64, h=36, it=300):
     def pic(vv):
@@ -861,7 +861,7 @@ def test_c_on_a_julia_slice_is_slowed_to_what_the_picture_takes():
     1.8 units of c and 0.03 of c tears the set apart. A second of the c
     drive at full throw used to move c by 1.8; now by its measured share,
     well under a tenth of the view — and that second changes the picture
-    within ×10 of a quarter-second of pan, where plan 63's rate changed it
+    within ×10 of a quarter-second of pan, where the view-height rate changed it
     many times as much."""
     v = values(**JULIA)
     h = M.view_height(1.7)
@@ -874,7 +874,7 @@ def test_c_on_a_julia_slice_is_slowed_to_what_the_picture_takes():
 
 def test_the_measured_scale_follows_the_picture_across_views():
     """R (`sensitivity`) against the picture: a step of R·d in c changes it
-    about as much as a pan of d, over Julia views where plan 63's rate (the
+    about as much as a pan of d, over Julia views where the view-height rate (the
     view height, for both) was off by orders of magnitude."""
     for cx, cy, zoom, cen in [(-0.1, 0.65, 20.0, (0.3, 0.1)), (0.285, 0.01, 300.0, (0.31, 0.12)),
                               (-0.4, 0.6, 20.0, (0.3, 0.1))]:
@@ -894,7 +894,7 @@ def test_an_unused_term_and_pan_keep_their_rates_and_the_rate_never_jumps():
     v = values(**dict(JULIA, slice=0.0, centre_x=-0.5, c_drive_x=1.0))   # c is the screen
     before = v["c_x"]
     M.advance(spec, v, 0.5)
-    assert v["c_x"] - before == pytest.approx(0.5 * h)          # unused: plan 63's rate
+    assert v["c_x"] - before == pytest.approx(0.5 * h)          # unused: the view-height rate
     j = values(**JULIA)
     p = dict(j, pan_x=1.0)
     M.advance(spec, p, 0.5)
@@ -910,7 +910,7 @@ def test_an_unused_term_and_pan_keep_their_rates_and_the_rate_never_jumps():
     assert (steps[1:] / steps[:-1]).max() < 2.0                 # eased: no jump
 
 
-# 4. Cost: the packed border pass, and the skip that rests (rows 1003, 1004)
+# 4. Cost: the packed border pass, and the skip that rests
 
 def test_the_packed_border_slots_are_a_tiles_border():
     for w, h in [(16, 16), (40, 24), (33, 17)]:
@@ -1038,7 +1038,7 @@ def test_a_dive_wakes_a_resting_skip_at_once():
     assert not g.want(3.5e4)
 
 
-# Devin's review of #471
+# a drive after rest
 
 def test_a_drive_after_rest_measures_where_the_terms_are_now():
     """Measure at c = 0.156i, let the drive rest, set c to −0.8 + 0.156i by
@@ -1112,7 +1112,7 @@ def test_a_render_too_wide_for_the_packed_pass_runs_without_the_skip(ctx):
 
 @pytest.mark.parametrize("flip", [False, True], ids=["direct", "flipped"])
 def test_switched_off_after_drawing_unwired_it_leaves_the_ground(ctx, flip):
-    """Devin's review of #471: an unwired Mandelbrot drawn, then switched
+    """An unwired Mandelbrot drawn, then switched
     off with the wiring as it was, left its last picture on the output —
     its paint wrote nothing. Off, it clears to the ground, on a direct
     output and on a flipped one (the cached-texture path)."""

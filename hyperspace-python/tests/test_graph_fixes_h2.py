@@ -1,7 +1,6 @@
-"""Plan 90 (H2b): the graph fixes the look-back's retirement found, each on
-its own — a stack's delay records whether or not its reader is drawn; a
-composite never paints into the texture its `over` is made in; a section's
-`keys` save on one line and go with their node."""
+"""Graph behaviours, each on its own: a stack's delay records whether or not
+its reader is drawn; a composite never paints into the texture its `over` is
+made in; a section's `keys` save on one line and go with their node."""
 
 from __future__ import annotations
 
@@ -69,7 +68,7 @@ def test_a_deleted_node_leaves_the_keys(tmp_path):
     assert "keys" not in rig.loaded_patch.graph.spec.to_json()
 
 
-# ---------------------------------------------------------------- the cover (Devin on #521)
+# ---------------------------------------------------------------- the cover
 
 def _wired(ctx, wires, nodes=(), media=None):
     """A fresh renderer on a wired frame (`wires` as pairs) — and its views."""

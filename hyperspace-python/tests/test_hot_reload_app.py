@@ -1,9 +1,9 @@
-"""A hot reload through the real swap, over the real app's long-lived objects (HR, row 802).
+"""A hot reload through the real swap, over the real app's long-lived objects.
 
-Plan 44 D5a gave `DeckLibrary` and `DeckInstall` slots over a hot base, and from that day
-no save before `library` on the list completed: `swap: TypeError: __class__ assignment:
-'DeckLibrary' object layout differs from 'DeckLibrary'`. Nothing failed, because no reload
-test assigned a `__class__` on a class whose base had reloaded. The fast tier holds the
+A `__slots__` subclass of a hot base (`DeckLibrary`, `DeckInstall`) makes a save
+fail: `swap: TypeError: __class__ assignment: 'DeckLibrary' object layout differs
+from 'DeckLibrary'`. A `__class__` assignment on a class whose base has reloaded
+is the case to cover. The fast tier holds the
 rule on every real class in a hot module, with Python's own check; the `live` tier (real
 windows take the focus on a Mac, so `--all`, not CI) runs a save through the real app.
 """
@@ -133,7 +133,7 @@ def test_every_class_in_a_hot_module_can_be_re_classed_after_a_reload():
 
 
 def test_the_rule_imports_in_the_lists_order(capsys):
-    """Row 812: `report` imports in `MODULES`'s order, with the importer passed in, so
+    """`report` imports in `MODULES`'s order, with the importer passed in, so
     this test patches nothing in a worker the other tests share."""
     seen = []
 
@@ -194,7 +194,7 @@ class V(ABC):
 
 
 @pytest.mark.parametrize(("source", "refused"), [
-    # what D5a did
+    # a `__slots__` subclass of a hot base
     ("class Lib: pass\nclass V(Lib):\n    __slots__ = ('a',)", True),
     ("class Lib: pass\nclass V(Lib):\n    __slots__ = ['a']", True),
     # a slotless class over a slotted one gains a __dict__: refused, even over empty slots
@@ -252,7 +252,7 @@ def test_every_module_imports_alone():
     """Each of the package's modules imports first, into a process with none of the
     package loaded. A cycle the app's own order never meets still broke
     the report above whenever a set's order put the module first: `ui_pane` read by
-    `ui_graph`, and `ui_desk` read by `ui_pad`, half made (row 808, ui_diagram.py)."""
+    `ui_graph`, and `ui_desk` read by `ui_pad`, half made."""
     out = subprocess.run([sys.executable, "-c", COLD], capture_output=True, text=True,
                          check=False, cwd=str(ROOT), timeout=110)
     assert out.returncode == 0, out.stderr[-2000:]

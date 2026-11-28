@@ -1,4 +1,4 @@
-"""WP0 foundation: param flags, registry snapshot/restore/remove, modulation.
+"""Param flags, registry snapshot/restore/remove, modulation.
 
 Modulation is the one control concept every source shares (params.py
 docstring): a source calls modulate(u) each frame, Registry.apply() lands
@@ -17,8 +17,7 @@ from hyperspace.params import Kind
 @pytest.fixture()
 def rig(tmp_path):
     reg, view, *rest = make(tmp_path)
-    # a file-path param, as `view.test_file` was until plan 32 took the one
-    # bitmap file away — the registry declares no TEXT param of its own now,
+    # a file-path param: the registry declares no TEXT param of its own,
     # so the kind is held to its contract on one declared here
     view.test_file = ""
     reg.text("view.test_file", "Test file", lambda: view.test_file,
@@ -44,7 +43,7 @@ def test_new_params_exist_and_default_to_the_undriven_look(rig):
         assert reg[f"pattern.mod.{k}"].value == 1.0
     assert reg["camera.pan.x"].value == 0.0 and reg["camera.pan.y"].value == 0.0
     assert reg["view.test_file"].kind is Kind.TEXT
-    reg["camera.pan.x"].set_value(2.5)     # world units (plan 26 A2), ±12
+    reg["camera.pan.x"].set_value(2.5)     # world units, ±12
     assert view.pan[0] == 2.5
     reg["rot.rate.XY"].set_value(-2.0)   # signed: a plane can run backwards
     assert view.rate[0] == -2.0
@@ -77,7 +76,7 @@ def test_flags_say_what_a_param_is_for(rig):
         assert not reg[pid].persist, pid
     assert not reg["preset.select"].modulatable
     assert not reg["preset.save.0"].modulatable
-    assert not reg["preset.load.0"].modulatable  # a person's press, no row's (rows 746, 775)
+    assert not reg["preset.load.0"].modulatable  # a person's press, no row's
     assert not reg["camera.reset"].persist       # triggers never persist
     assert reg["view.bright"].persist and reg["view.bright"].modulatable
     assert not reg["view.test_file"].modulatable
@@ -102,7 +101,7 @@ def test_text_param_is_inert_on_every_numeric_surface(rig):
 def test_snapshot_and_restore_round_trip_through_the_registry(rig):
     reg, view, _control, _audio, _ = rig
     view.bright, view.shape, view.faces = 1.5, 7, True
-    reg["camera.pan.y"].set_value(-4.0)    # world units (plan 26 A2), ±12
+    reg["camera.pan.y"].set_value(-4.0)    # world units, ±12
     reg["band.2.atk"].set_norm(0.3)
     reg["view.test_file"].set("a.png")
     snap = reg.snapshot()

@@ -442,7 +442,7 @@ def test_the_display_it_left_coming_and_going_before_settling_raises_nothing(rig
 
 
 def test_the_control_window_fits_a_smaller_display_and_the_pinned_panel_with_it(rig):
-    """`Panel.panel_rect` follows the OS window every frame (row 808), so the move has to leave a
+    """`Panel.panel_rect` follows the OS window every frame, so the move has to leave a
     window that fits: its full 2372 × 900 on a 1280 × 720 display, and the panel is off the edge."""
     small = Mon("Small", (1728, 0, 1280, 720), 5)
     r = rig(mons=[_laptop(), small], rows={"Built-in": row(CONTROL)})
@@ -866,7 +866,7 @@ def test_the_loop_reads_only_live_windows(rig):
     assert win in r.plug.windows(), "both exits destroy it"
 
 
-# ---- review of #425: an accident at a show doesn't cost the show
+# ---- an accident at a show doesn't cost the show
 
 
 def _boom(*a, **k):

@@ -115,10 +115,10 @@ def test_a_tape_that_does_not_loop_goes_stale_after_its_end(leap, tmp_path):
 
 @pytest.mark.parametrize("bad", ["missing", "not a tape"])
 def test_a_bad_tape_path_is_a_note_the_pages_show(tmp_path, capsys, bad):
-    """Plan 21 WP5 R10: a `[hands] tape` that is missing or is not a tape
+    """A `[hands] tape` that is missing or is not a tape
     leaves no tracker, as before, and says why in `cfg["notes"]` — which
     the SYSTEM page lists and the HANDS page shows in place of "tracker
-    off" (test_ui_shell) — not on stderr alone. Plan 27 B1: the hands
+    off" (test_ui_shell) — not on stderr alone. The hands
     device's `open` fails, the registry notes it the same way and its line
     reads `error: …`."""
     from hyperspace import devices
@@ -143,7 +143,7 @@ def test_a_bad_tape_path_is_a_note_the_pages_show(tmp_path, capsys, bad):
 
 
 def test_the_stale_time_and_the_palm_width_are_defined_once(monkeypatch):
-    """Plan 21 WP5 R13: `STALE_S` is assigned in one module of the hands
+    """`STALE_S` is assigned in one module of the hands
     package (tape.py, the leaf; core.py imports it) and the ghost's palm
     fallback is core's `PALM_W`, not a second 85.0."""
     import ast
@@ -189,7 +189,7 @@ def test_thinning_keeps_every_cue_its_own_first_frame():
     """`--fps` thins a tape, and a tape is replayed by taking the last
     frame at or before a time (`TapeSource`). Spacing the frames across
     the whole tape could drop a cue's first one, and that cue's `t0` then
-    landed on the pose before it (review of #449). A cue's start survives
+    landed on the pose before it. A cue's start survives
     the thinning, and restarts the spacing."""
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root / "tools"))
@@ -222,7 +222,7 @@ def test_thinning_keeps_both_of_a_cues_bounds():
     """A cue names a first and a last frame, and the fixture test holds a
     tape to both. Keeping only the starts left the ends to the spacing,
     which dropped one for 53 of 60 cue lengths — a fresh `record --cues
-    --fps` would then have failed that test (review of #450)."""
+    --fps` would then have failed that test."""
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root / "tools"))
     from hands_tape import _thinned

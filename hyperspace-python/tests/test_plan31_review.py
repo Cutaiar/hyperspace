@@ -1,5 +1,4 @@
-"""Plan 31 review findings — one regression test (or a few) per finding,
-each written to fail before its fix. The rigs are test_plan31_wiring's."""
+"""Regression tests for the envelope and sequencer voices. The rigs are test_plan31_wiring's."""
 
 import pytest
 from test_plan31_wiring import frame, make_app, rig
@@ -229,14 +228,14 @@ def test_a_two_second_stall_at_length_1_still_fires_one_step():
     assert [c[0] for c in calls] == pytest.approx([0.0, 2.0])
 
 
-# ---- 7: desk rows and layout keys on plan 31's ids — an older build keeps them ----
+# ---- 7: desk rows and layout keys on envelope and sequencer ids — an older build keeps them ----
 
-def test_desk_rows_and_layout_keys_on_plan_31_ids_survive_a_build_without_it(tmp_path):
-    """A pre-plan-31 build (`make_app(plan31=False)`: no env/seq params)
+def test_desk_rows_and_layout_keys_on_envelope_and_seq_ids_survive_a_build_without_them(tmp_path):
+    """A build without envelope and sequencer params (`make_app(plan31=False)`)
     loads a desk row on ``env.2.fire`` and GRAPH positions for env/seq
     nodes and writes them back verbatim — `set_desk` checks no target
-    against the registry and `read_layout` keeps any name. (Row 394: the
-    save is `/6` whatever it holds.)"""
+    against the registry and `read_layout` keeps any name. The save is `/6`
+    whatever it holds."""
     old = make_app(tmp_path, plan31=False)
     doc = old.loaded_patch.document("x")
     row = {**doc["desk"][0], "target": "env.2.fire", "op": "momentary"}

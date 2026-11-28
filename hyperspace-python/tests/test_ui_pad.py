@@ -23,7 +23,7 @@ from hyperspace.routing import Binding, padmap
 # ---------------------------------------------------------------- the close chip
 
 def test_the_pads_x_closes_it_and_never_leaves_the_window_empty(rig, monkeypatch):
-    """Row 808: the floating pad diagram has the × the desk has, flush right on
+    """The floating pad diagram has the × the desk has, flush right on
     its header; a click turns `ui.pad_diagram` off. GRAPH's inline picture of
     the pad has none. A hidden panel with no desk comes back with it."""
     from ui_driver import Driver
@@ -54,7 +54,7 @@ def test_the_pads_x_closes_it_and_never_leaves_the_window_empty(rig, monkeypatch
 
 
 def test_the_panel_stays_in_a_window_too_narrow_for_it_and_the_column():
-    """Review of #426: at the narrowest window placement opens (320 wide),
+    """At the narrowest window placement opens (320 wide),
     with only the pad up, the panel's `PANEL_W` floor put its left edge off
     the window, where nothing could drag it back. It keeps the window."""
     from hyperspace import placement, ui
@@ -356,7 +356,7 @@ def test_it_draws_with_a_pad_on_it(rig, monkeypatch):
     assert _pad_frames(rig, monkeypatch)["texts"] == before
 
 
-# ---- a pad's own face (plan 42) ----
+# ---- a pad's own face ----
 
 def test_the_edge_draws_its_own_face_and_its_extras_without_overlap():
     from hyperspace.pads import models
@@ -399,7 +399,7 @@ def test_each_stick_well_shows_its_own_stick_on_a_sony_face():
     assert ui_pad._stick(pad, ls) == (1.0, 0.0) and ui_pad._stick(pad, rs) == (0.0, -1.0)
 
 
-# ---- the readouts (plan 42's follow-up): map, faithful, lanes, cockpit ----
+# ---- the readouts: map, faithful, lanes, cockpit ----
 
 def _edge_pad():
     """An Edge read from the real Bluetooth bytes (tests/fixtures/pads),
@@ -670,7 +670,7 @@ def test_each_room_keeps_its_own_framebuffer():
     assert set(surf.fbs) == {"window"}                              # the side panel's went
 
 
-# ---- the review of 2026-11-02 (deep review and Devin's): each finding's test ----
+# ---- review findings: one test each ----
 
 def _side_frame(panel, monkeypatch, width: float) -> list[str]:
     """GRAPH's side panel as wide as `width`: the pad picture drawn there
@@ -917,11 +917,11 @@ def test_the_drawings_show_upright_through_real_gl(monkeypatch, gl_window_ok):
     finally:
         surf.close()
         glfw.destroy_window(win)
-        glfw.terminate()        # (not left up for the worker's later tests: row 606)
+        glfw.terminate()        # (not left up for the worker's later tests)
 
 
 def test_the_poi_says_its_word_and_shows_its_dials_while_on(rig, monkeypatch):
-    """Plan 47, the poi: "poi off" in the header and no Poi window; on, the
+    """The poi: "poi off" in the header and no Poi window; on, the
     header reads its length · weight · springiness, and the six dials are
     drawn in the Poi window of their own — never in the pad window, whose
     room under the header (the map's unit, a view's room) is what it was

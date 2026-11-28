@@ -1,4 +1,4 @@
-"""Draw-list replay (2026-11-02): the GRAPH canvas as `panel:graph`. The
+"""Draw-list replay: the GRAPH canvas as `panel:graph`. The
 filter rule over fake draw lists, the scissor and projection maths, the
 tap's leased texture pool, and — on a GL context — a real imgui frame
 replayed into the tap: the canvas's own window kept, its child (the side

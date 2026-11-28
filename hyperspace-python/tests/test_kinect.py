@@ -1,4 +1,4 @@
-"""The Kinect device (plan 29, `kinect.py`): depth to points, and the device
+"""The Kinect device (`kinect.py`): depth to points, and the device
 over a stand-in sensor. No libfreenect and no hardware."""
 
 from __future__ import annotations
@@ -139,7 +139,7 @@ def test_frames_become_the_devices_cloud_and_a_held_picture():
 
 
 def test_a_colour_picture_is_published_once_and_a_silent_colour_stream_is_let_go():
-    """Colour that stops while depth goes on is not live (PR #503 review): the
+    """Colour that stops while depth goes on is not live: the
     same picture is never published again, and a stream silent for `QUIET_S`
     gives its last one up, so no moving point wears it."""
     depth, rgb = depth_at((240, 320, 2000)), np.full((480, 640, 3), 9, np.uint8)
@@ -197,7 +197,7 @@ def test_a_silent_sensor_is_reopened(monkeypatch):
 
 
 def test_a_stream_that_starts_silent_is_started_again():
-    """The colour stream that came up mute (2026-11-24): the sensor stops and
+    """The colour stream that came up mute: the sensor stops and
     starts that one, leaves the other, and gives it `QUIET_S` again."""
     calls = []
     s = kinect.Sensor(O(colors=True))

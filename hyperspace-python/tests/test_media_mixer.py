@@ -1,12 +1,11 @@
-"""Plan 45 V2 — the media mixer (hyperspace/media/mixer.py) and the two
+"""The media mixer (hyperspace/media/mixer.py) and the two
 params per channel that drive it (`media.<c>.audio`, `media.<c>.gain`).
 
 No audio device: the mixer is handed a fake stream factory whose stream
 keeps its callback for the test to pull blocks through, and the channels
 hold fake video sources whose `audio` is a fake soundtrack recording each
-`read(at, n)` and each `enable` / `disable`. The rule under test is plan
-45's: the transport is the one clock, and the callback moves nothing of it.
-A voice's first block fades in (V4), so a test of its level pulls one first
+`read(at, n)` and each `enable` / `disable`. The rule under test: the transport is the one clock, and the callback moves nothing of it.
+A voice's first block fades in, so a test of its level pulls one first
 (`warm`); the read head itself is `tests/test_media_varispeed.py`."""
 
 import threading
@@ -402,7 +401,7 @@ def test_a_still_and_a_live_feed_add_nothing_and_open_no_stream():
 
 
 def test_a_once_clip_parked_at_its_end_is_silence():
-    """Second review 1: at loop `once` the playhead clamps at the duration
+    """at loop `once` the playhead clamps at the duration
     with the speed still 1; a track that outlasts the picture would be
     re-read one block a frame there — a buzz. Parked at the end: silent."""
     m, _, f = rig("shared:a.mp4")
@@ -439,7 +438,7 @@ def test_reverse_and_pingpongs_way_back_are_heard():
 
 
 def test_an_enable_that_raises_is_tried_again_next_frame():
-    """Second review 3: `heard` is set only once `on` returned, so an
+    """`heard` is set only once `on` returned, so an
     enable that raised is retried rather than forgotten."""
     m, _, _ = rig("shared:a.mp4")
     ch = m.channels["a"]
@@ -462,7 +461,7 @@ def test_an_enable_that_raises_is_tried_again_next_frame():
 
 
 def test_the_callback_reads_into_its_own_buffers():
-    """Second review 6: once warm the callback allocates nothing: every
+    """once warm the callback allocates nothing: every
     voice is read into the mixer's one source buffer (`read(..., out=)`),
     resampled into its voice buffer and summed into its one mix buffer, the
     same arrays callback after callback."""
@@ -632,7 +631,7 @@ def test_a_stream_that_stops_under_us_is_opened_again():
 
 
 def test_a_stream_whose_active_raises_is_a_stopped_one():
-    """Second review 2: sounddevice raises for a dead stream when asked if
+    """sounddevice raises for a dead stream when asked if
     it is active; that is "stopped", never an exception out of `poll`."""
     m, _, f = rig("shared:a.mp4")
     m.channels["a"].play_audio = True
@@ -658,7 +657,7 @@ def test_a_stream_whose_active_raises_is_a_stopped_one():
 
 
 def test_close_holds_its_budget_with_an_abort_that_hangs():
-    """Second review 7: the abort and close run off the calling thread and
+    """the abort and close run off the calling thread and
     are waited for inside the budget; `MediaState.close` hands the closer
     only what is left, so the whole stays within the budget."""
     m, _, f = rig("shared:a.mp4")
@@ -750,7 +749,7 @@ def test_a_mixer_of_another_class_is_left_as_it_is():
 
 def test_a_media_state_from_before_the_mixer_gets_one():
     m, _, _ = rig("shared:a.mp4")
-    del m.sources.__dict__["mixer"]          # (plan 44 D3: the mixer is the sources')
+    del m.sources.__dict__["mixer"]          # (the mixer is the sources')
     m.poll(DT, 0.0)
     assert isinstance(m.mixer, M.Mixer)
 

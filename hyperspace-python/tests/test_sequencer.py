@@ -1,4 +1,4 @@
-"""The step sequencer (sequencer.py, plan 31 §S): clock-locked stepping,
+"""The step sequencer (sequencer.py): clock-locked stepping,
 exact step times, stalls, nudges, the epoch, swing, length, mute, the
 transport, pulses, the params and a hot-reload swap. Every test runs on a
 deterministic clock (``Clock(now=lambda: 0.0)``) with explicit times, as

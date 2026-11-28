@@ -1,4 +1,4 @@
-"""GRAPH's side pane (plan 49, then the single viewer of 2026-11-07): always
+"""GRAPH's side pane, the single viewer: always
 on, one view at a time at its full height — the selection or a section,
 each section drawing what its page draws, found by the panel driver by the
 ids its page uses. The view is `ui.page`: a chip, the sections menu, a
@@ -65,7 +65,7 @@ def test_the_pane_is_on_with_nothing_selected_and_says_so(pane, monkeypatch):
 
 
 def test_every_view_has_a_chip_or_a_menu_row_and_one_route_each():
-    """Nothing stranded (Dillon, 2026-11-07): the selection and every
+    """Nothing stranded: the selection and every
     section reachable by the mouse — its own chip, or a row of the sections
     menu — and by `ui.page` (so by ⌘[ / ⌘], a key row, a pad)."""
     assert set(ui_pane.TABS) | set(ui_pane.MENU) == set(ui_pane.KEYS)
@@ -127,7 +127,7 @@ def test_a_selection_shows_in_the_selection_view(pane):
 def test_a_selection_by_code_leaves_the_view_and_its_chip_is_its_name(pane):
     """A section being worked in stays when something else selects a node
     (OUTPUT's open on GRAPH, a controller); the selection's chip is one
-    click away, and says SELECTION alone (Dillon, 2026-11-09)."""
+    click away, and says SELECTION alone."""
     r, d = pane
     st = _st(r)
     d.run(d.click("pane.loadable"), d.park())
@@ -450,7 +450,7 @@ def test_the_projector_inset_keeps_clear_of_the_pane(tmp_path, monkeypatch):
         assert ox + aw <= px + 1e-6                  # wide: left of the column
 
 
-# ---------------------------------------------------------------- stage 2 (U2)
+# ---------------------------------------------------------------- the later sections
 
 # a control each stage-2 section draws, by the id its page draws it under
 STAGE2_IDS = {
@@ -522,9 +522,9 @@ def _tall_driver(r, monkeypatch, size=(1600, 2400)):
 
 @pytest.mark.parametrize("key", sorted(STAGE2_IDS))
 @pytest.mark.parametrize("width", ["min", "default"])
-def test_each_stage2_section_draws_in_the_pane_and_nothing_passes_its_edge(
+def test_each_later_section_draws_in_the_pane_and_nothing_passes_its_edge(
         tmp_path, monkeypatch, key, width):
-    """Every section stage 2 added, alone open, at the pane's narrowest
+    """Every later section, alone open, at the pane's narrowest
     (`SIDE_MIN`) and at its default width: its page's control found by
     its page's id inside the pane, and no control past the pane's right
     edge (a row that would spill wraps, the grids lay out for the room)."""
@@ -546,7 +546,7 @@ def test_each_stage2_section_draws_in_the_pane_and_nothing_passes_its_edge(
 
 def test_the_media_grid_goes_four_to_a_row_and_the_seq_grid_thins_in_the_pane(
         tmp_path, monkeypatch):
-    """Plan 49 stage 2's two hard ones, at `SIDE_MIN`: MEDIA's eight
+    """The two hard ones, at `SIDE_MIN`: MEDIA's eight
     channels A–D over E–H, each bin's cells inside the pane; SEQ's eight
     steps still across, no thinner than `ui_seq.CELL_MIN`."""
     from hyperspace import ui_media, ui_seq
@@ -572,7 +572,7 @@ def test_the_media_grid_goes_four_to_a_row_and_the_seq_grid_thins_in_the_pane(
 
 
 def test_ui_page_on_fx_shows_the_fx_section_and_every_slot_keeps_its_index(pane):
-    """The FX page went with stage 2; its slot stays, so a key row or an old
+    """The FX page is gone; its slot stays, so a key row or an old
     show that names it lands on the effects: `ui.page` set to FX shows the
     fx section. The slots are the ones every saved binding names."""
     r, d = pane
@@ -580,7 +580,7 @@ def test_ui_page_on_fx_shows_the_fx_section_and_every_slot_keeps_its_index(pane)
     assert PAGE_KEYS == [
         "output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
         "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist",
-        "fractal"]                                       # (plan 64: appended, every slot kept)
+        "fractal"]                                       # (appended, every slot kept)
     fx = PAGE_KEYS.index("fx")
     assert "fx" not in st["pane_drawn"]
     r.reg["ui.page"].set(fx)
@@ -598,8 +598,8 @@ def test_every_page_slot_but_graph_and_playlist_is_a_section():
     """No page is left to switch to: the table `ui.page` indexes names a
     section in every slot, GRAPH's being the selection (the canvas is always
     drawn). The playlist's slot is kept for saved bindings, but it is the meta
-    controller's now (row 858: GRAPH's deck row), so it shows the selection;
-    the LOOKBACK page's is kept too, and shows fx, where it retired (row 1185)."""
+    controller's now (GRAPH's deck row), so it shows the selection;
+    the LOOKBACK page's is kept too, and shows fx, where it retired."""
     assert ui_pane.section_of("graph") == "selection"
     assert {k for k in PAGE_KEYS if ui_pane.section_of(k) != k} == {"graph", "playlist",
                                                                     "lookback"}
@@ -721,7 +721,7 @@ def test_the_track_readout_is_measured_as_printed(tmp_path, monkeypatch):
 
 
 
-# ---- stage 3 (U3): the rail goes, every page a section
+# ---- the rail goes, every page a section
 
 STAGE3_IDS = {
     "view": "view.bright",
@@ -733,9 +733,9 @@ STAGE3_IDS = {
 
 @pytest.mark.parametrize("key", sorted(STAGE3_IDS))
 @pytest.mark.parametrize("width", ["min", "default"])
-def test_each_stage3_section_draws_in_the_pane_and_nothing_passes_its_edge(
+def test_each_last_section_draws_in_the_pane_and_nothing_passes_its_edge(
         tmp_path, monkeypatch, key, width):
-    """The four pages stage 2 left, alone open, at the pane's narrowest and
+    """The last four pages, alone open, at the pane's narrowest and
     at its default width: the page's control found by its id inside the
     pane, and no control past the pane's right edge."""
     with build_rig(tmp_path) as r:
@@ -854,7 +854,7 @@ def test_a_macro_rows_chips_stay_beside_the_knob_where_it_fits(tmp_path, monkeyp
         assert one[0] >= knob[2] - 1
 
 
-# ---------------------------------------------------------------- the paper cuts (row 731)
+# ---------------------------------------------------------------- the paper cuts
 
 def _analyzer_at(r, monkeypatch, width):
     r.panel.desk = False
@@ -868,7 +868,7 @@ def _analyzer_at(r, monkeypatch, width):
 
 
 def test_save_as_patch_and_update_patch_keep_inside_the_narrowest_pane(tmp_path, monkeypatch):
-    """#364's 19 px: the two chips one row where they fit, and two where not."""
+    """The 19 px: the two chips one row where they fit, and two where not."""
     with build_rig(tmp_path) as r:
         r.panel.desk = False
         r.lib.load("loadable", "party-noita")
@@ -1073,7 +1073,7 @@ def test_the_chips_hold_still_whatever_they_say(pane, monkeypatch):
 
 
 def test_each_chip_is_as_wide_as_its_name(pane, monkeypatch):
-    """No chip is padded out (Dillon, 2026-11-09): each is its title's width,
+    """No chip is padded out: each is its title's width,
     the dirty dot in its corner taking no room; only the sections chip is
     the width of its widest name."""
     _r, d = pane
@@ -1100,8 +1100,7 @@ def test_each_chip_is_as_wide_as_its_name(pane, monkeypatch):
 
 
 def test_what_a_chip_would_say_live_is_its_tooltip(pane, monkeypatch):
-    """The selection's node is the selection chip's tooltip, not its words
-    (Dillon, 2026-11-09)."""
+    """The selection's node is the selection chip's tooltip, not its words."""
     r, d = pane
     view = ui_graph.view_of(r.panel)
     node = next(n for n in view.nodes if n.label and n.kind != "modifier")
@@ -1121,7 +1120,7 @@ def test_what_a_chip_would_say_live_is_its_tooltip(pane, monkeypatch):
 
 @pytest.mark.parametrize("layout", ["band", "min", "default"])
 def test_the_grip_section_open_whole_stays_inside_the_pane(tmp_path, monkeypatch, layout):
-    """Plan 60: the HANDS page's grip section with every control showing (the
+    """The HANDS page's grip section with every control showing (the
     grip on, the inertia shaped) draws in the pane and passes no edge."""
     with build_rig(tmp_path) as r:
         r.reg["grip.on"].set(True)
@@ -1139,7 +1138,7 @@ def test_the_grip_section_open_whole_stays_inside_the_pane(tmp_path, monkeypatch
 @pytest.mark.parametrize("name", ["Menger sponge", "Sierpinski 5-cell"])
 def test_the_fractal_section_draws_its_controls_inside_the_pane(tmp_path, monkeypatch,
                                                                layout, name):
-    """Plan 64: the FRACTAL section on a fractal draws its sliders, its
+    """The FRACTAL section on a fractal draws its sliders, its
     switch and its button, every one in the pane; on another shape it says
     how to pick one and draws none of them."""
     from hyperspace.geometry import shape_index

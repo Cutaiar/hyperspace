@@ -1,4 +1,4 @@
-"""The GRAPH page (plan 28 N2): the model (graphview.py) and the page
+"""The GRAPH page: the model (graphview.py) and the page
 (ui_graph.py), headless.
 
 The model is built from the shell's rig (tests/test_ui_shell.py: the full
@@ -41,9 +41,8 @@ def rig(shell_rig):  # noqa: F811
 
 
 def _every_file(rig) -> None:
-    """Every effect file's params, as before a graph landed (plan 36 T3:
-    `FxState.hold(None)`) — a canvas these tests build from a render graph
-    no loadable patch's section says."""
+    """Every effect file's params (`FxState.hold(None)`) — a canvas these
+    tests build from a render graph no loadable patch's section says."""
     from hyperspace.fx import declare
 
     st = rig.reg.fx_state
@@ -59,10 +58,8 @@ def views(*sw):
 
 
 def thru(w, effects, *shows, look: str = "off") -> G.Graph:
-    """Plan 35 T4: the frame `w` draws on one window per state of `shows`
-    (the retired switches as each output's wiring, `tests/wiredframe.py`:
-    `Shows(through=True)` where `Switches(through=True)` was); plan 36 T4:
-    its look-back as `look` says the old words had it."""
+    """The frame `w` draws on one window per state of `shows` (each
+    output's wiring, `tests/wiredframe.py`), its look-back as `look` says."""
     return G.build_graph(views(*(Switches() for _ in shows)),
                          wired_wiring(wired_for(w, *shows, look=look)), effects=effects)
 
@@ -71,7 +68,7 @@ def stacked(effects, wiring=None) -> G.Wiring:
     """`wiring` (None: the default) with `effects` its run — those no wire
     or placement of it takes, in the order given: what the order-built
     stack ran for a wiring that said no run, and what a load lands for an
-    old loadable patch with them on (plan 33 R23: a graph fixture says its run)."""
+    old loadable patch with them on (a graph fixture says its run)."""
     from dataclasses import replace
 
     wiring = wiring if wiring is not None else G.Wiring()
@@ -91,7 +88,7 @@ def owner_of(view, pid):
 # ---------------------------------------------------------------- the model
 
 def test_every_route_is_one_cable_and_every_cable_one_route(rig):
-    """Today's routes convert one-to-one (decision 13): every performer
+    """Routes convert one-to-one: every performer
     row of a loaded patch — enabled or not — is exactly one `route`
     cable whose `ref` is that row, into its target's `mod` stub, and no
     route cable stands for anything else."""
@@ -150,11 +147,10 @@ def test_macro_subs_are_cables_into_base_or_depth(rig):
 
 def test_params_group_under_the_render_node_that_owns_them(rig):
     """The one table (`graphview.OWNERS`): the shape's params on `shape`,
-    an effect's on its node (plan 90 H2: the look-back's trail's, `fx.trail.*`,
-    on `trail`, where `dream.*` was on the retired `lookback`), the
+    an effect's on its node (the look-back's trail's, `fx.trail.*`, on
+    `trail`), the
     camera's on `camera`, an output's on its output node, the hands'
-    (`ghost.*`) on their hands node — plan 35 V2: the nodes in the new ids,
-    the params in theirs; an LFO's knobs on that LFO; a group no render
+    (`ghost.*`) on their hands node; an LFO's knobs on that LFO; a group no render
     node owns on a node of its own."""
     from hyperspace.routing import Binding
     out1 = next(p.id for p in rig.reg if p.id.startswith("output.1."))
@@ -164,12 +160,11 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     _every_file(rig)
     view = build(rig, g)
     names = {n.id for n in view.nodes}
-    # (plan 35 T4: output 2's hands through are a slot of each effect over a
-    # composite, plan 89 — on the effect's own node; plan 35 G: no end nor
-    # `fx` is drawn — none is a node)
+    # (output 2's hands through are a slot of each effect over a composite,
+    # on the effect's own node; no end nor `fx` is drawn — none is a node)
     assert {"render:shape", "render:acid", "render:trail", "render:delay",
             "render:output.1", "render:output.2", "render:output.all"} <= names
-    assert "render:camera" not in names      # (2026-11-23: no node of its own: see below)
+    assert "render:camera" not in names      # (no node of its own: see below)
     assert not {n for n in names if n.startswith(("render:shown", "render:history"))}
     assert owner_of(view, "view.bright") == "render:shape"
     rot = next(p.id for p in rig.reg if p.group == "rot" and p.modulatable)
@@ -178,7 +173,7 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     assert owner_of(view, "fx.palette.mix") == "render:palette"
     assert owner_of(view, "fx.mix") == "group:fx"            # (no pipeline end to own it)
     assert owner_of(view, "fx.trail.fade") == "render:trail"
-    assert owner_of(view, "dream.mix") is None             # (plan 90 H3: no dream.* now)
+    assert owner_of(view, "dream.mix") is None             # (no dream.* param)
     assert owner_of(view, "camera.zoom") == "render:shape"   # (its world pose: not a camera)
     assert owner_of(view, "eye.fov") == "render:scene"       # (the eye its geometries are seen through)
     assert owner_of(view, "eye.distance") == "render:scene"
@@ -198,7 +193,7 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     # where each node's position lives
     assert graphview.home(view.node("render:shape")) == graphview.PATCH_SECTION
     assert graphview.home(view.node("render:output.1")) == graphview.META_SECTION
-    # plan 31 G1: an LFO is the loadable patch's (a bank's membership is loadable patch content)
+    # an LFO is the loadable patch's (a bank's membership is loadable patch content)
     assert graphview.home(view.node("lfo.1")) == graphview.PATCH_SECTION
     assert graphview.home(view.node(graphview.ANALYZER)) == graphview.META_SECTION
     assert graphview.home(view.node("group:tempo")) == graphview.META_SECTION
@@ -234,7 +229,7 @@ def test_device_nodes_come_from_the_registry_with_their_port_groups(rig):
     view = build(rig, devs=reg)
     leap, gp = view.node("device:leap"), view.node("device:pad")
     assert leap.kind == gp.kind == "device" and not leap.grey and gp.grey
-    # plan 28 N5: the hands' `switches` drawn as the design's pinches (and grab)
+    # the hands' `switches` drawn as the design's pinches (and grab)
     assert [p.group for p in leap.ports[:4]] == ["axes", "axes", "pinches", "dance"]
     assert leap.ports[0].pins == ("out:hand:right.y",)
     # a hand route whose address the device names draws from that port
@@ -249,10 +244,10 @@ def test_device_nodes_come_from_the_registry_with_their_port_groups(rig):
 
 
 def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
-    """Plan 35 G: every wire of the wired frame is one `render` cable of its
+    """Every wire of the wired frame is one `render` cable of its
     port's type, its `ref` the wire — geometry into the scene, a picture
     along the chain — and an effect on the hands' layer before an output
-    (as plan 30's placements were) is a node like any other, its cables
+    is a node like any other, its cables
     picture cables. Nothing the render graph makes for itself (an end, the
     cover, the capture) is drawn: none is a node of the section."""
     from hyperspace.params import Registry
@@ -269,7 +264,7 @@ def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
     view = graphview.build(Bindings(), Registry(), None, None, g, spec)
     wires = [c for c in view.cables if c.kind == "render" and not G.is_bus(c.ref)]
     assert [c.ref for c in wires] == list(spec.wires)
-    # plan 36 T1: and the meta controller's bus cables into the ports the section
+    # and the meta controller's bus cables into the ports the section
     # leaves to All outputs (its own wire takes output.1.hands)
     assert [c.ref for c in view.cables if c.kind == "render" and G.is_bus(c.ref)] == [
         G.bus_wire(1, "image"), G.bus_wire(1, "guide"), G.bus_wire(1, "depth")]
@@ -282,7 +277,7 @@ def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
     assert not [n.id for n in view.nodes if "(" in n.id or n.id == "render:shown"]
     assert view.node("render:acid.2").kind == "render"
     assert view.node("render:output.1").kind == "output"
-    # plan 32 T7: every port wired but the effect's aux, open until a wire
+    # every port wired but the effect's aux, open until a wire
     # puts a second picture on it
     ports = {p.id: p for p in view.node("render:acid.2").ports}
     assert not ports.pop("rin:acid.2/aux").patched
@@ -290,11 +285,11 @@ def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
 
 
 def test_old_layout_positions_follow_the_renamed_ids(rig):
-    """R14: positions saved on the canvas before plan 35 (`render:eye`,
+    """Positions saved on the canvas under the older ids (`render:eye`,
     `render:history`, `render:media.a`, `render:ghost`, `render:hands` the
     layer …) are read under the wired frame's ids (`graphmigrate.
     renamed_layout`), in the loadable patch's layout and in the show's, so the
-    owner's arrangement stays; a layout already in the new ids is as it is."""
+    arrangement stays; a layout already in the new ids is as it is."""
     import json
 
     from hyperspace import graphmigrate as M
@@ -318,7 +313,7 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
     raw["layout"] = {"render:eye": [40, 50], "render:output.1": [60, 70]}
     project.path.write_text(json.dumps(raw))
     project.load("old-show")
-    # (plan 43 C2: the camera's position is the look's — held for the old
+    # (the camera's position is the look's — held for the old
     # loadable patches this show opens, never the show's own)
     assert project.layout == {"render:output.1": [60, 70]}
     assert project.camera_at == [40, 50]
@@ -332,9 +327,9 @@ def test_layout_round_trips_through_the_loadable_and_the_show(rig):
     from hyperspace.loadable import LAYOUT_KEY
     lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.install
     lib.load("loadable", "party-trip")
-    # (plan 36 T3: the corpus `/7` holds the envelopes' and the sequencer's
-    # values, which this rig — the panel's, built without them — lacks)
-    # (plan 90 H2: and its look-back's knobs, which no look-back drew, dropped)
+    # (the corpus `/7` holds the envelopes' and the sequencer's values,
+    # which this rig — the panel's, built without them — lacks; and its
+    # look-back's knobs, which no look-back drew, are dropped)
     said = [n for n in loaded_patch.notes if (not n.endswith("…") or "env." not in n)
             and n != "the look-back's retired knobs dropped: no look-back drew them (plan 90)"]
     assert loaded_patch.layout == {} and said == [] and not lib.is_dirty("loadable")
@@ -375,14 +370,13 @@ def test_layout_round_trips_through_the_loadable_and_the_show(rig):
 
 def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     """Every node not placed gets a position, in its band's columns left to
-    right (the flow layout, 2026-11-19: the controllers and the audio →
-    the modulation → the media and the scene → the effects (plan 90 H2:
-    the look-back drawn is its public parts, the composite adding its trail
-    among them) → the outputs; inside a band, each node past what feeds it);
+    right (the flow layout: the controllers and the audio →
+    the modulation → the media and the scene → the effects (the look-back
+    drawn is its public parts, the composite adding its trail among them) → the outputs; inside a band, each node past what feeds it);
     a placed node keeps its own."""
     rig.lib.load("loadable", "lfo-breathe")
     rig.router.table.add_modifier("smooth", ["lane:0"], rig.reg)
-    # (plan 36 T4: the look-back drawn, as the old words with it on)
+    # (the look-back drawn)
     g = G.build_graph(views(Switches()), wired_wiring(stacked(("acid",)), "trail"),
                       effects=("acid", "fade", "trail"))
     _every_file(rig)
@@ -391,24 +385,24 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     pos = graphview.auto_layout(view, placed)
     assert set(pos) == {n.id for n in view.nodes} - set(placed)
     x = {nid: xy[0] for nid, xy in pos.items()}
-    # N9: the areas' columns, not the kinds' — the analyzer and the tempo
+    # the areas' columns, not the kinds' — the analyzer and the tempo
     # are the audio's; an LFO, a modifier and a macro the modulation's
     col = [x["source:key"], x[graphview.ANALYZER], x["lfo.1"],
            x["render:scene"], x["render:composite"], x["render:output.all"]]
-    # review round 1: lfo-breathe has the acid off and no cable on it: idle, at
+    # lfo-breathe has the acid off and no cable on it: idle, at
     # the effects' idle line, and a through wire from where the run starts
-    # (the composite adding the trail) to where it ends (plan 35 G: All outputs)
+    # (the composite adding the trail) to where it ends (All outputs)
     assert view.node("render:acid").idle
     assert any(c.src_port == "rout:composite" and c.dst_port == "rin:output.all/image"
                for c in graphview.layout(view).throughs)
-    # (2026-11-19, the flow layout: the controllers and the audio one band,
+    # (the flow layout: the controllers and the audio one band,
     # what moves the params — both fed by nothing, they share its first column)
     assert col == sorted(col) and col[0] == col[1] and len(set(col[1:])) == len(col) - 1
     assert x[graphview.ANALYZER] < x["group:tempo"] < x["lfo.1"]      # the band's own cable
     assert x["mod.1"] == x["macro.1"] == x["lfo.1"]
     assert x["render:output.1"] == max(x.values())
-    # a column's drawn nodes are stacked, never on top of one another (N9:
-    # the idle LFOs 3 and 4 sit at the modulation's idle line, drawn by none)
+    # a column's drawn nodes are stacked, never on top of one another (the
+    # idle LFOs 3 and 4 sit at the modulation's idle line, drawn by none)
     drawn = [nid for nid in pos if x[nid] == x["lfo.1"] and not view.node(nid).idle]
     ys = sorted(pos[nid][1] for nid in drawn)
     assert {"lfo.1", "lfo.2", "mod.1", "macro.1"} <= set(drawn)
@@ -428,9 +422,8 @@ def test_graphview_imports_no_imgui():
 
 
 def test_no_plumbing_words_remain():
-    """Plan 35 T5: the frame is ordinary nodes and wires, so the canvas's
-    words for the old frame's own plumbing are gone, and so are the T3/T4
-    bridges that drew a wired frame in plan 33's words."""
+    """The frame is ordinary nodes and wires, so the canvas has no words
+    for a frame's own plumbing."""
     from hyperspace import loadable, ui_graph
     for name in ("PLUMBING", "RUN_KEPT", "FEEDS", "FEEDS_NO_DELETE", "FrameNode",
                  "canvas_name", "run_end", "_with_run", "_framed", "_is_plumbing"):
@@ -467,18 +460,18 @@ def test_the_page_draws_with_a_corpus_loadable_and_a_render_graph(rig):
     loadable patch loaded, a render graph with effects, every node expanded and
     collapsed, a route and an effect node selected (the side column), a
     tidy — and nothing raises; the SYSTEM page then has its line."""
-    from test_graph_legible import party  # (plan 35 T5: its frame landed as the loadable patch's)
+    from test_graph_legible import party
     party(rig)
-    rig.reg["fx.acid.on"].set(1)        # N9: an off effect with no cable is not drawn
+    rig.reg["fx.acid.on"].set(1)        # an off effect with no cable is not drawn
     for _ in range(3):
         frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
     view = st["view"]
     assert st["created"] == 1 and st["editor"] is not None
     assert view.node("render:acid") is not None
-    # every drawn node placed (N9: an idle one is not on the canvas)
+    # every drawn node placed (an idle one is not on the canvas)
     assert all(n.id in st["applied"] for n in view.nodes if ui_graph.drawn_node(st, n))
-    # plan 28 N7: every node starts collapsed; expanded, a route is its own cable
+    # every node starts collapsed; expanded, a route is its own cable
     assert not st["open"]
     ui_graph.expand_all(st, view, True)
     frame(rig.panel, "graph")
@@ -517,7 +510,7 @@ def _in_editor(rig, fn):
 
 def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     """A node moved on the canvas is written where it lives — a render
-    node and an LFO (plan 31 G1) into the loaded patch's layout (dirtying
+    node and an LFO into the loaded patch's layout (dirtying
     it), the analyzer into the show's — once the mouse lets go; a node left
     alone is written nowhere."""
     rig.lib.load("loadable", "party-trip")
@@ -532,7 +525,7 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
         ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:analyzer")), imgui.ImVec2(40, 20))
     _in_editor(rig, move)
     frame(rig.panel, "graph")
-    # N9: lfo.2 is idle, not drawn
+    # lfo.2 is idle, not drawn
     assert rig.lib.loaded_patch.layout == {"render:scene": [700, 50], "lfo.1": [30, 640]}
     assert rig.lib.install.layout == {"analyzer": [40, 20]}
     assert rig.lib.is_dirty("loadable")
@@ -554,7 +547,7 @@ def test_the_editor_context_is_made_once_kept_across_a_reload_and_destroyed_on_c
                         or real_create(cfg))
     monkeypatch.setattr(ed, "destroy_editor", lambda c: gone.append(c) or real_destroy(c))
     assert made == []                                # no context before the panel draws
-    frame(rig.panel, "view")                         # plan 49 stage 3: GRAPH is always drawn
+    frame(rig.panel, "view")                         # GRAPH is always drawn
     frame(rig.panel, "graph")
     assert made == [""]                              # the widget's settings file is off
     first = ui_graph._state(rig.panel)["editor"]
@@ -572,15 +565,15 @@ def test_the_editor_context_is_made_once_kept_across_a_reload_and_destroyed_on_c
 # ---------------------------------------------------------------- review round 1
 
 def test_a_d1_placed_effect_from_a_real_spec_is_an_effect_node_with_image_cables(rig):
-    """D1's placement (`palette-hands.json`: the palette `after` the hands'
+    """A placed effect (`palette-hands.json`: the palette `after` the hands'
     layer), read by `graph.read_graph` and built by `default_graph`, is an
     `effect` render node on the canvas with its image cables in and out,
     and the palette's params on it — nothing here reads `after` / `into`."""
     import json
     doc = json.loads((Path(__file__).parent / "fixtures" / "presets" /
                       "palette-hands.json").read_text())
-    # (plan 36 T3: the canvas draws a `/7` frame — the old section migrated,
-    # its placement the wires it stood for)
+    # (the canvas draws a `/7` frame — the old section migrated, its
+    # placement the wires it stood for)
     from hyperspace import graphmigrate as M
 
     old = G.read_graph(doc["graph"])
@@ -589,13 +582,13 @@ def test_a_d1_placed_effect_from_a_real_spec_is_an_effect_node_with_image_cables
     _every_file(rig)
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     node = view.node("render:palette")
-    # (plan 36 T3: the placement is the wires it stood for — a wired effect)
+    # (the placement is the wires it stood for — a wired effect)
     assert node is not None and isinstance(node.ref, G.Effect) and node.ref.placed == "wire"
     assert view.spec is spec
     wires = [c for c in view.cables if c.kind == "render"]
     into = [c for c in wires if c.dst_port == "rin:palette/image"]
     out = [c for c in wires if c.src_port == "rout:palette"]
-    assert [c.src_port for c in into] == ["rout:hands.layer"]     # (plan 35 V2)
+    assert [c.src_port for c in into] == ["rout:hands.layer"]
     assert out and all(c.type == graphview.IMAGE for c in (*into, *out))
     assert owner_of(view, "fx.palette.mix") == "render:palette"
 
@@ -672,7 +665,7 @@ def test_undoing_a_load_puts_the_earlier_layout_back(tmp_path):
     pr.load("show-laid")
     settle(r)
     assert pr.layout == {"lfo.1": [0, 10]}
-    assert r.meta_undo.undo()                         # a show: the meta controller's (plan 44 D5b)
+    assert r.meta_undo.undo()                         # a show: the meta controller's
     assert pr.name == "show-plain" and pr.layout == {} and not pr.is_dirty()
 
 
@@ -701,14 +694,14 @@ def test_a_tidy_is_one_undo_step(tmp_path):
     assert not lib.is_dirty(LOADABLE)        # (the saved loadable patch holds no positions either)
 
 
-# ---------------------------------------------------------------- plan 32 T10: the media area
+# ---------------------------------------------------------------- the media area
 
 def test_graph_has_media_area(rig):
     """The eight channels are eight source nodes in a titled media area
-    (plan 35 V2: `render:channel.<c>`, kind `channel`, a picture out each,
+    (`render:channel.<c>`, kind `channel`, a picture out each,
     the channel's `media.<c>.*` params on it), whatever the render graph
     holds; a channel no cable leaves and whose bin is empty is idle (its
-    area's line). Plan 35 G: the backdrop is drawn only when the section
+    area's line). The backdrop is drawn only when the section
     wires or declares it (its params else on their group's node). A wire
     from `channel.a` — into an effect's `aux` port, or under the scene as
     the backdrop — is drawn from the one `channel.a` node, and it names
@@ -757,9 +750,8 @@ def test_graph_has_media_area(rig):
 
 
 def test_the_faces_patterns_eight_inputs_are_the_pattern_nodes(rig):
-    """2026-10-27 (the owner: the face shader's inputs were missing from the
-    pattern node's side pane): `OWNERS["pattern"]` is the pattern node, so
-    every `pattern.mod.k` is a param port on it, named `patterns.label(k)`,
+    """The face shader's inputs belong on the pattern node:
+    `OWNERS["pattern"]` is the pattern node, so every `pattern.mod.k` is a param port on it, named `patterns.label(k)`,
     and none on the shape; a route onto `pattern.mod.3` is a cable into the
     pattern node. With no pattern node drawn they fall to their group's
     node, as every param whose node the section does not name."""
@@ -804,18 +796,17 @@ def test_the_media_area_draws_on_the_page(rig, monkeypatch):
     assert "render:channel.b" not in drawn_ids(rig, monkeypatch)
 
 
-# ---------------------------------------------------------------- plan 33 T6: the free graph
+# ---------------------------------------------------------------- the free graph
 
 def test_the_new_nodes_sit_in_their_areas(rig):
-    """Plan 33 U, in plan 35's areas: the pattern and a switch are render
+    """The pattern and a switch are render
     nodes with the channels in the media, an effect the effects', All
     outputs the outputs' — and the params go to
     the node that owns them: `view.pattern*` and `view.media_*` to the
     pattern, `switch.select` to its switch, `fx.face_map` to the shape
-    (whose `faces` port is a picture input). Plan 35 G: no `frame`, no
+    (whose `faces` port is a picture input). No `frame`, no
     `fx`, no feeds — the scene's picture goes straight into the first
-    effect by its wire (plan 90 H2: the look-back that stood between is
-    retired); the pattern and the backdrop are drawn only when the section
+    effect by its wire; the pattern and the backdrop are drawn only when the section
     names them."""
     from hyperspace.params import declare_switches
     spec = G.read_graph({"frame": "wired", "nodes": [{"kind": "switch"}],
@@ -850,7 +841,7 @@ def test_the_new_nodes_sit_in_their_areas(rig):
     # with no render graph and no section: neither the pattern nor the backdrop
     bare = build(rig)
     assert bare.node("render:pattern") is None and bare.node("render:backdrop") is None
-    # names a wire uses, from the canvas's pins (plan 35 G: the shape too)
+    # names a wire uses, from the canvas's pins (the shape too)
     assert graphview.spec_name("rout:scene", g) == ("scene", None)
     assert graphview.spec_name("rin:output.all/image", g) == ("output.all.image", None)
     assert graphview.spec_name("rin:shape/faces", g) == ("shape.faces", None)
@@ -881,7 +872,7 @@ def test_an_unreached_branch_is_drawn_faint_from_the_spec(rig):
 
 
 def test_a_render_nodes_said_is_its_first_line():
-    """Plan 34 T5: a render node's `said` (`Node.said`) is the first line of
+    """A render node's `said` (`Node.said`) is the first line of
     its summary — after a switch's pick, after the faint word — and a node
     with none gives the lines it always did."""
     said = "last frame's · 64×64 half-float"
@@ -898,7 +889,7 @@ def test_a_render_nodes_said_is_its_first_line():
 
 
 def test_a_drops_reach_is_never_under_near_screen_px():
-    """2026-10-31: how near a dropped node must come to a cable (`NEAR`
+    """How near a dropped node must come to a cable (`NEAR`
     canvas units) grows with the canvas zoomed out, so it is never under
     `NEAR` screen px; zoomed in it stays `NEAR`."""
     assert graphview.drop_reach() == graphview.NEAR
@@ -906,7 +897,7 @@ def test_a_drops_reach_is_never_under_near_screen_px():
     assert graphview.drop_reach(4.0) == 4 * graphview.NEAR
 
 
-# ---- GRAPH's start zoom (plan 58 SM2) ----
+# ---- GRAPH's start zoom ----
 
 def _start(rig, zoom: float, frames: int = 3) -> dict:
     from test_graph_legible import party
@@ -998,7 +989,7 @@ def _node_on_canvas(monkeypatch, st) -> dict:
 @pytest.mark.parametrize(("narrower", "shorter"), [(0.0, 23.0), (40.0, 0.0), (40.0, 165.0)])
 def test_a_change_of_canvas_size_moves_no_node(rig, monkeypatch, zoom, narrower, shorter):
     """The zoom stands, and every node stays where it was against the canvas's
-    top-left (the owner, 2026-10-24): a head's extra line, a window's resize."""
+    top-left: a head's extra line, a window's resize."""
     st = _start(rig, zoom)
     seen = _node_on_canvas(monkeypatch, st)
     frame(rig.panel, "graph")
@@ -1059,11 +1050,11 @@ def test_a_begin_that_raises_leaves_the_editor_holding_no_file(rig, monkeypatch,
 
 
 @pytest.mark.parametrize(("base", "zoom", "density"), [
-    (1.0, 1.0, 1.0),        # 1:1, as before
+    (1.0, 1.0, 1.0),        # 1:1
     (1.0, 1.3, 1.3),        # the show's display: baked at the size it lands
     (2.0, 1.3, 2.6),
     (1.0, 1.376, 1.4),      # up to the next step: never stretched
-    (1.0, 0.5, 1.0),        # zoomed out, as before
+    (1.0, 0.5, 1.0),        # zoomed out
     (2.0, 4.0, 4.0),        # capped
 ])
 def test_the_canvas_bakes_its_words_for_the_zoom(base, zoom, density):

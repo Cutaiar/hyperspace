@@ -1,6 +1,6 @@
-"""Plan 90 (H2, §10.2): the migrated look-back draws the old trail's arithmetic.
+"""The migrated look-back draws the old trail's arithmetic.
 
-The old trail pass (`lookback.POST_FS`, deleted by H2), per echo i oldest
+The old trail pass (`lookback.POST_FS`, since deleted), per echo i oldest
 first — ``c = pow(L, contrast)·(1 − darken)``, ``a = w·peak(c)``, ``w =
 echo_mix·½^(age / fade)``, ``wake = wake·(1 − a) + c·w`` — held back by
 ``1 − occlude·min(4·peak(occluder), 1)`` and added under its picture,

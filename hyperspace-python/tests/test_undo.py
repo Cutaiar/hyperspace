@@ -1,4 +1,4 @@
-"""Plan 15 WP1 — undo down to single edits (hyperspace/undo.py).
+"""Undo down to single edits (hyperspace/undo.py).
 
 Every rig is built the way app.main builds it — Library, registry, the
 hands' settings, the clock and the LFOs, an Output, attach, the Router
@@ -58,12 +58,12 @@ def boot(home, show: str | None = None, *, fx=None, ghost=None, sources=None):
     """app.main's construction order, headless, over `home` — seeded with
     the corpus first (conftest.seed: the shipped loadable patches and the party
     show, which the home then opens with its startup loadable patch, TUMBLE).
-    The deck is `Deck.build`'s, the one order `app.main` runs too (plan 44
-    D1); the rig around it is stand-ins: no GL (no renderer), a
-    namespace for the audio engine, a bare `Output`, the panel's params
-    without imgui, and one `MidiIO` over fake ports. `sources`: shared
+    The deck is `Deck.build`'s, the one order `app.main` runs too; the rig
+    around it is stand-ins: no GL (no renderer), a namespace for the audio
+    engine, a bare `Output`, the panel's params without imgui, and one
+    `MidiIO` over fake ports. `sources`: shared
     sources (routing_sources.Sources) for the deck's router to read, as a
-    second deck's would (plan 44 D2); None, its own."""
+    second deck's would; None, its own."""
     seed(home)
     if show:
         opened_last(home, show)
@@ -92,8 +92,8 @@ def boot(home, show: str | None = None, *, fx=None, ghost=None, sources=None):
         return r.output
 
     def load_table(reg):
-        # the desk's shared meta params before attach, as app.main has them (plan
-        # 18 WP2): declared late, desk.slew would read as an unsaved show
+        # the desk's shared meta params before attach, as app.main has them:
+        # declared late, desk.slew would read as an unsaved show
         table = Bindings.load(bindings_path(home), legacy_midi=None)
         routing.register_desk(reg, table)
         return table
@@ -110,13 +110,13 @@ def boot(home, show: str | None = None, *, fx=None, ghost=None, sources=None):
 
     deck = Deck.build(library=lib, control=control, audio=audio, table=load_table,
                       fx=fx, ghost=ghost,
-                      # shared sources bring their one clock (plan 44 §2)
+                      # shared sources bring their one clock
                       clock=(sources.clock if sources is not None and sources.clock
                              is not None else tempo.Clock(now=lambda: r.t)),
                       lfos=lfo.LFOs(seed=1),
                       hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
                       devices=devices_setup, sources=sources)
-    # the meta controller's stack (plan 44 D5b), as `MetaController` builds it
+    # the meta controller's stack, as `MetaController` builds it
     meta_undo = meta_stack(deck)
     undo.install_meta(meta_undo)
     r.__dict__.update(lib=lib, reg=deck.reg, view=deck.view, control=control, chain=chain,
@@ -167,7 +167,7 @@ def look(r) -> tuple:
 def same_look(a: tuple, b: tuple) -> bool:
     """Two `look`s: the rows, desk and macros equal, the values equal to
     within undo's tolerance — a restore leaves a base that only differs
-    in its last bits alone (a performer's round-off, plan 15 §1 row 2)."""
+    in its last bits alone (a performer's round-off)."""
     return (a[1:] == b[1:] and a[0].keys() == b[0].keys()
             and all(undo._same(v, b[0][k]) for k, v in a[0].items()))
 
@@ -232,7 +232,7 @@ def test_a_slider_drag_is_one_step_and_undo_sets_only_that_param(rig, monkeypatc
 
 def test_a_pause_longer_than_the_settle_time_makes_a_second_step(rig):
     """`SETTLE_S` is the boundary: a pause under it is the same gesture,
-    one over it ends the step (fork 17)."""
+    one over it ends the step."""
     p = rig.reg["view.bright"]
     was = p.base
     short = math.floor(undo.SETTLE_S / DT) - 3
@@ -273,7 +273,7 @@ def test_a_knob_turn_on_the_desk_is_one_step(rig):
 
 def test_a_performer_moving_makes_no_step(rig):
     """A hand on `view.speed` — a param whose base moves in its last bits
-    when a performer takes it (plan 15 §1 row 2) — entering, moving for
+    when a performer takes it — entering, moving for
     120 frames and leaving: the stack stays empty. So does an LFO."""
     rig.table.set_routes([Binding("hand:0", "view.speed", "position", 1.0),
                           Binding("lfo:0", "view.bright", "push", 0.4)])
@@ -335,7 +335,7 @@ def test_integrated_state_and_the_clock_are_not_watched(rig):
 
 def test_meta_params_are_covered(rig):
     """The hands' feel and the master faders undo like the look does, on the
-    meta controller's stack (plan 44 D5b)."""
+    meta controller's stack."""
     reg = rig.reg
     smooth, gain = reg["hands.smooth"], reg["master.gain"]
     was = (smooth.base, gain.base)
@@ -425,7 +425,7 @@ def test_undo_of_a_load_puts_back_the_values_the_routes_the_desk_the_macros_and_
     reg["preset.load.4"].fire()                        # TRIP: other values, routes, desk
     assert lib.current(LOADABLE) == "TRIP" and not lib.is_dirty(LOADABLE) and pr.active == 4
     settle(rig)
-    # (round-off under a performer lights no dot: plan 16 WP7)
+    # (round-off under a performer lights no dot)
     trip = look(rig)
     assert not lib.is_dirty(LOADABLE)
     assert all(a != b for a, b in zip(tumble, trip, strict=True))
@@ -442,7 +442,7 @@ def test_undo_of_a_load_puts_back_the_values_the_routes_the_desk_the_macros_and_
 
 
 def test_save_after_undoing_a_load_writes_the_earlier_loadable(rig):
-    """The marks (fork 2): after undoing a load, Save writes the earlier
+    """The marks: after undoing a load, Save writes the earlier
     look to the earlier loadable patch's file — never over the later one."""
     reg, lib, loaded_patch = rig.reg, rig.lib, rig.loaded_patch
     a = loaded_patch.save_as("AAA")
@@ -466,7 +466,7 @@ def test_save_after_undoing_a_load_writes_the_earlier_loadable(rig):
 
 def test_a_show_load_and_its_startup_loadable_are_one_step_each(rig):
     """A show is the meta controller's and the loadable patch it starts on is a load on
-    its deck (plan 44 D5b): one step on each stack, each undoing its own, and
+    its deck: one step on each stack, each undoing its own, and
     both undone the `Install` comes back as it was."""
     reg, lib, pr = rig.reg, rig.lib, rig.lib.install
     reg["master.gain"].step(-3)                        # a meta controller edit
@@ -543,7 +543,7 @@ def test_an_action_that_changes_nothing_leaves_no_step(rig):
     assert len(rig.undo.stack) == 1
     free = next(p.id for p in rig.reg if not any(b.target == p.id for b in rig.table.midi()))
     rig.midi.unbind(free)                              # nothing mapped there: nothing goes,
-    assert len(rig.undo.stack) == 1                    # and no step is opened (plan 17 WP1)
+    assert len(rig.undo.stack) == 1                    # and no step is opened
     settle(rig)
     assert len(rig.undo.stack) == 1
     rig.lib.load(LOADABLE, "TUMBLE")                    # the same loadable patch… with an edit: a step
@@ -584,7 +584,7 @@ def test_redo_and_a_new_edit_clears_it(rig):
 
 
 def test_a_count_taken_to_zero_is_undone(rig):
-    """Plan 16 WP5: the instance count reaches 0 (nothing drawn) from the
+    """The instance count reaches 0 (nothing drawn) from the
     slider's left end; Ctrl+Z — the `edit.undo` trigger — brings it back."""
     p = rig.reg["view.instances"]
     settle(rig)
@@ -637,8 +637,8 @@ def test_undo_writes_no_file_and_the_dirty_dot_is_honest(rig):
 
 
 def test_a_performers_round_off_lights_no_dot(rig):
-    """Plan 16 WP7: a performer taking a param moves its base in the last
-    bits (plan 15 §1 row 2) and leaves it so. Every corpus loadable patch loaded,
+    """A performer taking a param moves its base in the last
+    bits and leaves it so. Every corpus loadable patch loaded,
     two hands through the box for two seconds with the lanes and the LFOs
     running, then gone: bases have moved, and no dot is lit — the
     loadable patch's, a module preset's, the show's. One detent of one param
@@ -689,7 +689,7 @@ def test_alike_is_exact_but_for_float_round_off():
     assert not undo.alike({"x": [1, 2]}, {"x": [1, 2, 3]})
     assert not undo.alike({"x": [1, 2]}, {"x": (1, 2)}) and not undo.alike(0.0, 1e-9)
     assert undo.alike(float("nan"), float("nan")) and undo.alike(None, None)
-    # a whole number written in a file is a number like any other (review of PR #92)
+    # a whole number written in a file is a number like any other
     assert undo.alike({"camera.zoom": 1}, {"camera.zoom": 0.9999999999999998})
     assert not undo.alike({"camera.zoom": 1}, {"camera.zoom": 0.999999})
     assert not undo.alike(True, 0.9999999999999998) and not undo.alike(10**400, 1e308)
@@ -700,7 +700,7 @@ def test_a_scene_pick_undoes_with_its_strips(rig):
     one step, and the restore's second pass puts the strips back — edited
     ones included."""
     reg, lib = rig.reg, rig.lib
-    meta = rig.meta_undo                               # (plan 44 D5b: the analyzer's)
+    meta = rig.meta_undo                               # (the analyzer's)
     reg["band.1.thr"].step(6)                          # a strip off its scene
     settle(rig)
     band = reg.snapshot("band")
@@ -788,9 +788,9 @@ def test_a_band_preset_load_with_a_layout_undoes_whole(rig):
 
 
 def test_strips_are_put_back_only_onto_the_layout_they_were_made_on(rig):
-    """The tag (fork 4): after a band is added, an older strip edit is
+    """The tag: after a band is added, an older strip edit is
     left and the rest of that step lands, with a note; with the band
-    removed again, it lands. (Plan 44 D5b: the meta controller's stack.)"""
+    removed again, it lands. (The meta controller's stack.)"""
     reg, control, meta = rig.reg, rig.control, rig.meta_undo
     thr, gain = reg["band.0.thr"], reg["master.gain"]
     was = (thr.base, gain.base)
@@ -867,14 +867,14 @@ def test_the_stack_is_bounded(rig):
     assert p.base == pytest.approx(1.0 + 0.001 * 6)    # the seven oldest are gone
 
 
-# ---------------------------------------------------------------- review of PR #82
+# ---------------------------------------------------------------- scene picks, redo, rows and loads
 
 def test_undoing_a_scene_pick_names_the_band_preset_it_was_on(rig):
     """A scene pick is a watcher step (control.py pushes nothing), and
     putting `scene.select` back adopts that scene: `Marks.mend` then puts
     the strip's own name back, so Save cannot write a user loadable patch's look
     under a factory scene's name. A slider undone after a save-as stays
-    on the new name (fork 2)."""
+    on the new name."""
     reg, lib, meta = rig.reg, rig.lib, rig.meta_undo
     reg["band.1.thr"].step(4)
     lib.save_as("band", "Mine")                        # scene 0's strips, edited, as Mine
@@ -1101,7 +1101,7 @@ def test_an_idle_app_makes_no_step(tmp_path):
     performed: set[str] = set()
     try:
         for name in order:
-            # what a pad sends: slot 9 (TRACER, plan 19 WP1) has no trigger of its own
+            # what a pad sends: slot 9 (TRACER) has no trigger of its own
             reg["preset.select"].set(bank.index(name))
             for _ in range(5):                          # 5 × 60 frames: five seconds
                 run(60)
@@ -1120,7 +1120,7 @@ def test_an_idle_app_makes_no_step(tmp_path):
     assert r.view.ang != [0.0] * 6
 
 
-# ------------------------------------------- plan 18 WP2: knob smoothing
+# ------------------------------------------- knob smoothing
 
 def _smoothed(rig, seconds=routing.SLEW_MAX_S):
     """Knob smoothing on, the adapter on the rig's clock, the stack empty;
@@ -1191,7 +1191,7 @@ def test_undo_during_a_glide_holds(rig):
 
 
 def test_the_slew_can_never_outlast_the_settle_time(rig):
-    """Plan 15: one knob turn is one undo step. The glide writes for up to
+    """One knob turn is one undo step. The glide writes for up to
     `desk.slew` after the hand stops, so its maximum stays under the
     settle time by more than a slow (100 ms) frame, and the param cannot
     be set past it."""
@@ -1207,7 +1207,7 @@ test_slew_max_stays_under_the_undo_settle_time = test_the_slew_can_never_outlast
 
 
 def test_the_output_switches_are_left_alone_by_undo_loadables_and_shows(rig):
-    """Plan 21 WP4 / fork F4: output.N.* are meta settings. Flipping one
+    """output.N.* are meta settings. Flipping one
     opens no undo step; an undo and a redo of a real step around it leave
     it where it is; no loadable patch save or show save writes it; a loadable patch load
     and a show load leave it alone."""
@@ -1251,7 +1251,7 @@ def test_the_output_switches_are_left_alone_by_undo_loadables_and_shows(rig):
 
 
 def test_a_fractal_setting_is_undone_and_a_load_puts_it_back(rig):
-    """Plan 64 (Devin's review of #466): Detail, Reach and Near are in the
+    """Detail, Reach and Near are in the
     undo history — an edit undoes, and undoing a load puts back the look's
     settings the load replaced — though a loadable patch writes them under
     its `fractal` key, not its values."""

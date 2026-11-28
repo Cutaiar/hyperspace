@@ -1,4 +1,4 @@
-"""Plan 83: saving and the playlist, live, on a trackpad.
+"""Saving and the playlist, live, on a trackpad.
 
 **save as** on GRAPH's deck row, beside **load…**: one press saves the deck the panel is
 on as a new loadable patch (`preset.save_new`, START held on a pad), in the folder of the
@@ -104,7 +104,7 @@ def test_a_second_click_never_overwrites(tmp_path, monkeypatch):
 
 
 def test_with_nothing_loaded_it_saves_at_the_top_named_as_the_pads_hold_names(tmp_path):
-    """The launch sheet's recommendation for 83: the library's top level, ``PATCH <n>``."""
+    """The library's top level, ``PATCH <n>``."""
     with build_rig(tmp_path) as r:
         lib = r.panel.library
         assert lib.current(LOADABLE) is None
@@ -131,7 +131,7 @@ def test_nothing_saved_shows_no_name(tmp_path, monkeypatch):
         assert ui_loadable.save_as_label(r.panel) == "save as"
 
 
-# ------------------------------------------------------------------ save as ▾ (plan 88)
+# ------------------------------------------------------------------ save as ▾
 
 def test_the_more_arrow_sits_on_the_chip_and_opens_two_ways_to_save(tmp_path, monkeypatch):
     with build_rig(tmp_path) as r:
@@ -278,7 +278,7 @@ def test_a_named_save_refuses_a_file_on_disk_the_list_does_not_see(tmp_path, mon
 
 
 def test_a_library_not_yet_moved_saves_into_presets(tmp_path):
-    """A library with ``presets/`` and no ``loadable/`` (plan 57): a new name is written
+    """A library with ``presets/`` and no ``loadable/``: a new name is written
     in ``presets/``, so no ``loadable/`` starts and hides the patches already there."""
     with build_rig(tmp_path) as r:
         lib = r.panel.library
@@ -295,7 +295,7 @@ def test_a_library_not_yet_moved_saves_into_presets(tmp_path):
 
 
 def test_a_library_not_yet_moved_refuses_a_name_another_folder_holds(tmp_path):
-    """Review of #481: in `presets/` a folder is no part of a name, so `set-a/intro`
+    """In `presets/` a folder is no part of a name, so `set-a/intro`
     beside `set-b/intro` would be a second `intro`, and the pad for the first could
     load the second. Refused; the pad still loads its own file."""
     from hyperspace import ui_browse

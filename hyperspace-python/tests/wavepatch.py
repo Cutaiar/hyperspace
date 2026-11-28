@@ -1,6 +1,5 @@
-"""Plan 67: a Wave look as a patch of primitives — the mapping the proof
-(`tests/test_wave_patch.py`) and the field example use, and the one the format
-lane's migration will use when `wave.glsl` retires.
+"""A Wave look as a patch of primitives — the mapping the proof
+(`tests/test_wave_patch.py`) and the field example use.
 
     point ─▶ <along>.field, <along>.2.field          (Centre X / Y)
     <along>   (Line, Rings or Spokes; a value)  ─▶ waveform ─▶ combine.field

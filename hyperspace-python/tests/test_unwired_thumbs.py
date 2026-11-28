@@ -1,6 +1,6 @@
-"""Plan 65 (3): an effect node whose picture reaches no output is never
-built (`graph.reaches`, register row 349: "kept, drawn faint, never run"),
-so it made no picture for its thumbnail. Its thumbnail is now its input —
+"""An effect node whose picture reaches no output is never
+built (`graph.reaches`: kept, drawn faint, never run),
+so it made no picture for its thumbnail. Its thumbnail is its input —
 else the test card — put through it at a thumbnail's size, at the frame's
 end (`render.unwired_through`, `graphview.UNWIRED_PIC`).
 

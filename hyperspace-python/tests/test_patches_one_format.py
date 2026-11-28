@@ -1,4 +1,4 @@
-"""Plan 50: one saved format — a patch, a group and a loadable patch are one
+"""One saved format — a patch, a group and a loadable patch are one
 document shape (`patches.shape_of`); every fragment comes in through one
 ladder (`patches.forward`: a ``patch/1`` and a ``hyperspace.preset/1``
 module preset read as their ``patch/2``); a module preset is a **patch of
@@ -59,7 +59,7 @@ def test_the_one_ladder_reads_every_fragment_as_its_newest():
     one = json.loads(ACID_WASH.read_text())
     assert one["schema"] == "hyperspace.patch/1"
     two = patches.forward(one)
-    assert two == {**one, "schema": "hyperspace.patch/3"}     # (plan 89: no copy to move)
+    assert two == {**one, "schema": "hyperspace.patch/3"}     # no copy to move
     assert patches.forward(two) == two                        # /3 is a fixed point
     assert patches.check(one) == [] and patches.check(two) == []
     for bad, words in (({"schema": "hyperspace.patch/4"}, "newer than this build"),
@@ -98,7 +98,7 @@ def test_the_corpus_is_in_the_one_shape():
         doc = json.loads(path.read_text())
         assert doc["schema"] == "hyperspace.patch/2" and doc["group"] == "dream", path.name
         assert patches.check(doc) == [] and patches.forward(doc) == {
-            **doc, "schema": patches.SCHEMA}               # (plan 89: /3 moves no group's values)
+            **doc, "schema": patches.SCHEMA}               # /3 moves no group's values
     assert not (CORPUS / "dream").exists()
     for path in sorted((CORPUS / "loadable").glob("*.json")):
         assert b'"modules"' not in path.read_bytes(), path.name
@@ -107,10 +107,10 @@ def test_the_corpus_is_in_the_one_shape():
 def test_the_loadables_ladder_is_one_function_the_load_reads_through():
     """A whole loadable patch's steps (`seven`, `nine`, `ten`) are one function,
     `graphmigrate.forward`, which the load runs: an `/11` with no copy comes
-    out as it was but for its schema (plan 89's `/12`) and the retired
-    look-back knobs it names with no look-back to draw them (plan 90 H2:
-    dropped quietly) and, H3, the old dream's, off and undriven (the ladder's
-    last steps), a `/2` `/7`-shaped and said."""
+    out as it was but for its schema (`/12`) and the retired look-back knobs
+    it names with no look-back to draw them (dropped quietly) and the old
+    dream's, off and undriven (the ladder's last steps), a `/2` `/7`-shaped
+    and said."""
     import inspect
 
     from hyperspace import graphmigrate, loadable
@@ -130,8 +130,8 @@ def test_the_loadables_ladder_is_one_function_the_load_reads_through():
 
 # ---------------------------------------------------------------- end to end
 
-# a retired look-back knob's line in a saved file (plan 90 H2), and every old
-# dream knob's (H3: a dream off and undriven is left out, its ids with it)
+# a retired look-back knob's line in a saved file, and every old dream knob's
+# (a dream off and undriven is left out, its ids with it)
 RETIRED_LINE = re.compile(rb'^ *"dream\.[a-z_]+": [^\n]*,\n', re.MULTILINE)
 
 
@@ -139,17 +139,17 @@ def test_a_corpus_loadable_round_trips_byte_for_byte_through_the_one_loader(tmp_
     for k, name in enumerate(("party-trip", "party-noita", "seq-demo")):
         data = (CORPUS / "loadable" / f"{name}.json").read_bytes()
         again, notes, _ = headless.resave(CORPUS / "loadable" / f"{name}.json", tmp_path / str(k))
-        # (plan 89: an `/11` with no copy resaves as itself but for the schema;
-        # plan 90 H2: less its retired look-back knobs, which drew nothing
-        # with no look-back — dropped quietly; H3: and its old dream's, off)
+        # an `/11` with no copy resaves as itself but for the schema, less its
+        # retired look-back knobs (which drew nothing with no look-back,
+        # dropped quietly) and its old dream's, off
         data = data.replace(b'"hyperspace.loadable/11"', b'"hyperspace.loadable/12"')
         data, gone = RETIRED_LINE.subn(b"", data)
         assert gone == 23, name
         assert again == data and notes == [], (name, notes)
 
 
-# (plan 90 H3: the dream group's presets are retired — tests/test_dream_migration.py —
-# so a module preset here is the camera's)
+# the dream group's presets are retired (tests/test_dream_migration.py), so a
+# module preset here is the camera's
 WIDE = {"schema": "hyperspace.patch/3", "name": "wide", "group": "camera",
         "values": {"camera.zoom": 0.7}}
 OLD_CAMERA = {"schema": "hyperspace.preset/1", "group": "camera", "name": "OLD",
@@ -238,7 +238,7 @@ def test_the_tool_moves_module_presets_and_patch_1_into_the_shape(tmp_path):
                   for s, d, _ in moves) == [
         ("camera/wide.json", "patches/camera/wide.json"),
         ("patches/acid-wash.json", "patches/acid-wash.json")]
-    # (plan 90 H3: the dream group is retired, as the fx group was)
+    # the dream group is retired, as the fx group was
     retired = ["dream/old.json: a retired group's — deleted",
                "fx/wobbly.json: a retired group's — deleted"]
     assert left == retired
@@ -269,7 +269,7 @@ def test_the_tool_dry_run_writes_nothing_and_apply_backs_up_first(tmp_path, monk
     assert tool.main(["--library", str(root)]) == 0
     out = capsys.readouterr().out
     assert "patches to write as hyperspace.patch/3: 2" in out
-    assert "dream/old.json: a retired group's — deleted" in out        # (plan 90 H3)
+    assert "dream/old.json: a retired group's — deleted" in out
     assert sorted(p.relative_to(root).as_posix() for p in root.rglob("*")) == before
     assert tool.main(["--library", str(root), "--apply"]) == 0
     out = capsys.readouterr().out
@@ -280,10 +280,10 @@ def test_the_tool_dry_run_writes_nothing_and_apply_backs_up_first(tmp_path, monk
     assert not (root / PATCHES / "dream").exists()
 
 
-# ---------------------------------------------------------------- review fixes (PR #352)
+# ---------------------------------------------------------------- group and tool edge cases
 
 def test_a_group_never_holds_the_meta_kinds_one_list_with_graphview():
-    """Review fix 1: a media channel, a window, All outputs and a cloud are
+    """A media channel, a window, All outputs and a cloud are
     the rig's (`patches.FIXTURE_KINDS`, `graphview.FIXTURE_KINDS` the same list):
     Group refuses them, so a group never carries what no patch can."""
     from hyperspace import graph as G
@@ -299,7 +299,7 @@ def test_a_group_never_holds_the_meta_kinds_one_list_with_graphview():
 
 
 def test_an_empty_group_key_is_one_refusal_and_one_reading():
-    """Review fix 6: `check` and `shape_of` read the key the same way — a
+    """`check` and `shape_of` read the key the same way — a
     `group` present but empty or not text is a group patch's key that names
     nothing, refused in one line whatever else the file holds."""
     canvas = patches.forward(json.loads(ACID_WASH.read_text()))
@@ -311,7 +311,7 @@ def test_an_empty_group_key_is_one_refusal_and_one_reading():
 
 
 def test_a_groups_folder_refuses_what_is_no_patch_of_that_group(tmp_path):
-    """Review fix 7: in `patches/dream/`, a whole loadable patch, a canvas patch and
+    """In `patches/dream/`, a whole loadable patch, a canvas patch and
     another group's patch are each refused, the mismatch named — never
     landed as dream values."""
     folder = tmp_path / PATCHES / "dream"
@@ -331,7 +331,7 @@ def test_a_groups_folder_refuses_what_is_no_patch_of_that_group(tmp_path):
 
 
 def test_the_tool_says_an_unreadable_patch(tmp_path):
-    """Review fix 5: a `patches/*.json` that does not read is left, said."""
+    """A `patches/*.json` that does not read is left, said."""
     tool = _tool()
     root = _old_library(tmp_path / "lib")
     (root / PATCHES / "torn.json").write_text("{not json")
@@ -340,7 +340,7 @@ def test_the_tool_says_an_unreadable_patch(tmp_path):
 
 
 def test_a_headless_resave_sees_the_librarys_patches(tmp_path):
-    """Review fix 2: the scratch home a resave loads in holds the library's
+    """The scratch home a resave loads in holds the library's
     `patches/`, every folder down — the module groups' patches with it."""
     lib = tmp_path / "lib"
     (lib / PATCHES / "dream").mkdir(parents=True)
@@ -354,7 +354,7 @@ def test_a_headless_resave_sees_the_librarys_patches(tmp_path):
 
 
 def test_to_moves_no_patch_with_or_without_apply(tmp_path, monkeypatch, capsys):
-    """Review round 2: `--to` moves none — alone it writes only loadable patches into
+    """`--to` moves none — alone it writes only loadable patches into
     the folder; with `--apply` the tool refuses the pair before anything is
     read (and the apply path guards its plan the same way), so the module
     loadable patches and the `/1` patch are left as they were."""

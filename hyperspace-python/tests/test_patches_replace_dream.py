@@ -1,11 +1,9 @@
-"""Wave 3 P2: the conflict sheet's replace machinery, generic.
+"""The conflict sheet's replace machinery, generic.
 
-Plan 90 H3: the dream was the one kind the sheet could replace ("replace
-the host's dream"); it is an effect now, any number of instances, and
-`patches.REPLACEABLE` is empty. Its dream-specific tests went with it; what
-stays is the machinery's own: every single-instance node is refused in
-words, the replaced values read by what a node owns for any kind, and a
-landing held across a hot reload.
+No kind is replaceable: the dream is an effect, any number of instances, and
+`patches.REPLACEABLE` is empty. What is checked is the machinery's own: every
+single-instance node is refused in words, the replaced values read by what a
+node owns for any kind, and a landing held across a hot reload.
 """
 
 from __future__ import annotations

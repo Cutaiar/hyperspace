@@ -1,4 +1,4 @@
-"""Version 0 of the Joy-Con (the owner, 2026-11-04): its buttons and stick, the
+"""Version 0 of the Joy-Con: its buttons and stick, the
 gyro and shake, with its sensors moving no position, and every other pad as it
 was. Real bytes from the owner's tapes (`joycon-bt-excerpt.jsonl`,
 `joycon-v0-moves.jsonl`)."""
@@ -452,7 +452,7 @@ def test_a_steady_slow_turn_past_the_ceiling_is_never_learned():
 
 
 def test_an_even_turn_under_the_ceiling_is_the_trade_off_and_its_back_drift_is_bounded():
-    """Row 687's trade-off, held: 5 deg/s for three seconds is taken for rest. Stopped,
+    """The trade-off, held: 5 deg/s for three seconds is taken for rest. Stopped,
     it drifts back slowly, and the next rest learned ends it."""
     turn = hid.Turn(learn=True)
     even_turn(turn, 5.0, 3.0)
@@ -556,7 +556,7 @@ def test_a_second_pads_layout_is_under_its_own_role():
 
 @pytest.mark.parametrize("model", [m for m in models.MODELS.values() if m.layout], ids=lambda m: m.id)
 def test_a_models_rows_are_a_persons_and_no_patch_may_reach_their_meta_params(model):
-    """The two layers (rows 746, 755): a pad button is a person's row, so a model's
+    """The two layers: a pad button is a person's row, so a model's
     row on a meta param stands; the same param on a patch's route is refused; and
     no model's row lives in a table, so no load can carry one."""
     _, _, router, _ = layout_rig(model)

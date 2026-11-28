@@ -1,8 +1,8 @@
-"""Outputs published out (plan 32 T9): the config's `syphon` / `ndi` /
+"""Outputs published out: the config's `syphon` / `ndi` /
 `window` keys, a publish-only output drawn offscreen with no window, each
 published output's picture handed to its publishers after it is drawn,
 an NDI out that never makes the frame wait, the SYSTEM lines — then
-loopbacks through the real libraries (our sender read back by T8's
+loopbacks through the real libraries (our sender read back by the
 receivers) where they import."""
 
 from __future__ import annotations
@@ -412,7 +412,7 @@ def test_fps_falls_to_zero_when_nothing_was_sent_for_a_second(ctx, monkeypatch):
 
 
 def test_ndi_out_loopback(ctx):
-    """Our NDI out, read back by T8's receiver: the mean colour matches
+    """Our NDI out, read back by the NDI receiver: the mean colour matches
     and the picture is the right way up."""
     pytest.importorskip("cyndilib")
     from hyperspace.media.ndi import NdiKind
@@ -468,7 +468,7 @@ def test_ndi_out_loopback(ctx):
 
 
 def test_ndi_turned_on_and_off_from_the_panel_on_a_real_context(ctx):
-    """2026-11-22: the panel's ask made so on the render context — a real
+    """The panel's ask made so on the render context — a real
     sender and tap, then both gone — and the frame publishes through them."""
     pytest.importorskip("cyndilib")
     sl = Slot(1)
@@ -491,7 +491,7 @@ def test_ndi_turned_on_and_off_from_the_panel_on_a_real_context(ctx):
 # (last in the file: it makes a window's context current; the module's
 # standalone context is made current again at its end)
 def test_syphon_out_loopback(ctx):
-    """Our Syphon out, read back by T8's Syphon source: the texture handed
+    """Our Syphon out, read back by the Syphon source: the texture handed
     over (no readback), its colours and its way up intact."""
     import gc
 
@@ -551,7 +551,7 @@ def test_syphon_out_loopback(ctx):
         k.close()
         out.close()
         # everything holding the window's GL freed while its context is
-        # current (T6's lesson), then the module's context current again
+        # current, then the module's context current again
         if mt is not None:
             mt.release()
         src = f = mt = out = k = None

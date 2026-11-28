@@ -1,4 +1,4 @@
-"""Plan 32 T1: the media core — frames, ids, the latest-frame slot, the
+"""The media core: frames, ids, the latest-frame slot, the
 worker pool and still images."""
 
 from __future__ import annotations

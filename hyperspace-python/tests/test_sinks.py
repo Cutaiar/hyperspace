@@ -1,4 +1,4 @@
-"""Plan 27 B3: sinks — the bridge and the hands' DAW out as sinks; a param
+"""Sinks — the bridge and the hands' DAW out as sinks; a param
 routed to a sink through the table and Learn.
 
 A sink is a device that reads effective values after `reg.apply` and sends
@@ -82,7 +82,7 @@ def pitches(out):
 def test_a_sink_row_is_a_meta_row_never_a_performer_and_round_trips(tmp_path):
     """The sink row's form: ``{"source": "param:<id>" | "lane:<i>" |
     "lane:*", "target": "<role>:<channel>", "op": "send"}``. bindings.json
-    keeps it (sinks are rig, D1 / D9); it is no route, owns nothing, and a
+    keeps it (sinks are rig); it is no route, owns nothing, and a
     loadable patch never sees it."""
     r = _rig(tmp_path)
     rows = [Binding("param:view.bright", "bridge:3", SINK_OP),

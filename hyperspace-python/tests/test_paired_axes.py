@@ -1,4 +1,4 @@
-"""Plan 56: two discrete controls of a pad as one polarised axis, through the
+"""Two discrete controls of a pad as one polarised axis, through the
 real `Router.pad` with a scripted real `gamepad.Pad`."""
 
 import json
@@ -218,7 +218,7 @@ def test_the_scheme_is_stated_once():
 # ---- the factory pairs ----
 
 def test_the_factory_pairs_act_exactly_as_they_did(rig):
-    """Row 750: `hat:N/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1`
+    """`hat:N/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1`
     stay two rows, the same two, stepping once per press."""
     rows = {(b.source, b.target, b.op, b.value) for b in rig.table.bindings}
     assert {("hat:N", "view.bright", "step", 3), ("hat:S", "view.bright", "step", -3),
@@ -375,7 +375,7 @@ def test_learn_pair_lands_a_step_row_on_two_presses(rig):
     press(rig, pad, 0.2, hat=DOWN)
     assert rig.learn.learning is None
     assert p.position() == was                 # neither learn press stepped it
-    # the factory's rows are on those poles: it asks first (row 754)
+    # the factory's rows are on those poles: it asks first
     assert not rig.table.of("pair")
     settle_pair(rig.learn.pair_ask, TAKE_OVER, rig.reg)
     row = rig.table.of("pair")
@@ -397,7 +397,7 @@ def test_learn_pair_spring_lands_a_route_like_a_stick(rig):
     pad.frame()
     press(rig, pad, 0.0, held={gp.RB})
     press(rig, pad, 0.1, held={gp.A})
-    settle_pair(rig.learn.pair_ask, KEEP_BOTH, rig.reg)    # the factory's RB row: row 754
+    settle_pair(rig.learn.pair_ask, KEEP_BOTH, rig.reg)    # the factory's RB row
     b = rig.table.owner(p.id)
     assert b is not None and b.source == "pair:RB/S" and b.op == "push"
     assert b.motion == DEFAULT_ROUTE_FEEL
@@ -572,7 +572,7 @@ def test_the_graphs_device_node_draws_the_pairs_and_a_cable_makes_a_route(rig):
 
 
 def test_two_decks_read_one_lane_and_keep_their_rows(rig):
-    """Row 748: the lanes are the source's, the rows the deck's. A free pair one
+    """The lanes are the source's, the rows the deck's. A free pair one
     deck's row names shifts no lane another deck reads, and a press acts only
     on the table whose router the pad was handed to."""
     src = Sources()
@@ -595,7 +595,7 @@ def test_two_decks_read_one_lane_and_keep_their_rows(rig):
     assert src.feeds["pair"][natural[1]] == 1.0
 
 
-# ---- review findings on #372 ----
+# ---- a natural pair named first, and pairs across decks ----
 
 def test_a_row_naming_a_natural_pair_first_leaves_the_rest_to_merge():
     src = Sources()
@@ -677,7 +677,7 @@ def test_a_pair_learn_sharing_a_pole_leaves_the_other_moving(rig):
     rig.learn.arm("view.bright", PAIR_WANT)
     rig.learn.learn_pad_button("hat:N")
     rig.learn.learn_pad_button("hat:W")
-    settle_pair(rig.learn.pair_ask, TAKE_OVER, rig.reg)    # row 754
+    settle_pair(rig.learn.pair_ask, TAKE_OVER, rig.reg)    # the factory row
     assert [b.source for b in rig.table.of("pair")] == ["pair:hat.N/hat.W"]
     assert [(b.source, b.value) for b in rig.table.of("hat")] == [("hat:S", -1.0)]
 
@@ -720,7 +720,7 @@ def test_the_lanes_view_lists_a_pair_a_row_names(rig):
 
 def test_every_road_asks_one_predicate(rig, monkeypatch):
     """`models.control_free` says no to LB: offered nowhere, counted nowhere,
-    read nowhere, fired nowhere. What #365's layout will say about SL and SR."""
+    read nowhere, fired nowhere. The same holds for SL and SR."""
     real = models.control_free
     monkeypatch.setattr(models, "control_free",
                         lambda m, name, skip=frozenset(): name != "LB" and real(m, name, skip))

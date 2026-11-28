@@ -1,4 +1,4 @@
-"""Plan 85 (row 1051): tools/set_hands_look.py — every loadable patch's ghost
+"""tools/set_hands_look.py — every loadable patch's ghost
 hands set to the show look (`ghost.SHOW_LOOK`), an unwired hands layer given
 the standard wires, the library walked every folder down, a dry run by
 default and a backup before ``--apply`` writes.
@@ -34,7 +34,7 @@ def _doc(name: str) -> dict:
 
 def _library(tmp_path: Path) -> Path:
     """A library in era folders: dial with its hands wires gone, seq-demo with
-    its layer drawn but into no output, big-blue-wave at #459's GLASS look
+    its layer drawn but into no output, big-blue-wave at the GLASS look
     with a second hands node, plasma-heart already at the show look, and a
     file that is no loadable patch."""
     lib = tmp_path / "lib"
@@ -176,7 +176,7 @@ def test_the_loadable_folder_itself_names_the_library(tmp_path, capsys, monkeypa
 
 
 def test_a_null_values_patch_is_set_and_does_not_end_the_run(tmp_path, capsys, monkeypatch):
-    """Review of #459: the app reads `values: null` as none; so does the tool,
+    """The app reads `values: null` as none; so does the tool,
     and a patch beside it is still visited."""
     t = _tool()
     lib = _library(tmp_path)
@@ -193,7 +193,7 @@ def test_a_null_values_patch_is_set_and_does_not_end_the_run(tmp_path, capsys, m
 
 
 def test_a_layer_fed_by_another_hands_node_keeps_its_feed():
-    """Review of #459: `hands.2 → hands.layer.hands` stays the layer's one
+    """`hands.2 → hands.layer.hands` stays the layer's one
     feed; only the output wires are added."""
     t = _tool()
     from hyperspace.fx import FxState
@@ -210,7 +210,7 @@ def test_a_layer_fed_by_another_hands_node_keeps_its_feed():
 
 
 def test_an_older_whole_patch_is_named_for_the_migration_and_left(tmp_path):
-    """Review of #459: a legacy `hyperspace.preset` whole patch is a loadable
+    """A legacy `hyperspace.preset` whole patch is a loadable
     patch, but its raw graph is not what runs; the tool says to migrate first."""
     t = _tool()
     from hyperspace.fx import FxState
@@ -225,7 +225,7 @@ def test_an_older_whole_patch_is_named_for_the_migration_and_left(tmp_path):
 
 
 def test_values_as_pairs_keep_every_value_and_their_shape():
-    """Review of #459: the app reads `values` given as pairs as a map; so does
+    """The app reads `values` given as pairs as a map; so does
     the tool, no other value is lost, and they are written back as pairs (the
     load converts an unmarked map's camera pan, never a pairs list's)."""
     t = _tool()
@@ -238,7 +238,7 @@ def test_values_as_pairs_keep_every_value_and_their_shape():
 
 
 def test_a_pairs_patch_lands_its_camera_as_it_did(tmp_path):
-    """Review of #459: a pairs patch with a camera pan and no units marker is
+    """A pairs patch with a camera pan and no units marker is
     written, and lands the same pan and everything else as before."""
     t = _tool()
     from hyperspace.fx import FxState

@@ -126,16 +126,16 @@ def test_config_explicit_path_keeps_working(tmp_path):
 # ---------------------------------------------------------------- files
 
 def test_the_band_scenes_ship_in_the_package():
-    """Nothing of the library ships with the app (one tier, 2026-10-28);
+    """Nothing of the library ships with the app (one tier);
     the analyzer's eleven scenes do, as code data under
     hyperspace/scenes/band/, read by control.py without a library."""
     names = {json.loads(p.read_text())["name"] for p in SCENES_DIR.glob("*.json")}
     assert names == set(SCENES)
     doc = json.loads((SCENES_DIR / "balanced.json").read_text())
     assert doc["schema"] == "hyperspace.patch/3" and doc["group"] == "band"
-    # (plan 50: read as a patch of the band group, through the one ladder)
+    # read as a patch of the band group, through the one ladder
     assert scene_doc(SCENES_DIR / "balanced.json") == patches.forward(doc)
-    assert patches.forward(doc)["schema"] == "hyperspace.patch/3"     # (plan 89)
+    assert patches.forward(doc)["schema"] == "hyperspace.patch/3"
     with pytest.raises(LibraryError, match="no scene file"):
         scene_doc(SCENES_DIR / "no-such.json")
     # the analyzer contract: a layout next to the flat band.{i}.* values
@@ -143,7 +143,7 @@ def test_the_band_scenes_ship_in_the_package():
     assert doc["layout"]["bands"][0]["f"] == pytest.approx((20 * 60) ** 0.5)
     assert doc["layout"]["bands"][0]["q"] == pytest.approx((20 * 60) ** 0.5 / 40)
     assert doc["values"]["band.1.atk"] == 0.015
-    # plan 11 (A1): the layout carries the band names, so a load keeps them
+    # the layout carries the band names, so a load keeps them
     assert [b["name"] for b in doc["layout"]["bands"]] == [b.id for b in BANDS]
 
 
@@ -154,11 +154,10 @@ def test_slug():
 
 
 def test_macros_are_patch_state(rig, tmp_path):
-    """Plan 13 WP1 / WP2: the macros are performance state. A loadable patch
+    """The macros are performance state. A loadable patch
     carries them and a project (the meta controller) does not; the module strips
     still list no `macro` group (a macro's meaning is its subscribers,
-    which live in the loadable patch). The live table keeps them too until plan
-    13 WP5 (test_routing)."""
+    which live in the loadable patch)."""
     lib, reg = rig.lib, rig.reg
     assert "macro" not in lib.groups() and "view" in lib.groups()
     m = reg["macro.2"]
@@ -178,7 +177,7 @@ def test_macros_are_patch_state(rig, tmp_path):
 
 
 def test_a_project_keeps_the_meta_apart(rig, tmp_path):
-    """Plan 13 §2.2 / §4: a project file (schema 2) holds the meta controller part
+    """A project file (schema 2) holds the meta controller part
     as `session` and the bank as names; the performance is the loadable patch's.
     is_dirty sees the meta controller, the bank and the startup loadable patch; a file
     that lacks a meta controller id takes the loaded state, so it opens clean."""
@@ -190,7 +189,7 @@ def test_a_project_keeps_the_meta_apart(rig, tmp_path):
     assert doc["schema"] == "hyperspace.install/1" and "values" not in doc
     assert doc["tuning"] == reg.snapshot(part="shared_meta")
     assert "master.gain" in doc["tuning"] and "view.shape" not in doc["tuning"]
-    # the file holds the F-keys' eight (plan 19 WP1: `bank_doc`), the show 24
+    # the file holds the F-keys' eight (`bank_doc`), the show 24
     assert doc["bank"] == lib.install.bank[:8] == library.bank_doc(lib.install.bank)
     assert doc["startup"] == "BIG BLUE WAVE"
     assert not lib.install.is_dirty()
@@ -263,7 +262,7 @@ def test_dirty_save_as_overwrite_reset(rig, tmp_path):
 
 
 def test_a_band_preset_saved_from_the_strip_carries_its_layout(rig, tmp_path):
-    """Audit A2: save_as fills the group's `extra` from its hook, so an
+    """save_as fills the group's `extra` from its hook, so an
     eight-band preset restores eight bands — names included — onto a
     six-band analyzer instead of six and two missing ids."""
     lib, reg, control, chain = rig.lib, rig.reg, rig.control, rig.chain
@@ -291,11 +290,9 @@ def test_a_band_preset_saved_from_the_strip_carries_its_layout(rig, tmp_path):
 
 
 def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
-    """Code review of PR #44 (A2): every band document the library writes
+    """Every band document the library writes
     is built by Library.document, so a band preset that has no file when
-    the project is saved is copied inline with its layout. (Applying a
-    module's layout on project load is a separate, older gap: Install._apply
-    never ran the layout hook; filed for plan 11's library sweep.)"""
+    the project is saved is copied inline with its layout."""
     lib, control, chain = rig.lib, rig.control, rig.chain
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
@@ -313,11 +310,9 @@ def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
 
 
 def test_delete_and_rename(rig, tmp_path):
-    """Audit L5: `rename` had no caller and went; delete deletes any file
-    (False only when there is no such loadable patch). Plan 19 WP4 brings a rename
-    back with a caller (the preset list), for the loadable patches' group — and
-    plan 40 the patches' (`RENAMABLE`): a module preset is named by shows
-    and scenes."""
+    """Delete deletes any file (False only when there is no such loadable
+    patch). Rename exists for the loadable patches' group and the patches'
+    (`RENAMABLE`): a module preset is named by shows and scenes."""
     lib = rig.lib
     lib.save_as("camera", "Wide")
     assert lib.list("camera") == ["Wide"] and lib.current("camera") == "Wide"
@@ -331,8 +326,8 @@ def test_delete_and_rename(rig, tmp_path):
 
 
 def test_a_group_registered_after_attach_has_a_default_too(rig):
-    """Audit L6: the overlay's output.* registered after attach(), so reset
-    and the dirty dot ignored them until a loadable patch saved them. Now a group's
+    """The overlay's output.* registers after attach(), so reset
+    and the dirty dot would ignore them until a loadable patch saved them. A group's
     fresh values are adopted the first time anyone asks about it."""
     lib, reg = rig.lib, rig.reg
     late = SimpleNamespace(alpha=1.0)
@@ -348,7 +343,7 @@ def test_a_group_registered_after_attach_has_a_default_too(rig):
 
 
 def test_the_home_is_ensured_once_per_process(tmp_path, monkeypatch):
-    """Audit L5: config.load and Library() both ensure the home; the
+    """config.load and Library() both ensure the home; the
     working-directory migration scan runs once."""
     home = tmp_path / "once"
     calls = []
@@ -361,7 +356,7 @@ def test_the_home_is_ensured_once_per_process(tmp_path, monkeypatch):
 
 
 def test_a_project_restores_a_modules_layout(rig, tmp_path):
-    """Audit L8: a project saved on eight bands comes back with eight —
+    """A project saved on eight bands comes back with eight —
     `Install._apply` takes the same road a strip load does, layout first."""
     lib, control, chain = rig.lib, rig.control, rig.chain
     band(tmp_path, "Balanced")
@@ -403,15 +398,14 @@ def test_a_project_restores_a_modules_layout(rig, tmp_path):
 # --------------------------------------------------------- document kinds
 
 def test_loadables_are_the_librarys_one_document_kind(rig, tmp_path):
-    """Audit L1, closed by plan 13 WP5: one loadable patch system. The routing
-    loadable patches' kind is gone (was test_routing_presets_are_a_document_kind_of_
-    the_library); what they were — legacy6, lfo-breathe, the hands-* — are
+    """One loadable patch system. There is no separate routing
+    kind; legacy6, lfo-breathe and the hands-* are
     loadable patches, which list, load, save, dirty and delete through the library
     like any module's. A user's old bindings/ folder is no group."""
     from hyperspace.routing import Binding
 
     lib, router = rig.lib, rig.loaded_patch.router
-    # plan 40 T1: and the patches, a kind that is spawned, never loaded
+    # and the patches, a kind that is spawned, never loaded
     assert lib.kinds == ("patches", "playlists", "loadable") and not hasattr(lib, "routing")
     (tmp_path / "bindings").mkdir()
     (tmp_path / "bindings" / "mine.json").write_text("{}")
@@ -422,7 +416,7 @@ def test_loadables_are_the_librarys_one_document_kind(rig, tmp_path):
     assert not lib.is_dirty("loadable")                    # nothing loaded: never dirty
     rig.view.pattern_mod[0] = 0.4
     lib.load("loadable", "legacy6")
-    assert rig.view.pattern_mod[0] == 1.0                 # its bases land (plan 22 B3: 1)
+    assert rig.view.pattern_mod[0] == 1.0                 # its bases land
     assert lib.current("loadable") == "legacy6" and not lib.is_dirty("loadable")
     assert len(router.table.routes()) == 12
     router.table.add(Binding("lane:2", "view.bright", "push", 0.3))
@@ -486,7 +480,7 @@ def test_a_project_naming_the_old_routing_layer_is_ignored(rig, tmp_path):
 
 
 def test_a_project_never_carries_the_loaded_loadable(rig, tmp_path):
-    """Audit L3, and plan 13 §2.2: `Install.io` is gone, and the loaded
+    """`Install.io` is gone, and the loaded
     loadable patch (routes and all) stays out of a project's modules — the bank
     names loadable patches, the project holds the meta controller."""
     lib = rig.lib
@@ -539,7 +533,7 @@ def test_bad_files_are_reported_not_fatal(rig, tmp_path):
 
 
 def test_schema_migration_table():
-    """The shows' ladder (plan 50: the only one `migrate_doc` serves — a
+    """The shows' ladder (the only one `migrate_doc` serves — a
     loadable patch's is `graphmigrate.forward`, a fragment's `patches.forward`)."""
     with pytest.raises(LibraryError, match="no schema"):
         migrate_doc({}, "hyperspace.project")
@@ -582,7 +576,7 @@ def test_project_save_load_new(rig, tmp_path):
     assert doc["tuning"]["master.gain"] == 2.5 and "camera.zoom" not in doc["tuning"]
     assert doc["bank"][2] == "STROBE CAGE"
     assert lib.read("loadable", "STROBE CAGE")["values"]["camera.zoom"] == 3.0
-    assert "io" not in doc                                  # audit L3: never written, gone
+    assert "io" not in doc                                  # never written, gone
 
     lib.install.new()
     assert lib.install.name == "untitled" and lib.install.path is None
@@ -670,7 +664,7 @@ def test_editing_the_open_project_reloads_it(rig, tmp_path):
 
 
 def test_a_band_presets_normalisation_switch_round_trips(rig):
-    """Audit A10: `band.{i}.norm` is a persisted scene setting, never a
+    """`band.{i}.norm` is a persisted scene setting, never a
     performer's — saved with a band preset, restored by it, not ownable."""
     lib, reg, chain = rig.lib, rig.reg, rig.chain
     assert not reg["band.3.norm"].modulatable and reg["band.3.norm"].persist
@@ -687,7 +681,7 @@ def test_a_band_presets_normalisation_switch_round_trips(rig):
 
 def test_the_librarys_shows_are_listed_and_load_by_name(rig, tmp_path):
     """The load combo lists the library's shows (`projects/*.json`;
-    plan 12's `party`, from the seed); opening one by name lands its bank,
+    the seed's `party`); opening one by name lands its bank,
     and its startup loadable patch with it."""
     lib = rig.lib
     assert lib.install.list() == ["house", "party"]
@@ -695,15 +689,15 @@ def test_the_librarys_shows_are_listed_and_load_by_name(rig, tmp_path):
     assert lib.install.name == "party"
     assert lib.install.path == tmp_path / "installs" / "party.json"
     assert lib.install.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA",
-                                "NOITA", "TRACER"] + [None] * 15    # plan 19 WP1: slot 9
+                                "NOITA", "TRACER"] + [None] * 15    # slot 9
     assert lib.current("loadable") == "TUMBLE" and lib.install.active == 0
     assert rig.view.shape == 10 and lib.current("band") == "Balanced"
 
 
-# ------------------------------------------------ plan 15 WP1: the trash
+# ------------------------------------------------ the trash
 
 def trash(home, group) -> list:
-    # (plan 50: a group's patches sit under patches/<group>/, and so in the trash)
+    # a group's patches sit under patches/<group>/, and so in the trash
     d = home / library.TRASH / (group if group in ("loadable", "installs", "patches")
                                 else f"patches/{group}")
     return sorted(d.iterdir()) if d.is_dir() else []
@@ -778,7 +772,7 @@ def test_a_delete_keeps_the_file_in_the_trash_or_does_not_delete(rig, tmp_path, 
 
 
 def test_a_save_that_changes_nothing_trashes_nothing(rig, tmp_path):
-    """Fork 6 (b): Save on an unchanged loadable patch leaves the trash alone."""
+    """Save on an unchanged loadable patch leaves the trash alone."""
     lib, reg = rig.lib, rig.reg
     lib.save_as("view", "Same")
     for _ in range(3):
@@ -831,7 +825,7 @@ def test_the_trash_is_no_group_and_is_never_watched(rig, tmp_path):
     assert json.loads(path.read_text())["values"]["view.bright"] == 2.0
 
 
-# ------------------------------------------- plan 15 WP4: save-as's name and slot
+# ------------------------------------------- save-as's name and slot
 
 def test_next_name_counts_on_from_a_trailing_number():
     """`next_name(base, taken)`: the first "<stem> <n>" whose slug is free.
@@ -859,8 +853,8 @@ def test_next_name_counts_on_from_a_trailing_number():
 
 
 def test_next_empty_reads_the_banks_own_length(tmp_path):
-    """Plan 15 §1 row 13: the next empty slot is read off the bank's own
-    list — neither `library.SLOTS` nor `routing.F_KEYS` — so plan 19's
+    """The next empty slot is read off the bank's own
+    list — neither `library.SLOTS` nor `routing.F_KEYS` — so the
     bank of twenty-four answers with no change to it, and a save-as and
     the slot menu's two calls reach its far slots: the party show's first
     empty slot is 10, and that is where the desk's save-as lands."""
@@ -898,7 +892,7 @@ def test_next_empty_reads_the_banks_own_length(tmp_path):
         assert "SLOTS" not in src, fn.__name__
 
 
-# ------------------------------------------- plan 19 WP1: a bank of twenty-four
+# ------------------------------------------- a bank of twenty-four
 
 def bak8(show):
     """The backups `Install.write` has made of an eight-slot show file."""
@@ -954,7 +948,7 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     assert len(pads) == 16 and {p["target"] for p in pads} == {"view.shape"}
     for name in OWNER_LOADABLES:
         doc = json.loads((home / "loadable" / f"{slug(name)}.json").read_text())
-        assert doc["schema"] == "hyperspace.loadable/12" and doc["name"] == name   # (row 394)
+        assert doc["schema"] == "hyperspace.loadable/12" and doc["name"] == name
         by_source = {row["source"]: row for row in doc["desk"]}
         for pad in pads:
             if name == "NIGHT TWO" and pad["source"] == OWNER_PAD["source"]:
@@ -968,7 +962,7 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     source, target = OWNER_ROW
     assert [b["target"] for b in table["bindings"] if b["source"] == source] == [target]
     assert not any(b.get("layer") == "preset" for b in table["bindings"])
-    # as written before plan 19 WP2: nothing on clip rows 4 and 5, the first eight pads only
+    # as written before the far pads: nothing on clip rows 4 and 5, the first eight pads only
     assert not {b["source"] for b in table["bindings"]} & set(far_pads())
     assert len([b for b in table["bindings"] if b["target"] == "preset.select"]) == 8
     assert json.loads((home / "windows.json").read_text())["schema"] == "hyperspace.windows/1"
@@ -983,7 +977,7 @@ def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
     rewritten: after a launch, loadable patch loads, home, opening the other show
     and a quit, every file in the home but `last_show` and `windows.json`
     (written as they always were) has the bytes and the mtime it had —
-    and but `bindings.json`, which the first launch of plan 19 WP2 rewrites
+    and but `bindings.json`, which the first launch rewrites
     once, backed up first (test_routing.py's tests on this home)."""
     home = owner_home
     quiet = ("last_install", "windows.json", "bindings.json")
@@ -1063,7 +1057,7 @@ def test_a_show_that_uses_only_the_first_eight_is_written_with_eight(owner_home)
     assert len(doc["bank"]) == 8 and doc["bank"][3] == "NIGHT THREE" and doc["bank"][6] is None
     r.reg["preset.save.6"].fire()                          # ⇧F7 into the hole
     assert len(json.loads(show.read_text())["bank"]) == 8 and pr.bank[6] == "PATCH 7"
-    # (the one backup in the home is bindings.json's, from the launch: plan 19 WP2)
+    # (the one backup in the home is bindings.json's, from the launch)
     assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v4"]
     assert not pr.is_dirty() and pr.bank_error == ""
     assert lib.warning == ""
@@ -1091,7 +1085,7 @@ def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
     assert [p.name for p in bak8(show)] == ["mine.json.bak-v2-bank8"]
     assert bak8(show)[0].read_bytes() == old               # the file from before any far slot
     doc = json.loads(show.read_text())
-    assert doc["schema"] == "hyperspace.install/1"         # the schema stays (fork 2; plan 44 D3: /3)
+    assert doc["schema"] == "hyperspace.install/1"         # the schema stays
     assert len(doc["bank"]) == 12 and doc["bank"][8:] == [None, None, None, "NIGHT TWO"]
     assert doc["bank"][:8] == json.loads(old)["bank"] and not pr.is_dirty()
     # a second far write, a save and "starts on": the long bank is on disk, no second copy
@@ -1139,7 +1133,7 @@ def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
         assert pr.bank[2] == "NIGHT ONE" and json.loads(show.read_text())["bank"][2] == "NIGHT ONE"
         assert pr.bank_error == ""
         # save as onto that eight-slot file from a show with a far slot: refused,
-        # and the open show is still the one it was (review of PR #104)
+        # and the open show is still the one it was
         pr.load("mine")
         held, as_was = (pr.name, pr.path, pr.stem), show.read_bytes()
         with pytest.raises(LibraryError, match="no backup"):
@@ -1194,8 +1188,7 @@ def test_save_as_lands_on_slot_nine_once_the_f_keys_are_full(owner_home):
 
 
 def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
-    """Fork 2's known cost, stated: the schema stays `hyperspace.project/3` (plan 44 D3; /2 before),
-    so a build from before plan 19 opens a long bank by cutting it to
+    """The schema stays `hyperspace.project/3`, so a build with eight slots opens a long bank by cutting it to
     eight (`_take`'s `[:SLOTS]` with SLOTS = 8). It shows slots 1–8
     correctly, and its next write of that show drops the far slots'
     names from the file. The loadable patches' files are untouched, and
@@ -1210,7 +1203,7 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     doc = json.loads(show.read_text())
     assert len(doc["bank"]) == 24 and doc["schema"] == "hyperspace.install/1"
     loadables_before = {p.name: p.read_bytes() for p in (home / "loadable").glob("*.json")}
-    # the older build's reading of the file (library.py before plan 19, SLOTS = 8)
+    # the older build's reading of the file (SLOTS = 8)
     old_slots = 8
     bank = [str(s) if isinstance(s, str) and s else None
             for s in list(doc.get("bank") or [])[:old_slots]]
@@ -1224,7 +1217,7 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     assert json.loads(bak8(show)[0].read_text())["bank"] == eight
 
 
-# ------------------------------------------- plan 19 WP4: rename, the trash
+# ------------------------------------------- rename, the trash
 
 def _shows_naming(r, name: str) -> None:
     """The owner's two shows both name `name` on a slot and as "starts on",
@@ -1380,8 +1373,8 @@ def test_renaming_the_loaded_loadable_keeps_its_unsaved_edit(owner_home):
 
 
 def test_a_deleted_loadable_says_which_slots_still_name_it(owner_home):
-    """× on your own loadable patch is plan 15's delete, unchanged; new is what is
-    said: which slots and the startup loadable patch still name it (nothing on the
+    """× on your own loadable patch is a plain delete; what is
+    said besides is which slots and the startup loadable patch still name it (nothing on the
     panel sets it since the library went one-tier; the file still carries
     it). The slots are not cleared for the owner — a restore to the old
     name makes them work."""
@@ -1541,7 +1534,7 @@ def test_empty_trash_removes_only_the_trash(owner_home, tmp_path):
 
 
 def test_the_trash_lists_only_what_it_kept(owner_home):
-    """Review of PR #117: a Finder `.DS_Store` (or any file `to_trash` did
+    """A Finder `.DS_Store` (or any file `to_trash` did
     not write) in a trash folder is not listed, not restored and not
     emptied — a restore would have made it a loadable patch."""
     home = owner_home
@@ -1556,7 +1549,7 @@ def test_the_trash_lists_only_what_it_kept(owner_home):
     assert lib.empty_trash() == 1 and all(p.exists() for p in junk)
 
 
-# ------------------------------------------- the stick spring's knobs (2026-10-29)
+# ------------------------------------------- the stick spring's knobs
 
 def _bare(home):
     """A library over an empty home with the desk's shared meta params — the

@@ -1,4 +1,4 @@
-"""Live media feeds (plan 32 T8): the shared `LiveSource` / `LiveKind`
+"""Live media feeds: the shared `LiveSource` / `LiveKind`
 over a fake reader and a fake clock — a feed that stops holds 1 s then
 goes black, comes back with no reopen, is let go 5 s after the last
 channel, and is found off the frame thread — then NDI, Syphon and the
@@ -562,8 +562,8 @@ def test_syphon_loopback(gl_window_ok):
     tex = ctx.texture((w, h), 4)
     fbo = ctx.framebuffer([tex])
     fbo.use()
-    # not one colour: a read of the wrong texture must not pass (T6 fix
-    # round: the bind as 2D failed and read the last 2D texture, this red)
+    # not one colour: a read of the wrong texture must not pass
+    # (a bind as 2D failed and read the last 2D texture, this red)
     ctx.clear(1.0, 0.0, 0.0, 1.0, viewport=(0, 0, w // 2, h))          # left: red
     ctx.clear(0.0, 0.0, 1.0, 1.0, viewport=(w // 2, 0, w - w // 2, h))  # right: blue
     ctx.clear(0.0, 1.0, 0.0, 1.0, viewport=(0, 0, w, h // 4))           # the bottom: green
@@ -595,7 +595,7 @@ def test_syphon_loopback(gl_window_ok):
             time.sleep(0.016)
         assert f is not None, src.status
         assert f.pixels is None and f.texture and f.size == (w, h) and src.status == READY
-        # the real path (T6): an IOSurface's rectangle texture, copied on the
+        # the real path: an IOSurface's rectangle texture, copied on the
         # GPU into a 2D texture of our own — never uploaded — and read back
         from hyperspace.media.frame import TEX_RECT
         from hyperspace.media_tex import MediaTextures
@@ -623,4 +623,4 @@ def test_syphon_loopback(gl_window_ok):
         srv.stop()
         ctx.release()
         glfw.destroy_window(win)
-        glfw.terminate()        # (not left up for the worker's later tests: row 606)
+        glfw.terminate()        # (not left up for the worker's later tests)

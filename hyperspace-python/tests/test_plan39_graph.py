@@ -1,4 +1,4 @@
-"""Plan 39 T5 (W6): GRAPH and the pages — plan 39's three nodes on the
+"""GRAPH and the pages — the segment, matte and cut nodes on the
 canvas.
 
 The picker lists `segment` under media ▸ and `matte` and `cut` under a
@@ -121,7 +121,7 @@ def test_the_cut_out_from_the_picker_lands_at_the_point(tmp_path):
 
 
 def test_the_scene_chain_names_what_it_replaced(tmp_path):
-    """Plan 36's follow-up: the scene chain no longer drops what fed All
+    """The scene chain no longer drops what fed All
     outputs' picture in silence."""
     _, e, _ = wired_rig(tmp_path, {"frame": "wired",
                                      "wires": [{"from": "channel.b", "to": ALL}]})
@@ -165,7 +165,7 @@ def test_a_segment_s_mask_pin_is_purple_its_pictures_red():
 
 
 def test_every_segment_instance_draws_its_pins_and_their_cables():
-    """T4's review: `PINS` lists instance 1 alone; a wired `segment.2` must
+    """`PINS` lists instance 1 alone; a wired `segment.2` must
     never be invisible."""
     spec = spec_of(("channel.a", "segment.2.image"), ("segment.2.fg", ALL),
                    ("segment.2.mask", "cut.mask"), ("scene", "cut.image"),
@@ -281,7 +281,7 @@ def test_each_entry_round_trips_through_a_seven_save_with_its_values(tmp_path):
 # ---------------------------------------------------------------- the FX page
 
 def test_edges_is_an_effect_file_like_any(tmp_path):
-    """W6: `edges` (T0) is on the picker's effects ▸ and on the FX page as
+    """`edges` is on the picker's effects ▸ and on the FX page as
     any effect file is — nothing of its own."""
     from hyperspace import ui_fx
 

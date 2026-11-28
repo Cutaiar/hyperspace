@@ -1,4 +1,4 @@
-"""A real DualSense Edge, over Bluetooth on macOS (2026-11-02): a slice of
+"""A real DualSense Edge, over Bluetooth on macOS: a slice of
 the probe's tape (`tests/fixtures/pads/edge-bt-excerpt.jsonl`, half a
 second of each step, a second of the touch sweep) decoded and turned into
 lanes exactly as the app does. The first test bytes from the hardware

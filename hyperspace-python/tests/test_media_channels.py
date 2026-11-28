@@ -1,4 +1,4 @@
-"""Plan 32 T5 — the eight media channels (hyperspace/media/channels.py).
+"""The eight media channels (hyperspace/media/channels.py).
 
 A `FakeOpener` stands in for `adapters.open_source`: it counts what it
 opens and closes, and a fake may run a thread of its own (named
@@ -429,7 +429,7 @@ def test_a_frozen_live_channel_says_frozen():
     assert m.status("a") == "lost"
 
 
-# ---- assign stores the shared id when there is one (row 809) ----
+# ---- assign stores the shared id when there is one ----
 
 class Twinned(Here):
     """A resolver that offers `prefer_shared`, as `MediaFolder` does: the

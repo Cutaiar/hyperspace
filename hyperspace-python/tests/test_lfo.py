@@ -55,7 +55,7 @@ def test_output_rests_at_half_at_depth_zero_and_swings_with_depth():
 def test_hz_mode_integrates_rate_dt():
     lfos, c = LFOs(), clock_at()
     lf = lfos[0]
-    lf.depth = 1.0                              # the full swing: an LFO's depth ships at 0.5 since the calmer defaults (2026-10-31)
+    lf.depth = 1.0                              # the full swing (an LFO's depth defaults to 0.5)
     lf.shape, lf.rate = SHAPES.index("saw"), 2.0
     lfos.step(0.125, 0.125, c)                  # a quarter cycle in: saw at −0.5
     assert lf.x == pytest.approx(0.25) and lf.out == pytest.approx(REST - 0.25)
@@ -100,7 +100,7 @@ def test_a_tap_does_not_move_a_running_synced_lfo_but_the_trigger_does():
     lfos, c = LFOs(), clock_at(120.0)
     bar, hz = lfos[0], lfos[1]
     bar.sync = SYNCS.index("1 bar")
-    bar.depth = hz.depth = 1.0                  # the full swing: an LFO's depth ships at 0.5 since the calmer defaults (2026-10-31)
+    bar.depth = hz.depth = 1.0                  # the full swing (an LFO's depth defaults to 0.5)
     bar.shape = hz.shape = SHAPES.index("saw")
     hz.rate = 0.7
     run(lfos, c, 0.0, 3.3)                      # mid-bar, mid-cycle
@@ -163,8 +163,8 @@ def test_the_trigger_lands_phase_zero_whatever_the_nudge_and_nudge_then_moves_it
 
 
 def test_a_trigger_after_this_frames_step_lands_phase_zero_on_the_next_step():
-    """The panel's chip and a performer-fired trigger run after `lfos.step`
-    (audit B6): the trigger is held and applied at the next step's own t,
+    """The panel's chip and a performer-fired trigger run after `lfos.step`:
+    the trigger is held and applied at the next step's own t,
     so the first frame the LFOs see it reads exactly 0 — not dt·bpm/60·ratio."""
     lfos, c = LFOs(), clock_at(120.0)
     bar, hz = lfos[0], lfos[1]
@@ -212,7 +212,7 @@ def test_a_per_lfo_reset_after_the_step_lands_phase_zero_next_step_in_either_mod
 
 
 def test_switching_to_hz_carries_the_phase_and_a_division_lands_on_the_clock():
-    """Audit B7: leaving a division for Hz continues from the wave's position
+    """Leaving a division for Hz continues from the wave's position
     (no stale accumulator); choosing a division lands on the clock's beat,
     whether a knob or a loadable patch set it."""
     lfos, c = LFOs(), clock_at(120.0)
@@ -371,13 +371,13 @@ def test_the_trigger_param_moves_the_clock_and_the_synced_lfos():
 def test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame():
     """The chain: LFO 1 pushes lfo.2.depth, centred on the LFO rest of 0.5
     the router reads from `rests` (the row names none). In dependency
-    order (plan 28 N0, decision 7): the LFOs step inside the pass, LFO 1
+    order: the LFOs step inside the pass, LFO 1
     first, then the depth lands, then LFO 2 steps on it — the same frame,
     no lag and no recursion."""
     reg, c, lfos = rig()
     one, two = lfos[0], lfos[1]
     one.shape, one.rate = SHAPES.index("sine"), 1.0    # a quarter cycle per frame below
-    one.depth = 1.0                                     # the full swing: an LFO's depth ships at 0.5 since the calmer defaults (2026-10-31)
+    one.depth = 1.0                                     # the full swing (an LFO's depth defaults to 0.5)
     two.depth = 0.0                                     # silent on its own
     two.shape, two.rate = SHAPES.index("square"), 1.0
     table = Bindings([Binding("lfo:0", "lfo.2.depth", "push", 1.0)])

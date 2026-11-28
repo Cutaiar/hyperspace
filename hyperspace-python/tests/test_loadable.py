@@ -1,12 +1,11 @@
-"""Plan 13 WP2 — the loadable patch (``hyperspace.preset/2``), the project's bank of
+"""The loadable patch (``hyperspace.preset/2``), the project's bank of
 loadable patch names (``hyperspace.project/2``), the F-keys and the startup loadable patch.
 
 Every rig is built the way app.main builds it — Library, registry, attach,
 the Router over the home's bindings.json, `LoadedPatch`, the startup loadable patch —
 on a tmp_path home seeded with the corpus (conftest.seed: the loadable patches the
 build once shipped and the house/party shows), never ~/Hyperspace. The
-bank tests that were tests/test_themes.py (the inline theme bank) are
-folded in here as the bank of names.
+The bank tests cover the bank of names.
 """
 
 import itertools
@@ -59,8 +58,7 @@ def boot(home, show: str | None = "house"):
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
-    # plan 31, as app.main: the envelopes and the sequencer beside the LFOs
-    # (plan 36 T3: the corpus `/7` files hold their values)
+    # as app.main: the envelopes and the sequencer beside the LFOs
     envelope.register(reg, envelope.Envelopes(), clock)
     sequencer.register(reg, sequencer.Sequencer(), clock)
     # the table before attach, as app.main reads it: the desk's meta controller
@@ -92,7 +90,7 @@ def put(home, name, **doc):
 
 def expected(lib, values):
     """Every patch param: the file's value, else the value its object
-    was built with (plan 44 D3: `_fresh_of`, never a `default.json`)."""
+    was built with (`_fresh_of`, never a `default.json`)."""
     out = {}
     for g in PATCH_GROUPS:
         out.update({k: v for k, v in lib._fresh_of(g).items()
@@ -110,7 +108,7 @@ def boot_registry():
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
-    envelope.register(reg, envelope.Envelopes(), clock)       # plan 31: seq-demo's ids
+    envelope.register(reg, envelope.Envelopes(), clock)       # seq-demo's ids
     sequencer.register(reg, sequencer.Sequencer(), clock)
     return reg
 
@@ -118,13 +116,13 @@ def boot_registry():
 # ---------------------------------------------------------------- a load
 
 def test_a_loadable_load_lands_every_base_and_replaces_every_route(rig):
-    """D2: every patch param lands — the file's value, or its group
+    """Every patch param lands — the file's value, or its group
     default — and every performer row is the file's; the input rows stay."""
     lib, reg, table = rig.lib, rig.reg, rig.router.table
     reg["view.bright"].set(3.3)                         # a view base off default
-    reg["fx.on"].set(not reg["fx.on"].value)            # an fx toggle (plan 36 T3: the
-    #                                                     effects are the startup loadable patch's)
-    reg["ghost.alpha"].set(0.2)                         # a hands value (plan 90 H3: was the dream's)
+    reg["fx.on"].set(not reg["fx.on"].value)            # an fx toggle (the effects
+    #                                                     are the startup loadable patch's)
+    reg["ghost.alpha"].set(0.2)                         # a hands value
     table.add(Binding("hand:7", "view.speed", "push", 0.3))    # a hand route
     keys = [b.to_json() for b in table.bindings
             if b.op not in routing.MOD_OPS and b.layer != "preset"]
@@ -146,10 +144,10 @@ def test_a_loadable_load_lands_every_base_and_replaces_every_route(rig):
 
 
 def test_a_loadable_with_per_frame_echo_ids_is_read_in_seconds(rig):
-    """Plan 14 WP6: a loadable patch file that still names the per-frame
+    """A loadable patch file that still names the per-frame
     `dream.decay` / `dream.every` loads as 60 Hz frames in seconds — its
     values, a hand push on the decay (the same throw of decays), a desk
-    knob on it — and the load says so, once. Plan 90 H2: its look-back is
+    knob on it — and the load says so, once. Its look-back is
     public parts, so the seconds land on them — the fade on the trail's
     (the same log range), the gap as the delay's rate — said by the
     look-back's own notes."""
@@ -188,10 +186,10 @@ def test_a_loadable_with_per_frame_echo_ids_is_read_in_seconds(rig):
 
 
 def test_a_loadable_load_never_touches_a_meta_param(rig):
-    """Plan 13 §10 exit 2: a tapped BPM survives TRIP, and so do the drive,
+    """A tapped BPM survives TRIP, and so do the drive,
     an analyzer strip and the band scene, even when the file names them —
-    and the master dim (plan 15 WP3), through a loadable patch load and a show load.
-    Knob smoothing too (`desk.slew`, plan 18 WP2): no loadable patch moves it, a
+    and the master dim, through a loadable patch load and a show load.
+    Knob smoothing too (`desk.slew`): no loadable patch moves it, a
     show that does not name it leaves it, and a show save and load
     round-trips it."""
     from hyperspace.overlay import Output
@@ -252,7 +250,7 @@ def test_meta_ids_in_a_loadable_are_noted_and_ignored(rig):
 
 
 def test_a_value_that_will_not_land_leaves_the_state_whole(rig):
-    """Review of PR #64: a hand-edited value that will not take refuses the
+    """A hand-edited value that will not take refuses the
     load whole — the bases, the routes and the strip stay on the last loadable patch."""
     lib, reg = rig.lib, rig.reg
     snap, routes = reg.snapshot(), [b.to_json() for b in rig.router.table.routes()]
@@ -266,7 +264,7 @@ def test_a_value_that_will_not_land_leaves_the_state_whole(rig):
 
 
 def test_a_project_reload_keeps_the_loaded_loadable(rig):
-    """Review of PR #64: a project re-read from disk (or opened with no
+    """A project re-read from disk (or opened with no
     startup loadable patch) keeps the loadable patch that is loaded — its name, its clean
     reference and its slot's light."""
     lib, pr = rig.lib, rig.lib.install
@@ -288,7 +286,7 @@ def test_a_project_reload_keeps_the_loaded_loadable(rig):
 
 
 def test_a_strip_save_as_moves_the_banks_light(rig):
-    """Review of PR #64: saving the live state from the strip under a name
+    """Saving the live state from the strip under a name
     the bank does not hold puts the slot light out; one the bank names
     lights that slot."""
     lib, pr = rig.lib, rig.lib.install
@@ -318,7 +316,7 @@ def test_a_loadable_carries_the_macros(rig):
 # ---------------------------------------------------------------- the bank
 
 def test_a_step_or_cycle_on_the_bank_skips_empty_slots(rig):
-    """Audit R14: `preset.select` has twenty-four choices and most are
+    """`preset.select` has twenty-four choices and most are
     empty. A learned step or toggle row walks the filled slots only: a step
     stops at the last filled one, a cycle wraps to the first; nothing ever
     lands on an empty slot. Setting a slot outright is unchanged."""
@@ -346,7 +344,7 @@ def test_a_step_or_cycle_on_the_bank_skips_empty_slots(rig):
 
 def test_the_bank_names_the_house_loadables(rig):
     pr = rig.lib.install
-    # plan 19 WP1: twenty-four slots; the house show fills the F-keys' eight
+    # twenty-four slots; the house show fills the F-keys' eight
     assert len(pr.bank) == SLOTS == 24 and pr.bank[0] == "BIG BLUE WAVE"
     eight = pr.bank[:F_KEYS]
     assert len(set(eight)) == F_KEYS and all(n in rig.lib.list("loadable") for n in eight)
@@ -409,7 +407,7 @@ def test_shift_f_saves_the_live_state_as_the_slots_loadable(rig):
     assert "tempo.bpm" not in user["values"] and "master.gain" not in user["values"]
     assert pr.bank[2] == "STROBE CAGE" and pr.active == 2
     doc = json.loads((home / "installs" / "house.json").read_text())
-    assert doc["schema"] == "hyperspace.install/1"   # (plan 44 D3)
+    assert doc["schema"] == "hyperspace.install/1"
     assert doc["bank"] == pr.bank[:F_KEYS] == bank_doc(pr.bank)     # eight in the file
     # an empty slot: a new name, made unique against what is there
     put(home, "PATCH 8")
@@ -434,7 +432,7 @@ def test_a_full_disk_does_not_stop_the_show(rig, monkeypatch):
 # ---------------------------------------------------------------- startup
 
 def test_the_startup_loadable_loads_on_launch(tmp_path):
-    """D11: the project names its startup loadable patch and a launch loads it; a
+    """The project names its startup loadable patch and a launch loads it; a
     startup with no file says so and the app keeps running."""
     r = boot(tmp_path)
     assert r.lib.install.startup == "BIG BLUE WAVE"
@@ -450,12 +448,12 @@ def test_the_startup_loadable_loads_on_launch(tmp_path):
     assert r2.lib.current("loadable") == "STROBE CAGE"
 
 
-# ---------------------------------------------------------------- home (plan 15 WP2)
+# ---------------------------------------------------------------- home
 
 def test_home_loads_what_the_show_starts_on(rig):
-    """Decision 27: `preset.home` loads the show's "starts on" loadable patch —
+    """`preset.home` loads the show's "starts on" loadable patch —
     from another loadable patch, with unsaved edits, and it is a load like any
-    other (D2): the values, the routes, the desk, the bank's light, a
+    other: the values, the routes, the desk, the bank's light, a
     clean dot. A "starts on" picked later is where home goes next."""
     reg, lib, proj = rig.reg, rig.lib, rig.lib.install
     home = reg["preset.home"]
@@ -547,12 +545,11 @@ def test_home_is_one_undo_step(tmp_path):
 
 
 def test_module_labels_are_dropped_and_a_missing_id_is_the_build_value(rig):
-    """Plan 44 D3 (row 540 resolved, the owner, 2026-11-03): an old file's
+    """An old file's
     `modules` labels name nothing any more — every performance strip lands
     clean and unnamed — and a value the file leaves out is the value its
     object was built with, never the group's default module preset (the
-    library's `camera/default.json`; plan 90 H3: the dream group it used is
-    retired, its presets left unread)."""
+    library's `camera/default.json`)."""
     lib, reg = rig.lib, rig.reg
     fresh = lib._fresh_of("camera")
     other = {pid: (v + 0.5 if isinstance(v, float) else v) for pid, v in fresh.items()}
@@ -580,10 +577,10 @@ def test_module_labels_are_dropped_and_a_missing_id_is_the_build_value(rig):
 
 
 def test_the_fx_presets_are_retired(rig):
-    """Plan 40 T5 (D6, the owner: "retired outright"): no fx group in the
+    """No fx group in the
     library's list (so no fx strip), and the fx defaults are the fresh
     values even where an old library still keeps an `fx/default.json`; the
-    load hook and its migration are gone (D10: the FX page is untouched)."""
+    load hook and its migration are gone (the FX page is untouched)."""
     lib = rig.lib
     assert "fx" not in lib.groups() and lib.list("fx") == []
     fresh = lib._fresh_of("fx")
@@ -605,7 +602,7 @@ def test_the_fx_presets_are_retired(rig):
 
 def test_a_loadable_round_trips(rig):
     """Save then load gives the same signature; `desk` and `macros` are
-    the table's (plan 13 WP4), `modules` names the patch groups'
+    the table's, `modules` names the patch groups'
     labels. (The base subscriber names a param nothing else in the test
     moves: the macro is the scene-setter of record, so a param a later
     module load moved would land back on the subscriber's value.)"""
@@ -621,14 +618,14 @@ def test_a_loadable_round_trips(rig):
     path = rig.loaded_patch.save_as("Round Trip")
     assert path == rig.home / "loadable" / "round-trip.json"
     doc = json.loads(path.read_text())
-    # (row 394: every save is the newest schema)
+    # every save is the newest schema
     assert doc["schema"] == "hyperspace.loadable/12" and doc["name"] == "Round Trip"
     assert doc["desk"] == desk and doc["macros"] == macros and doc["note"] == "a note"
-    assert "modules" not in doc                     # (plan 44 D3: the labels are retired)
+    assert "modules" not in doc                     # the labels are retired
     # every performance base, the media family's too — and no retired id
-    # (plan 33 T7: the wires say them; row 394: nothing writes them back)
+    # (the wires say them; nothing writes them back)
     snap = rig.reg.snapshot(part="patch")
-    # (plan 64, row 902: but a fractal's settings, which are its `fractal` key's)
+    # (but a fractal's settings, which are its `fractal` key's)
     snap = {k: v for k, v in snap.items() if k not in loadable.FRACTAL_PIDS}
     assert doc["values"] == snap
     from hyperspace.graphmigrate import retired
@@ -638,12 +635,12 @@ def test_a_loadable_round_trips(rig):
     rig.loaded_patch.load("Round Trip")
     assert rig.loaded_patch.signature() == sig and not lib.is_dirty("loadable")
     assert loadable.desk_json(table.desk()) == desk and table.macros_doc() == macros
-    assert lib.current("camera") is None            # (plan 44 D3: no module label)
+    assert lib.current("camera") is None            # no module label
 
 
 # ---------------------------------------------------------------- the desk and the macros
 
-# (scene launch 5: 1–4 are the invariant render toggles since plan 24 C1)
+# (scene launch 5: 1–4 are the invariant render toggles)
 DESK = [{"source": "cc:*:16", "target": "view.speed", "op": "abs", "feedback": "ring"},
         {"source": "note:0:86", "target": "view.points", "op": "toggle", "feedback": "led"}]
 MACROS = {"macro.1": {"label": "Heat", "subs": [
@@ -652,7 +649,7 @@ MACROS = {"macro.1": {"label": "Heat", "subs": [
 
 
 def test_a_loadable_load_replaces_the_desk_and_the_macros(rig):
-    """Plan 13 D2 / D4, §5 steps 4–5: the patch layer is the file's (a row
+    """The patch layer is the file's (a row
     on an invariant control dropped, its note in the load's), the layer
     drops to it, the global and invariant rows stay; the macros are the
     file's and their base subscribers land at once from the macros' bases
@@ -663,7 +660,7 @@ def test_a_loadable_load_replaces_the_desk_and_the_macros(rig):
     table.set_layer("global")
     put(rig.home, "DESKED", values={"macro.1": 0.5, "view.depth4": 1.0},
         routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}],
-        # MASTER: invariant (the track faders are layered since plan 24 C2)
+        # MASTER: invariant (the track faders are layered)
         desk=[*DESK, {"source": "cc:0:14", "target": "view.bright", "op": "abs"}],
         macros=MACROS)
     rig.loaded_patch.load("DESKED")
@@ -684,7 +681,7 @@ def test_a_loadable_load_replaces_the_desk_and_the_macros(rig):
 
 def test_a_loadable_without_a_desk_gets_the_fresh_loadable_layer(rig):
     """A file with no `desk` key is a fresh loadable patch's desk: the default
-    map's patch layer (`loadable.fresh_desk`, plan 13 §3.2)."""
+    map's patch layer (`loadable.fresh_desk`)."""
     table = rig.router.table
     put(rig.home, "EMPTY", desk=[])
     rig.loaded_patch.load("EMPTY")
@@ -781,7 +778,7 @@ def test_lfo_breathes_macro_moves_brightness_up_and_speed_down(rig):
 
 
 def test_a_load_tells_the_listeners_its_name(rig):
-    """Plan 14 WP1: app.py listens to every loadable patch load (a loadable patch that turns
+    """app.py listens to every loadable patch load (a loadable patch that turns
     the dream on with no worker is a banner); a listener that raises is a
     note, never a failed load."""
     heard: list = []
@@ -794,7 +791,7 @@ def test_a_load_tells_the_listeners_its_name(rig):
     assert not rig.loaded_patch.note.startswith("patch listener")   # the loadable patch's own note
 
 
-# ------------------------------------------- plan 15 WP4: save-as from the desk
+# ------------------------------------------- save-as from the desk
 
 def fill_far(pr, name: str = "WAKE") -> None:
     """Every empty slot past the F-keys pointed at `name`: a bank with no
@@ -825,7 +822,7 @@ def user_loadables(home):
 
 
 def test_save_new_never_overwrites(tmp_path):
-    """Decision 29: the desk's save-as makes a new file every time. The
+    """The desk's save-as makes a new file every time. The
     made name's slug is free among the loadable patch folder's file stems, the
     listed names and the bank's names — so nothing is written over,
     whatever the files are called inside."""
@@ -859,7 +856,7 @@ def test_save_new_never_overwrites(tmp_path):
     assert user_loadables(home) == sorted([*before, *[f"trip-{n}.json" for n in (6, 7, 8, 9)]])
     assert not (home / "trash").exists()
     # a file stem in another case is the same file on a filesystem that
-    # folds case (this rig's): it counts too (review of PR #87)
+    # folds case (this rig's): it counts too
     ten = put(home, "SUNSET").rename(home / "loadable" / "Trip-10.json")
     was = ten.read_bytes()
     assert reg["preset.save_new"].fire() is True
@@ -915,7 +912,7 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     the warning says where it went — every time it happens."""
     r = boot(tmp_path, None)
     lib, reg, pr, home = r.lib, r.reg, r.lib.install, r.home
-    fill_far(pr)                                 # (plan 19 WP1: the party show has 15 empty)
+    fill_far(pr)                                 # (the party show has 15 empty)
     reg["preset.load.4"].fire()
     bank = list(pr.bank)
     assert pr.next_empty() is None
@@ -945,7 +942,6 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     assert "disk full" in pr.bank_error and pr.bank[3] is None
     # the loadable patch saves but the show's file will not take the bank: the
     # slot stays as the file has it, no pad is lit, and it is said
-    # (review of PR #87)
     show = home / "installs" / "party.json"
     before, cur = show.read_text(), lib.current("loadable")
     with pytest.MonkeyPatch.context() as mp:
@@ -955,7 +951,7 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     assert name != cur and name in lib.list("loadable")
     assert pr.bank[3] is None and pr.active == -1 and show.read_text() == before
     assert "disk full" in pr.bank_error and not pr.is_dirty()
-    # the footer says why (plan 19 WP1: a show that cannot be backed up says so here)
+    # the footer says why: a show that cannot be backed up says so here
     assert lib.warning == (f"saved {name} — the install could not be written: it is in the "
                            "patch list (disk full)")
     reg["preset.save_new"].fire()                            # the disk is back: F4, and no error
@@ -1023,7 +1019,7 @@ def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
     reg["preset.load.3"].fire()
     pr.put_slot(7, "WAKE")
     assert pr.bank[3] == pr.bank[7] == "WAKE" and pr.active == 3
-    # nothing loaded: no slot is lit — an empty slot least of all (review of PR #87)
+    # nothing loaded: no slot is lit — an empty slot least of all
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(lib, "current", lambda group: None)
         pr.clear_slot(6)
@@ -1044,7 +1040,7 @@ def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
 
 def test_the_bank_calls_are_no_undo_step(tmp_path):
     """A save-as from the desk, a slot filled, a slot cleared: nothing live
-    changes, so none of them is an undo step (plan 15 WP4)."""
+    changes, so none of them is an undo step."""
     from test_undo import boot as undo_boot
     from test_undo import settle
 
@@ -1064,7 +1060,7 @@ def test_the_bank_calls_are_no_undo_step(tmp_path):
 
 
 def test_rename_and_trash_are_no_undo_step(tmp_path):
-    """Plan 19 WP4 (§1 row 10): rename (of the loaded patch too), ×,
+    """Rename (of the loaded patch too), ×,
     restore and empty write files and change nothing live, so none is an
     undo step — undo cannot put a file back; the trash is the net."""
     from test_undo import boot as undo_boot
@@ -1093,7 +1089,7 @@ def test_rename_and_trash_are_no_undo_step(tmp_path):
     assert "SUNRISE" in lib.list("loadable") and lib.trash() == []
 
 
-# ------------------------------------------- plan 19 WP1: a bank of twenty-four
+# ------------------------------------------- a bank of twenty-four
 
 def test_save_new_lands_past_the_f_keys_and_a_full_bank_says_so(tmp_path):
     """The desk's save-as on the party show: F1–F8 and slot 9 are filled,
@@ -1161,14 +1157,14 @@ def test_active_follows_the_loaded_loadable_from_one_place(tmp_path):
                loadable.LoadedPatch._landed):
         src = inspect.getsource(fn)
         assert "follow()" in src and "bank.index" not in src, fn.__qualname__
-    # (plan 48: `follow` resolves each slot to its file, so a slot naming
+    # (`follow` resolves each slot to its file, so a slot naming
     # the loadable patch by another spelling lights too — the one look-up is there)
     assert inspect.getsource(library).count("bank.index(") == 0
     assert "enumerate(self.bank)" in inspect.getsource(library.Install.follow)
     assert "pr.bank.index(" not in inspect.getsource(loadable)
 
 
-# ------------------------------ plan 19 WP2: a loadable patch saved before the bank's rows
+# ------------------------------ a loadable patch saved before the bank's rows
 
 def _files(home) -> dict:
     return {p.name: (p.read_bytes(), p.stat().st_mtime_ns)
@@ -1192,7 +1188,7 @@ def _is_device_knob(b: Binding) -> bool:
 
 def wake_knobs(home) -> list[tuple[str, str]]:
     """WAKE's eight device knobs, D1–D8, as the corpus file has them — as
-    (source, target), through the look-back's migration (plan 90 H2: its
+    (source, target), through the look-back's migration (its
     knobs retarget onto the public parts, a knob on darken or contrast
     copied onto the dream's and the part's, so eleven rows)."""
     doc = json.loads((home / "loadable" / "party-wake.json").read_text())
@@ -1202,8 +1198,8 @@ def wake_knobs(home) -> list[tuple[str, str]]:
 
 
 def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(owner_home):
-    """The owner's files (on a copy), fork 4. A loadable patch saved before plan
-    19 holds the sixteen shape pads of clip rows 4–5 in its `desk`. At a
+    """The owner's files (on a copy). A loadable patch saved before the shape pads
+    moved holds the sixteen shape pads of clip rows 4–5 in its `desk`. At a
     load those sixteen exact old factory rows are dropped **quietly** — no
     note, no warning line — while a pad the owner re-aimed is dropped
     **with** the existing "that control is invariant" note; a learned
@@ -1218,7 +1214,7 @@ def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(
         assert len(_on_bank_rows(desk)) == 16, name
     r = boot_home(home)                                    # the launch lands NIGHT ONE
     lib, table, pr, loaded_patch = r.lib, r.router.table, r.lib.install, r.loaded_patch
-    # saved before plan 19: the fresh layer had no device knob then (WP3's SCENE)
+    # saved before the device knobs: the fresh layer had none then (the SCENE knobs)
     fresh = len([b for b in loadable.fresh_desk() if not _is_device_knob(b)])
     # NIGHT ONE: the sixteen exact rows — nothing said
     assert lib.current("loadable") == "NIGHT ONE"
@@ -1240,8 +1236,8 @@ def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(
     # the pad the owner had re-aimed is the bank's now, on both layers
     kind, ch, n = OWNER_PAD["source"].split(":")
     assert [b.target for b in table.dispatch(kind, int(ch), int(n))] == ["preset.select"]
-    # NIGHT THREE (WAKE's eight device knobs): quiet, the eight kept (plan 90
-    # H2: saved from WAKE as it opens now, its knobs on the look-back's parts)
+    # NIGHT THREE (WAKE's eight device knobs): quiet, the eight kept
+    # (saved from WAKE as it opens now, its knobs on the look-back's parts)
     lib.warning = ""
     lib.load("loadable", "NIGHT THREE")
     assert loaded_patch.desk_notes == [] and lib.warning == ""
@@ -1256,7 +1252,7 @@ def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(
     lib.poll()
     assert _files(home) == before
     assert len(list((home / "trash" / "loadable").iterdir())) == 1      # nothing new in the trash
-    # emptying the list is fork 4's way back: every row on those pads is noted again
+    # emptying the list brings them back: every row on those pads is noted again
     with pytest.MonkeyPatch.context() as m:
         m.setattr(routing, "RETIRED_DESK_ROWS", frozenset())
         lib.load("loadable", "NIGHT ONE")
@@ -1265,8 +1261,7 @@ def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(
 
 def test_the_next_save_of_an_old_loadable_writes_the_desk_without_the_pads(owner_home):
     """…and the next save writes the desk as it is live — without the
-    rows on clip rows 4–5 — the old file going to the trash first (plan
-    15's rule), byte for byte. The other loadable patches' files are not touched."""
+    rows on clip rows 4–5 — the old file going to the trash first, byte for byte. The other loadable patches' files are not touched."""
     home = owner_home
     before = _files(home)
     r = boot_home(home)
@@ -1281,7 +1276,7 @@ def test_the_next_save_of_an_old_loadable_writes_the_desk_without_the_pads(owner
     doc = json.loads(path.read_text())
     assert _on_bank_rows(doc["desk"]) == []
     knob = loadable.desk_json([loadable.device_knob(*OWNER_KNOB)])[0]
-    # (the fresh layer less the device knobs it gained in plan 19 WP3, + the learned one)
+    # (the fresh layer less the device knobs it gained, + the learned one)
     fresh = [b for b in loadable.fresh_desk() if not _is_device_knob(b)]
     assert knob in doc["desk"] and len(doc["desk"]) == len(fresh) + 1
     (kept,) = list(trash.glob("night-two.*.json"))
@@ -1296,11 +1291,11 @@ def test_the_next_save_of_an_old_loadable_writes_the_desk_without_the_pads(owner
     assert r.loaded_patch.desk_notes == [] and not lib.is_dirty("loadable")
 
 
-# ------------------------------- plan 19 WP3: a user's desk and the re-cut
+# ------------------------------- a user's desk and the re-cut
 
 def test_a_users_desk_is_untouched_by_the_recut(owner_home):
-    """The owner's files (on a copy): a loadable patch saved before plan 19 carries
-    its own `desk`, and plan 19's re-cut does not reach it. NIGHT ONE's
+    """The owner's files (on a copy): a loadable patch saved before the re-cut carries
+    its own `desk`, and the re-cut does not reach it. NIGHT ONE's
     eight device knobs stay dark — D1 turned moves no 4D depth; NIGHT TWO
     keeps the knob the owner learned (D3) and the seven dark ones; NIGHT
     THREE keeps WAKE's eight as saved. No file changes. A user file with
@@ -1338,7 +1333,7 @@ def test_a_users_desk_is_untouched_by_the_recut(owner_home):
 
 
 def test_a_saved_route_onto_a_setting_is_dropped_with_a_note(rig):
-    """Plan 21 R12: a loadable patch saved while `ghost.mirror` (or `.guide`,
+    """A loadable patch saved while `ghost.mirror` (or `.guide`,
     `.tethers`) was modulatable may carry a hand's route onto it. Loading
     it drops that route with a note — no crash, the other routes land —
     and the file on disk is not rewritten."""
@@ -1355,23 +1350,22 @@ def test_a_saved_route_onto_a_setting_is_dropped_with_a_note(rig):
     assert table.owner("view.inst_amp").source == "hand:right.y"
     notes = rig.loaded_patch.notes
     assert ("dropped hand:right.x → ghost.mirror: ghost.mirror is the meta controller's, "
-            "tuned before the show; no patch row may drive it") in notes     # (row 743)
+            "tuned before the show; no patch row may drive it") in notes
     assert "dropped hand:left.roll → ghost.guide: not modulatable" in notes
     assert "dropped lfo:0 → ghost.tethers: not modulatable" in notes
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
     assert rig.reg["ghost.mirror"].value is False
 
 
-# ---- plan 35 T3: the wired frame's schema (row 385) ----
+# ---- the wired frame's schema ----
 
 WIRED_FIXTURES = ("blank-frame", "channel-out-only", "through-one-output")
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "presets"
 
 
 def test_a_wired_loadable_saves_as_v6(rig):
-    """Row 385, row 394: every save is the newest schema — plan 43 C2:
-    `hyperspace.preset/9` — the frame edited or not; the ladder reads `/2`
-    … `/9` (plan 40 T2's `/8` a `/7` with groups) — and a `/10` file is
+    """Every save is the newest schema, `hyperspace.preset/9` — the frame edited or not; the ladder reads `/2`
+    … `/9` (`/8` is a `/7` with groups) — and a `/10` file is
     refused in its words."""
     assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
     assert graphmigrate.WIRED_SCHEMA == loadable.WIRED_SCHEMA == "hyperspace.preset/7"
@@ -1392,8 +1386,8 @@ def test_a_wired_loadable_saves_as_v6(rig):
 
 @pytest.mark.parametrize("name", WIRED_FIXTURES)
 def test_a_wired_frame_loadable_saves_and_loads(tmp_path, name):
-    """Each of T3's `/6` fixtures, loaded, saved and loaded into a fresh rig,
-    lands the same `GraphSpec`, and saves `/7` (plan 36 T3) — the second
+    """Each of the `/6` fixtures, loaded, saved and loaded into a fresh rig,
+    lands the same `GraphSpec`, and saves `/7` — the second
     load reads it as it is."""
     src = FIXTURE_DIR / f"{name}.json"
     assert json.loads(src.read_text())["schema"] == "hyperspace.preset/6"
@@ -1413,7 +1407,7 @@ def test_a_wired_frame_loadable_saves_and_loads(tmp_path, name):
         assert json.loads(saved)["schema"] == "hyperspace.loadable/12"
 
 
-# ---------------------------------------------------------------- a new loadable patch (plan 35 T7)
+# ---------------------------------------------------------------- a new loadable patch
 
 def _fresh_patch(lib):
     return {k: v for k, v in lib._fresh_all().items()
@@ -1432,10 +1426,10 @@ def _spoil(rig, name):
 
 @pytest.mark.parametrize("name", ["big-blue-wave", "hex-engine"])
 def test_a_new_loadable_is_fresh_values_and_the_scene_chain(rig, name):
-    """Plan 35 T7 (row 387): the library's fresh values for every
+    """The library's fresh values for every
     patch group whatever was loaded, no loadable patch routes, the desk the
     fresh patch layer (written explicitly), the meta controller as it was, and
-    (plan 36 T5, W5) a frame of the scene chain alone — a shape on every
+    a frame of the scene chain alone — a shape on every
     window."""
     lib, reg, table = rig.lib, rig.reg, rig.router.table
     _spoil(rig, name)
@@ -1452,7 +1446,7 @@ def test_a_new_loadable_is_fresh_values_and_the_scene_chain(rig, name):
     spec = rig.loaded_patch.graph.spec
     assert spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}],
             "wires": [{"from": "shape", "to": "scene.geometry"},
-                      {"from": "scene", "to": "output.all.image"}]}   # (plan 36 T3: hands written)
+                      {"from": "scene", "to": "output.all.image"}]}   # (hands written)
     assert G.reaches(spec) == frozenset({"shape", "scene"})
     assert lib.current("loadable") == loadable.UNTITLED_PATCH
     assert lib.is_dirty("loadable")
@@ -1493,7 +1487,7 @@ def test_a_new_loadable_undoes_in_one_step(rig):
 
 
 def test_a_new_loadable_empties_the_bins_macros_and_modifiers(rig):
-    """T7's deferred check (final review): after a loadable patch with a channel's
+    """After a loadable patch with a channel's
     bin, a macro and a modifier, New leaves no bin filled, no macro
     subscriber and no modifier — and its save writes none of them."""
     doc = json.loads((rig.home / "loadable" / "lfo-breathe.json").read_text())
@@ -1538,7 +1532,7 @@ def gl_ctx():
 
 
 def test_a_new_loadable_draws_a_shape(rig, gl_ctx):
-    """Plan 36 T5 (W5; was plan 35 T7's black): the new loadable patch's frame,
+    """The new loadable patch's frame,
     drawn on two views through the bus, is not the ground alone — the
     shape is on each window."""
     from test_graph_frame import SIZE, _fbo, _px, _tool
@@ -1561,7 +1555,7 @@ def test_a_new_loadable_draws_a_shape(rig, gl_ctx):
         gl.close()
 
 
-# ---- plan 34 T4: the resize's values (Review Focus 6) ----
+# ---- the resize's values ----
 
 RESIZE_OLD = {"nodes": [{"kind": "resize", "instance": 2}],
               "wires": [{"from": "frame", "to": "fx.image"},
@@ -1575,7 +1569,7 @@ def _resize_section(section=RESIZE_OLD):
 def test_resize_values_save_and_load_with_the_loadable(tmp_path):
     """A loadable patch whose graph holds `resize.2` carries its values: saved and
     loaded into a fresh rig, `resize.2.crop_x` lands with no unknown-id
-    note, and the file is `/6` (row 394).
+    note, and the file is `/6`.
     A loadable patch without the entry undeclares `resize.2.*`; one with the entry
     and no wire still declares it (the reach does not decide)."""
     a, b = tmp_path / "a", tmp_path / "b"

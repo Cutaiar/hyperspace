@@ -1,4 +1,4 @@
-"""What the import walls share (`test_*_boundary.py`, row 788): a wall names a module by its
+"""What the import walls share (`test_*_boundary.py`): a wall names a module by its
 stem and holds wherever that module's code goes when it is split, so a split can't step out
 from behind it by moving the code to a new file. `audio` is `audio.py`, every `audio_*.py`
 beside it, and everything under an `audio/` package.

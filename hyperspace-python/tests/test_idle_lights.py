@@ -265,7 +265,7 @@ def test_a_desk_made_before_idle_lights_reads_none(rig):  # noqa: F811
 
 # ---------------------------------------------------------------- what counts as a touch
 
-# what the FLX4 sent in the probe's 120 s with no hand on it (2026-11-19): its crossfader's
+# what the FLX4 sent in the probe's 120 s with no hand on it: its crossfader's
 # 14-bit pair on channel 6, the MSB (CC 31) wandering a step, the LSB (CC 63) anywhere
 FLX4_TWITCH = ["B6 1F 43", "B6 3F 1E", "B6 1F 42", "B6 3F 6B", "B6 1F 42", "B6 3F 37",
                "B6 1F 42", "B6 3F 03", "B6 1F 41", "B6 3F 4F", "B6 1F 41", "B6 3F 1B"]
@@ -333,7 +333,7 @@ def test_reloop_is_not_on_the_flx4():
     assert len(idle_lights.flx4()) == 30
 
 
-# ---------------------------------------------------------------- review of PR #464
+# ---------------------------------------------------------------- a touch ends the animation
 
 
 def test_a_touch_ends_it_even_with_no_idle_delay():

@@ -96,7 +96,7 @@ def test_raw_ranges_clamp_int_and_log(rig):
     inst.set_norm(1.0)
     assert view.instances == 4096 and isinstance(view.instances, int)
     inst.set_value(-5)
-    assert view.instances == 0          # the floor is zero (plan 16 WP5)
+    assert view.instances == 0          # the floor is zero
     inst.step(3)
     assert view.instances == 3
     z = reg["camera.zoom"]
@@ -110,8 +110,7 @@ def test_raw_ranges_clamp_int_and_log(rig):
 
 
 def test_pitch_wraps_over_the_top_as_yaw_does(rig):
-    """2026-10-14: the pitch is a whole turn that wraps (it stopped at
-    ±1.55 before), so a stick or a drag held tumbles the shape round and
+    """The pitch is a whole turn that wraps, so a stick or a drag held tumbles the shape round and
     round on both axes."""
     reg, view, *_ = rig
     pitch = reg["camera.pitch"]
@@ -125,8 +124,8 @@ def test_pitch_wraps_over_the_top_as_yaw_does(rig):
 
 
 def test_instances_read_nothing_drawn_at_zero(rig):
-    """Plan 16 WP5 (fork F3): zero at the very bottom of the throw, and a
-    readout that says what a black render is. Since the instanced field:
+    """Zero at the very bottom of the throw, and a
+    readout that says what a black render is. The range is
     0–4096 on a count taper — every count to 64 one detent apart, then 40
     detents a doubling — whole numbers only, modulated or not."""
     from hyperspace.tapers import T_INSTANCES
@@ -167,7 +166,7 @@ def test_instances_read_nothing_drawn_at_zero(rig):
 
 
 def test_nudge_and_scale_move_the_base_without_a_detent(rig):
-    """Plan 09 WP2: the relative writers' two moves. In the param's own
+    """The relative writers' two moves. In the param's own
     units, on the base, wrapped or clamped, returning what was applied —
     and never snapped to a detent, so a tapered param takes a fraction of
     a step per frame and adds it up."""
@@ -248,7 +247,7 @@ def test_enum_norm_and_stepping(rig):
 
 
 def test_the_3d_switch_takes_the_fourth_dimension_out_of_the_view(rig):
-    # plan 28: view.three_d is ViewState.three_d; integrate holds the 4D
+    # view.three_d is ViewState.three_d; integrate holds the 4D
     # pose (ViewState.body) and the renderer turns it in 3D
     reg, view, *_ = rig
     t = reg["view.three_d"]
@@ -328,9 +327,8 @@ def test_params_survive_a_chain_swap(rig):
 
 
 def test_loadable_bank_params(rig):
-    """The bank's params (plan 13 WP2): select, load, save, next / prev
-    over the project's loadable patch names, loading through `LoadedPatch` (plan 19
-    WP1: twenty-four choices, the F-keys' eight with a trigger each)."""
+    """The bank's params: select, load, save, next / prev
+    over the project's loadable patch names, loading through `LoadedPatch` (twenty-four choices, the F-keys' eight with a trigger each)."""
     from hyperspace.loadable import LoadedPatch
     from hyperspace.routing import Bindings, Router
 
@@ -356,7 +354,7 @@ def test_loadable_bank_params(rig):
 
 
 def test_the_list_triggers_walk_the_drop_downs_list_not_the_bank(rig):
-    """`preset.list.next` / `prev` (the pad's B / X, 2026-10-14) step the
+    """`preset.list.next` / `prev` (the pad's B / X) step the
     PRESETS page's list — `Library.list`, by name — wrapping at both ends,
     and pass over the bank: a loadable patch in no slot is reached, and one saved
     as new a moment ago is in the walk. QUANT's `preset.next` still walks
@@ -406,14 +404,14 @@ def test_the_list_walk_from_nothing_loaded_and_a_bad_file(rig):
     LoadedPatch(bank.lib, reg, Router(reg, Bindings()))
     lib = bank.lib
     listing = lib.list(LOADABLE)
-    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the loadable patches' own landing)
+    lib._landed(LOADABLE, None, None)        # (the loadable patches' own landing)
     assert bank.walk(-1) == listing[-1]
-    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the loadable patches' own landing)
+    lib._landed(LOADABLE, None, None)        # (the loadable patches' own landing)
     assert bank.walk(1) == listing[0]
     bad = lib.home / LOADABLE / "aaa-broken.json"
     bad.parent.mkdir(parents=True, exist_ok=True)
     bad.write_text("{ not json")
-    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the loadable patches' own landing)
+    lib._landed(LOADABLE, None, None)        # (the loadable patches' own landing)
     lib.error = ""
     assert bank.walk(1) is None and lib.error.startswith("library:")
 
@@ -423,7 +421,7 @@ def test_scene_names_match_loadables(rig):
 
 
 def test_macro_knobs_are_persisted_attenuators_with_no_object(rig):
-    """macro.1–8 (plan 09, decision 7): continuous 0–1, saved and drivable,
+    """macro.1–8: continuous 0–1, saved and drivable,
     read as a percentage, base 1 (the "× 1" a route runs at unscaled). They
     hold no object, so a snapshot is all there is to them: restoring one
     brings every knob back."""
@@ -447,7 +445,7 @@ def test_macro_knobs_are_persisted_attenuators_with_no_object(rig):
     # the slot bounds itself: a restore writes raw, and nothing else would clamp
     assert reg.restore({"macro.3": 5.0, "macro.4": -2.0}) == []
     assert reg["macro.3"].value == 1.0 and reg["macro.4"].value == 0.0
-    # performance state (plan 13 WP1): in the whole snapshot and its patch part
+    # performance state: in the whole snapshot and its patch part
     assert set(reg.snapshot("macro")) == {p.id for p in ms}
     assert set(reg.snapshot("macro")) <= set(reg.snapshot(part="patch"))
 
@@ -470,7 +468,7 @@ def _full_registry(tmp_path):
 
 
 def test_every_persisted_group_is_patch_or_meta(tmp_path):
-    """Plan 13 §4 / exit criterion 1: every persisted param is in exactly
+    """Every persisted param is in exactly
     one part, the two tuples are disjoint, and each persisted id's first
     segment is its group (Install._is_session splits an unattached file by it)."""
     reg = _full_registry(tmp_path)
@@ -478,7 +476,7 @@ def test_every_persisted_group_is_patch_or_meta(tmp_path):
     persisted = [p for p in reg if p.persist]
     for must in ("hands", "tempo", "lfo", "output", "macro", "band", "desk"):
         assert any(p.group == must for p in persisted), must
-    # the desk (plan 18 WP2): knob smoothing is the meta controller's and a show
+    # the desk: knob smoothing is the meta controller's and a show
     # keeps it; the layer latch beside it is still never saved
     assert part_of(reg["desk.slew"]) == "shared_meta" and reg["desk.slew"].persist
     assert not reg["desk.shift"].persist and "desk" in SHARED_META_GROUPS
@@ -503,7 +501,7 @@ def test_snapshot_by_part(tmp_path):
     macros = {f"macro.{k}" for k in range(1, 9)}
     assert macros <= set(whole) and macros <= set(perf)
     assert "tempo.bpm" in sess and "scene.select" in sess and "lfo.1.depth" in perf
-    # plan 43 §6 item 1 / plan 44 D3: the hands' look and the clouds' are the
+    # the hands' look and the clouds' are the
     # loadable patch's, but for the mirror — the room's (`SHARED_META_KEYS`)
     assert "ghost.alpha" in perf and "ghost.style" in perf and "cloud.size" in perf
     assert "ghost.mirror" in sess and "ghost.mirror" not in perf
@@ -514,7 +512,7 @@ def test_snapshot_by_part(tmp_path):
 
 
 def test_two_decks_hold_the_meta_params_by_reference():
-    """Plan 44 D3: `build_meta` once, `build_patch` per deck — every
+    """`build_meta` once, `build_patch` per deck — every
     shared meta param is one `Param` object in both decks' registries (a base
     written through one is the room's), declared once whichever deck
     declares it, and dropped from both when the meta controller drops it; each
@@ -575,9 +573,7 @@ def test_core_does_not_import_the_midi_adapter():
 
 
 def test_a_non_finite_offset_never_poisons_a_base(rig):
-    """Plan 14 WP1: `clamp` passed NaN through, a NaN offset became the base,
-    and integer and enum params then raised in `reg.apply` every frame. A
-    non-finite offset is dropped (and named on `reg.nonfinite`); the value
+    """A non-finite offset is dropped (and named on `reg.nonfinite`); the value
     stays the base, and the next clean frame is clean."""
     from hyperspace.tapers import clamp
 
@@ -603,10 +599,10 @@ def test_a_non_finite_offset_never_poisons_a_base(rig):
 
 
 def test_the_bank_adds_no_params(rig):
-    """Plan 19 WP1's budget: a bank of twenty-four adds no param. The
-    `preset` group is the 21 it was — select, a load and a save for each
+    """A bank of twenty-four adds no param. The
+    `preset` group is 21 params — select, a load and a save for each
     F-key, save-as, next, prev, home — and the list's next / prev
-    (2026-10-14, the pad's B / X); slots 9–24 are choices of
+    (the pad's B / X); slots 9–24 are choices of
     `preset.select`, which says which of them hold a loadable patch (`Param.has`,
     what a pad's "filled" light reads)."""
     reg, _view, _control, _audio, bank = rig
@@ -634,10 +630,10 @@ def test_the_bank_adds_no_params(rig):
 
 
 def test_inst_layout_is_declared(tmp_path):
-    """Plan 20 WP6: `view.inst_layout`, three choices, default GRID, in the
+    """`view.inst_layout`, three choices, default GRID, in the
     view group, persisted and modulatable like the motion beside it, and
     declared just before it. A layout change is one undo step; a loadable patch
-    that does not name the id — every file saved before this plan, the
+    that does not name the id — every file saved before it existed, the
     whole factory layer — loads it as GRID."""
     from test_undo import boot, frames, labels, settle
 
@@ -689,8 +685,8 @@ def test_inst_layout_is_declared(tmp_path):
         assert r.view.inst_layout == 2
         assert "view.inst_layout" not in r.loaded_patch.load(name), name
         assert r.view.inst_layout == 0 and lay.base == 0, name
-    # (plan 36 T3: the corpus `/7` files are full saves — at its default;
-    # their sources, made before it, never name it)
+    # (the corpus `/7` files are full saves — at its default;
+    # their sources never name it)
     import json
 
     sources = CORPUS.parent / "fixtures" / "factory-sources" / "presets"
@@ -700,7 +696,7 @@ def test_inst_layout_is_declared(tmp_path):
         assert json.loads(f.read_text())["values"].get("view.inst_layout", 0) == 0, f.name
 
 
-# ---- plan 26 A0: the naming rule for node instances (ENGINEERING §2) ----
+# ---- the naming rule for node instances ----
 
 def test_the_first_instance_keeps_todays_id_and_extras_carry_a_marker():
     """The first instance of a node is today's id; instance n ≥ 2 carries
@@ -726,7 +722,7 @@ def test_the_first_instance_keeps_todays_id_and_extras_carry_a_marker():
 
 def test_every_node_param_today_reads_as_its_first_instance():
     """No loadable patch or binding migrates for a single-instance graph: every
-    effect's (the dream's among them, plan 90 H3) and the hands' params as
+    effect's (the dream's among them) and the hands' params as
     registered today read
     back as instance 1 under their own id, their group is their id's
     first segment (so an extra instance lands in the same part of a

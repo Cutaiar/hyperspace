@@ -1,4 +1,4 @@
-"""The media transport: rate, pos latch, jog coast, loop modes (plan 32 T2)."""
+"""The media transport: rate, pos latch, jog coast, loop modes."""
 
 import pytest
 

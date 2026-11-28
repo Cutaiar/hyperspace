@@ -7,8 +7,8 @@ convenient import at a time.
 import pytest
 from walls import family, imports, inside, module_of, shown
 
-# the leaves a standalone module may import: the LFOs are a modulator bank
-# (plan 31 B), and modbank.py keeps the same rule (test_modbank.py)
+# the leaves a standalone module may import: the LFOs are a modulator bank,
+# and modbank.py keeps the same rule (test_modbank.py)
 LEAVES = {"tempo": set(), "lfo": {"modbank", "writes"}}
 STEMS = {f: stem for stem in LEAVES for f in family(stem)}
 

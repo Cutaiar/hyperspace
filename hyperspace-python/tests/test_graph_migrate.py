@@ -1,4 +1,4 @@
-"""Plan 33 M: old loadable patches as wires (graphmigrate). Row 394: one way, on
+"""Old loadable patches as wires (graphmigrate): one way, on
 load — a save is always `/6`, so nothing writes the wires back as `/4`
 values any more."""
 
@@ -21,18 +21,18 @@ from hyperspace import graphmigrate as M
 from hyperspace.library import LibraryError
 
 ROOT = Path(__file__).parent.parent / "hyperspace"
-# plan 36 T3: the corpus loadable patches' sources (the corpus files are their `/7`)
+# the corpus loadable patches' sources (the corpus files are their `/7`)
 SOURCES = Path(__file__).parent / "fixtures" / "factory-sources" / "presets"
 FILES = sorted(SOURCES.glob("*.json"))
-# the loadable patches written before plan 33 (a `/5` fixture — plan 33 T4's proofs —
+# the loadable patches written before the wired frame (a `/5` fixture
 # is the free graph's own: nothing to migrate, nothing `/4` can say; a `/6`
-# one, plan 35 T3's, the wired frame's)
+# one is the wired frame's)
 FIXTURES = sorted(p for p in [*SOURCES.glob("*.json"),
                               *(Path(__file__).parent / "fixtures" / "presets").glob("*.json"),
                               *(Path(__file__).parent / "fixtures" / "merge-31-32").glob("*.json")]
                   if json.loads(p.read_text()).get("schema") not in (M.FREE_SCHEMA,
                                                                        M.SIX_SCHEMA))
-# (plan 67: a retired file — Hue cycle — keeps its place in the old stacks these
+# (a retired file — Hue cycle — keeps its place in the old stacks these
 # files were written against: its order and mix are read from its fixture)
 EFFECTS = {p.stem: fx.parse(p.stem, p.read_text())
            for p in [*(ROOT / "shaders" / "fx").glob("*.glsl"),
@@ -80,7 +80,7 @@ def test_every_library_loadable_migrates_without_a_note(path):
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_no_library_loadable_routes_an_effect_it_leaves_out(path):
-    """The owner's reading (row 346): no loadable patch routes an off effect. A
+    """No loadable patch routes an off effect. A
     failure is a loadable patch to look at, not a test to loosen."""
     doc = load(path)
     section, _ = M.to_free(doc, SPECS)
@@ -93,7 +93,7 @@ def test_no_library_loadable_routes_an_effect_it_leaves_out(path):
 def test_mandala_keeps_kaleido_first():
     """`fx.kaleido.order = 8` is read: kaleido sits where it did, right
     after the plasma (order 5) it folds and before the fractals (60).
-    (Plan 40 T5: the mandala fx module preset is retired; its values are
+    (The mandala fx module preset is retired; its values are
     party-mandala's source's, the old file this reads.)"""
     doc = {"values": json.loads((SOURCES / "party-mandala.json").read_text())["values"]}
     assert doc["values"]["fx.kaleido.order"] == 8
@@ -175,7 +175,7 @@ def test_a_route_onto_view_media_becomes_a_switch():
                      {"source": "lfo:1", "target": "backdrop.channel", "op": "push"}]
     doc["desk"] = [{"source": "midi:cc:1", "target": "view.media", "op": "abs"}]
     out, notes = M.migrate(doc, SPECS)
-    section = out["graph"]                  # (plan 35: a wired frame, in the new ids)
+    section = out["graph"]                  # (a wired frame, in the new ids)
     assert notes == [] and section["frame"] == "wired"
     assert {"kind": "switch"} in section["nodes"]
     assert {"kind": "switch", "instance": 2} in section["nodes"]
@@ -188,7 +188,7 @@ def test_a_route_onto_view_media_becomes_a_switch():
     assert out["routes"][0]["target"] == "switch.select"
     assert out["routes"][1]["target"] == "switch.2.select"
     assert out["desk"][0]["target"] == "switch.select"
-    spec = G.read_graph(section, placements=True)     # (plan 36 T4: before the split)
+    spec = G.read_graph(section, placements=True)     # (before the split)
     assert not spec.notes and [s.name for s in spec.switches] == ["switch", "switch.2"]
 
 
@@ -202,10 +202,10 @@ def test_a_route_onto_only_the_backdrop_takes_the_first_switch():
 
 @pytest.mark.parametrize("path", FIXTURES, ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_the_migrated_runs_are_the_old_stacks(path):
-    """Every loadable patch from before plan 33: the runs its section is given are
+    """Every loadable patch from before the wired frame: the runs its section is given are
     the ones the old stack ran from its values (orders, targets) — the
-    migration's half of what `legacy_values` checked both ways until row
-    394 retired the way back."""
+    migration's half of what `legacy_values` checked both ways before the
+    way back was retired."""
     doc = load(path)
     section, _ = M.to_free(doc, SPECS)
     frame, faces = runs(section)
@@ -218,7 +218,7 @@ BRANCH = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
 
 
 def test_a_branch_saves_as_v6_and_reloads(tmp_path):
-    """A branch saves `/6` (row 394: every save does), its graph the wired
+    """A branch saves `/6` (every save does), its graph the wired
     frame the load made of it, and it reloads as it saved."""
     doc = {"schema": "hyperspace.preset/2", "name": "t", "graph": BRANCH, "values": {}}
     assert G.read_graph(copy.deepcopy(BRANCH)).to_json() == BRANCH
@@ -227,15 +227,15 @@ def test_a_branch_saves_as_v6_and_reloads(tmp_path):
     saved = app.loaded_patch.document("t")
     wired, _ = M.seven(doc, app.loaded_patch.graph.specs())
     assert saved["schema"] == M.SAVE_SCHEMA
-    assert saved["graph"] == G.read_graph(wired["graph"]).to_json()     # (plan 36 T3: hands)
+    assert saved["graph"] == G.read_graph(wired["graph"]).to_json()     # (hands)
     assert saved["graph"][G.FRAME_KEY] == G.WIRED_FRAME
     assert app.loaded_patch.load_doc(copy.deepcopy(saved)) == []
     assert app.loaded_patch.document("t") == saved                 # and reloads as it saved
 
 
 def test_v6_is_refused_by_the_ladder_below(tmp_path):
-    """Row 385: a `/6` save (a frame only a wired one says: a channel into
-    All outputs) is refused, values and all, by a plan 33/34 build's ladder
+    """A `/6` save (a frame only a wired one says: a channel into
+    All outputs) is refused, values and all, by an older build's ladder
     (2 … 5) in its own words."""
     app = make_app(tmp_path)
     app.loaded_patch.load_doc({"schema": "hyperspace.preset/6", "name": "six", "values": {},
@@ -246,7 +246,7 @@ def test_v6_is_refused_by_the_ladder_below(tmp_path):
     lib = app.lib
     assert lib.read("loadable", "six")["schema"] == M.SAVE_SCHEMA
     kinds = lib._kinds
-    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)   # (plan 40 T2: /8; plan 43 C2: /9)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
     try:
         kinds["loadable"] = replace(kinds["loadable"], versions=(2, 3, 4, 5))
         with pytest.raises(LibraryError, match="git pull and uv sync"):
@@ -270,8 +270,8 @@ def test_a_driven_effect_on_at_mix_zero_stays_in_the_run():
 
 
 def test_a_legacy_shortened_placement_migrates_to_an_explicit_after():
-    """The owner, 2026-10-24: a free section shortens no wire, so a pre-33
-    section's wire D1 would write short (`scene → acid.2.image`, nothing out
+    """A free section shortens no wire, so a section from before the wired frame
+    can hold a wire D1 would write short (`scene → acid.2.image`, nothing out
     of acid.2) becomes the D1 entry it stood for, before the run is added —
     the same placement, and the same picture. `into` likewise."""
     doc = {**base(**{"fx.acid.2.on": True, "fx.palette.on": True}),
@@ -298,10 +298,10 @@ def _values_of(doc: dict) -> dict:
     return doc.get("values") or {}
 
 
-# ---------------------------------------------------------------- plan 35 T3: every section a wired frame
+# ---------------------------------------------------------------- every section a wired frame
 #
-# Plan 35 M (rows 372, 383–385): every section this build loads lands as a
-# wired frame in the owner's names — `migrate` runs plan 33's steps, then
+# Every section this build loads lands as a
+# wired frame in the owner's names — `migrate` runs the free-graph steps, then
 # `renamed` (V2: old ids → new), then `wired_section` (today's frame for
 # the default switches, written once into All outputs). `backdrop.history`
 # and the look-back's `holds` are the capture wire now.
@@ -367,7 +367,7 @@ def test_every_section_loads_as_a_wired_frame(tmp_path, path):
 
 def test_old_ids_are_renamed_on_load():
     """A `/4` section in the old ids loads in the new (V2): the layer of
-    hands 2, the look-back, a channel, D1's `after: hands` — and a plan 34
+    hands 2, the look-back, a channel, D1's `after: hands` — and a
     `/5` fixture keeps its delay, zoomblur and composite wires as they are."""
     doc = {"schema": "hyperspace.preset/4", "name": "renamed",
            "values": {"fx.palette.on": True, "fx.acid.2.on": True},
@@ -387,9 +387,9 @@ def test_old_ids_are_renamed_on_load():
     assert {("hands.2.layer", "output.2.hands"), ("lookback", "acid.2.image"),
             ("acid.2", "output.1.image"), ("channel.c", "output.2.image")} <= got
     assert {"kind": "effect", "file": "palette", "after": "hands.layer"} in section["nodes"]
-    spec = G.read_graph(section, placements=True)     # (plan 36 T3: `seven` writes it a wire)
+    spec = G.read_graph(section, placements=True)     # (`seven` writes it a wire)
     assert spec.wired and spec.notes == () and old_ends(spec) == []
-    # a plan 34 `/5` fixture: its own wires, unchanged
+    # a `/5` fixture: its own wires, unchanged
     trails = load(TESTS / "fixtures" / "presets" / "delay-trails.json")
     own = {(w["from"], w["to"]) for w in trails["graph"]["wires"]
            if not {w["from"], w["to"].rpartition(".")[0]} & {"frame", "fx"}}
@@ -398,10 +398,10 @@ def test_old_ids_are_renamed_on_load():
     assert any("composite" in a or "composite" in b for a, b in own)
     out, notes = M.migrate(trails, SPECS)
     assert notes == [] and own <= wires_of(out["graph"])
-    assert not G.read_graph(out["graph"], placements=True).notes     # (before the T4 split)
+    assert not G.read_graph(out["graph"], placements=True).notes     # (before the split)
 
 
-def test_a_plan_33_run_becomes_wires_to_all_outputs():
+def test_a_free_graph_run_becomes_wires_to_all_outputs():
     doc = {"values": {"fx.acid.on": True},
            "graph": {"nodes": [], "wires": [{"from": "frame", "to": "acid.image"},
                                             {"from": "acid", "to": "fx.image"}]}}
@@ -411,7 +411,7 @@ def test_a_plan_33_run_becomes_wires_to_all_outputs():
     assert not any(x in ("frame", "fx") for a, b in got for x in (a, b.rpartition(".")[0]))
 
 
-# plan 36 T2: the hidden edges' wires a migrated frame ends with (`drawn_edges`)
+# the hidden edges' wires a migrated frame ends with (`drawn_edges`)
 EDGES = [("pattern", "shape.faces"), ("scene.cover", "lookback.cover"),
          ("hands", "hands.layer.hands")]
 
@@ -434,7 +434,7 @@ EDGES = [("pattern", "shape.faces"), ("scene.cover", "lookback.cover"),
         ("hands.layer", "composite.over"), ("composite", "lookback.capture"), *EDGES]),
 ], ids=["backdrop.history", "holds", "both"])
 def test_backdrop_history_and_holds_become_the_capture_wire(values, nodes, pairs):
-    """T2's variants, reached through `migrate`: the capture wire says what
+    """The hidden-edge variants, reached through `migrate`: the capture wire says what
     `backdrop.history` and `holds` said, and neither is left behind."""
     doc = {"values": dict(values), **({"graph": {"nodes": nodes}} if nodes else {})}
     out, notes = M.migrate(doc, SPECS)
@@ -444,7 +444,7 @@ def test_backdrop_history_and_holds_become_the_capture_wire(values, nodes, pairs
     assert notes == [] and frame == pairs
     assert "backdrop.history" not in out["values"] and "backdrop.channel" not in out["values"]
     assert not any("holds" in e for e in section["nodes"])
-    assert not G.read_graph(section, placements=True).notes          # (before the T4 split)
+    assert not G.read_graph(section, placements=True).notes          # (before the split)
 
 
 @pytest.mark.parametrize("how", ["route", "desk"])
@@ -465,7 +465,7 @@ def test_a_driven_backdrop_history_is_dropped_with_a_note(how):
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_no_library_loadable_drives_backdrop_history(path):
-    """Row 381: no library loadable patch drives `backdrop.history` (a route on it
+    """No library loadable patch drives `backdrop.history` (a route on it
     is dropped with a note), so retiring it costs no loadable patch a look."""
     assert "backdrop.history" in M.RETIRED
     assert "backdrop.history" not in M.targets(load(path))

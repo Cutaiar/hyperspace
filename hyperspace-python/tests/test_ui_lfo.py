@@ -95,7 +95,7 @@ def test_the_page_has_no_conflicting_ids(rig, monkeypatch):
 
 
 def test_the_two_nudge_chips_have_a_popup_each(rig, monkeypatch):
-    """Audit U9: with one id, a right-click on either chip drew the menu's items
+    """With one id, a right-click on either chip drew the menu's items
     twice. No popup id is built twice on the page, whichever param it stands for."""
     popups: list[str] = []
     real = imgui.begin_popup_context_item
@@ -115,8 +115,8 @@ def test_the_two_nudge_chips_have_a_popup_each(rig, monkeypatch):
 
 def test_the_lfos_are_offered_as_routing_sources(rig):
     """The ROUTING page's source combo lists whatever the router has labels
-    for — lanes, then lfo, then the rest in the order they spoke (plan 27
-    B2: `lane` and `lfo` are the built-ins, listed first; the registry
+    for — lanes, then lfo, then the rest in the order they spoke
+    (`lane` and `lfo` are the built-ins, listed first; the registry
     orders the devices' schemes) — so LFO 1–4 can be routed."""
     from hyperspace import ui_routing
     from hyperspace.routing import Binding, Bindings, Router
@@ -135,7 +135,7 @@ def test_the_lfos_are_offered_as_routing_sources(rig):
         (f"lfo:{i}", f"lfo LFO {i + 1}") for i in range(4)]
     assert ("hand:1", "hand R x") in srcs and ("ext:2", "ext 2") in srcs
     # a row naming a scheme nobody feeds still shows it — up to the lane its
-    # rows name (plan 27 B3: no fixed count for ext; the bridge publishes
+    # rows name (no fixed count for ext; the bridge publishes
     # its labels when it is on)
     r2 = Router(rig.reg, Bindings([Binding("ext:5", "view.bright", "push", 0.1)]))
     offered = ui_routing._sources(rig.panel, r2)
@@ -161,7 +161,7 @@ def test_the_buttons_fire_the_trigger_params(rig):
     frame(rig.panel)
 
 
-# ---- N strips (plan 31 U) ----
+# ---- N strips ----
 
 def _bank(lfos, ids):
     """The bank holding exactly `ids`."""

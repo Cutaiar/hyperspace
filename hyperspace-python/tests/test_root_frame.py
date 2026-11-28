@@ -1,7 +1,7 @@
 """SC3a through real GL: the real `app._draw_render`, real looks and real windows
 (hidden ones) on the root's context. Goldens never run `_draw_render`, so what they
 can't see is here: the frame's MSAA, overlay's alpha on the window, no display live,
-and a hot reload's hooks in the right context (audit V8)."""
+and a hot reload's hooks in the right context."""
 
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ def stage(gl_window_ok):
             glfw.destroy_window(w)
         glfw.destroy_window(st.root_win)
         glfw.default_window_hints()
-        glfw.terminate()     # (not left up for the worker's later tests: row 606)
+        glfw.terminate()     # (not left up for the worker's later tests)
 
 
 def _rig(stage, slug="party-tumble", hands="absent"):
@@ -401,7 +401,7 @@ def test_the_picture_goes_on_when_every_display_is_gone(stage):
 
 
 def test_a_hot_reload_with_the_root_current_keeps_the_picture(stage):
-    """Audit V8, decided in SC3a: `frame` makes the root current before
+    """`frame` makes the root current before
     `reloader.poll()`, so the hooks' vertex arrays and framebuffers are the context's
     that draws them (tools/sc3a_spike.py v8 measures the wrong context). Here: a reload's
     hooks, the next frame the same picture."""

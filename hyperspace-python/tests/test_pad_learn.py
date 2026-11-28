@@ -62,7 +62,7 @@ def test_lanes_rest_and_travel():
 
 
 def test_the_share_button_is_named_and_free(rig):
-    """A pad with a Share button reports it at 15 (2026-10-15). It carries
+    """A pad with a Share button reports it at 15. It carries
     no factory row — Learn pad puts anything on it — and the
     name has to exist for the learn to land at all."""
     pad, lrn = ScriptedPad(), rig.learn
@@ -167,7 +167,7 @@ def test_a_desk_learn_ignores_the_pad(rig):
 def test_a_routed_axis_drives_its_param_and_is_claimed(rig):
     pad, r = ScriptedPad(), rig.router
     rig.table.add(Binding("axis:RT", "view.inst_amp", "position", 1.0))
-    gp.publish(r)                       # the pad names its axes (plan 27 B2: not the router)
+    gp.publish(r)                       # the pad names its axes, not the router
     assert r.claimed("axis") == {gp.AX_RT}
     pad.frame(axes=[0, 0, 0, 0, -1, 1.0])
     r.pad(pad)
@@ -223,7 +223,7 @@ def test_hold_fires_once_after_hold_s(rig):
 
 
 def test_no_factory_pad_row_loads_a_loadable_or_taps_the_tempo(rig):
-    """2026-11-04, the owner: no swapping loadable patches from a controller, and tap
+    """No swapping loadable patches from a controller, and tap
     tempo not a default on every controller. On the factory table neither the
     d-pad's ← / → nor B, X and BACK walk or tap, however long they are held;
     the APC keeps TAP TEMPO and the keyboard (not a controller) B."""
@@ -274,10 +274,10 @@ def test_a_stick_never_ends_a_learn_on_a_setting_it_cannot_drive(rig):
     assert any(b.source == "pad:GUIDE" and b.target == p.id for b in rig.table.bindings)
 
 
-# ---- the factory layout (2026-10-14) ----
+# ---- the factory layout ----
 
 def _older(rows, path):
-    """`rows` as a file from before the layout stamp (row 723) holds them."""
+    """`rows` as a file from before the layout stamp holds them."""
     Bindings(rows, path=path).write()
     doc = json.loads(path.read_text())
     doc.pop(routing.PAD_LAYOUT_KEY)
@@ -287,8 +287,8 @@ def _older(rows, path):
 def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_path):
     """The old factory pad rows (A rotate, X points, Y faces, START the
     sheet, BACK the panel, the right-stick click the camera) move to the
-    layout of 2026-10-14 — START's sheet gone — on to 2026-10-29's where it
-    moved again (X screen strokes), and BACK's holds the chase (2026-11-04); a
+    first layout (START's sheet gone), on to the second where it moved again
+    (X screen strokes), and on to the third, where BACK holds the chase; a
     row the owner learned onto a button stays; a second load changes nothing."""
     old = [Binding("pad:S", "view.rotate", "toggle"), Binding("pad:W", "view.points", "toggle"),
            Binding("pad:N", "view.faces", "toggle"), Binding("pad:MENU", "ui.cheatsheet", "toggle"),
@@ -318,7 +318,7 @@ def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_
 
 def test_the_pads_bank_rows_move_straight_to_the_newest_layout(tmp_path):
     """B / X's factory rows on the bank (`preset.next` / `prev`, and B's
-    `theme.next` from before plan 13) move to points and screen strokes,
+    `theme.next` from an older layout) move to points and screen strokes,
     noted;
     the same targets on another button or op — the owner's — stay, and the
     APC40's QUANT keeps the bank; a second load changes nothing."""
@@ -345,9 +345,9 @@ def test_the_pads_bank_rows_move_straight_to_the_newest_layout(tmp_path):
 
 
 def test_the_10_14_layout_goes_straight_to_the_newest(tmp_path):
-    """The layout of 2026-10-14 (B / X walk the list, the d-pad's ← / → step
+    """The first layout (B / X walk the list, the d-pad's ← / → step
     the speed): B / X onto points and screen strokes, and ← / → free, not via
-    the walk of 2026-10-29, which one load would have left behind for a second
+    the second layout's walk, which one load would have left behind for a second
     to remove. A d-pad row the owner changed stays; a second load changes
     nothing."""
     old = [Binding("pad:E", "preset.list.next", "fire"),
@@ -372,8 +372,8 @@ def test_the_10_14_layout_goes_straight_to_the_newest(tmp_path):
 
 
 def test_the_factory_pad_walks_nothing_and_the_desk_the_bank():
-    """The factory rows: B / X on points and screen strokes, ← / → on nothing
-    (the owner, 2026-11-04), the APC40's QUANT still on the bank's
+    """The factory rows: B / X on points and screen strokes, ← / → on nothing,
+    the APC40's QUANT still on the bank's
     `preset.next`."""
     from hyperspace.routing import factory_desk, padmap
 
@@ -386,7 +386,7 @@ def test_the_factory_pad_walks_nothing_and_the_desk_the_bank():
 
 
 def test_back_chases_and_start_is_free_on_the_generic_rows(rig):
-    """2026-11-04: hold-to-save is the Edge's only. The generic rows have
+    """Hold-to-save is the Edge's only. The generic rows have
     nothing on START, and holding it does nothing; BACK holds the base chase."""
     rows = {b.source: (b.target, b.op) for b in routing.padmap()}
     assert "pad:MENU" not in rows
@@ -416,7 +416,7 @@ def test_held_start_on_a_row_saves_once_after_hold_s(rig):
 
 @pytest.mark.parametrize("edge_is_primary", [True, False], ids=["primary", "second"])
 def test_an_edge_entry_keeps_hold_to_save_on_a_qualified_row_alone(rig, edge_is_primary):
-    """Until a model can carry rows (register row 724): an entry `role = "edge"`,
+    """An entry `role = "edge"`,
     `controller = "edge"`, and one row `pad@edge:MENU`. Only that entry's pad hears
     it, primary or not; no load moves it; the other pad's START does nothing."""
     rig.table.add(Binding("pad@edge:MENU", "preset.save_new", "hold"))
@@ -464,7 +464,7 @@ def test_the_right_stick_click_resets_the_4d_spin(rig):
         assert math.isclose(reg[f"rot.phase.{name}"].value, 1.0)
 
 
-# ---- a second pad (plan 27 B6) ----
+# ---- a second pad ----
 
 def test_learn_on_a_second_pad_writes_its_qualified_rows(rig):
     """Learn pad completes on whichever pad moves; a second pad's rows
@@ -572,7 +572,7 @@ def _second(d):
     return d
 
 
-# ---- BACK holds the base chase (register row 723, the owner, 2026-11-04) ----
+# ---- BACK holds the base chase ----
 
 THE_LAST_LAYOUT = [Binding("pad:VIEW", "tempo.tap", "fire"),     # as the factory wrote them
                    Binding("hat:W", "preset.list.prev", "hold"),
@@ -582,7 +582,7 @@ THE_LAST_LAYOUT = [Binding("pad:VIEW", "tempo.tap", "fire"),     # as the factor
 
 
 def test_the_new_row_reaches_an_existing_bindings_json_once(tmp_path, capsys):
-    """A file on the layout of 2026-10-29: BACK's factory row moves to the
+    """A file on the second layout: BACK's factory row moves to the
     chase, ← / → go, the file is copied beside itself first and written back,
     and the next load finds nothing to do and leaves no second copy. Not a
     schema move: the file's schema stays."""
@@ -682,7 +682,7 @@ def test_a_d_pad_row_the_owner_changed_stays(tmp_path):
             Binding("hat:W", "preset.list.prev", "hold", 0.0)], path)
     rows = {b.source: b.target for b in Bindings.load(path, legacy_midi=None).of("hat")}
     assert "hat:E" not in rows and rows["hat:W"] == "preset.list.prev"
-    # plan 57 (row 723): a file this build wrote says which layouts it has seen, so the same
+    # a file this build wrote says which layouts it has seen, so the same
     # row written by hand since then is the owner's, and stays
     Bindings([Binding("hat:E", "preset.list.next", "hold")], path=path).write()
     rows = {b.source: b.target for b in Bindings.load(path, legacy_midi=None).of("hat")}
@@ -741,8 +741,8 @@ def test_back_under_the_totem_still_chases(rig):
 
 def test_every_pad_has_back_but_the_right_joycon():
     """The row is on every model's face but a Joy-Con (R)'s, where it is dead and
-    harmless. A Joy-Con's chase is its own: L on the left, R on the right, in #365's
-    layout, which also gives − and capture to the totem (row 724)."""
+    harmless. A Joy-Con's chase is its own: L on the left, R on the right, in the
+    layout that also gives − and capture to the totem."""
     without = {m.id for m in MODELS.values() if not m.has_control("VIEW")}
     assert without == {"joycon-r"}
     assert MODELS["joycon-l"].glyphs["VIEW"] == "−"

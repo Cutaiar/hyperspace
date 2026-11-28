@@ -1,5 +1,4 @@
-"""No shader multiplies time by a param (the owner, 2026-11-02; register
-row 560): the lint over every shipped shader, and the lint's own tests.
+"""No shader multiplies time by a param: the lint over every shipped shader, and the lint's own tests.
 
 `tests/shader_lint.py` is the detector; the rule, and why `u_phase *
 u_drift` is a jump, are in its docstring and DECISIONS "Effects and the
@@ -7,14 +6,10 @@ look-back". A rate-like param is integrated by the host instead: an
 effect's `// @clock` (fx.py), the patterns' `u_ptime`
 (`Renderer._pattern_clock`).
 
-The allowlist below is today's offenders, found by this lint on
-2026-11-02, as exact (shader, param) pairs: a new product anywhere fails,
-and so does a stale entry once its shader is ported. K2 (row 577) took
-out warp's drift and scale and tripcolour's pulse; K4 (row 579) ported
-RINGS × colour, the pattern's hue, and the list is empty. The grid effects
-K4 was also given (glimmer, wobble, fractals) were measured and left
-alone — no knob of theirs grows with the clock
-(`tests/test_step_continuity.py`).
+The allowlist below holds exact (shader, param) pairs: a new product
+anywhere fails, and so does a stale entry once its shader is ported. It is
+empty. The grid effects glimmer, wobble and fractals are not products:
+no knob of theirs grows with the clock (`tests/test_step_continuity.py`).
 """
 
 from __future__ import annotations
@@ -27,8 +22,7 @@ from hyperspace.fx import FxState, parse
 
 # ---------------------------------------------------------------- the allowlist
 
-# (shader, param symbol) → why it is still there. Empty: K2 ported warp and
-# tripcolour (row 577), K4 RINGS × colour (row 579). A new product fails.
+# (shader, param symbol) → why it is still there. Empty: a new product fails.
 ALLOWLIST: dict[tuple[str, str], str] = {
 }
 
@@ -47,8 +41,7 @@ def effect_pairs(name: str, source: str) -> set[tuple[str, str]]:
     """The (effect, param uniform) products in one effect file: its @param
     uniforms are the params; u_time, u_phase and its @clock uniforms are
     the times. No exemption: a param a `@clock` integrates multiplied into
-    `u_phase` again is the show's bug come back (K2 left nothing
-    mid-port), and `u_drift_t * u_drift` is the rate applied twice."""
+    `u_phase` again is the show's bug come back, and `u_drift_t * u_drift` is the rate applied twice."""
     spec = parse(name, source)
     params = {p.uniform for p in spec.params}
     times = set(TIME_UNIFORMS) | {c.uniform for c in spec.clocks}
@@ -145,7 +138,7 @@ def test_a_clock_uniform_is_a_time_and_nothing_is_exempt():
 
 
 def test_a_ported_shader_that_brings_the_product_back_is_flagged():
-    """Warp and tripcolour as K2 left them, with the old line put back
+    """Warp and tripcolour as ported, with the old line put back
     beside the clock: every factor of the clock's rate is found again."""
     files = FxState().files
     warp = files["warp"].source

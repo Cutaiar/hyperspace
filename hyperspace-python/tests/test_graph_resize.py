@@ -1,20 +1,19 @@
 
-"""Plan 34 T4 — the resize (Z, row 368): a picture cropped and made at a size
+"""The resize: a picture cropped and made at a size
 of its own, so a delay or an effect after it runs small — the owner's "no
 1080p buffer into the faces for no reason".
 
-`ResizeNode` is built where the wires reach it (plan 35 B: `_Build._make`),
+`ResizeNode` is built where the wires reach it (`_Build._make`),
 its values (`resize[.n].*`, `params.declare_resizes`) live while its entry
-does, reached or not (Review Focus 6). What it must keep honest: its own
+does, reached or not. What it must keep honest: its own
 size is `resize_size`'s; a delay through it holds that size and an effect
-after it runs in that size's pool (Review Focus 5); a loop through it and a
-delay never reads what it writes (Review Focus 1); the crop is a value,
-never a rebuild; a size step remakes its target once each way (Review
-Focus 4).
+after it runs in that size's pool; a loop through it and a
+delay never reads what it writes; the crop is a value,
+never a rebuild; a size step remakes its target once each way.
 
 The sections are wired frames (`test_graph_wired.wired`) over the factory
 frame's six wires (`FACTORY_FRAME`); every test that wires `output.2` draws
-two views (plan 35 R12). The GL tests use test_graph_faces' harness and
+two views. The GL tests use test_graph_faces' harness and
 skip without a standalone context."""
 
 from __future__ import annotations
@@ -40,13 +39,13 @@ RED, GREEN, BLUE, WHITE = (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 255)
 RESIZE = {"kind": "resize"}
 DELAY = {"kind": "delay"}
 ACID2 = {"kind": "effect", "file": "acid", "instance": 2}
-# the factory frame (`wired_wiring(G.Wiring())`'s wires, in its order; plan
-# 36 T4: the look-back off in the old words, so none is drawn)
+# the factory frame (`wired_wiring(G.Wiring())`'s wires, in its order; the
+# look-back off in the old words, so none is drawn)
 FACTORY_FRAME = (("shape", "scene.geometry"), ("scene", "output.all.image"),
                  ("hands.layer", "output.all.hands"), ("hands.layer", "output.all.guide"))
 
 
-# plan 36 T2: and the hidden edges' wires the factory frame ends with
+# and the hidden edges' wires the factory frame ends with
 FACTORY_EDGES = (("pattern", "shape.faces"), ("hands", "hands.layer.hands"))
 
 
@@ -139,7 +138,7 @@ def test_the_registry_writes_the_view_states_resizes():
 
 
 def test_a_resize_is_built_only_when_reached():
-    """Review Focus 6: a resize that reaches no sink is never built; one
+    """a resize that reaches no sink is never built; one
     wired into an output is; one into an output with nothing in is
     dormant, in words."""
     vs = [View(Switches(), (64, 48)) for _ in range(2)]
@@ -220,7 +219,7 @@ def test_a_resize_makes_its_own_size(ctx):
 
 
 def test_an_effect_after_a_resize_runs_at_its_size(ctx):
-    """Review Focus 5: acid.2 after the resize runs in the 64×36 pool, every
+    """acid.2 after the resize runs in the 64×36 pool, every
     pass into a 64×36 target."""
     r = _wired_renderer(ctx, _media(a=Still(_rgba(16, 9))),
                         [("channel.a", "resize.image"), ("resize", "acid.2.image"),
@@ -242,7 +241,7 @@ def test_an_effect_after_a_resize_runs_at_its_size(ctx):
 
 
 def test_a_delay_through_a_resize_holds_a_small_buffer(ctx):
-    """Review Focus 5: the owner's headline — the scene at 64² square into
+    """The headline — the scene at 64² square into
     the delay onto the faces: the delay holds 64×64, its write after the
     resize and before the outputs."""
     r = _wired_renderer(ctx, None, [("scene", "resize.image"), ("resize", "delay.image"),
@@ -252,12 +251,12 @@ def test_a_delay_through_a_resize_holds_a_small_buffer(ctx):
         _frame(ctx, r, s, vs, WIDE, k)
     assert r.delay_pair("delay").read[0].size == (64, 64)
     order = [n.name for n in r._graph.order]
-    # (plan 36 T4: no look-back is drawn in this frame — the write before the outputs)
+    # (no look-back is drawn in this frame — the write before the outputs)
     assert order.index("resize") < order.index("delay(write)") < order.index("output.1")
 
 
 def test_a_loop_through_a_resize_and_a_delay_is_legal(ctx):
-    """Review Focus 1: `delay → resize`, `resize → delay` reads with no notes,
+    """`delay → resize`, `resize → delay` reads with no notes,
     draws with no GL error, and the resize never samples the delay's write
     side."""
     pairs = [("delay", "resize.image"), ("resize", "delay.image"), ("delay", "output.2.image")]
@@ -273,7 +272,7 @@ def test_a_loop_through_a_resize_and_a_delay_is_legal(ctx):
         return real(tex, dst, *a, **k)
 
     r._refit = spy
-    # (an empty loop stays empty, R7: the pair is seeded with a red frame,
+    # (an empty loop stays empty: the pair is seeded with a red frame,
     # so the picture goes round — delay → resize → delay(write) — 4 times)
     pair = r.delay_pair("delay")
     pair.target(ctx, WIDE).clear(1.0, 0.0, 0.0, 1.0)
@@ -387,7 +386,7 @@ def test_a_crop_change_is_a_value_never_a_rebuild(ctx):
 
 
 def test_a_size_step_reallocates_once_each_way(ctx):
-    """Review Focus 4: 64 → 128 → 64 → 128 makes two own targets, each once,
+    """64 → 128 → 64 → 128 makes two own targets, each once,
     and keeps both (`SIZED_KEEP_FRAMES`)."""
     r = _wired_renderer(ctx, _media(a=Still(_rgba(16, 9))), CHANNEL_OUT, [RESIZE])
     s, vs = _s(size=2), _views(ctx, WIDE)
@@ -411,7 +410,7 @@ def test_the_resize_says_its_size_fit_filter_and_crop(ctx):
 
 
 def test_resize_knobs_survive_a_hot_reload_of_view(monkeypatch):
-    """Review fix round 1: after a hot reload of `view` (`params.ResizeState`
+    """After a hot reload of `view` (`params.ResizeState`
     a new class), a redeclare keeps the live state the params are bound to —
     so the knob and the renderer's state stay one."""
     import dataclasses
@@ -434,7 +433,7 @@ def test_resize_knobs_survive_a_hot_reload_of_view(monkeypatch):
 
 
 def test_two_consumers_of_one_resize_refit_from_the_one_small_picture(ctx):
-    """Review fix round 1: `resize` into output 2 (160×90) and onto the faces
+    """`resize` into output 2 (160×90) and onto the faces
     (1024²) is made once a frame and refitted twice from that one small
     picture; in steady state no frame target is made."""
     r = _wired_renderer(ctx, _media(a=Still(_rgba(16, 9))),
@@ -466,7 +465,7 @@ def test_two_consumers_of_one_resize_refit_from_the_one_small_picture(ctx):
 
 
 def test_a_load_frees_the_last_loadables_frame_targets(ctx):
-    """R16 (final review): loadable patch A (channel a through a resize into
+    """Loadable patch A (channel a through a resize into
     outputs 2 and 3), then loadable patch B (channel b alone into output 2): 60
     frames later none of A's frame targets — its `shown(...)` end, the
     resize's own size, channel a's fit — is held, and what is

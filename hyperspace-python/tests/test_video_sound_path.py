@@ -1,10 +1,10 @@
-"""Register row 790, the owner, 2026-11-06: video sound reaching the look off air through
+"""Video sound reaching the look off air through
 the analyzer is accepted, and is not a breach of "no loadable patch can affect another".
 
 The first part names the road, on real objects: a video on the `Deck` on air, heard through
 the shared mixer (`app.MediaIO`, `Mixer._callback`), pushed into the one analyzer
 (`AudioEngine.start_mix`), read by the route of the `Deck` off air. It also says what this road
-moves and what it doesn't; row 702 has the other known limits, which aren't this road's. The
+moves and what it doesn't; other known limits aren't this road's. The
 second holds the words on the toggle: true for the state, and fitting the pane.
 
 No audio device: the mixer gets test_media_mixer's fake stream, and a test pulls the blocks.
@@ -292,7 +292,7 @@ def test_the_silent_line_says_on_air_and_stays_inside_the_pane(tmp_path, monkeyp
 
 def test_one_widget_on_one_section_is_the_door_to_this_choice(tmp_path, monkeypatch):
     """Every section and the canvas, one frame each, counting each widget drawn on the id:
-    a second door would have to say it too (register row 790)."""
+    a second door would have to say it too."""
     with build_rig(tmp_path) as r:
         r.reg.toggle("audio.mix", "Video sound", lambda: False, lambda on: None, group="audio",
                      persist=False)

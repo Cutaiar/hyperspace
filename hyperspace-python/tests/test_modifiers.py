@@ -1,4 +1,4 @@
-"""Plan 28 N1 — modifier nodes, in the loadable patch.
+"""Modifier nodes, in the loadable patch.
 
 A modifier (`modifiers.Modifier`) reads one or two source lanes, has a few
 params of its own (``mod.<n>.<p>``, group ``mod``, performance and
@@ -233,8 +233,7 @@ def test_a_threshold_lane_is_a_trigger_and_a_gate(rig):
 
 
 def test_a_modifier_reads_another_the_same_frame_whatever_its_id(rig):
-    """In dependency order (plan 28 N0, decision 7; this pinned the id-order
-    lag before): a modifier reading another — a lower id or a higher one —
+    """In dependency order: a modifier reading another — a lower id or a higher one —
     reads its output this frame."""
     reg, router = rig.reg, rig.router
     table = router.table
@@ -407,8 +406,7 @@ def test_the_routing_page_builds_the_smoothed_energy_times_band_patch(rig):
     fixture's loadable patch."""
     reg, router, loaded_patch = rig.reg, rig.router, rig.loaded_patch
     panel = panel_of(rig)
-    # (plan 36 T3: acid exists where the graph names it — every file, as
-    # before a graph lands)
+    # (acid exists where the graph names it, in every file)
     from hyperspace.fx import declare
 
     declare(reg, reg.fx_state, reg.fx_state.hold(None))
@@ -465,9 +463,9 @@ def test_the_modifiers_strip_draws_its_blocks_and_routing_points_to_graph(
         shell_rig, tmp_path, monkeypatch):  # noqa: F811
     """The strip's function (`ui_routing.modifiers`): each modifier's kind,
     its live output, its params as the panel's own widgets — and every
-    widget its own imgui id. Plan 28 N7: the real ROUTING page no longer
-    draws it (its pointer line to GRAPH is where routes and modifiers
-    were, before the desk); GRAPH's side pane draws a modifier's block."""
+    widget its own imgui id. The real ROUTING page does not draw it (its
+    pointer line to GRAPH stands there); GRAPH's side pane draws a
+    modifier's block."""
     panel, reg = shell_rig.panel, shell_rig.reg
     table = Bindings.factory(path=routing.bindings_path(tmp_path))
     router = panel.router = Router(reg, table)

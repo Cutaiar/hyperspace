@@ -1,4 +1,4 @@
-"""The tracking source and the DAW port against a fake ``leap`` (audit N5).
+"""The tracking source and the DAW port against a fake ``leap``.
 
 `LeapSource` imports the SDK bindings inside its constructor, so a fake
 module in `sys.modules["leap"]` — the Listener base, a Connection, the
@@ -158,7 +158,7 @@ def test_losing_the_service_or_the_camera_and_errors_show_in_the_status(leap):
                                         ("on_connection_lost_event", NS()),
                                         ("on_device_lost_event", NS())])
 def test_a_tracking_frame_after_a_bad_status_puts_the_hands_back_on_the_router(leap, event, arg):
-    """2026-10-08 at the rig: one SDK error mid-show left the status bad
+    """One SDK error mid-show left the status bad
     while frames kept coming — the ghost hands drew, but `on` was false,
     so HandsIO fed the router None and no hand route moved until a relaunch."""
     clock = Clock()
@@ -312,8 +312,8 @@ def test_hands_io_builds_the_real_source_by_default_and_closes_it(leap):
 
 
 # ---------------------------------------------------------------- the DAW port
-# (plan 27 B3: the port is the `hands-daw` sink's — bridge.OutPort /
-# bridge._open_out, moved out of hands/core.py — and HandsIO opens none)
+# (the port is the `hands-daw` sink's — bridge.OutPort /
+# bridge._open_out — and HandsIO opens none)
 
 def test_open_out_prefers_an_existing_port_else_makes_a_virtual_one(monkeypatch):
     from hyperspace import bridge

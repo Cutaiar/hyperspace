@@ -1,12 +1,12 @@
-"""Plan 35 F, V2 (T1): the wired frame as words — the marker (`"frame":
+"""The wired frame as words — the marker (`"frame":
 "wired"`), the frame's nodes in the owner's names (`scene`, `shape`,
 `backdrop`, `pattern`, `lookback`, `hands.layer`, `hands.guide`,
 `channel.<c>`), copies, All outputs (`output.all`), `ground`, the reach
 from the outputs and the capture, the loops through the two edges left
 hidden, and the ids old and new (`NEW_IDS`, `param_prefix`). Data only:
-`read_graph`, `wire_error`, `reaches`, `sink_loops`; the builder is T2's.
+`read_graph`, `wire_error`, `reaches`, `sink_loops`.
 
-Plan 90 H2: the look-back is retired — a live read refuses it in words
+The look-back is retired — a live read refuses it in words
 (`LOOKBACK_RETIRED`); the frames here put a cut, a delay or an effect where
 it stood, and the old words (`lookback` entries, `holds`, the old ids) are
 still read as the migration reads them."""
@@ -34,7 +34,7 @@ def test_the_marker_reads_and_round_trips():
     spec = G.read_graph(WIRED)
     assert spec.notes == ()
     assert spec.wired
-    assert spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}   # (plan 36 T3: hands written)
+    assert spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}   # (hands written)
     assert not G.read_graph({}).wired
     with pytest.raises(G.GraphError) as err:
         G.read_graph({"frame": "yes"})
@@ -51,8 +51,8 @@ FULL_WIRES = [
     ("cut", "acid.image"), ("acid", "output.all.image"),
     ("scene", "acid.slot.2.image"), ("acid.slot.2", "output.2.image"),
     ("hands.layer", "output.all.hands"), ("hands.layer", "output.all.guide"),
-    # plan 36 T2: the edges the builder read by name, as wires (plan 90 H2:
-    # the cover into a cut's mask, the look-back's cover port retired)
+    # the edges the builder read by name, as wires (the cover into a cut's
+    # mask; the look-back's cover port is retired)
     ("pattern", "shape.faces"), ("scene.cover", "cut.mask"),
     ("hands", "hands.layer.hands"), ("hands", "hands.guide.hands")]
 
@@ -77,7 +77,7 @@ def test_the_frame_kinds_read_and_round_trip():
                          (G.GuideAt(), "hands.guide", {"kind": "guide"}),
                          (G.GuideAt(2), "hands.2.guide", {"kind": "guide", "instance": 2})):
         assert at.name == name and at.to_json() == js
-    # plan 89: an effect's slot is named off its effect, declared by its entry
+    # an effect's slot is named off its effect, declared by its entry
     assert G.SlotAt("acid", 2).name == "acid.slot.2"
     assert G.SlotAt("acid.2", 3).name == "acid.2.slot.3"
     assert G.SceneAt().n == G.LookbackAt().n == 1
@@ -160,7 +160,7 @@ def test_ground_goes_only_into_outputs():
 
 
 def test_a_copy_entry_is_refused_and_a_slot_is_its_effects():
-    """Plan 89: no copy node — its entry is refused in words (a file older
+    """No copy node — its entry is refused in words (a file older
     than the build has it migrated before the read); an effect's slot is
     declared by its entry's `slots` and named off it; a wire naming a slot
     the entry does not declare is a note; `slots` is a count from 1 to
@@ -188,9 +188,7 @@ def test_reach_runs_from_the_outputs_and_the_capture():
     assert G.reaches(G.read_graph(wired(("shape", "scene.geometry")))) == frozenset()
     assert G.reaches(G.read_graph(wired(("shape", "scene.geometry"),
                                         ("scene", "output.all.image")))) == {"shape", "scene"}
-    # (plan 36 T4: what a look-back recorded was reached with the look-back;
-    # plan 90 H2: the delay that keeps the pictures now — a delay nothing
-    # reads records nothing)
+    # (the delay keeps the pictures; a delay nothing reads records nothing)
     d = [{"kind": "delay"}]
     assert G.reaches(G.read_graph(wired(("shape", "scene.geometry"),
                                         ("scene", "delay.image"), nodes=d))) == frozenset()
@@ -200,40 +198,38 @@ def test_reach_runs_from_the_outputs_and_the_capture():
         "shape", "scene", "delay"}
     faces = [("channel.a", "pattern.media"), ("shape", "scene.geometry"),
              ("scene", "output.1.image")]
-    # (plan 36 T2: the faces read the pattern by a wire, never by name)
+    # (the faces read the pattern by a wire, never by name)
     assert {"pattern", "channel.a"}.isdisjoint(G.reaches(G.read_graph(wired(*faces))))
     got = G.reaches(G.read_graph(wired(*faces, ("pattern", "shape.faces"))))
     assert {"pattern", "channel.a", "shape", "scene"} <= got
     got = G.reaches(G.read_graph(wired(*faces, ("channel.b", "shape.faces"))))
     assert "pattern" not in got and "channel.a" not in got and "channel.b" in got
-    # a delay's input is reached only once the delay is (plan 34's rule)
+    # a delay's input is reached only once the delay is (a delay's rule)
     assert "channel.a" not in G.reaches(G.read_graph(wired(("channel.a", "delay.image"),
                                                             nodes=d)))
     assert {"delay", "channel.a"} <= G.reaches(G.read_graph(wired(
         ("channel.a", "delay.image"), ("delay", "output.all.image"), nodes=d)))
 
 
-def test_loops_in_a_wired_frame_keep_plan_34s_words():
+def test_loops_in_a_wired_frame_keep_the_loop_words():
     spec = G.read_graph(wired(("shape", "scene.geometry"), ("scene", "shape.faces")))
     assert note(("scene", "shape.faces"),
                 G.LOOP_FACES.format(path="shape → scene → shape")) in spec.notes
     assert G.Wire("scene", "shape.faces") not in spec.wires
     spec = G.read_graph(wired(("scene", "backdrop.scene"), ("backdrop", "acid.image"),
                               ("acid", "backdrop.image")))
-    # (plan 90 H2: the look-back over the backdrop, which made this loop one
-    # through the backdrop, is retired — an effect between is a plain loop)
+    # (an effect between the backdrop and itself is a plain loop)
     w = ("acid", "backdrop.image")
     assert note(w, G.LOOP_PLAIN.format(path="backdrop → acid → backdrop")) in spec.notes
     assert G.Wire(*w) not in spec.wires
-    # (plan 36 T4: what a look-back recorded was for the frames after; plan
-    # 90 H2: a delay's — the backdrop's past under the backdrop is no loop)
+    # (what a delay keeps is for the frames after: the backdrop's past under
+    # the backdrop is no loop)
     assert G.read_graph(wired(("scene", "backdrop.scene"), ("backdrop", "delay.image"),
                               ("delay", "backdrop.image"),
                               nodes=[{"kind": "delay"}])).notes == ()
-    # plan 36 T2: the cover reads the scene's faces by its drawn wire — a pin
-    # of the scene, so a loop through it runs through the scene; unwired, no
-    # edge is read (the old hidden edge (lookback, scene) is gone; plan 90
-    # H2: the cover into a cut's mask)
+    # the cover reads the scene's faces by its drawn wire — a pin of the
+    # scene, so a loop through it runs through the scene; unwired, no edge
+    # is read (the cover into a cut's mask)
     cut = [{"kind": "cut"}]
     loop = (("channel.a", "cut.image"), ("shape", "scene.geometry"), ("cut", "shape.faces"))
     assert G.read_graph(wired(*loop, nodes=cut)).notes == ()
@@ -246,7 +242,7 @@ def test_loops_in_a_wired_frame_keep_plan_34s_words():
     spec = G.read_graph(wired(("delay", "acid.image"), ("acid", "delay.image"),
                               ("acid", "output.all.image"), nodes=[{"kind": "delay"}]))
     assert spec.notes == ()
-    # (plan 90 H2: the look-back is retired — a live read refuses any wire
+    # (the look-back is retired — a live read refuses any wire
     # to or from it, its old capture port too, and an entry of it, in words)
     retired = f"lookback: {G.LOOKBACK_RETIRED}"
     for pair, name in ((("scene", "lookback.capture"), "lookback"),
@@ -257,7 +253,7 @@ def test_loops_in_a_wired_frame_keep_plan_34s_words():
         assert spec.notes == (note(pair, f"{name}: {G.LOOKBACK_RETIRED}"),), pair
         assert spec.wires == (), pair
     assert G.read_graph(wired(nodes=[{"kind": "lookback"}])).notes == (retired,)
-    # through a delay a loop is legal, as in plan 34
+    # through a delay a loop is legal
     spec = G.read_graph(wired(("shape", "scene.geometry"), ("scene", "delay.image"),
                               ("delay", "shape.faces"), nodes=[{"kind": "delay"}]))
     assert spec.notes == ()
@@ -272,8 +268,7 @@ def test_loop_words_in_a_wired_frame():
 
 
 def test_outside_a_wired_frame_nothing_changes():
-    """Plan 34's `tests/test_graph_feedback.py` passes unedited (the
-    suite runs it); here the old ids still read as they did."""
+    """The old ids still read as they did."""
     spec = G.read_graph({"wires": [{"from": "history", "to": "output.2.image"},
                                    {"from": "hands", "to": "output.2.hands"},
                                    {"from": "frame", "to": "fx.image"}]})
@@ -332,7 +327,7 @@ def test_an_old_id_in_a_wired_frame_is_refused(pair, old, new):
 
 def test_a_full_wired_frame_saves_as_it_stands(tmp_path):
     """A wired frame's words — every frame kind, an effect's slot, a ground — load
-    and save `/6` as the frame stands (row 394: every save is `/6`, so no
+    and save `/6` as the frame stands (every save is `/6`, so no
     frame is put back into older words), and reload the same."""
     from test_plan31_wiring import make_app
 

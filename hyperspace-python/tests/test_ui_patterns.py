@@ -1,4 +1,4 @@
-"""Plan 22 B2: the FACES page (ui_patterns.py) — the pattern browser and the
+"""The FACES page (ui_patterns.py) — the pattern browser and the
 eight inputs, named, with what each does in the mode on show and what
 drives it. Headless imgui over the real registry (test_fx's PageRig, with
 this page in its frame); the swatches are the renderer's and a headless
