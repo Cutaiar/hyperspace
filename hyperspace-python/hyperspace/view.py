@@ -102,7 +102,8 @@ class DelayState:
 # plan 39 T2 (W2): a matte's sources — what makes a pixel pass: its
 # brightness, its own coverage (how a cut picture becomes a mask again), or
 # its closeness to a keyed hue (a chroma key)
-MATTE_FROM = ("luma", "alpha", "chroma")
+# (plan 90 H2, Q23: and Key's peak measure, appended — a saved index keeps its source)
+MATTE_FROM = ("luma", "alpha", "chroma", "peak")
 MATTE_FEATHER = 32.0      # the most px a matte's feather blurs its mask by
 
 
@@ -123,6 +124,7 @@ class MatteState:
     feather: float = 0.0
     hue: float = 1.0 / 3.0
     sat: float = 1.0
+    ramp: int = 0                # plan 90 (H2, Q23): an index into `KEY_RAMPS`, the key's
 
 
 # plan 87, black is clear: what a keyed node measures a pixel's brightness

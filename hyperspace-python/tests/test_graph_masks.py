@@ -222,12 +222,12 @@ def test_declare_mattes_comes_and_goes():
     reg = params.Registry()
     got = params.declare_mattes(reg, ["matte", "matte.2"])
     ids = params.matte_ids("matte") + params.matte_ids("matte.2")
-    assert sorted(got) == sorted(ids) and len(ids) == 14
+    assert sorted(got) == sorted(ids) and len(ids) == 16
     for pid in ids:
         assert reg[pid].group == params.MATTE_GROUP == "matte", pid
         assert reg[pid].modulatable, pid
         assert params.is_matte_id(pid), pid
-    assert reg["matte.from"].choices == ["luma", "alpha", "chroma"] == list(view.MATTE_FROM)
+    assert reg["matte.from"].choices == ["luma", "alpha", "chroma", "peak"] == list(view.MATTE_FROM)
     st = MatteState()
     assert (st.source, st.key, st.soft, st.invert, st.feather) == (0, 0.5, 0.0, False, 0.0)
     assert reg["matte.key"].value == 0.5 and reg["matte.soft"].hi == 0.5
