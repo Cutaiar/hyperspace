@@ -370,7 +370,7 @@ Read \`git diff ${STRBASE} -- <files>\` and \`verify --base ${STRBASE}\`'s list 
 Verifier notes, including tests that match changed messages: ${JSON.stringify(sres.filter(Boolean).map(r => r.notes))}
 
 1. From hyperspace-python/, run \`python3 tools/prose_audit.py verify --base ${STRBASE}\`. No file may report \`code\`.
-2. Run \`uv run ruff check .\`, then the fast tier as CI does. A failure caused by a changed message is fixed by updating that test's expected string to the new text. That is a string edit; never touch a test's logic. A failure you can't fix that way gets the message reverted.
+2. Run \`uv run ruff check .\`, then the fast tier as CI does. A failure caused by a changed message is fixed in the test: update its expected string to the new text, or, when the test keys on the history itself (filters or recognises messages by a plan number), change the test to recognise them another way, such as a predicate or constant the module exports. Don't put the history back in the message to satisfy a test. Change app code only in its strings, plus any such small exported predicate or constant. List every test you changed beyond an expected string. Revert a message only when its test can't be fixed either way.
 3. Run \`python3 tools/prose_audit.py baseline\` and \`check\`.
 4. Commit by area (app, tests, tools), with summary lines that begin "Strings:", so the string edits are reviewable on their own. Then run \`git push -u origin ${prep.branch}\`, retrying network errors up to 4 times. Don't open a PR.
 Return the gate results.`, { phase: 'Strings', label: 'strings gate', schema: GATED, model: SYNTH, effort: EFFORT }) : null

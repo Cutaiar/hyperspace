@@ -157,8 +157,12 @@ that commit (`STRBASE`), so its diff holds string edits and nothing else.
   every file, never `code`, and lists every string pair for the verifier.
 - **Tests that match a message.** The verifier lists any test whose
   expected text is a changed message. The gate updates that expectation to
-  the new text, which is a string edit, never a change to the test's
-  logic.
+  the new text. When a test keys on the history itself (it filters or
+  recognises messages by a plan number, say), the gate changes the test to
+  recognise them another way, such as a predicate or constant the module
+  exports, rather than keep the history in the message. Such a test edit
+  may report `code` in `verify`; it is listed in the report. Only tests
+  change this way, never app code beyond the strings.
 - **Commits** have summary lines that begin "Strings:", separate from the
   prose commits.
 
