@@ -492,10 +492,10 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
         (f"note:7:{apc40.N_CLIPSTOP}", routing.SAVE_PARAM)]
     send_a = routing.SEQ_PAGE_SOURCE                    # plan 31 §A: the sequencer page
     assert again.notes == [
-        f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)",
-        *[f"added {s} → preset.select (the APC40 map of plan 19)" for s in far],
-        *[f"added {s} → {pid} (the APC40 map of plan 24)" for s, pid in c1],
-        f"added {send_a} → seq.page (the APC40 map of plan 31)",
+        f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map: clip row)",
+        *[f"added {s} → preset.select (the APC40 map: far pads)" for s in far],
+        *[f"added {s} → {pid} (the APC40 map: desk)" for s, pid in c1],
+        f"added {send_a} → seq.page (the APC40 map: seq page)",
         *[f"added {s} → {pid} (reserved for the meta controller)" for s, pid in (
             (f"cc:0:{apc40.CC_MASTER}", "output.dim"), (f"cc:0:{apc40.CC_XFADE}", "output.xfade"))]]
     assert [b for b in again.to_json()["bindings"]
@@ -1547,8 +1547,8 @@ def test_an_older_file_gets_home_where_it_is_free(tmp_path, capsys):
     before = path.read_text()
     assert "preset.home" not in before
     t = Bindings.load(path, legacy_midi=None)
-    assert t.notes == [f"added {over} → preset.home (the APC40 map of plan 15)",
-                       f"added {key} → preset.home (the keys of plans 09, 11 and 15)"]
+    assert t.notes == [f"added {over} → preset.home (the APC40 map: clip row)",
+                       f"added {key} → preset.home (the factory keys)"]
     err = capsys.readouterr().err
     assert f"updated {path} (2 rows changed)" in err
     (row,) = [b for b in t.midi() if b.source == over]
@@ -1668,7 +1668,7 @@ def test_an_old_crossfader_row_moves_to_the_decks_with_a_backup(tmp_path, capsys
     err = capsys.readouterr().err
     assert t.error == ""
     assert t.notes[-1:] == [(f"remapped {xf}: {old.replace('overlay.', 'output.')} → output.xfade "
-                             "(the APC40 map of plan 44)")]
+                             "(the APC40 map: crossfade)")]
     assert t.notes[-1] in err and "kept as bindings.json.bak-v" in err
     row, = [b for b in t.bindings if b.source == xf]
     assert (row.target, row.op, row.layer, row.pickup, row.feedback) == (
@@ -1790,7 +1790,7 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_loadable_bank(tm
     assert [b.target for b in t.bindings if b.source == f"note:2:{apc40.N_CLIP[0]}"] \
         == ["preset.select"]
     assert not any(b.target.startswith("theme.") for b in t.bindings)
-    assert "remapped key:F3: theme.load.2 → preset.load.2 (the patch bank of plan 13)" in err
+    assert "remapped key:F3: theme.load.2 → preset.load.2 (the patch bank)" in err
     n = len(t.notes)
     # F-keys, clip row, QUANT, pad B (straight onto the newest layout's
     # points, PAD_REMAP), the user's — and clip rows 4 and 5,
@@ -2141,8 +2141,8 @@ def _added(err: str, path, sources) -> bool:
     row on each of `sources` — and on no other pad? (`table.notes` holds
     the rows only until the next edit, and the startup loadable patch's load is
     one: what stays for the meta controller is stderr and `said`.)"""
-    lines = [ln for ln in err.splitlines() if "(the APC40 map of plan 19)" in ln]
-    return lines == [f"bindings: {path}: added {s} → preset.select (the APC40 map of plan 19)"
+    lines = [ln for ln in err.splitlines() if "(the APC40 map: far pads)" in ln]
+    return lines == [f"bindings: {path}: added {s} → preset.select (the APC40 map: far pads)"
                      for s in sources]
 
 
@@ -2385,8 +2385,8 @@ def test_the_old_shape_pads_are_swapped_and_a_changed_row_is_left_alone(tmp_path
         else:
             assert (b.target, b.op, b.value, b.layer, b.feedback, b.on, b.off) \
                 == ("preset.select", "set", float(k), None, "led", apc40.GREEN, 0), s
-    assert [n for n in t.notes if "plan 19" in n] == [
-        f"remapped {s}: view.shape → preset.select (the APC40 map of plan 19)" for s in swapped]
+    assert [n for n in t.notes if "far pads" in n] == [
+        f"remapped {s}: view.shape → preset.select (the APC40 map: far pads)" for s in swapped]
     # the file still holds a loadable patch's part (the knobs' patch layer), so it is the
     # migration's to write — and nothing of rows 4–5 is carried into that loadable patch
     assert t.carried is not None and json.loads(path.read_text()) == v2
@@ -2402,11 +2402,11 @@ def test_the_old_shape_pads_are_swapped_and_a_changed_row_is_left_alone(tmp_path
     by = {b.source: b for b in out}
     assert all((by[s].target, by[s].value, by[s].layer) == ("preset.select", float(k), None)
                for k, s in enumerate(far, 8))
-    assert not any("plan 19" in n for n in notes[16:])           # none added on top
+    assert not any("far pads" in n for n in notes[16:])           # none added on top
     # a re-aimed pad on the patch layer in such a file: it keeps the pad
     out, notes = routing.remap_factory([Binding.from_json({**owner, "layer": "preset"})])
     assert [b.target for b in out if b.source == owner["source"]] == ["fx.acid.on"]
-    assert len([n for n in notes if "plan 19" in n]) == 15
+    assert len([n for n in notes if "far pads" in n]) == 15
     # an any-channel row on clip row 5 holds every pad of it
     wild = Binding(f"note:*:{apc40.N_CLIP[4]}", "view.faces", "toggle", feedback="led")
     out, notes = routing.remap_factory([wild])

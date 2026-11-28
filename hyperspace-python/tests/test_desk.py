@@ -622,7 +622,7 @@ def test_overdub_is_home_on_both_layers_and_is_lit(rig):
     notes = t.set_desk([{"source": f"note:0:{n}", "target": "view.points", "op": "toggle",
                          "feedback": "led"}])
     said = f"dropped note:0:{n} → view.points: that control is invariant, the meta controller's"
-    assert notes == [f"{said} (plan 13 D6)"]
+    assert notes == [f"{said}"]
     assert [x.target for x in t.route("note", 0, n)] == ["preset.home"]
     # no "starts on": dark, and a press loads nothing and says so
     push(rig, note(apc40.N_CLIP[0], channel=4), note(apc40.N_CLIP[0], 0, channel=4))
@@ -856,7 +856,7 @@ def test_the_bank_pads_are_invariant(rig):
     notes = t.set_desk([{"source": f"note:{ch}:{n}", "target": "view.points", "op": "toggle",
                          "feedback": "led"} for _k, (n, ch) in want])
     assert notes == [f"dropped note:{ch}:{n} → view.points: that control is invariant, the "
-                     "meta controller's (plan 13 D6)" for _k, (n, ch) in want]
+                     "meta controller's" for _k, (n, ch) in want]
     assert [(b.to_json(), b.layer) for b in t.midi() if b.layer != "preset"] == rows
     # no corpus loadable patch's desk names a pad of rows 4 or 5
     for name in lib.list("loadable"):

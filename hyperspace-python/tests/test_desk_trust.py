@@ -427,8 +427,7 @@ def test_an_older_loadables_toggle_rows_drop_quietly_and_an_owners_row_with_a_no
     lib.loaded_patch.load("OLD DESK")
     assert lib.current("loadable") == "OLD DESK"
     assert lib.loaded_patch.desk_notes == [
-        ("dropped note:7:52 → camera.reset: that control is invariant, the meta controller's "
-         "(plan 13 D6)")]
+        ("dropped note:7:52 → camera.reset: that control is invariant, the meta controller's")]
     assert [b.source for b in t.desk()] == ["cc:0:48", "cc:0:55", "note:0:86"]
     for (pid, n), want in zip(TOGGLES, (True, False, True, False)):
         assert bool(rig.reg[pid].value) is want
@@ -459,7 +458,7 @@ def test_a_meta_file_gains_the_toggles_and_the_save_once(tmp_path):
     for s, pid, op in added:
         (b,) = t.route("note", int(s.split(":")[1]), int(s.split(":")[2]))
         assert (b.target, b.op, b.layer, b.feedback) == (pid, op, None, "led")
-        assert f"added {s} → {pid} (the APC40 map of plan 24)" in t.notes
+        assert f"added {s} → {pid} (the APC40 map: desk)" in t.notes
     again = Bindings.load(path, legacy_midi=None)
     assert again.notes == []
     # an owner's row on scene launch 1 is kept; that control gets nothing

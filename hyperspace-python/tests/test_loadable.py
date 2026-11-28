@@ -1228,7 +1228,7 @@ def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(
     # NIGHT TWO: fifteen quiet, the owner's re-aimed pad with its note, the knob kept
     pr.load_slot(1)
     said = (f"dropped {OWNER_PAD['source']} → {OWNER_PAD['target']}: that control is "
-            "invariant, the meta controller's (plan 13 D6)")
+            "invariant, the meta controller's")
     assert lib.current("loadable") == "NIGHT TWO"
     assert loaded_patch.desk_notes == [said] and loaded_patch.notes == [said]
     assert lib.warning == f"patch NIGHT TWO: {said}"       # one note: no "(+15 more)"

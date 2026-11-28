@@ -188,7 +188,7 @@ def test_a_scale_on_a_patch_param_is_refused_with_a_note(tmp_path):
     t = Bindings.from_json({"schema": routing.SCHEMA, "bindings": rows})
     assert [b.scale for b in t.bindings] == [None, None, "master.gain"]
     assert t.bindings[0].value == 0.3 and t.changed
-    assert any("dropped the scale view.speed of hand:1 → view.bright" in n and "18 (a)" in n
+    assert any("dropped the scale view.speed of hand:1 → view.bright" in n and "meta controller param" in n
                for n in t.notes)
     assert t.macros_doc() == {"macro.4": {"subs": [depth_sub("lfo:1", "fx.mix")]}}
     # a loadable patch's load
@@ -238,7 +238,7 @@ def test_a_base_subscriber_on_a_meta_param_is_dropped_with_a_note(tmp_path):
     assert not table.routes_to("master.gain")
     notes = r.loaded_patch.notes
     assert any("macro.1's depth subscriber on hand:1 → master.gain" in n for n in notes)
-    assert any("macro.1's base subscriber tempo.bpm" in n and "D9" in n for n in notes)
+    assert any("macro.1's base subscriber tempo.bpm" in n and "never a patch's" in n for n in notes)
     assert any("macro.1's base subscriber band.sel.trim" in n for n in notes)
     # set_macros on its own: the same rule, by group prefix with no registry
     got = Bindings().set_macros({"macro.2": {"subs": [{"base": "master.gain"},

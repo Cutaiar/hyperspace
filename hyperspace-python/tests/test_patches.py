@@ -194,7 +194,7 @@ def test_the_example_is_a_patch():
     (lambda d: d["wires"].append({"from": "acid", "to": "zoomblur.image"}),
      "wire acid → zoomblur.image crosses the edge: a port says it"),
     (lambda d: d["values"].update({"view.bright": 0.8}),
-     "view.bright is the host's: a patch drives a host param, never sets it (D5)"),
+     "view.bright is the host's: a patch drives a host param, never sets it"),
     (lambda d: d.update(envs=[3]),
      "env.3 is a sequencer lane's envelope; left out (a patch's envelope spawns as 6 or more)"),
     (lambda d: d.update(schema="hyperspace.preset/7"),

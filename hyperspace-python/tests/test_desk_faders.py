@@ -296,7 +296,7 @@ def test_a_loadable_row_on_an_owners_invariant_fader_drops_with_the_invariant_no
     lib = load_fixture(rig)
     assert lib.loaded_patch.desk_notes == [
         (f"dropped cc:0:{FADER} → view.points_alpha: that control is invariant, the "
-         "meta controller's (plan 13 D6)")]
+         "meta controller's")]
 
 
 # ------------------------------------------------------- lines and points opacity

@@ -237,7 +237,7 @@ def test_older_files_get_send_a_unless_it_is_taken(tmp_path):
     Bindings(meta_rows, path=path).write()
     t = Bindings.load(path, legacy_midi=None)
     assert [b.target for b in t.route("note", 0, SEND_A)] == [routing.SEQ_PAGE_PARAM]
-    assert "added note:0:88 → seq.page (the APC40 map of plan 31)" in t.notes
+    assert "added note:0:88 → seq.page (the APC40 map: seq page)" in t.notes
     mine = Binding(f"note:0:{SEND_A}", "view.points", "toggle", feedback="led")
     path = bindings_path(tmp_path / "b")
     (tmp_path / "b").mkdir()
