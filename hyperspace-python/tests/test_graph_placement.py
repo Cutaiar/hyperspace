@@ -55,7 +55,10 @@ def unrescaled(notes: list[str]) -> list[str]:
     head = loadable.RETAPER_NOTE.partition("{count}")[0]
     # (plan 67: and Hue cycle's retirement, said of a fixture from before it)
     hue = M.HUE_TURN_NOTE.partition("{new}")[2][:40]
-    return [n for n in notes if not n.startswith(head) and hue not in n]
+    # (plan 90 H2: and the look-back made public parts, said of a fixture
+    # whose old values drew one)
+    lb = M.LOOKBACK_NOTE.partition("{chain}")[0].partition("{old}")[2]
+    return [n for n in notes if not n.startswith(head) and hue not in n and lb not in n]
 
 
 
@@ -308,26 +311,32 @@ def test_after_scene_and_into_the_history_in_the_graph():
     """`after: scene`: the history, the capture (or the history's
     composite) read the effect; the cover (the face buffer) and the
     depth ports still read the scene. `into: history`: the history alone,
-    the capture keeping the scene."""
+    the capture keeping the scene. (Plan 90 H2: the look-back drawn is its
+    public parts — the history is the composite adding the trail, its
+    occluder the matte, its capture the fade the delay records through.)"""
     vs = [View(S(), (10, 10))]
-    g = _graph(vs, G.EffectAt("acid", 2, after="scene"))
+    built = (*RUN, "fade", "trail")      # (the look-back's parts' effects, off the run)
+
+    def placed(*at, **kw):
+        return G.build_graph(vs, wired_wiring(G.Wiring(placed=at, run=_run(at), **kw),
+                                              "trail"), effects=built)
+
+    g = placed(G.EffectAt("acid", 2, after="scene"))
     a2, scene = g.nodes["acid.2"], g.nodes["scene"]
     assert a2.inputs["image"] is scene and a2.makes and not a2.see_through
     # (plan 36 T4: the trail added onto it, held back by it, and recording it)
     assert g.nodes["composite"].inputs["under"] is a2
-    assert g.nodes["lookback"].inputs["occluder"] is a2
-    assert g.nodes["lookback(capture)"].inputs["image"] is a2
-    assert g.nodes["lookback(cover)"].inputs["scene"] is scene
+    assert g.nodes["matte"].inputs["image"] is a2
+    assert g.nodes["fade"].inputs["image"] is a2
+    assert g.nodes["scene(cover)"].inputs["scene"] is scene
     assert g.readers(a2) == 3
-    at = (G.EffectAt("acid", 2, after="scene"),)
-    g = G.build_graph(vs, wired_wiring(G.Wiring(blend="depth", history="scene+hands", placed=at,
-                                                run=_run(at)), "trail"), effects=RUN)
+    g = placed(G.EffectAt("acid", 2, after="scene"), blend="depth", history="scene+hands")
     a2 = g.nodes["acid.2"]
-    assert g.nodes["composite"].inputs["under"] is a2
-    assert g.nodes["composite"].inputs["depth"] is g.nodes["scene"]
-    g = _graph(vs, G.EffectAt("acid", 2, into="history"))
+    comp = next(c for c in g.nodes.values() if isinstance(c, G.Composite) and c.blend == "depth")
+    assert comp.inputs["under"] is a2 and comp.inputs["depth"] is g.nodes["scene"]
+    g = placed(G.EffectAt("acid", 2, into="history"))
     assert g.nodes["composite"].inputs["under"] is g.nodes["acid.2"]
-    assert g.nodes["lookback(capture)"].inputs["image"] is g.nodes["scene"]
+    assert g.nodes["fade"].inputs["image"] is g.nodes["scene"]
 
 
 def test_a_placement_with_nothing_to_sit_on_is_said_and_wired_nowhere():
@@ -344,7 +353,10 @@ def test_a_placement_with_nothing_to_sit_on_is_said_and_wired_nowhere():
     assert notes == [("acid.2 into 'output.2' — output 2 shows no picture: it drew nothing, "
                       "so it is not wired (plan 36)")]
     assert {"from": "hands.layer", "to": "palette.image"} in got["wires"]
-    g = G.build_graph([View(S(), (10, 10))] * 2, G.read_graph(got).wiring(), effects=RUN)
+    # (plan 90 H2: the old frame's look-back split as the old words' off had it
+    # — none drawn — before a live read, which refuses one)
+    g = G.build_graph([View(S(), (10, 10))] * 2,
+                      G.read_graph(M.split_lookback(got, "off")).wiring(), effects=RUN)
     assert not {"palette", "acid.2"} & set(g.nodes)
     assert _run_names(g, _end(g)) == ["warp", "acid", "palette.2"]
 
@@ -455,37 +467,43 @@ def test_into_output_2_folds_one_output_only(ctx):
 
 
 def test_after_scene_feeds_the_history_the_folded_picture(ctx):
-    """A second acid after the scene: the capture's source is the
-    effect's folded texture (a pool texture, not the scene's), the
-    history reads the same one, and the effect ran once a frame for both;
-    the frame differs from the one without it."""
+    """A second acid after the scene: what the history records is the
+    effect's folded picture, the picture the trail is added onto the same
+    one, and the effect ran once a frame for both; the frame differs from
+    the one without it. (Plan 90 H2: the look-back drawn is its public
+    parts — the capture is the fade the delay records through, the history
+    the composite adding the trail.)"""
     import numpy as np
     from test_outputs import keep_run, rig, run, views
 
-    r = rig(ctx, effects=(), hands=False, echoes=True)
-    st = r.fx.state
-    st.set_instances({"acid": 2})
-    st.values["acid.2"].update(on=True, mix=1.0, twist=1.5, bend=0.05)
-    r.wiring = wired_wiring(keep_run(r, G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),))),
-                            "trail")
-    seen = []
-    real = r.lookback.capture
+    def tracer(placed):
+        r = rig(ctx, effects=(), hands=False)
+        st = r.fx.state
+        st.set_instances({"acid": 2})
+        st.values["acid.2"].update(on=True, mix=1.0, twist=1.5, bend=0.05)
+        for name in ("fade", "trail"):
+            st.values[name]["on"] = True
+        r.wiring = wired_wiring(keep_run(r, G.Wiring(placed=placed)), "trail")
+        return r
 
-    def capture(src, target):
-        seen.append(src)
-        real(src, target)
+    r = tracer((G.EffectAt("acid", 2, after="scene"),))
+    ran = []
+    real = r.draw_outputs
 
-    r.lookback.capture = capture
+    def draw(*a, **k):
+        real(*a, **k)
+        ran.append(list(r.stats["effects"]))
+
+    r.draw_outputs = draw
     got = run(ctx, r, views(ctx, S()), frames=3)[0]
     g = r._graph
     a2 = g.nodes["acid.2"]
-    assert (g.nodes["lookback(capture)"].inputs["image"] is a2
+    assert (g.nodes["fade"].inputs["image"] is a2
             and g.nodes["composite"].inputs["under"] is a2)
-    assert len(seen) == 3 and all(s is not r.scene.tex for s in seen)
-    assert all(any(s is t for t in r.fx._tex) for s in seen)      # the effect's held texture
-    assert r.stats["effects"] == ["acid.2"]
-    plain = rig(ctx, effects=(), hands=False, echoes=True)
+    assert len(ran) == 3 and all(x.count("acid.2") == 1 for x in ran), ran
+    plain = tracer(())
     want = run(ctx, plain, views(ctx, S()), frames=3)[0]
+    assert plain._graph.nodes["fade"].inputs["image"] is plain._graph.nodes["scene"]
     assert not np.array_equal(got, want)
 
 

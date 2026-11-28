@@ -15,7 +15,8 @@ picture whole on `fg`, nothing on `bg` and `mask`.
 The node is tested with a fake worker (as test_dream.py does): what it is
 fed and by which path (a count on each), the pins from a known matte, the
 orientation of a rows-top-first matte on every consumer (a cut, a window by
-the promotion, `lookback.cover` by the mask port's refit), `on` off idling
+the promotion; plan 90 H2: `lookback.cover`, bound by the mask port's refit,
+is retired), `on` off idling
 the worker, a removed node closing it, the preview making none, motion on
 two stills, and the `/7` round trip of the entry and its values
 (`segment-motion`, the fixture the goldens draw). The GL tests use
@@ -124,8 +125,8 @@ def test_the_segment_makes_its_pictures_on_its_pins():
                                   ("acid.2", "output.5.image"), *FACTORY_FRAME, nodes=nodes))
         assert not [n for n in spec.notes if src in n], (src, dst, spec.notes)
     # a picture pin is never a mask
-    spec = _read(("channel.a", "segment.image"), ("segment.fg", "lookback.cover"),
-                 ("scene", "lookback.image"), ("lookback", "output.2.image"))
+    spec = _read(("channel.a", "segment.image"), ("segment.fg", "cut.mask"),
+                 ("scene", "cut.image"), ("cut", "output.2.image"), nodes=(SEGMENT, CUT))
     assert spec.notes and "put a matte between" in spec.notes[0], spec.notes
 
 
@@ -527,28 +528,21 @@ def test_the_shortcut_for_a_channel_with_pixels_and_the_readback_for_one_without
 def test_a_rows_top_first_matte_lands_the_right_way_up_everywhere(ctx):
     """The orientation risk (spec "Risks"): a worker's matte passing its
     top half (its array's first rows) keeps the top half of the picture on
-    a cut, shows white at the top on a window (the promotion), and is bound
-    the right way up into `lookback.cover` (the mask port's refit)."""
+    a cut and shows white at the top on a window (the promotion). (Plan 90
+    H2: `lookback.cover`, the mask port that bound it by its refit, is
+    retired.)"""
     w = FakeWorker(_top())
     pairs = [("channel.a", "segment.image"), ("segment.fg", "output.2.image"),
              ("segment.mask", "output.3.image"), ("channel.a", "cut.image"),
-             ("segment.mask", "cut.mask"), ("cut", "output.4.image"),
-             ("scene", "lookback.image"), ("segment.mask", "lookback.cover"),
-             ("lookback", "output.5.image")]
+             ("segment.mask", "cut.mask"), ("cut", "output.4.image")]
     r = _renderer(ctx, _sources(), pairs, nodes=(SEGMENT, CUT), worker=w)
-    _, fg, mask, cut, _ = _draw(ctx, r, _s(), n=5)
+    _, fg, mask, cut = _draw(ctx, r, _s(), n=4)
     top, bottom = _tb(fg)
     assert tuple(top[:3]) == COLOUR and tuple(bottom[:3]) == (0, 0, 0)
     top, bottom = _tb(mask)
     assert tuple(top[:3]) == (255, 255, 255) and tuple(bottom[:3]) == (0, 0, 0)
     top, bottom = _tb(cut)
     assert tuple(top[:3]) == COLOUR and tuple(bottom[:3]) == (0, 0, 0)
-    seg = r._graph.nodes["segment"]
-    assert r._graph.nodes["lookback"].inputs["cover"] is seg
-    tex = r._frames["segment#fit"][0]           # what lookback.cover binds
-    assert tex.size == SIZE and tex.components == 1
-    rows = np.frombuffer(tex.read(), np.uint8).reshape(SIZE[1], SIZE[0])[::-1]  # top first
-    assert rows[10, 32] == 255 and rows[38, 32] == 0
 
 
 def test_on_off_idles_the_worker_and_passes_the_picture_whole(ctx):

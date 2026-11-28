@@ -21,6 +21,7 @@ opens through the library's own load.
 | `stack-trail` | Delay (depth 16) → Trail, each kept frame fainter by its age, added over the shape — a tracer |
 | `stack-echoes` | Delay (depth 6, 5 Hz) → Trail: six echoes, 0.2 s apart, fainter by age — the delay's rate is the spacing |
 | `stack-slit` | Delay → Read with Line on its At: each pixel a different moment — a slit-scan, a time displace |
+| `stack-lookback` | The old look-back from public parts (plan 90 H2): Curve → Fade (keyed) → Resize → Delay → Trail → two Cuts, added under the scene — party-tracer as it opens now |
 
 A **field** is a number (or a pair) at every pixel: green cables on GRAPH, grey
 when shown as a picture. A **stack** is the pictures a delay keeps (its Depth), read

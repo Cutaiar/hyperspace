@@ -3,7 +3,9 @@
 They are files for the owner's library, not part of the app (nothing ships:
 DECISIONS "One tier"), so nothing else reads them. Each must land through the
 library's own load with no unknown id and no note: a route dropped at load is
-a gesture that does nothing on stage. Each is opened from where its README
+a gesture that does nothing on stage. (Plan 90 H2: kinetic-clay holds a
+look-back, which opens as public parts with the migration's own note; its
+rows and values land retargeted, none dropped.) Each is opened from where its README
 copies it: the library's `loadable/kinetic/`, by its folder-qualified name.
 The README's own command is run too (`readme_copy`): it must land the files
 in the library `[library] path` names, as desktop startup reads it
@@ -19,10 +21,16 @@ from pathlib import Path
 import pytest
 import readme_copy
 
-from hyperspace import headless, library
+from hyperspace import graphmigrate, headless, library
 
 KINETIC = Path(__file__).resolve().parents[1] / "loadable" / "kinetic"
 FILES = sorted(KINETIC.glob("*.json"))
+
+
+def _only_look_back_notes(warning: str) -> bool:
+    """No warning, or only the look-back's migration's (plan 90 H2)."""
+    return not warning or ("(plan 90)" in warning and "unknown id" not in warning
+                           and "graph:" not in warning)
 
 
 def test_there_are_six():
@@ -49,7 +57,12 @@ def test_a_kinetic_preset_opens_with_no_note(path, tmp_path):
     app = headless.make_app(tmp_path)
     missing = app.loaded_patch.load(f"kinetic/{path.stem}")
     assert missing == []
-    assert not app.lib.warning
+    assert _only_look_back_notes(app.lib.warning)
+    # (plan 90 H2: what lands is the document as the look-back's migration
+    # rewrites it — every row and value of it, none dropped)
+    fwd = graphmigrate.forward(doc, {})
+    assert len(fwd.doc["routes"]) == len(doc["routes"])
+    doc = fwd.doc
     live = {(b.source, b.target) for b in app.router.table.routes()}
     for row in doc["routes"]:
         assert (row["source"], row["target"]) in live, row
@@ -69,5 +82,5 @@ def test_the_readme_copies_into_the_library_the_config_names(tmp_path):
     # opened as desktop startup opens it: the library at `[library] path`
     app = headless.make_app(drive, machine=machine)
     assert app.loaded_patch.load(f"kinetic/{FILES[0].stem}") == []
-    assert not app.lib.warning
+    assert _only_look_back_notes(app.lib.warning)
 

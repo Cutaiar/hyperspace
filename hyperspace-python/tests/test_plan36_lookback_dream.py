@@ -9,7 +9,12 @@ itself, pulls its own results, and with `dream.on` off passes its input
 through and submits nothing, so the worker sleeps. One live dream at a time.
 An old loadable patch's one-shader look-back migrates to `scene → lookback →
 composite (add)` — and `lookback → dream →` into it with a dream mix above
-0 — and its goldens are unmoved (tests/test_golden_frames.py)."""
+0 — and its goldens are unmoved (tests/test_golden_frames.py).
+
+Plan 90 H2: the look-back is retired. `seven` still writes the look-back an
+old file drew; the ladder's last step (`graphmigrate.lookbacks`) makes it
+public parts, so the tests of the migration read its result through that
+step; a live frame refuses a look-back wire in words; the dream is kept."""
 
 from __future__ import annotations
 
@@ -78,26 +83,26 @@ def _frames(ctx, r, s, n=4, views=1):
     return [_px(v.target) for v in vs]
 
 
-# the factory frame of an old loadable patch with its tracers on and a dream mix
-# above 0: `scene → lookback → dream → composite (add, under the scene)`
-WAKE = (("shape", "scene.geometry"), ("scene", "lookback.occluder"),
-        ("scene", "composite.under"), ("lookback", "dream.image"),
-        ("dream", "composite.over"), ("composite", "output.all.image"),
-        ("scene", "lookback.image"), ("scene.cover", "lookback.cover"))
+# a dream laid on its picture: `scene → dream → composite (add, under the
+# scene)` (plan 90 H2: the look-back that fed it in an old frame is retired)
+WAKE = (("shape", "scene.geometry"), ("scene", "composite.under"),
+        ("scene", "dream.image"), ("dream", "composite.over"),
+        ("composite", "output.all.image"))
 WAKE_NODES = ({"kind": "composite", "blend": "add"}, {"kind": "dream"})
 
 
 # ---------------------------------------------------------------- the dream off: the worker idle
 
 def test_tracers_with_the_dream_off_submit_nothing(ctx):
-    """The look-back drawn with no dream node, and with one that is off
-    (`dream.on` false): the trail shows, the worker gets no submission —
-    it sleeps — and the dream passes its picture through, byte for byte
-    the frame with no dream node at all."""
-    d = DreamState(on=False, echoes=8, gap=0.0, echo_mix=0.8)
-    tracers = _wired(*(p for p in WAKE if p not in (("lookback", "dream.image"),
+    """A dream node that is off (`dream.on` false), against the same frame
+    with no dream node: the worker gets no submission — it sleeps — and
+    the dream passes its picture through, byte for byte the frame with no
+    dream node at all. (Plan 90 H2: what it was laid on, the look-back's
+    trail, is public parts now; the dream's own switch is this test's.)"""
+    d = DreamState(on=False)
+    tracers = _wired(*(p for p in WAKE if p not in (("scene", "dream.image"),
                                                     ("dream", "composite.over"))),
-                     ("lookback", "composite.over"), nodes=WAKE_NODES[:1])
+                     ("scene", "composite.over"), nodes=WAKE_NODES[:1])
     plain = _renderer(ctx, tracers, dream=DreamState(**vars(d)))
     plain.dreamer.source = none = Counting()
     want = _frames(ctx, plain, _faces())[0]
@@ -105,7 +110,6 @@ def test_tracers_with_the_dream_off_submit_nothing(ctx):
     r.dreamer.source = worker = Counting()
     got = _frames(ctx, r, _faces())[0]
     assert worker.submits == 0 and none.submits == 0
-    assert r.lookback.held() > 0
     assert np.array_equal(got, want), "off, the dream is its picture"
     assert r._graph.nodes["dream"].said.startswith("off: the picture passes through")
     # on, it submits once a frame
@@ -157,54 +161,24 @@ def test_a_second_dream_is_refused_in_words():
     assert spec.dream == G.DreamAt(1)
 
 
-# ---------------------------------------------------------------- several look-backs
+# ---------------------------------------------------------------- no look-back (plan 90 H2)
 
-def test_two_lookbacks_keep_separate_rings(ctx):
-    """`lookback` and `lookback.2` (declared by its entry), each recording
-    its own picture with its own values (`dream.2.*`: its own count and
-    detail): two rings, their echoes held apart; `lookback.2.echo.1` reads
-    the second's ring. An undeclared `lookback.3` is refused in words."""
-    from hyperspace.params import declare_lookbacks, is_lookback_id, lookback_ids
-
-    assert lookback_ids("lookback.2")[:3] == ["dream.2.echo_mix", "dream.2.fade",
-                                              "dream.2.echoes"]
-    assert is_lookback_id("dream.2.echoes") and not is_lookback_id("dream.echoes")
-    wiring = _wired(("shape", "scene.geometry"), ("scene", "lookback.image"),
-                    ("lookback", "output.all.image"),
-                    ("channel.a", "lookback.2.image"), ("lookback.2", "output.2.image"),
-                    ("lookback.2.echo.1", "output.3.image"),
-                    nodes=[{"kind": "lookback", "instance": 2}])
-    m = _media(a=Still(_rgba(16, 9, RED)))
-    r = _renderer(ctx, wiring, media=m, dream=DreamState(echoes=4, gap=0.0, res=0))
-    from hyperspace.view import ViewState
-
-    s = _faces()
-    two = DreamState(echoes=2, gap=0.0, res=2)
-    s.lookback = {"lookback.2": two}
-    _frames(ctx, r, s, n=5, views=3)
-    one, other = r.ring("lookback"), r.ring("lookback.2")
-    assert one is r.lookback and other is not one and other.state is two
-    assert one.atlas is not None and other.atlas is not None and one.atlas is not other.atlas
-    assert one.echo != other.echo                         # res 0 against res 2
-    assert len(one.layers()) == 4 and len(other.layers()) == 2
-    assert r._graph.nodes["lookback.2.echo.1"].lookback == "lookback.2"
-    assert isinstance(r._graph.nodes["lookback.2(capture)"], G.Capture)
-    # an instance no entry declares
-    spec = G.read_graph({"frame": "wired", "wires": [
-        {"from": "scene", "to": "lookback.3.image"},
-        {"from": "lookback.3", "to": "output.all.image"}]})
-    assert spec.notes and 'add one: {"kind": "lookback", "instance": 3}' in spec.notes[0]
-    # its params come and go with its entry
-    from test_lookback import registry
-
-    reg = registry()
-    reg.lookback_state = {}
-    assert set(declare_lookbacks(reg, ["lookback", "lookback.2"])) == set(
-        lookback_ids("lookback.2"))
-    assert "dream.2.echoes" in reg and reg["dream.2.echoes"].value == 8
-    declare_lookbacks(reg, ["lookback"])
-    assert "dream.2.echoes" not in reg
-    assert isinstance(ViewState().lookback, dict)
+def test_a_live_frame_refuses_a_look_back_in_words():
+    """Plan 90 H2: a look-back (`lookback`, `lookback.<n>`) and its echo pins
+    are no live nodes — a saved one is public parts by the ladder's last
+    step — so a live frame refuses each wire on one in words, the rest
+    standing."""
+    words = G.LOOKBACK_RETIRED
+    spec = G.read_graph({"frame": "wired", "nodes": [{"kind": "lookback", "instance": 2}],
+                         "wires": [{"from": "shape", "to": "scene.geometry"},
+                                   {"from": "scene", "to": "lookback.2.image"},
+                                   {"from": "lookback.2", "to": "output.2.image"},
+                                   {"from": "lookback.echo.1", "to": "output.3.image"}]})
+    assert f"lookback.2: {words}" in spec.notes
+    assert f"wire scene → lookback.2.image — lookback.2: {words}" in spec.notes
+    assert f"wire lookback.2 → output.2.image — lookback.2: {words}" in spec.notes
+    assert f"wire lookback.echo.1 → output.3.image — lookback.echo.1: {words}" in spec.notes
+    assert spec.wires == (G.Wire("shape", "scene.geometry"),)
 
 
 # ---------------------------------------------------------------- the migration
@@ -223,13 +197,17 @@ def test_an_old_dream_loadable_migrates_to_the_drawn_chain(values, dream):
     dream → composite (add, under the scene) → All outputs`, the cover and
     the occluder its own wires, `dream.on` on; on with no mix, the same
     without the dream and `dream.on` off; off, no look-back at all — the
-    scene straight into All outputs, as it drew."""
+    scene straight into All outputs, as it drew. Plan 90 H2: the ladder's
+    last step makes that look-back public parts — its picture, the last
+    Cut's, where the look-back's went — and that graph reads clean."""
     out, notes = M.seven({"schema": "hyperspace.preset/2", "values": dict(values)}, {})
     assert notes == [] and out["schema"] == M.WIRED_SCHEMA
     got = _pairs(out["graph"])
-    spec = G.read_graph(out["graph"])
+    done, lb_notes = M.lookbacks(out)
+    spec = G.read_graph(done["graph"])
     assert spec.notes == () and G.read_graph(spec.to_json()).to_json() == spec.to_json()
     if dream is None:
+        assert done is out and lb_notes == []
         assert ("scene", "output.all.image") in got
         assert not any("lookback" in a or "lookback" in b for a, b in got)
         assert out["values"]["dream.on"] is False
@@ -245,6 +223,17 @@ def test_an_old_dream_loadable_migrates_to_the_drawn_chain(values, dream):
     assert ({"kind": "dream"} in out["graph"]["nodes"]) is dream
     assert out["values"]["dream.on"] is dream
     assert out["values"]["dream.mix"] == values["dream.mix"]          # its meaning kept
+    # (plan 90 H2: the parts, the scene recorded and cut by itself and its cover)
+    parts = _pairs(done["graph"])
+    assert not any("lookback" in a or "lookback" in b for a, b in parts)
+    assert {("scene", "fade.image"), ("delay", "trail.stack"), ("trail", "cut.image"),
+            ("scene", "matte.image"), ("scene.cover", "cut.2.mask"),
+            ("scene", "composite.under"), ("composite", "output.all.image")} <= set(parts)
+    assert (("cut.2", "dream.image") in parts and ("dream", "composite.over") in parts) is dream
+    assert (("cut.2", "composite.over") in parts) is not dream
+    assert done["values"]["dream.on"] is dream and done["values"]["dream.mix"] == values[
+        "dream.mix"]
+    assert len(lb_notes) == 1 and lb_notes[0].startswith("lookback is public parts now")
 
 
 def _route(target):
@@ -269,7 +258,11 @@ def test_a_driven_dream_on_at_rest_off_draws_the_chain_and_says_so():
     assert [r["target"] for r in out["routes"]] == ["dream.on", "dream.mix"]
     assert M.LIVE_LOOK_NOTES["dream.on"] in notes
     assert M.LIVE_LOOK_NOTES["dream.mix"] in notes
-    assert G.read_graph(out["graph"]).notes == ()
+    # (plan 90 H2: the look-back public parts, last; the routes untouched)
+    done, _ = M.lookbacks(out)
+    assert ("cut.2", "dream.image") in _pairs(done["graph"])
+    assert [r["target"] for r in done["routes"]] == ["dream.on", "dream.mix"]
+    assert G.read_graph(done["graph"]).notes == ()
 
 
 def test_a_driven_dream_on_with_no_mix_draws_the_trail_alone():
@@ -297,7 +290,9 @@ def test_a_driven_dream_mix_at_zero_draws_the_dream():
 def test_plan_34s_echo_and_dream_readers_fold_into_the_two_nodes():
     """An old section's `echo.3 →` reads the look-back's pin `lookback.echo.3`
     (the look-back off: drawn only to record for it); its `dream →` reads
-    the dream node, fed the look-back, `dream.on` on so it dreams."""
+    the dream node, fed the look-back, `dream.on` on so it dreams. Plan 90
+    H2: the ladder's last step makes the pin a Read of the delay at 2,
+    nearest, and the dream is fed the trail."""
     out, _ = M.seven({"schema": "hyperspace.preset/5", "values": {"dream.on": False},
                       "graph": {"nodes": [{"kind": "echo", "index": 3}, {"kind": "dream"}],
                                 "wires": [{"from": "frame", "to": "fx.image"},
@@ -309,19 +304,29 @@ def test_plan_34s_echo_and_dream_readers_fold_into_the_two_nodes():
     assert ("scene", "output.all.image") in got                     # the look-back was off
     assert not any(n.get("kind") == "echo" for n in out["graph"]["nodes"])
     assert out["values"]["dream.on"] is True
-    assert G.read_graph(out["graph"]).notes == ()
+    done, _ = M.lookbacks(out)
+    parts = _pairs(done["graph"])
+    assert ("delay", "read.stack") in parts and ("read", "shape.faces") in parts
+    assert ("trail", "dream.image") in parts and ("dream", "output.2.image") in parts
+    assert ("scene", "output.all.image") in parts
+    assert (done["values"]["fx.read.at"], done["values"]["fx.read.between"]) == (2.0, 1)
+    assert G.read_graph(done["graph"]).notes == ()
 
 
 def test_the_seven_words_refuse_the_old_ports():
     """A `/7` frame is read as it is: `lookback.capture` and plan 34's
-    `echo.<k>` are refused in words (the migration alone reads them)."""
+    `echo.<k>` are refused in words (the migration alone reads them) —
+    plan 90 H2: as is every look-back wire, the look-back retired."""
     spec = G.read_graph({"frame": "wired", "nodes": [{"kind": "echo", "index": 2}],
                          "wires": [{"from": "scene", "to": "lookback.capture"},
                                    {"from": "lookback", "to": "output.all.image"},
                                    {"from": "echo.2", "to": "output.2.image"}]})
+    words = G.LOOKBACK_RETIRED
     assert spec.notes == (
-        f"wire scene → lookback.capture — {G.CAPTURE_IS_IMAGE.format(node='lookback')}",
-        f"wire echo.2 → output.2.image — {G.ECHO_IS_A_PIN.format(name='echo.2', k=2)}")
+        f"wire scene → lookback.capture — lookback: {words}",
+        f"wire lookback → output.all.image — lookback: {words}",
+        f"wire echo.2 → output.2.image — echo.2: {words}")
+    assert spec.wires == ()
 
 
 # ---------------------------------------------------------------- fix round 1: `dream.on`'s meaning
@@ -330,38 +335,42 @@ def test_click_to_map_offers_a_migrated_tracers_trail_knobs():
     """`dream.on` gates the dream's knobs alone: a migrated party-tracer
     (`dream.on` false, its look-back drawn) can show its trail knobs, and
     click-to-map offers them among its own — the dream's own knobs it
-    cannot show (no dream drawn). With no look-back drawn, the trail knobs
-    are dead."""
+    cannot show (no dream drawn). Plan 90 H2: its trail knobs are its
+    public parts' (`fx.trail.level`, `fx.trail.fade`, `delay.depth`,
+    `cut.amount`), migrated on by the ladder's last step."""
     import json
 
     from conftest import CORPUS
 
     from hyperspace import learn
+    from hyperspace.fx import FxState
 
-    doc = json.loads((CORPUS / "loadable" / "party-tracer.json").read_text())
+    doc = M.forward(json.loads((CORPUS / "loadable" / "party-tracer.json").read_text()),
+                    {}).doc
     values = doc["values"]
     assert values["dream.on"] is False
-    drawn = learn.drawn_of(G.read_graph(doc["graph"]))
-    assert "lookback" in drawn and "dream" not in drawn
-    for pid in ("dream.echo_mix", "dream.fade", "dream.echoes", "dream.occlude"):
+    drawn = learn.drawn_of(G.read_graph(doc["graph"], effects=set(FxState().specs)))
+    assert {"trail", "delay", "cut"} <= drawn and "dream" not in drawn
+    assert "lookback" not in drawn
+    for pid in ("fx.trail.level", "fx.trail.fade", "delay.depth", "cut.amount"):
         assert learn.cannot_show(pid, values, drawn=drawn) is None, pid
     assert learn.cannot_show("dream.mix", values, drawn=drawn) == "no dream"
     assert learn.cannot_show("dream.k", values) == "dream off"       # no graph to ask
-    params = [(pid, "dream") for pid in ("dream.echo_mix", "dream.fade", "dream.mix")]
+    params = [("fx.trail.level", "fx"), ("fx.trail.fade", "fx"), ("dream.mix", "dream")]
     used, _ = learn.ranked(params, values, {}, set(), set(), drawn=drawn)
-    assert [pid for pid, _ in used] == ["dream.echo_mix", "dream.fade"]
-    assert dict(used)["dream.fade"] == learn.ON
-    plain = learn.drawn_of(G.read_graph({"frame": "wired", "wires": [
-        {"from": "scene", "to": "output.all.image"}]}))
-    assert learn.cannot_show("dream.fade", values, drawn=plain) == "no look-back"
-    assert learn.cannot_show("dream.2.fade", values, drawn=drawn) == "no look-back"
+    assert [pid for pid, _ in used] == ["fx.trail.level", "fx.trail.fade"]
+    assert dict(used)["fx.trail.fade"] == learn.ON
+    # the trail's off: its knobs are dead
+    assert learn.cannot_show("fx.trail.fade", {**values, "fx.trail.on": False},
+                             drawn=drawn) == "trail off"
 
 
 def test_the_tracer_only_group_loadable_leaves_the_worker_idle(ctx, tmp_path):
     """The dream group's `tracer-only` (echoes alone, mix 0) says the dream
     off since plan 36 T4: applied over a frame drawing a dream, the dream
     passes through and the worker gets no submission; its note says a
-    values-only loadable patch draws no node."""
+    values-only loadable patch draws no node. (Plan 90 H2: its retired
+    look-back knobs land quietly — they drew nothing in a module preset.)"""
     from conftest import seed
     from test_lookback import registry
 
@@ -377,4 +386,6 @@ def test_the_tracer_only_group_loadable_leaves_the_worker_idle(ctx, tmp_path):
     r = _renderer(ctx, _wired(*WAKE, nodes=WAKE_NODES), dream=d)
     r.dreamer.source = worker = Counting()
     _frames(ctx, r, _faces(), n=3)
-    assert worker.submits == 0 and r.lookback.held() > 0
+    assert worker.submits == 0
+    assert not lib.warning, lib.warning
+    assert "dream.echo_mix" not in reg and reg["dream.darken"].value == 0.3

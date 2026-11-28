@@ -67,7 +67,7 @@ live render error is a red banner at the bottom of the control window.
   the HTML oracle), `compare_render.py` (side-by-side diff),
   `gen_test_audio.py`, `midi_probe.py` (echoes what a controller sends;
   lights an APC40), `hands_probe.py` (every hand axis live; `--calibrate`
-  sweeps the box), `control_shots.py` / `fx_shots.py` / `lookback_shots.py`
+  sweeps the box), `control_shots.py` / `fx_shots.py`
   / `dream_shots.py` (screenshots for the docs) and `dream_bench/`.
 - `docs/` — [`SETUP.md`](docs/SETUP.md) a new Mac,
   [`ENGINEERING.md`](docs/ENGINEERING.md) the manual,

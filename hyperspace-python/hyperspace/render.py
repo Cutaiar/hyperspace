@@ -139,7 +139,6 @@ from .graph import (
     FIELD,
     IMAGE,
     MEDIA_CHANNELS,
-    Capture,
     Delay,
     DelayWrite,
     Effect,
@@ -164,7 +163,7 @@ from .graph import (
     picture,
     wire_depths,
 )
-from .lookback import Dreamer, DreamState, Lookback
+from .lookback import Dreamer, DreamState
 from .masks import MaskPasses
 from .media_tex import (
     COVER,
@@ -1091,8 +1090,7 @@ def gpu_made(graph: Graph, frame: Frame, asked) -> dict:
     before its graph ran): the chip then marks nothing as made."""
     owner: dict[str, str] = {}
     for node in graph.order:
-        own = getattr(node, "delay", None) if isinstance(node, DelayWrite) else (
-            getattr(node, "lookback", None) if isinstance(node, Capture) else None)
+        own = getattr(node, "delay", None) if isinstance(node, DelayWrite) else None
         if isinstance(own, str) and own != node.name:
             owner[node.name] = own
     try:
@@ -1378,13 +1376,11 @@ class Renderer:
         # texture takes the sampler units before the scene pass, so the
         # scene texture is never bound while it is the render target
         self.scene = SceneTarget(ctx)
-        # plan 36 T4 (W4): one ring per look-back node, by its name
-        # (`ring`) — `lookback`'s is this one, on the `dream.*` params'
-        # state — and the dream node's buffer and worker slot, apart from
-        # any look-back (`dreamer.source`: app.py hangs the worker there)
-        self.lookback = Lookback(ctx, dream)
-        self.rings: dict[str, Lookback] = {self.lookback.name: self.lookback}
-        self.dreamer = Dreamer(ctx, self.lookback.state)
+        # plan 36 T4 (W4): the dream node's buffer and worker slot, on the
+        # `dream.*` params' state (`dreamer.source`: app.py hangs the worker
+        # there). Plan 90 (H2): the look-back's rings are retired — a delay
+        # keeps the pictures (`delay_stack`)
+        self.dreamer = Dreamer(ctx, dream if dream is not None else DreamState())
         self.fx = FxChain(ctx, fx)      # every effect node's programs and textures
         # the picture the faces show while something other than the
         # pattern is wired into them (plan 33 R: `shape.faces`, painted by
@@ -1548,7 +1544,7 @@ class Renderer:
 
     def release_sized(self) -> None:
         """Plan 44 D4: the frame-sized targets let go, made again at the next
-        draw; a deck off air's after a fade. Its look-back rings and delays
+        draw; a deck off air's after a fade. Its delays (and their stacks)
         stay: they are the look's memory. This context must be current."""
         self._thumb_frame = None
         self.scene.release()
@@ -1798,8 +1794,6 @@ class Renderer:
             self._patterns_mtime = mtime
             self._build_face_program()
             if shared_changed:
-                for ring in self.rings.values():
-                    ring.on_reload()
                 self.dreamer.on_reload()
 
     def draw(
@@ -2003,7 +1997,7 @@ class Renderer:
         fx = self.fx
         fx.tick()
         fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
-        stats = {"ends": [], "chain_runs": 0, "direct": True, "captures": 0,
+        stats = {"ends": [], "chain_runs": 0, "direct": True,
                  "effects": [], "layer": False, "readout": False,
                  "routes": [(None, False)] * len(views)}
         self.stats = stats
@@ -2020,10 +2014,9 @@ class Renderer:
         # plan 34 D: each delay's pair turns — last frame's write is now
         # what its delay reads
         self._turn_delays(graph, t)
-        # plan 36 T4: a ring no look-back of this graph holds forgets its
-        # history (it starts clean when one is drawn again); the dream
-        # forgets `D` with no dream node, so the worker sleeps
-        self._idle_rings(graph)
+        # plan 36 T4: the dream forgets `D` with no dream node, so the
+        # worker sleeps
+        self._idle_dream(graph)
         # plan 39 T4: a segment no node of this graph holds lets its worker
         # and its background model go, after `SIZED_KEEP_FRAMES`
         self._tend_segments(graph)
@@ -3261,36 +3254,9 @@ class Renderer:
         gh.source, gh.router = self.ghost.source, self.ghost.router
         return gh
 
-    def ring(self, name: str = "lookback", state: DreamState | None = None) -> Lookback:
-        """Look-back `name`'s ring (plan 36 T4), made on first ask: its own
-        echoes, clock and atlas. `lookback`'s is `self.lookback` (the
-        `dream.*` params' state); another's reads `state` (its
-        `dream.<n>.*`, `ViewState.lookback`) when given, else a default."""
-        rings = self.__dict__.setdefault("rings", {})
-        got = rings.get(name)
-        if got is None:
-            if name == "lookback" and getattr(self, "lookback", None) is not None:
-                got = self.lookback
-            else:
-                got = Lookback(self.ctx, state if state is not None else DreamState(), name)
-            rings[name] = got
-        elif state is not None and got.state is not state:
-            got.state = state
-        return got
-
-    def _idle_rings(self, graph: Graph) -> None:
-        """Each ring whose look-back this graph does not hold forgets its
-        history; every one but `lookback`'s is also dropped then, its textures
-        released (made again, clean, when a graph holds it). No dream node:
-        `D` forgotten."""
-        rings = getattr(self, "rings", None) or {}
+    def _idle_dream(self, graph: Graph) -> None:
+        """No dream node in this graph: `D` forgotten (the worker sleeps)."""
         held = set(getattr(graph, "nodes", {}))
-        for name in list(rings):
-            if name in held:
-                continue
-            rings[name].idle()
-            if name != "lookback":
-                rings.pop(name).release_ring()
         dreamer = getattr(self, "dreamer", None)
         if dreamer is not None and "dream" not in held:
             dreamer.idle()

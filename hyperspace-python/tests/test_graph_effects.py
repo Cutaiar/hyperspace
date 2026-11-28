@@ -87,16 +87,27 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
 
 def test_an_effect_named_like_another_node_is_kept_apart():
     """An effect file called `capture` (nothing stops one being dropped in
-    the folder) is its own node: the frame's look-back, capture and cover
-    are named apart from any effect (plan 35 T4: `lookback`,
-    `lookback(capture)`, `lookback(cover)`)."""
+    the folder) is its own node: the frame's own nodes are named apart from
+    any effect — the scene's cover `scene(cover)` (plan 90 H2: renamed from
+    `lookback(cover)`, the look-back and its capture retired), a delay's
+    write `delay(write)`."""
     names = ("capture", "warp")
-    g = G.build_graph([View(S(), (10, 10))], wired_wiring(G.Wiring(run=names), "trail"),
-                      effects=names)
+    sec = {"frame": "wired", "nodes": [{"kind": "delay"}, {"kind": "cut"}],
+           "wires": [{"from": "shape", "to": "scene.geometry"},
+                     {"from": "scene", "to": "capture.image"},
+                     {"from": "capture", "to": "warp.image"},
+                     {"from": "warp", "to": "output.all.image"},
+                     {"from": "scene", "to": "delay.image"},
+                     {"from": "delay", "to": "cut.image"},
+                     {"from": "scene.cover", "to": "cut.mask"},
+                     {"from": "cut", "to": "output.1.hands"}]}
+    spec = G.read_graph(sec, effects=set(names))
+    assert not spec.notes, spec.notes
+    g = G.build_graph([View(S(), (10, 10))], spec.wiring(), effects=names)
     assert [e.name for e in _effects(g, _end(g))] == ["capture", "warp"]
-    assert isinstance(g.nodes["lookback(capture)"], G.Capture)
-    assert isinstance(g.nodes["lookback(cover)"], G.Cover)
-    assert isinstance(g.nodes["lookback"], G.History)
+    assert isinstance(g.nodes["capture"], G.Effect)
+    assert isinstance(g.nodes["scene(cover)"], G.Cover) and G.COVER == "scene(cover)"
+    assert isinstance(g.nodes["delay(write)"], G.DelayWrite)
 
 
 def test_an_effect_node_takes_an_image_and_makes_one():

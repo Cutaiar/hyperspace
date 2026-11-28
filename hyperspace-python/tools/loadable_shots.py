@@ -233,7 +233,6 @@ class Stage:
         if r is not None:
             r.scene.release()
             r.cover.release()
-            r.lookback.release_ring()
             r.fx.release_targets()
 
     def frame(self, hands: dict, fbo=None) -> None:

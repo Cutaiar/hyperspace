@@ -150,7 +150,8 @@ def test_macro_subs_are_cables_into_base_or_depth(rig):
 
 def test_params_group_under_the_render_node_that_owns_them(rig):
     """The one table (`graphview.OWNERS`): the shape's params on `shape`,
-    an effect's on its node, the look-back's (`dream.*`) on `lookback`, the
+    an effect's on its node (plan 90 H2: the look-back's trail's, `fx.trail.*`,
+    on `trail`, where `dream.*` was on the retired `lookback`), the
     camera's on `camera`, an output's on its output node, the hands'
     (`ghost.*`) on their hands node — plan 35 V2: the nodes in the new ids,
     the params in theirs; an LFO's knobs on that LFO; a group no render
@@ -158,7 +159,7 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     from hyperspace.routing import Binding
     out1 = next(p.id for p in rig.reg if p.id.startswith("output.1."))
     rig.router.table.bindings.append(Binding("key:F9", out1, "toggle"))   # a setter onto it
-    g = thru(stacked(("acid", "palette")), ("acid", "palette"), Shows(),
+    g = thru(stacked(("acid", "palette")), ("acid", "palette", "fade", "trail"), Shows(),
              Shows(scene=False, through=True), look="trail")
     _every_file(rig)
     view = build(rig, g)
@@ -166,7 +167,7 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     # (plan 35 T4: output 2's hands through are a slot of each effect over a
     # composite, plan 89 — on the effect's own node; plan 35 G: no end nor
     # `fx` is drawn — none is a node)
-    assert {"render:shape", "render:acid", "render:lookback",
+    assert {"render:shape", "render:acid", "render:trail", "render:delay",
             "render:output.1", "render:output.2", "render:output.all"} <= names
     assert "render:camera" not in names      # (2026-11-23: no node of its own: see below)
     assert not {n for n in names if n.startswith(("render:shown", "render:history"))}
@@ -176,7 +177,7 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     assert owner_of(view, "fx.acid.mix") == "render:acid"
     assert owner_of(view, "fx.palette.mix") == "render:palette"
     assert owner_of(view, "fx.mix") == "group:fx"            # (no pipeline end to own it)
-    assert owner_of(view, "dream.fade") == "render:lookback"
+    assert owner_of(view, "fx.trail.fade") == "render:trail"
     assert owner_of(view, "dream.mix") == "group:dream"      # (P2: the dream's; none here)
     assert owner_of(view, "camera.zoom") == "render:shape"   # (its world pose: not a camera)
     assert owner_of(view, "eye.fov") == "render:scene"       # (the eye its geometries are seen through)
@@ -260,8 +261,7 @@ def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
                                                       "instance": 2}],
                          "wires": [{"from": "shape", "to": "scene.geometry"},
                                    {"from": "hands", "to": "scene.geometry"},
-                                   {"from": "scene", "to": "lookback.image"},
-                                   {"from": "lookback", "to": "output.all.image"},
+                                   {"from": "scene", "to": "output.all.image"},
                                    {"from": "hands.layer", "to": "acid.2.image"},
                                    {"from": "acid.2", "to": "output.1.hands"}]})
     assert not spec.notes
@@ -334,7 +334,9 @@ def test_layout_round_trips_through_the_loadable_and_the_show(rig):
     lib.load("loadable", "party-trip")
     # (plan 36 T3: the corpus `/7` holds the envelopes' and the sequencer's
     # values, which this rig — the panel's, built without them — lacks)
-    said = [n for n in loaded_patch.notes if not n.endswith("…") or "env." not in n]
+    # (plan 90 H2: and its look-back's knobs, which no look-back drew, dropped)
+    said = [n for n in loaded_patch.notes if (not n.endswith("…") or "env." not in n)
+            and n != "the look-back's retired knobs dropped: no look-back drew them (plan 90)"]
     assert loaded_patch.layout == {} and said == [] and not lib.is_dirty("loadable")
     assert LAYOUT_KEY not in loaded_patch.document("party-trip")
     loaded_patch.layout["render:shape"] = [520, 40]
@@ -374,14 +376,15 @@ def test_layout_round_trips_through_the_loadable_and_the_show(rig):
 def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     """Every node not placed gets a position, in its band's columns left to
     right (the flow layout, 2026-11-19: the controllers and the audio →
-    the modulation → the media and the scene → the look-back and the
-    effects → the outputs; inside a band, each node past what feeds it);
+    the modulation → the media and the scene → the effects (plan 90 H2:
+    the look-back drawn is its public parts, the composite adding its trail
+    among them) → the outputs; inside a band, each node past what feeds it);
     a placed node keeps its own."""
     rig.lib.load("loadable", "lfo-breathe")
     rig.router.table.add_modifier("smooth", ["lane:0"], rig.reg)
     # (plan 36 T4: the look-back drawn, as the old words with it on)
     g = G.build_graph(views(Switches()), wired_wiring(stacked(("acid",)), "trail"),
-                      effects=("acid",))
+                      effects=("acid", "fade", "trail"))
     _every_file(rig)
     view = build(rig, g)
     placed = {"render:shape": (999.0, 999.0)}
@@ -391,10 +394,10 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     # N9: the areas' columns, not the kinds' — the analyzer and the tempo
     # are the audio's; an LFO, a modifier and a macro the modulation's
     col = [x["source:key"], x[graphview.ANALYZER], x["lfo.1"],
-           x["render:scene"], x["render:lookback"], x["render:output.all"]]
+           x["render:scene"], x["render:composite"], x["render:output.all"]]
     # review round 1: lfo-breathe has the acid off and no cable on it: idle, at
     # the effects' idle line, and a through wire from where the run starts
-    # (the look-back's picture) to where it ends (plan 35 G: All outputs)
+    # (the composite adding the trail) to where it ends (plan 35 G: All outputs)
     assert view.node("render:acid").idle
     assert any(c.src_port == "rout:composite" and c.dst_port == "rin:output.all/image"
                for c in graphview.layout(view).throughs)
@@ -805,19 +808,19 @@ def test_the_media_area_draws_on_the_page(rig, monkeypatch):
 
 def test_the_new_nodes_sit_in_their_areas(rig):
     """Plan 33 U, in plan 35's areas: the pattern and a switch are render
-    nodes with the channels in the media, the look-back the look-back's,
-    an effect the effects', All outputs the outputs' — and the params go to
+    nodes with the channels in the media, an effect the effects', All
+    outputs the outputs' — and the params go to
     the node that owns them: `view.pattern*` and `view.media_*` to the
     pattern, `switch.select` to its switch, `fx.face_map` to the shape
     (whose `faces` port is a picture input). Plan 35 G: no `frame`, no
-    `fx`, no feeds — the look-back's picture goes straight into the first
-    effect by its wire; the pattern and the backdrop are drawn only when
-    the section names them."""
+    `fx`, no feeds — the scene's picture goes straight into the first
+    effect by its wire (plan 90 H2: the look-back that stood between is
+    retired); the pattern and the backdrop are drawn only when the section
+    names them."""
     from hyperspace.params import declare_switches
     spec = G.read_graph({"frame": "wired", "nodes": [{"kind": "switch"}],
                          "wires": [{"from": "shape", "to": "scene.geometry"},
-                                   {"from": "scene", "to": "lookback.image"},
-                                   {"from": "lookback", "to": "acid.image"},
+                                   {"from": "scene", "to": "acid.image"},
                                    {"from": "acid", "to": "output.all.image"},
                                    {"from": "channel.a", "to": "switch.in1"},
                                    {"from": "switch", "to": "pattern.media"}]},
@@ -829,7 +832,7 @@ def test_the_new_nodes_sit_in_their_areas(rig):
     area = {n.id: n.area for n in view.nodes}
     for nid in ("render:pattern", "render:switch", "render:channel.a"):
         assert area[nid] == graphview.MEDIA, nid
-    assert area["render:lookback"] == graphview.LOOKBACK_AREA
+    assert area["render:scene"] == graphview.SCENE_AREA
     assert area["render:acid"] == graphview.EFFECTS_AREA
     assert area["render:output.all"] == graphview.OUTPUTS_AREA
     assert "render:backdrop" not in area and "render:frame" not in area
@@ -840,7 +843,7 @@ def test_the_new_nodes_sit_in_their_areas(rig):
     assert owner_of(view, "view.bright") == "render:shape"
     assert view.node("render:shape").port("rin:shape/faces").type == graphview.IMAGE
     renders = {(c.src_port, c.dst_port) for c in view.cables if c.kind == "render"}
-    assert ("rout:lookback", "rin:acid/image") in renders
+    assert ("rout:scene", "rin:acid/image") in renders
     assert ("rout:acid", "rin:output.all/image") in renders
     assert ("rout:switch", "rin:pattern/media") in renders
     assert all(c.kind != "feeds" for c in view.cables)
@@ -848,7 +851,7 @@ def test_the_new_nodes_sit_in_their_areas(rig):
     bare = build(rig)
     assert bare.node("render:pattern") is None and bare.node("render:backdrop") is None
     # names a wire uses, from the canvas's pins (plan 35 G: the shape too)
-    assert graphview.spec_name("rout:lookback", g) == ("lookback", None)
+    assert graphview.spec_name("rout:scene", g) == ("scene", None)
     assert graphview.spec_name("rin:output.all/image", g) == ("output.all.image", None)
     assert graphview.spec_name("rin:shape/faces", g) == ("shape.faces", None)
     assert graphview.spec_name("rin:backdrop/image", g) == ("backdrop.image", None)

@@ -147,8 +147,8 @@ def test_a_promoted_mask_cable_is_purple_into_a_red_port():
 def test_a_promoted_mask_into_a_switch_left_of_it_runs_back_by_design():
     """Review: `returns` takes a mask cable into a `TAKEN_BACK` node (a
     switch, with the media) back as it does a picture cable."""
-    spec = spec_of(("shape", "scene.geometry"), ("scene", "lookback.image"),
-                   ("lookback", ALL), ("lookback", "matte.image"), ("matte", "switch.in1"),
+    spec = spec_of(("shape", "scene.geometry"),
+                   ("scene", ALL), ("scene", "matte.image"), ("matte", "switch.in1"),
                    ("switch", "output.2.image"), nodes=[{"kind": "matte"}, {"kind": "switch"}])
     view = view_of(spec, build(spec, n=2))
     lay = graphview.layout(view, collapsed=lambda nid: True)
@@ -168,15 +168,15 @@ def test_every_segment_instance_draws_its_pins_and_their_cables():
     """T4's review: `PINS` lists instance 1 alone; a wired `segment.2` must
     never be invisible."""
     spec = spec_of(("channel.a", "segment.2.image"), ("segment.2.fg", ALL),
-                   ("segment.2.mask", "lookback.cover"), ("scene", "lookback.image"),
-                   nodes=[{"kind": "segment", "instance": 2}, {"kind": "lookback"}])
+                   ("segment.2.mask", "cut.mask"), ("scene", "cut.image"),
+                   nodes=[{"kind": "segment", "instance": 2}, {"kind": "cut"}])
     view = view_of(spec, build(spec))
     node = next(n for n in view.nodes if n.id == "render:segment.2")
     pins = {p.id: p.type for p in node.ports if p.direction == graphview.OUT}
     assert pins == {"rout:segment.2.fg": G.IMAGE, "rout:segment.2.bg": G.IMAGE,
                     "rout:segment.2.mask": G.MASK}
     assert cable(view, "segment.2.fg", ALL).type == graphview.IMAGE
-    assert cable(view, "segment.2.mask", "lookback.cover").type == graphview.MASK
+    assert cable(view, "segment.2.mask", "cut.mask").type == graphview.MASK
 
 
 def test_segment_one_s_pins_are_drawn_once():

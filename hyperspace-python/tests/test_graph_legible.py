@@ -956,8 +956,8 @@ def test_every_nodes_side_panel_draws(rig):
     # plan 35 T5: and every frame kind and plan 34's nodes, declared (faint)
     e = graphview.Edit(graph=rig.lib.loaded_patch.graph, push=lambda label: None)
     # (plan 36 T2: the pattern is in already — the faces' wire says it;
-    # T4: an echo is the look-back's pin — its item adds the look-back)
-    for kind, f in (("backdrop", None), ("guide", None), ("echo", "2"),
+    # plan 90 H2: the look-back and its echoes' items are retired)
+    for kind, f in (("backdrop", None), ("guide", None),
                     ("dream", None), ("delay", None), ("resize", None), ("composite", None)):
         assert e.add_node(kind, f) is None, kind
     frame(rig.panel, "graph")
@@ -966,7 +966,7 @@ def test_every_nodes_side_panel_draws(rig):
     drawn = [n.id for n in st["view"].nodes if ui_graph.drawn_node(st, n)]
     assert len(drawn) > 40
     assert {"render:backdrop", "render:pattern", "render:hands.guide",
-            "render:lookback", "render:dream", "render:delay", "render:resize",
+            "render:dream", "render:delay", "render:resize",
             "render:output.all", "render:scene"} <= set(drawn)
     for nid in drawn:
         pick(rig, st, nid)
@@ -982,15 +982,15 @@ def test_every_node_has_a_label_and_a_hover(rig):
     assert graphview.label_of("hands.2") == "Hands 2"
     assert graphview.label_of("channel.a") == "Channel A"
     assert graphview.label_of("hands.2.layer") == "Hands layer 2"
-    assert graphview.label_of("echo.3") == "Echo 3"
     assert graphview.label_of("acid.slot.2") == "acid slot 2"          # (plan 89)
     assert graphview.label_of("acid.2.slot.3") == "acid 2 slot 3"
     assert graphview.label_of("acid.2") == "acid 2"
     assert graphview.label_of("output.all") == "All outputs"
     assert graphview.label_of("output.2") == "Output 2"
     assert graphview.label_of("output.2", [NS(n=2, name="projector")]) == "projector"
-    assert graphview.hover_of("lookback").endswith(" · id lookback · params dream.* (its own knobs)")
-    assert graphview.hover_of("dream").endswith(" · id dream · params dream.* (its own knobs)")
+    # (plan 90 H2: the dream's knobs, `dream.*`, are its own id's — no look-back
+    # shares the prefix, so no params line)
+    assert graphview.hover_of("dream").endswith(" · id dream")
     assert graphview.hover_of("output.2").endswith(" · id output.2")
     for fixture in fixtures:
         st = load_fixture(rig, fixture)
@@ -1031,9 +1031,8 @@ def test_home_page_maps_each_node_kind(rig):
     assert home(V("render:backdrop", "render", "Backdrop",
                   ref=G.BackdropNode("backdrop"))) == "media"
     assert home(view.node("render:shape")) == "view"
-    # (plan 36 T4: party-trip draws no look-back — its stand-in, and the dream's)
-    assert home(V("render:lookback", "render", "Look-back", ref=G.History("lookback"))) == \
-        "lookback"
+    # (party-trip draws no dream — its stand-in; plan 90 H2: the LOOKBACK page
+    # is the dream's alone, the look-back retired)
     assert home(V("render:dream", "render", "Dream", ref=G.DreamNode("dream"))) == "lookback"
     assert home(view.node("render:output.all")) == "output"
     # plan 89: an effect with a slot (party-trip's through output) is one

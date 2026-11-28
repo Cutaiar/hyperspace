@@ -552,8 +552,9 @@ def test_each_stage2_section_draws_in_the_pane_and_nothing_passes_its_edge(
 
 
 def test_the_redrawn_lookback_section_keeps_inside_the_narrowest_pane(tmp_path, monkeypatch):
-    """The LOOKBACK section as its two picture nodes at `SIDE_MIN`: every
-    control inside the pane, the cells one to a row there."""
+    """The LOOKBACK section — the dream alone (plan 90 H2: the look-back's
+    half retired) — at `SIDE_MIN`: every control inside the pane, the cells
+    one to a row there."""
     with build_rig(tmp_path) as r:
         r.panel.desk = False
         r.panel.page = PAGE_KEYS.index("graph")
@@ -564,10 +565,11 @@ def test_the_redrawn_lookback_section_keeps_inside_the_narrowest_pane(tmp_path, 
         _only(r, "lookback")
         d.run(d.wait(3))
         assert _spills(d, st) == []
-        fade, gap = d.rect("dream.fade"), d.rect("dream.gap")
-        assert fade[1] < gap[1]                              # one to a row
         on, mix = d.rect("dream.on"), d.rect("dream.mix")
-        assert d.rect("dream.occlude")[1] < on[1] < mix[1]   # the look-back's, then the dream's
+        darken, contrast = d.rect("dream.darken"), d.rect("dream.contrast")
+        assert on[1] < mix[1]
+        tops = [r_[1] for r_ in (on, mix, darken, contrast)]
+        assert len(set(tops)) == len(tops)                   # one to a row
 
 
 def test_the_media_grid_goes_four_to_a_row_and_the_seq_grid_thins_in_the_pane(

@@ -235,9 +235,9 @@ def test_one_hands_node_feeding_a_scene_and_a_layer_is_timed_by_its_scene():
 
 def test_the_wiring_in_words():
     """The OUTPUT page's words (`hands_words`, `layer_words`) and the
-    LOOKBACK page's (`lookback_words`), and the graph's one line — read
-    off the wires (plan 35 T4: an output's state is its wiring, `Shows`;
-    its window's `Switches` the mutes)."""
+    graph's one line — read off the wires (plan 35 T4: an output's state is
+    its wiring, `Shows`; its window's `Switches` the mutes). (Plan 90 H2:
+    the LOOKBACK page's `lookback_words` are retired with the look-back.)"""
     w = TODAY
     assert G.hands_words(w, S()) == "hands: over"
     assert G.hands_words(wiring(w, Shows(through=True)), S()) == "hands: through FX"
@@ -253,13 +253,7 @@ def test_the_wiring_in_words():
     assert G.hands_words(wired_wiring(two), S()) == "hands: in the scene (1)"
     assert G.hands_words(wiring(two, Shows(scene=False)), S(scene=False)) == "hands: over (2)"
     assert G.layer_words(TODAY) == ""
-    # (plan 36 T4: a look-back drawn — the old words' on, as "trail")
-    assert G.lookback_words(TODAY) == "history: nothing"
-    assert G.lookback_words(wired_wiring(G.Wiring(), "trail")) == "history: the scene"
-    assert G.lookback_words(wired_wiring(G.Wiring(history="scene+hands"), "trail")) == \
-        "history: the scene · with the hands"
-    assert G.lookback_words(wired_wiring(G.Wiring(hands="scene"), "trail")) == \
-        "history: the scene · with the hands"
+    assert not hasattr(G, "lookback_words")
     spec = G.read_graph(json.loads(FIXTURE.read_text())["graph"])
     assert G.graph_words(spec) == \
         "graph: hands 1 in the scene as lines · history with the hands"
@@ -302,21 +296,6 @@ def test_the_output_pages_shows_line_says_the_wiring():
         "scene + hands: in the scene as lines", "")
     assert G.hands_words(lines, S(hands=False)) == "hands: in the scene as lines"
     assert G.hands_words(lines, S(scene=False, hands=False)) == "hands: off"
-
-
-def test_the_lookback_page_says_what_the_history_holds():
-    """Plan 35 T6: "records:" names the source of the wire into
-    `lookback.capture` (the hands held: the composite laying them on);
-    `lookback_words` keeps the longer words for the combo's hover."""
-    from hyperspace.ui_lookback import capture_line
-
-    held = G.read_graph(M.wired_of(G.Wiring(history="scene+hands"), look="trail"))
-    assert capture_line(None) == "records: nothing — the echoes fade"   # (plan 36 T3)
-    assert capture_line(G.read_graph(M.wired_of(G.Wiring()))) == (
-        "records: nothing — the echoes fade")        # (plan 36 T4: no look-back drawn)
-    assert capture_line(G.read_graph(M.wired_of(G.Wiring(), look="trail"))) == "records: Scene"
-    assert capture_line(held) == "records: Composite"
-    assert G.lookback_words(held.wiring()) == "history: the scene · with the hands"
 
 
 # ---------------------------------------------------------------- effect instances
@@ -431,7 +410,9 @@ def _fixture_in(home: Path) -> None:
 def test_no_corpus_source_carries_a_graph_and_each_loadable_loads_as_before(tmp_path):
     """Every corpus loadable patch loads with today's frame, no graph note and a
     clean dot. Plan 36 T3: each file is its source's `/7`, so it carries
-    that frame as its graph (its source has none) and lands it as it is."""
+    that frame as its graph (its source has none) and lands it as it is —
+    plan 90 H2: a file whose frame holds a look-back lands it as public
+    parts (`graphmigrate.lookbacks`), no longer in the old words."""
     seed(tmp_path)
     rig = boot(tmp_path)
     stub = Stub()
@@ -443,9 +424,12 @@ def test_no_corpus_source_carries_a_graph_and_each_loadable_loads_as_before(tmp_
         name = rig.lib.current(LOADABLE)
         assert not [n for n in rig.loaded_patch.notes if n.startswith("graph")], slug
         # plan 33 T3: the run as wires; plan 36 T3: the file's own section
-        own = json.loads((CORPUS / "loadable" / f"{slug}.json").read_text())["graph"]
-        assert rig.loaded_patch.graph.doc == own and _bare(stub.wiring) == DEFAULT
-        assert _old(stub.wiring).run is not None and stub.wiring.wired
+        raw = json.loads((CORPUS / "loadable" / f"{slug}.json").read_text())
+        parts, retired = M.lookbacks(raw)
+        own = parts["graph"] if not retired else G.read_graph(parts["graph"]).to_json()
+        assert rig.loaded_patch.graph.doc == own and stub.wiring.wired, slug
+        if not retired:
+            assert _bare(stub.wiring) == DEFAULT and _old(stub.wiring).run is not None
         # (row 394: the save is `/6`, the frame the load landed)
         doc = rig.loaded_patch.document(name)
         assert doc[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc(), slug
@@ -457,21 +441,27 @@ def test_no_corpus_source_carries_a_graph_and_each_loadable_loads_as_before(tmp_
 def test_the_proof_loadable_loads_its_graph_from_a_scratch_library(tmp_path):
     """`hands-lines` (a fixture, never a corpus loadable patch): its graph lands
     — the hands in the scene as lines, the history holding them — on the
-    attached renderer, the acid on, the look-back on; nothing missing, no
-    note, a clean dot; a save writes the wired frame the load made of it
-    (row 394), one node per line."""
+    attached renderer, the acid on, the look-back on (plan 90 H2: as its
+    public parts, the one note); nothing missing, a clean dot; a save
+    writes the wired frame the load made of it (row 394), one node per
+    line."""
     rig = boot(tmp_path)
     _fixture_in(rig.home)
     stub = Stub()
     rig.loaded_patch.graph.attach(stub)
     missing = rig.lib.load(LOADABLE, "hands-lines")
-    assert missing == [] and rig.loaded_patch.notes == []
+    # (plan 90 H2: its look-back lands as public parts, said)
+    head = M.LOOKBACK_NOTE.format(old="lookback", chain="").partition(":")[0]
+    assert missing == [] and len(rig.loaded_patch.notes) == 1
+    assert rig.loaded_patch.notes[0].startswith(head)
     # (plan 35: the hands are in the scene, so what the look-back records is
-    # the scene — the capture wire `scene → lookback.capture` says both
-    # `holds` would, the hands already in its picture)
-    assert _bare(stub.wiring) == G.Wiring(hands="scene", draw="lines")
-    assert G.Wire("scene", "lookback.image") in stub.wiring.wires     # (plan 36 T4)
-    assert _old(stub.wiring).run == ("acid",)          # plan 33 T3: its run, as wires
+    # the scene — plan 90 H2: the delay records it through the fade —, the
+    # hands already in its picture)
+    assert G.in_scene_hands(stub.wiring) == [1] and stub.wiring.draw == "lines"
+    assert G.Wire("scene", "fade.image") in stub.wiring.wires
+    assert G.Wire("resize", "delay.image") in stub.wiring.wires
+    # plan 33 T3: its run, as wires
+    assert G.run_back(rig.loaded_patch.graph.spec, "output.all.image") == ("acid",)
     # (plan 36 T4: its look-back on is drawn; `dream.on` is the dream's, and
     # with a dream mix of 0 there is none)
     assert rig.reg["fx.acid.on"].value and not rig.reg["dream.on"].value

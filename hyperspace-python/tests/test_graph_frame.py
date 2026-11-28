@@ -308,21 +308,22 @@ def test_a_scene_laid_over_by_a_composite_is_drawn_see_through():
     assert g.nodes["scene"].ground is None
 
 
-def test_the_capture_runs_once_after_every_end():
-    sec = wired(("shape", "scene.geometry"), ("scene", "lookback.image"),
-                ("lookback", "output.all.image"), ("channel.a", "output.2.image"),
-                ("scene", "delay.image"), ("delay", "output.3.image"),
-                nodes=[{"kind": "delay"}])
+def test_a_delays_write_runs_once_after_every_end():
+    """(Plan 90 H2: the look-back's capture, which ran after every end, is
+    retired; a delay's write is the sink that keeps the frame's picture
+    for the frames after.) Each delay writes once a frame, after every end
+    — what the windows show this frame is drawn before it is kept."""
+    sec = wired(("shape", "scene.geometry"), ("scene", "output.all.image"),
+                ("channel.a", "output.2.image"), ("scene", "delay.image"),
+                ("delay", "output.3.image"), nodes=[{"kind": "delay"}])
     g = G.build_graph(views(3), G.read_graph(sec).wiring())
-    caps = [n for n in g.order if isinstance(n, G.Capture)]
-    assert len(caps) == 1
-    cap = caps[0]
-    later = [n for n in g.order if isinstance(n, (G.Shown, G.DelayWrite))]
-    assert len(later) == 4                        # three ends and the delay's write
-    at = g.order.index(cap)
-    assert all(g.order.index(n) < at for n in later)
-    assert set(map(id, later)) <= set(map(id, cap.after))
-    assert all(cap in out.after for out in g.outputs)
+    writes = [n for n in g.order if isinstance(n, G.DelayWrite)]
+    assert [n.name for n in writes] == ["delay(write)"]
+    ends = [n for n in g.order if isinstance(n, G.Shown)]
+    assert len(ends) == 3                         # three ends
+    at = g.order.index(writes[0])
+    assert all(g.order.index(n) < at for n in ends)
+    assert writes[0].inputs == {"image": g.nodes["scene"]}
 
 
 def test_a_slot_reads_its_effects_knobs():
@@ -481,7 +482,7 @@ def test_a_slot_reads_its_effects_knobs_when_drawn(ctx, rig):
 
 
 def test_a_slot_chain_shows_as_wired(ctx, rig):
-    """Plan 36 T1: output 2's picture is acid's slot 2 over the look-back
+    """Plan 36 T1: output 2's picture is acid's slot 2 over the scene
     with the hands laid on, and that is what it shows every frame — acid
     off or on, a hand drawn or not: no stand-down swaps its end."""
     _land(rig, STAND)
@@ -518,19 +519,21 @@ def test_a_hands_mute_reaches_into_a_through_chain(ctx, rig):
 
 
 def test_a_mute_never_reaches_a_composite_another_reader_takes():
-    """A composite the look-back also records (or any reader outside the
+    """A composite a delay also records (or any reader outside the
     window's chain) keeps its hands: one window's mute cannot reach
-    another's picture, nor the capture's."""
-    shared = wired(("shape", "scene.geometry"), ("composite", "lookback.image"),
+    another's picture, nor what is kept for the frames after. (Plan 90 H2:
+    the delay where the look-back's capture was.)"""
+    d = [{"kind": "composite"}, {"kind": "delay"}]
+    shared = wired(("shape", "scene.geometry"), ("composite", "delay.image"),
                    ("scene", "composite.under"), ("hands.layer", "composite.over"),
                    ("composite", "output.2.image"),
-                   ("lookback", "output.all.image"), nodes=[{"kind": "composite"}])
+                   ("delay", "output.all.image"), nodes=d)
     g = G.build_graph(views(2), G.read_graph(shared).wiring())
     assert g.nodes["composite"].mute_hands == ()
-    alone = wired(("shape", "scene.geometry"), ("scene", "lookback.image"),
+    alone = wired(("shape", "scene.geometry"), ("scene", "delay.image"),
                   ("scene", "composite.under"), ("hands.layer", "composite.over"),
                   ("composite", "output.2.image"),
-                  ("lookback", "output.all.image"), nodes=[{"kind": "composite"}])
+                  ("delay", "output.all.image"), nodes=d)
     g = G.build_graph(views(2), G.read_graph(alone).wiring())
     assert g.nodes["composite"].mute_hands == (1,)
 
@@ -569,8 +572,9 @@ def test_laid_on_a_second_hands_entry_reads_in_a_wired_frame():
 def test_the_signature_follows_every_picture_port():
     """Before T4 deletes `default_graph`, `signature` follows every port a
     picture comes in by — an effect's `aux`, a switch's `inN`, a
-    composite's `depth`, the look-back's `occluder`, the scene's geometry
-    — and names it, so two frames that differ only there differ."""
+    composite's `depth`, the scene's geometry — and names it, so two
+    frames that differ only there differ. (Plan 90 H2: the look-back's
+    `occluder` is retired with it.)"""
     def sig(*pairs, nodes=()):
         spec = G.read_graph(wired(*pairs, nodes=nodes))
         assert not spec.notes, spec.notes
@@ -579,9 +583,8 @@ def test_the_signature_follows_every_picture_port():
     out = ("acid", "output.all.image")
     assert (sig(("channel.a", "acid.image"), ("channel.b", "acid.aux"), out)
             != sig(("channel.b", "acid.image"), ("channel.a", "acid.aux"), out))
-    scene = (("shape", "scene.geometry"), ("scene", "lookback.image"),
-             ("lookback", "acid.image"), out)
-    assert sig(*scene, ("scene", "acid.aux")) != sig(*scene, ("lookback", "acid.aux"))
+    scene = (("shape", "scene.geometry"), ("scene", "acid.image"), out)
+    assert sig(*scene, ("scene", "acid.aux")) != sig(*scene, ("channel.c", "acid.aux"))
     assert "aux" in json.dumps(_tool().as_json(sig(*scene, ("scene", "acid.aux"))))
     sw = [{"kind": "switch"}]
     assert (sig(("channel.a", "switch.in1"), ("channel.b", "switch.in2"),
@@ -594,11 +597,12 @@ def test_the_signature_follows_every_picture_port():
 
 
 def test_the_signature_follows_what_the_sinks_read():
-    """T3 review: two frames alike but for what the look-back records
-    (`scene` or `backdrop → lookback.image`), or what a delay writes,
-    differ in `signature` — the sinks are read by their chains."""
+    """T3 review: two frames alike but for what a delay writes (`scene` or
+    `backdrop → delay.image`) differ in `signature` — the sinks are read by
+    their chains. (Plan 90 H2: the look-back's record, the other sink, is
+    retired.)"""
     head = (("shape", "scene.geometry"), ("channel.a", "backdrop.image"),
-            ("scene", "backdrop.scene"), ("lookback", "output.all.image"))
+            ("scene", "backdrop.scene"), ("backdrop", "output.all.image"))
 
     def sig(*pairs, nodes=()):
         spec = G.read_graph(wired(*head, *pairs, nodes=nodes))
@@ -606,7 +610,6 @@ def test_the_signature_follows_what_the_sinks_read():
         # (two windows: a wire into an output not open builds nothing, T4)
         return G.signature(G.build_graph(views(2), spec.wiring()))
 
-    assert sig(("scene", "lookback.image")) != sig(("backdrop", "lookback.image"))
     d = [{"kind": "delay"}]
     assert (sig(("scene", "delay.image"), ("delay", "output.2.image"), nodes=d)
             != sig(("backdrop", "delay.image"), ("delay", "output.2.image"), nodes=d))

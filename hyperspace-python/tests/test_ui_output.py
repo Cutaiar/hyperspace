@@ -27,13 +27,10 @@ from hyperspace.ui import shows_line
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
 # the factory frame, as a load wires it — plan 36 T4: its look-back drawn
-# (the old words with it on), the trail added onto the scene by a composite
+# (the old words with it on), the trail added onto the scene by a composite;
+# plan 90 H2: the look-back its public parts (a delay, a trail, cuts)
 DEFAULT = M.wired_of(G.Wiring(), look="trail")
-ACID = M.split_lookback(M.wired_section(
-    M.renamed({"wires": [{"from": "frame", "to": "acid.image"},
-                         {"from": "acid", "to": "fx.image"}]}),
-    G.read_graph({"wires": [{"from": "frame", "to": "acid.image"},
-                            {"from": "acid", "to": "fx.image"}]})), "trail")
+ACID = M.wired_of(G.Wiring(run=("acid",)), look="trail")
 
 
 def _with(section: dict, *pairs) -> dict:
@@ -76,14 +73,17 @@ def test_the_output_block_says_what_it_shows():
 
 def test_the_combo_offers_the_graphs_pictures_in_area_order():
     """`picture_sources`: every picture-making node the section reaches or
-    declares, MEDIA → SCENE → LOOK-BACK → EFFECTS; no geometry, no window."""
+    declares, MEDIA → SCENE → EFFECTS (plan 90 H2: the look-back's area
+    retired, its delay the media's and its trail and fade the effects'); no
+    geometry, no window."""
     spec = G.read_graph(_with(ACID, ("channel.a", "shape.faces")))
     # (plan 36 T4: the composite laying the trail on is the effects' area's)
     assert graphview.picture_sources(spec) == [
-        "channel.a", "scene", "hands.layer", "lookback", "composite", "acid"]
+        "delay", "channel.a", "scene", "hands.layer", "fade", "trail", "composite", "resize",
+        "acid"]
     assert graphview.picture_choices(spec, "output.2.image") == [
-        "as All outputs", "nothing", "channel.a", "scene", "hands.layer", "lookback",
-        "composite", "acid"]
+        "as All outputs", "nothing", "delay", "channel.a", "scene", "hands.layer", "fade",
+        "trail", "composite", "resize", "acid"]
     assert graphview.picture_choices(spec, "output.all.image")[0] == "nothing"
     assert graphview.picture_now(spec, "output.2.image") == "as All outputs"
     assert graphview.picture_now(spec, "output.all.image") == "acid"
@@ -94,7 +94,8 @@ def test_output_offers_a_channel_with_a_source_and_picking_wires_it(tmp_path):
     source, though nothing wires it yet — after the graph's own pictures,
     by label — and its pick wires `channel.<c>` straight into the window's
     picture (or All outputs'), one landing. An empty channel is not
-    offered, nor is a filled one on the look-back's capture."""
+    offered, nor is a filled one on a delay's input (plan 90 H2: where the
+    look-back's capture was)."""
     from types import SimpleNamespace as NS
 
     reg = NS(media=NS(channels={"a": NS(bin=[None, None]), "c": NS(bin=[None, "clip-1"]),
@@ -102,17 +103,17 @@ def test_output_offers_a_channel_with_a_source_and_picking_wires_it(tmp_path):
     spec = G.read_graph(DEFAULT)
     got = graphview.picture_choices(spec, "output.2.image", reg)
     # (plan 36 T2: the faces' pattern is a picture of the graph's: a wire's)
-    assert got == ["as All outputs", "nothing", "pattern", "scene", "hands.layer", "lookback",
-                   "composite", "channel.b", "channel.c"]
+    assert got == ["as All outputs", "nothing", "delay", "pattern", "scene", "hands.layer",
+                   "fade", "trail", "composite", "resize", "channel.b", "channel.c"]
     assert graphview.picture_label(spec, "channel.b") == "Channel B"
     assert graphview.picture_choices(spec, "output.all.image", reg)[-2:] == [
         "channel.b", "channel.c"]
-    assert "channel.b" not in graphview.picture_choices(spec, "lookback.image", reg)
+    assert "channel.b" not in graphview.picture_choices(spec, "delay.image", reg)
     # a channel the graph wires already is listed once, where the graph has it
     both = G.read_graph(_with(DEFAULT, ("channel.c", "shape.faces")))
     assert graphview.picture_choices(both, "output.2.image", reg) == [
-        "as All outputs", "nothing", "channel.c", "scene", "hands.layer", "lookback",
-        "composite", "channel.b"]
+        "as All outputs", "nothing", "delay", "channel.c", "scene", "hands.layer", "fade",
+        "trail", "composite", "resize", "channel.b"]
     rig, e, pushed = free_rig(tmp_path, *_pairs(DEFAULT), nodes=DEFAULT["nodes"])
     assert graphview.set_picture(e, "output.2.image", "channel.b") is None
     assert G.Wire("channel.b", "output.2.image") in rig.loaded_patch.graph.spec.wires

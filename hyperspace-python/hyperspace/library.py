@@ -147,7 +147,15 @@ from typing import Any
 from . import patches as patchdoc
 from . import undo
 from .graph import BusCuts
-from .graphmigrate import CAMERA_NODES, EYE_IDS, OLD_KIND, is_look_id, renamed_layout, retired
+from .graphmigrate import (
+    CAMERA_NODES,
+    EYE_IDS,
+    OLD_KIND,
+    is_look_id,
+    lookback_retired,
+    renamed_layout,
+    retired,
+)
 from .groupwords import group_word
 from .hot_slots import DeckInstallSlots, DeckLibrarySlots
 from .palettecompat import palette_slice
@@ -3001,8 +3009,10 @@ class Library:
             # spawn would only hand its values back, at a full read's cost
             values = _module_values(group, doc)
             # (an old module file's retired ids — plan 33 T7's orders and
-            # targets — are no unknown ids: the wires say them now)
-            missing = [k for k in values if k not in self.reg and not retired(k)]
+            # targets, the wires say them now; plan 90 H2's look-back knobs,
+            # its parts' now — are no unknown ids)
+            missing = [k for k in values if k not in self.reg and not retired(k)
+                       and not lookback_retired(k)]
             resolved = self.resolved(group, values)
             self.restore(resolved)
             # (getattr: a Library from before a hot reload has no apply hooks)
@@ -3016,7 +3026,8 @@ class Library:
                 if late != resolved:
                     self.restore(late)
                     resolved = late
-                missing = [k for k in values if k not in self.reg and not retired(k)]
+                missing = [k for k in values if k not in self.reg and not retired(k)
+                           and not lookback_retired(k)]
             self._landed(group, doc.get("name") or name, resolved)
         self.report(missing, f"{group_word(group)}/{name}")
         if not quiet:

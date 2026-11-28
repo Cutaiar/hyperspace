@@ -3722,11 +3722,72 @@
         [
          "image",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -3752,32 +3813,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -3890,11 +3925,72 @@
            [
             "image",
             [
-             "History",
+             "CutNode",
              null,
              [
               [
-               "cover",
+               "image",
+               [
+                "CutNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Effect",
+                   "trail",
+                   [
+                    [
+                     "stack",
+                     [
+                      "Delay",
+                      null,
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ],
+                 [
+                  "mask",
+                  [
+                   "MatteNode",
+                   null,
+                   [
+                    [
+                     "image",
+                     [
+                      "Scene",
+                      null,
+                      [
+                       [
+                        "geometry",
+                        [
+                         "Shape",
+                         null,
+                         [
+                          [
+                           "faces",
+                           [
+                            "PatternNode",
+                            "",
+                            []
+                           ]
+                          ]
+                         ]
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
                [
                 "Cover",
                 null,
@@ -3920,32 +4016,6 @@
                         ]
                        ]
                       ]
-                     ]
-                    ]
-                   ]
-                  ]
-                 ]
-                ]
-               ]
-              ],
-              [
-               "occluder",
-               [
-                "Scene",
-                null,
-                [
-                 [
-                  "geometry",
-                  [
-                   "Shape",
-                   null,
-                   [
-                    [
-                     "faces",
-                     [
-                      "PatternNode",
-                      "",
-                      []
                      ]
                     ]
                    ]
@@ -4025,11 +4095,72 @@
         [
          "image",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -4055,32 +4186,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -4144,11 +4249,72 @@
         [
          "image",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -4174,32 +4340,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -4385,11 +4525,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -4423,7 +4590,35 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "curve",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -4432,27 +4627,63 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "PatternNode",
-             "",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "curve",
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -7483,11 +7714,72 @@
      [
       "over",
       [
-       "History",
+       "CutNode",
        null,
        [
         [
-         "cover",
+         "image",
+         [
+          "CutNode",
+          null,
+          [
+           [
+            "image",
+            [
+             "Effect",
+             "trail",
+             [
+              [
+               "stack",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
+            [
+             "MatteNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "mask",
          [
           "Cover",
           null,
@@ -7513,32 +7805,6 @@
                   ]
                  ]
                 ]
-               ]
-              ]
-             ]
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "occluder",
-         [
-          "Scene",
-          null,
-          [
-           [
-            "geometry",
-            [
-             "Shape",
-             null,
-             [
-              [
-               "faces",
-               [
-                "PatternNode",
-                "",
-                []
                ]
               ]
              ]
@@ -7642,11 +7908,72 @@
         [
          "over",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -7672,32 +7999,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -7768,11 +8069,72 @@
      [
       "over",
       [
-       "History",
+       "CutNode",
        null,
        [
         [
-         "cover",
+         "image",
+         [
+          "CutNode",
+          null,
+          [
+           [
+            "image",
+            [
+             "Effect",
+             "trail",
+             [
+              [
+               "stack",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
+            [
+             "MatteNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "mask",
          [
           "Cover",
           null,
@@ -7798,32 +8160,6 @@
                   ]
                  ]
                 ]
-               ]
-              ]
-             ]
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "occluder",
-         [
-          "Scene",
-          null,
-          [
-           [
-            "geometry",
-            [
-             "Shape",
-             null,
-             [
-              [
-               "faces",
-               [
-                "PatternNode",
-                "",
-                []
                ]
               ]
              ]
@@ -7878,11 +8214,72 @@
      [
       "over",
       [
-       "History",
+       "CutNode",
        null,
        [
         [
-         "cover",
+         "image",
+         [
+          "CutNode",
+          null,
+          [
+           [
+            "image",
+            [
+             "Effect",
+             "trail",
+             [
+              [
+               "stack",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
+            [
+             "MatteNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "mask",
          [
           "Cover",
           null,
@@ -7908,32 +8305,6 @@
                   ]
                  ]
                 ]
-               ]
-              ]
-             ]
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "occluder",
-         [
-          "Scene",
-          null,
-          [
-           [
-            "geometry",
-            [
-             "Shape",
-             null,
-             [
-              [
-               "faces",
-               [
-                "PatternNode",
-                "",
-                []
                ]
               ]
              ]
@@ -8116,11 +8487,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -8147,7 +8545,35 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "curve",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -8156,27 +8582,63 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "PatternNode",
-             "",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "curve",
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -11130,11 +11592,80 @@
         [
          "over",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Hands",
+                      1,
+                      []
+                     ]
+                    ],
+                    [
+                     "geometry.2",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -11168,40 +11699,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Hands",
-                1,
-                []
-               ]
-              ],
-              [
-               "geometry.2",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -11286,11 +11783,80 @@
         [
          "over",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Hands",
+                      1,
+                      []
+                     ]
+                    ],
+                    [
+                     "geometry.2",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -11324,40 +11890,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Hands",
-                1,
-                []
-               ]
-              ],
-              [
-               "geometry.2",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -11442,11 +11974,80 @@
         [
          "over",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Hands",
+                      1,
+                      []
+                     ]
+                    ],
+                    [
+                     "geometry.2",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -11480,40 +12081,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Hands",
-                1,
-                []
-               ]
-              ],
-              [
-               "geometry.2",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -11585,11 +12152,80 @@
         [
          "over",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Hands",
+                      1,
+                      []
+                     ]
+                    ],
+                    [
+                     "geometry.2",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -11623,40 +12259,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Hands",
-                1,
-                []
-               ]
-              ],
-              [
-               "geometry.2",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -11860,11 +12462,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -11897,7 +12526,28 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -11906,35 +12556,62 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Hands",
-          1,
-          []
-         ]
-        ],
-        [
-         "geometry.2",
-         [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "PatternNode",
-             "",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Hands",
+                   1,
+                   []
+                  ]
+                 ],
+                 [
+                  "geometry.2",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -11957,11 +12634,72 @@
      [
       "over",
       [
-       "History",
+       "CutNode",
        null,
        [
         [
-         "cover",
+         "image",
+         [
+          "CutNode",
+          null,
+          [
+           [
+            "image",
+            [
+             "Effect",
+             "trail",
+             [
+              [
+               "stack",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
+            [
+             "MatteNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "mask",
          [
           "Cover",
           null,
@@ -11987,32 +12725,6 @@
                   ]
                  ]
                 ]
-               ]
-              ]
-             ]
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "occluder",
-         [
-          "Scene",
-          null,
-          [
-           [
-            "geometry",
-            [
-             "Shape",
-             null,
-             [
-              [
-               "faces",
-               [
-                "PatternNode",
-                "",
-                []
                ]
               ]
              ]
@@ -12134,11 +12846,72 @@
         [
          "over",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -12164,32 +12937,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -12260,11 +13007,72 @@
      [
       "over",
       [
-       "History",
+       "CutNode",
        null,
        [
         [
-         "cover",
+         "image",
+         [
+          "CutNode",
+          null,
+          [
+           [
+            "image",
+            [
+             "Effect",
+             "trail",
+             [
+              [
+               "stack",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
+            [
+             "MatteNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "mask",
          [
           "Cover",
           null,
@@ -12290,32 +13098,6 @@
                   ]
                  ]
                 ]
-               ]
-              ]
-             ]
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "occluder",
-         [
-          "Scene",
-          null,
-          [
-           [
-            "geometry",
-            [
-             "Shape",
-             null,
-             [
-              [
-               "faces",
-               [
-                "PatternNode",
-                "",
-                []
                ]
               ]
              ]
@@ -12370,11 +13152,72 @@
      [
       "over",
       [
-       "History",
+       "CutNode",
        null,
        [
         [
-         "cover",
+         "image",
+         [
+          "CutNode",
+          null,
+          [
+           [
+            "image",
+            [
+             "Effect",
+             "trail",
+             [
+              [
+               "stack",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
+            [
+             "MatteNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "mask",
          [
           "Cover",
           null,
@@ -12400,32 +13243,6 @@
                   ]
                  ]
                 ]
-               ]
-              ]
-             ]
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "occluder",
-         [
-          "Scene",
-          null,
-          [
-           [
-            "geometry",
-            [
-             "Shape",
-             null,
-             [
-              [
-               "faces",
-               [
-                "PatternNode",
-                "",
-                []
                ]
               ]
              ]
@@ -12626,11 +13443,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -12664,7 +13508,35 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "curve",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -12673,27 +13545,63 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "PatternNode",
-             "",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "curve",
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -13665,33 +14573,68 @@
                     [
                      "image",
                      [
-                      "History",
+                      "CutNode",
                       null,
                       [
                        [
-                        "cover",
+                        "image",
                         [
-                         "Cover",
+                         "CutNode",
                          null,
                          [
                           [
-                           "scene",
+                           "image",
                            [
-                            "Scene",
+                            "Effect",
+                            "trail",
+                            [
+                             [
+                              "stack",
+                              [
+                               "Delay",
+                               null,
+                               []
+                              ]
+                             ]
+                            ]
+                           ]
+                          ],
+                          [
+                           "mask",
+                           [
+                            "MatteNode",
                             null,
                             [
                              [
-                              "geometry",
+                              "image",
                               [
-                               "Shape",
-                               null,
+                               "Effect",
+                               "acid.2",
                                [
                                 [
-                                 "faces",
+                                 "image",
                                  [
-                                  "PatternNode",
-                                  "",
-                                  []
+                                  "Scene",
+                                  null,
+                                  [
+                                   [
+                                    "geometry",
+                                    [
+                                     "Shape",
+                                     null,
+                                     [
+                                      [
+                                       "faces",
+                                       [
+                                        "PatternNode",
+                                        "",
+                                        []
+                                       ]
+                                      ]
+                                     ]
+                                    ]
+                                   ]
+                                  ]
                                  ]
                                 ]
                                ]
@@ -13704,13 +14647,13 @@
                         ]
                        ],
                        [
-                        "occluder",
+                        "mask",
                         [
-                         "Effect",
-                         "acid.2",
+                         "Cover",
+                         null,
                          [
                           [
-                           "image",
+                           "scene",
                            [
                             "Scene",
                             null,
@@ -13887,33 +14830,68 @@
                        [
                         "image",
                         [
-                         "History",
+                         "CutNode",
                          null,
                          [
                           [
-                           "cover",
+                           "image",
                            [
-                            "Cover",
+                            "CutNode",
                             null,
                             [
                              [
-                              "scene",
+                              "image",
                               [
-                               "Scene",
+                               "Effect",
+                               "trail",
+                               [
+                                [
+                                 "stack",
+                                 [
+                                  "Delay",
+                                  null,
+                                  []
+                                 ]
+                                ]
+                               ]
+                              ]
+                             ],
+                             [
+                              "mask",
+                              [
+                               "MatteNode",
                                null,
                                [
                                 [
-                                 "geometry",
+                                 "image",
                                  [
-                                  "Shape",
-                                  null,
+                                  "Effect",
+                                  "acid.2",
                                   [
                                    [
-                                    "faces",
+                                    "image",
                                     [
-                                     "PatternNode",
-                                     "",
-                                     []
+                                     "Scene",
+                                     null,
+                                     [
+                                      [
+                                       "geometry",
+                                       [
+                                        "Shape",
+                                        null,
+                                        [
+                                         [
+                                          "faces",
+                                          [
+                                           "PatternNode",
+                                           "",
+                                           []
+                                          ]
+                                         ]
+                                        ]
+                                       ]
+                                      ]
+                                     ]
                                     ]
                                    ]
                                   ]
@@ -13926,13 +14904,13 @@
                            ]
                           ],
                           [
-                           "occluder",
+                           "mask",
                            [
-                            "Effect",
-                            "acid.2",
+                            "Cover",
+                            null,
                             [
                              [
-                              "image",
+                              "scene",
                               [
                                "Scene",
                                null,
@@ -14076,33 +15054,68 @@
                     [
                      "image",
                      [
-                      "History",
+                      "CutNode",
                       null,
                       [
                        [
-                        "cover",
+                        "image",
                         [
-                         "Cover",
+                         "CutNode",
                          null,
                          [
                           [
-                           "scene",
+                           "image",
                            [
-                            "Scene",
+                            "Effect",
+                            "trail",
+                            [
+                             [
+                              "stack",
+                              [
+                               "Delay",
+                               null,
+                               []
+                              ]
+                             ]
+                            ]
+                           ]
+                          ],
+                          [
+                           "mask",
+                           [
+                            "MatteNode",
                             null,
                             [
                              [
-                              "geometry",
+                              "image",
                               [
-                               "Shape",
-                               null,
+                               "Effect",
+                               "acid.2",
                                [
                                 [
-                                 "faces",
+                                 "image",
                                  [
-                                  "PatternNode",
-                                  "",
-                                  []
+                                  "Scene",
+                                  null,
+                                  [
+                                   [
+                                    "geometry",
+                                    [
+                                     "Shape",
+                                     null,
+                                     [
+                                      [
+                                       "faces",
+                                       [
+                                        "PatternNode",
+                                        "",
+                                        []
+                                       ]
+                                      ]
+                                     ]
+                                    ]
+                                   ]
+                                  ]
                                  ]
                                 ]
                                ]
@@ -14115,13 +15128,13 @@
                         ]
                        ],
                        [
-                        "occluder",
+                        "mask",
                         [
-                         "Effect",
-                         "acid.2",
+                         "Cover",
+                         null,
                          [
                           [
-                           "image",
+                           "scene",
                            [
                             "Scene",
                             null,
@@ -14249,33 +15262,68 @@
                     [
                      "image",
                      [
-                      "History",
+                      "CutNode",
                       null,
                       [
                        [
-                        "cover",
+                        "image",
                         [
-                         "Cover",
+                         "CutNode",
                          null,
                          [
                           [
-                           "scene",
+                           "image",
                            [
-                            "Scene",
+                            "Effect",
+                            "trail",
+                            [
+                             [
+                              "stack",
+                              [
+                               "Delay",
+                               null,
+                               []
+                              ]
+                             ]
+                            ]
+                           ]
+                          ],
+                          [
+                           "mask",
+                           [
+                            "MatteNode",
                             null,
                             [
                              [
-                              "geometry",
+                              "image",
                               [
-                               "Shape",
-                               null,
+                               "Effect",
+                               "acid.2",
                                [
                                 [
-                                 "faces",
+                                 "image",
                                  [
-                                  "PatternNode",
-                                  "",
-                                  []
+                                  "Scene",
+                                  null,
+                                  [
+                                   [
+                                    "geometry",
+                                    [
+                                     "Shape",
+                                     null,
+                                     [
+                                      [
+                                       "faces",
+                                       [
+                                        "PatternNode",
+                                        "",
+                                        []
+                                       ]
+                                      ]
+                                     ]
+                                    ]
+                                   ]
+                                  ]
                                  ]
                                 ]
                                ]
@@ -14288,13 +15336,13 @@
                         ]
                        ],
                        [
-                        "occluder",
+                        "mask",
                         [
-                         "Effect",
-                         "acid.2",
+                         "Cover",
+                         null,
                          [
                           [
-                           "image",
+                           "scene",
                            [
                             "Scene",
                             null,
@@ -14563,11 +15611,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -14685,7 +15760,28 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -14694,33 +15790,60 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Effect",
-       "acid.2",
+       "ResizeNode",
+       null,
        [
         [
          "image",
          [
-          "Scene",
+          "KeyNode",
           null,
           [
            [
-            "geometry",
+            "image",
             [
-             "Shape",
-             null,
+             "Effect",
+             "fade",
              [
               [
-               "faces",
+               "image",
                [
-                "PatternNode",
-                "",
-                []
+                "Effect",
+                "acid.2",
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
                ]
               ]
              ]
@@ -14752,11 +15875,80 @@
         [
          "over",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Hands",
+                      1,
+                      []
+                     ]
+                    ],
+                    [
+                     "geometry.2",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -14790,40 +15982,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Hands",
-                1,
-                []
-               ]
-              ],
-              [
-               "geometry.2",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -14908,11 +16066,80 @@
         [
          "over",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Hands",
+                      1,
+                      []
+                     ]
+                    ],
+                    [
+                     "geometry.2",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -14946,40 +16173,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Hands",
-                1,
-                []
-               ]
-              ],
-              [
-               "geometry.2",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -15077,11 +16270,80 @@
         [
          "over",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Hands",
+                      1,
+                      []
+                     ]
+                    ],
+                    [
+                     "geometry.2",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -15115,40 +16377,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Hands",
-                1,
-                []
-               ]
-              ],
-              [
-               "geometry.2",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -15220,11 +16448,80 @@
         [
          "over",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Hands",
+                      1,
+                      []
+                     ]
+                    ],
+                    [
+                     "geometry.2",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -15258,40 +16555,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Hands",
-                1,
-                []
-               ]
-              ],
-              [
-               "geometry.2",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -15507,11 +16770,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -15544,7 +16834,28 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -15553,35 +16864,62 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Hands",
-          1,
-          []
-         ]
-        ],
-        [
-         "geometry.2",
-         [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "PatternNode",
-             "",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Hands",
+                   1,
+                   []
+                  ]
+                 ],
+                 [
+                  "geometry.2",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -21107,9 +22445,18 @@
         [
          "faces",
          [
-          "EchoNode",
-          "lookback.echo.3",
-          []
+          "Effect",
+          "read",
+          [
+           [
+            "stack",
+            [
+             "Delay",
+             null,
+             []
+            ]
+           ]
+          ]
          ]
         ]
        ]
@@ -21187,9 +22534,18 @@
            [
             "faces",
             [
-             "EchoNode",
-             "lookback.echo.3",
-             []
+             "Effect",
+             "read",
+             [
+              [
+               "stack",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -21234,9 +22590,18 @@
         [
          "faces",
          [
-          "EchoNode",
-          "lookback.echo.3",
-          []
+          "Effect",
+          "read",
+          [
+           [
+            "stack",
+            [
+             "Delay",
+             null,
+             []
+            ]
+           ]
+          ]
          ]
         ]
        ]
@@ -21265,9 +22630,18 @@
         [
          "faces",
          [
-          "EchoNode",
-          "lookback.echo.3",
-          []
+          "Effect",
+          "read",
+          [
+           [
+            "stack",
+            [
+             "Delay",
+             null,
+             []
+            ]
+           ]
+          ]
          ]
         ]
        ]
@@ -21380,9 +22754,16 @@
   ],
   [
    [
-    "EchoNode",
-    "lookback.echo.3",
+    "Delay",
+    null,
     []
+   ],
+   [
+    "Effect",
+    "read",
+    [
+     "stack"
+    ]
    ],
    [
     "Shape",
@@ -21426,7 +22807,28 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -21435,27 +22837,63 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "EchoNode",
-             "lookback.echo.3",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "Effect",
+                      "read",
+                      [
+                       [
+                        "stack",
+                        [
+                         "Delay",
+                         null,
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -26998,11 +28436,80 @@
         [
          "image",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Hands",
+                      1,
+                      []
+                     ]
+                    ],
+                    [
+                     "geometry.2",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -27036,40 +28543,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Hands",
-                1,
-                []
-               ]
-              ],
-              [
-               "geometry.2",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -27259,11 +28732,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -27289,7 +28789,35 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "curve",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -27298,35 +28826,71 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Hands",
-          1,
-          []
-         ]
-        ],
-        [
-         "geometry.2",
-         [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "PatternNode",
-             "",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "curve",
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Hands",
+                      1,
+                      []
+                     ]
+                    ],
+                    [
+                     "geometry.2",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -27355,11 +28919,72 @@
         [
          "image",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -27385,32 +29010,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -27571,11 +29170,72 @@
            [
             "image",
             [
-             "History",
+             "CutNode",
              null,
              [
               [
-               "cover",
+               "image",
+               [
+                "CutNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Effect",
+                   "trail",
+                   [
+                    [
+                     "stack",
+                     [
+                      "Delay",
+                      null,
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ],
+                 [
+                  "mask",
+                  [
+                   "MatteNode",
+                   null,
+                   [
+                    [
+                     "image",
+                     [
+                      "Scene",
+                      null,
+                      [
+                       [
+                        "geometry",
+                        [
+                         "Shape",
+                         null,
+                         [
+                          [
+                           "faces",
+                           [
+                            "PatternNode",
+                            "",
+                            []
+                           ]
+                          ]
+                         ]
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
                [
                 "Cover",
                 null,
@@ -27608,32 +29268,6 @@
                  ]
                 ]
                ]
-              ],
-              [
-               "occluder",
-               [
-                "Scene",
-                null,
-                [
-                 [
-                  "geometry",
-                  [
-                   "Shape",
-                   null,
-                   [
-                    [
-                     "faces",
-                     [
-                      "PatternNode",
-                      "",
-                      []
-                     ]
-                    ]
-                   ]
-                  ]
-                 ]
-                ]
-               ]
               ]
              ]
             ]
@@ -27731,11 +29365,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -27763,7 +29424,35 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "curve",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -27772,27 +29461,63 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "PatternNode",
-             "",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "curve",
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -27821,11 +29546,72 @@
         [
          "image",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -27851,32 +29637,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -27991,11 +29751,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -28022,7 +29809,35 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "curve",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -28031,50 +29846,86 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Composite",
+       "ResizeNode",
        null,
        [
         [
-         "over",
+         "image",
          [
-          "HandsLayer",
-          1,
-          [
-           [
-            "geometry",
-            [
-             "Hands",
-             1,
-             []
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "under",
-         [
-          "Scene",
+          "KeyNode",
           null,
           [
            [
-            "geometry",
+            "image",
             [
-             "Shape",
-             null,
+             "Effect",
+             "fade",
              [
               [
-               "faces",
+               "image",
                [
-                "PatternNode",
-                "",
-                []
+                "Effect",
+                "curve",
+                [
+                 [
+                  "image",
+                  [
+                   "Composite",
+                   null,
+                   [
+                    [
+                     "over",
+                     [
+                      "HandsLayer",
+                      1,
+                      [
+                       [
+                        "geometry",
+                        [
+                         "Hands",
+                         1,
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ],
+                    [
+                     "under",
+                     [
+                      "Scene",
+                      null,
+                      [
+                       [
+                        "geometry",
+                        [
+                         "Shape",
+                         null,
+                         [
+                          [
+                           "faces",
+                           [
+                            "PatternNode",
+                            "",
+                            []
+                           ]
+                          ]
+                         ]
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
                ]
               ]
              ]
@@ -28106,11 +29957,72 @@
         [
          "image",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -28136,32 +30048,6 @@
                      ]
                     ]
                    ]
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
                   ]
                  ]
                 ]
@@ -28276,11 +30162,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -28299,7 +30212,35 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "curve",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -28308,27 +30249,63 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "PatternNode",
-             "",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "curve",
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -32663,11 +34640,80 @@
      [
       "over",
       [
-       "History",
+       "CutNode",
        null,
        [
         [
-         "cover",
+         "image",
+         [
+          "CutNode",
+          null,
+          [
+           [
+            "image",
+            [
+             "Effect",
+             "trail",
+             [
+              [
+               "stack",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
+            [
+             "MatteNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Hands",
+                   1,
+                   []
+                  ]
+                 ],
+                 [
+                  "geometry.2",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "mask",
          [
           "Cover",
           null,
@@ -32701,40 +34747,6 @@
                   ]
                  ]
                 ]
-               ]
-              ]
-             ]
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "occluder",
-         [
-          "Scene",
-          null,
-          [
-           [
-            "geometry",
-            [
-             "Hands",
-             1,
-             []
-            ]
-           ],
-           [
-            "geometry.2",
-            [
-             "Shape",
-             null,
-             [
-              [
-               "faces",
-               [
-                "PatternNode",
-                "",
-                []
                ]
               ]
              ]
@@ -32921,11 +34933,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -32944,7 +34983,35 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "curve",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -32953,35 +35020,71 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Hands",
-          1,
-          []
-         ]
-        ],
-        [
-         "geometry.2",
-         [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "PatternNode",
-             "",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "curve",
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Hands",
+                      1,
+                      []
+                     ]
+                    ],
+                    [
+                     "geometry.2",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -33004,11 +35107,72 @@
      [
       "over",
       [
-       "History",
+       "CutNode",
        null,
        [
         [
-         "cover",
+         "image",
+         [
+          "CutNode",
+          null,
+          [
+           [
+            "image",
+            [
+             "Effect",
+             "trail",
+             [
+              [
+               "stack",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
+            [
+             "MatteNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "mask",
          [
           "Cover",
           null,
@@ -33034,32 +35198,6 @@
                   ]
                  ]
                 ]
-               ]
-              ]
-             ]
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "occluder",
-         [
-          "Scene",
-          null,
-          [
-           [
-            "geometry",
-            [
-             "Shape",
-             null,
-             [
-              [
-               "faces",
-               [
-                "PatternNode",
-                "",
-                []
                ]
               ]
              ]
@@ -33211,11 +35349,72 @@
         [
          "over",
          [
-          "History",
+          "CutNode",
           null,
           [
            [
-            "cover",
+            "image",
+            [
+             "CutNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "trail",
+                [
+                 [
+                  "stack",
+                  [
+                   "Delay",
+                   null,
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ],
+              [
+               "mask",
+               [
+                "MatteNode",
+                null,
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
             [
              "Cover",
              null,
@@ -33248,32 +35447,6 @@
               ]
              ]
             ]
-           ],
-           [
-            "occluder",
-            [
-             "Scene",
-             null,
-             [
-              [
-               "geometry",
-               [
-                "Shape",
-                null,
-                [
-                 [
-                  "faces",
-                  [
-                   "PatternNode",
-                   "",
-                   []
-                  ]
-                 ]
-                ]
-               ]
-              ]
-             ]
-            ]
            ]
           ]
          ]
@@ -33368,11 +35541,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -33393,7 +35593,35 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "curve",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -33402,27 +35630,63 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "PatternNode",
-             "",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "curve",
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]
@@ -33445,11 +35709,72 @@
      [
       "over",
       [
-       "History",
+       "CutNode",
        null,
        [
         [
-         "cover",
+         "image",
+         [
+          "CutNode",
+          null,
+          [
+           [
+            "image",
+            [
+             "Effect",
+             "trail",
+             [
+              [
+               "stack",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
+            [
+             "MatteNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "mask",
          [
           "Cover",
           null,
@@ -33475,32 +35800,6 @@
                   ]
                  ]
                 ]
-               ]
-              ]
-             ]
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "occluder",
-         [
-          "Scene",
-          null,
-          [
-           [
-            "geometry",
-            [
-             "Shape",
-             null,
-             [
-              [
-               "faces",
-               [
-                "PatternNode",
-                "",
-                []
                ]
               ]
              ]
@@ -33612,11 +35911,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -33636,7 +35962,35 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "curve",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -33645,50 +35999,86 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Composite",
+       "ResizeNode",
        null,
        [
         [
-         "over",
+         "image",
          [
-          "HandsLayer",
-          1,
-          [
-           [
-            "geometry",
-            [
-             "Hands",
-             1,
-             []
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "under",
-         [
-          "Scene",
+          "KeyNode",
           null,
           [
            [
-            "geometry",
+            "image",
             [
-             "Shape",
-             null,
+             "Effect",
+             "fade",
              [
               [
-               "faces",
+               "image",
                [
-                "PatternNode",
-                "",
-                []
+                "Effect",
+                "curve",
+                [
+                 [
+                  "image",
+                  [
+                   "Composite",
+                   null,
+                   [
+                    [
+                     "over",
+                     [
+                      "HandsLayer",
+                      1,
+                      [
+                       [
+                        "geometry",
+                        [
+                         "Hands",
+                         1,
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ],
+                    [
+                     "under",
+                     [
+                      "Scene",
+                      null,
+                      [
+                       [
+                        "geometry",
+                        [
+                         "Shape",
+                         null,
+                         [
+                          [
+                           "faces",
+                           [
+                            "PatternNode",
+                            "",
+                            []
+                           ]
+                          ]
+                         ]
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
                ]
               ]
              ]
@@ -33714,11 +36104,72 @@
      [
       "over",
       [
-       "History",
+       "CutNode",
        null,
        [
         [
-         "cover",
+         "image",
+         [
+          "CutNode",
+          null,
+          [
+           [
+            "image",
+            [
+             "Effect",
+             "trail",
+             [
+              [
+               "stack",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
+            ]
+           ],
+           [
+            "mask",
+            [
+             "MatteNode",
+             null,
+             [
+              [
+               "image",
+               [
+                "Scene",
+                null,
+                [
+                 [
+                  "geometry",
+                  [
+                   "Shape",
+                   null,
+                   [
+                    [
+                     "faces",
+                     [
+                      "PatternNode",
+                      "",
+                      []
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "mask",
          [
           "Cover",
           null,
@@ -33744,32 +36195,6 @@
                   ]
                  ]
                 ]
-               ]
-              ]
-             ]
-            ]
-           ]
-          ]
-         ]
-        ],
-        [
-         "occluder",
-         [
-          "Scene",
-          null,
-          [
-           [
-            "geometry",
-            [
-             "Shape",
-             null,
-             [
-              [
-               "faces",
-               [
-                "PatternNode",
-                "",
-                []
                ]
               ]
              ]
@@ -33881,11 +36306,38 @@
     ]
    ],
    [
-    "History",
+    "Delay",
+    null,
+    []
+   ],
+   [
+    "Effect",
+    "trail",
+    [
+     "stack"
+    ]
+   ],
+   [
+    "MatteNode",
     null,
     [
-     "cover",
-     "occluder"
+     "image"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
+    ]
+   ],
+   [
+    "CutNode",
+    null,
+    [
+     "image",
+     "mask"
     ]
    ],
    [
@@ -33897,7 +36349,35 @@
     ]
    ],
    [
-    "Capture",
+    "Effect",
+    "curve",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "fade",
+    [
+     "image"
+    ]
+   ],
+   [
+    "KeyNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "ResizeNode",
+    null,
+    [
+     "image"
+    ]
+   ],
+   [
+    "DelayWrite",
     null,
     [
      "image"
@@ -33906,27 +36386,63 @@
   ],
   [
    [
-    "Capture",
-    null,
+    "DelayWrite",
+    "delay",
     [
      [
       "image",
       [
-       "Scene",
+       "ResizeNode",
        null,
        [
         [
-         "geometry",
+         "image",
          [
-          "Shape",
+          "KeyNode",
           null,
           [
            [
-            "faces",
+            "image",
             [
-             "PatternNode",
-             "",
-             []
+             "Effect",
+             "fade",
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "curve",
+                [
+                 [
+                  "image",
+                  [
+                   "Scene",
+                   null,
+                   [
+                    [
+                     "geometry",
+                     [
+                      "Shape",
+                      null,
+                      [
+                       [
+                        "faces",
+                        [
+                         "PatternNode",
+                         "",
+                         []
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
             ]
            ]
           ]

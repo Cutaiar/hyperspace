@@ -66,7 +66,7 @@ def test_an_echo_index_out_of_range_is_unreadable(index):
     with pytest.raises(G.GraphError) as err:
         G.read_graph(section(RUN, nodes=[{"kind": "echo", "index": index}]))
     assert str(err.value) == (f"echo node: index {index!r}, a whole number from 1 to "
-                              f"{G.MAX_ECHOES}")
+                              f"{G.OLD_ECHOES}")
     with pytest.raises(G.GraphError) as err:
         G.read_graph(section(RUN, nodes=[{"kind": "echo"}]))
     assert str(err.value) == "echo node: names no index (echo.1 is the newest)"
@@ -203,8 +203,9 @@ def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
                                  "values": {}, "graph": sec}) == []
     doc = app.loaded_patch.document("fb")
     assert doc["schema"] == "hyperspace.loadable/12"
-    # (plan 36 T4: an echo is its look-back's pin now — the look-back's node)
-    kind = "lookback" if node["kind"] == "echo" else node["kind"]
+    # (plan 36 T4: an echo is its look-back's pin — plan 90 H2: and that pin
+    # a Read of the delay the look-back is now, `read → output.2.image`)
+    kind = "read" if node["kind"] == "echo" else node["kind"]
     wires = doc["graph"]["wires"]
     assert ([n for n in doc["graph"]["nodes"] if n.get("kind") == kind]
             or any(w["from"] == kind or w["to"].startswith(f"{kind}.") for w in wires))

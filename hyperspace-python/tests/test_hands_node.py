@@ -8,7 +8,7 @@ geometry inside the scene, drawn before the see-through shape, so the
 shape's depth puts a hand in front of or behind it; as a layer they have
 their own colour and depth, and a depth-aware composite hides the layer
 where the shape's visible surface is nearer. The history captures what
-it is wired to. `tests/test_graph.py` holds the graphs' shapes;
+it is wired to (plan 90 H2: a delay, the look-back retired). `tests/test_graph.py` holds the graphs' shapes;
 `tests/test_golden_frames.py` the pictures, byte for byte.
 
 Offscreen renders from synthetic hands (`fake_hands`, test_ghost's pose);
@@ -20,7 +20,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from test_ghost import both, tracker
-from test_outputs import H, W, fbo, keep_run, px, rig, scene_view, views
+from test_outputs import H, W, fbo, history, keep_run, px, rig, scene_view, views, with_echoes
 from wiredframe import Thru, wire_switches
 
 from hyperspace import ghost as G
@@ -117,11 +117,12 @@ def _rig(ctx, wiring=None, z0=None, *, effects=(), shape=True, **kw):
     r = rig(ctx, effects=effects, **kw)
     if wiring is not None:
         # (plan 33 R23: the rig's run kept; plan 36 T4: its look-back drawn
-        # while the rig's `dream.on` is on, as the old words had it)
-        from hyperspace.graphmigrate import look_of
-        st = r.lookback.state
-        r.wiring = wired_wiring(keep_run(r, wiring),
-                                look_of({"dream.on": bool(st.on), "dream.mix": 0.0}))
+        # while the rig's echoes are on, as the old words had it — plan 90
+        # H2: as its public parts, `test_outputs.with_echoes`)
+        if kw.get("echoes"):
+            with_echoes(r, keep_run(r, wiring))
+        else:
+            r.wiring = wired_wiring(keep_run(r, wiring))
     if z0 is not None and r.ghost.source is not None:
         r.ghost.source.units = hc.Units(mm=200.0, origin=(0.0, 205.0, z0), tilt=0.0)
     r._no_shape = not shape
@@ -185,14 +186,15 @@ def test_hands_in_the_scene_are_solid_and_in_front_of_or_behind_the_shape(ctx):
 
 def test_the_scene_holds_the_hands_so_the_effects_bend_them_and_the_history_keeps_them(ctx):
     """In the scene the hands are part of the picture: an effect bends
-    them with the shape and the look-back's echoes hold them — what the
-    default graph never does (its history is the bare scene)."""
+    them with the shape and the echoes hold them — what the default graph
+    never does (its history is the bare scene). (Plan 90 H2: the echoes are
+    the migrated look-back's delay, `test_outputs.with_echoes`.)"""
     bare = _rig(ctx, hands=False, echoes=True)
     _draw(ctx, bare, views(ctx, S()), frames=6)
-    want = np.frombuffer(bare.lookback.atlas.read(), dtype=np.uint8)
+    want = history(bare)[1]
     r = _rig(ctx, Wiring(hands="scene"), echoes=True)
     _draw(ctx, r, views(ctx, S()), frames=6)
-    assert not np.array_equal(np.frombuffer(r.lookback.atlas.read(), dtype=np.uint8), want)
+    assert history(r)[0] and not np.array_equal(history(r)[1], want)
     # through an effect: the scene's output with the hands in it is the
     # hands bent with the shape, never laid over after
     plain = _draw(ctx, _rig(ctx, Wiring(hands="scene")), views(ctx, S()))[0]

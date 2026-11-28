@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any
 
 import numpy as np
 
@@ -327,10 +326,6 @@ class ViewState(writes.Observed):
     # plan 39 T4: each segment node's values (`segment[.n].*`, declared from
     # the loadable patch's graph: params.declare_segments) — segment name → its state
     segments: dict[str, SegmentState] = field(default_factory=dict)
-    # plan 36 T4: each extra look-back's values (`dream.<n>.*`, declared from
-    # the loadable patch's graph: params.declare_lookbacks) — `lookback.<n>` → its
-    # `lookback.DreamState` (`lookback`'s are the renderer's own, `dream.*`)
-    lookback: dict[str, Any] = field(default_factory=dict)
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference

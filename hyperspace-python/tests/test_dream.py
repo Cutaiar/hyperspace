@@ -177,7 +177,7 @@ def test_round_trip_is_masked_rgb_at_echo_size(dream_mod):
         w.submit(buf, 8)
         assert wait_for(lambda: w.latest() if w.latest()[1] == 8 else None)[1] == 8
         assert w.stats()["behind"] == 0 and w.error == ""
-        # a foreign array (lookback's own staging) is copied in
+        # a foreign array (the dreamer's own staging) is copied in
         w.submit(blob(h, wd, 90), 9)
         assert wait_for(lambda: w.latest() if w.latest()[1] == 9 else None)[1] == 9
         assert "0 behind" in w.status()
@@ -462,7 +462,7 @@ def test_end_to_end_offscreen(dream_mod, tmp_path):
         ctx.finish()
         return np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(H, W, 4).copy()
 
-    d = DreamState(on=True, echoes=0, gap=0.0)
+    d = DreamState(on=True)        # (plan 90 H2: no echoes to switch off)
     fbo, r, s = rig(d)
     reg = registry(d)
     w = dream_mod.DreamWorker(reg, {"enabled": True, "weights_dir": str(tmp_path)})
@@ -477,10 +477,10 @@ def test_end_to_end_offscreen(dream_mod, tmp_path):
     finally:
         w.close()
         fbo.release()
-    fbo, r, s = rig(DreamState(on=True, echoes=0, gap=0.0))
-    tracer_only = run(fbo, r, s, None)
+    fbo, r, s = rig(DreamState(on=True))
+    undreamed = run(fbo, r, s, None)
     fbo.release()
-    a, b = with_dream[..., :3].astype(int), tracer_only[..., :3].astype(int)
+    a, b = with_dream[..., :3].astype(int), undreamed[..., :3].astype(int)
     diff = np.abs(a - b)
     assert diff.mean() > 1.0, f"the dream layer must contribute ({diff.mean():.2f})"
     # the black ground stays black: the mask keeps the dream off it

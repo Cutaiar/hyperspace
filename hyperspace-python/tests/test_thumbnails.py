@@ -135,9 +135,12 @@ def test_a_thumbnails_size_is_its_long_side_at_the_pictures_aspect():
 def test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none():
     # (plan 39's segment pins `fg`/`bg` are ports of the one segment node,
     # never a canvas node of their own, as the scene's depth pin is; plan
-    # 89's effect slots are ports of the effect's one node too)
+    # 89's effect slots are ports of the effect's one node too; plan 90 H2:
+    # the look-back and its echo pins are retired — only a migration's read
+    # still parses them, and the page never draws one)
     for kind, made in G.WIRED_MAKES.items():
-        if made == G.IMAGE and kind not in (G.GROUND, G.DEPTH_PORT, "slot", *G.SEGMENT_PINS):
+        if made == G.IMAGE and kind not in (G.GROUND, G.DEPTH_PORT, "slot", G.LOOKBACK, "echo",
+                                            *G.SEGMENT_PINS):
             assert graphview.THUMBS[kind] == graphview.PICTURE, kind
     # SM3: a matte makes a mask and a segment's own output is its matte: in grey
     assert graphview.thumb_of("matte", G.MatteNode("matte")) == graphview.MASK_PIC
@@ -168,17 +171,21 @@ def _renderer(ctx):
     r = render.Renderer(ctx)
     r.ghost.state.on = False
     r.fx.state.values["kaleido"].update(on=True, mix=1.0)
+    r.fx.state.values["trail"].update(on=True, mix=1.0)
     assert not r.fx.compile_all()
     # the scene through an effect to output 1; into output 2 a composite of
-    # that effect a frame late (a delay) under the look-back's trail picked
-    # by a switch: painted and made nodes, and the stateful kinds
+    # that effect a frame late (a delay) under a trail of the scene (a second
+    # delay's stack; plan 90 H2: the look-back's trail is retired) picked by a
+    # switch: painted and made nodes, and the stateful kinds
     r.wiring = _wire(("shape", "scene.geometry"), ("scene", "kaleido.image"),
                      ("kaleido", "output.1.image"), ("kaleido", "delay.image"),
-                     ("delay", "composite.under"), ("scene", "lookback.image"),
-                     ("lookback", "switch.in1"), ("switch", "composite.over"),
+                     ("delay", "composite.under"), ("scene", "delay.2.image"),
+                     ("delay.2", "trail.stack"),
+                     ("trail", "switch.in1"), ("switch", "composite.over"),
                      ("composite", "output.2.image"),
                      nodes=({"kind": "effect", "file": "kaleido"}, {"kind": "composite"},
-                            {"kind": "delay"}, {"kind": "switch"}))
+                            {"kind": "delay"}, {"kind": "delay", "instance": 2},
+                            {"kind": "effect", "file": "trail"}, {"kind": "switch"}))
     return r
 
 
@@ -197,7 +204,7 @@ S = ViewState(shape=10, ang=[0.3, 0.7, 1.1, 0.5, 0.9, 1.3], yaw=0.4, pitch=0.25,
 S.switch = {"switch": 1}
 EVERY = {"shape": "scene", "scene": "picture", "kaleido": "picture",
          "composite": "picture", "output.2": "window", "delay": "picture",
-         "lookback": "picture", "switch": "picture"}
+         "delay.2": "picture", "trail": "picture", "switch": "picture"}
 
 
 def test_the_outputs_are_byte_identical_with_and_without_thumbnails(ctx):

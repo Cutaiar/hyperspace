@@ -1,8 +1,8 @@
-"""Plan 90 (H2, row 1179): `scene.cover` goes into a cut's mask (a migrated
-look-back's second Cut takes it, H2c). A cut is made in its own `run`, in order,
+"""Plan 90 (H2, row 1179): `scene.cover` goes into a cut's mask, as a migrated
+look-back's second Cut takes it. A cut is made in its own `run`, in order,
 where it is read at the frame's size — never pulled half-way through another
-node's pass (its mask pass binds its own target and texture units): a
-trail cut by the cover under Plasma drew black."""
+node's pass (its mask pass binds its own target and texture units): the
+migrated acid-scene, a trail cut by the cover under Plasma, drew black."""
 
 from __future__ import annotations
 
@@ -79,3 +79,36 @@ def test_a_trail_cut_by_the_cover_under_an_effect_is_drawn(ctx):
     lit = (alone[..., :3].max(axis=2) > 8).mean()
     assert lit > 0.05
     assert (with_cover[..., :3].max(axis=2) > 8).mean() > 0.5 * lit, "drawn black"
+
+
+def test_the_migrated_acid_scene_is_drawn():
+    """The file that found it: acid-scene (an old placement file whose
+    look-back opens as public parts, its second Cut by the cover, Plasma and
+    three more effects after) through the golden rig's real load and draw."""
+    import sys
+    from pathlib import Path
+
+    tools = Path(__file__).resolve().parents[1] / "tools"
+    if str(tools) not in sys.path:
+        sys.path.insert(0, str(tools))
+    import golden_frames as gf
+
+    src = Path(__file__).parent / "fixtures" / "presets" / "acid-scene.json"
+    states = (("scene", {"scene": True, "hands": False, "through": False}),)
+    ctx = gf.context()
+    with gf.shared_programs(ctx):
+        rig = gf.Rig("acid-scene", "absent", ctx, source=src)
+        try:
+            section = gf.rig_section(rig, "acid-scene", states, None)
+            rig.renderer.wiring = gf.read_graph(
+                section, effects={n.partition(".")[0] for n in rig.fx.specs}).wiring()
+            size = (480, 300)
+            target = gf._target(ctx, size)
+            views = gf.state_views("acid-scene", states, size, [target])
+            for _ in range(12):
+                rig.frame(views, size, 1.0)
+            px = gf._read(ctx, target, size)
+        finally:
+            rig.close()
+    assert "cut.2" in rig.renderer._graph.nodes          # (the cover's cut is drawn)
+    assert (px[..., :3].max(axis=2) > 8).mean() > 0.1, "drawn black"

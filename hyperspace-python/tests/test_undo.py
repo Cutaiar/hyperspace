@@ -1006,7 +1006,7 @@ def test_an_idle_app_makes_no_step(tmp_path):
     the analyzer stepping on a synthetic signal that drives the lane
     routes, two hands moving through the box (and out of it, and back),
     `Registry.apply`, `view.integrate`, and — where a GL context can be
-    made — the real renderer drawing every frame (the look-back's and the
+    made — the real renderer drawing every frame (the dream's and the
     effects' clocks). The undo stack holds the eight loads and nothing
     else: no base moves on its own."""
     import fake_hands
@@ -1025,7 +1025,7 @@ def test_an_idle_app_makes_no_step(tmp_path):
     except Exception:  # noqa: BLE001 — no GL here: the frame runs without the draw
         renderer = None
     if renderer is not None:
-        r = boot(tmp_path / "home", fx=renderer.fx.state, dream=renderer.lookback.state,
+        r = boot(tmp_path / "home", fx=renderer.fx.state, dream=renderer.dreamer.state,
                  ghost=renderer.ghost.state)
     else:
         r = boot(tmp_path / "home")
