@@ -11,8 +11,8 @@ runs:
       # import; Mesa + Xvfb for GL and GLFW; libgl-dev for the unversioned
       # libGL.so moderngl's loader opens; glslang, the reference compiler
       # test_patterns holds the face shaders to. The panel's fonts ship in
-      # the package (hyperspace/fonts/). Cached by the list (row 870): an
-      # apt-get update and install was 11-16 s of every run. Bump `version`
+      # the package (hyperspace/fonts/). Cached by the list: an
+      # apt-get update and install costs 11-16 s a run. Bump `version`
       # to refetch the same list.
       uses: awalsh128/cache-apt-pkgs-action@v1
       with:
@@ -23,7 +23,7 @@ runs:
       # a cache hit untars the packages without their install scripts, so
       # nothing runs ldconfig: sounddevice's find_library("portaudio") then
       # finds no libportaudio.so.2 and every module importing the audio
-      # engine fails to collect (PR #453's first sweeps run)
+      # engine fails to collect
       shell: bash
       run: sudo ldconfig
 

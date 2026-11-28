@@ -18,7 +18,7 @@ dependencies = [
     "mlx>=0.20 ; sys_platform == 'darwin'",
     "pyobjc-framework-metal>=12.2 ; sys_platform == 'darwin'",
     "pyobjc-framework-quartz>=12.2 ; sys_platform == 'darwin'",
-    # the segment node's person matte (segment.py, plan 39 T4): Apple Vision
+    # the segment node's person matte (segment.py): Apple Vision
     # on the Neural Engine, through pyobjc — three small wheels, macOS only.
     # Imported only inside the worker's first job, so importing app pulls
     # none of it; elsewhere (or with `[segment] backend = "torch"`) the
@@ -28,17 +28,17 @@ dependencies = [
     # never see one — read over libusb, which libusb-package bundles
     "pyusb>=1.3.1",
     "libusb-package>=1.0.30.0",
-    # Sony pads (DualSense, DualSense Edge) over USB and Bluetooth (pads/hid.py,
-    # plan 42): the back buttons, Fn, touchpad, motion and every output (light
+    # Sony pads (DualSense, DualSense Edge) over USB and Bluetooth (pads/hid.py):
+    # the back buttons, Fn, touchpad, motion and every output (light
     # bar, rumble, trigger resistance) live in vendor-defined report bytes GLFW
     # never shows. The `hidapi` wheel bundles the C library. Imported only when
     # a pad entry with `hid` on opens, so importing app pulls none of it
     "hidapi>=0.14",
-    # OSC devices (osc.py, plan 27 B4): a phone app or any OSC sender as a
+    # OSC devices (osc.py): a phone app or any OSC sender as a
     # `[[devices]] kind = "osc"` entry. Pure Python; imported only when such
     # an entry opens, so importing app pulls none of it
     "python-osc>=1.8",
-    # media sources (hyperspace/media, plan 32): each adapter library is
+    # media sources (hyperspace/media): each adapter library is
     # imported only inside the function that opens a source, so importing
     # app pulls none of them. av = video files (PyAV, bundles FFmpeg)
     "av>=19",
@@ -56,7 +56,7 @@ dependencies = [
 [dependency-groups]
 # The groups below are on by default ([tool.uv] default-groups), so a plain
 # `uv sync` installs them as before; CI leaves `hands` and `dream` out
-# (`uv sync --no-group hands --no-group dream`, docs/ENGINEERING.md §16):
+# (`uv sync --no-group hands --no-group dream`, docs/ENGINEERING.md):
 # a runner has no Ultraleap SDK to build against, and Linux torch wheels
 # pull gigabytes of CUDA no test in the default tier imports.
 #
@@ -76,7 +76,7 @@ hands = [
     "leapc-cffi",
 ]
 # the look-back's dream worker (dream.py, torch on MPS) and the bench in
-# tools/dream_bench/ — part of the app since decision 23 (a), 2026-09-29:
+# tools/dream_bench/ — part of the app:
 # plain `uv sync` installs it. dream.py is still imported lazily, only
 # under `[dream] enabled` (on by default), so importing app pulls no torch.
 dream = [
@@ -93,7 +93,7 @@ dev = [
     "pytest-timeout>=2.3",
     # vendor/leapc-cffi/setup.py's own tests import it (tests/test_leapc_build.py)
     "setuptools",
-    # the type ratchet (tools/type_ratchet.py, row 788). Pinned exactly: a new
+    # the type ratchet (tools/type_ratchet.py). Pinned exactly: a new
     # pyright complains about new things, so moving it is a re-baseline, a
     # decision of its own. [nodejs]: a wheel's node, so a runner needs no other
     "pyright[nodejs]==1.1.414",
@@ -110,10 +110,10 @@ packages = ["hyperspace"]
 testpaths = ["tests"]
 # Tiers (tests/conftest.py applies the markers by name): a bare `pytest` runs
 # the fast tier in parallel; `pytest --all` runs everything; -n0 = serial.
-# A hung test fails by name (ENGINEERING §16, row 589): the thread method,
+# A hung test fails by name (ENGINEERING): the thread method,
 # because the signal method cannot interrupt a call blocked in C
 # (`glfw.init()`, a device open) — it dumps the stacks and exits the worker.
-# --dist load (row 605): a crashed worker's queue goes to its replacement,
+# --dist load: a crashed worker's queue goes to its replacement,
 # so a crash costs its one test; up to four replacements, then the run ends
 # (a hang that recurs ends it, never stalls it). `loadgroup` stalled at 99 %
 # with any replacement; live tests take turns through tests/live_lock.py,
@@ -142,7 +142,7 @@ extend-exclude = ["vendor/", "docs/plans/assets/"]
 hyperspace = "hyperspace.app:main"
 
 [tool.pyright]
-# The ratchet's settings (tools/type_ratchet.py, ENGINEERING §16): the app only,
+# The ratchet's settings (tools/type_ratchet.py, ENGINEERING): the app only,
 # basic mode, the Mac's view of `sys.platform` on every machine. A missing import
 # stays a complaint, a stale one of our own above all; the tool's OPTIONAL names
 # the packages CI lacks. Moving any of this moves every count, so

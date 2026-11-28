@@ -7606,7 +7606,7 @@ T4–T6 on plan 35's wired frame), on `plan-34-feedback` (PR #236). Rows 359,
   `LOOP_BACKDROP` for the faces and the backdrop, and (T5) `LOOP_PLAIN` for
   a wired frame's other loops
   (`tests/test_graph_edit.py::test_a_plain_loop_drag_points_at_a_delay`,
-  `tests/test_graph_wired.py::{test_loops_in_a_wired_frame_keep_plan_34s_words,test_loop_words_in_a_wired_frame}`).
+  `tests/test_graph_wired.py::{test_loops_in_a_wired_frame_keep_the_loop_words,test_loop_words_in_a_wired_frame}`).
 - **Other options.** Refuse every wire on the loop, as `wire_loops` does.
 - **To reverse.** `sink_loops`, `loop_words`, `_read_wires`.
 - **Rough edge.** The check is conservative on an old section: a wire
@@ -8213,7 +8213,7 @@ the wires `frame_wires` writes for an old preset. Plan 34's row 359 names
   `graph.HIDDEN_EDGES = (("shape", "pattern"), ("lookback", "scene"))`.
   `LOOP_FACES` and `LOOP_BACKDROP` keep their words and now also name
   explicit loops through `scene.geometry` and `backdrop.scene`
-  (`tests/test_graph_wired.py::{test_loops_in_a_wired_frame_keep_plan_34s_words,test_loop_words_in_a_wired_frame}`).
+  (`tests/test_graph_wired.py::{test_loops_in_a_wired_frame_keep_the_loop_words,test_loop_words_in_a_wired_frame}`).
   This supersedes the `FRAME_EDGES` of plan 34's row 359; plan 34's own
   `delay`, `resize`, `echo.k` and `dream` ids do not clash with V2.
 - **Other options.** Keep `frame` as a hidden node for the loop check.
@@ -11861,7 +11861,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Answer.** (rec) — pending the owner; built as recommended.
 - **Recommended.** Checked with the panel driver at `SIDE_MIN` (240 px)
   and `SIDE_W` (320 px), every control's rect inside the pane
-  (`test_each_stage2_section_draws_in_the_pane_and_nothing_passes_its_edge`).
+  (`test_each_later_section_draws_in_the_pane_and_nothing_passes_its_edge`).
   `ui.beside(w)` stands where `same_line()` stood in a row that can
   spill: it keeps the line when the next item ends by the region's edge,
   else starts a row. A section note is cut to what its title leaves

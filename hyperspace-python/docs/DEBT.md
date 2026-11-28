@@ -89,3 +89,10 @@ fix deletes the entry and its pointers.
 - **What it does now:** while a node-mode desk holds a param, every modulator route on it (LFO, envelope, analyzer lane, sequencer, modifier) is left out of the `Router` plan, and it comes back when the desk lets go. There is no way to keep a chosen modulator running under node mode.
 - **The proper fix:** a per-patch or per-controller setting that lets chosen modulators keep running while node mode holds their param.
 - **Cost while it stays:** a param cannot be modulated and played from a node-mode controller at the same time.
+
+### both-layers-modules
+
+- **Where:** `tests/test_layer_boundary.py:BOTH_LAYERS` and `META_NAMES`; the modules listed in `BOTH_LAYERS`: `hyperspace/params.py`, `routing.py`, `routing_sources.py`, `library.py`, `undo.py`, `learn.py`, `outputs.py`, `groupwords.py`, `hot_slots.py`, `writes.py`
+- **What it does now:** each of these modules holds classes of both the patch layer and the meta layer (for example `params.MetaRegistry`, `routing.MetaTable`, `library.MetaMarks`), which an import cannot tell apart. The boundary test cannot classify them as one side, so `META_NAMES` lists the meta layer's names and `test_a_patch_module_takes_only_the_listed_meta_names_from_a_module_of_both` checks what a patch module takes from them.
+- **The proper fix:** split each module by layer, so the boundary test can check imports directly and `BOTH_LAYERS` and `META_NAMES` go away.
+- **Cost while it stays:** the guard is by name prefix, so a meta-layer name that does not start with a `META_NAMES` prefix crosses unseen; the attribute-handle test covers only the listed handles.

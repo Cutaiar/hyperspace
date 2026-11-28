@@ -316,7 +316,7 @@ repeat: works; restore. *Fail:* no prompt → `Learn.learn_source`
 furthest).
 
 **20. `hands-pinch`: pinch zoom while scrolling.**
-Headless: `tests/test_routing.py::test_audit_1_a_relative_writer_on_the_base_holds_under_modulation`.
+Headless: `tests/test_routing.py::test_a_relative_writer_on_the_base_holds_under_modulation`.
 PRESETS: `hands-pinch`. Pinch L middle, move left hand: zoom follows.
 Keep pinching; scroll render window (wheel/trackpad). *Pass:* no
 runaway; release: zoom at scroll's value, not hand's. *Fail:* drift →
@@ -331,7 +331,7 @@ frame later before), nothing else moves
 movement → route in preset (ROUTING); depth stuck → `Follower.live`.
 
 **22. A knob on a hand-owned param.** (APC40)
-Headless: `tests/test_routing.py::test_audit_3_a_knob_moves_the_return_value_under_a_hand tests/test_hands.py::{test_a_hand_leaving_the_box_releases_its_position_row,test_a_hand_outside_the_box_releases_its_rows_and_the_base_returns}`.
+Headless: `tests/test_routing.py::test_a_knob_moves_the_return_value_under_a_hand tests/test_hands.py::{test_a_hand_leaving_the_box_releases_its_position_row,test_a_hand_outside_the_box_releases_its_rows_and_the_base_returns}`.
 PRESETS: `hands-play`; right hand in box (owns Brightness). Turn K1.
 *Pass:* setting moves (readout base, ring), gliding with knob
 smoothing (80 ms at launch); picture doesn't; hand out (past its faces,
@@ -3702,7 +3702,7 @@ lights it in place. *Fail:* a placeholder named after a scheme
 (`axis@p2`).
 
 **259. A patch saved on one Mac loads on the other through the shared library.** (two Macs, a shared folder)
-Headless: `tests/test_modifiers.py::test_modifiers_live_in_the_preset_and_never_in_bindings_json`, `tests/test_graphview.py::test_layout_round_trips_through_the_preset_and_the_show`, `tests/test_graph_wires.py::test_a_wire_list_round_trips_and_d1_keys_read_as_wires`.
+Headless: `tests/test_modifiers.py::test_modifiers_live_in_the_preset_and_never_in_bindings_json`, `tests/test_graphview.py::test_layout_round_trips_through_the_preset_and_the_show`, `tests/test_graph_wires.py::test_a_wire_list_round_trips_and_short_keys_read_as_wires`.
 **Both Macs on this build** (`plan-28-30-integration`, or `main` once it
 is merged), pointed at the same `[library] path` (as 139). On Mac A
 build 249's patch, drag its nodes, add a wire (252's, to output 1), save

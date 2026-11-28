@@ -1,4 +1,4 @@
-# The sweep tier (row 870): tests that walk a whole library of content
+# The sweep tier: tests that walk a whole library of content
 # (every effect, knob, shape or corpus loadable patch), soaks, and finished
 # migrations' old-way checks. Out of tests.yml, the merge gate: here on a
 # runner of its own when a PR touches what they walk, and after every push

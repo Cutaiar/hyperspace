@@ -615,7 +615,7 @@ Create `tests/fixtures/presets/hands-glass-only.json`,
   the history into `output.2.image`); goldens recorded once, "N4
   fixture, new".
 
-**Tests** (`tests/test_graph_wires.py`): `test_a_wire_list_round_trips_and_d1_keys_read_as_wires`,
+**Tests** (`tests/test_graph_wires.py`): `test_a_wire_list_round_trips_and_short_keys_read_as_wires`,
 `test_a_wire_into_an_output_overrides_its_switch_and_an_unnamed_output_keeps_them`,
 `test_a_wire_of_the_wrong_type_or_into_a_missing_port_is_a_note_and_the_default`,
 `test_a_cycle_of_wires_is_refused`,

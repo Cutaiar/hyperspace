@@ -42,7 +42,7 @@
 ## Review Focus
 
 1. **No pass samples the texture it writes.** (T2, built: `tests/test_graph_delay.py::{test_a_delay_ping_pongs_half_float,test_a_loop_of_effects_never_reads_what_it_writes}`.) T4 adds a loop through a resize: `test_a_loop_through_a_resize_and_a_delay_is_legal`.
-2. **Every sink loop is refused at read, and the wire refused is the one closing the loop.** Built: T1 for an old section, and plan 35 for a wired one (`tests/test_graph_wired.py::test_loops_in_a_wired_frame_keep_plan_34s_words`, `tests/test_graph_edit.py::test_a_sink_loop_drag_is_refused_in_words`). T5's `LOOP_PLAIN` changes only the words of a wired frame's other loops.
+2. **Every sink loop is refused at read, and the wire refused is the one closing the loop.** Built: T1 for an old section, and plan 35 for a wired one (`tests/test_graph_wired.py::test_loops_in_a_wired_frame_keep_the_loop_words`, `tests/test_graph_edit.py::test_a_sink_loop_drag_is_refused_in_words`). T5's `LOOP_PLAIN` changes only the words of a wired frame's other loops.
 3. **Nothing before T4 draws differently.** No node before `ResizeNode` takes a new path: the 741 goldens and the signature cases are unchanged after T4 and T5 (every task: the golden suite, `tests/test_graph_frame.py`).
 4. **Feedback survives what it should and only that.** (T2, built: `test_a_graph_rebuild_keeps_the_delay`, `test_a_size_change_loses_no_frame`, `test_a_delay_leaving_the_graph_is_released`.) A resize's size step remakes its own target once each way: `test_a_size_step_reallocates_once_each_way`.
 5. **A resize's saving is real.** A delay through it holds its size, and an effect after it runs in that size's pool (T4: `test_a_delay_through_a_resize_holds_a_small_buffer`, `test_an_effect_after_a_resize_runs_at_its_size`).
