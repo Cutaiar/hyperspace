@@ -141,6 +141,14 @@ line moves to `/13` and they resave byte for byte (row 1208).
    end-to-end test.
 6. Docs: DECISIONS, the register, ARCHITECTURE, hand checks.
 
+## Trying it by hand
+
+`loadable/clouds/cloud-test.json` (its README says how to copy it and which
+devices to list): three clouds — `cloud` naming the recorded `scan`, wired,
+four orbiting copies, turned; `cloud.2` naming the Kinect's `room`, wired,
+moved right; `cloud.3` naming none, unwired, to pick and wire on GRAPH.
+`tests/test_cloud_test_patch.py` holds it opening with no note.
+
 ## Still open
 
 - Row 1209: whether a device that connects should offer itself on a cloud
