@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/12",
+ "schema": "hyperspace.loadable/13",
  "name": "distort-hand-wave",
  "note": "Ripples from the centre you raise with a hand. No sound needed: the right hand's height is Amount, from nothing at the bottom; the left hand's height brings in the colour split.",
  "graph": {

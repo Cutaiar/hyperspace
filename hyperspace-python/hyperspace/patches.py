@@ -150,7 +150,7 @@ KEYED = "keys"
 # what is a name but no node of a wired frame (an echo pin, `fx`, `frame`)
 MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "matte", "cut",
             "segment", "hands", "layer", "guide", "scene", "shape", "backdrop", "pattern",
-            "lookback")
+            "lookback", "cloud")
 # what a frame holds one of: never renamed by a spawn (`scene.2` is no node;
 # `dream.2` may be declared but no wire may touch it, D2 of plan 36), so a
 # host that already has one refuses the spawn in words (`Landing.taken`).
@@ -163,10 +163,10 @@ ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern")
 REPLACEABLE: tuple[str, ...] = ()        # (plan 90 H3: the dream was the one)
 # the render nodes the GRAPH page never deletes and a patch never holds —
 # `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
-# plan 43 C2) and the clouds (the meta controller's, `NOT_REMOVABLE`); the windows are
-# refused by kind, `output`. Copied, not imported (graphview is the app's);
-# tests/test_patches.py holds the two lists equal
-FIXTURE_NODES = ("camera", "cloud")
+# plan 43 C2); the windows are refused by kind, `output`. (Plan 93: a point
+# cloud is the patch's own node, held like a matte.) Copied, not imported
+# (graphview is the app's); tests/test_patches.py holds the two lists equal
+FIXTURE_NODES = ("camera",)
 # the modulation banks a patch carries voices of, and the canvas ids
 LFO, ENV, MOD, MACRO = "lfo", "env", modmod.SCHEME, "macro"
 VOICES = (LFO, ENV)
@@ -209,7 +209,7 @@ COPY_GONE_WORDS = ("{name} is gone (plan 89): an effect draws on another picture
                    "of its own; left out")
 # a node entry of a kind that is no node a section declares but names a
 # thing a patch may not hold (`check`): said as that thing
-_KIND_WORDS = {"output": WINDOW_WORDS, "camera": CAMERA_WORDS, "cloud": FIXTURE_WORDS,
+_KIND_WORDS = {"output": WINDOW_WORDS, "camera": CAMERA_WORDS,
                "channel": CHANNEL_WORDS, "media": CHANNEL_WORDS, "copy": COPY_GONE_WORDS}
 
 
@@ -468,15 +468,13 @@ def _check_group(doc: Mapping) -> list[str]:
 def _kind(name: str) -> str | None:
     """A render node name's kind as the GRAPH page reads it
     (`graphview.kind_of`, restated): a wired frame's kinds, All outputs as
-    an output, the look's camera and the meta controller's clouds."""
+    an output and the look's camera (plan 93: a cloud is a wired kind)."""
     if not isinstance(name, str):
         return None
     if name == G.ALL_OUTPUTS:
         return "output"
     if name == "camera":
         return "camera"
-    if name == G.CLOUD_KIND or name.startswith(f"{G.CLOUD_KIND}."):
-        return "cloud"
     return G.wire_node_kind(name, wired=True)
 
 
@@ -1020,7 +1018,7 @@ def _macro_n(mid: Any) -> int:
 def check(doc: Any) -> list[str]:
     """The reasons `doc` is no patch this build can spawn, in words — []
     when it is one. The schema and the shape of every key; a node a patch
-    may not hold (an output, a cloud, the camera, a media channel); a port of an unknown type or onto no
+    may not hold (an output, the camera, a media channel); a port of an unknown type or onto no
     member; a wire to a node the patch lacks that no port covers; a value
     of a param no member has (D5); a lane envelope 1–5."""
     if not isinstance(doc, Mapping):
@@ -1177,11 +1175,11 @@ def check(doc: Any) -> list[str]:
 INSIDE, CONTROL, INTO, OUT = "inside", "control", "into", "out"
 NESTED_WORDS = "{name} is a group: a group holds nodes, not groups; left out"
 # the meta controller's own render kinds, always there — its windows (an output, All
-# outputs), its media channels (this Mac's files) and its clouds — which no
+# outputs) and its media channels (this Mac's files; plan 93: no cloud) — which no
 # loadable patch file holds as a node; `graphview.FIXTURE_KINDS` is this list. Plan 50
 # (review fix 1): no group holds one either, so a group can never carry what
 # no patch can
-FIXTURE_KINDS = ("output", "channel", "cloud")
+FIXTURE_KINDS = ("output", "channel")
 NEVER_GROUPED = FIXTURE_KINDS
 
 
@@ -1189,7 +1187,7 @@ def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
            ) -> tuple[_Members, list[str]]:
     """The members a region of GRAPH canvas ids may hold, and, in words,
     every id it may not (P1's rule — `lift`'s, and the GRAPH page's Group):
-    an output, the camera or a cloud, a media channel, a hands' layer or
+    an output, the camera, a media channel, a hands' layer or
     guide without its hands, the sequencer, a lane envelope, a node the section lacks, a modifier
     the table lacks, a group (no nesting),
     any other canvas id (a device, the analyzer: the meta controller's). Pure.
@@ -1210,7 +1208,7 @@ def groupable(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
     its modifiers, its LFOs and envelopes (the lane envelopes too) and the
     macros. Refused here only what no loadable patch holds and what a group cannot:
     the meta controller's render kinds (`FIXTURE_KINDS`: a window, All outputs, a media
-    channel, a cloud), a device, the analyzer, the sequencer, a node or
+    channel), a device, the analyzer, the sequencer, a node or
     modifier the loadable patch lacks, a group (no nesting). Whether it can be saved
     as a patch is asked at the save (`select`). Pure."""
     return _select(spec, table, node_ids, save=False)
@@ -1361,7 +1359,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
 
     Returns ``(doc, refused)``: the file's dict (``schema``, ``name`` and
     ``note`` empty, for the caller to fill) and, in words, every id it left
-    out — an output, the camera or a cloud, a media channel,
+    out — an output, the camera, a media channel,
     the sequencer, a lane envelope, a copy without its original, a hands'
     layer or guide without its hands,
     a host macro's subscriber on a member. The caller says them and saves

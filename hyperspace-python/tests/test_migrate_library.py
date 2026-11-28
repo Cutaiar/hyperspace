@@ -88,11 +88,11 @@ def test_a_dry_run_writes_nothing(tmp_path, capsys):
     assert _tree(lib) == before
     assert not home.exists() or not list(home.glob("library-backup-*"))
     assert "dry run, nothing is written" in out
-    assert "trip-night.json" in out and "2 → 12" in out
-    assert "glimmer-bug.json" in out and "5 → 12" in out
-    assert "already /12, untouched" in out
+    assert "trip-night.json" in out and "2 → 13" in out
+    assert "glimmer-bug.json" in out and "5 → 13" in out
+    assert "already /13, untouched" in out
     assert "broken: does not load" in out
-    assert "would rewrite 2 as /12, leave 1 untouched (already /12), skip 1" in out
+    assert "would rewrite 2 as /13, leave 1 untouched (already /13), skip 1" in out
 
 
 def test_apply_backs_up_migrates_and_leaves_seven_and_the_rest_alone(tmp_path, capsys):
@@ -112,17 +112,17 @@ def test_apply_backs_up_migrates_and_leaves_seven_and_the_rest_alone(tmp_path, c
                             if not k.startswith(("trash/", "fx/"))}
     for name in ("trip-night.json", "glimmer-bug.json"):
         doc = json.loads(after[f"loadable/{name}"][0])
-        assert doc["schema"] == "hyperspace.loadable/12", name
+        assert doc["schema"] == "hyperspace.loadable/13", name
         assert doc["name"] == json.loads(before[f"presets/{name}"][0])["name"]
     for name in ("acid-scene.json", "broken.json", "trip-night.json.bak-20261001"):
         assert after[f"loadable/{name}"][0] == before[f"presets/{name}"][0], name
-    assert "rewrote 2 as /12, left 1 untouched (already /12), skipped 1" in out
+    assert "rewrote 2 as /13, left 1 untouched (already /13), skipped 1" in out
     assert not [p for p in (lib / "loadable").iterdir() if p.name.endswith(".tmp")]
     # and once more: everything is /10 now, so nothing to do but the refusal
     again = _tree(lib)
     assert _tool().main(["--library", str(lib)], picture=same_picture) == 1
     assert _tree(lib) == again
-    assert "would rewrite 0 as /12, leave 3 untouched" in capsys.readouterr().out
+    assert "would rewrite 0 as /13, leave 3 untouched" in capsys.readouterr().out
 
 
 def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
@@ -141,9 +141,9 @@ def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
     assert sorted(p.name for p in out_dir.iterdir()) == [
         "acid-scene.json", "glimmer-bug.json", "trip-night.json"]
     for p in out_dir.iterdir():
-        assert json.loads(p.read_text())["schema"] == "hyperspace.loadable/12", p.name
+        assert json.loads(p.read_text())["schema"] == "hyperspace.loadable/13", p.name
     assert (out_dir / "acid-scene.json").read_bytes() == before["presets/acid-scene.json"][0]
-    assert "wrote 3 as /12 into" in capsys.readouterr().out
+    assert "wrote 3 as /13 into" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         _tool().main(["--library", str(lib), "--to", str(out_dir), "--apply"])
 
@@ -162,11 +162,11 @@ def test_a_loadable_whose_picture_moves_is_not_written_unless_forced(tmp_path, c
     assert _tree(lib)["loadable/glimmer-bug.json"][0] == before["presets/glimmer-bug.json"][0]
     assert "glimmer-bug: round-trip picture differs (8 of 8 outputs)" in out
     assert json.loads((lib / "loadable" / "trip-night.json").read_text())["schema"] == \
-        "hyperspace.loadable/12"
+        "hyperspace.loadable/13"
     assert _tool().main(["--library", str(lib), "--apply", "--force", "glimmer-bug"],
                         picture=moved) == 0
     assert json.loads((lib / "loadable" / "glimmer-bug.json").read_text())["schema"] == \
-        "hyperspace.loadable/12"
+        "hyperspace.loadable/13"
 
 
 def test_an_old_file_whose_section_is_not_read_is_never_written(tmp_path, capsys):
@@ -186,7 +186,7 @@ def test_an_old_file_whose_section_is_not_read_is_never_written(tmp_path, capsys
     assert _tree(lib)["loadable/odd.json"][0] == before["presets/odd.json"][0]
     assert "odd: its graph section was not read by this build" in out
     assert json.loads((lib / "loadable" / "trip-night.json").read_text())["schema"] == \
-        "hyperspace.loadable/12"
+        "hyperspace.loadable/13"
 
 
 def test_a_file_that_raises_runtime_error_is_skipped_alone(tmp_path, capsys, monkeypatch):
@@ -209,7 +209,7 @@ def test_a_file_that_raises_runtime_error_is_skipped_alone(tmp_path, capsys, mon
     assert _tree(lib)["loadable/glimmer-bug.json"][0] == before["presets/glimmer-bug.json"][0]
     assert "glimmer-bug: does not load: wired_section: the frame did not settle" in out
     assert json.loads((lib / "loadable" / "trip-night.json").read_text())["schema"] == \
-        "hyperspace.loadable/12"
+        "hyperspace.loadable/13"
 
 
 def test_the_library_defaults_to_the_configs(tmp_path, capsys):
@@ -240,7 +240,7 @@ def test_the_real_picture_check_passes_an_old_loadable(tmp_path, capsys):
     assert out.count("round-trip picture: same") == 3
     for name in ("trip-night", "glimmer-bug", "acid-scene"):
         assert json.loads((lib / "loadable" / f"{name}.json").read_text())["schema"] == \
-            "hyperspace.loadable/12"
+            "hyperspace.loadable/13"
 
 
 def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
@@ -260,7 +260,7 @@ def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
     out_dir = tmp_path / "out"
     _tool().main(["--library", str(lib), "--to", str(out_dir)], picture=same_picture)
     assert json.loads((out_dir / "party" / "deep" / "bug.json").read_text())["schema"] \
-        == "hyperspace.loadable/12"
+        == "hyperspace.loadable/13"
     capsys.readouterr()
     hidden = (loadable_dir / ".cache" / "x.json").read_bytes()
     assert _tool().main(["--library", str(lib), "--apply"], picture=same_picture) == 1
@@ -268,6 +268,51 @@ def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
     assert "party/night.json" in out and "party/deep/bug.json" in out
     loadable_dir = lib / "loadable"
     for rel in ("party/night.json", "party/deep/bug.json"):
-        assert json.loads((loadable_dir / rel).read_text())["schema"] == "hyperspace.loadable/12", rel
+        assert json.loads((loadable_dir / rel).read_text())["schema"] == "hyperspace.loadable/13", rel
     assert (loadable_dir / ".cache" / "x.json").read_bytes() == hidden
-    assert "rewrote 4 as /12" in out
+    assert "rewrote 4 as /13" in out
+
+
+def test_the_clouds_an_old_file_drew_are_this_macs_cloud_devices(tmp_path):
+    """Plan 93: the tool makes an old file's clouds nodes for the cloud devices this Mac
+    lists — the shared list's, else the config's seed — so its resave keeps them."""
+    tool = _tool()
+    lib, home = tmp_path / "lib", tmp_path / "home"
+    lib.mkdir()
+    home.mkdir()
+    assert tool.cloud_roles_of(lib, home) == ()
+    (home / "config.toml").write_text('[[devices]]\nrole = "scan"\nkind = "cloud"\nfile = "x.npz"\n')
+    assert tool.cloud_roles_of(lib, home) == ("scan",)
+    (lib / "devices.json").write_text(json.dumps({"schema": "devices/1", "devices": [
+        {"role": "apc40", "kind": "midi"}, {"role": "room", "kind": "kinect"},
+        {"role": "scan", "kind": "cloud"}]}))
+    assert tool.cloud_roles_of(lib, home) == ("room", "scan")
+    src = ROOT / "tests" / "corpus" / "loadable" / "party-trip.json"
+    old = json.loads(src.read_text())
+    old["schema"] = "hyperspace.loadable/12"
+    path = tmp_path / "old.json"
+    path.write_text(json.dumps(old))
+    from hyperspace import headless
+    data, _notes, _ = headless.resave(path, tmp_path / "scratch", clouds=("room",))
+    doc = json.loads(data)
+    assert doc["schema"] == "hyperspace.loadable/13"
+    assert {"kind": "cloud", "device": "room"} in doc["graph"]["nodes"]
+    assert {"from": "cloud", "to": "scene.geometry"} == doc["graph"]["wires"][0]
+
+
+def test_the_clouds_are_the_checked_list_and_an_empty_list_is_the_list(tmp_path):
+    """As the app reads it (`config.listed_devices`): a role trimmed, a duplicate dropped;
+    a list that reads, even empty, is the list — the config's seed is not read then."""
+    tool = _tool()
+    lib, home = tmp_path / "lib", tmp_path / "home"
+    lib.mkdir()
+    home.mkdir()
+    (home / "config.toml").write_text('[[devices]]\nrole = "seed"\nkind = "cloud"\nfile = "x.npz"\n')
+    (lib / "devices.json").write_text(json.dumps({"schema": "devices/1", "devices": []}))
+    assert tool.cloud_roles_of(lib, home) == ()
+    (lib / "devices.json").write_text(json.dumps({"schema": "devices/1", "devices": [
+        {"role": " scan ", "kind": "cloud", "file": "x.npz"},
+        {"role": "scan", "kind": "cloud", "file": "y.npz"}]}))
+    assert tool.cloud_roles_of(lib, home) == ("scan",)
+    (lib / "devices.json").write_text("{ not json")
+    assert tool.cloud_roles_of(lib, home) == ("seed",)

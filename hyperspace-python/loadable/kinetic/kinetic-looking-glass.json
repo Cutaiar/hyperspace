@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/12",
+ "schema": "hyperspace.loadable/13",
  "name": "kinetic-looking-glass",
  "note": "Step in front of the webcam. You are the backdrop, folded into a kaleidoscope, and you are on every face of the tesseract. Right hand height counts the mirrors, rolling it swirls them, two hands apart zooms in. Raise the left hand and you turn to neon line art.",
  "graph": {

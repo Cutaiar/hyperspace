@@ -126,6 +126,48 @@ class MatteState:
     ramp: int = 0                # plan 90 (H2, Q23): an index into `KEY_RAMPS`, the key's
 
 
+@dataclass
+class CloudState:
+    """One point-cloud node's values (plan 93, `cloud[.n].*`:
+    params.declare_clouds), read once a frame by the renderer
+    (`ViewState.clouds`, `graph.Frame.clouds`). A shape with only vertices
+    (the owner, 2026-11-28), so its pose and its copies carry the shape's own
+    names — `zoom` (its scale: `cloud.scale`, the cloud's units in the
+    world's), `yaw`, `pitch`, `pan` (world units, y down), `instances` and
+    `inst_*` — and the shape's code reads them unchanged (`field.field`,
+    `Renderer._copies_of`, `geometry.turn_matrix`). Its look: `size` a point's
+    radius in logical px, `bright`, `colors`. The defaults draw a cloud as
+    plan 26 A4b drew it: one copy at the origin, 0.3 of its units a world
+    unit, unturned."""
+
+    size: float = 2.0            # a point's radius, logical px
+    scale: float = 0.3           # the cloud's units → world units (shape radii)
+    bright: float = 1.0          # × the point's colour
+    colors: bool = True          # the cloud's own colours; off (or none): white
+    yaw: float = 0.0             # its turn, as camera.yaw / pitch turn the shape
+    pitch: float = 0.0
+    pan: list[float] = field(default_factory=lambda: [0.0, 0.0])
+    instances: int = 1           # its copies, as the shape's (view.instances …)
+    inst_layout: int = 0
+    inst_fit: bool = False
+    inst_spacing: float = 1.0
+    inst_persp: float = 0.5
+    inst_motion: int = 0
+    inst_amp: float = 0.25
+    inst_rate: float = 1.0
+    inst_phase: float = 0.0      # inst_rate integrated by the host (`ViewState.integrate`)
+
+    @property
+    def zoom(self) -> float:
+        """Its scale, by the shape's name for it (`field.field` reads `zoom`)."""
+        return self.scale
+
+    @property
+    def screen_strokes(self) -> bool:
+        """A point's size is in px whatever its copy's scale (`_copies_of`'s pad)."""
+        return True
+
+
 # plan 87, black is clear: what a keyed node measures a pixel's brightness
 # by — the largest of r, g, b, or Rec. 709 luma — by index (`key.<node>.measure`)
 KEY_MEASURES = ("peak", "luma")
@@ -264,13 +306,6 @@ class ViewState(writes.Observed):
     # calibration is fitted to (ghost.calibration)
     eye_fov: float = EYE_FOV           # degrees across the shorter side
     eye_distance: float = EYE_DISTANCE  # world units from the origin
-    # the point clouds (cloud.* — meta controller; plan 26 A4b, graph.PointCloud):
-    # how a recorded or live cloud is drawn in the shared camera. Nothing
-    # reads them until a `cloud` device is listed
-    cloud_size: float = 2.0      # a point's radius, logical px
-    cloud_scale: float = 0.3     # the cloud's units → world units (shape radii)
-    cloud_bright: float = 1.0    # × the point's colour
-    cloud_colors: bool = True    # the cloud's own colours; off (or none): white
     instances: int = 1           # synchronized copies, laid out by inst_layout; 0 draws nothing
     # 0 grid, 1 hex (a honeycomb spiral), 2 ring; 3–8 the 3D lattices: cubic,
     # bcc, fcc, hcp, hex prism, diamond (field.py)
@@ -326,6 +361,10 @@ class ViewState(writes.Observed):
     # plan 39 T4: each segment node's values (`segment[.n].*`, declared from
     # the loadable patch's graph: params.declare_segments) — segment name → its state
     segments: dict[str, SegmentState] = field(default_factory=dict)
+    # plan 93: each point-cloud node's look, pose and copies (`cloud[.n].*`,
+    # declared from the loadable patch's graph: params.declare_clouds) — cloud
+    # name → its state
+    clouds: dict[str, CloudState] = field(default_factory=dict)
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference
@@ -342,6 +381,8 @@ class ViewState(writes.Observed):
         each frame, the phase is (t + k·dt) · rate at a constant rate."""
         self.inst_phase = (t * self.inst_rate) % INST_PERIOD
         self.media_phase = (t * self.media_rate) % MEDIA_PERIOD
+        for c in self.clouds.values():         # plan 93: each cloud's copies, as the shape's
+            c.inst_phase = (t * c.inst_rate) % INST_PERIOD
 
     def integrate(self, dt: float) -> None:
         """The frame() angle update: ang[p] += dt·speed·RATE[p]·rate[p].
@@ -362,6 +403,8 @@ class ViewState(writes.Observed):
         the wall clock they replace did."""
         self.inst_phase = (self.inst_phase + dt * self.inst_rate) % INST_PERIOD
         self.media_phase = (self.media_phase + dt * self.media_rate) % MEDIA_PERIOD
+        for c in getattr(self, "clouds", {}).values():   # plan 93: as the shape's
+            c.inst_phase = (c.inst_phase + dt * c.inst_rate) % INST_PERIOD
         if self.three_d != self.held:
             R = rot_matrix(self.ang)
             T = rot_matrix([*self.ang[:3], 0.0, 0.0, 0.0])

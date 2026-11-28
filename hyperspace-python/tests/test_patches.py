@@ -143,16 +143,17 @@ def test_patches_is_a_leaf():
 
 def test_the_meta_nodes_are_graphviews_not_removable():
     """`FIXTURE_NODES` restates the render nodes the GRAPH page refuses to delete
-    (`graphview.spec_name`): the clouds as the rig's (`NOT_REMOVABLE`), the
-    camera as the look's one (`CAMERA_KEPT`, plan 43 C2); the two lists
-    agree, and the patch reads a name's kind as the canvas does."""
-    assert set(patches.FIXTURE_NODES) == {graphview.CAMERA, "cloud"}
-    for name in ("camera", "cloud", "cloud.2"):
-        got, why = graphview.spec_name(f"render:{name}")
-        said = graphview.CAMERA_KEPT if name == "camera" else graphview.NOT_REMOVABLE
-        assert got is None and why == said.format(label=graphview.label_of(name)), (name, why)
-        words = patches.CAMERA_WORDS if name == "camera" else patches.FIXTURE_WORDS
-        assert patches.held_words(name) == words.format(name=name)
+    (`graphview.spec_name`): the camera as the look's one (`CAMERA_KEPT`, plan
+    43 C2) — plan 93: a cloud is the patch's own, named, held and deleted like
+    a matte; the two lists agree, and the patch reads a name's kind as the
+    canvas does."""
+    assert set(patches.FIXTURE_NODES) == {graphview.CAMERA}
+    got, why = graphview.spec_name("render:camera")
+    assert got is None and why == graphview.CAMERA_KEPT.format(label=graphview.label_of("camera"))
+    assert patches.held_words("camera") == patches.CAMERA_WORDS.format(name="camera")
+    for name in ("cloud", "cloud.2"):
+        assert graphview.spec_name(f"render:{name}") == (name, None)
+        assert patches.held_words(name) is None
     for name in ("acid", "acid.2", "composite.3", "hands.2", "hands.2.layer", "segment.fg",
                  "output.all", "output.2", "channel.a", "scene", "lookback.2", "camera",
                  "cloud.1"):
@@ -175,7 +176,6 @@ def test_the_example_is_a_patch():
 @pytest.mark.parametrize("edit, said", [
     (lambda d: d["nodes"].append({"kind": "camera"}),
      "camera is the look's one camera, never a patch's; left out"),
-    (lambda d: d["nodes"].append({"kind": "cloud"}), "cloud is the meta controller's; left out"),
     (lambda d: d["nodes"].append({"kind": "output"}),
      "output is the meta controller's window; left out — a patch's picture leaves by a port"),
     (lambda d: d["nodes"].append({"kind": "channel"}),
@@ -187,8 +187,8 @@ def test_the_example_is_a_patch():
     (lambda d: d["wires"].append({"from": "channel.a", "to": "wobble.aux"}),
      ("wire channel.a → wobble.aux: channel.a is a media channel, this Mac's files; left "
       "out — a patch reads one through a port")),
-    (lambda d: d["wires"].append({"from": "cloud.1", "to": "acid.aux"}),
-     "wire cloud.1 → acid.aux: cloud.1 is the meta controller's; left out"),
+    (lambda d: d["wires"].append({"from": "cloud.2", "to": "acid.aux"}),
+     "wire cloud.2 → acid.aux crosses the edge: a port says it"),
     (lambda d: d["ports"][0].update(type="colour"),
      "port in: type 'colour' is not one of image, mask, geometry, value, field, stack"),
     (lambda d: d["wires"].append({"from": "acid", "to": "zoomblur.image"}),

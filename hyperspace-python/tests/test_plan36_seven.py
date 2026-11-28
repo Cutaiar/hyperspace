@@ -98,7 +98,7 @@ def _app_with(tmp_path, name: str, doc: dict):
 
 def _build(app, n: int = 2) -> G.Graph:
     gs = app.loaded_patch.graph
-    return G.build_graph(_views(n), gs.wiring, (), tuple(sorted(gs.fx.specs)))
+    return G.build_graph(_views(n), gs.wiring, tuple(sorted(gs.fx.specs)))
 
 
 # ---------------------------------------------------------------- a /7 is read as it is

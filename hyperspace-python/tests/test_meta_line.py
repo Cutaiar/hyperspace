@@ -162,13 +162,16 @@ def test_an_old_loadable_opened_with_an_old_show_takes_its_look_and_cuts_end_to_
     assert not pr.is_dirty()
     # the old loadable patch, loaded with the show open: the show's look and cuts
     assert pre.load("OLD") == []
-    assert reg["ghost.alpha"].value == 0.25 and reg["cloud.size"].value == 3.5
+    assert reg["ghost.alpha"].value == 0.25
+    # (plan 93: no cloud device listed here, so no cloud was drawn and none is
+    # made — the show's cloud look belongs to no node, dropped quietly)
+    assert "cloud.size" not in reg
     assert reg["ghost.style"].value == 2
     assert pre.bus.cut == {CUT} and G.bus_cuts_of(pre).cut == {CUT}
     assert rig.lib.current("dream") is None                   # no module label
     assert not rig.lib.is_dirty("loadable")
     doc = pre.document("OLD")
-    assert doc["schema"] == "hyperspace.loadable/12" and "modules" not in doc
+    assert doc["schema"] == "hyperspace.loadable/13" and "modules" not in doc
     assert doc[loadable.BUS_KEY] == {"cut": [CUT.to_json()]}
     assert doc["values"]["ghost.alpha"] == 0.25 and "ghost.mirror" not in doc["values"]
     # the show saved: /3, the meta controller, kept as /2 beside it
@@ -254,7 +257,7 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     out = capsys.readouterr().out
     assert {p: p.read_bytes() for p in lib.rglob("*") if p.is_file()} == tree
     assert "1 bus cut(s) into every loadable patch: output.all.image → output.2.image" in out
-    assert "would rewrite 3 as /12, leave 0 untouched (already /12)" in out
+    assert "would rewrite 3 as /13, leave 0 untouched (already /13)" in out
     assert "show rig.hyp.json → installs/rig.json" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     out = capsys.readouterr().out
@@ -262,9 +265,12 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     assert len(backups) == 1
     for rel in ("loadable/old.json", "loadable/party/deep.json"):
         doc = json.loads((lib / rel).read_text())
-        assert doc["schema"] == "hyperspace.loadable/12", rel
+        assert doc["schema"] == "hyperspace.loadable/13", rel
         assert doc["bus"] == {"cut": [CUT.to_json()]}, rel
-        assert {k: doc["values"][k] for k in LOOK} == LOOK, rel
+        # (plan 93: no cloud device on this Mac, so no cloud node — the cloud look goes)
+        hands = {k: v for k, v in LOOK.items() if not k.startswith("cloud.")}
+        assert {k: doc["values"][k] for k in hands} == hands, rel
+        assert "cloud.size" not in doc["values"], rel
         assert "modules" not in doc and "ghost.mirror" not in doc["values"], rel
         assert json.loads((backups[0] / rel).read_text())["schema"] == graphmigrate.EYE_SCHEMA
     # (plan 90 H2, H3: every `dream.*` goes, the dream off and undriven)
@@ -276,16 +282,16 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     doc = json.loads((lib / "installs" / "rig.json").read_text())
     assert doc["schema"] == "hyperspace.install/1" and "rig" not in doc
     assert doc["tuning"] == {"tempo.bpm": 128.0, "ghost.mirror": True}
-    assert "rewrote 3 as /12" in out and "wrote 1 install file(s)" in out
+    assert "rewrote 3 as /13" in out and "wrote 1 install file(s)" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     assert "nothing to do" in capsys.readouterr().out
 
 
 def test_a_newer_file_is_refused_as_an_older_build_refuses_a_ten(tmp_path):
-    """The two-Macs rule, as this build sees it: a `/13`, a `/4` show and an install `/2` are
-    refused, as a build from before refuses a `/12`; the words say what to do."""
+    """The two-Macs rule, as this build sees it: a `/14`, a `/4` show and an install `/2` are
+    refused, as a build from before refuses a `/13`; the words say what to do."""
     from hyperspace.library import Install, Library, LibraryError, migrate_doc
-    assert loadable.VERSIONS[-1] == 12                    # (plan 89)
+    assert loadable.VERSIONS[-1] == 13                    # (plan 89; plan 93)
     with pytest.raises(LibraryError, match="newer than this build"):
         migrate_doc({"schema": "hyperspace.project/4"}, "hyperspace.project")
     lib = Library(tmp_path)

@@ -133,17 +133,16 @@ def test_a_show_is_not_said_to_hold_the_bus_cables():
 
 
 def test_a_clouds_wire_is_no_bus_cable(monkeypatch):
-    """It never touches All outputs; `_cut_bus` cuts both, and says which."""
-    assert "bus" not in graphview.CLOUD_SAID
+    """Plan 93: a cloud's wire is the patch's own, never a fixture's; `_cut_bus`
+    cuts a bus cable, and says so."""
     cuts = NS(has=lambda w: True, cutting=lambda w: None)
     monkeypatch.setattr(graphview, "_bus_cuts", lambda edit: cuts)
     monkeypatch.setattr(graphview, "_doc", lambda edit: {})
     monkeypatch.setattr(graphview, "_land", lambda e, d, label, said, bus_cuts: said)
-    cloud = rgraph.cloud_wire(0)
-    assert rgraph.is_cloud_wire(cloud)
-    assert graphview._cut_bus(None, cloud) == f"cut the cloud's wire {cloud}"
+    cloud = rgraph.Wire("cloud", "scene.geometry")
+    assert not rgraph.is_fixture_wire(cloud) and rgraph.is_old_cloud_wire(cloud)
     bus = rgraph.Wire("output.all.image", "output.1.image")
-    assert rgraph.is_fixture_wire(bus) and not rgraph.is_cloud_wire(bus)
+    assert rgraph.is_fixture_wire(bus) and not rgraph.is_old_cloud_wire(bus)
     assert graphview._cut_bus(None, bus) == f"cut the bus cable {bus}"
 
 

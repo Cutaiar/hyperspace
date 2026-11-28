@@ -44,7 +44,7 @@ def _party(tmp_path):
 def _build(app, n: int = 2):
     """(the render graph the renderer would build, the canvas over it)."""
     spec = app.loaded_patch.graph.spec
-    g = G.build_graph(_views(n), spec.wiring(), (), tuple(sorted(app.loaded_patch.graph.fx.specs))
+    g = G.build_graph(_views(n), spec.wiring(), tuple(sorted(app.loaded_patch.graph.fx.specs))
                       if app.loaded_patch.graph.fx is not None else (), G.bus_cuts_of(app.loaded_patch))
     return g, graphview.build(Bindings(), Registry(), None, None, g, spec)
 

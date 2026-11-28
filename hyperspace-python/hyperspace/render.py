@@ -153,7 +153,6 @@ from .graph import (
     build_graph,
     bus_cuts_of,
     channel_into,
-    cloud_roles,
     effect_of,
     generators_of,
     graph_key,
@@ -2089,9 +2088,9 @@ class Renderer:
         `Renderer.wiring`), else one built from them (`graph.build_graph`;
         plan 36 T3: a wired frame only, `graph.EMPTY` for none). getattr: a renderer
         from before the graph
-        (or the wiring) has none. Plan 26 A4b: the `cloud` devices the
-        registry lists (`cloud_source`) are part of the key, so listing
-        one adds its point-cloud node to the scene. Plan 33 R: so are the
+        (or the wiring) has none. (Plan 93: a point cloud is the section's
+        node, in the wiring — the devices listed are no part of the key; a
+        cloud node reads its device each frame.) Plan 33 R: so are the
         effect files present (`FxState.specs`, as a set): each pipeline's
         run is the wiring's (`Wiring.run`, its wires), so a file that goes
         or comes builds again and a toggle does not (an off node reads
@@ -2111,7 +2110,6 @@ class Renderer:
         # the section's wires, never laid on per frame)
         wiring = getattr(self, "wiring", None) or EMPTY
         key = graph_key(views)
-        clouds = cloud_roles(getattr(self, "cloud_source", None))
         bus_cuts = bus_cuts_of(getattr(self, "bus_source", None))
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
@@ -2124,11 +2122,10 @@ class Renderer:
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "depths", ()) != depths
-                or getattr(graph, "clouds", ()) != clouds
                 or getattr(graph, "bus_cuts", None) != bus_cuts
                 or frozenset(getattr(graph, "effects", ())) != effects
                 or frozenset(getattr(graph, "generators", ())) != gens):
-            graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
+            graph = self._graph = build_graph(views, wiring, tuple(sorted(effects)),
                                               bus_cuts, tuple(sorted(gens)))
             graph.depths = depths
             if fx is not None and hasattr(fx, "fit_pool"):

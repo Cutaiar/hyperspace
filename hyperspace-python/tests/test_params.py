@@ -505,7 +505,9 @@ def test_snapshot_by_part(tmp_path):
     assert "tempo.bpm" in sess and "scene.select" in sess and "lfo.1.depth" in perf
     # plan 43 §6 item 1 / plan 44 D3: the hands' look and the clouds' are the
     # loadable patch's, but for the mirror — the room's (`SHARED_META_KEYS`)
-    assert "ghost.alpha" in perf and "ghost.style" in perf and "cloud.size" in perf
+    assert "ghost.alpha" in perf and "ghost.style" in perf
+    # (plan 93: a cloud's params are declared as the graph names it, a patch group's)
+    assert "cloud.size" not in whole and part_of_id("cloud.size") == "patch"
     assert "ghost.mirror" in sess and "ghost.mirror" not in perf
     assert part_of_id("ghost.2.mirror") == "shared_meta" and part_of_id("ghost.2.on") == "patch"
     # the filters combine

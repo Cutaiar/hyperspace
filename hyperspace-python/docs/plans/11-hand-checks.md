@@ -9162,6 +9162,16 @@ Headless: `tests/test_time_displace_488.py` (#488's own shader as a fixture agai
 
 **976. A slit-scan by hand.** (laptop) Load `field-examples/stack-slit` and move: the frame is a smear of moments, the left edge the newest. Swap the Line on Read's At for Rings, then Spokes; turn the wire's depth down to 0 (an echo at At) and up. *Pass:* each is a time displace as #488's was — rings from the centre out, spokes round it — and nothing of #488's is missing that you used. *Fail:* a field that does nothing on At, or a look you could only make with #488.
 
+## GJ. The point cloud as a show's node (rows 1201–1209, 2026-11-28)
+
+Headless: `tests/test_cloud_node.py` (the node wired, posed and copied as the shape), `tests/test_cloud_migration.py` (an old show end to end, a cut wire, the backup), `tests/test_plan36_edges.py` (added, named, wired, deleted on GRAPH).
+
+**977. A cloud added and named by hand.** (Mac, a `kinect` or `cloud` device listed) On GRAPH, scene ▸ point cloud. *Pass:* the node says "no device: pick one on its menu" and draws nothing; device ▸ lists this Mac's cloud devices; picking one and wiring the node into `scene.geometry` draws its points; plugging a device in picks nothing by itself. *Fail:* a cloud drawn with no wire, or a device picked unasked.
+
+**978. A cloud posed and copied.** (Mac, 977's cloud wired) Turn its Yaw and Pitch, move its Pan, raise Instances to 4, then Layout to a 3D lattice. *Pass:* the cloud turns and moves as the shape does under Camera, and its copies lie on the shape's lattice; the shape does not move. *Fail:* a copy off the lattice, or the shape moving with the cloud's knobs.
+
+**979. An old show still draws its cloud.** (Mac, before `tools/migrate_library.py`) Open a show saved before this build with its Kinect listed. *Pass:* the strip says it was migrated to /13, the cloud draws where it drew, a cloud whose wire the show had cut stays undrawn; the first save leaves `<file>.bak-v12-clouds` beside the file. The `cloud/*` goldens pass on the gate Mac. *Fail:* a cloud missing or doubled, or no backup.
+
 ## FT. The Kinect (row 1130, 2026-11-24)
 
 Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).

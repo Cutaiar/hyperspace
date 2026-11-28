@@ -2125,6 +2125,15 @@ def _camera(x, y, z, yaw: float, pitch: float):
     return x1, y1, z1
 
 
+def turn_matrix(yaw: float, pitch: float) -> np.ndarray:
+    """`_camera`'s turn — the shape's yaw about y, then pitch — as a 3×3
+    (column vectors), so what is turned on the GPU (plan 93: a point cloud)
+    turns exactly as the shape's vertices do on the CPU."""
+    e = np.eye(3)
+    x1, y1, z1 = _camera(e[0], e[1], e[2], yaw, pitch)
+    return np.stack([x1, y1, z1])
+
+
 def view_depth(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6) -> np.ndarray:
     """How near each vertex is to the 3D camera, nearer larger: z after the
     4D divide and the camera's yaw and pitch, the depth the 3D divide

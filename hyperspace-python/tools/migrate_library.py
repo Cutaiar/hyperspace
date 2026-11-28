@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The one migration (plan 57 §7, §7a): a library to the newest (`/12` since plan 89),
+"""The one migration (plan 57 §7, §7a): a library to the newest (`/13` since plan 93),
 its shows to install files.
 
     uv run python tools/migrate_library.py [--library PATH] [--show NAME] [--apply]
@@ -15,7 +15,9 @@ never see the other Mac: quit there first), then, in this order, because of what
    ``presets-backup-*``.
 3. **The retaper,** a no-op after the first (`retaper_plan`), and module presets and
    ``patch/1`` files into the one format (`group_plan`).
-4. **Every loadable patch to** ``hyperspace.loadable/12`` (plan 89; ``/11`` plan 57) by
+4. **Every loadable patch to** ``hyperspace.loadable/13`` (plan 93: the point clouds the
+   patch's own nodes, one per cloud device this Mac lists that its scene drew; ``/12``
+   plan 89; ``/11`` plan 57) by
    `hyperspace.headless.resave`, in
    place, with three checks: it loads; it is a fixed point (loaded and saved untouched again,
    the same bytes); and the same picture: the old file and its newest are each drawn on the
@@ -73,8 +75,8 @@ PROJECTS = "projects"
 INSTALLS = "installs"
 SHOW_SUFFIX = ".hyp.json"
 BACKUP_PREFIX = "library-backup-"
-NEWEST = "hyperspace.loadable/12"         # plan 57 (FQ4); plan 89: copies as slots
-NEW = "/" + NEWEST.rpartition("/")[2]     # how the words say it ("/12")
+NEWEST = "hyperspace.loadable/13"         # plan 57 (FQ4); plan 89: slots; plan 93: clouds
+NEW = "/" + NEWEST.rpartition("/")[2]     # how the words say it ("/13")
 OLD_BACKUPS = "presets-backup-"           # a hand-made copy, deleted with the trash (§7a)
 TRASH = "trash"
 NOTHING_FILES = ("Icon\r", "Icon", ".DS_Store")   # what makes no folder worth keeping
@@ -127,6 +129,32 @@ def configured_library(home: Path) -> Path:
         if lp:
             return Path(lp)
     return home
+
+
+def cloud_roles_of(library: Path, home: Path) -> tuple[str, ...]:
+    """Plan 93: the cloud devices' roles this Mac draws, in list order — the
+    shared device list's (``<library>/devices.json``, `devicelist`), checked as
+    the app checks it (`config.listed_devices`: roles trimmed, a duplicate or a
+    bad entry dropped), and authoritative once it reads, even empty; only with
+    no list that reads, the config's ``[[devices]]`` seed (checked by
+    `config.load`) — the kinds `graph.CLOUD_DEVICES` (a cloud, a Kinect): what a
+    loadable patch from before ``/13`` drew a point cloud for in its scene
+    (`graphmigrate.thirteen`). None found is none."""
+    from hyperspace import config, devicelist
+    from hyperspace.graph import CLOUD_DEVICES
+    entries: list[dict] | None = None
+    listed = library / "devices.json"
+    if listed.is_file():
+        try:
+            raw, _ = devicelist._parse(listed.read_bytes())
+            entries = config.listed_devices(raw, home)[0]
+        except (OSError, ValueError):
+            entries = None
+    if entries is None:
+        entries = (config.devices(config.load(home / config.FILE))
+                   if (home / config.FILE).is_file() else [])
+    return tuple(str(e["role"]) for e in entries
+                 if e.get("kind") in CLOUD_DEVICES and e.get("role"))
 
 
 def loadable_files(library: Path) -> list[Path]:
@@ -245,13 +273,16 @@ def rig_show(library: Path, home: Path, name: str | None = None
 
 
 def check(path: Path, library: Path, scratch: Path, *, picture=None,
-          show: dict | None = None, file: str | None = None) -> Result:
+          show: dict | None = None, file: str | None = None,
+          clouds: tuple[str, ...] = ()) -> Result:
     """Load, save, re-save and draw loadable patch file `path` (`picture`: the
     golden rig's, `golden_frames.picture`; a test may hand its own), the
     rig's show `show` (a `headless.show_seed`) open. An old file whose
     section the load did not read is an error: never written (`NOT_READ`).
     `file` is what the result calls it — its path under ``presets/``
-    (``party/trip.json``, plan 48 stage 2), else its file name."""
+    (``party/trip.json``, plan 48 stage 2), else its file name. `clouds`
+    (plan 93): this Mac's cloud devices' roles (`cloud_roles_of`), what an
+    old file's clouds are made nodes for."""
     from hyperspace import graphmigrate, headless
     from hyperspace.library import LibraryError
 
@@ -263,7 +294,8 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None,
         res.error = f"not JSON: {e}"
         return res
     try:
-        data, notes, name = headless.resave(path, scratch / "once", library=library, show=show)
+        data, notes, name = headless.resave(path, scratch / "once", library=library, show=show,
+                                            clouds=clouds)
     except (LibraryError, ValueError, KeyError, TypeError, OSError, RuntimeError) as e:
         res.error = f"does not load: {e}"
         return res
@@ -279,7 +311,8 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None,
     nine.parent.mkdir(parents=True, exist_ok=True)
     nine.write_bytes(data)
     try:
-        again, _, _ = headless.resave(nine, scratch / "twice", library=library, show=show)
+        again, _, _ = headless.resave(nine, scratch / "twice", library=library, show=show,
+                                      clouds=clouds)
         res.fixed = again == data
     except (LibraryError, ValueError, KeyError, TypeError, OSError, RuntimeError) as e:
         res.fixed = False
@@ -864,6 +897,10 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
             print(problem)
         if moves:
             print(f"wrote {len(moves)} patch(es) as {_patch_schema()}")
+    # plan 93: the clouds an old file's scene drew were this Mac's cloud devices
+    clouds = cloud_roles_of(library, home)
+    if clouds:
+        print(f"point clouds: {', '.join(clouds)} — an old file's scene gets a cloud node each")
     forced = set(a.force)
     results: list[Result] = []
     paths: dict[str, Path] = {}
@@ -874,7 +911,7 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
         for k, path in enumerate(files):
             file = under_folder(library, path)
             r = check(path, read_from, Path(scratch) / str(k), picture=picture, show=seed,
-                      file=file)
+                      file=file, clouds=clouds)
             results.append(r)
             paths[file] = path
             print(line(r), flush=True)

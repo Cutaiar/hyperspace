@@ -144,9 +144,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import graphmigrate, undo
 from . import patches as patchdoc
-from . import undo
-from .graph import BusCuts
+from .graph import BusCuts, is_old_cloud_wire
 from .graphmigrate import (
     CAMERA_NODES,
     EYE_IDS,
@@ -198,6 +198,11 @@ EYE_BACKUP = "2-eye"
 # hands' and clouds' looks from its `session`, each loadable patch's since `/10` —
 # <file>.bak-v2-look
 LOOK_BACKUP = "2-look"
+# CLOUDS_BACKUP (plan 93): the copy `save_as` makes beside a loadable patch from
+# before `/13` before the first write over it — the file whose clouds were the
+# meta controller's (its scene drew every listed cloud device, its `bus` cut
+# their wires), which the load made the patch's own nodes: <file>.bak-v12-clouds
+CLOUDS_BACKUP = "12-clouds"
 LOADABLE = "loadable"       # the loadable patches' group and folder, a document kind (loadable.py)
 # plan 57 (FQ4): the folder they sat in until the one migration. A library not yet
 # moved is read and saved there (`loadable_dir`); goes in CL1
@@ -1907,6 +1912,30 @@ def kept_look(path: Path) -> tuple[dict[str, Any], BusCuts]:
     return dict(found[0]), found[1]
 
 
+def _clouds_owed(text: str | None) -> bool:
+    """Plan 93: whether loadable patch text `text` is from before `/13` and is
+    one its load may have rewritten for its clouds (`graphmigrate.thirteen`): a
+    wired section that names the scene, a cloud wire cut in its `bus`, or a
+    file before the wired frame (`/7`), whose scene the migration makes
+    (`graphmigrate.seven`) — so its first rewrite keeps it beside itself
+    (`CLOUDS_BACKUP`)."""
+    try:
+        doc = json.loads(text) if text else None
+    except ValueError:
+        return False
+    if not isinstance(doc, dict):
+        return False
+    version = graphmigrate.schema_version(doc)
+    if version is not None and version >= graphmigrate.THIRTEEN:
+        return False
+    if version is None or version < graphmigrate.SEVEN:
+        return True
+    bus = doc.get(graphmigrate.BUS_KEY)
+    if any(is_old_cloud_wire(w) for w in BusCuts.read(bus).cut):
+        return True
+    return graphmigrate._names_scene(doc.get("graph"))
+
+
 def _kept(path: Path, tag: str = BANK8_BACKUP) -> bool:
     """Is the file at `path` already kept, byte for byte, in one of its
     backups under `tag` (the eight-slot bank's, the stick spring's)? Then a
@@ -3145,6 +3174,12 @@ class Library:
                 old = path.read_text()
             except (OSError, ValueError):
                 old = None                               # unreadable as text: keep it anyway
+            if (group == LOADABLE and old != text and _clouds_owed(old)
+                    and not _kept(path, CLOUDS_BACKUP)):
+                from .routing import backup
+                if backup(path, CLOUDS_BACKUP) is None:
+                    raise LibraryError(f"{path.name}: not written — no backup of the patch "
+                                       "from before its clouds were its own could be made")
             if old != text and self._to_trash(path) is None:
                 self.say(warning=f"{group}/{path.name}: overwritten — the old file could "
                                  "not be kept in the trash")

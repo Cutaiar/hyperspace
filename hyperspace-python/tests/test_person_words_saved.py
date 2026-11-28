@@ -91,9 +91,12 @@ def test_a_patch_reads_the_same_whatever_controls_word_is(monkeypatch):
     assert patches.read(doc) == now
 
 
-def test_a_cloud_wires_cut_is_saved_by_its_ends_never_by_a_cable_id():
-    cut = rgraph.BusCuts().cutting(rgraph.cloud_wire(0)).to_json()
-    assert cut == {"cut": [{"from": "cloud", "to": "scene.geometry"}]}
+def test_a_cloud_wire_is_saved_by_its_ends_never_by_a_cable_id():
+    """(Plan 93: the patch's own wire, in its section; an old file's cut of it was
+    saved by its ends too, and `graphmigrate.thirteen` reads it so.)"""
+    w = rgraph.Wire("cloud", "scene.geometry")
+    assert w.to_json() == {"from": "cloud", "to": "scene.geometry"}
+    assert rgraph.BusCuts().cutting(w).to_json() == {"cut": [w.to_json()]}
 
 
 def test_a_saved_show_holds_no_cable_id(rig):  # noqa: F811

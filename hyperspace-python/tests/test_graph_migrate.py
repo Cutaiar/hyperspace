@@ -246,7 +246,7 @@ def test_v6_is_refused_by_the_ladder_below(tmp_path):
     lib = app.lib
     assert lib.read("loadable", "six")["schema"] == M.SAVE_SCHEMA
     kinds = lib._kinds
-    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)   # (plan 40 T2: /8; plan 43 C2: /9)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)   # (plan 40 T2: /8; plan 43 C2: /9)
     try:
         kinds["loadable"] = replace(kinds["loadable"], versions=(2, 3, 4, 5))
         with pytest.raises(LibraryError, match="git pull and uv sync"):

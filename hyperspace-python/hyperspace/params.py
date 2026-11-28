@@ -104,6 +104,7 @@ from .view import (
     SEGMENT_LEARN,
     SEGMENT_MODES,
     SEGMENT_QUALITY,
+    CloudState,
     CutState,
     DelayState,
     KeyState,
@@ -1903,6 +1904,165 @@ def declare_resizes(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 93: the shape's pose and copies, as helpers a point cloud's share ----
+INSTANCES_TIP = ("Synchronized copies, laid out as Layout says — one at a time to 64, "
+                 "then faster to 4096. Scroll to zoom out over the field, right-drag "
+                 "to pan; Fit frames it to the screen instead. 0 draws nothing: the "
+                 "ground, the echoes and the effects carry on.")
+
+
+def _turn_params(r: Registry, obj, pid: Callable[[str], str], label: Callable[[str], str],
+                 g: str, pan_tip: str) -> None:
+    """An object's turn and place in the world — `yaw`, `pitch` (the shape's
+    turntable, `geometry._camera`) and `pan.x`, `pan.y` (world units, y down)
+    — over `obj`'s `yaw`, `pitch` and `pan`: the shape's `camera.*` (plan 26
+    A2) and a point cloud's (plan 93), one set of ranges and words."""
+    r.continuous(pid("yaw"), label("Yaw"), *_attr(obj, "yaw"), lo=-math.pi, hi=math.pi,
+                 wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
+    # pitch wraps like yaw (2026-10-14): the camera is a turn of the points,
+    # with no up vector to flip, so tumbling over the top is just more turn
+    r.continuous(pid("pitch"), label("Pitch"), *_attr(obj, "pitch"), lo=-math.pi, hi=math.pi,
+                 wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
+    for i, axis in enumerate("xy"):
+        r.continuous(pid(f"pan.{axis}"), label(f"Pan {axis.upper()}"),
+                     *_item(lambda: obj.pan, i), lo=-PAN_RANGE, hi=PAN_RANGE,
+                     fmt=lambda v: f"{v:+.2f}", group=g, tip=pan_tip)
+
+
+def _copy_params(r: Registry, obj, pid: Callable[[str], str], label: Callable[[str], str],
+                 g: str, instances_tip: str) -> None:
+    """An object's copies — `instances` and the lattice's `inst_*` — over
+    `obj`'s fields of those names (what `field.field` reads): the shape's
+    `view.*` and a point cloud's (plan 93), one set of ranges and words."""
+    r.continuous(pid("instances"), label("Instances"), *_attr(obj, "instances"),
+                 taper=tapers.T_INSTANCES, lo=0, hi=tapers.T_INSTANCES.map(
+                     tapers.T_INSTANCES.steps), integer=True,
+                 fmt=lambda v: f"{int(v)} instance(s)" if int(v) > 0 else "0 · nothing drawn",
+                 group=g, tip=instances_tip)
+    r.enum(pid("inst_layout"), label("Layout"), *_attr(obj, "inst_layout"), INST_LAYOUT,
+           group=g, tip="How the copies are laid out. Flat: a square grid, a honeycomb "
+                        "growing from the centre, or one ring. 3D lattices, turned by the "
+                        "camera's yaw and pitch: cubic, body-centred cubic, face-centred "
+                        "cubic, hexagonal close-packed, stacked honeycombs (hex prism) "
+                        "and diamond — neighbours one cell apart in each.")
+    r.enum(pid("inst_motion"), label("Field motion"), *_attr(obj, "inst_motion"), INST_MOTION,
+           group=g, tip="Trigonometric motion over the field of copies — each copy's phase "
+                        "comes from its place in the layout, so the field moves as one "
+                        "figure.")
+    r.continuous(pid("inst_amp"), label("Field amp"), *_attr(obj, "inst_amp"), lo=0.0, hi=1.0,
+                 fmt=lambda v: f"amp {v:.2f}", group=g)
+    r.continuous(pid("inst_rate"), label("Field rate"), *_attr(obj, "inst_rate"), lo=0.0,
+                 hi=6.0, fmt=lambda v: f"rate {v:.1f}", group=g)
+    r.toggle(pid("inst_fit"), label("Fit"), *_attr(obj, "inst_fit"), group=g,
+             tip="Fit the field to the screen: every copy whole, none cut by the edge. A "
+                 "grid or honeycomb takes the rows and columns that suit the screen and "
+                 "fills it in even cells; zooming in snaps to whole cells and panning "
+                 "moves a cell at a time. A ring or a lattice is framed whole and centred.")
+    r.continuous(pid("inst_spacing"), label("Spacing"), *_attr(obj, "inst_spacing"),
+                 lo=0.5, hi=4.0, log=True, fmt=lambda v: f"spacing {v:.2f}", group=g,
+                 tip="The room between neighbours, in cells: 1 is shoulder to shoulder; "
+                     "below 1 the copies overlap. With Fit on, more room makes each copy "
+                     "smaller in its cell.")
+    r.continuous(pid("inst_persp"), label("Field depth"), *_attr(obj, "inst_persp"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"depth {v:.2f}", group=g,
+                 tip="A 3D lattice's own perspective: 0 every copy one size, 1 the "
+                     "nearest copies drawn 2.5× the middle's. Nearer copies draw over "
+                     "farther ones, which fade.")
+
+
+# ---- plan 93: the point clouds' values ----
+CLOUD_GROUP = "cloud"
+_CLOUD_LOOK = ("size", "scale", "bright", "colors")
+_CLOUD_TURN = ("yaw", "pitch", "pan.x", "pan.y")
+_CLOUD_COPIES = ("instances", "inst_layout", "inst_motion", "inst_amp", "inst_rate",
+                 "inst_fit", "inst_spacing", "inst_persp")
+_CLOUD_KEYS = (*_CLOUD_LOOK, *_CLOUD_TURN, *_CLOUD_COPIES)
+_CLOUD_ID = re.compile(r"cloud(?:\.(?:[2-9]|[1-9][0-9]+))?\.("
+                       + "|".join(re.escape(k) for k in _CLOUD_KEYS) + ")")
+CLOUD_INSTANCES_TIP = ("Copies of the cloud, laid out as Layout says, as the shape's are — "
+                       "one at a time to 64, then faster to 4096; Fit frames them to the "
+                       "screen. 0 draws nothing.")
+
+
+def cloud_ids(name: str) -> list[str]:
+    """Point-cloud node `name`'s params (`cloud.2` → `cloud.2.size` …), in order."""
+    return [f"{name}.{k}" for k in _CLOUD_KEYS]
+
+
+def is_cloud_id(pid: str) -> bool:
+    """Is `pid` one of a point cloud's values — one that exists only while a
+    loadable patch's graph holds that cloud (plan 93)? A load sorts such ids
+    against the graph it lands, as it does a matte's."""
+    return bool(_CLOUD_ID.fullmatch(pid))
+
+
+def _cloud_state(r: Registry) -> dict[str, CloudState]:
+    """The states the cloud params write, cloud name → `CloudState`: the view
+    state's (`ViewState.clouds`, read once a frame by the renderer), kept by
+    `build_registry` as `r.cloud_state`; a dict of the registry's own for one
+    built without a view (as `_matte_state`)."""
+    state = getattr(r, "cloud_state", None)
+    if not isinstance(state, dict):
+        state = r.cloud_state = {}
+    return state
+
+
+def declare_clouds(r: Registry, names: Iterable[str]) -> list[str]:
+    """The point clouds' params (plan 93), as `declare_mattes` does the
+    mattes': for each cloud `names` holds, its look (`size` in px, `scale`
+    — its units in the world's, its pose's scale —, `bright`, `colors`, the
+    four plan 26 A4b had), its turn and place (`_turn_params`: `yaw`,
+    `pitch`, `pan.x`, `pan.y`) and its copies (`_copy_params`: `instances`,
+    `inst_*`), the shape's own two sets — group `cloud` (a patch group: the
+    loadable patch's) — over a `CloudState` made when first declared and kept
+    while the name stays; those of every cloud no longer named dropped, with
+    their states. The first cloud keeps `cloud.size` … (`instance_id`).
+    Returns the ids that appeared or went."""
+    state = _cloud_state(r)
+    want = {n: cloud_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == CLOUD_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    g = CLOUD_GROUP
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — a live state is kept across a hot
+        # reload of `view`, its params bound to it: `declare_mattes`')
+        if st is None:
+            st = state[name] = CloudState()
+        if all(pid in r for pid in ids):
+            continue
+        for pid in ids:          # (a part declared before: declared again, whole)
+            if pid in r:
+                r.remove(pid)
+        title = name.replace(".", " ").capitalize()
+        r.continuous(f"{name}.size", f"{title} point size", *_attr(st, "size"),
+                     lo=0.5, hi=12.0, fmt=lambda v: f"{v:.1f} px", group=g,
+                     tip="Each point's radius on screen, in pixels, whatever its depth.")
+        r.continuous(f"{name}.scale", f"{title} scale", *_attr(st, "scale"),
+                     lo=0.01, hi=10.0, log=True, fmt=lambda v: f"{v:.2f}×", group=g,
+                     tip="The cloud's size in the world: its own units in the world's "
+                         "(the shape's radius is 1), as the shape's zoom.")
+        r.continuous(f"{name}.bright", f"{title} brightness", *_attr(st, "bright"),
+                     lo=0.0, hi=2.0, fmt=lambda v: f"{v:.2f}", group=g,
+                     tip="The points' colour × this; 0 draws them black (they still hide "
+                         "what is behind them).")
+        r.toggle(f"{name}.colors", f"{title} colours", *_attr(st, "colors"), group=g,
+                 modulatable=False,
+                 tip="The cloud's own colours, when its source has them; off, every point "
+                     "is white.")
+        _turn_params(r, st, lambda k, n=name: f"{n}.{k}", lambda w, t=title: f"{t} {w.lower()}",
+                     g, "Where the cloud sits in the world, in shape radii: x right, y down.")
+        _copy_params(r, st, lambda k, n=name: f"{n}.{k}", lambda w, t=title: f"{t} {w.lower()}",
+                     g, CLOUD_INSTANCES_TIP)
+        changed += ids
+    return changed
+
+
 # ---- plan 39 T2: the mattes' values ----
 MATTE_GROUP = "matte"
 # `matte[.n].from` is the param; its state's field is `source` (`from` is a keyword)
@@ -2686,44 +2846,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                  "them; off, they draw over the ground and whatever layer is under them. "
                  "In window and fullscreen the picture is always opaque, on or off.")
     r.toggle("view.rotate", "Rotate", *_attr(view, "playing"), group=g)
-    r.continuous("view.instances", "Instances", *_attr(view, "instances"),
-                 taper=tapers.T_INSTANCES, lo=0, hi=tapers.T_INSTANCES.map(
-                     tapers.T_INSTANCES.steps), integer=True,
-                 fmt=lambda v: f"{int(v)} instance(s)" if int(v) > 0 else "0 · nothing drawn",
-                 group=g,
-                 tip="Synchronized copies, laid out as Layout says — one at a time to 64, "
-                     "then faster to 4096. Scroll to zoom out over the field, right-drag "
-                     "to pan; Fit frames it to the screen instead. 0 draws nothing: the "
-                     "ground, the echoes and the effects carry on.")
-    r.enum("view.inst_layout", "Layout", *_attr(view, "inst_layout"), INST_LAYOUT,
-           group=g, tip="How the copies are laid out. Flat: a square grid, a honeycomb "
-                        "growing from the centre, or one ring. 3D lattices, turned by the "
-                        "camera's yaw and pitch: cubic, body-centred cubic, face-centred "
-                        "cubic, hexagonal close-packed, stacked honeycombs (hex prism) "
-                        "and diamond — neighbours one cell apart in each.")
-    r.enum("view.inst_motion", "Field motion", *_attr(view, "inst_motion"), INST_MOTION,
-           group=g, tip="Trigonometric motion over the field of copies — each copy's phase "
-                        "comes from its place in the layout, so the field moves as one "
-                        "figure.")
-    r.continuous("view.inst_amp", "Field amp", *_attr(view, "inst_amp"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"amp {v:.2f}", group=g)
-    r.continuous("view.inst_rate", "Field rate", *_attr(view, "inst_rate"), lo=0.0, hi=6.0,
-                 fmt=lambda v: f"rate {v:.1f}", group=g)
-    r.toggle("view.inst_fit", "Fit", *_attr(view, "inst_fit"), group=g,
-             tip="Fit the field to the screen: every copy whole, none cut by the edge. A "
-                 "grid or honeycomb takes the rows and columns that suit the screen and "
-                 "fills it in even cells; zooming in snaps to whole cells and panning "
-                 "moves a cell at a time. A ring or a lattice is framed whole and centred.")
-    r.continuous("view.inst_spacing", "Spacing", *_attr(view, "inst_spacing"),
-                 lo=0.5, hi=4.0, log=True, fmt=lambda v: f"spacing {v:.2f}", group=g,
-                 tip="The room between neighbours, in cells: 1 is shoulder to shoulder; "
-                     "below 1 the copies overlap. With Fit on, more room makes each copy "
-                     "smaller in its cell.")
-    r.continuous("view.inst_persp", "Field depth", *_attr(view, "inst_persp"),
-                 lo=0.0, hi=1.0, fmt=lambda v: f"depth {v:.2f}", group=g,
-                 tip="A 3D lattice's own perspective: 0 every copy one size, 1 the "
-                     "nearest copies drawn 2.5× the middle's. Nearer copies draw over "
-                     "farther ones, which fade.")
+    _copy_params(r, view, lambda k: f"view.{k}", lambda w: w, g, INSTANCES_TIP)
     r.enum("view.pattern", "Pattern", *_attr(view, "pattern"), PATTERNS, group=g,
            tip="Face pattern — edit hyperspace/shaders/patterns.glsl while the app runs; "
                "it hot-reloads on save. Every pattern reads the same eight inputs: "
@@ -2857,22 +2980,15 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
     # in, so the depths onto zoom moved with it (loadable.py)
     r.continuous("camera.zoom", "Zoom", *_attr(view, "zoom"), lo=0.005, hi=200.0, log=True,
                  fmt=lambda v: f"{v:.2f}×" if v >= 0.1 else f"{v:.3f}×", group=g)
-    r.continuous("camera.yaw", "Yaw", *_attr(view, "yaw"), lo=-math.pi, hi=math.pi,
-                 wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
-    # pitch wraps like yaw (2026-10-14): the camera is a turn of the points,
-    # with no up vector to flip, so tumbling over the top is just more turn
-    r.continuous("camera.pitch", "Pitch", *_attr(view, "pitch"), lo=-math.pi, hi=math.pi,
-                 wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
     # plan 26 A2: zoom and pan are the shape's world scale and position
     # (geometry.model_matrix) — the hands stay where the performer is and
     # only the shape grows or moves. Pan is in world units, the shape's
     # unit circumradius (y positive down, as it always was); a preset/2
-    # file's px are converted at load (params.pan_world)
-    for i, axis in enumerate("xy"):
-        r.continuous(f"camera.pan.{axis}", f"Pan {axis.upper()}", *_item(lambda: view.pan, i),
-                     lo=-PAN_RANGE, hi=PAN_RANGE, fmt=lambda v: f"{v:+.2f}", group=g,
-                     tip="Where the shape sits in the world, in shape radii (the "
-                         "shape's own size): x right, y down. The hands do not move.")
+    # file's px are converted at load (params.pan_world). Plan 93: the turn
+    # and the pan are declared by the one helper a point cloud's pose is
+    _turn_params(r, view, lambda k: f"camera.{k}", lambda w: w, g,
+                 "Where the shape sits in the world, in shape radii (the shape's own "
+                 "size): x right, y down. The hands do not move.")
 
     def reset_view():
         view.ang = [0.0] * 6
@@ -2908,27 +3024,15 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                      "radii. Nearer: a stronger perspective and a bigger shape. "
                      f"{EYE_DISTANCE:.2f} is the view the shape was always drawn in.")
 
-    # ---- the point clouds (plan 26 A4b): how a cloud device's points are
-    # drawn in the shared camera (graph.PointCloud). Meta controller, like the
-    # hands' look: a cloud is the room's sensor, and a loadable patch load never
-    # changes how it is shown. Nothing reads them until a `cloud` device
-    # is listed, so they move no picture of today's
-    g = "cloud"
-    r.continuous("cloud.size", "Cloud point size", *_attr(view, "cloud_size"),
-                 lo=0.5, hi=12.0, fmt=lambda v: f"{v:.1f} px", group=g,
-                 tip="Each point's radius on screen, in pixels, whatever its depth.")
-    r.continuous("cloud.scale", "Cloud scale", *_attr(view, "cloud_scale"),
-                 lo=0.01, hi=10.0, log=True, fmt=lambda v: f"{v:.2f}×", group=g,
-                 tip="The cloud's own units in the world's (the shape's radius is 1), "
-                     "about the world's centre.")
-    r.continuous("cloud.bright", "Cloud brightness", *_attr(view, "cloud_bright"),
-                 lo=0.0, hi=2.0, fmt=lambda v: f"{v:.2f}", group=g,
-                 tip="The points' colour × this; 0 draws them black (they still hide "
-                     "what is behind them).")
-    r.toggle("cloud.colors", "Cloud colours", *_attr(view, "cloud_colors"), group=g,
-             modulatable=False,
-             tip="The cloud's own colours, when its source has them; off, every point "
-                 "is white.")
+    # ---- the point clouds (plan 93): each cloud node's look, pose and copies
+    # are declared from the loadable patch's graph (`declare_clouds`), as a
+    # matte's — none here
+    clouds = getattr(view, "clouds", None)
+    if not isinstance(clouds, dict):
+        clouds = {}
+        if view is not None:
+            view.clouds = clouds
+    r.cloud_state = clouds
 
     # ---- effects: one param per annotated uniform in shaders/fx/*.glsl ----
     # (fx.py). A file edited into a new shape re-declares its own ids.

@@ -430,7 +430,7 @@ def test_loadables_are_the_librarys_one_document_kind(rig, tmp_path):
     path = lib.save_as("loadable", "My Routes")
     assert path == tmp_path / "loadable" / "my-routes.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.loadable/12" and len(doc["routes"]) == 13
+    assert doc["schema"] == "hyperspace.loadable/13" and len(doc["routes"]) == 13
     assert lib.current("loadable") == "My Routes" and not lib.is_dirty("loadable")
     lib.load("loadable", "hands-play")
     assert not router.table.routes_to("view.bright")[0].source.startswith("lane")
@@ -954,7 +954,7 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     assert len(pads) == 16 and {p["target"] for p in pads} == {"view.shape"}
     for name in OWNER_LOADABLES:
         doc = json.loads((home / "loadable" / f"{slug(name)}.json").read_text())
-        assert doc["schema"] == "hyperspace.loadable/12" and doc["name"] == name   # (row 394)
+        assert doc["schema"] == "hyperspace.loadable/13" and doc["name"] == name   # (row 394)
         by_source = {row["source"]: row for row in doc["desk"]}
         for pad in pads:
             if name == "NIGHT TWO" and pad["source"] == OWNER_PAD["source"]:

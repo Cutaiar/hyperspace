@@ -140,7 +140,7 @@ def test_a_loadable_with_groups_round_trips_through_document_and_load_doc(tmp_pa
     app.lib.load("loadable", "party-noita")
     app.loaded_patch.groups = [dict(ENTRY, patch="noita-core")]
     doc = app.loaded_patch.document("noita grouped")
-    assert doc["schema"] == "hyperspace.loadable/12"          # (plan 43 C2: every save)
+    assert doc["schema"] == "hyperspace.loadable/13"          # (plan 43 C2: every save)
     assert doc["groups"] == [{"id": "group.1", "name": "noita core", "patch": "noita-core",
                               "nodes": NOITA_CORE, "open": False}]
     keys = list(doc)
@@ -163,7 +163,7 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     — its look-back public parts, and H3 its dream — and that save then
     resaves byte for byte.)"""
     raw = FIXTURE.read_bytes()
-    assert json.loads(raw)["schema"] == "hyperspace.loadable/12"
+    assert json.loads(raw)["schema"] == "hyperspace.loadable/13"
     # (plan 90 H2: the look-back's five retired knobs, `graphmigrate.LB_GONE`,
     # go quietly from a patch that draws no look-back — the rest is the same
     # bytes)
@@ -259,7 +259,7 @@ def test_signature_changes_when_a_group_is_made_and_a_save_drops_a_deleted_membe
     assert app.loaded_patch.document("x")["groups"] == [dict(ENTRY, nodes=["render:warp"])]
     app.loaded_patch.groups = [dict(ENTRY, nodes=["render:acid.4"])]
     doc = app.loaded_patch.document("x")
-    assert "groups" not in doc and doc["schema"] == "hyperspace.loadable/12"   # (C2: /9 either way)
+    assert "groups" not in doc and doc["schema"] == "hyperspace.loadable/13"   # (C2: /9 either way)
 
 
 # ---------------------------------------------------------------- the proof: the renderer learns nothing
