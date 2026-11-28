@@ -1194,7 +1194,11 @@ def _fdraw(ctx, r, s, w=FW, h=FH, t=2.0, frames=1, spin=0.0, samples=0):
 
 
 def _cover(ctx, r, w=FW, h=FH):
-    """Where the last scene pass drew a face: (h, w) bools, top row first."""
+    """Where the last scene pass drew a face: (h, w) bools, top row first.
+    (Plan 90 H2: `_draw_cover` binds again what was bound before — a live
+    framebuffer here, `_fdraw`'s window being released.)"""
+    bound = ctx.framebuffer(color_attachments=[ctx.renderbuffer((1, 1), 4)])
+    bound.use()
     tex = r._draw_cover(w, h)
     return np.frombuffer(tex.read(), dtype=np.uint8).reshape(h, w)[::-1] > 0
 
