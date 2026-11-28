@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ACID_WASH = ROOT / "tests" / "fixtures" / "patches" / "acid-wash.json"
 WAKE = CORPUS / "patches" / "dream" / "wake.json"
 OLD_MODULE = {"schema": "hyperspace.preset/1", "group": "dream", "name": "OLD",
-              "note": "a module patch from before plan 50",
+              "note": "a module patch in the old format",
               "values": {"dream.mix": 0.25, "dream.echoes": 12}}
 
 
@@ -54,7 +54,7 @@ def test_the_one_ladder_reads_every_fragment_as_its_newest():
     new = patches.forward(old)
     assert old == OLD_MODULE                                   # the input is never changed
     assert new == {"schema": "hyperspace.patch/3", "name": "OLD",
-                   "note": "a module patch from before plan 50", "group": "dream",
+                   "note": "a module patch in the old format", "group": "dream",
                    "values": {"dream.mix": 0.25, "dream.echoes": 12}}
     one = json.loads(ACID_WASH.read_text())
     assert one["schema"] == "hyperspace.patch/1"
@@ -153,7 +153,7 @@ def test_a_corpus_loadable_round_trips_byte_for_byte_through_the_one_loader(tmp_
 WIDE = {"schema": "hyperspace.patch/3", "name": "wide", "group": "camera",
         "values": {"camera.zoom": 0.7}}
 OLD_CAMERA = {"schema": "hyperspace.preset/1", "group": "camera", "name": "OLD",
-              "note": "a module patch from before plan 50", "values": {"camera.zoom": 0.4}}
+              "note": "a module patch in the old format", "values": {"camera.zoom": 0.4}}
 
 
 def test_a_module_preset_lives_and_loads_as_a_patch_of_its_group(tmp_path):

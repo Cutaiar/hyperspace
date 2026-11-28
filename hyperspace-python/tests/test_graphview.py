@@ -331,7 +331,7 @@ def test_layout_round_trips_through_the_loadable_and_the_show(rig):
     # which this rig — the panel's, built without them — lacks; and its
     # look-back's knobs, which no look-back drew, are dropped)
     said = [n for n in loaded_patch.notes if (not n.endswith("…") or "env." not in n)
-            and n != "the look-back's retired knobs dropped: no look-back drew them (plan 90)"]
+            and n != "the look-back's retired knobs dropped: no look-back drew them"]
     assert loaded_patch.layout == {} and said == [] and not lib.is_dirty("loadable")
     assert LAYOUT_KEY not in loaded_patch.document("party-trip")
     loaded_patch.layout["render:shape"] = [520, 40]

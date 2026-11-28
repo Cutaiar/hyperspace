@@ -326,7 +326,7 @@ def test_output_1_unplugged_hides_at_once_then_closes_in_order_and_comes_back(ri
     assert not r.slots[0].opened and r.main.win is None
     assert r.root.pacer.owner == r.slots[1].win, "the next display paces"
     assert r.g.intervals[r.slots[1].win] == 1
-    assert r.root.hold_size, "output 1's frame keeps its size for now"
+    assert r.root.hold_size, "output 1's frame keeps its size"
     assert any("TV has gone" in s for s in r.plug.lines())
     # the hold runs out: the close order, always
     r.g.log.clear()

@@ -519,7 +519,7 @@ SURFACE_NAMES = {
     "loadable": {"SHARED_META_GROUPS": "which groups a file's values may not hold",
                "is_meta_id": "a route's row goes on to the referee, in its words",
                "meta_row_refusal": "a save filters a row no load would land"},
-    "patches": {"meta_refusal": "a patch file naming a meta param is refused (row 744)"},
+    "patches": {"meta_refusal": "a patch file naming a meta param is refused"},
     "nodemode": {"meta_refusal": "a node's meta params fill no degree of freedom"},
 }
 # …and the handles at run time.

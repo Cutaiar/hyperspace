@@ -204,7 +204,7 @@ def test_the_hover_says_it_before_the_press_and_only_what_the_road_holds():
                   "off-air look's audio routes", "It moves only what those routes drive",
                   "an on-air channel's sound"):
         assert words in tip, words
-    assert "nothing else" not in tip.lower(), "row 702 keeps other limits: no absolute here"
+    assert "nothing else" not in tip.lower(), "no absolute claim here: other limits stay"
 
 
 @contextmanager

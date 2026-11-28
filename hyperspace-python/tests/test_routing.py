@@ -1320,7 +1320,7 @@ def test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one(tm
     the file is then not rewritten:
     `test_a_remap_whose_backup_fails_writes_nothing`."""
     path = bindings_path(tmp_path)
-    hand = path.with_name("bindings.json.bak-plan09")
+    hand = path.with_name("bindings.json.bak-mine")
     hand.write_text("mine")
     v2 = Bindings.factory().to_json()
     v2["schema"] = routing.SCHEMA_V2                  # an old table: no layers, no tap

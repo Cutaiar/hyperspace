@@ -71,8 +71,8 @@ def test_session_leaves_every_string_a_person_reads():
     want = Counter({key: n for key, (n, _why) in LEFT.items()})
     back = sorted((_found() - want).items())
     assert not back, (
-        "say these as what they mean (the meta controller's, the bus cable: register rows "
-        f"778, 779), or, if no person reads them, count them in LEFT and say why: {back}"
+        "say these as what they mean (the meta controller's, the bus cable), or, "
+        f"if no person reads them, count them in LEFT and say why: {back}"
     )
 
 
