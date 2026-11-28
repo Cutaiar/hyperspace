@@ -221,67 +221,36 @@ pattern is wired (Q4). A new scene sees what the first sees at the moment it is 
 > "The newly added scene should just have its camera pointing at the world origin. I think
 > your recommendation is fine for what it sees."
 >
-> "point clouds need to be treated like any other piece of geometry, and they should have a
-> canvas node … Not every camera should draw them. Point clouds should act like instanced
-> geometry, just like all of the other shapes do. The relabeling for eye-related stuff is
-> fine."
+> "Turning a Point cloud node from a rig-scoped node to a show-scoped node should not be in
+> this plan. That should just be its own work that we can independently execute and pick up
+> working on this plan once that is finished and merged into main."
 
 | Q | Answer |
 |---|---|
 | Q5 a new scene | Its eye aims at the world origin (not a copy of the first's). It sees what the first scene sees, its wires copied at the add. |
-| Q6 the clouds | Ordinary geometry: a canvas node, seen only by the scenes wired to it, instanced like a shape. |
+| Q6 the clouds | Not this plan: the point cloud becomes a show's geometry node in its own work (below), merged to main first. |
 | Q7 `camera.*` | Keep the ids; relabel on the panel ("Shape yaw" …). |
 
-### 7.1 The point cloud today [V]
+### 7.1 First, apart: the point cloud as a show's node
 
-There is a **Point cloud** node on the canvas (`graphview` kind `cloud`, a geometry out),
-but it is the meta controller's, not the show's:
+Today the **Point cloud** node is the rig's: one per listed cloud device (`graph.cloud_name`),
+never added, deleted or saved in a patch (`patches.FIXTURE_NODES`), wired into the scene by
+the meta controller (`graph.cloud_wire`, standing until cut), its knobs one shared set
+(`cloud.size`, `.scale`, `.bright`, `.colors` on the one `ViewState`). Its own work, merged
+to `main` before this plan builds, makes it the show's: added and saved like any node,
+naming its device by hand (nothing picked when a device connects), seen only where wired,
+numbered params, and — the owner: "a point cloud is literally just a list of vertices, the
+same way a shape would be … a special type of shape that has no edges, only vertices" — the
+shape's pose and copies.
 
-- **One per listed cloud device**, made by the rig (`graph.cloud_name`: `cloud`,
-  `cloud.2` … by the device's place in the list), never added, deleted or saved in a patch
-  (`patches.FIXTURE_NODES`, `NOT_REMOVABLE`).
-- **Its wire into the scene is the meta controller's too** (`graph.cloud_wire`,
-  `is_cloud_wire`, `is_fixture_wire`): `cloud → scene.geometry` stands by itself until the
-  show cuts it (`bus_cuts`), so every scene of today's one sees it. Its description says
-  "drawn in every scene".
-- **One set of knobs for every cloud**: `cloud.size`, `cloud.scale`, `cloud.bright`,
-  `cloud.colors` are bound to the one `ViewState` and shown on the first cloud
-  (`graphview._cloud_owner`). Its pose is a uniform scale about the world origin; it has no
-  position, turn or copies of its own.
+This plan then treats a cloud as one more world object (§6.1): a camera sees it where it is
+wired, as a shape.
 
-### 7.2 What it becomes [Rec]
-
-- **A node the show owns.** Added from the canvas like a shape, numbered (`cloud`,
-  `cloud.2` …), saved in the frame and in patches, deleted like any node. It names **its
-  source** — which cloud device it reads (`role`, a pick on its node, as a channel node
-  names its channel) — so two nodes may read one device, and a node whose device is absent
-  draws nothing, said on its node.
-- **Seen only where wired.** No standing meta-controller wire: `cloud.<n> → scene.<m>.geometry`
-  is a wire like a shape's, one per camera that should see it.
-- **Its own params, numbered as every node** (Q2): `cloud.<n>.size`, `.scale`, `.bright`,
-  `.colors`, plus a **world pose** like a shape's (position, turn, scale) and the shape's
-  **instancing** (its copies, `Renderer._copies_of`'s rule), so a cloud lays out as a shape's
-  copies do.
-- **Old shows.** A show saved with the meta controller's standing cloud wire is migrated to
-  an explicit `cloud → scene.geometry` wire and a cloud node per device it listed, so it
-  draws as before (REVIEW: the mapping, a backup before the first rewrite, an end-to-end
-  test of an old show). A cut cloud wire (`bus_cuts`) stays cut, which is: no wire.
-
-### 7.3 Build order, revised again
+### 7.2 Build order, revised again
 
 1. **Backdrop** (§4.1).
 2. **The world and a second camera** (§6.2.2); a new scene's eye on the origin.
 3. **Shape and pattern instances** (§6.2.3).
-4. **The point cloud as geometry**: the show's node, its source pick, numbered params, a
-   world pose and copies; the meta controller's cloud wire retired with its migration.
-5. **Retire the rule** (§4.4), and the panel relabel of `camera.*` (Q7).
+4. **Retire the rule** (§4.4), and the panel relabel of `camera.*` (Q7).
 
-### 7.4 New questions
-
-- **Q8. A device with no node.** When a cloud device connects and no cloud node reads it,
-  is a node added for it (wired to the first scene, as today), or nothing until the show adds
-  one? [Rec: nothing added to a saved show; a fresh show's starter frame has one cloud node
-  per listed device, wired to its scene, so a new rig still sees its camera at once.]
-- **Q9. A cloud's instancing.** Does a cloud take every copy knob a shape has (the copies'
-  layout, spin, spread), or only position and count? [Rec: the shape's whole set — one rule
-  for "instanced geometry".]
+Starts once §7.1's work is on `main`.
