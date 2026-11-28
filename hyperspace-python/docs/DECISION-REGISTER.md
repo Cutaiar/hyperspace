@@ -1028,6 +1028,7 @@ here; overturn → the change, then the same.
 | 1183 | The dream starters land the same chain folded as **dream** — dream on a picture: Resize → Dream → Fade (0.7) → Composite over; tracers + dream: Delay → Trail → Resize → Dream → Composite add (the trail's alpha its coverage: no key, no Fade), one group. A second dream is never refused. The tracers' group, and a migrated look-back's, is named **trail** (was "look-back") | 974 | owner — 2026-11-27 (plan 90 Q29, Q31) |
 | 1184 | Old dream presets (`patches/dream/`, the retired `dream` group's) are retired: left on disk, never listed or opened, said once by the library (`library.RETIRED_MODULES`, `DREAM_RETIRED`) | 973 | owner — 2026-11-27 (plan 90 Q33) |
 | 1185 | The LOOKBACK page is retired into the FX pane: the dream's knobs are its effect strip; what its hook says (no worker, waiting, one live dream, its size) is its node's words on GRAPH | 969 | owner — 2026-11-26 (plan 90 Q21) |
+| 1186 | Time Displace is Read with a field on At (plan 90 §4.8): no node or file of its own. #488's shader, kept as a test fixture over the delay's stack, equals `Line → Read.at` to within 2 levels wherever its age is one the stack holds; younger than the newest frame #488 blended toward the picture now, which a stack holds none of — Read reads its newest, and a slit-scan wanting now composites the picture. #488 closed | 976 | owner — 2026-11-26 (plan 90 Q13) |
 
 "—": no hand check shows it; tests only.
 
@@ -16347,3 +16348,10 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **What.** `ui_lookback.py`, `"lookback"` in `ui.PAGE_KEYS` and `ui_pane.SECTIONS`, and `tools/lookback_page_shots.py` are deleted. The dream's knobs are its effect strip on the FX pane (the layer menu its choice, its tip the file's); what the hook says is its node's line on GRAPH; the worker's reason for being off stays on SYSTEM and the banner.
 - **Answer.** owner, 2026-11-26 (plan 90 Q21: "the LOOKBACK page retires into the FX pane").
 - **Judge it.** 969.
+
+### 1186. Time Displace as Read + a field
+
+- **What.** No node and no file: **Read** (H1) with a field on **At** is a time displace (`field-examples/stack-slit`: Line → `read.at`). #488's knobs are public parts: its Field (line, rings, spokes, flat, aux) is which field is wired (Line, Rings, Spokes, a constant At, To field of any picture); Repeat and Drift are Waveform's; Steps is quantise; Flip is a Scale of −1; Between is Read's own; Centre is a Point; **Look-back** — a knob naming a ring — is the wire. Span is the wire's depth in frames (Read counts entries; a delay's rate makes them seconds).
+- **Proof.** `tests/test_time_displace_488.py`: #488's shader as it was (`tests/fixtures/time-displace-488/timedisplace488.glsl`, from `ccr-956dc2aa-r1kaqe`), one change — the past it reads, the delay's stack for the look-back's atlas — drawn beside `Line → Read.at` over one delay of a moving hue, At = `(Span / 2 − a₀) / g` and the wire's depth `Span / (g · aspect)`: within 2 levels at every column whose age the stack holds (a mapping 10 % off fails it). The one difference: an age younger than the newest frame, where #488 blended toward the picture now; Read reads its newest there (§4.8: "At below 0 reads the newest").
+- **Answer.** owner, 2026-11-26 (plan 90 Q13: "close #488; its slit-scan is … `read.at`").
+- **Judge it.** 976.

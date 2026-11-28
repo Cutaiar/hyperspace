@@ -9156,6 +9156,12 @@ Headless: `tests/test_dream_effect.py` (the effect and its hook through the real
 
 **975. One live dream.** (Mac, worker on) With two dreams on (the two starters of 974), look at their nodes. *Pass:* one dreams; the other passes its picture through and says "one live dream at a time … holds it"; delete the first and the second dreams from the next frame. *Fail:* both flicker, or the second stays passing through.
 
+## GI. Time Displace as Read + a field (row 1186, 2026-11-27)
+
+Headless: `tests/test_time_displace_488.py` (#488's own shader as a fixture against `Line → Read.at`, to two levels).
+
+**976. A slit-scan by hand.** (laptop) Load `field-examples/stack-slit` and move: the frame is a smear of moments, the left edge the newest. Swap the Line on Read's At for Rings, then Spokes; turn the wire's depth down to 0 (an echo at At) and up. *Pass:* each is a time displace as #488's was — rings from the centre out, spokes round it — and nothing of #488's is missing that you used. *Fail:* a field that does nothing on At, or a look you could only make with #488.
+
 ## FT. The Kinect (row 1130, 2026-11-24)
 
 Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).

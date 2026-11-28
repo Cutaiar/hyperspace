@@ -821,3 +821,15 @@ Rows 1181–1185, hand checks 969–975 (group GH).
 
 **Next: H4** — Time Displace as Read + a field on At (already `stack-slit`, H1): docs, a proof
 against #488's own shader as a test fixture, and #488 closed.
+
+## 13. H4 built: Time Displace as Read + a field (2026-11-27)
+
+Row 1186, hand check 976 (group GI). Time Displace was already `Line → read.at` (H1's
+`stack-slit`). H4 is its proof against #488's own shader, kept as a test fixture
+(`tests/fixtures/time-displace-488/timedisplace488.glsl`: #488's file with one change, the delay's
+stack for the look-back's atlas): `tests/test_time_displace_488.py` draws both over one delay of a
+moving hue and they agree within 2 levels wherever the age is one the stack holds (At =
+`(Span / 2 − a₀) / g`, depth `Span / (g · aspect)`; 10 % off fails). Younger than the newest
+frame #488 blended toward the picture now; Read reads its newest there, as §4.8 recommended. #488
+is closed with a pointer here. Plan 90 is built.
+
