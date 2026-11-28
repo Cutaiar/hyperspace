@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-25
+## v1.3 — 2026-11-27
 
 ### Panel
 
@@ -117,6 +117,10 @@
 - Zoomed far out (words under 6 px), nodes keep their size, wired pins, cables and thumbnails but drop the unreadable words, + / − and unwired pins, and a node off the canvas draws only its wired pins — zoom in to reach them (#507)
 - Node thumbnails refresh at 25 Hz, spread over the frames, instead of every frame, and field thumbnails measure their range once every 30 frames as meant, not every few — which had stalled the GPU nearly every frame (#495, #508)
 - A delay node can take its picture less often: **every** picks frames, Hz or a tempo step (1/16 … 4 bars), with **frames** (1–120) and **hz** (0.1–120), and it holds the last picture between takes; saved with the patch as `delay[.n].every` / `.frames` / `.hz` (#514)
+- A delay can keep its last pictures (**depth**, 1–64, newest first) for two new effects that read the past: **Read** steps back to any of them (a field on its At is a slit-scan, the old Time Displace) and **Trail** lays them over or adds them, fading by age; examples `stack-echo`, `stack-trail`, `stack-slit` (#519, #524)
+- The look-back is retired onto ordinary nodes: a saved look-back opens as Curve → Fade → Resize → Delay → Trail → Cut, folded in one **look-back** group (+ shows the parts), and the load says what it converted; the tracers starter is now Delay → Trail → Composite, grouped as **trail** (#522, #523)
+- Where a migrated look-back or dream needs it, the load turns the master effects switch (`fx.on`, `fx.mix`) on and evens out the patch's other effects so it looks as it did, and says so; the master switch now gates the trail and dream too (#522, #523)
+- The faces' cover (`scene.cover`) wires into any mask port, a cut is drawn in its own run (a trail cut by the cover under Plasma no longer draws black), and a delay read by Read or Trail keeps recording even when its reader isn't drawn (#521)
 
 ### Effects
 
@@ -134,6 +138,9 @@
 - A picture effect with nothing wired into its input now says **fed by nothing — wire its input** on GRAPH and in the FX pane, as field nodes do, and a Mandelbrot with nothing in is no longer drawn faint (#501)
 - New **Colour** generator: one flat colour set on an HSV volume (Hue, Saturation, Value), with **Spin** to turn the hue on its own; wire it straight into an output, a composite or an aux (#501)
 - Hue cycle is retired: saved looks load as the new **Hue turn** effect turned by a band field (Line + Rings), within 2 levels of the old picture; a desk row on Spread now spans −4 … 4 and a row on Rings is dropped, and the load says so; example `hue-cycle`; restart after pulling (#509)
+- The dream is an effect: **Dream** on any picture, with its knobs under `fx.dream.*` and a new **Hold**; a saved dream opens as its chain (Resize → Dream → colour → Fade → Composite) folded in a **dream** group, "dream on a picture" and "tracers + dream" starters land it the same way, and only one dream runs live at a time — a second passes its picture through and says so (#523)
+- The LOOKBACK page is gone, and the old dream presets in `patches/dream/` stay on disk but are no longer listed or opened (#522, #523)
+- New **Curve** effect remaps a picture's brightness (Shape; the old look-back contrast), **black is clear** gains a **linear** ramp beside smooth, and Matte can measure **peak** with a smooth or linear ramp (#519, #520)
 
 ### Shapes
 
@@ -210,6 +217,7 @@
 - `writes.py` (`Observed`, `ObservedDict`, `ObservedList`) marks param writes so `Undo.tick` fingerprints only a written frame, and `tests/conftest.py::undo_oracle` fails any change nothing marked; `hands/core.py` and `sequencer.py` may import `writes` (#506, #510); `imgui_gl.ControlRenderer` draws the panel in C++, with `tests/test_ui_on_change.py` on its memos (#502); `draw.icon(kept=, slot=)` (#512)
 - `graph.runs_unfed` is the one rule for running with no input, `graph.hungry` replaces `hungry_fields`, and `graph.FED_BY_NOTHING` (#501); a wired knob's pass gets its own program reading `knob_at`, `graphview.knob_pin`, and an optional `"depth"` on a wire (#497); `graphmigrate.hue_turns` / `retire_hue_cycle`, with `huecycle.glsl` kept in `shaders/fx/retired/` as the oracle (#509)
 - `ui_graph.Sketch` and `FAR_PX` (#507); `outputs.THUMB_HZ` and `PreviewTextures.due` (#508); `ui_graph.cost_badge_rect` (#496); `kinect.py` (libfreenect through ctypes, `KinectDevice.request`, a frozen `Telemetry`) and `ui_kinect.py` (#503, #513); `view.DelayState`, `graph.delay_due`, `params.declare_delays` and `DELAY_GROUP` (#514)
+- Plan 90 is built: `stack.DelayStack` (a half-float texture array, made only when read, 1 GiB cap), `graph.STACK` / `fx.STACK` and `// @takes stack stack` (#519); `glsl.KEY_SHAPE` shared by Key and Matte (#520); `Delay.read_as_stack` and `render._draw_cover` (#521); `graphmigrate.lookbacks` / `dreams` / `master_switch` and `patches._retire_lookbacks` / `_retire_dreams`, with `Lookback`, `History`, `EchoNode`, `DreamNode`, `Dreamer` and the `dream.*` params deleted (#522, #523); `shaders/fx/dream.glsl` with `// @hook dream` and `dreamhook.py` (#523); `tests/test_time_displace_488.py` proves #488's shader equals Line → `read.at` (#524)
 
 ## v1.2 — 2026-11-02
 
