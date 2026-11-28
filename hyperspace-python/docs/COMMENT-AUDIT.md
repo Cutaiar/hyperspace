@@ -187,6 +187,9 @@ up to 154 sweeps, and a handful for synthesis and the gate. A pilot on
 **Pilot first.** Run with `only: ["hyperspace/graph.py"]` and read its
 ledger and diff before releasing the full run.
 
+**Measure.** `python3 .claude/workflows/agent_metrics.py <transcript dir>` gives each
+agent's time, turns, messages, tool calls, and context at start and at peak.
+
 **Resume.** If the run stops, relaunch with the same script and args and
 `resumeFromRunId`. Finished shards come back from cache.
 
