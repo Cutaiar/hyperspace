@@ -1,4 +1,4 @@
-"""Game controllers as one vocabulary (plan 42).
+"""Game controllers as one vocabulary.
 
 `gamepad.Pad` is what the rest of the app reads: buttons by name
 (``pad:S``), the hat, six axes, and — on a pad that has them — the

@@ -1,5 +1,4 @@
-"""GRAPH's side pane: one viewer, showing one thing at a time (plan 49,
-then the single viewer of 2026-11-07).
+"""GRAPH's side pane: one viewer, showing one thing at a time.
 
 GRAPH is the panel: always drawn. The pane is always beside the canvas (or
 under it, on a narrow page) and shows **one view** at the pane's full
@@ -22,7 +21,7 @@ pad, a click on a node. The selection's view is kept with the node it
 showed (`ui.view_of`), so the pane is a viewer with a history: back from
 node B to node A selects A again and centres it (`ui.go_view`).
 
-**Every view has a mouse route** (Dillon, 2026-11-07: nothing
+**Every view has a mouse route** (nothing
 stranded). Over the body, a row of chips (`_bar`) wrapping at the pane's
 edge: **selection** and the five sections no canvas node leads to (`TABS`:
 patches, audio, routing, players, system), then a **sections**
@@ -41,8 +40,8 @@ Each section's body is a child of its own (``pane.<key>/##body``), so it
 scrolls by itself and imgui keeps each one's scroll: back to a section is
 back to where it was. Which view is up is not kept between launches: the
 app opens on the selection, as `Panel.page` starts on GRAPH's slot. (The
-folds plan 49 kept in ``<machine>/ui.json`` as ``pane.open`` and
-``pane.below`` are no longer read or written; a file holding them keeps
+folds in ``<machine>/ui.json``, ``pane.open`` and
+``pane.below``, are no longer read or written; a file holding them keeps
 them.)
 
 **Ids.** A widget in a section carries the label it carries on its page
@@ -58,8 +57,8 @@ view's chip, and each menu row, is ``##pane.<key>``; the menu's chip is
 (`ui_graph.SIDE_MIN`, 240 px, at the narrowest) a chip or a tick that
 would pass the right edge starts a new row (`ui.beside`), and the MEDIA
 grid, the SEQ grid, the LFO and envelope strips and the OUTPUT blocks
-lay themselves out for the room they are given (plan 49, stage 2), as do
-VIEW's rows, ROUTING's head, HANDS and SYSTEM (stage 3). In the narrow
+lay themselves out for the room they are given, as do
+VIEW's rows, ROUTING's head, HANDS and SYSTEM. In the narrow
 band under the canvas a section's view grows the band
 (`ui_graph.band_height`); the selection's keeps it `BELOW_H`.
 
@@ -84,7 +83,7 @@ UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
 # each body looked up as it is called, so a hot reload of its page lands; the
 # `Panel._page_<key>` methods are the bodies' one name (the fx browser has
-# no page of its own: the FX page went with stage 2)
+# no page of its own)
 def _fx(panel, dt: float) -> None:
     ui_fx.page(panel, dt)
 
@@ -143,7 +142,7 @@ CHIP_MAX = 220.0         # px: the most a chip's words take
 # The sections chip's own word, and the Select's placeholder on the kit
 # (`ui_switcher`): a view's chip says the view's name, and this says what
 # the menu holds when the view is not one of them. Lower case with the
-# rest of the interface (2026-11-10).
+# rest of the interface.
 SECTIONS_WORD = "sections"
 WRITE_AFTER_S = 0.5      # a setting in ui.json is written this long after the last change
 COST_KEEP = 0.9          # a body's running mean: this much the last mean, the rest the newest
@@ -177,7 +176,7 @@ def write_doc(machine, doc: dict, who: str = "panel") -> None:
 def write_key(machine, key: str, value, who: str = "panel") -> None:
     """Keep `value` as ui.json's top-level `key`, the rest of the file as
     it was — for another module's own key (the loadable patches' folds,
-    ``loadable``, plan 48 stage 2), deferred by its caller `WRITE_AFTER_S`
+    ``loadable``), deferred by its caller `WRITE_AFTER_S`
     after its last change."""
     doc = read_doc(machine)
     doc[key] = value
@@ -187,7 +186,7 @@ def write_key(machine, key: str, value, who: str = "panel") -> None:
 # ---------------------------------------------------------------- the view
 
 # a retired page's slot (its index stays, `ui.PAGE_KEYS`) → the section it
-# retired into (plan 90 H3: the LOOKBACK page into fx, row 1185)
+# retired into (the LOOKBACK page into fx)
 RETIRED_SLOTS = {"lookback": "fx"}
 
 
@@ -223,7 +222,7 @@ def show(panel, key: str) -> None:
 
 
 def where(panel) -> str | None:
-    """The section you are in, for ⌘Z (plan 44 D5b): the one under the mouse, as of
+    """The section you are in, for ⌘Z: the one under the mouse, as of
     the latest draw; anywhere else (the canvas, the pane's chips, the desk, the
     render window) none. Never the view alone: a key row or a pad moves it, and
     the mouse may be on the canvas, so it would say "analyzer" an hour on."""
@@ -235,7 +234,7 @@ def _working() -> bool:
     """Is the person working the panel, as far as a frame's start can say (`undo.by_hand`)?
     A button down or just released, or an item live. Not a text field: one stays live with
     nobody at it for as long as the cursor sits there, so a text field's writers report
-    their own write, `undo.by_hand(True)` where they write (row 757)."""
+    their own write, `undo.by_hand(True)` where they write."""
     return (any(imgui.is_mouse_down(b) or imgui.is_mouse_released(b) for b in (0, 1))
             or (imgui.is_any_item_active() and not imgui.get_io().want_text_input))
 
@@ -371,7 +370,7 @@ def _body(panel, st: dict, key: str, body, dt: float, selection, h: float,
 
 
 def timing_line(panel) -> str:
-    """The SYSTEM section's line for the pane (plan 49 stage 2): each
+    """The SYSTEM section's line for the pane: each
     section whose body drew last frame, its running mean in ms, the dearest
     first — "" until one has. GRAPH's own line above this one times the
     whole panel, these included."""
@@ -385,7 +384,7 @@ def timing_line(panel) -> str:
 
 
 def _live(panel, key: str, said: str) -> str:
-    """What a chip's tooltip says first, live (Dillon, 2026-11-09: the chips
+    """What a chip's tooltip says first, live (the chips
     say their names alone): what is selected, who is on and off air; "" for
     the rest. (The playlist is the meta controller's: GRAPH's deck row.)"""
     if key == SELECTION:
@@ -402,7 +401,7 @@ def _chip(cid: str, title: str, lit: bool, dot: bool, first: bool, tip: str,
     pass the edge. True when clicked.
 
     **As wide as its name, and never wider or narrower while you work**
-    (Dillon, 2026-11-09: the rows of chips, and so the body under them,
+    (the rows of chips, and so the body under them,
     must not jump, nor be padded out): a chip says its title alone — what
     is selected, playing or on air is its tooltip (`_live`) — and the dirty dot sits in
     its top-right corner, in its padding, taking no room. The sections chip,

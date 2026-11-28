@@ -1,4 +1,4 @@
-"""The trackpad's pinch, which GLFW never reports (the owner, 2026-10-26).
+"""The trackpad's pinch, which GLFW never reports.
 
 macOS sends a pinch as magnify events; GLFW's view drops them. `install`
 puts a local AppKit monitor in front of the windows that sums each

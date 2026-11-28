@@ -1,11 +1,9 @@
-"""Node mode's saved form (plan 53 NM0, plan 57): a controller pointed at one
+"""Node mode's saved form: a controller pointed at one
 node of a loadable patch, its degrees of freedom filled by that node's params.
 
-The owner, 2026-11-04: node mode cables are "a special type of cable", drawn and
-labelled, and "should save as part of the preset. In doing so, when you open that
-preset up again, if you choose a different thing for node mode, it should just
-switch. Whether or not you're in node mode and which node you are pointing to
-with node mode, it's just application state. It should just go in the preset."
+Node mode cables are a special kind of cable, drawn and labelled. Whether a controller is
+in node mode and which node it points to is application state, and it is saved in the
+preset: opening a preset and choosing a different node just switches.
 
 **What is saved** (`KEY`, written only when something points; a patch with none
 saves as it did, byte for byte)::
@@ -23,16 +21,16 @@ choosing another just switches (`NodeMode.pointing`).
 **What is not saved: the rows.** They come from `fill`, given the node's params
 (`fillable`), the controller's degrees of freedom and the rows the patch already
 has. A row's source says a controller's shape, and a patch names no device: the
-same file on a Joy-Con fills what a Joy-Con has. N1 and N2 turn a `Fit` into rows
-and draw them as `graphview.NODE_MODE` cables.
+same file on a Joy-Con fills what a Joy-Con has. `node_desk` turns a `Fit` into rows
+and draws them as `graphview.NODE_MODE` cables.
 
-**The rule of the fill** (the owner, 2026-11-04): a mapping already on the node's
+**The rule of the fill**: a mapping already on the node's
 params stays, the rest fill what is left, and there is no paging: a param with no
 freedom left is `Fit.over`, listed, as a node with too many params. A pair of
 discrete controls is one degree of freedom (`gamepad.degrees_of_freedom`). You
 enter with a node selected and a node with no params cannot be entered
 (`enter_refusal`). A meta param is no row of a loadable patch's, in node mode as anywhere
-(`routing.meta_refusal`, row 743).
+(`routing.meta_refusal`).
 
 **Whose it is.** The loadable patch's: `loadable.LoadedPatch.node_mode`, one per `Deck`, in its
 dirty dot and in a load's undo step (`library.Marks`). Who is on which `Deck` is the
@@ -174,7 +172,7 @@ def own_sources(source: str, qualifier: str = "") -> tuple[str, ...]:
     """The unqualified sources a row's `source` reads on the controller that
     publishes under `qualifier`, as `degrees_of_freedom` spells them; none when
     the row is another controller's, or names a pair no pad can have. A pair
-    (plan 56) is its two poles."""
+    is its two poles."""
     scheme, _, rest = source.partition(":")
     bare, _, who = scheme.partition("@")
     if who != qualifier:
@@ -191,7 +189,7 @@ def fill(params: Sequence[str], freedoms: Iterable[Sequence[str]],
     target). One on a param of the node stays, whoever's it is. Any this
     controller reads (`qualifier`) takes its freedom, wherever it aims, so one
     stick never moves two things by accident. A caller whose rows are shadowed
-    while it points (a desk's layers, N1) leaves those out, keeping the ones on
+    while it points (a desk's layers) leaves those out, keeping the ones on
     the node. Pure, so one file on one controller is always one map."""
     rows = list(rows)
     wanted = set(params)
@@ -203,8 +201,8 @@ def fill(params: Sequence[str], freedoms: Iterable[Sequence[str]],
     return Fit(slots, tuple(p for p in params if p in kept), tuple(todo[len(slots):]))
 
 
-# plan 86 (row 1061): a desk knob holds a dropdown as it holds a fader, a choice per
-# stretch of its throw (`Param.set_norm`), its ring the choice; a pad's button (row 1062)
+# a desk knob holds a dropdown as it holds a fader, a choice per
+# stretch of its throw (`Param.set_norm`), its ring the choice; a pad's button
 # cycles one, a press the next choice. Not one whose list is asked each time (a list
 # that changes moves every choice under the knob; today only meta params have one), nor
 # one with a single choice, which nothing could move
@@ -226,7 +224,7 @@ def _ours(reg: Any, pid: str) -> Any:
 
 def dropdowns(reg: Any, ids: Iterable[str]) -> list[str]:
     """Of a node's param ids, in order, the dropdowns a controller can hold
-    (`_knob_enum`): a desk's knob, or a pad's button (plan 86, rows 1061, 1062).
+    (`_knob_enum`): a desk's knob, or a pad's button.
     Neither is a route, so a dropdown no route can move is held as well."""
     out = []
     for pid in ids:
@@ -242,9 +240,9 @@ def fillable(reg: Any, ids: Iterable[str], *, routed: bool = False) -> list[str]
     then (a desk's) the `dropdowns`. Each run in `ids`' order, the dropdowns
     after every continuous param, so they take only the knobs the node's
     continuous params leave and a map made before them is the same map.
-    `routed`: a pad's sticks, triggers and pairs, whose rows are routes (plan 53
-    §3): only continuous params a route can move. A pad's dropdowns go on its
-    buttons instead (`dropdowns`, `node_desk.pad_buttons`, row 1062)."""
+    `routed`: a pad's sticks, triggers and pairs, whose rows are routes:
+    only continuous params a route can move. A pad's dropdowns go on its
+    buttons instead (`dropdowns`, `node_desk.pad_buttons`)."""
     ids = list(ids)
     out = []
     for pid in ids:

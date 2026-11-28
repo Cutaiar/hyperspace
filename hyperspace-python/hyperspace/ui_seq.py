@@ -1,5 +1,5 @@
 """The SEQ page — the step sequencer and its envelopes (sequencer.py,
-envelope.py; plan 31 U).
+envelope.py).
 
 Top to bottom:
 
@@ -78,7 +78,7 @@ THUMB_W = 48.0        # a folded strip's thumbnail (its height is the frame's)
 THUMB_SAMPLES = 4     # per curved stage of a thumbnail
 NAME_W = 52.0         # a folded strip's name cell; its level bar takes the rest
 FOLD_COLS = 2         # folded strips to a line
-# plan 49 stage 2: GRAPH's side pane (240–320 px). Narrower than `ROOMY`
+# GRAPH's side pane (240–320 px). Narrower than `ROOMY`
 # the lane column narrows, the cells may thin to `CELL_MIN`, the folded
 # strips go one to a line and an open strip's scope sits over its knobs
 ROOMY = 320.0         # px: the room the page's own layout wants
@@ -200,7 +200,7 @@ def add_env(panel, envs) -> int | None:
 def remove_env(panel, envs, n: int) -> bool:
     """The ×: extra envelope `n` and its knobs go; a lane pointed at it
     fires nothing until it is pointed elsewhere. One undo step, with the
-    library's marks (row 563: the envelope may be a GRAPH group's member).
+    library's marks (the envelope may be a GRAPH group's member).
     A lane envelope, 1–5, is refused: False, and no step."""
     if n in LANE_ENVS or n not in envs:
         return False
@@ -240,7 +240,7 @@ def _transport(panel, seq) -> None:
         imgui.table_next_column()
         panel.half(f"{g}.swing", "swing", label_w=ui_lfo.ROW_LABEL_W)
         imgui.table_next_column()
-        # how long a step holds a gate-mode envelope (P1), a fraction of a step
+        # how long a step holds a gate-mode envelope, a fraction of a step
         panel.half(f"{g}.gate", "gate", label_w=ui_lfo.ROW_LABEL_W)
         imgui.end_table()
 

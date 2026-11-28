@@ -1,16 +1,14 @@
-"""The modulation graph as data, and the order it is evaluated in (plan 28 N0).
+"""The modulation graph as data, and the order it is evaluated in.
 
 Every performer row, macro subscriber, `scale`, LFO knob and modifier
 input is an edge between nodes; `Router.build_modgraph` (routing.py) makes the
 graph from the table, and `Router.modulate` runs it in `order(g)`, so
 a value that something else in the pass reads — an LFO's depth a hand
 owns, a macro scaling a push, a `scale` param that is itself modulated —
-lands **this frame**, before its reader (decision 7: the one-frame lag
-is gone). Nothing reads a stale value but through a `delay` modifier.
+lands **this frame**, before its reader (no one-frame lag). Nothing reads a stale value but through a `delay` modifier.
 
-Until plan 40 this module was named `patch` (`Patch`, `PatchNode`, `PatchEdge`)
-(D1): "patch" is now the owner's word for a saved group of nodes and its
-boundary (`patches.py`); this is the modulation graph, `Router.modgraph`.
+"Patch" means a saved group of nodes and its boundary (`patches.py`); this
+module is the modulation graph, `Router.modgraph`.
 
 Nodes (`ModNode.kind`):
 
@@ -18,7 +16,7 @@ Nodes (`ModNode.kind`):
             an OSC role's axis — its id is the address a row names
   lfo       an LFO (``lfo:0`` is LFO 1): a source *with inputs*, its knob
             params; it steps inside the pass
-  modifier  a modifier (N1), ``mod:<n>``: inputs in, one lane out. A
+  modifier  a modifier, ``mod:<n>``: inputs in, one lane out. A
             `delay` modifier (``delay=True``) is where a loop may close
   macro     ``macro.N``: a param whose subscribers fan out into other
             params' `base` and other cables' `depth`
@@ -35,7 +33,7 @@ Edges (`ModEdge.port`, the port on `dst`):
             the subscribers are scene-setters that ran before the pass
             (`Router.follow_macros`, frame step 3), so they put no
             constraint on the pass and close no loop
-  in        a modifier's input (N1): a lane → the modifier
+  in        a modifier's input: a lane → the modifier
   shape rate sync depth phase reset trigger
             an LFO knob param → its LFO (``lfo.trigger`` → every LFO);
             on a modifier, its own param's name (``mod.2.attack``)
@@ -57,10 +55,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-# a modulator bank's voices (plan 31 B) take the bank's scheme as their
+# a modulator bank's voices take the bank's scheme as their
 # kind — ``lfo``, ``env`` — and routing.BANKS says which schemes those are
 KINDS = ("source", "lfo", "env", "modifier", "macro", "param")
-# plan 30 D2: the render graph's port type for a value a node publishes
+# the render graph's port type for a value a node publishes
 # once a frame (`graph.VALUE`; named here, not imported: this module is a
 # leaf). A render node's `VALUE` port would be a `source` here, its id the
 # node's port (``palette:palette``) — none publishes one yet
@@ -69,7 +67,7 @@ RENDER_VALUE = "value"
 # then the bank's global trigger
 LFO_KNOBS = ("shape", "rate", "sync", "depth", "phase", "reset")
 LFO_PORTS = (*LFO_KNOBS, "trigger")
-# the ports an envelope's params feed (plan 31 W1): its knobs in the order
+# the ports an envelope's params feed: its knobs in the order
 # envelope.py declares them, then `fire` and `gate` (envelope.Envelopes.KNOBS)
 ENV_KNOBS = ("mode", "attack", "hold", "decay", "sustain", "release", "curve", "sync",
              "retrig", "amount", "velocity", "fire", "gate")

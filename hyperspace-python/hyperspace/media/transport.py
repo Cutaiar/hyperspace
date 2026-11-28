@@ -7,7 +7,7 @@ put at pos * duration (so an LFO on `pos` drives the clip directly). `jog`
 adds a push of 8 * jog seconds per second that springs in and coasts back
 out; only that push is sprung, so the rate itself never lags.
 
-Plan 45 V4: each step also says how the playhead is moving, for the sound
+Each step also says how the playhead is moving, for the sound
 that follows it: `velocity`, in clip-seconds per second and signed (0 when
 it is not moving at all, as at a `once` clip's end, whatever `speed` says;
 a drag of `pos` at the speed the drag went, a jump at the rate) and `wrap`,
@@ -45,8 +45,8 @@ class Transport:
         self.coast = 0.0          # the jog's sprung contribution to speed
         self.coast_v = 0.0
         self.direction = 1.0      # pingpong sign
-        self.velocity = 0.0       # plan 45 V4: signed, as the playhead really moves
-        self.wrap = 0.0           # plan 45 V4: the loop's length, when it loops
+        self.velocity = 0.0       # signed, as the playhead really moves
+        self.wrap = 0.0           # the loop's length, when it loops
 
     def step(self, dt: float, rate: float, pos: float, jog: float, loop: str) -> float:
         """Advance one frame; returns the playhead in seconds."""

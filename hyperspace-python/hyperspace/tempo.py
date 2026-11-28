@@ -1,4 +1,4 @@
-"""Tempo — one free-running clock, tapped into time (plan 09, decision 9).
+"""Tempo — one free-running clock, tapped into time.
 
 There is no DJ Link, no MIDI clock and no drift correction: the performer
 taps a tempo, presses the trigger on the one, and re-taps when the track
@@ -11,9 +11,8 @@ Two things a tap must never do decide the shape of `Clock`:
     `trigger` — the global LFO trigger, ``lfo.trigger``, the one button
     pressed after tapping — places the downbeat the LFOs read (`t0`).
     A fresh clock's `t0` is its construction time until the first trigger,
-    so on a new launch the synced LFOs run unaligned until that press
-    (plan 11, decision register row 1). A re-tap mid-set changes the
-    tempo, not the downbeat: a BPM change
+    so on a new launch the synced LFOs run unaligned until that press.
+    A re-tap mid-set changes the tempo, not the downbeat: a BPM change
     re-anchors `t0` so that ``beat(t)`` is continuous at the instant of
     the change, and every synced LFO keeps its place in the bar and runs
     faster or slower from there.
@@ -41,8 +40,8 @@ it in the same frame agree on what "now" is — the frame the trigger
 fires, every synced LFO reads exactly phase 0. A trigger that arrives
 *after* the frame's step (the panel's chip, a performer's rising edge)
 is held by `LFOs` and lands at the start of the next step, at that
-step's time, so it too reads exactly phase 0 (lfo.py). Nothing here imports from
-the host: `register` takes the registry as a duck-typed argument, the
+step's time, so it too reads exactly phase 0 (lfo.py). Nothing here
+imports from the host: `register` takes the registry as a duck-typed argument, the
 way hands/core.py does.
 """
 
@@ -66,7 +65,7 @@ def _clamp(x, a, b):
 class Clock:
     """Tap tempo, a downbeat, and the phase of any division at any time."""
 
-    # how many triggers this clock has seen (plan 31 S1): a reader that
+    # how many triggers this clock has seen: a reader that
     # follows the beat — the step sequencer — compares it with the one it
     # last saw to tell a re-aligned downbeat from a backward nudge, which
     # moves `beat` the same way. Class-level so a clock from before a hot
@@ -146,7 +145,7 @@ class Clock:
 def register(reg, clock: Clock) -> None:
     """The clock's params in the ``tempo`` group: bpm and nudge persist as
     **meta controller** state (a project's session part — a loadable patch never carries
-    or moves a tempo, plan 13 §4), tap is the key's and the APC's
+    or moves a tempo), tap is the key's and the APC's
     button."""
     if f"{GROUP}.bpm" in reg:
         return
@@ -156,9 +155,9 @@ def register(reg, clock: Clock) -> None:
                    tip="The clock's tempo. Tap it (B, the APC's TAP TEMPO) or set it "
                        "here; a change keeps every synced LFO where it is and only "
                        "alters its rate.")
-    # the meta controller's, so no lane may drive it (rows 743, 775), which also keeps a
-    # performer from tapping on every transient (decision register row 2, option c). The
-    # LFO triggers stay ownable (lfo.py).
+    # the meta controller's, so no lane may drive it, which also keeps a
+    # performer from tapping on every transient. The LFO triggers stay
+    # ownable (lfo.py).
     reg.trigger(f"{GROUP}.tap", "Tap tempo", clock.tap, group=GROUP,
                 tip="Tap on the beat: two or more taps within 2 s of each other set "
                     "the BPM. Tapping never restarts the LFOs — the trigger does.")

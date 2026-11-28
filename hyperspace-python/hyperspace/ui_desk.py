@@ -1,17 +1,16 @@
-"""The APC40 drawn on screen (plan 14 WP7, decision 25 (a); plan 17 WP4).
+"""The APC40 drawn on screen.
 
-**APC40-only** (plan 27 B2): with several MIDI desks listed, this draws
+**APC40-only:** with several MIDI desks listed, this draws
 the first MIDI role's rows (`Bindings.active()` with no role) over
 `apc40.LAYOUT` — the APC40 in every install that lists it first. A second
-desk (a `generic` profile) has no layout to draw; plan 29's generic
-on-screen desk is what replaces this module for any profile.
+desk (a `generic` profile) has no layout to draw.
 
 A picture of the desk in the control window: every control of
 `apc40.LAYOUT` at its place on the device, with its glyph — the same
 glyph the ROUTING page prints first on a desk or meta row and Learn
 prints in its messages — so a row can be found on the device by looking.
 
-**It takes the room it has** (`room`, plan 17 fork 1): the space left of
+**It takes the room it has** (`room`): the space left of
 the panel, bottom-left, above the cheat sheet when that shows and under
 the pad diagram when that is up (ui_pad.py); with the
 panel hidden (`ui.panel`: H, DEVICE ON/OFF, the header's `big` chip) it is
@@ -25,12 +24,12 @@ alone, as before.
 
 What is drawn is the **layer that is up** (`Bindings.active`): the
 controls mapped on it and the invariant ones are lit, every other control
-is dark, exactly as the device's own LEDs and rings are (plan 13 D8), at
+is dark, exactly as the device's own LEDs and rings are, at
 either size. ⇧ fills red while the global layer is up. A knob's arc is
-its ring — the param's base (audit R6); a fader's cap the param's value;
+its ring — the param's base; a fader's cap the param's value;
 a button's LED is filled when the device's would be (`routing.led_level`,
-the rule midi.py lights by). A **bank pad** (clip rows 1, 4 and 5, plan 19
-WP2) has three states, as on the device: the loaded patch's is green, a
+the rule midi.py lights by). A **bank pad** (clip rows 1, 4 and 5) has three states, as on the device:
+the loaded patch's is green, a
 slot that holds another loadable patch is amber at half strength and reads that
 loadable patch's name, and an empty slot's is drawn as a dark control — its glyph
 only, no label (`empty`); its hover still says what the pad is. The hover
@@ -42,7 +41,7 @@ lit map is rebuilt only when the table says the desk changed — its
 serials (`layer_serial`, `desk_serial`, `redraw_serial`) or a row added
 or dropped — and the values are read every frame.
 
-**A click picks a control** (`click`, plan 17 forks 2 and 3): it is
+**A click picks a control** (`click`): it is
 framed in red here and on its ROUTING line (which the rows scroll to,
 `ui_routing.goto`), and the next click on a
 param's widget — on a page drawn dimmed, taking no other input
@@ -55,7 +54,7 @@ line lets go, and so does `PICK_S` seconds without a click (`tick`) —
 a dimmed page is never left standing. While "Learn desk" is armed a
 click completes it instead, as a knob bump would.
 
-**The offer** (plan 24 C3): while a mappable control is picked, the
+**The offer:** while a mappable control is picked, the
 empty ground of the right-hand section (`OFFER`, under the transport row)
 lists the params this loadable patch uses, ranked (`offer`, `learn.ranked`: what
 its routes and macros move, what it set off the group default, the
@@ -100,7 +99,7 @@ PICK_S = 20.0              # a picked control lets go by itself after this long 
 PICK_MOVE = 12.0           # px the mouse must leave a pick's click by before a click can map
 SAYS_S = 0.5               # how long the labels' texts are kept (a renamed loadable patch shows by then)
 LET_GO_TIP = "click to let go"     # the footer's picked line: on it where it fits, and on hover
-# The offer (plan 24 C3): where the picked control's list of this loadable patch's
+# The offer: where the picked control's list of this loadable patch's
 # params is drawn, in layout units (x, y, w, h) — the right-hand section's
 # empty ground between the transport row and the crossfader, so it covers
 # no control and the desk's own layout never moves while a pick stands
@@ -134,7 +133,7 @@ def _state(panel) -> dict:
 
 def _key(table) -> tuple:
     """What changes the lit map: the table's serials and its rows — and the
-    surface page's (plan 31 §A: its flips, and its rows, rebuilt when the
+    surface page's (its flips, and its rows, rebuilt when the
     lane or the length changes)."""
     return (table.layer, table.layer_serial, table.desk_serial,
             getattr(table, "redraw_serial", 0), id(table.bindings), len(table.bindings),
@@ -145,7 +144,7 @@ def _key(table) -> tuple:
 
 
 PAGE_OWNS = "the sequencer page owns this"
-NODE_FAINT = 0.3        # a filled control while the desk is on the other `Deck` (row 712)
+NODE_FAINT = 0.3        # a filled control while the desk is on the other `Deck`
 
 
 def _node_ink(away: bool) -> imgui.ImVec4:
@@ -171,13 +170,13 @@ def _edge(filled: dict[int, bool], b: Binding | None, on: bool) -> int:
 
 
 def on_page(table, c: apc40.Control) -> bool:
-    """Is this control one the surface page that is up holds (plan 31 §A)?"""
+    """Is this control one the surface page that is up holds?"""
     probe = Binding(c.source, "")
     return any(probe.overlaps(b) for b in getattr(table, "page_rows", ()))
 
 
 FINE_OWNS = "held, every knob moves a tenth as far"
-# the FINE button as a row for the desk to draw (row 732): `midi.MidiIO` reads
+# the FINE button as a row for the desk to draw: `midi.MidiIO` reads
 # the button itself, so the table has no row on it
 FINE_ROW = Binding(f"note:{apc40.FINE[1]}:{apc40.FINE[0]}", FINE_PARAM, "momentary",
                    feedback="led")
@@ -378,7 +377,7 @@ def footer_line(panel, now: float | None = None) -> tuple[str, bool] | None:
 
 
 def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
-    """What a picked control is offered (plan 24 C3): `learn.ranked` over
+    """What a picked control is offered: `learn.ranked` over
     every param a desk control may take (`ui_routing.desk_target`) — this
     loadable patch's own first, ranked, then the rest by group. Built from the
     registry, the table and the library's group defaults, and kept while
@@ -401,10 +400,10 @@ def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str
     routed = {b.target for b in table.routes() if b.enabled}
     routed |= {s.base for m in table.macros.values() for s in m.subs if s.base}
     on_desk = {b.target for b in table.desk() if b.enabled}
-    # (plan 33 T7: whether the faces show a picture is the graph's wire)
+    # (whether the faces show a picture is the graph's wire)
     spec = panel.graph_now()[1] if hasattr(panel, "graph_now") else None
     media = learn.faces_media(spec, getattr(getattr(panel, "view", None), "switch", None))
-    # (plan 36 T4: a look-back's and the dream's knobs show while drawn)
+    # (a look-back's and the dream's knobs show while drawn)
     out = learn.ranked(params, values, defaults, routed, on_desk, media=media,
                        drawn=learn.drawn_of(spec))
     st["offer"] = (key, out)
@@ -537,12 +536,12 @@ def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
     3. The control is the picked one → it is let go.
     4. Otherwise → it is picked; ROUTING scrolls to its line if it is
        open, or when it next is (`ui_routing.goto` — the page is not
-       changed, fork 2), its filter cleared; and a hidden panel comes back
+       changed), its filter cleared; and a hidden panel comes back
        (the desk shrinks to its column and the pick is still framed)."""
     lrn = getattr(panel, "learn", None)
     if lrn is None:
         return
-    if on_page(table, c):                   # neither learned nor picked (plan 31 §A)
+    if on_page(table, c):                   # neither learned nor picked
         lrn.said(f"{c.glyph}: {PAGE_OWNS}")
         return
     if is_fine(table, c):                   # reserved: a row here would take the button
@@ -648,7 +647,7 @@ def _room(panel) -> tuple[float, float, float, float]:
 # ---------------------------------------------------------------- what a control says
 
 # What a few targets do, where their label alone does not say it on the
-# desk (the owner's findings, 2026-10-16): MASTER select and PAN only
+# desk: MASTER select and PAN only
 # matter in overlay mode, which config.toml's [output] overlay must allow;
 # STOP ALL resets the analyzer to the selected scene and a second press within
 # 8 s undoes it; QUANT walks the bank, not the preset list
@@ -660,16 +659,16 @@ DESK_WORDS = {
     FINE_PARAM: "Fine (hold)",
 }
 # an enum `set` row whose choice's name alone does not say what the
-# button does: the word goes before the name (the track-select row, G7:
+# button does: the word goes before the name (the track-select row:
 # "analyzer SUB" — the strip the device knobs follow under SHIFT)
 SET_WORDS = {"band.select": group_word("band")}
 # a `step` row's word where the param's label is too long for a small button
-# at a size a person can read (B18, B19: "Band +1", the next band's strip)
+# at a size a person can read ("Band +1", the next band's strip)
 STEP_WORDS = {"band.select": group_part("band").capitalize()}
 
 
 def text(reg, b: Binding) -> str:
-    """What a lit control does, in the panel's words (plan 17 fork 8): a
+    """What a lit control does, in the panel's words: a
     `set` row on an enum → that value's name (the bank row reads the
     loadable patches' names, a scene pad the scene's; `SET_WORDS` puts a word
     before it — "analyzer SUB"); a `step` row → the label and the step
@@ -705,7 +704,7 @@ def empty(reg, b: Binding | None) -> bool:
     """Is this a `set` row on an enum that says which of its choices hold
     something (`Param.has`: the bank's `preset.select`), on a choice that
     holds nothing — a bank pad whose slot is empty? Such a pad is dark on
-    the device (D8) and pressing it only says the slot is empty."""
+    the device and pressing it only says the slot is empty."""
     p = reg.get(b.target) if b is not None else None
     has = getattr(p, "has", None)
     if p is None or has is None or b.op != "set" or p.kind is not Kind.ENUM:
@@ -809,7 +808,7 @@ def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
 
 
 def _deck_words(panel, table) -> tuple[str, str, bool]:
-    """The header's deck (plan 44 D5e, DQ7): the `Deck` whose rows this draws, the clause
+    """The header's deck: the `Deck` whose rows this draws, the clause
     naming the one the hardware plays while it is another, and whether it is red: either
     of those. Empty with no meta controller."""
     meta = getattr(panel, "meta", None)
@@ -983,7 +982,7 @@ def _draw_big(panel, dl, table, c: apc40.Control, b: Binding | None,
     """One control at the labelled size: its face, its glyph small in the
     top-left corner, and — returned, for the label pass, which draws in
     the labels' type — the room its label has. `lh` is a label line's
-    height. A dark control gets no label (D8), and an empty bank slot's
+    height. A dark control gets no label, and an empty bank slot's
     pad is drawn as one (`empty`)."""
     on = b is not None and not empty(panel.reg, b)
     edge = _edge(filled, b, on)
@@ -1185,7 +1184,7 @@ def _header(panel, table) -> None:
             ui.tooltip("The layer that is up — SHIFT (⇧) latches it. Lit controls do "
                               "something on it; dark ones do nothing.")
         page = getattr(table, "page", None)
-        if page is not None and hasattr(page, "header"):     # the sequencer page (plan 31 §A)
+        if page is not None and hasattr(page, "header"):     # the sequencer page
             imgui.same_line()
             ui._micro(page.header(), ui.RED)
             if imgui.is_item_hovered():
@@ -1193,7 +1192,7 @@ def _header(panel, table) -> None:
                                   "grid is the lanes' steps, scene 1–5 the lanes, clip stop "
                                   "k the length.")
         filled = table.node_rows()
-        if filled and not glob:             # node mode (plan 53 N1b): saved, and said here
+        if filled and not glob:             # node mode: saved, and said here
             imgui.same_line()
             node_away = bool(table.node_row_away(filled[0]))
             ui._micro(f"node · {len(filled)}" + (" · other deck" if node_away else ""),

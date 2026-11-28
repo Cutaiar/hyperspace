@@ -1,9 +1,9 @@
-"""Syphon in (plan 32 T8): another app on this Mac — Resolume, VDMX, a
+"""Syphon in: another app on this Mac — Resolume, VDMX, a
 TouchDesigner window — as `syphon:<app>/<server>` sources, zero-copy.
 
 Syphon hands over a GL texture in our own context, so a frame here is a
-texture `MediaFrame` (no pixels) and never touches the CPU (m0-findings
-§1). That puts the work on two threads:
+texture `MediaFrame` (no pixels) and never touches the CPU. That puts the
+work on two threads:
 
 - **The scan** (`SyphonKind`, ``media-discover-<role>``): each ask of
   syphon-python's server directory spins the asking thread's run loop
@@ -96,7 +96,7 @@ class SyphonSource(live.LiveSource):
                 self._latest.put(MediaFrame(None, self.clock(), self._n,
                                             texture=int(img.textureName()),
                                             tex_size=(int(sz.width), int(sz.height)),
-                                            tex_target=TEX_RECT))   # an IOSurface's (T6)
+                                            tex_target=TEX_RECT))   # an IOSurface's
                 self._fault = ""
         return self.latest()
 

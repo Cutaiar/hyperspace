@@ -1,7 +1,7 @@
-"""Node mode on a controller (plan 53 N1, N2): the rows `nodemode` says, per player and per `Deck`.
+"""Node mode on a controller: the rows `nodemode` says, per player and per `Deck`.
 
-The owner, 2026-11-04: a controller points at one node, "its degrees of freedom filled
-by that node's params", saved in the loadable patch, with no latch and no paging. So this
+A controller points at one node, its degrees of freedom filled by that node's params,
+saved in the loadable patch, with no latch and no paging. So this
 holds nothing of its own to save: each `Deck`'s table has a `NodeDesk`
 (`Bindings.node_desk`), which reads what that deck's loadable patch points where
 (`LoadedPatch.node_mode`) and derives the rows (`nodemode.fill`), the same objects until
@@ -15,7 +15,7 @@ patch says where a player points, and the meta controller says where the player 
 
 **Choosing the `Deck`.** `enter` is the panel's verb: it is run on the deck the panel looks
 at, an edit of that patch, and it brings the controller there (one controller points at one
-patch at a time, and mapping it elsewhere moves it, plan 55). Its player's duty stays;
+patch at a time, and mapping it elsewhere moves it). Its player's duty stays;
 moving the player brings it back. Undoing the edit does not move the controller: the
 pointer is the meta controller's, the undo stack the patch's.
 
@@ -25,35 +25,34 @@ pointer is the meta controller's, the undo stack the patch's.
   back when they go; a control they do not fill keeps its row;
 - a meta param is none of them (`nodemode.fillable`, `routing.meta_refusal`);
 - they are in no `bindings`, so not in the file, the dirty dot or `routes()`; a learn takes
-  their control freely (`is_invariant` does not read them), and a pair's consent (row 754)
+  their control freely (`is_invariant` does not read them), and a pair's consent
   does not ask about them, since no one made them.
 
 A mapping stays, whoever's: a row from any controller on one of the node's params keeps it
 out of the fill.
 
-**A modulator gives way, and comes back** (the owner, 2026-11-06, row 711): "we need to have
-LFOs and audio routes be allowed to be overwritten for node mode, as long as they come back when
-you disengage node mode." So a route from an LFO, an envelope, an analyzer lane, the sequencer or
+**A modulator gives way, and comes back.** LFOs and audio routes may be overwritten by node
+mode, and come back when it disengages. So a route from an LFO, an envelope, an analyzer lane, the sequencer or
 a modifier does not keep its param from filling, and while a desk here holds that param
 (`holding`) the route does not run: the knob is the param. `Router` leaves it out of its plan;
 nothing edits the saved route, so a leave, an undo, a re-point or a load is the route back, and
 the file holds what it held. A desk that does not act here holds nothing, so the modulators run:
 one on the other `Deck`, or one that is not plugged in. SHIFT does not let go: a held key is no
-reason for the look to jump. A branch to keep them is future work ("not important enough yet").
+reason for the look to jump.
+# DEBT: node-mode-modulators-always-give-way
 
-**A pad (N2)** is the same road: one fill, one set of rests, one cable kind. Its entry says
+**A pad** is the same road: one fill, one set of rests, one cable kind. Its entry says
 "gamepad", and its rows are for the player's first pad. What differs is what a row is, since a
 stick has no ring to catch and a pad's rows are routes: each is a `push` about the base at
 `PAD_DEPTH`, with the pad's own feel, so a stick at rest moves nothing and the look comes back on
-release (NQ5). `Router` runs them while the pad is on this `Deck` (`routed`), and that is also how
+release. `Router` runs them while the pad is on this `Deck` (`routed`), and that is also how
 the camera job stands down (`Router.claimed`) and a Joy-Con's stick stays heard
-(`PadDevice.quiet_stick`). Its freedoms are its axes, then its natural pairs (plan 56), for its
-continuous params; a lone button has no lane for a route to read. **Its dropdowns** (plan 86, row
-1062, the owner's) go on the buttons those left, bumpers first (`PAD_BUTTONS`), one a button, each
-a `toggle` row that `Router.pad` fires (`pressed`): a press the next choice, kept, as a desk's knob
+(`PadDevice.quiet_stick`). Its freedoms are its axes, then its natural pairs, for its
+continuous params; a lone button has no lane for a route to read. **Its dropdowns** go on the buttons those left, bumpers first (`PAD_BUTTONS`), one a button,
+each a `toggle` row that `Router.pad` fires (`pressed`): a press the next choice, kept, as a desk's knob
 keeps its. A control an enabled row reads, or
 gates on, or a modifier reads, or one the model's own layout holds (`routing.layout_of`), is no
-freedom: node mode takes no button that does something (NQ6), and it needs no hold on any. Desks
+freedom: node mode takes no button that does something, and it needs no hold on any. Desks
 fill first and pads in list order, each leaving what an earlier one filled, so a pad pointed second
 never changes a desk's map. **Whose pad:** the player's first that is connected, else their first
 listed (`is_first`), as the pad window picks. **A nap changes no map:** a pad asleep is filled as
@@ -74,15 +73,13 @@ KIND = "midi"                  # what a saved entry's `controller` says of a des
 PAD_KIND = "gamepad"           # ...and of a pad (`PadDevice.kind`)
 # a pad row's depth: a stick's whole throw is half the param's range either way, a trigger's
 # all of it. Not `learn.PUSH_DEPTH`, a route's start for a depth knob to take up: these have no
-# knob, so the stick must reach the param (row 820)
+# knob, so the stick must reach the param
 PAD_DEPTH = 1.0
 PAD_SCHEMES = ("axis", "pad", "hat", PAIR_SCHEME)   # what can hold a freedom of a pad's
-# plan 86 (row 1062, the owner, 2026-11-23): "pads should just use their toggle buttons
-# (bumpers, stick clicks, maybe even the middle buttons, or even the dpad or other button
-# cluster) to toggle / cycle between dropdown options". So a pad's dropdowns go on the
-# buttons its sticks, triggers and pairs left, in that order, one dropdown a button, each
-# press the next choice, wrapping (`routing.act`: `toggle` on an enum cycles). Not GUIDE,
-# the system's button. A press is an edit, as a desk's knob is: it stays
+# a pad's dropdowns go on the buttons its sticks, triggers and pairs left, in this order,
+# one dropdown a button, each press the next choice, wrapping (`routing.act`: `toggle` on
+# an enum cycles). Not GUIDE, the system's button. A press is an edit, as a desk's knob is:
+# it stays
 PAD_BUTTONS = ("pad:LB", "pad:RB", "pad:LSTICK", "pad:RSTICK",
                "pad:VIEW", "pad:MENU", "pad:SHARE", "pad:LP", "pad:RP", "pad:LFN", "pad:RFN",
                "pad:TOUCH", "hat:N", "hat:E", "hat:S", "hat:W", "pad:N", "pad:E", "pad:S", "pad:W")
@@ -156,7 +153,7 @@ def _pad_source(sources: tuple[str, ...], qualifier: str) -> str:
     if len(sources) == 1:
         return _address(sources[0], qualifier)
     # (a hat pole is ``hat.N`` in a pair's name, so the D-pad's pair never reads as the
-    # face's ``pair:N/S``: plan 57 §7b)
+    # face's ``pair:N/S``)
     pos, neg = (s.partition(":")[2] if s.startswith("pad:") else s.replace(":", ".", 1)
                 for s in sources)
     return pair_address(pos, neg, qualifier)
@@ -372,7 +369,7 @@ class NodeDesk:
         return out
 
     def _button_rows(self, pad, fit: nodemode.Fit, had: list[Binding]) -> list[Binding]:
-        """The rows of `fit` on a pad's buttons (row 1062): each a `toggle`, a press the
+        """The rows of `fit` on a pad's buttons: each a `toggle`, a press the
         dropdown's next choice. Kept while it says the same, as `_pad_rows`."""
         reg = self.deck.reg
         keep = {(b.source, b.target): b for b in had}
@@ -416,7 +413,7 @@ class NodeDesk:
             ahead = [("", p) for p in before]
             fit = nodemode.fill(params, [f for f in pad_freedoms(model) if not held.intersection(f)],
                                 [*self._kept(set(params)), *ahead])
-            # row 1062: the dropdowns on the buttons the sticks, triggers and pairs left
+            # the dropdowns on the buttons the sticks, triggers and pairs left
             drops = nodemode.dropdowns(deck.reg, ids)
             used = {src for slot in fit.slots for src in slot.sources}
             cycles = nodemode.fill(drops, pad_buttons(model, held | used),
@@ -431,7 +428,7 @@ class NodeDesk:
             drops = nodemode.dropdowns(deck.reg, ids)
             # the continuous params fill as they did before dropdowns did, so a saved map
             # never moves: a patch-layer row on a dropdown reserves no knob from them
-            # (plan 86, review of #468). The dropdowns then take what is left, where a
+            # The dropdowns then take what is left, where a
             # knob that still holds a dropdown's own row stays that row's
             params = [p for p in nodemode.fillable(deck.reg, ids) if p not in drops]
             wanted = set(params)
@@ -489,7 +486,7 @@ class NodeDesk:
 
     def routed(self) -> list[Binding]:
         """The rows `Router` runs, read each frame: those of each pad on this `Deck`. A pad on
-        the other runs nothing here, though its lanes are the shared half's and this deck
+        the other `Deck` runs nothing here, though its lanes are the shared half's and this deck
         could read them: no patch reaches another. One asleep stays, its lanes off, as a
         saved route on it does."""
         if not self.deck.loaded_patch.node_mode:
@@ -498,7 +495,7 @@ class NodeDesk:
 
     def pressed(self) -> list[Binding]:
         """The button rows `Router.pad` fires, read each frame: each pad's on this `Deck`
-        that cycle a dropdown (row 1062). A press acts (`routing.act`) as a table row's."""
+        that cycle a dropdown. A press acts (`routing.act`) as a table row's."""
         if not self.deck.loaded_patch.node_mode:
             return []
         return [b for b in self._pad_now() if b.op == CYCLE_OP]

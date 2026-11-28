@@ -1,17 +1,17 @@
 """The step sequencer — five lanes of eight steps, read straight off the clock.
 
-A sequencer is a source like the LFOs (plan 31 §S): `Sequencer.step` runs
+A sequencer is a source like the LFOs: `Sequencer.step` runs
 once a frame, fires each lane's envelope on the steps it crosses, and
 `publish` hands the router five trigger-kind lanes, ``seq:<i>``, that
 pulse on the frame a lane fires, so a lane can drive a strobe as well as its
-envelope (not ``preset.next``: `routing.meta_refusal`, no loadable patch's row loads). Every step is a registry param —
-``seq.<l>.<s>``, a toggle in v1 — so the APC40's clip grid is a plain
+envelope. (``preset.next`` is not a target: `routing.meta_refusal`, as no loadable patch's row loads.) Every step is a registry param —
+``seq.<l>.<s>``, a toggle — so the APC40's clip grid is a plain
 toggle row with LED feedback, and Learn, undo, the loadable patch and "a
-performer owns a step" all come with it (decision 4). The model stores a
+performer owns a step" all come with it. The model stores a
 step as a float, 0 off and > 0 its velocity, so the toggle can become a
-velocity later without a new file format (decision 5).
+velocity later without a new file format.
 
-Per sequencer (all global, decisions 5–6):
+Per sequencer (all global):
 
   span    1/2 bar · 1 bar · 2 bars · 4 bars — the time the eight steps
           cover, so a step is a 16th, an 8th, a quarter or a half
@@ -20,10 +20,10 @@ Per sequencer (all global, decisions 5–6):
   swing   0–0.5 of a step: how late every odd step lands
   gate    0.05–1 of a step: how long a fired gate-mode envelope holds
           before it releases (`gate_seconds`; a one-shot ignores it)
-  run     the transport; meta controller state, never in a loadable patch (decision 8)
+  run     the transport; meta controller state, never in a loadable patch
 
 Per lane: the eight steps, `mute`, and `env`, the envelope it fires —
-lane l fires envelope l by default (decision 3).
+lane l fires envelope l by default.
 
 **The position is the clock's, never integrated.** ``s(t) = (clock.beat(t)
 + shift) · steps_per_beat``, so the grid cannot drift from the synced
@@ -65,7 +65,7 @@ stopped (the clip-stop row goes dark rather than marching over a silent
 pattern); `seq.step` reads 0 then, else the 1-based step. The call that
 sees `run` go off sets `stopped` (one frame) and calls the optional
 ``release(lane, env, at)`` for every lane, so a gate the pattern opened
-can close; what releasing means is the host's (wave 2: `envs.release`).
+can close; what releasing means is the host's (`envs.release`).
 
 Callbacks, both 0-based in the lane like the router's addresses
 (``seq:0`` is lane 1, the param ids are 1-based ``seq.1.3``):
@@ -267,7 +267,7 @@ class Sequencer(writes.Observed):
         router.labels[GROUP] = self.labels
         router.rests[GROUP] = [REST] * LANES
         # a pulse is a hit, not a level: each lane's signal kind is a
-        # trigger (decision 10), as a threshold modifier's output is — on a
+        # trigger, as a threshold modifier's output is — on a
         # router that keeps kinds (routing.Router.lane_kinds)
         kinds = getattr(router, "lane_kinds", None)
         if kinds is not None:
@@ -277,8 +277,8 @@ class Sequencer(writes.Observed):
 def register(reg, seq: Sequencer, clock=None) -> None:
     """The grid and its globals as params in the ``seq`` group. The steps,
     mutes, envelope ids, span, length and swing persist — the pattern is
-    the loadable patch's (decision 8); `run` and the read-only playhead do not.
-    `clock` is unused today and taken for the shape of lfo.register."""
+    the loadable patch's; `run` and the read-only playhead do not.
+    `clock` is unused; it is taken for the shape of lfo.register."""
     if f"{GROUP}.run" in reg:
         return
     g = GROUP

@@ -1,4 +1,4 @@
-"""A Kinect's side pane (plan 29, row 1170): what GRAPH shows when the
+"""A Kinect's side pane: what GRAPH shows when the
 Kinect's device node (``device:<role>``, an entry of kind ``kinect``) is
 selected. Manual state control and telemetry, and nothing else: nothing here
 drives the sensor by itself, and nothing moves it when the pane opens.

@@ -1,11 +1,11 @@
-"""The playlist (plan 44 D6): for installations. Leave the cart running, a new look
+"""The playlist: for installations. Leave the cart running, a new look
 every five minutes.
 
 A playlist is the meta controller's and an operator's verb, not a look's: its file
 names loadable patches and holds none of their state, it sits in the library's
 ``playlists/`` folder (`library.PLAYLISTS`, schema ``hyperspace.playlist/1``), and no
 patch's row can press it (`routing.meta_refusal`). It is used with nobody editing, so it
-has no guards against the operator (the owner, 2026-11-04): it does not wait for
+has no guards against the operator: it does not wait for
 unsaved edits, an open undo step or the panel, and a look on the deck off air is
 written over. There is no pausing at all: it plays or it is stopped.
 
@@ -40,8 +40,8 @@ so. A bad row is left out and said; the rest of the file plays, as with a missin
 decks (a shared meta group), never saved and not modulatable, so no patch's row can press
 one (`routing.meta_refusal`); a key or a pad button may, those being the meta controller's.
 
-**Undo** (row 709). Each load is a step on that deck's stack, the most that stack keeps
-is `undo.LIMIT`, and each load and each fade latches the panel's stack (row 753), so ⌘Z on
+**Undo**. Each load is a step on that deck's stack, the most that stack keeps
+is `undo.LIMIT`, and each load and each fade latches the panel's stack, so ⌘Z on
 a cart left running refuses and takes nothing back until someone changes something there.
 
 Imports only `library`; the meta controller, the decks and the fade arrive as arguments
@@ -57,7 +57,7 @@ from typing import Any
 from .library import PLAYLIST_KIND, PLAYLIST_VERSION, PLAYLISTS, LibraryError
 
 SCHEMA = f"{PLAYLIST_KIND}/{PLAYLIST_VERSION}"
-DEFAULT_DWELL_S = 300.0   # the owner's "a new look every five minutes"
+DEFAULT_DWELL_S = 300.0   # a new look every five minutes
 MIN_DWELL_S = 1.0         # below this a look would not be seen, and a typo would strobe
 MAX_DWELL_S = 7 * 86400.0  # a week: past this a number is a typo, and an install looks hung
 FADE_MAX_S = 30.0         # `output.xfade_s`'s own top (`deck.register_xfade`, a test holds them)
@@ -418,7 +418,7 @@ PLAY_TIP = ("Play the playlist: each look loads off air, then the crossfader run
 
 
 def at_launch(playing: Playing, install) -> bool:
-    """SM6 (the owner, 2026-11-06): a cart starts by itself after launch: the one key in the
+    """A cart starts by itself after launch: the one key in the
     install file names the list (`Install.plays`). A list that is gone or empty says so and
     nothing plays. True when it started."""
     name = getattr(install, "plays", None)

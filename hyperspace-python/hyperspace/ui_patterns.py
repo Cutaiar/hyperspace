@@ -1,5 +1,4 @@
-"""The FACES page — the faces, the pattern on them and its eight inputs
-(plan 22 B2).
+"""The FACES page — the faces, the pattern on them and its eight inputs.
 
 Top to bottom:
 

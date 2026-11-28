@@ -1,10 +1,10 @@
-"""Modifiers — the modulation graph's curated value nodes (plan 28 N1).
+"""Modifiers — the modulation graph's curated value nodes.
 
 A modifier reads one or two source lanes, has a few params of its own,
 and publishes one output lane under the scheme ``mod`` (``mod:<n>`` for
 ``mod.<n>``), so a route may say ``"source": "mod:2"`` and the Router,
 Learn, the referee and ROUTING's source combo need no new path. They
-live in the loadable patch beside its routes (decision 8, `loadable.MODIFIERS_KEY`)
+live in the loadable patch beside its routes (`loadable.MODIFIERS_KEY`)
 and never in `bindings.json`.
 
   kind       inputs  params                            out
@@ -46,7 +46,7 @@ KINDS = ("curve", "scale", "smooth", "combine", "threshold", "delay")
 HOW = ("add", "mul", "min", "max", "cross")
 # how many inputs each kind reads
 INPUTS = {"curve": 1, "scale": 1, "smooth": 1, "combine": 2, "threshold": 1, "delay": 1}
-VALUE, TRIGGER = "value", "trigger"     # the two signal kinds (decision 10)
+VALUE, TRIGGER = "value", "trigger"     # the two signal kinds
 OUT = {"threshold": TRIGGER}            # every other kind's output is a value
 REST = 0.0                  # where every modifier's lane rests (`Router.rests`)
 CURVE_POW = 4.0             # `curve`'s shape ±1 is an exponent of 4^±1

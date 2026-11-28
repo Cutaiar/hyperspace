@@ -1,15 +1,13 @@
-"""A delay's stack — the frames before this one, kept (plan 90 H1).
+"""A delay's stack — the frames before this one, kept.
 
-Plan 67 §7.1 made the past one primitive: a stack of T, read at an index or
-summed over them. Plan 90 made the delay its one maker (the owner,
-2026-11-26: "merge, call it Delay"): a delay of depth 1 is plan 34's z⁻¹,
-and a deeper one keeps that many past frames for the readers that take a
-stack (`// @takes stack stack`: Read, Trail).
+The past is one primitive: a stack of T, read at an index or summed over
+them. A delay of depth 1 is z⁻¹, and a deeper one keeps that many past
+frames for the readers that take a stack (`// @takes stack stack`: Read,
+Trail).
 
 The stack sits beside the delay's half-float pair (`render.DelayPair`) and
-never replaces it. The pair paints and swaps exactly as it always has, so a
-delay's picture is last frame's whatever its depth, and a saved delay draws
-byte for byte. At the frame's turn, a pair that committed a frame hands it
+never replaces it. The pair paints and swaps the same whatever the depth,
+so a delay's picture is last frame's. At the frame's turn, a pair that committed a frame hands it
 to the stack (`commit`): a GPU copy (`glCopyTexSubImage3D`, core since GL
 1.2) of the pair's read side into one layer of a 2D texture array. So:
 
@@ -27,11 +25,11 @@ and a mix, in the reader (`fx.STACK_HEAD`).
 
 Time is the stack's own clock, in seconds, moved once a frame by the
 renderer's time (`tick`); a frame whose time did not move counts one frame
-at REF_HZ (as the look-back's ring, plan 14 WP6), so a test drawing at one
-fixed time still sees frames go by, and a reader knows each kept frame's age.
-that clock. What it keeps is what the delay takes: every frame, or at the
-delay's own rate (plan 34 D, `delay[.n].every`: frames, Hz or the tempo),
-so a delay that takes a picture every 1/30 s keeps one every 1/30 s.
+at REF_HZ (as the look-back's ring), so a test drawing at one fixed time
+still sees frames go by, and a reader knows each kept frame's age by that
+clock. What it keeps is what the delay takes: every frame, or at the
+delay's own rate (`delay[.n].every`: frames, Hz or the tempo), so a delay
+that takes a picture every 1/30 s keeps one every 1/30 s.
 """
 
 from __future__ import annotations
@@ -43,9 +41,9 @@ import moderngl
 
 REF_HZ = 60.0                  # what a frame whose time did not move counts as
 MAX_DEPTH = 64                 # the most frames a stack keeps (`view.DELAY_DEPTH`)
-# the most one deck's stacks together may hold (plan 90 Q4; a deck each since
-# Devin on #519, so the two decks never starve each other: 2 GiB at most on a
-# context) — 1 GiB: 32 half-float frames at 1080p are 531 MB
+# the most one deck's stacks together may hold, so the two decks never starve
+# each other (2 GiB at most on a context): 1 GiB, 32 half-float frames at
+# 1080p being 531 MB
 BUDGET = 1 << 30
 OVER_BUDGET = ("{name}: a stack of {depth} at {w}×{h} is {mb:.0f} MB, past the "
                "{budget:.0f} MB a deck's stacks may hold — fewer frames, or a resize before it")
@@ -60,16 +58,16 @@ def frame_bytes(size: tuple[int, int]) -> int:
 
 # every stack holding a texture, by the context it is on: the two decks' renderers
 # are siblings on one context (`Renderer.sibling`), so the budget is the context's,
-# not a renderer's (Devin on #519)
+# not a renderer's
 # (kept across a hot reload of this module: the stacks alive hold their
-# textures through it — Devin on #519)
+# textures through it)
 _LIVE: weakref.WeakSet = globals().get("_LIVE") or weakref.WeakSet()
 
 
 def held(ctx: Any, but: Any = None, owner: Any = None) -> int:
     """The bytes every stack on `ctx` holds, `but` one left out — of one deck's
     renderer when `owner` is given (its `id`): each deck has a budget of its own,
-    so a deck that filled its own never starves the deck faded in (Devin on #519)."""
+    so a deck that filled its own never starves the deck faded in."""
     return sum(st.bytes() for st in list(_LIVE)
                if st is not but and st.tex is not None and st.ctx is ctx
                and (owner is None or getattr(st, "owner", None) == owner))
@@ -158,9 +156,9 @@ class DelayStack:
         return True
 
     def reset(self) -> None:
-        """Hold nothing (a load, R19), and give back its room: the next commit
+        """Hold nothing (a load), and give back its room: the next commit
         makes it again at the depth the new look asks for, so an old deep stack
-        never counts against the next look's budget (Devin on #519)."""
+        never counts against the next look's budget."""
         self.release()
 
     def release(self) -> None:

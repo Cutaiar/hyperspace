@@ -1,4 +1,4 @@
-"""The effect picker (plan 65): GRAPH's "add an effect" as a grid of
+"""The effect picker: GRAPH's "add an effect" as a grid of
 pictures, in place of the nested effects ▸ submenu.
 
 The right-click picker's **effects…** (and a picture cable's **insert ▸
@@ -15,7 +15,7 @@ the search leaves; Esc or a click outside closes it.
 It is made for a trackpad on stage: big tiles (the whole tile is the click
 target), the picture first, one short label each, and the words only for
 the tile under the pointer. It is an ImGui popup, so the canvas under it is
-swallowed by GRAPH's own guard (`ui_graph._menu_up`, #452): no hover words,
+swallowed by GRAPH's own guard (`ui_graph._menu_up`): no hover words,
 no click, no wheel reaches the canvas while it is open.
 
 View state only: what is open, the search and the hovered tile live in the

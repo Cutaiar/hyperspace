@@ -1,19 +1,19 @@
-"""What paces the loop (SC3a, plan 58): the swap of the first live display's
+"""What paces the loop: the swap of the first live display's
 window, a floor under it, and a timer when nothing is being swapped.
 
 A swap on a hidden window does not wait (measured: 13,047 fps), so the root
 window that holds the renderer's context cannot pace; a display's window can,
 and any display can go. So one window at a time waits for its display (swap
 interval 1), every other does not (interval 0: two waiting swaps a frame halve
-the rate, fork F6), and that window's swap is the frame's last.
+the rate), and that window's swap is the frame's last.
 
 A swap that should wait does not always: a locked Mac, a window occluded from
 birth or minimised, a sleeping display. `Floor` bounds that, and must never touch
 a healthy loop, so it trusts nothing about the displays:
 
 - **A fixed cap, `CAP_HZ`, not a display's refresh.** `get_video_mode` doesn't
-  decide what a swap does: a window on a 60 Hz display swaps at 119.5 fps here
-  (row 782), and a VRR panel, a display reporting 0 or a mode change can all say
+  decide what a swap does: a window on a 60 Hz display swaps at 119.5 fps here,
+  and a VRR panel, a display reporting 0 or a mode change can all say
   less than the loop really runs at. A floor under the true rate halves the loop.
 - **An average, not a frame's length.** A healthy 120 Hz loop has frames of 1 ms
   beside frames of 16 (sd 3–5 ms around 8.3). A burst of `BURST` frames passes
@@ -26,7 +26,7 @@ rate is `NO_DISPLAY_HZ`.
 `choose` runs between frames, so a handover never lands inside one. It never
 touches a window that is not in the list: one going away has already been
 destroyed. Which window paces is the first in the list, in slot order: output 1
-while it is live, as it has always been.
+while it is live.
 
 Render stack's edge (ARCHITECTURE §3): it knows windows and the clock, nothing of
 the renderer. `glfw` is handed in, so a test can stand in for it.

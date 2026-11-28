@@ -1,4 +1,4 @@
-"""The poi's guide (plan 47, the poi): the handle, the string and the
+"""The poi's guide: the handle, the string and the
 weight drawn over each output, so the performer sees what the shape is
 swinging on.
 

@@ -1,4 +1,4 @@
-"""The stall log — a frozen show leaves a stack dump behind (plan 14 WP1).
+"""The stall log — a frozen show leaves a stack dump behind.
 
 Everything below writes ``<home>/stall.log``, each entry a ``=== <kind>``
 header (the wall time, the loaded patch) and every thread's stack
@@ -11,10 +11,9 @@ a ``stall`` with how long the loop has been stuck and when the last frame
 completed. Once per stall: the next dump needs a frame to complete and
 the loop to stall again.
 
-**The render window stops while the panel goes on** (`RenderWatch`) —
-the owner's freeze (2026-09-29): the control window kept working while
-the render window showed one frame. Two roads to it, both logged from the
-main thread:
+**The render window stops while the panel goes on** (`RenderWatch`):
+the control window keeps working while the render window shows one
+frame. The ways to it are logged from the main thread:
 
 - ``render error`` — `renderer.draw` raised. `app.frame` guards the draw
   so the loop lives on, which is exactly why the render window just
@@ -27,17 +26,17 @@ main thread:
   second display, a fullscreen Space). The entry has the window's
   attributes (visible, iconified, focused, monitor, framebuffer size,
   macOS occlusion) as `info()` reads them. With several render outputs
-  (plan 21 WP3, `outputs`) it is "no output presented"; one output dark
+  (`outputs`) it is "no output presented"; one output dark
   for 2 s while another presents, or whose present raised
   (`output_failed`), is a ``warning`` naming it ("output 2 (projector):
   …"), once per message, with its window state or traceback.
 - ``stranded target`` — a render frame started with an offscreen
   framebuffer still bound (`app.draw_render` checks before it binds the
-  window). That was the freeze itself: `Renderer.draw` draws into
-  whatever is bound, and a frame that left the look-back's atlas bound
-  made every later frame draw there while the window swapped a stale
-  picture, with no error anywhere. `Renderer.draw` and `Lookback.capture`
-  now put their target back on every exit; the check stays as the alarm.
+  window). `Renderer.draw` draws into whatever is bound, so a frame that
+  left the look-back's atlas bound would make every later frame draw
+  there while the window swapped a stale picture, with no error anywhere.
+  `Renderer.draw` and `Lookback.capture` put their target back on every
+  exit; the check is the alarm.
 - ``non-finite`` — a param dropped a NaN / inf offset or value
   (`Registry.nonfinite`), once per param.
 - ``warning`` — a show problem worth a banner, once per message (a
@@ -280,10 +279,10 @@ class RenderWatch:
         self.watchdog = log
         self.limit, self.poll = float(limit), float(poll)
         self.info, self.wall = info, wall
-        # plan 21 WP3: with two or more render outputs, (label, window state)
+        # with two or more render outputs, (label, window state)
         # for each opened one, the first included. The stall is then "no
         # output presented"; one output dark for `limit` while another
-        # presents is a warning that names it. None, or one entry: today's
+        # presents is a warning that names it. None, or one entry: single-output behaviour
         self.outputs = outputs
         self._others: list[tuple[str, dict]] = []
         self._dark: dict[str, float] = {}     # label → since when it is not presentable
@@ -339,7 +338,7 @@ class RenderWatch:
 
     def stranded(self, glo: int) -> None:
         """A render frame started with framebuffer `glo` bound, not the frame
-        target (`outputs.Root.frame`, SC3a)."""
+        target (`outputs.Root.frame`)."""
         try:
             last = self.last_error or "none"
             self.warn(f"render target stranded: framebuffer {glo} was still bound at the "
@@ -383,7 +382,7 @@ class RenderWatch:
             pass
 
     def output_failed(self, label: str, exc: BaseException) -> None:
-        """A later render output raised in its present (plan 21 WP3): the
+        """A later render output raised in its present: the
         frame went on; a warning naming it, once per message, with the
         traceback in the log. Output 1's goes to `failed` instead, as the red
         banner is the operator's one warning that the main picture stopped."""

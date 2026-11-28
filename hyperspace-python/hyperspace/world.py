@@ -1,4 +1,4 @@
-"""World objects: the things drawn in the scene, and the registries keyed by them (plan 59).
+"""World objects: the things drawn in the scene, and the registries keyed by them.
 
 A **world object** is a thing that is drawn: the shape (`shape`) and the two
 hands (`hand.left`, `hand.right`). Each has a **home** pose — what its source
@@ -8,12 +8,11 @@ an **offset** pose, what the world's own systems add on top. The pose drawn is
 turns the object about its own centre.
 
 What else an object takes part in is an **orthogonal registry** keyed by its
-id, each owned by its own system (the owner, 2026-11-10: "registering an
-object as a physics object, or as a clippable one, is an orthogonal
-registry"):
+id, each owned by its own system (registering an object as a physics object,
+or as a clippable one, is a registry of its own):
 
   bodies    `Body`: velocity, drag and an inertia fixed in the body.
-  joints    `Joint` (plan 60, the hand rig): a 6-DOF spring-damper from a
+  joints    `Joint` (the hand rig): a 6-DOF spring-damper from a
             hand object to the body's object, acting while its clutch is
             closed, and the gate that shapes the body's inertia.
   puppets   `Palm`: a tracked palm that sets a hand object's home each frame.
@@ -31,11 +30,11 @@ writes them.
 (qL, qR) and a scale. A point v, read as a quaternion with w as its real part,
 turns as ``qL · v · q̄R``. 3D is the case qL = qR: w stays fixed and x, y, z
 turn as the ordinary 3D quaternion qL turns them. Every object here is in that
-case with w = 0 (the world stays 3D); the general form is stored so plan 61's
+case with w = 0 (the world stays 3D); the general form is stored so a
 4D world changes no stored pose. Quaternions are (x, y, z, w), w the real
 part, the layout of a point and of the Leap's bone rotations.
 
-**The rig's physics** (plan 60; `grip.py` sets the joint from its params and
+**The rig's physics** (`grip.py` sets the joint from its params and
 gates). A body with a joint is a rigid body: its angular momentum L is what
 carries over, ω = I⁻¹ L with I = R · I_body · Rᵀ, so an uneven inertia fixed
 in the body precesses and nutates (I ω̇ = τ − ω × Iω, integrated as L) and a
@@ -67,7 +66,7 @@ KINDS = ("shape", "hand")
 STEP_S = 1.0 / 960.0
 MAX_STEPS = 96
 _EPS = 1e-12
-# plan 60, the hand rig's joint: the spring's natural frequency (Hz) at coupling 0
+# the hand rig's joint: the spring's natural frequency (Hz) at coupling 0
 # and just under 1 (geometric between; 1 is welded), its damping ratio
 # (linear between: loose and bouncy at the bottom)
 SPRING_HZ = (0.3, 30.0)
@@ -153,8 +152,8 @@ def spring_of(coupling: float) -> tuple[float, float]:
 
 
 def shaped_inertia(d, k: float, span: float = SPAN) -> np.ndarray:
-    """The inertia in the room from the vector `d` between the palms (plan 60
-    §2): 𝟙 + k · m · n nᵀ, n its direction and m its length over `span`
+    """The inertia in the room from the vector `d` between the palms:
+    𝟙 + k · m · n nᵀ, n its direction and m its length over `span`
     (at most 1), the principal ratio clamped to INERTIA_RATIO. No length:
     even."""
     d = np.asarray(d, dtype=np.float64)[:3]
@@ -295,7 +294,7 @@ class Pose:
 
     def log(self) -> np.ndarray:
         """The pose as a tangent vector, 11: position (4), qL's and qR's
-        rotation vectors (3 each), ln scale (1). For springs (plan 60)."""
+        rotation vectors (3 each), ln scale (1). For springs."""
         return np.concatenate([self.position, qlog(self.ql), qlog(self.qr),
                                [math.log(self.scale)]])
 
@@ -339,7 +338,7 @@ class WorldObject:
     home: Pose = field(default_factory=Pose)
     offset: Pose = field(default_factory=Pose)
     present: bool = True
-    # plan 64, part 2: False while the shape is a fractal the view is inside —
+    # False while the shape is a fractal the view is inside —
     # not an object but the space: its home is the identity, its offset the
     # space's flight (folded into the view, `fractal.fold_flight`, never drawn
     # as an offset), and it is neither boxed nor given a shaped inertia
@@ -362,7 +361,7 @@ class Body:
     (rad/s, rotation vectors in the world's axes; equal for a 3D body,
     `Body.spin3`), each decaying at its drag (1/s). `inertia` is fixed in the
     body (3×3, the identity even): stepped as a rigid body when it is uneven or
-    a joint holds the body (plan 60). `boxed`: held to `World.box`, the
+    a joint holds the body. `boxed`: held to `World.box`, the
     physics' own position in `place` (offset units, None until it first steps)."""
 
     mass: float = 1.0
@@ -393,7 +392,7 @@ class Body:
 
 @dataclass
 class Joint:
-    """The hand rig's joint (plan 60), keyed by the body's object: a 6-DOF
+    """The hand rig's joint, keyed by the body's object: a 6-DOF
     spring-damper from hand object `hand` to it, acting while `closed` (the
     clutch, set each frame by `grip.apply`; a hand not present opens it).
     `rel` is hand → the drawn object, captured as it closes (None: open);
@@ -424,7 +423,7 @@ class Palm:
     """A puppet: a tracked palm sets its object's home each frame. `side`
     "left" / "right"; `velocity` and `spin` (3D, rad/s) its frame-to-frame
     difference, zero on the frame it arrives — what the hand rig's target moves
-    at (plan 60, `World._target`), never fed into a body as such (the puppet
+    at (`World._target`), never fed into a body as such (the puppet
     sets the home; a body moves the offset)."""
 
     side: str
@@ -439,7 +438,7 @@ class World:
     def __init__(self) -> None:
         self.objects: dict[str, WorldObject] = {}
         self.bodies: dict[str, Body] = {}
-        self.joints: dict[str, Joint] = {}        # plan 60, the hand rig
+        self.joints: dict[str, Joint] = {}        # the hand rig
         self.puppets: dict[str, Palm] = {}
         self.clip: dict[str, object] = {}         # no consumer yet
         self.left = 0.0                           # time not yet stepped (< STEP_S)
@@ -447,7 +446,7 @@ class World:
         # body's object is drawn in (`poi.box_for`, set by the renderer); None: no box
         self.box: tuple[float, float, float] | None = None
         self.note = ""                            # the last NaN reset, said once
-        # (plan 60) whose grip, and which of its looks, last set the shape's joint
+        # whose grip, and which of its looks, last set the shape's joint
         # (`grip.apply`): a new one sends the shape home before it acts
         self.grip_key: tuple | None = None
 
@@ -515,7 +514,7 @@ class World:
             self.objects[oid].home = pose
 
     def to_space(self, oid: str, zoom: float, pan) -> None:
-        """Plan 64, part 2: the shape becomes the space the view is inside.
+        """The shape becomes the space the view is inside.
         Its offset went into the view (`fractal.go_inside`), so the object
         starts again at the identity, home and offset, unbounded; a body's
         motion is the same rigid motion of what is drawn, taken about the
@@ -538,7 +537,7 @@ class World:
         self._retake(oid)
 
     def to_object(self, oid: str, offset, zoom: float, pan) -> None:
-        """Plan 64, part 2: the view came out; the shape is an object again,
+        """The view came out; the shape is an object again,
         `offset` (a 4×4 in the home's frame, `fractal.go_outside`) its offset
         and the camera its home. A body's motion is re-referenced to its own
         drawn centre and put in the home's units; a joint keeps hold."""
@@ -648,7 +647,7 @@ class World:
         stall drops the rest), semi-implicit Euler, the quaternions
         renormalized each step. First the joints' frame (`_joints`: a clutch
         closing captures, one opening lets go; the inertia shaped). A body with
-        no joint and an even inertia steps as plan 59's free body; any other as
+        no joint and an even inertia steps as a free body; any other as
         a rigid body (`_rigid`). Returns the steps taken."""
         dt = min(max(0.0, float(dt)), MAX_STEPS * STEP_S)
         self.left += dt
@@ -704,7 +703,7 @@ class World:
         return home.inverse().apply(held)
 
     def _free(self, obj: WorldObject, b: Body, n: int) -> None:
-        """Plan 59's free body: velocity and spin under drag."""
+        """A free body: velocity and spin under drag."""
         off = obj.offset
         p, ql, qr = self._start(obj, b), off.ql.copy(), off.qr.copy()
         # drag in closed form a step (exp), so a free body decays at its
@@ -812,9 +811,9 @@ class World:
         self._land(obj, b, p, q, q)
 
     def _home(self, obj: WorldObject, b: Body, n: int) -> None:
-        """A grip turned off (plan 60): the body springs home, critically damped at
+        """A grip turned off: the body springs home, critically damped at
         HOME_HZ, its inertia even; once within SETTLED of home and still, the
-        offset is exactly the identity again (the renderer's matrix of before)."""
+        offset is exactly the identity again (the renderer's plain matrix)."""
         p, q = self._start(obj, b), obj.offset.ql.copy()
         v, w = b.velocity.copy(), b.spin_l.copy()
         wn = 2.0 * math.pi * HOME_HZ
@@ -859,7 +858,7 @@ class World:
             self._shape(obj, b, j, t)
 
     def _shape(self, obj: WorldObject, b: Body, j: Joint, t: float) -> None:
-        """The body's inertia this frame (plan 60 §2–3). Off: even. While the
+        """The body's inertia this frame. Off: even. While the
         shaping clutch is closed with both hands seen: `shaped_inertia` of the
         palms' vector, in the room, taken into the body's frame; else what it
         holds stays locked. A change goes at most INERTIA_RATE a second, so it

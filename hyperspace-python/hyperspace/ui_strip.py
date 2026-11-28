@@ -86,7 +86,7 @@ def _nav(panel, k, group, cur, listing, is_dirty, meta, x, y, w, h) -> None:
     strip's name opens its list. The loadable patches' strip is the name
     alone (and its dot): which patch a deck holds is the meta controller's
     to choose — load… on GRAPH's deck row, a pad, the walk. The dirty dot
-    (plan 19 WP5: a 12 px disc between the name and ▶) is a segment of its
+    (a 12 px disc between the name and ▶) is a segment of its
     own, there only while the group has moved off its patch."""
     L, C, T = ui_loadable, ui_kit.mod("comp_button"), ui_kit.mod("tokens")
     st = L._state(panel)

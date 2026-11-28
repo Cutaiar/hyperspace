@@ -1,15 +1,15 @@
-"""A modulator bank — voices with stable ids, declared at runtime (plan 31 B).
+"""A modulator bank — voices with stable ids, declared at runtime.
 
 A bank is a row of like voices (the LFOs; the envelopes next) that the
 router steps inside its modulation pass and publishes as one source
 scheme. Voice `n` (1-based, its params ``<scheme>.<n>.<key>``) is the
 lane ``<scheme>:<n-1>`` — the address every route, Learn row and factory
 loadable patch already names (``lfo:0`` is LFO 1). Membership is loadable patch content
-and undoable, the rule plan 28 N1 set for the modifiers: ids are **one
+and undoable, as for the modifiers: ids are **one
 past the highest held this session** (`next_id`) and **never
 compact**, so removing LFO 2 leaves LFO 3 on ``lfo:2`` and a route left
 on a removed voice's lane — the top one's too — is never silently picked
-up by the next one added. The count is capped at `MAX` (decision 1: 16).
+up by the next one added. The count is capped at `MAX` (16).
 
 What the bank owns, and what a kind supplies:
 
@@ -49,7 +49,7 @@ import math
 from collections.abc import Callable, Iterable
 from typing import Any, ClassVar
 
-MAX = 16          # voices a bank holds at most (plan 31 decision 1)
+MAX = 16          # voices a bank holds at most
 MAX_ID = 64       # the highest id a file may name: a hand-edited 10⁹ is no feed vector
 NAN = float("nan")
 
@@ -72,7 +72,7 @@ class Bank:
     stepped_at: float | None = None   # the t of the bank's last step
     high = 0                          # the meta controller's highest id ever held (`next_id`)
     serial = 0                        # moves on every membership change
-    # row 563 (2026-11-02): told on every membership change — the loadable patch
+    # told on every membership change — the loadable patch
     # points it at `LoadedPatch.settle_groups`, so a voice removed by any road
     # leaves its GRAPH group in the same call
     on_change: Callable[[], None] | None = None

@@ -1,4 +1,4 @@
-"""The hidapi road (plan 42): Sony pads over USB and Bluetooth, and tapes.
+"""The hidapi road: Sony pads over USB and Bluetooth, and tapes.
 
 **One reader thread per pad** (`HidPad`), as `gamepad.UsbPad` reads a
 wired 360 pad: it opens the device by path, reads feature report 0x05
@@ -83,7 +83,7 @@ def pad_devices(enumerate_=None) -> list[dict]:
             if vid == models.NINTENDO_VID and _on_usb(d):
                 # over USB a Joy-Con (in a grip) or a Pro Controller first wants the
                 # 0x80 handshake the codec does not send: left to GLFW until a hand
-                # has checked one (plan 46 "To revisit")
+                # has checked one
                 continue
             path = d.get("path")
             if path in seen:
@@ -93,7 +93,7 @@ def pad_devices(enumerate_=None) -> list[dict]:
     return out
 
 
-sony_devices = pad_devices     # plan 42's name
+sony_devices = pad_devices     # the Sony-only name
 
 
 def codec_for(model):
@@ -115,7 +115,7 @@ def _on_usb(info: dict) -> bool:
     """Is this device on a USB bus? hidapi's bus_type where it says (1);
     before 0.14 the interface number tells: a USB device has one (0 or
     more), a Bluetooth device reports −1 (a Joy-Con over Bluetooth on
-    macOS, 2026-11-02). Unknown both ways reads as USB — a Nintendo pad
+    macOS). Unknown both ways reads as USB — a Nintendo pad
     is never seized on a guess."""
     hint = _bt_hint(info)
     if hint is not None:
@@ -158,7 +158,7 @@ class Recorder:
 
 class HidPad:
     """One pad read over hidapi on a thread of its own — a Sony pad, or a
-    Joy-Con (plan 43), each through its codec (`codec_for`). `latest()`
+    Joy-Con, each through its codec (`codec_for`). `latest()`
     is the newest `sony.Frame` (None before the first, or once stale);
     `send(effects)` asks for an output; `close()` stops the thread.
     `opener` makes the device (tests hand in a fake)."""
@@ -544,8 +544,8 @@ class Turn:
     have wrapped through; at most `gesture.REPORT_DT_MAX` a report (the
     first after a real gap). `take` hands the sum over and starts again.
 
-    **A Joy-Con's gyro offset is learned here** (`learn`; other pads as they
-    were), so a pad whose rest reads past the dead band never turns the shape
+    **A Joy-Con's gyro offset is learned here** (`learn`; other pads are not corrected), so a pad whose
+    rest reads past the dead band never turns the shape
     on its own: a sensor axis that holds
     within `OFFSET_SPREAD_DPS`, under `OFFSET_MAX_DPS` on all three, for
     `OFFSET_S` of sensor time is at rest, and its mean becomes the offset

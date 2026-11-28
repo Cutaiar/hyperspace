@@ -3,7 +3,7 @@ place their names and meanings live.
 
 `shaders/patterns.glsl` paints the faces, reading eight inputs, `u_mod[8]`
 — the registry's `pattern.mod.0`–`.7` (0–2.6, 1.0 the un-driven look).
-Each input means the same kind of change in every mode (plan 22 B1), so a
+Each input means the same kind of change in every mode, so a
 route that feels right on one pattern means the same thing on the next:
 
   0 SCALE   1 GLOW   2 WARP   3 SPEED   4 COLOUR   5 SHARP   6 HUE   7 SPREAD

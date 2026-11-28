@@ -1,4 +1,4 @@
-"""Players and duties (plan 55): who is on which `Deck`, on this Mac.
+"""Players and duties: who is on which `Deck`, on this Mac.
 
 Controllers are generic; the actors are named: player 1, 2, 3, 4. A player
 holds any number of controllers (`devices` roles) and a duty, on air or off
@@ -7,7 +7,7 @@ a duty into a `Deck` and moves the pointers of what the player holds.
 
 **A patch names a player, never a device.** A row's qualifier is the player's:
 bare (``pad:S``, ``axis:LX``) is player 1, ``axis@p2:LX`` is player 2, with no
-file change (plan 27's roles were the seam). A player's first controller of a
+file change. A player's first controller of a
 repeatable kind publishes under that name (`devices.qualifiers_of`); a second
 of the same kind keeps its role as its address, so no two feed one lane. A
 player with no such controller has rows that are dormant and drawn.
@@ -46,7 +46,7 @@ SCHEMA = "players/1"
 NUMBERS = (1, 2, 3, 4)
 _ROLE = re.compile(r"p([1-4])")
 NAMES = frozenset(f"p{n}" for n in NUMBERS[1:])     # what a row calls players 2, 3, 4
-# where a controller is, for an undo of a move (`DeviceRegistry.presence`, row 800)
+# where a controller is, for an undo of a move (`DeviceRegistry.presence`)
 THERE, UNPLUGGED, UNLISTED = "there", "unplugged", "unlisted"
 
 
@@ -166,7 +166,7 @@ class Players:
             self.save()
 
     def put(self, doc: dict) -> None:
-        """Back to `to_json`'s `doc`, remembered: an undo's (row 740).
+        """Back to `to_json`'s `doc`, remembered: an undo's.
         `MetaController.put_players` also moves the pointers: call that."""
         duties = doc["duties"]
         for p in self:

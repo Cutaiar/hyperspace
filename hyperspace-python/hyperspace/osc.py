@@ -1,4 +1,4 @@
-"""OSC devices (plan 27 B4): a phone app, a laptop patch or anything else
+"""OSC devices: a phone app, a laptop patch or anything else
 that sends Open Sound Control over UDP, added by a `[[devices]]` entry
 alone — **no edit to `app.py`**. The only code that names this kind is this
 module and the registry's kind table (`devices.kinds`).
@@ -11,7 +11,7 @@ module and the registry's kind table (`devices.kinds`).
     hits = ["/hit"]           # triggers: phone:hit, velocity = the first number
     rest = 0.5                # where the axes idle (or a table: rest = { "/y" = 0 })
 
-**The role is the scheme** (plan 27 B1's rule for a new device): an axis
+**The role is the scheme** (the rule for any new device): an axis
 ``/x`` is the source ``phone:x`` — the address without its leading ``/``
 (``/1/fader3`` → ``phone:1/fader3``). The axes are one fed vector under
 the role, published with their names, labels and rests (`Router.names`,
@@ -355,7 +355,7 @@ class OscDevice(Base):
         from .routing import MOD_OPS
 
         if self._pressed:
-            if self._pressed_on is not router.reg or self.status == "lost":     # moved to another deck (plan 55)
+            if self._pressed_on is not router.reg or self.status == "lost":     # moved to another deck
                 self._let_go(lambda _source: True)
             else:
                 live = {b.source for b in router.table.of(self.role) if b.enabled}

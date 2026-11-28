@@ -1,10 +1,10 @@
-"""The player select screen (wave 4 PS, plan 55): a party game's team screen.
+"""The player select screen: a party game's team screen.
 
 Two lanes, ON AIR and OFF AIR, and a token per player, with its number and the
 controllers it holds, each drawn as itself (`GLYPHS`: a DualSense's four shapes, a
 Joy-Con's pill, the APC40's grid) and lit or struck through by whether it is
 there. **The mouse moves people, and nothing else does:** no stick, no pad, no
-desk (the owner, 2026-11-04). A move stays until someone moves it back.
+desk. A move stays until someone moves it back.
 
 - **A duty:** drag a token to the other lane, or click the token and then the lane.
 - **A controller:** drag it to another token, or click it and then the token.
@@ -13,9 +13,9 @@ desk (the owner, 2026-11-04). A move stays until someone moves it back.
 Each is said the moment it happens: on the line under the lanes and in the
 footer (`Library.say`). The moves go through `MetaController.move_player` and
 `register` and nothing else: where a player's deck is, and what a row does when
-it gets there, is plan 55's. They run after the board's draw (`_board`), since
+it gets there, is the meta controller's, not the board's. They run after the board's draw (`_board`), since
 `register` can close and open a device. Each is one step on the meta controller's
-undo stack (row 800), so ⌘Z over the board takes it back, and takes back nothing else
+undo stack (`Panel.in_meta_section`), so ⌘Z over the board takes it back, and takes back nothing else
 on that stack; the line under the lanes says what ⌘Z did. A controller unplugged since
 stays where it is, and that is said too.
 
@@ -26,11 +26,11 @@ large one, with the panel folded too. Esc closes it. O has no row in `routing.ke
 if one is learned onto it the row has it and the board does not (`_key_toggles`). Both are the one `_board`; every
 size is `lay_out`, a plain function of the width, tested at 240, 320 and large.
 
-**The tray** is what nobody holds. By plan 55's rule every listed controller has a
+**The tray** is what nobody holds. Every listed controller has a
 holder (player 1, unless told), so what can be in it is what the Mac sees and the
 device list doesn't: a pad or a MIDI port (`loose`, looked for every `LOOSE_S`, and
 for MIDI not at all if ``[midi] enabled = false``). **It waits there until it is dragged
-to a player (the owner, 2026-11-06):** that adopts it (`adopt`, `devicelist`), on both
+to a player:** that adopts it (`adopt`, `devicelist`), on both
 Macs, under a role that rows can name from then on. Nothing is adopted by plugging in.
 A token may hold nothing: a player with no controller is drawn dim, as an empty seat,
 and takes a controller like any other.
@@ -79,8 +79,8 @@ KEY = "O"                # opens the board: no row in `routing.keymap` (a test h
 STAYS = " Stays until moved."
 HINT = "Drag a player across to change duty. Drag a controller to another player, or a new one from the tray."
 TRAY_NONE = "nothing loose"
-# The board's own words. Lower case with the rest of the interface
-# (2026-11-10); named because each is measured for its room as well as
+# The board's own words. Lower case with the rest of the interface;
+# named because each is measured for its room as well as
 # drawn, and a width probe that says something else is a silent cut.
 PLAYER_WORD = "player"
 NOBODY = "nobody holds"
@@ -467,7 +467,7 @@ def move(panel, number: int, duty: Duty) -> None:
     if meta.players.get(number).duty == duty:
         return
     left = _deck_no(meta, meta.deck_of_player(number))
-    undos.by_hand(True)         # the mouse's: the step opens the meta stack (row 753)
+    undos.by_hand(True)         # the mouse's: the step opens the meta stack
     meta.move_player(number, duty)
     _say(panel, _state(panel), duty_words(number, duty, meta.players.controllers_of(number), left,
                                           _deck_no(meta, meta.deck_of_player(number))))
@@ -480,7 +480,7 @@ def give(panel, role: str, number: int) -> None:
         return
     regs = getattr(panel, "devices", None)
     was = regs.get(role) if regs is not None else None
-    undos.by_hand(True)         # the mouse's: the step opens the meta stack (row 753)
+    undos.by_hand(True)         # the mouse's: the step opens the meta stack
     meta.register(role, number)
     now = regs.get(role) if regs is not None else None
     pad = isinstance(now, devices.PadDevice)
@@ -509,7 +509,7 @@ def adopt(panel, h: Held, number: int) -> None:
         shown.remove(h)
     st["loose"], st["loose_at"] = shown, -LOOSE_S
     role = store.adopt(h.entry)
-    undos.by_hand(True)         # the mouse's: the step opens the meta stack (row 753)
+    undos.by_hand(True)         # the mouse's: the step opens the meta stack
     meta.register(role, number)
     regs.relist()
     _say(panel, st, adopt_words(h.name, role, number, _deck_no(meta, meta.deck_of_player(number))),
@@ -1086,6 +1086,6 @@ def window(panel) -> None:
 
 def over(panel) -> bool:
     """Is the mouse over a board, as of the latest draw? ⌘Z there goes to the meta
-    stack, for a player's moves alone (`Panel.in_meta_section`, row 800)."""
+    stack, for a player's moves alone (`Panel.in_meta_section`)."""
     from . import ui_pane  # (late: ui_pane imports this module)
     return bool(_state(panel).get("over_big")) or ui_pane.where(panel) == "players"

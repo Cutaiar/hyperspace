@@ -1,11 +1,10 @@
-"""Looking for MIDI ports: the one road, on the frame thread (audit R15, row 791).
+"""Looking for MIDI ports: the one road, on the frame thread.
 
 `port_names()` is what asks the machine which MIDI ports it has. Call it from the
 main thread, as often as you like: it really looks at most every `LOOK_S`, and a
 plugged-in port shows within that. An open passes `fresh=True`, on its own pace.
 
-What R15 feared, and what is true of the python-rtmidi we ship (1.5.8, read
-from its binary on 2026-11-06):
+What is true of the python-rtmidi we ship (1.5.8, read from its binary):
 
 - **The abort is the process's first client, not every look.** RtMidi holds one
   CoreMIDI client for the process and asks for it only while it has none. Asked
@@ -23,7 +22,7 @@ often it is called. The client we made is held for the life of the process, so
 CoreMIDI's answer still stands a moment later, when RtMidi asks. A refusal in
 exactly that gap is the one thing left, and no code here can reach it.
 
-**What a look costs** (2026-11-06, one Mac, busy; virtual ports made by another
+**What a look costs** (one Mac, busy; virtual ports made by another
 process, n inputs and n outputs, the first named as an APC40; 300 looks each):
 
     n     median    p99       worst

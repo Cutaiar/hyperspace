@@ -1,9 +1,9 @@
-"""The Joy-Con as a 4D totem — an experiment (plan 47, not a plan item).
+"""The Joy-Con as a 4D totem — an experiment.
 
 A pad with motion sensors (a Joy-Con, a DualSense) held in the hand turns
 the shape: its gyro, integrated, drives **three of the six rotation
-planes**, and its tilt holds the shape off centre (not a Joy-Con's: `poi.no_position`,
-register row 686). Off by default
+planes**, and its tilt holds the shape off centre (not a Joy-Con's: `poi.no_position`).
+Off by default
 (`totem.on`), and nothing here runs while it is off.
 
 **The planes.** A turn about one of the pad's axes is a turn in the plane
@@ -147,7 +147,7 @@ class TotemState:
     note: str = ""                # the last change, for the terminal and the pad window
     # the registry `ang`, `ref` and `pan_out` are of: one `TotemState` is on both
     # decks (`app._share_experiments`), one pad's, and what it holds of a look
-    # goes no further than the deck it took it from (plan 55)
+    # goes no further than the deck it took it from
     on_reg: Any = None
 
     def say(self, note: str) -> None:
@@ -353,8 +353,8 @@ def reads_stick(model, reg, role: str) -> bool:
 
 
 def quiet_stick(model, reg, role: str, steers: bool = True) -> bool:
-    """Does a route on this pad's stick let go, because the stick orbits instead (the
-    owner, 2026-11-04)? Only where the stick has that job: a pad that doesn't `steer`
+    """Does a route on this pad's stick let go, because the stick orbits instead?
+    Only where the stick has that job: a pad that doesn't `steer`
     keeps its routes, or the stick would be dead."""
     return own_layout(model) and steers and not drives(state_of(reg), role)
 

@@ -1,4 +1,4 @@
-"""Effect previews (plan 65): every effect file put through the test card,
+"""Effect previews: every effect file put through the test card,
 as a still and a short loop, for GRAPH's effect picker.
 
 The picker (`ui_effect_picker`) shows a tile per effect file: what the
@@ -85,10 +85,9 @@ PASSES_PER_FRAME = 3
 # (the edges drew nothing). The card is drawn at it too
 WORK_W, WORK_H = 960, 540
 
-# the families by `@order` band (plan 33: `@order` draws nothing; it is the
-# stack position an old loadable patch had, so it already groups the files
-# by what they do). The one table to change, until the files say
-# `@family` themselves
+# the families by `@order` band (`@order` draws nothing; it is a
+# stack position, so it already groups the files by what they do).
+# DEBT: family-from-order-band
 ORDER_FAMILIES: tuple[tuple[int, str], ...] = (
     (10, "generators"),         # 0–9: draw a picture of their own (plasma, the test card)
     (30, "distort"),            # 10–29: move the picture (warp, wave, kaleidoscope …)

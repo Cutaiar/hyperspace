@@ -1,5 +1,4 @@
-"""The ROUTING page — one page over the loaded patch (plan 13 §3.3,
-decision register row 13).
+"""The ROUTING page — one page over the loaded patch.
 
 Top to bottom: the **head** (the loaded patch's name, its dirty dot,
 save / as… over it — a factory one gets a user shadow, `Library.overwrite`
@@ -7,16 +6,15 @@ save / as… over it — a factory one gets a user shadow, `Library.overwrite`
 last learn did, a refusal in the warning colour, and the notes of the
 last load: the desk rows it dropped for sitting on an invariant control,
 the routes the referee refused); then a pointer line, "routes and
-modifiers: the GRAPH page" (plan 28 N7: the routes and the MODIFIERS strip
-are drawn there now — a route's row below is drawn by GRAPH's side pane,
-a modifier's block by `modifier_block` there; their functions all stay
-here, and ROUTING is retired in a later pass), the filter beside it; then,
+modifiers: the GRAPH page" (the routes and the MODIFIERS strip are drawn
+there: a route's row below is drawn by GRAPH's side pane, a modifier's
+block by `modifier_block`; their functions live here), the filter beside it; then,
 in one scrolling child, the **desk** (the patch layer: one line per row — the
 control in Akai's words, its target, its op, × — and one dimmed line per
 patch-layer control the loadable patch leaves dark), the **macros** (each knob
 with its label and its base / depth subscribers) and the **meta controller**
 (the invariant and global-layer MIDI rows, read-only: bindings.json's,
-never learned or edited here, D5).
+never learned or edited here).
 
 Every edit here changes the live table — the routes, the desk, the
 macros — and so the loaded patch's dirty dot (`LoadedPatch.signature`);
@@ -47,26 +45,26 @@ pushes nothing — normally the source's own, what its adapter publishes
 in `Router.rests`, shown dimmed; dragging it makes the row's own number,
 "auto" gives it back; scale names the meta controller's attenuator — a **shared meta**
 param (the drive fader, `master.gain`) — or none, never a performance
-param (decision register row 18 (a)): a macro scales a route as its depth
-subscriber, shown read-only as a "× macro.N" chip (plan 13 §2.4). No
-route lands on a meta param (`route_target`, register row 743: tuning
+param: a macro scales a route as its depth
+subscriber, shown read-only as a "× macro.N" chip. No
+route lands on a meta param (`route_target`: tuning
 happens before the show), so the combo does not offer one and the param's
 menu says why. The live bar is the
 source's normalized reading (white) with a red hairline at the target's
 effective norm, so a route can be read working. Edits land on the table
 at once (the router reads it every frame) — nothing here is copied.
 
-The macros (`macro.1–8`, plan 13 §2.4): each knob is the panel's
+The macros (`macro.1–8`): each knob is the panel's
 ordinary compact slider, so a performer can own one (right-click: Learn,
 Route a lane here…) and its readout shows `base → effective` while it
 does, beside its label (editable) and its subscribers. A macro does
 nothing of its own; it acts through them: a **base** subscriber sets a
 param's base to from + m · (to − from) along its fader whenever the
 macro's base moves — a patch param's only, which is all its picker
-offers (`base_targets`, D9: a loadable patch never moves a meta controller base); a **depth** subscriber runs a route at depth ×
+offers (`base_targets`: a loadable patch never moves a meta controller base); a **depth** subscriber runs a route at depth ×
 (from + m · (to − from)), one frame behind whatever moves the macro. A
 param two macros base-subscribe is marked on both lines — the last write
-wins (§2.4). An edit of a subscriber re-lands the base subscribers
+wins. An edit of a subscriber re-lands the base subscribers
 (`macros_serial`).
 
 One performer per target: the table's referee (`routing.Owned`) refuses
@@ -89,8 +87,7 @@ and exactly one owner remains. The owner is named the way its adapter
 names it (`Router.describe`). Rows a loadable patch had to drop for the same
 reason (`table.dropped`) are listed under the header until the next edit.
 
-The filter (plan 17 WP5): one text field flush right on the pointer line
-(plan 28 N7: on the counts line, left of `+ route`, before). While it
+The filter: one text field flush right on the pointer line. While it
 holds text, only the lines that match are drawn — in every section (and
 a line a widget is in use on, until it is let go: `_shown`) — and the
 pointer to GRAPH gives way to "3 of 41 rows" in red, a × beside the
@@ -103,8 +100,8 @@ an undo step, gone at restart; a loadable patch load leaves it. A hidden line
 keeps its place in the unfiltered list as its imgui id, so a × removes
 the row it is on. Section titles are always drawn.
 
-The routing loadable patches are gone (plan 13 WP5): the loadable patch holds the routes,
-and the ones that shipped are loadable patches on the PRESETS strip.
+The loadable patch holds the routes, and the ones that shipped are
+loadable patches on the PRESETS strip.
 
 The panel reaches the router through `panel.router`, which app.py is
 meant to set; until it does, the table is found through the MIDI
@@ -185,12 +182,12 @@ MACRO_LABEL_W = 22.0     # a knob's number beside it; the section says "macros"
 MACRO_NAME_W = 96.0      # a macro's editable label
 MACRO_SLIDER_MIN = 60.0  # the knob's slider beside the chips, or the chips under it
 SUB_W = 58.0             # a subscriber's from / to fields
-CONTROL_W = 56.0         # the desk and meta controller lines' control column: a glyph (plan 14 WP7)
+CONTROL_W = 56.0         # the desk and meta controller lines' control column: a glyph
 INDENT = 18.0            # a subscriber line under its macro
 PROMPT = "replace##routing"   # the Replace / Keep modal's popup id
 PROMPT_W = 360.0
 FIND_W = 120.0           # the filter field on the pointer line
-POINTER = "routes and modifiers: on the canvas"     # plan 28 N7: where they went
+POINTER = "routes and modifiers: on the canvas"
 POINTER_TIP = ("The routes and the modifiers are edited on the canvas now — drag a "
                "cable, select it for its row in the selection section")
 # the feel chip (motion.py) cycles auto → follow → spring → still → auto:
@@ -210,7 +207,7 @@ def _state(panel) -> dict:
     st = getattr(panel, "_routing_state", None)
     if st is None:
         st = panel._routing_state = {"error": "", "filter": "", "prompt": None}
-    # the page's filter (plan 17 WP5); "filter" is the param combo's find
+    # the page's filter; "filter" is the param combo's find
     # field. setdefault: a state dict from before a hot reload has no key
     st.setdefault("find", "")
     # a line in use is not filtered away under the hand (`_shown`): the
@@ -264,9 +261,9 @@ def _label(panel, pid: str | None) -> str:
 
 def goto(panel, source: str) -> None:
     """Scroll the rows' child to the line of the control `source` names
-    and mark it. Clears the filter (WP5), so the line is never hidden.
+    and mark it. Clears the filter, so the line is never hidden.
 
-    It does not change the page (plan 17 fork 2): with ROUTING open the
+    It does not change the page: with ROUTING open the
     rows scroll on this frame's draw; if not, when ROUTING is next opened
     while that control is still picked (`Learn.control`). The line is the
     control's row on the layer that is up — a patch row in the desk
@@ -387,7 +384,7 @@ def _meta_rows(table) -> tuple[list[Binding], list[Binding]]:
 def found(panel, router: Router) -> tuple[int, int]:
     """(lines the filter leaves, lines there are) over the whole page: the
     desk's rows and its dark controls, the macros, the meta controller's rows,
-    the sinks (plan 28 N7: the routes and the modifiers are GRAPH's)."""
+    the sinks (the routes and the modifiers are GRAPH's)."""
     text, table = _state(panel)["find"], router.table
     hays = [control_hay(panel, router, b) for b in table.desk()]
     hays += [control_hay(panel, router, f, mapped=False) for f in unmapped(table)]
@@ -411,7 +408,7 @@ def add_route(panel, target: str, source: str | None = None, depth: float = LANE
     """A new `push` row from the selected band's lane (or `source`) to
     target, into the loaded patch (no file written); it rests where its
     source does and travels on the default feel (`motion.DEFAULT_ROUTE_FEEL`,
-    the `smooth` spring — the owner, 2026-10-31). None when the target
+    the `smooth` spring). None when the target
     already has a performer — the prompt is up, and *Replace* puts the
     row in."""
     router = router_of(panel)
@@ -446,7 +443,7 @@ def ask(panel, old: Binding, new: Binding, commit: Callable[[], object]) -> None
 
 
 def ask_pair(panel, asked: PairAsk) -> None:
-    """Hold the question a pair's overlap asks (row 754): nothing lands until
+    """Hold the question a pair's overlap asks: nothing lands until
     `answer_pair`. A learn's is on the shared `Learn`, as `pending` is."""
     _state(panel)["pair"] = asked
 
@@ -487,7 +484,7 @@ def answer_pair(panel, choice: str) -> None:
 
 
 def _move_source(panel, router: Router, b: Binding, source: str) -> None:
-    """A row's source combo: onto a pair whose poles have rows, it asks (row 754)."""
+    """A row's source combo: onto a pair whose poles have rows, it asks."""
     got = propose_row(router.table, replace(b, source=source),
                       lambda: move_route(router.table, router.reg, b, source=source), moving=b)
     if isinstance(got, PairAsk):
@@ -543,17 +540,17 @@ def answer(panel, replace_it: bool) -> None:
     if q is None:
         return
     if replace_it:
-        # one undo step for the swap (undo.py, plan 15); a held learn's own
+        # one undo step for the swap (undo.py); a held learn's own
         # push inside `resolve_pending` is this same frame's and is ignored
         undo.push(f"replace {q[0].target}")
     q[2](replace_it)
 
 
-# ---- plan 40 T3: the conflict sheet (D3, D9) — a spawn's second question ----
+# ---- the conflict sheet — a spawn's second question ----
 #
 # `panel.spawn_question = (landing, choices, on_spawn, on_cancel)`: a
 # `patches.Landing` whose control rows collide with the loadable patch, the answer per
-# conflict (index → "patch" / "preset", every row the patch's at first, D9),
+# conflict (index → "patch" / "preset", every row the patch's at first),
 # and what Spawn (`on_spawn(choices)`) and Cancel (`on_cancel()`) do. The
 # same modal draws it, ahead of the Replace / Keep question, wider. While it
 # is up the hands learn nothing (`Learn.hold`, kept in step every frame).
@@ -561,8 +558,8 @@ def answer(panel, replace_it: bool) -> None:
 SHEET_W = 560.0
 SHEET_TIP = ("Each row: which keeps this control — the patch's row, or the one the loadable "
              "patch has. A row the loadable patch keeps is not added; the group says so")
-# (wave 3 P2, row 661) a node the frame holds one of: no two-way row, since
-# without it the patch is not the patch it was saved as (row 658): the answer
+# a node the frame holds one of: no two-way row, since
+# without it the patch is not the patch it was saved as: the answer
 # that keeps the loadable patch's is Cancel, and the press that takes the patch's is Spawn
 REPLACE_ROW = "{name}: the patch's replaces this loadable patch's"
 REPLACE_LOSES = "this loadable patch's {name} loses"
@@ -625,8 +622,8 @@ def conflict_words(c) -> tuple[str, str, str]:
 
 
 def sheet_wants(panel, landing, choices=None) -> list[str]:
-    """The patch's wants the meta controller lacks, one line per device role (plan 40
-    P4, T4's words over the landing's rows): "apc40 (lost): K1", "leap (not
+    """The patch's wants the meta controller lacks, one line per device role
+    (the words over the landing's rows): "apc40 (lost): K1", "leap (not
     in this rig): right hand y". With the sheet's `choices` (conflict index
     → ``"patch"`` / ``"preset"``), a row the loadable patch kept is not the patch's
     and waits for nothing (what `land_spawn` says after the landing)."""
@@ -664,7 +661,7 @@ def _sheet(panel, landing, choices) -> None:
     """The sheet's body (inside the modal): the title, a row per conflict —
     its words, then **the patch** / **the loadable patch**, lit as answered — then
     **keep all existing** and **take all**, the wants, **Spawn** / **Cancel**.
-    A node it replaces (wave 3 P2) comes first, what the host's loses under it;
+    A node it replaces comes first, what the host's loses under it;
     with no control in question the rows' lines are left out."""
     ui._micro("conflicts")
     imgui.text_wrapped(sheet_title(panel, landing))
@@ -738,8 +735,8 @@ def modal(panel) -> None:
     """The Replace / Keep modal, drawn by the panel every frame — before
     anything else it draws, so a question shows on any page, with the
     panel hidden or collapsed; a learn can come from anywhere. A question
-    withdrawn while the modal was up (a new learn armed) closes it. Plan 40
-    T3: a spawn's conflict sheet (`panel.spawn_question`) is drawn first,
+    withdrawn while the modal was up (a new learn armed) closes it. A spawn's
+    conflict sheet (`panel.spawn_question`) is drawn first,
     in the same popup, wider (`SHEET_W`); while it is up the shared
     `Learn` is held (`Learn.hold`: the hands learn nothing)."""
     st = _state(panel)
@@ -750,7 +747,7 @@ def modal(panel) -> None:
         lrn.hold(sq is not None or pair is not None)
     q = _question(panel)
     st["modal"] = False                 # did the modal draw this frame (tests read it)
-    st["sheet"] = False                 # …and was it the spawn's sheet (plan 40 T3)
+    st["sheet"] = False                 # …and was it the spawn's sheet
     if q is None and sq is None and pair is None:
         if imgui.is_popup_open(PROMPT):                  # stale: the question went away
             opened, _ = imgui.begin_popup_modal(PROMPT, None, imgui.WindowFlags_.no_title_bar)
@@ -802,7 +799,7 @@ def modal(panel) -> None:
 
 
 def _pair_body(panel, asked: PairAsk) -> None:
-    """The overlap question (row 754): which control is mapped and to what, then
+    """The overlap question: which control is mapped and to what, then
     **Keep both**, **Let the pair take over**, **Cancel**. No default: the chips
     take the mouse, and the panel has no keyboard navigation."""
     ui._micro("part of this pair is already mapped")
@@ -841,7 +838,7 @@ def ctx_item(panel, p: Param) -> None:
     if router_of(panel) is None:
         return
     why = meta_refusal(real.id)
-    if why is not None:                 # register row 743: the refusal, in words
+    if why is not None:                 # the refusal, in words
         imgui.text_disabled(META_LINE if is_shared_meta_id(real.id) else PER_DECK_LINE)
         if imgui.is_item_hovered():
             ui.tooltip(why)
@@ -851,7 +848,7 @@ def ctx_item(panel, p: Param) -> None:
         return
     if imgui.menu_item_simple("Route a lane here…"):
         b = add_route(panel, real.id)
-        if b is not None:           # plan 28 N7: GRAPH selects it, its row in the pane
+        if b is not None:           # GRAPH selects it, its row in the pane
             _state(panel)["reveal"] = b
 
 
@@ -859,13 +856,13 @@ def ctx_item(panel, p: Param) -> None:
 
 def source_schemes(router: Router) -> list[str]:
     """The continuous schemes the combo offers after the analyzer's lanes,
-    in order (plan 27 B2: no fixed list here): the router's — the device
+    in order (no fixed list here): the router's — the device
     registry's `continuous_schemes`, `lfo` then each listed device's feeds
     — then any other scheme a performer row names, so a loadable patch's row on a
     device this rig lacks still shows its source."""
     out = [sc for sc in router.schemes() if sc != "lane"]
     for b in router.table.routes():
-        # its Router key, qualifier and all (``axis@p2``, plan 27 B6)
+        # its Router key, qualifier and all (``axis@p2``)
         if b.head != "lane" and b.head not in out:
             out.append(b.head)
     return out
@@ -879,9 +876,9 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
     frame, or a row names it — one
     entry per lane, labelled as the adapter says ("lfo LFO 1") or by
     index, and addressed by name where the adapter publishes names
-    (`Router.address`: ``hand:right.roll``, decision register row 20).
+    (`Router.address`: ``hand:right.roll``).
     Nothing here knows what a scheme is: the bridge publishes its ext
-    lanes' labels like any device (plan 27 B3), and a scheme no device
+    lanes' labels like any device, and a scheme no device
     publishes offers the lanes its rows name."""
     labels = getattr(router, "labels", {})
     # the lanes as the engine published them (AudioEngine.publish, each
@@ -972,7 +969,7 @@ def reading(panel, router: Router, source: str) -> float | None:
 
 def route_target(p: Param) -> bool:
     """Can a route land on this param? Modulatable, which no meta param is
-    (register rows 743, 775). One rule for the target combo, the menu's Learn
+    One rule for the target combo, the menu's Learn
     items and Route from ▸ (`ui_graph.route_from_items`)."""
     return p.modulatable
 
@@ -989,8 +986,8 @@ def _targets(panel) -> list[Param]:
 
 def _scales(panel, target: str | None = None) -> list[Param]:
     """What a row's scale may be: a continuous **meta controller** param
-    (master.gain on the rate routes; decision register row 18 (a)) — a
-    macro scales a route as a depth subscriber (plan 13 §2.4), shown on the
+    (master.gain on the rate routes) — a
+    macro scales a route as a depth subscriber, shown on the
     row as a chip, and a patch param is no attenuator a loadable patch could
     carry — less the row's own target: a row scaled by what it pushes
     strobes (the push grows the scale grows the push, then clamps and lets
@@ -1045,9 +1042,8 @@ def _param_combo(panel, label: str, current: str | None, width: float,
     return picked
 
 
-# plan 44 D5e: why an enabled row acts on nothing on the deck the panel shows. The
-# first is row 650's (a row onto a meta param, which row 745 lets stand until the next
-# load); the second is plan 55's, and what most of a deck off air's rows say
+# why an enabled row acts on nothing on the deck the panel shows: its param does
+# not land on this deck, or its controller is on the other deck
 DORMANT_OFF_AIR = "dormant off air: lands when this deck is on air"
 DORMANT_AWAY = "dormant: its controller is on the other deck"
 
@@ -1065,7 +1061,7 @@ def dormant_words(reg, router: Router, b: Binding, p: Param | None) -> str | Non
 
 
 def desk_elsewhere(panel, table) -> str | None:
-    """While the APC40 is on another `Deck` than the panel (DQ7): the words that say so.
+    """While the APC40 is on another `Deck` than the panel: the words that say so.
     What a person sees of the desk is the panel's deck's rows, and those and the hardware
     then disagree on purpose. None with no meta controller, or no such desk connected: one
     listed and unplugged plays nothing, though its pointer stands."""
@@ -1357,7 +1353,7 @@ def head(panel, router: Router) -> None:
         imgui.text_colored(ui.WARN, st["error"])
     if lib is not None and lib.error and LOADABLE in lib.error:
         imgui.text_colored(ui.WARN, lib.error)          # a loadable patch that would not load
-    # the desk rows the last load dropped (an invariant control, D6), on
+    # the desk rows the last load dropped (an invariant control), on
     # one line so a file full of them never pushes the page off the window
     notes = getattr(pr, "desk_notes", None) or []    # (a Loadable patches from before a hot reload)
     if notes:
@@ -1371,7 +1367,7 @@ def head(panel, router: Router) -> None:
         imgui.text_colored(ui.WARN, f"dropped {b.source} → {b.target}: {why}")
     for note in table.notes:
         imgui.text_disabled(note)
-    # a loop no delay breaks (plan 28 N0): the cable the patch keeps off, while it stands
+    # a loop no delay breaks: the cable the patch keeps off, while it stands
     for note in getattr(router, "modgraph_notes", ()):
         imgui.text_colored(ui.WARN, note)
 
@@ -1396,7 +1392,7 @@ def _loadable_line(panel, pr, table) -> None:
     layer = f"desk layer: {'global' if glob else 'patch'}"
     word = ui_loadable.save_label(lib, LOADABLE) if lib is not None else "save"
     sp = imgui.get_style().item_spacing.x
-    # flush right; in a narrow pane on a row of its own (plan 49 stage 3)
+    # flush right; in a narrow pane on a row of its own
     right = ui.chip_w(word, "as…") + ui._micro_width(layer) + sp
     avail = imgui.get_content_region_avail().x
     if imgui.get_item_rect_max().x + sp + right <= imgui.get_cursor_screen_pos().x + avail:
@@ -1408,7 +1404,7 @@ def _loadable_line(panel, pr, table) -> None:
                           "patch: the loaded patch's desk. A patch load drops to it.")
     ui.beside(ui.chip_w(word, "as…"))
     # the preset strip's own save chip,
-    # lit while there is something to save (plan 19 WP5)
+    # lit while there is something to save
     if lib is None:
         imgui.begin_disabled()
         ui.chip(word)
@@ -1435,7 +1431,7 @@ def _learn_line(panel) -> None:
     if lrn.learning and not (refused and lrn.last):
         imgui.text_colored(ui.RED, f"learning {lrn.learning} — {panel._learn_hint()}")
     elif lrn.last:
-        # a refusal leaves the learn armed (plan 17 fork 6): the reason, and that it still waits
+        # a refusal leaves the learn armed: the reason, and that it still waits
         still = f" — still learning {lrn.learning}" if lrn.learning and refused else ""
         imgui.push_style_color(imgui.Col_.text, ui.WARN if refused else ui.FAINT)
         imgui.text_wrapped(f"learn: {lrn.last}{still}")
@@ -1453,7 +1449,7 @@ def control_name(table, b: Binding) -> str:
 
 def control_glyph(table, b: Binding) -> str:
     """What a desk or meta row prints first: the control's glyph on the
-    on-screen desk ("D3", plan 14 WP7), else the row's own name."""
+    on-screen desk ("D3"), else the row's own name."""
     g = apc40.glyph(b.source) if table.profile == "apc40" else None
     return g or b.describe()
 
@@ -1470,7 +1466,7 @@ def _control_cell(table, b: Binding, color=None) -> None:
 
 def _next_op(b: Binding, wraps: bool) -> str:
     """What the op chip's click makes of a row: a whole-circle lane on a
-    wrapping target goes between position and turn (plan 51), as `row_for`
+    wrapping target goes between position and turn, as `row_for`
     would land it; anything else between push and position, as ever."""
     if b.op == "position" and wraps and whole_circle(b.source):
         return TURN_OP
@@ -1536,7 +1532,7 @@ def _dark_signature(table) -> tuple:
 
 
 def unmapped(table) -> list[Binding]:
-    """The patch-layer controls the loaded patch leaves dark (D8).
+    """The patch-layer controls the loaded patch leaves dark.
     A pairwise scan of the table (~10 ms on the rig), so the ROUTING page
     draw remembers the last answer until the table's signature changes."""
     sig = _dark_signature(table)
@@ -1551,10 +1547,10 @@ def unmapped(table) -> list[Binding]:
 def desk_target(p: Param) -> bool:
     """Can a desk control be put on this param? Not on a file path (a knob
     cannot set one), not on SHIFT's own param, and not on the desk's SAVE
-    (plan 24 C1: a learned toggle or key would latch it on, and every bank
+    (a learned toggle or key would latch it on, and every bank
     pad's tap would then make a new loadable patch). One rule for the desk rows'
     target combo and for the menu's "Learn desk" (`Panel._desk_target`). Not
-    on a meta param either (register row 743): both of those land a preset-
+    on a meta param either: both of those land a preset-
     layer row."""
     return pad_target(p) and meta_refusal(p.id) is None
 
@@ -1592,7 +1588,7 @@ def desk(panel, router: Router) -> None:
         ui.tooltip("The loaded patch's own controls on the APC40 (SHIFT off). "
                           "A control the patch leaves unmapped is dark and does nothing.")
     imgui.same_line()
-    # (the click is the on-screen desk's, once it has one: plan 17 WP4's
+    # (the click is the on-screen desk's, once it has one:
     # `ui_desk.click`.) The longest wording that fits beside the title; the
     # whole of it on hover
     full = ("new rows: right-click a param → Learn desk"
@@ -1669,7 +1665,7 @@ def _macros_edited(table) -> None:
 
 def shared_bases(table) -> dict[str, list[str]]:
     """{param: [macro ids]} for every param more than one macro
-    base-subscribes (plan 13 §2.4: the last write wins; the page marks it)."""
+    base-subscribes (the last write wins; the page marks it)."""
     by: dict[str, list[str]] = {}
     for mid, m in table.macros.items():
         for s in m.subs:
@@ -1681,7 +1677,7 @@ def shared_bases(table) -> dict[str, list[str]]:
 def base_targets(panel) -> list[Param]:
     """What a base subscriber may set: a persisted, non-alias
     **performance** param — never a meta controller one, which a loadable patch never
-    moves (plan 13 D9; `routing.base_refusal`) — and not a macro."""
+    moves (`routing.base_refusal`) — and not a macro."""
     return [q for q in panel.reg if q.kind not in (Kind.TRIGGER, Kind.TEXT)
             and q.group != "macro" and base_refusal(q.id, panel.reg) is None]
 
@@ -1779,10 +1775,10 @@ def macros(panel, router: Router) -> None:
         imgui.set_next_item_width(MACRO_NAME_W)
         changed, text = ui.input_text_with_hint("##label", "label", m.label if m else "")
         if changed:
-            undo.by_hand(True)          # the field's own report: row 757
+            undo.by_hand(True)          # the field's own report
             _macro(table, p.id).label = text
         imgui.same_line()
-        # plan 49 stage 3: in a narrow pane the chips go on a row of their own
+        # in a narrow pane the chips go on a row of their own
         chips = ui.chip_w("+ base", "+ depth") + sp
         roomy = imgui.get_content_region_avail().x - chips >= MACRO_SLIDER_MIN
         panel._slider(p.id, -chips if roomy else -1)
@@ -1790,7 +1786,7 @@ def macros(panel, router: Router) -> None:
             imgui.same_line()
         if ui.chip("+ base"):
             q = panel.reg.get("view.bright") or base_targets(panel)[0]
-            # from where the param sits to its fader's end (row 537)
+            # from where the param sits to its fader's end
             _macro(table, p.id).subs.append(base_sub(q))
             _macros_edited(table)
         if imgui.is_item_hovered():
@@ -1821,7 +1817,7 @@ def macros(panel, router: Router) -> None:
         imgui.text_disabled(NO_MATCH)
 
 
-# ---- the modifiers (plan 28 N1) ----
+# ---- the modifiers ----
 #
 # One block per modifier, under the routes:
 #
@@ -1839,7 +1835,7 @@ def macros(panel, router: Router) -> None:
 MOD_KIND_W = 96.0        # the "+ modifier" kind combo
 MOD_IN_W = 150.0         # an input's source combo
 MOD_ID_W = 52.0          # "mod 2" beside the block
-MOD_STACK_W = 76.0       # plan 28 N7: a stacked block's label column (GRAPH's side pane)
+MOD_STACK_W = 76.0       # a stacked block's label column (GRAPH's side pane)
 
 
 def mod_hay(panel, router: Router, m: Modifier) -> tuple[str, ...]:
@@ -1850,7 +1846,7 @@ def mod_hay(panel, router: Router, m: Modifier) -> tuple[str, ...]:
 def modifier_sources(panel, router: Router, mid: str | None = None) -> list[tuple[str, str]]:
     """(address, label) an input may read: every route source (`_sources`)
     and every modifier's output lane but `mid`'s own — a modifier reading
-    itself is a loop (N0 refuses one with no delay in it)."""
+    itself is a loop (refused when no delay is in it)."""
     out = [(a, lb) for a, lb in _sources(panel, router) if not a.startswith("mod:")]
     out += [(m.address, f"mod {m.n} {m.kind}") for m in router.table.modifiers
             if m.id != mid]
@@ -1880,7 +1876,7 @@ def set_modifier_input(panel, mid: str, k: int, source: str) -> None:
 def remove_modifier(panel, mid: str) -> None:
     """The ×: the modifier and its params go, what fed it wired on to
     what it fed (`Bindings.remove_modifier`). One undo step, with the
-    library's marks (row 563: the modifier may be a GRAPH group's member;
+    library's marks (the modifier may be a GRAPH group's member;
     the table settles the group, the undo puts the member back)."""
     router = router_of(panel)
     undo.push(f"delete modifier {mid}", load=True)
@@ -1984,7 +1980,7 @@ def modifiers(panel, router: Router) -> None:
 def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) -> bool:
     """One modifier's editor — its kind, its inputs (`_input_combo`), its
     live output, ×, its params as the panel's own widgets — the strip's
-    block, and (plan 28 N7) the GRAPH page's side pane for a selected
+    block, and the GRAPH page's side pane for a selected
     modifier node, `stacked`: each input on a line of its own and each
     param under it, for a narrow column. True when its × was clicked (the
     caller removes it)."""
@@ -2066,7 +2062,7 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
 def meta_rows(panel, router: Router) -> None:
     """The invariant and global-layer MIDI rows: bindings.json's, shown so a
     loadable patch mapping one of them (dropped at load, in the head's notes) can
-    be seen; never learned or edited here (D5, D6)."""
+    be seen; never learned or edited here."""
     table = router.table
     inv, glob = _meta_rows(table)
     _heading("meta controller", "its own rows — edit bindings.json")
@@ -2089,7 +2085,7 @@ def meta_rows(panel, router: Router) -> None:
             _mark_line(panel, table, b, "meta", y0)
 
 
-# ---- the sinks (plan 27 B3) ----
+# ---- the sinks ----
 
 def sink_hay(panel, router: Router, b: Binding) -> tuple[str, ...]:
     """What the filter searches on a sink row: its source, the param's
@@ -2138,7 +2134,7 @@ def sinks(panel, router: Router) -> None:
 
 def _find_w(on: bool) -> float:
     """What the pointer line's right side takes: the field and its × while
-    it holds text (plan 28 N7: `+ route` is the GRAPH page's drag now)."""
+    it holds text (`+ route` is the GRAPH page's drag)."""
     sp = imgui.get_style().item_spacing.x
     return FIND_W + sp + (ui.chip_w("×") + sp if on else 0.0)
 
@@ -2193,7 +2189,7 @@ def page(panel, dt: float) -> None:
         if imgui.is_item_hovered():
             ui.tooltip("The filter hides the rest — × beside it shows every row")
     else:
-        # plan 28 N7: the routes and the modifiers are the canvas's now;
+        # the routes and the modifiers are the canvas's;
         # their line here points there
         room = (imgui.get_content_region_avail().x - _find_w(False)
                 - imgui.get_style().item_spacing.x)

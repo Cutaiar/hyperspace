@@ -1,4 +1,4 @@
-"""The app's pen: the lab's drawings with NanoVG (plan 42's readouts).
+"""The app's pen: the lab's drawings with NanoVG.
 
 `ui_pad_lab` holds the drawings — the browser lab's canvas code ported —
 written against a `Pen`. This is the pen that draws them: NanoVG, which

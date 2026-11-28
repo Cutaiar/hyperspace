@@ -1,4 +1,4 @@
-"""Patches — a group of nodes and its boundary, as data (plan 40 P1).
+"""Patches — a group of nodes and its boundary, as data.
 
 A **patch** is a loadable patch fragment with a boundary: the nodes of a region of
 the GRAPH page, their values, the wires among them, the routes, desk rows,
@@ -36,19 +36,19 @@ not stored twice** (`read`):
   hold) onto one it does, a member macro's base subscriber onto a host
   param, a modifier input read from a host lane.
 
-D5 (the owner's): a patch **drives** a host param through a port, it never
+A patch **drives** a host param through a port, it never
 **sets** one — ``values`` holds only its members' params.
 
 Four functions: `check` (the refusals in words), `read` (the fragment and
 its boundary), `lift` (cut a patch out of a loaded patch's parts: the
 pure half of *save as patch*) and `spawn` (what landing it in another
-loadable patch would add: the pure half of *spawn*, P3 lands it through today's
-doors as one undo step). A leaf like `graphmigrate.py`: pure data in, pure
+loadable patch would add: the pure half of *spawn*, landed through the
+GRAPH page's doors as one undo step). A leaf like `graphmigrate.py`: pure data in, pure
 data out — it imports `graph`'s names and helpers, `routing`'s `Binding`
 and scheme split and the modifiers' id rule, and nothing of the app.
 `library` imports it (for `check`), never the reverse.
 
-**One format** (plan 50): a patch, a group and a loadable patch are one document
+**One format**: a patch, a group and a loadable patch are one document
 shape (`shape_of`). A *loadable patch* is a patch that fills the whole frame — no
 ``ports``, every part replaced when it opens (``hyperspace.preset/10``,
 its own ladder in `graphmigrate`); a *group* is a patch not yet saved
@@ -61,22 +61,22 @@ group's strip as a spawn that replaces the group's values (`spawn`'s
 `Landing.replaces`). Every fragment comes in through `forward`, the one
 ladder (a ``patch/1`` and a ``hyperspace.preset/1`` module preset are read
 as their ``/2``), so a file of any age reaches `check`, `read` and
-`spawn` in today's words.
+`spawn` in the current words.
 
-**Frame kinds** (wave 3 P1): a patch holds any render node a loadable patch file
+**Frame kinds**: a patch holds any render node a loadable patch file
 holds but the meta controller's own and the look's one camera — the scene, the shape,
 the backdrop, the pattern, hands 1, its layer and
 its guide as well as what `MAY_HOLD` always named — so a "dream + fx +
-composite" patch exists (plan 90 H3: the dream is an effect, renamed as
-any is; a second is said by its hook as it runs). No schema moves (the file's keys are as they were;
-an older build's `check` refuses such a file in words). A patch owns of a
+composite" patch exists (the dream is an effect, renamed as
+any is; a second is said by its hook as it runs). The file's keys are the
+same as ever; an older build's `check` refuses such a file in words. A patch owns of a
 frame kind only that kind's params (`_param_rows`: `rot.*` and most of
 `view.*` the shape's; `scene.*` is the band scene's and
 no node's). What can be made twice is renamed as ever (hands 1 lands as
 `hands.2`); what a frame holds one of (`ONE_PER_FRAME`) keeps its name,
 and a host that already has it refuses the spawn in words, nothing landed
 (`Landing.taken`, `Landing.refusal`) — but for a kind of `REPLACEABLE`
-(wave 3 P2; none since plan 90 H3 made the dream an effect): the conflict
+(none while the dream is an effect): the conflict
 sheet asks to replace the host's, whose wires and values go
 (`Landing.replacing`, `graphview.Edit.spawn`).
 """
@@ -99,21 +99,21 @@ from .routing import Binding, Macro, base_scheme, is_continuous, is_macro, meta_
 from .routing_sources import nsew
 
 KIND = "hyperspace.patch"
-# plan 50: `/2` is `/1` plus the optional `group` key (a patch of one param
-# group, what a module preset was). Plan 89: `/3` is `/2` with no copy node —
+# `/2` is `/1` plus the optional `group` key (a patch of one param
+# group, what a module preset was). `/3` is `/2` with no copy node —
 # a copy is a slot of its effect (`_slots_step`). Every save writes `/3`; a
 # load reads each through `forward` (the one ladder); an older build refuses it
 VERSION = 3
 SCHEMA = f"{KIND}/{VERSION}"
 READS = (1, 2, 3)
-# a module preset as it was before plan 50 — `hyperspace.preset/1` with a
+# a module preset — `hyperspace.preset/1` with a
 # `group` — read through `forward` as a `/2`, never written
 MODULE_KIND, MODULE_VERSION = "hyperspace.preset", 1
-# plan 57 (FQ4): a whole loadable patch's kind since `/11` (`graphmigrate.LOADABLE_KIND`, restated:
+# a whole loadable patch's kind since `/11` (`graphmigrate.LOADABLE_KIND`, restated:
 # tests/test_format_lane.py holds them equal)
 LOADABLE_KIND = "hyperspace.loadable"
-# plan 50: the key that makes a patch one param group's, its value the
-# registry group (``"camera"``; plan 90 H3: a `dream` one is retired, left on
+# the key that makes a patch one param group's, its value the
+# registry group (``"camera"``; a `dream` one is retired, left on
 # disk and never opened — `RETIRED_GROUPS`). Such a patch holds `values` — and, for a
 # group that lays out its own params (the analyzer's bands, `Library.extra`),
 # that group's `layout`: a group patch has no canvas, so the key is the
@@ -127,8 +127,8 @@ NOT_FRAGMENT_WORDS = "schema {schema!r} is not a {kind}"
 GROUP_EMPTY_WORDS = "group is {value!r}: the key names no param group"
 GROUP_ONLY_WORDS = ("{key}: a patch of one group ({group}) holds values only — no canvas, "
                     "rows or voices")
-# the marker that a patch's depths are measured along the effect tapers
-# (wave 0 T1), as a loadable patch's `units` is — `params.UNITS_KEY`, `DEPTH_UNIT`
+# the marker that a patch's depths are measured along the effect tapers,
+# as a loadable patch's `units` is — `params.UNITS_KEY`, `DEPTH_UNIT`
 # and `DEPTH_TAPER`, spelled here a second time because this module is a
 # leaf (tests/test_retaper.py holds the two spellings equal). A file
 # without it is read as it was by the library's door (`Library.read_patch`,
@@ -138,32 +138,31 @@ UNITS = {"fx.depth": "taper"}
 # the file's keys, in the order a lift writes them
 KEYS = ("schema", "name", "note", "nodes", "wires", "values", "modifiers", "routes", "desk",
         "macros", "lfos", "envs", "ports", "layout", UNITS_KEY)
-# plan 87: a fragment's members keyed (black is clear) — the loadable patch's
+# a fragment's members keyed (black is clear) — the loadable patch's
 # graph `"keys"` cut to the members, written last and only when one is (so not
 # among `KEYS`, the keys every fragment writes, in order)
 KEYED = "keys"
-# (a patch of one group's keys are `GROUP_KEYS`, plan 50: `check` reads it apart)
+# (a patch of one group's keys are `GROUP_KEYS`: `check` reads it apart)
 
 # what a patch may hold of the render graph: the kinds a loadable patch's section
-# declares (`graph.wire_node_kind(…, wired=True)`), since wave 3 P1 the
+# declares (`graph.wire_node_kind(…, wired=True)`), and the
 # frame's too. Not here: the meta controller's (`FIXTURE_KINDS`), the look's one camera, and
 # what is a name but no node of a wired frame (an echo pin, `fx`, `frame`)
 MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "matte", "cut",
             "segment", "hands", "layer", "guide", "scene", "shape", "backdrop", "pattern",
             "lookback")
 # what a frame holds one of: never renamed by a spawn (`scene.2` is no node;
-# `dream.2` may be declared but no wire may touch it, D2 of plan 36), so a
+# `dream.2` may be declared but no wire may touch it), so a
 # host that already has one refuses the spawn in words (`Landing.taken`).
 # Hands 1 is no such thing — every other hands is a new number — nor is a
 # look-back (`lookback.2`)
 ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern")
-# (wave 3 P2, row 661) of those, what the conflict sheet may replace rather
-# than refuse. The dream alone for now; a kind added here gets the sheet's row
+# of those, what the conflict sheet may replace rather
+# than refuse. None at present; a kind added here gets the sheet's row
 # and `Edit.spawn`'s door as they are, fresh values by what the node owns
-REPLACEABLE: tuple[str, ...] = ()        # (plan 90 H3: the dream was the one)
+REPLACEABLE: tuple[str, ...] = ()
 # the render nodes the GRAPH page never deletes and a patch never holds —
-# `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
-# plan 43 C2) and the clouds (the meta controller's, `NOT_REMOVABLE`); the windows are
+# `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`) and the clouds (the meta controller's, `NOT_REMOVABLE`); the windows are
 # refused by kind, `output`. Copied, not imported (graphview is the app's);
 # tests/test_patches.py holds the two lists equal
 FIXTURE_NODES = ("camera", "cloud")
@@ -176,20 +175,20 @@ LANE_ENVS = envmod.LANE_ENVS
 FIRST_ENV = max(LANE_ENVS) + 1
 MACROS = 8                     # macro.1 … macro.8, the meta controller's eight knobs
 # the control-side sources one control drives one param from (the Learn rule:
-# "one axis, one param", plan 18 fork 7) — a patch row on one of these that
-# the host already sends somewhere else is a conflict (P3's sheet). A desk
+# "one axis, one param") — a patch row on one of these that
+# the host already sends somewhere else is a conflict (the conflict sheet). A desk
 # control is judged by `Binding.overlaps` instead; every other scheme (an
 # audio band, an LFO, an OSC fader) may drive any number of params
 ONE_OWNER = ("hand", "axis")
 
-# the refusals' words (P1: name the thing and why)
+# the refusals' words: name the thing and why
 WINDOW_WORDS = "{name} is the meta controller's window; left out — a patch's picture leaves by a port"
 FIXTURE_WORDS = "{name} is the meta controller's; left out"
-CAMERA_WORDS = "{name} is the look's one camera, never a patch's; left out"   # plan 43 C2
+CAMERA_WORDS = "{name} is the look's one camera, never a patch's; left out"
 CHANNEL_WORDS = ("{name} is a media channel, this Mac's files; left out — a patch reads one "
                  "through a port")
 NOT_HELD_WORDS = "{name} is no node a patch holds; left out"
-# (a spawn, wave 3 P1) the single-instance nodes the host already has
+# (a spawn) the single-instance nodes the host already has
 TAKEN_WORDS = ("{name} not spawned: this loadable patch already has {nodes}, and a frame holds one "
                "of each — delete it here first; nothing landed")
 SEQ_WORDS = "the sequencer is the look's one, never a patch's; left out"
@@ -204,7 +203,7 @@ NO_MACRO_NOTE = "{mid}: no free macro — its subscribers not spawned"
 NO_VOICE_NOTE = "{vid}: {why} — not spawned, nor its routes"
 NO_INPUT_NOTE = "{mid}: its input {k} read {vid}, which did not spawn — left empty"
 CROSSES_WORDS = "wire {wire} crosses the edge: a port says it"
-# plan 89: a copy entry in a `/3` (a `/2`'s is moved by the ladder, `_slots_step`)
+# a copy entry in a `/3` (a `/2`'s is moved by the ladder, `_slots_step`)
 COPY_GONE_WORDS = ("{name} is gone (plan 89): an effect draws on another picture by a slot "
                    "of its own; left out")
 # a node entry of a kind that is no node a section declares but names a
@@ -221,7 +220,7 @@ def slug(name: str) -> str:
     return s or "untitled"
 
 
-# ---------------------------------------------------------------- one format (plan 50)
+# ---------------------------------------------------------------- one format
 
 def _schema(doc: Mapping) -> tuple[str, int | None]:
     """A document's schema as (kind, version); version None when the
@@ -245,7 +244,7 @@ def _module_step(doc: Mapping) -> dict:
 
 
 def _slots_step(doc: Mapping) -> dict:
-    """``patch/2`` → ``patch/3`` (plan 89): its copies made slots of their
+    """``patch/2`` → ``patch/3``: its copies made slots of their
     effects (`graphmigrate.slots_of_copies`, the loadable patch's rule): the
     entries, the wires, `keys`, a boundary port's own end (`to` / `from`)
     renamed, and a copy's canvas place dropped (its effect's node has one).
@@ -290,9 +289,9 @@ STEPS = {
 
 
 def forward(doc: Mapping) -> dict:
-    """The one ladder for a fragment (plan 50): a ``patch/1``, a ``patch/2``
+    """The one ladder for a fragment: a ``patch/1``, a ``patch/2``
     or a module preset (``hyperspace.preset/1`` with a `group`) → its
-    ``patch/3`` (plan 89), step by step (`STEPS`), a copy — the input is never
+    ``patch/3``, step by step (`STEPS`), a copy — the input is never
     changed. A whole loadable patch (``hyperspace.preset/2`` and up) is no fragment:
     its ladder is `graphmigrate`'s, so it is refused here, as is anything
     newer than this build or of another kind (ValueError, in words)."""
@@ -321,7 +320,7 @@ def forward(doc: Mapping) -> dict:
 
 
 def _retire_dreams(doc: dict) -> dict:
-    """Plan 90 (H3): a fragment holding an old dream with it made public parts,
+    """A fragment holding an old dream with it made public parts,
     at any version (`graphmigrate.retire_dreams`; keyed on the file)."""
     nodes, wires = doc.get("nodes"), doc.get("wires")
     if not isinstance(nodes, list) or not isinstance(wires, list):
@@ -345,7 +344,7 @@ def _retire_dreams(doc: dict) -> dict:
 
 
 def _retire_lookbacks(doc: dict) -> dict:
-    """Plan 90 (H2): a fragment naming a look-back with it made public parts,
+    """A fragment naming a look-back with it made public parts,
     at any version (`graphmigrate.retire_lookbacks`; keyed on the file)."""
     nodes, wires = doc.get("nodes"), doc.get("wires")
     if not isinstance(nodes, list) or not isinstance(wires, list):
@@ -368,11 +367,11 @@ def _retire_lookbacks(doc: dict) -> dict:
     # (a row kept onto the host's dream — the look-back's shared knobs — is
     # the fragment's only where its source is: a desk knob onto a dream the
     # fragment does not hold is nothing of the patch's, refused by `check`;
-    # its copy onto the part stays. Devin on #522, third pass)
+    # its copy onto the part stays)
     shared = {f"dream.{k}" for k in graphmigrate.LB_SHARED}
     if not any(isinstance(e, dict) and e.get("kind") == "dream" for e in nodes2):
         # (a malformed file passes through untouched, for `check` to refuse in
-        # words — never raised here: Devin on #522, fourth pass)
+        # words — never raised here)
         try:
             m = _members_of(out)
         except (TypeError, ValueError, AttributeError):
@@ -388,7 +387,7 @@ def _retire_lookbacks(doc: dict) -> dict:
 
 
 def _retire_hue_cycle(doc: dict) -> dict:
-    """Plan 67: a fragment naming Hue cycle with it retired, at any version
+    """A fragment naming Hue cycle with it retired, at any version
     (`graphmigrate.retire_hue_cycle`; keyed on the file, not the schema)."""
     nodes, wires = doc.get("nodes"), doc.get("wires")
     if not isinstance(nodes, list) or not isinstance(wires, list):
@@ -407,14 +406,14 @@ def _retire_hue_cycle(doc: dict) -> dict:
 
 
 def shape_of(doc: Mapping) -> str:
-    """Which reading of the one document shape `doc` is (plan 50):
+    """Which reading of the one document shape `doc` is:
     `LOADABLE_SHAPE` — a whole loadable patch, a patch that fills the frame (no
     ports, its parts replace the open loadable patch's when it opens); `GROUP_SHAPE`
     — a patch of one param group (its `group` key: what a module preset
     was; it replaces that group's values); `PATCH_SHAPE` — a fragment of
     the canvas with its boundary, spawned into the open loadable patch under fresh
     ids. By the schema's kind, then the `group` key — its presence, as
-    `check` reads it (review fix 6: a `group` that is empty or not text is
+    `check` reads it (a `group` that is empty or not text is
     still a group patch's key, and `check` refuses it in one line,
     `GROUP_EMPTY_WORDS`)."""
     kind, version = _schema(doc)
@@ -433,7 +432,7 @@ def names_group(doc: Mapping) -> bool:
 
 def group_doc(group: str, name: str, values: Mapping[str, Any], *, note: str = "",
               extra: Mapping[str, Any] | None = None) -> dict:
-    """A patch of one param group (plan 50; what a module preset was):
+    """A patch of one param group (what a module preset was):
     ``{"schema": "hyperspace.patch/2", "name", ["note",] "group", "values",
     …extra}`` — `extra` the group's own keys beside the values (the
     analyzer's `layout`, the camera's `units`)."""
@@ -482,7 +481,7 @@ def _kind(name: str) -> str | None:
 
 def _node_of(src: str) -> str:
     """A wire's end → the node it is drawn on (a pin is its node:
-    `segment.2.fg` → `segment.2`, `scene.depth` → `scene`; plan 89: an
+    `segment.2.fg` → `segment.2`, `scene.depth` → `scene`; an
     effect's slot its effect, `acid.slot.2` → `acid`)."""
     return G.pin_node(src) or G.effect_of(src)
 
@@ -491,7 +490,7 @@ def _family(name: str) -> tuple[str, int, str]:
     """A render node name → (its base, its instance, a suffix): `acid.2` →
     ("acid", 2, ""), `hands.3.layer` → ("hands", 3, ".layer"). The base and
     instance are what a rename moves — a hands node, its layer and its
-    guide move together; plan 89: an effect's slot moves with its effect,
+    guide move together; an effect's slot moves with its effect,
     `acid.slot.2` → ("acid", 1, ".slot.2")."""
     kind = _kind(name)
     if kind == "slot":
@@ -513,7 +512,7 @@ def _join(base: str, n: int, suffix: str = "") -> str:
 
 def held_words(name: str) -> str | None:
     """Why render node `name` may not be in a patch, in words — None when
-    it may (`MAY_HOLD`; wave 3 P1: the frame's kinds too)."""
+    it may (`MAY_HOLD`, the frame's kinds too)."""
     kind = _kind(name)
     if kind == "camera":
         return CAMERA_WORDS.format(name=name)
@@ -628,7 +627,7 @@ class _Members:
         out: list[_ParamRow] = []
         for name in self.render:
             out += [(pre, name, keys) for pre, keys in _param_rows(name)]
-            # plan 87: its black is clear knobs, while it is keyed
+            # its black is clear knobs, while it is keyed
             out.append((f"key.{name}", name, _any_key))
         for scheme in (MOD, LFO, ENV):
             for n in self.ids(scheme):
@@ -670,12 +669,12 @@ def _is_shape_view_key(key: str) -> bool:
 
 def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
     """Render node `name`'s params as ``(prefix, keys)`` — what is its to
-    carry (D5) and to rename. The canvas's owners where a frame kind's
+    carry and to rename. The canvas's owners where a frame kind's
     params are not under its own name (`graphview.OWNERS`, the app's, so
     restated here; tests/test_patches_frame_kinds.py holds the two equal):
     `rot.*`, `view.*` and `fx.face_map` the shape's, `pattern.*`,
     `view.pattern*` and `view.media_*` the pattern's
-    (plan 90 H2: the look-back's are its parts'). The scene has none:
+    (the look-back's are its parts'). The scene has none:
     `scene.*` is the band scene's (a shared meta group)."""
     kind = _kind(name)
     if kind == "scene":
@@ -794,7 +793,7 @@ class _Renamer:
         if vo is not None:
             return f"{vo[0]}.{self.voice(*vo)}" + pid[len(pre):]
         moved = self.name(who)
-        if pre.startswith("key."):                # plan 87: `key.<node>.*` by the node's name
+        if pre.startswith("key."):                # `key.<node>.*` by the node's name
             return f"key.{moved}" + pid[len(pre):]
         # (a member that keeps its name keeps its ids: `rot.*` is no `shape.*`)
         return pid if moved == who else G.param_prefix(moved) + pid[len(pre):]
@@ -817,7 +816,7 @@ class _Renamer:
         return out
 
     def wire(self, w: Mapping) -> dict:
-        # (plan 67 P3: a wire's other keys — a knob's field's depth — kept)
+        # (a wire's other keys — a knob's field's depth — kept)
         return {**w, "from": self.src(w["from"]), "to": self.dst(w["to"])}
 
     def row(self, r: Mapping) -> dict:
@@ -892,10 +891,10 @@ class Patch:
     ports: tuple[dict, ...]
     control_rows: tuple[dict, ...]
     host_ports: tuple[dict, ...]
-    # plan 50: the param group a patch of one group is (`GROUP_KEY`), "" for
+    # the param group a patch of one group is (`GROUP_KEY`), "" for
     # a canvas fragment
     group: str = ""
-    # plan 87: the members keyed (black is clear), by name
+    # the members keyed (black is clear), by name
     keys: tuple[str, ...] = ()
 
     @property
@@ -919,7 +918,7 @@ def _port_order(p: Mapping) -> tuple[str, int, str]:
 def _in_order(wires: Iterable[dict]) -> tuple[dict, ...]:
     """A file's wires in `read`'s fixed order — except that the wires into a
     many-wire port (`graph.MANY_PORTS`: the scene's geometry) keep theirs
-    among themselves, it being the draw order (wave 3 P1: the scene in a
+    among themselves, it being the draw order (the scene in a
     patch)."""
     held = list(wires)
     out = sorted(held, key=_wire_key)
@@ -944,15 +943,15 @@ def read(doc: Mapping) -> Patch:
     (nodes by name, wires and ports in a fixed order, so two equal patches
     read equal), and its boundary classified. Tolerant: a shape `check`
     would refuse reads as what it can; the library refuses before this —
-    and reads a file from before wave 0 T1 (no `units` marker) as it was
+    and reads a file with no `units` marker as it was
     (`Library.read_patch`, `params.retaper_depths`), so what arrives here
     has its depths along the effect tapers."""
     nodes = tuple(sorted((dict(e) for e in doc.get("nodes") or () if isinstance(e, Mapping)),
                          key=lambda e: (entry_name(e) or "", str(e))))
     m = _members_of({**doc, "nodes": nodes})
     wires = _in_order(dict(w) for w in doc.get("wires") or () if isinstance(w, Mapping))
-    # (review of #435: a patch saved before bindings/4 says its pad sources in the old
-    # words; `nsew` is idempotent, so every read takes them into today's)
+    # (a patch saved before bindings/4 says its pad sources in the old
+    # words; `nsew` is idempotent, so every read takes them into the current words)
     routes = tuple({**r, "source": nsew(r["source"])} if isinstance(r.get("source"), str)
                    else dict(r) for r in doc.get("routes") or () if isinstance(r, Mapping))
     desk = tuple(dict(r) for r in doc.get("desk") or () if isinstance(r, Mapping))
@@ -1006,7 +1005,7 @@ def read(doc: Mapping) -> Patch:
                  lfos=tuple(sorted(m.lfos)), envs=tuple(sorted(m.envs)), layout=layout,
                  ports=ports, control_rows=tuple(control), host_ports=tuple(host),
                  group=str(doc.get(GROUP_KEY) or ""),
-                 # (plan 89: a member effect's slot may be keyed: it is the effect's)
+                 # (a member effect's slot may be keyed: it is the effect's)
                  keys=tuple(sorted(k for k in set(doc.get(KEYED) or ())
                                    if isinstance(k, str) and _node_of(k) in m.render)))
 
@@ -1022,14 +1021,14 @@ def check(doc: Any) -> list[str]:
     when it is one. The schema and the shape of every key; a node a patch
     may not hold (an output, a cloud, the camera, a media channel); a port of an unknown type or onto no
     member; a wire to a node the patch lacks that no port covers; a value
-    of a param no member has (D5); a lane envelope 1–5."""
+    of a param no member has; a lane envelope 1–5."""
     if not isinstance(doc, Mapping):
         return [f"a patch is a JSON object, not {type(doc).__name__}"]
     out: list[str] = []
     kind, version = _schema(doc)
-    if kind != KIND or version not in READS:     # (plan 50: a /1 is read as its /2)
+    if kind != KIND or version not in READS:     # (a /1 is read as its /2)
         out.append(f"schema {doc.get('schema')!r} is not {SCHEMA}")
-    if GROUP_KEY in doc:                  # plan 50: a patch of one param group
+    if GROUP_KEY in doc:                  # a patch of one param group
         return out + _check_group(doc)
     extra = sorted(set(doc) - set(KEYS) - {KEYED})
     if extra:
@@ -1060,7 +1059,7 @@ def check(doc: Any) -> list[str]:
     if len(set(m.render)) != len(m.render):
         out.append("a node named twice")
     for k in doc.get(KEYED) or ():
-        # (plan 89: a member effect's slot may be keyed: it is the effect's)
+        # (a member effect's slot may be keyed: it is the effect's)
         if not isinstance(k, str) or _node_of(k) not in m.render:
             out.append(f"keys: {k!r} is not a node of the patch"[:120])
     held = set(m.render)
@@ -1095,7 +1094,7 @@ def check(doc: Any) -> list[str]:
         src, dst = w["from"], w["to"]
         # a patch's wires are its own, both ends in it; a cable across the edge
         # is a port, never a wire — a wire would be landed by a spawn, an
-        # attachment by its saved name (D2, plan 36: no hidden edge)
+        # attachment by its saved name (no hidden edge)
         for end in (_node_of(src), _node_of(dst.rpartition(".")[0])):
             if end in held:
                 continue
@@ -1133,7 +1132,7 @@ def check(doc: Any) -> list[str]:
                 out.append(f"route {b.source} → {b.target}: not a performer row")
             if not (m.owns(b.target) or m.own_lane(b.source)):
                 out.append(f"{key} row {b.source} → {b.target}: nothing of the patch's")
-            elif (why := meta_refusal(b.target)) is not None:    # register row 744
+            elif (why := meta_refusal(b.target)) is not None:
                 out.append(f"{key} row {b.source} → {b.target}: {why}")
     for mid, mac in (doc.get("macros") or {}).items():
         if not (isinstance(mid, str) and is_macro(mid) and 1 <= _macro_n(mid) <= MACROS):
@@ -1142,7 +1141,7 @@ def check(doc: Any) -> list[str]:
             out.append(f"{mid}: a macro is {{label, subs}}")
         else:
             try:
-                out += [f"{mid}'s subscriber: {meta_refusal(pid)}"      # register row 744
+                out += [f"{mid}'s subscriber: {meta_refusal(pid)}"
                         for pid in Macro.from_json(mac).meta_subs()]
             except (KeyError, TypeError, ValueError, AttributeError) as e:
                 out.append(f"{mid}: a subscriber this build cannot read: {e!r}"[:120])
@@ -1164,7 +1163,7 @@ def check(doc: Any) -> list[str]:
 
 # ---------------------------------------------------------------- the boundary
 #
-# Plan 40 T2: the one classifier of what crosses a region's edge. `lift`
+# The one classifier of what crosses a region's edge. `lift`
 # cuts a patch with it and `read` classifies a file's rows with it; the
 # GRAPH page's group node (`graphview.VGroup`) draws a group's boundary
 # with it — so a group folded on the canvas shows exactly the pins and
@@ -1178,8 +1177,7 @@ INSIDE, CONTROL, INTO, OUT = "inside", "control", "into", "out"
 NESTED_WORDS = "{name} is a group: a group holds nodes, not groups; left out"
 # the meta controller's own render kinds, always there — its windows (an output, All
 # outputs), its media channels (this Mac's files) and its clouds — which no
-# loadable patch file holds as a node; `graphview.FIXTURE_KINDS` is this list. Plan 50
-# (review fix 1): no group holds one either, so a group can never carry what
+# loadable patch file holds as a node; `graphview.FIXTURE_KINDS` is this list. No group holds one either, so a group can never carry what
 # no patch can
 FIXTURE_KINDS = ("output", "channel", "cloud")
 NEVER_GROUPED = FIXTURE_KINDS
@@ -1188,13 +1186,13 @@ NEVER_GROUPED = FIXTURE_KINDS
 def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
            ) -> tuple[_Members, list[str]]:
     """The members a region of GRAPH canvas ids may hold, and, in words,
-    every id it may not (P1's rule — `lift`'s, and the GRAPH page's Group):
+    every id it may not (`lift`'s rule, and the GRAPH page's Group):
     an output, the camera or a cloud, a media channel, a hands' layer or
     guide without its hands, the sequencer, a lane envelope, a node the section lacks, a modifier
     the table lacks, a group (no nesting),
     any other canvas id (a device, the analyzer: the meta controller's). Pure.
 
-    Plan 50: this is the **save's** rule — `Edit.save_patch` asks it, and a
+    This is the **save's** rule — `Edit.save_patch` asks it, and a
     group holding what it refuses is not saved, in its words. What a group
     may hold on the canvas is `groupable`'s, wider."""
     return _select(spec, table, node_ids, save=True)
@@ -1202,9 +1200,8 @@ def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
 
 def groupable(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
               ) -> tuple[_Members, list[str]]:
-    """The members a **group** may hold, and the words for the rest (plan
-    50, the second half of harden-node-groups: "a group holds any node,
-    checked at save"). A group is a patch not yet saved, so it holds any
+    """The members a **group** may hold, and the words for the rest.
+    A group is a patch not yet saved, so it holds any
     node the loadable patch file saves: every render node of its section — the
     frame's singletons, hands 1, the camera —
     its modifiers, its LFOs and envelopes (the lane envelopes too) and the
@@ -1353,7 +1350,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
          layout: Mapping[str, Any] | None, node_ids: Iterable[str]
          ) -> tuple[dict, list[str]]:
     """Cut a patch out of a loaded patch's parts — the pure half of *save
-    as patch* (P1). `spec` is the landed graph section, `table` the
+    as patch*. `spec` is the landed graph section, `table` the
     `routing.Bindings` (its routes, patch-layer desk, modifiers, macros),
     `values` the registry's snapshot of the patch params, `layout`
     the GRAPH page's positions, `node_ids` the canvas ids picked
@@ -1378,7 +1375,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
     member is kept verbatim; a row from a member lane onto a host param, or
     from a host lane onto a member, is kept with the host's end as it is
     (a host port, derived at `read`). `values` holds only the members'
-    params (D5)."""
+    params."""
     members, refused = select(spec, table, node_ids)
     render = list(members.render)
     entries = {entry_name(e): e for e in (spec.to_json().get("nodes", []) if spec else [])}
@@ -1415,7 +1412,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
             ins += 1
             port: dict[str, Any] = {"id": _join("in", ins), "type": wire_type(w, where),
                                     "to": rn.dst(w.dst), "was": w.src}
-            if w.depth != 1.0:      # plan 67 P3: a field into a knob keeps its depth
+            if w.depth != 1.0:      # a field into a knob keeps its depth
                 port[G.WIRE_DEPTH] = w.depth
             # a many-wire port's order is the draw order: where this inlet
             # sits among the patch's own wires into it (absent: after them)
@@ -1428,7 +1425,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
             outs += 1
             port = {"id": _join("out", outs), "type": wire_type(w, where),
                     "from": rn.src(w.src), "was": w.dst}
-            if w.depth != 1.0:      # (an outlet into a host's knob too: Devin, #497)
+            if w.depth != 1.0:      # (an outlet into a host's knob too)
                 port[G.WIRE_DEPTH] = w.depth
             ports.append(port)
     # the rows: every one that touches a member
@@ -1467,9 +1464,9 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
            "lfos": sorted(rn.voice(LFO, n) for n in members.lfos),
            "envs": sorted(rn.voice(ENV, n) for n in members.envs),
            "ports": ports, "layout": lay, UNITS_KEY: dict(UNITS)}
-    # (plan 89: a member effect's keyed slot too, renamed with its effect)
+    # (a member effect's keyed slot too, renamed with its effect)
     keyed = sorted(rn.name(n) for n in getattr(spec, "keys", ()) if _node_of(n) in render)
-    if keyed:                                     # plan 87: only when a member is keyed
+    if keyed:                                     # only when a member is keyed
         doc[KEYED] = keyed
     return doc, refused
 
@@ -1544,7 +1541,7 @@ class Host:
 
 @dataclass(frozen=True)
 class Conflict:
-    """One collision between a patch's row and the host (P3's sheet, D3),
+    """One collision between a patch's row and the host (the conflict sheet),
     with enough for a two-way choice in words:
 
     - ``"desk"``: a desk control the host's patch layer maps
@@ -1570,19 +1567,19 @@ class Conflict:
 @dataclass(frozen=True)
 class Landing:
     """What spawning a patch into a host adds (`spawn`), renamed and placed,
-    for P3 to land through today's doors as one undo step: the rename map
+    for the GRAPH page to land through its doors as one undo step: the rename map
     (only the ids that moved: ``{"acid": "acid.2", "mod.1": "mod.7",
     "lfo.1": "lfo.6"}``), the render `nodes` and internal `wires` (to join
     the host's section), the `values`, the `modifiers` entries, the `routes`
     and `desk` rows (JSON, as a loadable patch holds them), the `macros` (each
     member macro's label and subscribers), the bank voices `lfos` / `envs`,
-    the `layout` moved to the drop point, the `group` entry (P2's shape:
-    ``{"name", "patch", "nodes", "open": false}`` — **no `id`**: T2 numbers
+    the `layout` moved to the drop point, the `group` entry (
+    ``{"name", "patch", "nodes", "open": false}`` — **no `id`**: the caller numbers
     groups, the caller adds ``"id": "group.<n>"``), the `ports` with their
     ends renamed (each an open pin: one whose `was` the host lacks is no
-    note), the `conflicts` (P3's sheet; empty: land at once), the `wants`
+    note), the `conflicts` (the conflict sheet; empty: land at once), the `wants`
     (the control-side sources by scheme head — ``cc``, ``hand``, ``axis@p2`` —
-    each with the rows and modifier inputs that read it, for P4 to word)
+    each with the rows and modifier inputs that read it, for the caller to word)
     and the `notes` (a macro with no free number, a bank with no room)."""
 
     renames: dict[str, str]
@@ -1601,16 +1598,16 @@ class Landing:
     conflicts: tuple[Conflict, ...]
     wants: dict[str, tuple[dict, ...]]
     notes: tuple[str, ...]
-    # plan 50: the param group a patch of one group replaces the values of
+    # the param group a patch of one group replaces the values of
     # ("" for a canvas fragment): its `values` are the group's, landed over
     # the group's fresh values (`Library.resolved`), nothing else moves
     replaces: str = ""
-    # wave 3 P1: the patch's single-instance nodes (`ONE_PER_FRAME`) the host
+    # the patch's single-instance nodes (`ONE_PER_FRAME`) the host
     # already has. Not empty: this landing does not land (`refusal`).
     taken: tuple[str, ...] = ()
-    # plan 87: the members keyed (black is clear), renamed — into the host's `keys`
+    # the members keyed (black is clear), renamed — into the host's `keys`
     keys: tuple[str, ...] = ()
-    # wave 3 P2: what replacing `replacing` costs the host and what it keeps,
+    # what replacing `replacing` costs the host and what it keeps,
     # in words, and the host they were read off, the sheet's
     # (`dataclasses.replace` by `ui_graph.spawn`: this module cannot see the
     # registry; `graphview.Edit.replace_said`). `asked` is empty for a landing
@@ -1637,7 +1634,7 @@ class Landing:
     def unanswered(self, choices: Mapping | None) -> str | None:
         """The words for a landing that would replace a node nobody said to
         (`replace_key` not in `choices`: only the sheet says it), or None. A
-        node is more than a row: D9's "not answered is the patch's" stops here."""
+        node is more than a row: a node nobody answered for is the patch's, and that stops here."""
         left = [n for n in self.replacing if replace_key(n) not in (choices or {})]
         if not left:
             return None
@@ -1663,7 +1660,7 @@ def replace_key(name: str) -> str:
 
 
 def _group_landing(p: Patch) -> Landing:
-    """`spawn` of a patch of one param group (plan 50; a module preset's
+    """`spawn` of a patch of one param group (a module preset's
     load): no node, row or voice, so nothing is renamed and nothing can
     conflict — the group's values, to replace that group's."""
     return Landing(renames={}, nodes=(), wires=(), values=dict(p.values), modifiers=(),
@@ -1701,7 +1698,7 @@ def _sub_dropped(s: Any, gone: _Members) -> bool:
 def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
           patch: str | None = None) -> Landing:
     """What spawning patch `doc` into `host` at canvas point `at` would add
-    — the pure half of *spawn* (P1, P3). Writes nothing.
+    — the pure half of *spawn*. Writes nothing.
 
     Renames, in the patch's order: a render node takes the lowest instance
     of its base the host does not hold (`graphview._new_instance`'s rule:
@@ -1718,8 +1715,8 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     its old number, which would read the host's voice). The lowest free
     instance may be one a host's dormant rows still name (a removed
     `acid.2`'s): they wake with the spawn, as after an add on the canvas.
-    Only the patch's own wires land: a crossing is a port, an open pin
-    (D2). A value lands only for a member's param (D5). A macro keeps its number when the host
+    Only the patch's own wires land: a crossing is a port, an open pin.
+    A value lands only for a member's param. A macro keeps its number when the host
     does not use it, else takes the lowest free of the eight, else is a
     note — ``"macro.2: no free macro — its subscribers not spawned"`` — and
     it, its value and every row onto it stay out, the rest spawned.
@@ -1728,7 +1725,7 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     host has its second copy's control rows collide with the first's, row by
     row. `patch` is the group's provenance slug (default: the name's).
 
-    Plan 50: a patch of one param group (`GROUP_KEY`, what a module preset
+    A patch of one param group (`GROUP_KEY`, what a module preset
     was) spawns as its values alone, `Landing.replaces` naming the group
     (`host` is not read: nothing of it can collide)."""
     p = read(doc)
@@ -1804,13 +1801,13 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
                 renames[f"{scheme}.{n}"] = f"{scheme}.{new}"
     nodes = tuple(rn.entry(e) for e in p.nodes)
     # only the patch's own wires, both ends members: a crossing is a port, an
-    # open pin — never a wire landed by its saved name (D2), whatever the file
+    # open pin — never a wire landed by its saved name, whatever the file
     held = set(m.render)
     wires = tuple(rn.wire(w) for w in p.wires
                   if isinstance(w.get("from"), str) and isinstance(w.get("to"), str)
                   and _node_of(w["from"]) in held
                   and _node_of(w["to"].rpartition(".")[0]) in held)
-    # D5 for any caller, not only one that ran `check`: a member's params only
+    # a patch never sets a host param, for any caller, not only one that ran `check`: a member's params only
     values = {rn.param(k): v for k, v in p.values.items() if m.owns(k) and not lost.owns(k)}
     mods = []
     for x in p.modifiers:
@@ -1841,7 +1838,7 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     group = {"name": p.name, "patch": slug(p.name) if patch is None else patch,
              "nodes": canvas, "open": False}
     ports = tuple(rn.port(x) for x in p.ports)
-    # the conflicts (D3): against the host as it stands
+    # the conflicts: against the host as it stands
     conflicts: list[Conflict] = []
     for r in desk:
         b = Binding.from_json({**r, "layer": "preset"})

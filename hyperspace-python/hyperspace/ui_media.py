@@ -1,4 +1,4 @@
-"""The MEDIA page (plan 32 U) — the eight channels and what fills them.
+"""The MEDIA page — the eight channels and what fills them.
 
 Top to bottom:
 
@@ -18,15 +18,15 @@ Top to bottom:
   channel A    the selected channel's transport and fit — rate · jog,
                position · loop, slot · fit — as the panel's own widgets,
                then what is on it, its status and its time.
-  backdrop · faces   which channel each is wired to (plan 33 T7: the
+  backdrop · faces   which channel each is wired to (the
                graph's wires into `backdrop.image` and `pattern.media`,
                through a switch at its pick — wired on GRAPH, said here)
                and their alphas; the hint that the desk's cue knob is a jog.
 
-Read across a room in the dark (the restyle of PR #24): the panel's own
+Read across a room in the dark: the panel's own
 widgets and faces, a bin cell lit solid red, a missing source in the
-warning colour. No desk binding is made here (row 339: the desk is
-Dylan's); Learn on any of the page's params reaches it.
+warning colour. No desk binding is made here (the desk is
+the operator's); Learn on any of the page's params reaches it.
 
 The page only reads and writes. It reads the channels (`MediaState`:
 `channels`, `status`, `playhead`, `missing`), the folder's last scan
@@ -75,9 +75,9 @@ GAP = 6.0                  # between two channel columns
 CELL_H = 16.0              # a bin cell
 CELL_GAP = 2.0
 BAR_H = 4.0                # the playhead bar under a channel's picture
-GAIN_W = 110.0             # the channel's sound level (plan 45 V2), on the source's line
+GAIN_W = 110.0             # the channel's sound level on the source's line
 COL_MIN = 40.0             # px: a channel column thinner than this (the side pane) and
-                           # the eight go four to a row, A–D over E–H (plan 49 stage 2)
+                           # the eight go four to a row, A–D over E–H
 PIC_MAX_H = 25.0           # a channel's picture is 16:9 of its column, never taller than
                            # this (the panel at ui.PANEL_W): the page fits on a wider one
 THUMBS_KEPT = 512          # decoded thumbnails held for the renderer: the least recently
@@ -128,7 +128,7 @@ def folder_of(panel):
 
 
 def _feeds(panel) -> dict:
-    """The live feeds: the resolver's built-ins (`panel:graph`, 2026-11-02:
+    """The live feeds: the resolver's built-ins (`panel:graph`:
     no `[[devices]]` entry) first, then what the devices found."""
     out: dict = {}
     builtin = getattr(getattr(media_of(panel), "resolver", None), "builtin", None)
@@ -289,7 +289,7 @@ def _library(panel, st: dict, rows_shown: int = LIST_ROWS) -> None:
         _ndi_row(panel, st)
 
 
-# ---- NDI both ways (2026-11-22): the other Mac's picture as a live feed ----
+# ---- NDI both ways: the other Mac's picture as a live feed ----
 
 NDI_ENTRY = {"role": "ndi", "kind": "ndi", "enabled": True}
 
@@ -425,7 +425,7 @@ def _row(panel, st: dict, it: Item) -> None:
 def hint(status: str) -> str:
     """The line a row's tooltip adds under a status word that needs one:
     `off page` (`panel:graph` while the panel is hidden, the only time GRAPH
-    is not drawn: plan 49 stage 3) says why the preview is dark."""
+    is not drawn) says why the preview is dark."""
     if status == OFF_PAGE:
         return ("\nthe graph canvas is drawn only while the panel is up (it was hidden): "
                 f"a channel on it holds the last picture {HOLD_S:g} s, then shows black")
@@ -835,8 +835,7 @@ def _feed(panel, port: str) -> tuple[str | None, bool]:
     """(the node the loaded graph wires into `port` — `backdrop.image`,
     `pattern.media` — or None, whether a switch is on the way): straight,
     or through a switch at its pick (`graph.source_into`; the picks are the
-    view's, `ViewState.switch`). Plan 33 T7: what `backdrop.channel` and
-    `view.media` said before they were retired. Nothing with no graph."""
+    view's, `ViewState.switch`). Nothing with no graph."""
     now = getattr(panel, "graph_now", None)
     try:
         spec = now()[1] if now is not None else None
@@ -847,15 +846,15 @@ def _feed(panel, port: str) -> tuple[str | None, bool]:
     wires = spec.all_wires()
     direct = next((w.src for w in wires if w.dst == port), None)
     picks = getattr(getattr(panel, "view", None), "switch", None)
-    wired = bool(getattr(spec, "wired", False))     # (plan 35: a wired frame's ids)
+    wired = bool(getattr(spec, "wired", False))     # (a wired frame's ids)
     return source_into(wires, port, picks), wire_node_kind(direct, wired=wired) == "switch"
 
 
 def _channel_of(panel, port: str) -> str | None:
     """The channel the loaded graph feeds `port` with (`_feed`), or None:
     nothing wired, a switch off, or a picture that is no channel's own.
-    Plan 35 T5: a wired frame's `channel.<c>` (every load's), or a section
-    of before it's `media.<c>`, as `graph.channel_into` reads them."""
+    A wired frame's `channel.<c>` (every load's), or an older section's
+    `media.<c>`, as `graph.channel_into` reads them."""
     src, _ = _feed(panel, port)
     old, new = wire_node_kind(src), wire_node_kind(src, wired=True)
     c = src.partition(".")[2] if old == "media" or new == "channel" else None
@@ -879,7 +878,7 @@ def _selected(panel, st: dict, state) -> None:
     c = st["sel"] if st["sel"] in CHANNELS else "a"
     ch = state.channels[c]
     status = state.status(c)
-    # the hint is the title's note: the desk is Dylan's (row 339), so no
+    # the hint is the title's note: the desk is not bound here, so no
     # binding is made — Learn the cue knob (a relative encoder) to the jog
     title = f"channel {c.upper()} · {status.split(':')[0]}"
     panel._section(title, note=_fit_note(title, JOG_HINT.format(c=c)))
@@ -894,7 +893,7 @@ def _selected(panel, st: dict, state) -> None:
     sid = ch.bin[ch.index()]
     head = state.playhead(c)
     clock = f"{_mmss(head[0])} / {_mmss(head[1])}" if head is not None else ""
-    if f"media.{c}.audio" in panel.reg:     # (a registry from before plan 45 V2 lacks it)
+    if f"media.{c}.audio" in panel.reg:     # (an older registry lacks it)
         # the channel's sound on the source's own line: the page has no row to spare
         panel._check(f"media.{c}.audio", "audio")
         imgui.same_line()
@@ -912,17 +911,17 @@ def _selected(panel, st: dict, state) -> None:
         ui._readout(clock, ui.DIM)
 
 
-# the switch's id (plan 87), what a driver clicks
+# the switch's id, what a driver clicks
 KEY_SWITCH = "media.{c}.key"
-# plan 87: black is clear's knobs (`key.channel.<c>.*`), two to a row under
+# black is clear's knobs (`key.channel.<c>.*`), two to a row under
 # its switch while the channel is keyed
 KEY_ROWS = (("level", "level", "soft", "soft"), ("measure", "measure", "feather", "feather"),
             ("ramp", "ramp", None, None))
 
 
 def keyed(panel, c: str) -> bool:
-    """Whether the loaded patch's graph keys channel `c` (black is clear,
-    plan 87): its node's name in the section's `keys`. Read off the landed
+    """Whether the loaded patch's graph keys channel `c` (black is clear):
+    its node's name in the section's `keys`. Read off the landed
     spec, no copy: asked every frame the page is up."""
     spec = getattr(getattr(getattr(getattr(panel, "library", None), "loaded_patch", None),
                            "graph", None), "spec", None)
@@ -938,7 +937,7 @@ def set_keyed(panel, c: str, on: bool) -> str | None:
 
 
 def _key(panel, c: str) -> None:
-    """Channel `c`'s black is clear (plan 87): the switch — the same edit as
+    """Channel `c`'s black is clear: the switch — the same edit as
     GRAPH's node menu, on `channel.<c>` — and while it is on its knobs, two
     to a row, then keep colour and invert."""
     on = keyed(panel, c)
@@ -965,7 +964,7 @@ def _key(panel, c: str) -> None:
 
 
 def mixer_line(panel) -> tuple[str, bool]:
-    """SYSTEM's line for the media sound (plan 45 V2, `Mixer.line`) and
+    """SYSTEM's line for the media sound (`Mixer.line`) and
     whether it warns (`Mixer.failed`: the stream would not open or stopped
     — a contained read error does not); '' until a channel's audio has
     first been turned on."""
@@ -986,7 +985,7 @@ def _mmss(s: float) -> str:
 def _pickers(panel, st: dict) -> None:
     panel._section("backdrop · faces", note="which picture each draws · wired on graph")
     if imgui.begin_table("##media.pickers", 2, imgui.TableFlags_.sizing_stretch_same):
-        # plan 33 T7: the channel is the graph's wire, said here (GRAPH wires it)
+        # the channel is the graph's wire, said here (GRAPH wires it)
         for port, label in (("backdrop.image", "backdrop"), ("pattern.media", "faces")):
             imgui.table_next_column()
             panel._label_cell(label, width=ui.HALF_LABEL_W)

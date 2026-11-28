@@ -17,7 +17,7 @@ from imgui_bundle import imgui
 from . import ui, ui_fields, ui_kit
 
 ORBIT = ("camera.zoom", "camera.yaw", "camera.pitch", "camera.pan.x", "camera.pan.y")
-EYE = ("eye.fov", "eye.distance")    # plan 43 C2: the eye the world is seen through
+EYE = ("eye.fov", "eye.distance")    # the eye the world is seen through
 RESET = "camera.reset"
 HINT_KEY = "R"                       # the key bound to Reset view (bindings.default.json)
 HINT = "· stick click"               # … and the pad's (gamepad.py)

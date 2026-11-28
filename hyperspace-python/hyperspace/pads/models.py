@@ -71,7 +71,7 @@ class Model:
     caps: frozenset[str] = frozenset()
     glyphs: dict[str, str] = field(default_factory=dict)
     controls: frozenset[str] | None = None
-    # a pad's own controls (the owner, 2026-11-04): (control, param, op, value)
+    # a pad's own controls: (control, param, op, value)
     # rows that stand in for every table row on that control, whichever table
     # is loaded (a controller is generic, with extensions by model)
     layout: tuple[tuple[str, str, str, float], ...] = ()
@@ -102,7 +102,7 @@ _SONY_GLYPHS = {
 }
 _SONY_OUT = frozenset({"touch", "motion", "light", "rumble", "triggers", "players", "mic"})
 
-# A single Joy-Con (plan 43) is held like a Wii Remote — face up, the stick
+# A single Joy-Con is held like a Wii Remote — face up, the stick
 # under the thumb, pointing where the hand points — and is first of all
 # its six-axis sensor. What it has reads by position: its one stick is the
 # left stick (``axis:LX`` / ``LY``, its click ``pad:LSTICK``); the (L)'s
@@ -115,10 +115,10 @@ _SONY_OUT = frozenset({"touch", "motion", "light", "rumble", "triggers", "player
 # — no light bar, no trigger resistance, no mic light.
 _JOYCON_CAPS = frozenset({"motion", "back", "rumble", "players"})
 _JOYCON_COMMON = frozenset({"LX", "LY", "LSTICK", "S", "E", "W", "N", "LP", "RP"})
-# the Joy-Con's own layout (the owner, 2026-11-04): SL / SR the shape in every
+# the Joy-Con's own layout: SL / SR the shape in every
 # mode, the stick's click the view's reset; − (+ on the R) the totem's reset,
-# capture (HOME on the R) the totem on and off; L (R) holds the base chase
-# (register row 724). ZL (ZR) is free
+# capture (HOME on the R) the totem on and off; L (R) holds the base chase.
+# ZL (ZR) is free
 _JOYCON_ROWS = (("LP", "view.shape", "step", -1.0), ("RP", "view.shape", "step", 1.0),
                 ("LSTICK", "camera.reset", "fire", 1.0))
 _JOYCON_L_LAYOUT = (*_JOYCON_ROWS, ("VIEW", "totem.reset", "fire", 1.0),
@@ -127,8 +127,7 @@ _JOYCON_L_LAYOUT = (*_JOYCON_ROWS, ("VIEW", "totem.reset", "fire", 1.0),
 _JOYCON_R_LAYOUT = (*_JOYCON_ROWS, ("MENU", "totem.reset", "fire", 1.0),
                     ("GUIDE", "totem.on", "toggle", 1.0),
                     ("RB", "deck.chase", "momentary", 1.0))
-# hold-to-save is the Edge's alone (row 724): "the controller Dylan will be
-# using for VJ-style setups"
+# hold-to-save is the Edge's alone
 _EDGE_LAYOUT = (("MENU", "preset.save_new", "hold", 1.0),)
 _JOYCON_L_GLYPHS = {
     "S": "↓", "E": "→", "W": "←", "N": "↑", "LB": "L", "LT": "ZL", "LP": "SL", "RP": "SR",
@@ -163,7 +162,7 @@ MODELS: dict[str, Model] = {m.id: m for m in (
     # (both sticks, a D-pad): the codec reads it; no hand has checked one
     Model("procon", "Pro Controller", "nintendo", "hid", ((NINTENDO_VID, 0x2009),),
           frozenset({"motion", "rumble", "players"}), {**_PRO_GLYPHS}),
-    # any other GLFW pad: read with the Xbox map, as every pad was before plan 42
+    # any other GLFW pad: read with the Xbox map, as the default
     Model("generic", "gamepad", "generic", "glfw"),
 )}
 SONY_IDS = {pid for m in MODELS.values() if m.family == "sony" for _, pid in m.ids}
@@ -174,7 +173,7 @@ for _m in MODELS.values():
         for _vid, _pid in _m.ids:
             HID_IDS.setdefault(_vid, set()).add(_pid)
 
-# Plan 56: the controls anyone reads as one degree of freedom with two poles,
+# The controls anyone reads as one degree of freedom with two poles,
 # (+ pole, − pole), up and right high as on a stick. The order is the lanes'
 # order on every pad, so it only grows at the end (`natural_pairs` says which
 # a model has). A single Joy-Con's four arrows are the face, so they are here
@@ -183,14 +182,14 @@ PAIRS: tuple[tuple[str, str], ...] = (
     ("N", "S"), ("E", "W"),
 )
 _POLE_CAP = {"LP": "back", "RP": "back", "LFN": "fn", "RFN": "fn"}
-# plan 57 (row 545, FQ7): the four-button cluster and the D-pad are each north, south, east and
+# the four-button cluster and the D-pad are each north, south, east and
 # west on every pad, since every pad is orientable. A row says which by its scheme (`pad:N`,
-# `hat:N`); a control's own name needs one more word for the D-pad, `hat.N` (row 836)
+# `hat:N`); a control's own name needs one more word for the D-pad, `hat.N`
 HAT_PREFIX = "hat."
 HAT_NAMES = frozenset(f"{HAT_PREFIX}{d}" for d in "NESW")
 HAT_WORDS = {"N": "up", "E": "right", "S": "down", "W": "left"}     # what a person reads
 FACE_WORDS = {"N": "north", "E": "east", "S": "south", "W": "west"}  # what a person reads
-# a face button's letter where the model prints none of its own: the Xbox pad's (row 552)
+# a face button's letter where the model prints none of its own: the Xbox pad's
 XBOX_FACE = {"S": "A", "E": "B", "W": "X", "N": "Y"}
 
 
@@ -209,7 +208,7 @@ def pole_name(source: str) -> str:
 
 def control_free(model: Model | None, name: str, skip=frozenset()) -> bool:
     """May the discrete control `name` be a pole on `model` right now? The one
-    question plan 56 asks, wherever a pair is offered, counted or read: not
+    question asked wherever a pair is offered, counted or read: not
     while something else holds it, `skip` (sources, as `Router.pad`'s: the
     totem's), nor a control the pad's own layout holds."""
     return pole_source(name) not in skip and not any(row[0] == name for row in getattr(model, "layout", ()))
@@ -310,7 +309,7 @@ def may_be_hid(spec: str | None) -> bool:
     return any(s.startswith(f"{vid:04x}:") for vid in HID_IDS)
 
 
-may_be_sony = may_be_hid       # plan 42's name, for a module loaded before plan 43
+may_be_sony = may_be_hid       # the Sony-only name, kept as an alias
 
 
 def glfw_ids(guid: str | None) -> tuple[int | None, int | None]:
@@ -330,7 +329,7 @@ def glfw_ids(guid: str | None) -> tuple[int | None, int | None]:
 def glyph_name(source: str) -> str:
     """The name `glyph` looks a source up by: a button's or axis's own (``pad:N`` → ``N``),
     a hat's with `HAT_PREFIX` (``hat:N`` → ``hat.N``), so the D-pad's north never reads as
-    the face's north button (plan 57 §7b)."""
+    the face's north button."""
     scheme, _, rest = source.partition(":")
     return f"{HAT_PREFIX}{rest}" if scheme.partition("@")[0] == "hat" else rest
 

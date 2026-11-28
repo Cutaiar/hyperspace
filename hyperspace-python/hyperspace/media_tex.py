@@ -1,4 +1,4 @@
-"""The media channels' textures (plan 32 R): one GL texture per channel,
+"""The media channels' textures: one GL texture per channel,
 and the fit pass's shader that lays one into a frame.
 
 `MediaTextures.texture(c, f)` is the one place a channel's picture
@@ -29,9 +29,9 @@ and GL puts the first row at v = 0, so the texture holds the picture
 upside down in GL's terms and whoever samples it flips v (`flipped`); a
 GPU frame is in GL's own row order (row 0 at the bottom) and is drawn as
 it is. Uploading the rows reversed would be a copy of every frame on the
-frame thread, which the plan forbids.
+frame thread.
 
-The MEDIA page's previews (final review B-I2): a channel the page shows
+The MEDIA page's previews: a channel the page shows
 that nothing in the frame reads gets a small texture of its own
 (`preview`), at most `PREVIEW_W` wide, written from every k-th row and
 column of the frame — a copy of at most 320 × 180 pixels, against the
@@ -39,10 +39,10 @@ column of the frame — a copy of at most 320 × 180 pixels, against the
 (`Renderer._for_the_panel`); a GPU frame is not copied at all, it goes
 through `texture` as a consumer's would.
 
-Plan 32 T6 found the Syphon spike's "read as 2D" wrong: binding the
-client's texture as 2D is GL_INVALID_OPERATION and reads whatever 2D
-texture was bound before (`test_a_syphon_frame_samples_through_the_fit_pass`
-samples the real thing).
+A rectangle texture cannot be read as 2D: binding the client's texture as
+2D is GL_INVALID_OPERATION and reads whatever 2D texture was bound before
+(`test_a_syphon_frame_samples_through_the_fit_pass` samples the real
+thing).
 
 Render stack (ARCHITECTURE §3): moderngl and numpy only; the frame is
 duck-typed (`pixels`, `texture`, `tex_size`, `frame`, `t`, `size`)."""
@@ -81,8 +81,7 @@ def fit_scale(fit: int, src: tuple[int, int], dst: tuple[int, int]) -> tuple[flo
     return (dw / (sw * k), dh / (sh * k))
 
 
-# the fit pass's key modes (`u_key`, plan 87): off (the pass as it was
-# before plan 87, the same arithmetic), keyed here, keyed by a feathered
+# the fit pass's key modes (`u_key`): off (no keying), keyed here, keyed by a feathered
 # ramp (`u_keymask`, read 1:1), and the ramp alone out (into a one-channel
 # target, for the feather)
 KEY_OFF, KEY_HERE, KEY_MASK, KEY_RAMP_OUT = range(4)
@@ -90,7 +89,7 @@ KEY_OFF, KEY_HERE, KEY_MASK, KEY_RAMP_OUT = range(4)
 # the fit pass (`Renderer._media_fit`): the channel's texture into a frame-
 # sized target, fitted, premultiplied — by its own alpha (a PNG's) and by
 # `u_alpha` (the backdrop's fader) — with the letterbox transparent black.
-# Plan 87, a keyed channel (black is clear): the shared ramp `k`
+# A keyed channel (black is clear): the shared ramp `k`
 # (`glsl.KEY_RAMP`, on the source's straight colour) multiplies the alpha;
 # keep colour leaves the premultiplied colour as it was (not inverted: a
 # bright pixel kept at alpha 0 would be added), else colour goes with
@@ -136,10 +135,10 @@ void main() {
 
 @dataclass(frozen=True)
 class Key:
-    """A keyed node's black is clear (plan 87, `key.<node>.*`,
+    """A keyed node's black is clear (`key.<node>.*`,
     `view.KeyState`) as a key pass reads it, held to its ranges: `measure`
     an index into `view.KEY_MEASURES`, `level` and `soft` the ramp, `keep`
-    keep colour, `feather` px, `invert`, `ramp` (plan 90: smooth or linear). Hashable: part of a frame cache key."""
+    keep colour, `feather` px, `invert`, `ramp` (smooth or linear). Hashable: part of a frame cache key."""
 
     measure: int = 0
     level: float = 0.02
@@ -147,7 +146,7 @@ class Key:
     keep: bool = True
     feather: float = 0.0
     invert: bool = False
-    ramp: int = 0                   # plan 90 (H1): an index into `view.KEY_RAMPS`
+    ramp: int = 0                   # an index into `view.KEY_RAMPS`
 
 
 def key_of(state: Any) -> Key:
@@ -376,7 +375,7 @@ UI_UPLOADS = 4          # thumbnails uploaded a frame at most; the rest wait the
 
 class UiTextures:
     """Small pictures the control panel draws — the MEDIA page's library
-    thumbnails (plan 32 T10) — as textures of the render context. The page
+    thumbnails — as textures of the render context. The page
     decodes a thumbnail's PNG on the media pool and hands the pixels here
     (`put`); the renderer makes the texture in its own frame (`upload`),
     with its context current, so the panel never makes a GL object on the

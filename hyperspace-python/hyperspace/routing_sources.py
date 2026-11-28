@@ -1,4 +1,4 @@
-"""The router's shared sources (plan 44 D2): what every source has said
+"""The router's shared sources: what every source has said
 this frame, one for the rig.
 
 `Sources` is the half of the old `routing.Router` that the adapters write
@@ -10,20 +10,20 @@ with named lanes publishes (`names`) and what an address means over it
 are (`use`, `follow_devices`, `schemes`), the scheme's own feel and its
 rule (`source_feel`: the pad's feel for `axis`, none else), the key and
 button constants a row names (`code`), and the one clock every router's banks
-step on (plan 44 §2: one beat for every deck). The
+step on (one beat for every deck). The
 evaluator — the patch, the banks, the macros, the modifiers' memory, the
 rows' followers and the camera job's (`Router.felt`), the key and pad
 rows — stays `routing.Router`, one per
 deck, built over a `Sources` (`Router(reg, table, sources)`); one `Sources`
 fed once a frame can feed two routers over two registries, which is what
-decks need first (plan 44 §1).
+decks need.
 
 The scheme grammar a source address is spelled in lives here too, since
 the sources resolve it: `BUILTIN_LANES`, `MIDI_SCHEMES`, `ROW_SCHEMES`,
 `QUALIFIER`, `base_scheme`, `qualified`, `is_continuous`. `routing.py`
 imports them back, and re-exports `Sources`, so no importer changes.
 
-What is a deck's stays off the sources (plan 44 D4, row 591 changed): the
+What is a deck's stays off the sources: the
 lanes a deck makes for itself — its LFOs', envelopes', sequencer's and
 modifiers' (`DECK_SCHEMES`) — live in that router's own `LaneLayer`, read
 over these sources through `Layered`. A scheme the layer does not hold falls
@@ -53,12 +53,12 @@ from . import pointer
 from .motion import OFF, Motion
 
 # the schemes no device feeds — the analyzer, the LFOs, the envelopes and
-# the sequencer's trigger lanes (plan 31) — in offer order; devices.py's
+# the sequencer's trigger lanes — in offer order; devices.py's
 # BUILTIN_SCHEMES, restated (routing never imports devices), the two held
-# equal by tests/test_plan31_wiring.py
+# equal by a test
 BUILTIN_LANES = ("lane", "lfo", "env", "seq")
 # the schemes a deck makes for itself and no device feeds: its banks' lanes
-# and its modifiers' (plan 44 D4, row 591). Each router keeps its own
+# and its modifiers'. Each router keeps its own
 # (`LaneLayer`), so two decks' `lfo:0` are two lanes; held equal to the
 # banks' and `modifiers.SCHEME` by tests/test_routing_sources.py
 DECK_SCHEMES = frozenset(("lfo", "env", "seq", "mod"))
@@ -68,30 +68,30 @@ DECK_SCHEMES = frozenset(("lfo", "env", "seq", "mod"))
 MODULATOR_SCHEMES = frozenset(BUILTIN_LANES) | DECK_SCHEMES
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
-# the row kinds the table dispatches itself (plan 27 B2): the keys
+# the row kinds the table dispatches itself: the keys
 # (`Router.keys`), the pad's buttons and D-pad (`Router.pad`) and MIDI
 # (midi.MidiIO). Every other scheme is a **continuous** source — a lane
 # some device feeds (`lane`, `lfo`, `hand`, `axis`, a new device's role) —
 # so a patch row naming a device this rig lacks is still a performer,
-# dormant until its device feeds (decision 11). Which continuous schemes
+# dormant until its device feeds. Which continuous schemes
 # exist, and in what order a page offers them, is the device registry's
 # (`Sources.schemes`, devices.DeviceRegistry.continuous_schemes): there is
 # no fixed list of them here
 ROW_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
-# a source's device qualifier (plan 27 B2 for MIDI, B6 for every scheme):
+# a source's device qualifier:
 # ``cc@<role>:<ch>:<n>``, ``pitch@<role>:<ch>``, ``pad@<role>:A``,
 # ``axis@<role>:LX`` — the row of a device other than the first one listed
 # that publishes the scheme. An unqualified source is that first device's
-# (MIDI: `Bindings.midi_roles`, the profile-matching rule B2 built; any
+# (MIDI: `Bindings.midi_roles`, the profile-matching rule; any
 # other scheme: `Bindings.primaries`, the first enabled device of its kind
-# in list order), so every row written before plan 27 means what it meant.
+# in list order), so a row with no qualifier means what it always meant.
 # The qualifier adds no ``:`` (a role has none). For a continuous scheme
 # the qualified head (``axis@p2``) is its own Sources key — its own feed,
 # labels, rests and names — so two pads never overwrite each other
 QUALIFIER = "@"
 
 
-# Plan 56: two discrete controls of one pad as one bipolar lane. The address
+# Two discrete controls of one pad as one bipolar lane. The address
 # is its own declaration, ``pair:<+ pole>/<− pole>`` in the rows' own control
 # names (``pair:hat.N/hat.S``, ``pair@p2:RB/LB``), so nothing lists a pair but the
 # row that reads it. Continuous: a route reads it as it reads a stick; a `step`
@@ -100,7 +100,7 @@ PAIR_SCHEME = "pair"
 PAIR_SEP = "/"
 PAIR_REST = 0.5
 
-# plan 57 (row 545): the words every pad's cluster and D-pad had until `bindings/4` and `/11`.
+# the words every pad's cluster and D-pad had until `bindings/4` and `/11`.
 # Old and new don't overlap, so the map is idempotent and needs no version to read by
 OLD_FACE = {"A": "S", "B": "E", "X": "W", "Y": "N"}
 OLD_HAT = {"UP": "N", "RIGHT": "E", "DOWN": "S", "LEFT": "W"}
@@ -149,7 +149,7 @@ def pair_poles(addr: str) -> tuple[Pole, Pole] | None:
         return _POLES[addr]
     try:
         from . import gamepad
-    except ImportError:          # no window system: dormant (decision 11), asked again later
+    except ImportError:          # no window system: dormant, asked again later
         return None
     got = None
     pos, sep, neg = addr.partition(PAIR_SEP)
@@ -195,7 +195,7 @@ def pair_lanes(pad, names: dict[str, int], skip=frozenset()) -> list[float]:
 
 def base_scheme(scheme: str) -> str:
     """A scheme without its device qualifier: ``cc@launch`` → ``cc``,
-    ``axis@p2`` → ``axis`` (plan 27 B6: any scheme takes one); a scheme
+    ``axis@p2`` → ``axis`` (any scheme takes one); a scheme
     with none is returned as it is."""
     head, at, _ = scheme.partition(QUALIFIER)
     return head if at else scheme
@@ -203,7 +203,7 @@ def base_scheme(scheme: str) -> str:
 
 def qualified(scheme: str, role: str) -> str:
     """`scheme` under the device qualifier `role` (``axis`` + ``p2`` →
-    ``axis@p2``); "" leaves it bare — the primary device's (plan 27 B6)."""
+    ``axis@p2``); "" leaves it bare — the primary device's."""
     return f"{scheme}{QUALIFIER}{role}" if role else scheme
 
 
@@ -211,16 +211,16 @@ def is_continuous(scheme: str) -> bool:
     """Is `scheme` a continuous source — read by the Router as a lane,
     driven through a performer row — rather than a row kind the table
     dispatches (`ROW_SCHEMES`)? Open-ended: a scheme no device of this rig
-    publishes is continuous too, its rows dormant (decision 11)."""
+    publishes is continuous too, its rows dormant."""
     return base_scheme(scheme) not in ROW_SCHEMES
 
 
 class Layered(MutableMapping):
     """One of a router's views of a per-scheme dict: its deck's own layer
-    over the shared sources' (plan 44 D4). A read finds the layer's entry,
+    over the shared sources'. A read finds the layer's entry,
     else the sources'; a write of a deck's scheme (`DECK_SCHEMES`) lands in
     the layer, any other in the sources, so an adapter handed the router
-    writes where it always did. `hide` (plan 55): shared schemes this view
+    writes where it always did. `hide`: shared schemes this view
     does not read, a controller's on another deck (`Sources.away_from`). A
     write and a delete still reach them."""
 
@@ -275,7 +275,7 @@ class Layered(MutableMapping):
 
 
 class LaneLayer:
-    """One deck's own lanes (plan 44 D4, row 591): what its banks and its
+    """One deck's own lanes: what its banks and its
     modifiers publish — the five per-scheme dicts the sources hold for the
     meta controller's — and nobody else's pass or panel reads."""
 
@@ -302,8 +302,8 @@ _NOWHERE: frozenset = frozenset()   # `away_from`, with every controller on this
 class Sources:
     """What every source said this frame, shared by every router over it.
 
-    `devices` is the meta controller's device registry (devices.DeviceRegistry, plan 27
-    B2), handed in as an argument — this module imports nothing above it —
+    `devices` is the meta controller's device registry (devices.DeviceRegistry),
+    handed in as an argument — this module imports nothing above it —
     and asked which continuous schemes there are and in what order a page
     offers them (`schemes`); None (bare sources, the tests') offers what
     has been fed or labelled. `clock` is the tap-tempo clock every router's
@@ -337,8 +337,7 @@ class Sources:
     def follow(self, table) -> None:
         """`table` (a routing.Bindings a router runs over) is told the
         registry's meta controller facts from now on (`follow_devices`). Held weakly:
-        a table no router keeps is forgotten, never written again. Plan 44
-        D3 (row 593's note): the meta controller facts are the meta controller's, so a deck's
+        a table no router keeps is forgotten, never written again. The meta controller facts are the meta controller's, so a deck's
         table is followed through its meta table (`table.meta_table`, a
         `routing.MetaTable`) — every deck over one meta controller is told at
         once, and the meta controller is written once."""
@@ -357,7 +356,7 @@ class Sources:
             self._tables = [weakref.ref(t) for t in live]
         return live
 
-    # ---- the device registry (plan 27 B2) ----
+    # ---- the device registry ----
 
     def use(self, devices) -> None:
         """Ask `devices` (anything with `continuous_schemes()`, and
@@ -413,7 +412,7 @@ class Sources:
     def names(self) -> dict[str, dict[str, int]]:
         """scheme → {address name: lane index}, published like `labels`
         by an adapter whose lanes have names (the hands: ``"right.roll"``
-        → its lane, decision register row 20), by plain assignment of a
+        → its lane), by plain assignment of a
         **new** dict whenever its layout changes — the resolved addresses
         are cached against that dict's identity. A row naming
         ``hand:right.roll`` reads the lane this map gives; a name the map
@@ -427,8 +426,7 @@ class Sources:
 
     @property
     def lane_kinds(self) -> dict[str, list[str]]:
-        """scheme → each lane's signal kind, "value" or "trigger" (decision
-        10), published like `labels` by a source that has triggers: the
+        """scheme → each lane's signal kind, "value" or "trigger", published like `labels` by a source that has triggers: the
         ``mod`` lanes, where a threshold's output is a trigger, the
         sequencer's, a pad's touch lanes. A trigger lane is still read as a
         value (1 while it fires, else 0)."""
@@ -514,7 +512,7 @@ class Sources:
     # ---- the feeds ----
 
     def away_from(self, router) -> frozenset[str]:
-        """The schemes `router`'s pass does not read this frame (plan 55): those
+        """The schemes `router`'s pass does not read this frame: those
         of a controller whose pointer is on another deck, so a row acts only on
         the `Deck` its player is on. Asked of the device registry (`holders`:
         scheme → that controller's pointer), a pointer's move counting at once.
@@ -544,7 +542,7 @@ class Sources:
         """A scheme's own feel: the pad's (`pad_feel`, the asking table's
         `Bindings.pad_feel`) for `axis`, none for every other source — the
         analyzer's lanes have theirs in the chain already, a hand has its
-        own smoothing. One feel for every pad (plan 27 B6): ``axis@p2``
+        own smoothing. One feel for every pad: ``axis@p2``
         travels with it too."""
         return pad_feel if base_scheme(scheme) == "axis" else OFF
 

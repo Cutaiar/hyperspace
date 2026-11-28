@@ -1,4 +1,4 @@
-"""The on-screen pad's other readouts (plan 42's follow-up): the same pad,
+"""The on-screen pad's other readouts: the same pad,
 three more ways to read it, picked by ``ui.pad_view`` beside the map.
 
   map       ui_pad's own picture: every control at its place, named with
@@ -86,7 +86,7 @@ class Reading:
     effects: object | None = None          # what the pad is being sent (sony.Effects)
     battery: int = -1
     link: str = ""
-    # plan 46, a Joy-Con's calibration at a glance: the sensors as the lanes
+    # a Joy-Con's calibration at a glance: the sensors as the lanes
     # see them (gyro deg/s, accel g, in the pad's axes), the stick's raw
     # 12-bit reading, the centre in use and where it came from
     sensors: tuple | None = None           # ((gx, gy, gz), (ax, ay, az))
@@ -164,7 +164,7 @@ def read(pad) -> Reading:
 
 
 def _calibration_of(pad, report, model):
-    """What the pad's reader knows past the lanes (plan 46): the sensors in
+    """What the pad's reader knows past the lanes: the sensors in
     the pad's axes through its calibration and axis map, and a Joy-Con's
     raw stick with the centre in use — (sensors, raw, centre, from)."""
     reader = getattr(pad, "hid_pad", None)
@@ -275,7 +275,7 @@ def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
     A stick's direction lanes (``axis:L.N`` …) only where `routed` names
     them: sixteen idle lines would crowd the rest out."""
     out = []
-    has = r.has_control               # a single Joy-Con: one stick, no D-pad (plan 46)
+    has = r.has_control               # a single Joy-Con: one stick, no D-pad
     out.append(("sticks", [(f"axis:{n}", r.glyph(n, n), r.axes[n], 0.5, True)
                            for n in ("LX", "LY", "RX", "RY") if has(n)]))
     out.append(("triggers", [(f"axis:{n}", r.glyph(n, n), r.axes[n], 0.0, False)
@@ -297,7 +297,7 @@ def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
         hat = name.removeprefix(models.HAT_PREFIX)
         return (int(bool(r.hat & gamepad.HATS[hat])) if hat != name and hat in gamepad.HATS
                 else int(name in r.down))
-    # plan 56: each one lane, one degree of freedom: the model's, and any a row names
+    # each one lane, one degree of freedom: the model's, and any a row names
     shown = list(models.natural_pairs(model))
     for s in sorted(routed):
         scheme, _, addr = s.partition(":")

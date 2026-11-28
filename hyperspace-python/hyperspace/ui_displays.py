@@ -1,5 +1,5 @@
-"""The output section's rows (wave 5 SC2): one per connected display, each choosing what
-targets it, with its fullscreen and flips. Not a dropdown of screens: the owner, 2026-11-06.
+"""The output section's rows: one per connected display, each choosing what
+targets it, with its fullscreen and flips. Not a dropdown of screens.
 
 What the rows are, and the file they go to, is `displays.py`. A change of target acts at once
 (`hotplug.py`, at the next frame), and so do fullscreen and flips on a window that's open there.

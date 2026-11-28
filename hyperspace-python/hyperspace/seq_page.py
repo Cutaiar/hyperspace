@@ -1,4 +1,4 @@
-"""The APC40's sequencer page (plan 31 §A, decisions 7 and 10).
+"""The APC40's sequencer page.
 
 A **surface page**, not a third layer: while it is up its rows shadow every
 row on their controls — the bank's pads, SAVE, the render toggles, the
@@ -65,7 +65,7 @@ class SeqPage:
     what they say changes: the lane selected or the length."""
 
     name = NAME
-    # the registry of the deck the first desk is on (`MidiIO.point`, plan 44 D5a)
+    # the registry of the deck the first desk is on (`MidiIO.point`)
     reg = Through("reg")
 
     def __init__(self, reg):

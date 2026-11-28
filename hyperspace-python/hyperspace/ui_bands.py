@@ -1,4 +1,4 @@
-"""Band / EQ editor — the bands drawn over the live spectrogram (plan 07 WP5b).
+"""Band / EQ editor — the bands drawn over the live spectrogram.
 
 The ANALYZER page's band section. An implot heat map of the analyzer's
 spectrum history (analyzer.history(): the last HIST_S seconds, time
@@ -12,7 +12,7 @@ stays (f and q both change, `drag_edge`); a left-drag box on the map
 sets the selected band's f/q from its frequency extent (`fit_box`, the
 time extent is ignored); a plain click selects the narrowest band under
 it. Every write goes through the registry (band.{i}.f / .q), so it is
-what the meta controller saves and what MIDI can learn; no lane may ride it (row 775).
+what the meta controller saves and what MIDI can learn; no lane may ride it.
 
 Cost: the history is 240 × 256 and implot's heat map is a quad per cell,
 which was 3 ms and 246 k vertices a frame headless — too much for a 320
@@ -348,7 +348,7 @@ def band_row(panel) -> None:
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
         ui.tooltip("Move the band one strip later")
     reset_w = ui.chip_w("Reset")
-    width = BAND_W                      # (plan 49 stage 3: rows wrap in a narrow pane)
+    width = BAND_W                      # rows wrap in a narrow pane
     if not ui.beside(BAND_W):           # on a row of its own, Reset beside it if it can be
         width = max(min(BAND_W, imgui.get_content_region_avail().x - reset_w
                         - imgui.get_style().item_spacing.x), BAND_W / 2)
@@ -361,7 +361,7 @@ def band_row(panel) -> None:
 
 
 def _norm_chip(panel) -> None:
-    """auto / manual normalisation for the open band (audit A10): lit red on
+    """auto / manual normalisation for the open band: lit red on
     manual, where the trim is a plain gain."""
     a = panel.reg["band.sel.norm"]
     p = panel._real(a)

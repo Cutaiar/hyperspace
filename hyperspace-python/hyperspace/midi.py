@@ -1,6 +1,6 @@
 """MIDI adapter — any registry Param ↔ any MIDI message, with feedback.
 
-The inbound half of the DAW bridge (BLUEPRINT §3.6, plan 05 task 3): a
+The inbound half of the DAW bridge: a
 hardware controller drives the same parameter registry the panel draws,
 so anything the panel can change, a knob can change. This module depends
 on params.py; nothing in the core imports it — app.py attaches it only
@@ -50,11 +50,11 @@ adapter hears every CC for LISTEN_S and then writes the row the way the
 control spoke (`heard_as`) — an MSB with its LSB after it is a 14-bit
 `abs14` row, the same value twice running is a relative encoder (`rel64`
 around 64, `rel` near 0 / 127: a jog sends +1 again and again, a knob
-never repeats itself), anything else `abs` as before. A note and pitch
+never repeats itself), anything else `abs`. A note and pitch
 bend still learn at once, and the APC40, whose profile knows its
 encoders, learns every CC at once.
 
-Every op here is a scene-setter (plan 09 decision 3): on a param a
+Every op here is a scene-setter: on a param a
 performer owns — a hand, a lane, an LFO riding it through routing.py —
 an `abs` knob moves the *return value*, the base the performer works
 from and the param comes back to when the performer leaves. Nothing
@@ -72,15 +72,15 @@ Triggers echo their press so the button lights while held, or show a
 light of their own when the param carries one (``Registry.trigger(lit=)``:
 the METRONOME LED blinks on the beat through ``lfo.trigger``).
 
-Two layers under a latched SHIFT (plan 13 §3). A message goes to the
+Two layers under a latched SHIFT. A message goes to the
 invariant rows on its control, else to the rows of the layer that is up
 (`Bindings.dispatch`) — nothing falls through, so a control the up layer
 does not map does nothing; a note-off goes to the rows its note-on went
-to, whatever the layer is by then (D12). Only the up layer's rows and the
+to, whatever the layer is by then. Only the up layer's rows and the
 invariant ones draw (`Bindings.active`); a layer switch or a desk
 replacement re-sends every ring and LED (`redraw`), a control no active
 row draws going dark. A knob's ring also re-bases the endless encoder
-(`apc40.RING_REBASES_KNOB`, hand check 31), so the row is caught at the
+(`apc40.RING_REBASES_KNOB`), so the row is caught at the
 value just sent; the faders keep soft pickup, and a desk replacement (a
 loadable patch load) clears the catch of a fader whose param it moved — the
 crossfader, MASTER and the meta controller's faders keep their hold through it.
@@ -89,33 +89,33 @@ Bindings persist with every other source's in bindings.json (routing.py;
 an old midi_map.json is migrated on first run). With no file the device
 profile's default map is used. Right-click → Learn on any panel control,
 then a knob or button, writes a patch-layer row into the loaded patch
-(`_learned`, plan 13 §3.3): the loadable patch is dirty and bindings.json is not
+(`_learned`): the loadable patch is dirty and bindings.json is not
 written; a learn on an invariant control or with the global layer up is
 refused with the reason. `MidiIO.bindings` is the MIDI-side view of that table —
 what this adapter routes through and the panel edits. The profile (apc40.py is the
 first) knows the device's port name, its power-up SysEx, which controls
 have rings, and what velocities its LEDs take.
 
-Knob smoothing (plan 18 WP2). `set_norm` lands on a detent, and an
-untapered param has 100 of them, so a slow turn used to move the base a
+Knob smoothing. `set_norm` lands on a detent, and an
+untapered param has 100 of them, so a slow turn would move the base a
 whole detent at a time. With the meta controller's `desk.slew` above 0
 (`Bindings.slew`, seconds; 0 on a bare table, routing.SLEW_DEFAULT_S in
 the app) an `abs` row on a continuous, non-integer param aims a glide
 instead (`_aim`), and `_glide` walks the base to it once a poll: a
 straight line, written between detents with `Param.set`, that arrives
 `desk.slew` after the last message with the very `set_norm` the row makes
-today, so the value rests where it always did. Still a scene-setter
+without smoothing, so the value rests on the same detent. Still a scene-setter
 writing the base, never an offset. One glide per param, whoever sent it.
 Anyone else's write to the param ends its glide and stands (the panel, a
 key, an undo); a loadable patch load ends every glide but a shared meta param's
 (`redraw`); a layer switch ends none; turning `desk.slew` to 0, or the
 port going away, lands them all at once. A ring shows where the knob is
 sending the base, not the base in flight (`_ring_norm`): the same message
-as before, so the encoder is never re-based behind the hand. `rel` and
+as without smoothing, so the encoder is never re-based behind the hand. `rel` and
 `rel64` knobs, buttons and discrete targets are not smoothed. At 0 no
-glide is ever made and every base and every message sent is as before.
+glide is ever made and every base and every message sent is as without smoothing.
 
-The fine button (wave 2 T3, register rows 609–610). While `desk.fine` is
+The fine button. While `desk.fine` is
 on — the profile's `FINE` control held (SEND B on the APC40), or the
 param set any other way — an `abs` knob row (one with a ring) on a
 continuous, non-integer param reads the knob relatively: each message
@@ -176,8 +176,8 @@ from .routing import (
     register_desk,
 )
 
-# a `[[devices]]` MIDI entry's `profile` names one of these (plan 27 B2:
-# the entry's, never bindings.json's "profile" field, which says only
+# a `[[devices]]` MIDI entry's `profile` names one of these (the
+# entry's, never bindings.json's "profile" field, which says only
 # which profile the file's unqualified rows were written for)
 PROFILES = {"apc40": apc40, "generic": generic}
 RECONNECT_S = 2.0
@@ -227,7 +227,7 @@ def _hold_key(b) -> object:
 BLINK_S = 1.5       # how long the LEDs blink after a hold fires
 SLEW_TOL = 1e-6     # norm: further than this from our last write, someone else set it
 SLEW_BACK_S = 0.05  # a new glide starts at the previous poll, no further back than this
-DESK_LOG_SIZE = 20  # the desk event log keeps this many events (plan 24 C1)
+DESK_LOG_SIZE = 20  # the desk event log keeps this many events
 
 __all__ = ["FINE_DIV", "FINE_PARAM", "PICKUP_TOL", "Binding", "DeskEvent", "DeskLog", "MidiIO", "Ports", "Slew",
            "find_port", "retry_after"]
@@ -236,13 +236,13 @@ __all__ = ["FINE_DIV", "FINE_PARAM", "PICKUP_TOL", "Binding", "DeskEvent", "Desk
 # the desk's held buttons: a toggle the hand holds on, never saved, never
 # performed, that losing the desk or a reconnect lets go of
 # (`MidiIO._let_go_held`) so a lost note-off cannot leave it down — SAVE
-# (routing.register_desk), the base chase (plan 52) and FINE
+# (routing.register_desk), the base chase and FINE
 HELD_PARAMS = (*HELD_ONLY, FINE_PARAM)
 
 
 @dataclass(frozen=True)
 class DeskEvent:
-    """One desk event (plan 24 C1): a press, a hold that fired or a
+    """One desk event: a press, a hold that fired or a
     two-handed save — the control in the device's words, what it did, and
     the layer it was read on: "preset", "global" (SHIFT up), or "both" (an
     invariant control, the same on either)."""
@@ -257,10 +257,10 @@ class DeskEvent:
 
 
 class DeskLog:
-    """The last `size` desk events, oldest first in `events` (plan 24 C1,
-    decision 18: so the owner can see what a press did). The SYSTEM page
+    """The last `size` desk events, oldest first in `events`, so the owner
+    can see what a press did. The SYSTEM page
     prints `lines()`, newest first. Its own small class, so a device that
-    takes the adapter over (plan 27 B2) carries it whole."""
+    takes the adapter over carries it whole."""
 
     def __init__(self, size: int = DESK_LOG_SIZE, wall=None):
         self.size = size
@@ -316,7 +316,7 @@ class Ports:
     names each side on its own — None leaves that side closed. An error
     on either side drops both, and `retry` looks again every RECONNECT_S,
     all night: a look is cheap (`midiports`), and a desk plugged back in late
-    comes back as soon as one that was only just lost (row 791).
+    comes back as soon as one that was only just lost.
     """
 
     def __init__(self, in_match: str | None, out_match: str | None = None, *,
@@ -337,7 +337,7 @@ class Ports:
     def connect(self) -> bool:
         """Open whatever is present now; True when something opened."""
         self._next_try = self.clock() + RECONNECT_S
-        # (the one road; it can't abort on a refusal it sees: audit R15)
+        # (the one road; it can't abort on a refusal it sees)
         seen = port_names(fresh=True)
         # (only the sides this entry names: an out-only bridge doesn't care for the inputs)
         self.error = (seen.in_why if self.in_match else "") or (seen.out_why if self.out_match else "")
@@ -403,16 +403,16 @@ class MidiIO:
     and send()); otherwise the ports are found by substring and reopened
     on their own if the device disappears (`Ports`).
 
-    Several at once (plan 27 B2): each is one `[[devices]]` MIDI entry,
+    Several at once: each is one `[[devices]]` MIDI entry,
     with its own `role` and `profile`. It reads and draws only its own
     rows of the shared table (`Bindings.serves`): an unqualified row is the
     first MIDI role's, any other device's rows carry its role
     (``cc@launch:0:7``), and a learn on it writes that form (`qualifier`).
     Each role has its own layer (`Bindings.layer_of`); SHIFT's latch,
     `desk.shift`, is the first role's. `role` None is the first role —
-    a bare adapter (the tests', the probe's) is today's one desk.
+    a bare adapter (the tests', the probe's) is a single desk.
 
-    Plan 44 D5a: `reg` and `table` read through this desk's own pointer, and
+    `reg` and `table` read through this desk's own pointer, and
     `learner` through the panel's, once it has them (`point`).
     """
 
@@ -451,7 +451,7 @@ class MidiIO:
         # sees; a bare adapter (tests, the probe) makes its own
         self.learner = learner if learner is not None else Learn(registry, self.table)
         self._writes: dict[str, float] = {}  # param → norm we last wrote / saw
-        # D12: a note-on's rows, by (channel, note), so its note-off goes to
+        # a note-on's rows, by (channel, note), so its note-off goes to
         # the same rows whatever layer is up by then
         self._held: dict[tuple[int, int], list[Binding]] = {}
         # the `hold` rows of each note still down, with the time of its
@@ -465,7 +465,7 @@ class MidiIO:
         # (kind, channel, number), with the row that drew it: a redraw
         # darkens each one no active row draws now, even when the row that
         # lit it has left the table (a loadable patch load's smaller desk, the
-        # ROUTING page's ×) — D8, review of PR #67
+        # ROUTING page's ×)
         self._shown: dict[tuple, Binding] = {}
         # knob smoothing: the glides in flight, by param id, and the clock
         # at the previous poll (where a new glide's line starts)
@@ -473,15 +473,15 @@ class MidiIO:
         self._polled: float | None = None
         # params seen to move on their own (`_glide`): written at once
         self._restless: set[str] = set()
-        # the last position each fader or knob sent, by control (plan 24
-        # C1): a load's fresh rows start from where the control is, so a
+        # the last position each fader or knob sent, by control:
+        # a load's fresh rows start from where the control is, so a
         # fader's first move after a load can pick up by crossing
         self._hw: dict[tuple, float] = {}
-        # the last twenty desk events, for the SYSTEM page (plan 24 C1)
+        # the last twenty desk events, for the SYSTEM page
         self.desk_log = DeskLog()
         # SHIFT's param and the smoothing's, for a bare adapter too
         register_desk(registry, self.table)
-        # the fine button (wave 2 T3): the knobs it moved, by control, and
+        # the fine button: the knobs it moved, by control, and
         # its LED as last sent
         self._fine_moved: set[tuple] = set()
         self._fine_was = False
@@ -527,9 +527,9 @@ class MidiIO:
         self._hold_state()[0].clear()
         self._hold_state()[1].clear()
         self._light_bars()
-        # a SAVE whose note-off was lost (plan 24 C1) must not turn the next
+        # a SAVE whose note-off was lost must not turn the next
         # pad press into a save: power-up lets go of it
-        # (and of FINE, wave 2 T3: the knobs it moved are forgotten with it)
+        # (and of FINE: the knobs it moved are forgotten with it)
         self._let_go_held()
         self._fine_held, self._fine_was = None, False
         self.__dict__["_fine_moved"] = set()
@@ -540,7 +540,7 @@ class MidiIO:
             b.last_out = None
             b.caught = False
             if b.kind in ("cc", "pitch"):
-                b.last_hw = None    # and each row's own last position (review of PR #180)
+                b.last_hw = None    # and each row's own last position
         if self.out is not None:
             for msg in self.profile.enter():
                 self._send(msg)
@@ -571,7 +571,7 @@ class MidiIO:
         return self.__dict__.setdefault("_momentary_down", {})
 
     def close(self) -> None:
-        self._let_go_held()     # no poll follows, so `poll`'s cable check will not (plan 52)
+        self._let_go_held()     # no poll follows, so `poll`'s cable check will not
         self._land_all()        # knob smoothing: no value is left between detents at exit
         idle = self.idle
         if idle is not None:
@@ -616,8 +616,8 @@ class MidiIO:
 
     @property
     def qualifier(self) -> str:
-        """What this device's sources carry (plan 27 B2): "" for the first
-        MIDI role — every row before plan 27 is unqualified — else its role
+        """What this device's sources carry: "" for the first
+        MIDI role — its rows are unqualified — else its role
         (``cc@launch:0:7``)."""
         role = self._role()
         return "" if self.table.is_primary(role) else (role or "")
@@ -636,17 +636,17 @@ class MidiIO:
 
     def unbind(self, pid: str) -> list[Binding]:
         """The loaded patch's desk rows on `pid` go — `Learn.unbind` with
-        the routes left alone (plan 17 WP1: the menu calls the learn object
+        the routes left alone (the menu calls the learn object
         itself, so Unbind is there with no adapter). The table's
         `redraw_serial` moves, so this adapter redraws and the controls go
         dark (`_follow_table`); the undo step, and the refusal for a param
-        only the meta controller maps (D5, D6), are `Learn.unbind`'s."""
+        only the meta controller maps, are `Learn.unbind`'s."""
         return self.learner.unbind((pid,), routes=False, name=self.control_name)
 
     def control_name(self, b: Binding) -> str:
         """The control a row names, in the device's words where the
-        profile has them — its glyph, then Akai's name ("D3 (device knob 3)",
-        plan 14 WP7) — else the row's own. Another desk's row (plan 27 B2)
+        profile has them — its glyph, then Akai's name ("D3 (device knob 3)")
+        — else the row's own. Another desk's row
         is never named in this desk's words: it describes itself."""
         if not self.table.serves(self._role(), b):
             return b.describe()
@@ -655,10 +655,10 @@ class MidiIO:
 
     def _learned(self, kind: str, channel: int, number: int, value: int) -> None:
         """A desk message completes the armed learn: `Learn.learn_control`
-        with this device's profile (plan 17 WP2, fork 7 — the row-making
+        with this device's profile (the row-making
         lives there, so a click on the on-screen desk makes the same row
         with no adapter). When it lands, the table's `redraw_serial` tells
-        this adapter to redraw; a refusal (the global layer, D5) changes
+        this adapter to redraw; a refusal (the global layer) changes
         nothing and leaves the learn armed."""
         self.learner.learn_control(self._source(kind, channel, number), self.profile)
 
@@ -667,7 +667,7 @@ class MidiIO:
     def poll(self) -> None:
         if not self.on:
             if self.__dict__.pop("_was_on", False):
-                self._let_go_held()     # the cable went: no note-off is coming (plan 52)
+                self._let_go_held()     # the cable went: no note-off is coming
             if self.ports.retry():
                 self._connected()
             if not self.on:
@@ -731,7 +731,7 @@ class MidiIO:
 
     def point(self, pointer, panel=None) -> None:
         """This desk's rows act on the deck `pointer` is on from now on, and
-        its learn is the one the panel's deck holds (plan 44 D5a). The first
+        its learn is the one the panel's deck holds. The first
         desk carries the sequencer page with it (`seq_page.of`)."""
         self._on = (self.reg, self.table)      # where it was: `_follow_pointer` compares
         self.pointer, self.panel_pointer = pointer, panel
@@ -790,8 +790,8 @@ class MidiIO:
     def _serials(self) -> tuple[int, int, int, int, int]:
         """(this desk's layer serial, the desk serial, the redraw serial,
         the surface page's serial, node mode's rows' serial): the layer serial is
-        this role's own (plan 27 B2), so SHIFT on the APC40 never re-arms a second
-        desk's faders; the page is the first role's only (plan 31 §A)."""
+        this role's own, so SHIFT on the APC40 never re-arms a second
+        desk's faders; the page is the first role's only."""
         t = self.table
         of = getattr(t, "layer_serial_of", None)
         layer = of(self._role()) if of is not None else t.layer_serial
@@ -805,10 +805,10 @@ class MidiIO:
         return getattr(t, "page_rows", []) if t.is_primary(self._role()) else []
 
     def _drop_page_holds(self) -> None:
-        """The page went up (plan 31 §A): a hold timing on one of its
+        """The page went up: a hold timing on one of its
         controls — a bank pad held across SEND A — is forgotten, so it
         cannot save, and its blink goes with it. Its release still goes to
-        the rows its press went to (D12), and does nothing."""
+        the rows its press went to, and does nothing."""
         on = {b.control for b in self._page_rows()}
         holds, blinks = self._hold_state()
         for key in [k for k in holds if ("note", *k) in on]:
@@ -842,8 +842,8 @@ class MidiIO:
             return
         ch = msg.channel
         self.last = f"{kind} {number} ch{ch + 1} = {value}"
-        # a desk that fell back to its power-up mode (apc40.fell_back,
-        # 2026-10-16): the intro again, and the message read as Mode 2 would
+        # a desk that fell back to its power-up mode (apc40.fell_back):
+        # the intro again, and the message read as Mode 2 would
         # send it (a device button on channel 0)
         fell_back = getattr(self.profile, "fell_back", None)
         fell = fell_back is not None and fell_back(kind, ch, number, value > 0,
@@ -851,7 +851,7 @@ class MidiIO:
         if fell:
             self._reenter()
         ch = getattr(self.profile, "in_channel", lambda k, c, n: c)(kind, ch, number)
-        if kind != "note":          # where the control is now (plan 24 C1, `redraw`)
+        if kind != "note":          # where the control is now (`redraw`)
             full = 16383.0 if kind == "pitch" else 127.0
             self.__dict__.setdefault("_hw", {})[(kind, ch, number)] = value / full
         if kind == "note" and value == 0 and self._hold_state()[0].pop((ch, number), None):
@@ -863,9 +863,9 @@ class MidiIO:
             if fell and value > 0 and number in getattr(self.profile, "MODE0_TOGGLES", ()):
                 self._fine_press(ch, number, False)     # no release will come (see below)
             return
-        # an armed learn (plan 17 WP2): a CC or a press is a candidate only
+        # an armed learn: a CC or a press is a candidate only
         # when the learn waits for the desk (`Learn.accepts`: not during a
-        # hand learn) and the control is not invariant (fork 6: SHIFT, a
+        # hand learn) and the control is not invariant (SHIFT, a
         # fader, TAP do their own job while a learn is armed). A candidate
         # is not dispatched, landed or refused; everything else is, as if
         # no learn were armed — a note-off included (never a candidate)
@@ -890,9 +890,9 @@ class MidiIO:
             reg14[1], reg14[2] = value, False
             self._apply14(ch, number - LSB_OFFSET)
             return
-        # the layer is read at the press (D12): a note-off goes to the rows
+        # the layer is read at the press: a note-off goes to the rows
         # its note-on went to, whatever is up by now — on this device's
-        # own latch (plan 27 B2)
+        # own latch
         if kind == "note" and value > 0:
             rows = self._held[(ch, number)] = t.dispatch(kind, ch, number, role)
         elif kind == "note":
@@ -973,14 +973,14 @@ class MidiIO:
                         "mode: a power cycle?)", "both")
         self._enter()
 
-    # ---- the two-handed save and the desk log (plan 24 C1) ----
+    # ---- the two-handed save and the desk log ----
 
     def _save_tap(self, rows: list[Binding], source: str, layer: str) -> bool:
-        """The two-handed save (plan 24 C1, decision 18): while the desk's
+        """The two-handed save: while the desk's
         SAVE is held (`desk.save`, track 8's clip stop), a press on a `set`
         row whose param saves into its choice (`Param.save_into`: a bank
-        pad) saves the live state into that slot — an empty slot as #158's
-        hold does, a filled one as a **new** loadable patch the slot then points
+        pad) saves the live state into that slot — an empty slot as a hold
+        does, a filled one as a **new** loadable patch the slot then points
         at (`library.Install.save_into`: nothing is overwritten or
         trashed) — instead of loading it, and starts no hold. The pad
         blinks for BLINK_S when the save worked. SAVE and the pads are
@@ -1021,7 +1021,7 @@ class MidiIO:
         armed learn took it): the fader or knob moved without its param,
         so a pickup row has to pick up again from where the control is
         now — its next applied message would otherwise write the whole
-        distance it travelled meanwhile (audit R13)."""
+        distance it travelled meanwhile."""
         if b.kind in ("cc", "pitch") and b.op in ABS_OPS and b.pickup:
             b.caught = False
             b.last_hw = value / (16383.0 if b.kind == "pitch" else 127.0)   # (an MSB: near enough)
@@ -1169,8 +1169,7 @@ class MidiIO:
                     p.toggle()
             elif not pressed:
                 # a press echo goes dark at the release: a trigger's, and an
-                # enum stepped by a toggle row (the solo row's next transfer,
-                # 2026-10-16 — its light used to stay on for good)
+                # enum stepped by a toggle row
                 if p.kind is Kind.TRIGGER or (p.kind is Kind.ENUM and op == "toggle"):
                     b.lit = False
                 return
@@ -1219,7 +1218,7 @@ class MidiIO:
                 if not b.caught:
                     return
             b.last_hw = u
-            # knob smoothing (plan 18 WP2): a continuous value glides to
+            # knob smoothing: a continuous value glides to
             # where set_norm would put it; at desk.slew 0, and on a
             # discrete or integer target, the write is the immediate one
             # (an abs14 row rests at its 14-bit value itself, between detents)
@@ -1237,7 +1236,7 @@ class MidiIO:
         if p.kind is not Kind.TRIGGER:
             self._writes[p.id] = p.norm
 
-    # ---- the fine button (wave 2 T3) ----
+    # ---- the fine button ----
 
     def _fine_control(self) -> tuple[int, int] | None:
         """(channel, note) of the profile's FINE button, or None: a profile
@@ -1320,7 +1319,7 @@ class MidiIO:
         there). Where rings do not re-base the catch stays let go: soft
         pickup, as the faders."""
         moved = self.__dict__.setdefault("_fine_moved", set())
-        for b in self._own_rows():        # (a knob node mode fills is one too, row 609)
+        for b in self._own_rows():        # (a knob node mode fills is one too)
             if b.control in moved:
                 b.last_out, b.caught = None, False
         moved.clear()
@@ -1394,7 +1393,7 @@ class MidiIO:
         is taken to move on its own (`rot.phase.*` while its plane turns:
         the integrator's, not a setting): a glide on it would be dropped
         every frame and never arrive, so from then on its knob writes at
-        once, as with smoothing off (`_restless`; review of PR #98)."""
+        once, as with smoothing off (`_restless`)."""
         slews = self._slew_state()
         if slews:
             seconds = getattr(self.table, "slew", 0.0)
@@ -1446,15 +1445,15 @@ class MidiIO:
         Rings show the base — a pickup readback, so a knob can always
         catch its own value under a performer. LEDs on a toggle or an
         enum `set` row show the effective value — a state light shows
-        what the show is doing. Intended (owner, 2026-09-28, audit R6).
+        what the show is doing.
         An unlit `set` row on an enum whose choice holds something
-        (`led_level` 1: a bank pad whose slot is filled, plan 19 WP2) gets
+        (`led_level` 1: a bank pad whose slot is filled) gets
         the profile's `filled_of` velocity where the control has one —
         amber on the clip grid — else its off.
         A control blinking after a hold fired (`_fire_holds`) gets its
         blink velocity, whatever its state, until BLINK_S is up.
-        The light is `led_shade`'s; a surface page's own shades (plan 31
-        §A: a step under the playhead, a muted lane) take the profile's
+        The light is `led_shade`'s; a surface page's own
+        shades (a step under the playhead, a muted lane) take the profile's
         `shade_of` velocity. A playhead moving sends only what changed.
         """
         if self.out is None:
@@ -1493,7 +1492,7 @@ class MidiIO:
                     filled_of = getattr(self.profile, "filled_of", None)
                     filled = filled_of(b.number, b.on) if filled_of is not None else None
                     v = b.off if filled is None else filled
-                elif shade not in ("on", "off"):     # a page's own (plan 31 §A)
+                elif shade not in ("on", "off"):     # a page's own
                     shade_of = getattr(self.profile, "shade_of", None)
                     hit = shade_of(b.number, shade) if shade_of is not None else None
                     v = b.on if hit is None else hit
@@ -1507,7 +1506,7 @@ class MidiIO:
         self._fine_light()
 
     def _rebase(self, b: Binding, p: Param, v: int) -> None:
-        """Plan 13 D7, hand check 31 (`profile.RING_REBASES_KNOB`): the ring
+        """A ring that re-bases its knob (`profile.RING_REBASES_KNOB`): the ring
         CC just sent also set the endless knob's own value, so the knob is
         caught there — its next turn continues from the ring, no pickup.
         A fader never gets here (it has no ring) and keeps soft pickup."""
@@ -1519,11 +1518,11 @@ class MidiIO:
 
     def redraw(self, *, load: bool = False, whole: bool = False,
                switch: bool = False) -> None:
-        """Every ring and LED for the layer that is up (plan 13 §3.1): each
+        """Every ring and LED for the layer that is up: each
         control some row names, or feedback drew since the last redraw
         (`_shown` — a row since removed lit it: a loadable patch load's smaller
         desk, the ROUTING page's ×), goes dark unless an active row draws
-        it (D8); then every active row is re-sent — a knob's ring re-bases
+        it; then every active row is re-sent — a knob's ring re-bases
         it (`_rebase`). `load` (a desk replacement: a loadable patch load) also
         clears a fader's catch when its param is no longer where this
         adapter last put it — `_uncatch_moved`'s test — or it has no last
@@ -1532,15 +1531,14 @@ class MidiIO:
         have made the last write): a fader whose base the load moved
         picks up, and one whose param the load left alone (the
         crossfader, SM's dim, and the audio strip on S1–S8 under SHIFT: a
-        loadable patch never moves a shared meta param, D9) keeps its hold (plan 15 WP3, fork 19). A load also ends
+        loadable patch never moves a shared meta param) keeps its hold. A load also ends
         every glide (knob smoothing) but a shared meta param's, before anything
         else: the load's value stands, even where it equals the glide's
         last write; a shared meta param the load never moves goes on arriving,
         and its fader is compared with where the glide is taking the param
         (the fader's own position), so it keeps its hold too.
 
-        **Every load relights the whole desk** (plan 24 C1, decision 18;
-        this changes register row 44): `load` — and `whole`, the power-up —
+        **Every load relights the whole desk**: `load` — and `whole`, the power-up —
         also sends dark every control of the profile's layout that no
         active row draws, not only those a row has named (`_dark_desk`: a
         light another program left on goes out), and **every fader the new
@@ -1548,11 +1546,11 @@ class MidiIO:
         picks up from the new loadable patch the same way every time. A fresh row
         starts from where its control physically is (`_hw`), so a fader
         already on the value catches on its first move. The meta controller's
-        faders (invariant or global: a loadable patch never moves their params,
-        D9) keep the rule above.
+        faders (invariant or global: a loadable patch never moves their params)
+        keep the rule above.
 
-        **A layer switch re-arms every layered fader** (`switch`; plan 24
-        C2, D7): since the track faders carry the loadable patch's targets on one
+        **A layer switch re-arms every layered fader** (`switch`): since the track faders carry the
+        loadable patch's targets on one
         layer and the audio strip under SHIFT, one physical fader serves
         two params. Each layered fader row starts from where the fader
         physically is (`_hw`) and is caught only when its param is already
@@ -1563,7 +1561,7 @@ class MidiIO:
                 # every ring is re-sent below, re-basing each knob: nothing
                 # left for a release to do. Where rings do not re-base the
                 # knobs fine moved keep their place, so a release still
-                # lets go of their catch (review of #344, round 2)
+                # lets go of their catch
                 self.__dict__["_fine_moved"] = set()
             slews = self._slew_state()
             for pid in [pid for pid in slews if not is_meta_id(pid)]:   # (a load moves none)
@@ -1610,7 +1608,7 @@ class MidiIO:
     def _dark_desk(self, drawn: set, dark: set) -> None:
         """Every control of the profile's layout (`apc40.LAYOUT`) that no
         active row draws, and that the redraw has not darkened already,
-        goes dark: a button's LED off, a knob's ring off (plan 24 C1: a
+        goes dark: a button's LED off, a knob's ring off (a
         load relights the whole desk). A fader has no light; a profile
         with no layout darkens nothing more."""
         for c in getattr(self.profile, "LAYOUT", ()):

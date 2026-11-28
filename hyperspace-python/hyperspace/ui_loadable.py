@@ -7,14 +7,14 @@ knows (library.groups()) carries a strip under its title:
 
 prev / next step through ``library.list(group)``; on a module group the
 name opens the group's list (× on each, to the trash); the dot is
-``is_dirty(group)``, a 12 px red disc (``ui.dirty_dot``, plan 19 WP5),
+``is_dirty(group)``, a 12 px red disc (``ui.dirty_dot``),
 and while it shows the save chip is lit solid red; save writes over the
 current loadable patch (its old text kept in the trash) and is disabled only when
 none is loaded; as… turns the strip into a name field until Enter (or
 Esc); reset (module strips only) lands the group on its default loadable patch
 or its fresh values.
 
-The PRESETS page (2026-10-28: one tier — nothing is factory, nothing is
+The PRESETS page (one tier — nothing is factory, nothing is
 hidden, every loadable patch is yours to load, rename and delete) reads top to
 bottom (``page``):
 
@@ -25,7 +25,7 @@ bottom (``page``):
               deck row (ui_browse.py), a pad, the walk
   trash (n) ▸ only while the trash holds something: its own popup —
               restore per file, "empty trash…" asked twice in place
-  patches ▸   folded: every patch (plan 40 T3), rename and × — a patch is
+  patches ▸   folded: every patch, rename and × — a patch is
               spawned on GRAPH, never loaded here
   SHOW        one line that says what a show is — the desk's pads, the
               meta controller and the meta controller's wires — then its name ●, open ▾ (your
@@ -62,7 +62,7 @@ LIST_POLL = 1.0      # seconds between re-listings of a group's loadable patches
 NAME_MAX = 14        # chars of a loadable patch name the strip shows before eliding
 PROJECT = "show"     # the listing / name-field key for the show line
 SHOW_W = 96          # the open ▾ menu
-# plan 19 WP4: a module strip's list and the trash's view
+# a module strip's list and the trash's view
 LIST_ROWS = 12       # rows of a module strip's list, and of the trash, before each scrolls
 EMPTY_S = 4.0        # how long "empty trash…" stays armed for its second click
 TRASH_KEY = "\0trash"     # the listings cache: the trash
@@ -77,7 +77,7 @@ SHOW_TIP = ("An install is the room the patches play in: which patch each of the
 
 def trash_tag(item) -> str:
     """A trash row's dim first column: its group, and for a file in the
-    library's old trash (plan 48 row 586) ``· library`` — so a row says in
+    library's old trash ``· library`` — so a row says in
     itself that "empty" leaves it and a restore is a copy."""
     word = group_word(item.group)
     return f"{word} · library" if item.old else word
@@ -169,7 +169,7 @@ NAME_MIN = 48.0     # px: the narrowest the strip's name button is squeezed to
 
 def strip_name_w(avail: float, chips: tuple[str, ...], dirty_: bool,
                  extra: float = 0.0) -> float:
-    """The name button's width on a strip `avail` px wide (plan 49): `name_w`
+    """The name button's width on a strip `avail` px wide: `name_w`
     where it fits — every page — else what is left beside the arrows, the
     dot, `extra` (the presets strip's "N devices missing" chip after ▶,
     `ui_graph.wants_chip_w`) and the right-hand chips (GRAPH's side pane, a
@@ -229,7 +229,7 @@ def _name_field(panel, key: str, commit, hint: str = "patch name",
     if ok:
         name = st["buf"].strip()
         if name:
-            undo.by_hand(True)          # the field's own report: row 757
+            undo.by_hand(True)          # the field's own report
             if commit(name) is not False:
                 st["naming"] = None
     return True
@@ -277,7 +277,7 @@ def save_chip(panel, group: str, label: str, lit: bool, *, key: str | None = Non
     return hit
 
 
-# ---- save as, on GRAPH's deck row (plan 83): one press, a new patch ----
+# ---- save as, on GRAPH's deck row: one press, a new patch ----
 
 SAVE_AS = "save as"
 SAVE_AS_ID = "graph.save_as"     # the chip's id, for `tests/ui_driver.py`
@@ -287,7 +287,7 @@ SAVE_AS_TIP = ("Save this deck as a new patch, in one press. It gets a fresh nam
                "the loaded one (moo → moo 2), in the same folder, and takes the next empty pad. "
                "It never writes over a patch. Right-click to learn it to a desk or pad button. "
                "▾ beside it: save under a name you type, or in a folder you pick.")
-MORE_ID = "graph.save_as.more"   # the ▾ beside it (plan 88)
+MORE_ID = "graph.save_as.more"   # the ▾ beside it
 MORE = "▾"
 BY_NAME_ID = "graph.save_as.name"            # …its two items
 BY_NAME = "save as name…"
@@ -374,7 +374,7 @@ def save_as_chip(panel) -> bool:
     """**save as** on GRAPH's deck row, beside **load…** (ui_browse): one press saves
     (`save_as`), and the chip reads "saved <name>", lit, for `SAVED_S`. Its menu is
     `preset.save_new`'s, so Learn puts the same press on a desk or pad button. The ▾
-    joined to its right (plan 88) opens **save as name…** (`begin_save_by_name`: a
+    joined to its right opens **save as name…** (`begin_save_by_name`: a
     name field takes the chip's place) and **save to location…** (ui_browse's dialog
     in save mode). True when the chip itself was pressed."""
     if _name_field(panel, NAMING, lambda n: _name_in_folder(panel, n), width=FIELD_W):
@@ -425,12 +425,12 @@ def strip(panel, group: str) -> None:
     """◀ name ● ▶ · save · as… · reset — for one registry group. On the
     loadable patches' strip (a document kind) there is no reset (`Library.reset`
     on a kind loads a loadable patch called "default", and none ships) and `new`
-    starts a blank loadable patch (plan 35 T7); its name is a readout — the
+    starts a blank loadable patch; its name is a readout — the
     PRESETS page's list is under it. A module strip's name opens the
     group's list."""
     lib = panel.library
     if lib is None or lib.reg is None or group in RETIRED_MODULES:
-        return                  # (plan 40 T5: a retired module group has no strip)
+        return                  # (a retired module group has no strip)
     if ui_kit.ready():
         from . import ui_strip  # (late: it imports this module) — on the kit (hyperspace/dkit)
         ui_strip.strip(panel, group)
@@ -456,11 +456,11 @@ def strip(panel, group: str) -> None:
         from . import ui_graph  # (late, as below)
         wants = ui_graph.wants_chip_w(panel)
     # "N devices missing" beside ▶ where it fits by a squeezed name, else
-    # on a row of its own under the strip (a narrow pane, plan 49)
+    # on a row of its own under the strip (a narrow pane)
     wants_beside = wants == 0.0 or strip_name_w(avail, chips, is_dirty) - wants >= NAME_MIN
     extra = wants if wants_beside else 0.0
     width = strip_name_w(avail, chips, is_dirty, extra)
-    # plan 49 stage 3: narrower still (a pane with its scrollbars), the chips
+    # narrower still (a pane with its scrollbars), the chips
     # go on a row of their own under ◀ name ▶ and the name has that row's room
     roomy = avail - _strip_beside(chips, is_dirty, extra) >= NAME_MIN
     if not roomy:
@@ -506,7 +506,7 @@ def strip(panel, group: str) -> None:
     imgui.end_disabled()
     if group == LOADABLE:
         from . import ui_graph  # (late, as `new` below)
-        if wants_beside:                # plan 40 T4: the devices the loadable patch waits for
+        if wants_beside:                # the devices the loadable patch waits for
             ui_graph._wants_chip(panel)
     else:
         _list_popup(panel, group, listing, cur)
@@ -517,7 +517,7 @@ def strip(panel, group: str) -> None:
     if loaded_patch is not None:
         if ui.chip("new##new"):
             from . import ui_graph  # (late: ui_graph imports ui_routing, which imports this)
-            # plan 36 T5: its chain laid out where the GRAPH page is looking
+            # its chain laid out where the GRAPH page is looking
             _guard(panel, loaded_patch.new, ui_graph.in_view(panel))
             invalidate(panel, group)
         _rect(panel, f"strip.{group}.new")
@@ -525,7 +525,7 @@ def strip(panel, group: str) -> None:
             ui.tooltip("A new patch: default values, shape → scene → All outputs — "
                        "a shape on every window")
         imgui.same_line()
-    # R17: a loadable patch `new` made and nothing saved names itself — a loadable patch
+    # a loadable patch `new` made and nothing saved names itself — a loadable patch
     # that happens to be called `untitled` is never written over (the flag
     # counts while `untitled` is current: an undo of New hands back the
     # loadable patch before, which saves as it always did)
@@ -578,7 +578,7 @@ def list_row_h() -> float:
 
 def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect) -> None:
     """One row of a preset list: the name (a pick loads it), then its
-    chips — `rename` and × on a loadable patch or a patch (plan 40 T3: a patch's
+    chips — `rename` and × on a loadable patch or a patch (a patch's
     row has no pick — a patch is spawned on GRAPH, never loaded), × alone
     on a module preset. What was drawn joins `drawn["rows"]` as
     ``(name, chips)``."""
@@ -733,7 +733,7 @@ def page(panel) -> None:
         return
     ui._micro("patch")
     meta = getattr(panel, "meta", None)
-    if meta is not None:    # plan 44 D5e, DQ7: its own room, so no name is cut for it
+    if meta is not None:    # its own room, so no name is cut for it
         imgui.same_line()
         ui._micro(meta.words(meta.panel), ui.RED if meta.panel is not meta.on_air else ui.DIM)
     strip(panel, LOADABLE)
@@ -773,7 +773,7 @@ def trash_line(panel) -> None:
 
 
 def _trash_popup(panel, bin_: list) -> None:
-    """The trash (plan 19 WP4), a popup off the list's "trash (n) ▸": every
+    """The trash, a popup off the list's "trash (n) ▸": every
     file it holds, newest first — every group and the shows a rename kept,
     for "empty" deletes what is listed and nothing else — each with
     `restore`, in a child that scrolls past LIST_ROWS rows; then "empty
@@ -829,7 +829,7 @@ def _trash_popup(panel, bin_: list) -> None:
                 invalidate(panel, LOADABLE)
         imgui.end_child()
         rect("rows")
-    # plan 48 row 586: the trash is this Mac's; what the library's own
+    # the trash is this Mac's; what the library's own
     # trash kept from before is listed and restorable, never emptied here
     old = sum(1 for t in bin_ if t.old)
     drawn["old"] = old
@@ -846,7 +846,7 @@ def _trash_popup(panel, bin_: list) -> None:
     imgui.separator()
     if n == 0:
         # only the library's old trash is listed: nothing here to empty, so
-        # no chip to arm ("delete 0 files for good?", review of #334)
+        # no chip to arm ("delete 0 files for good?")
         st["empty_armed"] = None
         drawn["empty"] = None
         imgui.end_popup()
@@ -883,7 +883,7 @@ def _trash_popup(panel, bin_: list) -> None:
     imgui.end_popup()
 
 
-# ---- the patches fold (plan 40 T3) ----
+# ---- the patches fold ----
 
 def patches_fold(panel) -> None:
     """The **patches** fold — every patch (`Library.list(PATCHES)`), each a
@@ -923,7 +923,7 @@ def show_line(panel) -> None:
     proj = lib.install
     imgui.push_id("show")
     # the line's right edge: a chip that would pass it starts a new row
-    # (GRAPH's side pane, plan 49; every page has the room for one row)
+    # (GRAPH's side pane; every page has the room for one row)
     right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
     ui._micro(ui.fit_micro(SHOW_LINE, right - imgui.get_cursor_screen_pos().x))
     _rect(panel, "show.line")

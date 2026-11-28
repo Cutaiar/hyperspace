@@ -1,6 +1,5 @@
-"""A pad as the handle of a poi (the app's: not a Joy-Con's since register row 686,
-`no_position`) — an experiment beside the totem
-(plan 47, "The poi"; not a plan item).
+"""A pad as the handle of a poi (the app's: not a Joy-Con's, see
+`no_position`) — an experiment beside the totem.
 
 A poi is a weight on a string; the performer holds the string's other end
 in a handle and swings it. Here the Joy-Con is the handle and **the shape
@@ -15,16 +14,16 @@ it feels. So the handle is modelled as
   where the pad is carried (`_hand`): the accelerometer with gravity taken
   out, rotated into the world, integrated into a velocity and that into a
   place, which **stays where it ends** — no pull home, a reference frame
-  that does not centre itself, as a Wii remote's (the owner, 2026-11-03).
+  that does not centre itself, as a Wii remote's.
   Each time the pad is held still its velocity is zeroed, so a double
   integral's drift cannot run on between moves; what drift a move gathers
   stays, and A puts the hand home. The wrist is **held on the screen**
   (`box`: what the eye sees at depth 0, `box_for`, set from the frame by
   `Renderer._poi_layer`; a default 16:9 before it), so what drift gathers
-  cannot take it out of the picture (row 817). `poi.hand` scales the push
+  cannot take it out of the picture. `poi.hand` scales the push
   (2.5 world units a metre at 1); 0 is the wrist alone.
 - the *tip*, `HANDLE` world units out of the wrist along the pad's +z
-  (away from the player as the owner holds it), turned by the pad's
+  (away from the player as it is held), turned by the pad's
   attitude: every report's turn (the reader sums it, `Motion.take_turn`
   with the poi's own tap, so the totem and the poi do not share it), its
   tilt pulled to gravity while the pad is not being flung (a
@@ -260,7 +259,7 @@ class PoiState:
     note: str = ""
     # the registry the homes and lasts are of: one `PoiState` is on both decks
     # (`app._share_experiments`), one pad's, and what it holds of a look goes no
-    # further than the deck it took it from (plan 55)
+    # further than the deck it took it from
     on_reg: Any = None
 
     def say(self, note: str) -> None:
@@ -274,8 +273,8 @@ class PoiState:
 
     def tip(self) -> Vec:
         """Where the string hangs from: the wrist, and the handle along the
-        pad's +z — away from the player as the owner holds the Joy-Con
-        (2026-11-03: −z drew the tip toward them)."""
+        pad's +z — away from the player as the Joy-Con is held
+        (−z would draw the tip toward the player)."""
         return _add(self.wrist, _apply(self.att, [0.0, 0.0, HANDLE]))
 
     def hang(self) -> None:
@@ -443,10 +442,9 @@ NO_POSITION = "a Joy-Con moves no position: the poi needs a DualSense"
 
 
 def no_position(pad) -> bool:
-    """Is `pad` one whose sensors move no position? The Nintendo pads, for
-    now (the owner, 2026-11-04: their version 0 is buttons, sticks, the gyro
-    and shake; an IMU this size cannot hold a place). Every other pad is as
-    it was."""
+    """Is `pad` one whose sensors move no position? The Nintendo pads
+    (buttons, sticks, the gyro and shake; an IMU this size cannot hold a
+    place). Every other pad is unaffected."""
     return getattr(getattr(pad, "model", None), "family", "") == "nintendo"
 
 
@@ -619,7 +617,7 @@ def _push(state: PoiState, accel) -> Vec:
 def _hand(state: PoiState, accel, dt: float, rate_dps: float = 0.0) -> None:
     """The hand where the pad has been carried: its push integrated into
     a velocity and that into a place, which stays where it ends — no pull
-    home (the owner, 2026-11-03: a reference frame that does not centre
+    home (a reference frame that does not centre
     itself, as a Wii remote's). While the pad is still (`STILL_*`) its
     velocity is zeroed, so the drift a double integral gathers cannot run
     on between moves; A puts the hand home. `accel` None (no new reading

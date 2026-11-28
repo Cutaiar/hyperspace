@@ -1,4 +1,4 @@
-"""What the scene pass draws of a shape this frame (plan 64): one interface,
+"""What the scene pass draws of a shape this frame: one interface,
 `provider(i).frame(view, w, h, offset)` → `ShapeFrame`, for every kind of
 shape, so `render.draw_scene` draws them all by one rule and asks no shape
 what it is.
@@ -13,12 +13,11 @@ what it is.
   additive, the cells go to the GPU as instance rows (`walk`, drawn by
   fractal_gl.py) and nothing is sorted.
 
-What used to be a fractal's four special cases in draw_scene are fields
-here: the depth cue's fixed ends (`cue`), the count the stroke density
-reads (`dens_m`), whether a legacy stroke scales with camera.zoom
-(`zoom_strokes`), and the frame's own triangles and their uvs and weights.
-For a fixed shape or a scene every field is what draw_scene computed
-before, from the same calls, so its frames are byte for byte the same.
+A fractal's differences from a fixed shape are fields here: the depth
+cue's fixed ends (`cue`), the count the stroke density reads (`dens_m`),
+whether a legacy stroke scales with camera.zoom (`zoom_strokes`), and the
+frame's own triangles and their uvs and weights. For a fixed shape or a
+scene every field is what `geometry` gives for it.
 """
 
 from __future__ import annotations
@@ -79,7 +78,7 @@ class Fixed:
         P, w4, pd = shape_world(i, s.ang, s.yaw, s.pitch, d4=s.depth4,
                                 flat=getattr(s, "held", False), body=getattr(s, "body", None))
         if offset is not None:
-            # plan 60 (register row 856): a turned offset turns a 3D shape before
+            # a turned offset turns a 3D shape before
             # the painter sort and the depth cue read its depth, so it sorts and
             # shades by where it is now; a 4D shape's cue stays its w
             pd = turned_depth(i, P, pd, offset)
@@ -89,7 +88,7 @@ class Fixed:
 
 
 class Scene(Fixed):
-    """A scene (plan 28's catalog): its layers, each turned at its own spin
+    """A scene: its layers, each turned at its own spin
     by `shape_world`, each edge's and point's weight its layer's (`style`)."""
 
 
@@ -127,7 +126,7 @@ class Fractal:
 def drawn_offset(s, world_off=None, bounded: bool = True):
     """The offset the scene pass composes after the shape's own geometry (a
     4×4 in the home's frame, as `world.World.offset_matrix`; None the
-    identity). Plan 64, part 2: a fractal the view is inside draws the room
+    identity). A fractal the view is inside draws the room
     placement it had as an object (`Dive.shift`, fixed in world units: in the
     home's frame ÷ camera.zoom); its flight is folded into the view itself.
     Otherwise the world's offset on the shape — while the world's shape is

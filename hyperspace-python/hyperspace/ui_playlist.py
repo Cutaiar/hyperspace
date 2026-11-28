@@ -1,5 +1,5 @@
-"""The playlist (plan 44 D6b): choose one, play it, and write one. A playlist is the meta
-controller's (owner, 2026-11-10, register row 858), so it is not in the side pane: a
+"""The playlist: choose one, play it, and write one. A playlist is the meta
+controller's, so it is not in the side pane: a
 **playlist** chip on GRAPH's deck row (deck · load… · save as · playlist · copy on air to off air ·
 fade; `ui_graph._deck_row`), lit while one plays, its hover saying where it has got to
 (`where`), opens these controls in a popup under it (`popup`), `WIDTH` wide.
@@ -7,8 +7,8 @@ fade; `ui_graph._deck_row`), lit while one plays, its hover saying where it has 
 Top to bottom: the file to play (or a new one by name), play and stop, back and on (the
 fade's seconds are the deck row's own, beside its fade), a line saying where it has got
 to, then the entries, each one row `ROW_H` tall (a trackpad's target): its place and name,
-its dwell and a × to take it out. The entries are a list of their own that scrolls (plan
-70), as tall as the screen leaves under the popup, so a long list never runs off its edge;
+its dwell and a × to take it out. The entries are a list of their own that scrolls, as tall as the screen leaves under the
+popup, so a long list never runs off its edge;
 the entry on air is scrolled into view as the popup opens and each time it changes. Under
 them, always in view, a list to add another from. An edit is
 written to the file when it is done (`playlist.save`), so a dwell typed over writes one file
@@ -17,7 +17,7 @@ and not one per key, and `Playing` reads the file before each load anyway.
 The library's folders are listed only with a list open, and on the poll's cadence
 (`ui_loadable.names`), so an open list globs no Drive folder a frame on the machine driving
 the room. Nothing here is on an undo stack, so ⌘Z over the popup takes nothing back and
-says so (`Panel.in_meta_section`, row 709: the popup sets `UNDER` as the section under
+says so (`Panel.in_meta_section`: the popup sets `UNDER` as the section under
 the mouse).
 
 Ids for `tests/ui_driver.py`: ``graph.playlist`` (the chip), ``playlist.pick``,
@@ -150,7 +150,7 @@ def _row(panel, p, i: int, entry, name_w: float):
 
 
 def _entries(panel, p) -> None:
-    """The entries in a list of their own that scrolls (plan 83): as tall as the screen
+    """The entries in a list of their own that scrolls: as tall as the screen
     leaves, so forty never run off its edge, with the add list under it. The entry on
     air is scrolled to the list's middle when the popup opens and each time it changes,
     and the hand's scroll is left alone between."""
@@ -242,5 +242,5 @@ def popup(panel, st: dict, at=None) -> None:
     st["playlist_entries_rect"] = _state(panel).get("rect")
     if imgui.is_window_hovered(imgui.HoveredFlags_.child_windows
                                | imgui.HoveredFlags_.allow_when_blocked_by_popup):
-        st["pane_under"] = UNDER        # ⌘Z here takes nothing back (row 709)
+        st["pane_under"] = UNDER        # ⌘Z here takes nothing back
     imgui.end_popup()

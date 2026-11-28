@@ -1,14 +1,14 @@
-"""The fx browser — the effect nodes in the loaded graph (plan 33 U).
+"""The fx browser — the effect nodes in the loaded graph.
 
-Plan 49 stage 2 retired the FX page: this browser is GRAPH's side pane's
-fx section (`ui_pane.SECTIONS`), and `ui.page` on FX focuses that section.
-"The page" below is that section's body.
+This browser is GRAPH's side pane's fx section (`ui_pane.SECTIONS`), and
+`ui.page` on FX focuses that section. "The page" below is that section's
+body.
 
-The owner's "file explorer" over the graph (row 348): the page lists every
+A file explorer over the graph: the page lists every
 effect instance the loaded patch's graph holds — in the run, on a branch,
 unreached — grouped by where its path ends (`groups`): **Run** (in wire
 order), **→ faces**, **→ pattern media**, **→ backdrop**, **→ output N**,
-**→ <effect> aux**, then **fed by nothing** (R15: nothing wired into its
+**→ <effect> aux**, then **fed by nothing** (nothing wired into its
 input, so the builder never builds it — `graph.hungry`; a generator,
 `graph.runs_unfed`, is never here) and **reaches nothing** last. An effect
 behind a switch is grouped by the switch's destination; one that ends in
@@ -28,15 +28,11 @@ compile error under its title — and **Show on GRAPH** selects and centres
 its node there (`ui_graph.select_effect`). The strip is the GRAPH page's
 side pane for a selected effect node too.
 
-An effect that is not running says why on its strip (plan 16 WP3,
-`why_idle`): one line over its rows — off, reaching nothing, on the faces
+An effect that is not running says why on its strip (`why_idle`): one line
+over its rows — off, reaching nothing, on the faces
 with Faces off, every effect bypassed, FX mix at 0, its own mix at 0 — with
 a chip that mends the ones a click can ("turn on", "faces on", "effects
 on"). The rows under the line are dimmed but live.
-
-Gone with the stack (plan 33 T7, row 341): the chip grid and its
-drag-to-reorder, the placed grid, the order slider, the ONTO chips, the
-faces lines and `fx.select`.
 
 A function over the Panel, like ui_lfo: no state of its own, and a
 save of this file lands live (hotreload.MODULES). The effects are whatever
@@ -68,10 +64,10 @@ FACES = "→ faces"
 PATTERN = "→ pattern media"
 BACKDROP = "→ backdrop"
 UNREACHED = "reaches nothing"
-UNFED = FED_BY_NOTHING      # R15: nothing wired into its input, so never built (`graph.hungry`)
+UNFED = FED_BY_NOTHING      # nothing wired into its input, so never built (`graph.hungry`)
 # a picture port's sink → the group it ends in (an output, an aux: by name)
 _ENDS = {"shape.faces": FACES, "pattern.media": PATTERN, "backdrop.image": BACKDROP,
-         "fx.image": RUN, "output.all.image": RUN}     # (plan 35: a wired frame's run's end)
+         "fx.image": RUN, "output.all.image": RUN}     # (a wired frame's run's end)
 EMPTY = "no effects in the graph — add one on graph (right-click the canvas)"
 SHOW = "Show on graph"
 NAME_W = 0.42       # of the page's width: a row's name chip
@@ -91,7 +87,7 @@ IDLE = {
     "mix 0": ("its mix is at 0", None, None, None),       # its fader is the next row
     UNFED: (f"{UNFED} — {WIRE_ITS_INPUT} on graph", None, None, None),
 }
-# one line at the page's width (plan 20 WP2: it wrapped to two by 2 px)
+# one line at the page's width
 RESET_NOTE = "a patch load resets these: save a patch to keep them"
 
 
@@ -107,11 +103,11 @@ def groups(spec) -> list[tuple[str, list[str]]]:
     destination, whatever their pick: the page shows what is wired);
     an effect ending in two places is in each group; within a group the
     effects are in path order, the head first. Empty groups are left out.
-    Pure: it reads the spec alone (D1's placements as the wires they are).
+    Pure: it reads the spec alone (placements as the wires they are).
 
-    Plan 35 T3: in a wired frame (every load's) the run is the effects from
-    the look-back into All outputs, and a name is a wired frame's (`hands`
-    the geometry, `lookback` no effect); a copy groups with its wires."""
+    In a wired frame the run is the effects from the look-back into All
+    outputs, and a name is a wired frame's (`hands` the geometry, `lookback`
+    no effect); a copy groups with its wires."""
     if spec is None:
         return []
     wired = bool(getattr(spec, "wired", False))
@@ -119,8 +115,8 @@ def groups(spec) -> list[tuple[str, list[str]]]:
     def kind_of(name: str) -> str | None:
         return wire_node_kind(name, wired=wired)
     # (the picture ports `graph.reaches` follows, and the field ports: a field
-    # into Displace's `field`, or into a knob, reaches what that effect reaches
-    # — plan 67 F1, P3. A value port carries none)
+    # into Displace's `field`, or into a knob, reaches what that effect reaches.
+    # A value port carries none)
     wires = [w for w in spec.all_wires()
              if w.port in _PICTURE_PORTS or w.port == FIELD_PORT
              or is_knob_port(w.node, kind_of(w.node), w.port)]
@@ -149,14 +145,14 @@ def groups(spec) -> list[tuple[str, list[str]]]:
 
     for name in names:
         ends[name] = follow(name, frozenset({name}))
-    # D1's `after` a node (plan 30): the effect is laid on that node's
+    # an `after` placement: the effect is laid on that node's
     # picture wherever it goes — no wire of its own says where, so the
     # group is the place (`→ after hands`)
     for e in spec.effects:
         if e.placed and e.where[0] == "after" and not ends.get(e.name):
             ends[e.name] = {f"→ after {e.where[1]}": 1}
     by: dict[str, list[str]] = {}
-    unfed = hungry(spec)        # R15: never built, wherever its path leads
+    unfed = hungry(spec)        # never built, wherever its path leads
     for name in sorted(names):
         for end in ({UNFED: 0} if name in unfed else ends[name] or {UNREACHED: 0}):
             by.setdefault(end, []).append(name)
@@ -212,8 +208,8 @@ def page(panel, dt: float) -> None:
     panel._check("fx.on")
     imgui.same_line()
     panel._slider("fx.mix")
-    # plan 14 WP5: a loadable patch load replaces every effect value (plan 13 D2),
-    # so what is tried here is gone on the next F-key unless it is saved
+    # a loadable patch load replaces every effect value, so what is tried
+    # here is gone on the next F-key unless it is saved
     _faint(RESET_NOTE)
     if fx is None:
         imgui.text_disabled("no renderer")
@@ -339,7 +335,7 @@ def strip(panel, sel: str) -> None:
     """One effect's strip — its title (its file and where its paths end in
     the hover), its tip, why it is idle, on and mix, speed and blend, then
     its own params: the FX page's open strip, and the GRAPH page's side
-    column for a selected effect node (plan 28 N2)."""
+    column for a selected effect node."""
     r = panel.reg
     chain = getattr(panel.renderer, "fx", None)
     fx = _state(panel)
@@ -357,9 +353,9 @@ def strip(panel, sel: str) -> None:
     err = _error(chain, fx, sel)
     if err:
         imgui.text_colored(ui.WARN, err)
-    # plan 16 WP3: an effect that is not running says why, and the rows
-    # under the line are dimmed but live — set it up dark, then switch it on.
-    # Plan 33 T7: "faces off" and "reaches nothing" read its paths
+    # an effect that is not running says why, and the rows under the line
+    # are dimmed but live — set it up dark, then switch it on.
+    # "faces off" and "reaches nothing" read its paths
     faces_on = bool(getattr(panel.view, "faces", True)) or not where or where != [FACES]
     idle = why_idle(fx, sel, faces_on, reached=where != [UNREACHED] if where else True,
                     fed=where != [UNFED] if where else True)
@@ -381,23 +377,23 @@ def strip(panel, sel: str) -> None:
     panel._label_cell("blend")
     panel._tip(r[f"{pre}.blend"])
     sp = imgui.get_style().item_spacing.x
-    # plan 33 U: no order slider — an effect's place is its wires (GRAPH)
+    # no order slider — an effect's place is its wires (GRAPH)
     panel._combo(f"{pre}.blend")
     drawn(f"{pre}.blend")
     mode = fx.values[sel].get("mode", 0)
     labels = {p.key: p.label.lower() for p in spec.params}
     choices = {p.key for p in spec.params if p.choices}
-    pads = ui_kit.ready()                   # plan 82: no kit, no pads — its sliders, packed as before
+    pads = ui_kit.ready()                   # no kit, no pads — its sliders, packed
     for label, keys in pad_rows(spec, sel, [p.key for p in spec.params if f"{pre}.{p.key}" in r],
                                 mode, pads):
         pad = pad_of(spec, keys[0]) if pads else None
-        if pad is not None and tuple(keys) == pad.keys:   # plan 82: the square and its knobs
+        if pad is not None and tuple(keys) == pad.keys:   # the square and its knobs
             for pid, rr in ui_fields.inline_pad(panel, [f"{pre}.{k}" for k in keys],
                                                 pad.label).items():
                 rects[pid] = rr
             continue
         if len(keys) == 1 and keys[0] in choices:
-            # a discrete choice (plan 30 N8, `@param choice`): a picker
+            # a discrete choice (`@param choice`): a picker
             panel._label_cell(labels[keys[0]])
             panel._ctx_label(r[f"{pre}.{keys[0]}"])   # its label opens the menu, as a row's
             panel._combo(f"{pre}.{keys[0]}")
@@ -421,7 +417,7 @@ def strip(panel, sel: str) -> None:
         w = (room - gap * (ends - 1)) / ends
         for i, k in enumerate(keys):
             if i and pair and i < 2:
-                # a slice's two ends: from → to (plan 30 N8)
+                # a slice's two ends: from → to
                 imgui.same_line()
                 imgui.text_disabled(ARROW)
                 imgui.same_line()
@@ -436,12 +432,12 @@ def strip(panel, sel: str) -> None:
         _relearn_frame(panel, rects)
 
 
-# plan 24 C6: an effect with many params would scroll the page, so the rows
+# an effect with many params would scroll the page, so the rows
 # are packed by a convention in the uniform names: consecutive params that
 # share a stem and end _lo/_hi, or _hue/_sat/_val, share one row (sat_lo +
 # sat_hi -> "sat"; a1_hue + a1_sat + a1_val -> "a1"). Every param is still
 # declared and routable; this only decides what the strip draws
-# plan 30 N8: and _from/_to — a slice's two ends, drawn `from → to`
+# and _from/_to — a slice's two ends, drawn `from → to`
 # (and a slice's `_turn` after them on the same row)
 ROW_SUFFIXES = (("_lo", "_hi"), ("_from", "_to", "_turn"), ("_from", "_to"),
                 ("_hue", "_sat", "_val"))
@@ -461,7 +457,7 @@ def _is_palette(name: str) -> bool:
 
 
 def compress_line(v: dict) -> str:
-    """The palette's compress mode in the owner's words (plan 30 N8):
+    """The palette's compress mode as a line of text:
     `compress into: hue 170° → 230° · sat 0.00 → 1.00 · val 0.00 → 1.00`."""
     turn = float(v.get("hue_turn", 0.0))
     return (f"compress into: hue {v.get('hue_from', 0.0):.0f}° → {v.get('hue_to', 360.0):.0f}°"
@@ -498,7 +494,7 @@ def _hue_bar(v: dict) -> None:
 
 def pad_rows(spec, name: str, keys: list[str], mode: int = 0, pads: bool = True
              ) -> list[tuple[str, list[str]]]:
-    """`strip_rows` with plan 82's pads resolved first: a `@pair` or
+    """`strip_rows` with the pads resolved first: a `@pair` or
     `@volume` whose keys are all shown is one row of its keys, at its first
     key's place, and only the keys between pads are packed — so a pad over
     two keys `strip_rows` would pack together (`sat_lo`, `sat_hi`) is still
@@ -527,7 +523,7 @@ def pad_rows(spec, name: str, keys: list[str], mode: int = 0, pads: bool = True
 
 def strip_rows(name: str, keys: list[str], mode: int = 0) -> list[tuple[str, list[str]]]:
     """The open strip's param rows: (label, [param keys on the row])."""
-    # an instance (`palette.2`, plan 26 A4) hides as its file does
+    # an instance (`palette.2`) hides as its file does
     hide = HIDDEN_BY_MODE.get(name.partition(".")[0], {}).get(1 if mode else 0, ())
     keys = [k for k in keys if not k.startswith(hide)]
     rows: list[tuple[str, list[str]]] = []
@@ -547,8 +543,8 @@ def strip_rows(name: str, keys: list[str], mode: int = 0) -> list[tuple[str, lis
 
 def _strip_header(panel, fx, name: str, place: str | None = None) -> None:
     """The open strip's title; its note the file name and where the
-    effect's paths end (`place`, the page's groups). Plan 33 U: no ONTO
-    chips and no order — where an effect runs is its wires, edited on GRAPH."""
+    effect's paths end (`place`, the page's groups). Where an effect runs is
+    its wires, edited on GRAPH."""
     spec = fx.specs[name]
     note = f"{spec.name}.glsl" + (f" · {place}" if place else "")
     panel._section(spec.label.lower(), note=note)
@@ -573,10 +569,10 @@ def why_idle(fx, name: str, faces_on: bool = True, reached: bool = True,
              fed: bool = True) -> str | None:
     """Why `name` is not running, first reason only; None while it runs.
     "off" | "fed by nothing" | "reaches nothing" | "faces off" | "bypassed" | "fx mix 0" |
-    "mix 0" (`fed` False: nothing is wired into its input, R15).
+    "mix 0" (`fed` False: nothing is wired into its input).
 
     With the two flags left True it is None exactly when `FxState.live`
-    says the effect draws. Plan 33 T7: where it is wired is the caller's to
+    says the effect draws. Where it is wired is the caller's to
     say — `reached` False for an effect whose paths reach nothing (it never
     runs), `faces_on` False for one that ends only on the faces while
     `view.faces` is off (the faces draw nothing)."""
@@ -630,9 +626,8 @@ def _relearn_frame(panel, rects: dict) -> None:
 
 def _dim(lo: imgui.ImVec2, hi: imgui.ImVec2) -> None:
     """Dim what is already drawn in the rect: a veil of the window's ground
-    over it. The controls under it stay live (they are not disabled, fork
-    F2), and their menus, tooltips and combo lists — windows of their own —
-    stay at full strength, which a pushed style alpha would not leave them."""
+    over it. The controls under it stay live (they are not disabled), and
+    their menus, tooltips and combo lists — windows of their own — stay at full strength, which a pushed style alpha would not leave them."""
     c = imgui.get_style_color_vec4(imgui.Col_.window_bg)
     imgui.get_window_draw_list().add_rect_filled(
         lo, hi, ui.u32(imgui.ImVec4(c.x, c.y, c.z, 1.0 - IDLE_ALPHA)))

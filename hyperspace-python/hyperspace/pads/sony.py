@@ -1,9 +1,7 @@
-"""The DualSense and DualSense Edge report format (plan 42), bytes ↔ values.
+"""The DualSense and DualSense Edge report format, bytes ↔ values.
 
-Everything here was written from published sources before a controller
-was in hand — SDL's ``SDL_hidapi_ps5.c``, Linux's ``hid-playstation.c``,
-hid-tools' descriptors — pinned with line numbers in
-``docs/plans/assets/42-controllers/sony-hid.md``. Where the sources
+Written from published sources — SDL's ``SDL_hidapi_ps5.c``, Linux's ``hid-playstation.c``,
+hid-tools' descriptors. Where the sources
 disagree, or only hardware can say, the constant is named and the
 probe (``tools/hid_probe.py``) settles it.
 
@@ -56,7 +54,7 @@ BT_INPUT_TAGS = (0, 1)
 FIRMWARE_ID, FIRMWARE_LEN = 0x20, 64            # the update version: which rumble mode
 FEATURE_READ_LEN = 64                           # hidapi reads a feature into this
 # the touchpad's resolution: Linux's 1920 × 1080 (SDL says 1070 high; an
-# Edge's corners read 0–1919 × 0–1079, 2026-11-02)
+# Edge's corners read 0–1919 × 0–1079)
 TOUCH_W, TOUCH_H = 1920, 1080
 # the sensors' raw scales when no calibration was read (SDL's fallback,
 # spec §4.1): about 16 counts per deg/s and 8192 per g. Linux's 1024 and
@@ -109,7 +107,7 @@ class Frame:
     battery: int = -1                      # 0–10 (×10 %); −1 unknown
     charging: int = -1                     # the status nibble: 0 discharging, 1 charging, 2 full
     raw_buttons: bytes = b""               # payload bytes 7–10 as sent, for the probe
-    raw_sticks: tuple = ()                 # a Joy-Con's 12-bit (x, y) per stick (plan 43's lab)
+    raw_sticks: tuple = ()                 # a Joy-Con's 12-bit (x, y) per stick
 
     @property
     def full(self) -> bool:
@@ -295,7 +293,7 @@ class Trigger:
     `mode` "off", "resist" (a uniform pushback from `start` of the travel,
     strength 0–1) or "pulse" (a vibration of `strength` at `freq` Hz
     from `start`). Everything else the firmware can do stays out until
-    a hand at the pad has felt it (plan 42 D8)."""
+    a hand at the pad has felt it."""
 
     mode: str = "off"
     start: float = 0.0
@@ -346,7 +344,7 @@ LIGHT_OUT = 0x02             # the light bar setup that hands the LEDs to the ho
 PLAYERS_INSTANT = 0x20       # player LEDs change at once, not fading
 RUMBLE_V2_VERSION = 0x0215   # a DualSense at or past this update takes rumble v2 (Linux)
 # the USB output report's length: the descriptor's (DualSense 48, Edge 64 —
-# macOS took an Edge's 64 at once, 2026-11-02); `HidPad` falls back through
+# macOS took an Edge's 64 at once); `HidPad` falls back through
 # the others if a pad refuses one
 USB_OUT_LENS = {"dualsense": (48, 64, 63), "edge": (64, 63, 48)}
 TRIGGER_ZONES = 10
@@ -429,7 +427,7 @@ def output_report(e: Effects, *, bluetooth: bool, seq: int = 0, first: bool = Fa
     return bytes(r)
 
 
-# ---- the road's surface (pads/hid.py calls these on every codec; plan 46) ----
+# ---- the road's surface (pads/hid.py calls these on every codec) ----
 
 def accepts(r: bytes, reader) -> str | None:
     """Is `r` an input report the road keeps — and over which link? A BT
@@ -495,7 +493,7 @@ def write(dev, reader, want: Effects, now: float) -> bool:
     """What `want` needs sent now: nothing while it equals what was last
     sent (False); else, the first time, Linux's take-over (the light
     bar's setup to "out", so the host's colours stick — spec §5.3, enough
-    on macOS over USB and Bluetooth, a real Edge 2026-11-02), then the
+    on macOS over USB and Bluetooth, a real Edge), then the
     output report, through the reader's `_send` (which learns the USB
     length)."""
     if want.key() == reader._sent_key:

@@ -4,8 +4,8 @@ A taper owns both directions of the mapping between an integer fader
 position and the real value stored in the chain, and every pair
 round-trips exactly: unmap(map(p)) == p over the whole throw. That law is
 what stops selecting a band or loading a scene from walking a fader
-sideways. LIN vs LOG per control is a considered decision (ENGINEERING.md,
-audio chain section, "Fader tapers") — don't re-litigate it here.
+sideways. LIN vs LOG per control is set in ENGINEERING.md, audio chain
+section, "Fader tapers".
 """
 
 from __future__ import annotations
@@ -19,10 +19,10 @@ OCT_T = 12   # slider steps per doubling, time constants
 
 
 def clamp(x, a, b):
-    """The package's one clamp (audit R10). tempo.py, lfo.py and the hands
+    """The package's one clamp. tempo.py, lfo.py and the hands
     package keep a private copy: they import nothing from the package.
     NaN lands on `a`, never through: a NaN base once made every integer
-    and enum param raise in `reg.apply` each frame (plan 14 WP1)."""
+    and enum param raise in `reg.apply` each frame."""
     return a if not x >= a else min(x, b)
 
 
@@ -54,7 +54,7 @@ def exp_pure(u: int, n: int) -> Taper:
 
 
 def exp_signed(u: int, side: int) -> Taper:
-    """Signed exponential about a hard zero in the middle (wave 0 T1, the
+    """Signed exponential about a hard zero in the middle (the
     effects' speed): 2·side + 1 detents, position `side` is 0, and either
     side runs exponentially from ±2^((1 − u)/OCT) one step out to
     ±2^((side − u)/OCT) at its end, through ±1 at `side ± u` (the unity
@@ -84,7 +84,7 @@ def exp_signed(u: int, side: int) -> Taper:
 
 
 def exp_amount(hi: float, octaves: int) -> Taper:
-    """A zero-safe log taper for an amount 0…`hi` (wave 0 T1): position 0
+    """A zero-safe log taper for an amount 0…`hi`: position 0
     is a hard 0; positions 1…n run `octaves` doublings up to `hi` at
     n = octaves · OCT, so the bottom step is hi · 2^((1 − n)/OCT) (about
     hi / 1000 at ten octaves). Between 0 and the first detent the map
@@ -130,7 +130,7 @@ def lin_t(d: float, n: int) -> Taper:
 def lin_db(lo: float, hi: float, n: int) -> Taper:
     """dB trim: position 0 is a true −∞; 1..n runs lo..hi dB at 1 dB/step.
 
-    Marked LIN and that is correct, not a shortcut — dB is already a
+    Marked LIN because dB is already a
     logarithm; an exponential over a dB scale would take the log twice.
     """
     return Taper(
@@ -180,7 +180,7 @@ T_DRIVE = exp_zero(100, 160)   # master audio drive: off, 0.03×–8.00×
 T_DYN = exp_zero(80, 120)      # dynamics: bypass, then 0.06×–4.00×
 T_BRIGHT = exp_pure(60, 100)   # brightness: 0.13×–4.00×, never off
 T_SPEED = exp_zero(120, 160)   # rotation speed: stop, then 0.016–4.00 rad/s
-# a media channel's sound (plan 45 V2): off, then 0.03×–2.00× (−30…+6 dB), unity notch at 100
+# a media channel's sound: off, then 0.03×–2.00× (−30…+6 dB), unity notch at 100
 T_MEDIA_GAIN = exp_zero(100, 120)
 
 

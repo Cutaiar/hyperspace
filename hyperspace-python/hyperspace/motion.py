@@ -47,7 +47,7 @@ MODES = ("off", "follow", "spring")
 ATK_MAX = 2.0        # s — the panel's throws; a file may hold more
 REL_MAX = 4.0
 # s — the panel's spring throws: 20 Hz … 0.1 Hz, the slowest the Hz knob
-# before 2026-10-29 reached, so an old file's spring still reads as it was
+# once reached, so an old file's spring still reads as it was
 DUR_MIN, DUR_MAX = 0.05, 10.0
 BOUNCE_MIN, BOUNCE_MAX = -0.75, 0.95     # ζ 4 … ζ 0.05
 # the named springs: perceptual duration (s), bounce. Apple's smooth and
@@ -198,8 +198,7 @@ class Motion:
 
 
 OFF = Motion("off")
-# the feel a new route row is made with (the owner, 2026-10-31, after the
-# show of the 30th: every new route is a spring): the named `smooth`,
+# the feel a new route row is made with (every new route is a spring): the named `smooth`,
 # critically damped, so a reading lands without overshoot. A row keeps its
 # own feel on file; `Binding.motion`'s dataclass default stays None so a
 # row written without one still reads as auto (its source's feel)

@@ -26,7 +26,7 @@ one). Where that fails — a wheel that does not export the symbol — the
 native dialog (portable_file_dialogs, as MEDIA's and AUDIO's) opens on the
 same folder and the pick is handled the same way.
 
-The same dialog saves too (plan 88): **save to location…** under **save as**'s ▾
+The same dialog saves too: **save to location…** under **save as**'s ▾
 opens it in save mode (`open_save`) on the folder of the patch the panel's
 deck holds, else the patches' folder (on the owner's Mac, the library is in
 Google Drive, so that is ``My Drive/Hyperspace/loadable``). The folder picked
@@ -160,7 +160,7 @@ def open_patches(panel) -> None:
 
 
 def open_save(panel) -> None:
-    """Open the dialog in save mode (plan 88, the module docstring): on the folder
+    """Open the dialog in save mode (see the module docstring): on the folder
     of the patch the panel's deck holds, else the patches' folder; the name the
     one-press save would give is typed in for you. One at a time, as `open_patches`."""
     lib, st = panel.library, _state(panel)

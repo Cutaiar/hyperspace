@@ -1,4 +1,4 @@
-"""Which `Deck` a holder is on (plan 44 D5a, `deck.MetaController` owns them).
+"""Which `Deck` a holder is on (`deck.MetaController` owns them).
 
 A holder is whatever acts on a look: one controller (a device by its role), the
 keys, the mouse, the panel. Each has its own `Pointer`, so each can be moved on

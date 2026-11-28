@@ -20,20 +20,20 @@ window-system state is three settings and the params that drive them:
   output.dim          0–1      master dim of the finished frame, in every
                                mode: 0 black … 1 full (the desk's MASTER fader)
 
-and, per opened render output N (plan 21 WP4, `register_switches`; the
+and, per opened render output N (`register_switches`; the
 config's ``[[output.screens]]``, one output with no list):
 
   output.N.scene      toggle   "picture": the mute on what is wired into its
-                               image (plan 35 O: off, its ground)
+                               image (off, its ground)
   output.N.hands      toggle   the mute on the hands and the guide wired into it
-  output.N.flip_x/_y  toggle   its mirror (plan 23 WP1)
+  output.N.flip_x/_y  toggle   its mirror
   output.N.dim        0–1      that output's own dim, times the master —
                                only when the config lists two or more outputs
 
-("hands through the effects" is the loadable patch's wiring, plan 35 O: no switch)
+("hands through the effects" is the loadable patch's wiring: no switch)
 
 The monitor / fullscreen / overlay params above are output 1's; a later
-output's screen and fullscreen are its config entry's (plan 21 fork F10).
+output's screen and fullscreen are its config entry's.
 
 Fullscreen asks GLFW for the monitor's current video mode, so a projector
 never re-syncs; the window is created with AUTO_ICONIFY off (app.py) so
@@ -45,7 +45,7 @@ back.
 
 Rig-specific settings (monitor, fullscreen, overlay, passthrough, dim,
 and every output.N.*) never persist in a loadable patch. No ``output.*`` param can be
-modulated (row 775); ground and opacity are still saved until the migration moves them. The dim (plan 15 WP3, decision 28) is the operator's: it
+modulated; ground and opacity are still saved until the migration moves them. The dim is the operator's: it
 is not a window-system setting — the renderer multiplies the finished
 frame by it (render.Renderer.dim_pass; app.frame hands it over beside
 the ground) — it has no config key, so a launch always starts at full,
@@ -54,8 +54,7 @@ aliases of the ``output.*`` params; the factory table (routing.py) and
 the APC40 profile bind the alias ids, so they are the live names for
 those rows, not a shim.
 
-Overlay is there only when the config asks (decision 21 (a), plan 14
-WP2): ``[output] overlay = true``. Otherwise the render window is created
+Overlay is there only when the config asks: ``[output] overlay = true``. Otherwise the render window is created
 without a transparent framebuffer (app._windows) and ``output.overlay``
 refuses to switch on — the ``T`` key, the APC40's MASTER select, the
 panel and a loadable patch all land on the one param, so one gate covers every
@@ -83,7 +82,7 @@ _JOIN_ALL_SPACES = 1 << 0
 _STATIONARY = 1 << 4
 _FULLSCREEN_AUX = 1 << 8
 _OVERLAY_LEVEL = 1000        # NSScreenSaverWindowLevel
-_OVER_A_RENDER = _OVERLAY_LEVEL + 1   # the control window, over a fullscreen render (SC3b)
+_OVER_A_RENDER = _OVERLAY_LEVEL + 1   # the control window, over a fullscreen render
 
 # the render cap (output.render): the box the frame must fit inside, its
 # aspect kept (outputs.capped); "full" is output 1's framebuffer, uncapped.
@@ -199,7 +198,7 @@ class GlfwBackend:
 
     def float_over_renders(self, win, on: bool) -> None:
         """The control window over a render on its display, a fullscreen one too, which is at
-        `_OVERLAY_LEVEL` (SC3b: it had nowhere free to go). Back to a normal window with off."""
+        `_OVERLAY_LEVEL`. Back to a normal window with off."""
         self.set_attrib(win, "FLOATING", on)
         ns = self._nswindow(win)
         if ns is not None:
@@ -214,7 +213,7 @@ class Output:
     def __init__(self, win, backend=None, *, allowed: bool = False):
         self.win = win
         self.backend = backend
-        # decision 21 (a): the config's [output] overlay; False (the
+        # the config's [output] overlay; False (the
         # default) means overlay can never switch on (_set_overlay)
         self.allowed = bool(allowed)
         self.fullscreen = False
@@ -236,7 +235,7 @@ class Output:
         g = "output"
         settings = {"persist": False}
         # index 0 is "follow window" (monitor −1: the screen holding the
-        # window, resolved by _target_monitor); the screens follow (audit P3)
+        # window, resolved by _target_monitor); the screens follow
         reg.enum("output.monitor", "Screen", lambda: self.monitor + 1,
                  lambda i: setattr(self, "monitor", int(i) - 1), self.screen_names, group=g,
                  tip="Which screen fullscreen and overlay cover: the one the window is "
@@ -318,7 +317,7 @@ class Output:
         """The enum's choices: "follow window" (monitor −1), then every screen."""
         return [self.FOLLOW, *self.monitor_names()]
 
-    # ---- a window coming and going (SC3b) ----
+    # ---- a window coming and going ----
 
     def swap_window(self, other: Output) -> None:
         """Trade windows with `other`, and all that goes with one: its backend (which caches
@@ -473,25 +472,25 @@ def _cap(s: str) -> str:
 
 
 def register_switches(reg: Registry, slots) -> list[str]:
-    """The per-output switches (plan 21 WP4): for each render output
+    """The per-output switches: for each render output
     N (an `outputs.Slot`, numbered by its place in the config's list),
     ``output.N.scene`` (labelled "picture") and ``output.N.hands`` — the
-    window's two mutes (plan 35 O, row 374: off, it ignores what is wired
+    window's two mutes (off, it ignores what is wired
     into that port; never the loadable patch's structure, never a rebuild) —,
-    ``output.N.flip_x`` / ``.flip_y`` (plan 23 WP1: the output's mirror) and
+    ``output.N.flip_x`` / ``.flip_y`` (the output's mirror) and
     — only when the config lists two or more outputs — ``output.N.dim``.
     No ``.through``: "hands through the effects" is the loadable patch's wiring. They
     write the slot's `outputs.Switches`, which `app._draw_render` hands the
     renderer each frame in that output's `View`; the renderer only reads
     them (ARCHITECTURE §3).
 
-    Meta settings, like ``output.fullscreen`` beside them (fork F4): group
+    Meta settings, like ``output.fullscreen`` beside them: group
     ``output``, never persisted — no loadable patch, show or undo step holds them
     — and not modulatable; a launch (and ⌘R) takes them from the config's
     ``[[output.screens]]`` entry, so a switch flipped at the party lasts
     until the restart. They can be learned onto a desk button like any
-    toggle. Every slot gets them, whether or not a display shows it (SC2): a display
-    can take an output up while the app runs (SC3b), and params turning up then would
+    toggle. Every slot gets them, whether or not a display shows it: a display
+    can take an output up while the app runs, and params turning up then would
     move ids and bindings. Returns the ids."""
     settings = {"persist": False, "modulatable": False}
     several = len(slots) > 1
@@ -509,7 +508,7 @@ def register_switches(reg: Registry, slots) -> list[str]:
                     lambda v: setattr(sw, attr, bool(v)))
 
         whose = f" on {sl.label}" if several else ""
-        # plan 35 O (row 374): the window's mutes — the id `scene` kept for
+        # the window's mutes — the id `scene` kept for
         # the bindings, the label what it mutes
         reg.toggle(f"{pre}.scene", label("picture"), *flag("scene"), group="output",
                    tip=f"The picture wired into this window{whose} (GRAPH, OUTPUT). Off: "
@@ -520,7 +519,7 @@ def register_switches(reg: Registry, slots) -> list[str]:
                    tip=f"The hands and the guide wired into this window{whose}. Off: "
                        "a mute — this window ignores them. Ghost hands (HANDS section) is "
                        "the switch for every output at once.", **settings)
-        # plan 23 WP1: this output's mirror, its last step — the scene, the
+        # this output's mirror, its last step — the scene, the
         # hands and the readout together, to undo a Pepper's Ghost glass
         mirror = ("Ghost mirror (HANDS section) flips the hands only: with this on, "
                   "leave it off or the hands flip twice. Launch value: the "
@@ -534,7 +533,7 @@ def register_switches(reg: Registry, slots) -> list[str]:
                        f"flat under a 45° glass. {mirror}", **settings)
         ids += [f"{pre}.scene", f"{pre}.hands", f"{pre}.flip_x", f"{pre}.flip_y"]
         # one output: the master dim is its dim — unless the config gave it a
-        # launch dim of its own, which must then have a fader (review of #124)
+        # launch dim of its own, which must then have a fader
         if several or float(sw.dim) < 1.0:
             reg.continuous(f"{pre}.dim", label("dim"), lambda sw=sw: float(sw.dim),
                            lambda v, sw=sw: setattr(sw, "dim", min(1.0, max(0.0, float(v)))),

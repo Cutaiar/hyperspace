@@ -52,7 +52,7 @@ mapped as floats — no detents — so a lane never zippers; enum and toggle
 targets move with hysteresis so a noisy lane cannot flap them; a trigger
 fires on a rising edge.
 
-The base chase (plan 52) is the one way a performer reaches a base: while
+The base chase is the one way a performer reaches a base: while
 `Registry.base_chase` is on, each landing also writes what the param shows
 into its base. `_trim` is the ledger that keeps that from counting twice:
 how much of the pushes' offset the base already holds. The offset rides on
@@ -126,7 +126,7 @@ N_MACROS = 8     # macro.1–8: knobs that act through their subscribers and may
 # and a `preset.save.k` trigger. The bank itself is longer (library.SLOTS);
 # `library.F_KEYS` and `routing.F_KEYS` are this number
 F_KEYS = 8
-# the patch / meta controller split (plan 13 §4, D9), by group, declared
+# the patch / meta controller split, by group, declared
 # once. Performance is what a loadable patch (loadable.py) holds and
 # replaces: the look, its LFOs and its macros. The meta controller is everything and the
 # room (the clock, the hands' feel, the analyzer and its source, the
@@ -135,69 +135,69 @@ F_KEYS = 8
 # scene survives a loadable patch load. Every persisted param is in exactly one
 # (tests/test_params.py walks the full registry); a group in neither
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
-# `mod` (plan 28 N1): the modifier nodes' params, `mod.<n>.<p>` — the
+# `mod`: the modifier nodes' params, `mod.<n>.<p>` — the
 # loadable patch's, declared while it holds the modifier (routing.declare_modifiers)
-# `env` and `seq` (plan 31): the envelopes' knobs and the sequencer's
-# pattern are the look's, like the LFOs' (decision 8: the pattern is the
+# `env` and `seq`: the envelopes' knobs and the sequencer's
+# pattern are the look's, like the LFOs' (the pattern is the
 # loadable patch's, `seq.run` and the playhead are not persisted at all)
-# `switch` (plan 33 S): each switch node's `select`, the loadable patch's, declared
+# `switch`: each switch node's `select`, the loadable patch's, declared
 # while its graph holds the switch (declare_switches)
-# `delay` (plan 34 D): each delay node's rate (every, frames, hz), the loadable
+# `delay`: each delay node's rate (every, frames, hz), the loadable
 # patch's, declared while its graph holds the entry (declare_delays)
-# `resize` (plan 34 Z): each resize node's size, aspect, fit, filter and
+# `resize`: each resize node's size, aspect, fit, filter and
 # crop, the loadable patch's, declared while its graph holds the entry (declare_resizes)
-# `matte` (plan 39 T2): each matte node's source, key, edge and feather, the
+# `matte`: each matte node's source, key, edge and feather, the
 # loadable patch's, declared while its graph holds the entry (declare_mattes)
-# `cut` (plan 39 T3): each cut node's invert and amount, the loadable patch's,
+# `cut`: each cut node's invert and amount, the loadable patch's,
 # declared while its graph holds the entry (declare_cuts)
-# `delay` (plan 90 H1): each delay node's depth and gap, the loadable patch's,
+# `delay`: each delay node's depth and gap, the loadable patch's,
 # declared while its graph holds the delay (declare_delays)
-# `segment` (plan 39 T4): each segment node's mode, level, feather, smooth,
+# `segment`: each segment node's mode, level, feather, smooth,
 # switch and motion's sense and learn, the loadable patch's, declared while its
 # graph holds the entry (declare_segments)
-# `eye` (plan 43 C2, the owner, 2026-11-02, row 555): the one orbit camera is
+# `eye`: the one orbit camera is
 # the look's — `camera.*` (the shape's pose and scale in the world) and
 # `eye.*` (the fixed eye the world is seen through) are one camera in the
 # loadable patch. The ids keep their group (`eye.fov`, a saved id, is a format):
 # the merge is the group's move from the meta controller, not a rename
-# `ghost` and `cloud` (plan 43 §6 item 1, plan 44 D3, schema `/10`): the
+# `ghost` and `cloud`: the
 # hands' look and the point clouds' look are the look's — a loadable patch carries
 # them, a load lands them — but for the one setting each hands node keeps
 # for the room (`SHARED_META_KEYS`: `ghost.mirror`, a real mirror in front of
-# the performer's hands; the owner's answer of 2026-11-02, kept 2026-11-03)
-# `pad` (plan 28, rows 729-730): how each stick reads as a dial, petal or blend
+# the performer's hands)
+# `pad`: how each stick reads as a dial, petal or blend
 # (`pad.dial.left` / `.right`, `declare_dial`): the loadable patch's, since a reading
 # changes what its own `axis:L.*` / `axis:R.*` routes do. The pad's feel (`desk.pad.*`)
 # is about the hardware, and stays the meta controller's
 PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "fx", "media",
                       "backdrop", "switch", "resize", "matte", "cut", "segment", "key", "delay", "ghost",
                       "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "mod")
-# `grip` (plan 60, the hand rig): a patch's own, each deck's — the owner, 2026-11-10,
-# testing it: "this really should be per preset". The on-air deck's acts on the one world
-# `world` (plan 59): `world.reset`, over the one `world.World` both decks draw from
+# `grip` (the hand rig): a patch's own, each deck's. The on-air deck's acts on the one world
+# `world`: `world.reset`, over the one `world.World` both decks draw from
 SHARED_META_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "playlist", "world")
-# plan 44 D3 (row 612): the shared meta params inside a patch group, by
+# the shared meta params inside a patch group, by
 # group → the last segment of their ids — `ghost.mirror`. They keep their group
 # (the HANDS page lists the group; an id is a saved format) and are the meta
 # controller's single copy: `part_of` asks here first, so a loadable patch never names
-# one and the show keeps it. `ghost.2.mirror` is no param since LY1 (a hands node's
+# one and the show keeps it. `ghost.2.mirror` is no param (a hands node's
 # state follows `ghost.mirror`); an old show may hold the id, which stays classed here
-# so no look ever takes it, until the old reader goes (CL1)
+# so no look ever takes it.
+# DEBT: legacy-ghost-n-mirror-id
 SHARED_META_KEYS: dict[str, tuple[str, ...]] = {"ghost": ("mirror",)}
-# review of #371: the shared meta params whose group is not their id's first segment
+# the shared meta params whose group is not their id's first segment
 # (`edit.undo`, `app.restart`: group `ui`; `seq.page`: group `desk`). The app's
 # verbs and the desk's page latch: no part of a look. Asked first by `part_of_id`,
 # so a table with no registry (`routing.meta_refusal`) and `part_of` cannot
 # disagree (tests/test_meta_rule.py walks the registry)
 SHARED_META_IDS = ("app.restart", "edit.undo", "edit.redo", "seq.page", "seq.select")
-# plan 43 C2 (row 573): the spin's pose — where each plane is in its turn,
+# the spin's pose — where each plane is in its turn,
 # `view.body` folded in (`ViewState.pose`) — saved by every loadable patch under
 # these ids (its `pose` section, loadable.POSE_KEY, beside `values`) and set
 # by its load. The params stay `persist=False`: the turn moves every frame,
 # so it is no base, no undo step and no dirty dot
 POSE_IDS = tuple(f"rot.phase.{name}" for name in PLANE_NAMES)
-# SEM (register row 746): the meta controller's params that are one per `Deck`. They
+# the meta controller's params that are one per `Deck`. They
 # close over one deck (`preset.*` its `DeckInstall`, `deck.chase` its registry's
 # `chasing`, `totem.*` and `poi.*` their `on_reg`), so they cannot be a shared meta param,
 # which `Registry.add` makes one object on every deck. They count as the meta controller's
@@ -207,8 +207,7 @@ PER_DECK_META_GROUPS = ("preset", "deck", "totem", "poi")
 PER_DECK_META = "per_deck_meta"
 PARTS = {"patch": PATCH_GROUPS, "shared_meta": SHARED_META_GROUPS,
          PER_DECK_META: PER_DECK_META_GROUPS}
-# the two layers (the owner, 2026-11-04, fourth round: "two layers of granularity and no
-# others"): these parts are the meta controller's, and "patch" is the patch's. A param
+# the two layers, and no others: these parts are the meta controller's, and "patch" is the patch's. A param
 # is in exactly one (tests/test_layer_boundary.py, over the app's whole registry)
 META_PARTS = ("shared_meta", PER_DECK_META)
 
@@ -220,20 +219,19 @@ DRIVE = 3.2
 # rot.rate.* spans the largest drive the reference ever put on a plane — a
 # lane at the CEIL asymptote through DRIVE at the drive fader's 8× — so the
 # legacy6 routes (routing.py) land today's rate without clamping. Wide for
-# a slider (RAW_STEPS detents of 1.33×); WP5a can give it a finer widget.
+# a slider (RAW_STEPS detents of 1.33×).
 ROT_RATE_MAX = CEIL * DRIVE * tapers.T_DRIVE.map(tapers.T_DRIVE.steps)
 
-# camera.pan's reach, world units (plan 26 A2). Chosen so a routed pan
+# camera.pan's reach, world units. Chosen so a routed pan
 # travels as far as the old ±4000 px did on the 1080p screen
 # (geometry.PAN_REF_PX, 324 px a unit there: ±12.3): hands-orbit's push
 # of 0.1 moves the shape ±1.2 units (≈ ±390 px) for a hand across the box,
 # where it moved ±400 px
 PAN_RANGE = 12.0
 # the eye's ranges: a field of view from a long lens to a wide one, and a
-# distance from just outside a unit shape to far off. Plan 43 C2 (row 574)
-# made both modulatable and left their tapers as they were — `eye.fov`
-# linear, `eye.distance` log — so a desk row or macro learned onto either
-# before lands the same value for the same knob position
+# distance from just outside a unit shape to far off. Both are modulatable;
+# their tapers are `eye.fov` linear and `eye.distance` log, so a desk row or macro
+# learned onto either lands the same value for the same knob position
 EYE_FOV_RANGE = (10.0, 120.0)
 EYE_DISTANCE_RANGE = (1.5, 40.0)
 
@@ -243,13 +241,13 @@ EYE_DISTANCE_RANGE = (1.5, 40.0)
 MOD_ON, MOD_OFF = 0.6, 0.4
 MOD_DEADBAND = 0.15
 
-# the base chase (plan 52): the deck's meta control, held to commit the
+# the base chase: the deck's meta control, held to commit the
 # performer into the base. Its group is meta, one per deck (`PER_DECK_META_GROUPS`):
 # every deck has its own, and no file holds it
 CHASE_PARAM = "deck.chase"
 CHASE_LABEL = "base chase"     # the undo step's name
 # a macro's base moves its base subscribers (`Router.follow_macros`), which an
-# offset never did: committing one would jump them (register row 655)
+# offset never did: committing one would jump them
 CHASE_REFUSED_GROUPS = ("macro",)
 
 
@@ -290,7 +288,7 @@ class Param:
     # did something, so the new light blinks; None: a hold is a press
     held: Callable[[int], bool] | None = field(repr=False, default=None)
     # ENUM: what a desk `set` button tapped while the desk's SAVE is held
-    # does with its choice (plan 24 C1: a bank pad saves the live state into
+    # does with its choice (a bank pad saves the live state into
     # its slot, filled or empty) — True when it saved, so the pad blinks;
     # None: under SAVE the press is an ordinary press
     save_into: Callable[[int], bool] | None = field(repr=False, default=None)
@@ -310,18 +308,18 @@ class Param:
     _disc: float | None = field(default=None, repr=False)   # last discrete effective
     _armed: bool = field(default=True, repr=False)          # trigger edge detector
     _bad: bool = field(default=False, repr=False)           # a non-finite value was dropped
-    # the frame mark this param last landed under (plan 28 N0): `apply`
+    # the frame mark this param last landed under: `apply`
     # with the same mark again is a no-op, so `Router.modulate` can land a
     # param something in the pass reads and `Registry.apply` skip it
     _mark: int | None = field(default=None, repr=False)
-    # the base chase (plan 52): position rows' share of `_mod` this frame
+    # the base chase: position rows' share of `_mod` this frame
     # (None: no position row called); the verb is held on this param; how
     # much of the pushes' offset the base already holds
     _pos: float | None = field(default=None, repr=False)
     _chase: bool = field(default=False, repr=False)
     _trim: float = field(default=0.0, repr=False)
-    # how far `follow` has moved the base, normalized, all told (plan 81
-    # follow-up): what undo takes off the base to read what the user set
+    # how far `follow` has moved the base, normalized, all told:
+    # what undo takes off the base to read what the user set
     _drift: float = field(default=0.0, repr=False)
 
     def __post_init__(self):
@@ -331,11 +329,11 @@ class Param:
             self.persist = False
         if self.kind is Kind.TEXT:
             self.modulatable = False
-        # plan 44 D3 (review of #351): its part of the split, once — an id and
+        # its part of the split, once — an id and
         # a group never change, and `snapshot(part=)` asks every frame the
         # dirty dot is drawn
         self._part = None if self.group is None else part_of_id(self.id, self.group)
-        # register row 775: no route lands on a meta param (row 743), so the flag says so,
+        # no route lands on a meta param, so the flag says so,
         # whatever the declaration said or left out. By the part and by the id, which is
         # what the doors judge (`is_meta_id`), so the two can't disagree. Its desk rows,
         # keys and pad buttons set it (`routing.act`, `Router.dispatch`) and never ask this
@@ -553,14 +551,14 @@ class Param:
     #
     # Both work on the *base* and write it back, so while a performer owns
     # the param its offset rides on the move instead of folding into it
-    # (plan 09 decision 3). Neither snaps to a detent: a drag or a held key
+    # Neither snaps to a detent: a drag or a held key
     # moves a tapered param by a fraction of a step per frame, and
     # set_value's unmap round-trip would land it back on the same detent
     # every frame — so the value is written raw through set(), and a
     # modulated base keeps its continuous position (_taper_pos).
 
     def follow(self, v) -> None:
-        """The object's owner moved it to `v` (plan 64: a fractal's re-root,
+        """The object's owner moved it to `v` (a fractal's re-root,
         a crossing, a flight — the same picture written another way): the
         object and the base move together, once, held or not. While a source
         modulates the param its base takes the move (in normalized units, so
@@ -570,7 +568,7 @@ class Param:
 
         How far the base moved is added to `_drift` (normalized): undo reads a
         base less what `follow` moved it (`undo.own`), so a running dive makes
-        no step and runs no step on (plan 81 follow-up, register row 1018)."""
+        no step and runs no step on."""
         if self.kind is not Kind.CONTINUOUS:
             self.put(v)
             writes.mark()
@@ -635,7 +633,7 @@ class Param:
         """Where n steps land on an enum whose choices can be empty
         (`has`, e.g. the bank's slots): each step goes to the next choice
         that holds something, so a learned step or toggle never stops on
-        an empty slot (audit R14). Past the last filled choice a step
+        an empty slot. Past the last filled choice a step
         stays put and a cycle wraps; with nothing filled, nothing moves."""
         m, k = len(self.names), int(self.base)
         d = 1 if n > 0 else -1
@@ -707,14 +705,14 @@ class Param:
             self._mod += u
             if position:
                 self._pos = (self._pos or 0.0) + u
-        else:                   # a NaN or an inf never reaches the base (plan 14 WP1)
+        else:                   # a NaN or an inf never reaches the base
             self._bad = True
         self._held = True
 
     def apply(self, mark: int | None = None) -> None:
         """End of frame: write base + offsets to the object, or let go.
 
-        `mark` is the frame's (plan 28 N0, `Registry.frame`): a second call
+        `mark` is the frame's (`Registry.frame`): a second call
         under the mark this param already landed under does nothing — no
         base restored twice, no offset doubled, no toggle flipped twice. So
         `Router.modulate` lands a param a later node of the pass reads, and
@@ -782,7 +780,7 @@ class Param:
         self._last = self._norm_of(self.get())
 
     def _commit(self, raw: float, target: float, push: float) -> None:
-        """The base chase's landing (plan 52): what the param shows now
+        """The base chase's landing: what the param shows now
         becomes its base, and the trim says how much of the pushes' offset
         that holds. The part a range's end cut off (`raw` past `target`) is
         not in the base, so it stays on the offset's side of the ledger: the
@@ -802,7 +800,7 @@ class Param:
 
 
 def _came_home(trim: float, push: float) -> float:
-    """The trim after this frame's push (plan 52): it only falls, following
+    """The trim after this frame's push: it only falls, following
     an offset on its way to zero and never past it. So a source going home
     moves nothing (offset less trim stays 0), one pushing further than it
     was moves the look on from where it stands, and one past zero rides in
@@ -813,7 +811,7 @@ def _came_home(trim: float, push: float) -> float:
 
 
 def chase_reaches(p: Param) -> bool:
-    """Does the base chase commit this param (plan 52, row 654): continuous,
+    """Does the base chase commit this param: continuous,
     modulatable and the deck's own. A shared meta param is the room's and a
     deck's verb never writes it; a macro is left out (`CHASE_REFUSED_GROUPS`)."""
     return (p.kind is Kind.CONTINUOUS and p.modulatable and part_of(p) == "patch"
@@ -824,7 +822,7 @@ def part_of(p: Param) -> str | None:
     """"patch", "shared_meta" or `PER_DECK_META`, by the param's group; None for a
     group in none of them, which the one-layer test fails. A shared meta key of a
     patch group (`SHARED_META_KEYS`: `ghost.mirror`) is the meta controller's. The one
-    rule (plan 44 D3): a deck's registry hands the meta controller every param this calls
+    rule: a deck's registry hands the meta controller every param this calls
     "shared_meta". Cached on the param at its declaration (`Param._part`); one from
     before a hot reload is asked."""
     got = p.__dict__.get("_part", _UNSET)
@@ -837,7 +835,7 @@ _UNSET = object()
 
 
 def is_shared_meta_id(pid: str | None) -> bool:
-    """Does `pid` name a shared meta param (`SHARED_META_GROUPS`, plan 13 §4), the one object every
+    """Does `pid` name a shared meta param (`SHARED_META_GROUPS`), the one object every
     deck shares? By its group prefix, so a param this registry lacks (a band a layout has
     not built yet) is still classed."""
     return bool(pid) and part_of_id(pid) == "shared_meta"
@@ -865,7 +863,7 @@ def group_part(group: str | None) -> str | None:
 def in_group(p: Param, group: str) -> bool:
     """Whether `p` is one of `group`'s params on every per-group road — a
     module preset's values, its reset, its dirty dot, `snapshot(group)`,
-    the library's fresh values (review of #351, round 2): its group, and
+    the library's fresh values: its group, and
     its group's part — so a shared meta key (`ghost.mirror`) is never moved,
     saved or counted by the `ghost` group's roads, though the HANDS page
     (`Registry.group`) still lists it."""
@@ -888,7 +886,7 @@ def part_of_id(pid: str, group: str | None = None) -> str | None:
 
 
 def instance_id(node: str, key: str, n: int = 1) -> str:
-    """The naming rule for a render node's params (plan 26 A0; ENGINEERING
+    """The naming rule for a render node's params (ENGINEERING
     §2, "Node instances"). `node` is the node's id prefix — ``fx.acid``
     for an effect, ``ghost``, ``dream`` — and `key` the param's own name.
     The first instance keeps today's id (``fx.acid.mix``); instance n ≥ 2
@@ -923,7 +921,7 @@ def instance_of(pid: str, node: str) -> tuple[int, str] | None:
 def is_instance_id(pid: str) -> bool:
     """Is `pid` a param of an extra node instance — `fx.<file>.<n>.<key>`
     or `ghost.<n>.<key>`, n ≥ 2 — one that exists only while a loadable patch's
-    graph holds that instance (plan 26 A4)? A loadable patch load sorts such ids
+    graph holds that instance? A loadable patch load sorts such ids
     against the graph it lands; an old show's `ghost.<n>.*` ones the registry
     lacks are held back (`Install._held_back`)."""
     parts = pid.split(".")
@@ -942,7 +940,7 @@ class Registry:
     # this deck's dial readings, {"L": "petal", "R": "blend"} (`declare_dial`); None: a
     # registry with no dial
     dial_modes: dict[str, str] | None = None
-    # plan 34 D: each delay's rate, `ViewState.delay`'s dict (`build_registry`)
+    # each delay's rate, `ViewState.delay`'s dict (`build_registry`)
     delay_state: dict[str, Any]
 
     @staticmethod
@@ -950,7 +948,7 @@ class Registry:
         """`groupwords.group_word`, for `undo.py`, a leaf that holds a registry."""
         return groupwords.group_word(group)
 
-    # class-level so a registry from before a hot reload has them (plan 28 N0):
+    # class-level so a registry from before a hot reload has them:
     # `serial` moves on every add and remove (the modulation patch's cache
     # key, `Router.modgraph`); `frame` is the frame mark `Router.modulate`
     # opens (`begin_frame`) and `landed` the mark `apply` lands under —
@@ -958,14 +956,14 @@ class Registry:
     serial: int = 0
     frame: int = 0
     landed: int | None = None
-    # plan 44 D3: the meta controller registry this deck's registry follows — None
+    # the meta controller registry this deck's registry follows — None
     # for a registry of its own (a bare one, the tests'; and one from
     # before a hot reload, on the class)
     meta_reg: MetaRegistry | None = None
     # moves when a base, or anything a param here reads, was written: what
     # `undo.Undo` (a leaf) asks instead of reading every base (writes.py)
     writes = staticmethod(writes.serial)
-    # the base chase (plan 52): held now; this deck's `undo.Undo`
+    # the base chase: held now; this deck's `undo.Undo`
     # (`Deck.build`), None: a bare registry has no steps
     chasing: bool = False
     chase_undo: Any = None
@@ -986,7 +984,7 @@ class Registry:
             self.follow(meta_reg)
 
     def follow(self, meta_reg: MetaRegistry) -> None:
-        """Hold `meta_reg`'s params by reference from now on (plan 44 D3): the
+        """Hold `meta_reg`'s params by reference from now on: the
         ones it has now, added here in its order, and every one it gains or
         loses later — one `Param` object in every deck's registry, so
         `reg["output.dim"]` reads and writes the room's from any deck. A
@@ -1003,7 +1001,7 @@ class Registry:
     def real(self, p: Param) -> Param:
         """The param behind an alias — where the base and the modulation
         state live — or `p` itself when it is not one. A meta controller alias
-        (`band.sel.*`) is answered by the meta controller's rules (plan 44 D3)."""
+        (`band.sel.*`) is answered by the meta controller's rules."""
         if not p.alias:
             return p
         if self.real_of is not None:
@@ -1031,7 +1029,7 @@ class Registry:
     def add(self, p: Param) -> Param:
         """Declare `p`. On a deck's registry (one that follows a meta controller) a
         shared meta param (`part_of`) is the meta controller's: added there, and so to
-        every deck that follows it — declared once (plan 44 D3)."""
+        every deck that follows it — declared once."""
         meta_reg = self.meta_reg
         if meta_reg is not None and meta_reg is not self and part_of(p) == "shared_meta":
             return meta_reg.add(p)            # (its one duplicate check, every deck)
@@ -1099,11 +1097,11 @@ class Registry:
     # ---- frame ----
 
     def begin_frame(self) -> int:
-        """A new frame mark (plan 28 N0): `Router.modulate` lands the params
+        """A new frame mark: `Router.modulate` lands the params
         its pass reads under it, and the next `apply` skips those. Returns
         the mark.
 
-        A deck's registry (plan 44 D3, review of #351) takes its mark from
+        A deck's registry takes its mark from
         its session: the first deck to begin a frame moves the meta controller's
         frame on, every other deck adopts it, so every deck's pass in one
         frame lands the shared shared meta params under **one** mark — a
@@ -1139,12 +1137,12 @@ class Registry:
         """Once per frame, after every source has called modulate(): base +
         offsets onto every modulated param, in registry order — but for
         those `Router.modulate` already landed under this frame's mark
-        (plan 28 N0: a param the pass reads lands before its reader), which
+        (a param the pass reads lands before its reader), which
         `Param.apply` skips. Closes the mark: an `apply` with no pass
         before it lands everything, as before.
 
         A shared meta param is one `Param` in every deck, and no route moves
-        one (row 775), so it has no offset for any deck to land, and
+        one, so it has no offset for any deck to land, and
         `app.frame` running the lead first is what has another deck read this
         frame's meta controller values."""
         # over a copy: a modulated trigger may add or remove params
@@ -1161,7 +1159,7 @@ class Registry:
                 bad.append(p.id)
         self.nonfinite = bad
 
-    # ---- the base chase (plan 52): the verb, a deck operation ----
+    # ---- the base chase: the verb, a deck operation ----
 
     def base_chase(self, on: bool, *, steps=None) -> bool:
         """Hold or let go of the verb on this deck: while on, every param it
@@ -1198,8 +1196,7 @@ class Registry:
         """{id: base value} for every persistent param, the macros
         included, or only one group, one id set, or one part of the split
         (``part="patch"`` / ``"shared_meta"``, PARTS). The filters
-        combine: each one given must hold. A part is `part_of`'s (plan 44
-        D3: `ghost.mirror` is the meta controller's though its group is not)."""
+        combine: each one given must hold. A part is `part_of`'s (`ghost.mirror` is the meta controller's though its group is not)."""
         out: dict[str, Any] = {}
         if part is not None and part not in PARTS:
             raise KeyError(part)
@@ -1226,7 +1223,7 @@ class Registry:
         return got[1]
 
     def forget_commits(self, ids: Iterable[str]) -> None:
-        """The base chase's ledger empties on these params (plan 52): whatever
+        """The base chase's ledger empties on these params: whatever
         their bases hold now, no commit of the verb's is in them."""
         for pid in ids:
             p = self._p.get(pid)
@@ -1254,7 +1251,7 @@ class Registry:
     def restore(self, values: dict[str, Any], *, trims: dict[str, float] | None = None
                 ) -> list[str]:
         """Set every param named; returns the ids this registry doesn't have.
-        The base chase's ledger goes with the base it describes (plan 52): a
+        The base chase's ledger goes with the base it describes: a
         continuous param's trim is what `trims` (an undo's state) says that
         base held, and none when there is no such state (a load: a look's
         values hold no commit, so a route on them rides in full)."""
@@ -1302,7 +1299,7 @@ class Registry:
         the choices are. Stored as `Param.has`. `held`, likewise, is what a
         `set` button held midi.HOLD_S does with its choice (`Param.held`),
         and `save_into` what its tap does while the desk's SAVE is held
-        (`Param.save_into`, plan 24 C1)."""
+        (`Param.save_into`)."""
         return self.add(Param(pid, label, Kind.ENUM, get, set, group=group, tip=tip,
                               choices=choices, persist=persist, modulatable=modulatable,
                               alias=alias, has=has, held=held, save_into=save_into))
@@ -1328,7 +1325,7 @@ class Registry:
                               persist=persist))
 
 
-# the sticks' dial readings (plan 28, rows 729-730). Restated from `gamepad`
+# the sticks' dial readings. Restated from `gamepad`
 # (`DIAL_MODES`, `DIAL_DEFAULT`): the import wall forces it, `params` being both layers'
 # and `gamepad` the meta controller's, and it imports glfw. tests/test_dial.py holds them equal
 DIAL_READINGS = ("petal", "blend")
@@ -1374,7 +1371,7 @@ def declare_dial(r: Registry) -> None:
 
 
 class MetaRegistry(Registry):
-    """The meta controller's params, one set for every deck (plan 44 D3): the meta controller
+    """The meta controller's params, one set for every deck: the meta controller
     groups (`SHARED_META_GROUPS`, `SHARED_META_KEYS`) and the params of no part
     that only the meta controller declares (`app.restart`, the undo keys). Built by
     `build_meta`; each deck's `Registry` follows it (`Registry.follow`)
@@ -1409,8 +1406,8 @@ class MetaRegistry(Registry):
 
     @property
     def on_air_reg(self) -> Registry | None:
-        """The deck whose `apply` lands the meta controller's params, once a frame
-        (review of #351, round 2): **named** — the deck on air, which
+        """The deck whose `apply` lands the meta controller's params, once a frame:
+        **named** — the deck on air, which
         `Deck.build(on_air=True)` (the host's one deck today) sets — held
         weakly; until one is named, the first deck that follows. A registry
         that follows and is not the lead (a stale deck a closure still
@@ -1427,8 +1424,7 @@ class MetaRegistry(Registry):
         self.__dict__["_lead"] = weakref.ref(deck) if deck is not None else None
 
     def apply(self) -> None:
-        """The meta controller's params landed from the meta controller itself (review of
-        #351, round 2): under the frame's shared mark when a deck began one
+        """The meta controller's params landed from the meta controller itself: under the frame's shared mark when a deck began one
         (`Registry.begin_frame` sets `landed`), so in the same frame as the
         lead's apply — before or after it — each param lands once; with no
         frame begun (no deck, a test) every one lands, as `Registry.apply`
@@ -1463,13 +1459,13 @@ class MetaRegistry(Registry):
 
 # ---------------------------------------------------------------- builder
 
-# plan 26 A2: camera.pan is in world units (the shape's unit circumradius),
-# no longer logical px. A document saved since says so with this key (the
+# camera.pan is in world units (the shape's unit circumradius), not logical
+# px. A document saved in world units says so with this key (the
 # schema stays preset/2: `load_doc` ignores keys it does not know, so an
 # older build still loads the file — reading its pan as px); one without
 # it is a preset/2 file from before, its pan read in px and converted
 UNITS_KEY = "units"
-# wave 0 T1: a route's depth onto an effect's `speed` or an `amount` param
+# A route's depth onto an effect's `speed` or an `amount` param
 # is measured along the param's taper (`fx.retaper_of`), where a document
 # from before measured it along the linear range; `retaper_depths` reads
 # the old file as it was, and this key says a document is already so
@@ -1481,7 +1477,7 @@ PAN_IDS = ("camera.pan.x", "camera.pan.y")
 def pan_world(doc: dict) -> tuple[dict, bool]:
     """A loadable patch document — a whole loadable patch (`preset.load_doc`) or a camera
     module preset (`Library._apply_doc`, `Library.defaults`) — with its
-    camera.pan in world units (plan 26 A2):
+    camera.pan in world units:
     a file without the `units` key stored logical px, which become world
     units through the default eye on the 1080p screen
     (`geometry.pan_px_to_world`), so the shape sits where it did there.
@@ -1509,7 +1505,7 @@ def pan_world(doc: dict) -> tuple[dict, bool]:
     return out, changed
 
 
-# ---- wave 0 T1: a depth onto a retapered effect param, read as it was ----
+# ---- a depth onto a retapered effect param, read as it was ----
 #
 # A route's depth is in the target's normalised units; the effects' `speed`
 # and `amount` params were linear and are now on tapers (fx.T_SPEED,
@@ -1538,8 +1534,8 @@ def fx_files(source=None) -> dict:
     if files is None:
         files = getattr(getattr(source, "fx_state", None), "files", None)
     if files is not None:
-        # (plan 67: and the retired files', which an old file still names
-        # until the ladder's last step rewrites it — Devin on #509)
+        # and the retired files', which an old file still names
+        # until the ladder's last step rewrites it
         return {**fx.retired_specs(), **files}
     if _FALLBACK_FILES is None:
         _FALLBACK_FILES = {**fx.retired_specs(), **FxState().files}
@@ -1667,9 +1663,9 @@ def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
 
 
-# ---- plan 33 S: the switches' picks ----
+# ---- the switches' picks ----
 SWITCH_GROUP = "switch"
-# off, then the eight inputs (R11: choice k is the input `in<k>`)
+# off, then the eight inputs (choice k is the input `in<k>`)
 SWITCH_CHOICES = ["off", *(str(i) for i in range(1, 9))]
 _SWITCH_ID = re.compile(r"(switch(?:\.(?:[2-9]|[1-9][0-9]+))?)\.select")
 
@@ -1681,7 +1677,7 @@ def switch_id(name: str) -> str:
 
 def is_switch_id(pid: str) -> bool:
     """Is `pid` a switch's `select` — one that exists only while a loadable patch's
-    graph holds that switch (plan 33 S)? A loadable patch load sorts such ids
+    graph holds that switch? A loadable patch load sorts such ids
     against the graph it lands, as it does an effect instance's."""
     return bool(_SWITCH_ID.fullmatch(pid))
 
@@ -1699,7 +1695,7 @@ def _switch_state(r: Registry) -> dict[str, int]:
 
 
 def declare_switches(r: Registry, names: Iterable[str]) -> list[str]:
-    """The switches' params (plan 33 S), as `FxState.set_instances` and
+    """The switches' params, as `FxState.set_instances` and
     `fx.declare` do the effect instances': `switch[.<n>].select` for each
     switch `names` holds — an enum off / 1–8 (`SWITCH_CHOICES`), off when
     first declared, group `switch` (a patch group: the loadable patch's),
@@ -1729,9 +1725,9 @@ def declare_switches(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
-# ---- plan 34 D: the delays' rate ----
+# ---- the delays' rate ----
 DELAY_GROUP = "delay"
-# (plan 90 H1: `depth`, appended — how many of its pictures it keeps for a stack reader)
+# `depth`: how many of its pictures it keeps for a stack reader
 _DELAY_KEYS = ("every", "frames", "hz", "depth")
 _DELAY_ID = re.compile(r"delay(?:\.(?:[2-9]|[1-9][0-9]+))?\.(every|frames|hz|depth)")
 
@@ -1773,9 +1769,9 @@ _DELAY_TIPS = {
 
 
 def declare_delays(r: Registry, names: Iterable[str]) -> list[str]:
-    """The delays' params (plan 34 D), as `declare_resizes` does the resizes':
+    """The delays' params, as `declare_resizes` does the resizes':
     for each delay `names` holds, `every` (an enum over `DELAY_EVERY`),
-    `frames` (1–`DELAY_FRAMES_MAX`), `hz` and (plan 90 H1) `depth` — group `delay` (a patch group:
+    `frames` (1–`DELAY_FRAMES_MAX`), `hz` and `depth` — group `delay` (a patch group:
     the loadable patch's), over a `DelayState` made when first declared and
     kept while the name stays; those of every delay no longer named dropped,
     with their states. Returns the ids that appeared or went."""
@@ -1804,8 +1800,8 @@ def declare_delays(r: Registry, names: Iterable[str]) -> list[str]:
                 r.continuous(pid, label, *got, lo=1, hi=DELAY_FRAMES_MAX, integer=True,
                              fmt=lambda v: f"{int(v)}", group=DELAY_GROUP, tip=tip)
             elif key == "depth":
-                # (plan 90 H1: modulatable — a stack only grows, `DelayStack.ensure`,
-                # so a depth driven down keeps what it holds)
+                # modulatable: a stack only grows (`DelayStack.ensure`),
+                # so a depth driven down keeps what it holds
                 r.continuous(pid, label, *got, lo=DELAY_DEPTH[0], hi=DELAY_DEPTH[1],
                              integer=True, fmt=lambda v: f"{int(v)}", group=DELAY_GROUP,
                              tip=tip)
@@ -1816,7 +1812,7 @@ def declare_delays(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
-# ---- plan 34 Z: the resizes' values ----
+# ---- the resizes' values ----
 RESIZE_GROUP = "resize"
 _RESIZE_KEYS = ("size", "aspect", "fit", "filter", "crop_x", "crop_y", "crop_w", "crop_h")
 _RESIZE_ID = re.compile(r"resize(?:\.(?:[2-9]|[1-9][0-9]+))?\.(size|aspect|fit|filter|crop_x"
@@ -1830,7 +1826,7 @@ def resize_ids(name: str) -> list[str]:
 
 def is_resize_id(pid: str) -> bool:
     """Is `pid` one of a resize's values — one that exists only while a
-    loadable patch's graph holds that resize (plan 34 Z)? A loadable patch load sorts such
+    loadable patch's graph holds that resize? A loadable patch load sorts such
     ids against the graph it lands, as it does a switch's `select`."""
     return bool(_RESIZE_ID.fullmatch(pid))
 
@@ -1862,7 +1858,7 @@ _RESIZE_TIPS = {
 
 
 def declare_resizes(r: Registry, names: Iterable[str]) -> list[str]:
-    """The resizes' params (plan 34 Z), as `declare_switches` does the
+    """The resizes' params, as `declare_switches` does the
     switches': for each resize `names` holds, `size` (an enum over
     `RESIZE_SIDES`), `aspect`, `fit` and `filter` (enums), and the crop
     (`crop_x`, `crop_y` 0–1; `crop_w`, `crop_h` 0.01–1) — group `resize`
@@ -1903,10 +1899,10 @@ def declare_resizes(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
-# ---- plan 39 T2: the mattes' values ----
+# ---- the mattes' values ----
 MATTE_GROUP = "matte"
 # `matte[.n].from` is the param; its state's field is `source` (`from` is a keyword)
-# (plan 90 H2: and `ramp`, the key's — appended)
+# `ramp` is the key's
 _MATTE_KEYS = ("from", "key", "soft", "invert", "feather", "hue", "sat", "ramp")
 _MATTE_ATTR = {"from": "source"}
 _MATTE_ID = re.compile(r"matte(?:\.(?:[2-9]|[1-9][0-9]+))?\.(" + "|".join(_MATTE_KEYS) + ")")
@@ -1919,7 +1915,7 @@ def matte_ids(name: str) -> list[str]:
 
 def is_matte_id(pid: str) -> bool:
     """Is `pid` one of a matte's values — one that exists only while a
-    loadable patch's graph holds that matte (plan 39 T2)? A loadable patch load sorts such
+    loadable patch's graph holds that matte? A loadable patch load sorts such
     ids against the graph it lands, as it does a resize's."""
     return bool(_MATTE_ID.fullmatch(pid))
 
@@ -1953,7 +1949,7 @@ _MATTE_TIPS = {
 
 
 def declare_mattes(r: Registry, names: Iterable[str]) -> list[str]:
-    """The mattes' params (plan 39 T2), as `declare_resizes` does the
+    """The mattes' params, as `declare_resizes` does the
     resizes': for each matte `names` holds, `from` (an enum over
     `MATTE_FROM`), `key` 0–1, `soft` 0–0.5, `invert`, `feather` 0–32 px and
     the chroma key's `hue` and `sat` (0–1) — group `matte` (a performance
@@ -1994,7 +1990,7 @@ def declare_mattes(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
-# ---- plan 39 T3: the cuts' values ----
+# ---- the cuts' values ----
 CUT_GROUP = "cut"
 _CUT_KEYS = ("invert", "amount")
 _CUT_ID = re.compile(r"cut(?:\.(?:[2-9]|[1-9][0-9]+))?\.(" + "|".join(_CUT_KEYS) + ")")
@@ -2007,7 +2003,7 @@ def cut_ids(name: str) -> list[str]:
 
 def is_cut_id(pid: str) -> bool:
     """Is `pid` one of a cut's values — one that exists only while a
-    loadable patch's graph holds that cut (plan 39 T3)? A loadable patch load sorts such ids
+    loadable patch's graph holds that cut? A loadable patch load sorts such ids
     against the graph it lands, as it does a matte's."""
     return bool(_CUT_ID.fullmatch(pid))
 
@@ -2032,7 +2028,7 @@ _CUT_TIPS = {
 
 
 def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
-    """The cuts' params (plan 39 T3), as `declare_mattes` does the mattes':
+    """The cuts' params, as `declare_mattes` does the mattes':
     for each cut `names` holds, `invert` (off) and `amount` 0–1 (1) — group
     `cut` (a patch group: the loadable patch's), both modulatable — over a
     `CutState` made when first declared and kept while the name stays;
@@ -2067,7 +2063,7 @@ def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
-# ---- plan 87: black is clear, on any picture node ----
+# ---- black is clear, on any picture node ----
 KEY_GROUP = "key"
 KEY_PREFIX = "key."
 KEY_FEATHER = MATTE_FEATHER         # the most px a key's feather blurs by (masks.MAX_FEATHER)
@@ -2104,7 +2100,7 @@ def key_ids(name: str) -> list[str]:
 
 def is_key_id(pid: str) -> bool:
     """Is `pid` a keyed node's knob — one that exists only while a loadable
-    patch's graph keys that node (plan 87)? A load sorts such ids against the
+    patch's graph keys that node? A load sorts such ids against the
     graph it lands, as it does a matte's."""
     return bool(_KEY_ID.fullmatch(pid))
 
@@ -2121,7 +2117,7 @@ def _key_state(r: Registry) -> dict[str, KeyState]:
 
 
 def rename_keys(r: Registry, renames: dict[str, str]) -> None:
-    """Keyed nodes renamed (plan 89: an effect's later slots numbered down
+    """Keyed nodes renamed (an effect's later slots numbered down
     when one comes off): each old name's `KeyState` — its values — moves to
     its new name, and both names' knobs leave the registry, so the next
     `declare_keys` makes the new name's over the state it carries. A name
@@ -2136,7 +2132,7 @@ def rename_keys(r: Registry, renames: dict[str, str]) -> None:
 
 
 def declare_keys(r: Registry, names: Iterable[str]) -> list[str]:
-    """Black is clear's knobs (plan 87), as `declare_mattes` does the
+    """Black is clear's knobs, as `declare_mattes` does the
     mattes': for each node `names` keys, `level` 0–1 (0.02), `soft` 0–1
     (0.1), `measure` (peak, luma), `feather` 0–32 px (0), `keep` (on) and
     `invert` (off) — group `key` (a patch group), modulatable — over a
@@ -2178,7 +2174,7 @@ def declare_keys(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
-# ---- plan 39 T4: the segments' values ----
+# ---- the segments' values ----
 SEGMENT_GROUP = "segment"
 _SEGMENT_KEYS = ("mode", "quality", "feather", "smooth", "on", "sense", "learn")
 _SEGMENT_ID = re.compile(r"segment(?:\.(?:[2-9]|[1-9][0-9]+))?\.("
@@ -2192,7 +2188,7 @@ def segment_ids(name: str) -> list[str]:
 
 def is_segment_id(pid: str) -> bool:
     """Is `pid` one of a segment's values — one that exists only while a
-    loadable patch's graph holds that segment (plan 39 T4)? A loadable patch load sorts
+    loadable patch's graph holds that segment? A loadable patch load sorts
     such ids against the graph it lands, as it does a cut's."""
     return bool(_SEGMENT_ID.fullmatch(pid))
 
@@ -2227,7 +2223,7 @@ _SEGMENT_TIPS = {
 
 
 def declare_segments(r: Registry, names: Iterable[str]) -> list[str]:
-    """The segments' params (plan 39 T4), as `declare_cuts` does the cuts':
+    """The segments' params, as `declare_cuts` does the cuts':
     for each segment `names` holds, `mode` (person / motion / subject, not
     modulatable: a model is not started per frame), `quality` (fast /
     balanced / accurate, not modulatable likewise), `feather` 0–32 px,
@@ -2282,7 +2278,7 @@ def build_registry(view, control, audio, bank=None, fx=None,
     `devices` list (audio.AudioEngine) ``audio.mic`` and ``audio.device`` do
     something; without them they are declared anyway, so a key row (`M`)
     resolves with or without a panel. `fx` (fx.FxState, the renderer's
-    effects' values; plan 90 H3: the dream's among them, `fx.dream.*`) — a
+    effects' values, the dream's among them, `fx.dream.*`) — a
     fresh one stands in when there is no renderer — and `ghost` (ghost.GhostState, the
     renderer's ghost hands), and `media` (media.channels.MediaState, the
     eight channels the ``media.*`` params write; kept as ``r.media``, the
@@ -2300,7 +2296,7 @@ def build_registry(view, control, audio, bank=None, fx=None,
 
 
 def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
-    """Declare the meta controller's params once (plan 44 D3): the analyzer's (`master`,
+    """Declare the meta controller's params once: the analyzer's (`master`,
     `scene`, `band` — the bands rebuilt on a layout change, `band.sel.*`
     the selected band's views), the audio transport, `app.restart` and the
     undo keys. What every deck shares by reference (`MetaRegistry`); the
@@ -2343,7 +2339,7 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
               tip="Reloads the selected scene across the whole analyzer. Undoable for 8 s.")
 
     # ---- bands ----
-    # The analyzer has N bands (plan 07), so this block is a function: it
+    # The analyzer has N bands, so this block is a function: it
     # drops every band.* id and declares them again for the current N, and
     # runs whenever the layout changes (a band added, removed or moved, a
     # loadable patch's layout applied) — control.on_layout is that hook.
@@ -2446,8 +2442,8 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     r.toggle("audio.mic", "Mic", mic_on, set_mic, group=g, persist=False,
              tip="Listen to the selected input device.")
 
-    # plan 45 V3: the third source — the media mixer's sum, the videos' sound.
-    # The mixer is the media sources' (plan 44 D3: shared, one for the room)
+    # The third source: the media mixer's sum, the videos' sound.
+    # The mixer is the media sources' (shared, one for the room)
     def mix_on() -> bool:
         return bool(getattr(audio, "on", False) and getattr(audio, "mode", None) == "mix")
 
@@ -2481,7 +2477,7 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
               restart if restart is not None else (lambda: None), group="ui",
               modulatable=False,
               tip="Restart the process (Cmd+R). Full cold reload; view state is lost.")
-    # undo and redo (undo.py, plan 15 WP1): key rows fire them (⌘Z / Ctrl+Z,
+    # undo and redo (undo.py): key rows fire them (⌘Z / Ctrl+Z,
     # with ⇧ to redo), on the stack `undo.here` names; none installed: nothing
     r.trigger("edit.undo", "Undo", lambda: undo.undo(), group="ui", modulatable=False,
               tip="Take back the last gesture or the last load, learn or delete on the "
@@ -2504,7 +2500,7 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
 
 def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                       meta_reg: MetaRegistry | None = None) -> Registry:
-    """Declare a deck's own params (plan 44 D3): the look's — the view, the
+    """Declare a deck's own params: the look's — the view, the
     media channels' (`media`, the deck's `Channels`), the backdrop, the
     turn, the camera and the eye, the clouds' and the hands' looks, the
     effects (the dream among them), the macros — and the bank's
@@ -2515,11 +2511,11 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
     r = Registry(meta_reg=meta_reg if meta_reg is not None else MetaRegistry())
     media = media if media is not None else media_channels.MediaState()
     r.media = media
-    # plan 43 C2 (row 573): the view the rotation params write — what a
+    # The view the rotation params write — what a
     # loadable patch's save reads the spin's pose from and its load sets it on
-    # (`ViewState.pose` / `set_pose`; a registry from before is posed by none)
+    # (`ViewState.pose` / `set_pose`; a registry without a view is posed by none)
     r.view = view
-    # plan 33 S: the switches' picks live on the view state the renderer
+    # The switches' picks live on the view state the renderer
     # reads (`ViewState.switch`); their params come with the loadable patch's graph
     picks = getattr(view, "switch", None)
     if not isinstance(picks, dict):
@@ -2529,7 +2525,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.switch_state = picks
-    # plan 52: the base chase, held. The deck's meta control, so every deck has
+    # The base chase, held. The deck's meta control, so every deck has
     # its own: a pad's BACK (the factory row) or a learned button presses it, and it is `Deck.chase`'s
     # road: `base_chase` with this deck's undo (`chase_undo`)
     r.toggle(CHASE_PARAM, "Base chase", lambda: r.chasing, lambda v: r.base_chase(bool(v)),
@@ -2537,7 +2533,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
              tip="While held, whatever the performers are doing to the look is written "
                  "into its values; let go and the look stays where they left it. One undo "
                  "step per hold.")
-    # plan 34 D: the delays' rate likewise (`ViewState.delay`)
+    # The delays' rate likewise (`ViewState.delay`)
     delays = getattr(view, "delay", None)
     if not isinstance(delays, dict):
         delays = {}
@@ -2546,7 +2542,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.delay_state = delays
-    # plan 34 Z: the resizes' values likewise (`ViewState.resize`)
+    # The resizes' values likewise (`ViewState.resize`)
     sizes = getattr(view, "resize", None)
     if not isinstance(sizes, dict):
         sizes = {}
@@ -2555,7 +2551,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.resize_state = sizes
-    # plan 39 T2: the mattes' values likewise (`ViewState.mattes`)
+    # The mattes' values likewise (`ViewState.mattes`)
     mattes = getattr(view, "mattes", None)
     if not isinstance(mattes, dict):
         mattes = {}
@@ -2564,7 +2560,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.matte_state = mattes
-    # plan 87: the keyed nodes' black is clear likewise (`ViewState.keys`)
+    # The keyed nodes' black is clear likewise (`ViewState.keys`)
     keys = getattr(view, "keys", None)
     if not isinstance(keys, dict):
         keys = {}
@@ -2573,7 +2569,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     vars(r)["key_state"] = keys       # (as `_key_state`)
-    # plan 39 T3: the cuts' values likewise (`ViewState.cuts`)
+    # The cuts' values likewise (`ViewState.cuts`)
     cuts = getattr(view, "cuts", None)
     if not isinstance(cuts, dict):
         cuts = {}
@@ -2582,7 +2578,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.cut_state = cuts
-    # plan 39 T4: the segments' values likewise (`ViewState.segments`)
+    # The segments' values likewise (`ViewState.segments`)
     segments = getattr(view, "segments", None)
     if not isinstance(segments, dict):
         segments = {}
@@ -2607,16 +2603,15 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                  tip=f"Rotate in the {name} plane")
     r.toggle("view.points", "Points", *_attr(view, "points"), group=g)
     r.toggle("view.lines", "Lines", *_attr(view, "lines"), group=g)
-    # plan 24 C2: a mix on the two layers that had none (decision 17), at 1
-    # — the picture as it was (decision 24); patch params, modulatable
+    # A mix on each of the two layers, at 1 (the picture unmixed);
+    # patch params, modulatable
     r.continuous("view.points_alpha", "Points opacity", *_attr(view, "points_alpha"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"points {v:.2f}", group=g,
                  tip="The points' opacity: 1 draws them as they always were, 0 not at all.")
     r.continuous("view.lines_alpha", "Lines opacity", *_attr(view, "lines_alpha"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"lines {v:.2f}", group=g,
                  tip="The lines' opacity: 1 draws them as they always were, 0 not at all.")
-    # plan 26 A2b (owner, 2026-10-14): off — strokes in world space, × the
-    # zoom (main's picture, decision 24); on — screen space, A2's fixed
+    # Off: strokes in world space, × the zoom; on: screen space, a fixed
     # pixel weight. A performance switch like view.lines: in the loadable patch,
     # routable and modulatable
     r.toggle("view.screen_strokes", "Screen strokes", *_attr(view, "screen_strokes"),
@@ -2624,10 +2619,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
              tip="Off: the edges and the dots are drawn in world space — they grow and "
                  "shrink with the shape as you zoom. On: screen space — they keep the "
                  "same pixel weight whatever the zoom.")
-    # plan 64 (register row 884): a fractal's lines and faces sorted on the
-    # CPU (off, the default) or additive and unsorted on the GPU. Not saved
-    # while the owner judges the look; a fractal's alone (fractal.py)
-    # plan 64's fractal section (row 902): what a fractal draws, the look's own —
+    # The fractal section: what a fractal draws, the look's own —
     # persisted params, so undo, the dirty dot and a patch export hold them, but
     # a loadable patch writes them under its optional `fractal` key, only for a
     # fractal (`loadable.FRACTAL_KEY`), never in its values: no other look's
@@ -2648,7 +2640,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                      "octaves: up, cells pass closer; down, they fade sooner. 0 is the "
                      "fractal's own.")
 
-    # plan 81 (row 1011): a fractal's dive rate, levels a second (× 1 / ratio
+    # A fractal's dive rate, levels a second (× 1 / ratio
     # each), signed — a velocity on camera.zoom that `fractal.step` integrates
     # and re-roots, so an LFO, a hand or a knob on it dives without end. Saved
     # and routable as the section's others are (`loadable.FRACTAL_KEY`)
@@ -2730,10 +2722,9 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                + ", ".join(i.name for i in patterns.INPUTS) + ".")
     r.continuous("view.pattern_mix", "Pattern mix", *_attr(view, "pattern_mix"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"mix {v:.2f}", group=g)
-    # plan 32 (row 331): the faces draw a media channel where the one
-    # bitmap file was; alpha, size and path as the bitmap's were. Which
-    # channel is the graph's wire into `pattern.media` (plan 33 T7: no
-    # `view.media` — an old loadable patch's is read as that wire, `graphmigrate`)
+    # The faces draw a media channel; alpha, size and path. Which
+    # channel is the graph's wire into `pattern.media` (there is no
+    # `view.media`; an old loadable patch's is read as that wire, `graphmigrate`)
     r.continuous("view.media_alpha", "Media alpha", *_attr(view, "media_alpha"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"media alpha {v:.2f}", group=g)
     # the default desk's knob 7 (apc40.DEFAULT_MAP, a fresh loadable patch's
@@ -2762,7 +2753,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                      *_item(lambda: view.pattern_mod, k), lo=0.0, hi=2.6,
                      fmt=lambda v: f"{v:.2f}", group="pattern", tip=patterns.tip(k))
 
-    # ---- the media channels (plan 32 C, media/channels.py): the bin entry
+    # ---- the media channels (media/channels.py): the bin entry
     # on each, how it fits a frame, and its transport — all performance,
     # all routable; the bins themselves are the loadable patch's `media` section ----
     g = "media"
@@ -2800,11 +2791,11 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                      taper=tapers.T_MEDIA_GAIN, fmt=tapers.fmt_level, group=g,
                      tip="The channel's sound level, off to +6 dB; unity at the notch.")
 
-    # ---- the backdrop (plan 32 R, row 330): a picture under the scene ----
-    # (which is the graph's wire into `backdrop.image`: plan 33 T7 retired
-    # `backdrop.channel`, an old loadable patch's read as that wire; plan 35 T3
-    # retired `backdrop.history` likewise — what the look-back records is
-    # the wire into `lookback.capture`, `graphmigrate.RETIRED`)
+    # ---- the backdrop: a picture under the scene ----
+    # (which is the graph's wire into `backdrop.image`: `backdrop.channel` and
+    # `backdrop.history` are retired, an old loadable patch's read as that wire —
+    # what the look-back records is the wire into `lookback.capture`,
+    # `graphmigrate.RETIRED`)
     g = "backdrop"
     r.continuous("backdrop.alpha", "Backdrop alpha", *_attr(view, "backdrop_alpha"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"backdrop {v:.2f}", group=g)
@@ -2814,8 +2805,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
     # backwards, and as wide as the reference's plane drive (ROT_RATE_MAX).
     # phase is the integrated angle, folded to one turn: not a base (it moves
     # every frame: no undo step, no dirty dot) but a modulation target — a
-    # lane adds a phase offset on top of the integrator. Plan 43 C2 (row
-    # 573): a loadable patch saves the pose under these ids all the same
+    # lane adds a phase offset on top of the integrator. A loadable patch saves the pose under these ids all the same
     # (`POSE_IDS`, `ViewState.pose`) and its load sets the turn there.
     g = "rot"
     fold = lambda a: math.remainder(a, 2 * math.pi)   # ±π stay put, the rest folds
@@ -2832,7 +2822,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                      fmt=lambda v: f"{math.degrees(v):.0f}°", group=g, persist=False,
                      tip=f"Where the {name} plane is in its turn right now.")
 
-    # the 4D spin back to its origin (2026-10-14, the pad's right-stick click):
+    # the 4D spin back to its origin (the pad's right-stick click):
     # the W planes' rates to 0 through their params (a modulated rate's base
     # too) and their angles to 0, as camera.reset zeroes them all
     w_planes = [(p, name) for p, name in enumerate(PLANES) if name.endswith("W")]
@@ -2841,7 +2831,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         for p, name in w_planes:
             r[f"rot.rate.{name}"].set(0.0)
             view.ang[p] = 0.0
-        view.body = None            # the pose the 3D switch folded in (plan 28)
+        view.body = None            # the pose the 3D switch folded in
 
     r.trigger("rot.reset_w", "Reset 4D spin", reset_w, group=g,
               tip="Stop the XW, YW and ZW planes (rate 0) and turn them back to 0°: "
@@ -2851,7 +2841,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
     g = "camera"
     # the field of thousands needs far more zoom-out than one shape did: a
     # 4096-copy grid at spacing 4 stands 184 screens tall, and 0.005 frames
-    # it (2026-10-21). The ends are geometric about 1×, so the knob's middle,
+    # it. The ends are geometric about 1×, so the knob's middle,
     # a fader at noon and a level hand all sit at 1× — and the range's span
     # (log: 0.005 … 200, 15.3 octaves) is the unit a push's depth is measured
     # in, so the depths onto zoom moved with it (loadable.py)
@@ -2859,14 +2849,14 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                  fmt=lambda v: f"{v:.2f}×" if v >= 0.1 else f"{v:.3f}×", group=g)
     r.continuous("camera.yaw", "Yaw", *_attr(view, "yaw"), lo=-math.pi, hi=math.pi,
                  wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
-    # pitch wraps like yaw (2026-10-14): the camera is a turn of the points,
+    # pitch wraps like yaw: the camera is a turn of the points,
     # with no up vector to flip, so tumbling over the top is just more turn
     r.continuous("camera.pitch", "Pitch", *_attr(view, "pitch"), lo=-math.pi, hi=math.pi,
                  wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
-    # plan 26 A2: zoom and pan are the shape's world scale and position
+    # zoom and pan are the shape's world scale and position
     # (geometry.model_matrix) — the hands stay where the performer is and
     # only the shape grows or moves. Pan is in world units, the shape's
-    # unit circumradius (y positive down, as it always was); a preset/2
+    # unit circumradius (y positive down); a preset/2
     # file's px are converted at load (params.pan_world)
     for i, axis in enumerate("xy"):
         r.continuous(f"camera.pan.{axis}", f"Pan {axis.upper()}", *_item(lambda: view.pan, i),
@@ -2876,7 +2866,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
 
     def reset_view():
         view.ang = [0.0] * 6
-        view.body = None            # the pose the 3D switch folded in (plan 28)
+        view.body = None            # the pose the 3D switch folded in
         view.yaw = view.pitch = 0.0
         view.zoom, view.pan = 1.0, [0.0, 0.0]
         view.dive.reset()           # back out of a self-similar shape (fractal.py)
@@ -2884,14 +2874,12 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
     r.trigger("camera.reset", "Reset view", reset_view, group=g,
               tip="Reset rotation phases, orbit, zoom and pan.")
 
-    # ---- the eye (plan 26 A2): the one fixed camera the shape and the
-    # hands drawn in the scene are seen through. Plan 43 C2 (the owner,
-    # 2026-11-02, rows 555, 574): the loadable patch's, part of the one orbit
-    # camera with `camera.*` — a load lands it like any look value — and
-    # modulatable: a lane breathes the framing (row 182's objection, that
-    # a lane would swing the whole room, went with the eye leaving the
-    # room). The defaults are the old 3D divide, so the shape lands where
-    # it always did; the hands' calibration is fitted to those defaults,
+    # ---- the eye: the one fixed camera the shape and the
+    # hands drawn in the scene are seen through. The loadable patch's, part
+    # of the one orbit camera with `camera.*` — a load lands it like any look
+    # value — and modulatable: a lane breathes the framing (the eye is not
+    # the room's, so a lane cannot swing the whole room). The defaults are the
+    # old 3D divide, so the shape lands where it always did; the hands' calibration is fitted to those defaults,
     # the meta controller's reference eye, never to this one (`ghost.calibration`)
     g = "eye"
     r.continuous("eye.fov", "Eye field of view", *_attr(view, "eye_fov"),
@@ -2908,11 +2896,11 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                      "radii. Nearer: a stronger perspective and a bigger shape. "
                      f"{EYE_DISTANCE:.2f} is the view the shape was always drawn in.")
 
-    # ---- the point clouds (plan 26 A4b): how a cloud device's points are
+    # ---- the point clouds: how a cloud device's points are
     # drawn in the shared camera (graph.PointCloud). Meta controller, like the
     # hands' look: a cloud is the room's sensor, and a loadable patch load never
     # changes how it is shown. Nothing reads them until a `cloud` device
-    # is listed, so they move no picture of today's
+    # is listed, so they move no picture
     g = "cloud"
     r.continuous("cloud.size", "Cloud point size", *_attr(view, "cloud_size"),
                  lo=0.5, hi=12.0, fmt=lambda v: f"{v:.1f} px", group=g,
@@ -2936,16 +2924,15 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
     declare_fx(r, fx)
     fx.on_specs = lambda names: declare_fx(r, fx, names)
     # the effects' state the fx.* params write, for whoever declares more:
-    # a loadable patch's graph holding an effect twice (plan 26 A4,
-    # loadable.GraphSection — `fx.acid.2.*`)
+    # a loadable patch's graph holding an effect twice (loadable.GraphSection — `fx.acid.2.*`)
     r.fx_state = fx
     # the ghost hands' display (ghost.py; the renderer's Ghost.state)
     declare_ghost(r, ghost if ghost is not None else GhostState())
     declare_dial(r)                     # the sticks' dial readings, this deck's
 
-    # ---- macros: the chaining knobs (plan 09, decision 7) ----
+    # ---- macros: the chaining knobs ----
     # Nothing reads a macro but the router, through the macro's subscribers
-    # (routing.Macro, plan 13 §2.4): a base subscriber follows the macro's
+    # (routing.Macro): a base subscriber follows the macro's
     # base, a depth subscriber its effective value — so a hand that
     # positions macro.2 deepens the routes macro.2 subscribes, one frame
     # later, rather than two performers pulling on one param. No object,
@@ -2968,16 +2955,15 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         names = lambda: [n or f"SLOT {k + 1}" for k, n in enumerate(bank.bank)]
         # active is −1 until a loadable patch loads: no choice selected, no LED lit
         # meta-controls: they *apply* loadable patches, so no loadable patch stores them
-        # every slot is a choice (plan 19 WP1: twenty-four); `has` says
+        # every slot is a choice (twenty-four); `has` says
         # which hold a loadable patch, for a pad's "filled" light
         r.enum("preset.select", "Patch", lambda: bank.lit, bank.load_slot, names,
                group=g, persist=False, modulatable=False,
                has=lambda k: 0 <= k < len(bank.bank) and bank.bank[k] is not None,
-               # a pad held on an empty slot saves the live state into it
-               # (2026-10-09, replacing the clip-stop SAVE AS bar); a filled
+               # a pad held on an empty slot saves the live state into it; a filled
                # slot held only loads — the press loaded it
                held=bank.save_empty,
-               # SAVE held and a pad tapped (plan 24 C1): a new loadable patch into
+               # SAVE held and a pad tapped: a new loadable patch into
                # that slot, filled or empty; the old loadable patch stays listed
                save_into=bank.save_into,
                tip="The install's twenty-four pads: the desk's clip rows 1, 4 and 5, the "
@@ -2989,8 +2975,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                    "touches the room; it is lit for what that deck holds. The panel's "
                    "own load goes to the deck the panel is on.")
         # the F-keys' slots have a load and a save trigger each; slots past
-        # them are reached through `preset.select` and the page (plan 19
-        # fork 1: no params added)
+        # them are reached through `preset.select` and the page (no params added)
         for k in range(min(len(bank.bank), F_KEYS)):
             r.trigger(f"preset.load.{k}", f"Load patch {k + 1}",
                       lambda k=k: bank.load_slot(k), group=g,
@@ -2998,8 +2983,8 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                           "The room does not move.")
             r.trigger(f"preset.save.{k}", f"Save patch {k + 1}",
                       lambda k=k: bank.save_slot(k), group=g, modulatable=False)
-        # save-as into the next empty slot (plan 15 WP4): no desk row any
-        # more, learnable onto a pad button, never a loadable patch's row (row 752)
+        # save-as into the next empty slot: no desk row,
+        # learnable onto a pad button, never a loadable patch's row
         r.trigger("preset.save_new", "Save as a new patch", bank.save_new,
                   group=g, modulatable=False,
                   tip="Save the live state as a new patch, named from the loaded "
@@ -3012,9 +2997,9 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         r.trigger("preset.prev", "Previous patch", lambda: bank.cycle(-1), group=g,
                   tip="Load the previous filled pad's patch into the deck off air. The "
                       "room does not move.")
-        # the preset list, not the bank (2026-10-14): they step what the PRESETS
+        # the preset list, not the bank: they step what the PRESETS
         # page lists, saved ones included. No factory row: a pad button's Learn or
-        # the bindings file puts them on a control, never a loadable patch's row (row 700)
+        # the bindings file puts them on a control, never a loadable patch's row
         r.trigger("preset.list.next", "Next patch in the list", lambda: bank.walk(1),
                   group=g,
                   tip="Load the next patch of the PATCHES section's list — every "
@@ -3025,7 +3010,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                   group=g,
                   tip="Load the previous patch of the PATCHES section's list into the deck "
                       "off air, wrapping at the start. The room does not move.")
-        # home (plan 15 WP2, decision 27): the show's startup loadable patch. Lit
+        # home: the show's startup loadable patch. Lit
         # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,
                   lit=lambda: bool(bank.startup),

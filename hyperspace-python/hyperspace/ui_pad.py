@@ -22,7 +22,7 @@ What is lit is what a control **does**:
   depth). Such a lane is lit with its label in grey — nothing in the
   table, nothing to unbind, the app's own hand on it, as a grey label on
   the desk is a row that is the meta controller's;
-* a stick a route reads as a dial (``axis:L.NE`` …, plan 28) shows its eight
+* a stick a route reads as a dial (``axis:L.NE`` …) shows its eight
   sectors in its well, each filled to how far it reads, and its X and Y say
   "Left dial · petal" in grey: off the camera job, the reading the panel's
   deck's (`pad.dial.*`);
@@ -39,7 +39,7 @@ applied, this is the hardware. With no pad (none connected, or
 ``[gamepad] enabled = false``) the picture is the same, drawn from the
 table alone, and the header says so.
 
-**The pad in hand** (plan 42): the picture is the model read
+**The pad in hand**: the picture is the model read
 (`gamepad.layout_for`, `gamepad.shown_model` — while lost, the one the
 entry's ``controller =`` names): a DualSense or an Edge draws its own
 glyphs (✕ where an Xbox pad's A is), its touchpad with each finger on it
@@ -47,7 +47,7 @@ glyphs (✕ where an Xbox pad's A is), its touchpad with each finger on it
 (every ``motion:`` row), the Edge's back and Fn buttons, and the light
 bar's colour beside the header's word.
 
-**Node mode (N2):** a control node mode fills is outlined in its cable's colour
+**Node mode:** a control node mode fills is outlined in its cable's colour
 (`ui_desk._edge`), faint with the pad on the other `Deck`, and says the param it
 holds; the header counts them.
 
@@ -133,7 +133,7 @@ def rows(table, model=None, role: str = "") -> dict[str, Binding]:
             continue
         # (the window's controls are the primary's: a second pad's row is not on them)
         poles = pair_poles(":".join(b.parts)) if b.scheme == PAIR_SCHEME and not b.device else None
-        for pole in poles or ():         # plan 56: a pair's row is on both its poles
+        for pole in poles or ():         # a pair's row is on both its poles
             out.setdefault(pole.source, b)
         c = gamepad.control_in(every, b.source)
         if c is not None:
@@ -362,7 +362,7 @@ def lane(pad, name: str) -> float:
 def _stick(pad, c: gamepad.Control) -> tuple[float, float]:
     """Where a stick is, each in [-1, 1], x right and y **down** (what a
     draw list wants); (0, 0) with no pad."""
-    # by the control, not its glyph: a Sony face calls the left stick L3 (plan 42)
+    # by the control, not its glyph: a Sony face calls the left stick L3
     xa, ya = ("LX", "LY") if c.source == "pad:LSTICK" else ("RX", "RY")
     return 2 * lane(pad, xa) - 1, 1 - 2 * lane(pad, ya)
 
@@ -403,7 +403,7 @@ def label(panel, c: gamepad.Control, b: Binding | None) -> str:
     learn = "right-click a param → Learn pad, then press it here"
     model = gamepad.shown_model(getattr(panel, "pad", None))
     other = gamepad.paired_with(c.source, model)
-    if other is not None:             # plan 56: one degree of freedom with its partner
+    if other is not None:             # one degree of freedom with its partner
         word = gamepad.models.glyph(model, gamepad.models.glyph_name(other),
                                      gamepad.glyph(other) or other)
         learn += f"\none axis with {word}: right-click a param → Learn pair"
@@ -486,7 +486,7 @@ def _lanes(pad, which: str) -> dict[str, float]:
 def _touchpad(dl, pad, c: gamepad.Control, x0: float, y0: float, x1: float, y1: float,
               edge: int, on: bool) -> None:
     """The touchpad: its face (red while clicked) and each finger on it,
-    where it is (plan 42)."""
+    where it is."""
     down = held(pad, c)
     face = ui.u32(ui.RED) if down else ui.u32(_OFF if on else _DARK)
     dl.add_rect_filled(_v(x0, y0), _v(x1, y1), face, 4.0)
@@ -504,7 +504,7 @@ def _touchpad(dl, pad, c: gamepad.Control, x0: float, y0: float, x1: float, y1: 
 def _tilt(dl, pad, cx: float, cy: float, r: float, edge: int, on: bool) -> None:
     """The tilt bubble: a well with a dot where the pad leans — right
     side down to the right, the far edge up upward — its ring red on a
-    shake (plan 42)."""
+    shake."""
     m = _lanes(pad, "motion")
     dl.add_circle_filled(_v(cx, cy), r, ui.u32(_WELL))
     ring = ui.u32(ui.RED) if m.get("shake") else edge
@@ -770,7 +770,7 @@ def _node_word(panel, table) -> None:
 
 
 def totem_word(reg) -> tuple[str, str] | None:
-    """The totem's word for the header (plan 47, an experiment): "totem
+    """The totem's word for the header: "totem
     off", or the three live planes (``totem YZ · XZ · ZW``); None with no
     totem in the registry. The hover is the button map."""
     state = getattr(reg, "totem", None)
@@ -807,7 +807,7 @@ def _totem(panel) -> None:
 
 
 def poi_word(reg, pad=None) -> tuple[str, str] | None:
-    """The poi's word for the header (plan 47, the poi): "poi off", or its
+    """The poi's word for the header: "poi off", or its
     dials (``poi 1.00 · 0.30 · 0.20``: length, weight, springiness); None
     with no poi in the registry. `pad`, the one drawn: a Joy-Con is told it can't drive it."""
     state = getattr(reg, "poi", None)
@@ -948,7 +948,7 @@ def _drawn(panel, table) -> None:
         imgui.text_disabled("no table")
         return
     view = view_of(panel)
-    if view != "map":          # plan 42's readouts: the room is the map's, so the desk keeps
+    if view != "map":          # the room is the map's, so the desk keeps
         origin = imgui.get_cursor_screen_pos()
         avail = imgui.get_content_region_avail()
         ui_pad_views.draw(

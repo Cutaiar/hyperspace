@@ -1,13 +1,13 @@
-"""The palette's old ids read as its slice (plan 30 N8, the owner 2026-10-20).
+"""The palette's old ids read as its slice.
 
-Plan 24 C6's palette folded every hue onto ``centre`` ± ``width``/2 and
+The old palette folded every hue onto ``centre`` ± ``width``/2 and
 rescaled saturation and value into ``sat_lo``–``sat_hi`` and
-``val_lo``–``val_hi``. Since N8 it compresses the HSV cylinder into a
+``val_lo``–``val_hi``. The palette now compresses the HSV cylinder into a
 closed slice: ``hue_from`` → ``hue_to`` turned by ``hue_turn``,
 ``sat_from`` → ``sat_to``, ``val_from`` → ``val_to``. A document saved
-before carries the old ids; `palette_slice` reads it in the new ones, on
-every load (like plan 26 A2's camera.pan, `params.pan_world`: silent, and
-the next save writes the new keys), so the look comes back:
+with the old ids is read by `palette_slice` in the new ones, on every
+load (silent, like the camera.pan migration to `params.pan_world`; the
+next save writes the new keys), so the look comes back:
 
 - **values**: ``hue_from`` = centre − width/2 and ``hue_to`` = centre +
   width/2, wrapped into 0–360 (centre 200, width 60 → 170 → 230; width

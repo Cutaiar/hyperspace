@@ -1,4 +1,4 @@
-"""What a file both Macs share needs, whatever it holds (wave 5 CT1, SC2): the worker no
+"""What a file both Macs share needs, whatever it holds: the worker no
 stalled Drive can hold up, a whole write, and a stat that says a folder has gone. `devicelist`
 and `displays` each keep their own merge and their own words. No GL, no imgui, nothing of the
 package.

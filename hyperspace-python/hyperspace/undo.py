@@ -1,4 +1,4 @@
-"""Undo — one step per gesture, whatever wrote it (plan 15 WP1, decision 26).
+"""Undo — one step per gesture, whatever wrote it.
 
 Nothing tells this module *which* parameter was written; a counter says that
 something was (`reg.writes`, writes.py), and a frame it has not moved in costs
@@ -13,8 +13,8 @@ wrote it (the panel, a key row, a MIDI row, the mouse).
 
 A performer makes no step: a hand, a band or an LFO writes an *offset*
 (`Router.modulate`), not the base, and the fingerprint reads bases. Two write
-the base, each keeping its own one step open (`Undo.keep_open`): a `turn` row
-(plan 51 O2), one step per clutch closure, and the base chase (plan 52). The
+the base, each keeping its own one step open (`Undo.keep_open`): a `turn` row,
+one step per clutch closure, and the base chase. The
 frame a performer takes a param, and the frame it lets go, the base can
 move in its last bits (the norm round trip in `Param.modulate` /
 `Param.apply`), so two fingerprints are *the same* when every float pair
@@ -41,13 +41,13 @@ a trigger, and not in `EXCLUDED_GROUPS` (the clock: a tap burst rewrites
 angles (`rot.phase.*`), selections, the panel's own state, transport and
 the meta controller's output settings are all `persist=False`.
 
-**Three stacks** (plan 44 D5b, the owner's design, 2026-11-04): one `Undo` per
+**Three stacks**: one `Undo` per
 `Deck`, scoped to its loadable patch (`only`: `deck.in_patch`), and one for the meta
 controller over `MetaRegistry` and `MetaTable` (`install_meta`,
 `deck.meta_stack`). The second watches the meta params, whose tuning is done before a performance and
 not during one, the meta controller's rows of the table (keys, pad,
 invariant and global-layer MIDI rows, sinks) and who holds what (`moves`:
-`deck.MetaPlayers`, row 740). Those rows live in `bindings.json` and the players in
+`deck.MetaPlayers`). Those rows live in `bindings.json` and the players in
 `players.json` the moment they change, so their restores (`MetaTable.set_rows`,
 `MetaController.put_players`) write those files: the two writes a restore makes.
 
@@ -57,9 +57,9 @@ in a meta section or on a meta param (`where`), which takes the meta stack. Neve
 ago, and never the panel's focus, which says nothing of where you are an hour on.
 Pressing it never crosses over: a stack with nothing says so. On the meta stack the
 player screen (`BOARD`) answers for a player's moves and every other place for the
-rest (`_not_its_own`, row 800).
+rest (`_not_its_own`).
 
-**The latch** (the owner, 2026-11-06, row 753): a stack you have just come to takes
+**The latch**: a stack you have just come to takes
 nothing back until you change something on it. Whenever focus comes to a stack it
 latches shut (`latched`); ⌘Z and ⇧⌘Z there refuse, in words, and touch no history; the
 first push after that opens it, and ⌘Z then goes all the way down, older steps
@@ -67,7 +67,7 @@ included. Focus (`_focused`) is not where the mouse is: `here` follows the mouse
 one passing over a section is no event. It moves on three acts only: the panel moving
 the stack ⌘Z reaches (`install`), a ⌘Z pressed at a stack, and the person's own change
 in the panel (`by_hand`, read from the panel's input and reported by a text field's own
-writers, row 757), whose stack is the edited param's own, so a popup over another
+writers), whose stack is the edited param's own, so a popup over another
 section cannot mislead it. A controller's change opens the stack in focus and never
 moves the focus, wherever the mouse is; a held step (`keep_open`) opens nothing. A
 change out of focus opens nothing, and coming back latches it again. Two things shut the
@@ -82,7 +82,7 @@ a `band.*` value is put back only when the tag is the same as when the
 state was taken — a strip's values never land on another band. A load
 step carries the layout in its marks and puts it back first.
 
-**A move written another way** (plan 81 follow-up, row 1018): a fractal's dive
+**A move written another way**: a fractal's dive
 writes camera.zoom's and camera.pan's bases every frame it runs
 (`Param.follow`: a re-root, the dive rate, the settle) — the same picture, not
 an edit. The watcher reads a base less what `follow` moved it (`_drift`), so
@@ -92,7 +92,7 @@ made since, so an undo never yanks the dive back to where it stood. A step
 also holds what lives beside the camera (`beside`: the dive's framing,
 `Dive.frame`), put back only when a restore writes the camera.
 
-The modulator banks (plan 31 B: the LFOs) are not that: adding or
+The modulator banks (the LFOs) are not that: adding or
 removing an LFO is a step, pushed by the panel's chip like a modifier's.
 Each state holds every bank's ids beside the modifiers, and a restore
 puts the membership back before the bases — a voice that returns is
@@ -115,13 +115,13 @@ from operator import attrgetter
 from typing import Any
 from weakref import WeakKeyDictionary, ref
 
-SETTLE_S = 0.4        # quiet time that ends a step. Plan 18's knob slew must stay under it.
+SETTLE_S = 0.4        # quiet time that ends a step. The knob slew must stay under it.
 LIMIT = 100           # steps kept; the oldest goes first
 ABSORB_FRAMES = 2     # frames after a restore whose changes are the restore's own
 REL_TOL, ABS_TOL = 1e-9, 1e-12
-EXCLUDED_GROUPS = ("tempo",)          # the clock (plan 15 fork 5)
+EXCLUDED_GROUPS = ("tempo",)          # the clock
 # groups whose params are watched as part of the table, not as bases: the
-# modifiers' (plan 28 N1) — adding one declares its params, and a step must
+# modifiers' — adding one declares its params, and a step must
 # hold the node and its params together (`table.modifiers_doc(reg)`)
 TABLE_GROUPS = ("mod",)
 PASSES = 3            # restore passes: a setter with side effects (scene.select) needs a second
@@ -156,7 +156,7 @@ def _same(a, b) -> bool:
 def alike(a, b) -> bool:
     """Two snapshots, or two signatures holding them (dicts, tuples and
     lists, nested): the same shape and keys, every leaf `_same`. What a
-    dirty dot compares with (library.py; plan 16 WP7): a base a performer
+    dirty dot compares with (library.py): a base a performer
     took and gave back differs from the file's in its last bits only, and
     that is not an edit — one detent of any param is far outside it. A
     whole number in a file (`"camera.zoom": 1`) is a number like any
@@ -260,14 +260,14 @@ class State:
     macros: dict
     tag: Any = None
     marks: Any = None
-    modifiers: Any = None     # the modifiers' document (plan 28 N1); None: not taken
-    banks: Any = None         # each bank's ids by scheme (plan 31 B); None: not taken
+    modifiers: Any = None     # the modifiers' document; None: not taken
+    banks: Any = None         # each bank's ids by scheme; None: not taken
     # how much of a route's offset each base held then, those that held any
-    # (the base chase's ledger, plan 52), so a base goes back with its own
+    # (the base chase's ledger), so a base goes back with its own
     trims: Any = None
-    rows: tuple = ()          # the meta controller's rows (`deck.MetaRows`, plan 44 D5b)
-    moves: Any = None         # who holds what and who is where (`Undo.moves`, row 740)
-    # plan 81 follow-up (row 1018): how far `Param.follow` had moved each base
+    rows: tuple = ()          # the meta controller's rows (`deck.MetaRows`)
+    moves: Any = None         # who holds what and who is where (`Undo.moves`)
+    # how far `Param.follow` had moved each base
     # then, those it had moved; and what lives beside the camera (`beside`)
     drift: Any = None
     beside: Any = None
@@ -286,7 +286,7 @@ class Step:
     # a step that is not a load: every group's landed name and reference
     # as of the last quiet frame before it (`marks.lands()`), for `mend`
     lands: Any = None
-    then: Any = None          # `Undo.moves.then()` as the step began (row 800)
+    then: Any = None          # `Undo.moves.then()` as the step began
 
 
 class Undo:
@@ -305,20 +305,20 @@ class Undo:
     name (`scene.select` adopts its scene), and `mend` puts those back. `tag` (optional)
     is a callable naming the shape the `tagged` id prefixes live on.
     `on_restore` is called after every restore's writes. `banks`
-    (optional) is the modulator banks by scheme (plan 31 B: the LFOs), or
+    (optional) is the modulator banks by scheme (the LFOs), or
     a callable returning them: each has `doc()` (its ids) and `set(ids)`;
     a step holds their membership and a restore puts it back before the
     bases, so a voice's params exist before their values land. `only`
     (optional) narrows `watched` to the params this stack is for: a `Deck`'s
-    takes those of its loadable patch (plan 44 D5b). A `table` with `rows` and
+    takes those of its loadable patch. A `table` with `rows` and
     `set_rows(rows)` (`deck.MetaRows`) has those watched too. `moves` (optional:
-    `deck.MetaPlayers`, row 740) is one more part of what a step holds: `doc()` to
+    `deck.MetaPlayers`) is one more part of what a step holds: `doc()` to
     compare and hold; `then()`, what a step must remember of the moment it began and
     `doc` does not hold, kept on the `Step`; `put(doc, then)` to restore it;
     `refuses(doc, then)`, the words why it may not go back now (else None, and the step
     stays where it is, as under the latch); `trouble()`, what went wrong in the last
     `put`, for the status; and `heard`, what ⌘Z last said over the board, for its line.
-    `beside` (optional: `deck.DiveFrame`, row 1018) is state the camera's bases
+    `beside` (optional: `deck.DiveFrame`) is state the camera's bases
     carry with them that no param holds: `ids`, the params it goes with; `take()`
     to hold; `continues(then, now)`, whether the follows made between two takes
     are to be kept on a restore (else bases go back as they were);
@@ -327,10 +327,10 @@ class Undo:
 
     only = None      # on the class: a live `Undo` from before a hot reload has it
     moves: Any = None     # …and this
-    latched = False  # …and these: ⌘Z refuses here until a new push (row 753)
+    latched = False  # …and these: ⌘Z refuses here until a new push
     called = "here"  # how the refusal names this stack ("on deck 2"; `MetaController`)
     _opens = False   # the open step began on focus: when it lands it opens the latch
-    beside: Any = None    # …and these (row 1018)
+    beside: Any = None    # …and these
     _seen: Any = None     # …and these: `reg.writes` as the last fingerprint began
     _seen_every: Any = None    # …and the registry's params, the very list it read
     _reading: Any = None
@@ -415,13 +415,13 @@ class Undo:
 
     def _mods(self) -> list:
         """The table's modifiers as a loadable patch holds them, their params at
-        their bases (plan 28 N1); [] for a table with none or no such call."""
+        their bases; [] for a table with none or no such call."""
         doc = getattr(self.table, "modifiers_doc", None)
         return doc(self.reg) if doc is not None else []
 
     def _banks(self) -> dict:
         """The banks by scheme; none for an Undo built without (or from
-        before plan 31 B, a hot reload re-classes and never re-inits)."""
+        before banks existed, a hot reload re-classes and never re-inits)."""
         banks = getattr(self, "banks", None)
         banks = banks() if callable(banks) else banks
         return dict(banks or {})
@@ -572,7 +572,7 @@ class Undo:
         lands = getattr(self.marks, "lands", None)
         return lands() if lands is not None else None
 
-    # ---- a step a held control keeps open (plan 52, the base chase) ----
+    # ---- a step a held control keeps open (the base chase) ----
 
     # on a class: a live `Undo` from before a hot reload reads them
     _kept: Step | None = None     # the step no quiet closes
@@ -911,18 +911,18 @@ class Undo:
             # 4. the macros
             if table.macros_doc() != state.macros:
                 table.set_macros(state.macros, reg)
-            # 4¼. the meta controller's rows (plan 44 D5b): through the table's
+            # 4¼. the meta controller's rows: through the table's
             #     own call, which writes `bindings.json`, where they live
             if _rows(self._table_rows()) != _rows(state.rows):
                 table.set_rows(self._rows_for(state.rows, self._table_rows()))
-            # 4⅓. who holds what and who is where (row 740), through the meta
+            # 4⅓. who holds what and who is where, through the meta
             #     controller, which writes `players.json`, where they live
             if getattr(state, "moves", None) is not None and self._moves_doc() != state.moves:
                 self.moves.put(state.moves, then)
-            # 4½. the modifiers and their params (plan 28 N1)
+            # 4½. the modifiers and their params
             if state.modifiers is not None and not alike(self._mods(), state.modifiers):
                 table.set_modifiers(state.modifiers, reg)
-            # 4¾. the banks' membership (plan 31 B): a voice that comes back
+            # 4¾. the banks' membership: a voice that comes back
             #     is declared fresh here, and step 5 lands its bases
             if state.banks is not None:
                 banks = self._banks()
@@ -959,7 +959,7 @@ class Undo:
                     break
                 wrote.update(todo)
                 reg.restore(todo, trims=state.trims)
-            # 5½. what lives beside the camera (row 1018: the dive's framing),
+            # 5½. what lives beside the camera (the dive's framing),
             #     with it: only when this restore wrote the camera
             beside = getattr(self, "beside", None)
             if beside is not None and wrote.intersection(beside.ids):
@@ -1104,7 +1104,7 @@ BOARD = "board"       # what `where` says over the player screen: the meta stack
 
 def here() -> Undo | None:
     """The stack ⌘Z acts on: the meta controller's inside a meta section, else
-    that of the panel's `Deck` (the owner, 2026-11-04). Never the newest of them.
+    that of the panel's `Deck`. Never the newest of them.
     None where `where` says None: there, nothing is taken back (a playlist's section);
     and with no stack installed. `_on_no_stack` tells the two apart."""
     inside = _inside()
@@ -1143,7 +1143,7 @@ def _over_board() -> bool:
 
 
 def _not_its_own(at: Undo, verb: str) -> bool:
-    """A section takes back only its own (row 800): on the meta stack the board answers for
+    """A section takes back only its own: on the meta stack the board answers for
     a player's moves and every other place for the rest. One stack and one order, so the step
     a press would reach may be the other's: said, and no history moves. So a setting is not
     taken back from an unrelated screen, nor a device reopened from the HANDS section."""
@@ -1192,7 +1192,7 @@ def _begun_on(u: Undo) -> bool:
 
 def by_hand(on: bool) -> None:
     """Is the person working the panel, as of its latest draw (`ui_pane.left`), or has a
-    text field just written (its writer, row 757)? It holds to the next draw's `left`, so
+    text field just written (its writer)? It holds to the next draw's `left`, so
     a stack's tick, which comes first in the frame, reads it. No panel: never, and a
     change opens only the stack in focus."""
     global _hand
@@ -1280,14 +1280,14 @@ def push(label: str, *, load: bool = False) -> None:
 
 def push_on(reg, label: str, *, load: bool = False) -> None:
     """`Undo.push` on the stack over `reg` (`watching`), whichever is installed
-    (plan 44 D5a: a load into a deck the panel is not on opens no step on
+    (a load into a deck the panel is not on opens no step on
     the panel's); no such stack: the installed one, as `push`."""
     u = watching(reg)
     if u is None or u is _installed:
         push(label, load=load)
     else:
         _guarded("push", lambda v: v.push(label, load=load), on=u)
-        if load:                              # a pad, a copy, with the panel on air (row 753)
+        if load:                              # a pad, a copy, with the panel on air
             _await_load(u)
 
 

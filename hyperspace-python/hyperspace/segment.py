@@ -1,5 +1,4 @@
-"""The segment worker — a person matte off the frame thread (plan 39 T4,
-W4; decisions 3, 4, 5; the spike is docs/plans/assets/39-vision/).
+"""The segment worker — a person matte off the frame thread.
 
 The `segment` node (graph.SegmentNode) cuts any picture into its
 foreground and its background by a matte. In `person` mode the matte is a
@@ -32,7 +31,7 @@ imported there and never on `import hyperspace.app` (tests/test_app_boundary.py)
   thread is Python's, with no pool of its own, and without one every
   autoreleased object of a run (the frame's NSData copy first of all)
   leaked for the life of the process — ~1 MB a job, 140 GB over a
-  half-hour set (2026-11-01). Vision's mask has a fixed size per level (256×192, 512×384,
+  half-hour set. Vision's mask has a fixed size per level (256×192, 512×384,
   2016×1512) stretched over the whole image, so it is resampled here to
   the frame's aspect at its own width: a consumer fits it by cover, as it
   fits every mask.
@@ -195,7 +194,7 @@ class VisionBackend(Backend):
             q.CVPixelBufferUnlockBaseAddress(pb, 1)
 
     def run(self, frame: np.ndarray, quality: str = "fast") -> np.ndarray:
-        # Every run under its own autorelease pool (2026-11-01): the worker is
+        # Every run under its own autorelease pool: the worker is
         # a plain Python thread, which has none, and without one each
         # autoreleased object — the NSData holding the frame's copy, the
         # results array, the matte's pixel buffer — lives for ever: ~1 MB a
@@ -254,9 +253,8 @@ def find_weights(weights_dir: Path) -> Path | None:
 
 
 def _shared_model(device, dtype, weights_dir: Path):
-    """The one LR-ASPP model per device and precision, every worker's
-    (decision 4's "the torch backend shares one model"): built on the first
-    ask, weights found or downloaded (announced on stderr), frozen, in eval."""
+    """The one LR-ASPP model per device and precision, every worker's,
+    built on the first ask, weights found or downloaded (announced on stderr), frozen, in eval."""
     key = (str(device), str(dtype))
     with _SHARED_LOCK:
         got = _SHARED.get(key)

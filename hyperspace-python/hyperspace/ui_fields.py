@@ -20,9 +20,9 @@ modulation dot (`_mod_dot`) and a picked desk control (`_ctx_pick`, through
 - `toggles`: TOGGLEs side by side as one joined group, lit while on;
 - `button`: a TRIGGER — the kit's Button;
 - `pad`: two or three CONTINUOUS params as one XY pad (an XYZ volume with a
-  third), a knob for each (plan 82).
+  third), a knob for each.
 
-Every CONTINUOUS fader is drawn by its `Shape` (plan 82): unipolar, filled
+Every CONTINUOUS fader is drawn by its `Shape`: unipolar, filled
 from the left; bipolar, filled from its zero with a detent there; unity, a
 multiplier filled from its 1 with a detent there; and a stepped (integer)
 one with a tick per step, thinned where they would crowd.
@@ -212,7 +212,7 @@ def _slider(panel, k, a, p, x, y, w, h, box=None) -> bool:
         panel.ghosts += 1
     if not changed:
         return False
-    undo.by_hand(True)                      # (typed into it, or dragged: row 757)
+    undo.by_hand(True)                      # (typed into it, or dragged)
     if p.taper is not None:
         pos = round(nv)
         if pos == p.position():
@@ -225,7 +225,7 @@ def _slider(panel, k, a, p, x, y, w, h, box=None) -> bool:
     return True
 
 
-# ---------------------------------------------------------------- shapes (plan 82)
+# ---------------------------------------------------------------- shapes
 #
 # One abstraction draws every continuous fader: what kind of quantity it is
 # says where its fill starts, where its detent is, and whether it has steps.
@@ -236,7 +236,7 @@ TICK_STRIDES = (1, 2, 4, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000)
 
 @dataclass(frozen=True)
 class Shape:
-    """How a CONTINUOUS param's fader is drawn (plan 82).
+    """How a CONTINUOUS param's fader is drawn.
 
     - `polarity`: UNIPOLAR (0..1-like, rests at 0 or the top: filled from
       the left), BIPOLAR (symmetric, neutral at 0: filled from the centre,
@@ -276,7 +276,7 @@ def polarity(lo: float, hi: float, log: bool, default: float | None, said: str =
     """A continuous range's class: `said` when the effect file says it
     (`bipolar` / `unipolar` on its `@param` line); else BIPOLAR for a range
     across 0 whose default is 0 (or unknown: a param that is no effect's
-    has none to read, and its fill started at 0 before plan 82); UNITY for
+    has none to read); UNITY for
     a multiplier whose default is 1 in the middle of its range — linear
     about 1 (lo + hi = 2: Hue cycle's saturation) or log about 1 (lo · hi
     = 1: Kaleidoscope's zoom, Blocks' aspect); else UNIPOLAR."""
@@ -375,7 +375,7 @@ def _snap(p, shape: Shape, nv: float, span: float) -> float:
     return shape.neutral if abs(t - shape.detent) * span <= ui.DETENT_PX else nv
 
 
-# ---------------------------------------------------------------- pads (plan 82)
+# ---------------------------------------------------------------- pads
 #
 # An XY pad replaces a pair of sliders (`@pair` in an effect file), an XYZ
 # volume a triple (`@volume`): a square a click or a drag sets X and Y on,
@@ -621,7 +621,7 @@ def knob(panel, k, a, p, x, y, words: str, room: float | None = None):
     hh = head_h()
     # the readout, each line inside the knob's column `room`: its letter and
     # the base, then — a lane riding it — "→ effective" on a line of its own
-    # (`base → effective` on one line ran past the column, row 1028)
+    # (`base → effective` on one line runs past the column)
     room = ui.KNOB_COL if room is None else room
     col = ui.RED if p.modulated else ui.TEXT
     value = p.text()
@@ -1201,5 +1201,5 @@ def inline_raw(panel, key: str, value: float, lo: float, hi: float, fmt: str, ti
         text(k.dl, x + track + gap, y, fh, shown, font, size, col)
     ui_kit.end_block((x, y, w, fh))
     if changed:
-        undo.by_hand(True)                  # (typed into it: row 757)
+        undo.by_hand(True)                  # (typed into it)
     return changed, v

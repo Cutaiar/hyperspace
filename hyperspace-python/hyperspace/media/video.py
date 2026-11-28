@@ -8,16 +8,16 @@ to RGBA. When a scrub proxy exists (see `proxy.py`) the clip is read from
 that, so every frame is a keyframe; when there is none and the clip is
 short, one is queued on the proxy worker for the next open.
 
-**The soundtrack** (plan 45, V1). A video's audio track is decoded to
+**The soundtrack.** A video's audio track is decoded to
 memory by a `Soundtrack` on a second thread of the source's own
 (`media-audio-<name>`), always from the original file (a proxy is MJPEG
-with no audio), as float32 stereo at `AUDIO_RATE`, so the mixer (V2) adds
+with no audio), as float32 stereo at `AUDIO_RATE`, so the mixer adds
 every track in one buffer at one rate. **The transport is the one clock
 and the soundtrack is its slave**: the same `want(t)` the video thread
 follows reaches the soundtrack, which keeps the samples around that
 position; nothing here has a clock, a stream or a playhead of its own,
-and V4 reads samples by the transport's position. **Nothing is read until
-something asks for sound** (`Soundtrack.enable`, V2's play-audio toggle):
+and the sound reads samples by the transport's position. **Nothing is read until
+something asks for sound** (`Soundtrack.enable`, the play-audio toggle):
 a window decode demuxes the video's packets too, so an unheard soundtrack
 would read the whole clip for nothing. **The memory policy**: a track of
 `AUDIO_WINDOW_S` or less is held whole (static, never re-decoded; its
@@ -51,8 +51,8 @@ SEQUENTIAL_S = 1.0      # moving forward this far or less: decode on, no seek
 _IDLE_S = 0.05
 CLOSE_JOIN_S = 1.0      # how long close waits for the thread; then it is abandoned
 
-# the soundtrack (plan 45 V1)
-AUDIO_RATE = 48_000     # every track is resampled to this: the mixer's one rate (V2)
+# the soundtrack
+AUDIO_RATE = 48_000     # every track is resampled to this: the mixer's one rate
 AUDIO_CHANNELS = 2      # stereo, by the resampler: mono on both sides at −3 dB (its centre mix), surround downmixed
 AUDIO_WINDOW_S = 120.0  # the memory bound: a longer track is held as this much around the position
 AUDIO_RECENTRE_S = AUDIO_WINDOW_S / 4   # the window follows once the position is this far off its centre
@@ -121,7 +121,7 @@ class _Follower:
     `want(t)` hands it the transport's position (a float store and a wake),
     `close` stops it and joins it `timeout` at most. Each start gets a stop
     event of its own, handed to `_run`: a thread `close` abandoned (stuck in
-    `av.open` on a file still downloading, A-I1) sees *its* stop when the
+    `av.open` on a file still downloading) sees *its* stop when the
     open returns and ends, and can never resume beside the thread a later
     `open` started. A subclass defines `_run(stop)` and keeps `status`."""
 
@@ -176,7 +176,7 @@ class _Window:
 class Soundtrack(_Follower):
     """A video's audio track in memory, following the transport (see the
     module docstring). **Nothing is read until something asks for sound**:
-    `enable()` (V2's play-audio toggle) starts the thread, `disable()` ends
+    `enable()` (the play-audio toggle) starts the thread, `disable()` ends
     it and lets the samples go; until then `status` is OFF and the file is
     not opened — a window decode demuxes the video's packets too, so a
     soundtrack nobody hears would read the whole clip for nothing. Once
@@ -253,13 +253,13 @@ class Soundtrack(_Follower):
         if self._thread is not None and not (self.whole and self._win is not None):
             self._wake.set()        # a whole track held has nothing left to follow
 
-    # -- what V2 reads ----------------------------------------------------
+    # -- what the mixer reads ---------------------------------------------
 
     def read(self, at: int, n: int, out: np.ndarray | None = None) -> np.ndarray:
         """`n` samples from sample `at` (counted at `rate` from the start of
         the clip) as (n, channels) float32: the track where it is held,
         zeros everywhere else. The reader's own array, safe to write —
-        `out[:n]` when the reader hands one in (plan 45 V2: the mixer's
+        `out[:n]` when the reader hands one in (the mixer's
         callback allocates nothing), a new one otherwise."""
         n = max(int(n), 0)
         if out is None:
@@ -278,7 +278,7 @@ class Soundtrack(_Follower):
 
     def holds(self, at: int, n: int) -> bool:
         """Whether all of the `n` samples from `at` are in memory: the mixer's
-        fade (plan 45 V4), so a window arriving or left is not a click.
+        fade, so a window arriving or left is not a click.
         Never blocks: one read of the one reference."""
         w = self._win
         return w is not None and w.start <= at and at + n <= w.end
@@ -466,7 +466,7 @@ def _packed(frame) -> np.ndarray:
 class VideoSource(_Follower):
     kind = "video"
     timed = True
-    audio: Soundtrack | None = None    # the track (plan 45); None on a source made before it
+    audio: Soundtrack | None = None    # the track
 
     def __init__(self, sid: str, path: Path, cap: tuple[int, int] = CAP_FILE,
                  cache: Path | None = None):
@@ -503,7 +503,7 @@ class VideoSource(_Follower):
         (less near the app's exit deadline). A thread stuck in `av.open` (a
         file still downloading) is abandoned: it is a daemon and sees its
         own stop when the open returns, so the closer goes on to the next
-        source (A-I1)."""
+        source."""
         end = time.monotonic() + pool.left(timeout)
         super().close(max(end - time.monotonic(), 0.0))
         if self.audio is not None:

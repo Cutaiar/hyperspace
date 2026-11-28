@@ -1,8 +1,8 @@
-"""Draw-list replay (2026-11-02): the GRAPH canvas drawn again, from its
+"""Draw-list replay: the GRAPH canvas drawn again, from its
 own draw lists, into the control window's `outputs.CanvasTap` — what
 `panel:graph` (`media.panel`) hands a channel.
 
-The owner's ask: the node editor's view — output 1 behind it, the faded
+The node editor's view — output 1 behind it, the faded
 ground, the grid, the nodes and the cables — as a picture a media channel
 can pick, with what is laid over the canvas filtered out. The filter is
 by draw list, not by pixel: imgui keeps one `ImDrawList` per window, each

@@ -1,4 +1,4 @@
-"""The lab's drawings: the pad window's Faithful and Cockpit (plan 42's readouts).
+"""The lab's drawings: the pad window's Faithful and Cockpit.
 
 The browser lab (`prototypes/edge-lab/index.html`, `drawFaithful` /
 `drawCockpit`) draws on an HTML canvas: curved paths, filled outlines,
@@ -183,7 +183,7 @@ def _glyph(r, name: str) -> str:
     return r.glyph(name, _XBOX_WORDS.get(name, name))      # a Joy-Con's own words first
 
 
-# a Joy-Con's inks: the (L)'s neon blue, the (R)'s neon red (plan 46)
+# a Joy-Con's inks: the (L)'s neon blue, the (R)'s neon red
 JOYCON_INK = {"l": "#3fc1ff", "r": "#ff5f6d", "pro": "#9aa7bf"}
 JOYCON_BODY = {"l": "#162738", "r": "#331a22", "pro": "#1a1f2c"}
 
@@ -366,7 +366,7 @@ def faithful(p: Pen, r, st: dict) -> None:
     now = time.monotonic()
     light, players, r_low, r_high, left, right, mic = _sent(r)
     if getattr(r, "nintendo", False) and r.kind in ("l", "r"):
-        _faithful_joycon(p, r, st, now, players, r_low, r_high)   # one Joy-Con, upright (plan 46)
+        _faithful_joycon(p, r, st, now, players, r_low, r_high)   # one Joy-Con, upright
         return
     sony = r.sony
     edge = r.has("back")
@@ -620,7 +620,7 @@ def cockpit(p: Pen, r, st: dict) -> None:
     now = time.monotonic()
     light, players, r_low, r_high, left, right, mic = _sent(r)
     if getattr(r, "nintendo", False) and r.kind in ("l", "r"):
-        _cockpit_joycon(p, r, st, now, players, r_low, r_high)    # one dial, the tilt big (plan 46)
+        _cockpit_joycon(p, r, st, now, players, r_low, r_high)    # one dial, the tilt big
         return
     edge = r.has("back")
     p.rr(0, 0, DESIGN_W, DESIGN_H, 0)
@@ -751,7 +751,7 @@ def _ticker(p: Pen, r, st: dict, now: float) -> None:
         p.text("presses, taps and shakes scroll here", 500, 587, size=12, color="#2b3446")
 
 
-# ---------------------------------------------------------------- a Joy-Con (plan 46)
+# ---------------------------------------------------------------- a Joy-Con
 
 def _rumble_rings(p: Pen, r_low: float, r_high: float, lx, ly, rx, ry) -> None:
     """The rumble as rings: the heavy band at (lx, ly), the light at (rx, ry)."""
@@ -971,7 +971,7 @@ def _six(r) -> dict[str, float] | None:
 
 
 def _scope(p: Pen, r, st: dict, x, y, w, row_h) -> None:
-    """All six degrees of freedom as traces (plan 46): the accelerometer's
+    """All six degrees of freedom as traces: the accelerometer's
     x, y, z in g and the gyro's x, y, z in deg/s, each row the last
     `SCOPE_N` frames scrolling left, its baseline at zero, the value now
     and the chip's own count at the right. The traces are the state kept

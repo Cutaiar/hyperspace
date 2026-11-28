@@ -1,9 +1,9 @@
 """Where the windows open at launch: the config's screen, else where they were.
 
-Two sources, in this order (plan 16 WP4, fork F4):
+Two sources, in this order:
 
 - ``[output] monitor`` / ``control_monitor`` in config.toml — a screen
-  index, or a screen's name (row 771: `match`). At 0 or above, or on a name
+  index, or a screen's name (`match`). At 0 or above, or on a name
   that is connected, the window opens on that screen.
 - ``<home>/windows.json`` — the windowed rects at the last quit (or ⌘R).
   It fills in what the config leaves at −1, and on a configured screen it
@@ -25,16 +25,15 @@ The file::
 
 ``x, y, w, h`` are GLFW screen coordinates of the content area, always the
 *windowed* rect (never a fullscreen or overlay cover: whether a launch is
-fullscreen is the config's say, fork F6). ``render`` is a list, one entry
-per render output in the config's order (plan 21: ``[[output.screens]]``;
+fullscreen is the config's say). ``render`` is a list, one entry
+per render output in the config's order (``[[output.screens]]``;
 one entry with no list), and `place` is called once per window, so
 nothing here assumes how many render windows there are. A file with one
 entry still loads for an install with two: the second opens at its default spot. ``screen`` is the
 name of the screen the rect was on, kept for the note; placement is decided
-by geometry alone. The file is written on quit and on restart only (fork
-F5); delete it to forget.
+by geometry alone. The file is written on quit and on restart only; delete it to forget.
 
-**Since each display's row says what it shows (`displays.py`, SC2),** an output can move
+**Since each display's row says what it shows (`displays.py`),** an output can move
 between displays, so a place in ``render`` says little: a window's spot goes under
 ``displays``, by the display's label, ``{"displays": {"TV #2": {"x": ...}}}``, and that's read
 first (`spot`). The file stays ``/1``: ``render`` is still written, an older build reads it,
@@ -115,11 +114,11 @@ def screens(glfw) -> list[Screen]:
     return out
 
 
-# ---- GRAPH's start zoom (plan 58 SM2) ----
+# ---- GRAPH's start zoom ----
 #
 # Read off the display the control window opens on, by its usable height alone,
-# never its reported millimetres (a 48-inch panel on the owner's Mac says it is
-# 598 mm wide). The show's display is 1080p (the owner, 2026-11-07).
+# never its reported millimetres (a 48-inch panel on a Mac says it is
+# 598 mm wide). The target display is 1080p.
 
 ZOOM_READ = 1.3         # by eye at 1920x1080: words read from a distance, four columns on the canvas
 ZOOM_FULL = 960.0       # a display at least this tall gets ZOOM_READ: 1080p, less a menu bar and a dock
@@ -379,7 +378,7 @@ def _ordinal(want: str) -> tuple[str, int] | None:
 
 
 def match(asked: str, scr: list[Screen]) -> int:
-    """The index of the screen a name asks for, −1 for none (row 771).
+    """The index of the screen a name asks for, −1 for none.
 
     In this order:
     1. "TV #2": the second of the "TV" family across the desk (`_same`).
@@ -527,7 +526,7 @@ def read(key: str, monitor) -> tuple[int, str]:
     is what `int()` reads of it, and −1 for anything under −1; a value
     `int()` will not read (None, a NaN, a name nobody resolved) is −1 with
     the note. The one reading of ``[output] monitor`` / ``control_monitor``
-    (plan 16 WP7) — `config.load`, `place` below and `app._make_output` all
+    — `config.load`, `place` below and `app._make_output` all
     go through it, so a window's screen and the one fullscreen covers agree.
     It never raises. Whether a screen has that index is `place`'s to say."""
     try:
@@ -551,7 +550,7 @@ def place(kind: str, size: tuple[int, int], scr: list[Screen],
     `kind` is "render" or "control"; `monitor` is that window's config
     index (−1: no say; `settle` has made any name one); `remembered` is its entry from the file, or None.
     `what` names the window in the notes in place of `kind` ("output 2",
-    plan 21: one call per render output); it changes nothing else.
+    one call per render output); it changes nothing else.
 
     1. `monitor` ≥ 0 and that screen exists: the remembered rect if it is
        usable and its centre is on that screen; else the default spot there.

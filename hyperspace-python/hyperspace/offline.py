@@ -1,11 +1,11 @@
 """Offline driver: run a WAV through the chain at a fixed frame cadence.
 
-Used by the plan-01 behaviour tests and by future constant-tuning work
-(plan 06). Live capture replaces the file reader in plan 03; the chain
-itself neither knows nor cares. The history ends at the lanes: the
-reference's PLANEDRIVE is a route (routing.legacy_planedrive), and the
-test that needs it computes it from `out` — this module is part of the
-audio stack and imports nothing above it (tests/test_audio_boundary.py).
+Used by the behaviour tests and by constant tuning. The chain itself
+neither knows nor cares whether its frames come from a file or a live
+capture. The history ends at the lanes: the reference's PLANEDRIVE is a
+route (routing.legacy_planedrive), and the test that needs it computes it
+from `out`. This module is part of the audio stack and imports nothing
+above it (tests/test_audio_boundary.py).
 """
 
 from __future__ import annotations

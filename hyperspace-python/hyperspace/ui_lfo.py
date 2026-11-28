@@ -8,8 +8,8 @@ Top to bottom:
                          beats, then tap · trigger · nudge −/+ — the
                          trigger params as buttons — and the bpm and
                          nudge faders on one row
-  lfos   ◀ loadable patch ▶ …    a strip per LFO, by id (four by default, plan 31
-                         B; `+ lfo` on the first strip's head adds one, a
+  lfos   ◀ loadable patch ▶ …    a strip per LFO, by id (four by default;
+                         `+ lfo` on the first strip's head adds one, a
                          strip's `×` removes it — each one undo step). Each:
                          a small scope of two cycles
                          of the shape at the current depth, a hairline
@@ -18,7 +18,7 @@ Top to bottom:
                          line, rate on the next, depth · phase on the
                          third — three rows, so four strips fit.
 
-Above four LFOs (plan 31 U) every strip but one folds to a single line: a
+Above four LFOs every strip but one folds to a single line: a
 thumbnail of one cycle, the name, the live output as a bar, and a chevron
 that opens it. Exactly one strip is open at a time — the selected one,
 kept on the Panel for the meta controller and never saved; a new LFO is selected
@@ -120,7 +120,7 @@ def add_lfo(panel, lfos) -> int | None:
 def remove_lfo(panel, lfos, n: int) -> None:
     """The ×: LFO `n` and its knobs go; the others keep their ids and a
     route on its lane goes dormant. One undo step, with the library's
-    marks (row 563: the LFO may be a GRAPH group's member)."""
+    marks (the LFO may be a GRAPH group's member)."""
     if n not in lfos:
         return
     undo.push(f"delete LFO {n}", load=True)
@@ -179,7 +179,7 @@ def _clock_strip(panel, clock) -> None:
         if ui.chip(f"{tag}##{nudge.id}.{tag}"):
             nudge.step(sign)
         panel._tip(nudge, f"Nudge the downbeat {tip} a hundredth of a beat (APC NUDGE {tag})")
-        panel._ctx(nudge, f".{tag}")    # (two chips, one param: each its own popup, audit U9)
+        panel._ctx(nudge, f".{tag}")    # (two chips, one param: each its own popup)
         panel._learn_frame(nudge)
     imgui.end_group()
     # the two faders side by side, so the clock costs the page one row
@@ -234,7 +234,7 @@ def _strip(panel, lfos, clock, n: int, first: bool = False) -> None:
         ui.tooltip(f"Remove LFO {n} — the others keep their numbers; a route "
                           "from it waits, dormant")
     _scope(lf)
-    # plan 49 stage 2: the knobs beside the scope, or under it where the
+    # the knobs beside the scope, or under it where the
     # room is narrow (the side pane); the two pickers share what the reset
     # chip leaves them
     sp = imgui.get_style().item_spacing.x

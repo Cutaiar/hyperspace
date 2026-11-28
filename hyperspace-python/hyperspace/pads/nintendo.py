@@ -1,10 +1,10 @@
-"""The Joy-Con (and Pro Controller) report format (plan 43), bytes ↔ values.
+"""The Joy-Con (and Pro Controller) report format, bytes ↔ values.
 
 Written from the community's reverse engineering (dekuNukem's
 ``Nintendo_Switch_Reverse_Engineering``: ``bluetooth_hid_notes.md``,
 ``spi_flash_notes.md``, ``imu_sensor_notes.md``, ``rumble_data_table.md``),
 Linux's ``hid-nintendo.c`` and SDL's ``SDL_hidapi_switch.c`` — and checked
-against a real Joy-Con (L) over Bluetooth on macOS (2026-11-02): silent
+against a real Joy-Con (L) over Bluetooth on macOS: silent
 until asked, then report 0x30 at about 62 a second, the sensors on once
 subcommand 0x40 says so. Where only hardware can say, the constant is
 named and the probe (``tools/hid_probe.py``) settles it.
@@ -95,8 +95,8 @@ RECENTRE_SPREAD = 0.1         # …if it moved less than this meanwhile (else a 
 # the long axis toward the shoulder (L / ZL, R / ZR) end, y across it, z up
 # out of the face. Held like a Wii Remote the shoulder end points away, so
 # the pad's x (right) is −y, its y (up out of the face) z, its z (toward the
-# player) −x — **checked on a Joy-Con (L)** (the probe's tilt step,
-# 2026-11-02: the proposed map equalled this one). The (R)'s chip sits the
+# player) −x — **checked on a Joy-Con (L)** (the probe's tilt step
+# found the proposed map equal to this one). The (R)'s chip sits the
 # other way up on its board: Linux's hid-nintendo negates its y and z, so its
 # map is the (L)'s with those two signs flipped — **unverified**, no (R) in
 # hand. The Pro Controller's axes are the (L)'s (no flip in Linux or SDL) —
@@ -127,7 +127,7 @@ _R_BUTTONS = (
     (3, 0x10, "RP"), (3, 0x20, "LP"), (3, 0x40, "RB"),                   # SR SL R
     (4, 0x02, "MENU"), (4, 0x10, "GUIDE"), (4, 0x04, "LSTICK"),          # + HOME R3 (the one stick)
 )
-# the Pro's face by position too (review of #435): byte 3's bits are the (R)'s,
+# the Pro's face by position too: byte 3's bits are the (R)'s,
 # Y X B A, so Y is the left button, X the top, B the bottom, A the right
 _PRO_BUTTONS = (
     (3, 0x01, "W"), (3, 0x02, "N"), (3, 0x04, "S"), (3, 0x08, "E"), (3, 0x40, "RB"),

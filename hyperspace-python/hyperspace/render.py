@@ -1,6 +1,6 @@
 """moderngl renderer — port of the draw() pipeline of hyperspace.html.
 
-Plan 26 A2, one camera: the CPU takes the shape to 3D
+One camera: the CPU takes the shape to 3D
 (geometry.shape_world: per layer, world_points' rotate4, the 4D divide
 and the yaw/pitch turntable) and the vertex shaders take it to the clip
 through one shared 4×4, the eye (`u_vp`, geometry.eye_matrix, the `eye.*`
@@ -8,7 +8,7 @@ params), after each copy's place in the world (`in_inst`, below: the
 camera's zoom and pan are a copy's scale and centre). The default eye
 is project_h's old 3D divide, so at zoom 1 and pan 0 every vertex lands
 within a ten-thousandth of a pixel of where project_h — the renderer's
-path until A2, and geometry.project's, the parity oracle — puts it
+path before the camera, and geometry.project's, the parity oracle — puts it
 (tests/test_camera.py). The dataclass it draws, ViewState, lives in
 view.py so nothing has to import moderngl to hold a view.
 
@@ -27,21 +27,19 @@ strokes), folding into alpha below a pixel there. Either way a field of
 thousands costs one 3D pass and a few kilobytes of upload a frame, and a
 copy wholly off screen is not drawn.
 
-Blending decision (plan 02 task 2): alpha-over in painter order, not
-additive. The additive suggestion existed to avoid a CPU depth sort, but the
-CPU already computes every edge depth per frame, so the argsort is free and
-alpha-over + sort reproduces the reference compositing exactly.
+Blending: alpha-over in painter order, not additive. The CPU already
+computes every edge depth per frame, so the argsort is free and alpha-over +
+sort reproduces the reference compositing exactly.
 
 Edges are screen-space quads, not GL lines: core-profile macOS caps line
 width at 1 px, and the first comparison shots showed the near-edge weight
 hierarchy (width 0.5–2 px scaled by depth and brightness) is a visible part
 of the look. Widths below 1 px fold into alpha, the standard thin-line
-trick, so far edges render correctly without MSAA. Since A2 the quads —
+trick, so far edges render correctly without MSAA. The quads —
 and the points', once point sprites — are expanded in the vertex shader
 from the edge's two 3D ends, so they carry a real depth; their widths
-are pixels × the zoom in world space (the default, the pre-A2 feel) or
-pixels whatever the zoom in screen space (`view.screen_strokes`, plan 26
-A2b). The scene's depth buffer
+are pixels × the zoom in world space (the default) or
+pixels whatever the zoom in screen space (`view.screen_strokes`). The scene's depth buffer
 holds the shape's nearest visible surface (`DEPTH_ALPHA`), written after
 its colour; the see-through shape itself is still painter-sorted.
 
@@ -54,7 +52,7 @@ effect chain's texture instead and the last effect writes the window.
 `draw_scene` is the scene pass alone, for anything that wants the raw
 frame.
 
-A picture wired into the faces (`shape.faces`, plan 33 R: the faces'
+A picture wired into the faces (`shape.faces`: the faces'
 run `pattern → … → shape.faces`, or any branch) is made before the scene
 pass at a fixed size (FACE_PIC², `Renderer._face_picture`: the seed pass,
 then the effects on its wires, mipmaps); the face shader then draws that
@@ -64,14 +62,14 @@ effects are *in* the scene texture: the echoes and the dream carry them,
 and the frame's run goes over them. With nothing wired into the faces
 none of it runs, nothing is allocated and the frame is bit-identical.
 The ghost hands (ghost.py) are a geometry in the same
-camera (plan 26 A3): by default their own layer, laid over the finished
+camera: by default their own layer, laid over the finished
 frame (or onto it before the effects); wired into the scene, solid,
 before the shape; off, the frame is untouched. Last of all the master
-dim (`Renderer.dim`, the MASTER fader's `output.dim`; plan 15 WP3)
+dim (`Renderer.dim`, the MASTER fader's `output.dim`)
 multiplies what is there — it draws nothing of its own, and at 1 it does
 not run.
 
-Plan 21: `Renderer.draw_outputs` shows that one frame on several outputs
+`Renderer.draw_outputs` shows that one frame on several outputs
 (`outputs.View`), each through its own mutes — the picture, the hands —
 and its own dim. The scene, the capture and the hands' layer run once a
 frame; each distinct picture an output shows once (its end, `Shown`);
@@ -79,24 +77,24 @@ the picture, the hands over it and the dim once per output. `draw` is
 `draw_outputs` with one default view on the bound framebuffer, and is
 the frame it always was, byte for byte.
 
-Plan 26 A1: those passes are the nodes of a render graph (graph.py).
+Those passes are the nodes of a render graph (graph.py).
 `_draw_frame` builds the graph — or reuses the last one while the views'
 count and the wiring do not change — and evaluates it: the nodes run
 once each, in an order settled when the graph was built, and each node
 is timed on the GPU (`PassTimer`, one line per node on the SYSTEM page).
-Plan 35 T4: every graph is a wired frame's (`graph.build_graph`; plan 36
-T3: nothing else — `graph.EMPTY` until a loadable patch lands); the pipelines are gone, and
+Every graph is a wired frame's (`graph.build_graph`;
+nothing else — `graph.EMPTY` until a loadable patch lands); the pipelines are gone, and
 every golden frame is drawn byte for byte. The passes themselves (`draw_scene`,
 `_face_picture`, `_draw_cover`, `_compose`, `_show`, `dim_pass`) stay
 here; the nodes call them.
 
-Plan 34 D: each delay's two half-float pictures are the renderer's
+Each delay's two half-float pictures are the renderer's
 (`DelayPair`, `delay_pair`), kept by name across graph rebuilds and
 swapped once a frame before the graph runs (`_turn_delays`); a picture
 of its own size is laid into a consumer of another shape by the refit
 pass (`REFIT_FS`, `_refit`). GL allows one time query active at once, so
-a node's query opened inside another's is a no-op (`PassTimer.time`,
-ruling R5): `delay(write)` times its paint, effects inside it included.
+a node's query opened inside another's is a no-op (`PassTimer.time`):
+`delay(write)` times its paint, effects inside it included.
 """
 
 from __future__ import annotations
@@ -193,7 +191,7 @@ from .previews import CARD_EFFECT, EffectPreviews
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
 
-# plan 32 (final review B-I2): the MEDIA page's previews of channels nothing
+# The MEDIA page's previews of channels nothing
 # in the frame reads — each at most this often, at most this many a frame
 PREVIEW_HZ = 10.0
 PREVIEWS_PER_FRAME = 2
@@ -204,7 +202,7 @@ PREVIEWS_PER_FRAME = 2
 WIRE_PX_MAX = 1024
 WIRE_DROP_S = 1.0
 
-# plan 33 R29: how many frames a texture made at another size (`pool_at`, a
+# How many frames a texture made at another size (`pool_at`, a
 # `(name, size)` frame target) is kept after its last use before
 # `_prune_sized` releases it — so a switch the sequencer flicks between two
 # branches of other sizes reallocates nothing per flick (half a second at
@@ -220,15 +218,15 @@ BG = (0.0, 0.0, 0.0)
 # from its nearest point instead of over its own nothing. Set under every
 # real solid's thinnest (the Rose at rest, 0.16), so only a plane figure
 # reaches it: through each plane from rest, in 5° steps, the Flow mark and
-# the Orbit face-on, and no other shape (decision register row 542)
+# the Orbit face-on, and no other shape
 DEPTH_FLOOR = 0.05
 
 # FACE_PIC (graph.py's, imported above): the side, in texels, of the
 # picture the faces show while something other than the pattern is wired
-# into them (plan 20 fork F2; plan 33 R: what `shape.faces` asks)
+# into them (what `shape.faces` asks)
 _UNSET = object()        # `_face_uniforms`: no media layer handed in
 
-# Plan 26 A2, the one camera: the scene's vertices arrive in 3D — the
+# The one camera: the scene's vertices arrive in 3D — the
 # shape after the 4D tumble, the 4D divide and the yaw/pitch turntable
 # (geometry.shape_world) — and the vertex shaders place each copy (in_inst:
 # the point × the copy's scale + its centre, in the world; field.py, with
@@ -247,7 +245,7 @@ EYE_W = f"{EYE_NEAR * 1.2:.6f}"     # the nearest clip w a stroke end is kept at
 # fills and far edges stay see-through to depth as they are to the eye
 DEPTH_ALPHA = 0.25
 
-# plan 26 A3, the depth-aware composite (`LAYER_FS`, `Renderer.lay`): a
+# The depth-aware composite (`LAYER_FS`, `Renderer.lay`): a
 # layer's texel is hidden where the scene's visible surface is nearer the
 # eye by more than this, in world units (shape radii; the default
 # calibration puts about 170 mm of the Leap's box in one) — about 8 mm, so
@@ -261,7 +259,7 @@ in vec3 in_b;
 in vec2 in_corner;   // x: which end (0 a, 1 b); y: which side of the edge (±1)
 in float in_width;   // logical px at scale 1 (below 1 it folds into alpha)
 in float in_alpha;
-in vec3 in_rgb;      // white, but for a scene's tinted layer (plan 28 catalog)
+in vec3 in_rgb;      // white, but for a scene's tinted layer
 in vec4 in_inst;     // this copy: centre (xy, world), scale (z), alpha (w)
 uniform mat4 u_vp;   // the eye
 uniform mat4 u_model; // the world transform
@@ -324,7 +322,7 @@ out vec4 f_color;
 void main() { f_color = vec4(0.0, 0.0, 0.0, u_factor); }
 """
 
-# the other deck's finished picture, × `u_k` (plan 44 D4, `Renderer.mix_pass`):
+# the other deck's finished picture, × `u_k` (`Renderer.mix_pass`):
 # 1:1 by texelFetch, the same bytes, or scaled by the sampler for a smaller tap
 MIX_FS = """
 #version 330
@@ -341,7 +339,7 @@ void main() {
 }
 """
 
-# a frame texture onto an output (plan 21 WP1): 1:1 by texelFetch — the
+# a frame texture onto an output: 1:1 by texelFetch — the
 # same bytes, as the look-back's post pass reads the scene — or scaled
 # through the fit rect (the viewport) by the sampler. On an opaque ground
 # the output keeps alpha 1 whatever the frame holds
@@ -352,7 +350,7 @@ uniform sampler2D u_src;
 uniform int u_scaled;
 uniform ivec2 u_origin;      // the rect's origin (gl_FragCoord is window-relative)
 uniform int u_opaque;
-uniform ivec2 u_flip;        // plan 23 WP1: mirror x / y inside the rect (0 0: as drawn)
+uniform ivec2 u_flip;        // mirror x / y inside the rect (0 0: as drawn)
 out vec4 f_color;
 void main() {
     vec4 c;
@@ -373,13 +371,13 @@ void main() {
 }
 """
 
-# plan 34 D (row 358): a picture of its own size laid into a target of
+# A picture of its own size laid into a target of
 # another shape (`Renderer._refit`: the delay, the echoes, the dream, the
 # resize) — the crop `u_crop` of the source (x0, y0, w, h in its GL uv)
 # fitted about the centre by `u_scale` (`media_tex.fit_scale` of the crop's
 # pixels into the target's), sampled inside `u_clamp` (min uv, max uv) so
 # no neighbour bleeds in. Outside the fit, transparent black; inside, the
-# texel as it is (premultiplied in, premultiplied out). Plan 34 T4: a crop
+# texel as it is (premultiplied in, premultiplied out). A crop
 # past the source's edge (a resize's) is transparent black there too — a
 # crop inside the source, every caller's before the resize, never is
 REFIT_FS = """
@@ -405,7 +403,7 @@ void main() {
 }
 """
 
-# a layer laid onto a picture (plan 26 A3, `Renderer.lay`: the graph's
+# a layer laid onto a picture (`Renderer.lay`: the graph's
 # Composite node, and an output's hands over when its wiring is not plain
 # over): premultiplied × its opacity — `ghost.COMPOSITE_FS`'s arithmetic,
 # so plain over is the same bytes — mirrored by `u_flip` like the frame;
@@ -614,7 +612,7 @@ in vec3 in_pos;      // the shape's 3D point (see LINE_VS)
 in vec2 in_corner;   // the quad's corner, (±1, ±1)
 in float in_size;    // radius in framebuffer pixels at scale 1
 in float in_alpha;
-in vec3 in_rgb;      // RED, but for a scene's tinted layer (plan 28 catalog)
+in vec3 in_rgb;      // RED, but for a scene's tinted layer
 in vec4 in_inst;     // this copy: centre (xy, world), scale (z), alpha (w)
 uniform mat4 u_vp;
 uniform mat4 u_model;
@@ -714,12 +712,12 @@ class SceneTarget:
     output is multisampled. Recreated on resize, DPI change, or a target
     with a different sample count.
 
-    Plan 26 A2: and a depth attachment on the framebuffer the scene is
+    It also has a depth attachment on the framebuffer the scene is
     drawn into — the shape's nearest visible surface (`Renderer._depth_pass`),
-    for whatever is drawn after it in the shared camera (A3: the hands).
+    for whatever is drawn after it in the shared camera (the hands).
     Single-sampled it is a depth texture (`depth`), which a depth-aware
     composite can read; multisampled it is a renderbuffer beside the
-    colour one (`depth` None: A3 resolves it when a node needs it)."""
+    colour one (`depth` None: it is resolved when a node needs it)."""
 
     def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
@@ -731,7 +729,7 @@ class SceneTarget:
         self.depth: moderngl.Texture | None = None        # single-sampled: the depth
         self._depth_rb = None                             # multisampled: its renderbuffer
         self._color_rb = None                             # …and the colour's, the size of the frame
-        # plan 26 A3: multisampled, the depth resolved for a node that reads
+        # Multisampled, the depth resolved for a node that reads
         # it (`depth_texture`), made on first ask: a depth texture and the
         # framebuffer the blit lands in (a colour renderbuffer beside it,
         # as a blit wants one)
@@ -767,7 +765,7 @@ class SceneTarget:
             self.ctx.copy_framebuffer(self.fbo, self._msaa)
 
     def depth_texture(self) -> moderngl.Texture | None:
-        """The scene's depth as a texture a shader reads (plan 26 A3, a
+        """The scene's depth as a texture a shader reads (for a
         depth-aware composite): the depth attachment itself when single-
         sampled; multisampled, resolved now (one sample per pixel) into a
         texture made on first ask. Call it after the scene pass."""
@@ -784,8 +782,7 @@ class SceneTarget:
         return self._rdepth
 
     def release(self) -> None:
-        # getattr: a target from before A2 has no depth, from before A3 no
-        # resolved one
+        # getattr: a target from before the depth attachment has none
         for res in (self._msaa, self.fbo, self.tex, getattr(self, "depth", None),
                     getattr(self, "_depth_rb", None), getattr(self, "_color_rb", None),
                     getattr(self, "_rfbo", None), getattr(self, "_rdepth", None),
@@ -826,7 +823,7 @@ class CoverTarget:
 
 
 class DelayPair:
-    """One delay's two pictures (plan 34 D, row 354): `read`, last frame's
+    """One delay's two pictures: `read`, last frame's
     (what `graph.Delay` shows), and `write`, this frame's (what
     `graph.DelayWrite` paints into) — each (texture, framebuffer), RGBA
     half-float (an 8-bit feedback with a decay below 1 sticks and never
@@ -854,14 +851,14 @@ class DelayPair:
         self.cell: Any = None
         self.phase = 0.0                # Hz: cycles run, advanced by dt × the rate now
         self.last_t: float | None = None
-        # plan 90 (H1): the pictures it took, kept for a reader of its stack
+        # The pictures it took, kept for a reader of its stack
         # (`stack.DelayStack`), made on a reader's first ask
         # (`Renderer.delay_stack`), else None
         self.stack = None
 
     def target(self, ctx: moderngl.Context, size: tuple[int, int]) -> moderngl.Framebuffer:
         """The write side at `size`: made again only when missing or of
-        another size (row 357: the read side is left alone, so the next
+        another size (the read side is left alone, so the next
         frame still reads the frame before, at its old size)."""
         size = (int(size[0]), int(size[1]))
         if self.write is not None and tuple(self.write[0].size) == size:
@@ -912,7 +909,7 @@ class DelayPair:
 
 class FaceTarget:
     """The picture the faces show while something other than the pattern
-    is wired into them (plan 20; plan 33 R: `shape.faces`), or the
+    is wired into them (`shape.faces`), or the
     pattern's own picture for a consumer that binds one
     (`Renderer._pattern_picture`): one RGBA8 texture, FACE_PIC square,
     premultiplied with alpha as the face's intensity, mipmapped — per face
@@ -946,8 +943,8 @@ class FaceTarget:
 
 
 class PassTimer:
-    """GPU time per node of the render graph (plan 26 A0, per pass; A1,
-    per node): a ``ctx.query(time=True)`` around each node's work, read
+    """GPU time per node of the render graph: a ``ctx.query(time=True)``
+    around each node's work, read
     back `LAG` frames later so the CPU does not wait on the GPU for a
     result, and kept as a rolling median over the last `WINDOW` frames in
     ms (`medians`), in the graph's order.
@@ -977,7 +974,7 @@ class PassTimer:
         # frames ended, not yet read: (the frame's node names, its queries)
         self._pending: list[tuple[list[str], list[tuple[str, object]]]] = []
         self._ms: dict[str, list[float]] = {}
-        # plan 84: every name that asks this frame, while GRAPH's **gpu cost**
+        # Every name that asks this frame, while GRAPH's **gpu cost**
         # chip is lit (`Renderer._draw_frame` sets it); None, nothing noted
         self.watch: set[str] | None = None
         try:
@@ -1009,11 +1006,11 @@ class PassTimer:
 
     def time(self, name: str) -> _Timed:
         """``with timer.time("scene"):`` — the node's GPU time, this frame.
-        Plan 34 D: inside another node's query (a delay's write painting an
+        Inside another node's query (a delay's write painting an
         effect, which times its own pass) it is a no-op — GL allows one
         active per target, so the outer line holds the inner's time.
 
-        Plan 84: while `watch` holds a set (GRAPH's **gpu cost** chip lit),
+        While `watch` holds a set (GRAPH's **gpu cost** chip lit),
         every name that asks is noted in it, timed or not — a pass inside
         another's query ran too — so the chip knows what ran this frame,
         not only what the timer lists (a segment switched off asks nothing)."""
@@ -1064,7 +1061,7 @@ class PassTimer:
 
 
 def gpu_made(graph: Graph, frame: Frame, asked) -> dict:
-    """Plan 84, the read side of the timer for GRAPH's **gpu cost** chip:
+    """The read side of the timer for GRAPH's **gpu cost** chip:
     which of the frame's nodes made something, from what the frame did.
     `asked` is every name that asked the timer for a query this frame
     (`PassTimer.watch`): a node that ran a pass. Nothing is timed, drawn or
@@ -1077,7 +1074,7 @@ def gpu_made(graph: Graph, frame: Frame, asked) -> dict:
       `Graph.timed` does not list them): their time is their consumer's, so
       they are neither a cost nor "made nothing";
     - ``gpu_built``: every node of the frame's graph. A canvas node in none
-      of these was not built (unreached, row 349); one built but in neither
+      of these was not built (unreached); one built but in neither
       of the first two made nothing this frame — an effect switched off, a
       segment switched off, a branch behind a switch's unpicked input;
     - ``gpu_owner``: a pass timed under a name of its own that no canvas
@@ -1128,7 +1125,7 @@ class _Timed:
             try:
                 self.q.__enter__()
                 self.began = True
-                self.timer._active = True        # (plan 34 D: no query inside it)
+                self.timer._active = True        # (no query inside it)
             except Exception as e:  # noqa: BLE001 — timing never costs a frame
                 self.timer._off(e)
         return self
@@ -1157,7 +1154,7 @@ def _flush() -> None:
 def thumb_source(frame: Frame, name: str, how: str,
                  pulled: frozenset[str] | None = None) -> moderngl.Texture | None:
     """The picture node `name`'s thumbnail is copied from, this frame
-    (plan 37 C1; `how` is `graphview.THUMBS`' word for its kind) — or None:
+    (`how` is `graphview.THUMBS`' word for its kind) — or None:
     it made nothing this frame (no such node built, not pulled behind a
     switch, reading nothing, a hands layer with no hand drawn).
 
@@ -1178,7 +1175,7 @@ def thumb_source(frame: Frame, name: str, how: str,
     - ``card``: an effect whose thumbnail is switched to the test card
       (`card_through`): never the frame's picture, and nothing of the
       frame is pulled for it;
-    - ``unwired`` (plan 65): an effect whose picture reaches no
+    - ``unwired``: an effect whose picture reaches no
       output, so the frame never built it (`graph.reaches`): its real input
       put through it at a thumbnail's size when the frame made that input,
       else the test card (`unwired_through`). An unbuilt effect asked for
@@ -1216,10 +1213,10 @@ def thumb_source(frame: Frame, name: str, how: str,
         return _field_thumb(frame, node)
     if getattr(node, "OUTPUT", None) != IMAGE:
         return None
-    # (review: every kind — a composite, a delay, a resize, a copy behind a
+    # (every kind — a composite, a delay, a resize, a copy behind a
     # switch's unpicked input made nothing this frame, and painting it would
     # pull its inputs: the gated effects, the unpicked channels read and
-    # uploaded — plan 33 S. First, before `reads`, which reads a channel)
+    # uploaded). First, before `reads`, which reads a channel)
     if pulled is not None and node.name not in pulled:
         return None
     if not node.reads(frame):
@@ -1228,7 +1225,7 @@ def thumb_source(frame: Frame, name: str, how: str,
 
 
 def _field_thumb(frame: Frame, node) -> moderngl.Texture | None:
-    """Plan 67 F1: a field node's thumbnail — the field this frame already
+    """A field node's thumbnail — the field this frame already
     made, shown grey (`FxChain.show_field`) into a frame texture of its own;
     None when the frame made none (a thumbnail never makes a field, as it
     never makes a mask)."""
@@ -1301,16 +1298,15 @@ def card_through(frame: Frame, node) -> moderngl.Texture | None:
 
 
 UNWIRED_PIC = "unwired"     # `graphview.UNWIRED_PIC`, the page's word (render imports no graphview)
-# plan 65: the unwired effects' thumbnails made at a frame's end at most (one
+# The unwired effects' thumbnails made at a frame's end at most (one
 # small pass each, round robin: the rest keep their last, `PreviewTextures.shade`)
 UNWIRED_PER_FRAME = 4
 
 
 def unwired_through(frame: Frame, name: str, pulled: frozenset[str] | None = None,
                     card: bool = False) -> moderngl.Texture | None:
-    """Plan 65: the thumbnail of effect (or its slot, plan 89) `name`, which the frame did
-    not build because its picture reaches no output (`graph.reaches`, row
-    349): its input put through it, at a thumbnail's size (`CARD_PX`), with
+    """The thumbnail of effect (or its slot) `name`, which the frame did
+    not build because its picture reaches no output (`graph.reaches`): its input put through it, at a thumbnail's size (`CARD_PX`), with
     its values and clocks as the frame left them.
 
     The input is the picture wired into its `image` when the frame made
@@ -1323,7 +1319,7 @@ def unwired_through(frame: Frame, name: str, pulled: frozenset[str] | None = Non
     unbuilt. None for a name that is no effect the state holds."""
     r = frame.r
     wiring = getattr(r, "wiring", None)
-    effect = effect_of(name)              # (plan 89: a slot runs its effect)
+    effect = effect_of(name)              # (a slot runs its effect)
     chain = r.fx
     if effect not in chain.state.specs:
         return None
@@ -1347,7 +1343,7 @@ def unwired_through(frame: Frame, name: str, pulled: frozenset[str] | None = Non
 
 
 class Renderer:
-    # plan 34 D: the one tempo clock (`tempo.Clock`), set by the app; None headless
+    # The one tempo clock (`tempo.Clock`), set by the app; None headless
     tempo: Any = None
 
     def __init__(self, ctx: moderngl.Context, fx: FxState | None = None,
@@ -1367,7 +1363,7 @@ class Renderer:
         self.max_frame: tuple[int, int] | None = None
         self._dim_prog: moderngl.Program | None = None
         self._dim_vao: moderngl.VertexArray | None = None
-        # the deck fade's pass (plan 44 D4, `mix_pass`), likewise
+        # the deck fade's pass (`mix_pass`), likewise
         self._mix_prog: moderngl.Program | None = None
         self._mix_vao: moderngl.VertexArray | None = None
         self.mix_error = ""
@@ -1375,12 +1371,12 @@ class Renderer:
         # texture takes the sampler units before the scene pass, so the
         # scene texture is never bound while it is the render target
         self.scene = SceneTarget(ctx)
-        # Plan 90: the look-back's rings are retired (H2: a delay keeps the
-        # pictures, `delay_stack`), and the dream is an effect file (H3: its
+        # The look-back's rings are retired (a delay keeps the
+        # pictures, `delay_stack`), and the dream is an effect file (its
         # worker hangs on `fx.dream_source`, app.py)
         self.fx = FxChain(ctx, fx)      # every effect node's programs and textures
         # the picture the faces show while something other than the
-        # pattern is wired into them (plan 33 R: `shape.faces`, painted by
+        # pattern is wired into them (`shape.faces`, painted by
         # the graph at FACE_PIC², `graph.Shape.prepare`). Nothing is
         # allocated until then. face_error says why it could not be made
         # (the frame is then drawn as with the faces unwired); _pic is the
@@ -1392,28 +1388,27 @@ class Renderer:
         self.face_error = ""
         self._pic: moderngl.Texture | None = None
         self._face_layer = False
-        # plan 36 T2: the faces plain this scene pass — `shape.faces` unwired,
+        # The faces plain this scene pass — `shape.faces` unwired,
         # no pattern drawn (`graph.Shape.prepare`; False outside a frame)
         self._face_plain = False
         self.ghost = Ghost(ctx, ghost)  # the hands, last, over everything (ghost.py)
-        # plan 21: the outputs. A picture with more than one consumer (or
-        # one not drawn here) ends in a frame texture, one per end (plan 35:
-        # keyed by the end's name), made on first use; the program that
+        # The outputs. A picture with more than one consumer (or
+        # one not drawn here) ends in a frame texture, one per end (keyed by the end's
+        # name), made on first use; the program that
         # shows one on an output, too. `stats` is what the last frame ran
         self._frames: dict[str, tuple[moderngl.Texture, moderngl.Framebuffer]] = {}
         self._show_prog: moderngl.Program | None = None
         self._show_vao: moderngl.VertexArray | None = None
-        # plan 26 A3: the program a Composite node lays a layer with, on
-        # first use; and the wiring the frame is built from — plan 36 T3
-        # (W3): the empty frame (black) until a loadable patch's graph lands one
+        # The program a Composite node lays a layer with, on
+        # first use; and the wiring the frame is built from: the empty frame (black) until a loadable patch's graph lands one
         self._lay_prog: moderngl.Program | None = None
         self._lay_vao: moderngl.VertexArray | None = None
         self.wiring = EMPTY
-        # plan 26 A4b: what the point-cloud nodes read — the device
+        # What the point-cloud nodes read — the device
         # registry (app hands it over; duck-typed: `clouds` and its
         # devices' kinds). None: no cloud is drawn
         self.cloud_source = None
-        # plan 47, the poi: its state (`poi.PoiState`, handed over by app),
+        # The poi: its state (`poi.PoiState`, handed over by app),
         # whose handle, string and weight the guide draws over each output
         # that shows the hands (`poi_guide.PoiGuide`, made on first use).
         # None: nothing is drawn
@@ -1421,22 +1416,22 @@ class Renderer:
         self.poi_guide = None
         # the registry of the deck this renderer draws (`Deck.build`); None: no deck
         self.deck_reg = None
-        # plan 36 T1: whoever holds the meta controller's own wires (the open show,
+        # Whoever holds the meta controller's own wires (the open show,
         # `library.Install.rig`, by `app`); None: every bus cable standing
         self.bus_source = None
-        # plan 26 A4: the extra hands nodes' states, by node name (`ghost.2`
+        # The extra hands nodes' states, by node name (`ghost.2`
         # …), handed over by whoever declared their params (the loadable patch's
         # graph section, `loadable.GraphSection`); their Ghosts, made on
         # first use (`ghost_of`)
         self.ghost_states: dict[str, GhostState] = {}
         self._ghosts: dict[str, Ghost] = {}
-        # plan 26 A4b: the cloud nodes' GL (`graph._CloudGL`), made on first
+        # The cloud nodes' GL (`graph._CloudGL`), made on first
         # draw; the getattr guards stay for a hot-reloaded renderer
         self._cloud_gl = None
         self.stats: dict = {"ends": [], "chain_runs": 0, "direct": True}
-        # plan 26 A0: GPU time per node, `stats["gpu_ms"]` (the SYSTEM page)
+        # GPU time per node, `stats["gpu_ms"]` (the SYSTEM page)
         self.timer = PassTimer(ctx)
-        # plan 26 A1: the render graph for the last frame's views, reused
+        # The render graph for the last frame's views, reused
         # while their count and the wiring do not change (graph.graph_key)
         self._graph: Graph | None = None
         self.cover = CoverTarget(ctx)
@@ -1449,7 +1444,7 @@ class Renderer:
         self._fbuf = ctx.buffer(reserve=2160 * 3 * 8 * 4, dynamic=True)
         self._ibuf = ctx.buffer(reserve=MAX_INSTANCES * 4 * 4, dynamic=True)   # the copies
         self._build_wire_programs()
-        # the media channels (plan 32, media/channels.MediaState): app.main
+        # the media channels (media/channels.MediaState): app.main
         # hands the app's own; None draws no media anywhere. Their textures
         # (`media_tex.MediaTextures`) and the fit pass's program are made on
         # first use; `_media_now` is what this frame read and fitted, so a
@@ -1463,12 +1458,12 @@ class Renderer:
         self._fit_prog: moderngl.Program | None = None
         self._fit_vao: moderngl.VertexArray | None = None
         self.scene_ground: float | None = None
-        # plan 32 T10: what the MEDIA page shows — the channels whose live
+        # What the MEDIA page shows — the channels whose live
         # picture it draws (`media_watch`, read once at the end of the next
         # frame, `_for_the_panel`) and its thumbnails (`ui_upload`)
         self.media_watch: set[str] = set()
         self.ui_tex: UiTextures | None = None
-        # plan 37 C1: the GRAPH page's thumbnails — the nodes it has on
+        # The GRAPH page's thumbnails — the nodes it has on
         # screen (`PreviewTextures.want`), copied at the end of the next
         # frame (`_thumbnails`) from that frame (`_thumb_frame`, held only
         # until then)
@@ -1494,7 +1489,7 @@ class Renderer:
         # the analyzer's lanes, normalized, set by the app each frame (app._bands):
         # render input for the patterns that draw the bands (u_levels)
         self.bands: tuple[float, ...] = ()
-        # the world objects (world.World, plan 59), set by the app: the
+        # the world objects (world.World), set by the app: the
         # shape's offset composes into its model matrix. Read only; None (a
         # renderer of a test, a host with no world): no offset
         self.world: Any = None
@@ -1507,7 +1502,7 @@ class Renderer:
         self._swatch_frame = self._swatch_until = self._swatch_next = 0
         self.swatch_error = ""
         self._build_face_program()
-        # plan 39 T4: the segment nodes' workers (`segmenter`), made from
+        # The segment nodes' workers (`segmenter`), made from
         # `segment_cfg` (the config's [segment], app.py hands it over) on a
         # node's first need — None until `app.main` gives it,
         # makes none: its segments pass their pictures through — and motion
@@ -1521,7 +1516,7 @@ class Renderer:
     def sibling(self, fx: FxState | None = None, ghost: GhostState | None = None) -> Renderer:
         """A second renderer on this one's context and its one wall clock, on
         the states given (each a fresh one of its own when None): a
-        preview, deck 2's (plan 44 D4). This context must be current."""
+        preview, deck 2's. This context must be current."""
         r = Renderer(self.ctx, fx=fx, ghost=ghost)
         r._t0 = self._t0
         r.world = getattr(self, "world", None)     # one world: its shape is either deck's
@@ -1539,7 +1534,7 @@ class Renderer:
         mine._t_last = getattr(theirs, "_t_last", None)
 
     def release_sized(self) -> None:
-        """Plan 44 D4: the frame-sized targets let go, made again at the next
+        """The frame-sized targets let go, made again at the next
         draw; a deck off air's after a fade. Its delays (and their stacks)
         stay: they are the look's memory. This context must be current."""
         self._thumb_frame = None
@@ -1586,14 +1581,14 @@ class Renderer:
         bad edit keeps the last good set (the face program already does
         this). An attribute a newer __init__ would have added is missing
         until a restart, and the reloader reports the AttributeError rather
-        than this hook guessing at a value (audit H3)."""
+        than this hook guessing at a value."""
         olds = (self._lvao, self._pvao, self._cvao, self._lines, self._points, self._cover_prog)
         if getattr(self, "_ibuf", None) is None:     # a renderer from before the instanced draws
             self._ibuf = self.ctx.buffer(reserve=MAX_INSTANCES * 4 * 4, dynamic=True)
         self._build_wire_programs()
         for res in olds:
             res.release()
-        # a fractal's GPU draw (plan 64): made again from fractal_gl as it is now
+        # a fractal's GPU draw: made again from fractal_gl as it is now
         cells = getattr(self, "_cells", None)
         if cells is not None:
             cells.release()
@@ -1602,8 +1597,8 @@ class Renderer:
         # the faces' pictures are made again from the module as it is now
         # (app.py's reloader does not re-class them), rebuilt on next use. A
         # renderer from before the face target existed gets them here; one
-        # from before plan 33 T7 lets its faces chain (`face_fx`) go
-        # plan 65: the effect previews are made again on the picker's next ask
+        # without `face_fx` lets its faces chain go
+        # The effect previews are made again on the picker's next ask
         # (from the module as it is now: none survives a reload half-made)
         pv = self.__dict__.pop("previews", None)
         if pv is not None:
@@ -1620,7 +1615,7 @@ class Renderer:
         for res in (old_fx, old_pic, old_pat):
             if res is not None:
                 res.release()
-        # plan 33 R: the effects' textures at other sizes (`pool_at`)
+        # The effects' textures at other sizes (`pool_at`)
         self._release_pools()
         # not the ghost hands': their programs live in ghost.py, and the
         # reloader calls `Ghost.on_reload` itself whenever ghost.py (or a
@@ -1635,37 +1630,37 @@ class Renderer:
                 res.release()
         self._dim_prog = self._dim_vao = None
         self.dim_error = ""
-        # the deck fade's (plan 44 D4), likewise
+        # the deck fade's, likewise
         for res in (getattr(self, "_mix_vao", None), getattr(self, "_mix_prog", None)):
             if res is not None:
                 res.release()
         self._mix_prog = self._mix_vao = None
         self.mix_error = ""
-        # plan 39 T2: the mask passes, likewise — compiled again from
+        # The mask passes, likewise — compiled again from
         # masks.py as it is now on the next ask (`mask_passes`)
         mp = self.__dict__.pop("_mask_passes", None)
         if mp is not None:
             mp.release()
-        # plan 21's frame textures and the program that shows them: dropped,
+        # The output frame textures and the program that shows them: dropped,
         # made again from this module's source on next use. getattr: a
         # renderer from before the outputs existed has none of them
         self._release_frames()
-        # plan 26 A1: the graph is built again from graph.py as it is now
+        # The graph is built again from graph.py as it is now
         # (its nodes are not re-classed; they hold no GL resources), and so
         # is the timer — the one from before the reload is this module's
         # old `PassTimer`, with an `end_frame` of another shape
         self._graph = None
         self._drop_timer()
-        # plan 26 A4b: the point clouds' program and buffers, made again
+        # The point clouds' program and buffers, made again
         # from graph.py's source on the next frame that draws a cloud
         if getattr(self, "_cloud_gl", None) is not None:
             self._cloud_gl.release()
         self._cloud_gl = None
-        # plan 26 A4: an extra hands node's Ghost is not a reload target
+        # An extra hands node's Ghost is not a reload target
         # (the reloader re-classes the renderer's own): released, and made
         # again from ghost.py as it is now on next use, over the same state
         self.drop_ghosts()
-        # plan 37 C1: the thumbnails' textures and pass, made again from
+        # The thumbnails' textures and pass, made again from
         # outputs.py as it is now (the page wants them again next frame)
         if getattr(self, "thumbs", None) is not None:
             self.thumbs.close()
@@ -1683,7 +1678,7 @@ class Renderer:
             if res is not None:
                 res.release()
         self._ptile = None
-        # plan 32 R: the channels' textures and the fit pass's program, made
+        # The channels' textures and the fit pass's program, made
         # again from media_tex.py as it is now on the next frame that reads
         # a channel (a still uploads again; a feed's next frame would anyway)
         if getattr(self, "media_tex", None) is not None:
@@ -1696,15 +1691,14 @@ class Renderer:
         self._fit_prog = self._fit_vao = None
 
     def _face_media(self, s: ViewState) -> tuple[moderngl.Texture, bool] | None:
-        """The texture the faces draw over their pattern (plan 32 T7, row
-        331: where the one bitmap file was) and whether it is in GL's row
-        order. Plan 33 R: what the loadable patch's graph wires into `pattern.media`
+        """The texture the faces draw over their pattern (where the one bitmap file was) and whether it is in GL's row
+        order. What the loadable patch's graph wires into `pattern.media`
         — not `view.media`. In a frame, what the graph's pattern node read
         for this scene pass (`graph.PatternNode.layer`, handed over as
         `_face_layer`: a channel's raw texture, or a branch's picture at its
         head's size). Outside one (the FACES page's tiles, a tool) the
         channel the wiring puts in (`_channel_layer`) — straight, or through
-        a switch at its pick (`graph.channel_into`, plan 33 T7; getattr: a
+        a switch at its pick (`graph.channel_into`; getattr: a
         view state from before the switch has no picks). None — the layer
         off — with nothing wired, no media state, or nothing on the
         channel."""
@@ -1805,15 +1799,15 @@ class Renderer:
         The target is captured once and bound again, with its viewport and
         blending, on every exit — a raise included. The frame binds half a
         dozen offscreen framebuffers; one left bound made every later
-        frame draw into it while the window swapped a stale picture (the
-        owner's freeze, plan 14 WP1: WAKE without a dream worker left the
+        frame draw into it while the window swapped a stale picture (a
+        freeze: WAKE without a dream worker left the
         look-back's atlas bound, with no error anywhere)."""
         ctx = self.ctx
         target = ctx.fbo
         if target is None:
             raise RuntimeError("Renderer.draw: no framebuffer bound (call fbo.use())")
         vp = tuple(target.viewport)
-        # one output, today's: the default switches on the bound framebuffer
+        # one output: the default switches on the bound framebuffer
         view = View(Switches(), (vp[2], vp[3]), target=target,
                     bg_alpha=getattr(self, "bg_alpha", 1.0), viewport=vp)
         self.draw_outputs(s, w, h, dpr, [view], t_now)
@@ -1824,7 +1818,7 @@ class Renderer:
 
     def draw_outputs(self, s: ViewState, w: int, h: int, dpr: float, views: list[View],
                      t_now: float | None = None) -> None:
-        """One frame, a picture per output (plan 21 WP1): `views[0]` is the
+        """One frame, a picture per output: `views[0]` is the
         first output — a framebuffer on this context; its rect sets the
         frame's size and its framebuffer the scene's sample count (fork
         F12) — and every view shows that frame through its own switches.
@@ -1833,7 +1827,7 @@ class Renderer:
         look-back's tick and pull, the hands' layer (only while some view
         shows hands), the look-back's capture (from the scene texture,
         exactly once, whatever the mutes). Once per distinct picture an
-        output shows (its end, plan 35 `Shown`): the look-back composite and
+        output shows (its end, `Shown`): the look-back composite and
         the effects wired to it, ending straight on the view when it is the
         end's only consumer at the frame size, else in a frame texture. Once per
         view: the picture (nothing, a 1:1 copy, or scaled into
@@ -1848,7 +1842,7 @@ class Renderer:
         once-a-frame passes included — binds `views[0].target` again with
         its rect and blending. `stats` says what ran.
 
-        Plan 32 T9: then each view's publishers (`View.publish`) are handed
+        Then each view's publishers (`View.publish`) are handed
         its picture (`_publish`)."""
         if not views or views[0].target is None:
             raise RuntimeError("Renderer.draw_outputs: the first view needs a target "
@@ -1857,7 +1851,7 @@ class Renderer:
         t = self.now(t_now)
         for v in views:
             v.error, v.exc, v.handoff = "", None, None
-        self._media_now = {}          # plan 32 R: nothing read or fitted yet this frame
+        self._media_now = {}          # nothing read or fitted yet this frame
         first = views[0]
         target, vp = first.target, first.rect
         try:
@@ -1872,7 +1866,7 @@ class Renderer:
             ctx.viewport = vp
             ctx.enable(moderngl.BLEND)
 
-    # ---- plan 32 T9: the outputs published out
+    # ---- the outputs published out ----
 
     def _publish(self, views: list[View], t: float) -> None:
         """Each view's publishers (media/publish.py) handed its picture, a
@@ -1953,12 +1947,12 @@ class Renderer:
                 pass
 
     def _timed(self, name: str) -> _Timed:
-        """``with self._timed("fx"):`` — the pass's GPU time (plan 26 A0)."""
+        """``with self._timed("fx"):`` — the pass's GPU time."""
         return self._pass_timer().time(name)
 
     def _draw_frame(self, s: ViewState, w: int, h: int, dpr: float, t: float,
                     views: list[View]) -> None:
-        """draw_outputs()'s body (plan 26 A1): the frame's size under the
+        """draw_outputs()'s body: the frame's size under the
         render cap, the chain's clocks, then the render graph for these
         views — built from their switches, or the last frame's while they
         have not changed — evaluated once, every node timed on the GPU
@@ -1986,8 +1980,7 @@ class Renderer:
         target.viewport = vp
         # the chain's folder watch and ground, once a frame, before the
         # graph: whether an effect is on steers the hands' readout and the
-        # routes. An opaque ground keeps the whole chain at alpha 1 (plan
-        # 14 WP1)
+        # routes. An opaque ground keeps the whole chain at alpha 1
         fx = self.fx
         fx.tick()
         fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
@@ -1998,42 +1991,42 @@ class Renderer:
         # (the frame's view state, for the backdrop the graph is built with:
         # kept on the renderer so `_graph_for` keeps its one-argument shape)
         self._view_now = s
-        # plan 33 R: the frame's size (what `_media_fit` keys its targets
+        # The frame's size (what `_media_fit` keys its targets
         # by), and the textures made last frame at another size kept only
         # while something still asks for them
         self._frame_size = size
         self._prune_sized()
         self._poi_layer(s, size, target, vp)
         graph = self._graph_for(views)
-        # plan 34 D: each delay's pair turns — last frame's write is now
+        # Each delay's pair turns — last frame's write is now
         # what its delay reads
         self._turn_delays(graph, t)
-        # plan 39 T4: a segment no node of this graph holds lets its worker
+        # A segment no node of this graph holds lets its worker
         # and its background model go, after `SIZED_KEEP_FRAMES`
         self._tend_segments(graph)
-        # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
+        # "an effect is on" means one of the pipelines' runs: an
         # effect the loadable patch placed on an edge runs there (and moves its
         # clock in `run_one`) but bends no pipeline, so with only placed
-        # effects on a through output stands down as with none. Plan 33 R:
+        # effects on a through output stands down as with none.
         # the runs are the graph's (its wires), each effect asked `live`
         fx_on = any(fx.state.live(n) for n in getattr(graph, "run", ()))
         stats["fx_on"] = fx_on
-        # plan 33 S: each switch's `select`, read once for the frame
+        # Each switch's `select`, read once for the frame
         # (`ViewState.switch`, the `switch[.n].select` params' — getattr: a
         # view state from before the switch has none): what the switches
         # pass and what the graph pulls, never a rebuild
         selects = dict(getattr(s, "switch", None) or {})
-        # plan 34 Z: each resize's values likewise (`ViewState.resize`)
+        # Each resize's values likewise (`ViewState.resize`)
         resizes = dict(getattr(s, "resize", None) or {})
-        # plan 34 D: each delay's rate likewise (`ViewState.delay`)
+        # Each delay's rate likewise (`ViewState.delay`)
         delays = dict(getattr(s, "delay", None) or {})
-        samples = getattr(first, "samples", None)   # (plan 44 D4: a deck drawn for a window)
+        samples = getattr(first, "samples", None)   # (a deck drawn for a window)
         frame = Frame(self, ctx, s, w, h, dpr, t, views, size,
                       samples if samples is not None else _samples_of(ctx, target),
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
                       stats=stats, selects=selects, resizes=resizes, delays=delays)
         timer = self._pass_timer()
-        # plan 84: what each node runs this frame, only while GRAPH's **gpu
+        # What each node runs this frame, only while GRAPH's **gpu
         # cost** chip asks (`gpu_watch`, set by the page each frame it is lit
         # and cleared here, so a chip turned off — or a page no longer drawn —
         # stops costing after one frame)
@@ -2043,7 +2036,7 @@ class Renderer:
         self._thumb_frame = None
         try:
             graph.evaluate(frame)
-            self._thumb_frame = frame       # plan 37 C1: the panel's thumbnails read it
+            self._thumb_frame = frame       # the panel's thumbnails read it
         finally:
             timer.end_frame(graph.timed_in(frame))
             stats["gpu_ms"] = timer.medians()
@@ -2053,7 +2046,7 @@ class Renderer:
                 stats.update(gpu_made(graph, frame, asked))
 
     def _poi_layer(self, s: ViewState, size: tuple[int, int], target, vp) -> None:
-        """The poi's guide for this frame (plan 47), drawn once into its
+        """The poi's guide for this frame, drawn once into its
         own layer before the graph runs, laid over each output by
         `_compose`. Nothing — no GL touched — with no poi, or the poi or
         its guide off. A failure is the guide's alone: it is dropped for
@@ -2087,27 +2080,26 @@ class Renderer:
         """The render graph for these views: the last one while their count
         and the wiring have not changed (`graph.graph_key`,
         `Renderer.wiring`), else one built from them (`graph.build_graph`;
-        plan 36 T3: a wired frame only, `graph.EMPTY` for none). getattr: a renderer
-        from before the graph
-        (or the wiring) has none. Plan 26 A4b: the `cloud` devices the
+        a wired frame only, `graph.EMPTY` for none). getattr: a renderer
+        from before the graph (or the wiring) has none. The `cloud` devices the
         registry lists (`cloud_source`) are part of the key, so listing
-        one adds its point-cloud node to the scene. Plan 33 R: so are the
+        one adds its point-cloud node to the scene. So are the
         effect files present (`FxState.specs`, as a set): each pipeline's
         run is the wiring's (`Wiring.run`, its wires), so a file that goes
         or comes builds again and a toggle does not (an off node reads
         through). A wiring that says no run (no loadable patch's graph reached it)
-        has the empty one (R23, plan 33 T7). A new graph
+        has the empty one. A new graph
         fits the effects' texture pool to what it needs (`Graph.pool`).
-        Plan 28 N4: the loadable patch's wires are part of the key — they ride in
+        The loadable patch's wires are part of the key — they ride in
         the wiring (`Wiring.wires`, `Wiring.placed`, `Wiring.composites`),
         so an edit on the GRAPH page that lands a new `GraphSpec` builds
         the graph again, with the same refusals (a dormant wire, a loop).
-        Plan 35 B, T4: every frame is a wired frame, keyed by the views'
+        Every frame is a wired frame, keyed by the views'
         count alone — a window's switches are mutes, read by each output
-        every frame, never a rebuild. Plan 36 T1: the meta controller's own wires
+        every frame, never a rebuild. The meta controller's own wires
         (`bus_source`, the open show: `graph.bus_cuts_of`) are part of the key —
         a bus cable cut on GRAPH builds again."""
-        # (`s`: the view state, unread since plan 36 T3 — the backdrop is
+        # (`s`: the view state, unread — the backdrop is
         # the section's wires, never laid on per frame)
         wiring = getattr(self, "wiring", None) or EMPTY
         key = graph_key(views)
@@ -2116,9 +2108,9 @@ class Renderer:
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
         effects = frozenset(st.specs) if st is not None else frozenset()
-        # plan 80: the effects that draw with nothing wired in (`Effect.generates`)
+        # The effects that draw with nothing wired in (`Effect.generates`)
         gens = generators_of(st)
-        # plan 67 P3: a wire's depth is not part of what the wire is, so a
+        # A wire's depth is not part of what the wire is, so a
         # depth changed alone is no other wiring: the depths are keyed too
         depths = wire_depths(wiring)
         graph = getattr(self, "_graph", None)
@@ -2133,13 +2125,13 @@ class Renderer:
             graph.depths = depths
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
-            # plan 26 A4: a second hands node's Ghost the new graph does
+            # A second hands node's Ghost the new graph does
             # not hold goes with the old graph
             self.drop_ghosts({param_prefix(n.name) for n in graph.nodes.values()
                               if isinstance(n, Hands)})
         return graph
 
-    # ---- plan 32 T10: what the control panel draws of the media ----
+    # ---- what the control panel draws of the media ----
 
     def _for_the_panel(self) -> None:
         """The end of a frame, this context current: the channels the MEDIA
@@ -2186,11 +2178,11 @@ class Renderer:
         self._thumbnails()
         self._make_previews()
 
-    # ---- plan 37 C1: the GRAPH page's thumbnails ----
+    # ---- the GRAPH page's thumbnails ----
 
     def _thumbs(self) -> PreviewTextures:
-        """The thumbnails, made on first use (getattr: a renderer from
-        before plan 37, or after a reload, has none)."""
+        """The thumbnails, made on first use (getattr: a renderer after
+        a reload has none)."""
         th = getattr(self, "thumbs", None)
         if th is None:
             th = self.thumbs = PreviewTextures(self.ctx)
@@ -2318,7 +2310,7 @@ class Renderer:
         th.end_frame()
 
     def _unwired_budget(self, wanted: dict[str, str]) -> dict[str, str]:
-        """Plan 65: `wanted` with at most `UNWIRED_PER_FRAME` of its unwired
+        """`wanted` with at most `UNWIRED_PER_FRAME` of its unwired
         effects (`UNWIRED_PIC`), round robin from after the last one made;
         the others keep their last thumbnail until their turn."""
         un = sorted(n for n, how in wanted.items() if how == UNWIRED_PIC)
@@ -2330,7 +2322,7 @@ class Renderer:
         self._unwired_last = un[UNWIRED_PER_FRAME - 1]
         return {n: how for n, how in wanted.items() if how != UNWIRED_PIC or n in keep}
 
-    # ---- plan 65: the effect picker's previews ----
+    # ---- the effect picker's previews ----
 
     def effect_previews(self) -> EffectPreviews:
         """The effect picker's previews (`previews.EffectPreviews`), made on
@@ -2442,7 +2434,7 @@ class Renderer:
         """RGBA8 pixels for the panel, uploaded at the end of the next frame."""
         self._ui_textures().put(key, size, data)
 
-    # ---- plan 32 R: the media channels' pictures ----
+    # ---- the media channels' pictures ----
 
     def _media_textures(self) -> MediaTextures:
         """The channels' textures, made on first use (getattr: a renderer
@@ -2462,7 +2454,7 @@ class Renderer:
         """Channel `c`'s newest frame this frame — the `MediaFrame` its
         texture was uploaded from (None: black) — and its fit (`media.<c>.
         fit`: 0 cover): the segment's shortcut to a camera's or a feed's CPU
-        pixels (plan 39 T4), read once a frame with the texture."""
+        pixels, read once a frame with the texture."""
         self.media_texture(c)
         ch = getattr(getattr(self, "media", None), "channels", {}).get(c)
         return self._media_frame_now().get(("frame", c)), int(getattr(ch, "fit", 0) or 0)
@@ -2485,11 +2477,11 @@ class Renderer:
                 f = media.frame(c)
             except Exception:  # noqa: BLE001 — a channel must not take the frame down
                 f = None
-            now[("frame", c)] = f         # (plan 39 T4: `media_now`)
+            now[("frame", c)] = f         # (`media_now`)
             now[key] = self._media_textures().texture(c, f)
         return now[key]
 
-    # plan 87: a keyed node's state as the fit pass's cache key reads it
+    # A keyed node's state as the fit pass's cache key reads it
     # (`media_tex.key_of`: hashable, held to its ranges) — `graph.MediaNode`
     key_of = staticmethod(key_of)
 
@@ -2500,7 +2492,7 @@ class Renderer:
         texture of the renderer's (`_frame_target`, one per channel and
         alpha 1 or not), once a frame per (channel, size, alpha, fit, key).
         With no picture it is transparent black — a texture all the same,
-        so an `IMAGE` port always has one. Plan 87: `key` (a keyed channel
+        so an `IMAGE` port always has one. `key` (a keyed channel
         node's black is clear, `graph.MediaNode`) keys it in the same pass,
         into a target of its own; with a feather, the ramp alone first into
         a one-channel target, blurred by `MaskPasses.feather`, and the pass
@@ -2514,7 +2506,7 @@ class Renderer:
         if cache in now:
             return now[cache]
         src = self.media_texture(c)
-        # (plan 33 R: fitted at another size than the frame's — a branch on
+        # (fitted at another size than the frame's — a branch on
         # the faces — it is a target of its own, `(name, size)`)
         name = f"media.{c}" if alpha >= 1.0 else f"media.{c}@alpha"
         if key is not None:
@@ -2565,7 +2557,7 @@ class Renderer:
 
     def _key_ramp(self, c: str, src: moderngl.Texture, tkey, size: tuple[int, int], fit: int,
                   key) -> moderngl.Texture:
-        """Plan 87's feather: channel `c`'s ramp alone (`KEY_RAMP_OUT`) into a
+        """The feather: channel `c`'s ramp alone (`KEY_RAMP_OUT`) into a
         one-channel target of `size` under `(tkey, "key")`, blurred by
         `key.feather` px (`MaskPasses.feather`, under `(tkey, "key/feather")`).
         Returns the blurred ramp, which the fit pass reads 1:1."""
@@ -2597,7 +2589,7 @@ class Renderer:
         """`tex`'s `crop` (x0, y0, w, h in its GL uv) fitted by `fit`
         (`media_tex.FITS`) into `dst`'s viewport, blending off, the texels
         as they are (premultiplied in and out), transparent black outside
-        the fit (plan 34 D, row 358; `REFIT_FS`). `clamp` (min u, min v,
+        the fit (`REFIT_FS`). `clamp` (min u, min v,
         max u, max v) bounds the samples (the crop itself when None). The
         filter is a sampler object's (`_sampler`: linear, or nearest; `mip`
         trilinear from mipmaps built here), so the texture's own filter —
@@ -2632,7 +2624,7 @@ class Renderer:
 
     def _refit_program(self) -> tuple[moderngl.Program, moderngl.VertexArray]:
         """`_refit`'s program (`REFIT_FS`), built on first use (getattr: a
-        renderer from before plan 34 has none)."""
+        renderer from before the refit has none)."""
         prog, vao = getattr(self, "_refit_prog", None), getattr(self, "_refit_vao", None)
         if prog is not None and vao is not None:
             return prog, vao
@@ -2668,24 +2660,22 @@ class Renderer:
                  lay=None, blend: str = "over", ghost: Ghost | None = None,
                  readout_ghost: Ghost | None = None,
                  hands_tex: moderngl.Texture | None = None) -> None:
-        """One view's picture: its end's frame (`key`, the end's name, plan
-        35 `Shown`: `shown(lookback)` …; already there when it was drawn
+        """One view's picture: its end's frame (`key`, the end's name,
+        `Shown`: `shown(lookback)` …; already there when it was drawn
         direct; None, its ground), the hands over it in the same rect, the readout layer over
         that when there is one, its dim. `lay(target, rect, opaque, flip)`
-        lays the hands when the output's wiring is not plain over (plan 26
-        A3: add, depth-aware); a presenter's hand-off carries `blend` and
+        lays the hands when the output's wiring is not plain over
+        (add, depth-aware); a presenter's hand-off carries `blend` and
         honours add, and lays a depth-aware layer plain over (the depths
         stay in this context). `ghost` is the Ghost whose layer is laid
-        over and `readout_ghost` the one whose readout goes on (plan 26 A4:
-        each hands node's own; the renderer's when None). `hands_tex` (plan
-        30 D1): the picture of the hands laid over when it is not the
+        over and `readout_ghost` the one whose readout goes on (each hands node's own; the renderer's when None). `hands_tex`: the picture of the hands laid over when it is not the
         Ghost's own layer — an effect placed after the hands folds it — for
         a presenter's hand-off (a target view lays it through `lay`)."""
         ctx = self.ctx
         gh = ghost if ghost is not None else self.ghost
         rg = readout_ghost if readout_ghost is not None else gh
         factor = clamp(getattr(self, "dim", 1.0) * float(v.switches.dim), 0.0, 1.0)
-        # plan 23 WP1: this output's mirror, its last step — the frame, the
+        # This output's mirror, its last step — the frame, the
         # hands laid after and the readout, never the hands-through pass
         # (the graph's Composite node, inside the frame this flips whole)
         flip = (bool(getattr(v.switches, "flip_x", False)),
@@ -2694,7 +2684,7 @@ class Renderer:
         if v.target is None or getattr(v, "tap", None) is not None:
             if v.target is None and v.presenter is None:
                 raise RuntimeError("a view needs a target or a presenter")
-            # a presenter's hand-off — and (plan 32 T9) a published
+            # a presenter's hand-off — and a published
             # window's, which `_published` presents into its tap at the
             # capped size (the window itself is drawn below as ever)
             rx, ry, rw, rh = v.rect
@@ -2731,7 +2721,7 @@ class Renderer:
                     rg.composite_readout(tgt, inner, opaque=opaque, flip=flip)
             except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
                 self._hands_failed(e, tgt, rect)
-        # plan 47: the poi's guide over the hands, on an output that shows
+        # The poi's guide over the hands, on an output that shows
         # them (its hands switch mutes it too), never through the effects
         guide = getattr(self, "poi_guide", None)
         if guide is not None and guide.shown and bool(getattr(v.switches, "hands", True)):
@@ -2742,7 +2732,7 @@ class Renderer:
                 guide.error = f"poi guide: {type(e).__name__}: {e}"[:160]
                 tgt.use()
                 ctx.viewport = rect
-        # the deck fade (plan 44 D4): the other deck's finished picture for
+        # the deck fade: the other deck's finished picture for
         # this output, before the dim, so a fade under a half-dim fades under
         # a half-dim. No fade on: the pass does not run
         mix = getattr(v, "mix", None)
@@ -2761,7 +2751,7 @@ class Renderer:
               bg_alpha: float, flip: tuple[bool, bool] = (False, False)) -> None:
         """A frame texture onto `tgt`: 1:1 when `inner` is the frame's size,
         else scaled into `inner` with the rest of `rect` the ground;
-        mirrored inside `inner` by `flip` (x, y; plan 23 WP1)."""
+        mirrored inside `inner` by `flip` (x, y)."""
         prog, vao = self._show_program()
         ctx = self.ctx
         tgt.use()
@@ -2800,9 +2790,9 @@ class Renderer:
             flip: tuple[bool, bool] = (False, False), depth: moderngl.Texture | None = None,
             scene_depth: moderngl.Texture | None = None) -> bool:
         """A layer (`tex`, premultiplied, frame-sized) into `target`'s
-        `rect` at `alpha` (plan 26 A3, the Composite node's blend): "over"
+        `rect` at `alpha` (the Composite node's blend): "over"
         — `Ghost.composite`'s blend and arithmetic, the same bytes — "add",
-        "screen" (plan 87: `src + dst·(1 − src)` in colour, alpha as over),
+        "screen" (`src + dst·(1 − src)` in colour, alpha as over),
         or "depth": over, hidden where `scene_depth` is nearer than the
         layer's own `depth` (`LAYER_FS`, `LAYER_DEPTH_BIAS`; plain over when
         either depth is missing). On an opaque ground the target's alpha is
@@ -2851,7 +2841,7 @@ class Renderer:
 
     def _lay_program(self) -> tuple[moderngl.Program, moderngl.VertexArray]:
         """`lay`'s program, built on first use (getattr: a renderer from
-        before A3 has none)."""
+        before the layer pass has none)."""
         prog, vao = getattr(self, "_lay_prog", None), getattr(self, "_lay_vao", None)
         if prog is not None and vao is not None:
             return prog, vao
@@ -2867,20 +2857,20 @@ class Renderer:
     def _frame_target(self, key, size: tuple[int, int], dtype: str = "f1",
                       components: int = 4
                       ) -> tuple[moderngl.Texture, moderngl.Framebuffer]:
-        """The frame texture for an end (plan 35: by its name): RGBA8 at the frame's size,
+        """The frame texture for an end (by its name): RGBA8 at the frame's size,
         LINEAR (a 1:1 show reads it by texelFetch), made on first use and
-        again when the frame's size changes. Plan 33 R: a key that is
+        again when the frame's size changes. A key that is
         `(name, size)` (a picture made at another size, `graph.Frame.key`)
-        lives while some frame asks for it (`_prune_sized`) — R16: as does
-        any other key, after `SIZED_KEEP_FRAMES` idle. Plan 34 D:
+        lives while some frame asks for it (`_prune_sized`) — as does
+        any other key, after `SIZED_KEEP_FRAMES` idle.
         `dtype` "f2" a half-float one (a delay's picture refitted, which
         must not quantise); a stored texture of another dtype is made
-        again. Plan 39 T2: `components` 1 a one-channel one (a mask,
+        again. `components` 1 a one-channel one (a mask,
         `masks.MaskPasses`), likewise made again when it differs."""
         frames = getattr(self, "_frames", None)
         if frames is None:
             frames = self._frames = {}
-        # R16 (final review): every key asked for is marked — a string
+        # Every key asked for is marked — a string
         # key (an end's `shown(...)`, a `#fit`) is pruned when idle as a
         # `(name, size)` one is, so a load leaves nothing of the last loadable patch
         self.__dict__.setdefault("_sized_used", set()).add(key)
@@ -2906,7 +2896,7 @@ class Renderer:
         return tex, fbo
 
     def mask_passes(self) -> MaskPasses:
-        """The mask passes (plan 39 T2, `masks.MaskPasses`): compiled on
+        """The mask passes (`masks.MaskPasses`): compiled on
         first ask and kept, handed `_frame_target` for their one-channel
         targets (late-bound, so a spy on it sees their asks too). What the
         graph's mask nodes paint through (`graph.MatteNode`, `MaskPicture`)."""
@@ -2924,8 +2914,7 @@ class Renderer:
 
     def pool_at(self, size: tuple[int, int], n: int
                 ) -> list[tuple[moderngl.Texture, moderngl.Framebuffer]]:
-        """The effects' half-float textures at `size`, at least `n` (plan 33
-        R, `graph.Frame.pool`): a branch made at a size not the frame's —
+        """The effects' half-float textures at `size`, at least `n` (`graph.Frame.pool`): a branch made at a size not the frame's —
         the faces' FACE_PIC², the pattern's layer at its channel's — paints
         through these, as one at the frame's size does through the chain's
         pool (`FxChain.pool`), so neither is made again for the other. Grown
@@ -2955,10 +2944,10 @@ class Renderer:
         self._pools_used = set()
 
     def delay_pair(self, name: str) -> DelayPair:
-        """Delay `name`'s pair (plan 34 D, row 354), made on first ask and
+        """Delay `name`'s pair, made on first ask and
         kept by name across graph rebuilds — an edit elsewhere on GRAPH
-        does not cut the feedback; a loadable patch load does (`reset_delays`, R19)
-        (__dict__: a renderer from before plan 34 has none)."""
+        does not cut the feedback; a loadable patch load does (`reset_delays`)
+        (__dict__: a renderer from before the delays has none)."""
         pairs = self.__dict__.setdefault("_delays", {})
         got = pairs.get(name)
         if got is None:
@@ -2971,7 +2960,7 @@ class Renderer:
         return got
 
     def segmenter(self, name: str):
-        """Segment node `name`'s worker (plan 39 T4, `segment.SegmentWorker`),
+        """Segment node `name`'s worker (`segment.SegmentWorker`),
         made on its first need from `segment_cfg` and kept by name across
         graph rebuilds — or None on a renderer with no `segment_cfg`. Closed when
         no graph has held its node for `SIZED_KEEP_FRAMES` (`_tend_segments`)
@@ -2993,8 +2982,7 @@ class Renderer:
         return got
 
     def motion_pair(self, name: str) -> DelayPair:
-        """Segment node `name`'s background model in motion mode (plan 39
-        T4): a half-float pair on the delay's pattern (`DelayPair`), made on
+        """Segment node `name`'s background model in motion mode: a half-float pair on the delay's pattern (`DelayPair`), made on
         first ask and kept by name across graph rebuilds; the node writes
         one side and turns it once a frame. Released with its worker."""
         pairs = self.__dict__.setdefault("_motions", {})
@@ -3041,7 +3029,7 @@ class Renderer:
                 pass
 
     def close(self, timeout: float = 1.0) -> None:
-        """This renderer's own segment workers closed (plan 39 T4; app.py's
+        """This renderer's own segment workers closed (app.py's
         close list, at quit and restart) — all stopped first, then joined
         against one shared deadline of `timeout` seconds, the ones
         `_tend_segments` stopped earlier too — never anything another
@@ -3065,7 +3053,7 @@ class Renderer:
         self._stopped = []
 
     def delay_stack(self, name: str):
-        """Plan 90 (H1): delay `name`'s stack (`stack.DelayStack`), made on a
+        """Delay `name`'s stack (`stack.DelayStack`), made on a
         reader's first ask — it fills from the next turn — and kept while a
         reader asks each frame; None when the delay has no pair yet."""
         from .stack import DelayStack
@@ -3079,10 +3067,10 @@ class Renderer:
 
     def _turn_stack(self, name: str, pair: DelayPair, committed: bool, reset: bool,
                     t: float | None) -> None:
-        """Plan 90 (H1): a delay's stack at the turn — its clock moves; the
+        """A delay's stack at the turn — its clock moves; the
         picture its pair just took (at the delay's own rate, `graph.delay_due`)
-        is kept (`DelayStack.commit`) at its depth (`ViewState.delay`); a load forgets it
-        (R19). One no reader asked for in `SIZED_KEEP_FRAMES` is released.
+        is kept (`DelayStack.commit`) at its depth (`ViewState.delay`); a load forgets it.
+        One no reader asked for in `SIZED_KEEP_FRAMES` is released.
         Never raises: a stack that cannot be kept says why on `error`."""
         from . import stack as _stack
         from .stack import KEEPS_WHAT_FITS, OVER_BUDGET, frame_bytes
@@ -3104,7 +3092,7 @@ class Renderer:
         depth = int(getattr(st, "depth", 1))
         size = tuple(pair.read[0].size)
         # (this deck's stacks on this context: each deck a budget of its own, so
-        # neither starves the other in a crossfade — Devin on #519)
+        # neither starves the other in a crossfade)
         others = _stack.held(self.ctx, but=stack, owner=id(self))
         # past the budget it keeps the frames that fit, never none (the owner on
         # the Mac, hand check 960: past depth 36 the whole picture went black)
@@ -3127,7 +3115,7 @@ class Renderer:
             stack.error = f"{name}: {type(e).__name__}: {e}"[:160]
 
     def reset_delays(self) -> None:
-        """R19 (final review, row 354): a loadable patch load landed a new section —
+        """A loadable patch load landed a new section —
         at the next turn every pair holds nothing (as on its first frame),
         so no trail of the last loadable patch shows in the new one. A GRAPH edit
         or rebuild does not ask: the feedback runs on across those. The
@@ -3140,7 +3128,7 @@ class Renderer:
         pair whose delay is in no node of `graph` counts a frame idle and
         is released at `SIZED_KEEP_FRAMES`, with its refitted picture
         (`<name>#fit`); one in the graph is idle 0. After `reset_delays`
-        (a load, R19) every pair holds nothing this frame. Never raises."""
+        (a load) every pair holds nothing this frame. Never raises."""
         pairs = getattr(self, "_delays", None)
         reset = getattr(self, "_delays_reset", False)
         if reset:
@@ -3174,11 +3162,11 @@ class Renderer:
 
     def _prune_sized(self) -> None:
         """Once a frame, first: release the pools (`pool_at`) and the frame
-        textures (R16: every key — `(name, size)`, an end's `shown(...)`, a
+        textures (every key — `(name, size)`, an end's `shown(...)`, a
         `#fit`, a channel's fit) that no frame has asked for in the last
         `SIZED_KEEP_FRAMES` — a channel whose clip changed size, a branch
         unwired, the loadable patch before a load — so pictures never pile up,
-        and (R29) a switch flicked every frame between branches of other
+        and a switch flicked every frame between branches of other
         sizes reallocates nothing: the branch not picked keeps its
         textures for the next flick."""
         # (__dict__: a renderer from before a hot reload has no idle counts;
@@ -3226,13 +3214,13 @@ class Renderer:
         self._rebind(target, vp)
 
     def ghost_of(self, name: str) -> Ghost:
-        """The `Ghost` that draws hands node `name` (plan 26 A4): `ghost` is
+        """The `Ghost` that draws hands node `name`: `ghost` is
         the renderer's own (`self.ghost`, `ghost.*`); another (`ghost.2` …)
         is made on first ask over its state in `ghost_states` — the one the
         registry's `ghost.2.*` params write (`loadable.GraphSection`), a
         fresh one when none was handed over — and follows the first's
         tracker and routing table. A state handed over again later
-        replaces the Ghost. getattr: a renderer from before A4."""
+        replaces the Ghost. getattr: a renderer from before the extra hands nodes."""
         if name == "ghost":
             return self.ghost
         ghosts = self.__dict__.setdefault("_ghosts", {})
@@ -3267,7 +3255,7 @@ class Renderer:
 
     def _face_picture(self, s: ViewState, t: float, paint=None) -> moderngl.Texture | None:
         """The picture the faces show this frame, or None for "as ever"
-        (the pattern per face). Plan 33 R: `paint` paints what the graph
+        (the pattern per face). `paint` paints what the graph
         wires into `shape.faces` at FACE_PIC² into a framebuffer
         (`graph.Shape.prepare`) — from the pattern through effects, the
         faces' chain as it always ran: the seed (what face 0 shows: pattern
@@ -3302,7 +3290,7 @@ class Renderer:
 
     def _pattern_into(self, dst: moderngl.Framebuffer, s: ViewState, t: float,
                       media) -> None:
-        """The pattern as a picture (plan 33 R, `graph.PatternNode`): the
+        """The pattern as a picture (`graph.PatternNode`): the
         seed — what face 0 shows, the pattern and `media` (the layer's
         (texture, GL row order) or None) over it, premultiplied by its
         intensity — into `dst` at its own viewport, blending off, as the
@@ -3322,10 +3310,10 @@ class Renderer:
             ctx.enable(moderngl.BLEND)
 
     def _pattern_picture(self, s: ViewState, t: float, media) -> moderngl.Texture:
-        """The pattern's picture as a texture (plan 33 R): `_pattern_into` a
+        """The pattern's picture as a texture: `_pattern_into` a
         FACE_PIC² `FaceTarget` of its own (`pattern_pic`), mipmapped — what
         a consumer that binds the pattern's picture reads (a composite, an
-        output's hands port). getattr: a renderer from before plan 33."""
+        output's hands port). getattr: a renderer from before the pattern picture."""
         pic = getattr(self, "pattern_pic", None)
         if pic is None:
             pic = self.pattern_pic = FaceTarget(self.ctx)
@@ -3357,7 +3345,7 @@ class Renderer:
         clock is the live one unless a still pins it (`ptime`); the clocks
         are set only if the patterns read them (an edit may not). `media`:
         the media layer's (texture, GL row order) or None, as the pattern
-        node read it (plan 33 R); left out, `_face_media`'s."""
+        node read it; left out, `_face_media`'s."""
         if ptime is None:
             ptime = self._pattern_clock(s, t)
         bands = tuple(float(v) for v in (getattr(self, "bands", ()) or ())[:N_BANDS])
@@ -3378,7 +3366,7 @@ class Renderer:
         # reads; upload exactly that many
         u_mod = p["u_mod"]
         u_mod.value = tuple(float(v) for v in s.pattern_mod[: u_mod.array_length])
-        # the media layer (plan 32, row 331: a channel where the bitmap file
+        # the media layer (a channel where the bitmap file
         # was), with the bitmap's alpha, size and path. Each uniform guarded:
         # a program that never reads the layer (an edit, a frozen test
         # program) has had them trimmed
@@ -3388,7 +3376,7 @@ class Renderer:
             except KeyError:
                 pass
 
-        # (plan 33 R: the layer is what `pattern.media` reads — `media`,
+        # (the layer is what `pattern.media` reads — `media`,
         # handed in by the pattern node, else `_face_media` — never
         # `view.media`)
         if media is _UNSET:
@@ -3532,7 +3520,7 @@ class Renderer:
         … 1 untouched): one full-screen triangle, blending only — nothing
         is read and nothing is drawn. On an opaque ground the colour scales
         and the alpha is left exactly as it was, so the Pepper's Ghost
-        window stays opaque black (plan 14 WP1); on overlay's see-through
+        window stays opaque black; on overlay's see-through
         ground the frame is premultiplied, so colour and alpha both scale
         and the render fades off the desktop. The multiply is linear in the
         framebuffer's values; a curve for the bottom of the throw would go
@@ -3542,7 +3530,7 @@ class Renderer:
         the scene pass sets it. A driver that refuses the program leaves
         the frame undimmed, says why once on `dim_error`, and is not asked
         again until a reload. True when it dimmed. Called once per frame
-        with the master; plan 21 calls it once per output with master ×
+        with the master; each output calls it once with master ×
         that output's own dim."""
         ctx = self.ctx
         if getattr(self, "_dim_prog", None) is None and not self._build_dim():
@@ -3580,7 +3568,7 @@ class Renderer:
 
     def mix_pass(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int],
                  tex: moderngl.Texture, k: float, opaque: bool = True) -> bool:
-        """The one fade (plan 44 D4): `tex`, another deck's finished picture
+        """The one fade: `tex`, another deck's finished picture
         for this output (premultiplied), mixed into what is on `target`'s
         viewport `vp` at `k`, linear — 0 what is there, 1 `tex`'s bytes. Two
         full-screen triangles beside `dim_pass`: what is there multiplied by
@@ -3644,7 +3632,7 @@ class Renderer:
 
     def _draw_cover(self, w: int, h: int) -> moderngl.Texture:
         """The faces again, solid, into the coverage mask — from the vertices
-        the scene pass left in the face buffer. Plan 90 (H2): the framebuffer
+        the scene pass left in the face buffer. The framebuffer
         and viewport bound before are bound again after — a cut takes the
         cover now, pulled in the middle of another node's pass (an effect
         painting into its consumer), where the look-back's trail pass bound
@@ -3665,7 +3653,7 @@ class Renderer:
         ctx.clear(0.0, 0.0, 0.0, 0.0)
         cells = getattr(self, "_cover_cells", None)
         if cells is not None and self._copies:
-            # a fractal's solids on the GPU (plan 64): its own cover program
+            # a fractal's solids on the GPU: its own cover program
             ctx.disable(moderngl.BLEND)
             cells()
             ctx.enable(moderngl.BLEND)
@@ -3683,15 +3671,15 @@ class Renderer:
     def clear_scene(self) -> None:
         """The scene's clear, into whatever is bound: the premultiplied
         ground (black at `bg_alpha`) and the depth to the far plane. The
-        scene node clears before its solid geometry (plan 26 A3); a scene
+        scene node clears before its solid geometry; a scene
         of the shape alone clears inside `draw_scene`, as it always did.
-        Plan 32 R: at `scene_ground` instead while a scene node sets it
+        At `scene_ground` instead while a scene node sets it
         (0 over the backdrop)."""
         self.ctx.clear(*BG, self._scene_ground())
 
     def _scene_ground(self) -> float:
         """The scene's ground alpha: `scene_ground` while a scene node sets
-        it (plan 32 R: 0, see-through over the backdrop), else `bg_alpha`."""
+        it (0, see-through over the backdrop), else `bg_alpha`."""
         g = getattr(self, "scene_ground", None)
         return float(g) if g is not None else float(getattr(self, "bg_alpha", 1.0))
 
@@ -3708,17 +3696,17 @@ class Renderer:
         faces' effects are `draw`'s (`_draw_frame` hands the picture over
         for the one scene pass it wraps).
 
-        Plan 26 A2, the one camera: the CPU takes the shape to 3D
+        The one camera: the CPU takes the shape to 3D
         (`geometry.shape_world`), the GPU on to the clip through each
         copy's place (its scale and centre, the camera's zoom and pan with
         them: `_copies_of`, field.py) and the eye (`eye.*`,
         `geometry.eye_matrix`). The see-through shape is painter-sorted
         as before and drawn with the depth test on but no depth written
         (whatever solid geometry is already in the depth buffer hides it;
-        A3's hands), then `_depth_pass` writes its nearest visible
+        the hands), then `_depth_pass` writes its nearest visible
         surface for what comes after.
 
-        Plan 26 A3: `clear` False draws over what is bound — the scene node
+        `clear` False draws over what is bound — the scene node
         cleared it and drew the solid geometry (the hands) first, whose
         depth hides the shape behind them."""
         # the camera: the shape's world transform and the eye, as the vertex
@@ -3732,10 +3720,10 @@ class Renderer:
         # scaled per copy in the shaders (`_copies_of`)
         zoom = max(s.zoom, 1e-3)
         legacy = _field_mod.takes_offset(s)
-        # plan 59: the world's offset on the shape object (home ∘ offset, the
+        # The world's offset on the shape object (home ∘ offset, the
         # home being zoom and pan), None while it is the identity — the matrix
         # of before, built exactly as before. Fit and the 3D lattices carry the
-        # camera in each copy's row and take no offset (register row 851)
+        # camera in each copy's row and take no offset
         world = getattr(self, "world", None)
         off = None
         if legacy:
@@ -3745,17 +3733,16 @@ class Renderer:
                 getattr(obj, "bounded", True))
         model = model_matrix(zoom, s.pan, off) if legacy else model_matrix(1.0, (0.0, 0.0))
         if world is not None and hasattr(world, "box"):
-            # plan 60: the box the rig holds the shape to, what the eye sees at
+            # The box the rig holds the shape to, what the eye sees at
             # depth 0 — set from the scene drawn, as the poi's (`poi.box_for`)
             world.box = tuple(poi.box_for(w, h, getattr(s, "eye_fov", EYE_FOV),
                                           getattr(s, "eye_distance", EYE_DISTANCE)))
-        # what the shape is this frame (plan 64, shapeframe.py): a fixed shape
+        # what the shape is this frame (shapeframe.py): a fixed shape
         # its cached geometry, turned — a 3D shape with no W turn, cueing on its
         # depth toward the 3D camera; a 4D shape turned to its body first, and
         # with the 3D switch holding it (ViewState.held) by its 3D angles alone
-        # —, a scene each layer at its own (plan 28's catalog), a fractal made
-        # for the frame (fractal.py). The offset turns a 3D shape's cue
-        # (plan 60, register row 856); a fractal culls by it
+        # —, a scene each layer at its own (the catalog), a fractal made
+        # for the frame (fractal.py). The offset turns a 3D shape's cue; a fractal culls by it
         sf = shapeframe.frame(s, w, h, off)
         g, P, w4, pd = sf.g, sf.P, sf.w4, sf.pd
         # a scene's per-layer weights (geometry._scene_style), else None
@@ -3796,14 +3783,14 @@ class Renderer:
         alpha = np.clip((0.10 + 0.90 * t * t) * B, 0.015, 1)
 
         # the reference's depth- and brightness-scaled line width (CSS px)
-        # at scale 1. Plan 26 A2b (view.screen_strokes): in world space (the
+        # at scale 1. With `view.screen_strokes` off, in world space (the
         # default) LINE_VS scales it by the copy's scale — the camera's zoom
         # with it — so a stroke grows and shrinks with the shape as it did
-        # before A2 and a zoomed-out field thins out naturally; in screen
-        # space it keeps its weight whatever the shape's size in the world
-        # (A2). The shape's strokes only: the hands are not drawn here —
-        # A3's tubes are world-sized geometry (ghost.py WIRE_R / BONE_R) that
-        # never follows camera.zoom, and A4's hand lines are 1 px edges drawn
+        # before the camera and a zoomed-out field thins out naturally; in screen
+        # space it keeps its weight whatever the shape's size in the world.
+        # The shape's strokes only: the hands are not drawn here —
+        # their tubes are world-sized geometry (ghost.py WIRE_R / BONE_R) that
+        # never follows camera.zoom, and the hand lines are 1 px edges drawn
         # by ghost.Geometry, not by this width, in both modes
         screen_strokes = getattr(s, "screen_strokes", False)
         # the shaders scale a stroke by its copy (field path, world space);
@@ -3824,7 +3811,7 @@ class Renderer:
             width = np.where(em > 500, 0.35 + 0.85 * t, 0.5 + 1.5 * t) * wscale
             width = width * st["e_width"][order]
         # the edges' alpha: depth × brightness × density (floored above),
-        # a sub-pixel width folded in, × the lines opacity (plan 24 C2) —
+        # a sub-pixel width folded in, × the lines opacity —
         # before the vertex fill, so the depth pass's skip test (`draws`)
         # sees the faded alpha. On the legacy path the zoom (`sz`) is in the
         # width and the fold is done here, as before; on the field path
@@ -3840,7 +3827,7 @@ class Renderer:
         # blending leaves the framebuffer correctly composited for a
         # transparent window (colour = Σ c·a, alpha = 1 − Π(1 − a)). The
         # clear clears the depth too (to the far plane)
-        bg_alpha = self._scene_ground()       # (plan 32 R: 0 over the backdrop)
+        bg_alpha = self._scene_ground()       # (0 over the backdrop)
         if clear:
             self.ctx.clear(*BG, bg_alpha)
         # cut-through: the plain blend also blends alpha (a² + (1 − a)·dst),
@@ -3849,12 +3836,11 @@ class Renderer:
         # (a + (1 − a)·dst), never below it — the lowest layer shows instead.
         # Only on a see-through ground (overlay mode): on an opaque one the
         # frame stays alpha 1 everywhere, so the desktop never shows through
-        # the window (plan 14 WP1 — the Pepper's Ghost rig)
-        # plan 39 T1 (alpha is honest): the see-through *window*'s ground
+        # the window (the Pepper's Ghost rig)
+        # Alpha is honest: the see-through *window*'s ground
         # (`bg_alpha`), never a laid-over scene's zero one (`scene_ground`):
-        # a scene in a composite's `over` (PR #240) or laid over the
-        # backdrop (`backdrop.scene`, plan 32 R — the case that moved the
-        # backdrop goldens). There the plain blend squared the alpha
+        # a scene in a composite's `over` or laid over the
+        # backdrop (`backdrop.scene`). There the plain blend squared the alpha
         # against a colour of c·a, so what lay under showed too much
         if s.cut_through and float(getattr(self, "bg_alpha", 1.0)) < 1.0:
             blend = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
@@ -3896,7 +3882,7 @@ class Renderer:
         draws: list[tuple] = []        # (vao, vertices, program, the most alpha a fragment has)
         try:
             if sf.walk is not None:
-                # a fractal on the GPU (plan 64, fractal_gl.py): its cells, one
+                # a fractal on the GPU (fractal_gl.py): its cells, one
                 # instance each, unsorted and additive
                 self._draw_cells(sf, s, w, h, dpr, inst, mats, blend, near, span, dens,
                                  heavy, wscale, legacy, wsc, t_m, draws)
@@ -3931,7 +3917,7 @@ class Renderer:
                     self._camera_uniforms(p, mats, -1.0)
                     self._face_uniforms(p, s, t_m)
                     if getattr(self, "_face_plain", False):
-                        # plan 36 T2: `shape.faces` unwired — plain faces, no
+                        # `shape.faces` unwired — plain faces, no
                         # pattern and no media layer (mode 0: FACE_PX's flat face)
                         p["u_mode"].value = 0
                         try:
@@ -3978,14 +3964,14 @@ class Renderer:
                 self._lvao.render(moderngl.TRIANGLES, vertices=len(verts), instances=copies)
                 draws.append((self._lvao, len(verts), self._lines, float(alpha.max())))
 
-            if s.points and not g.get("curve") and sf.walk is None:   # a curve (plan 28) has no corners to dot
+            if s.points and not g.get("curve") and sf.walk is None:   # a curve has no corners to dot
                 # V's corners only: the rows after them (a pentagram's
                 # crossings) are points a face needs, not corners to dot
                 n = g.get("corners", g["n"])
                 tp = (pd[:n] - near) / span
                 order_p = np.argsort(pd[:n], kind="stable")
                 # radius in framebuffer px (× dpr) at scale 1; POINT_VS scales
-                # it by the copy in world space (plan 26 A2b) and rounds the
+                # it by the copy in world space and rounds the
                 # diameter to whole pixels, as the point sprites the quads
                 # replace were rasterised (the driver rounded gl_PointSize —
                 # measured: with it the quads draw the sprites' frame byte for
@@ -3996,7 +3982,7 @@ class Renderer:
                     # shader's own rounding of a whole diameter is the identity
                     r = np.floor(2.0 * r * sz + 0.5) / 2.0
                 # the points' alpha: depth × brightness, floored, × the points
-                # opacity (plan 24 C2) after the floor — the one place it is derived
+                # opacity after the floor — the one place it is derived
                 PB = s.bright * clamp(dens * 1.5, 0.55, 1)
                 pa = np.clip((0.32 + 0.68 * tp) * PB, 0.05, 1) * s.points_alpha
                 prgb = RED
@@ -4035,7 +4021,7 @@ class Renderer:
                     mats: tuple, blend: tuple, near: float, span: float, dens: float,
                     heavy: bool, wscale: float, legacy: bool, wsc: float, t_m: float,
                     draws: list) -> None:
-        """A fractal's cells on the GPU (plan 64, fractal_gl.py): the walk's
+        """A fractal's cells on the GPU (fractal_gl.py): the walk's
         rows uploaded, each mesh drawn once per cell and per copy — the
         faces, the lines, the dots, by the scene pass's own rules, which the
         vertex shaders apply — blended additively and not sorted. Adds the
@@ -4127,7 +4113,7 @@ class Renderer:
 
     def _depth_pass(self, fbo: moderngl.Framebuffer, draws: list[tuple], mats: tuple,
                     blend: tuple, copies: int = 1) -> None:
-        """The shape's depth, after its colour (plan 26 A2): the same draws
+        """The shape's depth, after its colour: the same draws
         again with the colour left as it is (the blend keeps the
         destination) and depth written, only by fragments whose alpha is
         over `DEPTH_ALPHA` — the nearest visible surface. A draw none of
@@ -4224,7 +4210,7 @@ class Renderer:
         px a unit), so the field keeps its world spacing whatever the eye;
         the camera is in the rows and the world transform is the identity.
 
-        `model` (plan 59, legacy only): the world transform when the world's
+        `model` (legacy only): the world transform when the world's
         offset is on it (turned, moved in z). Each copy's box then goes
         through the whole matrix for the cull; None, the cull of before."""
         if legacy:
@@ -4335,11 +4321,11 @@ def render_offscreen(
     """Render one frame to an FBO; returns (h, w, 3) uint8. For tests/tools.
     Pattern time defaults to 0.0 so offscreen renders are deterministic.
     `media`: the channels the frame reads (`Renderer.media`), None for none;
-    `wiring`: the graph's (`Renderer.wiring` — plan 33 R: a channel on the
-    faces is the wire `media.<c> → pattern.media`), None today's frame —
-    plan 36 T3: said here, as the tool's own wiring, by the one-way
-    migration of a loadable patch with no section (`graphmigrate.wired_wiring`),
-    never by the renderer, whose own is the empty frame."""
+    `wiring`: the graph's (`Renderer.wiring`; a channel on the faces is the
+    wire `media.<c> → pattern.media`). None means the tool's own wiring: the
+    one-way migration of a loadable patch with no section
+    (`graphmigrate.wired_wiring`), never the renderer's, whose own is the
+    empty frame."""
     own = ctx is None
     if own:
         ctx = moderngl.create_context(standalone=True)

@@ -1,29 +1,29 @@
-"""The render outputs, as the renderer sees them (plan 21 WP1).
+"""The render outputs, as the renderer sees them.
 
 One frame is drawn per loop; each output — a window on its own screen,
 or an offscreen target standing in for one — shows what the loadable patch's
-graph wires into it (plan 35: its own wires; plan 36 T1, else All
+graph wires into it (its own wires, else All
 outputs' by the meta controller's bus cable into that port, `graph.window_ports`) through
 its window's two mutes, the picture and the hands, with its mirror and
 its own dim. A mute is the window's, never the loadable patch's structure: off,
 the window ignores the picture (or the hands and the guide) wired into
 it and shows its ground, the hands over — it builds nothing, so it never
-rebuilds the graph (row 374). "Hands through the effects" is wiring in
-the loadable patch, not a switch (plan 35 O). This module is the pure half of
+rebuilds the graph. "Hands through the effects" is wiring in
+the loadable patch, not a switch. This module is the pure half of
 that: what a window's mutes are (`Switches`), where the frame sits in an
 output of another shape (`fit`), and the one-frame record the renderer
 fills in for an output (`View`, with `Handoff` for an output in another
 window's context). `Renderer.draw_outputs` (render.py) does the
-drawing. WP3 adds the meta controller's side: `Slot`, one listed output for the run
+drawing. It also holds the meta controller's side: `Slot`, one listed output for the run
 (app.py fills it from `[[output.screens]]`), and `Presenter`, which shows
-a `Handoff` in another window's context. Plan 32 T9 adds `Offscreen`, a
+a `Handoff` in another window's context. `Offscreen` is a
 texture-backed target on the renderer's context: a publish-only output
 (`window = false`) is drawn into one, and a published output with a
 window has one as its `tap`, the copy its publishers are handed.
 
 Render stack (ARCHITECTURE §3): it only reads. This module imports
 moderngl and glsl at most — never app, ui or params — and the
-`output.N.*` params (WP4) write `Switches`, which the renderer reads.
+`output.N.*` params write `Switches`, which the renderer reads.
 """
 
 from __future__ import annotations
@@ -39,8 +39,7 @@ import moderngl
 from .glsl import QUAD_VS
 
 MAX_OUTPUTS = 4
-# the scene's MSAA sample count (SC3a). It was read off output 1's window, which
-# only ever supplied the number: the multisampling is the renderer's own
+# the scene's MSAA sample count: the multisampling is the renderer's own
 # framebuffers' (`render.SceneTarget`), and an `Offscreen` says 0 if asked
 FRAME_SAMPLES = 4
 
@@ -48,16 +47,16 @@ FRAME_SAMPLES = 4
 @dataclass
 class Switches:
     """One window's mutes and its own look — what the output.N.* params
-    write (WP4). Plan 35 O (row 374): `scene` is the picture mute (off: the
+    write. `scene` is the picture mute (off: the
     window ignores the picture wired into it), `hands` the hands mute (off:
     it ignores the hands and the guide); read by its `Output` each frame,
-    never a rebuild. The through switch is gone: "hands through the
-    effects" is the loadable patch's wiring."""
+    never a rebuild. "Hands through the
+    effects" is the loadable patch's wiring, not a switch."""
 
     scene: bool = True         # the picture (its label "picture"; the id is kept)
     hands: bool = True
     dim: float = 1.0           # this output's own dim, times the master's
-    # plan 23 WP1: this output's picture mirrored as its last step, inside
+    # this output's picture mirrored as its last step, inside
     # the fit rect — the frame, the hands laid after and the readout alike,
     # so a Pepper's Ghost glass's own mirror is undone (the dim covers the
     # whole rect and needs none). Off, the output is bit-identical
@@ -81,7 +80,7 @@ def capped(size: tuple[int, int], cap: tuple[int, int] | None) -> tuple[int, int
 
 def fit(src: tuple[int, int], dst: tuple[int, int]) -> tuple[int, int, int, int]:
     """The rect (x, y, w, h) in `dst` that shows `src` whole, centred, its
-    aspect kept (fork F5: letterbox). Equal sizes give (0, 0, w, h); a
+    aspect kept (letterbox). Equal sizes give (0, 0, w, h); a
     zero-sized side gives the whole of `dst`."""
     sw, sh = int(src[0]), int(src[1])
     dw, dh = int(dst[0]), int(dst[1])
@@ -96,9 +95,9 @@ def fit(src: tuple[int, int], dst: tuple[int, int]) -> tuple[int, int, int, int]
 @dataclass
 class Handoff:
     """What `Renderer.draw_outputs` leaves for an output it cannot draw
-    itself — one in another window's context (`View.presenter`, WP3). Every
+    itself — one in another window's context (`View.presenter`). Every
     texture belongs to the renderer's context (a share group shares
-    textures, not framebuffers or vertex arrays); WP3's presenter wraps
+    textures, not framebuffers or vertex arrays); the presenter wraps
     each GL name with `ctx.external_texture` and, in its own context, in
     this order:
 
@@ -109,13 +108,13 @@ class Handoff:
     3. lays `hands` (the hands' layer, premultiplied, frame-sized) over the
        same `rect` at `alpha`: colour ONE / ONE_MINUS_SRC_ALPHA, and alpha
        ZERO / ONE on an opaque ground (`bg_alpha` 1) — `Ghost.composite`'s
-       blend; with `blend` "add" (plan 26 A3) colour ONE / ONE instead, and
+       blend; with `blend` "add" colour ONE / ONE instead, and
        alpha ONE / ONE_MINUS_SRC_ALPHA on a see-through ground. None: no
        hands after the effects on this output;
     4. lays `readout` (the guide and the tethers' labels when they are a
-       layer of their own, WP2 — on every output that shows the hands,
+       layer of their own — on every output that shows the hands,
        over or through) into `rect` the same way. None: nothing;
-    4½. plan 44 D4: mixes `mix`, the other deck's finished picture for this
+    4½. mixes `mix`, the other deck's finished picture for this
        output (premultiplied, the whole framebuffer), in at `mix_k`
        (`Renderer.mix_pass`'s blend). None: no fade on;
     5. multiplies the whole framebuffer by `factor` when it is under 1
@@ -124,9 +123,9 @@ class Handoff:
 
     The textures are valid until the next `draw_outputs`; the renderer's
     context must be flushed (`glFlush`) before the presenter's samples
-    them (plan §1: otherwise it sees last frame's).
+    them (otherwise it sees last frame's).
 
-    Plan 30 D1: `frame` or `hands` may be a half-float texture of the
+    `frame` or `hands` may be a half-float texture of the
     effects' pool rather than RGBA8 — an output's frame through an effect
     placed into it, the hands' layer through one placed after the hands.
     The presenter wraps every name as "f1" (`Presenter._ext`); that
@@ -141,14 +140,14 @@ class Handoff:
     alpha: float = 1.0
     factor: float = 1.0
     bg_alpha: float = 1.0
-    flip: tuple[bool, bool] = (False, False)   # plan 23 WP1: steps 2–4 mirrored in `rect`
-    blend: str = "over"                        # plan 26 A3: step 3's blend, "over", "add" or "screen" (plan 87)
-    mix: moderngl.Texture | None = None        # plan 44 D4: step 4½
+    flip: tuple[bool, bool] = (False, False)   # steps 2–4 mirrored in `rect`
+    blend: str = "over"                        # step 3's blend, "over", "add" or "screen"
+    mix: moderngl.Texture | None = None        # step 4½
     mix_k: float = 0.0
-    # SC2: `mix` is mirrored as it was drawn; a further display of this output with
+    # `mix` is mirrored as it was drawn; a further display of this output with
     # other flips (`Also`) says how far off that is
     mix_flip: tuple[bool, bool] = (False, False)
-    # SC2: `mix` is that display's shape, and this window may have another: the viewport
+    # `mix` is that display's shape, and this window may have another: the viewport
     # that lays the picture in it over this one's `rect`. None: the whole framebuffer
     mix_viewport: tuple[int, int, int, int] | None = None
 
@@ -161,8 +160,8 @@ class Handoff:
 @dataclass
 class View:
     """One output, for one frame. `target` is a framebuffer on the
-    renderer's context (the first output's `Offscreen`, SC3a); `presenter`
-    an output in another window's context (WP3),
+    renderer's context (the first output's `Offscreen`); `presenter`
+    an output in another window's context,
     which `draw_outputs` leaves a `handoff` for. `viewport` is the rect of
     `target` (or of the presenter's framebuffer) to draw (None: (0, 0) and
     `size`).
@@ -171,31 +170,31 @@ class View:
     shows no pipeline, and whether its composites and dim keep alpha. The
     frame itself — the scene's clear, the effect chain — is drawn on
     `Renderer.bg_alpha`, once for every output: overlay is the first
-    output's only (plan 21 §4), so an output's ground can make the frame
+    output's only, so an output's ground can make the frame
     opaque on it (alpha forced to 1) but never see-through."""
 
     switches: Switches
     size: tuple[int, int]                       # its framebuffer, px
     target: moderngl.Framebuffer | None = None  # on the renderer's context
-    presenter: Any = None                       # WP3: another window's context
+    presenter: Any = None                       # another window's context
     bg_alpha: float = 1.0                       # this output's ground
     error: str = ""                             # set by draw_outputs, never raised
     viewport: tuple[int, int, int, int] | None = None
     handoff: Handoff | None = None              # set by draw_outputs for a presenter
     exc: BaseException | None = field(default=None, repr=False)   # what set `error`
-    # plan 32 T9: this output's publishers (media/publish.py), each handed
+    # this output's publishers (media/publish.py), each handed
     # its picture once the frame is drawn — `target`'s own texture when it
     # is an `Offscreen`'s, else a copy in `tap` (an `Offscreen`): a
     # window's framebuffer resolved into it, a presenter's hand-off
     # presented into it on the renderer's context
     publish: list = field(default_factory=list)
     tap: Any = None
-    # plan 44 D4: the other deck's picture for this output, a texture of the
+    # the other deck's picture for this output, a texture of the
     # renderer's context at this view's size, mixed in at `mix_k` before the
     # dim (`Renderer.mix_pass`); None, no fade: the frame as ever
     mix: Any = None
     mix_k: float = 0.0
-    # plan 44 D4: the scene's sample count when `views[0]`'s target does not
+    # the scene's sample count when `views[0]`'s target does not
     # say it — a deck drawn offscreen for a window, so its picture is the
     # one that window would have drawn. None: the target's own
     samples: int | None = None
@@ -207,11 +206,11 @@ class View:
         return 0, 0, int(self.size[0]), int(self.size[1])
 
 
-# ---------------------------------------------------------------- WP3: the list
+# ---------------------------------------------------------------- the list
 
 @dataclass
 class Also:
-    """A further display of one output (SC2, plan 58): a window of its own with a
+    """A further display of one output: a window of its own with a
     `Presenter` of its own, and flips of its own. The frame is offscreen, so a further
     window is one more present of the output's picture, and its flips are a `Handoff`'s:
     nothing is drawn again. `display` is the label of its row (`displays.py`), `monitor` and
@@ -236,20 +235,20 @@ class Slot:
     `[output]` window when there is no list), for the whole run: its place
     `n` (1-based — `output.2.*` is always the second entry, opened or
     not), its name, its switches (the config's launch values; the
-    output.N.* params write them, WP4), and its window — or, for a later
+    output.N.* params write them), and its window — or, for a later
     output whose screen is not connected, `missing`, the reason it was not
-    opened (fork F9). `output` is its `overlay.Output`, `presenter` its
-    `Presenter` (every opened output, SC3a), `error` the last present that
+    opened. `output` is its `overlay.Output`, `presenter` its
+    `Presenter` (every opened output), `error` the last present that
     raised ("" once one succeeds), `size` its framebuffer at the last frame.
     The app fills it; the renderer never sees it, only the `View` built
     from it each frame.
 
-    Plan 32 T9: `syphon` / `ndi` are the names it is published under ("" =
+    `syphon` / `ndi` are the names it is published under ("" =
     not), `publishers` the publishers made for them, `window` false for a
     publish-only output — no window ever, drawn into `offscreen`; a
     published output with a window copies its picture into `tap`.
 
-    SC2: `display` is the label of the row its window is on, and `also` the further
+    `display` is the label of the row its window is on, and `also` the further
     displays that show this output. `win` and `switches` are its first display's: the
     flips the frame is drawn with, the size it's drawn at, and what the desk's
     `output.N.flip_x` writes."""
@@ -298,8 +297,8 @@ class Slot:
 
 class Offscreen:
     """An RGBA8 texture and its framebuffer on the renderer's context,
-    made at the size `fit` asks for and made again when that changes
-    (plan 32 T9): a publish-only output's target, a published window's
+    made at the size `fit` asks for and made again when that changes:
+    a publish-only output's target, a published window's
     tap. `tex` is what a publisher is handed."""
 
     def __init__(self, ctx: moderngl.Context):
@@ -349,12 +348,12 @@ class Offscreen:
 
 @dataclass
 class Root:
-    """What the picture rests on (SC3a, plan 58), which no display can take away:
+    """What the picture rests on, which no display can take away:
     `win`, the hidden window holding the renderer's context; `frame`, the
     `Offscreen` the first view draws into, whichever displays are live;
     `pacer`, a `pacing.Pacer`. `logical` and `size` are the frame's window
     points and framebuffer pixels: output 1's, or the last known while it has
-    no window or says nothing usable. `hold_size` (SC3b): output 1's display dropped
+    no window or says nothing usable. `hold_size`: output 1's display dropped
     a moment ago, and may well be back, so another display's size doesn't take over yet.
     The app fills it; the renderer never sees it."""
 
@@ -388,7 +387,7 @@ def preview_size(full: tuple[int, int], cap: tuple[int, int] | None = None) -> t
 
 
 class Preview:
-    """Output 1's picture for the control window (2026-10-26: the GRAPH
+    """Output 1's picture for the control window (the GRAPH
     page's backdrop): a publisher in shape — `_draw_render` adds it to
     output 1's view, with this tap when the window has none of its own, on
     a frame after the page `want`ed it — that keeps the texture it is
@@ -428,7 +427,7 @@ class Preview:
             self.tap.release()
 
 class Lease:
-    """A frame's hold on one of the tap's textures (2026-11-02): while any
+    """A frame's hold on one of the tap's textures: while any
     lease on a texture lives, no grab writes it and no resize frees it. A
     `MediaFrame` carries it (`lease`), so the hold lasts exactly as long as
     the frame — a channel's `held` at rate 0, the source's newest — and
@@ -484,7 +483,7 @@ class _TapSlot:
 
 
 class CanvasTap:
-    """The GRAPH canvas as a picture (2026-11-02, `media.panel`): a small
+    """The GRAPH canvas as a picture (`media.panel`): a small
     pool of RGBA8 textures on the control window's context, written by
     `replay.grab` at the end of a frame the canvas was wanted on. Each
     grab goes into a texture no frame holds (`Lease`): a frame a channel
@@ -631,16 +630,16 @@ def fit_size(size: tuple[float, float], scale: tuple[float, float],
     k = min(1.0, cap / max(w, h))
     return (max(round(w * k), 1), max(round(h * k), 1))
 
-# ---------------------------------------------------------------- plan 37 C1: the thumbnails
+# ---------------------------------------------------------------- the thumbnails
 
-# the long side of a node's thumbnail on GRAPH, in texels (P1)
+# the long side of a node's thumbnail on GRAPH, in texels
 THUMB_PX = 192
 # a thumbnail not wanted for this long is dropped (its texture freed)
 THUMB_DROP_S = 1.0
 # a node that made nothing this long shows black (dimmed before that)
 THUMB_BLACK_S = 1.0
-# a node's thumbnail is copied this many times a second at most (the owner's
-# rate), each on a beat of its own so a frame copies a share of them
+# a node's thumbnail is copied this many times a second at most,
+# each on a beat of its own so a frame copies a share of them
 # (`PreviewTextures.due`); never copied yet, it is copied at once
 THUMB_HZ = 25.0
 # a node that makes nothing is said to have stopped once its last copy is
@@ -648,13 +647,13 @@ THUMB_HZ = 25.0
 # that node's beat, not its own, so one try that finds nothing says nothing
 THUMB_LATE_S = 3.0 / THUMB_HZ
 THUMB_PHASE = (math.sqrt(5.0) - 1.0) / 2.0     # the step between two names' beats
-# the downsample pass (plan 37 C1): 4×4 bilinear taps over the footprint
+# the downsample pass: 4×4 bilinear taps over the footprint
 # of one thumbnail texel — each tap averages 2×2 source texels, so a
 # 1920-wide picture's ten texels a thumbnail texel are read eight across,
 # in one draw, with no mipmap built on (and no filter changed on) a
 # texture the frame owns. Written opaque: the picture over black, so a
 # see-through layer reads on the node as it would on a black window. A mask
-# (`u_mask`, SM3) is one channel, so its red is drawn as grey; one whose rows
+# (`u_mask`) is one channel, so its red is drawn as grey; one whose rows
 # are top first (`u_flip`: a segment's worker) is read upside down
 THUMB_FS = """
 #version 330
@@ -676,7 +675,7 @@ void main() {
 """
 
 
-# plan 37 C2 (D3): a thumbnail's dominant hue, for the GRAPH head's
+# a thumbnail's dominant hue, for the GRAPH head's
 # **pictures · tint cables** switch — read from the thumbnail (never the
 # full picture) at most once a second a node, at most one node a frame,
 # only while the page asks (`want_hues`): the thumbnail downsampled to
@@ -728,7 +727,7 @@ def thumb_size(src: tuple[int, int], px: int = THUMB_PX) -> tuple[int, int]:
 
 
 class PreviewTextures:
-    """The GRAPH page's thumbnails (plan 37 C1, P1): a small texture per
+    """The GRAPH page's thumbnails: a small texture per
     node name, its long side `THUMB_PX`, the picture's aspect — `Preview`'s
     pattern, one per node. The page `want`s, each frame it draws, the
     names it has on screen (each with how its picture is found:
@@ -778,7 +777,7 @@ class PreviewTextures:
         self.repainted = 0
         self.error = ""
         self._prog = self._vao = self._sampler = None
-        # plan 37 C2: each name's dominant hue (`dominant_hue`) and when it
+        # each name's dominant hue (`dominant_hue`) and when it
         # was read; when the page last asked for hues (`want_hues`)
         self.hues: dict[str, tuple[float, float]] = {}
         self.hue_at: dict[str, float] = {}
@@ -827,7 +826,7 @@ class PreviewTextures:
         return len(self.tex) if self.ctx is not None else len(self.sizes)
 
     def want_hues(self) -> None:
-        """The page tints its picture cables (plan 37 C2): keep reading the
+        """The page tints its picture cables: keep reading the
         thumbnails' hues — one a frame, each at most once a second — until
         it has not asked for `THUMB_DROP_S`."""
         self.hue_asked = self.clock()
@@ -890,7 +889,7 @@ class PreviewTextures:
         self._read_hue()
 
     def _read_hue(self) -> None:
-        """Plan 37 C2: the thumbnails' hues, read without waiting on the
+        """The thumbnails' hues, read without waiting on the
         GPU. First the hue started last frame is collected: its 16×16
         downsample, copied into a pixel buffer (`read_into`, asynchronous)
         a frame ago, is read from that buffer — long since filled — and
@@ -906,7 +905,7 @@ class PreviewTextures:
         if self.hue_asked is None or self.clock() - self.hue_asked >= THUMB_DROP_S:
             return
         now = self.clock()
-        # (a mask is grey, so it has no hue to read: SM3 adds no readback)
+        # (a mask is grey, so it has no hue to read: no readback is added)
         due = [(self.hue_at.get(n, -math.inf), n) for n in self.tex
                if n not in self.masks and now - self.hue_at.get(n, -math.inf) >= HUE_EVERY_S]
         if not due:
@@ -1064,7 +1063,7 @@ uniform int u_scaled;
 uniform ivec2 u_origin;      // the rect's origin (gl_FragCoord is window-relative)
 uniform float u_k;
 uniform int u_opaque;
-uniform ivec2 u_flip;        // plan 23 WP1: mirror x / y inside the rect (0 0: as drawn)
+uniform ivec2 u_flip;        // mirror x / y inside the rect (0 0: as drawn)
 out vec4 f_color;
 void main() {
     vec4 c;
@@ -1096,10 +1095,10 @@ void main() { f_color = vec4(0.0, 0.0, 0.0, u_factor); }
 
 
 class Presenter:
-    """One output's window, output 1's too (plan 21 WP3, SC3a): a moderngl handle on
+    """One output's window, output 1's too: a moderngl handle on
     that window's context and its own programs and vertex arrays — a share
     group shares textures and programs, never framebuffers or vertex
-    arrays, so the renderer's cannot draw here (§1 row 1).
+    arrays, so the renderer's cannot draw here.
 
     `present(handoff, size)` follows `Handoff`'s five steps in this
     context: the ground, the frame into its rect, the hands, the readout,
@@ -1175,7 +1174,7 @@ class Presenter:
                 prog["u_k"].value = 1.0
                 prog["u_opaque"].value = int(opaque)
                 vao.render(moderngl.TRIANGLES, vertices=3)
-            # the hands' blend (plan 87: screen too); the readout is over
+            # the hands' blend (screen too); the readout is over
             how = getattr(ho, "blend", "over")
             for layer, laid in ((ho.hands, how), (ho.readout, "over")):         # 3, 4
                 if layer is None or rect[2] <= 0 or rect[3] <= 0:
@@ -1255,6 +1254,5 @@ class Presenter:
     def release(self) -> None:
         """Free the programs and arrays; call with this context current, every
         output's alike, before its window is destroyed: GL's vertex array numbers are
-        per context. (On Apple's driver they aren't, so a wrong order is harmless there:
-        SC3a's spike read its own array's number going as the root's, row 813.)"""
+        per context. (On Apple's driver they aren't, so a wrong order is harmless there.)"""
         self._drop()

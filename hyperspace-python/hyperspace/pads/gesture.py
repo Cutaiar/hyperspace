@@ -1,4 +1,4 @@
-"""The touchpad's and the motion sensors' lanes (plan 42).
+"""The touchpad's and the motion sensors' lanes.
 
 Two schemes beside a pad's ``axis`` lanes, each lane in [0, 1] like
 every routing lane, published by the pad device under the pad's role
@@ -24,8 +24,8 @@ every routing lane, published by the pad device under the pad's role
 
 The sensors' axes: x right, y up out of the face, z toward the player
 (SDL's convention). Which raw axis is which, and its sign, is the
-`AxisMap`; its default held on a real Edge over USB and Bluetooth
-(2026-11-02, the probe's tilt test).
+`AxisMap`; its default holds on a real Edge over USB and Bluetooth
+(the probe's tilt test).
 
 A leaf: the standard library only.
 """
@@ -159,8 +159,8 @@ class AxisMap:
 
 
 def axis_map_of(override, reader) -> AxisMap:
-    """The one rule for whose axes a pad's sensors are read through (plan
-    46): a map set on the pad (`override`, None when none was) — the
+    """The one rule for whose axes a pad's sensors are read through: a map
+    set on the pad (`override`, None when none was) — the
     default map set on purpose counts, so an entry can force the identity
     onto a pad whose built map is wrong; else the reader's own (a Joy-Con's,
     per side); else the default. The app, the pad window and the probe all
@@ -184,8 +184,7 @@ REPORT_DT_MAX = 0.05
 def _banded(v: float) -> float:
     """A rate through the dead band: nothing under `TURN_DEADBAND_DPS`, a
     ramp up to twice it, then exact. Not the band subtracted from every
-    rate: that made a fast turn short by the band on every axis, and a poi
-    swung hard for a few seconds lost ten degrees of attitude to it."""
+    rate, which would leave a fast turn short by the band on every axis."""
     a, d = abs(float(v)), TURN_DEADBAND_DPS
     if a < d:
         return 0.0
@@ -275,7 +274,7 @@ class Motion:
     def add_turn(self, turn) -> None:
         tx, ty, tz = self.turned
         self.turned = (tx + turn[0], ty + turn[1], tz + turn[2])
-        taps = self.__dict__.setdefault("taps", {})     # (a Motion from before the taps)
+        taps = self.__dict__.setdefault("taps", {})     # tolerates a Motion built without `taps`
         for name, (x, y, z) in taps.items():
             taps[name] = (x + turn[0], y + turn[1], z + turn[2])
 
