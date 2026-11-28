@@ -75,10 +75,9 @@ frame kind only that kind's params (`_param_rows`: `rot.*` and most of
 no node's). What can be made twice is renamed as ever (hands 1 lands as
 `hands.2`); what a frame holds one of (`ONE_PER_FRAME`) keeps its name,
 and a host that already has it refuses the spawn in words, nothing landed
-(`Landing.taken`, `Landing.refusal`) — but for a kind of `REPLACEABLE`
-(wave 3 P2; none since plan 90 H3 made the dream an effect): the conflict
-sheet asks to replace the host's, whose wires and values go
-(`Landing.replacing`, `graphview.Edit.spawn`).
+(`Landing.taken`, `Landing.refusal`). Nothing is replaced (wave 3 P2's
+"replace the host's dream" went with plan 90 H3; plan 92 makes these kinds
+numbered instead).
 """
 
 from __future__ import annotations
@@ -151,16 +150,13 @@ KEYED = "keys"
 MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "matte", "cut",
             "segment", "hands", "layer", "guide", "scene", "shape", "backdrop", "pattern",
             "lookback", "cloud", "handmask")
-# what a frame holds one of: never renamed by a spawn (`scene.2` is no node;
-# `dream.2` may be declared but no wire may touch it, D2 of plan 36), so a
-# host that already has one refuses the spawn in words (`Landing.taken`).
+# what a frame holds one of: never renamed by a spawn (`scene.2` is no node),
+# so a host that already has one refuses the spawn in words (`Landing.taken`).
 # Hands 1 is no such thing — every other hands is a new number — nor is a
-# look-back (`lookback.2`)
-ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern")
-# (wave 3 P2, row 661) of those, what the conflict sheet may replace rather
-# than refuse. The dream alone for now; a kind added here gets the sheet's row
-# and `Edit.spawn`'s door as they are, fresh values by what the node owns
-REPLACEABLE: tuple[str, ...] = ()        # (plan 90 H3: the dream was the one)
+# look-back (`lookback.2`) or, since plan 90 H3, the dream (an effect), or
+# since plan 92 (phase 1) the backdrop (`backdrop.2`). Plan 92 numbers the
+# other three too, and this list goes
+ONE_PER_FRAME = ("scene", "shape", "pattern")
 # the render nodes the GRAPH page never deletes and a patch never holds —
 # `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
 # plan 43 C2); the windows are refused by kind, `output`. (Plan 93: a point
@@ -1608,56 +1604,20 @@ class Landing:
     taken: tuple[str, ...] = ()
     # plan 87: the members keyed (black is clear), renamed — into the host's `keys`
     keys: tuple[str, ...] = ()
-    # wave 3 P2: what replacing `replacing` costs the host and what it keeps,
-    # in words, and the host they were read off, the sheet's
-    # (`dataclasses.replace` by `ui_graph.spawn`: this module cannot see the
-    # registry; `graphview.Edit.replace_said`). `asked` is empty for a landing
-    # no sheet put a question for
-    loses: tuple[str, ...] = ()
-    keeps: tuple[str, ...] = ()
-    asked: tuple = ()
-
-    @property
-    def replacing(self) -> tuple[str, ...]:
-        """Of `taken`, what the conflict sheet may replace (`REPLACEABLE`)."""
-        return tuple(n for n in self.taken if _kind(n) in REPLACEABLE)
 
     @property
     def refusal(self) -> str | None:
         """Why this landing cannot land, in words, or None: what the loadable patch
-        has to delete first (`TAKEN_WORDS`). What it may replace (`replacing`) is
-        no refusal but a row of the sheet."""
-        nodes = [n for n in self.taken if n not in self.replacing]
-        if not nodes:
-            return None
-        return TAKEN_WORDS.format(name=self.group.get("name") or "the patch", nodes=", ".join(nodes))
-
-    def unanswered(self, choices: Mapping | None) -> str | None:
-        """The words for a landing that would replace a node nobody said to
-        (`replace_key` not in `choices`: only the sheet says it), or None. A
-        node is more than a row: D9's "not answered is the patch's" stops here."""
-        left = [n for n in self.replacing if replace_key(n) not in (choices or {})]
-        if not left:
+        has to delete first (`TAKEN_WORDS`)."""
+        if not self.taken:
             return None
         return TAKEN_WORDS.format(name=self.group.get("name") or "the patch",
-                                  nodes=", ".join(left))
+                                  nodes=", ".join(self.taken))
 
 
 def node_members(names: Iterable[str]) -> _Members:
     """Render nodes `names` as members, to ask whose a param is (`owns`)."""
     return _Members(tuple(names))
-
-
-def replaceable(render: Iterable[str]) -> tuple[str, ...]:
-    """Of a patch's render nodes, those the sheet could replace in a host
-    that has them (`REPLACEABLE`)."""
-    return tuple(n for n in render if _kind(n) in REPLACEABLE)
-
-
-def replace_key(name: str) -> str:
-    """The sheet's answer "replace the host's `name`" in `Edit.spawn`'s
-    choices, beside its rows' numbers (`keep all existing` leaves it alone)."""
-    return f"replace:{name}"
 
 
 def _group_landing(p: Patch) -> Landing:
@@ -1706,8 +1666,7 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     `acid` → `acid.2` where the host has `acid`; a hands node and its layer
     and guide move together, hands 1 being always the frame's; a node a
     frame holds one of, `ONE_PER_FRAME`, keeps its name, and one the host
-    already has is said in `Landing.taken`, which refuses the landing or,
-    for the dream, makes it the sheet's to replace, `Landing.replacing`); a
+    already has is said in `Landing.taken`, which refuses the landing); a
     modifier one past the highest the host
     holds (`modifiers.next_id`); an LFO or envelope the bank's next id (its
     high-water rule; an envelope 6 or more), none when the bank is full or
@@ -1911,7 +1870,6 @@ __all__ = [
     "is_control_source",
     "lift",
     "read",
-    "replace_key",
     "select",
     "side",
     "slug",

@@ -9180,6 +9180,12 @@ Headless: `tests/test_graph_handmask.py` (the polygon from synthetic hands throu
 
 **981. Through the scene's eye.** (Mac, 980's wiring) Wire the hands into `scene.geometry` too, zoom the patch's eye in, and set `handmask.eye` to scene. *Pass:* the polygon's corners sit on the fingertips drawn in the scene; with `eye` layer they sit on the hands layer's instead. *Fail:* either eye off its hands.
 
+## GL. Any number of backdrops (plan 92 phase 1, row 1215, 2026-11-28)
+
+Headless: `tests/test_backdrops_numbered.py` (declared, drawn as the first at its alpha, its param, the picker, a delete, a spawn).
+
+**982. Two backdrops.** (Mac, GRAPH) Add **backdrop** from the picker on a show that has one, wire a channel into `backdrop.2.image`, the scene into `backdrop.2.scene` and `backdrop.2` into output 2; turn **Backdrop 2 alpha**. *Pass:* output 1 is as it was; output 2 shows the scene over the second picture at its own alpha; delete `backdrop.2` and output 2 shows the scene alone; save, reopen, and both are there. *Fail:* the first backdrop's alpha moving the second's, a second refused, or the show changing on reopen.
+
 ## FT. The Kinect (row 1130, 2026-11-24)
 
 Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).

@@ -260,15 +260,14 @@ def test_a_scene_feeding_two_ports_leaves_the_composite_unwired(tmp_path):
     assert "left unwired: the composite's picture (the scene feeds 2 ports)" in e.said
 
 
-@pytest.mark.parametrize("which,section", [
-    ("backdrop", {"frame": "wired", "nodes": [{"kind": "backdrop"}]}),
-])
-def test_one_of_each_is_refused_in_words(tmp_path, which, section):
-    rig, e, pushed = wired_rig(tmp_path, section)
-    was = rig.loaded_patch.graph.spec.to_json()
-    why = e.starter(which)
-    assert why is not None and "in the graph already" in why
-    assert pushed == [] and rig.loaded_patch.graph.spec.to_json() == was and e.placed == ()
+def test_a_second_backdrop_starter_lands_as_the_next_backdrop(tmp_path):
+    """Plan 92 (phase 1): a backdrop is any number — the starter on a section
+    that has one adds `backdrop.2`, its own channel under it."""
+    rig, e, _ = wired_rig(tmp_path, {"frame": "wired", "nodes": [{"kind": "backdrop"}]})
+    assert e.starter("backdrop") is None
+    spec = rig.loaded_patch.graph.spec
+    assert [b.name for b in spec.backdrops] == ["backdrop", "backdrop.2"]
+    assert ("channel.a", "backdrop.2.image") in wired_wires(rig)
 
 
 def test_a_cable_starter_is_only_a_picture_one(tmp_path):

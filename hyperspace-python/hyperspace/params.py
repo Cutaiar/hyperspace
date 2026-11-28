@@ -107,6 +107,7 @@ from .view import (
     SEGMENT_LEARN,
     SEGMENT_MODES,
     SEGMENT_QUALITY,
+    BackdropState,
     CloudState,
     CutState,
     DelayState,
@@ -951,6 +952,8 @@ class Registry:
     dial_modes: dict[str, str] | None = None
     # plan 34 D: each delay's rate, `ViewState.delay`'s dict (`build_registry`)
     delay_state: dict[str, Any]
+    # plan 92: each backdrop past the first's alpha, `ViewState.backdrops`'s dict
+    backdrop_state: dict[str, Any]
 
     @staticmethod
     def group_word(group: str) -> str:
@@ -2011,6 +2014,62 @@ def _cloud_state(r: Registry) -> dict[str, CloudState]:
     if not isinstance(state, dict):
         state = r.cloud_state = {}
     return state
+
+
+# ---- plan 92: a backdrop past the first's alpha ----
+# the first's is `backdrop.alpha` (`ViewState.backdrop_alpha`, declared with the
+# view); `backdrop.<n>.alpha` (n ≥ 2) is declared from the loadable patch's graph
+_BACKDROP_ID = re.compile(r"backdrop\.(?:[2-9]|[1-9][0-9]+)\.alpha")
+
+
+def is_backdrop_id(pid: str) -> bool:
+    """Is `pid` a backdrop past the first's alpha — one that exists only while a
+    loadable patch's graph holds that backdrop (plan 92)? A loadable patch load
+    sorts such ids against the graph it lands, as it does a matte's."""
+    return bool(_BACKDROP_ID.fullmatch(pid))
+
+
+def _backdrop_state(r: Registry) -> dict[str, BackdropState]:
+    """The states the backdrop params past the first write, name →
+    `BackdropState`: the view state's (`ViewState.backdrops`), kept by
+    `build_registry` as `r.backdrop_state`; the registry's own without a view."""
+    state = getattr(r, "backdrop_state", None)
+    if not isinstance(state, dict):
+        state = r.backdrop_state = {}
+    return state
+
+
+def declare_backdrops(r: Registry, names: Iterable[str]) -> list[str]:
+    """The backdrops' alphas past the first (plan 92), as `declare_mattes`
+    does the mattes': for each backdrop `names` holds but the first (whose
+    `backdrop.alpha` is the view's, always there), `<name>.alpha` 0–1 — group
+    `backdrop` (a patch group), modulatable — over a `BackdropState` made when
+    first declared and kept while the name stays; those of every backdrop no
+    longer named dropped, with their states. Returns the ids that appeared or
+    went."""
+    state = _backdrop_state(r)
+    want = [n for n in dict.fromkeys(names) if n != "backdrop"]
+    keep = {f"{n}.alpha" for n in want}
+    changed: list[str] = []
+    for p in [p for p in r if is_backdrop_id(p.id) and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name in want:
+        st = state.get(name)
+        if st is None:
+            st = state[name] = BackdropState()
+        pid = f"{name}.alpha"
+        if pid in r:
+            continue
+        title = name.replace(".", " ").capitalize()
+        word = title.lower()
+        r.continuous(pid, f"{title} alpha", *_attr(st, "alpha"), lo=0.0, hi=1.0,
+                     fmt=lambda v, t=word: f"{t} {v:.2f}", group="backdrop",
+                     tip=f"How opaque the picture under {name}'s scene lies: 0 none, 1 all.")
+        changed.append(pid)
+    return changed
 
 
 def declare_clouds(r: Registry, names: Iterable[str]) -> list[str]:
@@ -3132,6 +3191,13 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         if view is not None:
             view.clouds = clouds
     r.cloud_state = clouds
+    # plan 92: a backdrop past the first's alpha, likewise (`declare_backdrops`)
+    backdrops = getattr(view, "backdrops", None)
+    if not isinstance(backdrops, dict):
+        backdrops = {}
+        if view is not None:
+            view.backdrops = backdrops
+    r.backdrop_state = backdrops
 
     # ---- effects: one param per annotated uniform in shaders/fx/*.glsl ----
     # (fx.py). A file edited into a new shape re-declares its own ids.

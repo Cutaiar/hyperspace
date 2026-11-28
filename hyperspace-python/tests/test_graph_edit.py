@@ -2106,13 +2106,18 @@ def test_a_ground_wire_deletes(tmp_path):
 
 def test_a_frame_node_is_added_once(tmp_path):
     """A frame kind from the picker is its entry, there once: a second add
-    is refused in words; a slot on an instance is its entry's `slots` one up
-    (plan 89), the effect's own node, nothing new."""
+    is refused in words (plan 92: but a backdrop, which lands as the next
+    one); a slot on an instance is its entry's `slots` one up (plan 89), the
+    effect's own node, nothing new."""
     from hyperspace import graph as G
     rig, e, _ = wired_rig(tmp_path, {"frame": "wired"})
+    assert e.add_node("pattern") is None and e.added == "pattern"
+    assert G.PatternAt() in rig.loaded_patch.graph.spec.frame_nodes
+    assert e.add_node("pattern") == "Faces pattern is in the graph already"
     assert e.add_node("backdrop") is None and e.added == "backdrop"
-    assert G.BackdropAt() in rig.loaded_patch.graph.spec.frame_nodes
-    assert e.add_node("backdrop") == "Backdrop is in the graph already"
+    assert e.add_node("backdrop") is None and e.added == "backdrop.2"
+    assert e.said == graphview.BACKDROP_ADDED.format(name="backdrop.2")
+    assert G.BackdropAt(2) in rig.loaded_patch.graph.spec.frame_nodes
     assert e.add_node("effect", "acid") is None
     assert e.add_node("slot", "acid") is None and not e.added
     assert e.said == graphview.SLOT_ADDED.format(label="acid", k=2, name="acid.slot.2")
@@ -2610,11 +2615,11 @@ def test_insert_node_from_the_cable_menu(rig):
     assert ui_graph.insert_node(rig.panel, c, "delay", at=(1.0, 2.0)) is None
     assert wires_of(rig.lib) >= {("acid", "delay.image"), ("delay", "composite.over")}
     e = ui_graph.render_edit(rig.panel)
-    assert {k: why for k, _, why in graphview.insert_items(e)}["backdrop"] is None
-    assert e.add_node("backdrop") is None
+    assert {k: why for k, _, why in graphview.insert_items(e)}["pattern"] is None
+    assert e.add_node("pattern") is None
     items = {k: why for k, _, why in graphview.insert_items(e)}
-    assert items["backdrop"] == "Backdrop is in the graph already: drag it onto the cable"
-    assert items["composite"] is None and items["pattern"] is None
+    assert items["pattern"] == "Faces pattern is in the graph already: drag it onto the cable"
+    assert items["composite"] is None and items["backdrop"] is None   # (plan 92: any number)
     assert e.insert_node(c, "channel") == graphview.CHANNEL_INSERT
     assert e.insert_node(c, "composite") == graphview.PICK_INLET.format(
         name="composite", ports="under or over", src="acid")
