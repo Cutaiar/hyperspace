@@ -1,10 +1,10 @@
 """The Combobox's items, and the filter over them. Pure, no imgui.
 
 `Item`, `heading` and `sep` are the row model; `filter_items` is Base UI's
-plain case-insensitive substring match. Moved out of `comp_combobox.py` by
-`HANDOFF.md` item 3c. `comp_command.py` imports from HERE - including the
-two private helpers `_k` and `_is_row`, which `test_module_surface.py`
-keeps on its ledger of names crossing a module boundary.
+plain case-insensitive substring match. `comp_command.py` imports from HERE -
+including the two private helpers `_k` and `_is_row`, which
+`test_module_surface.py` keeps on its ledger of names crossing a module
+boundary.
 """
 
 from __future__ import annotations
@@ -63,11 +63,8 @@ def _is_row(it) -> bool:
 # --------------------------------------------------------------------------
 #
 # A plain case-insensitive SUBSTRING match, which is what Base UI's Combobox
-# uses. The kit once shipped cmdk's `commandScore` here, because the premise
-# was that a Combobox is Popover + Command; it is not. That port was exact -
-# verified against the shipped JavaScript over 382 pairs - and it was the
-# wrong rule, which is RETRO row 3. It now lives in `comp_command.py`, where
-# it is the right one.
+# uses. cmdk's `commandScore` is a different rule, for a different component
+# (Popover + Command); it lives in `comp_command.py`.
 
 
 _SPACE = frozenset(" \t\n\r-")
@@ -87,9 +84,8 @@ def _fold(t: str) -> str:
 def filter_items(items, query: str) -> list:
     """Base UI's filter: SUBSTRING, case-insensitive, author's order kept.
 
-    This is what the real `combobox.tsx` does, and it is not what the kit
-    first shipped. Measured by typing into the component and reading its
-    rows back:
+    This is what the real `combobox.tsx` does. Measured by typing into the
+    component and reading its rows back:
 
         "dodec" -> Dodecahedron, Great Dodecahedron
         "DODEC" -> the same two               (case-insensitive)
@@ -103,8 +99,8 @@ def filter_items(items, query: str) -> list:
     `contains`, and there is no ranking - rows keep the order they were
     given.
 
-    cmdk's subsequence scoring is the other rule, and it lives in
-    `comp_command.py` now, where the component that wants it is.
+    cmdk's subsequence scoring is the other rule; it lives in
+    `comp_command.py`.
     """
     items = list(items)
     if not query or not query.strip():

@@ -1,4 +1,4 @@
-"""The hands as a device on this host's registry (plan 27 B2).
+"""The hands as a device on this host's registry.
 
 A thin wrapper that owns a `HandsIO` and satisfies the device protocol
 (devices.py): it opens the instrument behind its `[[devices]]` entry,
@@ -6,16 +6,15 @@ makes the instrument's one call — ``HandsIO.poll(dt, learn, router)``,
 which reads the tracker, makes the frame's DAW MIDI, feeds ``hand`` and
 ``hands`` and completes a hand Learn at once — from the registry's feed
 slot (the DAW MIDI goes out through the `hands-daw` sink, a `midi-out`
-device that carries it after ``reg.apply``: plan 27 B3), and
+device that carries it after ``reg.apply``), and
 describes the instrument's lanes as ports for the SYSTEM page and the node
-editor (plan 28).
+editor.
 
 Like panel.py, this file knows the host: it is the adapter to *this*
 registry, and extracting the package means replacing it. core.py,
 signal.py and tape.py import nothing from it, nor from the host
 (tests/test_hands_boundary.py). The lane layout is `Layout`'s — this
-wrapper reads every count from it and pins none (plan 24 C4 and C5 grew
-it; the dance lanes are the port group ``dance``, the pinches and the
+wrapper reads every count from it and pins none (the dance lanes are the port group ``dance``, the pinches and the
 grabs the group ``switches``). The ghost renderer reads the same
 `HandsIO` through ``renderer.ghost.source``: the registry's listener in
 app.main hands it over whenever the device list changes.
@@ -79,7 +78,7 @@ class HandsDevice(Base):
         (group ``axes``, with their rests and whether they are centred),
         the switches (``switches``: the pinches and the grabs, the layout's
         `gates`), the presence lanes (``presence``), the dance sources
-        (``dance``), the room lanes (``room``, plan 51) — all under ``hand`` — then the pair's lanes under
+        (``dance``), the room lanes (``room``) — all under ``hand`` — then the pair's lanes under
         ``hands`` (gap, twist; group ``dance``). Counts are the layout's."""
         io = self.io
         if io is None:
@@ -99,7 +98,7 @@ class HandsDevice(Base):
             elif i in room:
                 out.append(Port(addr, label, rest=rests[i], bipolar=True, group="room",
                                 scheme="hand"))
-            else:   # plan 24 C4's dance sources (curl, spread, energy, flick)
+            else:   # the dance sources (curl, spread, energy, flick)
                 out.append(Port(addr, label, rest=rests[i], group="dance", scheme="hand"))
         pair = getattr(lay, "pair_addresses", None) or []
         names = getattr(lay, "pair_names", None) or pair

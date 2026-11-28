@@ -23,8 +23,8 @@ and brighter, and the field is drawn far to near so the painter's order
 holds between copies as it does inside one.
 
 Fit (`view.inst_fit`). Off, the field is laid out about the centre and the
-camera's zoom and pan look over it: copies past the edge are cut, as they
-always were. On, the field is fitted to the screen: a flat grid or
+camera's zoom and pan look over it: copies past the edge are cut.
+On, the field is fitted to the screen: a flat grid or
 honeycomb takes the rows and columns that give a copy the most room at
 the screen's aspect (whole rows; a part row is centred) and stretches to
 partition the screen exactly, so every copy sits whole in its own cell
@@ -66,10 +66,10 @@ _R3 = math.sqrt(3.0)
 
 
 def takes_offset(s) -> bool:
-    """Whether the scene pass composes the world's offset (plan 59) into the
-    shape's model matrix: one copy, or a flat field with Fit off (`legacy`
-    in `render.draw_scene`); Fit and the 3D lattices carry the camera in
-    each copy's row and take none (register row 851)."""
+    """Whether the scene pass composes the world's offset into the
+    shape's model matrix: one copy, or a flat field with Fit off
+    (`render.draw_scene` branches on this); Fit and the 3D lattices carry the camera in
+    each copy's row and take none."""
     return not getattr(s, "inst_fit", False) and (
         int(s.instances) <= 1 or not is_3d(int(getattr(s, "inst_layout", 0))))
 
@@ -373,7 +373,7 @@ def perspective(z: np.ndarray, radius: float, persp: float) -> np.ndarray:
 def field(s, w: float, h: float, *, radius_px: float | None = None,
           pad_px: float = PAD_PX) -> np.ndarray:
     """Where the copies of view `s` go in a (w, h) viewport at its motion's
-    phase `s.inst_phase` (K3, row 578: `inst_rate` integrated by the host):
+    phase `s.inst_phase` (`inst_rate` integrated by the host):
     (m, 4) float32 rows of (cx, cy, k, alpha) — each drawn copy's centre
     on screen (logical px), its scale against the shape at zoom 1, and its
     alpha. Ordered far to near; copies wholly off screen are dropped when
@@ -412,7 +412,7 @@ def field(s, w: float, h: float, *, radius_px: float | None = None,
         cell = cell0 * zoom
         g = np.stack([gx, gy], axis=1).astype(np.float64)
         d = _motion(g, mode, amp, ph)
-        # the copies' offsets as the pre-field renderer made them, in float32
+        # the copies' offsets in float32
         offs = np.stack([gx * cell * spacing, gy * cell * spacing], axis=1).astype(np.float32)
         offs[:, 0] += (cell * d[:, 0]).astype(np.float32)
         offs[:, 1] += (cell * d[:, 1]).astype(np.float32)

@@ -1,4 +1,4 @@
-"""One row per display, and the file both Macs share (wave 5 SC2): `<library>/displays.json`.
+"""One row per display, and the file both Macs share: `<library>/displays.json`.
 
 The meta controller's: which display shows what. No loadable patch reaches this file, and
 nothing here reaches a patch. A root file is safe in the library: `Library.groups` and
@@ -169,7 +169,7 @@ class Wanted:
 
 
 def wanted(rows: Rows, scr: list[Screen], tags: list[str] | None = None) -> Wanted:
-    """The rows and the connected list, and what should be open (SC3b's seam). `tags`: each
+    """The rows and the connected list, and what should be open. `tags`: each
     screen's label, a running app's (`Running.labels`); by default, by arrangement."""
     out = Wanted()
     rows = normal(rows)

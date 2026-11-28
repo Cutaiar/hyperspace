@@ -1,5 +1,5 @@
 """The palm's orientation in the room's frame: lanes that mean the same
-thing whatever the sensor's mount and whatever the camera does (plan 51).
+thing whatever the sensor's mount and whatever the camera does.
 
 The room is x to the performer's right, y up, z toward the performer. A
 palm is three axes in it (`palm_axes`: the same on both hands, so they read
@@ -30,7 +30,7 @@ POLE_EXIT_DEG = 11.0
 _POLE = math.sin(math.radians(POLE_DEG))
 _POLE_EXIT = math.sin(math.radians(POLE_EXIT_DEG))
 # a twist made inside the cone, seen as a yaw step on the way out: past this the
-# reading restarts rather than step (plan 51 §4, `Palm.step`)
+# reading restarts rather than step (`Palm.step`)
 POLE_STEP_DEG = 5.0
 # near vertical yaw swings far for a small move of the fingers (a hand passing
 # just outside the cone sweeps up to half a turn in a few frames, each step short

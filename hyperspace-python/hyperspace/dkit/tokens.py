@@ -66,13 +66,7 @@ DARK_L = {"primary": 0.922, "card": 0.205}
 # spacing
 # --------------------------------------------------------------------------
 #
-# Tailwind's 4px base, which is what shadcn spaces everything on. This exists
-# because the dashboard was written without it and read cramped: rows on a
-# 27px pitch carrying 24px controls, a 3px gutter, and a card header whose
-# title and description were 20px apart where shadcn puts them 4.
-#
-# That is the same failure box.py was written to stop one layer down - "the
-# answer is not better constants; it is not writing constants" - so the
+# Tailwind's 4px base, which is what shadcn spaces everything on. The
 # numbers below are measured off a real Card + Field on the ?probe route
 # rather than chosen:
 #
@@ -81,8 +75,8 @@ DARK_L = {"primary": 0.922, "card": 0.205}
 #     header -> content       16    (gap-4)
 #     label -> its control     8    (gap-2)
 #
-# Use SPACE[n], and reach for box.flex(direction="column", gap=...) rather
-# than writing `i * pitch`: the kit has had that since flex landed.
+# Use SPACE[n], and box.flex(direction="column", gap=...) rather than
+# writing `i * pitch`.
 # Half steps included because shadcn leans on them for control padding:
 # px-2.5 is the Input's 10 and py-1.5 is the Tooltip's 6. Without them those
 # read as arbitrary numbers instead of as points on one scale.
@@ -216,9 +210,8 @@ RING_W = 3.0
 # Focus rings for interact.py's own primitives
 # --------------------------------------------------------------------------
 #
-# MEASURED per control on `?probe`, not ported from Button, and the reason to
-# measure the second and third is that all three differ. HANDOFF said this
-# was "applying a settled model"; it is not one model.
+# MEASURED per control on `?probe`, not ported from Button: all three differ,
+# so there is no single focus-ring model to apply.
 #
 #   Button            ring/50 at 3px, border -> ring
 #   TabsTrigger       the same, PLUS a 1px solid outline at full `ring`
@@ -404,9 +397,7 @@ SELECT = {
     "hover_bg": ("transparent", 1.0),   # light has no hover tint
     "border": ("input", 1.0),
     # Measured on a keyboard-focused CLOSED trigger: box-shadow
-    # `ring/50 0 0 0 3px` AND border -> `ring`, in both themes. The border
-    # half was missing from this table, so draw.field fell back to leaving the
-    # border alone and the trigger rang without changing colour.
+    # `ring/50 0 0 0 3px` AND border -> `ring`, in both themes.
     #
     # The ring is on the trigger only while it is focused and CLOSED. Opening
     # it with the keyboard moves focus into the listbox, and the trigger's
@@ -551,9 +542,7 @@ SCROLL = {
     # The scrollbar lives inside the VIEWPORT, not inside the root box, so a
     # bordered region insets it by the border. Measured on a 320x200 root
     # with `rounded-lg border`: viewport at (1,1) 318x198, scrollbar at
-    # (309,1) 10x198, thumb at (311,2) 7 wide. The kit drew the bar against
-    # the ROOT's edge, which put the thumb on top of the border and one
-    # pixel further out than the browser's at every point.
+    # (309,1) 10x198, thumb at (311,2) 7 wide.
     "border": 1.0,
     # How far one unit of `io.mouse_wheel` scrolls.
     #
@@ -561,8 +550,7 @@ SCROLL = {
     # On macOS GLFW hands it `scrollingDeltaY * 0.1` for a precise trackpad,
     # and `scrollingDeltaY` is points of FINGER TRAVEL - so a 100 pt swipe
     # arrives as 10 units and ImGui moves the page 900 px. The browser moves
-    # it 100: a trackpad scrolls 1:1 with the finger. That is the whole of
-    # why this felt nine times too fast.
+    # it 100: a trackpad scrolls 1:1 with the finger.
     #
     # 10 px per unit puts a precise trackpad back at 1:1. A discrete wheel
     # notch (one unit) then moves 10 px where a browser moves ~100, so
@@ -575,8 +563,7 @@ SCROLL = {
     #
     # EVERY delta is a multiple of 0.1. That quantum is the whole proof:
     # AppKit's `scrollingDeltaY` is an integer count of points and GLFW
-    # multiplies it by 0.1, which is the factor I had claimed from memory
-    # for two commits without being able to check it. So one unit is TEN
+    # multiplies it by 0.1. So one unit is TEN
     # POINTS of finger travel, and 1:1 with a browser - which applies
     # trackpad deltas unscaled and unsmoothed - is 10 px per unit.
     #
@@ -590,8 +577,8 @@ SCROLL = {
     # The same probe answered the inertia question: the tail of a flick
     # reads 1.2, 1.0, 0.8, 0.6, 0.5, 0.3, 0.3, 0.1, 0.1 at 17 ms intervals.
     # That decay is AppKit's momentum phase arriving through GLFW
-    # untouched, so inertial scrolling needs nothing built - only this
-    # factor, which was scaling it wrong along with everything else.
+    # untouched, so inertial scrolling needs nothing built beyond this
+    # factor.
     "px_per_unit": 10.0,
     # A notched wheel, which only ever sends whole units: a browser gives
     # one of those about 120 px a tick. Note the probe shows a TRACKPAD

@@ -1,14 +1,13 @@
-"""The deck: one look's objects, built in one order (plan 44 D1).
+"""The deck: one look's objects, built in one order.
 
-A `Deck` bundles what plan 44 §2 marks "per deck", as the objects exist
-today: the registry (`reg`), the view state (`view`), the binding table
-(`table`), the router and the sources it reads (`sources`, plan 44
-D2), the three modulator banks (`lfos`, `envs`,
-`seq`), the loadable patches and their graph section (`presets`, `loaded_patch.graph`),
-the learn, the undo and the marks it restores through, and — in the app,
-never headless — the renderer, and the clock the banks step on. D1 changes no behaviour:
-there is one deck, `app.main` builds it, and `app.Host` and `ui.Panel`
-keep their flat handles, assigned from it.
+A `Deck` bundles what is "per deck": the registry (`reg`), the view state
+(`view`), the binding table (`table`), the router and the sources it reads
+(`sources`), the three modulator banks (`lfos`, `envs`, `seq`), the loadable
+patches and their graph section (`loaded_patch`, `loaded_patch.graph`), the
+learn, the undo and the marks it restores through, and — in the app, never
+headless — the renderer, and the clock the banks step on. `app.main` builds
+the first deck, and `app.Host` and `ui.Panel` keep their flat handles,
+assigned from it.
 
 `Deck.build` holds the lines of `app.main` from the view state to
 `undo.install` in their order, which is the registry's order (what
@@ -20,41 +19,40 @@ the library's band hooks, stays with the caller, before `build`), so the headles
 app run the same lines and cannot drift apart. A hook the caller leaves
 out is a step that meta controller does not have.
 
-`Deck.targets()` is the deck itself and then the hot-reload tuples `main`
-listed for these objects, in the order it listed them; `main` hands the
-reloader the deck's and then the meta controller's. A save of this file re-classes
+`Deck.targets()` is the deck itself and then the hot-reload tuples for
+these objects; `main` hands the reloader the deck's and then the meta
+controller's. A save of this file re-classes
 the live deck, and a field added to `Deck` with a default is back-filled
 on it (`hotreload._backfill_dataclass`); but `build` does not re-run, so
 what a new field should hold on a running deck arrives only with a
-restart, and a PR that adds one says "restart" (plan 44 §8).
+restart, and a change that adds one says "restart".
 
-Plan 44 D4 adds the second deck and the fade. `Deck.beside` builds a deck
-beside the first over the same meta controller, sources and clock, with a renderer on
-the same context; nothing points at it — no controller, no page, no undo —
-and it writes no file. `Mix` holds `output.xfade` (`register_xfade`) and
-`Fade` runs it: at 0 nothing of deck 2 is drawn; above 0 deck 2's renderer
-draws every output into a frame texture at that output's size, which the
-on-air deck's pass mixes in before the dim (`Renderer.mix_pass`), and the one
-dream worker is lent to it. A raise in deck 2's draw leaves the on-air deck's
-picture alone and is said on `Fade.error`.
+`Deck.beside` builds a second deck beside the first over the same meta
+controller, sources and clock, with a renderer on the same context; nothing
+points at it — no controller, no page, no undo — and it writes no file.
+`Mix` holds `output.xfade` (`register_xfade`) and `Fade` runs it: at 0
+nothing of deck 2 is drawn; above 0 deck 2's renderer draws every output
+into a frame texture at that output's size, which the on-air deck's pass
+mixes in before the dim (`Renderer.mix_pass`), and the one dream worker is
+lent to it. A raise in deck 2's draw leaves the on-air deck's picture alone
+and is said on `Fade.error`.
 
-Plan 44 D5a adds `MetaController`, what owns the two decks and every holder's
-pointer (`pointer.Pointer`). Every pointer starts on deck 1 and nothing in the
-app moves one yet. D5b splits undo: a stack per deck, scoped to its loadable patch
-(`in_patch`), and one for the meta controller (`meta_stack`), so three.
-Plan 55 adds the players (`players.Players`): a controller's pointer goes where
-its player's duty says.
+`MetaController` owns the two decks and every holder's pointer
+(`pointer.Pointer`). Undo is split: a stack per deck, scoped to its loadable
+patch (`in_patch`), and one for the meta controller (`meta_stack`), so
+three. The players (`players.Players`) say where a controller's pointer goes:
+a controller's pointer goes where its player's duty says.
 
-D5c makes it a DJ mixer's crossfader, with no swap: `output.xfade` 0 is deck 1
+The crossfader is a DJ mixer's, with no swap: `output.xfade` 0 is deck 1
 alone, 1 deck 2 alone, and on air is whichever the fader is closer to
 (`MetaController.follow_fader`, `MIDDLE`). `Fade` mixes the other deck over the
-one on air by `Fade.k`, the other's share. Two verbs, and no others (the owner,
-2026-11-04): the crossfade, by hand or timed (`crossfade`, `tick`), and
-`copy_on_air`. D5d wires them: `app.frame` ticks the meta controller first, the
-desk's crossfader is `output.xfade`, and GRAPH's head has both verbs and which
-deck the panel is on. A bank verb from a row never changes what is on air: it
-loads off air (`row_load`, the owner, 2026-11-06). Every change of stack latches the
-stack you come to (`undo`'s latch, row 753).
+one on air by `Fade.k`, the other's share. Two verbs, and no others: the
+crossfade, by hand or timed (`crossfade`, `tick`), and `copy_on_air`.
+`app.frame` ticks the meta controller first, the desk's crossfader is
+`output.xfade`, and GRAPH's head has both verbs and which deck the panel is
+on. A bank verb from a row never changes what is on air: it loads off air
+(`row_load`). Every change of stack latches the stack you come to (`undo`'s
+latch).
 """
 
 from __future__ import annotations
@@ -83,7 +81,7 @@ from .view import ViewState
 
 
 def _unseen(view) -> None:
-    """After an undo or redo restores the camera: the view's dive (plan 81)
+    """After an undo or redo restores the camera: the view's dive
     takes it as it is on the next step, not as a zoom about the middle of the
     screen since the view it last saw."""
     d = getattr(view, "dive", None)
@@ -92,8 +90,8 @@ def _unseen(view) -> None:
 
 
 class DiveFrame:
-    """What an undo step holds beside the camera (`undo.Undo`'s `beside`, plan
-    81 follow-up, row 1018): the view's dive framing (`fractal.Dive.frame`),
+    """What an undo step holds beside the camera (`undo.Undo`'s `beside`):
+    the view's dive framing (`fractal.Dive.frame`),
     the pans made inside a fractal, which no param holds, and which life of the
     dive it was (`Dive.lives`). Put back only when a restore writes the camera,
     so an undone pan takes its framing with it and an unrelated edit leaves the
@@ -150,8 +148,8 @@ class DiveFrame:
 
 
 def in_patch(p) -> bool:
-    """Is `p` a param of the loadable patch, what a `Deck`'s undo stack watches (plan 44
-    D5b)? A meta param is on the meta controller's stack (`meta_stack`)."""
+    """Is `p` a param of the loadable patch, what a `Deck`'s undo stack watches?
+    A meta param is on the meta controller's stack (`meta_stack`)."""
     return part_of(p) == "patch"
 
 
@@ -171,7 +169,7 @@ class DeckHooksMade:
 
 @dataclass
 class Deck:
-    """One look and its controls (plan 44 §1), today's singletons bundled.
+    """One look and its controls.
     `renderer` is None on a headless deck (no GL)."""
 
     reg: Registry
@@ -181,19 +179,18 @@ class Deck:
     lfos: lfo.LFOs
     envs: envelope.Envelopes
     seq: sequencer.Sequencer
-    # the tap-tempo clock the banks step on. Built here today, in main's
-    # order; plan 44 §2 calls it shared — D3+ passes the meta controller's one in
-    # (`build(clock=…)`) rather than building one per deck
+    # the tap-tempo clock the banks step on; the meta controller's one is
+    # passed in (`build(clock=…)`) rather than one built per deck
     clock: tempo.Clock
     loaded_patch: LoadedPatch
     learn: Learn
     undo: undos.Undo
     marks: Marks
     renderer: Any = None
-    # what the sources said this frame (routing_sources.Sources, plan 44
-    # D2): the router's shared half, the one the devices and the analyzer
-    # feed. Built here while there is one deck (`build(sources=…)` hands a
-    # meta controller's one in, so two routers read one feed); plan 44 §2 calls it shared
+    # what the sources said this frame (routing_sources.Sources): the
+    # router's shared half, the one the devices and the analyzer feed.
+    # `build(sources=…)` hands a meta controller's one in, so two routers
+    # read one feed
     sources: Sources | None = None
     # the bands' names in strip order (`undo.Undo.tag`): the shape the meta
     # controller's stack keeps `band.*` values for (`meta_stack`)
@@ -206,14 +203,14 @@ class Deck:
 
     @property
     def meta_reg(self) -> MetaRegistry | None:
-        """The meta controller's params this deck's registry holds by reference (plan 44
-        D3, `params.MetaRegistry`): one for every deck."""
+        """The meta controller's params this deck's registry holds by reference
+        (`params.MetaRegistry`): one for every deck."""
         return self.reg.meta_reg
 
     @property
     def meta_table(self):
         """The meta controller's half of the binding table this deck's table holds by
-        reference (plan 44 D3, `routing.MetaTable`): the meta rows
+        reference (`routing.MetaTable`): the meta rows
         and `bindings.json`."""
         return self.table.meta_table
 
@@ -243,12 +240,11 @@ class Deck:
         since the renderer's states are the ones it draws. `media` is the channels' `MediaState`, `restart`
         the `app.restart` param's callback, `clock` / `lfos` a clock and
         an LFO bank to use in place of new ones, `sources` the shared
-        sources the router reads (plan 44 D2; new ones when None) — their
+        sources the router reads (new ones when None) — their
         clock, when they have one, is the deck's unless `clock` is given,
-        and a different `clock` is refused there. `meta_reg` (plan 44 D3) is
+        and a different `clock` is refused there. `meta_reg` is
         the meta controller's params (`params.build_meta`) this deck's registry
-        follows; None: `build_registry` makes them (the one deck there is
-        today). The hooks, each called
+        follows; None: `build_registry` makes them. The hooks, each called
         where `main` builds that meta controller object, each returning what it made:
         `hands(reg)` the hands' setup, `outputs(reg)` the outputs' params
         and switches, `panel(reg, view, clock=, lfos=, envs=, seq=,
@@ -265,9 +261,8 @@ class Deck:
         `startup` (the show's startup loadable patch lands on this deck) and
         `install` (this deck's undo is the one `undo.push` and the
         `edit.*` triggers reach). All three default on, as `main` has them;
-        a second deck built beside the first passes all three False, and
-        D2+ decides their real shape. `on_air` (plan 44 D3, review of #351):
-        this deck is the meta controller's lead — its `apply` lands the meta controller's
+        a second deck built beside the first passes all three False.
+        `on_air`: this deck is the meta controller's lead — its `apply` lands the meta controller's
         params once a frame; a deck built beside it passes False. `warm`: build every shape's geometry
         on a background thread once the startup loadable patch has landed."""
         if renderer is not None:
@@ -276,14 +271,14 @@ class Deck:
                 raise ValueError(f"Deck.build: {', '.join(given)} given with a renderer, "
                                  "whose own states the deck's params must drive")
             fx, ghost = renderer.fx.state, renderer.ghost.state
-        # one clock for every deck (plan 44 §2): a clock other than the shared
+        # one clock for every deck: a clock other than the shared
         # sources' is refused before anything registers on it
         if (sources is not None and clock is not None and sources.clock is not None
                 and clock is not sources.clock):
             raise ValueError("Deck.build: the sources step every bank on their own clock; "
                              "a different `clock` was given")
         library = library.base           # (a deck's own view, `Deck.beside`: the one library)
-        on_deck = library.on_deck()      # this deck's bank and loadable patches (plan 44 D5a)
+        on_deck = library.on_deck()      # this deck's bank and loadable patches
         s = ViewState()
         reg = build_registry(s, control, audio, on_deck.install,
                              fx=fx if fx is not None else FxState(),
@@ -291,16 +286,16 @@ class Deck:
                              media=media, restart=restart, meta_reg=meta_reg)
         beside = meta_reg is not None and not on_air    # a deck beside the first (`beside`)
         if on_air and reg.meta_reg is not None:
-            # (review of #351: the deck on air lands the meta controller's params —
+            # (the deck on air lands the meta controller's params —
             # named, never "whichever registry followed first")
             reg.meta_reg.on_air_reg = reg
         made = made if made is not None else DeckHooksMade()
         if hands is not None:
             made.hands = hands(reg)            # before attach: "default" includes them
         # the tap-tempo clock and the LFO bank (tempo.py, lfo.py; four by
-        # default, up to 16, plan 31 B): their knobs are params too, so a
+        # default, up to 16): their knobs are params too, so a
         # loadable patch carries a tempo and an LFO arrangement
-        # one clock for every deck (plan 44 §2): shared sources that have
+        # one clock for every deck: shared sources that have
         # one bring it, and the router refuses any other (`Router.use_bank`)
         if clock is None and sources is not None:
             clock = sources.clock
@@ -309,19 +304,19 @@ class Deck:
         if not beside:                         # the meta controller's, declared by the first deck
             tempo.register(reg, clock)
         lfo.register(reg, lfos, clock)
-        # plan 31: the envelope bank (the five lane envelopes, plus extras) and
+        # the envelope bank (the five lane envelopes, plus extras) and
         # the step sequencer that fires them — registered beside the LFOs and
         # before attach, so "default" holds their knobs and an empty pattern
         envs = envelope.Envelopes()
         seq = sequencer.Sequencer()
         envelope.register(reg, envs, clock)
         sequencer.register(reg, seq, clock)
-        # plan 60: the hand rig's grip, a patch's own (each deck's; the on-air
+        # the hand rig's grip, a patch's own (each deck's; the on-air
         # deck's acts on the one world, `app._step_world`) — before attach, so
         # "default" holds it off
         grip.register(reg, grip.GripState())
         # the render window's placement registers before attach, so "default"
-        # includes output.* and reset / the dirty dot see them (audit L6)
+        # includes output.* and reset / the dirty dot see them
         if outputs is not None:
             made.outputs = outputs(reg)
         # one binding table for keys, pad, MIDI and lanes — read before
@@ -335,20 +330,20 @@ class Deck:
             made.panel = panel(reg, s, clock=clock, lfos=lfos, envs=envs, seq=seq,
                                output=made.outputs)
         # the router: this deck's evaluator over the sources every source
-        # feeds (plan 44 D2) — the meta controller's when handed in, else its own
+        # feeds — the meta controller's when handed in, else its own
         sources = sources if sources is not None else Sources()
         router = Router(reg, bindings, sources=sources)
-        router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
-        router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
+        router.use_lfos(lfos, clock)           # they step inside the pass
+        router.use_bank(envs, clock)           # …and so do the envelopes
         router.use_sequencer(seq, envs)        # after the banks begin, before the plan
         # the loadable patches (loadable.py): the library's `presets/` files, landed on the
         # registry and the table; the project's bank loads through it
         loaded_patch = LoadedPatch(on_deck, reg, router)
         if renderer is not None:
-            # plan 26 A4: a loadable patch's graph section sets the renderer's wiring and
+            # a loadable patch's graph section sets the renderer's wiring and
             # hands an extra hands node its own state (`Renderer.ghost_states`)
             loaded_patch.graph.attach(renderer)
-            # plan 44 D3: the bus cuts are the loaded patch's — the renderer
+            # the bus cuts are the loaded patch's — the renderer
             # reads them off the loadable patches (`graph.bus_cuts_of`: `LoadedPatch.bus_cuts`)
             renderer.bus_source = loaded_patch
             renderer.deck_reg = reg            # whose picture it is (the poi's guide)
@@ -359,7 +354,7 @@ class Deck:
         if devices is not None:
             made.devices = devices(reg, router, learn, panel=made.panel,
                                    hand_settings=made.hands)
-        # the project's startup loadable patch (D11), once, now that everything it lands
+        # the project's startup loadable patch, once, now that everything it lands
         # on exists; a missing one is said on the panel and the app runs on
         if startup:
             library.install.load_startup()
@@ -368,23 +363,22 @@ class Deck:
             # startup loadable patch's shape first, so the first switch to a big one
             # (rectified 600-cell, 600-cell, 120-cell, Clifford torus) does not stutter
             geometry.warm_all(first=s.shape)
-        # undo (undo.py, plan 15 WP1), built after the startup loadable patch so a
-        # launch starts with an empty stack: this deck's preset only (plan 44
-        # D5b), bases through the registry, table parts through the table, what
+        # undo (undo.py), built after the startup loadable patch so a
+        # launch starts with an empty stack: this deck's preset only, bases through the registry, table parts through the table, what
         # is loaded through the deck's marks, and a restore tells the router its
         # macros are acted on. The meta params are on `meta_stack`'s
         marks = Marks(loaded_patch.lib)
         undo_obj = undos.Undo(reg, router.table, marks=marks, only=in_patch,
                               on_restore=router.sync_macros,
                               # the dive's framing goes with the camera, and the
-                              # dive is told how to take a restored camera (row 1018)
+                              # dive is told how to take a restored camera
                               beside=DiveFrame(s),
-                              # the LFOs' membership (plan 31 B), read off the
+                              # the LFOs' membership, read off the
                               # router at each step, so a re-classed router counts
                               banks=lambda: router._banks(),
                               # (the first deck is the one installed; the latch's words)
                               called=f"on deck {1 if install else 2}")
-        reg.chase_undo = undo_obj          # one base chase hold, one step here (plan 52)
+        reg.chase_undo = undo_obj          # one base chase hold, one step here
         if install:
             undos.install(undo_obj)        # what undo.push and the edit.* triggers reach
         return cls(reg=reg, view=s, table=router.table, router=router, lfos=lfos, envs=envs,
@@ -395,14 +389,14 @@ class Deck:
                        if audio is not None else None))
 
     def chase(self, on: bool) -> bool:
-        """Hold or let go of the base chase on this deck (plan 52): the
+        """Hold or let go of the base chase on this deck: the
         performer into this deck's bases, one step on this deck's undo.
         Returns whether it is on now. `deck.chase` is the same road."""
         return self.reg.base_chase(on, steps=self.undo)
 
     @classmethod
     def beside(cls, first: Deck, *, renderer=None, media=None, lfos=None) -> Deck:
-        """A deck beside `first` (plan 44 D4): its own look — registry,
+        """A deck beside `first`: its own look — registry,
         view, table, router, banks, loadable patches, undo, `renderer` (on the same
         context; None headless) and `media` (its `Channels`, over the meta controller's
         sources) — over `first`'s shared meta params and rows, sources and clock.
@@ -419,11 +413,9 @@ class Deck:
 
     def targets(self) -> list[tuple[Any, str, str]]:
         """The live objects a hot reload re-classes, as (object, module,
-        class) — the deck itself, then the ones `app.main` listed for these
+        class) — the deck itself, then the ones `app.main` lists for these
         objects, in its order; re-evaluated each swap, so a voice made since
-        counts. The clock is listed here while
-        the deck builds it (plan 44 §2 calls it shared: D3+ hands the meta controller's
-        in, and the meta controller lists it)."""
+        counts. The clock is listed here because the deck builds it."""
         r = self.renderer
         return [
             (self, "deck", "Deck"),
@@ -436,47 +428,46 @@ class Deck:
                (r.ghost.state, "ghost", "GhostState")] if r is not None else []),
             (self.view, "view", "ViewState"),
             (self.reg, "params", "Registry"),
-            # plan 44 D3: the meta controller's params this deck holds by reference (listed
-            # here while there is one deck; D4+ hands the meta controller's in)
+            # the meta controller's params this deck holds by reference
             *([(sr, "params", "MetaRegistry")]
               if (sr := getattr(self.reg, "meta_reg", None)) is not None else []),
             *[(p, "params", "Param") for p in self.reg],
             (self.marks, "library", "Marks"),
             (self.undo, "undo", "Undo"),
-            # the router's shared half (plan 44 D2), while the deck builds it
-            # (getattr: a stand-in deck, or one from before D2, has none)
+            # the router's shared half
+            # (getattr: a stand-in deck has none)
             *([(src, "routing_sources", "Sources")]
               if (src := getattr(self, "sources", None)) is not None else []),
             (self.router, "routing", "Router"),
             (self.loaded_patch, "loadable", "LoadedPatch"),
-            # plan 44 D5a: its view of the library (getattr: a stand-in deck has none)
+            # its view of the library (getattr: a stand-in deck has none)
             *([(on, "library", "DeckLibrary"), (on.install, "library", "DeckInstall")]
               if (on := getattr(self.loaded_patch, "lib", None)) is not None else []),
-            (self.loaded_patch.graph, "loadable", "GraphSection"),      # plan 26 A4
+            (self.loaded_patch.graph, "loadable", "GraphSection"),
             (self.learn, "learn", "Learn"),
             (self.clock, "tempo", "Clock"),
             (self.lfos, "lfo", "LFOs"),
-            # the LFOs as they are at this swap: N of them, with gaps (plan 31 B)
+            # the LFOs as they are at this swap: N of them, with gaps
             *[(lf, "lfo", "LFO") for lf in self.lfos.lfos],
-            # the envelopes the same way (plan 31: five lane ones and the
+            # the envelopes the same way (five lane ones and the
             # extras), and the sequencer with its lanes
             (self.envs, "envelope", "Envelopes"),
             *[(e, "envelope", "Envelope") for e in self.envs.voices],
             (self.seq, "sequencer", "Sequencer"),
             *[(ln, "sequencer", "Lane") for ln in self.seq.lanes],
-            # the totem's state (plan 47), once the panel hook registered it
+            # the totem's state, once the panel hook registered it
             *([(st, "totem", "TotemState")]
               if (st := totem.state_of(self.reg)) is not None else []),
-            # …and the poi's (plan 47, the poi)
+            # …and the poi's
             *([(sw, "poi", "PoiState")]
               if (sw := poi.state_of(self.reg)) is not None else []),
-            # …and the grip's (plan 60), each deck's own
+            # …and the grip's, each deck's own
             *([(gs, "grip", "GripState")]
               if (gs := getattr(self.reg, "grip", None)) is not None else []),
         ]
 
 
-# ------------------------------------------------------- the two decks (D5a)
+# ------------------------------------------------------------- the two decks
 
 # the holders that are no device; a device's holder name is its role
 KEYS = "window:keys"
@@ -512,7 +503,7 @@ class MetaRows:
 
 @dataclass(frozen=True)
 class MovedThen:
-    """What a step of a player's move remembers of the moment it began (row 800).
+    """What a step of a player's move remembers of the moment it began.
     `gone`: the controllers not there then, so not "unplugged since". `decks`: each
     pointer's side, on air or off, as a side: the fader may have crossed by the undo."""
 
@@ -521,8 +512,8 @@ class MovedThen:
 
 
 class MetaPlayers:
-    """Who holds what and who is where, as `undo.Undo` reads it (`Undo.moves`, row
-    740): one part of what the meta stack holds, restored through the meta controller."""
+    """Who holds what and who is where, as `undo.Undo` reads it (`Undo.moves`):
+    one part of what the meta stack holds, restored through the meta controller."""
 
     heard: tuple[str, bool] | None = None    # what ⌘Z last said over the board, and if it warns
 
@@ -546,25 +537,24 @@ class MetaPlayers:
 
 
 def meta_stack(first: Deck, moves: MetaPlayers | None = None) -> undos.Undo:
-    """The meta controller's undo stack (plan 44 D5b): an `Undo` over the
+    """The meta controller's undo stack: an `Undo` over the
     `MetaRegistry` and the `MetaTable` every deck holds by reference, what
-    is loaded through the library's `MetaMarks`, and with `moves` who holds what
-    (row 740). `first` is whichever deck has the band hooks; the stack is no deck's."""
+    is loaded through the library's `MetaMarks`, and with `moves` who holds what.
+    `first` is whichever deck has the band hooks; the stack is no deck's."""
     return undos.Undo(first.meta_reg, MetaRows(first.meta_table), moves=moves,
                       called="on the meta controller",
                       marks=MetaMarks(first.loaded_patch.lib.base), tag=first.band_shape)
 
 
 def _carry(src: Deck, dst: Deck) -> None:
-    """What `LoadedPatch.document` does not hold and a copy must (the reading's rows 3
-    and 4), after the doc road landed the rest: the turn as it stands (`pose` folds
+    """What `LoadedPatch.document` does not hold and a copy must: the turn as it stands (`pose` folds
     it, which is not the same bits), the field's and the media path's phases, each
     param's running state with its chase ledger (`Registry.take_running`: the pose's
     ledger too, which no snapshot holds), each row's and bank's, and the renderer's
     clocks. One clock steps both
     banks, so nothing here is a lock: each deck runs on from where the copy left it.
     A clip's place and the trails are not carried: a load's start empty."""
-    dst.router.modgraph                  # noqa: B018 — its lost rows forgotten first (plan 52)
+    dst.router.modgraph                  # noqa: B018 — its lost rows forgotten first
     sv, dv = src.view, dst.view
     dv.ang, dv.body, dv.held = list(sv.ang), copy.copy(sv.body), sv.held
     dv.inst_phase, dv.media_phase = sv.inst_phase, sv.media_phase
@@ -608,18 +598,18 @@ class MetaController:
     the keys and the mouse, and the panel has its own (`panel_pointer`,
     `point_panel`): none moves with another, so players can sit on either deck
     and the panel can show either. `on_air_pointer` is the deck the outputs
-    show; it stays on deck 1 until the crossfader decides it (D5c).
+    show; it stays on deck 1 until the crossfader decides it.
 
     A holder reads through its pointer each time. `point` moves only the
     pointer: what a holder kept of the deck it left is its own to let go when
     it next looks (`MidiIO._follow_pointer`). A deck not in `decks` is refused.
 
-    `undo` is its own stack (`meta_stack`, plan 44 D5b), beside one on each deck:
+    `undo` is its own stack (`meta_stack`), beside one on each deck:
     `stacks` are the three, all ticked each frame. A stack stays with its `Deck`
-    whatever points at it. A player's move is one step on `undo` (row 740), and
+    whatever points at it. A player's move is one step on `undo`, and
     its undo goes the same road back (`put_players`).
 
-    `players` (plan 55) say where the controllers go: a controller's pointer
+    `players` say where the controllers go: a controller's pointer
     starts on the deck its player's duty says (`deck_for`), `move_player` moves
     all a player holds, `register` moves a controller to a player. On air is
     `on_air`, off air `off_air`; when the crossfader moves `on_air_pointer`
@@ -688,8 +678,8 @@ class MetaController:
         return self.timed is not None or between_ends(self.mix.xfade)
 
     def bars_load(self) -> str | None:
-        """Why a bank verb from a row may not load now, or None when it may (the owner,
-        2026-11-04: changing what is on air is intentional, never from the desk). While
+        """Why a bank verb from a row may not load now, or None when it may: changing
+        what is on air is intentional, never from the desk. While
         the crossfader is between its ends both decks are on air. The panel's own load
         is the intentional one and never asks."""
         if self.mixing:
@@ -704,7 +694,7 @@ class MetaController:
 
     def row_load(self) -> tuple[DeckInstall | None, str | None]:
         """Where a bank verb from a row lands, and why it may not: (where, None) or
-        (None, why). The owner, 2026-11-06, row 700: a press always loads into the deck
+        (None, why). A press always loads into the deck
         off air, whichever deck its player or the keys are on, and never touches the room.
         A load is the meta controller's verb, the named exception to "a row acts only on
         the `Deck` its player is on"; no loadable patch's row can reach it (`routing.meta_refusal`)."""
@@ -714,7 +704,7 @@ class MetaController:
     def loaded_words(self, name: str) -> str:
         """The status line after a row's load: what, where, and that the room is as it
         was. ⌘Z only where it is true (`undo.takes_back`): coming to the deck later
-        latches it (row 753)."""
+        latches it."""
         off = self.deck_name(self.off_air)
         back = "; ⌘Z takes it back" if undos.takes_back(self.off_air.undo) else ""
         return f"{name} loaded off air on {off}; the room still sees {self.deck_name(self.on_air)}{back}"
@@ -761,7 +751,7 @@ class MetaController:
         it. It stays until someone moves it. Each controller lets go of the deck
         it left at its next `act` (`Router.pad_left`, `MidiIO._follow_pointer`,
         `routing.let_go_lost`); a row on it there goes dormant in that deck's
-        next pass. One step on the meta stack (row 740)."""
+        next pass. One step on the meta stack."""
         duty = Duty(duty)
         if self.players.get(number).duty != duty:
             undos.push_meta(f"player {number} to {duty.value.replace('_', ' ')}")
@@ -785,14 +775,14 @@ class MetaController:
                     p.deck, self.seats[role] = self.deck_of_player(number), number
 
     def place_players(self) -> None:
-        """Every player where its duty says: for what moves on air (D5c), so an
+        """Every player where its duty says: for what moves on air, so an
         on-air player stays on air and an off-air one with the off-air `Deck`."""
         for player in self.players:
             self._place(player.number)
 
     def register(self, role: str, number: int) -> None:
         """Player `number` holds the controller `role` from now on, remembered;
-        the controller goes to that player's deck. One step on the meta stack (row 740)."""
+        the controller goes to that player's deck. One step on the meta stack."""
         self.players.get(number)
         if self.players.player_of(role).number != number:     # (holds already: nothing to write)
             undos.push_meta(f"{role} to player {number}")
@@ -829,7 +819,7 @@ class MetaController:
                           for r, p in self.pointers.items() if r not in (KEYS, MOUSE)})
 
     def refuses_players(self, doc: dict, then: MovedThen | None = None) -> str | None:
-        """Why who holds what may not go back to `doc` now (row 800): a controller it moves
+        """Why who holds what may not go back to `doc` now: a controller it moves
         that was there when the step began and is unplugged now. Going back would reopen it
         under another name, a device nobody has. One off the device list passes: nothing
         opens for a role no entry lists, there is no plugging it back in to ask for, and
@@ -846,7 +836,7 @@ class MetaController:
         return f"{', '.join(unplugged)} unplugged since that move. Plug {it} back in and try again"
 
     def put_players(self, doc: dict, then: MovedThen | None = None) -> None:
-        """An undo of a move (row 800): who holds what and who is where as `doc` says,
+        """An undo of a move: who holds what and who is where as `doc` says,
         remembered. A controller the step moved, by its holder or its player's duty, goes
         back to the side it was on as the step began, so one mapped off air stays off the
         room's deck, or where its player's duty says if it had no pointer then. One nobody
@@ -885,7 +875,7 @@ class MetaController:
         for fn in self.on_panel:
             fn(deck)
 
-    # ---- the crossfader (D5c): on air by the fader's side, no swap ----
+    # ---- the crossfader: on air by the fader's side, no swap ----
 
     def follow_fader(self) -> bool:
         """On air follows the side the fader is on, past `MIDDLE` so a fader
@@ -986,7 +976,7 @@ class MetaController:
         else:
             self.mix.xfade = x                # (no param: a test rig with no outputs hook)
 
-    # ---- copy on air to off air (D5c): the second verb ----
+    # ---- copy on air to off air: the second verb ----
 
     def copy_on_air(self) -> list[str]:
         """The deck on air's look onto the deck off air, so the two run as one
@@ -1023,7 +1013,7 @@ class MetaController:
                 *[(p, "pointer", "Pointer") for p in self.pointers.values()]]
 
 
-# ------------------------------------------------------------- the fade (D4)
+# ------------------------------------------------------------- the fade
 
 @dataclass
 class Mix:
@@ -1074,10 +1064,10 @@ XFADE_S_TIP = "How long a timed fade runs the crossfader, in seconds. 0 is a cut
 
 
 def register_xfade(reg, mix: Mix) -> list[str]:
-    """`output.xfade` and `output.xfade_s` (plan 44 §3 D4): the meta controller's,
+    """`output.xfade` and `output.xfade_s`: the meta controller's,
     like `output.dim` — group `output`, never persisted, not modulatable (a band
     on the fade would cut the room on every kick) — so they cross no file. The
-    desk's crossfader is the first (D5d, `apc40.META_CONTROLS`)."""
+    desk's crossfader is the first (`apc40.META_CONTROLS`)."""
     settings = {"group": "output", "persist": False}
     reg.continuous("output.xfade", "Crossfade", lambda: mix.xfade,
                    lambda v: setattr(mix, "xfade", min(1.0, max(0.0, float(v)))),
@@ -1089,7 +1079,7 @@ def register_xfade(reg, mix: Mix) -> list[str]:
 
 
 def draw_size(full: tuple[int, int], cap: tuple[int, int] | None, fading: bool) -> tuple[int, int]:
-    """The size a deck off air draws an output of size `full` at (plan 44 §8):
+    """The size a deck off air draws an output of size `full` at:
     the output's own during a fade (its frame then fits the render cap as the
     on-air deck's does), `preview_size` (under the cap, at most 1280 px on its
     long side) otherwise, what the panel's backdrop draws (`Fade.preview`)."""
@@ -1098,7 +1088,7 @@ def draw_size(full: tuple[int, int], cap: tuple[int, int] | None, fading: bool) 
 
 def hand_over(main, off_air) -> None:
     """What the off-air deck's renderer reads this frame that the frame gave the
-    on-air one: the bands, the window's ground and the render cap (§8: on both
+    on-air one: the bands, the window's ground and the render cap (on both
     renderers). Its dim stays 1: the mix is laid before the on-air deck's dim. Its
     look — wiring, media, bus cuts, extra hands — is its own, and the meta controller's wires
     (the clouds, the hands' source, the poi) stand on both from `app.main`, so
@@ -1123,7 +1113,7 @@ def _spec_of(deck):
 
 
 def dreams(deck) -> bool:
-    """Does this deck's look use the dream worker now: a dream (plan 90 H3: the
+    """Does this deck's look use the dream worker now: a dream (the
     effect file `dream`, any instance) in its graph, turned on?"""
     spec = deck.graph.spec
     if spec is None:
@@ -1137,7 +1127,7 @@ def dreams(deck) -> bool:
 
 
 class Fade:
-    """The one mix between the deck on air and the other (plan 44 D4). `k` is the
+    """The one mix between the deck on air and the other. `k` is the
     other's share of the picture, off `output.xfade`. Once a frame before the on-air
     deck draws: `begin_frame` (the dream worker's lend, and at 0 the fade's rest);
     above 0, the deck off air draws (`draw`) and each view carries its picture for
@@ -1201,7 +1191,7 @@ class Fade:
                 self.off_air.renderer.release_sized()
 
     def lend(self) -> None:
-        """One dream worker (§2, row 558): at rest the on-air deck's, and in a fade
+        """One dream worker: at rest the on-air deck's, and in a fade
         the deck coming in's while its look has a dream on (`dreams`) — from
         `LEND_AT` on and until the fader reaches an end, so a fader nudged or
         jittering at the bottom of its throw never wipes the on-air deck's dream,
@@ -1239,8 +1229,8 @@ class Fade:
 
     def warm(self, w: int, h: int, dpr: float, switches, samples: int | None = None) -> bool:
         """Once after a copy or a load: the deck off air drawn small and thrown
-        away, so a shader's compile lands now and not in a fade's first frame (the
-        reading's risk 3). Not above 0, where it is drawn anyway, nor once that deck
+        away, so a shader's compile lands now and not in a fade's first frame.
+        Not above 0, where it is drawn anyway, nor once that deck
         has gone on air. Leaves nothing: its delays hold nothing again, its targets
         go. A raise stays on `warm_error` until the next warm draw, and `said` is
         told at once: this is the moment to learn it. True when it drew."""

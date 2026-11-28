@@ -63,9 +63,8 @@ def corner_mask(shape: tuple[int, int]) -> np.ndarray:
 
     Walks contour.sub_boxes rather than the cell rect, so a slider's thumb
     and a switch's thumb - whose arcs are nowhere near their cell's corners -
-    are excluded from the strict metric too. Leaving them in it would fail a
-    third of a pixel of rasterizer disagreement as a hundred-level error,
-    which is the thing the two-metric split exists to prevent.
+    are excluded from the strict metric too. Left in it, a third of a pixel
+    of rasterizer disagreement would fail as a hundred-level error.
     """
     m = np.zeros(shape, bool)
     for c in SPEC["cells"]:
@@ -280,10 +279,9 @@ def main() -> int:
 
     # --- icons: mass and centroid, which the strict metric cannot see -----
     # icon_boxes drops these pixels from the photometric metric because a
-    # round line cap disagrees by up to 59 levels. Nothing then measured the
-    # icon at all - see contour.icon_ink. These two aggregates do, and they
-    # FAIL, because "the chevron still has to land on the right pixels" was
-    # written in icon_boxes' docstring while nothing enforced it.
+    # round line cap disagrees by up to 59 levels. These two aggregates (see
+    # contour.icon_ink) are what measure the icon, and they FAIL: the chevron
+    # still has to land on the right pixels.
     irows = []
     for c in SPEC["cells"]:
         for n, box in enumerate(C.icon_boxes(c)):

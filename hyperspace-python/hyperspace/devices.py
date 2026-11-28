@@ -1,13 +1,13 @@
-"""The device registry (plan 27): every input or output the meta controller has,
+"""The device registry: every input or output the meta controller has,
 listed in the library's ``devices.json`` (`devicelist`), opened behind its own entry,
 polled in order each frame, and closed in one list.
 
 A *device* is anything that satisfies the `Device` protocol below:
 `open()`, `poll(dt, now)`, `close()`, a `status` for the SYSTEM page, a
 `role`, its `sources` (the ports it publishes), `feed(sources)` (the
-shared `routing_sources.Sources`, plan 44 D2),
-`learn(learn)` and `wants` (what a Learn can arm it for). Today's inputs
-are devices since B2: `MidiDevice` — one per MIDI entry, each with its own
+shared `routing_sources.Sources`),
+`learn(learn)` and `wants` (what a Learn can arm it for). The inputs
+are devices: `MidiDevice` — one per MIDI entry, each with its own
 `profile` (`apc40`, `generic`) and its own rows (`cc@<role>:…` for every
 MIDI role but the first) —, `PadDevice` (the gamepad: its rows, its axis
 lanes and the sticks' default camera job) and the hands'
@@ -26,7 +26,7 @@ row's qualifier (``cc@launch:0:7``) use. A role contains no ``:``. **For
 today's devices the role is not the scheme:** a loadable patch names a *scheme*
 (`hand:right.roll`, `axis:LX`, `ext:3`, `cc:0:48`) and the device's
 `schemes` tuple says which schemes its role publishes, so every existing
-row is unchanged whatever the entry is called. A new device (B4's OSC)
+row is unchanged whatever the entry is called. A new device (OSC)
 publishes under its role. Two enabled devices may not **feed** one
 scheme: the sources hold one vector per fed scheme (`feeds`), so a second
 pad (`axis`) or a second hands device (`hand`) is refused with a note
@@ -36,7 +36,7 @@ unqualified MIDI row is the first MIDI role's (`midi_roles`), the second
 desk's rows carry its role. One role, one entry (config drops a
 duplicate role).
 
-**Schemes from the registry** (B2): which schemes are continuous, and in
+**Schemes from the registry:** which schemes are continuous, and in
 what order a page offers them, is `continuous_schemes` (the analyzer's
 `lane` and the LFOs' `lfo` first, then each device's `feeds`); which a
 device delivers as rows is `row_schemes`; what a Learn can be armed for is
@@ -49,7 +49,7 @@ fader, a lane) or a *trigger* (a hit, a button, a pad — with a velocity
 when the device sends one). Discrete controls stay scene-setters: a
 device delivers them as rows through the table (`Router.pad`,
 `MidiIO._handle`), never as a feed. A device may expose `layers`
-(decision 14: the APC40 as two nodes in plan 28): the first MIDI role's
+(decision 14: the APC40 as two nodes): the first MIDI role's
 desk has two, the patch layer and SHIFT's global one.
 
 **The frame.** `DeviceRegistry.poll` runs in the scene-setter slot
@@ -67,14 +67,14 @@ config notes), opened again on the `Ports` schedule (midi.py: every 2 s
 five times, then every 10 s). A device whose `open()` returned but whose
 hardware is not there reports `lost` and **reconnects itself** on its own
 schedule — today's adapters do (`midi.Ports.retry`, the pad's GLFW poll
-and USB rescan, the hands' Leap thread and DAW port), and a B2 / B4
+and USB rescan, the hands' Leap thread and DAW port), and any new
 device must too; the registry never closes or reopens a `lost` device
 (a `Ports` of its own inside `poll` is the pattern). The registry asks the list
 (`devicelist.DeviceList`, whose worker does the disk) every `WATCH_FRAMES` frames
 whether it changed, closing what left and opening what arrived; a bad list is a note
 and the old one stands.
 
-**Sinks** (plan 27 B3). A sink takes values *out* of the app: a device's
+**Sinks.** A sink takes values *out* of the app: a device's
 `sinks` are its sink ports (a `Port` whose `scheme` is the device's role and
 whose `name` is the channel, so its `address` is ``<role>:<channel>`` —
 ``bridge:3``), and its `send(reg, analyzer)` runs in the slot after
@@ -113,18 +113,17 @@ RETRY_SLOW_S = 10.0
 WATCH_FRAMES = 30        # the device list's mtime is looked at this often (as the shaders are)
 REOPEN_S = 3.0           # a device reopened while connected: longer than one `RETRY_S` to find it
 STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
-# fed by the analyzer, the LFOs, the envelopes and the sequencer (plan 31),
+# fed by the analyzer, the LFOs, the envelopes and the sequencer,
 # not a device
 BUILTIN_SCHEMES = ("lane", "lfo", "env", "seq")
-# plan 40 T4: the schemes no device feeds, which `wants` never names — the
+# the schemes no device feeds, which `wants` never names — the
 # built-in lanes, the modifiers' outputs (modifiers.SCHEME, restated: this
 # module imports nothing of the app at its top) and the keyboard
 NO_DEVICE_SCHEMES = (*BUILTIN_SCHEMES, "mod", "key")
 # a role-less row's role when no listed device publishes its scheme: the
 # meta controller's usual name for the kind behind it (config.py's example list); a
 # scheme not here is a role of its own (an OSC device's scheme is its
-# role). Plan 28 N5's table, moved here from graphview by plan 40 T4
-# (graphview reads it from here: the placeholder node keeps its words)
+# role). graphview reads it from here: the placeholder node keeps its words
 SCHEME_ROLE = {"hand": "leap", "hands": "leap", "axis": "pad", "pair": "pad", "pad": "pad",
                "hat": "pad",
                "touch": "pad", "motion": "pad",
@@ -139,19 +138,19 @@ def retry_after(misses: int) -> float:
 
 @dataclass(frozen=True)
 class Port:
-    """One source (or, from B3, one sink) a device publishes — what the
-    node editor (plan 28) draws a device from, so there is no second
+    """One source (or one sink) a device publishes — what the
+    node editor draws a device from, so there is no second
     description of it. `scheme` is the Router scheme the port lives under
     (`hand`, `axis`, `cc`), `name` the address after it (``right.roll``,
     ``LX``, ``0:48``), and `address` the row's source string,
     ``scheme:name`` — a cable can be built from a port. `kind` is
-    ``value`` or ``trigger`` — or ``cloud`` (plan 27 B4: a `PointCloud`
+    ``value`` or ``trigger`` — or ``cloud`` (a `PointCloud`
     the device publishes on the registry, `DeviceRegistry.clouds`, never
     through the Router; its scheme is ``cloud``); `rest` where a value idles; `bipolar` a
     value centred on its rest; `velocity` a trigger that carries one;
     `group` folds a long list (the APC40's hundred controls); `layer` the
     device layer the port belongs to ("" = every layer). A *sink* port
-    (plan 27 B3, `Device.sinks`) has the device's role as its `scheme`
+    (`Device.sinks`) has the device's role as its `scheme`
     and a channel as its `name`, so its `address` is ``<role>:<channel>``
     — what a sink row targets."""
 
@@ -189,9 +188,9 @@ class Device(Protocol):
     frame's discrete controls as rows; `feed` publishes the continuous
     vectors, labels, rests, gates and names; `sinks` are the device's sink
     ports (``<role>:<channel>``) and `send` the sink half, after
-    `reg.apply` (plan 27 B3). `targets` are the live objects the hot reloader re-classes.
+    `reg.apply`. `targets` are the live objects the hot reloader re-classes.
     `wants` are what a Learn can be armed for and this device completes
-    (plan 27 B2: ``desk`` for MIDI, ``pad``, ``hand:left`` /
+    (``desk`` for MIDI, ``pad``, ``hand:left`` /
     ``hand:right``; a new device's role by default)."""
 
     role: str
@@ -248,12 +247,12 @@ class Context:
     # the registry itself (set by `DeviceRegistry`): a sink that carries
     # another device's output (the hands' DAW messages) finds it by role
     devices: object | None = None
-    # what the pad devices share (plan 27 B6, gamepad.Claims): which GLFW
+    # what the pad devices share (gamepad.Claims): which GLFW
     # joystick each reads, the pinned indices, the one USB reader's owner.
     # Made by the first pad that opens
     pads: object | None = None
-    # who holds which controller (plan 55, players.Players), which names a pad's
-    # rows; None: every pad its kind's primary or its role, as plan 27 B6 had it
+    # who holds which controller (players.Players), which names a pad's
+    # rows; None: every pad is its kind's primary or its role
     players: object | None = None
 
 
@@ -267,16 +266,15 @@ class Base:
     schemes: tuple[str, ...] = ()
     feeds: tuple[str, ...] = ()
     layers: tuple[str, ...] = ()
-    # plan 27 B6: may several entries of this kind be enabled at once? A
-    # repeatable kind's first enabled entry (`primaries`) publishes its
-    # schemes bare, as every row before B6 names them; each later one
-    # publishes them under its role (``axis@p2``, `qualify`), so no two
-    # feed one Router key. A kind that is not repeatable keeps B1's rule:
-    # a second entry that would feed a scheme already fed is refused
+    # may several entries of this kind be enabled at once? A repeatable
+    # kind's first enabled entry (`primaries`) publishes its schemes bare;
+    # each later one publishes them under its role (``axis@p2``, `qualify`),
+    # so no two feed one Router key. A kind that is not repeatable refuses
+    # a second entry that would feed a scheme already fed
     repeatable = False
     # the device's qualifier: "" for its kind's primary, else its role
     qualifier = ""
-    # which deck this controller is on (plan 44 D5a, `pointer.Pointer`); None,
+    # which deck this controller is on (`pointer.Pointer`); None,
     # no meta controller yet: `ctx`'s registry and table, and the frame's router
     pointer = None
 
@@ -294,7 +292,7 @@ class Base:
         self.pointer = pointer
         # a device that is its own adapter (a live media kind once open:
         # `LiveKind.open` sets io to self) has nothing to hand on to —
-        # calling its own point again recursed until the app died at start
+        # calling its own point again would recurse without end
         point = getattr(type(self.io), "point", None) if self.io is not self else None
         if point is not None:
             point(self.io, pointer, panel)
@@ -357,8 +355,8 @@ class Base:
 
     @property
     def wants(self) -> tuple[str, ...]:
-        """A new device that feeds can be armed for by its role (plan 27
-        B2); today's devices name theirs as a class tuple."""
+        """A device that feeds can be armed for by its role; today's
+        devices name theirs as a class tuple."""
         return (self.role,) if self.feeds else ()
 
     @property
@@ -366,12 +364,12 @@ class Base:
         """The schemes this device delivers discrete rows under (the
         referee's `row_schemes`): its `schemes` less its `feeds` — the
         pad's `pad` / `hat`, MIDI's three. A device whose role is its
-        scheme and which has both lanes and hits under it (B4's OSC) says
+        scheme and which has both lanes and hits under it (OSC) says
         so itself."""
         return tuple(s for s in self.schemes if s not in self.feeds)
 
     def qualify(self, q: str) -> None:
-        """Publish under the qualifier `q` (plan 27 B6): a repeatable
+        """Publish under the qualifier `q`: a repeatable
         kind's entry that is not its kind's primary — its `schemes`,
         `feeds` and `rows` become ``<scheme>@<role>``. "" leaves them bare."""
         self.qualifier = q
@@ -389,8 +387,8 @@ class Base:
         """(schemes, feeds, rows) an entry of this kind under `role` would
         publish, before any device is made: what `make` checks a second
         feeder against and what an `off` entry still lists. Today's kinds
-        keep their class tuples; a kind whose role is its scheme (plan 27
-        B4: OSC) overrides this."""
+        keep their class tuples; a kind whose role is its scheme (OSC)
+        overrides this."""
         return cls.schemes, cls.feeds, tuple(s for s in cls.schemes if s not in cls.feeds)
 
     def __repr__(self) -> str:
@@ -416,7 +414,7 @@ class OffDevice(Base):
             w = cls.__dict__.get("wants")
             self._wants = w if isinstance(w, tuple) else ((role,) if self.feeds else ())
             self._wants_for = getattr(cls, "wants_for", None)    # a kind whose wants
-                                                                 # follow its qualifier (B6)
+                                                                 # follow its qualifier
 
     @property
     def wants(self) -> tuple[str, ...]:
@@ -468,7 +466,7 @@ class RefusedDevice(Base):
         return ()
 
 
-# ---- today's inputs as devices (plan 27 B2) ----
+# ---- today's inputs as devices ----
 
 MIDI_PROFILES = ("apc40", "generic")    # midi.PROFILES' names (midi is imported lazily)
 # `idle = true` animates the profile's own light set (idle_lights.SETS); a generic
@@ -477,10 +475,10 @@ _IDLE_SETS = {"apc40": "apc40"}
 
 
 class MidiDevice(Base):
-    """One MIDI controller (plan 27 B2): a `midi.MidiIO` with the entry's
+    """One MIDI controller: a `midi.MidiIO` with the entry's
     `port` and `profile` (`apc40`, or `generic`: plain CC / note / pitch,
     no feedback) under this entry's role. Several may be listed: the first
-    MIDI role's rows are unqualified (every row written before plan 27),
+    MIDI role's rows are unqualified,
     any other's carry its role (``cc@launch:0:7``) — `MidiIO.qualifier` —
     and each role has its own layer; the first role's desk has two, the
     patch layer and SHIFT's global one (`desk.shift`). Its rows are
@@ -526,10 +524,10 @@ class MidiDevice(Base):
 
     @property
     def layers(self) -> tuple[str, ...]:
-        """The desk's layers (decision 14, for plan 28's one node per
+        """The desk's layers (decision 14, one node per
         mode): the first MIDI role's APC40 has the patch layer and SHIFT's
-        global one; any other desk has the patch layer only — no latch of
-        its own in this plan."""
+        global one; any other desk has the patch layer only, with no latch of
+        its own."""
         if self.profile == "apc40" and self._primary():
             return ("preset", "global")
         return ("preset",)
@@ -593,19 +591,19 @@ class MidiDevice(Base):
 
 
 class PadDevice(Base):
-    """The gamepad as a device (plan 27 B2): a `gamepad.Pad` polled each
+    """The gamepad as a device: a `gamepad.Pad` polled each
     frame (it finds a pad itself — GLFW, then USB — so absent it is `lost`,
     never an error), offered to an armed Learn pad (`gamepad.learn_from`),
     then in `act` its rows delivered (`Router.pad`: the axis lanes fed —
     their names, labels and rests published by the pad, `gamepad.publish`
     — and the button and D-pad rows) and **the sticks' default camera
-    job** run (`gamepad.steer`, moved here from `app.frame`: each axis no
+    job** run (`gamepad.steer`: each axis no
     route names, a relative move on the base, through the pad's feel).
     All in the scene-setter slot.
 
-    Several at once (plan 27 B6): the kind is `repeatable`. The first
+    Several at once: the kind is `repeatable`. The first
     enabled pad entry is the primary — its rows unqualified (``pad:S``,
-    ``axis:LX``, every row before B6), the factory pad rows its, the
+    ``axis:LX``), the factory pad rows its, the
     sticks' camera job its alone; each later pad publishes under its
     role (``pad@p2:S``, ``axis@p2:LX``) and starts with no rows. Each
     reads its own controller (`gamepad.Pad.attach` on the registry's
@@ -615,7 +613,7 @@ class PadDevice(Base):
     GLFW joystick, else to the first ``usb = true`` pad with none. A
     second pad also arms a Learn by its role (`wants_for`).
 
-    **Any controller, any role (plan 42).** The entry's ``controller =``
+    **Any controller, any role.** The entry's ``controller =``
     says which pads it may take (`pads.models.matches`: ``any``, a model
     such as ``edge``, a family ``sony`` / ``xbox``, a USB id), ``hid``
     whether Sony pads are read over hidapi (USB and Bluetooth: the
@@ -654,10 +652,10 @@ class PadDevice(Base):
     @staticmethod
     def wants_for(role: str, qualifier: str) -> tuple[str, ...]:
         """``pad`` — Learn pad, completed by whichever pad moves — and, for
-        a pad other than the primary, its role too (plan 27 B6): "Learn
+        a pad other than the primary, its role too: "Learn
         p2" on a param's menu completes only from that pad, so a second
         pad can be learned onto while the first is not plugged in. Its
-        qualifier, which is what its rows say (plan 55: a player's name)."""
+        qualifier, which is what its rows say (a player's name)."""
         return ("pad", "pair", "pair (spring)", qualifier) if qualifier else (
             "pad", "pair", "pair (spring)")
 
@@ -684,7 +682,7 @@ class PadDevice(Base):
     def open(self) -> None:
         from .gamepad import Claims, Pad
         self.io = Pad(usb=bool(self.entry.get("usb", True)))
-        # plan 42: which controllers it may take, the hid road, a tape
+        # which controllers it may take, the hid road, a tape
         tape = self.entry.get("tape")
         self.io.hid = bool(self.entry.get("hid", True))
         self.io.controller = str(self.entry.get("controller", "any") or "any")
@@ -706,7 +704,7 @@ class PadDevice(Base):
     @property
     def last(self) -> str:
         """Where the pad reads from — ``glfw 1`` (the GLFW joystick index,
-        so two pads are told apart, plan 27 B6) or ``usb: <name>`` — and,
+        so two pads are told apart) or ``usb: <name>`` — and,
         while lost, why: a pinned index waited for, the USB reader's note,
         or that another pad owns the USB reader."""
         io = self.io
@@ -718,7 +716,7 @@ class PadDevice(Base):
             name = getattr(usb, "name", "") if io.source == "usb" else ""
             jid = getattr(io, "jid", None) if io.source == "glfw" else None
             if io.source in ("hid", "tape"):
-                # plan 42: which pad, how it is linked, its battery
+                # which pad, how it is linked, its battery
                 model = getattr(getattr(io, "model", None), "name", "") or "pad"
                 link = getattr(io, "link", "") or io.source
                 head = f"{io.source}: {model} ({link})"
@@ -743,8 +741,8 @@ class PadDevice(Base):
     @property
     def sources(self) -> tuple[Port, ...]:
         """The pad's fixed layout as ports, each addressed as this pad's
-        rows name it — qualified for every pad but the primary (plan 27
-        B6: ``axis@p2:LX``), as `MidiDevice.sources` does for a desk."""
+        rows name it — qualified for every pad but the primary
+        (``axis@p2:LX``), as `MidiDevice.sources` does for a desk."""
         from . import gamepad as g
         q = self.qualifier
 
@@ -752,7 +750,7 @@ class PadDevice(Base):
             return f"{s}@{q}" if q else s
         model = self.model
 
-        def has(n: str) -> bool:      # a single Joy-Con has less than a face (plan 43)
+        def has(n: str) -> bool:      # a single Joy-Con has less than a face
             return model is None or model.has_control(n)
         axes = [Port(n, lb, rest=r, bipolar=n in g.STICKS,
                      group="sticks" if n in g.STICKS else "triggers", scheme=sc("axis"))
@@ -802,13 +800,13 @@ class PadDevice(Base):
 
     @property
     def sinks(self) -> tuple[Port, ...]:
-        """The pad's outputs as sink ports (plan 42), ``<role>:<channel>``
+        """The pad's outputs as sink ports, ``<role>:<channel>``
         — `SINKS` — when its model has them."""
         m = self.model
         if m is None or not m.outputs:
             return ()
         # the channels keep their numbers; a pad shows only those it has (a
-        # Joy-Con: rumble and the player lights, no light bar — plan 43)
+        # Joy-Con: rumble and the player lights, no light bar)
         return tuple(Port(str(k), label, group="feedback", scheme=self.role)
                      for k, (key, label) in enumerate(SINKS) if SINK_CAP[key] in m.outputs)
 
@@ -833,7 +831,7 @@ class PadDevice(Base):
     @property
     def identity(self) -> tuple[tuple[int, int, int], int]:
         """(light colour, player number) with no sink row on them: the
-        entry's ``light`` / ``player``, else by who holds the pad (plan 55), else
+        entry's ``light`` / ``player``, else by who holds the pad, else
         by its place among the pads (`PLAYER_LIGHTS`, as a PlayStation numbers
         its pads)."""
         place = 1
@@ -842,7 +840,7 @@ class PadDevice(Base):
         if claims is not None and io is not None and io in getattr(claims, "order", ()):
             place = claims.order.index(io) + 1
         if (held_by := getattr(self.ctx, "players", None)) is not None:
-            place = held_by.player_of(self.role).number     # plan 55: its player, once there are
+            place = held_by.player_of(self.role).number     # its player, once there are
         rgb = _hex_rgb(self.entry.get("light"))
         if rgb is None:
             rgb = PLAYER_LIGHTS[(place - 1) % len(PLAYER_LIGHTS)]
@@ -855,7 +853,7 @@ class PadDevice(Base):
         self._taken = False
         self._dt = dt
         if self.io is not None:
-            self.io.dt_hint = dt       # the touch and motion lanes' time (plan 42)
+            self.io.dt_hint = dt       # the touch and motion lanes' time
             self.io.poll()
             # a pad reads the `Deck` it drives: that deck's dict, no copy (`params.declare_dial`)
             modes = getattr(self.reg, "dial_modes", None)
@@ -885,14 +883,14 @@ class PadDevice(Base):
     def act(self, router) -> None:
         """The pad's rows, then the sticks' camera job — on the registry
         of the deck it is on (`Base.reg`), else the router's. The camera
-        job is one pad's on each deck (plan 27 B6, decision 24: defaults
-        author no look; plan 55, `steers`): another's unrouted axes do nothing."""
+        job is one pad's on each deck (decision 24: defaults
+        author no look; `steers`): another's unrouted axes do nothing."""
         self._router = router       # `close` lets go through it: no later frame will
         io = self.io
         if io is None:
             return
         q = self.qualifier
-        # moved to another deck since last frame (plan 44 D5a): that deck's
+        # moved to another deck since last frame: that deck's
         # router lets go of this pad, as MIDI's `_follow_pointer` does
         was = self.__dict__.get("_acted_on")
         if was is not None and was is not router:
@@ -925,8 +923,8 @@ class PadDevice(Base):
                               scheme=axis)
 
     def steers(self, router) -> bool:
-        """Is the camera job this pad's: the first pad listed on the deck it is on
-        (plan 55)? So with every player on air it is the first pad's, as ever, and
+        """Is the camera job this pad's: the first pad listed on the deck it is on?
+        So with every player on air it is the first pad's, as ever, and
         a player off air alone, or the only pad given to player 2, keeps a stick
         that orbits. With no pointer or no list: the primary's."""
         devs = getattr(self.ctx, "devices", None)
@@ -946,15 +944,14 @@ class PadDevice(Base):
             super().close()
 
     def feed(self, sources) -> None:
-        """The pad's touch and motion lanes into the shared sources (plan
-        44 D2), in the feed slot like every device's lanes; its axis lanes
+        """The pad's touch and motion lanes into the shared sources, in the feed slot like every device's lanes; its axis lanes
         are fed by `Router.pad`, in `act`, into the router's sources."""
         io = self.io
         if io is not None:
             self._feed_extras(sources, io, self.qualifier)
 
     def _totem(self, io, reg) -> dict:
-        """The totem and the poi experiments (plan 47, totem.py, poi.py):
+        """The totem and the poi experiments (totem.py, poi.py):
         while `totem.on` the first pad with motion sensors turns the shape,
         while `poi.on` it swings the shape as a poi's weight; the buttons
         each uses are held off the pad's rows (`Router.pad`'s `skip`).
@@ -1025,7 +1022,7 @@ class PadDevice(Base):
         return skip | routing.layout_of(getattr(io, "model", None)).sources
 
     def _feed_extras(self, sources, io, q: str) -> None:
-        """The ``touch`` and ``motion`` lanes (plan 42): their names,
+        """The ``touch`` and ``motion`` lanes: their names,
         labels, rests, kinds and gates published once per scheme, then this
         frame's vector — None while the pad read has neither, so their
         routes let go. Sources without `feed` (a shim) are left alone."""
@@ -1062,7 +1059,7 @@ class PadDevice(Base):
         return [(self.io, "gamepad", "Pad")] if self.io is not None else []
 
 
-# ---- the pad's outputs (plan 42) ----
+# ---- the pad's outputs ----
 
 # a pad's sink channels, in order: (key, label) — `pad_effects` reads them
 SINKS = (
@@ -1145,7 +1142,7 @@ def pad_effects(vals: dict[int, float], identity) -> object:
 
 
 class BridgeDevice(Base):
-    """`bridge.Bridge` as one device with two halves (plan 27 B3): its
+    """`bridge.Bridge` as one device with two halves: its
     ports looked for again in `poll`; the inbound lanes fed as ``ext``,
     with their labels and rests, in the feed slot (`receive`, `publish`);
     and the out half a **sink** — in the slot after `reg.apply`, the
@@ -1228,7 +1225,7 @@ class BridgeDevice(Base):
         return [(self.io, "bridge", "Bridge")] if self.io is not None else []
 
 
-# ---- the sinks (plan 27 B3): a device that only sends ----
+# ---- the sinks: a device that only sends ----
 
 def _lane_sinks(role: str, sender, entry: dict) -> tuple[Port, ...]:
     """A bridge-encoded output's lanes as sink ports, from the open
@@ -1246,21 +1243,21 @@ def _lane_sinks(role: str, sender, entry: dict) -> tuple[Port, ...]:
 
 
 class MidiOutDevice(Base):
-    """A MIDI output as a sink (`kind = "midi-out"`, plan 27 B3): a port
+    """A MIDI output as a sink (`kind = "midi-out"`): a port
     found by `port` (a substring of an existing one, else a virtual port
     of that name unless ``virtual = false``; `bridge.OutPort`, looked for
     again on midi.Ports' schedule when it goes), carrying
 
       * the DAW messages of the hands device whose role `carries` names —
-        what `HandsIO._send` sent before plan 27 B3 (`HandsIO.carry`): the
+        what `HandsIO.carry` sends: the
         `hands-daw` entry the `[hands] out` setting becomes at load
         (config.py). When the port comes back after a gap the DAW is
         brought up to date (`HandsIO.resync`) before the hands' frame runs;
       * the meta controller's sink rows on this role, encoded like the bridge's
         lanes (`encoding`, `channel`, `cc`, `rate`; `bridge.Sender`).
 
-    A `lost` port is looked for again in `poll` (the device's own job,
-    B1). Nothing here feeds; it publishes no sources."""
+    A `lost` port is looked for again in `poll` (the device's own job).
+    Nothing here feeds; it publishes no sources."""
 
     kind = "midi-out"
     schemes: tuple[str, ...] = ()
@@ -1380,7 +1377,7 @@ def _said(m) -> str:
     return str(t)
 
 
-# ---- point clouds (plan 27 B4): the source type, its file, a recorded-cloud device ----
+# ---- point clouds: the source type, its file, a recorded-cloud device ----
 
 CLOUD_SCHEME = "cloud"          # a cloud is published as ``cloud:<role>`` (`DeviceRegistry.clouds`)
 CLOUD_FILE_VERSION = 1
@@ -1403,10 +1400,10 @@ def _frozen(a, what: str, n: int | None = None) -> np.ndarray:
 
 @dataclass(frozen=True, eq=False)
 class PointCloud:
-    """One frame of a point-cloud source (plan 27 B4) — not a scalar lane:
+    """One frame of a point-cloud source — not a scalar lane:
     a device publishes it on the registry under ``cloud:<role>``
     (`DeviceRegistry.clouds`), never through the Router, and the render
-    graph's point-cloud geometry node (plan 26 A4b) draws it.
+    graph's point-cloud geometry node draws it.
 
     `points` is N×3 float32, C-contiguous and read-only: a GPU-ready
     buffer (``ctx.buffer(cloud.points)`` uploads it as it is), in the
@@ -1523,8 +1520,9 @@ def read_clouds(path: Path | str) -> CloudFile:
 
 
 class CloudDevice(Base):
-    """A recorded point cloud played back as a source (plan 27 B4), so the
-    `PointCloud` type is exercised with no sensor (a live one: kinect.py). Its entry: `file` (a `write_clouds` .npz; a
+    """A recorded point cloud played back as a source, so the
+    `PointCloud` type is exercised with no sensor (a live one: kinect.py).
+    Its entry: `file` (a `write_clouds` .npz; a
     relative path is the home's), `rate` (frames per second; default the
     file's own), `loop` (default true: at the end it starts again; false
     holds the last frame). It plays at its own rate against the frame's
@@ -1610,11 +1608,9 @@ class CloudDevice(Base):
 
 def kinds() -> dict[str, type[Base]]:
     """The kinds the registry knows: `[[devices]] kind` → the device class.
-    B3 adds "midi-out", B4 adds "osc" and "cloud", plan 32 T8 the live
-    media kinds "ndi", "syphon" and "camera" — here and nowhere else
-    (a new kind is one line here and its own class: no edit to `app.py`).
-    The hands' device lives in its own package (`hands/device.py`, plan 27
-    B2), which imports this module, so it is looked up when asked for —
+    Every kind is listed here and nowhere else (a new kind is one line here
+    and its own class: no edit to `app.py`). The hands' device lives in its
+    own package (`hands/device.py`), which imports this module, so it is looked up when asked for —
     `devices.KINDS` and `devices.HandsDevice` read through here too."""
     from .hands.device import HandsDevice
     from .kinect import KinectDevice  # (libfreenect is loaded on its own thread)
@@ -1627,11 +1623,11 @@ def kinds() -> dict[str, type[Base]]:
         "gamepad": PadDevice,
         "hands": HandsDevice,
         "bridge": BridgeDevice,
-        "midi-out": MidiOutDevice,          # plan 27 B3: a sink alone
+        "midi-out": MidiOutDevice,          # a sink alone
         "osc": OscDevice,
         "cloud": CloudDevice,
-        "kinect": KinectDevice,             # plan 29: a live cloud and its pictures
-        "ndi": NdiKind,                     # plan 32 T8: live media feeds, `media_feeds`
+        "kinect": KinectDevice,             # a live cloud and its pictures
+        "ndi": NdiKind,                     # live media feeds, `media_feeds`
         "syphon": SyphonKind,
         "camera": CameraKind,
     }
@@ -1655,7 +1651,7 @@ _ROLE = "\0role:"       # `claimed`'s key for a role (no scheme starts with a NU
 
 
 def qualifiers_of(entries: list[dict], players=None) -> dict[str, str]:
-    """role → its qualifier, for each repeatable kind's entry (plan 55): a
+    """role → its qualifier, for each repeatable kind's entry: a
     player's first controller of the kind publishes under the player's name
     (`players.qualifier_of`: bare for player 1), enabled entries first as
     `primaries_of` goes, a role already spelled as its holder's name first of
@@ -1701,8 +1697,8 @@ def _controllers_in(entries: list[dict]) -> list[str]:
 
 
 def primaries_of(entries: list[dict]) -> dict[str, str]:
-    """kind → the role of its primary entry, for each repeatable kind
-    (plan 27 B6): the first *enabled* entry of the kind in list order,
+    """kind → the role of its primary entry, for each repeatable kind:
+    the first *enabled* entry of the kind in list order,
     else (none enabled) the first listed — the one whose rows are
     unqualified."""
     out: dict[str, str] = {}
@@ -1724,12 +1720,12 @@ def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None
     table lacks, `RefusedDevice` on a true collision — an earlier enabled
     entry of the same role, or one that already **feeds** one of its
     `feeds` (`claimed`: fed scheme → role, filled here for the next
-    entry). The registry claims (scheme, role), not scheme (plan 27 B6):
+    entry). The registry claims (scheme, role), not scheme:
     a repeatable kind's entry publishes under `qualifiers` (role → its
     qualifier; `qualifiers_of`, `qualify`: a second pad feeds ``axis@p2``), so
     two pads never collide; a kind
     that cannot qualify (the hands: forty lanes of another shape) is
-    refused as in B1. A kind that feeds nothing (MIDI: rows, not vectors)
+    refused likewise. A kind that feeds nothing (MIDI: rows, not vectors)
     is never refused for a scheme, so two desks of different roles both
     open. Nothing is opened here."""
     role, kind = str(entry.get("role", "")), str(entry.get("kind", ""))
@@ -1749,7 +1745,7 @@ def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None
             return RefusedDevice(role, kind, "", "", entry, ctx,
                                  why=f"role {role!r} is listed twice — not opened")
         claimed[_ROLE + role] = role
-        feeds = cls.publishes(role, entry)[1]       # an OSC role feeds its own name (B4)
+        feeds = cls.publishes(role, entry)[1]       # an OSC role feeds its own name
         if q:
             from .routing import qualified
             feeds = tuple(qualified(s, q) for s in feeds)
@@ -1768,8 +1764,8 @@ def make_all(entries: list[dict], ctx: Context | None = None) -> list[Base]:
     """One device per entry, in order, each later entry refused a role or
     the fed schemes an earlier enabled one claims (roles are unique
     already: config drops a duplicate role at load and on a re-read); a
-    repeatable kind's entries qualified by who holds them (plan 27 B6,
-    plan 55: `qualifiers_of`)."""
+    repeatable kind's entries qualified by who holds them
+    (`qualifiers_of`)."""
     claimed: dict[str, str] = {}
     quals = qualifiers_of(entries, getattr(ctx, "players", None))
     return [make(e, ctx, claimed, qualifiers=quals) for e in entries]
@@ -1786,12 +1782,12 @@ class DeviceRegistry:
     `devices` may be given ready-made (tests, the frame-order stubs).
     `store` is the list both Macs share (`devicelist.DeviceList`), which it
     watches and `relist`s from; `path`, with no store, a config.toml to
-    watch instead (RT1 retires that road). `clock` is the retry clock
+    watch instead. `clock` is the retry clock
     (monotonic, as midi.Ports'). `listeners` are called after any open
     or close, so the host can re-point what holds an adapter (the panel,
     the ghost renderer).
 
-    Plan 40 T4, the arrival: `poll` compares each device's `status` with
+    The arrival: `poll` compares each device's `status` with
     last frame's; on a change it calls the listeners once for the frame
     and `said(role, before, after)` once per device that changed — a hook
     the app sets to the footer line (`arrival`: "apc40 connected — 6
@@ -1800,7 +1796,7 @@ class DeviceRegistry:
     device, as before."""
 
     def said(self, role: str, before: str | None, after: str) -> None:
-        """The status-change hook (plan 40 T4): a no-op until the app sets
+        """The status-change hook: a no-op until the app sets
         an instance's own (`rig.said = …`, app.py)."""
 
     def renamed(self, old: str, new: str) -> None:
@@ -1834,7 +1830,7 @@ class DeviceRegistry:
         self._retry: dict[str, tuple[int, float]] = {}   # role → (misses, next try)
         self._frames = 0
         self._mtime: float | None = self._stat()
-        # plan 40 T4: role → the status last seen (`_statuses`); a role first
+        # role → the status last seen (`_statuses`); a role first
         # seen is stored without a word — the launch says nothing
         self._status: dict[str, str] = {}
 
@@ -1851,7 +1847,7 @@ class DeviceRegistry:
         return next((d for d in self.devices if d.role == role), None)
 
     def presence(self, role: str) -> str:
-        """Where the controller `role` is, for an undo of a move (row 800): `UNLISTED`,
+        """Where the controller `role` is, for an undo of a move: `UNLISTED`,
         no entry lists it; `UNPLUGGED`, listed and lost; else `THERE`. One switched off is
         there. One `apply` has just reopened reads as lost until a poll finds it (a pad's
         `io.on`), and that is no unplugging: it is there for `REOPEN_S`, or until it says."""
@@ -1903,7 +1899,7 @@ class DeviceRegistry:
         built-in `lane` (the analyzer), `lfo`, `env` and `seq` first, then each listed
         device's `feeds` in list order (an `off` device's too, so a loadable patch
         row naming it stays a dormant route, not an unknown one). What the
-        Router offers (`Router.schemes`, plan 27 B2: no fixed tuple)."""
+        Router offers (`Router.schemes`: no fixed tuple)."""
         out = list(BUILTIN_SCHEMES)
         for d in self.devices:
             for s in getattr(d, "feeds", ()):
@@ -1923,7 +1919,7 @@ class DeviceRegistry:
             if rows is None:
                 fed = getattr(d, "feeds", ())
                 rows = tuple(s for s in getattr(d, "schemes", ()) if s not in fed)
-            for s in rows:          # an OSC role's hits are rows under its fed scheme (B4)
+            for s in rows:          # an OSC role's hits are rows under its fed scheme
                 if s not in out:
                     out.append(s)
         return tuple(out)
@@ -1935,8 +1931,7 @@ class DeviceRegistry:
         `apc40` by default) — the desk the file's rows were written for —
         else the first listed; the rest in list order. So a generic box
         listed above the APC40 never inherits the APC40's rows or SHIFT,
-        and a meta controller whose only desk is generic still maps (orchestrator's
-        ruling on PR #181)."""
+        and a meta controller whose only desk is generic still maps."""
         midi = [d for d in self.devices if d.kind == "midi"]
         table = getattr(self.ctx, "table", None)
         want = str(getattr(table, "profile", "") or "apc40")
@@ -1949,12 +1944,12 @@ class DeviceRegistry:
 
     def primaries(self) -> dict[str, str]:
         """scheme → the role whose rows on it are unqualified, for every
-        scheme but MIDI's (plan 27 B6; MIDI's rule is `midi_roles`): the
+        scheme but MIDI's (MIDI's rule is `midi_roles`): the
         first listed device that publishes the scheme bare and is not off,
         refused or unknown — a repeatable kind's primary (``pad``, ``axis``,
         ``hat`` → the first enabled pad), any other device its own
         schemes. `Bindings.primaries`, through `Router.use`. A role spelled as
-        another device's address is left out (plan 55): ``@p2`` is then that
+        another device's address is left out: ``@p2`` is then that
         device's, not an alias for the bare rows."""
         out: dict[str, str] = {}
         names = {q for d in self.devices if (q := getattr(d, "qualifier", ""))}
@@ -2029,7 +2024,7 @@ class DeviceRegistry:
             table.write()
 
     def _say_players(self) -> None:
-        """Pads there are and none is player 1's (plan 55): the bare rows wait, and
+        """Pads there are and none is player 1's: the bare rows wait, and
         a stick going dead with no word is the one thing not to do."""
         pads = [d for d in self.devices if isinstance(d, PadDevice)]
         if (getattr(self.ctx, "players", None) is not None and pads
@@ -2037,18 +2032,18 @@ class DeviceRegistry:
             self._note("players: no pad is player 1's — the bare pad rows wait for one")
 
     def _tell_table(self) -> None:
-        """The shared binding table learns the MIDI roles in list order
-        (plan 27 B2), so a desk opened next reads and writes its own rows."""
+        """The shared binding table learns the MIDI roles in list order,
+        so a desk opened next reads and writes its own rows."""
         table = getattr(self.ctx, "table", None)
         if table is not None:
             table.midi_roles = self.midi_roles()
-            table.primaries = self.primaries()      # plan 27 B6: every other scheme's
+            table.primaries = self.primaries()      # every other scheme's
 
     @property
     def clouds(self) -> dict[str, PointCloud]:
-        """The point clouds the open devices publish (plan 27 B4), as
+        """The point clouds the open devices publish, as
         ``cloud:<role>`` → that device's latest `PointCloud`, in list order
-        — what the render graph's point-cloud node reads (plan 26 A4b).
+        — what the render graph's point-cloud node reads.
         Not through the Router: a cloud is not a scalar lane. A device that
         is closed, removed or not yet polled has no entry."""
         out: dict[str, PointCloud] = {}
@@ -2059,7 +2054,7 @@ class DeviceRegistry:
         return out
 
     def media_feeds(self) -> dict:
-        """The live media feeds the open devices have found (plan 32 T8),
+        """The live media feeds the open devices have found,
         as source id → `media.live.LiveSource`, in list order (the first
         device to find an id keeps it) — what the app's media resolver
         answers `live(sid)` from. Each device's dict is made by its own
@@ -2078,7 +2073,7 @@ class DeviceRegistry:
     def lines(self) -> list[tuple[str, str, str, int, str]]:
         """One (role, kind, status, n sources, last) per device — the
         SYSTEM page's lines. A sink's `last` starts with what it sends:
-        ``n sinks``, its enabled sink rows (plan 27 B3)."""
+        ``n sinks``, its enabled sink rows."""
         out = []
         table = getattr(self.ctx, "table", None)
         for d in self.devices:
@@ -2149,7 +2144,7 @@ class DeviceRegistry:
         fails is a note and `error: …`, the rest open."""
         for d in self.devices:
             self._open(d)
-        self._statuses(say=False)        # plan 40 T4: the launch is no change
+        self._statuses(say=False)        # the launch is no change
         self._changed()
 
     def _close(self, d) -> None:
@@ -2191,8 +2186,8 @@ class DeviceRegistry:
         return True
 
     def point(self, pointer_of, panel) -> None:
-        """Hand every controller its own pointer, now and whenever one opens
-        (plan 44 D5a): `pointer_of(role)` is `MetaController.pointer`, keyed
+        """Hand every controller its own pointer, now and whenever one opens:
+        `pointer_of(role)` is `MetaController.pointer`, keyed
         by role so a controller that comes back is on the deck it left; `panel`
         the panel's pointer."""
         self.pointer_of, self.panel_pointer = pointer_of, panel
@@ -2206,7 +2201,7 @@ class DeviceRegistry:
             self._holders = None
 
     def holders(self) -> dict:
-        """scheme → the pointer of the controller that feeds it (plan 55): what
+        """scheme → the pointer of the controller that feeds it: what
         `Sources.away_from` asks, so a row acts only on the deck its controller
         is on. A device with no pointer holds nothing. Made once per device
         list; a pointer's move is seen through the pointer."""
@@ -2250,7 +2245,7 @@ class DeviceRegistry:
     def mapped(self, deck, b) -> None:
         """A Learn on `deck` has just made row `b` (`Learn.mapped`): one
         controller points at one deck at a time, and mapping it elsewhere moves
-        it (plan 55). The player's duty does not move; moving the player brings
+        it. The player's duty does not move; moving the player brings
         it back. Its presses let go at its next `act`, on the deck it left."""
         d = self.controller_of(deck.table, b)
         p = getattr(d, "pointer", None)
@@ -2273,7 +2268,7 @@ class DeviceRegistry:
         self._frames += 1
         if self._frames % WATCH_FRAMES == 0:
             self.watch()
-        told = False                    # plan 40 T4: the listeners, once a frame at most
+        told = False                    # the listeners, once a frame at most
         for d in list(self.devices):
             if d.role not in self._opened:
                 misses, at = self._retry.get(d.role, (0, 0.0))
@@ -2289,7 +2284,7 @@ class DeviceRegistry:
                 p = getattr(d, "pointer", None)
                 on = p.deck.router if p is not None else router
                 self._guard(d, lambda d=d, on=on: d.act(on))
-        # plan 40 T4: after every device's poll, what changed is said; a
+        # after every device's poll, what changed is said; a
         # hardware that came back inside its adapter (midi.Ports.retry →
         # MidiIO._connected, which relit the desk already) tells the
         # listeners here, once — or not again, when an open that succeeded
@@ -2298,8 +2293,7 @@ class DeviceRegistry:
             self._changed()
 
     def _statuses(self, say: bool = True) -> bool:
-        """Each listed device's `status` against the last seen (plan 40
-        T4): a change is stored and, with `say`, handed to `said` — True
+        """Each listed device's `status` against the last seen: a change is stored and, with `say`, handed to `said` — True
         when any role's changed. A role seen for the first time is stored
         silently; a role no longer listed is forgotten (`_word`: an error
         is no coming or going)."""
@@ -2323,7 +2317,7 @@ class DeviceRegistry:
         return changed
 
     def _word(self, d) -> str | None:
-        """The status `_statuses` compares (plan 40 T4): ``connected``,
+        """The status `_statuses` compares: ``connected``,
         ``lost``, ``off`` as the device says them; an error on a device that
         is open (a poll that raised, an adapter's own error) None — its
         error line says it, and a step that raises every other frame must
@@ -2348,7 +2342,7 @@ class DeviceRegistry:
 
     def feed(self, sources) -> None:
         """The feed slot: every open device publishes its vectors into
-        the shared sources (routing_sources.Sources, plan 44 D2: what every
+        the shared sources (routing_sources.Sources: what every
         deck's pass reads; a router stands in for its own sources)."""
         for d in list(self.devices):
             if d.role in self._opened:
@@ -2356,7 +2350,7 @@ class DeviceRegistry:
 
     def send(self, reg, analyzer=None) -> None:
         """After `reg.apply`: the sinks read effective values out, each
-        device in list order (plan 27 B3), off the deck that device is on
+        device in list order, off the deck that device is on
         (`reg`: one with no pointer)."""
         for d in list(self.devices):
             if d.role in self._opened:
@@ -2434,12 +2428,12 @@ class DeviceRegistry:
         fresh = {d.role: d for d in make_all(new, self.ctx)}
         changed = False
         devices = []
-        arrived: list[str] = []         # plan 40 T4: added or reopened, said below
+        arrived: list[str] = []         # added or reopened, said below
         for e in new:
             role = e["role"]
             kept = have.get(role)
             # unchanged, refused or not exactly as before, and under the same
-            # qualifier (plan 27 B6: the first pad leaving makes the second
+            # qualifier (the first pad leaving makes the second
             # the primary — it reopens with its rows bare): the device stays
             if kept is not None and old.get(role) == e and (
                     isinstance(kept, RefusedDevice) == isinstance(fresh[role], RefusedDevice)
@@ -2470,7 +2464,7 @@ class DeviceRegistry:
             for d in devices:
                 if d.role not in self._opened:
                     self._open(d)
-            # plan 40 T4: an added device says what it brings, as hardware
+            # an added device says what it brings, as hardware
             # that comes back does ("leap connected — 3 rows live"); a
             # reopened one only when its status moved
             seen = self.__dict__.setdefault("_status", {})
@@ -2487,16 +2481,16 @@ class DeviceRegistry:
         return changed
 
 
-# ---- what the loaded patch wants, and the arrival (plan 40 T4) ----
+# ---- what the loaded patch wants, and the arrival ----
 #
-# The bindings on a device the meta controller lacks were never dropped (decision 11:
-# a performer row on a scheme no device feeds waits; a patch-layer desk
+# The bindings on a device the meta controller lacks are never dropped (a performer
+# row on a scheme no device feeds waits; a patch-layer desk
 # row is kept whatever is plugged in, and the desk relights from the table
-# when its port comes back). What was missing is the *saying*: which
+# when its port comes back). What is said: which
 # devices the loaded patch wants and does not have, and a word when one
 # arrives. `wants` is that answer, pure over the table and the registry;
 # the GRAPH head's and the PRESET strip's chip, the SYSTEM page's lines,
-# a group node's status line (T2) and a spawn's notes (T3) all read it.
+# a group node's status line and a spawn's notes all read it.
 
 CONNECTED, LOST, OFF, MISSING = "connected", "lost", "off", "missing"
 WANT_STATES = (CONNECTED, LOST, OFF, MISSING)
@@ -2509,7 +2503,7 @@ WANT_ROWS_SHOWN = 8         # a line names this many rows, then "+ k more"
 
 @dataclass(frozen=True)
 class Want:
-    """One device role the loaded patch's rows name (plan 40 T4): `state`
+    """One device role the loaded patch's rows name: `state`
     is the registry's view this frame — ``connected`` (listed, live),
     ``lost`` (listed, the hardware away, or in error), ``off`` (listed,
     ``enabled = false``) or ``missing`` (no entry for the role: "not in this
@@ -2598,7 +2592,7 @@ def _lands(where: str, only) -> bool:
 
 
 def wants(table, registry, only=None) -> list[Want]:
-    """Every device role the loaded patch's rows name (plan 40 T4), in
+    """Every device role the loaded patch's rows name, in
     table order, each with its state this frame and its rows in words.
     A row's role is its ``@role`` qualifier; else, for ``cc:`` / ``note:``
     / ``pitch:``, the first MIDI role (`DeviceRegistry.midi_roles`, the
@@ -2628,7 +2622,7 @@ def wants(table, registry, only=None) -> list[Want]:
             continue
         _, at, q = head.partition("@")
         if at and q:
-            # whoever publishes that address answers for it (plan 55: a player's
+            # whoever publishes that address answers for it (a player's
             # name, which a role may be spelled as); else the role it names
             role = listed.get(head) or q
         elif scheme in _MIDI:
@@ -2637,7 +2631,7 @@ def wants(table, registry, only=None) -> list[Want]:
         else:
             role = prim.get(scheme) or listed.get(scheme)
             if not role:
-                # pads there are, and none is player 1's (plan 55): not the pad's words
+                # pads there are, and none is player 1's: not the pad's words
                 role = (PLAYER_1 if any(base_scheme(s) == scheme for s in listed)
                         else SCHEME_ROLE.get(scheme, scheme))
         # the desk's glyphs for an APC40's rows: a listed desk's own profile;
@@ -2662,8 +2656,7 @@ def wants(table, registry, only=None) -> list[Want]:
 
 
 def wants_for(table, registry, ids) -> list[Want]:
-    """The wants whose rows land on `ids` (plan 40 T4, for a group node,
-    T2): a collection of param ids and modifier ids, each covering the
+    """The wants whose rows land on `ids` (for a group node): a collection of param ids and modifier ids, each covering the
     ids under it — `wants(table, registry, only=ids)`.
 
     >>> wants_for(table, device_reg, ["fx.acid.2", "mod.3"])            # doctest: +SKIP
@@ -2688,7 +2681,7 @@ def want_lines(ws, limit: int = WANT_ROWS_SHOWN) -> list[str]:
 
 
 def want_words(ws, limit: int = WANT_ROWS_SHOWN) -> str:
-    """The wants as a group node's status line says them (plan 40 T4):
+    """The wants as a group node's status line says them:
     "waits for apc40 (lost): K1, K2 · leap (not set up on this Mac): right hand
     y"; "" when every device is there.
 
@@ -2701,7 +2694,7 @@ def want_words(ws, limit: int = WANT_ROWS_SHOWN) -> str:
 
 
 def missing_chip(ws) -> str | None:
-    """The GRAPH head's and the PRESET strip's chip (plan 40 T4): "1 device
+    """The GRAPH head's and the PRESET strip's chip: "1 device
     missing", "2 devices missing"; None when every wanted device is there."""
     n = sum(1 for w in ws if w.lacking)
     if not n:
@@ -2710,7 +2703,7 @@ def missing_chip(ws) -> str | None:
 
 
 def wanted_lines(ws) -> list[str]:
-    """The SYSTEM page's lines under the device lines (plan 40 T4), one per
+    """The SYSTEM page's lines under the device lines, one per
     wanted role the meta controller lacks: "wanted by the preset: leap — not in this
     rig; 3 rows wait", "wanted by the preset: apc40 — lost; 6 controls
     wait". Nothing for a connected role, nothing when the loadable patch wants
@@ -2721,7 +2714,7 @@ def wanted_lines(ws) -> list[str]:
 
 def said_words(role: str, before: str | None, after: str, ws=()) -> str:
     """The footer's line when `role`'s status moved from `before` to
-    `after` (plan 40 T4; `before` None: a device just added to
+    `after` (`before` None: a device just added to
     config.toml), counted from the wants `ws`:
 
       lost → connected   "apc40 connected — 6 controls live"
@@ -2744,6 +2737,6 @@ def said_words(role: str, before: str | None, after: str, ws=()) -> str:
 
 
 def arrival(table, registry, role: str, before: str | None, after: str) -> str:
-    """`said_words` with the wants of the moment (plan 40 T4): what the
+    """`said_words` with the wants of the moment: what the
     app's `DeviceRegistry.said` hook hands the footer (app.py)."""
     return said_words(role, before, after, wants(table, registry))

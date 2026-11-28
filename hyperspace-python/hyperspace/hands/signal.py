@@ -33,7 +33,7 @@ pressure use 0–127; 14-bit CC (MSB on n, LSB on n + 32, so n ≤ 31) and
 pitch bend use 0–16383. Every encoding holds its last value until y is
 clearly past the next step (hysteresis), so a still hand sends nothing.
 
-The dance sources (plan 24 C4: curl, spread, energy, gap, twist, flick)
+The dance sources (curl, spread, energy, gap, twist, flick)
 are shaped here too, more simply than the axes — no calibration, no
 curve, no rest spring, since nothing but a route reads them:
 
@@ -126,7 +126,7 @@ class Follower:
         its return. False before the first sight and while the hand is
         away, when the spring or the hold shape only the DAW output: the
         routing lane reads NaN then, so a row lets go of its param the
-        frame the hand leaves (plan 11, audit B1). The catch stays live so
+        frame the hand leaves. The catch stays live so
         a one-frame tracking dropout costs one frame, not a catch-long
         hole, and a push row keeps its glide onto a returning hand."""
         return self.mode in (self.FOLLOW, self.CATCH)
@@ -161,7 +161,7 @@ class Follower:
         return self.y
 
 
-# ---------------------------------------------- the dance sources (plan 24 C4)
+# ---------------------------------------------- the dance sources
 
 def unit(v: float, lo: float, hi: float) -> float:
     """v over [lo, hi] as 0–1, clamped; lo when the range is empty."""

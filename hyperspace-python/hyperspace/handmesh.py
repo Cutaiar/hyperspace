@@ -364,13 +364,12 @@ def bone_matrices(model: HandModel, J: np.ndarray, rest: np.ndarray | None = Non
     for d in range(5):
         parent = palm
         # every digit's first bone starts at its own tracked base — a
-        # finger's metacarpal as much as the thumb's proximal. Riding the
-        # rigid palm instead cost each finger its knuckle's whole offset,
-        # the same displacement all the way to the tip (the pinky's 13 mm
-        # open, 15 mm spread: a finger's own width, and the ring-pinky web
-        # with it). The metacarpals are what these rigs fan the palm by,
-        # so the web between two knuckles is the model's own weights now,
-        # not a gap the skinning opened.
+        # finger's metacarpal as much as the thumb's proximal. A finger riding
+        # the rigid palm would miss its knuckle's whole offset, the same
+        # displacement all the way to the tip (the pinky's 13 mm open, 15 mm
+        # spread). The metacarpals are what these rigs fan the palm by, so the
+        # web between two knuckles is the model's own weights, not a gap the
+        # skinning opens.
         for k in range(1 if d == 0 else 0, 4):
             a_r, b_r, a_p, b_p = R[d, k], R[d, k + 1], J[d, k], J[d, k + 1]
             l_r, l_p = float(np.linalg.norm(b_r - a_r)), float(np.linalg.norm(b_p - a_p))

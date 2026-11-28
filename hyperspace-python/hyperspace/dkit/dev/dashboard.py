@@ -7,7 +7,7 @@ project's own stack, headless.
     HYPERSPACE_HOME=$(mktemp -d) uv run python hyperspace/dkit/dev/dashboard.py \
         --out /tmp/dkit --theme dark
 
-Layout follows the house pattern (ui_players.lay_out, ui_players.py:122-176):
+Layout follows the house pattern (ui_players.lay_out):
 a pure function of width that returns every rectangle, with no imgui in it, so
 it can be reasoned about and tested without a GL context. Drawing is a second
 pass over those rects.
@@ -63,28 +63,27 @@ ROW_MENU = [
            variant="destructive"),
 ]
 
-# Row 0's right-click menu, and only row 0's: the SUBMENU's driving ground.
-# A submenu cannot be driven without one somewhere in this app, and adding a
-# row to ROW_MENU would move the rows `test_menu_keys` counts - "the last
-# row" is a measured rule and it is asserted on that list. So the submenu
-# lives on a row no test names, with the same ids either side of it.
+# Row 0's right-click menu, and only row 0's: the submenu's driving ground.
+# `test_menu_keys` counts the rows of ROW_MENU ("the last row" is a measured
+# rule), so the submenu lives on a row no test names, with the same ids
+# either side of it.
 ROW_MENU_SUB = [
     M.Item("open", "Open in catalog", icon="eye"),
     M.Item("insert", "Insert", items=(
         M.Item("insert.gain", "Gain"),
         M.Item("insert.curve", "Curve"),
         # a WIDE second level, on purpose: a chain whose levels want
-        # different widths is what made the menus flip sides, so the test
-        # for that needs one that cannot fit where the level above it did
+        # different widths is what flips menus to the other side, so it needs
+        # a level that cannot fit where the level above it did
         M.Item("insert.deep", "More", items=(
             M.Item("insert.deep.one", "One of the wider rows in this menu"),
             M.Item("insert.deep.two", "Two of the wider rows in this menu"),
         )),
     )),
     M.Item("pin", "Pin to scene", icon="layers"),
-    # 32 rows, which is the look-back frame menu's count and the reason a
-    # submenu has to scroll: at 28 a row it wants 906px, more than the
-    # window is tall once it hangs off a table row.
+    # 32 rows, the look-back frame menu's count: at 28 a row it wants 906px,
+    # more than the window is tall once it hangs off a table row, so the
+    # submenu has to scroll.
     M.Item("frames", "Look-back frames", items=tuple(
         M.Item(f"frames.{k}", f"echo.{k}") for k in range(1, 33))),
     # a panel that SCROLLS and carries triggers of its own: wheeling it
@@ -107,9 +106,6 @@ ROW_MENU_SUB = [
 NAV = [("Overview", "gauge"), ("Gallery", "boxes"), ("Catalog", "shapes"),
        ("Scenes", "layers"), ("Analyzer", "activity"), ("Routing", "waves")]
 # Which nav row shows the contact sheet rather than the dashboard body.
-# Named rather than written as a 1 at the branch, because the only thing
-# worse than a magic number is a magic number that moves when somebody adds
-# a nav item above it.
 NAV_GALLERY = 1
 SOURCES = [("Audio in", "music"), ("Solids", "box"), ("Compounds", "boxes"),
            ("Effects", "sparkles")]
@@ -156,22 +152,15 @@ def ticks(n=180, seed=0x4d21):
 # layout: a pure function of size, no imgui
 # --------------------------------------------------------------------------
 
-# The Tier 1 controls' starting values, in one place so `live` and `render`
-# cannot drift apart.
 # The control rows' label column. A module constant because the interaction
-# tests need to know where a control starts, and a number copied into them
-# by hand is a number that goes stale the moment the layout moves - which is
-# exactly what happened when this went from 92 to 74.
+# tests read it to find where a control starts.
 CTL_LABEL_W = 74.0
 
-# A table row's height. One constant, because lay_out counts slots with it
-# and paint places rows with it, and the two disagreeing is a whole class of
-# bug.
+# A table row's height. lay_out counts slots with it and paint places rows
+# with it, so both read this one constant.
 ROW_H = 34.0
 
-# Rows per column in the Controls card. Adding one grows the card on its own
-# - intrinsic sizing - where before it would have needed the card's height
-# edited to match.
+# Rows per column in the Controls card. The card's height follows from it.
 CTL_ROWS = 6
 
 # How many table rows the page carries. The PAGE scrolls, so this is a
@@ -181,6 +170,8 @@ N_TABLE_ROWS = 14
 
 PLANES = ("XY", "XZ", "XW", "YZ", "YW", "ZW")
 
+# The Tier 1 controls' starting values, in one place so `live` and `render`
+# cannot drift apart.
 CTL_STATE = {
     "cutoff": 2400.0,
     "bypass": False,
@@ -240,17 +231,11 @@ def lay_out(w: int, h: int, n_rows: int | None = None,
             body_dy: float = 0.0) -> Rects:
     """The whole page as a layout TREE, measured then placed.
 
-    Every card's height here comes from what is in it. The old version typed
-    them - the bands card was 258 because somebody measured a picture and
-    wrote 258, the stat cards were 136 on three adjacent lines - so adding a
-    row to a card did not make the card grow, it made the row land outside
-    it, silently. `box.Node` + `box.lay` is the fix CSS calls `height: auto`:
-    measure the tree bottom-up for what each subtree wants, place it
-    top-down with what there is. 0.1 ms for this page, so it can run on
-    every resize without a thought.
-
-    The function still returns the same `Rects`, so paint and the tests see
-    exactly the contract they saw before; only the numbers are derived now.
+    Every card's height comes from what is in it (CSS `height: auto`):
+    `box.Node` + `box.lay` measure the tree bottom-up for what each subtree
+    wants, then place it top-down with what there is. About 0.1 ms for this
+    page, so it can run on every resize. The result is a `Rects` that paint
+    and the tests read.
     """
     r = Rects()
     N = B.Node
@@ -283,22 +268,17 @@ def lay_out(w: int, h: int, n_rows: int | None = None,
     controls.grow, controls.basis = 1.0, 0.0
 
     # ---- the cards whose content is drawn rather than stacked -----------
-    # Their height is still a composition of named parts rather than one
-    # number: a stat card is its label, its figure and its footnote; the
-    # bands card is its header and two rows of facets.
+    # Their height is a composition of named parts: a stat card is its label,
+    # its figure and its footnote; the bands card is its header and two rows
+    # of facets.
     FACET_H, FACET_GAP = 60.0, T.SPACE[6] + 2.0
 
     def stat_card(i):
         """A stat card's four stacked lines, each keyed so PAINT reads them.
 
-        This is the half that matters. Giving the card an auto height is no
-        use if paint still works out where its contents go from the card's
-        own height - the first version of this modelled the card as 20/30/16
-        and got 114, paint kept drawing its last two lines at `ch - 52` and
-        `ch - 32`, and the figure landed on top of the footnote. Layout and
-        paint have to read the same rects or they drift the moment either
-        moves. Modelled off what paint actually draws, the card comes back to
-        136 - the number that used to be typed, now derived.
+        Paint places its contents from these rects, never from the card's own
+        height, so layout and paint cannot drift apart. The parts model what
+        paint draws and sum to the card's height of 136.
         """
         return N(grow=1.0, basis=0.0, dir="column", pad=CARD_PAD,
                  key=("stat", i), kids=(
@@ -331,12 +311,8 @@ def lay_out(w: int, h: int, n_rows: int | None = None,
                 N(dir="row", gap=CARD_GAP, key="cards",
                   kids=(routing, controls)),
                 N(h=32.0, key="tabs"),
-                # The table is its NATURAL height - every row - and the PAGE
-                # scrolls. It used to take whatever was left and scroll
-                # inside itself, which on a window this tall left a viewport
-                # one row deep: you could see a single clipped row and
-                # nothing below it. Nested scrolling is the wrong answer
-                # anyway; a dashboard scrolls as a page.
+                # The table is its natural height, every row, and the page
+                # scrolls; there is no nested scroll area.
                 N(dir="column", key="table", kids=(
                     N(h=36.0, key="head"),
                     N(h=float(n_rows if n_rows is not None else N_TABLE_ROWS)
@@ -346,9 +322,8 @@ def lay_out(w: int, h: int, n_rows: int | None = None,
         )),
     ))
 
-    # The body is laid out at its own height, then SHIFTED by the scroll.
-    # lay_out stays a pure function of (w, h, body_dy), so it is still
-    # cacheable and still testable without imgui.
+    # The body is laid out at its own height, then shifted by the scroll, so
+    # lay_out is a pure function of (w, h, body_dy).
     B.measure_tree(page)
     body = next(k for k in page.kids[1].kids if k.key == "body")
     natural = body.mh
@@ -393,8 +368,7 @@ def lay_out(w: int, h: int, n_rows: int | None = None,
         r.table_rows.append((rows.x, rows.y + i * ROW_H, rows.w, ROW_H))
 
     # Shape | Kind | Schlafli | Dim | Cells | Family — weights, and flex
-    # resolves them. The old version hand-summed six fractions that had to
-    # add to 1.0, which is a constraint nothing checked.
+    # resolves them.
     weights = [22, 28, 13, 6, 8, 20]
     r.cols = [(b.x, b.w) for b in B.flex(
         B.Rect(rows.x, rows.y, rows.w, 1),
@@ -410,10 +384,7 @@ def card_head(dl, card, title, desc, faces, theme):
     """A Card's title and description, on the measured rhythm.
 
     16px of padding, a 22px title, a 4px gap, a 20px description - all from
-    tokens, which read them off a real shadcn Card. Three cards were each
-    writing `y + 14` and `y + 34` instead, which is a 20px gap where the
-    component uses 4, and is why the headers read loose while the rows below
-    them read tight.
+    tokens, which read them off a real shadcn Card.
     """
     x, y, _w, _h = card
     tx = x + T.CARD_PAD
@@ -459,8 +430,7 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     # ---- header -----------------------------------------------------------
     hx, hy, hw, hh = r.header
     D.fill(dl, hx, hy + hh - 1, hw, 1, T.rgba("border", theme=theme))
-    # the header names the section the sidebar is on, rather than a typed
-    # "Overview" that went on saying Overview from every other tab
+    # the header names the section the sidebar is on
     sect = NAV[state.get("nav", 0)][0]
     D.label(dl, hx + GUT, hy, sect, faces, "medium", 16,
             T.rgba("foreground", theme=theme), baseline_box=hh)
@@ -471,9 +441,9 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     _dot(dl, bx + 8, hy + hh / 2, (0.20, 0.83, 0.60, 1.0), 3.0)
     D.label(dl, bx + 20, hy + (hh - 20) / 2, "Rendering", faces, "medium", 12,
             T.rgba("foreground", theme=theme), baseline_box=20)
-    # The measured Button (comp_button), not the old three-variant stub: six
-    # variants, a size-dependent radius, a per-variant hover and the +1px
-    # press nudge. Sized from its own label rather than a typed 72.
+    # The measured Button (comp_button): six variants, a size-dependent
+    # radius, a per-variant hover and the +1px press nudge. Sized from its
+    # own label.
     by = hy + (hh - 32) / 2
     gw, _gh = CB.button_size("default", "GitHub", faces)
     CB.ui_button(ui, "hdr.github", hx + hw - GUT - gw, by, gw, 32,
@@ -491,17 +461,15 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     render.last_group_w, render.last_github_w = rgw, gw
 
     # ---- everything below the header scrolls as ONE page ------------------
-    # Not the table on its own: at the window heights people actually use,
-    # the content above left the table a viewport one row deep. A dashboard
-    # scrolls as a page.
+    # The table does not scroll on its own; the dashboard scrolls as a page.
     bx, by = SIDEBAR_W, HEADER_H
     bw, bh = w - SIDEBAR_W, h - HEADER_H
     if state.get("nav") == NAV_GALLERY:
         # The contact sheet. Its height comes from its own content, which is
         # text-dependent and so cannot be worked out in `lay_out` (which has
         # no faces) - so it is planned here, before the scroll area opens,
-        # and the same plan is handed to the paint. One call, so the scroll
-        # range and what is on screen cannot disagree.
+        # and the same plan is handed to the paint, so the scroll range and
+        # what is on screen cannot disagree.
         gw = bw - 2 * GUT
         pre = CG.plan(gw, faces, ui.theme_name)
         with I.scroll_area(ui, "page", bx, by, bw, bh, pre[0] + 2 * GUT,
@@ -542,8 +510,7 @@ def _body(ui, r, w, h, series, state):
                 T.rgba("foreground", theme=theme), baseline_box=vv[3],
                 tabular=True)
         # shadcn's badge: gap-1 (4), px-2 (8) but pl-1.5 (6) with a leading
-        # icon, and [&>svg]:size-3 (12). Measured, not guessed - the hand
-        # offsets this replaces put the label a pixel inside the icon.
+        # icon, and [&>svg]:size-3 (12).
         f = B.Flow(gap=4).icon("trending-up" if up else "trending-down", 12)
         D.flow_text(f, delta, faces, "medium", 12, tabular=True)
         pill_w = f.width() + 6 + 8
@@ -613,10 +580,9 @@ def _body(ui, r, w, h, series, state):
     # they drag, type, open and toggle for real - and stay reachable to
     # tests/ui_driver.py, which finds controls by the text after `##`.
     #
-    # The right column is the STATES. They are here rather than only in the
-    # gallery because the gallery is a contact sheet: it proves the chrome to
-    # a pixel and shows you nothing about how a disabled control feels under
-    # the pointer, or whether a two-thumb range drags the handle you meant.
+    # The right column is the STATES. The gallery is a contact sheet that
+    # proves the chrome to a pixel; these are live, so a disabled control
+    # under the pointer and a two-thumb range's handles can be exercised.
     x, y, cw, ch = r.controls_card
     D.card(dl, {"x": x, "y": y, "w": cw, "h": ch, "variant": "plain"}, theme, None)
     card_head(dl, r.controls_card, "Controls",
@@ -640,27 +606,24 @@ def _body(ui, r, w, h, series, state):
     D.label(dl, sx + sw - 44, sy, f"{state['cutoff']:.0f}", faces, "regular",
             12, muted, align="right", box_w=44, baseline_box=sh, tabular=True)
     # the tooltip hangs off the slider's own rect and takes no hit target of
-    # its own, so it cannot steal the hover from the control it describes
-    # The Kbd says what the slider already does: Shift scales a drag to a
-    # tenth (interact.FINE). A shortcut hint for a key that does nothing
-    # would be worse than none.
+    # its own, so it cannot steal the hover from the control it describes.
+    # The Kbd says what the slider does: Shift scales a drag to a tenth
+    # (interact.FINE).
     shown = I.tooltip(ui, "ctl.cutoff.tip", (sx, sy, sw - 46, sh),
                       "Low-pass cutoff, 20 Hz - 20 kHz. Fine:", kbd="\u21e7",
                       hovered=imgui.is_mouse_hovering_rect(
                           imgui.ImVec2(sx, sy),
                           imgui.ImVec2(sx + sw - 46, sy + sh)))
-    # Counted rather than sampled from pixels. A tooltip floats OVER whatever
-    # is above it - here the card's own description - so ink at a guessed
-    # point cannot tell the two apart. The count also makes the flicker test
-    # exact instead of inferred: if it blinks, the frames simply do not add
-    # up.
+    # Frames shown are counted rather than sampled from pixels: a tooltip
+    # floats over whatever is above it (here the card's own description), so
+    # ink at a point cannot tell the two apart. The count also lets a flicker
+    # test be exact: a blink makes the frames not add up.
     state["tip_frames"] = state.get("tip_frames", 0) + (1 if shown else 0)
     state["tip_now"] = shown
 
-    # a toggle param: 47 of them. It GATES the rest, which is what a bypass
-    # does - and it means the disabled chrome is something you can toggle and
-    # watch ease rather than a dead row to look at. Every Tier 1 component
-    # below takes `disabled` from it.
+    # a toggle param: 47 of them. It gates the rest, as a bypass does, so the
+    # disabled chrome can be toggled and watched easing. Every Tier 1
+    # component below takes `disabled` from it.
     wx, wy, _, wh = _row(1, "Bypass")
     _, state["bypass"] = I.switch(ui, "ctl.bypass", wx, wy + (wh - 18.4) / 2,
                                   state["bypass"])
@@ -689,9 +652,8 @@ def _body(ui, r, w, h, series, state):
     D.label(dl, gx + gw - 44, gy, f"{state['mix']:.2f}", faces, "regular", 12,
             muted, align="right", box_w=44, baseline_box=gh, tabular=True)
 
-    # A Combobox: a filterable Select. With 600-900 live params this is the
-    # shape the panel actually needs - typing beats scanning well before
-    # then. Type in it to filter; the ranking is cmdk's own commandScore.
+    # A Combobox: a filterable Select, the shape a panel of 600-900 live
+    # params needs. Type in it to filter; the ranking is cmdk's commandScore.
     kx, ky, kw, _ = _row(5, "Find")
     got, _o = CC.combobox(
         ui, "ctl.find", kx, ky, min(kw, 150.0), state["plane"],
@@ -716,12 +678,11 @@ def _body(ui, r, w, h, series, state):
     _, state["mute"] = I.switch(ui, "ctl.mute", mx, my + (mh - 14.0) / 2,
                                 state["mute"], size="sm", disabled=off)
     # A Checkbox beside it, with its Label: the other shape of a toggle
-    # param, and the one a row of independent flags reads best as. Placed
-    # 24px past the small switch's track: the switch's stretched target
-    # reaches 11px past its end and the checkbox's 11px before its box, so
-    # 2px separate them and neither steals the other's clicks.
-    # On a CARD, so the card is the backdrop its disabled state folds
-    # against - the page's `background` would be the wrong colour here.
+    # param. Placed 24px past the small switch's track: the switch's
+    # stretched target reaches 11px past its end and the checkbox's 11px
+    # before its box, so 2px separate them and neither steals the other's
+    # clicks. The backdrop is the card, which its disabled state folds
+    # against; the page's `background` would be the wrong colour here.
     sw_w = T.SWITCH_SIZES["sm"][0]
     _, state["solo"] = I.checkbox(
         ui, "ctl.solo", mx + sw_w + T.HIT_STRETCH[0] * 2,
@@ -766,7 +727,6 @@ def _body(ui, r, w, h, series, state):
     if picked is not None:
         state["tab"] = picked
     rows = filtered(state["tab"])
-    # every row is in the table now; the viewport decides what is on screen
     D.label(dl, tx, ty, f"{len(rows)} shapes", faces, "regular", 13,
             T.rgba("muted-foreground", theme=theme), align="right",
             box_w=r.table_head[2], baseline_box=th, tabular=True)
@@ -780,8 +740,8 @@ def _body(ui, r, w, h, series, state):
         D.label(dl, cxp, hy, head, faces, "medium", 13, ink, align=al,
                 box_w=cwid - (COL_PAD if al == "right" else 0), baseline_box=hh)
 
-    # No inner scroll: the PAGE scrolls, and nesting one inside the other is
-    # the wrong answer. The rows are drawn inline at their natural heights.
+    # No inner scroll: the page scrolls and the rows are drawn inline at
+    # their natural heights.
     vx, vy, vw, vh = r.table_view
     _table_rows(ui, rows, B.Rect(vx, vy, vw, vh), r, faces, theme, ink, state)
 
@@ -901,9 +861,8 @@ def _draw(ui_box, rects, w, h, series, state, bgc):
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
     imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
     imgui.begin("##dkit", None, WIN_FLAGS)
-    # a real window's list, not the background list: replay.keep
-    # (hyperspace/replay.py:91) only carries the page window's own list into
-    # the canvas tap
+    # a real window's list, not the background list: replay.keep only
+    # carries the page window's own list into the canvas tap
     ui_box.dl = imgui.get_window_draw_list()
     # One place where ImGui's stock focus rectangle and text selection are
     # replaced by the kit's. A popup opened inside `paint` is a separate
@@ -918,15 +877,12 @@ def _draw(ui_box, rects, w, h, series, state, bgc):
 def wheel_probe(theme_name: str, w: int, h: int) -> None:
     """Open the dashboard and print every raw wheel delta the OS sends.
 
-    This exists because the scroll constant is the one number in the kit
-    that cannot be measured on this machine. The wheel has to be turned
-    into pixels of finger travel, and how many units a trackpad produces per
-    point is a property of the GLFW build and the platform - on macOS it
-    comes out of `scrollingDeltaY` and a factor I have only ever recalled,
-    never checked.
+    The scroll constant turns wheel units into pixels of finger travel, and
+    how many units a trackpad produces per point is a property of the GLFW
+    build and the platform (on macOS it comes out of `scrollingDeltaY` and a
+    factor). It can only be measured on the machine with the device.
 
-    Run it on the machine that can feel it, scroll once, and read three
-    things off the output:
+    Scroll once and read three things off the output:
 
       * the MAGNITUDE of the deltas - one slow swipe of about 100 points
         tells you the units-per-point factor directly;
@@ -1051,16 +1007,12 @@ def _loop(win, impl, ui, state, series, bgc, prev) -> None:
             continue
         if (lw, lh) != last_size:
             rects, last_size = lay_out(lw, lh), (lw, lh)
-        # Ctrl+C can land anywhere, and ImGui asserts "Forgot to call
-        # Render()" if the process tears down with a frame half open - a
-        # traceback about the wrong thing, on the way out. The frame is
-        # closed first and the loop returns normally.
-        # Ctrl+C can land anywhere, including INSIDE `new_frame()`. The
-        # first version of this answered it with a bare `imgui.render()` in
-        # the handler, which asserts "Forgot to call NewFrame()" when the
-        # interrupt arrived before the frame was open - trading one wrong
-        # traceback for another. `open_frame` says whether there is a frame
-        # to abandon, and `end_frame` is the call that abandons one.
+        # Ctrl+C can land anywhere, including inside `new_frame()`, and
+        # ImGui asserts "Forgot to call Render()" if the process tears down
+        # with a frame half open. A bare `imgui.render()` in the handler
+        # asserts "Forgot to call NewFrame()" if the interrupt came before
+        # the frame opened. `open_frame` says whether there is a frame to
+        # abandon, and `end_frame` abandons it, so the loop returns normally.
         open_frame = False
         try:
             imgui.new_frame()
@@ -1139,16 +1091,14 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
         keymap.setdefault(at + 2, []).append(k)
     # ImGui routes Escape (and every other key) through its nav system, which
     # is OFF by default - so without this a menu cannot be dismissed with the
-    # keyboard at all. tests/ui_driver.py:172 turns it on for the same reason.
+    # keyboard at all. tests/ui_driver.py turns it on for the same reason.
     io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard
     frames = []
     # The teardown is in a `finally` because a script that raises - a
     # component handed the wrong kind of item, an ImGui assert - would
     # otherwise leave this context and window alive, and every later
     # render() in the same process would assert "Forgot to call
-    # Render()" instead of reporting its own problem. One real crash
-    # then reads as a dozen unrelated ones, which is exactly how long
-    # the Gallery's own crash took to find.
+    # Render()" instead of reporting its own problem.
     try:
         for i, mouse in enumerate(steps):
             glfw.poll_events()
@@ -1177,9 +1127,8 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
             imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
             imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
             imgui.begin("##dkit", None, WIN_FLAGS)
-            # a real window's list, not the background list: replay.keep
-            # (hyperspace/replay.py:91) only carries the page window's own list
-            # into the canvas tap
+            # a real window's list, not the background list: replay.keep only
+            # carries the page window's own list into the canvas tap
             ui = I.Ui(imgui.get_window_draw_list(), faces, theme, anim, grad_tex,
                       theme_name=theme_name)
             paint(ui, rects, w, h, series, state)

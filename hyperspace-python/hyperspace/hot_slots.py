@@ -1,4 +1,4 @@
-"""Slots for hot classes, in a module no reload re-executes (row 802).
+"""Slots for hot classes, in a module no reload re-executes.
 
 A hot class can't add to its object's layout over another hot class: once the base
 has reloaded, Python refuses the re-class (`hotreload.py`'s contract). A class that

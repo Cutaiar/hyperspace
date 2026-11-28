@@ -1,6 +1,5 @@
 """The dream worker — temporal Deep Dream on the GPU behind the dream effect
-(plan 07, WP6b; the spike is docs/plans/assets/06-lookback-perf.md; plan
-90 H3: the effect file `shaders/fx/dream.glsl`, its Python half
+(the effect file is `shaders/fx/dream.glsl`, its Python half
 `dreamhook.py`).
 
 Off by default; ``[dream] enabled = true`` in config.toml opens it and
@@ -10,7 +9,7 @@ never the reverse — and without torch it is never touched: the dream
 effect passes its picture through, said.
 
 The picture it is handed is RGBA, premultiplied, its alpha the coverage
-(plan 90 §7.2: alpha is coverage — key a picture with black is clear to
+(alpha is coverage — key a picture with black is clear to
 dream only where it is lit). One running buffer ``D`` on the device, rgba:
 
     D ← D·(1 − k) + frame·k                  Hold: blend the newest picture in
@@ -23,11 +22,11 @@ dream only where it is lit). One running buffer ``D`` on the device, rgba:
 At Hold (``k``) 1 it holds nothing: each picture is dreamed anew. Lower,
 persistent content accumulates steps and dreams deep; content that moved
 fades at ``k`` — its coverage with it (the old mask's linger merged into
-Hold, plan 90 Q17). The knobs come with each picture (`submit`'s
+Hold). The knobs come with each picture (`submit`'s
 ``params``, the effect's `fx.dream.*`): nothing here reads a registry. Octaves run one
 scale a frame in rotation ("2 alt", "3 alt") with the reference engine's
 lost-detail reinjection — the same cost as one octave. The stability
-rule from the spike, ``step × steps / k`` under a ceiling, is a guard
+rule, ``step × steps / k`` under a ceiling, is a guard
 here while Hold is below 1 (1.5 where the gate leaves some of the picture
 out, 0.5 where it covers all of it: `ceiling`): a larger push is clamped
 to it and the status line says so; a buffer that still goes non-finite is
@@ -38,21 +37,19 @@ the worker thread and returns; a frame that arrives while the worker is
 busy replaces the one waiting (latest wins — a queue would only add
 lag). The worker sleeps on a condition, runs the step inside torch
 kernels (which release the GIL; a Python spin here is what hurts the
-renderer, spike C) and publishes into a ring of output buffers;
+renderer) and publishes into a ring of output buffers;
 ``latest`` is a lock-free read of the newest one. A result lands a
 frame or two after its submit by design.
 
 Copy path. ``buffer(shape)`` hands lookback.py a numpy view over the
 MPS tensor's own host-visible MTLBuffer (``torch.mps._host_alias_storage``,
 private API present in torch 2.14), so glReadPixels lands the pixels in
-the tensor and the result comes back the same way — the spike's 0.9 ms
+the tensor and the result comes back the same way — a 0.9 ms
 round trip. Three input slots rotate so the reader never fills a slot
 the worker is still converting. Without the alias (another device, an
 older torch) a plain staging array and ``.to(device)`` in the worker
 take over; the path in use is printed at startup and shown in the
-status line. The IOSurface/DLPack zero-copy path the spike prototyped
-is documented there as the fallback if the alias API disappears; it is
-not built.
+status line. There is no IOSurface/DLPack zero-copy path.
 
 Models. torchvision's pretrained VGG16 (every conv, conv1_1 … conv5_3,
 through its ReLU) and GoogLeNet (conv1 … conv3 and every inception block,
@@ -70,7 +67,7 @@ first submit, so an app that never turns look-back on never reads it.
     [dream]
     enabled = false         # true opens the worker; off, it is never imported
     device = "auto"         # "auto" (MPS when there, else CPU), "mps", "cpu"
-    precision = "fp32"      # or "fp16": 10 % faster on VGG, p99 outliers (spike C)
+    precision = "fp32"      # or "fp16": 10 % faster on VGG, p99 outliers
     weights_dir = ""        # where pretrained weights go; "" = <library home>/weights
 """
 
@@ -124,9 +121,9 @@ TRUNKS: dict[str, tuple[str, Any]] = {
 GOOGLENET_LAST = "inception5b"
 WEIGHTS = {"vgg16": "VGG16_Weights", "googlenet": "GoogLeNet_Weights"}
 
-# step × steps / k at most. The spike's unmasked rule is 0.5; gated (the
+# step × steps / k at most. The unmasked rule is 0.5; gated (the
 # coverage leaving some of the picture out) the ground cannot fill and the
-# ceiling is saturation, ~0.06 at k 0.08 and 2 steps (spike, UI ranges) —
+# ceiling is saturation, ~0.06 at k 0.08 and 2 steps (UI ranges) —
 # 1.5. A gate that covers everything is the unmasked case (`ceiling`)
 STABLE_RATIO = 1.5
 UNGATED_RATIO = 0.5
@@ -437,7 +434,7 @@ class DreamWorker:
 
     def ready(self) -> bool:
         """Whether a picture handed over now is taken at the next job: none
-        is waiting (plan 90 Q8: the effect reads back only then)."""
+        is waiting (the effect reads back only then)."""
         with self._cv:
             return self._pending is None
 
@@ -472,8 +469,8 @@ class DreamWorker:
         return got[1], got[2]
 
     def lend(self, reg=None) -> None:
-        """Plan 44 D4 (§2, row 558): the one worker now dreams for another
-        deck (`reg`, its registry: unread since plan 90 H3 — the knobs come
+        """The one worker now dreams for another
+        deck (`reg`, its registry: unread — the knobs come
         with each picture), and the dream restarts — `D` is the last deck's
         memory (the fade covers it), and a job already running for that deck
         publishes nothing the new deck would take for its own."""

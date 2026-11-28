@@ -8,9 +8,9 @@ either half needs from the renderer is a text width, and
 The expected numbers come from two oracles, and each test says which:
 
 * `GOLDEN_SCORE` is `commandScore` out of the SHIPPED `cmdk@1.1.1`
-  (node_modules/cmdk/dist/command-score.js), run under node. 59 pairs were
-  compared while the port was written and every one agreed to 1e-12; these
-  are the nine that pin the behaviour worth pinning.
+  (node_modules/cmdk/dist/command-score.js), run under node. The port
+  agrees with it to 1e-12 on every pair compared; these are the nine that
+  pin the behaviour worth pinning.
 * `BROWSER_*` is `hyperspace/dkit/dev/probe_react.js` against the real
   Popover + Command on the `?probe&open` route, both themes.
 """
@@ -148,10 +148,10 @@ def test_menu_items_are_accepted_too():
 # Straight off the probe: the `combobox.open` panel is 220 x 176 with a
 # heading and three rows.
 #
-# The empty figure was RE-measured on the real Base UI component, which is
-# not what the 112 above it came from: type a query that matches nothing and
-# the whole panel is 319 x 36, because `data-empty:p-0` collapses the list's
-# padding and the empty block (`py-2` on a 20px line) becomes the panel.
+# The empty figure is measured on the real Base UI component: type a query
+# that matches nothing and the whole panel is 319 x 36, because
+# `data-empty:p-0` collapses the list's padding and the empty block (`py-2`
+# on a 20px line) becomes the panel.
 BROWSER_PANEL_H = 176.0
 BROWSER_EMPTY_PANEL_H = 36.0
 BROWSER_LIST_H = 132.0
@@ -283,9 +283,7 @@ def test_the_row_is_not_a_menu_row():
     that a Command list is not a dropdown menu with a search box."""
     from hyperspace.dkit import menu
     t = C.COMBOBOX
-    # menu.py's item was 26 and its icon 14 when this was written; both
-    # were wrong and have since been corrected to the browser's 28 and 16.
-    # The rows still differ on every axis, which is the claim here.
+    # The rows differ on every axis, which is the claim here.
     assert (t["item_h"], menu.ITEM_H) == (32.0, 28.0)
     assert (t["item_pad_x"], menu.ITEM_PAD_X) == (8.0, 6.0)
     assert (t["item_gap"], menu.GAP) == (8.0, 6.0)
@@ -367,15 +365,10 @@ def test_the_search_placeholder_is_not_muted_foreground():
     assert T.INPUT["placeholder"] == ("muted-foreground", 1.0)
 
 
-def test_the_empty_state_is_muted_after_all():
-    """It WAS `popover-foreground` on the Popover+Command recipe, and this
-    test pinned that correctly. The real Base UI `ComboboxEmpty` carries
-    `text-muted-foreground`, measured as `oklch(0.556 0 0)` — which is what
-    muted-foreground resolves to in light.
-
-    Kept as a flipped assertion rather than deleted, because the thing worth
-    remembering is that a correct measurement of the wrong component is
-    still wrong."""
+def test_the_empty_state_is_muted_foreground():
+    """The Base UI `ComboboxEmpty` carries `text-muted-foreground`, measured
+    as `oklch(0.556 0 0)` — which is what muted-foreground resolves to in
+    light. It is not the popover-foreground of the Popover+Command recipe."""
     assert C.COMBOBOX["empty_ink"] == ("muted-foreground", 1.0)
     assert T.rgba("muted-foreground", theme=T.LIGHT)[:3] != \
         T.rgba("popover-foreground", theme=T.LIGHT)[:3]
@@ -384,13 +377,6 @@ def test_the_empty_state_is_muted_after_all():
 def test_the_triggers_chevron_is_where_the_browser_puts_it():
     """The chevron's RIGHT edge is 8.203 in from the trigger's right, and it
     is drawn in muted-foreground at FULL strength.
-
-    This replaces an assertion that `field_icon_x == 1.0 + T.SPACE[2]`,
-    which is RETRO row 27's trap in miniature: an arithmetic identity over
-    the token, which cannot fail and says nothing about the browser. Worse,
-    the number it modelled belonged to the leading magnifier of the
-    Popover+Command search field - a component this has not been since that
-    recipe was replaced - so it was a correct identity over a dead token.
 
     Measured on the real Base UI component at two widths, 200 and 320, and
     constant at both: svg 16x16 with its right edge at trigger_right -
@@ -482,12 +468,11 @@ def test_the_first_matching_row_is_the_one_cmdk_preselects():
 
 
 # --------------------------------------------------------------------------
-# Re-measured against the REAL component
+# Measured against the real component
 # --------------------------------------------------------------------------
-# The kit first built the old Popover+Command recipe, because the brief said
-# shadcn had no combobox component. It does: `combobox.tsx`, built on Base
-# UI, whose `ComboboxInput` IS the trigger. Everything below was measured on
-# that, and supersedes the numbers above where the two disagree.
+# shadcn's `combobox.tsx` is built on Base UI, and its `ComboboxInput` IS the
+# trigger. Everything below is measured on that, and supersedes the numbers
+# above where the two disagree.
 
 
 def test_the_match_is_a_substring_case_insensitive():
@@ -521,11 +506,9 @@ def test_an_empty_query_keeps_the_authors_order():
 
 
 def test_the_cmdk_scorer_lives_with_the_component_that_wants_it():
-    """It is not the Combobox's rule and it is no longer in the Combobox's
-    file. The port is exact - verified against the shipped JavaScript over
-    382 pairs - and it was answering a question nobody asked, which is
-    RETRO row 3. `comp_command.py` is where the Command palette will find
-    it.
+    """It is not the Combobox's rule and it is not in the Combobox's file.
+    The port is exact - verified against the shipped JavaScript over 382
+    pairs. `comp_command.py` is where the Command palette finds it.
 
     This asserts the split rather than the code: the scorer is gone from
     here, present there, and the Combobox's own filter is the substring
@@ -559,7 +542,7 @@ def test_the_panel_rows_are_menu_rows():
 
 
 # --------------------------------------------------------------------------
-# the row, re-measured on the REAL combobox-item
+# the row, measured on the real combobox-item
 # --------------------------------------------------------------------------
 # `node /tmp/cb.js` against `?probe`, `[data-slot="combobox-item"]`:
 #
@@ -568,11 +551,6 @@ def test_the_panel_rows_are_menu_rows():
 #               offsetWidth - clientWidth == 0   <- no scrollbar, ever
 #     item[0]   311 x  28 @ 29,2535   radius 8    padding 4/32/4/6
 #     indicator span 16 wide, 287 from the row's left, 8 from its right
-#
-# Three of those the kit had wrong: it drew the row with 8 of padding on
-# BOTH sides (so the check crowded the row's edge and a long label ran
-# under it), rounded it by 6 rather than 8, and nested a p-1 group inside
-# the p-1 list so every row was inset 8 instead of 4.
 BROWSER_ITEM = {
     "content_w": 319.0, "list_pad": 4.0, "item_w": 311.0, "item_h": 28.0,
     "item_radius": 8.0, "pad_t": 4.0, "pad_r": 32.0, "pad_b": 4.0,
@@ -601,10 +579,7 @@ def test_the_rows_padding_is_six_left_and_thirty_two_right():
 
 def test_the_check_sits_eight_from_the_rows_right_edge():
     """`absolute right-2` on a `size-4` span - the indicator's RIGHT edge is
-    8 in, so a 16px glyph starts 24 in. The kit placed it at
-    `row.right - padding - 16` with padding 8, which put it 8 from the edge
-    by coincidence of the old numbers and would have drifted the moment
-    either moved."""
+    8 in, so a 16px glyph starts 24 in."""
     t = C.combobox_table("light")
     assert t["check"] == BROWSER_ITEM["indicator_w"]
     assert t["check_gap"] == BROWSER_ITEM["indicator_right"]
@@ -641,10 +616,8 @@ def test_the_list_clamps_rather_than_growing():
     report 319x252, with `scrollHeight` 456 and `clientHeight` 252 - so the
     `p-1` rails are INSIDE the clamp, not added to it.
 
-    This assertion used to read `h == list_max_h + 2 * pad`, i.e. 260. It
-    asked the source for the number and still got the answer wrong, because
-    it had the wrong model of what the number clamps: the rows, rather than
-    the box the browser measured. 252 is what Chromium paints.
+    The clamp is on the box the browser measured, not on the rows: 252 is
+    what Chromium paints, not `list_max_h + 2 * pad`.
     """
     t = C.combobox_table("light")
     assert t["list_max_h"] == BROWSER_ITEM["list_max_h"]
@@ -672,9 +645,8 @@ def test_the_list_clamps_rather_than_growing():
 #     ArrowUp            Gamma   (idx 2)      Zeta   (last)
 #     typing             none                 none
 #
-# The left-hand column is the one the kit got wrong: it opened with nothing
-# highlighted on a click and with the first / last row on an arrow, in every
-# case, because the model was measured on the block that holds no value.
+# With a value, every gesture lands on its row; without one, the gesture
+# decides.
 BROWSER_OPEN = {
     ("click", True): 2, ("chevron", True): 2,
     ("down", True): 2, ("up", True): 2, ("type", True): None,
@@ -701,7 +673,7 @@ WANT = {"click": C.SEL_NONE, "chevron": C.SEL_NONE, "down": C.SEL_FIRST,
 
 def test_an_open_lands_on_the_committed_row_whatever_opened_it():
     """The left column of BROWSER_OPEN: with a value, all four gestures
-    land on its row. The kit opened on none / first / last instead."""
+    land on its row."""
     src, rows = _sixteen()
     for gesture in ("click", "chevron", "down", "up", "type"):
         got = C.resolve_open(WANT[gesture], src, rows, "Gamma")
@@ -754,7 +726,7 @@ def test_the_highlighted_row_on_open_is_the_row_that_carries_the_check():
 
 
 # --------------------------------------------------------------------------
-# the group heading and the separator, re-measured on combobox.tsx
+# the group heading and the separator, measured on combobox.tsx
 # --------------------------------------------------------------------------
 # `?probe`'s `combobox.grp` block - a ComboboxGroup holding a ComboboxLabel,
 # an item, a ComboboxSeparator and a second item:
@@ -767,12 +739,10 @@ def test_the_highlighted_row_on_open_is_the_row_that_carries_the_check():
 #     sep      319 x   1 @ 25,2814    margin 4px -4px
 #     item[1]  311 x  28 @ 29,2819
 #
-# Two of those the kit had from `command.tsx` - the OLD Popover+Command
-# recipe - rather than from `combobox.tsx`: the heading's weight (that one
-# is `font-medium`, this one has no weight class at all) and the
-# separator's margin block (that one is `-mx-1 h-px bg-border`, this one is
-# `-mx-1 my-1 h-px bg-border`). Same failure as the empty block's 68px: an
-# exact measurement of the wrong component.
+# Two of those differ from `command.tsx`: the heading's weight (that one is
+# `font-medium`, this one has no weight class at all) and the separator's
+# margin block (that one is `-mx-1 h-px bg-border`, this one is
+# `-mx-1 my-1 h-px bg-border`).
 BROWSER_GRP = {
     "group_h": 93.0, "panel_h": 101.0, "label_h": 28.0, "label_weight": 400,
     "label_pad_x": 8.0, "label_font": 12.0, "item_h": 28.0,
@@ -783,10 +753,10 @@ BROWSER_GRP = {
 def test_the_group_heading_is_regular_weight_not_medium():
     """Measured `font-weight: 400` on `[data-slot=combobox-label]`.
     `ComboboxLabel` is `px-2 py-1.5 text-xs text-muted-foreground` and
-    declares no weight, so it inherits the panel's. The kit carried
-    `medium`, which is `command.tsx`'s CommandGroup heading."""
+    declares no weight, so it inherits the panel's. `medium` is
+    `command.tsx`'s CommandGroup heading."""
     t = C.combobox_table("light")
-    # asked of the source: the kit's variant names map to Geist's face
+    # asked of the source: the variant names map to Geist's face
     # files, and the one Chromium reports as 400 is the Regular face.
     from hyperspace.dkit import draw as D
     faces = dict(D.FACE_FILES)
@@ -800,9 +770,8 @@ def test_the_group_heading_is_regular_weight_not_medium():
 
 
 def test_a_separator_carries_four_pixels_above_and_below():
-    """`my-1`, measured as `margin: 4px -4px`. The kit gave it one pixel of
-    height and no margin, so two rows either side of a separator sat 8px
-    closer together than the browser draws them."""
+    """`my-1`, measured as `margin: 4px -4px`, so two rows either side of a
+    separator sit 8px further apart than with a bare 1px rule."""
     t = C.combobox_table("light")
     assert t["sep_my"] == BROWSER_GRP["sep_margin"]
     # the rows the probe block holds, in the probe block's order
@@ -842,11 +811,10 @@ def test_panel_chrome_is_menus():
     """`_panel_chrome` delegates to `menu.panel_chrome`, which hardcodes the
     popover fill, the foreground/10 ring and `rounded-lg`. COMBOBOX still
     declares all three, and the delegation is sound only while they say the
-    same thing - so this asserts the equivalence the delegation assumes
-    rather than leaving it to the comment that claims it.
+    same thing - so this asserts the equivalence the delegation assumes.
 
-    If a future shadcn moves the Combobox's panel off the menu's chrome,
-    this fails and `_panel_chrome` has to grow its own body back.
+    If the Combobox's panel moves off the menu's chrome, this fails and
+    `_panel_chrome` needs its own body.
     """
     from hyperspace.dkit import menu as M
     assert C.COMBOBOX["radius"] == "lg"

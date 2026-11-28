@@ -1,10 +1,8 @@
 """Every cross-module reference in the kit resolves on the module it names.
 
-This exists for `HANDOFF.md` item 3. `box.py`, `interact.py` and
-`comp_combobox.py` are to be split, and there are ~190 `B.x` / `I.x` / `C.x`
-references across seventeen files — so the split has to leave those modules
-as facades that re-export, or it is not a refactor, it is a rewrite of every
-call site.
+`box.py`, `interact.py` and `comp_combobox.py` are facades over split
+modules, and there are ~190 `B.x` / `I.x` / `C.x` references across
+seventeen files, so each facade has to re-export every name its callers use.
 
 The test is DERIVED from the call sites rather than being a snapshot of the
 public surface, which matters both ways round:
@@ -13,8 +11,8 @@ public surface, which matters both ways round:
   to stop exporting it; a name somebody uses is pinned automatically, with no
   list to maintain.
 * it fails the moment a facade is incomplete, naming the attribute and the
-  file that wanted it — which is the one failure mode of a move-and-reexport
-  that import-time errors do NOT catch, because `from x import *` and an
+  file that wanted it — the one failure mode of a move-and-reexport that
+  import-time errors do NOT catch, because `from x import *` and an
   explicit re-export list both import cleanly while missing names.
 
 It is a static read of the source: no GL context, no window, and it covers
@@ -90,10 +88,7 @@ def _bound(fn) -> set[str]:
     Needed because an import alias can be SHADOWED locally, and then the
     attribute belongs to something else entirely. `test_components.py` does
     exactly this: `import draw as D` at the top and `D = _dashboard()` inside
-    a test, so `D.lay_out` is the dashboard's, not draw's. The first version
-    of this scanner reported those two as dangling references on a module
-    that was fine - RETRO rows 35 and 51, a probe reporting a defect that is
-    not there, which is why it was checked before being believed.
+    a test, so `D.lay_out` is the dashboard's, not draw's.
     """
     out = set()
     for a in fn.args.args + fn.args.kwonlyargs + fn.args.posonlyargs:
@@ -115,8 +110,7 @@ def _local_imports(fn) -> dict[str, str]:
     The kit does this constantly - `import menu as M` inside a function, to
     keep a module-level cycle from forming - and such an import is not a
     shadow of the same alias at module level, it is the same binding stated
-    twice. Treating it as one made seven files report no references at all,
-    which is how it was noticed: the skip count moved, not the pass count.
+    twice. Treating it as a shadow would drop that file's references.
     """
     out = {}
     for n in ast.walk(fn):
@@ -201,11 +195,10 @@ def test_every_cross_module_reference_resolves(path):
 def test_the_check_actually_finds_references():
     """A test derived from the source has to be shown to be reading it: if
     `_refs` silently returned nothing, every case above would pass vacuously.
-    This is RETRO row 20's rule applied to the scanner rather than the code.
     """
     total = sum(len(_refs(p)) for p in SOURCES)
     assert total > 300, f"only {total} cross-module references found"
-    # and the three modules item 3 splits are among the most referenced
+    # the split modules are among the most referenced
     counted: dict[str, int] = {}
     for p in SOURCES:
         for mod, _attr, _line in _refs(p):
@@ -238,14 +231,12 @@ def test_the_private_names_that_cross_a_module_boundary_are_known():
 
     A module's `_private` names are normally free to move. These are not:
     another module imports them by name, so a split that leaves them behind
-    breaks at import. `HANDOFF.md` item 3 (3a-3c) grew this from two entries
-    to nine; each one it added carries the reason beside it. Item 3a added
-    none, because the box model's privates had no outside callers and the
-    facade does not re-export them.
+    breaks at import. Each entry carries the reason beside it. The box
+    model's privates have no outside callers and its facade does not
+    re-export them.
 
-    This is a LEDGER, not a prohibition - if a split moves one, update the
-    list and the importer together. It exists so the next person finds them
-    before the ImportError does.
+    This is a ledger, not a prohibition: if a split moves one, update the
+    list and the importer together.
     """
     crossing = {}
     for p in SOURCES:
@@ -253,22 +244,22 @@ def test_the_private_names_that_cross_a_module_boundary_are_known():
             if name.startswith("_"):
                 crossing.setdefault(f"{mod}.{name}", set()).add(p.name)
     assert crossing == {
-        # item 3c moved these two out of comp_combobox with the rest of the
-        # row model. comp_command imports them from the new home; the other
-        # importers are the widget and the two pure modules split beside it.
+        # Both live in combobox_items with the row model. comp_command
+        # imports them from there; the other importers are the widget and the
+        # two pure modules split beside it.
         "combobox_items._is_row": {"comp_command.py", "comp_combobox.py",
                                    "combobox_measure.py"},
         "combobox_items._k": {"comp_command.py", "comp_combobox.py",
                               "combobox_measure.py", "combobox_select.py"},
-        # item 3c: the widget reads both; neither had another caller.
+        # the widget reads both; neither has another caller.
         "combobox_measure._rows_node": {"comp_combobox.py"},
         "combobox_select._MISSING": {"comp_combobox.py"},
-        # item 3b: the facade re-exports it because
+        # the facade re-exports it because
         # test_a_fractional_delta_marks_the_device_precise_for_good flips
         # `I._PRECISE["seen"]`. Safe only while wheel.py MUTATES the dict
         # and never rebinds it - see wheel.py's docstring.
         "wheel._PRECISE": {"interact.py"},
-        # item 3b: the primitives left in interact.py ARE the sandwich's
+        # the primitives in interact.py ARE the sandwich's
         # callers, so these cross by construction. comp_combobox also reaches
         # `I._sandwich_end` through the facade, which `_refs` covers.
         "uictx._sandwich_begin": {"interact.py"},

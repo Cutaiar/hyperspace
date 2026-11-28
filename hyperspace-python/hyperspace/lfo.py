@@ -1,8 +1,8 @@
 """The LFOs — performers that own a parameter, and are themselves ownable.
 
 An LFO is a source like a hand or an audio lane: `LFOs.step` runs once a
-frame and `publish` hands the outputs to the router as ``lfo:<i>``
-(plan 09, decisions 7 and 8). Every knob on an LFO — shape, rate, sync,
+frame and `publish` hands the outputs to the router as ``lfo:<i>``.
+Every knob on an LFO — shape, rate, sync,
 depth, phase — is a registry param, modulatable and persistent, which is
 what makes them chainable: a hand can own LFO 1's depth while LFO 1 owns
 brightness, and a loadable patch carries the whole arrangement. Layering is a
@@ -17,7 +17,7 @@ Per LFO:
   rate    Hz, used only in Hz mode; the phase integrates rate · dt
   depth   0–1; the output is ``u = 0.5 + 0.5 · depth · wave`` with the
           wave in [−1, 1], so an LFO *rests* at 0.5 (REST) — the rest a
-          push row is centred on (decision 6) — and depth 0 is silence
+          push row is centred on — and depth 0 is silence
   phase   0–1, an offset added on top of the cycle in either mode
   reset   a trigger: this one LFO's cycle restarts now, in either mode —
           a per-LFO gesture hook
@@ -32,11 +32,11 @@ Hz LFOs are untouched by it. A per-LFO `reset` in a division keeps its
 own offset from the clock (`shift`), so one LFO can be restarted without
 moving the clock or the others; the global trigger clears those offsets.
 
-Frame order (plan 28 N0): the LFOs step **inside** `Router.modulate`, one
+Frame order: the LFOs step **inside** `Router.modulate`, one
 at a time in the modulation patch's order (`LFOs.begin`, then
 `LFOs.step_one` per LFO node): an LFO is a source with inputs, its knob
 params land before it steps, so an LFO that owns another LFO's depth moves
-that LFO's output **the same frame** (decision 7). An LFO with no cable
+that LFO's output **the same frame**. An LFO with no cable
 still steps and publishes. `LFOs.step` — begin, then every LFO in index
 order — is the whole bank at once, for a caller without a router.
 `publish` also hands the router the rest (0.5) a push row from an LFO is
@@ -62,7 +62,7 @@ the moment it is chosen.
 Addresses: the router's source addresses are 0-based (``lfo:0`` is
 "LFO 1") while the param ids are 1-based (``lfo.1.depth``).
 
-**N of them** (plan 31 B): the bank is a `modbank.Bank` — four by
+**N of them**: the bank is a `modbank.Bank` — four by
 default (`N`), up to 16, each added or removed by its stable id. Ids
 never compact: with LFO 2 removed, LFO 3 is still ``lfo:2`` and
 ``lfo.3.*``, so every route and loadable patch keeps its meaning, and
@@ -206,7 +206,7 @@ class LFOs(Bank):
     KNOBS = KNOBS
     SHARED: ClassVar[dict[str, str]] = {f"{GROUP}.trigger": "trigger"}
 
-    # class-level so a hot-reloaded instance from before these existed has them
+    # class-level so an instance built before this attribute existed still has it
     pending = False                    # a global trigger held for the next step
 
     def __init__(self, n: int = N, seed: int | None = None):
@@ -237,7 +237,7 @@ class LFOs(Bank):
         """The LFO on lane `i` restarts now, in either mode; the clock and
         the rest stay. Late — held for its next step — only if *this* LFO
         has stepped at this frame's t: a reset landed by the pass before
-        its LFO's node reads phase 0 that same step (plan 28 N0)."""
+        its LFO's node reads phase 0 that same step."""
         if t is None:
             t = getattr(clock, "t", None)
         if self.late_one(i, clock, t):

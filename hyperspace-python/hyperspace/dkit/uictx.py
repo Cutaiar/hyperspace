@@ -7,13 +7,9 @@ holds the imgui style overrides for a whole frame; `_sandwich_begin` and
 chrome on the channel under it. Everything in `interact.py` depends on these
 and none of them depends on anything there.
 
-Moved out of `interact.py` by `HANDOFF.md` item 3b, which re-exports every
-name a caller uses - `I.Ui`, `I.chrome`, `I._sandwich_end` keep working.
-
-Named `uictx` rather than the handoff's `ui.py` on purpose: eight places in
-this kit cite Hyperspace's own `ui.py` by bare file name and line number
-(`ui.py:1311-1357`, `ui.py:317-329`), and a kit module of the same name
-would quietly make every one of them point at the wrong file.
+The module is not named `ui.py`: this kit cites Hyperspace's own `ui.py` by
+bare file name and line number (`ui.py:1311-1357`), and a kit module of the
+same name would make every such citation point at the wrong file.
 """
 
 from __future__ import annotations
@@ -158,27 +154,15 @@ class Ui:
         clicked = imgui.invisible_button(
             f"##{key}", imgui.ImVec2(w, h),
             imgui.ButtonFlags_.enable_nav if nav else 0)
-        # AND the pointer is actually inside the rect, which is not
-        # redundant. This comment used to say that a real `imgui.button`
-        # "reports is_item_hovered True while merely nav-focused" and that
-        # `invisible_button` + `enable_nav` was the way to avoid it. It is
-        # not: measured in 1.92.9 with the pointer parked at (5, 5) and a
-        # 28x28 button at (80, 60), `is_item_hovered()` turns True on the
-        # frame after a Tab reaches it and stays True.
-        #
-        # Every control that reads `State.hot` was therefore lighting its
-        # HOVER tint off the keyboard - the sidebar item, the tabs trigger,
-        # the table row, the kebab, and `comp_button.ui_button` too. It is
-        # RETRO row 37 one level up: there the menus' highlight turned out to
-        # be ImGui's nav leaking through `is_item_hovered`, and the lesson
-        # was to ask what paints a thing before believing it is yours. The
-        # same call was still being believed here.
-        #
-        # Narrowing it cannot lose a real hover: ImGui's own answer still
-        # decides occlusion and overlap, and this only removes the case where
-        # the pointer is somewhere else entirely. A drag that leaves a held
-        # control correctly goes un-hovered while `held` stays, which is the
-        # behaviour comp_button.button documents for `hot` versus `down`.
+        # AND the pointer is actually inside the rect. `is_item_hovered()`
+        # turns True on the frame after a Tab reaches the item and stays
+        # True with the pointer elsewhere (measured in 1.92.9: pointer at
+        # (5, 5), a 28x28 button at (80, 60)), so every control that reads
+        # `State.hot` would light its hover tint off the keyboard. ImGui's
+        # own answer still decides occlusion and overlap; this only removes
+        # the case where the pointer is somewhere else entirely. A drag that
+        # leaves a held control goes un-hovered while `held` stays, which is
+        # the `hot` versus `down` split comp_button.button documents.
         mp = imgui.get_io().mouse_pos
         hovered = (imgui.is_item_hovered()
                    and x <= mp.x < x + w and y <= mp.y < y + h)

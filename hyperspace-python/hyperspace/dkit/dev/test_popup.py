@@ -1,10 +1,8 @@
 """What ImGui's popup WINDOW does, as opposed to what the kit paints in it.
 
-A new file rather than more of `test_interaction.py`, because the thing under
-test is not a component: it is the window every popup in the kit sits in, and
-the defaults ImGui gives it. Those defaults are not neutral, and one of them
-drew two vertical lines across the Combobox for as long as the Combobox has
-existed.
+The thing under test is not a component: it is the window every popup in the
+kit sits in, and the defaults ImGui gives it. Those defaults are not neutral:
+one of them draws two vertical lines across the Combobox.
 """
 
 from __future__ import annotations
@@ -59,12 +57,11 @@ def test_no_popup_border_bridges_the_gap_under_the_combobox(DB):
     that 1px ran down both sides of the 6px gap between the field and the
     list, as two vertical lines that have no counterpart in the browser.
 
-    Measured before the fix: 75 against a 23 ground, every row of the gap, at
+    With the border on, the gap reads 75 against a 23 ground on every row, at
     exactly the field's left and right edges.
 
-    Every other popup in the kit hid the same border by accident, because
-    their window IS their panel and their own chrome covers it. That is luck,
-    not a decision, so `menu.popup` turns it off too.
+    Every other popup's window IS its panel and its own chrome covers the
+    border, so `menu.popup` turns it off too.
     """
     f, (fx, fy, fw, fh), (_px, py, _pw, _ph) = _open_the_combobox(DB)
     assert py > fy + fh, "this test needs the panel BELOW the field"
@@ -82,14 +79,13 @@ def test_no_popup_border_bridges_the_gap_under_the_combobox(DB):
 
 
 def test_the_field_still_rings_in_the_gap_which_the_browser_does_too(DB):
-    """The companion to the test above, so the fix cannot be "paint nothing
-    in the gap".
+    """The companion to the test above: the gap is not simply left empty.
 
     The real component's focused input group carries
     `box-shadow: oklab(0.556 0 0 / 0.5) 0 0 0 3px`, and measured in Chromium
     that is a 3px band at 63 against a 10 ground, immediately under the
-    field, full width. The kit draws the same band. What had to go was the
-    window border beside it, not the ring.
+    field, full width. The kit draws the same band; only the window border
+    beside it is off.
     """
     f, (fx, fy, fw, fh), _panel = _open_the_combobox(DB)
     bg = int(f[int(fy) + 6, int(fx) - 20].max())
@@ -110,15 +106,14 @@ def test_no_popup_in_the_kit_lets_imgui_draw_its_own_scrollbar():
 
     That is the window's bar, not the list's: the list already runs
     `bars=False`, because the real component carries `no-scrollbar`. Two
-    different bars, two different switches, and asserting one said nothing
-    about the other - which is how I came to tell the user there was no
-    scrollbar while they were watching one flash.
+    different bars, two different switches; asserting one says nothing about
+    the other.
 
-    Asserted on the SOURCE rather than on pixels, deliberately. The flash is
-    one frame on some machines and not others; this machine (Mesa, density
-    1) does not produce it at all, so a pixel test here would pass whatever
-    the flags said. What can be pinned is that no `begin_popup` in the kit
-    is called without `no_scrollbar`.
+    Asserted on the SOURCE rather than on pixels. The flash is one frame on
+    some machines and absent on others (Mesa, density 1, does not produce
+    it), so a pixel test would pass whatever the flags said. What can be
+    pinned is that no `begin_popup` in the kit is called without
+    `no_scrollbar`.
     """
     import re
     from pathlib import Path

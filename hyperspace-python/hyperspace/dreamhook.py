@@ -1,4 +1,4 @@
-"""The dream effect's Python half (plan 90 H3: `shaders/fx/dream.glsl`,
+"""The dream effect's Python half (`shaders/fx/dream.glsl`,
 `// @hook dream`) — the dream as an effect file, with nothing of its own on
 show but its knobs.
 
@@ -6,7 +6,7 @@ What it does, in its pass (`run`, from `fx.FxChain.run_one`):
 
 - **pull** the worker's newest result into the instance's result texture —
   one of another size (the input changed size since its submit) is skipped;
-- **submit** the input when the worker is free (`ready()`, plan 90 Q8:
+- **submit** the input when the worker is free (`ready()`:
   one readback a job, not one a frame) and at most once a frame: the input
   copied into an RGBA8 target at its own size, read back once, handed over
   with the knobs (`params`): Hold, layer, passes, strength, jitter, scales;
@@ -21,7 +21,7 @@ on the chain as `chain.dream_source` (app.py; a deck fade lends it,
 picture through, said. A numpy fake drives every test (torch is not
 installed in the cloud).
 
-**One live dream** (D2: one worker, one GPU job): the first instance to run
+**One live dream** (one worker, one GPU job): the first instance to run
 holds the worker; another that runs while it does passes its picture
 through, said, until the holder stops running for a frame.
 
@@ -44,11 +44,10 @@ LAYERS = ["conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "incept
           "conv5_1", "conv5_2", "conv5_3",
           "conv1", "conv2", "conv3", "inception3a", "inception4a", "inception4b",
           "inception4d", "inception5a", "inception5b"]
-OCTAVES = ["1", "2 alt", "3 alt"]       # one scale a job, in rotation (spike D)
+OCTAVES = ["1", "2 alt", "3 alt"]       # one scale a job, in rotation
 # name → (net, short, long), by net, shallow → deep. From two contact sheets
-# (docs/plans/assets/20-fx-dream-looks/dream-layers*.jpg, tools/dream_layer_sheet.py:
-# one to two seconds of dreaming at the defaults, 256 px, the owner's laptop over
-# MPS); "slower" is over 25 ms a job there, where conv3_3 takes about 19
+# (tools/dream_layer_sheet.py: one to two seconds of dreaming at the
+# defaults, 256 px, over MPS); "slower" is over 25 ms a job there, where conv3_3 takes about 19
 LAYER_INFO: dict[str, tuple[str, str, str]] = {
     "conv1_1": ("VGG16", "flat colour, fine dots",
                 ("The first layer: colours pushed to a few flat, bold ones under a fine "

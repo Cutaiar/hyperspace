@@ -1,7 +1,7 @@
 """layer.py against the browser's own Dialog and Sheet.
 
 Measured on `?probe&open`, which carries both open. The numbers here are
-Chromium's, not arithmetic over the tokens - RETRO row 27's rule - and three
+Chromium's, not arithmetic over the tokens, and three
 of them are ones a reading of the Tailwind classes gets wrong: the scrim's
 alpha, the fact that it also blurs, and the fact that a Dialog has NO drop
 shadow where a Sheet has shadow-lg.
@@ -63,7 +63,7 @@ def test_a_dialog_is_centred_where_chromium_centres_it():
     """Measured: a 384x141 Dialog in a 1200x900 viewport lands at
     (408, 379.5), and the browser snaps what it PAINTS to whole pixels - so
     380, by `draw.px`, which is floor(v + 0.5) and not Python's banker's
-    round (RETRO row 36)."""
+    round."""
     r = L.dialog_rect(VP, h=141.0)
     assert (r.x, r.w, r.h) == (408.0, 384.0, 141.0)
     assert r.y == 380.0
@@ -72,9 +72,8 @@ def test_a_dialog_is_centred_where_chromium_centres_it():
 def test_the_centring_snaps_with_draw_px_and_not_pythons_round():
     """h=141 does not discriminate: (900-141)/2 is 379.5 and both functions
     give 380. h=143 does - 378.5, where `draw.px` is 379 and Python's
-    banker's `round` is 378. That is RETRO row 36, which cost a session of
-    chasing a two-pixel wobble, so the distinction gets a case that can see
-    it rather than one that happens to agree."""
+    banker's `round` is 378, so the distinction gets a case that can see it
+    rather than one that happens to agree."""
     assert L.dialog_rect(VP, h=143.0).y == 379.0
     assert round(378.5) == 378, "if this changes, the test above is moot"
 
@@ -160,14 +159,12 @@ def test_the_close_button_is_the_measured_box():
 
 
 # --------------------------------------------------------------------------
-# and that the chrome actually paints - RETRO row 21's standing warning
+# and that the chrome actually paints
 # --------------------------------------------------------------------------
 
 def test_the_dialog_panel_paints_its_fill_and_its_ring():
     """A table of measured numbers is worth nothing if the function that
-    reads it draws nothing. RETRO row 21: the Button's focus ring - the
-    "reference implementation" - had never once painted, because
-    `invisible_button` could not take focus. So this renders it.
+    reads it draws nothing, so this renders it.
 
     Checks the three things the table claims: the fill is `background`, there
     IS a 1px ring one pixel outside the box, and there is NO drop shadow

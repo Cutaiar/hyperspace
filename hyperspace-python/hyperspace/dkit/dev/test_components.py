@@ -249,8 +249,7 @@ def test_zero_width_range_draws_nothing():
 # Spacing
 # --------------------------------------------------------------------------
 # The numbers come from a real shadcn Card + Field on the ?probe route, not
-# from the Tailwind docs. They are here because the dashboard was first
-# written without a scale and read cramped - 24px controls on a 27px pitch.
+# from the Tailwind docs.
 
 def test_space_is_tailwinds_4px_scale():
     assert T.SPACE[1] == 4.0 and T.SPACE[2] == 8.0 and T.SPACE[4] == 16.0
@@ -405,13 +404,11 @@ def test_flex_basis_zero_gives_equal_halves():
 
 
 def test_stat_card_parts_are_inside_the_card_and_do_not_overlap():
-    """The regression this cost me.
+    """Layout and paint read the SAME rects.
 
-    Paint used to place a stat card's last two lines at `ch - 52` and
-    `ch - 32`, derived from the card's own height. The moment layout gave
-    the card its real height those offsets put the figure on top of the
-    footnote. Layout and paint have to read the SAME rects; this asserts
-    they do.
+    Offsets derived from the card's own height (`ch - 52`, `ch - 32`) would
+    put the figure on top of the footnote once layout gives the card its
+    real height; this asserts the parts stay inside the card and apart.
     """
     r = _dashboard().lay_out(1440, 1100)
     for card, part in zip(r.stats, r.stat_parts):
@@ -430,7 +427,7 @@ def test_the_page_fits_the_window():
     D = _dashboard()
     for w, h in ((1440, 1100), (1280, 900), (1680, 1200)):
         r = D.lay_out(w, h)
-        # The page SCROLLS now, so the body is taller than the window by
+        # The page SCROLLS, so the body is taller than the window by
         # design - that is what body_h is. What must hold is that it is
         # laid out at its natural height and nothing escapes sideways.
         bottom = r.table_rows[-1][1] + r.table_rows[-1][3]
@@ -660,7 +657,7 @@ def test_draw_ring_covers_exactly_the_columns_outside_the_box(painted):
 
 @pytest.mark.parametrize("theme_name", ["light", "dark"])
 def test_the_switch_paints_both_halves_only_when_focused(painted, theme_name):
-    """The Switch drew neither half. Both come out of its table now, so this
+    """Both halves come out of the Switch's table; this
     checks the band's colour, the border's colour, and that `disabled`
     suppresses them - the three things `focus_f` is for."""
     theme = THEME[theme_name]
@@ -707,10 +704,9 @@ def test_the_switchs_ring_eases_rather_than_snapping(painted):
 @pytest.mark.parametrize("theme_name", ["light", "dark"])
 def test_the_select_triggers_border_swaps_to_the_ring(painted, monkeypatch,
                                                       theme_name):
-    """The entry that was missing. `tokens.SELECT` carried the band and not
-    the border, so `draw.field` fell back to leaving the border alone: the
-    trigger rang with a border still `input`, where the browser measures
-    `ring` in both themes."""
+    """`tokens.SELECT` carries the border as well as the band. Without it
+    `draw.field` leaves the border alone and the trigger rings with a border
+    still `input`, where the browser measures `ring` in both themes."""
     monkeypatch.setattr(D, "icon", lambda *a, **k: True)
     theme = THEME[theme_name]
     tbl = T.select_table(theme_name)
@@ -807,7 +803,7 @@ def test_a_fractional_delta_marks_the_device_precise_for_good():
 
 
 def test_the_wheel_is_scaled_where_it_ENTERS_not_in_the_frame_loop():
-    """The bug this guards is that the first fix never ran at all.
+    """A scale applied between `process_inputs()` and `new_frame()` never runs.
 
     The GLFW backend's `scroll_callback` calls `io.add_mouse_wheel_event`,
     which QUEUES the event; `io.mouse_wheel` is not populated until
@@ -816,7 +812,7 @@ def test_the_wheel_is_scaled_where_it_ENTERS_not_in_the_frame_loop():
     and writes zero, every frame - and its unit test passed anyway, because
     it handed the function a fake `io`.
 
-    So this one asserts the WIRING: the frame loops install a scroll
+    This asserts the WIRING: the frame loops install a scroll
     callback and do not try to touch `io.mouse_wheel` themselves.
     """
     from pathlib import Path
@@ -892,8 +888,8 @@ def test_every_scroll_step_lands_on_a_whole_pixel():
 
 def test_a_trackpad_also_sends_whole_units_so_the_flag_must_be_sticky():
     """Six exact 1.0 deltas in one trackpad run. Deciding "notch or
-    trackpad" per event would have switched rate mid-gesture on every one
-    of them, which is the cliff this already cost one round to remove."""
+    trackpad" per event would switch rate mid-gesture on every one of
+    them."""
     assert any(abs(d - round(d)) < 1e-9 for d in TRACKPAD_RUN)
     assert any(abs(d - round(d)) > 1e-9 for d in TRACKPAD_RUN)
 
@@ -960,8 +956,7 @@ def test_pixel_rounding_is_monotone_not_bankers():
 
 
 def test_every_coordinate_the_kit_rounds_goes_through_px():
-    """The wiring. A monotone helper nobody calls fixes nothing, which is
-    how the wheel fix came to be a no-op."""
+    """The wiring. A monotone helper nobody calls fixes nothing."""
     import inspect
 
     from hyperspace.dkit import draw as D  # (the package's: hyperspace/dkit/draw.py)

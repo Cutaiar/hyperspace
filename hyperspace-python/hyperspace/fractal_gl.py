@@ -1,4 +1,4 @@
-"""A fractal's cells on the GPU (plan 64): one mesh, drawn once per cell.
+"""A fractal's cells on the GPU: one mesh, drawn once per cell.
 
 `fractal.walk` decides on the CPU which cells are drawn and how strongly;
 `fractal.instances` makes one row a cell — its centre already in the view
@@ -9,8 +9,7 @@ place the corner in its cell, turn it with the view, the 4D divide, the
 depth cue and the fade along w (`FRAC_PLACE`, which is `fractal.Walk.place`
 in float32), then the scene pass's own stroke, dot and face rules and the
 eye. Nothing is sorted: the lines, dots and faces blend additively
-(`view.frac_additive`; the owner's decision 3, 2026-11-18, to look at
-before anything depends on it). The CPU path (`fractal.frame`, painter
+(`view.frac_additive`). The CPU path (`fractal.frame`, painter
 sorted) stays the default and the oracle.
 
 World space throughout: a cell is the shape's own geometry, placed in the

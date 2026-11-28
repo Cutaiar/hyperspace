@@ -1,14 +1,11 @@
 """cmdk's `commandScore`, ported, against the shipped JavaScript.
 
-Moved here with the code it tests. It was in `test_combobox.py` because the
-scorer was in `comp_combobox.py`, and the scorer was there because of a
-wrong premise — shadcn's Combobox is Base UI, not Popover + Command, and
-filters by substring. The port is exact and belongs to the Command palette.
+The port is exact and belongs to the Command palette; shadcn's Combobox is
+Base UI, not Popover + Command, and filters by substring.
 
 `GOLDEN_SCORE` is `commandScore` out of `cmdk@1.1.1`
-(node_modules/cmdk/dist/command-score.js) run under node. 59 pairs were
-compared while the port was written and every one agreed to 1e-12; these
-are the nine that pin the behaviour worth pinning.
+(node_modules/cmdk/dist/command-score.js) run under node. The port agrees
+with it to 1e-12; these pairs pin the behaviour worth pinning.
 """
 
 from __future__ import annotations

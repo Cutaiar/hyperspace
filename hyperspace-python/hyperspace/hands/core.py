@@ -18,7 +18,7 @@ when it returns. The output y ∈ [0, 1] goes two ways:
   * outside, as MIDI for a DAW: per axis 7-bit CC, 14-bit CC, pitch
     bend or channel pressure on any channel, rate-limited, plus a
     presence note per hand, and a note per pinch switch. This module
-    makes the messages and opens no port (plan 27 B3): each frame's go
+    makes the messages and opens no port: each frame's go
     to `outbox`, and whoever carries them out drains it (`carry`) — the
     host's `hands-daw` sink, a `midi-out` port the `[hands] out` setting
     becomes (a virtual "Hyperspace Hands" port unless it names another),
@@ -67,7 +67,7 @@ ranges belong to the box, not to a setup: they live in
 tools/hands_probe.py --calibrate). Meta controller choices — tracking mode, which
 features, the MIDI port — are the ``[hands]`` section of config.toml.
 
-The same file holds the interaction box (plan 18): bounds on the palm's
+The same file holds the interaction box: bounds on the palm's
 x, y and z in the Leap's millimetres, one box for both hands, any
 coordinate open. A hand the tracker sees but whose palm is outside it
 reads absent — its axes NaN, its switches dropped, presence off, no
@@ -82,7 +82,7 @@ ranges" opens it; no box, the default, bounds nothing.
    "units": {"mm": null, "origin": null, "tilt": 32.0}}
 
 ``box`` is absent or null (no bounds) or has x, y, z each ``[lo, hi]``
-or null (open). ``units`` (plan 26 A2, `Units`) is the calibration from
+or null (open). ``units`` (`Units`) is the calibration from
 the Leap's mm into the shape's units — millimetres per shape unit, the
 Leap point at the world's centre, the tilt toward the eye; null for
 "from the box". A ``/1`` file has no box, a ``/2`` file no units; each
@@ -101,7 +101,7 @@ the SDK thread. The ghost hands draw it (hyperspace/ghost.py) and it goes
 through none of the axes' shaping: no axis and no MIDI reads it. The
 dance sources do (below).
 
-The dance sources (plan 24 C4, H2) sit beside the twelve axes, routable
+The dance sources sit beside the twelve axes, routable
 like them and shaped more simply (signal.py: `Smooth`, `Flick`), with no
 setup params and no DAW output:
 
@@ -125,7 +125,7 @@ axis's; the curls and the spread need the skeleton and read NaN without
 one. The constants (ranges, time constants, the flick's thresholds) are
 under `DANCE`.
 
-The grab (plan 24 C5, H1) is a fifth switch per hand, beside the pinches:
+The grab is a fifth switch per hand, beside the pinches:
 
   hand:<side>.grab          a closed fist: 1 while the hand is closed, 0
                             open — the four fingers' curls (`fist`)
@@ -134,13 +134,13 @@ The grab (plan 24 C5, H1) is a fifth switch per hand, beside the pinches:
 
 It is a lane after the dance sources (so no older lane moves) and a gate
 the routing UI offers beside the pinches (`Layout.gates`), so a row can
-act only while that hand is closed: the owner's "close a hand near the
+act only while that hand is closed: "close a hand near the
 shape and it follows the hand; open it to let go" is `position` rows from
 the hand's roll / pitch / yaw, each `when` ``hand:right.grab``. Like the
 dance sources it has no setup params and no DAW note; it needs the
 skeleton, so with none it never closes.
 
-The room lanes (plan 51, room.py) sit after the grabs: the palm's
+The room lanes (room.py) sit after the grabs: the palm's
 orientation in the room's frame rather than the sensor's, the same reading
 on both hands, whatever the camera does:
 
@@ -206,7 +206,7 @@ from .tape import STALE_S, TapeSource  # STALE_S: no frame for this long, no han
 SIDES = ("left", "right")
 LEARN_MOVE = 0.25        # y an axis must travel to win a learn
 CAL_FILE = "hands.json"
-# /3 (plan 26 A2): the file gains "units", the calibration from the Leap's
+# /3: the file gains "units", the calibration from the Leap's
 # mm into the shape's units; a /2 file reads as it is (units: from the box)
 # and is kept beside itself as hands.json.bak-v2 before the first save
 CAL_SCHEMA = "hyperspace.hands/3"
@@ -215,12 +215,12 @@ CAL_SCHEMA = "hyperspace.hands/3"
 # from above as the ghost hands' own camera does (ghost.ELEVATION)
 UNITS_TILT = 32.0
 CAL_MIN_SAMPLES = 30
-# the interaction box: bounds on the palm, in the Leap's mm (plan 18 WP1)
+# the interaction box: bounds on the palm, in the Leap's mm
 BOX_AXES = ("x", "y", "z")
 BOX_MARGIN = 40.0     # mm: the sweep's box stands this far outside what the palms covered
 BOX_EDGE = 15.0       # mm: a hand that is in stays in until it is this far past a face
 BOX_MIN_SPAN = 120.0  # mm: a coordinate swept over less than this is left open
-# levelling the room from a flat hand (plan 51): held at least LEVEL_S, then
+# levelling the room from a flat hand: held at least LEVEL_S, then
 # on until CAL_MIN_SAMPLES frames arrived, for at most LEVEL_WAIT_S more (so a
 # slow frame rate can still pass). Refused when any frame's palm strayed past
 # LEVEL_STILL_DEG from the mean, or the palm's up is past LEVEL_TILT_DEG from
@@ -272,7 +272,7 @@ DEFAULTS: dict = {
     "out": "Hyperspace Hands",   # MIDI out for a DAW: an existing port by
                                  # substring, else a virtual port ("" = none).
                                  # The host's: config.py makes it the
-                                 # `hands-daw` midi-out sink (plan 27 B3);
+                                 # `hands-daw` midi-out sink;
                                  # HandsIO opens no port
     "channel": 16,           # 1-based: the default channel every axis starts on
     "cc": 102,               # left hand cc … cc+n−1, right hand cc+n … cc+2n−1
@@ -350,15 +350,14 @@ DIGITS = ("thumb", "index", "middle", "ring", "pinky")
 BONES = ("metacarpal", "proximal", "intermediate", "distal")
 _NO_ROT = (0.0, 0.0, 0.0, 1.0)
 
-# ---- the dance sources (plan 24 C4, H2): beside the twelve axes, never
+# ---- the dance sources: beside the twelve axes, never
 # instead of them. Per hand, after the pinch switches in the `hand` vector:
 # five curls (DIGITS order), spread, energy, flick; and the two-hand
 # `hands` scheme: gap, twist. Each 0–1, NaN while its hand (or, for the
 # pair, either hand) is away. The curls and the spread read the skeleton
 # (`skeleton`), so a source that gives none (a palm-only fake) reads NaN
 # there; energy and flick fall back to the palm; gap and twist read the
-# features. The numbers below are the shaping (decision register draft
-# rows, plan 24 C4): ranges in the native unit, then time constants.
+# features. The numbers below are the shaping: ranges in the native unit, then time constants.
 DANCE = tuple(f"curl.{f}" for f in DIGITS) + ("spread", "energy", "flick")
 PAIR = ("gap", "twist")
 PAIR_RESTS = (0.0, 0.5)        # gap rests closed, twist level (it is centred)
@@ -393,7 +392,7 @@ SPEED_GAP_S = 0.1              # frames further apart than this measure no speed
 GAP_RANGE = (60.0, 600.0)
 TWIST_FULL = 90.0
 PAIR_S = 0.05                  # s, the pair's smoothing
-# the grab switch (plan 24 C5): a fist is the mean raw curl of the four
+# the grab switch: a fist is the mean raw curl of the four
 # fingers (the thumb tucks or not — a fist either way). Closes past
 # GRAB_CLOSE, lets go only under GRAB_OPEN (the Schmitt gap: a hand
 # hovering half-closed does not chatter), and an edge must hold
@@ -1001,9 +1000,9 @@ def inside(box: Box | None, feats: dict, grow: float = 0.0) -> bool:
 
 @dataclass
 class Units:
-    """The calibration from the Leap's millimetres into the shape's units
-    (plan 26 A2): where the hands sit in the one world the shape is drawn
-    in, so the eye (`eye.*`) sees both. A point p (Leap mm) lands at
+    """The calibration from the Leap's millimetres into the shape's units:
+    where the hands sit in the one world the shape is drawn in, so the eye
+    (`eye.*`) sees both. A point p (Leap mm) lands at
 
         world = R_x(tilt) · stage(p − origin) / mm
 
@@ -1076,7 +1075,7 @@ def load_units(path: Path | None) -> Units:
 
 
 def load_room(path: Path | None) -> dict | None:
-    """The room's levelling in the file (plan 51) as ``{"mode", "level"}``,
+    """The room's levelling in the file as ``{"mode", "level"}``,
     the tracking mode it was made in and its stage → room rotation; None when
     it has none: no file, no key, ``"room": null``. A bad entry is ignored and
     said once on stderr."""
@@ -1357,16 +1356,16 @@ class Layout:
     """Where each lane sits in the ``hand`` vector — written here once.
 
     Axes first (in setup order), then one presence lane per hand, then
-    the eight pinch switches. A lane is addressed by **name** (decision
-    register row 20, audit N7): ``hand:left.roll``, ``hand:right.present``,
+    the eight pinch switches. A lane is addressed by **name**:
+    ``hand:left.roll``, ``hand:right.present``,
     ``hand:left.pinch.index`` (`addresses`); `index` maps each name to
     its lane and is what the adapter publishes as ``router.names["hand"]``,
     so a row keeps its axis whatever order or subset `dofs` lists, and a
     name this rig lacks is dormant. ``hand:<i>`` — the lane at index i —
-    still reads, which is why every lane added since goes after the
-    switches (the dance sources, plan 24 C4; then the grab switches, C5;
-    then the room lanes, plan 51): no older lane moves. The labels and the gate list are published beside
-    it (`labels["hand"]`, `gates["hand"]`: the eight pinches, then the two
+    still reads, which is why every lane added after the switches (the
+    dance sources, then the grab switches, then the room lanes) goes at
+    the end: no older lane moves. The labels and the gate list are
+    published beside it (`labels["hand"]`, `gates["hand"]`: the eight pinches, then the two
     grabs); `presence`, `gate`, `dance`, `grab` and `room` are the index maps
     `lanes()` and `rests()` fill by. Every count here is derived — a
     caller reads `n`, never a number of its own.
@@ -1417,7 +1416,7 @@ class HandsIO:
     test's fake, a tool's port) each frame's go straight to it, and one
     that fails is let go of, never reopened; without one they wait in
     `outbox` for the frame's carrier (`carry`: the host's `hands-daw`
-    sink, plan 27 B3), and nothing here opens a port.
+    sink), and nothing here opens a port.
     """
 
     def __init__(self, settings: HandSettings, cfg: dict | None = None, *, source=None,
@@ -1429,7 +1428,7 @@ class HandsIO:
         cal = load_calibration(cal_path)
         # the interaction box, None for no bounds (the default, an old file)
         self.box: Box | None = load_box(cal_path)
-        # the calibration into the shape's units (plan 26 A2), from the box
+        # the calibration into the shape's units, from the box
         # unless the file says otherwise
         self.units: Units = load_units(cal_path)
         self.state = []
@@ -1443,7 +1442,7 @@ class HandsIO:
             source = TapeSource(Path(self.cfg["tape"]), clock)
             self.cfg["mode"] = source.mode
         self.source = source if source is not None else LeapSource(self.cfg["mode"], clock)
-        # the room's levelling (plan 51): the file's entry, kept whole so a save
+        # the room's levelling: the file's entry, kept whole so a save
         # never loses one this run does not apply; `level` what applies now,
         # None for the tracking mode's frame
         self._room_doc: dict | None = load_room(cal_path)
@@ -1462,12 +1461,12 @@ class HandsIO:
         self.present = {s: False for s in SIDES}
         # the eight pinch switches, whether or not the ratios are axes
         self.gates = {s: {f: Gate() for f in PINCHES} for s in SIDES}
-        # the dance sources (plan 24 C4): each hand's, and the pair's
+        # the dance sources: each hand's, and the pair's
         self.dance = {s: Dance() for s in SIDES}
         self.pair = {k: Smooth() for k in PAIR}
-        # the grab switches (plan 24 C5): a closed fist, from the curls
+        # the grab switches: a closed fist, from the curls
         self.grab = {s: Gate() for s in SIDES}
-        # the room lanes (plan 51): each hand's palm in the room's frame
+        # the room lanes: each hand's palm in the room's frame
         self.room = {s: Palm() for s in SIDES}
         # a levelling in progress: (normal, direction) of each frame's one palm
         self._level_seen: list[tuple] | None = None
@@ -1702,7 +1701,7 @@ class HandsIO:
             # the switches, so the routing UI can offer them without
             # knowing anything about hands
             router.gates["hand"] = lay.gates
-            # name → lane: how the router finds `hand:right.roll` (row 20)
+            # name → lane: how the router finds `hand:right.roll`
             if names is not None:
                 names["hand"] = lay.index
         # the two hands together, `hands:gap` / `hands:twist`: a scheme of
@@ -1865,13 +1864,13 @@ class HandsIO:
         furthest (≥ LEARN_MOVE) since the learn began takes it — a hand
         moves all its axes at once, so first-to-move won't do. The route
         goes into the loaded patch through `learn.learn_source` (the
-        referee and the Replace / Keep prompt as ever); no file is written,
-        the loadable patch shows dirty until a save (plan 13 §3.3).
+        referee and the Replace / Keep prompt are unchanged); no file is
+        written, the loadable patch shows dirty until a save.
 
-        A learn says what it waits for (plan 17 WP2: `learn.accepts`,
+        A learn says what it waits for (`learn.accepts`,
         asked per axis address): under "Learn hand ▸ left" only the left
         hand's axes can win, under "Learn desk" none can; a learn object
-        without `accepts` takes any axis, as before."""
+        without `accepts` takes any axis."""
         ok = getattr(learn, "accepts", None)
         pid = getattr(learn, "learning", None)
         if pid is None or (ok is not None
@@ -1899,7 +1898,7 @@ class HandsIO:
             # pinched while learning: the pinch becomes the row's gate, so
             # the same movement means this only while the thumb agrees
             gate = self.held_gate(self.axes[best].side)
-            # what the row lands as is the learn's (plan 18 WP3): told whether
+            # what the row lands as is the learn's: told whether
             # this axis rests in the middle — its setup now, not the feature
             # table — and the meta controller's depth for a push
             centred = bool(self.axes[best].bipolar)
@@ -1913,7 +1912,7 @@ class HandsIO:
         callable taking one message, False when its port is gone (then the
         rest of the frame's are dropped, as a missing port's always were) —
         and the outbox emptied. The host's `hands-daw` sink calls it after
-        the frame's hands poll (plan 27 B3); `name` is its port's, for the
+        the frame's hands poll; `name` is its port's, for the
         HANDS page (`out_name`), `error` why it has none. Returns what went
         out."""
         msgs, self.outbox = self.outbox, []
@@ -2054,7 +2053,7 @@ class HandsIO:
     def start_level(self, seconds: float = LEVEL_S) -> None:
         """Level the room from the palm held flat for `seconds`: its axes
         become the room's, so a tilted mount reads level and its fingers
-        point the way "forward" means (plan 51). Not during a sweep, whose
+        point the way "forward" means. Not during a sweep, whose
         palms are moving, and not from a tape, which is not this rig."""
         self._rooms()
         if self.calibrating > 0:

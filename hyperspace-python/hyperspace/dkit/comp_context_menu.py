@@ -4,7 +4,7 @@ A ContextMenu is not a new panel. It is `menu.popup` placed at the POINTER
 instead of against a trigger, so this module is placement plus a gesture and
 nothing else — the chrome comes from `menu.py` wholesale.
 
-**The verdict on the chrome, with the evidence.** Diffing
+**The chrome.** Comparing
 `prototypes/dashboard/src/components/ui/context-menu.tsx` against
 `dropdown-menu.tsx`, the class strings for the item, the label, the separator
 and the shortcut are character-for-character identical, and the content panel
@@ -29,8 +29,8 @@ the only thing this module overrides when it calls `menu.popup`.
 Everything below was measured on the real component in Chromium at dpr 1 —
 `?probe`, block `contextmenu.target`, opened with a real right-click because
 Radix's ContextMenu has no `defaultOpen` — in both themes, hovering each item
-and dwelling 400ms (past the 150ms transition). Rest + hover + the placement
-sweep, not a reading of the classes.
+and dwelling 400ms (past the 150ms transition): rest, hover and a placement
+sweep.
 
     panel     144.000 x 125.000   radius 10   p-1 = 4
               bg popover (#ffffff / #171717)
@@ -45,45 +45,43 @@ sweep, not a reading of the classes.
     shortcut  text 12/16, right edge = item.right - 6, centred at y + 6
     label     text 12/16 weight 500, muted-foreground
 
-What surprised me, i.e. what a reading of the classes gets wrong:
+Where the measurement differs from a reading of the classes (`menu.py`
+carries these measured values):
 
-* **an item is 28px tall, not 26.** `menu.py` uses `ITEM_H = 26.0`
-  ("py-1 either side of a 14px line"), but `text-sm` carries a 20px
-  line-height, so the row is 20 + 4 + 4 = 28. Measured on three separate
+* **an item is 28px tall, not 26.** `text-sm` carries a 20px line-height, so
+  the row is 20 + 4 + 4 = 28. Measured on three separate
   items, with and without a shortcut, with and without an icon: 28.000 every
   time. The item classes are identical between the two components, so this is
-  a `menu.py` number to fix rather than a ContextMenu difference — it is
-  reported, not patched, and this module takes its panel height from
-  `menu.measure` so it stays right when that lands.
+  not a ContextMenu difference. This module takes its panel height from
+  `menu.measure`.
 * **the label row is 24, not an item height.** `text-xs` is 16/16 + py-1.
 * **the separator is full-bleed.** `-mx-1` exactly cancels the panel's `p-1`,
   so the rule runs from the panel's left edge to its right edge: measured
-  x = panel.x, w = 144.000 = panel.w. `menu.py` insets it by 1px a side.
+  x = panel.x, w = 144.000 = panel.w.
 * **hovering an item changes the TEXT colour too**, not just the background:
   `focus:text-accent-foreground`. Light goes #0a0a0a -> #171717 (lighter, not
   darker) and the shortcut jumps muted-foreground -> accent-foreground
   (oklch .556 -> .205), which is the loudest part of the change. In dark both
-  land on #fafafa, so the effect is invisible there — measure one theme only
-  and you would conclude it does not exist.
+  land on #fafafa, so the effect is invisible there — measuring one theme
+  alone would miss it.
 * **`accent-foreground` is not in `tokens.LIGHT`/`DARK` at all.** Measured
   oklch(0.205 0 0) light and oklch(0.985 0 0) dark, which are exactly
   `secondary-foreground` in each theme (#171717 / #fafafa). That is the token
-  named below, with the measurement recorded so the coincidence is visible.
+  named below.
 * **the destructive hover fill is themed in its ALPHA**, like `tokens.BADGE`:
   `destructive/10` light, `destructive/20` dark — measured
-  oklab(... / 0.1) and oklab(... / 0.2). `menu.py` uses 0.10 in both.
+  oklab(... / 0.1) and oklab(... / 0.2).
   The destructive ink does NOT change on hover.
 * **an item's icon is 16, not 14.** `[&_svg:not([class*='size-'])]:size-4`;
-  measured 16x16 at (6, 6) in a 28 row. `menu.py` uses `ICON = 14.0`.
+  measured 16x16 at (6, 6) in a 28 row.
 * **the shortcut carries letter-spacing 1.2px** (`tracking-widest` = 0.1em at
   12px), and Chromium puts that space after the last glyph too: "⌘O"
-  measures 23.2813, which is 2 x 1.2 wider than its glyphs. Neither
-  `menu.py` nor `draw.text_w` tracks text, so a shortcut's reserved width is
-  short by 1.2 px per character.
+  measures 23.2813, which is 2 x 1.2 wider than its glyphs. `draw.text_w`
+  does not track text, so `menu.py` adds `SHORTCUT_TRACKING` per character.
 * **the width law gives a shortcut ONE gap, not two.** At max-content the
   item is `6 + label + 6 + shortcut + 6`: measured label 194.3125 +
   shortcut 23.2813 + 26 = 243.5938 = the panel's width to the 1/64 px.
-  `menu.measure` reserves `GAP * 2` there, so it comes out 6px wide.
+  `menu.measure` reserves one `GAP` there.
 
 **The pointer offset is +2, and it is not zero.** Radix's ContextMenu anchors
 a 0x0 virtual element at the pointer and places the panel with
@@ -109,10 +107,8 @@ Two more things the sweep showed, both of which this module reproduces:
   deliberate divergence, documented there, which can only bite in a window
   narrower than `min_w + 2`.
 
-**The KEYBOARD is `menu.popup`'s, and that is a measurement rather than an
-assumption.** Driven on `?probe`'s `contextmenu.target` with a real
-right-click - Radix's ContextMenu has no `defaultOpen`, which is the one way
-this block was already right - the keyboard is the DropdownMenu's to the
+**The KEYBOARD is `menu.popup`'s, as measured.** Driven on `?probe`'s
+`contextmenu.target` with a real right-click, the keyboard is the DropdownMenu's to the
 key: a right-click opens the panel with NOTHING highlighted and focus on the
 content; ArrowDown then takes the first row and ArrowUp the LAST; the arrows
 move one row and CLAMP at both ends rather than wrapping; Home and PageUp go
@@ -120,23 +116,22 @@ to the first row and End and PageDown to the last; a letter jumps by prefix
 with a 1s buffer; Enter and Space take the highlight and close; Escape
 closes; and Tab is SWALLOWED - the panel stays open and focus does not move.
 
-The one difference from a DropdownMenu is where the focus goes afterwards,
-and it is forced rather than chosen: a ContextMenu has no trigger button, so
+The one difference from a DropdownMenu is where the focus goes afterwards:
+a ContextMenu has no trigger button, so
 Escape and Enter leave `document.activeElement` on the BODY where a
 DropdownMenu returns it to the trigger.
 
 So this module needs no keyboard of its own. The full measured table lives
 above THE KEYBOARD in `menu.py`, with the probe block each row came from
 named beside it, and `test_menu_keys.py::test_a_right_clicked_menu_answers_the_same_keys`
-drives this panel through it - which is what makes "it inherits" a claim and
-not a hope.
+drives this panel through it.
 
-**One caveat before this goes near the GRAPH canvas.** `replay.keep`
+**Not part of the GRAPH canvas.** `replay.keep`
 (`hyperspace/replay.py:91`) carries only the page window's own draw list into
 the canvas tap and explicitly drops "every popup, menu and tooltip (their own
-windows)". A context menu opened over that canvas will NOT appear in the
-`panel:graph` texture that feeds the render graph. It is fine on the panel; it
-cannot be part of anything projected.
+windows)". A context menu opened over that canvas does not appear in the
+`panel:graph` texture that feeds the render graph; it exists on the panel
+only.
 """
 
 from __future__ import annotations
@@ -152,10 +147,9 @@ from . import tokens as T
 # MULTIPLIES whatever the token already carries, which is how
 # `bg-destructive/10` works. Sizes are in CSS px at dpr 1.
 #
-# Where a value is already in `menu.py`, the comment says so and gives
-# menu.py's name - these are NOT silent duplicates, and
-# test_context_menu.py asserts the agreement so the two cannot drift. The
-# four rows marked DIFFERS are where menu.py and the browser disagree.
+# Where a value is already in `menu.py`, the comment gives menu.py's name.
+# These are not silent duplicates:
+# test_context_menu.py asserts the agreement so the two cannot drift.
 CONTEXT_MENU = {
     # -- panel ----------------------------------------------------------
     # min-w-36. The ONLY chrome number that differs between ContextMenu and
@@ -170,16 +164,16 @@ CONTEXT_MENU = {
     "shadow": T.SHADOW_MD,              # shadow-md        == menu.popup's
 
     # -- rows -----------------------------------------------------------
-    "item_h": 28.0,                     # DIFFERS: menu.ITEM_H is 26
-    "label_h": 24.0,                    # DIFFERS: menu.py draws labels at 26
+    "item_h": 28.0,                     # == menu.ITEM_H
+    "label_h": 24.0,                    # == menu.LABEL_H
     "sep_h": 1.0,                       # h-px             == menu.py's 1
     "sep_my": T.SPACE[1],               # my-1 = 4         == menu.SEP_MY
-    "sep_bleed": True,                  # DIFFERS: menu.py insets it 1px/side
+    "sep_bleed": True,                  # full-bleed, == menu.py's
     "sep": ("border", 1.0),             #                  == menu.py's
     "item_pad_x": T.SPACE[1.5],         # px-1.5 = 6       == menu.ITEM_PAD_X
     "item_radius": "md",                # rounded-md = 8   == menu.py's
     "gap": T.SPACE[1.5],                # gap-1.5 = 6      == menu.GAP
-    "icon": 16.0,                       # DIFFERS: menu.ICON is 14
+    "icon": 16.0,                       # size-4        == menu.ICON
     "font": 14.0,                       # text-sm/20       == menu.py's
     "label_font": 12.0,                 # text-xs/16       == menu.py's
     "shortcut_font": 12.0,              # text-xs/16       == menu.py's

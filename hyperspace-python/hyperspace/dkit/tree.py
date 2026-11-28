@@ -1,7 +1,7 @@
 """The layout tree: intrinsic sizing, measured bottom-up then placed top-down.
 
 The top layer of the box model: built on `rect.Rect` and `flex.flex`.
-Re-exported by `box.py` - see `HANDOFF.md` item 3a.
+Re-exported by `box.py`.
 """
 
 from __future__ import annotations
@@ -17,28 +17,22 @@ from .rect import Rect
 # --------------------------------------------------------------------------
 #
 # `flex` above is ONE line placed into a box whose size the caller already
-# knew. That is half a layout engine, and the missing half is the reason the
-# demo kept typing numbers: the bands card is 258 px tall because somebody
-# measured a picture and wrote 258, and adding a seventh row to it does not
-# make it grow. CSS calls the fix `height: auto`, and it is two passes -
-# measure the tree bottom-up to learn what each subtree WANTS, then place it
-# top-down to hand out what there actually is.
+# knew. Intrinsic sizing (CSS `height: auto`) is the other half, and it is
+# two passes: measure the tree bottom-up to learn what each subtree WANTS,
+# then place it top-down to hand out what there actually is.
 #
-# The ROADMAP rejected Taffy and Yoga for this, and was right to: their
-# Python bindings cost 1.4-6.0 ms a frame because every box has to be read
-# back across the FFI boundary. But that is an argument against an ENGINE,
-# not against intrinsic sizing. Measured here, in pure Python:
+# Taffy and Yoga are not used: their Python bindings cost 1.4-6.0 ms a frame
+# because every box has to be read back across the FFI boundary. Measured
+# here, in pure Python:
 #
-#     207 nodes  (this dashboard)      0.099 ms      0.6% of a frame
+#     207 nodes  (a dashboard)         0.099 ms      0.6% of a frame
 #     487 nodes  (a longer table)      0.229 ms      1.4%
 #     955 nodes  (a 600-param panel)   0.381 ms      2.3%
 #     200 text measurements            0.029 ms      0.2%
 #
-# ~15x faster than Taffy at the same node count, because the arithmetic is
-# slower per operation and never crosses a boundary. So this can run every
-# frame, uncached, and still leave 97% of the budget - which means layout can
-# depend on content, which is the thing that makes dynamic UI possible at
-# all.
+# That is ~15x faster than Taffy at the same node count, because nothing
+# crosses a boundary. So this can run every frame, uncached, and still leave
+# 97% of the budget, which means layout can depend on content.
 #
 # Conformance is measured, not assumed: nest_oracle.js lays the same trees
 # out in Chromium and test_nest.py asserts agreement, exactly as flex is.
@@ -171,10 +165,10 @@ def lay_auto(root: Node, x: float, y: float, w: float,
     wants. The usual call: a window hands down a width, the content decides
     its own height.
 
-    It exists because `lay(root, Rect(x, y, w, root.mh))` reads `mh` BEFORE
-    anything has measured it - it is 0 until the pass runs - so the tree gets
-    placed into a zero-height box and every child shrinks to nothing. That is
-    a trap worth closing with an API rather than a docstring.
+    `lay(root, Rect(x, y, w, root.mh))` reads `mh` BEFORE anything has
+    measured it - it is 0 until the pass runs - so the tree gets placed into
+    a zero-height box and every child shrinks to nothing. This call measures
+    first.
     """
     _mw, mh = measure_tree(root)
     return place_tree(root, Rect(x, y, w, mh if h is None else h))

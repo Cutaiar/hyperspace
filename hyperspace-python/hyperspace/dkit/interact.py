@@ -27,10 +27,9 @@ Three rules it has to keep:
   `ui.hit` has to pass `ButtonFlags_.enable_nav` for any of it to be
   reachable at all; the comment there says why.
 
-Since `HANDOFF.md` item 3b this file holds the primitives only. `State`,
-`Ui`, `chrome` and the sandwich's two halves are in `uictx.py`; the scroll
-wheel is in `wheel.py`. Both are re-exported here, so `I.Ui`, `I.chrome` and
-`I.install_wheel` are unchanged.
+This file holds the primitives only. `State`, `Ui`, `chrome` and the
+sandwich's two halves are in `uictx.py`; the scroll wheel is in `wheel.py`.
+Both are re-exported here, so `I.Ui`, `I.chrome` and `I.install_wheel` work.
 """
 
 from __future__ import annotations
@@ -69,12 +68,7 @@ from .wheel import (  # noqa: F401 - re-exported
 # interactive primitives
 # --------------------------------------------------------------------------
 
-# `button` used to live here: a stub predating comp_button, with its own
-# radius (md, where a real Button at `default` is lg), its own ad-hoc hover
-# mix and no focus ring. It had no callers anywhere in the tree and no test,
-# so it is deleted rather than given a ring - the audit's list named it as
-# one of six controls to fix, and the fix for a second, worse Button is to
-# not have one. `comp_button.ui_button` is the Button.
+# There is no `button` here: `comp_button.ui_button` is the Button.
 
 
 def sidebar_item(ui: Ui, key, x, y, w, h, s, *, active=False, icon=None) -> State:
@@ -83,9 +77,9 @@ def sidebar_item(ui: Ui, key, x, y, w, h, s, *, active=False, icon=None) -> Stat
     hov = ui.col("accent")
     f = min(1.0, st.hot + st.down * 0.4)
     # `focus-visible:ring-2` in `sidebar-ring`, at FULL opacity and with no
-    # border change - measured, and not Button's 3px ring/50. See
-    # tokens.SIDEBAR_FOCUS. Drawn BEFORE the fill, so the band is behind the
-    # item rather than over its edge.
+    # border change (not Button's 3px ring/50). See tokens.SIDEBAR_FOCUS.
+    # Drawn BEFORE the fill, so the band is behind the item rather than over
+    # its edge.
     ff = ui.focus_f(key, st.focused)
     if ff > 0.01:
         sf = T.SIDEBAR_FOCUS
@@ -127,8 +121,8 @@ def tabs(ui: Ui, key, x, y, h, items, active, *, pad=3.0, keys=None, icons=None,
         if st.clicked:
             hit_idx = i
         # A TabsTrigger carries Button's band AND a 1px solid outline at full
-        # `ring`, which covers the band's innermost pixel - measured, and the
-        # one control in the kit with both. See tokens.TABS_FOCUS.
+        # `ring`, which covers the band's innermost pixel; the one control in
+        # the kit with both. See tokens.TABS_FOCUS.
         ff = ui.focus_f(f"{key}.{i}", st.focused)
         if ff > 0.01:
             tf = T.tabs_focus(ui.theme_name)
@@ -170,12 +164,10 @@ def tabs(ui: Ui, key, x, y, h, items, active, *, pad=3.0, keys=None, icons=None,
 def row(ui: Ui, key, x, y, w, h) -> State:
     """A table row: hover tints the whole band, as shadcn's `hover:bg-muted/50`.
 
-    NO focus ring, and that is the measured answer rather than an omission.
-    The audit listed this among six controls "missing" one; `?probe` carries
-    `table.row` for it, and a real TableRow is a `<tr>` with no tabindex that
-    `document.activeElement` never becomes, in either theme. Giving it a ring
-    would invent an affordance the component does not have - and it is the
-    row's CONTENTS that take focus in the browser.
+    NO focus ring: `?probe` carries `table.row`, and a real TableRow is a
+    `<tr>` with no tabindex that `document.activeElement` never becomes, in
+    either theme. A ring would invent an affordance the component does not
+    have - it is the row's CONTENTS that take focus in the browser.
     """
     st = ui.hit(key, x, y, w, h, allow_overlap=True)
     if st.hot > 0.01:
@@ -251,11 +243,10 @@ def row_action(ui: Ui, key, x, y, size, icon, row_hot: float, *,
     if vis > 0.001:
         f = min(1.0, st.hot + st.down * 0.4)
         # Gated on `vis` with everything else, so the ring never appears
-        # alone on a control that is not drawn. Whether a KEYBOARD focus
-        # should reveal a hover-only action is a separate question and an
-        # unmeasured one - shadcn's SidebarMenuAction is hidden by
-        # `opacity-0 group-hover:opacity-100` and nothing on ?probe says what
-        # a focus does to it - so it is left as it is rather than guessed.
+        # alone on a control that is not drawn. A keyboard focus does not
+        # reveal a hover-only action: what focus does to shadcn's
+        # SidebarMenuAction (`opacity-0 group-hover:opacity-100`) is not
+        # measured on ?probe.
         _ghost_ring(ui, key, x, y, size, st.focused, vis)
         D.fill(ui.dl, x, y, size, size,
                mix(ui.col("transparent"), ui.col("accent", vis), f),
@@ -271,16 +262,15 @@ def row_action(ui: Ui, key, x, y, size, icon, row_hot: float, *,
 # --------------------------------------------------------------------------
 #
 # These run a REAL imgui widget for behaviour and paint dkit chrome under it,
-# which is Panel._track (hyperspace/ui.py:1311-1357) generalized. Using the
-# stock widget rather than hand-rolling the input is not a shortcut, it is the
-# constraint: tests/ui_driver.py:43-46 finds controls by wrapping stock
-# widgets and reading the text after `##`, and its `enter()` action drives a
-# slider by Ctrl+clicking it into a text field - behaviour only
-# `imgui.slider_float` has. Twenty-two test files depend on that.
+# which is Panel._track (hyperspace/ui.py) generalized. The stock widget is
+# required: tests/ui_driver.py finds controls by wrapping stock widgets and
+# reading the text after `##`, and its `enter()` action drives a slider by
+# Ctrl+clicking it into a text field - behaviour only `imgui.slider_float`
+# has.
 #
-# Taper is deliberately NOT in here. `_track` takes a `norm` in 0..1 along
-# the throw and lets the caller own the mapping, because a taper belongs to
-# the param model rather than to the chrome; the kit follows that.
+# Taper is not in here. `_track` takes a `norm` in 0..1 along the throw and
+# lets the caller own the mapping, because a taper belongs to the param
+# model rather than to the chrome.
 
 
 FINE = 0.1          # Shift scales a drag to a tenth, as the panel's does
@@ -300,8 +290,8 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
     the stock slider has no notion of, so it is applied by hand from the
     mouse delta while the item is active.
 
-    Three hooks for a caller that owns its own value model, which is what
-    adopting the kit in Hyperspace needed (`hyperspace/ui_camera.py`):
+    Three hooks for a caller that owns its own value model
+    (`hyperspace/ui_camera.py`):
 
     * `flags` go to the stock slider - `SliderFlags_.logarithmic` for a log
       param, so Ctrl+click still types a VALUE rather than a fraction, which
@@ -345,7 +335,7 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
     imgui.pop_item_width()
     active, hovered = imgui.is_item_active(), imgui.is_item_hovered()
     # `is_item_focused` answers for the item just submitted, so it is read
-    # here beside the other two rather than after the chrome is drawn.
+    # here beside the other two.
     kb_focus = imgui.is_item_focused() and ui.focus_visible
     imgui.pop_style_color()
     ui.texting[key] = bool(active and imgui.get_io().want_text_input)
@@ -376,11 +366,8 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
     tbl = ui.slider_tbl
     # The thumb is the one control whose band is not focus-only: it carries
     # `hover:ring-3 focus-visible:ring-3 active:ring-3`, so THREE states turn
-    # the same `ring/50` band on. Measured hovered with the pointer,
-    # `:focus-visible` false and the band painted - and measured under a real
-    # keyboard focus, which is the state this was missing: hover and active
-    # were here and `focus-visible` was not, so a slider tabbed to showed
-    # nothing at all.
+    # the same `ring/50` band on. Hovered with the pointer, `:focus-visible`
+    # is false and the band is painted.
     ring_f = ui.anim.to(
         f"{key}:ring",
         1.0 if (hovered or active or kb_focus) and not disabled else 0.0)
@@ -403,11 +390,9 @@ def switch(ui: Ui, key, x, y, on: bool, *, size="default", disabled=False,
     and a checkbox would draw its own box inside ours. The id is still an
     `##key` on a widget ui_driver knows.
 
-    That hit area was `x - 3, y - 2` until the Checkbox was measured: the
-    Tailwind STEP numbers read as pixels. `-inset-x-3` is 12px, and measured
+    The hit area is `rect.stretched_hit`: `-inset-x-3` is 12px, and measured
     on ?probe the real Switch is the pointer target 11px either side and 7px
-    above and below - so the kit had an 8px dead strip at each end that the
-    browser does not. `rect.stretched_hit` is now the one answer for both.
+    above and below. The Checkbox uses the same function.
     """
     tw, th, _ = T.SWITCH_SIZES[size]
     # `row` (x, y, w, h): the switch's target is that row instead — a switch
@@ -422,12 +407,12 @@ def switch(ui: Ui, key, x, y, on: bool, *, size="default", disabled=False,
     if st.clicked and not disabled:
         out = not on
     on_f = ui.anim.to(f"{key}:on", 1.0 if out else 0.0)
-    # No hover chrome at all: measured, the track's fill is byte-identical
-    # hovered and at rest. The one state that changes the chrome is
+    # No hover chrome at all: the track's fill is byte-identical hovered and
+    # at rest. The one state that changes the chrome is
     # `focus-visible`, and it is the WHOLE two-part answer - a 3px `ring/50`
     # band outside the track and the track's own border swapping to `ring`.
-    # Measured keyboard-only in both themes: held under the pointer the
-    # switch matches `:focus` and not `:focus-visible`, and paints neither.
+    # Held under the pointer the switch matches `:focus` and not
+    # `:focus-visible`, and paints neither.
     focus_f = ui.focus_f(key, st.focused, disabled=disabled)
     D.switch(ui.dl, x, y, on_f, ui.theme, ui.switch_tbl, size=size,
              focus_f=focus_f, disabled=disabled)
@@ -521,35 +506,20 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
     hh = tbl["h"] if h is None else h
     cols = _sandwich_begin(ui, clear_grab=False)
     # The stock widget draws the text itself, with imgui's own Col_.text -
-    # which is WHITE by default. On the dark theme that happens to look
-    # right; on the light one the value is invisible against the field. The
-    # theme has to be pushed explicitly rather than relied on.
+    # which is WHITE by default: invisible against the field on the light
+    # theme, so the theme's ink is pushed explicitly.
     imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(*ui.col("foreground")))
-    # ImGui draws an InputText's text at the cursor PLUS `FramePadding`, and
-    # the default is (4, 3). So the value sat 4 right and 3 down of where
-    # this put it: the selection band measured 9 px above and 4 below in a
-    # 32 px field instead of 6.5 either side, and - worse, because it is
-    # visible without selecting anything - the placeholder (drawn here, at
-    # `pad_x`) and the value (drawn by imgui, at `pad_x + 4`) did not line
-    # up with each other.
-    #
-    # Zeroing it is better than subtracting it: the frame is the kit's own
-    # `draw.field`, the stock one is transparent, so there is no padding for
-    # imgui to be adding in the first place and the cursor becomes exactly
-    # the text's top-left.
+    # ImGui draws an InputText's text at the cursor PLUS `FramePadding`
+    # (default (4, 3)), which would offset the value from the placeholder
+    # drawn here at `pad_x`. The frame is the kit's own `draw.field` and the
+    # stock one is transparent, so the padding is zeroed and the cursor is
+    # exactly the text's top-left.
     imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, 0))
-    # The SAME font `draw.label` draws the placeholder with. Without this
-    # the stock widget renders the value in imgui's CURRENT font at imgui's
-    # current size, which is not the Geist face at `font * FONT_SPAN_EM` -
-    # so the value and the placeholder, one line of one field, had
-    # different metrics and did not land on the same rows. Measured 1 px
-    # apart on Mesa at density 1; far wider on a Retina Mac, where the
-    # atlas is rasterised at 2x, which is where it was spotted.
-    #
-    # And it is why centring on `font * 1.3` by hand was wrong even after
-    # FramePadding went to zero: that is the size the KIT would have used,
-    # not the size imgui was about to draw at. `get_font_size()` with the
-    # face pushed is the same number for both.
+    # The SAME font `draw.label` draws the placeholder with. Otherwise the
+    # stock widget renders the value in imgui's CURRENT font at imgui's
+    # current size, which is not the Geist face at `font * FONT_SPAN_EM`, and
+    # the value and the placeholder differ in metrics. Centring uses
+    # `get_font_size()` with the face pushed, the size imgui draws at.
     D.push_css_font(ui.faces, "regular", tbl["font"])
     imgui.set_cursor_screen_pos(
         imgui.ImVec2(x + tbl["pad_x"],
@@ -563,10 +533,9 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
     imgui.pop_item_width()
     imgui.pop_font()
     imgui.pop_style_var()
-    # NOT gated on `ui.focus_visible`, and that is measured rather than
-    # sloppy: a text field is the one control Chromium matches
-    # `:focus-visible` on however the focus arrived. Clicked with the
-    # pointer, the real Input rings - same `ring/50 0 0 0 3px` band, same
+    # NOT gated on `ui.focus_visible`: a text field is the one control
+    # Chromium matches `:focus-visible` on however the focus arrived. Clicked
+    # with the pointer, the real Input rings - same `ring/50 0 0 0 3px` band, same
     # `ring` border - where a clicked Button, Switch or SelectTrigger does
     # not. `is_item_active` is imgui's "this field is being edited", which is
     # what a pointer click into it produces; the second term catches a field
@@ -599,22 +568,19 @@ def select(ui: Ui, key, x, y, w, label, items, *, size="default",
     hh, _rkey = T.SELECT_SIZES[size]
     pkey = f"##sel.{key}"
     st = ui.hit(key, x, y, w, hh)
-    # THE KEYBOARD, and the whole of it is `menu`'s. A Select's panel IS
-    # `menu.popup`, so the open panel's model comes with it; this one call is
-    # the TRIGGER's half - measured on `?probe`'s `select.kb` / `select.kbnone`,
-    # a click, Enter, Space, ArrowDown and ArrowUp all open it, on the CHECKED
-    # row if there is one and on the first row if there is not. It lives in
-    # menu.py so that a second trigger cannot disagree with this one.
+    # The keyboard is `menu`'s. A Select's panel IS `menu.popup`, so the open
+    # panel's model comes with it; this call is the TRIGGER's half (`?probe`'s
+    # `select.kb` / `select.kbnone`): a click, Enter, Space, ArrowDown and
+    # ArrowUp all open it, on the CHECKED row if there is one and on the first
+    # row if there is not. It lives in menu.py so every trigger agrees.
     menu.open_from_trigger(ui, pkey, st, role="listbox", disabled=disabled)
     open_ = imgui.is_popup_open(pkey)
     hot = ui.anim.to(f"{key}:hot", 1.0 if st.hovered and not disabled else 0.0)
-    # Measured, and the opposite of what this used to do. A trigger reached
-    # with the KEYBOARD and still CLOSED rings: `ring/50 0 0 0 3px` and its
+    # A trigger reached with the KEYBOARD and still CLOSED rings: `ring/50 0 0 0 3px` and its
     # border -> `ring`, both themes. Open it and Radix moves focus into the
     # listbox, so the trigger's ring goes with it (`:focus-visible` false,
     # box-shadow `none`, border back to `input`) and Escape brings it back. A
-    # trigger opened with the POINTER never rings at all. Driving `focus_f`
-    # off `open_` painted a ring in exactly the two states that have none.
+    # trigger opened with the POINTER never rings at all.
     focus_f = ui.focus_f(key, st.focused and not open_, disabled=disabled)
     D.select_trigger(ui.dl, x, y, w, hh, ui.theme, ui.select_tbl, size=size,
                      hot=hot, focus_f=focus_f, disabled=disabled, open_=open_)
@@ -628,14 +594,9 @@ def select(ui: Ui, key, x, y, w, label, items, *, size="default",
     # `role="listbox"`: a Select's measured keyboard differs from a menu's in
     # exactly two places - an open lands on the CHECKED row whatever the
     # gesture, and PageUp / PageDown do nothing at all.
-    # Called EITHER WAY, and the `if open_` that stood here was a seam bug.
-    # `menu.popup`'s closed branch is what resets the open animation and pops
-    # `menu.LAST_RECT`, so a Select that was never handed a closed frame left
-    # its entry in that dict for the rest of the process - and `LAST_RECT` is
-    # how a test knows whether the panel is up, so a probe reading it after a
-    # Select closed was sampling page pixels through a rect that no longer
-    # existed. Same shape, and same fix, as `comp_context_menu.context_menu`,
-    # which already says so in its own comment.
+    # Called every frame, open or not: `menu.popup`'s closed branch resets the
+    # open animation and pops `menu.LAST_RECT`, which is how a test knows
+    # whether the panel is up. Same as `comp_context_menu.context_menu`.
     chosen = menu.popup(ui, pkey, items, min_w=w,
                         anchor=B.Rect(x, y, w, hh), side="bottom",
                         align="start", offset=4.0, role="listbox",
@@ -708,8 +669,8 @@ def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
     maths over two `invisible_button`s - still widgets `tests/ui_driver.py`
     can find, since it keys off the text after `##`.
 
-    The cost of not using the stock widget is Ctrl+click numeric entry, which
-    a range has no single number for anyway. Everything else - the inset
+    There is no Ctrl+click numeric entry, which a range has no single number
+    for anyway. Everything else - the inset
     thumb law, pixel snapping, the hover ring - is shared with `slider`,
     because both draw through `draw.slider`.
     """
@@ -725,16 +686,12 @@ def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
     kb_focus = False
 
     # The TRACK is a target too, submitted first and `allow_overlap` so the
-    # two thumbs on top of it still take their own hover. Without it a click
-    # anywhere but on a thumb did nothing, where the single-thumb slider -
-    # a stock `imgui.slider_float` - jumps to the pointer, and so does
-    # Radix: pressing the track moves the NEAREST thumb there and hands it
-    # the drag.
+    # two thumbs on top of it still take their own hover. Pressing it moves
+    # the NEAREST thumb to the pointer and hands it the drag, as Radix does.
     #
     # Which thumb was grabbed has to outlive the frame, or a drag that
     # carries one thumb past the other would hop to whichever is nearest
-    # mid-gesture. It goes in `ui.drag`, the store that already exists for
-    # exactly this.
+    # mid-gesture. It is kept in `ui.drag`.
     def _at_pointer():
         """The value under the pointer, through the SAME inset span the
         thumbs were laid out on - a thumb is inset by its own width, so the
@@ -744,8 +701,7 @@ def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
 
     tr = ui.hit(f"{key}.track", x, y, w, h, allow_overlap=True, nav=False)
     # The PRESS, not the click: `State.clicked` fires on RELEASE, and by then
-    # `held` is already False - the first version chose a thumb and dropped
-    # it in the same frame, so nothing moved at all.
+    # `held` is already False.
     if not tr.held:
         ui.drag.pop(key, None)
     elif key not in ui.drag and not disabled:
@@ -782,8 +738,7 @@ def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
     fhi = min(max((hi - vmin) / span, 0.0), 1.0)
     # `focus-visible` as well as hover and active, the same three states the
     # single-thumb slider answers to. `draw.slider` takes one `ring_f` for
-    # every thumb it draws, so both thumbs ring together - which is what
-    # hovering one already did and is not changed here.
+    # every thumb it draws, so both thumbs ring together.
     ring_f = ui.anim.to(
         f"{key}:ring",
         0.0 if disabled else max(min(hot, 1.0), 1.0 if kb_focus else 0.0))
@@ -824,11 +779,9 @@ def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
 
     `backdrop` is the colour behind the region: with a `radius` the corners
     are painted back with `draw.cover_corners`, because ImGui clips to a
-    rectangle and a draw list cannot erase. That is this primitive's first
-    real use - it was built for exactly this and had nothing to call it.
+    rectangle and a draw list cannot erase.
 
-    One deliberate difference from Radix, which is a deviation and not an
-    oversight: its default `type="hover"` does not render the scrollbar at
+    One difference from Radix: its default `type="hover"` does not render the scrollbar at
     all until the pointer is over the region, then unmounts it 600ms after
     it leaves - an abrupt appear and disappear. The same information eases
     in here on the kit's own 150ms curve. The GEOMETRY is measured and
@@ -837,9 +790,8 @@ def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
     imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
     # `no_background` as well as `no_scrollbar`: a child window paints
     # `Col_.ChildBg` behind its content, and inside a popup that is a SQUARE
-    # rectangle over whatever rounded chrome the popup drew - the corners go
-    # first. It is transparent in the default dark style, which is exactly
-    # the kind of thing that holds until a theme changes it.
+    # rectangle over whatever rounded chrome the popup drew. It is
+    # transparent in the default dark style but a theme can change that.
     imgui.begin_child(f"##{key}", imgui.ImVec2(w, h), 0,
                       imgui.WindowFlags_.no_scrollbar
                       | imgui.WindowFlags_.no_background)
@@ -848,42 +800,31 @@ def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
     # cursor - so without this the content measures 0 tall, scroll_max_y is
     # 0 and the wheel does nothing. One zero-width dummy states the height.
     #
-    # In WINDOW coordinates, not screen ones. A screen position inside a
-    # scrolled child is further down its content the further it has
-    # scrolled, so the dummy started lower each frame and the content grew
-    # without bound: scroll_max_y went 3238 -> 5638 -> 51238 while the row
-    # count never changed.
+    # In WINDOW coordinates, not screen ones: a screen position inside a
+    # scrolled child is further down its content the further it has scrolled,
+    # so the content would grow without bound.
     imgui.set_cursor_pos(imgui.ImVec2(0.0, 0.0))
     imgui.dummy(imgui.ImVec2(0.0, max(content_h, 0.0)))
-    # SNAPPED TO A WHOLE PIXEL, and this is the fix for text that jitters
-    # while you scroll slowly.
+    # The scroll offset is SNAPPED TO A WHOLE PIXEL so text does not jitter
+    # during slow scrolling.
     #
     # `draw.label` rounds a glyph run's origin - `add_text(round(tx),
-    # round(ty))` - because at rest that is what keeps type crisp. With a
-    # FRACTIONAL scroll offset every line has a different fractional y, so
-    # as the offset drifts each line crosses .5 at its own moment and jumps
-    # a whole pixel on its own. The page appears to snap up and back down.
-    # Hyperspace's own panel never did this with far faster scrolling,
-    # because `ui.py` passes raw floats to `add_text` and never rounds.
+    # round(ty))` - to keep type crisp. With a FRACTIONAL scroll offset every
+    # line has a different fractional y, so each crosses .5 at its own moment
+    # and jumps a whole pixel on its own. Rounding the OFFSET keeps every
+    # line's fractional part constant, so the page moves together in whole
+    # pixels. Chromium does the same: it lays out on fractions and snaps what
+    # it PAINTS to whole device pixels.
     #
-    # Rounding the OFFSET instead keeps every line's fractional part
-    # constant, so the whole page moves together in whole pixels and the
-    # type stays crisp. It is also the rule this project already measured
-    # in the browser: Chromium lays out on fractions and snaps what it
-    # PAINTS to whole device pixels.
-    #
-    # The offset is fractional in the first place because ImGui's own step
-    # is `ImFloor(ImMin(5 * font_size, inner_height * 0.67))` - floored,
-    # and clamped by the window's height - while the scale factor is
-    # computed from `5 * font_size` alone. A short region therefore moves a
-    # slightly different number of pixels than the factor asks for, and the
-    # remainder lands in the offset.
+    # The offset is fractional because ImGui's own step is
+    # `ImFloor(ImMin(5 * font_size, inner_height * 0.67))` - floored, and
+    # clamped by the window's height - while the scale factor is computed
+    # from `5 * font_size` alone, so the remainder lands in the offset.
     sy = snap_scroll(imgui.get_scroll_y())
     from . import box as B
     # The content has to go into the CHILD's draw list, which is what gets
     # clipped to the child's rect. Drawing it into the parent's list instead
-    # is not clipped by anything: the first version scrolled correctly and
-    # painted the rows straight over the table header above it.
+    # is not clipped by anything.
     outer, ui.dl = ui.dl, imgui.get_window_draw_list()
     try:
         yield B.Rect(x + pad, y + pad - sy, w - 2 * pad, h - 2 * pad)
@@ -904,11 +845,9 @@ def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
         has = smax > 0.5
         show = ui.anim.to(f"{key}:bar",
                           1.0 if (always or hovered) and has else 0.0)
-        # `bars=False` is not a shortcut: shadcn's Combobox list carries
-        # `no-scrollbar`, measured as `offsetWidth - clientWidth == 0` in
-        # every state including one scrolled by 204px. That list scrolls
-        # and shows nothing, and a thumb easing in over it is the kit
-        # inventing an affordance the component does not have.
+        # shadcn's Combobox list carries `no-scrollbar`
+        # (`offsetWidth - clientWidth == 0` in every state): it scrolls and
+        # shows nothing, so `bars=False` draws no thumb.
         if bars:
             D.scroll_bar(ui.dl, x, y, w, h, h, h + smax, sy, ui.theme,
                          alpha=show, border=border)

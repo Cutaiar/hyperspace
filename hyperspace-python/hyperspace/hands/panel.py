@@ -25,10 +25,10 @@ Top to bottom:
                            hairline, the rest value as a dim tick, the
                            MIDI out on the right. Click a row to edit it.
   the dance sources        a line per hand: five curls and the grab
-                           switch (● closed, a fist; plan 24 C5), then
+                           switch (● closed, a fist), then
                            spread, energy, flick; a line for both: gap,
                            twist — small bars, hollow while they read
-                           nothing; hover one for its address (plan 24 C4)
+                           nothing; hover one for its address
   the selected axis        its transfer (dead zone and curve over the
                            calibrated range) with the live point on it,
                            then invert · centred · dead zone · curve ·
@@ -119,8 +119,7 @@ def ctx_rows(panel, p, *, lines: bool = True, gate: bool = True) -> None:
     (`lines`: a line per hand row, in the adapter's words) and the pinch
     that gates it (`gate`: the "Gate: … ▸" submenu). The menu draws the
     lines above its items and the gate among them, so it calls this twice.
-    Removing the rows is the menu's one Unbind (`Learn.unbind`, plan 17
-    WP1); a gate is not an unbind."""
+    Removing the rows is the menu's one Unbind (`Learn.unbind`); a gate is not an unbind."""
     router = getattr(panel, "router", None)
     if router is None:
         return
@@ -128,7 +127,7 @@ def ctx_rows(panel, p, *, lines: bool = True, gate: bool = True) -> None:
     if lines:
         for b in rows:                  # in the adapter's words: "R height positions …"
             imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
-    # routes are the loaded patch's (plan 13 §3.3): an edit here changes
+    # routes are the loaded patch's: an edit here changes
     # the table and the loadable patch's dirty dot, and writes no file
     if gate and rows:
         _gate_menu(router, rows)
@@ -136,8 +135,7 @@ def ctx_rows(panel, p, *, lines: bool = True, gate: bool = True) -> None:
 
 def _gate_menu(router, rows) -> bool:
     """Pick the pinch that has to be held for these rows to act; the pick
-    is written by name (``hand:right.pinch.index``, decision register row
-    20), and a gate an older loadable patch names by number shows as its switch."""
+    is written by name (``hand:right.pinch.index``), and a gate an older loadable patch names by number shows as its switch."""
     gates = getattr(router, "gates", {}).get("hand") or []
     if not gates:
         return False
@@ -183,7 +181,7 @@ def body(panel, dt: float, *, strip: bool = True) -> None:
     _status(io, getattr(panel, "config_notes", None) or ())
     _box(io)
     if _has_pinches(io):        # the switches beside the box, where there is room
-        ui.beside(PINCHES_W)    # (plan 49 stage 3: under it in a narrow pane)
+        ui.beside(PINCHES_W)    # (under it in a narrow pane)
         _pinches(io)
     _ghost(panel)
     k = _axes(panel, io, settings)
@@ -210,7 +208,7 @@ GRIP_GATES = (("grip.clutch", "Clutch", "default_clutch"),
 
 
 def grip(panel, *, strip: bool = True) -> None:
-    """The hand rig (plan 60, grip.py): its section and preset strip, the
+    """The hand rig (grip.py): its section and preset strip, the
     switch, then — while on — the hand, the coupling and drag, the inertia
     and the two clutches as lane addresses (empty: the grabs)."""
     reg = panel.reg
@@ -328,8 +326,7 @@ def ghost_notes(panel) -> list[tuple[str, bool]]:
     could not build or draw (ghost.Ghost.error — a refused build stays
     until a reload, anything else until the ghost goes off), then, with
     the ghost on in screentop or HMD, that those modes' axes are reasoned,
-    not seen (ghost.MODES: only desktop's are the hands/core.py table;
-    hand check Q9). An unknown mode draws as desktop."""
+    not seen (ghost.MODES: only desktop's are the hands/core.py table). An unknown mode draws as desktop."""
     out = []
     err = getattr(getattr(getattr(panel, "renderer", None), "ghost", None), "error", "")
     if err:
@@ -398,7 +395,7 @@ def _status(io, notes=()) -> None:
     if imgui.is_item_hovered():
         ui.tooltip("● in the box  ·  ◌ tracked, but outside the box: it reads "
                           "absent  ·  ○ not seen")
-    # the DAW port is the hands-daw sink's (plan 27 B3): why it has none
+    # the DAW port is the hands-daw sink's: why it has none
     # comes through `HandsIO.carry`, beside the instrument's own error
     err = io.error or getattr(io, "daw_error", "")
     if err:
@@ -555,12 +552,12 @@ def _axes(panel, io, settings) -> int:
     k = _sel(panel, len(settings.axes))
     bad = conflicts(settings)
     h = imgui.get_text_line_height() + 2
-    # the dance sources (plan 24 C4) take a column on the right of the
+    # the dance sources take a column on the right of the
     # rows, so the default twelve rows' page grows no taller: it has to fit
     # the control window. A short `dofs` list can be shorter than the column
     dance = io is not None and getattr(io, "dance", None) is not None
     top, avail = imgui.get_cursor_screen_pos(), imgui.get_content_region_avail().x
-    # plan 49 stage 3: in a pane too narrow for the column, it goes under the rows
+    # in a pane too narrow for the column, it goes under the rows
     column = dance and avail >= DANCE_MIN
     right = DANCE_W if column else 0.0
     # twelve rows have to share the page with the editor: tight spacing
@@ -637,17 +634,17 @@ def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool,
 DANCE_BAR_W = 16.0     # one dance source's bar
 DANCE_W = 220.0        # the dance column, right of the axis rows …
 DANCE_GAP = 14.0       # … this much of it a gap
-DANCE_MIN = 460.0      # narrower than this the column goes under the rows (plan 49 stage 3)
+DANCE_MIN = 460.0      # narrower than this the column goes under the rows
 SMALL_SLIDER_W = 58.0  # a slider on a row that may wrap: at least this much beside
 PINCHES_W = 210.0      # the pinch switches beside the box, or under it
-EDITOR_BESIDE = 340.0  # the feel knobs beside the plot; narrower, under it (plan 49 stage 3)
+EDITOR_BESIDE = 340.0  # the feel knobs beside the plot; narrower, under it
 
 
 def _dance(io, h: float) -> None:
-    """The dance sources (plan 24 C4), live, in a column beside the axes:
+    """The dance sources, live, in a column beside the axes:
     per hand a row of the five curls (thumb … pinky) and the grab switch
-    (C5: ● while the hand is a closed fist), a row of spread, energy and
-    flick, and a row of the room lanes (plan 51: roll, pitch, yaw); then a
+    (● while the hand is a closed fist), a row of spread, energy and
+    flick, and a row of the room lanes (roll, pitch, yaw); then a
     row for the two hands together — gap, twist.
     Each a small bar like an axis's output, hollow while it reads nothing
     (the hand away, no skeleton). Hover a bar for its address and value:
@@ -671,7 +668,7 @@ def _dance(io, h: float) -> None:
             if label.endswith("curl"):
                 imgui.same_line(0.0, 6.0)
                 _grab(io, s, lanes[lay.grab[s]])
-        imgui.text_colored(col, f"{side} room")     # plan 51: the whole circle, level centred
+        imgui.text_colored(col, f"{side} room")     # the whole circle, level centred
         for kind in ROOM:
             imgui.same_line(0.0, 3.0)
             _dance_bar(f"hand:{s}.room.{kind}", lanes[lay.room[(s, kind)]], h, centred=True)
@@ -855,7 +852,7 @@ def _calibrate(io, settings, k: int) -> None:
 
 
 def _level(io) -> None:
-    """The room's frame (plan 51): level it from a flat hand, or clear it."""
+    """The room's frame: level it from a flat hand, or clear it."""
     if io.calibrating > 0:              # a sweep's palms are moving
         return
     if io.on_tape:

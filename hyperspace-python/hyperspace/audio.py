@@ -1,7 +1,7 @@
-"""Audio sources — live capture and file playback (plan 03 task 0).
+"""Audio sources — live capture and file playback.
 
-Both feed the same Analyser+Analyzer pair (`chain` — the N-band analyzer,
-plan 07), mirroring the reference's single attach() hub. Transport
+Both feed the same Analyser+Analyzer pair (`chain` — the N-band analyzer),
+mirroring the reference's single attach() hub. Transport
 semantics are the reference's (ENGINEERING.md, transport section):
 position is ``_offset + _played``, where ``_played`` counts the frames
 the output callback has handed PortAudio — not the frame loop's dt;
@@ -10,20 +10,20 @@ so the chain keeps stepping and the bands decay on their own time
 constants; restart is return-to-zero
 preserving transport state; playback loops.
 
-Callback discipline (plan 04 note, honoured here): stream callbacks only
+Callback discipline: stream callbacks only
 copy samples into a ring buffer. FFT + chain run on the frame loop.
 
-The third source, ``mix`` (plan 45 V3): the media mixer's output — the
+The third source, ``mix``: the media mixer's output — the
 channels' video sound, summed — pushed by the mixer's own callback into
 this engine's ring as mono at 48 kHz (`media.mixer.Mixer.listen`). The
 engine opens no stream for it (no input device is grabbed) and keeps no
 position: the transport is the video sound's one clock, and the analyzer
 reads the ring once a frame as it reads the mic's. Until the mixer's
-stream is open (V2: the first channel whose sound is on) the mix is
+stream is open (the first channel whose sound is on) the mix is
 silence, and so it is once the mixer has not pushed for `MIX_IDLE_FRAMES`
 frames (a stream failed, stopped, or stalled with `active` still true) —
-a count of frame-loop steps, read nowhere else. The file transport below (`_played`) is the second time base
-plan 45 forbids for video sound; `mix` shares nothing with it.
+a count of frame-loop steps, read nowhere else. The file transport below (`_played`) is a second time base, which
+video sound must not have; `mix` shares nothing with it.
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ class _Ring:
     def push(self, x: np.ndarray) -> None:
         """Copy `x` into the ring's own buffer, under the lock: no reference
         to `x` is kept, so a caller may reuse it at once (the mixer's
-        `_mono`, plan 45 V3)."""
+        `_mono`)."""
         n = len(x)
         with self.lock:
             i = self.w % self.cap
@@ -174,7 +174,7 @@ class AudioEngine:
     # ---- shared teardown ----
 
     def stop(self) -> None:
-        mixer = getattr(self, "_mixer", None)    # an engine from before V3 has none
+        mixer = getattr(self, "_mixer", None)
         if mixer is not None:
             self._mixer = None
             if getattr(mixer, "tap", None) is self._ring:
@@ -237,7 +237,7 @@ class AudioEngine:
     def _on_input(self, indata, _frames, _t, _status) -> None:
         self._ring.push(indata[:, 0].copy())
 
-    # ---- the media mix (plan 45 V3) ----
+    # ---- the media mix ----
 
     def start_mix(self, mixer) -> bool:
         """Listen to the media mixer (`media.mixer.Mixer`): its callback
@@ -342,9 +342,9 @@ class AudioEngine:
         self.chain.step(dt)
 
     def publish(self, sources) -> None:
-        """The lanes' names to the shared sources (routing_sources.Sources,
-        plan 44 D2; a router stands in for its own), once a frame like every
-        other source (audit R8; lfo.py's `publish` is the pattern): a lane is
+        """The lanes' names to the shared sources (routing_sources.Sources;
+        a router stands in for its own), once a frame like every
+        other source (lfo.py's `publish` is the pattern): a lane is
         named by its band. It publishes no rests — a scheme that says
         nothing rests at 0 (`Router.rest_of`), which is where a lane idles.
         The lanes themselves are read by `Router.modulate`, which takes the

@@ -28,22 +28,22 @@ path), so what lies beside the cell the view stands in is still there.
 Nothing jumps at a re-root: every point's place in the world is the same
 either side of it. Inside, the zoom and the turn are taken about the middle
 of the screen, and a dive settles onto the middle of the cell it is in
-(plan 81, `centre`, `settle`), so a dive stays full and centred however deep
+(`centre`, `settle`), so a dive stays full and centred however deep
 it goes; a dive rate (`view.frac_dive`) dives for good. Zooming out of the
 last cell eases the shape back to the middle of the screen (`step`), so
 "all the way out" is always the whole shape, centred.
 
-Two ways to draw a frame's cells (plan 64): `frame`, the CPU path, makes
+Two ways to draw a frame's cells: `frame`, the CPU path, makes
 the frame's geometry in numpy and the scene pass painter-sorts it as any
 shape's; `instances` hands the same walk (`walk`) to the GPU as one row a
 cell, and fractal_gl.py's vertex shaders place, turn and divide each cell's
 copy of one mesh, drawn unsorted and additive (`view.frac_additive`). The
 cull and the split stay here, on the CPU, either way.
 
-A loadable patch keeps the dive (`loadable.DIVE_KEY`, row 889): a load puts
+A loadable patch keeps the dive (`loadable.DIVE_KEY`): a load puts
 the view back in the cell it was saved in.
 
-What a grab holds (plan 64, part 2, the module's end): outside, the shape
+What a grab holds (the module's end): outside, the shape
 is an object; inside — too big to keep whole on screen, or gone into a
 cell — the space, whose flight is this view's own.
 """
@@ -91,10 +91,10 @@ FOG = 0.35
 CUE_GONE = 2.5
 # the most edges in a frame; over it the frame is drawn coarser
 BUDGET = 30000
-# a saved dive's longest path (row 889): far past any dive float64 can tell
+# a saved dive's longest path: far past any dive float64 can tell
 # apart, short enough that a hand-edited file can't make a load crawl
 MAX_PATH = 4096
-# plan 64, part 2: the view goes inside once the shape no longer fits the
+# the view goes inside once the shape no longer fits the
 # rig's box (a corner past its half, across or up), and comes back out only
 # within this share of it, so a zoom riding the edge doesn't flip it
 FIT_OUT = 0.9
@@ -305,7 +305,7 @@ class Dive:
     camera.pan has no word for, and `w`, its place along the fourth (a 4D
     fractal's; 0 for a 3D one); `last`, the zoom `step` last saw.
 
-    Inside (plan 64, part 2: `inside`), what a grab holds is the space, and
+    Inside (`inside`), what a grab holds is the space, and
     its motion is part of this view rather than an offset on a world object:
     `turn` (3×3), the space turned about the middle of the screen, on x, y, z
     before the 4D divide (`fractal.turn`), and `shift` (3, world units), the
@@ -324,21 +324,21 @@ class Dive:
     flown: np.ndarray | None = None
     flown_epoch: int = -1             # the world object's epoch `flown` was read in
     shape: int | None = None          # the shape this dive is in (another: it starts over)
-    # plan 81: the view as the last re-root or move left it — (zoom, p, M) —
+    # the view as the last re-root or move left it — (zoom, p, M) —
     # so the next `step` turns and zooms it about the middle of the screen
     # (`centred`); None after a reset or a load: that frame is taken as it is
     seen: tuple | None = None
-    # plan 81: the point under the middle of the screen is on the fractal, and
+    # the point under the middle of the screen is on the fractal, and
     # only a zoom or a turn about it has moved the view since: a dive holds it
     # and settles no more. A pan, a flight, a crossing or a load clears it
     settled: bool = False
-    # plan 81: where the performer has put the cell's middle on the screen
+    # where the performer has put the cell's middle on the screen
     # (world units, 4D): the pans and the flights made inside, kept as a
     # framing the dive's settle onto the cell's middle leaves alone
     frame: np.ndarray = field(default_factory=lambda: np.zeros(4))
-    # plan 81 follow-up: how many times this dive has started over (`reset`:
-    # a load, another shape, the top). Undo puts the dive's own motion back on
-    # a restored camera only within one life (`deck.DiveFrame`, row 1018)
+    # how many times this dive has started over (`reset`: a load, another
+    # shape, the top). Undo puts the dive's own motion back on a restored
+    # camera only within one life (`deck.DiveFrame`)
     lives: int = 0
 
     def reset(self) -> None:
@@ -353,16 +353,15 @@ class Dive:
         self.lives = getattr(self, "lives", 0) + 1
 
     def to_json(self, name: str) -> dict:
-        """The dive as a loadable patch keeps it (`DIVE_KEY`, row 889)."""
+        """The dive as a loadable patch keeps it (`DIVE_KEY`)."""
         doc = {"shape": name, "path": [int(k) for k in self.path],
                "z": float(self.z), "w": float(self.w),
                "turn": [float(x) for x in np.asarray(self.turn).ravel()],
                "shift": [float(x) for x in np.asarray(self.shift).ravel()]}
         fr = _frame_of(self)
         if fr.any():
-            # plan 81: the performer's framing (`frame`), an optional key (plan
-            # 64's precedent): written only when there is one, so a dive with
-            # none saves as before, and a file without it reads none
+            # the performer's framing (`frame`), an optional key: written only
+            # when there is one, so a file without it reads none
             doc["frame"] = [float(x) for x in fr.ravel()]
         return doc
 
@@ -452,10 +451,10 @@ def step(s, reg=None, off=None, dt: float = 0.0) -> None:
     `off`: the offset the scene pass composes after the walk (`shapeframe.
     drawn_offset`, a 4×4 in the home's frame; None the identity), read only
     for which point is under the middle of the screen as drawn. A re-root
-    happens only inside (plan 64, part 2), where that offset is the room
+    happens only inside, where that offset is the room
     placement the shape had (`Dive.shift`), fixed in world units, so it moves
     nothing and nothing here makes up for it. `dt`: the frame's seconds, for
-    the dive rate (`view.frac_dive`, plan 81)."""
+    the dive rate (`view.frac_dive`)."""
     d = s.dive
     spec = spec_of(s.shape)
     if spec is None or (d.shape is not None and d.shape != int(s.shape)):
@@ -481,8 +480,8 @@ def step(s, reg=None, off=None, dt: float = 0.0) -> None:
     def into() -> None:
         nonlocal zoom, p
         x = ((mid - p) / zoom) @ M.T        # the middle of the screen, in the shape
-        # the child the fractal's point nearest it is in (plan 81: a dive's
-        # point stays in the rooted cell, `settle`)
+        # the child the fractal's point nearest it is in (a dive's point stays
+        # in the rooted cell, `settle`)
         _, k = nearest(spec, x, *_settle_start(spec, [], 0))
         p = p + zoom * (1.0 - r) * (spec.centres[k] @ M)
         zoom = zoom * r
@@ -520,13 +519,13 @@ def step(s, reg=None, off=None, dt: float = 0.0) -> None:
     _land(s, reg, zoom0, p0, zoom, p, keep=True)
 
 
-# ---- plan 81: an endless dive, centred
+# ---- an endless dive, centred
 #
 # camera.zoom scales the view about p (`walk`'s world = zoom · x M + p), and
 # inside a fractal p is the rooted cell's place, not the middle of the screen:
-# a plain zoom drifted toward it, and each re-root moved the drift's centre to
-# another cell, so the picture slid toward an edge and part of the screen went
-# empty. Now, inside, whatever changed the zoom or the turn since the last
+# a plain zoom would drift toward it, and each re-root would move the drift's
+# centre to another cell, so the picture would slide toward an edge. Inside,
+# whatever changed the zoom or the turn since the last
 # step is applied about the middle of the screen (`centred`), and going in
 # the view settles onto what it dives into (`settle`): the rooted cell's
 # middle, by default, so what is round the middle of the screen is always a
@@ -536,21 +535,20 @@ def step(s, reg=None, off=None, dt: float = 0.0) -> None:
 # Held to the letter — one point of the shape kept under the middle for good
 # (`SETTLE_ON = "point"`) — the screen goes emptier, not fuller: a point of a
 # fractal has holes of every size beside it (the sponge's tunnels, the dust's
-# gaps), and a dive into one point frames them. The old dive looked full
-# because its zoom was about a cell's middle, off the screen's; "cell" keeps
-# that, with the middle on the screen's (row 1012: the owner chose "cell").
+# gaps), and a dive into one point frames them. A zoom about a cell's middle
+# keeps the screen full; "cell" keeps that, with the middle on the screen's.
 
 
 # how fast a dive settles onto what it dives into: (zoom before / zoom after)
 # ** SETTLE of the way left goes each step, so most of it (8/9 for a sponge,
 # 3/4 for a tetrahedron) within one level
 SETTLE = 2.0
-# what a dive settles onto (row 1012): "cell", the middle of the cell the view
+# what a dive settles onto: "cell", the middle of the cell the view
 # is rooted in — the screen stays full, and the view steers toward each new
 # cell's middle as it goes in (on the sponge about a screen a level, which the
 # self-similar picture hides); "point", the fractal's point the eye sees at the
-# middle of the screen, held there for good — the letter of decision D4, and
-# a much emptier screen. A hot reload takes a change
+# middle of the screen, held there for good, which makes a much emptier
+# screen. A hot reload takes a change
 SETTLE_ON = "cell"
 # where `settle` starts looking (levels above the rooted cell), how fine it
 # looks, and how long
@@ -567,7 +565,7 @@ SETTLE_NEAR = 0.05
 
 
 def centre(s, reg=None, off=None, dt: float = 0.0) -> None:
-    """The first half of `step` (plan 81), before any re-root: the dive rate's
+    """The first half of `step`, before any re-root: the dive rate's
     zoom for `dt` (`dive_zoom`), then, inside, the zoom and turn changed since
     the last step or move taken about the middle of the screen (`centred`).
     Lands through `_land` as a re-root does; a second call in the same frame
@@ -623,8 +621,8 @@ def _middle(s, off, zoom: float, p: np.ndarray) -> np.ndarray:
 
 
 def dive_zoom(spec: Fractal, d: Dive, zoom: float, rate: float, dt: float) -> float:
-    """The zoom after `dt` seconds of a dive at `rate` levels a second (plan 81,
-    `view.frac_dive`): × (1 / ratio) a level, signed, in float64. The re-root
+    """The zoom after `dt` seconds of a dive at `rate` levels a second
+    (`view.frac_dive`): × (1 / ratio) a level, signed, in float64. The re-root
     keeps it in [Z_OUT, Z_IN), so it never ends going in; going out it stops
     at the whole shape (`Z_HOME`, path empty) and pulls no further."""
     if not (rate and dt > 0.0 and math.isfinite(rate)):
@@ -796,8 +794,8 @@ def _land(s, reg, zoom0: float, p0: np.ndarray, zoom: float, p: np.ndarray,
     written another way. With a registry through `Param.follow` — camera.zoom
     and camera.pan's objects and bases move together, once, so a route or an
     LFO modulating them rides on the move, still or letting go (writing the
-    base and the object apart applied it twice, or lost it at a release: the
-    reviews of 2026-11-19); without one onto the view alone."""
+    base and the object apart would apply it twice, or lose it at a release);
+    without one onto the view alone."""
     d = s.dive
     d.z, d.w = float(p[2]), float(p[3])
     pan = (float(p[0]), float(-p[1]))
@@ -812,9 +810,9 @@ def _land(s, reg, zoom0: float, p0: np.ndarray, zoom: float, p: np.ndarray,
         d.settled = False            # a crossing or a flight: another point is under the middle
 
 
-# ---- plan 64, part 2: what a grab holds, outside a fractal and inside it
+# ---- what a grab holds, outside a fractal and inside it
 #
-# Outside, the shape is an object: the world's offset on it (plan 59) is
+# Outside, the shape is an object: the world's offset on it is
 # drawn home ∘ offset, as any shape's. Inside — once it no longer fits the
 # rig's box, or the view has gone into a cell (`wants_inside`) — a grab holds
 # the space: its motion is folded into this view (`fold_flight`), turning it
@@ -850,7 +848,7 @@ def drawn_corners(s, off=None) -> np.ndarray:
 
 
 def wants_inside(s, box, off=None) -> bool:
-    """Whether the view of a fractal is inside it (plan 64, part 2): it has
+    """Whether the view of a fractal is inside it: it has
     gone into a cell, or is about to, or the shape no longer fits `box` (the
     rig's: half the view across and up, world units, at depth 0) — what can't
     be kept whole on screen is not an object you hold. Out again only once
@@ -865,7 +863,7 @@ def wants_inside(s, box, off=None) -> bool:
 
 
 def go_inside(s, reg, off) -> None:
-    """Into the space: the object's offset `off` (home frame, plan 59; None the
+    """Into the space: the object's offset `off` (home frame; None the
     identity) becomes the view's own — its turn `Dive.turn`, about the middle
     of the screen before the 4D divide (where a turn commutes with it), the
     view's camera turned with it, and the rest `Dive.shift`, a move in world
@@ -962,7 +960,7 @@ class Walk:
     (the faces on); `whole`: the whole shape's own outline is drawn too, at
     (`scale`, `origin`). The view: a point x of the shape is at
     zoom · (x @ M) + p in 4D (before the 4D divide); `off`, the world's
-    offset on the shape (plan 59), a 4×4 or None."""
+    offset on the shape, a 4×4 or None."""
 
     spec: Fractal
     M: np.ndarray
@@ -1038,7 +1036,7 @@ def walk(spec: Fractal, s, w: int, h: int, off=None) -> Walk:
     """The cells of this frame (module docstring, `Walk`): from the top cell
     down, those the eye can see, split while large on screen, faded in as
     they split and out at the cue's ends, at most `BUDGET` edges. `off`, the
-    world's offset on the shape (plan 59, `world.World.offset_matrix`): the
+    world's offset on the shape (`world.World.offset_matrix`): the
     cull and the cue read where a cell is with it, so a grabbed or moved
     fractal is culled where it is drawn."""
     d = s.dive
@@ -1055,7 +1053,7 @@ def walk(spec: Fractal, s, w: int, h: int, off=None) -> Walk:
     tx, ty = (tan * aspect, tan) if aspect >= 1.0 else (tan, tan / aspect)
     nx, ny = math.hypot(1.0, tx), math.hypot(1.0, ty)
     px = min(w, h) / 2.0 / tan                      # px a unit spans at distance 1
-    # the view's own reach on the fractal's (the fractal section, plan 64)
+    # the view's own reach on the fractal's (the fractal section)
     oct_far = max(spec.far + float(getattr(s, "frac_far", 0.0)), 0.2)
     oct_near = max(spec.near + float(getattr(s, "frac_near", 0.0)), 0.3)
     far = min(dist * 2.0 ** oct_far, EYE_FAR)

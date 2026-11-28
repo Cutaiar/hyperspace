@@ -1,8 +1,8 @@
-"""N-band graphic-EQ analyzer — the six-band chain, reshaped (plan 07 WP4a).
+"""N-band graphic-EQ analyzer — the six-band chain, reshaped.
 
-The per-band chain math is bands.py's, moved here untouched: spectrum in,
+The per-band chain math is bands.py's: spectrum in,
 `atk dec thr exp trn trim fn pre post` per band, N lanes out. What changed
-is the shape. A band is no longer a fixed row of the BANDS table but a
+is the shape. A band is not a fixed row of the BANDS table but a
 `BandSpec` — centre frequency, Q and a weighting curve — and there are
 1..N_MAX of them, added, removed and reordered at runtime.
 
@@ -31,7 +31,7 @@ Band → plane and `dir` are not the analyzer's business — the output is
 legacy table lives there as the "legacy6" loadable patch).
 
 Spectrum history: a ring of the last HIST_S seconds of spectra on a
-log-frequency axis, for the heat map (WP5b). One column every HIST_DT of
+log-frequency axis, for the heat map. One column every HIST_DT of
 frame time; a column is a `maximum.reduceat` over the frame's dB spectrum
 into a preallocated row — no per-frame allocation.
 """
@@ -140,10 +140,8 @@ class Curve:
 
 
 # A curve's tag is an enum option's words on screen, and it is also what a
-# saved layout holds — but `curve_index` has always read a tag in ANY case,
-# and the shipped scenes already stored it lower case, so these going lower
-# with the rest of the interface (2026-11-10) changes nothing a file can
-# notice: "RECT" in an old layout still loads.
+# saved layout holds. `curve_index` reads a tag in any case, so "RECT" in an
+# old layout still loads.
 CURVES = [
     Curve("rect", "Rectangular — every bin between the edges, equally", _cv_rect),
     Curve("tri", "Triangular — full at the centre, zero at the edges", _cv_tri),
@@ -159,9 +157,7 @@ def curve_index(c) -> int:
     if isinstance(c, Curve):
         return CURVES.index(c)
     if isinstance(c, str):
-        # case-folded on BOTH sides, not on the argument alone: the tags are
-        # lower case as of 2026-11-10 and `.upper()` on the argument looked
-        # like case-insensitivity while only ever matching the old spelling
+        # case-folded on both sides, so the match is case-insensitive
         tags = [cv.tag.lower() for cv in CURVES]
         return tags.index(c.lower())
     i = int(c)
@@ -184,12 +180,10 @@ class BandSpec:
     def label(self) -> str:
         """The band's name on screen, as stored.
 
-        The names in `bands.BANDS` and the shipped scenes are lower case as
-        of 2026-11-10 ("remove all caps from the interface"), and nothing
-        here rewrites a stored one: a layout saved before that keeps the
+        The names in `bands.BANDS` and the shipped scenes are lower case,
+        and nothing here rewrites a stored one: a layout keeps the
         capitals it holds, and a band somebody named keeps the name they
-        gave it. A name is a label and never a key, so the file format is
-        untouched either way.
+        gave it. A name is a label and never a key.
         """
         if self.name:
             return self.name
@@ -594,7 +588,7 @@ class Analyzer:
             lvl = TARGET * conf + dev
 
             if P.norm:
-                # MANUAL (audit A10): no adaptive window, no confidence, no
+                # MANUAL: no adaptive window, no confidence, no
                 # expansion, no warm-up. The level is the envelope itself in
                 # u (1.0 = nominal), which already carries the trim once, as
                 # a plain gain; the transient knob blends toward the

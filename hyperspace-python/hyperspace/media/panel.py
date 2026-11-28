@@ -1,4 +1,4 @@
-"""The control window's GRAPH canvas as a media source (2026-11-02):
+"""The control window's GRAPH canvas as a media source:
 `panel:graph`.
 
 The picture is the canvas the GRAPH page draws — output 1 behind it, the
@@ -16,18 +16,18 @@ It is untimed, so a channel at rate 0 holds the frame it showed
 (`channels._freeze`). Each frame carries a lease on its texture
 (`outputs.Lease`, `MediaFrame.lease`): while the channel holds the frame
 no grab writes that texture and no resize frees it, so the hold is exact
-however many other readers go on grabbing beside it, and the texture is
+however many further readers go on grabbing beside it, and the texture is
 free again the moment the channel lets the frame go.
 
 `gl_poll` runs only on the frame thread (the renderer's `MediaTextures`
 reads a channel): it asks the tap to draw the canvas at the end of this
 frame (`want`) and hands back the texture the tap wrote last — one frame
 of latency, which round a loop (the channel on the backdrop behind the
-canvas it pictures) is the intended echo. With the panel hidden (plan 49
-stage 3: the only time GRAPH is not drawn) nothing is drawn: the last frame holds `live.HOLD_S`, then the source reads None
+canvas it pictures) is an echo. With the panel hidden (the only time GRAPH is not drawn) nothing
+is drawn: the last frame holds `live.HOLD_S`, then the source reads None
 (black) and says `off page` (the page says it is not drawing: not
 `lost`, which is for a page that draws and a tap that gets nothing — a
-minimised window) — the owner's default — and is `ready` again on the
+minimised window) and is `ready` again on the
 first frame the page is back."""
 
 from __future__ import annotations
@@ -47,8 +47,8 @@ class PanelSource(SharedSource):
     is the `outputs.CanvasTap` (duck-typed: `want()`, `lease()` with
     `texture`, `size` and `generation`, `frame_no`, `at` on `clock`'s
     scale); `on_page` answers whether GRAPH is drawing its canvas now
-    (plan 49 stage 3: while the panel is not hidden) — the panel's own fact (`Panel.canvas_px is not None`),
-    read from it, so the status has one owner."""
+    (while the panel is not hidden) — the panel's own fact
+    (`Panel.canvas_px is not None`), read from it, so the status has one owner."""
 
     def __init__(self, tap, *, on_page=None, clock=time.monotonic):
         super().__init__(GRAPH, kind="panel", clock=clock)

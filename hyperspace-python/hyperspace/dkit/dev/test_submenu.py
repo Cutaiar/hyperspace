@@ -113,8 +113,8 @@ def test_a_panel_is_capped_and_a_long_row_is_cut_to_it(monkeypatch):
     A shadcn item carries no `truncate`, so in the browser a long row makes
     the panel as wide as its words. A menu row here is one line and the
     graph's insert menu carries whole sentences — "faces pattern: Faces
-    pattern is in the graph already: drag it onto the cable" — which made a
-    980px panel over the canvas. Capped, the row is ellipsised and the
+    pattern is in the graph already: drag it onto the cable" — which would
+    make a 980px panel over the canvas. Capped, the row is ellipsised and the
     words that were cut are the row's tooltip (`ui_menu._tips_kit`).
     """
     from hyperspace.dkit import draw as D
@@ -127,8 +127,7 @@ def test_a_panel_is_capped_and_a_long_row_is_cut_to_it(monkeypatch):
                        "drag it onto the cable")
     w, _h = M.measure(FakeUi(), [long])
     assert w == M.MAX_W - 2 * M.PAD, "the panel was not capped"
-    # uncapped it is as wide as the whole sentence, which is the bug: the
-    # panel the owner saw over the canvas was ~980px
+    # uncapped it is as wide as the whole sentence: ~980px over the canvas
     uncapped = M.measure(FakeUi(), [long], max_w=0.0)[0]
     assert uncapped == 9.0 * len(long.label) + 2 * M.ITEM_PAD_X
     assert uncapped > 2 * M.MAX_W
@@ -243,7 +242,7 @@ def test_a_chain_picks_its_side_from_the_widest_panel_it_could_draw():
     view = Rect(0, 0, 1000, 800)
     assert M.chain_side(Rect(100, 200, 136, M.ITEM_H), view) == "right"
     # 700 + 136 = 836, and 836 + 320 > 1000: a narrow panel would still fit
-    # to the right, which is exactly the trap
+    # to the right
     trig = Rect(700, 200, 136, M.ITEM_H)
     assert trig.right + M.SUB_MIN_W < view.right          # the narrow one fits
     assert M.chain_side(trig, view) == "left"             # the chain still goes left
@@ -285,8 +284,7 @@ def test_a_parked_pointer_is_aiming_at_nothing():
     """A zero-length move makes a degenerate triangle, which contains every
     point — so without this the wedge reads "true" for as long as the hand
     rests on the trigger, and its patience is spent before the move it
-    exists for begins. Measured in the app: five seconds of it, and the
-    diagonal then failed on its first step."""
+    exists for begins."""
     panel = (300.0, 100.0, 128.0, 200.0)
     assert not M.aiming_at((250.0, 150.0), (250.0, 150.0), panel)
 
@@ -468,7 +466,7 @@ def test_a_hover_opened_submenu_highlights_nothing(DB):
     It armed every open, so a panel the pointer had merely dwelled on came
     up with its first row lit while the pointer was still in the parent:
     two rows filled, in two panels, with the pointer on neither of them.
-    Read off the pixels, because that is what the owner saw.
+    Read off the pixels, because that is what a person sees.
     """
     script, _at = _open(DB)
     DB.render("dark", W, H, script=script, keep="last")
@@ -488,11 +486,11 @@ def test_the_highlight_follows_the_pointer_past_an_open_submenu(DB):
     """Exactly one row of a panel is ever lit, and it is the one under the
     pointer (or the one whose submenu is open, which is the same row).
 
-    Walking down a menu opens a submenu in passing. The highlight used to
-    be FROZEN while one was open, so it stayed on the row that had opened
-    it while the pointer ran the next one — two rows lit, in one panel,
-    which is what the owner's screenshot showed. A parked mouse still
-    cannot take the highlight: the hand-over only happens on movement.
+    Walking down a menu opens a submenu in passing. The highlight is not
+    frozen while one is open: a frozen one would stay on the row that
+    opened it while the pointer ran the next, lighting two rows in one
+    panel. A parked mouse still cannot take the highlight: the hand-over
+    only happens on movement.
     """
     script, _at = _open(DB)
     DB.render("dark", W, H, script=script, keep="last")
@@ -522,7 +520,7 @@ def test_moving_to_another_row_closes_it(DB):
 
 
 def test_the_parent_is_still_alive_while_a_submenu_is_open(DB):
-    """The ImGui trap this flag exists for. A popup that takes focus takes
+    """The ImGui behaviour the focus flag exists for. A popup that takes focus takes
     HOVERING with it - `IsWindowContentHoverable` refuses it to every
     window outside the focused popup's begin-stack chain - so a focused
     submenu would make its own parent dead to the mouse. Driven: with the
@@ -622,9 +620,9 @@ def test_the_pointer_lands_on_the_row_it_is_over_in_a_scrolled_submenu(DB):
     the pointer is the row that is taken.
 
     The rows of a capped panel are drawn at `y + inset - off`, and the
-    pointer used to be hit-tested against them UNSCROLLED — so the
-    highlight landed on a row nobody was pointing at, Enter took it, and
-    `_scroll` dragged the list back to show it. `scrolled` is last frame's
+    pointer is hit-tested against them as scrolled: tested UNSCROLLED, the
+    highlight would land on a row nobody was pointing at, Enter would take
+    it, and `_scroll` would drag the list back. `scrolled` is last frame's
     offset, which is where the rows the pointer is over were painted.
     """
     h = 640
@@ -691,9 +689,8 @@ def test_a_dismissed_submenu_forgets_its_own_descendants(DB):
 
 
 def test_both_levels_of_a_chain_land_on_the_same_side(DB):
-    """The owner's report: "the small menu opens to the right of the
-    initial panel, and then a larger menu opens to the left. It feels
-    scary."
+    """A narrow level one must not open on one side with a wide level two
+    on the other.
 
     Opened near the window's right edge, level one (128 wide) still fits on
     the right and level two (wide) does not — so each deciding for itself
@@ -705,7 +702,7 @@ def test_both_levels_of_a_chain_land_on_the_same_side(DB):
     DB.render("dark", W, H, script=script, keep="last")
     root = M.LAST_RECT.get(CKEY)
     assert root, "the menu did not open"
-    # THE TRAP, stated rather than hoped for: a narrow panel still fits to
+    # a narrow panel still fits to
     # the right of level one's trigger here, so a panel deciding for itself
     # goes right — and the wide level under it cannot, so it goes left.
     trig_right = root[0] + root[2] - M.PAD
@@ -812,7 +809,7 @@ def test_scrolling_moves_the_pointers_row_under_it(DB):
     The claim on a row is taken by MOTION, which is right for a mouse and
     blind to a scroll: wheel a capped panel and a different trigger is
     under the cursor with no `mouse_delta` at all, so the panel of the row
-    that used to be there stayed open over the row that is.
+    that was there would stay open over the row that is.
     """
     h = 560                                         # short: `Deep list` caps
     script, _at = _open(DB, h)
@@ -840,8 +837,8 @@ def test_scrolling_moves_the_pointers_row_under_it(DB):
     DB.render("dark", W, h, script=wheeled, keep="last")
     now = [k for k in M.LAST_RECT if k.startswith(key + ">")]
     # the positive, not merely "something changed": the row now under the
-    # cursor is the one whose panel is open. Unfixed, the claim stays on a
-    # row that has scrolled away and NOTHING opens.
+    # cursor is the one whose panel is open; a claim left on a row that has
+    # scrolled away would open NOTHING.
     assert now == [f"{key}>deep.8"], \
         f"after the scroll the open panel is {now}, not row 8's"
 

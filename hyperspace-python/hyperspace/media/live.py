@@ -1,4 +1,4 @@
-"""Live feeds as media sources (plan 32 T8): what NDI, Syphon and the
+"""Live feeds as media sources: what NDI, Syphon and the
 cameras share.
 
 A *kind* (`LiveKind`) is a device-registry entry — ``kind = "ndi"``,
@@ -26,8 +26,7 @@ join runs on the pool, never on the frame thread.
 
 A feed that stops (the sender quit, the Wi-Fi dropped) keeps its last
 frame for `HOLD_S`, then reads None (black) and says `lost`; the reader
-stays connected, so frames that resume are `ready` again with no reopen
-(review focus 5). A reader that raises is said as the source's
+stays connected, so frames that resume are `ready` again with no reopen. A reader that raises is said as the source's
 ``error: …`` and opened again after `RETRY_S`.
 
 Each adapter library is imported inside the scan or the reader's `open`

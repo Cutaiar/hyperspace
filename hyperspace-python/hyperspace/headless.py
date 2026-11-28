@@ -2,14 +2,14 @@
 the library, the router (with the LFO, envelope and sequencer banks) and
 `loadable.LoadedPatch`, as app.main wires them — what the tests load and save
 loadable patches through (tests/test_plan31_wiring.make_app) and what
-tools/migrate_library.py rewrites a library with (row 394).
+tools/migrate_library.py rewrites a library with.
 
 `resave` is the one road a file takes there: copied into a scratch library
 as a user's loadable patch, loaded by the library, saved untouched under the name
 it loaded as (`Library.save_as`, the strip's save), the bytes written read
 back. Nothing here touches the library a file came from.
 
-Plan 43 C2: a resave is the migration's, so it writes the spin's pose only
+A resave is the migration's, so it writes the spin's pose only
 where the file had one (the app saves one every time; the resave takes it
 back out of a file that had none — an old file keeps spinning, and its
 `/9` is a fixed point); and with `show` — what an old show kept of
@@ -41,8 +41,8 @@ from .view import ViewState
 def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
     """The app's registry, library, router and loadable patches over the library at
     `home` (`machine`: the home for this machine's files — bindings.json,
-    last_show — default `home`); `plan31` False is a build from before plan
-    31 — no envelopes, no sequencer."""
+    last_show — default `home`); `plan31` False builds
+    without envelopes and sequencer."""
     home = Path(home)
     machine = home if machine is None else Path(machine)
     chain = Analyzer(Analyser())
@@ -56,7 +56,7 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
     lfos, envs, seq = LFOs(), Envelopes(), Sequencer()
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
-    grip.register(reg, grip.GripState())     # plan 60: a patch's own, as `Deck.build` registers it
+    grip.register(reg, grip.GripState())     # a patch's own, as `Deck.build` registers it
     if plan31:
         envelope.register(reg, envs, clock)
         sequencer.register(reg, seq, clock)
@@ -74,12 +74,12 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
 
 
 # the library folders copied beside a loadable patch for its load: the module
-# loadable patches (a strip's defaults; plan 44 D3 retired the desk templates and
-# the labels, so a whole loadable patch's load reads none of them, but the golden
-# meta controller and the tools keep the library's module groups as the app has them).
-# Plan 50 (review fix 2): every module preset is a patch of one group under
-# `patches/<group>/`, so the one folder, every folder down (`copytree`) —
-# the old `<group>/` folders are the migration's to move, never read
+# loadable patches (a strip's defaults; a whole loadable patch's load reads
+# no desk templates or labels, but the golden meta controller and the tools keep
+# the library's module groups as the app has them).
+# Every module preset is a patch of one group under `patches/<group>/`, so the
+# one folder, every folder down (`copytree`) — the old `<group>/` folders are
+# the migration's to move, never read
 SHARED_FOLDERS = ("patches",)
 def _link_or_copy(src, dst):
     """A hard link where the disk allows one, else a copy."""
@@ -90,15 +90,15 @@ def _link_or_copy(src, dst):
     return dst
 
 
-SEED_SHOW = "migration"        # the scratch show `seed` writes (plan 43 C2)
+SEED_SHOW = "migration"        # the scratch show `seed` writes
 
 
 def show_seed(doc: dict | None, eye: dict | None = None,
               camera_at: list | None = None, look: dict | None = None,
               cuts=None) -> dict | None:
     """What an old show kept of the look, as a show of its own: its
-    meta controller's `eye.*` and its layout's camera node (plan 43 C2,
-    `library.show_eye`), and (plan 44 D3) the hands' and clouds' looks in
+    meta controller's `eye.*` and its layout's camera node
+    (`library.show_eye`), and the hands' and clouds' looks in
     its session and its bus cuts (`library.show_look`) — nothing else of
     the meta controller: what an old loadable patch drew through. `eye` / `camera_at` / `look`
     / `cuts` stand in where `doc` kept none (a `.bak-v2-eye` or
@@ -159,7 +159,7 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
             if src.is_dir():
                 # (hard links where the disk allows: a library's folders are
                 # read, never written, by a resave — one copy per run, not
-                # one per loadable patch; review 2.7)
+                # one per loadable patch)
                 shutil.copytree(src, home / folder, dirs_exist_ok=True,
                                 ignore=shutil.ignore_patterns(".*", "Icon*"),
                                 copy_function=_link_or_copy)
@@ -176,7 +176,7 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
         name = app.lib.current(loadable.GROUP) or stem
         notes = list(app.loaded_patch.notes)
         out = app.loaded_patch.save_as(name)
-        # (plan 43 C2: the app saves the pose every time; the migration
+        # (the app saves the pose every time; the migration
         # writes one only where the file had one — an old file keeps
         # spinning — so a file without one has it taken back out)
         try:

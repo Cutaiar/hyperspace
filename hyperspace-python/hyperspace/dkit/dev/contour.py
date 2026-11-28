@@ -162,7 +162,7 @@ def icon_boxes(cell):
         # 14px padding box as ?probe measured it (14 x 14 at 1,1), padded by
         # a pixel past the stroke. Anchored on the CELL, not on the draw
         # code's constants, so a tick drawn in the wrong place moves the
-        # ink and not the hole (RETRO row 44). Its perimeter is all fill,
+        # ink and not the hole. Its perimeter is all fill,
         # which is the background icon_ink needs.
         if not cell.get("on"):
             return []
@@ -238,13 +238,10 @@ def icon_ink(img, box):
 
     The photometric metric cannot judge a stroked icon - a round line cap a
     third of a pixel longer reads as 59 levels - so icon_boxes drops those
-    pixels from it. That left the icon measured by nothing at all: its
-    position, its colour and even whether it was drawn were invisible, which
-    is how the Combobox trigger shipped a chevron 3px too far right in ink
-    at half the strength the browser uses. Both bugs were found by eye in the
-    first pixel pass and NEITHER could be caught by the cell afterwards,
-    because the excluded region is derived from the same token the draw site
-    reads - move the token and the hole moves with it.
+    pixels from it. Left at that, the icon's position, its colour and even
+    whether it was drawn would be invisible to the cell, because the
+    excluded region is derived from the same token the draw site reads -
+    move the token and the hole moves with it.
 
     Mass and centroid are aggregate, so they survive the cap disagreement
     while still answering the three questions that matter:
@@ -255,10 +252,10 @@ def icon_ink(img, box):
 
     `bg` is the median of the box's PERIMETER rather than a token, so this
     works in both themes without being told which. Not the modal level of
-    the whole box, which was the first attempt and is degenerate on a small
-    box: a scroll thumb's end cap fills most of its own box, so the mode was
-    the THUMB and "ink" came out as the background around it - reported as a
-    2.36px centroid shift between two images that are pixel-identical there.
+    the whole box, whose mode is degenerate on a small box: a scroll thumb's
+    end cap fills most of its own box, so the mode is the THUMB and "ink"
+    comes out as the background around it - a spurious centroid shift
+    between two images that are pixel-identical there.
     A box's perimeter is background for every shape here: field around a
     chevron, page and track around a cap.
 
@@ -365,13 +362,13 @@ def sub_boxes(cell):
     thumb's antialiased edge inside the strict metric, where a third of a
     pixel of rasterizer disagreement reads as a hundred levels.
 
-    `corners` exists for a subtler reason, and it was a real false alarm. A
+    `corners` exists for a subtler reason. A
     Switch's thumb sits ON one end of its own track, so that end's arc centre
     is INSIDE the thumb: the ray starts in thumb colour and the step it finds
     is thumb-to-background, not track-to-background. In light that self-
     cancels (thumb and page are both white, so the contrast guard rejects the
-    ray) but in dark it does not, and it reported 0.996 px on a track that is
-    actually fine. So the track declares only the two corners the thumb is
+    ray) but in dark it does not, and it would report a false offset on a
+    sound track. So the track declares only the two corners the thumb is
     not standing on.
     """
     k = cell["kind"]

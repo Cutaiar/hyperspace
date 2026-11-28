@@ -138,7 +138,7 @@ class MediaFolder:
         """The file for `sid`, or None: not seen, gone, or still
         downloading (`fetching`) — reading a cloud file mid-download blocks
         until it lands (or for good, offline), so nothing opens one; the
-        scan after it lands says `ready` (final review A-I1). A `local:` or
+        scan after it lands says `ready`. A `local:` or
         `file:` id the scan has not got reads through its shared twin
         (`shared_twin`), so a patch from the other Mac opens here."""
         e = self._resolve(sid)
@@ -149,7 +149,7 @@ class MediaFolder:
         return None
 
     def live(self, sid: str):
-        return None   # live feeds come from the app's resolver (plan 32 T8)
+        return None   # live feeds come from the app's resolver
 
     def entry(self, sid: str) -> Entry | None:
         """The last scan's entry for `sid` (its size and mtime say whether

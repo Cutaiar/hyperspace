@@ -1,7 +1,7 @@
 """Learn — the one armed param, shared by every adapter that can complete it.
 
 Right-click → Learn arms a param id here, with what the learn waits for
-(`want`, plan 17 WP2): **Learn desk** arms ``"desk"``, **Learn hand ▸
+(`want`): **Learn desk** arms ``"desk"``, **Learn hand ▸
 left / right** arms ``"hand:left"`` / ``"hand:right"``, and nothing else
 can complete it (`accepts`). The MIDI adapter completes a desk learn with
 the message it received (midi.py, ``MidiIO._learned`` → `learn_control`
@@ -10,51 +10,48 @@ learn with the axis *of that hand* that moved furthest (hands/core.py,
 ``HandsIO._learn`` → ``learn_source`` → a route: a ``push`` about the
 param's base at the meta controller's learn depth wherever the axis or the
 target's range is centred, the ``position`` fader only for a one-sided
-axis on a one-sided param or a discrete target — plan 18 WP3, `_row`). A
+axis on a one-sided param or a discrete target; `_row`). A
 row already in the table is never rewritten: this is what a *new* learn
 lands with. A knob
 bumped during a hand learn does its own job; a hand waved during a desk
 learn does nothing. A bare ``arm(pid)`` (`want` None) takes whichever
-comes first, as every learn did before plan 17. Until plan 11 this state
-lived in ``MidiIO``, so with ``[midi] enabled = false`` — or the adapter
-failing to open — there was no hand Learn at all (audit B3). Now
-``app.main`` builds one ``Learn`` over the live table whatever the MIDI
-gate says and hands it to both adapters and to the panel.
+comes first. ``app.main`` builds one ``Learn`` over the live table whatever
+the MIDI gate says (``[midi] enabled = false``, or the adapter failing to
+open, included) and hands it to both adapters and to the panel.
 
-A learn writes into the **loaded patch** (plan 13 §3.3, D5): the row
+A learn writes into the **loaded patch**: the row
 goes into the live table — a knob's as a patch-layer desk row, a hand's
 as a route — and no file is written. The loadable patch's dirty dot (loadable.py,
 `LoadedPatch.signature` over the table) shows it until a save (⇧F, the loadable patch
 strip's save / as…); loading the loadable patch again throws it away. A desk learn
 on an invariant control or with the global layer up is refused
 (`learn_control` calls `refuse`): the reason is `last`, `refused` is set,
-nothing changes, and the learn **stays armed** (plan 17 fork 6) — the
+nothing changes, and the learn **stays armed** — the
 next control that can take it does.
 
-**Unbind** is here too (plan 17 WP1): `unbind` removes what is bound to a
+**Unbind** is here too: `unbind` removes what is bound to a
 param in the loaded patch — its patch-layer desk rows and its routes,
 one kind or both — as one undo step, whether or not a MIDI adapter
 exists. `bound` is the same question without the edit (the menu asks it
 to know what to list and whether to offer the item at all). A meta row
-(invariant or global layer) is never removed (D5, D6).
+(invariant or global layer) is never removed.
 
-**Learn sink ▸ <role>:<channel>** (plan 27 B3) routes a param *out*: the
+**Learn sink ▸ <role>:<channel>** routes a param *out*: the
 menu lists the meta controller's sink ports (`sinks`, the device registry's
 `sink_ports`) and a pick lands at once (`learn_sink`) — there is nothing to
 wait for — as a sink row, ``param:<id> → <role>:<channel>`` (routing.py,
-`SINK_OP`), in the **meta controller** (`bindings.json`, written now: sinks are
-meta controller, D1 / D9), like a pad learn: no undo step, no loadable patch dirt. It replaces
+`SINK_OP`), in the **meta controller** (`bindings.json`, written at once:
+sinks are the meta controller's), like a pad learn: no undo step, no loadable patch dirt. It replaces
 whatever that port sent before (one source per sink port) and never asks
 Replace / Keep: a sink row is not a performer.
 
-**Click a control, then a param** (plan 17 WP4) is the same road taken
+**Click a control, then a param** is the same road taken
 from the other end: `pick` holds a desk control (`control`, the on-screen
 desk's click), and `map_picked(pid)` is `arm(pid, "desk")` then
-`learn_control(control)` — so the op, the feedback, the refusals (D5, D6),
+`learn_control(control)` — so the op, the feedback, the refusals,
 the undo step and the message are the knob learn's. A pick and an armed
 learn never stand together: arming lets the pick go, picking cancels the
-learn. Which params the on-screen desk offers a pick first is `ranked`
-(plan 24 C3), a pure function over the loadable patch's values, its group
+learn. Which params the on-screen desk offers a pick first is `ranked`, a pure function over the loadable patch's values, its group
 defaults, its routes and macros, and `cannot_show` — the rule the desk
 coverage report (tools/desk_coverage.py) calls a control "dead" by.
 
@@ -70,17 +67,16 @@ Two things the object owns:
     table is untouched until ``resolve_pending`` answers.
 
 ``learn_source`` resolves a ``band.sel.*`` alias to the band it stands
-for (audit B4): an alias is not modulatable, so a route on it would sit
+for: an alias is not modulatable, so a route on it would sit
 in the table doing nothing. So that resolution is this object's, not the
 table's. A band, though, is the meta controller's, so that learn is then
-refused: **no row of a loadable patch may drive a meta param** (register row 743,
-`routing.meta_refusal`), and both learns say so. The factory's own desk
+refused: **no row of a loadable patch may drive a meta param** (`routing.meta_refusal`), and both learns say so. The factory's own desk
 rows on them are the meta controller's and stay. The rule itself is
 the registry's (``Registry.real``, installed by ``build_registry``), the
 same one the panel's widgets read through; a registry without it (a
 bare test rig) learns the alias as armed.
 
-**A pair that overlaps a mapping asks** (register row 754): a row a person
+**A pair that overlaps a mapping asks**: a row a person
 makes on a ``pair:`` lane, by any road, while either pole already has a row
 waits as a `PairAsk` for **keep both**, **let the pair take over** or
 **cancel** (`settle_pair`). A row from a file never comes this way.
@@ -127,23 +123,23 @@ from .routing import (
     whole_circle,
 )
 
-# plan 24 C1: the desk's SAVE is held, never latched — a learned toggle or
+# the desk's SAVE is held, never latched — a learned toggle or
 # button row would leave it on, and every bank pad's tap would then save
-# row 755: a desk Learn on a meta param that is one per `Deck` would be a patch's row, so it
-# is refused (the owner, seventh round); these say where a person's road is
+# a desk Learn on a meta param that is one per `Deck` would be a patch's row, so it
+# is refused; these say where a person's road is
 PER_DECK_ROAD = "use Learn pad, a key, or the APC's factory rows"
 SAVE_REFUSAL = ("Save is the desk's SAVE (track 8's clip stop, held) — it takes no "
                 "learned control")
 
 # what an armed learn may wait for (`Learn.want`, `Learn.wants`) is the
-# device registry's to say (plan 27 B2: each device's `wants` — "desk" for
+# device registry's to say (each device's `wants` — "desk" for
 # every MIDI role, "hand:left" / "hand:right" for the hands, "pad" for the
 # gamepad, a new device's role for it), and "desk" always: a click on the
 # on-screen desk completes a desk learn with no device at all. A Learn the
 # registry has not been handed (a bare test rig, the probe) offers what
-# today's meta controller offers
+# the meta controller offers
 DESK = "desk"
-# plan 56: a pair's two wants, its model — "pair" a step row (`Learn.learn_pair`),
+# a pair's two wants, its model — "pair" a step row (`Learn.learn_pair`),
 # the neutral default; "pair (spring)" a route, as a stick's. Devices restate them
 PAIR_WANT, PAIR_SPRING_WANT = "pair", "pair (spring)"
 PAIR_WANTS = (PAIR_WANT, PAIR_SPRING_WANT)
@@ -175,17 +171,15 @@ def source_heads(d) -> frozenset[str]:
 
 PAD_SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")  # what can complete a "pad" learn
 
-# a push learn's depth when the adapter names none (plan 18 WP3). The hands
+# a push learn's depth when the adapter names none. The hands
 # adapter passes its own `hands.learn_depth`, whose default is this number
 # written a second time: hands/core.py imports nothing from the package
 # (tests/test_learn.py::test_the_two_default_depths_agree holds them equal)
 PUSH_DEPTH = 0.25
-# a band lane's push depth (the owner, after the show of 2026-10-30: band
-# routes land far too hot). A lane reads u = band / bands.CEIL, ≈ 0.385 for
-# a nominal band, so the `position` row a lane used to land parked the
-# param at ~38 % of its throw and threw the base away, and a push at 0.5
-# added 0.19 of the throw per band — "each band pushes a third of the
-# range". A push of 0.12 about the base adds ≈ 0.05 of the throw per
+# a band lane's push depth. A lane reads u = band / bands.CEIL, ≈ 0.385 for
+# a nominal band, so a `position` row would park the param at ~38 % of its
+# throw and throw the base away, and a push at 0.5 would add 0.19 of the
+# throw per band. A push of 0.12 about the base adds ≈ 0.05 of the throw per
 # nominal band: a shimmer the base shows through, and the depth knob
 # takes it up from there
 LANE_DEPTH = 0.12
@@ -216,15 +210,15 @@ def _table_name(table: Bindings) -> str:
 
 def blocked(table: Bindings, source: str) -> str | None:
     """Why no desk row can be learned onto the control `source` names, as
-    the table stands: ``"invariant"`` — the meta controller's on both layers (D6)
-    — ``"global"`` — nothing is learned while the global layer is up (D5)
+    the table stands: ``"invariant"`` — the meta controller's on both layers
+    — ``"global"`` — nothing is learned while the global layer is up
     — or None when it can. The one rule `Learn.learn_control` refuses by
     and the on-screen desk asks before a click (`ui_desk.mappable`)."""
     b = Binding(source, "", "abs", layer="preset")
     if table.is_invariant(b):
         return "invariant"
-    # the layer up on the device the control is on (plan 27 B2: each MIDI
-    # role has its own latch; a table from before a hot reload has one)
+    # the layer up on the device the control is on (each MIDI role has its
+    # own latch; a table from before a hot reload has one)
     layer_of = getattr(table, "layer_of", None)
     layer = layer_of(b.device or None) if layer_of is not None else table.layer
     if layer == "global":
@@ -232,7 +226,7 @@ def blocked(table: Bindings, source: str) -> str | None:
     return None
 
 
-# ---- what a loadable patch can show, and what it uses (plan 24 C3) ----
+# ---- what a loadable patch can show, and what it uses ----
 #
 # A desk control on a param the loadable patch cannot show is "dead": it moves a
 # value nobody sees. `cannot_show` is the one rule, by group, read off the
@@ -240,12 +234,12 @@ def blocked(table: Bindings, source: str) -> str | None:
 #
 #   pattern.*, view.pattern, view.pattern_mix   the faces are off (view.faces)
 #   view.media_*, view.bmp_alpha                 the faces are off, or nothing wired into
-#                                                their layer (`pattern.media`, plan 33 T7)
+#                                                their layer (`pattern.media`)
 #   view.points_alpha / view.lines_alpha         points / lines off
 #   view.screen_strokes                          points and lines both off
 #   fx.mix                                       the effects are off (fx.on)
 #   fx.<effect>.<key> (not .on)                  fx.on off, or that effect off
-#   dream.<look-back knob>                       no look-back drawn (plan 36 T4: the graph's)
+#   dream.<look-back knob>                       no look-back drawn (the graph's)
 #   dream.<dream knob> (not dream.on)            no dream drawn, or the dream off (dream.on)
 #   rot.rate.*, view.plane.*                     rotation is off (view.rotate)
 #
@@ -254,17 +248,17 @@ def blocked(table: Bindings, source: str) -> str | None:
 
 _PATTERN = ("view.pattern", "view.pattern_mix")
 _MEDIA = ("view.media_alpha", "view.media_scale", "view.media_mode", "view.media_amp",
-          "view.media_rate",      # plan 32: the faces' media channel (was view.bmp_*)
+          "view.media_rate",      # the faces' media channel
           "view.bmp_alpha")       # …and the factory knob 7's alias of view.media_alpha
 _ROTATE = ("rot.rate.", "view.plane.")
-# plan 36 T4 (W4): `dream.*` is the dream node's, shown while a dream is drawn
-# and `dream.on` (plan 90 H2: the look-back's knobs are its parts')
+# `dream.*` is the dream node's, shown while a dream is drawn
+# and `dream.on` (the look-back's knobs are its parts')
 
 
 def drawn_of(spec) -> frozenset[str] | None:
     """The nodes graph `spec` (a `graph.GraphSpec`) names in its wires —
     a pin as its node — what decides
-    whether the dream's knobs can show (plan 36 T4). None
+    whether the dream's knobs can show. None
     with no graph to ask."""
     if spec is None:
         return None
@@ -275,8 +269,7 @@ def drawn_of(spec) -> frozenset[str] | None:
 def faces_media(spec, selects=None) -> bool | None:
     """Whether the graph `spec` (a `graph.GraphSpec`) wires a picture into
     the faces' media layer, `pattern.media` — straight, or through a switch
-    at its pick (`selects`, `ViewState.switch`) — what `view.media` said
-    before plan 33 T7 retired it. None with no graph to ask."""
+    at its pick (`selects`, `ViewState.switch`). None with no graph to ask."""
     if spec is None:
         return None
     return source_into(spec.all_wires(), "pattern.media", selects) is not None
@@ -289,10 +282,9 @@ def cannot_show(pid: str, values, media: bool | None = None,
     "kaleido off"), or None when it can — the rule above. A switch the
     values do not name counts as on. `media`: whether its graph wires a
     picture into the faces' layer (`faces_media`); None (no graph to ask)
-    counts as wired — `view.media`, which said it before plan 33 T7, is no
-    param any more. `drawn`: the nodes the graph names (`drawn_of`) — a
+    counts as wired. `drawn`: the nodes the graph names (`drawn_of`) — a
     look-back's knob shows while its look-back is drawn, the dream's while
-    the dream is (plan 36 T4); None (no graph to ask) counts as drawn."""
+    the dream is; None (no graph to ask) counts as drawn."""
     def off(sw: str) -> bool:
         v = values.get(sw)
         return v is not None and not bool(v)
@@ -307,7 +299,7 @@ def cannot_show(pid: str, values, media: bool | None = None,
     if pid == "view.lines_alpha":
         return "lines off" if off("view.lines") else None
     if pid == "view.screen_strokes":
-        # the stroke space (plan 26 A2b) moves the edges and the dots only.
+        # the stroke space moves the edges and the dots only.
         # At camera.zoom 1 it shows nothing either, but that is no rule: a
         # routed zoom makes it live
         both = off("view.points") and off("view.lines")
@@ -346,7 +338,7 @@ ROUTED, MOVED, ON, DESKED = "routed", "moved", "on", "on the desk"
 def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
            shows=None, media: bool | None = None, drawn: frozenset[str] | None = None
            ) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
-    """Click-to-map's offer (plan 24 C3): the params this loadable patch uses,
+    """Click-to-map's offer: the params this loadable patch uses,
     ranked, then the rest by group. A pure function.
 
     `params`: (id, group) of every param a desk control may take, in
@@ -393,7 +385,7 @@ def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
 def _switched_on(pid: str, values, drawn: frozenset[str] | None = None) -> bool:
     """Is `pid` part of a module `cannot_show` knows that is on — its
     switch named in `values` and set? (A param of no such module: False.)
-    Plan 36 T4: a look-back's knob while its look-back is drawn (`drawn`),
+    A look-back's knob while its look-back is drawn (`drawn`),
     the dream's while the dream is drawn and on."""
     if pid.startswith("pattern.") or pid in _PATTERN or pid in _MEDIA:
         return bool(values.get("view.faces"))
@@ -413,7 +405,7 @@ def _switched_on(pid: str, values, drawn: frozenset[str] | None = None) -> bool:
 
 def clutch_of(source: str) -> str:
     """The gate a room lane's `turn` row lands with: the same hand's closed
-    fist, ``hand:right.room.yaw`` → ``hand:right.grab`` (plan 51 O2)."""
+    fist, ``hand:right.room.yaw`` → ``hand:right.grab``."""
     head, _, name = source.partition(":")
     return f"{head}:{name.partition('.room.')[0]}.grab"
 
@@ -426,7 +418,7 @@ def is_auto_clutch(source: str, when: str | None) -> bool:
 
 def row_for(source: str, p: Param, when: str | None = None, *,
             centred: bool = False, depth: float | None = None) -> Binding:
-    """The row a hand learn makes (plan 18 WP3): its op and depth.
+    """The row a hand learn makes: its op and depth.
 
         the target                     a centred axis  a one-sided axis  a band lane  an LFO       an envelope
         continuous, centred on zero    push, depth D   push, depth D     push, L      push, D      push, depth H
@@ -437,17 +429,14 @@ def row_for(source: str, p: Param, when: str | None = None, *,
     D is `depth`, or `PUSH_DEPTH` when the caller named none; L is
     `depth`, or `LANE_DEPTH`. A band lane (the ``lane`` scheme) and an LFO
     (``lfo``, `lfo.GROUP`) are pushes about the base on any continuous
-    target (the owner, after the show of 2026-10-30): a lane reads
-    `band / bands.CEIL`, ≈ 0.385 nominal, so as the fader it parked the
-    param at ~38 % of its throw and threw the base away, and as a push
-    at 0.5 ("Route a lane here…" until now) each band added 0.19 of the
-    throw — a third of a centred range's positive half; an LFO's output
-    is one-sided (0 … 1) and as the fader swept the whole throw whatever
-    the base. An envelope
+    target: a lane reads `band / bands.CEIL`, ≈ 0.385 nominal, so as the
+    fader it would park the param at ~38 % of its throw and throw the base
+    away, and as a push at 0.5 each band would add 0.19 of the throw; an
+    LFO's output is one-sided (0 … 1) and as the fader would sweep the
+    whole throw whatever the base. An envelope
     (the ``env`` scheme, `envelope.GROUP`) rests at 0 and only rises, so as
-    the fader it pinned the param to its minimum between fires (the owner,
-    2026-10-24: "they all reduce the base to 0 in between fires no matter
-    what I set the base to be"): it is a push about the base instead, H
+    the fader it would pin the param to its minimum between fires: it is
+    a push about the base instead, H
     the headroom above the base when the row is made, `1 - p.norm`, and
     at least `PUSH_DEPTH` — a full fire reaches the top of the range, and
     between fires the base shows. A push
@@ -460,17 +449,17 @@ def row_for(source: str, p: Param, when: str | None = None, *,
     never reaches the next step: the learn would land and do nothing.
     Nothing reads the target's id or group and nothing is refused here: a
     rate-type param lands by the same table as any other. A meta param's row
-    (register row 743) is refused where it would land: `Learn.learn_source`
+    is refused where it would land: `Learn.learn_source`
     says so first and `Bindings.add` is the door.
 
     Every row lands with the default feel, `motion.DEFAULT_ROUTE_FEEL`
-    (the named `smooth` spring; the owner, 2026-10-31) — except an
+    (the named `smooth` spring) — except an
     envelope's, on any target, which keeps `motion=None`: an envelope has
     an attack and a release of its own, and a half-second spring on top
     would blunt a kick-fired hit. A saved row keeps whatever feel it has;
     nothing here rewrites one.
 
-    A hand's room lane (`whole_circle`, plan 51) on a wrapping target is the
+    A hand's room lane (`whole_circle`) on a wrapping target is the
     orbit: a `turn` at 1 with no feel, clutched by that hand's fist unless the
     caller names a gate (`clutch_of`). On any other continuous target it is
     the `position` fader at 1 with no feel, centred or not. Depth 1 is what
@@ -496,7 +485,7 @@ def row_for(source: str, p: Param, when: str | None = None, *,
 
 
 def _steps_on(x: Binding, b: Binding, bare: tuple[str, ...]) -> bool:
-    """Is `x` a pair's `step` row (plan 56) of `b`'s pad with a pole among
+    """Is `x` a pair's `step` row of `b`'s pad with a pole among
     `bare` (``hat:N``)? A row on that button, then, in a button learn's eyes."""
     if x.scheme != PAIR_SCHEME or x.op != "step" or x.device != b.device:
         return False
@@ -529,11 +518,11 @@ def _split_pairs(table: Bindings, b: Binding, bare: tuple[str, ...]) -> tuple[li
     return gone, left
 
 
-# ---- a pair that overlaps a mapping asks first (register row 754) ----
+# ---- a pair that overlaps a mapping asks first ----
 
 KEEP_BOTH, TAKE_OVER, CANCEL = "keep both", "take over", "cancel"
 # where a meta row's step is: the stack, not a promise of the next ⌘Z (a stack just
-# come to may refuse until a change is made on it, row 753). `ui.META_SECTIONS`
+# come to may refuse until a change is made on it). `ui.META_SECTIONS`
 META_UNDO = "undo it on the meta controller's stack: mouse over OUTPUT, AUDIO, ANALYZER or HANDS"
 DECK_UNDO = "undo the route taken on this deck's stack"
 
@@ -542,7 +531,7 @@ def pole_rows(table: Bindings, b: Binding, skip: Iterable[Binding] = ()) -> list
     """The mappings `b` would land beside: a row of its own on either pole, or
     another pair's sharing one, that would still stand once `b` lands. Empty when
     `b` is on no pair or is switched off, since it acts on nothing. The same pair
-    on any param is one lane read twice, not a pole's mapping (row 754). A row
+    on any param is one lane read twice, not a pole's mapping. A row
     switched off acts on nothing. A performer on `b`'s own target is the referee's
     question: `b` replaces it whichever way this one is answered. `skip`: what the
     road moves anyway."""
@@ -595,7 +584,7 @@ def withdrawn_words(ask: PairAsk) -> str:
 
 def propose_row(table: Bindings, new: Binding, land: Callable[[], object],
                 answered: Callable[[], object] | None = None, moving: Binding | None = None):
-    """The one door for a row a person makes (register row 754). Lands it (returns
+    """The one door for a row a person makes. Lands it (returns
     what `land` returns), or holds it and returns a `PairAsk` when it overlaps a
     mapping, with `answered` the landing that runs on an answer (default `land`:
     the road's own second question has been asked by then). `moving`: the row in
@@ -632,7 +621,7 @@ def settle_pair(ask: PairAsk, choice: str, reg: Registry | None = None) -> str:
     layer, and a row taken from the other layer on that layer's stack (a meta
     row: `undo.push_meta`, restored through `MetaTable.set_rows`, which writes
     the file). No stack reaches into another, so the words say where each is. The
-    meta push comes last: by the latch (row 753) only the stack a person's change
+    meta push comes last: by the latch only the stack a person's change
     ended on can take it back at once, and a meta row is the one they cannot
     simply delete again from where they are."""
     if choice not in (KEEP_BOTH, TAKE_OVER, CANCEL):
@@ -643,7 +632,7 @@ def settle_pair(ask: PairAsk, choice: str, reg: Registry | None = None) -> str:
         return f"nothing landed: {pair} → {new.target}"
     if ask.stale:
         return withdrawn_words(ask)
-    why = table.refusal(new)             # before any push: a push moves the focus (row 753)
+    why = table.refusal(new)             # before any push: a push moves the focus
     if why is not None:
         return f"nothing landed: {why}"
     rows = ask.rows
@@ -680,8 +669,7 @@ def settle_pair(ask: PairAsk, choice: str, reg: Registry | None = None) -> str:
 
 def land_moved(b: Binding, old_source: str, p: Param | None) -> None:
     """A row just re-pointed lands as `row_for` would when a room lane or a
-    `turn` is in it (any other row keeps its op, depth and feel, as it always
-    did): a clutch that was the old hand's fist follows to the new one, a gate
+    `turn` is in it (any other row keeps its op, depth and feel): a clutch that was the old hand's fist follows to the new one, a gate
     someone picked stays; a `turn` on a target that no longer wraps or a source
     that is no circle becomes that target's row; a turn stays at its depth."""
     if p is None or (b.op != TURN_OP and not whole_circle(b.source)):
@@ -707,26 +695,26 @@ class Learn:
 
     pair_ask: PairAsk | None = None      # on the class: a `Learn` from before a hot reload
 
-    # told each row a learn makes (plan 55: `DeviceRegistry.mapped`, so a controller
+    # told each row a learn makes (`DeviceRegistry.mapped`, so a controller
     # mapped on another deck moves there); None: nobody asks
     mapped = None
 
     def __init__(self, reg: Registry, table: Bindings, lane=None, devices=None):
         self.reg = reg
         self.table = table
-        # the device registry (devices.DeviceRegistry, plan 27 B2), asked
-        # what can be armed (`wants`); None: today's meta controller (BARE_WANTS)
+        # the device registry (devices.DeviceRegistry), asked
+        # what can be armed (`wants`); None: the meta controller's (BARE_WANTS)
         self.devices = devices
         # the router's `lane` (source → (scheme, index)), so one hand axis
         # named two ways — `hand:7` in an older loadable patch, `hand:right.y` from
-        # a learn — is one axis here too (decision register row 20); None:
+        # a learn — is one axis here too; None:
         # sources compare as strings
         self.lane = lane
         self.learning: str | None = None
         self.want: str | None = None   # what may complete `learning` (`wants`); None: anything
         self.control: str | None = None    # the picked desk control's source; None: none
         self.pending: tuple[Binding, Binding] | None = None
-        self.held = False       # plan 40 T3: a spawn's sheet is up — nothing completes a learn
+        self.held = False       # a spawn's sheet is up — nothing completes a learn
         self.last = ""        # what the last learn did, for the status lines
         self.refused = False    # …and whether it was a refusal (drawn as a warning)
         self.said_n = 0         # how many times `last` was set: the same words twice are two
@@ -801,12 +789,12 @@ class Learn:
         if pid is not None:
             self.refused = False
             self.control = None          # arming a param lets a picked control go
-        self.pair_first = None           # plan 56: no pole pressed yet
-        self.pair_ask = None             # row 754: a new arm forgets it, as `pending`
+        self.pair_first = None           # no pole pressed yet
+        self.pair_ask = None             # a new arm forgets it, as `pending`
         self.armed_n = getattr(self, "armed_n", 0) + 1
 
     def hold(self, on: bool = True) -> None:
-        """Plan 40 T3: while a spawn's conflict sheet is up (D3) no source
+        """While a spawn's conflict sheet is up no source
         completes the armed learn — `accepts` says no to every one, so the
         hands, a desk control, a pad or an OSC fader learn nothing, as
         while the Replace / Keep prompt is up — and the learn stays armed
@@ -824,17 +812,16 @@ class Learn:
     def accepts(self, source: str) -> bool:
         """May this source complete the armed learn? False when nothing
         is armed. want None: any source. "desk": a cc / note / pitch
-        source, from any MIDI device (a qualified ``cc@launch:0:7`` too:
-        plan 27 B2). "hand:left": a source that starts "hand:left." (an
+        source, from any MIDI device (a qualified ``cc@launch:0:7`` too). "hand:left": a source that starts "hand:left." (an
         axis or a switch of that hand, by name). "pad": a gamepad button,
         the D-pad or an axis (PAD_SCHEMES). A device's role (a want with no
         ``:``): a source under that scheme. A modifier's output lane
-        (``mod:<n>``, plan 28 N1) is a continuous source like a hand's
+        (``mod:<n>``) is a continuous source like a hand's
         axis: it completes a learn armed for anything, or for "mod", and
         never a desk, pad or hand one."""
         if getattr(self, "learning", None) is None:
             return False
-        if getattr(self, "held", False):         # plan 40 T3: a sheet is up (`hold`)
+        if getattr(self, "held", False):         # a sheet is up (`hold`)
             return False
         want = getattr(self, "want", None)       # a Learn from before a hot reload: None
         if want is None:
@@ -846,13 +833,13 @@ class Learn:
             return d is not None and source.partition(":")[0] in source_heads(d)
         if want == DESK:
             return Binding(source, "").is_midi
-        if want in PAIR_WANTS:               # a pole, or the pair a port names (plan 56)
+        if want in PAIR_WANTS:               # a pole, or the pair a port names
             return base_scheme(source.partition(":")[0]) in ("pad", "hat", PAIR_SCHEME)
-        if want == "pad":                    # any pad's: ``pad@p2:S`` too (plan 27 B6)
+        if want == "pad":                    # any pad's: ``pad@p2:S`` too
             return base_scheme(source.partition(":")[0]) in PAD_SCHEMES
         if ":" not in want:
             # a role: a source under that scheme (an OSC role's), or one
-            # qualified with it (``pad@p2:S`` completes "p2", plan 27 B6)
+            # qualified with it (``pad@p2:S`` completes "p2")
             return (source.partition(":")[0] == want
                     or Binding(source, "").device == want)
         return source.startswith(f"{want}.")
@@ -861,9 +848,9 @@ class Learn:
 
     def learn_control(self, source: str, profile=None, op: str | None = None) -> bool:
         """A desk control completes the armed learn: a patch-layer row
-        into the loaded patch (plan 13 §3.3). True when it landed.
+        into the loaded patch. True when it landed.
 
-        The one road onto the desk (plan 17 WP2): the MIDI adapter calls
+        The one road onto the desk: the MIDI adapter calls
         it with the message it received, the on-screen desk with the
         control clicked — so it needs no adapter. `profile` is the device's
         module, duck-typed (`is_relative`, `feedback_for`, `named`), for
@@ -876,8 +863,8 @@ class Learn:
 
         It binds the param as armed. Refused, with the reason in `last`,
         nothing changed and **the learn still armed**, on an invariant
-        control (D6) and while the global layer is up (D5): both are the
-        meta controller's. A meta param (row 743) is refused whatever the control:
+        control and while the global layer is up: both are the
+        meta controller's. A meta param is refused whatever the control:
         this row would be the loadable patch's, and no patch row may drive one. A
         learn armed for the desk is then over, since no control can land it;
         a bare arm still waits for a pad button, which can.
@@ -934,7 +921,7 @@ class Learn:
             b.op = "momentary" if pid in HELD_ONLY else "toggle"
         b.feedback_from(profile)
         self.take()
-        undo.push(f"learn {pid}")                    # one undo step (undo.py, plan 15)
+        undo.push(f"learn {pid}")                    # one undo step (undo.py)
         gone = table.bind(b, write=False)            # the patch rows it replaced
         self._mapped(b)
         table.redraw_serial = getattr(table, "redraw_serial", 0) + 1
@@ -995,7 +982,7 @@ class Learn:
         step — nor in any loadable patch. It replaces every row on that button; the
         param's other controls stay.
 
-        Armed for a pair (plan 56), the press is one of its poles instead
+        Armed for a pair, the press is one of its poles instead
         (`_pair_pole`)."""
         if not self.accepts(source):
             return False
@@ -1034,7 +1021,7 @@ class Learn:
                   + (f"; {let_go} let go" if let_go else "") + keeps)
         return True
 
-    # ---- two presses complete it (plan 56) ----
+    # ---- two presses complete it ----
 
     def _pair_pole(self, source: str) -> bool:
         """A press while armed for a pair: the first is the + pole, and the
@@ -1061,7 +1048,7 @@ class Learn:
         """The pair `source` (``pair:hat.N/hat.S``) completes the armed learn, by
         the want's model. "pair": a `step` row at one detent each way, the
         meta controller's like any pad button row: `bindings.json` is written, and a
-        step on the meta stack. Rows on either pole ask first (row 754). "pair (spring)": a
+        step on the meta stack. Rows on either pole ask first. "pair (spring)": a
         route through `learn_source`, into the loadable patch as a stick's; a whole-
         number or enum target takes the step row, since a lane resting at 0.5
         would park it mid-throw (a GRAPH cable comes here for the same reason,
@@ -1110,13 +1097,13 @@ class Learn:
         self._mapped(b)
 
     def _ask_pair(self, asked) -> None:
-        """What `propose_row` returned: a question is held for the panel (row 754),
+        """What `propose_row` returned: a question is held for the panel,
         the table untouched; a row that landed has nothing to hold."""
         if isinstance(asked, PairAsk):
             self.pair_ask = asked
             self.said(f"{row_words(asked.new)} overlaps a mapping: answer the question")
 
-    # ---- a sink port takes it (plan 27 B3) ----
+    # ---- a sink port takes it ----
 
     def sinks(self) -> tuple:
         """The meta controller's sink ports (devices.Port: `address` ``<role>:<channel>``,
@@ -1129,7 +1116,7 @@ class Learn:
     def learn_sink(self, pid: str, port: str) -> Binding | None:
         """Send `pid` out on the sink port `port` (``bridge:3``): a sink row
         ``param:<pid> → <port>`` into the meta controller's table, written to
-        `bindings.json` now — sinks are meta controller (D1 / D9), so no undo step and
+        `bindings.json` at once — sinks are the meta controller's, so no undo step and
         no loadable patch dirt, like a pad learn. The row takes the port from
         whatever sent on it before (one source per port); the param may go
         out on several ports. Never a Replace / Keep question: a sink row
@@ -1203,7 +1190,7 @@ class Learn:
         rather than taking the target or being lost. `learning` is cleared
         first, so the hands adapter, which keys off it, cannot fire again.
 
-        A meta param (register row 743: ``master.gain``) is refused with a line
+        A meta param (``master.gain``) is refused with a line
         the performer can read in `last`, the table untouched, in the rule's
         words: a route is a loadable patch's, and no patch row may drive one.
         Any other target that is not modulatable (`Param.modulatable`: a patch's
@@ -1226,7 +1213,7 @@ class Learn:
             # a setting of the patch's no performer may drive (ghost.guide):
             # a route on it would sit dormant, so none is made. The learn
             # is over — no hand can ever complete it — and nothing changed
-            if Binding(source, p.id).scheme in ("axis", PAIR_SCHEME):     # any pad's (plan 27 B6)
+            if Binding(source, p.id).scheme in ("axis", PAIR_SCHEME):     # any pad's
                 self.refuse(f"{p.label} can't follow a stick (not modulatable) "
                             "— not learned; Learn pad with a button puts it on one")
                 return
@@ -1236,7 +1223,7 @@ class Learn:
         b = self._row(source, p, when, centred=centred, depth=depth)
         cur = self.table.owner(p.id)
         if cur is not None and self.same_source(cur.source, source):
-            undo.push(f"learn {p.id}")               # one undo step (undo.py, plan 15)
+            undo.push(f"learn {p.id}")               # one undo step (undo.py)
             cur.when = when                          # the same axis again: no move
             self._mapped(cur)
             self.said(f"learned {p.id} ← {cur.describe()} (into the patch)")
@@ -1253,7 +1240,7 @@ class Learn:
     def _row(self, source: str, p: Param, when: str | None, *,
              centred: bool = False, depth: float | None = None) -> Binding:
         """The row a hand learn makes (`row_for`, the one table — the GRAPH
-        page's cable into a `mod` port makes the same row, plan 28 N3)."""
+        page's cable into a `mod` port makes the same row)."""
         return row_for(source, p, when, centred=centred, depth=depth)
 
     def resolve_pending(self, replace: bool) -> Binding | None:
@@ -1278,14 +1265,14 @@ class Learn:
     def _place(self, b: Binding) -> None:
         """The learned row into the table: the axis's other push / position
         rows go first, whatever their op and switched on or off (one axis,
-        one param; plan 18 fork 7 — the status line names the params they
+        one param; the status line names the params they
         were on; a switched-off twin on this very target goes too, so the
         table never holds the route twice), then `replace_owner` — the
         one door
         onto a target, which reads the owner *now* (a free target takes the
         row; the prompt's Replace removes whoever holds it at this moment,
         not whoever did when the question was asked). A route of the
-        loaded patch's: no file is written (plan 13 §3.3). One undo step
+        loaded patch's: no file is written. One undo step
         (undo.py): the rows it took out come back with a Ctrl+Z."""
         undo.push(f"learn {b.target}")
         table = self.table
@@ -1314,10 +1301,10 @@ class Learn:
         id when they are the same). Returns the rows removed.
 
         A desk row goes through `Bindings.unbind` (it bumps
-        `redraw_serial`: an adapter redraws and the control goes dark, D8);
+        `redraw_serial`: an adapter redraws and the control goes dark);
         a route — any scheme, enabled or not — through `Bindings.remove`,
         its depth subscribers with it. No file is written: the edit is the
-        loaded patch's (plan 13 §3.3). One undo step, pushed once and only
+        loaded patch's. One undo step, pushed once and only
         when something goes. `name(b)` gives each row's words for the
         message; without it, `Binding.describe()`. A meta row is never
         removed: with nothing else to remove, that is a refusal."""
@@ -1335,7 +1322,7 @@ class Learn:
                 self.refuse(f"{name(b)} → {b.target} is {where} (the meta controller's, "
                             "edited in bindings.json) — not unbound")
             return []
-        undo.push(f"unbind {real}")                  # one undo step (undo.py, plan 15)
+        undo.push(f"unbind {real}")                  # one undo step (undo.py)
         gone = []
         if desk:
             for pid in ids:
@@ -1354,7 +1341,7 @@ class Learn:
 
 
 def sinks_of(table: Bindings, ids) -> list[Binding]:
-    """The sink rows that send a param out (plan 27 B3), enabled or not:
+    """The sink rows that send a param out, enabled or not:
     the meta controller's, listed by the param's menu, never removed by Unbind."""
     ids = _ids(ids)
     return [b for b in table.bindings

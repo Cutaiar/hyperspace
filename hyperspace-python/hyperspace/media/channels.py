@@ -1,8 +1,8 @@
-"""The eight media channels (plan 32 C, rows 321–326): `a`–`h`, each a bin
+"""The eight media channels: `a`–`h`, each a bin
 of up to sixteen source ids with one of them on the channel (`slot`), and
 a transport for a timed source.
 
-`Channels` (plan 44 D3; `MediaState` is its old name) is the one object a deck reads, over
+`Channels` (`MediaState` is its old name) is the one object a deck reads, over
 the meta controller's `MediaSources` (the resolver, the opener, the closer, the mixer —
 shared by every deck: one decode for every reader): the registry's `media.*`
 params write its channels' fields (params.py), the loadable patch's `media`
@@ -26,7 +26,7 @@ disk (the resolver's optional `stamp(sid)` moved) opens afresh. The
 resolver answers from the folder's last scan, so none of this touches the
 disk on the frame thread.
 
-Sound (plan 45 V2): a channel's `play_audio` toggle enables its source's
+Sound: a channel's `play_audio` toggle enables its source's
 soundtrack (`VideoSource.audio`) the frame it turns on or a new slot comes
 under it, and disables it `OFF_FRAMES` after it turns off — on the
 closer, since a disable joins the soundtrack's thread, and never at once
@@ -34,7 +34,7 @@ with an enable (`_Sound`); a slot change leaves the old track to its
 source's `close`. Each poll ends by handing the mixer
 (`media/mixer.py`) the channels heard, with the playhead each transport
 was just stepped to, how it is moving, and the channel's `gain`: the
-transport is the one clock, and the mixer's read head is its slave (V4)."""
+transport is the one clock, and the mixer's read head is its slave."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ CHANNELS = "abcdefgh"
 BIN = 16
 FITS = ("cover", "contain", "stretch")
 EMPTY = "empty"          # a bin entry with nothing in it: black
-FROZEN = "frozen"        # a live feed held at rate 0 (row 324)
+FROZEN = "frozen"        # a live feed held at rate 0
 RECHECK_S = 1.0          # how often a channel asks the resolver about its id again
 
 
@@ -138,7 +138,7 @@ class Channel(writes.Observed):
     pos: float = 0.0
     jog: float = 0.0
     loop: int = 0
-    play_audio: bool = False   # plan 45 V2: the source's soundtrack into the mixer
+    play_audio: bool = False   # the source's soundtrack into the mixer
     gain: float = 1.0          # …at this gain (linear; 1 is unity)
     # runtime, never saved
     source: Source | None = field(default=None, repr=False, compare=False)
@@ -157,7 +157,7 @@ class Channel(writes.Observed):
 
 class _Sound:
     """Who calls a soundtrack's `enable` and `disable`, so the two never
-    run at once on one track (plan 45 V2, review): the frame thread enables
+    run at once on one track: the frame thread enables
     (`on`, non-blocking), the closer disables (`off` queues a `_Silence`:
     `disable` joins the soundtrack's thread). While a disable is queued or
     running the frame thread only notes that it wants the track again, and
@@ -207,7 +207,7 @@ class _Sound:
 class _Silence:
     """A soundtrack's `disable` as a job for the closer: it joins the
     soundtrack's thread, which can sit in `av.open` on a cloud file, so it
-    never runs on the frame thread (plan 45 V2)."""
+    never runs on the frame thread."""
 
     def __init__(self, sound: _Sound, track):
         self.sound, self.track = sound, track
@@ -267,10 +267,9 @@ def read_bins(doc) -> tuple[dict[str, list[str | None]], list[str]]:
 
 class MediaSources:
     """What the channels read their pictures and sound through — the meta controller's,
-    one for every deck (plan 44 D3, §2 "the media sources"): the resolver
+    one for every deck: the resolver
     (an id → a file or a live feed), the opener, the closer thread a dropped
-    source goes to, the soundtracks' bookkeeping and the mixer (plan 45
-    V2–V3: `live_mixer`, the analyzer's `mix` source). A decode is one for
+    source goes to, the soundtracks' bookkeeping and the mixer (`live_mixer`, the analyzer's `mix` source). A decode is one for
     every reader; the channels' state (bins, slots, transports) is a deck's
     (`Channels`)."""
 
@@ -290,7 +289,7 @@ class MediaSources:
         return c
 
     def _mixer(self) -> mixer.Mixer:
-        """The mixer (plan 45 V2); made here for an object from before it,
+        """The mixer; made here for an object from before it,
         and re-classed to the module's `Mixer` after a hot reload of
         `media.mixer` (its stream, and the callback reached through the
         class, live on)."""
@@ -305,7 +304,7 @@ class MediaSources:
         return m
 
     def begin_frame(self) -> None:
-        """A new frame's reads (plan 44 D4, §8): from here to the next call,
+        """A new frame's reads: from here to the next call,
         each source is read once (`read`) whichever deck asks."""
         self.__dict__["_read_now"] = {}
 
@@ -324,7 +323,7 @@ class MediaSources:
 
     def live_mixer(self) -> mixer.Mixer:
         """The mixer the channels feed — the public door (the analyzer's
-        `mix` source, plan 45 V3); `_mixer` is the hot-reload accessor
+        `mix` source); `_mixer` is the hot-reload accessor
         behind it."""
         return self._mixer()
 
@@ -340,14 +339,14 @@ class MediaSources:
 
 
 def _through(name: str) -> property:
-    """A deck's channels' view of their sources' `name` (plan 44 D3)."""
+    """A deck's channels' view of their sources' `name`."""
     return property(lambda self: getattr(self._sources(), name),
                     lambda self, v: setattr(self._sources(), name, v),
                     doc=f"The media sources' `{name}` (`MediaSources`).")
 
 
 class Channels:
-    """A deck's eight media channels (plan 44 D3): each `Channel`'s bin,
+    """A deck's eight media channels: each `Channel`'s bin,
     slot, fit and transport — what the deck's `media.*` params write
     (`params.build_patch`), the loadable patch's `media` section (`to_json`
     / `from_json`), what the deck's renderer reads (`frame`) — over the
@@ -375,7 +374,7 @@ class Channels:
 
     def _sources(self) -> MediaSources:
         """The sources — made here, from what the object held itself, for a
-        `MediaState` from before plan 44 D3 (a hot reload re-classes it)."""
+        `MediaState` from before the split (a hot reload re-classes it)."""
         src = self.__dict__.get("_media_sources")
         if src is None:
             src = MediaSources.__new__(MediaSources)
@@ -394,7 +393,7 @@ class Channels:
         return self._sources()._mixer()
 
     def live_mixer(self) -> mixer.Mixer:
-        """The sources' mixer (plan 45 V3: the analyzer's `mix` source)."""
+        """The sources' mixer (the analyzer's `mix` source)."""
         return self._sources().live_mixer()
 
     def _sound(self) -> _Sound:
@@ -406,7 +405,7 @@ class Channels:
         """Once a frame: each channel's source follows its slot, a missing or
         replaced file is looked at again, and a timed source's transport is
         stepped and handed to it. Never raises for a source's sake. `heard`
-        False (plan 44 D4, a deck off air): its channels leave the one mixer
+        False (a deck off air): its channels leave the one mixer
         alone — the on-air deck's are what it plays — and what they asked of a
         soundtrack ends now (`_unheard`), so a deck that leaves the air decodes no
         sound it cannot play, and coming back asks afresh."""
@@ -436,7 +435,7 @@ class Channels:
         else:
             self._unheard()
 
-    # -- the sound (plan 45 V2) ---------------------------------------------
+    # -- the sound ---------------------------------------------
 
     def _unheard(self) -> None:
         """Each channel's soundtrack let go, at once: no toggle is flicking here,
@@ -459,7 +458,7 @@ class Channels:
         toggle never queues a disable and a fresh decode a flick), through
         `_Sound`. Returns, for every channel heard, a `mixer.Voice` — a hold
         or a parked clip included, at velocity 0: the mixer's read head
-        follows it and the mixer is what makes that silence (plan 45 V4) —
+        follows it and the mixer is what makes that silence —
         and whether any channel asks for sound at all (the mixer opens its
         stream on that, before a hold ends)."""
         sound, out, asked = self._sound(), [], False
@@ -565,7 +564,7 @@ class Channels:
         src.want(tr.step(dt, ch.rate, ch.pos, ch.jog, loop))
 
     def _freeze(self, ch: Channel, src) -> None:
-        """A live feed at rate 0 holds the frame it showed (row 324)."""
+        """A live feed at rate 0 holds the frame it showed."""
         if ch.rate == 0.0:
             if not ch.frozen:
                 ch.frozen, ch.held = True, self._sources().read(src)
@@ -590,7 +589,7 @@ class Channels:
     def status(self, c: str) -> str:
         """The source's status; `frozen` while a live feed is held at rate
         0 — nobody reads the source then, so its own would drift to
-        `lost` (final review A-m3)."""
+        `lost`."""
         ch = self.channels.get(c)
         if ch is None or ch.source is None:
             return EMPTY
@@ -609,8 +608,8 @@ class Channels:
         """The ids in any bin the resolver cannot find on this Mac, in bin
         order, once each — the MEDIA page's banner. Each is asked of the
         resolver (`_found`): a file by its path, a live feed by `live`,
-        which the app's resolver answers None for until plan 32 T8 brings
-        the feeds. A `phone:` id is reserved (V2) and never listed."""
+        which the folder's resolver answers None for (the app's
+        resolver answers live feeds). A `phone:` id is reserved and never listed."""
         out: list[str] = []
         for ch in self.channels.values():
             for sid in ch.bin:
@@ -676,7 +675,7 @@ class Channels:
 
     def drop_sources(self) -> None:
         """Every source this deck holds handed to the closer, and none opened
-        again: all a deck off air has to do at exit (plan 44 D4) — the mixer
+        again: all a deck off air has to do at exit: the mixer
         and the closer's budget are the meta controller's, spent by the on-air deck."""
         self._closed = True
         for ch in self.channels.values():
@@ -695,7 +694,7 @@ class Channels:
         return self.drain(pool.left(left)) and quiet
 
 
-# plan 44 D3: the one object before the split, by its old name — a deck's
+# the one object before the split, by its old name — a deck's
 # channels over the meta controller's sources (`MediaState(resolver, opener)` makes both)
 MediaState = Channels
 

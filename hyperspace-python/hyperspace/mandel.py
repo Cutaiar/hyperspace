@@ -1,4 +1,4 @@
-"""The Mandelbrot effect's Python half (plan 63): `shaders/fx/mandel.glsl`
+"""The Mandelbrot effect's Python half: `shaders/fx/mandel.glsl`
 says `// @hook mandel`, so `fx.FxChain.run_one` hands its pass here and
 `fx.FxState.advance` its drives.
 
@@ -14,7 +14,7 @@ Three things live here and not in the shader:
 - **The drives** (`advance`). Pan x/y, Dive and the c and z₀ drives are rates,
   integrated in float64 into the terms every frame they run, in *view
   heights* a second (`VIEW` / zoom): a knob, a hand or an LFO on one moves
-  the picture by the same amount on screen at any depth (owner decision 4).
+  the picture by the same amount on screen at any depth.
   The terms stay absolute, saved values. The rule of `@clock` (no shader
   multiplies time by a param) holds: the shader only ever reads where the
   view is.
@@ -56,16 +56,16 @@ import numpy as np
 from .glsl import QUAD_VS
 
 VIEW = 3.0              # plane units top to bottom at zoom 1
-# plan 80 (row 1000): it paints the whole frame from nothing, so its graph node
+# it paints the whole frame from nothing, so its graph node
 # draws with no picture wired into `image` (`graph.Effect.generates`)
 GENERATOR = True
-SIZES = (540, 810, 1080)     # the Size choice's lines (owner decision 2)
-PERTURB_AT = 1.0e4      # auto: float32 direct up to here, perturbation past it (decision 3)
+SIZES = (540, 810, 1080)     # the Size choice's lines
+PERTURB_AT = 1.0e4      # auto: float32 direct up to here, perturbation past it
 REF_W = 1024            # the reference texture's width (mandel.glsl's REF_W)
 BAIL = 1.0e4            # |z|² past this has escaped (mandel.glsl's BAIL)
 TILE = 16               # the skip's tile, px (mandel.glsl's TILE)
-BORDER = 64             # plan 80: a tile's slots in the packed border pass (its 60 border px)
-# plan 80 (row 1004): the skip turns itself off where it costs more than it
+BORDER = 64             # a tile's slots in the packed border pass (its 60 border px)
+# the skip turns itself off where it costs more than it
 # saves. Its pre-passes cost about a quarter of a picture (a tile's 60 border
 # pixels of 256, iterated again), and it saves the flagged tiles: under
 # SKIP_MIN of the tiles flagged it rests, and probes again every SKIP_PROBE
@@ -76,7 +76,7 @@ SKIP_PROBE = 30
 SKIP_LAG = 3
 DIVE_DOUBLINGS = 4.0    # Dive at ±1: zoom doublings a second
 PERIOD_EPS = 0.05       # periodicity: z within this many pixels of a saved z is a cycle
-# plan 80 (row 1001): the coloured inside is how fast a point settles onto its
+# the coloured inside is how fast a point settles onto its
 # cycle, from the cycle's multiplier λ — the steps it takes to come SETTLE_K
 # times nearer, L·ln K / ln|λ_L| over a lag L the check found (`Settle`) — not
 # the step the periodicity check happened to catch it at, which hangs on a
@@ -119,7 +119,7 @@ def terms(q, v: dict) -> tuple[Any, Any]:
 
 
 def smooth(n, r2, p: int):
-    """The smooth escape count n + 1 − log_p log|z| (owner decision 5), at
+    """The smooth escape count n + 1 − log_p log|z|, at
     least 0, from the step n and |z|² just past the bail-out."""
     return np.maximum(n + 1.0 - np.log(0.5 * np.log(r2)) / math.log(p), 0.0)
 
@@ -134,7 +134,7 @@ def in_cardioid(c) -> np.ndarray:
 
 
 class Settle:
-    """How fast each inside point settles onto its cycle (plan 80, row 1001):
+    """How fast each inside point settles onto its cycle:
     the shader's `settle` twin. Each step adds ln|f′(z)| = ln p + (p − 1)
     ln|z| for the z the step starts from, so since the last save of the
     periodicity check the sum is ln|λ_L|, λ_L the product of f′ over those L
@@ -180,7 +180,7 @@ def escape_counts(c, z0, p: int, iters: int, *, periodic_eps: float | None = Non
     the smooth count where a point escaped, else the step a cycle was caught
     at (`periodic_eps`: the shader's check, Brent's doubling window, |z −
     saved| < eps) or `iters`. With no `periodic_eps` it is the plain oracle.
-    `settle` (plan 80, the coloured inside): an inside point's count is how
+    `settle` (the coloured inside): an inside point's count is how
     fast it settles (`Settle`) instead; the inside itself is still decided
     by `periodic_eps`."""
     c = np.asarray(c, dtype=dtype)
@@ -343,7 +343,7 @@ def is_edge(w: int, h: int) -> np.ndarray:
 
 
 def border_slot(i: int) -> tuple[int, int]:
-    """Plan 80: slot `i` (0 … BORDER − 1) of a tile in the packed border
+    """Slot `i` (0 … BORDER − 1) of a tile in the packed border
     pass — its pixel (x, y) in the tile, before the clamp to the picture:
     the bottom row, the top row, the left column, the right column, then
     four spare slots on the first pixel (mandel.glsl's `border_px`)."""
@@ -384,7 +384,7 @@ def fill_tiles(inside: np.ndarray) -> np.ndarray:
 def skip_valid(v: dict) -> bool:
     """Whether the skip may run: on, the inside black (a coloured inside needs
     every pixel's settling time), and a slice whose set has no holes — the
-    Mandelbrot slice with z₀ = 0, or a pure Julia slice (owner's rule)."""
+    Mandelbrot slice with z₀ = 0, or a pure Julia slice."""
     if int(v["skip"]) != 0 or int(v["interior"]) != 0:
         return False
     s = float(v["slice"])
@@ -416,7 +416,7 @@ def render_size(size: int, w: int, h: int) -> tuple[int, int]:
 
 # ---- the drives (FxState.advance) ----
 
-# plan 80 (row 1002): an off-screen term's drive. A pan of one view height a
+# an off-screen term's drive. A pan of one view height a
 # second slides the whole picture by a screen a second; moving c on a Julia
 # slice (or z₀ on the Mandelbrot one) by the same amount can reshape it
 # hundreds of times over, since how fast the picture answers a term depends
@@ -424,9 +424,9 @@ def render_size(size: int, w: int, h: int) -> tuple[int, int]:
 # the view height times its measured sensitivity R (`sensitivity`), the
 # rate at which it changes the picture as fast as a pan does, times
 # TERM_RATE; never faster than a pan (an unused term, R → ∞, keeps the
-# plan 63 rate). Pan and Dive are as plan 63 made them.
+# a pan's rate). Pan and Dive are not scaled.
 TERM_RATE = 0.1         # an off-screen term at full throw: a tenth of a pan's change a
-                        # second (row 1002: tuned on the rig, check 802)
+                        # second (tuned on the rig)
 SENS_GRID = (16, 9)     # the points across the view it is measured at
 SENS_STEPS = 192        # … iterated at most this far
 SENS_EVERY = 0.25       # seconds of a running drive between measurements
@@ -446,11 +446,11 @@ def sensitivity(v: dict, w: int = SENS_GRID[0], h: int = SENS_GRID[1],
     black, counts nothing). With q laid in by Slice s: ∂z/∂q = (1 − s)∂z/∂c
     + s ∂z/∂z₀, ∂z/∂c_term = s ∂z/∂c, ∂z/∂z₀_term = (1 − s) ∂z/∂z₀. A term
     the slice does not use (c at Slice 0, z₀ at 1) is inf: its drive keeps
-    plan 63's rate. A used term the measure cannot read — nothing escaped,
+    a pan's rate. A used term the measure cannot read — nothing escaped,
     or a first derivative of 0, as z₀ = 0 has (z₁ = z₀² + c: a step of z₀
     moves the picture by its square) — is 1, so its drive starts at
-    `TERM_RATE` of the view and is measured again once it has moved
-    (Devin's review of #471: inf there lurched a fifth of a screen)."""
+    `TERM_RATE` of the view and is measured again once it has moved (inf there
+    would lurch a fifth of a screen)."""
     p, s = int(v["power"]), float(v["slice"])
     q = complex(v["centre_x"], v["centre_y"]) + offsets(w, h, float(v["zoom"]))
     c, z = terms(q, v)
@@ -515,7 +515,7 @@ def advance(spec, v: dict, dt: float) -> None:
     """Each drive's rate into its term, and Dive into the zoom in doublings
     a second; clamped to each param's range. Pan moves the centre in view
     heights a second; a c or z₀ drive moves its term by the view height
-    times that term's measured scale (`term_scale`, plan 80). A rate at 0
+    times that term's measured scale (`term_scale`). A rate at 0
     writes nothing (and measures nothing)."""
     if dt <= 0.0:
         return
@@ -528,8 +528,8 @@ def advance(spec, v: dict, dt: float) -> None:
     scale = None
     if not any(float(v.get(rate, 0.0)) for term, rate in DRIVES if not term.startswith("centre")):
         # every term drive at rest: forget the measure, so the next start
-        # measures where the terms are then, not where they were (Devin's
-        # review of #471: a c set by hand while at rest kept the old rate)
+        # measures where the terms are then, not where they were (a c set by
+        # hand while at rest would otherwise keep the old rate)
         _sens.pop(id(v), None)
     for term, rate in DRIVES:
         r = float(v.get(rate, 0.0))
@@ -605,7 +605,7 @@ void main() {
     float every = 1.0;
     for (int i = 0; i < 64; i++)
         every = min(every, texelFetch(u_border, ivec2(t.x * 64 + i, t.y), 0).r);
-    if (every < 0.5) discard;     // plan 80: only a flagged tile is drawn (and counted)
+    if (every < 0.5) discard;     // only a flagged tile is drawn (and counted)
     f_color = vec4(1.0, 0.0, 0.0, 1.0);
 }
 """
@@ -639,12 +639,11 @@ class Target:
 
 @dataclass
 class SkipGate:
-    """Whether the skip runs this pass (plan 80, row 1004): on while at
+    """Whether the skip runs this pass: on while at
     least `SKIP_MIN` of the tiles come back flagged; else resting, with one
     pass in `SKIP_PROBE` run with it to look again. Each run of the tiles
     pass is counted by a samples query (`issue`), read `SKIP_LAG` passes
-    later (`read`). A context with no samples queries keeps it on, as plan
-    63 had it."""
+    later (`read`). A context with no samples queries keeps it on."""
 
     on: bool = True
     rest: int = 0                     # passes since the last probe while off
@@ -652,8 +651,8 @@ class SkipGate:
     pending: list = field(default_factory=list)       # [query, tiles, age]
     # read queries, used again: moderngl 5's Query has no release, so a query
     # once made lives as long as its context. `Gl.state` hands every gate on a
-    # chain the chain's one pool, and a gate let go returns its queries there
-    # (Devin's review of #471: a patch switched away and back made new ones)
+    # chain the chain's one pool, and a gate let go returns its queries there, so a
+    # patch switched away and back makes no new ones
     free: list = field(default_factory=list)
     flagged: float | None = None      # the last share read back
     queries: bool = True              # False once a query could not be made
@@ -716,7 +715,7 @@ class State:
     low: Target = field(default_factory=Target)       # the Size's render target
     border: Target = field(default_factory=Target)    # the skip's first pass
     tiles: Target = field(default_factory=Target)     # one texel a tile
-    gate: SkipGate = field(default_factory=SkipGate)  # plan 80: the skip turns itself off
+    gate: SkipGate = field(default_factory=SkipGate)  # the skip turns itself off
     stats: dict = field(default_factory=dict)         # the last pass's choices (tools, tests)
 
     def release(self) -> None:
@@ -732,7 +731,7 @@ class Gl:
     states: dict[str, State] = field(default_factory=dict)
     tiles_prog: moderngl.Program | None = None
     tiles_vao: moderngl.VertexArray | None = None
-    queries: list = field(default_factory=list)       # plan 80: the skip gates' query pool
+    queries: list = field(default_factory=list)       # the skip gates' query pool
     max_px: int = 0                                   # the context's largest target side
 
     def state(self, name: str) -> State:
@@ -742,10 +741,10 @@ class Gl:
         return got
 
     def fits(self, ctx: moderngl.Context, w: int) -> bool:
-        """Plan 80: whether the packed border pass (`BORDER` px a tile across)
+        """Whether the packed border pass (`BORDER` px a tile across)
         fits a target this context can make, for a render `w` px wide — over
         about 4096 px (an ultrawide output at Size 1080) it does not, and the
-        pass runs without the skip (Devin's review of #471)."""
+        pass runs without the skip."""
         if not self.max_px:
             info = getattr(ctx, "info", {}) or {}
             sides = [int(info.get("GL_MAX_TEXTURE_SIZE", 0) or 0)]

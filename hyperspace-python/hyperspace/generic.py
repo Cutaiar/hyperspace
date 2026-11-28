@@ -1,7 +1,7 @@
-"""The `generic` MIDI profile (plan 27 B2): any controller that sends
+"""The `generic` MIDI profile: any controller that sends
 plain CC, note and pitch-bend messages, with no feedback at all.
 
-A profile is a duck-typed module (apc40.py is the first): midi.MidiIO and
+A profile is a duck-typed module (apc40.py is one): midi.MidiIO and
 learn.Learn ask it for a port to match, the messages that wake the device
 and put it to sleep, which knobs are relative encoders, what feedback a
 learned control can show, and the controls' names. This one knows nothing
@@ -26,8 +26,7 @@ keyboard's knobs — maps on the desk's Learn with no code:
     launch"); there is no layout to draw, so the desk page (ui_desk.py)
     stays the APC40's, and the device line counts no sources.
   * **One layer.** It has no SHIFT: its rows are the loaded patch's (a
-    learn) or the meta controller's invariant ones; plan 28 is where a device with
-    a mode switch becomes one node per mode.
+    learn) or the meta controller's invariant ones.
 
 Imports nothing from the package.
 """

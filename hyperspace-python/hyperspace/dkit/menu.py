@@ -20,7 +20,7 @@ Measured off `prototypes/dashboard/src/components/ui/dropdown-menu.tsx`:
               · gap-1.5 (6) · focus:bg-accent
     destructive  text-destructive · focus:bg-destructive/10
 
-**One caveat worth knowing before this goes near the GRAPH canvas.**
+**Menus are not part of the GRAPH canvas.**
 `replay.keep` (`hyperspace/replay.py:91`) carries only the page window's own
 draw list into the canvas tap, and explicitly drops "every popup, menu and
 tooltip (their own windows)". So a menu opened over that canvas will not
@@ -47,9 +47,7 @@ LAST_RECT: dict = {}
 
 PAD = 4.0            # p-1
 # Measured in Chromium, not derived from the classes. `text-sm` carries a
-# 20px LINE-HEIGHT, not a 14px one, so py-1 either side is 20 + 4 + 4. The
-# 26 that stood here was the font size plus the padding, and it was wrong by
-# two pixels on every row of every menu the kit has ever drawn.
+# 20px LINE-HEIGHT, not a 14px one, so py-1 either side is 20 + 4 + 4.
 ITEM_H = 28.0        # py-1 either side of a 20px line box
 # A label is `text-xs` (16/16) + py-1, which is NOT an item height.
 LABEL_H = 24.0
@@ -57,16 +55,12 @@ ITEM_PAD_X = 6.0     # px-1.5
 GAP = 6.0            # gap-1.5
 MIN_W = 128.0        # min-w-32
 # How wide a panel may get. The real component has no maximum: a shadcn menu
-# item carries no `truncate`, so in the browser a long row simply makes the
-# panel as wide as its words (and wraps once the viewport runs out). That is
-# not a law this kit can keep — a menu row here is ONE line, and the graph's
-# insert menu carries refusals like "faces pattern: Faces pattern is in the
-# graph already: drag it onto the cable", which made a 980px panel over the
-# canvas. So this is the kit's own policy, like the x-clamp in
-# `comp_context_menu.place_at_pointer`, and the number is the one the kit
-# already uses for a floating box of words (`interact.tooltip`'s max_w).
-# A row too long for it is ellipsised, and the host can put the whole of it
-# in that row's tooltip (`ui_menu._tips_kit`).
+# item carries no `truncate`, so in the browser a long row makes the panel as
+# wide as its words. Here a menu row is ONE line and a row can carry a long
+# refusal message, so the kit caps the panel, like the x-clamp in
+# `comp_context_menu.place_at_pointer`, at the width of a floating box of
+# words (`interact.tooltip`'s max_w). A row too long for it is ellipsised, and
+# the host can put the whole of it in that row's tooltip (`ui_menu._tips_kit`).
 MAX_W = 320.0
 SEP_MY = 4.0         # my-1
 DESTRUCTIVE_HOVER_A = {"light": 0.10, "dark": 0.20}
@@ -148,11 +142,10 @@ def is_sub(it) -> bool:
 # --------------------------------------------------------------------------
 #
 # Driven on the real components in Chromium at dpr 1, with `?probe` blocks
-# that are NOT forced open - which is the whole point. A `defaultOpen`
-# component reports `data-state="open"` whatever you press, so "did this key
-# open it" and "did this key close it" both come back yes, and the Combobox's
-# first keyboard model came out wrong for exactly that reason (RETRO row 17).
-# The blocks added for this are `menu.kb` (a DropdownMenu with a real
+# that are NOT forced open. A `defaultOpen` component reports
+# `data-state="open"` whatever you press, so "did this key open it" and "did
+# this key close it" both come back yes. The blocks are `menu.kb` (a
+# DropdownMenu with a real
 # trigger, one label, one separator, one DISABLED item, one destructive item
 # and six enabled rows with distinct initials), `menu.long` (sixteen rows),
 # `contextmenu.target` (opened with a real right-click), `select.kb` (a
@@ -177,7 +170,7 @@ def is_sub(it) -> bool:
 # column: all four gestures open it on the FIRST row - not on none, and not
 # on the last for ArrowUp. The value beats the gesture and the gesture is
 # only the fallback, which is `resolve_open`, and which is the same shape
-# `comp_combobox.resolve_open` records for the Combobox (RETRO row 26).
+# `comp_combobox.resolve_open` records for the Combobox.
 #
 # OPEN - the panel
 #
@@ -210,14 +203,14 @@ def is_sub(it) -> bool:
 # ArrowUp x20 off the top, both of which simply sit on the end row. This is
 # the one place a menu and the Combobox genuinely differ - the Combobox
 # falls off either end into nothing and comes back round on the next press -
-# and porting the Combobox's table would have got it wrong. Radix's
+# so the Combobox's table does not apply. Radix's
 # `RovingFocusGroup` takes a `loop` prop and the menus do not pass it.
 #
 # **Tab is the opposite of the Combobox's too.** Radix's menu content runs
 # `if (event.key === "Tab") event.preventDefault()`, so a menu really does
 # trap Tab, and so does a Select. It is a modal roving-focus layer: the only
-# ways out are Escape, Enter, Space and a click. The kit already satisfied
-# this by accident, because ImGui will not tab out of a popup window either.
+# ways out are Escape, Enter, Space and a click. ImGui will not tab out of a
+# popup window either, so the kit needs no code for it.
 #
 # TYPEAHEAD is the thing menus have that comboboxes do not, and it is
 # Radix's `getNextMatch`, reproduced in `next_match`:
@@ -238,20 +231,10 @@ def is_sub(it) -> bool:
 #     inside the second left the menu open on Epsilon; 'e', 1.3s, Space
 #     selected it.
 #
-# TWO ROWS THE KIT CANNOT EXPRESS, recorded rather than implemented:
-#
-#   * **the panel scrolls to follow its keyboard highlight.** Measured on
-#     `menu.long` in a 260px viewport: the panel clamps to 114px, and
-#     arrowing down past the visible rows scrolls it by the minimum - 30,
-#     86, 142, 198 ... 338 of a 342 range - exactly as the Combobox's list
-#     does. `menu.popup` has no scroll area and no height clamp at all: it
-#     sizes the window to its content and lets `place_popover` put it
-#     somewhere. Giving a menu a clamp is a sizing job, not a keyboard one,
-#     and it is the next thing to do here.
-#   * **a Select's closed typeahead.** Measured: with the panel SHUT and the
-#     trigger focused, typing 'd' set the trigger to `Delta` without opening
-#     anything. `interact.select` reads no characters, so there is nowhere
-#     for this to live yet.
+# A Select's closed typeahead is not implemented. Measured: with the panel
+# SHUT and the trigger focused, typing 'd' set the trigger to `Delta` without
+# opening anything. `interact.select` reads no characters.
+# DEBT: select-closed-typeahead
 KEY_MODEL = """closed: focus keeps it closed; a click opens a menu with
 NOTHING highlighted and a Select on its CHECKED row; Enter, Space and
 ArrowDown open a menu on its FIRST row. open: the arrows move one row and
@@ -291,8 +274,8 @@ def highlighted_item(items, hi) -> int | None:
     Two numbering systems meet here and keeping them straight is the whole
     job: the keyboard counts the rows it can land on (`item_rows`), while
     the draw loop walks every item, separators and labels included. A menu
-    with a label above it had its highlight two rows off when this was done
-    inline at one of the two call sites.
+    with a label above it has its highlight off by the labels if the two are
+    mixed.
     """
     if hi is None:
         return None
@@ -382,8 +365,7 @@ def _kb(ui, key: str) -> dict:
 
     It has to live there and not on the `Ui`: a `Ui` is rebuilt every frame
     (dashboard.py), and `anim.store` is the one object the kit already
-    threads across frames. The same trap kept the tooltip from reaching its
-    delay and the context menu from remembering where it was clicked.
+    threads across frames.
     """
     return ui.anim.store.setdefault("menukb", {}).setdefault(
         key, {"sel": None, "armed": False, "buf": "", "buf_age": 0.0,
@@ -533,40 +515,35 @@ def _begin_keys(ui, key: str, items, x, y, w, role: str,
     them to that panel, and two levels both reading ArrowDown would move
     two highlights with one press.
 
-    It does NOT hold the pointer off, and that is the correction to a
-    first version which did. A frozen pointer leaves the highlight behind:
-    move down a menu, open one row's submenu in passing, carry on to
-    another row, and the first row stayed lit while the second ran the
-    submenu - two rows lit at once, which is what the owner saw. Nothing
-    is lost by letting the pointer through, because the hand-over below
-    only happens when the mouse MOVES: a mouse parked over a trigger while
-    the keyboard drives the submenu cannot take anything.
+    It does NOT hold the pointer off. A frozen pointer leaves the highlight
+    behind: move down a menu, open one row's submenu in passing, carry on to
+    another row, and the first row would stay lit while the second ran the
+    submenu - two rows lit at once. Nothing is lost by letting the pointer
+    through, because the hand-over below only happens when the mouse MOVES:
+    a mouse parked over a trigger while the keyboard drives the submenu
+    cannot take anything.
 
     `hold` is the pointer's own exception, and it is the other half of the
     safe triangle (`_keep`): while the pointer is INSIDE this panel's open
     submenu, or cutting the corner toward it, the rows it is passing over
     must not take the highlight either - the row that owns the open panel
-    keeps it. Without this the parent lit the row under the pointer while
-    the submenu of another row stood open beside it, which is the same two
-    rows lit, arrived at the other way round.
+    keeps it. Without this the parent would light the row under the pointer
+    while the submenu of another row stood open beside it: two rows lit.
 
     `off` is where the rows START, scrolled (`scrolled`). Without it a
     capped panel hit-tests the pointer against the UNSCROLLED rows: on a
     32-row submenu scrolled 266px, a pointer 20px into the panel is over
-    row 11 and this said row 1 — so Enter took a row nobody was pointing
-    at, and `_scroll` then dragged the list back to show it.
+    the eleventh row and this would say the first - so Enter takes a row
+    nobody is pointing at, and `_scroll` then drags the list back to show it.
     """
     from imgui_bundle import imgui
     st = _kb(ui, key)
     rows = item_rows(items)
 
     # Is this the frame the panel appeared on? Counted in FRAMES rather than
-    # read off `LAST_RECT`, which would be the obvious seam and is the wrong
-    # one: `LAST_RECT` is cleared by `popup`'s CLOSED branch, so it only
-    # answers for a caller that hands the popup a closed frame. One did not -
-    # `interact.select` called `popup` under `if open_`, which is fixed, and
-    # which is a thing a future caller can get wrong again for free. A frame
-    # count depends on nothing outside this function.
+    # read off `LAST_RECT`: `LAST_RECT` is cleared by `popup`'s CLOSED branch,
+    # so it only answers for a caller that hands the popup a closed frame. A
+    # frame count depends on nothing outside this function.
     fc = imgui.get_frame_count()
     fresh = st.get("frame", -10) != fc - 1
     st["frame"] = fc
@@ -616,9 +593,8 @@ def _end_keys(ui, key: str, items) -> str | None:
       a popup window, and with every row submitted `nav=False` there is
       nothing inside one for a Tab to reach either. Measured on the real
       component: three Tabs and a Shift+Tab all left the menu open on the
-      same row. This is the one place the kit was right by accident, and it
-      is the opposite of the Combobox, where Tab closes the list and moves
-      on.
+      same row. This is the opposite of the Combobox, where Tab closes the
+      list and moves on.
     """
     from imgui_bundle import imgui
     st = _kb(ui, key)
@@ -699,12 +675,8 @@ def panel_chrome(ui, dl, x, y, w, h, a: float = 1.0) -> None:
     # clips to; widen the clip while the chrome is drawn
     dl.push_clip_rect(imgui.ImVec2(x - 16, y - 16),
                       imgui.ImVec2(x + w + 16, y + h + 16), False)
-    # draw.shadow_stack, not a loop of its own: CSS lists shadows FRONT to
-    # back, so they have to go up reversed, and this loop went up forward
-    # and dropped dx on the floor. Both are invisible on SHADOW_MD - two
-    # layers of the same colour and alpha composite to the same result in
-    # either order, and neither carries a dx - so this is pixel-neutral
-    # today and was one differently-shaped token away from not being.
+    # draw.shadow_stack handles the layers: CSS lists shadows FRONT to back,
+    # so they go up reversed, and each layer's dx is honoured.
     D.shadow_stack(dl, x, y, w, h, T.RADII["lg"],
                    [(dx, dy, blur, spread, al * a)
                     for dx, dy, blur, spread, al in T.SHADOW_MD])
@@ -744,7 +716,7 @@ def sub_size(ui, items) -> tuple[float, float]:
     `min-w-32` is the floor on the PANEL, so the border comes off it before
     `measure` is asked for a content width - otherwise the floor is applied
     to the rows and the panel comes out 130 wide where the browser measures
-    128 and its rows 118.
+    128, with a content width of 118.
     """
     edge = 2 * (PAD + SUB_BORDER)
     cw, ch = measure(ui, items, SUB_MIN_W - 2 * SUB_BORDER,
@@ -779,10 +751,10 @@ def _dismiss(ui, key: str) -> None:
         imgui.pop_style_var()
         imgui.pop_style_color()
     # ITS descendants too. `_dismiss` begins this panel only to close it, so
-    # the closed branch of `sub_popup` — which is what normally forgets a
-    # chain — never runs for it, and its own `open` and `shown` would still
-    # name the grandchild. Reopening the panel then brought that grandchild
-    # straight back without its trigger ever being hovered.
+    # the closed branch of `sub_popup` - which is what normally forgets a
+    # chain - never runs for it, and its own `open` and `shown` would still
+    # name the grandchild, which reopening the panel would bring straight
+    # back without its trigger ever being hovered.
     _forget(ui, key)
     LAST_RECT.pop(key, None)
     ui.anim.to(f"{key}:open", 0.0)
@@ -792,14 +764,14 @@ def chain_side(trig, avail, width: float = MAX_W) -> str:
     """Which side a whole chain of submenus opens on: "right" or "left".
 
     Decided ONCE, when a menu's first submenu opens, and kept for every
-    level under it. Each level choosing for itself is what made the menus
+    level under it. Each level choosing for itself would make the menus
     jump: a narrow panel fits to the right of a trigger near the window's
-    edge and a wide one does not, so `insert ▸` opened rightward and
-    `effects ▸` under it flipped back over the top of it. Nothing about the
-    menu changed between those two moments except how long one word was.
+    edge and a wide one does not, so `insert ▸` would open rightward and
+    `effects ▸` under it flip back over the top of it, though nothing about
+    the menu changed except how long one word was.
 
     `width` is what a panel may take at most (`MAX_W`), not what the next
-    one happens to need — that is the whole point. A side with room for the
+    one happens to need. A side with room for the
     widest panel the kit can draw has room for every panel in the chain, so
     the decision taken here cannot be overtaken by a later level.
     """
@@ -826,8 +798,7 @@ def place_sub(trig, w: float, h: float, avail, side: str = "") -> B.Rect:
     same way `place_at_pointer` records for the panel itself), so this
     flips to the trigger's LEFT when the right does not fit, keeping the
     side that overflows less when neither does. An ImGui popup that leaves
-    the window is simply lost, which is the reason the divergence is worth
-    it here and was worth it there.
+    the window is simply lost, so the divergence is deliberate.
 
     `side` is the chain's own, from `chain_side`, and when it is given it
     is obeyed rather than worked out per panel: a chain that opens leftward
@@ -936,7 +907,7 @@ def _keep(ui, st: dict) -> bool:
     * **the pointer is IN it.** `is_mouse_hovering_rect` knows nothing
       about which window is on top, so a parent panel reads the pointer as
       being on one of its own rows while it is really inside the submenu
-      drawn over them — and closed the submenu the pointer had reached.
+      drawn over them, and would close the submenu the pointer had reached.
       The two panels overlap by four pixels by construction (the submenu
       starts at `trigger.right`, which is inside the parent's padding), so
       this is not an edge case: every approach from the parent's side
@@ -1014,10 +985,10 @@ def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
         st["pointer_row"] = over
     on = st.get("pointer_row")
     # `by_key` is the row a KEY asked to open — ArrowRight, Enter or Space.
-    # It is not the same as "a panel opened this frame", and conflating the
-    # two armed a HOVER-opened panel on its first row: measured, a hover
+    # It is not the same as "a panel opened this frame": conflating the two
+    # would arm a HOVER-opened panel on its first row, but measured, a hover
     # open highlights nothing, and a row lit under a pointer that is still
-    # in the parent is the second of the two rows the owner saw lit at once.
+    # in the parent would be a second row lit at once.
     by_key = kb.pop("open_sub", None)
     if by_key is not None and by_key in rects:
         st["open"], st["hot"], st["age"] = by_key, by_key, 0.0
@@ -1036,11 +1007,11 @@ def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
     elif on is not None and on != st["open"]:
         # The pointer is on ANOTHER row, so the open panel goes at once —
         # whether that row has a submenu of its own or not. Closing is
-        # immediate and only OPENING is on Radix's 100 ms timer, and the
-        # two were conflated here: a move from one SubTrigger to the next
-        # left the first panel up for the whole dwell, so for six frames
-        # the menu had TWO rows lit, the old one on `data-open` and the new
-        # one on hover. The real component never shows that.
+        # immediate and only OPENING is on Radix's 100 ms timer: closing on
+        # the dwell would leave the first panel up while the pointer moves
+        # to the next SubTrigger, so the menu would have TWO rows lit, the
+        # old one on `data-open` and the new one on hover. The real
+        # component never shows that.
         st["open"] = None
         # the dwell is per ROW: moving along them must not pour one row's
         # wait into the next
@@ -1236,8 +1207,7 @@ def rows(ui, items, x, y, w, key, a: float = 1.0, *,
 
     `chrome_only` submits no widgets and draws no text - which the gallery
     needs for both reasons. A widget outside any imgui window makes ImGui
-    auto-create its "Debug" window, and the first version of the gallery
-    cell painted one straight over the top third of the canvas; and the
+    auto-create its "Debug" window, which would paint over the canvas; and the
     chrome pass hides text on the React side, so drawing it here would
     compare glyphs against nothing.
 
@@ -1246,8 +1216,8 @@ def rows(ui, items, x, y, w, key, a: float = 1.0, *,
     """
     out, iy = None, y
     # No `hi`: this path has no popup to route a key through, so every row
-    # falls back to its own hover, which is the gallery's chrome diff and is
-    # what it has always drawn. The keyboard highlight belongs to `popup`,
+    # falls back to its own hover, which is the gallery's chrome diff.
+    # The keyboard highlight belongs to `popup`,
     # which owns the key routing and the state that outlives the frame.
     for i, it in enumerate(items):
         if _row(ui, it, x, iy, w, f"{key}.{i}", a, chrome_only=chrome_only):
@@ -1263,8 +1233,7 @@ def row_h(it) -> float:
 
     One function because `measure` and the stride loop in `popup` both need
     the answer, and the two disagreeing puts every row below a label a pixel
-    out - which is exactly what happened while labels were drawn on an item
-    box.
+    out.
     """
     if it.kind == "sep":
         return 1.0 + 2 * SEP_MY
@@ -1339,8 +1308,7 @@ def _row(ui, it, x, y, w, key, alpha, *, chrome_only: bool = False,
     """
     if it.kind == "sep":
         # `-mx-1` exactly cancels the panel's `p-1`, so the rule is
-        # FULL-BLEED: measured x == panel.x and w == panel.w. The +-1 inset
-        # that stood here was invented.
+        # FULL-BLEED: measured x == panel.x and w == panel.w.
         D.fill(ui.dl, x - PAD, y + SEP_MY, w + 2 * PAD, 1,
                ui.col("border", alpha))
         return False
@@ -1352,11 +1320,11 @@ def _row(ui, it, x, y, w, key, alpha, *, chrome_only: bool = False,
 
     # `nav=False`, and it is not an optimisation. An `invisible_button` with
     # `enable_nav` is reported by `is_item_hovered` while merely NAV-focused,
-    # so ImGui's own nav cursor was driving the kit's hover tint through the
-    # menu - which looked like a keyboard highlight and was not one. It
-    # started on the second row (ImGui parks NavId on the first item when the
-    # popup appears and the arrow then moves it on), it WRAPPED at both ends
-    # where the real one clamps, and Enter never took the row. The menu's
+    # so ImGui's own nav cursor would drive the kit's hover tint through the
+    # menu - which looks like a keyboard highlight and is not one. It
+    # would start on the second row (ImGui parks NavId on the first item when
+    # the popup appears and the arrow then moves it on), WRAP at both ends
+    # where the real one clamps, and Enter would never take the row. The menu's
     # items carry `tabIndex -1` on the real component and are driven by a
     # roving-focus group, so taking them out of ImGui's tab order is the
     # faithful thing as well as the one that leaves the kit owning the
@@ -1516,9 +1484,9 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
     imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
     # `PopupBorderSize` is a SEPARATE style var, 1.0 by default, and
     # `WindowBorderSize` does not cover it. This panel fills its window
-    # exactly, so the stray 1px has always been hidden under the panel's
-    # own chrome - which is luck rather than a decision. The Combobox,
-    # whose window spans the trigger too, is where that luck ran out.
+    # exactly, so a stray 1px would be hidden under the panel's own chrome;
+    # a window that spans more than the panel (the Combobox's spans the
+    # trigger too) would show it.
     imgui.push_style_var(imgui.StyleVar_.popup_border_size, 0.0)
     imgui.push_style_var(imgui.StyleVar_.popup_rounding, T.RADII["lg"])
     imgui.push_style_color(imgui.Col_.popup_bg, imgui.ImVec4(0, 0, 0, 0))

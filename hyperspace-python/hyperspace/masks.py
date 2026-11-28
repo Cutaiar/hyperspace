@@ -1,9 +1,9 @@
-"""The mask passes (plan 39 T2, W1–W3): a mask as its own wire.
+"""The mask passes: a mask as its own wire.
 
 A mask is a pattern — a pixel passes (1) or it does not (0); a value
 between is only an edge the softness or the feather asked for — held as a
 one-channel 8-bit texture at its maker's size. It never rides in a
-picture's alpha (the owner, 2026-10-27: "alpha is not a mask"). Three
+picture's alpha. Three
 passes make, show and use one, each a fullscreen triangle over the
 target's viewport (`glsl.QUAD_VS`), premultiplied in and out:
 
@@ -12,17 +12,17 @@ target's viewport (`glsl.QUAD_VS`), premultiplied in and out:
   where a pixel starts to pass, `soft` the edge's width, `invert`. Then,
   when `feather` > 0, `BLUR_FS` twice — across, then down — a separable
   Gaussian of one channel.
-- `PROMOTE_FS`, mask → picture (W1's promotion: a mask wired where a
+- `PROMOTE_FS`, mask → picture (a mask wired where a
   picture is taken): white where it passes, black elsewhere, opaque,
   fitted into the consumer by cover as an own-sized node is.
-- `CUT_FS`, picture + mask → picture (T3's `cut`): where the mask passes
+- `CUT_FS`, picture + mask → picture (the `cut` node): where the mask passes
   the picture, elsewhere cut away to transparent black, by `amount`.
-- Plan 87 (black is clear): `KEY_FS`, a picture → the same picture with
+- `KEY_FS` (black is clear), a picture → the same picture with
   its dark parts clear — any picture node a loadable patch's graph keys
   (`graph.KeyNode`), by the ramp every key shares (`glsl.KEY_RAMP`), its
   feather `BLUR_FS` over the ramp alone. A picture's own transparency,
   not a mask: no mask is made or read.
-- Plan 39 T4 (`segment`): `MOTION_FS` and `LEARN_FS`, motion mode's
+- `MOTION_FS` and `LEARN_FS`, motion mode's
   background model — the mask where the picture differs from the
   background it has learnt, and the background learning the picture;
   `DOWN_FS` and `readback`, a picture downsampled and read back for the
@@ -52,8 +52,8 @@ import numpy as np
 
 from .glsl import KEY_RAMP, KEY_SHAPE, QUAD_VS
 
-# the sources `MATTE_FS` reads (`u_from`), in `view.MATTE_FROM`'s order (plan
-# 90 H2: peak appended — Key's measure, `glsl.KEY_SHAPE`)
+# the sources `MATTE_FS` reads (`u_from`), in `view.MATTE_FROM`'s order (PEAK is Key's
+# measure, `glsl.KEY_SHAPE`)
 LUMA, ALPHA, CHROMA, PEAK = 0, 1, 2, 3
 # the most px a feather blurs by each way (`BLUR_FS`'s loop bound)
 MAX_FEATHER = 32
@@ -73,7 +73,7 @@ uniform int u_from;
 uniform float u_key;
 uniform float u_soft;
 uniform int u_invert;
-uniform int u_ramp;        // view.KEY_RAMPS: 0 smooth, 1 linear (plan 90 H2)
+uniform int u_ramp;        // view.KEY_RAMPS: 0 smooth, 1 linear
 uniform vec2 u_chroma;     // the keyed colour's chroma: sat · (cos, sin) of its hue
 out vec4 f_color;
 """ + KEY_SHAPE + """
@@ -135,10 +135,10 @@ void main() {{
 }}
 """
 
-# mask → picture (W1): the mask laid into the consumer's viewport about the
+# mask → picture: the mask laid into the consumer's viewport about the
 # centre by `u_scale` (cover: `cover_scale`), sampled inside its edge
 # texels, white where it passes, black elsewhere, opaque — a grey picture,
-# premultiplied. Plan 39 T4: `u_flip` reads a rows-top-first mask upside
+# premultiplied. `u_flip` reads a rows-top-first mask upside
 # down (as `CUT_FS` does), so a segment's matte lands the right way up
 PROMOTE_FS = """
 #version 330
@@ -156,14 +156,14 @@ void main() {
 }
 """
 
-# picture + mask → picture (W3, T3's `cut`): the mask sampled bilinearly at
+# picture + mask → picture (`cut`): the mask sampled bilinearly at
 # the picture's size, fitted by cover (`u_scale`, `cover_scale` of the mask
 # into the picture: where the promoted picture shows it); where it passes
 # the picture, elsewhere the picture × (1 − amount) — 1 cuts to transparent
 # black, 0.5 dims; `u_invert` keeps the hole and cuts the rest.
-# Premultiplied in and out, so colour and alpha go together. Plan 39 T3:
+# Premultiplied in and out, so colour and alpha go together.
 # `u_flip` reads the mask upside down — for a mask whose rows are top first
-# (a CPU array uploaded as it is: T4's segment worker), where every mask a
+# (a CPU array uploaded as it is: the segment worker), where every mask a
 # GL pass made has its first row at the bottom
 CUT_FS = """
 #version 330
@@ -192,7 +192,7 @@ void main() {
 """
 
 
-# plan 87, black is clear: a premultiplied picture keyed by the shared ramp
+# black is clear: a premultiplied picture keyed by the shared ramp
 # (`glsl.KEY_RAMP`) of its straight colour. Keep colour leaves the colour as
 # it was and takes only the alpha down (not inverted); else colour and alpha
 # go together. `u_mode` 1 keys by the ramp here, 2 by `u_keymask` (the ramp
@@ -222,7 +222,7 @@ void main() {
 }
 """
 
-# plan 39 T4 (W4, motion mode): the mask where the picture differs from the
+# motion mode: the mask where the picture differs from the
 # background model — `d` the largest channel's difference (premultiplied,
 # alpha included), the mask `smoothstep(sense − soft, sense + soft, d)`;
 # and the model learning the picture, `bg ← mix(bg, picture, k)` (k from
@@ -366,7 +366,7 @@ class MaskPasses:
         return out
 
     def feather(self, mask: moderngl.Texture, key, radius: float) -> moderngl.Texture:
-        """Mask `mask` blurred by `radius` px (plan 39 T4: a segment's matte,
+        """Mask `mask` blurred by `radius` px (a segment's matte,
         `BLUR_FS` twice) into a target of its own at the mask's size, kept
         under frame key `key` (the half-way one `(key, "/blur")`) — its rows
         as `mask`'s (a blur does not mind which way up). `mask` itself at
@@ -385,7 +385,7 @@ class MaskPasses:
         return out
 
     def key(self, src: moderngl.Texture, key, size: tuple[int, int], k) -> moderngl.Texture:
-        """Picture `src` keyed (plan 87, `KEY_FS`) into an RGBA target at
+        """Picture `src` keyed (`KEY_FS`) into an RGBA target at
         `size` kept under frame key `key`, by `k` (a `media_tex.Key`-shaped
         value: measure, level, soft, keep, feather, invert): with a feather,
         the ramp alone first into a one-channel target `(key, "ramp")`,
@@ -412,7 +412,7 @@ class MaskPasses:
 
     def motion(self, src: moderngl.Texture, bg: moderngl.Texture | None,
                dst: moderngl.Framebuffer, *, sense: float, soft: float = MOTION_SOFT) -> None:
-        """Motion mode's mask into `dst`'s viewport (plan 39 T4, `MOTION_FS`):
+        """Motion mode's mask into `dst`'s viewport (`MOTION_FS`):
         1 where picture `src` differs from background `bg` past `sense`,
         both read 1:1 at `dst`'s size. No background yet: nothing passes."""
         rect = tuple(int(v) for v in dst.viewport)
@@ -458,24 +458,24 @@ class MaskPasses:
 
     def promote(self, mask: moderngl.Texture, dst: moderngl.Framebuffer, *,
                 flip: bool = False) -> None:
-        """Mask `mask` as a picture into `dst`'s viewport (W1): white where
+        """Mask `mask` as a picture into `dst`'s viewport: white where
         it passes, black elsewhere, opaque, fitted by cover. `flip`: its rows
-        are top first (plan 39 T4), so it is read upside down."""
+        are top first, so it is read upside down."""
         rect = tuple(int(v) for v in dst.viewport)
         self._run("promote", dst, rect, (mask,), u_mask=0,
                   u_scale=cover_scale(mask.size, rect[2:]), u_flip=int(bool(flip)))
 
     def cut(self, src: moderngl.Texture, mask: moderngl.Texture, dst: moderngl.Framebuffer,
             *, invert: bool = False, amount: float = 1.0, flip: bool = False) -> None:
-        """Picture `src` cut by `mask` into `dst`'s viewport (W3, `CUT_FS`):
+        """Picture `src` cut by `mask` into `dst`'s viewport (`CUT_FS`):
         what passes stays, the rest goes to transparent black by `amount`
         (1 all the way, 0.5 dimmed by half, 0 not at all); `invert` keeps
         the hole and cuts the rest. `src` is read 1:1 — the picture at
         `dst`'s size; the mask is fitted into it by cover, as the promotion
         fits it, sampled bilinearly. `flip`: the mask's rows are top first
-        (a CPU array uploaded as it is — plan 39 T4's segment sets it), so
-        it is read upside down. Callers: the `cut` node (plan 39 T3,
-        `graph.CutNode`), and T4's `segment.fg` / `.bg` (the bg inverted)."""
+        (a CPU array uploaded as it is — a segment's matte), so
+        it is read upside down. Callers: the `cut` node (`graph.CutNode`),
+        and `segment.fg` / `.bg` (the bg inverted)."""
         rect = tuple(int(v) for v in dst.viewport)
         self._run("cut", dst, rect, (src, mask), u_src=0, u_mask=1,
                   u_scale=cover_scale(mask.size, rect[2:]),
@@ -489,7 +489,7 @@ class MaskPasses:
         into an R8 target: its red is the mask), kept under frame key `key` —
         what a mask port that reads the frame's pixels 1:1 binds
         (`lookback.cover`), so the mask lands where its promoted picture
-        shows it. `flip` (plan 39 T4): its rows are top first — the refit
+        shows it. `flip`: its rows are top first — the refit
         turns it the right way up, as every GL mask is. Returns `mask`
         itself when it is that size already and needs no turning."""
         size = (int(size[0]), int(size[1]))

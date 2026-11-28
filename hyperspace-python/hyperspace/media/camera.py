@@ -1,4 +1,4 @@
-"""Cameras (plan 32 T8): this Mac's webcams and capture cards as
+"""Cameras: this Mac's webcams and capture cards as
 `camera:<name>` sources.
 
 `CameraKind` is a ``kind = "camera"`` device entry. Its scan (on the media
@@ -23,7 +23,7 @@ FPS = 30
 SIZE = "1280x720"
 # what an open tries, in order: 720p, 1080p, 480p at FPS, then the
 # device's own default (no options). The one that opened is tried first
-# next time (final review A-I2)
+# next time
 MODES: tuple[dict[str, str], ...] = (
     {"framerate": str(FPS), "video_size": SIZE},
     {"framerate": str(FPS), "video_size": "1920x1080"},

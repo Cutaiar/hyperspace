@@ -215,7 +215,8 @@ def test_the_fill_is_inset_one_pixel_on_every_side():
     is clipped to the padding box, so five of the six variants have a 1 px
     fully transparent ring around their fill. Measured on a `default` button
     pinned to x 20 y 20 w 80 h 32: the fill paints into columns 21..98 and
-    rows 21..50, and columns 20 / 99 and rows 20 / 51 show the page.
+    pixel lines y = 21..50, and columns 20 / 99 and lines y = 20 / 51 show
+    the page.
     """
     fx, fy, fw, fh = CB.fill_rect(20.0, 20.0, 80.0, 32.0, (1.0,) * 4)
     assert (fx, fy) == (21.0, 21.0)
@@ -292,8 +293,7 @@ def test_variant_fill_matches_the_browser(theme_name, variant, state, rgb):
 
 
 def test_default_hovers_on_an_alpha_and_not_on_a_mix():
-    """`hover:bg-primary/80` — and the stub it supersedes had BOTH halves of
-    this wrong: it mixed 10% toward `background` and it used /90. Measured
+    """`hover:bg-primary/80`: an alpha, not a mix toward `background`. Measured
     light hover is 69; a 10% mix toward white would be 46."""
     assert TL["default"]["hover_fill"] == ("primary", 0.8)
     assert composite(c(LIGHT, ("primary", 0.8)), WHITE) == (69, 69, 69)
@@ -304,7 +304,7 @@ def test_default_hovers_on_an_alpha_and_not_on_a_mix():
 
 def test_outline_is_opaque_background_in_light_and_a_tint_in_dark():
     """Not transparent in either: `bg-background` in light,
-    `dark:bg-input/30` in dark. The stub had it transparent."""
+    `dark:bg-input/30` in dark."""
     assert TL["outline"]["fill"] == ("background", 1.0)
     assert TD["outline"]["fill"] == ("input", 0.3)
     assert composite(c(LIGHT, TL["outline"]["fill"]), WHITE) == (255, 255, 255)
@@ -488,19 +488,18 @@ def test_every_other_variant_focuses_to_ring_over_fifty_percent():
 # --------------------------------------------------------------------------
 
 def test_the_press_nudge_is_whatever_the_constant_says_and_is_uniform():
-    """The browser nudges; this kit, by request, does not — and the point of
+    """The browser nudges; this kit does not — and the point of
     this test is that there is exactly ONE switch.
 
-    Measured on the current registry Button:
+    Measured on the registry Button:
     `active:not-aria-[haspopup]:translate-y-px` reads back as
     `translate: 0px 1px` with `transform: none`, and the box's own rect moves
     784.375 -> 785.375 while the mouse is held. `aria-haspopup` suppresses
     it so a dropdown trigger does not bounce.
 
-    `CB.NUDGE` is 0.0 here because a 1px drop was asked to go, twice. What
-    this test pins is that whatever the constant says applies EVERYWHERE —
-    a plain Button and a ButtonGroup member go through the same code path,
-    which is what went wrong before: one was changed and the other was not.
+    `CB.NUDGE` is 0.0 here (no 1px drop). What this test pins is that
+    whatever the constant says applies EVERYWHERE: a plain Button and a
+    ButtonGroup member go through the same code path.
     """
     # whatever the constant is, the paint follows it exactly
     rest = D.snap(24.0, 784.375, 65.71875, 32.0)
@@ -581,7 +580,7 @@ def test_disabled_does_NOT_fold_the_border_over_the_fill():
 
     The only case that can tell them apart is a disabled dark `outline`,
     whose border is white/15 over a white/4.5 fill. Chromium paints the
-    border at 28 and the fill at 14 (re-measured: 96 of the 100 pixels
+    border at 28 and the fill at 14 (96 of the 100 pixels
     sampled well inside the fill, the rest being label glyphs). Dimming each
     separately predicts 28.3 and 15.5; folding the border over the fill
     first predicts 33 — five levels out, which is four more than the

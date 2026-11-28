@@ -1,10 +1,9 @@
 """End-to-end interaction tests, driven by synthetic input and read back
 from pixels.
 
-These exist because of a bug they would have caught and my earlier manual
-check did not: the row kebab flickered and could never be clicked. The check
-I ran hovered for six frames, which is *shorter than the 150ms transition*,
-so the oscillation had not started yet and a screenshot looked fine.
+A row kebab that flickers and cannot be clicked is invisible to a check that
+hovers for six frames, which is *shorter than the 150ms transition*: the
+oscillation has not started yet and a screenshot looks fine.
 
 So every test here **dwells well past the easing period** and asserts
 stability over time, not just the state of one frame. A UI bug that needs
@@ -96,11 +95,11 @@ def ink(frame, x, y, r=9):
 
 
 def test_kebab_stays_put_while_hovered(DB):
-    """The regression. Hovering the kebab must not make it come and go.
+    """Hovering the kebab must not make it come and go.
 
-    The old code gated the kebab's *submission* on the row's hover, so the
-    kebab took the hover, the row lost it, the kebab was withdrawn, the row
-    regained it — forever, at the easing's period.
+    Gating the kebab's *submission* on the row's hover would loop: the kebab
+    takes the hover, the row loses it, the kebab is withdrawn, the row
+    regains it, at the easing's period.
     """
     pre, x, y = kebab_xy(DB)
     frames = DB.render("dark", W, H, script=pre + [(x, y)] * DWELL)
@@ -113,8 +112,8 @@ def test_kebab_stays_put_while_hovered(DB):
 
 
 def test_kebab_opens_the_menu_after_a_long_hover(DB):
-    """Press after dwelling — the case that was broken for a real person,
-    who takes far longer than six frames to move and click."""
+    """Press after dwelling, as a real person does: far longer than six
+    frames to move and click."""
     pre, x, y = kebab_xy(DB)
     script = pre + [(x, y)] * DWELL + [(x, y, True)] * 2 + [(x, y, False)] * 14
     frames = DB.render("dark", W, H, script=script)
@@ -205,8 +204,8 @@ def test_every_widget_id_is_unique(DB):
 #
 # Same rule as above: every one of these dwells well past the 150ms easing
 # (DWELL = 40 frames against a 9-frame transition) and asserts stability over
-# time rather than the state of one frame. The kebab bug survived a six-frame
-# check because the oscillation had not started yet.
+# time rather than the state of one frame. A six-frame check misses an
+# oscillation that has not started yet.
 
 
 def ctl_rect(DB, i):
@@ -412,8 +411,8 @@ def test_input_text_is_visible_in_both_themes(DB):
 
 def page_view(DB):
     """The page's scroll viewport: everything below the header, right of
-    the sidebar. The whole body scrolls now, not the table on its own - at
-    the window heights people use, the content above left the table a
+    the sidebar. The whole body scrolls, not the table on its own - at
+    the window heights people use, the content above leaves the table a
     viewport one row deep."""
     return (DB.SIDEBAR_W, DB.HEADER_H,
             W - DB.SIDEBAR_W, H - DB.HEADER_H)
@@ -525,10 +524,10 @@ def test_the_thumb_lands_where_the_geometry_says(DB):
                        thumb_inset=s["thumb_inset"], thumb_min=s["thumb_min"])
     assert t is not None
     # Differenced against a column just LEFT of the thumb, inside the same
-    # rows. Two earlier attempts measured the wrong thing: a raw column
-    # crosses every 34px row separator (and read a thumb 42px tall), and
-    # differencing against an unhovered frame removes the hovered ROW's tint
-    # too, which starts exactly where the thumb does not.
+    # rows. A raw column crosses every 34px row separator (and reads a
+    # thumb 42px tall), and differencing against an unhovered frame removes
+    # the hovered ROW's tint too, which starts exactly where the thumb does
+    # not.
     f = frames[-1]
     col = int(t.x + t.w / 2)
     ref = int(t.x) - 4
@@ -545,10 +544,9 @@ def test_the_thumb_lands_where_the_geometry_says(DB):
 # --------------------------------------------------------------------------
 # The components the agents built, driven in the demo
 # --------------------------------------------------------------------------
-# They had unit tests and gallery chrome, but nothing exercised them with a
-# pointer until they were composed into the dashboard. That gap is the whole
-# reason the demo is the dashboard: three of the bugs in this file's history
-# were invisible to the diff by construction.
+# Unit tests and gallery chrome do not exercise these with a pointer; the
+# dashboard composes them, so the demo is the dashboard. Some bugs are
+# invisible to the pixel diff by construction.
 
 
 def test_right_click_opens_the_context_menu(DB):
@@ -601,7 +599,7 @@ def test_the_combobox_opens_and_filters(DB):
     r = CC.LAST_RECT.get("##cb.ctl.find")
     assert r, "the combobox panel did not open"
     full_h = r[3]
-    # the panel sits BELOW the field now - the trigger IS the input
+    # the panel sits BELOW the field - the trigger IS the input
     rr = DB.lay_out(W, H)
     fy = rr.ctl_rows[5][1]
     assert r[1] > fy, "the list did not open below the field"
@@ -654,13 +652,11 @@ def test_a_mouse_click_leaves_no_focus_ring(DB):
     the next as you clicked along a group. The browser rings a control
     reached by keyboard and never one reached by pointer.
 
-    Rewritten, because the first version of this test could not fail: it
-    compared the rows 1..6 px above the control ROW, and a Button sits
-    centred inside its row, so the band it read was pixels no ring would ever
-    reach whatever the code did. It now reads the three columns immediately
-    outside the Button's own box - the strip `draw.ring` is calibrated to
-    cover - and checks the keyboard case in the same breath, so "no ring"
-    cannot pass by the ring being impossible.
+    It reads the three columns immediately outside the Button's own box -
+    the strip `draw.ring` is calibrated to cover - and checks the keyboard
+    case in the same breath, so "no ring" cannot pass by the ring being
+    impossible. (A Button sits centred inside its row, so rows above the row
+    are pixels no ring reaches.)
 
     Dwells 40 frames after the release, well past the 150ms the ring takes
     to ease in.
@@ -1109,12 +1105,10 @@ def test_a_mouse_opened_select_trigger_has_no_ring(DB):
 
     ground = ground_of("light")
     rest = one_widget("light", paint, DWELL, script=[FAR] * DWELL)
-    # A TAB and nothing else. The ArrowDown that used to stand here was
-    # there only to set `Ui.focus_visible`, which a Tab does on its own -
-    # and ArrowDown is now an OPENER, measured on `?probe`'s `select.kb`
-    # (Enter, Space, ArrowDown and ArrowUp all open a Select). An open
-    # trigger has no ring by design, which is the next assertion down, so
-    # pressing it here asked this test for both answers at once.
+    # A TAB and nothing else: it sets `Ui.focus_visible` on its own, and
+    # ArrowDown is an OPENER (Enter, Space, ArrowDown and ArrowUp all open a
+    # Select). An open trigger has no ring by design, which is the next
+    # assertion down, so pressing it here would ask for both answers at once.
     kb = one_widget("light", paint, DWELL, script=[FAR] * DWELL,
                     keys=[(2, imgui.Key.tab)])
     on = (PROBE_X + 40.0, PROBE_Y + hh / 2)
@@ -1275,12 +1269,11 @@ def test_the_inputs_value_sits_on_the_placeholders_line(DB):
     must land on the same rows. Nothing else about an input is worth
     asserting here: this is the thing a person looks at.
 
-    The first version of this test measured the SELECTION BAND - imgui's own
-    line box - and the band was centred while the glyphs were not, so it
-    passed on text that visibly sat high. A proxy for the observable is not
-    the observable.
+    It does not measure the SELECTION BAND (imgui's own line box): the band
+    is centred while the glyphs may not be. A proxy for the observable is
+    not the observable.
 
-    Two causes, both now fixed. ImGui draws an InputText's text at the
+    Two things move the glyphs. ImGui draws an InputText's text at the
     cursor PLUS `FramePadding`, default (4, 3), which the kit's own frame
     does not want; and the stock widget renders in imgui's CURRENT font,
     which is not the Geist face at `font * FONT_SPAN_EM` that `draw.label`
@@ -1358,11 +1351,9 @@ def test_the_inputs_value_sits_on_the_placeholders_line(DB):
 # the four controls that had no focus ring at all
 # --------------------------------------------------------------------------
 #
-# RETRO row 21: `invisible_button` could not take keyboard focus in ImGui
-# 1.92.9, so the Button's ring - the "reference implementation" - had never
-# painted once. Porting it would have shipped four more rings that cannot
-# appear and four tests that cannot fail. So each of these is DRIVEN: a real
-# Tab, a real dwell past the 9-frame transition, and pixels.
+# `invisible_button` cannot take keyboard focus in ImGui 1.92.9, so a ring
+# can silently never paint. Each of these is DRIVEN: a real Tab, a real
+# dwell past the 9-frame transition, and pixels.
 
 
 def _col_mean(frame, x, y, h):

@@ -2,8 +2,7 @@
 
 `combobox_size` and `list_content_h` both measure the same `_rows_node`
 tree, so the size the popup reserves and the content height its ScrollArea
-is told cannot disagree (RETRO row 22). Moved out of `comp_combobox.py` by
-`HANDOFF.md` item 3c, which re-exports both.
+is told cannot disagree. `comp_combobox.py` re-exports both.
 """
 
 from __future__ import annotations
@@ -92,11 +91,7 @@ def combobox_size(items, faces, *, min_w: float = 0.0, measure=None,
     cw, ch = B.wants(_rows_node(items, mw, tbl, empty=empty))
     pad = tbl["pad"]
     # NO search field. The panel is the list and the list's padding, because
-    # the field IS the trigger — that is the whole shape of the real Base UI
-    # component. This function went on reserving `field_h + field_pad` after
-    # `combobox()` stopped drawing one, so the panel it predicted was 36 px
-    # taller than the panel the widget drew. Nothing caught it until a test
-    # asked both halves the same question.
+    # the field IS the trigger, as in the real Base UI component.
     # `data-empty:p-0` on the list: with nothing to show, the panel IS the
     # empty block - 36 tall, no 4px rails. Measured.
     if not any(_is_row(it) for it in items):

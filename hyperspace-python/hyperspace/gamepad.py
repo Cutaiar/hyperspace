@@ -8,11 +8,11 @@ Bluetooth (fw 5.9.2709.0). Buttons 2/5/8/9 are unused gaps on this
 firmware. Works identically over USB-C.
 
 A pad with a Share button under the Xbox button reports it at 15 and
-19 buttons after it (tools/pad_probe.py, 2026-10-15); the sixteen below
+19 buttons after it (tools/pad_probe.py); the sixteen below
 are the same, so one map reads both pads. Every other index a pad
 reports has no name here: it is read and ignored.
 
-**Every pad in one vocabulary (plan 42).** A pad is read by one of
+**Every pad in one vocabulary.** A pad is read by one of
 four roads and lands in the same state — `buttons` by the indices
 below (`pads.models.CANON`), the GLFW hat bits, six GLFW-style axes:
 
@@ -85,7 +85,7 @@ BUTTONS = {"S": A, "E": B, "W": X, "N": Y, "LB": LB, "RB": RB, "VIEW": VIEW,
            "MENU": MENU, "GUIDE": GUIDE, "LSTICK": LSTICK, "RSTICK": RSTICK,
            "SHARE": SHARE}
 HATS = {"N": HAT_UP, "E": HAT_RIGHT, "S": HAT_DOWN, "W": HAT_LEFT}
-# what an Xbox pad lacks (plan 42), at indices no GLFW pad reaches: the
+# what an Xbox pad lacks, at indices no GLFW pad reaches: the
 # touchpad's click, the Edge's back buttons and its Fn buttons. A pad
 # lists them only when its model has them (`Pad.buttons_named`)
 EXTRA_BUTTONS = dict(models.EXTRAS)
@@ -101,7 +101,7 @@ SONY_GLFW_BUTTONS = {0: X, 1: A, 2: B, 3: Y, 4: LB, 5: RB, 8: VIEW, 9: MENU,
 SONY_GLFW_AXES = (0, 1, 2, 5, 3, 4)
 XBOX_RAW_MAX = 32          # an Xbox-mapped pad's raw buttons kept, below the extras
 
-# the touchpad's and the sensors' schemes (plan 42), fed by the pad device
+# the touchpad's and the sensors' schemes, fed by the pad device
 TOUCH_SCHEME, MOTION_SCHEME = "touch", "motion"
 EXTRA_SCHEMES = (TOUCH_SCHEME, MOTION_SCHEME)
 
@@ -113,15 +113,15 @@ AXIS_LABELS = ("left stick X", "left stick Y", "right stick X", "right stick Y",
 AXIS_RESTS = (0.5, 0.5, 0.5, 0.5, 0.0, 0.0)
 STICKS = frozenset(AXES[:4])      # centred: a learn on one lands a push
 
-# plan 56: a pair's lane, its scheme (routing_sources.PAIR_SCHEME, restated:
+# a pair's lane, its scheme (routing_sources.PAIR_SCHEME, restated:
 # nothing above pads/ is imported here; tests/test_paired_axes.py holds them equal)
 PAIR_SCHEME = "pair"
 
 # how far from rest an axis must travel to complete a learn
 LEARN_TRAVEL = 0.4
 
-# the sticks' default camera job (`steer`, plan 27 B2: moved here from
-# app.frame), each axis while no route names it: the left stick orbits,
+# the sticks' default camera job (`steer`), each axis while no route
+# names it: the left stick orbits,
 # the right stick's Y zooms, its X rides the W planes' rate multipliers
 # (rot.rate.*W, the 4D spin) and the triggers ride depth4
 ORBIT_PER_S = 2.2     # camera.yaw / pitch, radians a second at full throw
@@ -224,7 +224,7 @@ def _layout() -> list[Control]:
                                 ("E", "→", 2.3, 0.95), ("S", "↓", 1.15, 1.9)):
         out.append(Control(f"hat:{name}", "button", glyph, 2.75 + dx, 2.6 + dy, 1.15, 0.9))
     # the face buttons, in their diamond, and the right stick under them
-    # (the Xbox face's own letters: a model with its own says so, `Model.glyphs`, row 552)
+    # (the Xbox face's own letters: a model with its own says so, `Model.glyphs`)
     for name, glyph, dx, dy in (("N", "Y", 1.25, 0.0), ("W", "X", 0.0, 1.05),
                                 ("E", "B", 2.5, 1.05), ("S", "A", 1.25, 2.1)):
         btn(name, glyph, 8.6 + dx, 0.95 + dy, 1.25, 1.0)
@@ -241,7 +241,7 @@ LAYOUT_H = max(c.y + c.h for c in LAYOUT)
 _BY_SOURCE = {c.source: c for c in LAYOUT}
 
 
-# ---- a pad's own face (plan 42) ----
+# ---- a pad's own face ----
 # The layout above is the Xbox's. A pad whose model has more draws more,
 # in the room the Xbox face leaves: the touchpad across the top (its click
 # `pad:TOUCH`, every ``touch:`` row on it), a tilt bubble under the left
@@ -273,7 +273,7 @@ def layout_for(model) -> list[Control]:
         name = c.address if c.source.startswith(("pad:", "axis:")) else ""
         have = f"{models.HAT_PREFIX}{c.address}" if c.source.startswith("hat:") else c.address
         if c.source.startswith(("pad:", "axis:", "hat:")) and not model.has_control(have):
-            continue                   # a single Joy-Con: no right stick, no D-pad (plan 43)
+            continue                   # a single Joy-Con: no right stick, no D-pad
         out.append(replace(c, glyph=models.glyph(model, name, c.glyph)) if name else c)
     for cap in ("touch", "motion", "back", "fn"):
         if model.has(cap):
@@ -335,7 +335,7 @@ def named(source: str) -> str | None:
     c = control(source)
     return f"{c.glyph} ({c.name})" if c is not None else None
 
-# ---- the dial (prototype): each stick also read as a clock face ----
+# ---- the dial: each stick also read as a clock face ----
 # A stick's angle picks one of DIAL equal sectors — sector 0 straight up,
 # then clockwise — and its distance from centre, 0 at rest to 1 at the
 # rim, is how far that sector's lane reads. Every lane rests at 0, so a
@@ -596,14 +596,13 @@ class UsbPad:
 
 
 class Claims:
-    """What the pad devices share (plan 27 B6: several pads at once), one
+    """What the pad devices share (several pads at once), one
     per device registry (devices.Context.pads): which GLFW joystick each
     pad reads (`taken`, jid → the `Pad`), which indices a pad is pinned to
     (`pinned`, an entry's ``joystick = n`` — no unpinned pad takes one),
     the pads in attach order (`order`, the list's), the one libusb reader
     (`reader`, made the first time a pad borrows it) and the pad it is lent
-    to now (`usb`). The reader is **lent, not owned** (ruling 3 as
-    amended): each poll it goes to its holder while that pad still has
+    to now (`usb`). The reader is **lent, not owned**: each poll it goes to its holder while that pad still has
     `usb` on and no GLFW joystick (sticky), else to the first pad in
     `order` with `usb` on and no GLFW joystick. A `Pad` no device attached
     has none of this: it reads the first present joystick and its own
@@ -615,7 +614,7 @@ class Claims:
         self.order: list[Pad] = []
         self.reader: UsbPad | None = None
         self.usb: Pad | None = None
-        self.hub = None        # pads.hid.HidHub, made the first time a `hid` pad looks (plan 42)
+        self.hub = None        # pads.hid.HidHub, made the first time a `hid` pad looks
 
     def lend(self) -> Pad | None:
         """Who holds the reader this poll: the holder while it still may
@@ -663,7 +662,7 @@ class Pad:
     """Edge detection and analog reads over polled pad state. `usb`: look
     for a wired 360 pad over libusb when GLFW has none (`UsbPad`).
 
-    Several pads at once (plan 27 B6): a pad its device `attach`es to the
+    Several pads at once: a pad its device `attach`es to the
     registry's shared `Claims` reads the next present GLFW joystick no
     other pad has taken (the devices poll in list order, so the first
     listed pad takes the first), or — pinned (`joystick`) — that index
@@ -674,7 +673,7 @@ class Pad:
     def __init__(self, usb: bool = False, hid: bool = False, controller: str = "any",
                  tape=None):
         self.jid: int | None = None
-        # plan 42: which controllers this pad may take, the hid road, a tape
+        # which controllers this pad may take, the hid road, a tape
         self.controller = controller or "any"
         self.hid = hid
         self.tape = tape                   # a path: read this recording instead
@@ -704,7 +703,7 @@ class Pad:
         self.dial_sectors: dict[str, int | None] = dict.fromkeys(DIAL_STICKS)
 
     def attach(self, claims: Claims, role: str = "", joystick: int | None = None) -> None:
-        """Join the other pad devices (plan 27 B6): `claims` is the
+        """Join the other pad devices: `claims` is the
         registry's shared `Claims`, `role` this pad's entry, `joystick` a
         pinned GLFW index. Attach order is list order: it decides who the
         one libusb reader is lent to (`Claims.lend`)."""
@@ -867,7 +866,7 @@ class Pad:
 
     @property
     def status(self) -> str:
-        """The device line's word (plan 27 B2): `connected` while a pad is
+        """The device line's word: `connected` while a pad is
         read (GLFW or USB), `lost` while none is — the pad looks for one
         itself on every poll, so it is never an error."""
         return "connected" if self.on else "lost"
@@ -886,7 +885,7 @@ class Pad:
     def poll(self, dt: float | None = None) -> None:
         """Read the pad for this frame: a tape when the entry names one,
         else a GLFW joystick, else a hid pad, else the libusb reader
-        (plan 42's roads, in that order). `dt` the frame's time, for the
+        (the roads, in that order). `dt` the frame's time, for the
         touch and motion lanes (None: the clock's since the last poll)."""
         source = getattr(self, "source", None)
         now = time.monotonic()
@@ -985,8 +984,8 @@ class Pad:
         if take is None:               # a reader that sums nothing (a test's): per frame
             self.motion.step(gyro, accel, dt)
             return
-        # the turn the reader summed on its thread, every report (plan 47
-        # review): a slow frame loses none, a stalled pad adds none
+        # the turn the reader summed on its thread, every report:
+        # a slow frame loses none, a stalled pad adds none
         turn, n = take()
         self.motion.add_turn(amap.pick(turn, amap.gyro))
         if n:
@@ -1027,15 +1026,14 @@ class Pad:
         return self.source or ""
 
     def close(self) -> None:
-        """Stop the USB reader thread, when one was started (plan 27 B1:
-        the pad is on the one close list, so a restart's new image finds
-        the device free), and forget the pad: a later `poll` would find
+        """Stop the USB reader thread, when one was started (the pad is on the one close list, so a
+        restart's new image finds the device free), and forget the pad: a later `poll` would find
         it again. Never raises."""
         usb = getattr(self, "usb_pad", None)
         self.usb_pad = None
         claims = getattr(self, "claims", None)
         if claims is not None:
-            claims.release(self)       # its joystick, its pin, the USB reader (plan 27 B6)
+            claims.release(self)       # its joystick, its pin, the USB reader
             if self in claims.order:
                 claims.order.remove(self)
             # the shared reader closes only when no pad left could borrow it
@@ -1086,7 +1084,7 @@ class Pad:
         if not getattr(self, "usb", False):
             return None
         claims = getattr(self, "claims", None)
-        if claims is not None:              # several pads: one reader, lent (plan 27 B6)
+        if claims is not None:              # several pads: one reader, lent
             if claims.lend() is not self:
                 return None
             claims.usb = self
@@ -1156,7 +1154,7 @@ def learn_from(pad: Pad, learn, role: str = "", dials=frozenset,
     (not modulatable) only a button can: the axes are not asked, so a
     nudged stick never ends the learn. True when the press was the
     learn's, so the router lets that frame's button rows be. `role` is a
-    second pad's qualifier (plan 27 B6): its rows read ``pad@p2:S``,
+    second pad's qualifier: its rows read ``pad@p2:S``,
     ``hat@p2:N``, ``axis@p2:LX``; "" (the primary pad) leaves them bare.
     `skip`: the buttons, unqualified (``pad:S``, ``hat:S``), that land
     nothing — the totem's while it reads this pad (as `Router.pad`'s)."""
@@ -1167,10 +1165,10 @@ def learn_from(pad: Pad, learn, role: str = "", dials=frozenset,
     model = getattr(pad, "model", None)
     model = model if models.is_model(model) else None
 
-    def no_pole(name: str) -> bool:         # plan 56: armed for a pair, only a free control
+    def no_pole(name: str) -> bool:         # armed for a pair, only a free control
         return str(getattr(learn, "want", "")).startswith(PAIR_SCHEME) and not models.control_free(
             model, name)
-    named = getattr(pad, "buttons_named", None)      # plan 42: the extras the pad has
+    named = getattr(pad, "buttons_named", None)      # the extras the pad has
     for name, i in (named if isinstance(named, dict) else BUTTONS).items():
         if f"pad:{name}" in skip or no_pole(name):
             continue
@@ -1217,7 +1215,7 @@ GESTURE_LEARN = 0.2            # pinch / twist / tilt this far from rest lands i
 
 
 def _learn_extra(pad, learn=None) -> tuple[str, str, bool] | None:
-    """The touch or motion lane a Learn pad lands (plan 42), or None: a
+    """The touch or motion lane a Learn pad lands, or None: a
     finger dragged `TOUCH_LEARN_TRAVEL` along x or y (whichever it went
     further), a pinch or a twist `GESTURE_LEARN` from rest, a tap; a tilt
     `GESTURE_LEARN` in roll or pitch, a shake. The spin and energy lanes
@@ -1267,8 +1265,8 @@ def paired_with(source: str, model=None) -> str | None:
 
 
 def degrees_of_freedom(model=None, pairs=None) -> list[tuple[str, ...]]:
-    """The pad's degrees of freedom, as the sources each is made of (plan 56,
-    for node mode, plan 53): a stick's axis and a trigger one each, a pair
+    """The pad's degrees of freedom, as the sources each is made of (for node mode): a stick's axis and a
+    trigger one each, a pair
     of discrete controls one, any other discrete control one. `pairs`, the
     (+, −) control names to pair: None is `model`'s natural ones; a pair
     with a pole the pad lacks, or one already paired, is left out."""
@@ -1293,10 +1291,10 @@ def degrees_of_freedom(model=None, pairs=None) -> list[tuple[str, ...]]:
 def publish(router, scheme: str = "axis", model=None) -> None:
     """The `axis` lanes' names, labels and rests on `router` (its `names`,
     `labels`, `rests` dicts, duck-typed) — the pad's to say, not the
-    table's (plan 27 B2: they left `Router._publish_axes`). Once: the names
+    table's. Once: the names
     map is published as one new dict, so the router's address cache keeps.
-    `scheme` is a second pad's qualified key (``axis@p2``, plan 27 B6)."""
-    # plan 56: `model`'s natural pairs; merged every frame, since a loadable patch's row
+    `scheme` is a second pad's qualified key (``axis@p2``)."""
+    # `model`'s natural pairs; merged every frame, since a loadable patch's row
     # can have named a pair first, and another model can come (`Sources.add_pairs`)
     add = getattr(router, "add_pairs", None)
     if add is not None:
@@ -1319,7 +1317,7 @@ def ride_depth(p, octaves: float) -> None:
 
 
 def steer(pad, router, reg, dt: float, routed=None, scheme: str = "axis") -> None:
-    """The sticks' default camera job (moved from app.frame, plan 27 B2):
+    """The sticks' default camera job:
     each axis **while no route names it** (`router.claimed("axis")`, an
     `axis:LX` row takes its stick off the job) writes a relative move on
     the base — the left stick orbits (`camera.yaw` / `pitch`), the right

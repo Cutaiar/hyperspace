@@ -1,4 +1,4 @@
-"""The GRAPH page's model (plan 28 N2): both graphs as one set of nodes,
+"""The GRAPH page's model: both graphs as one set of nodes,
 ports and cables, built from the live objects and drawn by ui_graph.py.
 
 Nothing here draws. `build` reads the binding
@@ -17,36 +17,34 @@ this one read the same rows, so an edit on either is on both next frame.
 
 - ``device`` — one per listed device, by role (``device:<role>``), grey
   while it is not connected (its cables dormant); a device with `layers`
-  one per layer (plan 28 N5: *apc40* and *apc40 (SHIFT)*,
+  one per layer (*apc40* and *apc40 (SHIFT)*,
   ``device:<role>/global``, `device_nodes`); a role this rig lists no
   device for, a grey placeholder of that id (its cables waiting);
   ``source`` — the
   keys, which are no device; ``analyzer`` — one port per band lane;
 - ``lfo`` — each LFO (``lfo.<n>``), its knobs (`lfo.<n>.*`) as input
-  ports and its lane as the output; ``env`` (plan 31) — each envelope
+  ports and its lane as the output; ``env`` — each envelope
   (``env.<n>``), the same way; ``seq`` — the step sequencer (one node,
   ``seq``): its params as inputs and a trigger output per lane
   (``seq:<l>``), each bound lane's envelope drawn as a ``lane`` cable into
-  that envelope's ``fire``; ``modifier`` (``mod.<n>``, plan 28
-  N1) — its inputs, its params, its lane; ``macro`` (``macro.<n>``) — a
+  that envelope's ``fire``; ``modifier`` (``mod.<n>``) — its inputs, its params, its lane; ``macro`` (``macro.<n>``) — a
   bus: its knob in, one output, its subscribers as cables;
-- ``render`` / ``output`` — the wired frame's nodes (plan 35 G): one per
+- ``render`` / ``output`` — the wired frame's nodes: one per
   name the loadable patch's section says, by an entry or a wire's end, in the
   owner's ids (``render:<id>``: ``render:scene``, ``render:hands.layer``,
-  ``render:lookback``, ``render:acid.2`` …; plan 89: an effect's slots
+  ``render:lookback``, ``render:acid.2`` …; an effect's slots
   are its own node's ports), titled in the
   owner's words (`label_of`, `LABELS`) and hovered by what each is
   (`hover_of`, `HOVERS`), their ports a wired frame's (`graph.WIRED_TAKES`,
   ``rin:lookback/capture``) and, as input ports, the params of the node
   that owns them (`OWNERS`, the one table); ``render:output.all`` and each
   window ``render:output.<n>`` always; ``render:camera`` — the shared
-  camera (`camera.*`, `eye.*`), the look's one orbit camera (plan 43 C2:
-  its params and its position are the loadable patch's), always there, which
+  camera (`camera.*`, `eye.*`), the look's one orbit camera (its params and its position are the
+  loadable patch's), always there, which
   draws through every scene and so has no picture port; a cloud, the meta controller's; a node the section
   declares or wires that reaches nothing (`unreached`) ``faint``
   ("reaches nothing");
-- ``channel`` — the eight media channels (``render:channel.<c>``, plan 32
-  T10), always, each with its picture out and its `media.<c>.*` params;
+- ``channel`` — the eight media channels (``render:channel.<c>``), always, each with its picture out and its `media.<c>.*` params;
   one with an empty bin and no cable sits on MEDIA's idle line;
 - ``group`` — a node per group of params no render node owns
   (``group:tempo``, ``group:master`` …).
@@ -58,11 +56,11 @@ rows, a macro's base subscriber — many, last touch wins) and a
 ``depth:<pid>`` stub while a route lands on it (a macro's depth
 subscriber scales that route); a modifier's inputs are ``in:<id>.<k>``,
 a macro's output ``bus:<id>``, a render node's ports ``rin:<node>/<port>``
-and ``rout:<node>``; every node's single in / out stub (plan 28 N7, where
+and ``rout:<node>``; every node's single in / out stub (where
 its bundles end while it is collapsed) ``nin:<node>`` / ``nout:<node>``.
 Pins are strings; the page maps them to the widget's integer ids.
 
-**Collapsed nodes and bundles** (plan 28 N7): `summary` is a collapsed
+**Collapsed nodes and bundles**: `summary` is a collapsed
 node's lines (five at most); `wiring` folds every value / trigger cable
 with a collapsed end into one `VBundle` per (source node, target node)
 pair; `land_choices` is the picker a drag onto a stub opens.
@@ -71,29 +69,28 @@ pair; `land_choices` is the picker a drag onto a stub opens.
 `Binding`, into ``mod``), ``setter`` (a desk / pad / key row, into
 ``base``), ``sub`` (a macro subscriber, into ``base`` or ``depth``,
 `ref` (macro id, `Sub`)), ``input`` (a modifier's input), ``render`` (a
-wire of the section, `ref` its `graph.Wire` — plan 36 T1: or a bus cable
+wire of the section, `ref` its `graph.Wire`, or a bus cable
 of the meta controller's, ``rout:output.all.<port>`` into a window's same port, `ref`
 its `graph.bus_wire`, drawn while the open show has not cut it and the
-section does not wire that port itself), ``lane`` (plan 31: a
+section does not wire that port itself), ``lane`` (a
 sequencer lane's envelope binding, `ref` (lane, envelope id) — no row:
 dragging a lane's pin onto an envelope's ``base:env.<n>.fire`` rebinds it,
 and it cannot be deleted). A route's `scale`
 and its `when` gate are said on the cable (`label`), not drawn: a param
-has no output pin. Sink rows are not drawn in this plan.
+has no output pin. Sink rows are not drawn.
 
 **Layout** (`auto_layout`, `home`): positions live in two maps — the
 loadable patch's (`loadable.LAYOUT_KEY`) for the nodes a loadable patch holds (modifiers,
 macros, the render nodes and their params, a patch group's node,
 the LFOs, the envelopes, the sequencer) and the show's for the meta controller's
 (devices, sources, the analyzer, the outputs, a shared meta group's node). An unplaced node is laid out in its
-**area** (plan 28 N9, the owner's decision of 2026-10-20: the canvas
-organised by concern), left to right: *controllers* (the devices, the
+**area** (the canvas organised by concern), left to right: *controllers* (the devices, the
 keys, a placeholder) → *audio* (the analyzer, the band,
 tempo, master, audio and scene params; the small *other* area — the
 loadable patch, ui and desk params — stacked under it) → *modulation* (the LFOs,
-the modifiers, the macros) → (plan 35 G: by primitive) *media* (the
-eight channels, plan 32 T10; plan 33 the pattern, the switches, and any
-effect or composite made of the media alone, `media_made`; plan 34's
+the modifiers, the macros) → *media* (by primitive: the
+eight channels, the pattern, the switches, and any
+effect or composite made of the media alone, `media_made`; the
 delays) → *scene* (the shape, the hands, their layers and guides, a
 cloud, the camera, the scene that draws them, the backdrop) →
 *effects* (the effects — the dream, the Trail and Read among them — an
@@ -128,7 +125,7 @@ from . import graphmigrate, modbank, modgraph, patches
 from . import learn as learnmod
 from . import modifiers as modmod
 from . import sequencer as seqmod
-from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
+from .devices import SCHEME_ROLE
 from .groupwords import group_title
 from .params import PATCH_GROUPS, Kind, Param, Registry, rename_keys
 from .routing import (
@@ -152,18 +149,18 @@ from .routing import (
     row_words,
 )
 
-# signal kinds a port and a cable carry (decision 10: values and triggers;
-# plan 26's image, geometry and mask)
+# signal kinds a port and a cable carry: values and triggers, then image,
+# geometry and mask
 VALUE, TRIGGER = "value", "trigger"
 IMAGE, GEOMETRY, MASK = rgraph.IMAGE, rgraph.GEOMETRY, rgraph.MASK
-FIELD = rgraph.FIELD                     # plan 67 F1
+FIELD = rgraph.FIELD
 TYPES = (VALUE, TRIGGER, IMAGE, GEOMETRY, MASK, FIELD)
 
 KINDS = ("device", "source", "analyzer", "lfo", "env", "seq", "modifier", "macro", "group",
          "render", "output", "channel")
-# plan 35 G: the kinds a wired frame's node is drawn as (its render-side ones)
+# the kinds a wired frame's node is drawn as (its render-side ones)
 FRAME_VKINDS = ("render", "output", "channel")
-# plan 31 G1: ``lane`` is a sequencer lane's envelope binding (``seq.<l>.env``,
+# ``lane`` is a sequencer lane's envelope binding (``seq.<l>.env``,
 # a fixed link the sequencer fires directly — no row), drawn as a cable
 CABLE_KINDS = ("route", "setter", "sub", "input", "render", "lane")
 IN, OUT = "in", "out"
@@ -172,9 +169,9 @@ BASE, MOD, DEPTH = "base", "mod", "depth"
 PATCH_SECTION, META_SECTION = "preset", "meta"
 
 ANALYZER = "analyzer"
-CAMERA = "camera"            # the shared camera's node: `render:camera` (plan 35 V2: was `eye`)
+CAMERA = "camera"            # the shared camera's node: `render:camera`
 MISSING = "missing"          # a group node for the cables' targets no registry holds
-# plan 31 G1: the modulator banks the canvas draws a node per voice of
+# the modulator banks the canvas draws a node per voice of
 # (``lfo.<n>``, ``env.<n>``: the scheme is the node's kind and the params'
 # group), in drawing order, and the sequencer's one node
 BANK_SCHEMES = ("lfo", "env")
@@ -218,7 +215,7 @@ class VPort:
     param: str | None = None
     addr: str | None = None
     bipolar: bool = False        # a source centred on its rest (a hand's roll, a stick)
-    # plan 28 N5: the device layer a desk port sends on ("" every layer: an
+    # the device layer a desk port sends on ("" every layer: an
     # invariant control, any other device's port) and whether that layer is
     # up this frame (`refresh`: the table's latch, `Bindings.layer_of`)
     layer: str = ""
@@ -245,7 +242,7 @@ class VNode:
     status: str = ""
     ref: Any = None
     column: int = 0
-    # plan 28 N5: a layered device's node is one layer's (`layer`, of the
+    # a layered device's node is one layer's (`layer`, of the
     # device of `role`), lit while that layer is up (`up`, `refresh`); a
     # `placeholder` is a role this rig lists no device for (grey, its
     # cables waiting)
@@ -253,26 +250,26 @@ class VNode:
     role: str = ""
     up: bool = True
     placeholder: bool = False
-    # plan 28 N7: how many cables start or end on this node (`build`), for
+    # how many cables start or end on this node (`build`), for
     # its collapsed lines
     wires: int = 0
-    # plan 28 N9: the concern area the canvas lays this node out in
+    # the concern area the canvas lays this node out in
     # (`area_of`, `AREA`), and whether it sits with nothing in and nothing
     # out (`build`: not drawn until its area's idle line is opened)
     area: str = ""
     idle: bool = False
-    # plan 33 U: an effect, composite or switch the loadable patch's graph holds
+    # an effect, composite or switch the loadable patch's graph holds
     # that no path leads from to a sink (`graph.reaches`): kept, never run,
     # drawn faint with the line "reaches nothing" — never idle
     faint: bool = False
-    # R15: faint because nothing is wired into its input, though it may reach
+    # faint because nothing is wired into its input, though it may reach
     # an output — said as what it needs, not "reaches nothing"
     unfed: bool = False
-    # plan 37 C1 (P1): how this node's thumbnail is found (`THUMBS`' word:
+    # how this node's thumbnail is found (`THUMBS`' word:
     # "picture", "scene", "layer", "window", "mask"), None for a node that stays
     # text (the modulation side, a group, the camera); and the size of the
     # picture its thumbnail was last copied from (the page sets it each
-    # frame from `outputs.PreviewTextures.size_of`: C2's hover says it),
+    # frame from `outputs.PreviewTextures.size_of`: the hover says it),
     # None before the first copy
     thumb: str | None = None
     picture: tuple[int, int] | None = None
@@ -305,16 +302,15 @@ class VCable:
     depth: float | None = None
     label: str = ""
     addr: str | None = None
-    # plan 28 N5: the subgraph node (none since plan 44 D3 retired the templates)
-    # the cable is inside of: the page draws it only while that node is
-    # open (ui_graph.is_open); "" for every other cable
+    # the subgraph node the cable is inside of: the page draws it only while
+    # that node is open (ui_graph.is_open); "" for every other cable
     inside: str = ""
 
 
 def node_mode_cable(player: int, src: str, dst: str, control: str, param: str,
                     *, dormant: bool = False, live: float | None = None,
                     addr: str | None = None, ref: Any = None) -> VCable:
-    """One node mode cable (plan 57: a kind of its own, in `ui_graph.KIND_COLOURS`,
+    """One node mode cable (a kind of its own, in `ui_graph.KIND_COLOURS`,
     labelled): a row the loadable patch's node mode derives (`nodemode.fill`), from pin
     `src` to pin `dst`. `dormant`: the player is on the other `Deck`, so the cable
     is drawn and does nothing. `build` puts these in the view, `ref` (the desk's role,
@@ -331,7 +327,7 @@ class View:
     cables: list[VCable] = field(default_factory=list)
     spec: Any = None                 # the loadable patch's graph spec (graph.GraphSpec | None)
     pins: dict[str, tuple[str, str]] = field(default_factory=dict)   # pin → (node, port)
-    # plan 40 T2: the loadable patch's groups on the canvas (`attach_groups`)
+    # the loadable patch's groups on the canvas (`attach_groups`)
     groups: list = field(default_factory=list)
 
     def group(self, gid: str):
@@ -340,7 +336,7 @@ class View:
 
     def node(self, nid: str) -> VNode | None:
         # by an index kept while the node list is the same list of the same
-        # length (plan 28 N7: `refresh` asks it per cable every frame)
+        # length (`refresh` asks it per cable every frame)
         idx = self.__dict__.get("_index")
         if idx is None or idx[0] is not self.nodes or idx[1] != len(self.nodes):
             idx = self.__dict__["_index"] = (self.nodes, len(self.nodes),
@@ -397,7 +393,7 @@ def _first_segment_number(pid: str, head: str) -> int:
 
 
 def _hands_owner(pid: str, ctx: _Ctx) -> str | None:
-    # plan 35 V2: `ghost[.n].*` is hands node `hands[.n]`'s (params keep their ids)
+    # `ghost[.n].*` is hands node `hands[.n]`'s (params keep their ids)
     n = _first_segment_number(pid, "ghost")
     return rgraph.wired_hands_name(n)
 
@@ -405,7 +401,7 @@ def _hands_owner(pid: str, ctx: _Ctx) -> str | None:
 def _effect_owner(pid: str, ctx: _Ctx) -> str | None:
     # `fx.<effect>.<key>`: the effect's node in the scene's pipeline (named
     # by the effect), else the first node of that effect; `fx.on`,
-    # `fx.mix` the scene pipeline's end; (plan 33 U)
+    # `fx.mix` the scene pipeline's end;
     # `fx.face_map` the shape's, whose faces it maps the picture onto
     if pid == "fx.face_map":
         return "shape"
@@ -435,67 +431,66 @@ def _cloud_owner(pid: str, ctx: _Ctx) -> str | None:
 
 
 def _media_owner(pid: str, ctx: _Ctx) -> str | None:
-    # plan 32 T10: `media.<c>.<key>` on channel c's node, there whatever the
-    # render graph holds (`build` adds the eight); plan 35 V2: `channel.<c>`
+    # `media.<c>.<key>` on channel c's node, there whatever the
+    # render graph holds (`build` adds the eight): `channel.<c>`
     seg = pid.split(".")
     return rgraph.channel_name(seg[1]) if len(seg) >= 3 else None
 
 
 def _view_owner(pid: str, ctx: _Ctx) -> str | None:
-    # plan 33 U: the face pattern and its media layer (`view.pattern*`,
+    # the face pattern and its media layer (`view.pattern*`,
     # `view.media_*`) are the pattern node's; the rest of `view.*` the shape's
     return "pattern" if patches.is_pattern_view_key(pid.partition(".")[2]) else "shape"
 
 
 def _switch_owner(pid: str, ctx: _Ctx) -> str | None:
-    # plan 33 S: `switch[.<n>].select` on its switch's node
+    # `switch[.<n>].select` on its switch's node
     return pid.rpartition(".")[0] or None
 
 
 def _resize_owner(pid: str, ctx: _Ctx) -> str | None:
-    # plan 34 T5: `resize[.<n>].<key>` on its resize's node
+    # `resize[.<n>].<key>` on its resize's node
     return pid.rpartition(".")[0] or None
 
 
 def _key_owner(pid: str, ctx: _Ctx) -> str | None:
-    # plan 87: `key.<node>.<knob>`, black is clear's knobs, on the node keyed
+    # `key.<node>.<knob>`, black is clear's knobs, on the node keyed
     name = pid.removeprefix("key.").rpartition(".")[0]
     return name or None
 
 
 # a param's group → the canvas node that owns it: a node id, or a rule
-# over the param id (an instance's number, an effect's name). Plan 35 V2:
-# the ids are the wired frame's, the params keep theirs (`graph.
-# param_prefix`: `ghost.2.*` hands 2's; plan 90 H3: the dream's are an
-# effect's, `fx.dream.*`). A node
+# over the param id (an instance's number, an effect's name). The ids are
+# the wired frame's, the params keep theirs (`graph.param_prefix`:
+# `ghost.2.*` hands 2's; the dream's are an effect's, `fx.dream.*`). A node
 # the section does not name (no look-back, no backdrop) leaves the param
-# to its group's node. The look's one orbit camera (plan 43 C2) has no node
-# of its own since 2026-11-23: `camera.*` is the shape's world pose and
-# `eye.*` the first scene's eye. A group not listed here has no render node: a node per group
+# to its group's node. The look's one orbit camera has no node of its own:
+# `camera.*` is the shape's world pose and `eye.*` the first scene's eye.
+# A group not listed here has no render node: a node per group
 # (`group:<group>`)
 OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "view": _view_owner,
     "rot": "shape",
     # the faces pattern's eight inputs (`pattern.mod.k`: scale, glow, warp,
     # speed, colour, sharp …) on the pattern node, with its selector, its mix
-    # and its media (2026-10-27: they sat on the shape's pane, out of reach)
+    # and its media
     "pattern": "pattern",
-    # plan 33 U: the backdrop's params on its node, a switch's pick on its switch
+    # the backdrop's params on its node, a switch's pick on its switch
     "backdrop": "backdrop",
     "switch": _switch_owner,
     "resize": _resize_owner,
-    # plan 34 D: `delay[.<n>].<key>` on its delay's node (the resize's rule)
+    # `delay[.<n>].<key>` on its delay's node (the resize's rule)
     "delay": _resize_owner,
-    # plan 39 T2: `matte[.<n>].<key>` on its matte's node (the resize's rule)
+    # `matte[.<n>].<key>` on its matte's node (the resize's rule)
     "matte": _resize_owner,
-    # plan 39 T3: `cut[.<n>].<key>` on its cut's node (the resize's rule)
+    # `cut[.<n>].<key>` on its cut's node (the resize's rule)
     "cut": _resize_owner,
-    # plan 39 T4: `segment[.<n>].<key>` on its segment's node (the resize's rule)
+    # `segment[.<n>].<key>` on its segment's node (the resize's rule)
     "segment": _resize_owner,
     "ghost": _hands_owner,
     "cloud": _cloud_owner,
     "fx": _effect_owner,
-    "camera": "shape",          # 2026-11-23: its world pose and scale (decision 4) — not a camera
+    "camera": "shape",          # its world pose and scale — not a camera
     "eye": _eye_owner,          # …the eye is the scene's: what its geometries are seen through
     "output": _output_owner,
     "media": _media_owner,
@@ -590,7 +585,7 @@ BANK_PROBE = {"lfo": "depth", "env": "fire"}
 def bank_ids(router: Router | None, reg: Registry, scheme: str) -> list[int]:
     """A bank's voice ids (1-based, ascending): the router's bank's, else
     every ``<scheme>.<n>.<probe>`` the registry holds. A list, not a count —
-    ids keep their gaps when a voice is removed (plan 31 B)."""
+    ids keep their gaps when a voice is removed."""
     ids = getattr(bank_of(router, scheme), "ids", None)
     if callable(ids):
         try:
@@ -608,7 +603,7 @@ def _lfo_ids(router: Router | None, reg: Registry) -> list[int]:
 
 def has_sequencer(router: Router | None, reg: Registry) -> bool:
     """Is there a step sequencer to draw: the router steps one, or the
-    registry holds its params (plan 31 S)."""
+    registry holds its params."""
     return (router is not None and getattr(router, "__dict__", {}).get("sequencer")
             is not None) or f"{seqmod.GROUP}.run" in reg
 
@@ -676,8 +671,8 @@ def _device_schemes(devices) -> tuple[dict[str, Any], str | None]:
 def device_node(d) -> tuple[VNode, list]:
     """One listed device as a node (``device:<role>``) and the source ports
     it draws (`Device.sources`, value and trigger lanes; a point cloud is
-    no lane, plan 27 B4), in their port groups. Grey while not connected.
-    The base of `device_nodes` (plan 28 N5), which makes a device with
+    no lane), in their port groups. Grey while not connected.
+    The base of `device_nodes`, which makes a device with
     `layers` one node per layer from it."""
     role = str(getattr(d, "role", "") or "")
     try:
@@ -693,7 +688,7 @@ def device_node(d) -> tuple[VNode, list]:
     return node, ports
 
 
-# ---------------------------------------------------------------- controllers (plan 28 N5)
+# ---------------------------------------------------------------- controllers
 #
 # A device with `layers` (the first MIDI role's APC40: "preset", "global")
 # is **one node per layer** (decision 12): *apc40* — the patch layer's
@@ -703,8 +698,7 @@ def device_node(d) -> tuple[VNode, list]:
 # layer's rows. Each port is lit while its layer is up — the table's latch,
 # the one `MidiIO` reads (`Bindings.layer_of(role)`) — and each row's cable
 # leaves the node of the layer it belongs to. Presentation only: no row,
-# no home, no layer changes here. (Plan 28 N5's desk-template node went
-# with the templates, plan 44 D3.) A row whose role this rig lists no
+# no home, no layer changes here. A row whose role this rig lists no
 # device for draws from a grey placeholder ``device:<role>``.
 
 PATCH_DESK_LAYER, GLOBAL_LAYER = "preset", "global"
@@ -719,7 +713,7 @@ DESK_GROUPS = (INVARIANT, "track knobs", "device knobs", "knobs", "faders", "cli
 # a role-less row's role when no listed device publishes its scheme: the
 # meta controller's usual name for the kind behind it (config.py's example list); a
 # scheme not here is a role of its own (an OSC device's scheme is its role)
-# — `SCHEME_ROLE`, devices.py's since plan 40 T4 (imported above)
+# — `SCHEME_ROLE`, devices.py's (imported above)
 # schemes that are no device's: the keyboard, the built-in lanes, the modifiers
 NO_DEVICE = ("key", "lane", "lfo", "env", SEQ, modmod.SCHEME)
 PLACEHOLDER_STATUS = ("not set up on this Mac: its cables wait for it. "
@@ -812,38 +806,38 @@ def _port_type(kind: str) -> str:
     return TRIGGER if kind == TRIGGER else VALUE
 
 
-# ---------------------------------------------------------------- the wired frame (plan 35 G)
+# ---------------------------------------------------------------- the wired frame
 #
-# The loadable patch's graph is a wired frame (plan 35): every node of the picture,
+# The loadable patch's graph is a wired frame: every node of the picture,
 # the shape to the outputs, is a name of the section's entries or wires, in
-# the owner's ids (V2, row 373). The canvas draws the section itself: a
+# the owner's ids. The canvas draws the section itself: a
 # node per name (`frame_names`), a cable per wire, All outputs and each
-# window always, the eight channels (idle while empty and unwired, plan 28
-# N9's idle line), the look's camera and the meta controller's clouds. Each node's `ref` is the
+# window always, the eight channels (idle while empty and unwired, on the
+# area's idle line), the look's camera and the meta controller's clouds. Each node's `ref` is the
 # render node the renderer built for that name, else a stand-in of its
 # kind (`_stand_in`: never built into a graph, never run), so its area, its
 # side panel and its page are its kind's whatever was built. A node the
 # section declares or wires that reaches no sink (`unreached`) is drawn
 # faint, "reaches nothing", its wires in, so it can be wired on. Nothing
 # of the old frame's plumbing (`frame`, `fx`, `grounded`, `capture`, the
-# pipelines' composites and ends) is drawn: none of it is a node any more.
+# pipelines' composites and ends) is drawn: none of it is a node.
 
 REACHES_NOTHING = "reaches nothing"     # the spec's canvas word for an unreached node
-# R15: a faint node fed by nothing and wired onward (`graph.hungry`) — the
+# a faint node fed by nothing and wired onward (`graph.hungry`) — the
 # words the builder's dormant line and the FX pane say
 FED_BY_NOTHING = f"{rgraph.FED_BY_NOTHING} — {rgraph.WIRE_ITS_INPUT}"
 
 
 def needs_input(n) -> str:
-    """What a node fed by nothing takes into its input (R15), for its hover:
+    """What a node fed by nothing takes into its input, for its hover:
     "a field" (Waveform, Combine …) or "a picture"."""
     name = n.id.partition(":")[2]
     takes = rgraph.effect_ports(rgraph.effect_of(name) or name)[1].get("image")
     return "a field" if takes == rgraph.FIELD else "a picture"
 MAKER_KINDS = ("effect", "composite", "switch")    # (`unreached` before the wired frame)
-D1_AFTER = "sits after"     # a cable drawn from a D1 `after` effect (`build`, `returns`)
+D1_AFTER = "sits after"     # a cable drawn from an `after` effect (`build`, `returns`)
 
-# V (the owner, 2026-10-24, row 373): a node's title by its kind …
+# a node's title by its kind …
 LABELS: dict[str, str] = {
     "scene": "Scene", "shape": "Shape", "hands": "Hands", "layer": "Hands layer",
     "guide": "Hands guide", "cloud": "Point cloud", "camera": "Camera",
@@ -853,8 +847,8 @@ LABELS: dict[str, str] = {
     "matte": "Matte", "cut": "Cut", "segment": "Segment",
     "output": "Output", rgraph.ALL_OUTPUTS: "All outputs", rgraph.GROUND: "Ground",
 }
-# … and its hover, one line (V's hover column; an effect says its file's
-# own `@tip` when it has one)
+# … and its hover, one line (an effect says its file's own `@tip` when it
+# has one)
 HOVERS: dict[str, str] = {
     "shape": "The polytope. Its faces show the faces pattern, or the picture wired into faces.",
     "scene": "Draws the shape and any hands wired into it, through the camera.",
@@ -884,17 +878,17 @@ HOVERS: dict[str, str] = {
     "output": "A window: shows its picture, the hands over it, the guide over all.",
     rgraph.ALL_OUTPUTS: ("The meta controller's bus: a window shows it by a cable from here, unless the "
                          "patch cuts that cable or wires that port itself."),
-    # R13: `ground`, a source with no render node, drawn so its wires can be seen and deleted
+    # `ground`, a source with no render node, drawn so its wires can be seen and deleted
     rgraph.GROUND: ("A window's background where nothing is drawn — the clear colour, or "
                     "see-through in overlay: wired into an output's port, that port shows it."),
 }
-# the words a delete or an add says (plan 35 G)
+# the words a delete or an add says
 OUTPUT_UNWIRED = "{label} is one of the meta controller's windows: its wires are gone, it shows its ground"
 ALL_UNWIRED = ("All outputs stays (every window reads it): its wires are gone, so the "
                "windows show their own wires, else their ground")
-# plan 36 T1 (W1, D1): the meta controller's bus cables from All outputs into each
-# window (`graph.BusCuts`) — which of them stand is the loadable patch's since
-# plan 44 D3 (`loadable.LoadedPatch.bus`, saved under `bus`), in words
+# the meta controller's bus cables from All outputs into each
+# window (`graph.BusCuts`) — which of them stand is the loadable patch's
+# (`loadable.LoadedPatch.bus`, saved under `bus`), in words
 BUS_SAID = ("the bus cable: All outputs' {port} on {label} — cut it and {label} shows "
             "nothing there with this patch (a patch saves its cuts)")
 BUS_IDLE = "nothing is wired into All outputs' {port}"
@@ -902,7 +896,7 @@ BUS_SAME_PORT = "All outputs' {port} goes into a window's {port} (output.1.{port
 BUS_NO_SHOW = "no patch is loaded: a patch holds which cables from All outputs stand"
 BUS_NO_EFFECT = ("{wire} is a bus cable: put the node on All outputs' picture, or "
                  "wire the window a picture of its own")
-# plan 44 D3 (plan 43 §6 item 3): a window the loadable patch wires or cuts that this
+# a window the loadable patch wires or cuts that this
 # meta controller has not open — requested, said, never an error: the loadable patch is a
 # complete look, the meta controller is what is plugged in
 WINDOW_WANTED = ("this patch wires Output {n}, which is not open on this Mac — choose a "
@@ -910,7 +904,7 @@ WINDOW_WANTED = ("this patch wires Output {n}, which is not open on this Mac —
 
 
 def wanted_windows(spec, bus_cuts=None) -> list[int]:
-    """The windows the loadable patch asks for (plan 44 D3): every `output.<n>` its section
+    """The windows the loadable patch asks for: every `output.<n>` its section
     wires into, and every one its bus cuts (the loadable patch's `graph.BusCuts`) name, in
     order. `ui_graph.window_wants` says those nothing shows (`WINDOW_WANTED`), so the owner can
     give them a display. Pure; nothing is opened here."""
@@ -925,29 +919,28 @@ def wanted_windows(spec, bus_cuts=None) -> list[int]:
     return sorted(want)
 
 
-# plan 36 T2 (W2): a listed cloud's wire into the scene, the meta controller's too
+# a listed cloud's wire into the scene, the meta controller's too
 CLOUD_SAID = ("this cloud's wire into the scene — cut it and the scene "
               "draws no cloud with this patch (a patch saves its cuts)")
 CLOUD_IDLE = "nothing reaches the scene: the cloud is not drawn"
 CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geometry"
-# plan 36 T5 (W5): the picker's starters ▸ — each a pre-wired group, one
+# the picker's starters ▸ — each a pre-wired group, one
 # undo step, every node and cable ordinary after it. (key, the item's words)
 STARTERS = (("scene", "scene chain"), ("tracers", "tracers"),
             ("tracers+dream", "tracers + dream"), ("dream", "dream on a picture"),
-            # wave 0 E1 (2026-11-02): a delay loop with a blend on a picture
+            # a delay loop with a blend on a picture
             # ("feedback", not "echo": `echo.k` is the look-back's frame)
             ("feedback", "feedback"),
             ("backdrop", "channel to backdrop"),
-            # plan 39 T5 (W6): channel a segmented, its foreground over the scene
+            # channel a segmented, its foreground over the scene
             ("cut-out", "cut-out"))
 # the starters a picture cable's menu offers, that cable their picture
 CABLE_STARTERS = ("tracers", "tracers+dream", "dream", "feedback")
-# wave 0 E1 (2026-11-02, the 2026-10-31 triage's "echo / reverb starter"):
 # feedback is a delay loop with a blend — on picture cable `src → dst` a
 # new composite spliced in by the insert table (`_onto`, the cable's
 # picture into its `over`), its picture round through a new delay and a
 # new fade into its `under`. The fade is the decay: a delay has no params
-# of its own (DECISIONS, plan 34: "decay, mix and tint are an effect's
+# of its own (DECISIONS: "decay, mix and tint are an effect's
 # after it"), and `fade.glsl` multiplies the whole premultiplied picture,
 # colour and alpha alike, by `FEEDBACK_LEVEL` a frame — so the trail fades
 # towards clear (not to an opaque black ghost, as a palette's val slice,
@@ -959,7 +952,7 @@ CABLE_STARTERS = ("tracers", "tracers+dream", "dream", "feedback")
 # "laid add" on the composite's menu brightens it instead. There may be
 # many: each is its own composite, delay and fade instance.
 FEEDBACK_FILE = "fade"
-# plan 90 (H2, Q28): the tracers starters — Delay (8, 30 Hz) → Trail (add) →
+# the tracers starters — Delay (8, 30 Hz) → Trail (add) →
 # Composite (add); a migrated look-back gets the whole chain, not a starter
 TRACERS_FILE = "trail"
 TRACERS_DEPTH = 8
@@ -973,7 +966,7 @@ FEEDBACK_LOOP_SAID = ("feedback: {comp} → {delay} → {fx} → {comp} under �
 FEEDBACK_UNWIRED = (" — left unwired: {comp}.over (wire a picture into it) and the composite's "
                     "picture")
 # the picker's feedback on a scene whose picture is not one thing: refused
-# (never a dead `scene → composite.over` nothing pulls; review 2026-11-02)
+# (never a dead `scene → composite.over` nothing pulls)
 FEEDBACK_MANY_FEEDS = ("{src} feeds {n} picture ports: say which — starters ▸ feedback on that "
                        "cable, or add feedback after on {src}")
 FEEDBACK_NO_FEED = "{src} feeds no picture port: wire its picture somewhere first"
@@ -983,10 +976,10 @@ FEEDBACK_FEEDS_NOTHING = "feeds nothing: wire its picture somewhere first"
 SCENE_CHAIN = (("shape", "scene.geometry"), ("scene", f"{rgraph.ALL_OUTPUTS}.image"))
 NEW_CHAIN = ("shape", "scene", rgraph.ALL_OUTPUTS)   # its nodes, left to right
 STARTER_SAID = "scene chain: shape → scene → All outputs"
-# plan 39 T5 (plan 36's follow-up): a starter that takes All outputs'
+# a starter that takes All outputs'
 # picture says what fed it before — its words' tail
 STARTER_REPLACED = " — in place of {was} into All outputs"
-# plan 39 T5 (W6): the cut-out starter's words, and the scene it lays the
+# the cut-out starter's words, and the scene it lays the
 # foreground over drawing nothing until a shape is wired in
 CUT_OUT_SAID = ("cut-out: {feed} → {seg}.image, {seg}.fg over the scene in {comp} "
                 "→ All outputs")
@@ -1003,7 +996,7 @@ SLOT_ADDED = ("{label} slot {k} added: wire a picture into {name}.image, and {na
 SLOT_DROPPED = "{label} slot {k} removed"
 
 
-# plan 37 C1 (P1, the one table): how each canvas kind's thumbnail is
+# how each canvas kind's thumbnail is
 # found — "picture": the picture the node makes (`graph.picture`);
 # "scene": a geometry, which makes draw calls, not a picture — the scene
 # that draws it, faint (`THUMB_FAINT`); "layer": a hands node — its hands
@@ -1011,7 +1004,7 @@ SLOT_DROPPED = "{label} slot {k} removed"
 # window shows (output 1 the page's `outputs.Preview`, any other its
 # presenter's picture: `render.thumb_source`); "mask": a matte's or a
 # segment's mask, in grey, white where it passes. A kind missing here whose
-# node's output is a picture (a kind added later: plan 39's) is a
+# node's output is a picture (a kind added later) is a
 # "picture" too (`thumb_of`); the rest (All outputs, the camera, ground,
 # the modulation side) stay text.
 PICTURE, SCENE_PIC, LAYER_PIC, WINDOW_PIC = "picture", "scene", "layer", "window"
@@ -1022,19 +1015,19 @@ MASK_PIC = "mask"
 # has it in `THUMBS`, and a node's own `thumb` stays "picture"
 CARD_PIC = "card"
 CARD_KINDS = ("effect",)                # the kinds whose thumbnail has the chip
-# plan 65: an effect that reaches nothing (`unreached`, faint) is
+# an effect that reaches nothing (`unreached`, faint) is
 # never built, so it made no picture: its thumbnail is its input — else the
 # test card — put through it at a thumbnail's size (`render.unwired_through`)
 UNWIRED_PIC = "unwired"
 UNWIRED_WORDS = "reaches nothing: its input, or the test card, through it here"
-# R15: one fed by nothing (`VNode.unfed`) has no input — the card it is
+# one fed by nothing (`VNode.unfed`) has no input — the card it is
 UNFED_WORDS = f"{rgraph.FED_BY_NOTHING}: the test card through it here"
 THUMBS: dict[str, str] = {
     "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
     "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,
     "effect": PICTURE,
     "layer": PICTURE, "guide": PICTURE,
-    # plan 39 at the plan 37 merge: a cut is its picture. SM3 (row 777): a
+    # a cut is its picture; a
     # matte's is its mask, and a segment's its matte (fg, bg are its pins)
     "cut": PICTURE, "matte": MASK_PIC, "segment": MASK_PIC,
     "shape": SCENE_PIC, "cloud": SCENE_PIC, "hands": LAYER_PIC,
@@ -1066,9 +1059,9 @@ def thumb_of(name: str, ref=None) -> str | None:
 
 
 def kind_of(name: str) -> str | None:
-    """A canvas name's kind (plan 35 G): a wired frame's (`graph.
+    """A canvas name's kind: a wired frame's (`graph.
     wire_node_kind(…, wired=True)`), All outputs' own key, the look's camera
-    and clouds, and (R13) `ground` — no render node, but drawn so its wires
+    and clouds, and `ground` — no render node, but drawn so its wires
     are seen; None for a name no wired frame has a node for (an old id,
     `frame`, `fx`)."""
     if not isinstance(name, str):
@@ -1085,7 +1078,7 @@ def kind_of(name: str) -> str | None:
 
 def _takes(kind: str | None, name: str | None = None) -> dict[str, str]:
     """A canvas kind's input ports (`graph.WIRED_TAKES`; All outputs' are an
-    output's); with `name`, an effect's are its file's (plan 67 F1: a field
+    output's); with `name`, an effect's are its file's (a field
     port, or no picture port on a field generator — `graph.effect_ports`)."""
     if kind == "effect" and name:
         return rgraph.effect_ports(name)[1]
@@ -1096,7 +1089,7 @@ def _takes(kind: str | None, name: str | None = None) -> dict[str, str]:
 
 def _makes(kind: str | None, name: str | None = None) -> str | None:
     """What a canvas kind puts out (`graph.WIRED_MAKES`; a cloud geometry);
-    with `name`, an effect's is its file's (plan 67 F1: a field maker's field)."""
+    with `name`, an effect's is its file's (a field maker's field)."""
     if kind == "effect" and name:
         return rgraph.effect_ports(name)[0]
     if kind == "cloud":
@@ -1114,9 +1107,9 @@ def _slot_name(slots, n: int) -> str:
 
 
 def label_of(name: str, slots=()) -> str:
-    """Node `name`'s title on the canvas (V, `LABELS`): `hands.2` "Hands 2",
+    """Node `name`'s title on the canvas (`LABELS`): `hands.2` "Hands 2",
     `channel.a` "Channel A", `hands.2.layer` "Hands layer 2", `echo.3` "Echo
-    3", an effect's slot `acid.slot.2` "acid slot 2" (plan 89), an effect its instance name
+    3", an effect's slot `acid.slot.2` "acid slot 2", an effect its instance name
     with the dot a space ("acid 2"), a window its config name (`slots`: the
     outputs, each with `n` and `name`, or {n: name}), else "Output N"."""
     kind = kind_of(name)
@@ -1142,9 +1135,9 @@ def label_of(name: str, slots=()) -> str:
 
 
 def params_of(name: str) -> str:
-    """The prefix node `name`'s params are found by (V2: `graph.
+    """The prefix node `name`'s params are found by (`graph.
     param_prefix` — params keep their ids); an effect's slot's knobs are
-    its effect's (`fx.<effect>`, plan 89)."""
+    its effect's (`fx.<effect>`)."""
     kind = kind_of(name)
     if kind == "slot":
         return f"fx.{rgraph.effect_of(name)}"
@@ -1163,7 +1156,7 @@ def param_ids(reg, nid: str) -> list[str]:
     pre = params_of(name)
     head = pre + "."
     ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))]
-    # plan 87: a keyed node's black is clear knobs (`key.<name>.*`) after its own
+    # a keyed node's black is clear knobs (`key.<name>.*`) after its own
     keyed = f"key.{name}."
     ids += [p.id for p in reg if p.id.startswith(keyed)]
     if name == "scene":         # the eye is the first scene's (`_eye_owner`): it was the camera
@@ -1179,7 +1172,7 @@ def _params_said(name: str) -> str:
 
 
 def hover_of(name: str, slots=(), *, tip: str = "") -> str:
-    """Node `name`'s hover (V, `HOVERS`): what it is in one line (an
+    """Node `name`'s hover (`HOVERS`): what it is in one line (an
     effect's own `@tip`, when its file has one), then its id and its params'
     prefix (`_params_said`) — "… · id hands.2 · params ghost.2.*", so
     `ghost.2.alpha` under a node called Hands 2 reads why."""
@@ -1190,7 +1183,7 @@ def hover_of(name: str, slots=(), *, tip: str = "") -> str:
 
 
 def side_head(n: VNode) -> str:
-    """A frame node's side-panel header (V2): its title, its id and, where it
+    """A frame node's side-panel header: its title, its id and, where it
     differs, its params' prefix — "Hands 2 · hands.2 · params ghost.2.*"."""
     name = n.id.partition(":")[2]
     return f"{n.label} · {name}" + _params_said(name)
@@ -1207,7 +1200,7 @@ def _tip(reg, name: str) -> str:
 
 
 def aux_shown(reg, effect: str, wired: bool = False) -> bool:
-    """Plan 65: does effect instance `effect`'s node draw an `aux` port? When
+    """Does effect instance `effect`'s node draw an `aux` port? When
     its file reads one (`fx.EffectSpec.aux`: Blend, Displace on this
     build), or a saved wire goes into it (kept and drawn, so it can be seen
     and deleted); also with no FxState to ask (a stand-in registry)."""
@@ -1223,14 +1216,14 @@ def aux_shown(reg, effect: str, wired: bool = False) -> bool:
 
 def canvas_node(name: Any) -> Any:
     """The canvas node a wire's end is drawn on: a pin's node (`scene.depth`
-    → `scene`, plan 36 T2), an effect's slot's effect (`acid.slot.2` →
-    `acid`, plan 89: one node, one set of knobs), else the name itself."""
+    → `scene`), an effect's slot's effect (`acid.slot.2` →
+    `acid`: one node, one set of knobs), else the name itself."""
     return rgraph.pin_node(name) or rgraph.effect_of(name)
 
 
 def slot_names(spec, effect: str) -> list[str]:
     """Effect instance `effect`'s slots past the first that section `spec`
-    declares (plan 89), in order: the ports its node draws besides its own."""
+    declares, in order: the ports its node draws besides its own."""
     at = next((e for e in (getattr(spec, "effects", None) or ()) if e.name == effect), None)
     return [x.name for x in at.slot_list()] if at is not None else []
 
@@ -1238,9 +1231,9 @@ def slot_names(spec, effect: str) -> list[str]:
 def frame_names(spec) -> list[str]:
     """Every node wired frame `spec` names, once, in section order: its
     entries' (the hands, the effects, then the rest as read), then each
-    wire's ends (`ground` too, R13: drawn so its wires are seen) — with the hands node each
+    wire's ends (`ground` too: drawn so its wires are seen) — with the hands node each
     layer or guide is of just before it (the hands' params are on that
-    node). Plan 36 T2: a pin (`scene.cover`) is its node's; plan 89: an
+    node). A pin (`scene.cover`) is its node's; an
     effect's slot its effect's."""
     if spec is None:
         return []
@@ -1266,22 +1259,21 @@ def frame_names(spec) -> list[str]:
 
 def unreached(spec) -> frozenset[str]:
     """The nodes of section `spec` that reach no sink (`graph.reaches`):
-    drawn faint, never run. Plan 35 G: in a wired frame every kind — a
+    drawn faint, never run. In a wired frame every kind — a
     node declared or wired with no path to an output's port, All outputs'
-    or the look-back's capture (plan 36 T2: a hands node by its wire into a
-    layer's or a guide's `hands`, no longer by name; the windows and All
-    outputs are the sinks, never faint). Before the wired frame (a section
-    a test reads as it stands): the effects, composites and switches, as
-    plan 33 drew them. A D1-placed effect sits where it is placed, so it
-    reaches."""
+    or the look-back's capture (a hands node by its wire into a
+    layer's or a guide's `hands`, not by name; the windows and All
+    outputs are the sinks, never faint). With an unwired section (one
+    a test reads as it stands): the effects, composites and switches. A
+    placed effect sits where it is placed, so it reaches."""
     if spec is None:
         return frozenset()
     got = set(rgraph.reaches(spec)) | {e.name for e in spec.effects if e.placed}
     if getattr(spec, "wired", False):
-        # (R15: an effect or its slot no wire feeds reads nothing — never
-        # built, faint, its outs kept; plan 89: an effect's node is drawn
+        # (an effect or its slot no wire feeds reads nothing — never
+        # built, faint, its outs kept; an effect's node is drawn
         # reached while any of its slots is)
-        # (plan 67 F1: a file that takes no picture — a field generator,
+        # (a file that takes no picture — a field generator,
         # Point, Rings … — is fed by nothing by design, and reaches what it feeds)
         got -= rgraph.unfed(spec)
         got |= {rgraph.effect_of(n) for n in got if kind_of(n) == "slot"}
@@ -1295,7 +1287,7 @@ def unreached(spec) -> frozenset[str]:
 
 
 class GroundNode(rgraph.Node):
-    """`ground` on the canvas (R13): the source a wire into an output's port
+    """`ground` on the canvas: the source a wire into an output's port
     names to show the window's background there. No render node is ever
     built for it (the output clears to its ground); this stands in so the
     wire is drawn, and can be deleted, like any other."""
@@ -1345,7 +1337,7 @@ def _stand_in(name: str, spec=None) -> rgraph.Node | None:
     if kind in (CAMERA, "slot"):
         return None
     r = FRAME_CLASS[kind](name)
-    if kind in STAND_IN_SAID:                        # plan 39 T5: its body line, in words
+    if kind in STAND_IN_SAID:                        # its body line, in words
         into = {w.port: w.src for w in (spec.all_wires() if spec is not None else ())
                 if w.node == name}
         r.said = r.refused = STAND_IN_SAID[kind](name, into)
@@ -1369,7 +1361,7 @@ def _segment_said(name: str, into: dict[str, str]) -> str:
     return f"{src} into it: no worker runs until it is reached" if src else SEGMENT_UNWIRED
 
 
-# plan 39 T5 (W6): what a matte, a cut or a segment the renderer built
+# what a matte, a cut or a segment the renderer built
 # none of says (`summary` reads `said`): unwired, or wired but reached by
 # nothing — a built one says its own (`graph.MatteNode.run` …)
 MATTE_UNWIRED = "nothing wired into its image: no mask"
@@ -1388,7 +1380,7 @@ def _built(rnodes: Iterable[rgraph.Node]) -> dict[str, rgraph.Node]:
     out: dict[str, rgraph.Node] = {}
     for r in rnodes:
         if isinstance(r, rgraph.Slot):
-            continue                    # (plan 89: a slot is drawn on its effect's node)
+            continue                    # (a slot is drawn on its effect's node)
         if isinstance(r, rgraph.Effect):
             name = r.effect
         elif isinstance(r, rgraph.MediaNode):
@@ -1403,18 +1395,18 @@ def _built(rnodes: Iterable[rgraph.Node]) -> dict[str, rgraph.Node]:
 
 
 def frame_of(spec, render_graph=None):
-    """The wired frame the canvas draws (plan 35 G): the loadable patch's section
+    """The wired frame the canvas draws: the loadable patch's section
     when it is one (every load's); with none, the frame the renderer drew
-    (its wiring), else `{"frame": "wired"}`'s nothing. Plan 36 T3 (W3):
-    nothing else — a section or a wiring from before the wired frame is
-    an old loadable patch's words, which only the one-way migration reads, so the
+    (its wiring), else `{"frame": "wired"}`'s nothing. Nothing else: a
+    section or a wiring that is not a wired frame is an old loadable
+    patch's words, which only the one-way migration reads, so the
     canvas draws the empty frame for it."""
     if spec is not None and getattr(spec, "wired", False):
         return spec
     wiring = getattr(render_graph, "wiring", None) if spec is None else None
     if wiring is not None and getattr(wiring, "wired", False):
         most: dict[str, int] = {}
-        for x in wiring.slots:                     # plan 89: each effect's slots
+        for x in wiring.slots:                     # each effect's slots
             most[x.effect] = max(most.get(x.effect, 1), x.k)
         effects = tuple(rgraph.EffectAt(*rgraph.split_instance(e), slots=k)
                         for e, k in sorted(most.items()))
@@ -1425,14 +1417,14 @@ def frame_of(spec, render_graph=None):
     return rgraph.read_graph({rgraph.FRAME_KEY: rgraph.WIRED_FRAME})
 
 
-# (plan 34 T4: a resize of the media alone too — `channel.a → resize →
-# acid.2` runs on from the media, as a switch over the channels does)
+# (a resize of the media alone counts too: `channel.a → resize → acid.2`
+# runs on from the media, as a switch over the channels does)
 MEDIA_MADE = (rgraph.Effect, rgraph.Composite, rgraph.SwitchNode, rgraph.ResizeNode)
 
 
 def media_made(r) -> bool:
     """Is render node `r` an effect, composite or switch whose picture is
-    made of the media alone (plan 33 T6's layout rule): every path back
+    made of the media alone: every path back
     from it through its picture inputs starts at a channel or the pattern,
     and there is one. Such a node is a branch of the media and sits in the
     media area, so `channel.a → acid.2 → shape.faces` runs left to right."""
@@ -1450,13 +1442,13 @@ def media_made(r) -> bool:
             heads += 1
             continue
         if isinstance(n, rgraph.Scene):
-            # a scene picture (plan 36 T2: its faces' pattern is a wire now,
-            # and a scene of patterned faces is still the scene)
+            # a scene picture (its faces' pattern is a wire, and a scene of
+            # patterned faces is still the scene)
             return False
         ins = [x for x in getattr(n, "inputs", {}).values() if x is not None]
         if not ins:
             if n is not r:
-                return False            # a scene picture (the look-back, the scene …)
+                return False            # a scene picture (the scene …)
             continue
         todo.extend(ins)
     return heads > 0
@@ -1470,11 +1462,12 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     and the render graph `render_graph` (the renderer's last), with the
     loadable patch's graph `spec` kept on the view. `lanes` are the analyzer's
     lanes this frame, normalised (None: not live); `bands` their names
-    (else the Router's published ``lane`` labels); `slots` the meta controller's outputs (each with `n` and `name`: a
-    window's title is its config name, plan 35 G); `rig` the meta controller's own
-    wires (plan 36 T1, `graph.BusCuts`: the bus cables drawn), else the
-    render graph's — what it was built with; `groups` the loadable patch's groups
-    (plan 40 T2, `loadable.GROUPS_KEY` entries: `View.groups`)."""
+    (else the Router's published ``lane`` labels); `slots` the meta
+    controller's outputs (each with `n` and `name`: a window's title is its
+    config name); `bus_cuts` the meta controller's own wires
+    (`graph.BusCuts`: the bus cables drawn), else the render graph's — what
+    it was built with; `groups` the loadable patch's groups
+    (`loadable.GROUPS_KEY` entries: `View.groups`)."""
     view = View(spec=spec)
     if bus_cuts is None:
         bus_cuts = getattr(render_graph, "bus_cuts", None)
@@ -1506,7 +1499,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
 
     # ---- the sources: devices, the analyzer, LFOs, modifiers ----
     by_scheme, midi_first = _device_schemes(devices)
-    # plan 28 N5: a layered device's nodes by role and layer, and each
+    # a layered device's nodes by role and layer, and each
     # port's pin on them by (node id, address): the first layer's pins are
     # ``out:<address>`` (so a drag or a Learn reads them as before), every
     # other node's carry its tag (``out:<address>|global``)
@@ -1535,7 +1528,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     kinects = [d for d in listed if getattr(d, "kind", "") == "kinect"]
     for d in listed:
         for node, ports in device_nodes(d, table):
-            if getattr(d, "kind", "") == "kinect":      # row 1170: the sensor, not the role it is listed under
+            if getattr(d, "kind", "") == "kinect":      # the sensor, not the role it is listed under
                 node.label = kinect_label(d, len(kinects))
             n = add_node(node)
             if node.layer:
@@ -1553,7 +1546,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     for i, name in enumerate(band_names):
         add_source(analyzer, f"lane:{i}", f"{i} {name}", group="bands")
 
-    # plan 31 G1: a node per bank voice (the LFOs, the envelopes), by id —
+    # a node per bank voice (the LFOs, the envelopes), by id —
     # ids keep their gaps — then the sequencer's one node, a trigger out
     # per lane
     for scheme in BANK_SCHEMES:
@@ -1598,7 +1591,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         elif base == modmod.SCHEME:
             owner = nodes.get(modmod.id_of(addr) or "")
         if owner is None and at and role:
-            # whoever publishes the address (plan 55: a player's name, which a
+            # whoever publishes the address (a player's name, which a
             # role may be spelled as), else the role it names
             d = by_scheme.get(scheme)
             owner = nodes.get(f"device:{d.role if d is not None else role}")
@@ -1610,7 +1603,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             elif d is not None:
                 owner = nodes.get(f"device:{d.role}")
         if owner is None and base not in NO_DEVICE:
-            # plan 28 N5, roles not serials (decision 11): a device this rig
+            # roles not serials: a device this rig
             # lists none for is a grey placeholder named by its role — the
             # row's qualifier, else the desk's first role, else the kind's
             # usual role — its cables dormant until a device of that role
@@ -1630,10 +1623,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
 
     def row_pin(b: Binding, shadowed: bool = False) -> tuple[str, str]:
         """(the pin a desk row's cable leaves from, the subgraph it is
-        inside — none since the templates went): the node of the layer it
+        inside — always none): the node of the layer it
         belongs to on a layered desk — an invariant row (layer None) the
         first node's — else `source_pin`. A
-        layered row `shadowed` by an invariant control (D6: it never acts)
+        layered row `shadowed` by an invariant control (it never acts)
         leaves that control's port on the first node, so an invariant
         control is a port there only."""
         if not b.is_midi:
@@ -1654,16 +1647,16 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                                  "" if b.layer is None or shadowed else b.layer)
         return pin, inside
 
-    # ---- the wired frame's nodes (plan 35 G): the section's, in the owner's ids ----
+    # ---- the wired frame's nodes: the section's, in the owner's ids ----
     ctx = _Ctx()
     rnodes = list(render_graph.order) if render_graph is not None else []
     frame = frame_of(spec, render_graph)
     built = _built(rnodes)
-    # the canvas's names: the eight channels always (plan 32 T10: what a
+    # the canvas's names: the eight channels always (what a
     # wire starts from), the meta controller's clouds, the section's names, All outputs
     # and every window the renderer drew (and any a wire names)
     names: list[str] = [rgraph.channel_name(c) for c in rgraph.MEDIA_CHANNELS]
-    # (plan 36 T2: every listed cloud, built or not — one whose wire the
+    # (every listed cloud, built or not — one whose wire the
     # show has cut is drawn too, to join again)
     roles = tuple(getattr(render_graph, "clouds", ()) or ())
     names += [rgraph.cloud_name(i) for i in range(len(roles))]
@@ -1674,7 +1667,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     names = [n for n in dict.fromkeys(names) if kind_of(n) not in ("output", rgraph.ALL_OUTPUTS)]
     names += [rgraph.ALL_OUTPUTS, *sorted(outs, key=lambda n: int(n.partition(".")[2]))]
     gone = unreached(frame)
-    # R15's, among those wired onward: they need an input (`graph.runs_unfed`
+    # among those wired onward, the ones that need an input (`graph.runs_unfed`
     # the generators that do not); one wired to nothing still reaches nothing
     hungry = rgraph.hungry(frame)
     refs: dict[str, rgraph.Node] = {}
@@ -1703,30 +1696,30 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                            thumb=thumb_of(name, r),
                            status=hover_of(name, slots,
                                            tip=_tip(reg, name) if kind == "effect" else "")))
-        # plan 89: an effect draws one row of ports per slot — its own, then
+        # an effect draws one row of ports per slot — its own, then
         # `acid.slot.2`'s (`image 2`, `aux 2` in, `2` out) — on its one node;
-        # plan 67 F1: an effect's ports are its file's (a field port, a field out)
+        # an effect's ports are its file's (a field port, a field out)
         for slot in [name, *(slot_names(frame, name) if kind == "effect" else ())]:
             k = rgraph.split_slot(slot)[1]
             tail = f" {k}" if k > 1 else ""
             for port, typ in _takes(kind, name).items():
                 if port == rgraph.AUX and kind == "effect" and not aux_shown(
                         reg, name, f"{slot}.{port}" in aux_wired):
-                    continue                    # plan 65: a file that reads no aux has no port
+                    continue                    # a file that reads no aux has no port
                 if (kind == "effect" and port not in rgraph.PORT_NAMES
                         and f"{slot}.{port}" not in wired_to):
-                    continue    # plan 67 P3: a knob's field port is drawn once wired (`knob_pin`)
+                    continue    # a knob's field port is drawn once wired (`knob_pin`)
                 add_port(n, VPort(f"rin:{slot}/{port}", port + tail, IN, typ))
             made = _makes(kind, name)
             if made is not None:
                 add_port(n, VPort(f"rout:{slot}", made + tail, OUT, made))
-        if kind == rgraph.ALL_OUTPUTS:           # plan 36 T1: the bus's pins, one a port
+        if kind == rgraph.ALL_OUTPUTS:           # the bus's pins, one a port
             for port in rgraph.BUS_PORTS:
                 add_port(n, VPort(f"rout:{name}.{port}", port, OUT, IMAGE))
-        if kind == "segment":                    # plan 39 T5: every instance's three pins
+        if kind == "segment":                    # every instance's three pins
             for p, typ in rgraph.SEGMENT_PINS.items():
                 add_port(n, VPort(f"rout:{name}.{p}", p, OUT, typ))
-        for pin, owner in rgraph.PINS.items():   # plan 36 T2: the scene's cover and depth
+        for pin, owner in rgraph.PINS.items():   # the scene's cover and depth
             if owner == name and kind != "segment":
                 typ = rgraph.WIRED_MAKES[kind_of(pin)]
                 add_port(n, VPort(f"rout:{pin}", pin.rpartition(".")[2], OUT, typ))
@@ -1750,9 +1743,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             targets.append(pid)
 
     for p in reg:
-        if p.modulatable and not p.alias:       # (no meta param is: register rows 743, 746, 775)
+        if p.modulatable and not p.alias:       # (no meta param is)
             want(p.id)
-    # N1b: what the loadable patch's node mode derives, drawn whether or not it acts here
+    # what the loadable patch's node mode derives, drawn whether or not it acts here
     node_desk = getattr(table, "node_desk", None)
     held = node_desk.held() if node_desk is not None else ()
     for b in (*routes, *setters, *(r for h in held for r in h.rows)):
@@ -1810,7 +1803,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if n.kind == "macro":
             n.ports.sort(key=lambda q: q.direction == OUT)
     # the faces pattern's params in one run: the selector, the mix and the
-    # eight inputs (`_sub_group`'s "pattern"), then its media (2026-10-27)
+    # eight inputs (`_sub_group`'s "pattern"), then its media
     pat = nodes.get("render:pattern")
     if pat is not None:
         pat.ports.sort(key=lambda q: (q.param is not None,
@@ -1839,7 +1832,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                                   depth=depth, label=said, addr=b.source))
     inv_rows = table.invariant_rows() if hasattr(table, "invariant_rows") else []
     for b in setters:
-        # a layered row on an invariant control never acts (D6)
+        # a layered row on an invariant control never acts
         shadowed = (b.is_midi and b.layer is not None and hasattr(table, "is_invariant")
                     and table.is_invariant(b, inv_rows))
         src, inside = row_pin(b, shadowed)
@@ -1847,7 +1840,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         p = reg.get(b.target)
         typ = TRIGGER if (b.op in TRIGGER_OPS or pin_type.get(src) == TRIGGER) else VALUE
         layer = f"  {b.layer} layer" if b.layer else ""
-        # a saved row under a control node mode fills does nothing until it leaves (N1b)
+        # a saved row under a control node mode fills does nothing until it leaves
         under = node_desk is not None and node_desk.under(b)
         view.cables.append(VCable(cable_id(f"set:{b.source}>{b.target}"), src, dst, typ,
                                   ref=b, kind="setter",
@@ -1901,7 +1894,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             view.cables.append(VCable(cable_id(f"in:{addr}>{m.id}.{k}"), src, dst,
                                       pin_type.get(src, VALUE), ref=(m, k), kind="input",
                                       off=(addr, m.address) in cut, addr=addr))
-    # plan 31 G1: each sequencer lane's envelope binding, a cable from its
+    # each sequencer lane's envelope binding, a cable from its
     # lane's pin to the envelope's `fire` — only for a lane that can fire
     # (a step on, or the sequencer running); dormant while it is stopped
     # or the lane muted
@@ -1918,11 +1911,11 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                                       ref=(li, env), kind="lane", off=mute or not running,
                                       label=f"lane {li + 1} fires env {env}{why}",
                                       addr=seq_node.port(src).addr))
-    # plan 35 G: each wire of the section, as it stands, a render cable —
-    # `ground`'s from the Ground node (R13), a wire into a
-    # window this rig has not open dormant (plan 35 T4: it builds nothing)
+    # each wire of the section, as it stands, a render cable —
+    # `ground`'s from the Ground node, a wire into a
+    # window this rig has not open dormant (it builds nothing)
     windows = {r.name for r in rnodes if isinstance(r, rgraph.Output)}
-    # (plan 30 D1's `after X`, kept in an old loadable patch's frame: what reads X
+    # (`after X`, kept in an old loadable patch's frame: what reads X
     # reads the effect — drawn from it, the cable still X's wire)
     after = {e.where[1]: e.name for e in frame.effects
              if e.where is not None and e.where[0] == "after"
@@ -1936,22 +1929,22 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 and w.node not in windows)
         said = (f"no {w.node} this frame" if shut else
                 f"{lay} {D1_AFTER} {w.src}: what reads {w.src} reads it" if lay else "")
-        # plan 39 T5 (W6): a cable whose maker makes a mask is a mask cable
-        # (purple), whatever port takes it — promoted into a picture port too
-        # (plan 67 F1: and a field maker's a field cable, promoted or not)
+        # a cable whose maker makes a mask is a mask cable (purple),
+        # whatever port takes it — promoted into a picture port too
+        # (and a field maker's a field cable, promoted or not)
         typ = (pin_type[src] if pin_type.get(src) in (MASK, FIELD)
                else _takes(kind_of(w.node), w.node).get(w.port, IMAGE))
-        # plan 67 P3: a field into a knob says its depth, as a route does
+        # a field into a knob says its depth, as a route does
         knob = rgraph.is_knob_port(w.node, rgraph.wire_node_kind(w.node, wired=True), w.port)
         view.cables.append(VCable(cable_id(f"wire:{w.src}>{w.node}/{w.port}"), src, dst,
                                   typ, ref=w, depth=w.depth if knob else None,
                                   kind="render", dormant=shut, off=shut, label=said))
-    # plan 36 T1 (W1, D1): the meta controller's bus cables, `output.all.<port> →
+    # the meta controller's bus cables, `output.all.<port> →
     # output.<n>.<port>` — each standing one the show has not cut, into
     # every window on the canvas, but where the loadable patch wires that port
     # itself (its own wire takes it: one wire into a port, always drawn);
     # dormant into a window not open, or while nothing feeds that port of
-    # All outputs. A render cable like any: delete cuts it (the loadable patch's, plan 44 D3)
+    # All outputs. A render cable like any: delete cuts it (the loadable patch's)
     owned = {w.dst for w in frame.all_wires()}
     feeds = {w.port for w in frame.all_wires() if w.node == rgraph.ALL_OUTPUTS}
     standing = rgraph.BusCuts() if bus_cuts is None else bus_cuts
@@ -1969,7 +1962,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             view.cables.append(VCable(cable_id(f"bus:{w.src}>{w.node}/{w.port}"), src, dst,
                                       IMAGE, ref=w, kind="render", dormant=shut or idle,
                                       off=shut, label=said))
-    # plan 36 T2 (W2): each listed cloud's wire into the scene — the meta controller's,
+    # each listed cloud's wire into the scene — the meta controller's,
     # standing until the show cuts it, cut and joined like a bus cable;
     # dormant while nothing reaches the scene (the cloud is not built)
     for i in range(len(roles)):
@@ -1987,21 +1980,21 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     for n in nodes.values():
         for port in n.ports:
             port.patched = any(pin in hit for pin in port.pins)
-    for c in view.cables:                       # plan 28 N7: each node's cable count
+    for c in view.cables:                       # each node's cable count
         ends = {node_of(view, c.src_port), node_of(view, c.dst_port)}
         for nid in ends:
             if nid in nodes:
                 nodes[nid].wires += 1
-    # row 1170: a Kinect's point cloud is its own kind of cloud — made of the sensor's depth by
+    # a Kinect's point cloud is its own kind of cloud — made of the sensor's depth by
     # the sensor's own calibration, so not one to take for any cloud's — and is titled so
     sensor_roles = {str(getattr(d, "role", "")) for d in kinects}
     for i, role in enumerate(roles):
         cloud = nodes.get(f"render:{rgraph.cloud_name(i)}")
         if cloud is not None and role in sensor_roles:
             cloud.label = cloud.label.replace(LABELS["cloud"], KINECT_CLOUD, 1)
-    # plan 28 N9: each node's area, and which sit with nothing in and out
+    # each node's area, and which sit with nothing in and out
     named = {b.scale for b in routes if b.scale} | {b.when for b in routes if b.when}
-    # review round 1: an effect switched off whose nodes no value cable
+    # an effect switched off whose nodes no value cable
     # reaches is idle (its render cables do not count: the chain draws a
     # through wire over it)
     cabled: set[str] = set()
@@ -2014,9 +2007,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 cabled.add(ref.effect)
     for n in nodes.values():
         n.area = area_of(n)
-        # plan 33 U, plan 35 G: a node of the section that reaches nothing
+        # a node of the section that reaches nothing
         # is drawn faint, and so never idle — it was just added, or it
-        # waits to be wired in; (plan 35 G) a channel with nothing in its
+        # waits to be wired in; a channel with nothing in its
         # bin and no cable sits on MEDIA's idle line, as an idle macro does
         n.faint = n.kind in FRAME_VKINDS and n.id.partition(":")[2] in gone
         n.unfed = n.faint and n.id.partition(":")[2] in hungry
@@ -2025,18 +2018,18 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             or (n.kind != "channel" and is_idle(n, macros, named))
             or (n.kind == "render" and effect_off(n, reg) and n.ref.effect not in cabled))
     view.nodes = list(nodes.values())
-    # plan 37 P3: an effect is laid where its consumers are (`laid_areas`)
+    # an effect is laid where its consumers are (`laid_areas`)
     for nid, area in laid_areas(view).items():
         nodes[nid].area = area
     _columns(view, render_graph)
-    attach_groups(view, groups, table)      # plan 40 T2: after the nodes and cables
+    attach_groups(view, groups, table)      # after the nodes and cables
     refresh(view, reg, router, lanes)
     return view
 
 
 def routes_held(table, reg: Registry, router: Router | None) -> dict[int, str]:
     """The routes node mode holds off now, by `id`, each with what is true of it after a
-    leave: `NODE_MODE_HOLDS` of a route that comes back (the owner, row 711), `LOOP_OFF` of
+    leave: `NODE_MODE_HOLDS` of a route that comes back, `LOOP_OFF` of
     one a loop will cut, and nothing of one that was off already (switched off, or on a param
     no route can move). `Bindings.node_held` is asked once: this is per frame, not per route."""
     held = table.node_held() if getattr(table, "node_desk", None) is not None else None
@@ -2099,7 +2092,7 @@ def _sub_group(pid: str, p: Param | None) -> str:
     if p.group in ("fx", "ghost", "output"):
         seg = pid.split(".")
         return ".".join(seg[:2]) if len(seg) > 2 else p.group
-    if p.group == "view":           # the pattern node's (`_view_owner`), 2026-10-27
+    if p.group == "view":           # the pattern node's (`_view_owner`)
         key = pid.partition(".")[2]
         if key.startswith("pattern"):
             return "pattern"        # the selector and the mix, with the eight inputs
@@ -2122,7 +2115,7 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
     effective depth and words (a macro's depth subscriber turning, a
     depth dragged on ROUTING: `key` leaves the values out, so neither
     rebuilds the view). Cheap: no structure changes. A node `collapsed`
-    says true for (plan 28 N7) reads only what its lines show — its
+    says true for reads only what its lines show — its
     patched ports, its outputs and a macro's knob — not every port."""
     table = getattr(router, "table", None) if router is not None else None
     cut = set(getattr(router, "modgraph_cut", ()) or ()) if router is not None else set()
@@ -2137,7 +2130,7 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
         return seen[addr]
     owners = view.source_owners()
     for n in view.nodes:
-        if n.layer and layer_of is not None:      # plan 28 N5: the latch, read each frame
+        if n.layer and layer_of is not None:      # the latch, read each frame
             up = layer_of(n.role or None)
             n.up = up == n.layer
             for port in n.ports:
@@ -2182,7 +2175,7 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
     identity and the fields that make cables), the macros' and the
     modifiers' serials, the registry's add / remove serial, each device's
     status and port count, the render graph and the spec, every effect's
-    on switch (an off effect is idle: review round 1). The page builds
+    on switch (an off effect is idle). The page builds
     a new view only when this moves."""
     rows = tuple((id(b), b.source, b.target, b.op, b.enabled, b.scale, b.when)
                  for b in table.bindings)          # not `value`: `refresh` follows a depth
@@ -2209,7 +2202,7 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
 
 
 def seq_key(reg: Registry) -> tuple:
-    """What the sequencer's binding cables are made of (plan 31 G1), for
+    """What the sequencer's binding cables are made of, for
     `key`: each lane's envelope, whether a step is on and its mute, and the
     transport — a step toggled from the grid or the APC40 rebuilds the view
     only when it moves a lane between empty and not."""
@@ -2220,29 +2213,16 @@ def seq_key(reg: Registry) -> tuple:
 
 # ---------------------------------------------------------------- layout
 
-# plan 28 N9 — the canvas organised by concern (the owner's decision of
-# 2026-10-20: "all things audio need to live in one area; all things
-# geometry … another; all things shader … another"). Five areas, left to
-# right, so the wires read one way: the controllers, the audio (the
-# analyzer is a source: what the music says, read by the modulation and
-# the look), the modulation (the LFOs, the modifiers, the macros), then
-# the two the sources feed — the geometry and the shaders, the render
-# graph's own order (the shape is drawn by the scene, the scene feeds the
-# effects, the effects the outputs). A group no area claims goes to the
-# small `OTHER` area, stacked under the audio in its column.
-#
-# Plan 32 T10 adds a sixth, *media*, between the modulation and the
-# geometry: the eight channels are sources of pictures (what the folder
-# and the feeds say), read by the shaders (an output, an effect's aux, the
-# backdrop under the scene) and by the faces.
-#
-# Plan 35 G: the frame's areas by primitive, the way a picture is made —
-# media, the scene, the effects, the outputs — where the
-# geometry and the shaders were: the frame is ordinary nodes now, so the
-# areas name what each is, not the pipelines it used to be part of.
+# The canvas is organised by concern, in areas laid left to right so the
+# wires read one way: the controllers, the audio (the analyzer is a
+# source: what the music says, read by the modulation and the look), the
+# modulation (the LFOs, the modifiers, the macros), the media (the eight
+# channels are sources of pictures, what the folder and the feeds say,
+# read by the shaders and by the faces), then the areas by primitive, the
+# way a picture is made, in the render graph's own order: the scene, the
+# effects, the outputs. A group no area claims goes to the small `OTHER`
+# area, stacked under the audio in its column.
 CONTROLLERS, AUDIO, MODULATION, MEDIA = "controllers", "audio", "modulation", "media"
-# (plan 90 H2: the look-back's area is retired with it; H3: the dream is an
-# effect)
 SCENE_AREA, EFFECTS_AREA, OUTPUTS_AREA = "scene", "effects", "outputs"
 OTHER = "other"
 AREAS = (CONTROLLERS, AUDIO, MODULATION, MEDIA, SCENE_AREA, EFFECTS_AREA,
@@ -2283,25 +2263,24 @@ AREA: dict[str, str] = {
     "Effect": EFFECTS_AREA, "Composite": EFFECTS_AREA, "ResizeNode": EFFECTS_AREA,
     # the windows and All outputs
     "Output": OUTPUTS_AREA, "GroundNode": OUTPUTS_AREA,
-    # the media channels (plan 32 T10), and (plan 33 U) the pictures made
+    # the media channels, and the pictures made
     # beside them: the pattern the faces draw, a switch picking one of them,
     # a delay's last frame — and any effect or composite made of the media
     # alone (`media_made`, by `area_of`)
     "MediaNode": MEDIA, "PatternNode": MEDIA, "SwitchNode": MEDIA, "Delay": MEDIA,
 }
-# An area's title over its column. Lower case with the rest of the
-# interface (2026-11-10, the owner: "remove all caps from the interface");
-# the words themselves are unchanged, and nothing stores one — an area is
-# keyed by its constant, never by its title.
+# An area's title over its column, lower case like the rest of the
+# interface. Nothing stores one: an area is keyed by its constant, never
+# by its title.
 TITLES = {CONTROLLERS: "controllers", AUDIO: "audio", OTHER: "other",
           MODULATION: "modulation", MEDIA: "media", SCENE_AREA: "scene",
           EFFECTS_AREA: "effects", OUTPUTS_AREA: "outputs"}
-# a title too long for its room at the floor size (review round 1)
+# a title too long for its room at the floor size
 SHORT_TITLES = {CONTROLLERS: "ctrl", AUDIO: "aud", OTHER: "oth", MODULATION: "mod",
                 MEDIA: "med", SCENE_AREA: "scn", EFFECTS_AREA: "fx",
                 OUTPUTS_AREA: "out"}
-# 2026-10-26 (the laptop's own screen): the canvas's text, boxes, pins and
-# spacing all a quarter bigger than the panel's — one factor, so the
+# The canvas's text, boxes, pins and spacing are all a quarter bigger than
+# the panel's — one factor, so the
 # layout's units still hold what the page draws in them; each unit whole
 # (the editor puts a node on a whole pixel: a half one reads as a drag)
 SCALE = 1.25
@@ -2316,7 +2295,7 @@ IDLE_H = HEAD_H        # an area's idle line
 def chain_layout(names: Iterable[str], at: tuple[float, float]) -> dict[str, list[int]]:
     """Render nodes `names` laid left to right from `at` (layout units),
     one column (`COL_W`) apart on one row: their layout map entries by
-    canvas id (plan 36 T5: a new loadable patch's chain, a starter's group)."""
+    canvas id (a new loadable patch's chain, a starter's group)."""
     x, y = at
     return {f"render:{n}": [round(x + i * COL_W), round(y)] for i, n in enumerate(names)}
 
@@ -2325,7 +2304,7 @@ def area_of(n: VNode) -> str:
     """The area node `n` is laid out in (`AREA`): a group node by its id, a
     render node by its class or a base of it (a render class no row names
     is an effect's: it is in the picture's chain), every other node by its
-    kind; a node the table does not name is `OTHER`. Plan 33 T6: an
+    kind; a node the table does not name is `OTHER`. An
     effect, composite or switch made of the media alone (`media_made`) is
     the media's."""
     if n.kind == "group" or n.id == f"render:{CAMERA}":
@@ -2348,20 +2327,17 @@ def area_column(area: str) -> int | None:
 
 
 def laid_areas(view: View) -> dict[str, str]:
-    """Plan 37 P3, D5 (the rules): the nodes `area_of` lays in the effects
+    """The nodes `area_of` lays in the effects
     that are laid where their consumers are instead, so no cable runs back
     across areas — by node id, the area each is laid in.
 
     An effect, composite or resize (a node of the frame `area_of`
     gives the effects) whose consumers sit left of the effects is laid in
     the leftmost of their areas that is not left of what feeds it: with
-    one consumer area that is D5's rule (`acid-scene`'s acid.2, between
-    the scene and the look-back, is the look-back's), with several the
-    leftmost (acid.2 also feeds a composite: it still sits in LOOK-BACK, so
-    that cable runs right). Tie-breaks: a consumer left of what feeds the
+    one consumer area, that area; with several, the leftmost. Tie-breaks: a consumer left of what feeds the
     node (a picture of the scene taken back into a switch) is a return by
     design and does not count; neither does a cable kept for the next
-    frame (`kept`: into a look-back's or a delay's `image`) — such a cable
+    frame (`kept`: into a delay's `image`) — such a cable
     is not counted as a consumer but still counts in `makers`, as a feed
     bounding its taker from the left, so "not left of what feeds it"
     holds across every drawn cable, kept ones included; a consumer of
@@ -2371,10 +2347,10 @@ def laid_areas(view: View) -> dict[str, str]:
     area its own feeds allow). A node with no consumer left of the
     effects keeps the effects.
 
-    Plan 36's rule holds: this names an *area*, the one `layout` lays an
-    unplaced node in — a node with a saved position keeps it (`layout`
-    skips what `placed` holds), nothing re-lays on a later frame, and a
-    tidy lays out by the same areas. To reverse: drop the call in `build`."""
+    This names an *area*, the one `layout` lays an unplaced node in — a
+    node with a saved position keeps it (`layout` skips what `placed`
+    holds), nothing re-lays on a later frame, and a tidy lays out by the
+    same areas."""
     by = {n.id: n for n in view.nodes}
     col = {k: area_column(n.area) for k, n in by.items()}
     free = [k for k, n in by.items() if n.kind in FRAME_VKINDS and n.area == EFFECTS_AREA]
@@ -2426,7 +2402,7 @@ def laid_areas(view: View) -> dict[str, str]:
 # which kinds may sit idle (`is_idle`): a node of any other kind is always
 # drawn — the analyzer, a modifier just picked (it is dropped onto a cable
 # next), a render node, a connected device, a placeholder (it has rows);
-# plan 35 G: a channel, while its bin is empty too (`channel_empty`)
+# a channel, while its bin is empty too (`channel_empty`)
 IDLE_KINDS = ("macro", "lfo", "env", SEQ, "group", "device", "channel")
 IDLE_NOUNS = {"macro": ("idle macro", "idle macros"), "lfo": ("idle LFO", "idle LFOs"),
               "env": ("idle envelope", "idle envelopes"),
@@ -2435,9 +2411,8 @@ IDLE_NOUNS = {"macro": ("idle macro", "idle macros"), "lfo": ("idle LFO", "idle 
               "effect": ("off effect", "off effects"),
               "channel": ("empty channel", "empty channels"),
               "off": ("off device", "off devices"), "lost": ("lost device", "lost devices")}
-# plan 32 T10 drew the backdrop's group node always; plan 35 G: the
-# backdrop is a node of the section, drawn when wired or declared, and its
-# group node idles like any group (none is always drawn)
+# The backdrop is a node of the section, drawn when wired or declared, and
+# its group node idles like any group (none is always drawn).
 ALWAYS_DRAWN: tuple[str, ...] = ()
 NOUN_ORDER = ("macro", "lfo", "env", SEQ, "effect", "channel", "group", "off", "lost")
 
@@ -2453,8 +2428,8 @@ def effect_off(n: VNode, reg: Registry | None) -> bool:
 
 
 def channel_empty(n: VNode, reg: Registry | None) -> bool:
-    """Is node `n` a media channel with nothing to show and nothing to say
-    (plan 32 T10): no cable at either end, no param of it named by a
+    """Is node `n` a media channel with nothing to show and nothing to say:
+    no cable at either end, no param of it named by a
     route, and every entry of its bin empty (`reg.media`, the channels the
     ``media.*`` params write)? Such a channel sits on its area's idle line,
     as an unused macro does; one with a source in its bin is drawn though
@@ -2487,15 +2462,15 @@ def effect_switches(reg: Registry) -> tuple:
 def is_idle(n: VNode, macros: Mapping[str, Macro] | None = None,
             named: Iterable[str] = ()) -> bool:
     """Does node `n` sit with nothing in and nothing out — not drawn by
-    default (plan 28 N9)? No cable starts or ends on it (`VNode.wires`), no
+    default? No cable starts or ends on it (`VNode.wires`), no
     route names one of its params as its `scale` or its sources as its
     `when` (`named`: neither is drawn as a cable), and: a macro has no
     label and no subscriber (an idle knob of the meta controller's eight — the picker
     names one to bring it on); an LFO and a group node are idle on that
     alone; a device only while it is lost or off (grey, not a placeholder:
     a connected device is drawn even unmapped — it says the meta controller has it).
-    An effect switched off is idle by `build`'s own rule (`effect_off`,
-    review round 1): its render cables do not count, a value cable on any
+    An effect switched off is idle by `build`'s own rule (`effect_off`):
+    its render cables do not count, a value cable on any
     node of that effect does."""
     if n.kind not in IDLE_KINDS or n.wires or n.id in ALWAYS_DRAWN:
         return False
@@ -2541,7 +2516,7 @@ def idle_id(area: str) -> str:
 
 
 THROUGH = "through"    # a display-only wire over a run of hidden (off) effects
-NODE_MODE = "node_mode"    # a controller's control on a node's param (plan 57, `nodemode`)
+NODE_MODE = "node_mode"    # a controller's control on a node's param (`nodemode`)
 NODE_PIN = "node"          # the pin such a cable lands on when its param's port is another node's
 UNDER_NODE_MODE = "  (under node mode)"
 NODE_MODE_HOLDS = "off: node mode holds this param, back on leave"
@@ -2553,8 +2528,8 @@ LEAVE_WORDS = "a node mode cable is no row: leave the node to end it (right-clic
 
 
 def throughs(view: View, shown: Callable[[VNode], bool]) -> list[VCable]:
-    """The display-only wires over the runs of hidden render nodes (review
-    round 1: an off effect with no cable is idle): from a drawn node's
+    """The display-only wires over the runs of hidden render nodes (an off
+    effect with no cable is idle): from a drawn node's
     output, through every hidden node its render cables reach, to the
     input of each drawn node at the end of the run — one wire per (start
     pin, end pin), kind `THROUGH`, no `ref`. Not a render edge: nothing
@@ -2594,13 +2569,13 @@ def throughs(view: View, shown: Callable[[VNode], bool]) -> list[VCable]:
 
 # ---------------------------------------------------------------- the flow layout
 #
-# The owner, 2026-11-19: "This graph is read from left to right, and that's
-# what I want tidy to do" — the things moving parameters on the left, the
-# geometry, the scene and the hands after them, the picture work (the
-# look-back, the effects) nearer the outputs; and "clear cables running
-# from node to node that are not occluded behind other nodes and that have
-# room to breathe". So the canvas is laid out as a layered drawing
-# (Sugiyama's method, kept small), in four steps, each one tunable below:
+# The graph is read from left to right, and tidy lays it out that way: the
+# things moving parameters on the left, the geometry, the scene and the
+# hands after them, the picture work (the effects) nearer the outputs, with
+# clear cables running from node to node that are not occluded behind other
+# nodes and that have room to breathe. So the canvas is laid out as a
+# layered drawing (Sugiyama's method, kept small), in four steps, each one
+# tunable below:
 #
 # 1. columns (`_ranks`): each node's *band* (`BANDS`, by its area) is a run
 #    of columns; the bands follow one another left to right, and inside a
@@ -2939,20 +2914,20 @@ class Layout:
     throughs: list[VCable] = field(default_factory=list)
 
 
-# plan 33 T6: the sinks of the media and the geometry a picture is taken
+# the sinks of the media and the geometry a picture is taken
 # back into — the faces, the pattern's layer, the backdrop, a switch
 TAKEN_BACK = (rgraph.Shape, rgraph.PatternNode, rgraph.BackdropNode, rgraph.SwitchNode)
 
 
 def returns(view: View, lay: Layout) -> set[str]:
     """The ids of the wires that run back by design: a wire from one row
-    of a wrapped chain to a later one (none since the flow layout of
-    2026-11-19, which wraps nothing: every row is 0); (plan 33 T6) a picture the
+    of a wrapped chain to a later one (none under the flow layout, which
+    wraps nothing: every row is 0); a picture the
     scene made, taken back into a sink that sits left of where it was made
     (`TAKEN_BACK`: `scene → acid.2 → switch.in1`; into the faces, the
     pattern or the backdrop such a picture is a loop — the scene draws
     them — and is never built) — a picture made of the media alone sits
-    with the media (`media_made`), so its wire runs right; and (plan 35 G)
+    with the media (`media_made`), so its wire runs right; and
     every wire into a delay's `image`: what is kept for the frames after,
     read back where its delay sits.
     Every other wire runs right."""
@@ -2965,7 +2940,7 @@ def returns(view: View, lay: Layout) -> set[str]:
         wrapped = (a.area == b.area == EFFECTS_AREA
                    and lay.rows.get(b.id, 0) > lay.rows.get(a.id, 0))
         taken = (order.get(a.area, 0) > order.get(b.area, 0) and isinstance(b.ref, TAKEN_BACK)
-                 and c.type in (IMAGE, MASK, FIELD))   # (plan 39 T5: a promoted mask too; plan 67 a field)
+                 and c.type in (IMAGE, MASK, FIELD))   # (a promoted mask too, and a field)
         if kept(c, b) or wrapped or taken:
             out.add(c.id)
     return out
@@ -2974,7 +2949,7 @@ def returns(view: View, lay: Layout) -> set[str]:
 def kept(c: VCable, b: VNode) -> bool:
     """Is cable `c` (into node `b`) what is kept for the frames after — a
     loop by design, drawn back where its delay sits (`returns`)? An old
-    loadable patch's D1 `after X` effect is drawn where X's readers read it."""
+    loadable patch's `after X` effect is drawn where X's readers read it."""
     if isinstance(b.ref, rgraph.Delay) and c.dst_port.endswith("/image"):
         return True
     return c.kind == "render" and f" {D1_AFTER} " in c.label
@@ -2997,10 +2972,10 @@ def grouped(n: VNode, full: bool) -> bool:
 def height(n: VNode, full: bool = False, folds=frozenset(), collapsed: bool = False) -> float:
     """A node's height as auto_layout stacks it: its title, the ports it
     shows (`visible`) and, expanded, a line per port group — or, while it
-    is `collapsed` (plan 28 N7), its title and its lines (`summary`)."""
-    pic = THUMB_H if n.thumb is not None else 0.0    # plan 37 C1 (D2): always
+    is `collapsed`, its title and its lines (`summary`)."""
+    pic = THUMB_H if n.thumb is not None else 0.0
     if collapsed:
-        # (a picture node's lines are its hover's: plan 37 P1)
+        # (a picture node's lines are its hover's)
         return HEAD_H + (pic if n.thumb is not None else ROW_H * len(summary(n)))
     rows = len(visible(n, full, folds))
     if grouped(n, full):
@@ -3014,8 +2989,8 @@ def layout(view: View, placed: Mapping[str, Any] | None = None,
            collapsed: Callable[[str], bool] | None = None,
            idle_open: Iterable[str] = (),
            shown: Callable[[str], bool] | None = None) -> Layout:
-    """The canvas laid out left to right by the flow layout (`flow`, the
-    owner's of 2026-11-19): every node `placed` does not hold at its column
+    """The canvas laid out left to right by the flow layout (`flow`):
+    every node `placed` does not hold at its column
     and height; each area's title in a row over the canvas, over its first
     column (a title whose column another took moves right inside its own
     columns, else up a row); and each area with idle nodes (`VNode.idle`)
@@ -3027,7 +3002,7 @@ def layout(view: View, placed: Mapping[str, Any] | None = None,
     only view's hidden nodes: no room for what is not drawn). `expanded(node
     id)` says which nodes show every port (default none) and `folds` which
     of their groups are folded, so an expanded node is as tall as it is
-    drawn. `collapsed(node id)` (plan 28 N7: the page's default, every
+    drawn. `collapsed(node id)` (the page's default, every
     node) says which nodes draw only their title and lines; such a node
     takes that much room whatever `expanded` says."""
     placed = placed or {}
@@ -3042,7 +3017,7 @@ def layout(view: View, placed: Mapping[str, Any] | None = None,
     def size(n: VNode) -> float:
         full = bool(expanded(n.id)) if expanded is not None else False
         shut = bool(collapsed(n.id)) if collapsed is not None else False
-        # an expanded node on the N7 page has its all ports / patched only line
+        # an expanded node on the collapsing page has its all ports / patched only line
         chip = ROW_H if collapsed is not None and not shut else 0.0
         return height(n, full, folds, shut) + chip
 
@@ -3117,21 +3092,18 @@ def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
 
 
 def patch_only(view: View) -> frozenset[str]:
-    """The ids of the nodes the **preset only** view draws (plan 36 T6, D4):
+    """The ids of the nodes the **preset only** view draws:
     the loadable patch section's own nodes (`frame_names`, as ``render:<name>``),
     every node with a cable to one of them (whatever its kind: an LFO routed
     to an effect, a controller bound to a param are drawn, so a moving
     param shows its source; controllers, modulation and macros with no
     cable to the section are not) and whatever feeds those, to full depth
-    (2026-10-31: LFO → modifier → param draws the LFO; downstream stays one
+    (LFO → modifier → param draws the LFO; downstream stays one
     hop, so a controller's other bindings pull nothing else in), every
     output — All outputs and each window, wired or not: they are where a
     picture is wired to, so one the loadable patch no longer reaches must stay on
-    the canvas to be wired again (the owner, 2026-10-27: unwiring the
-    outputs made them vanish); a Kinect's node (row 1170: no cable, but its panel) — and, the same way, every media channel
-    (2026-10-31, the owner after the show of 2026-10-30: with no faces
-    media node wired "you can't actually spawn one, it just doesn't
-    exist"): a channel always exists, empty or not, and is where a file
+    the canvas to be wired again; a Kinect's node (no cable, but its
+    panel) — and, the same way, every media channel: a channel always exists, empty or not, and is where a file
     is dropped or a source picked and what a picture is wired from.
     Only a drawing choice: nothing in `view` is changed. A view with no
     section (`view.spec` None) draws everything. Worked out once a view."""
@@ -3160,10 +3132,10 @@ def _patch_only(view: View) -> frozenset[str]:
                 todo.append(x)
     shown |= {nid for nid, n in have.items() if n.kind in ("output", "channel")}
     # a Kinect's point cloud is no lane, so its node has no cable to the loadable patch, and
-    # its control panel is that node's side pane (row 1170): it is drawn, as an output is
+    # its control panel is that node's side pane: it is drawn, as an output is
     shown |= {nid for nid, n in have.items()
               if n.kind == "device" and getattr(n.ref, "kind", "") == "kinect"}
-    # plan 40 T2: a group's members are the loadable patch's (a group holds nothing
+    # a group's members are the loadable patch's (a group holds nothing
     # of the meta controller's: `patches.groupable`), so a group is drawn, open or folded
     shown |= {n.id for g in view.groups for n in g.members}
     return frozenset(shown)
@@ -3172,7 +3144,7 @@ def _patch_only(view: View) -> frozenset[str]:
 def home(n: VNode) -> str:
     """Which layout map holds node `n`'s position: the loadable patch's for what
     a loadable patch holds (modifiers, macros, the render nodes, a performance
-    group's node, and since plan 31 the LFOs,
+    group's node, the LFOs,
     the envelopes and the sequencer: a bank's membership is loadable patch
     content), the show's for the meta controller (devices — a layered desk's every
     node, a placeholder — sources, the analyzer, the outputs, a meta controller
@@ -3198,9 +3170,9 @@ def split(view: View, positions: Mapping[str, Any]) -> tuple[dict, dict]:
     return pre, ses
 
 
-# ---------------------------------------------------------------- a legible graph (plan 28 N7)
+# ---------------------------------------------------------------- a legible graph
 #
-# The owner's decisions of 2026-10-20: **every node starts collapsed** — its
+# **Every node starts collapsed** — its
 # title and at most five short lines (`summary`), no row per port — and
 # **one wire between two nodes while either end is collapsed**, however
 # many params are mapped between them (`VBundle`, `wiring`); the real
@@ -3266,7 +3238,7 @@ def summary(n: VNode) -> list[str]:
     lines: list[str]
     if n.kind in ("device", "source", "analyzer"):
         # "band" here is the plain audio word for one of the analyzer's
-        # parts, not the fixture's name (register row 737)
+        # parts, not the fixture's name
         noun = "band" if n.kind == "analyzer" else "port"
         lines = [f"{_count(len(n.ports), noun)} · {patched} patched",
                  _loudest(p for p in outs if p.patched)]
@@ -3301,18 +3273,18 @@ def summary(n: VNode) -> list[str]:
             lines.append(_count(len(pics), "picture port"))
         if params:
             lines.append(_loudest(p for p in params if p.patched))
-        said = getattr(n.ref, "said", "")   # plan 34 T5: the node's own words
+        said = getattr(n.ref, "said", "")   # the node's own words
         if said:
             lines.insert(0, said)
         if isinstance(n.ref, rgraph.SwitchNode):
             lines.insert(0, switch_pick(n))
-        if n.faint:                         # plan 33 U: unreached, said first
+        if n.faint:                         # unreached, said first
             lines.insert(0, FED_BY_NOTHING if n.unfed else REACHES_NOTHING)
     return lines[:SUMMARY_LINES]
 
 
 def picture_hover(n: VNode, gpu_ms: float | None = None) -> str:
-    """What hovering a picture node's thumbnail says (plan 37 C2, P1): its
+    """What hovering a picture node's thumbnail says: its
     title, then the lines a collapsed text node shows under its title
     (`summary`: param counts, picture ports, the node's own words, a
     switch's pick, "reaches nothing"), then the size of the picture its
@@ -3330,8 +3302,8 @@ def picture_hover(n: VNode, gpu_ms: float | None = None) -> str:
 
 def switch_pick(n: VNode) -> str:
     """A switch node's pick in words, from its `select` port's reading
-    (the owner, 2026-10-24: the canvas says which input passes): "picks
-    in3", "off" — "off" too while it reads nothing."""
+    (the canvas says which input passes): "picks in3", "off" — "off" too
+    while it reads nothing."""
     port = next((p for p in n.ports if p.param is not None), None)
     live = port.live if port is not None else None
     k = 0 if live is None else round(live * len(rgraph.SWITCH_PORTS))
@@ -3353,7 +3325,7 @@ class VBundle:
     cables: list[VCable] = field(default_factory=list)
     live: float | None = None
     dormant: bool = False
-    # plan 40 T2: a folded group's end is its boundary pin (a param's row,
+    # a folded group's end is its boundary pin (a param's row,
     # a lane's out), not a stub: "" for a node's stub
     out_pin: str = ""
     in_pin: str = ""
@@ -3389,14 +3361,14 @@ def wiring(view: View, collapsed: Callable[[str], bool],
     itself, its collapsed ends moved to the node's stub; a cable between
     two expanded nodes is drawn as it is. `drawn(cable)` (a desk template's
     closed rows: False) leaves a cable out altogether, and so does
-    `shown(node id)` False for either end (plan 28 N9: an idle node is not
+    `shown(node id)` False for either end (an idle node is not
     drawn); `extra` are the through wires over hidden effects, drawn as
     render cables are. Bundles are in the order of their first cable;
     their readings are this frame's.
 
-    Plan 40 T2 (D4): `folded` (`folded(view)`: a folded group's member id
+    `folded` (`folded(view)`: a folded group's member id
     → its `VGroup`) — a cable with both ends inside one folded group is not
-    drawn (the one place a cable is folded away, the owner's); a cable with
+    drawn (the one place a cable is folded away); a cable with
     one end inside is re-ended at the group node, at the boundary pin its
     `ends` say (else the group's stub), as an expanded end: a render cable
     one wire to its typed pin, a value cable bundled per (node, pin) when
@@ -3410,7 +3382,7 @@ def wiring(view: View, collapsed: Callable[[str], bool],
         gs = folded.get(s) if folded else None
         gd = folded.get(d) if folded else None
         if gs is not None and gs is gd:
-            continue                        # D4: inside a folded group
+            continue                        # inside a folded group
         a, z = "", ""                       # a folded group's pins, when an end is one
         if gs is not None:
             s, a = gs.id, gs.ends.get(c.id, (None, None))[0] or stub_out(gs.id)
@@ -3456,7 +3428,7 @@ def readings(bundles: Iterable[VBundle]) -> None:
 def cable_words(view: View, c: VCable) -> str:
     """One cable as a bundle's hover lists it: "<source port> → <param>"."""
     src, dst = view.owner(c.src_port), view.owner(c.dst_port)
-    port = src[1] if src and src[1] else None     # plan 40 T4: the row's words, the port's first
+    port = src[1] if src and src[1] else None     # the row's words, the port's first
     a = row_words(c.addr or c.src_port, lambda _s: port.name if port is not None else None)
     b = (dst[1].param or dst[1].name) if dst and dst[1] else c.dst_port.partition(":")[2]
     return f"{a} → {b}"
@@ -3516,12 +3488,9 @@ def land_choices(view: View, edit, fixed: str, nid: str
 
 
 
-# ---------------------------------------------------------------- groups (plan 40 T2)
+# ---------------------------------------------------------------- groups
 #
-# P2, D4 (the owner's, 2026-10-27: "Saved, folded until `+` … an explicit
-# place where we want to say, okay, we want to encapsulate complexity" —
-# the one sanctioned exception to plan 36's no-hidden-edge rule). A group
-# is a region of the loaded patch — the loadable patch's `groups` entries — drawn
+# A group is a region of the loaded patch — the loadable patch's `groups` entries — drawn
 # on GRAPH as one node: folded, its members are not drawn and neither is
 # a cable with both ends inside; every cable with one end inside is drawn
 # re-ended at the group node — a picture cable at one typed pin each, a
@@ -3545,11 +3514,11 @@ LEFT_GROUP = "{node} left {name}"
 LEFT_EMPTY = "{node} left {name}, the last of it: the group is gone"
 GROUP_NO_DELETE = ("{name} is a group: Ungroup it from its menu (its nodes stay), or open it "
                    "and delete its nodes")
-# plan 40 T3: a patch spawned, spliced, wired as saved; a group saved as one
-PATCH_SIDE, LOADABLE_SIDE = "patch", "preset"     # a conflict's two answers (the sheet's, D3)
+# a patch spawned, spliced, wired as saved; a group saved as one
+PATCH_SIDE, LOADABLE_SIDE = "patch", "preset"     # a conflict's two answers (the sheet's)
 NO_LOADABLE_SPAWN = "no patch is loaded: nothing to spawn into"
 SPAWN_STALE = "the loadable patch changed while the sheet was up: spawn {name} again"
-# (wave 3 P2) what replacing the host's dream costs it, in words
+# what replacing the host's dream costs it, in words
 LOSES_WIRES = "its wires: {wires}"
 LOSES_VALUES = "{n} setting{s}: {names}"
 LOSES_GROUP = "its place in {name}"
@@ -3567,8 +3536,8 @@ PORT_TAKEN = "{port} is taken"
 NO_HOST_NODE = "no node {name}"
 NO_WAS = "{port}: the patch says nothing it was wired to"
 NOTHING_OPEN = "no pin of {name} is open"
-# wave 3 P3 (row 524, the owner's yes): the explicit chip that takes a taken
-# port over, and the words a press says when the chip no longer holds
+# the explicit chip that takes a taken port over, and the words a press says
+# when the chip no longer holds
 TAKE_OVER_CHIP = "wire as saved, replacing"
 TAKE_OVER_COUNT = "{n} cables"
 TAKE_OVER_NAMED = 3        # a chip names this many cuts, a line each; past it, the count
@@ -3585,16 +3554,14 @@ SAVED_PATCH = "saved {name} as a patch"
 UPDATED_PATCH = "updated patch {name}"
 PATCH_NEEDS_NAME = "a patch needs a name"
 PATCH_EXISTS = "a patch named {name} exists — Update patch, or another name"
-# plan 50: a group holds any node the loadable patch saves; the save is where what a
-# patch cannot carry (the camera, a lane envelope; wave 3 P1: the frame's
-# kinds it now can) is refused
+# a group holds any node the loadable patch saves; the save is where what a
+# patch cannot carry (the camera, a lane envelope) is refused
 SAVE_REFUSED = "{name} not saved as a patch: {why}"
-FIXTURE_KINDS = patches.FIXTURE_KINDS   # always there: the meta controller's own nodes (one list, plan 50)
-# …and the look's one camera (plan 43 C2: the camera is the loadable patch's, not
-# the meta controller's), always there too: what a patch's wire may name though no
-# section does
-# (wave 3 P3: and All outputs, whose kind is its own, so an outlet lands on it
-# with nothing yet wired in)
+FIXTURE_KINDS = patches.FIXTURE_KINDS   # always there: the meta controller's own nodes
+# …and the look's one camera (the loadable patch's, not the meta controller's),
+# always there too: what a patch's wire may name though no section does; and
+# All outputs, whose kind is its own, so an outlet lands on it with nothing
+# yet wired in
 ALWAYS_KINDS = (*FIXTURE_KINDS, "camera", rgraph.ALL_OUTPUTS)
 
 
@@ -3611,7 +3578,7 @@ def is_group_pin(pin: str) -> bool:
 
 @dataclass
 class VGroup:
-    """One group of the loaded patch on the canvas (plan 40 T2): its `id`
+    """One group of the loaded patch on the canvas: its `id`
     (``group.<n>``), `name`, provenance `patch` (the slug it was spawned
     from, or None), its entry's canvas ids (`nodes`) and the view's nodes of
     the ones a group may hold and the view has (`members`), whether it is
@@ -3624,8 +3591,8 @@ class VGroup:
     with both ends inside (not drawn while folded), `real` each pin → the
     member pin it stands for (a drag onto it lands there), `rows` each pin
     → the cables at it, `thumb` the member whose picture is its last
-    picture outlet (plan 37's thumbnail on the folded node), and
-    `kept_by_host` (plan 40 T3: the rows a spawn's conflict sheet gave the
+    picture outlet (the thumbnail on the folded node), and
+    `kept_by_host` (the rows a spawn's conflict sheet gave the
     loadable patch — drawn when present)."""
 
     id: str
@@ -3655,7 +3622,7 @@ class VGroup:
              ) -> tuple[float, float, float, float] | None:
         """The members' bounding rect (x0, y0, x1, y1) from their
         `positions` (node id → (x, y)) and `size(node id)` → (w, h); None
-        with no member placed. A group has no position of its own (D4: the
+        with no member placed. A group has no position of its own (the
         layout keeps its members')."""
         boxes = []
         for n in self.members:
@@ -3682,8 +3649,8 @@ def region(rect: tuple[float, float, float, float] | None, margin: float = GAP
 
 def leaves(area: tuple[float, float, float, float] | None,
            box: tuple[float, float, float, float]) -> bool:
-    """Does node rect `box` lie wholly outside region `area` (plan 40 T2:
-    a member dragged so — **ungroup one**)? Touching or overlapping it is
+    """Does node rect `box` lie wholly outside region `area` (a member
+    dragged so — **ungroup one**)? Touching or overlapping it is
     still inside: the region grows to hold it."""
     if area is None:
         return False
@@ -3697,8 +3664,8 @@ def folded(view: View) -> dict[str, VGroup]:
 
 
 def attach_groups(view: View, entries, table) -> None:
-    """`view.groups` from the loadable patch's `groups` entries (plan 40 T2): each
-    entry's members the view has and a group may hold (`patches.groupable`, plan 50; a
+    """`view.groups` from the loadable patch's `groups` entries: each
+    entry's members the view has and a group may hold (`patches.groupable`; a
     node already in an earlier group stays there), its boundary classified
     over the view's cables by `patches`' rule. A group with no member left
     (its nodes deleted since: the save leaves them out) is not drawn."""
@@ -3721,7 +3688,7 @@ def attach_groups(view: View, entries, table) -> None:
                    kept_by_host=list(e.get("kept_by_host") or ()))
         mem, _ = patches.groupable(view.spec, table, keep)
         _boundary(view, g, mem)
-        _open_pins(view, g, e)              # plan 40 T3: a spawn's host ports, still open
+        _open_pins(view, g, e)              # a spawn's host ports, still open
         view.groups.append(g)
 
 
@@ -3858,8 +3825,8 @@ def group_of(view: View, nid: str) -> VGroup | None:
 def group_params(g: VGroup) -> list[str]:
     """The ids group `g`'s members' params live under — a render node's
     param prefix (``fx.acid.2``, ``ghost.2``), a modifier's, a voice's, a
-    macro's id — what `devices.wants_for` keeps a group's rows by (plan 40
-    P4: the group node's status line)."""
+    macro's id — what `devices.wants_for` keeps a group's rows by (the group
+    node's status line)."""
     out = []
     for n in g.members:
         name = n.id.partition(":")[2] if n.id.startswith("render:") else ""
@@ -3868,7 +3835,7 @@ def group_params(g: VGroup) -> list[str]:
 
 
 def kept_words(row: Any) -> str:
-    """A row a spawn's conflict sheet kept for the loadable patch (plan 40 T3's
+    """A row a spawn's conflict sheet kept for the loadable patch (the
     `kept_by_host` entries), in words: "K1 kept by the preset" — the
     entry's own `words` (the control as the sheet said it: a desk knob by
     its glyph) where it has them."""
@@ -3881,10 +3848,10 @@ def kept_words(row: Any) -> str:
     return f"{row} kept by the loadable patch"
 
 
-# ---- plan 40 T3: a spawn's open pins, a patch's boundary in words ----
+# ---- a spawn's open pins, a patch's boundary in words ----
 
 PICTURE_NOUNS = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask", FIELD: "field",
-                 rgraph.STACK: "stack"}   # plan 90 (Devin on #519: a saved stack inlet)
+                 rgraph.STACK: "stack"}   # a saved stack inlet
 OPEN_PIN = "{id} · open (was {was})"
 
 
@@ -3895,11 +3862,11 @@ def _members_named(entry: Mapping) -> set[str]:
 
 
 def open_ports(spec, entry: Mapping) -> list[dict]:
-    """Plan 40 T3 (D2): the host ports a spawn left open on group `entry`
+    """The host ports a spawn left open on group `entry`
     (its session-only ``ports``, `patches.Landing.ports` as landed — never
     saved) that are open still: an inlet whose member port nothing is
     wired into, an outlet whose member does not yet feed the port it was
-    saved feeding (wave 3 P3: that one wire, so a member feeding another
+    saved feeding (that one wire, so a member feeding another
     port leaves this one reachable; an outlet that names no such port, none
     to match, while its member sends nothing out of the group).
     Picture, geometry and mask ports only (a value port is a row, landed
@@ -3913,8 +3880,8 @@ def open_ports(spec, entry: Mapping) -> list[dict]:
         if not isinstance(p, Mapping) or p.get("type") not in RENDER_TYPES:
             continue
         if isinstance(p.get("to"), str) and p["to"] in rgraph.MANY_PORTS:
-            # (wave 3 P1: the scene's geometry takes several; its other wires
-            # leave this one open)
+            # the scene's geometry takes several; its other wires
+            # leave this one open
             free = not any(w.dst == p["to"] and w.src == p.get("was") for w in wires)
         elif isinstance(p.get("to"), str):
             free = not any(w.dst == p["to"] for w in wires)
@@ -3949,7 +3916,7 @@ def source_said(src: str, slots=()) -> str:
 
 @dataclass(frozen=True)
 class TakeOver:
-    """What one press of the take-over chip would do to a group (wave 3 P3):
+    """What one press of the take-over chip would do to a group:
     the very section it read (`spec`, a landing makes a new one), the cables
     it cuts (`words`: the same, as the canvas titles them), the wires it lands
     and what stays refused. The chip's lines come from here, and a press hands
@@ -3981,8 +3948,8 @@ class TakeOver:
 
 
 def _open_pins(view: View, g: VGroup, entry: Mapping) -> None:
-    """Group `g`'s open pins (plan 40 T3, D2: "every host port is an open
-    pin on the group node"): one per `open_ports` entry, typed, its drag
+    """Group `g`'s open pins (every host port is an open
+    pin on the group node): one per `open_ports` entry, typed, its drag
     landing on the member's own port (`real`) — appended to its pins."""
     for p in open_ports(view.spec, entry):
         if "to" in p:
@@ -4014,8 +3981,8 @@ SPLICE_TYPE = "{name}'s pins carry {have}: that cable carries {want}"
 
 
 def splice_refusal(name: str, ports: Iterable[Mapping], typ: str = IMAGE) -> str | None:
-    """Can a patch with `ports` be dropped on a cable of type `typ` (plan 40
-    T3, D2's splice)? Exactly one inlet and one outlet, both `typ`; else
+    """Can a patch with `ports` be dropped on a cable of type `typ`
+    (a splice)? Exactly one inlet and one outlet, both `typ`; else
     the words why not."""
     ins, outs = patch_pins(ports)
     if len(ins) != 1 or len(outs) != 1:
@@ -4029,7 +3996,7 @@ def splice_refusal(name: str, ports: Iterable[Mapping], typ: str = IMAGE) -> str
 
 
 def patch_words(doc: Mapping, names: Callable[[str], str | None] | None = None) -> str:
-    """A patch's boundary in words, for the browser (plan 40 T3): "in:
+    """A patch's boundary in words, for the browser: "in:
     picture · out: picture · wants: K1, right hand y, analyzer 1" — its picture
     ports by direction and type, then every control-side source its rows and
     modifiers read, once, in `routing.row_words`' words (`names`: the
@@ -4065,8 +4032,7 @@ def view_group_of_pin(view: View, pin: str) -> VGroup | None:
 
 
 def real_pin(view: View, pin: str) -> str:
-    """What a folded group's boundary pin stands for in a drag (plan 40
-    T2): the member pin behind it (a member's picture port, a param's
+    """What a folded group's boundary pin stands for in a drag: the member pin behind it (a member's picture port, a param's
     ``mod`` stub, a modifier's input, a member's lane); any other pin is
     itself."""
     if not is_group_pin(pin):
@@ -4075,7 +4041,7 @@ def real_pin(view: View, pin: str) -> str:
     return g.real.get(pin, pin) if g is not None else pin
 
 
-# ---------------------------------------------------------------- editing (plan 28 N3)
+# ---------------------------------------------------------------- editing
 #
 # `Edit` turns a gesture on the canvas — a cable dragged from one pin to
 # another, a cable deleted, a modifier dropped onto a cable, a node picked
@@ -4087,20 +4053,20 @@ def real_pin(view: View, pin: str) -> str:
 # table call returned, a `Refusal` (the words the page shows, nothing
 # changed) or an `Ask` (the target has a performer: the page puts up the
 # same Replace / Keep prompt ROUTING does, `ui_routing.ask`, and *Replace*
-# runs `commit`) or a `learn.PairAsk` (a pair whose poles have rows, row 754:
+# runs `commit`) or a `learn.PairAsk` (a pair whose poles have rows:
 # `ui_routing.ask_pair`).
 #
-# **The seam with plan 28 N4** (render-graph edits): a request is
+# **The seam with the render-graph edits**: a request is
 # dispatched by the type of the pins it joins. Value and trigger pins are
 # this section's (`connect_value`, `disconnect_value`, `remove_value_node`);
 # an image, geometry or mask pin, a render cable or a render node goes to
-# the method N4 adds beside them — `Edit.wire(src, dst)`,
+# the render method beside them — `Edit.wire(src, dst)`,
 # `Edit.unwire(cable)`, `Edit.remove_render_node(node id)`, and
 # optionally `Edit.wire_refusal(src, dst)` for the drag's feedback —
 # looked up by name (`_render`; a plain-words refusal from them becomes a
 # `Refusal`). `RENDER_NOT_YET` is said only by an Edit without them.
 
-RENDER_TYPES = (IMAGE, GEOMETRY, MASK, FIELD, rgraph.STACK)   # plan 90: a saved stack inlet too
+RENDER_TYPES = (IMAGE, GEOMETRY, MASK, FIELD, rgraph.STACK)   # a saved stack inlet too
 RENDER_NOT_YET = "render cables: not yet"
 # the words a refusal says
 NOT_A_PORT = "not a port"
@@ -4125,10 +4091,10 @@ META_ROW = "{what} is the meta controller's (bindings.json): edit it on ROUTING"
 SHIFT_NODE = ("{addr} on the SHIFT node is the meta controller's (bindings.json): "
               "map it on ROUTING")
 NOT_REMOVABLE = "{label}: the meta controller's, not the patch's (nothing to delete)"
-# plan 43 C2: the camera is the loadable patch's, and every look has exactly one
+# the camera is the loadable patch's, and every look has exactly one
 CAMERA_KEPT = "{label}: the look's one camera, always there (nothing to delete)"
 NO_SUCH_MOD = "no modifier {kind}"
-# plan 31 G1: the banks' nodes and the sequencer's bindings
+# the banks' nodes and the sequencer's bindings
 LANE_ENV_KEPT = "{label} is a sequencer lane's envelope: it stays (an extra one can go)"
 BANK_FULL = "{k} {what}, the most there can be: delete one to add another"
 
@@ -4206,26 +4172,26 @@ class Edit:
                  graph=None, render=None, push: Callable[[str], None] | None = None):
         self.table, self.reg, self.router, self.view = table, reg, router, view
         self.profile = profile
-        # plan 28 N4, the render edits: the loadable patch's `GraphSection` they land
+        # the render edits: the loadable patch's `GraphSection` they land
         # through, the renderer's last graph (canvas pins → names), the undo
         # step pushed before a landing (the page: `undo.push(label,
         # load=True)`; None: none), the last edit's words
         self.graph, self.render, self.push = graph, render, push
         self.said = ""
-        self.added = ""         # plan 33 U: the node the last add or insert made (its name)
-        # plan 36 T5: the nodes the last starter added, left to right (each
+        self.added = ""         # the node the last add or insert made (its name)
+        # the nodes the last starter added, left to right (each
         # placed by the page from where the menu opened)
         self.placed: tuple[str, ...] = ()
-        self.slots = ()         # plan 35 G: the meta controller's outputs (a window's name in the words)
-        # plan 36 T1: the open show, which holds the meta controller's own wires (its
+        self.slots = ()         # the meta controller's outputs (a window's name in the words)
+        # the open show, which holds the meta controller's own wires (its
         # `rig`, `graph.BusCuts`): a bus cable cut or joined lands there
         self.show = None
-        # plan 40 T2: the loaded `loadable.LoadedPatch`, whose `groups` and
+        # the loaded `loadable.LoadedPatch`, whose `groups` and
         # `layout` the group verbs edit (None: no group verb lands)
         self.loaded_patch = None
-        self.spawned = None     # plan 40 T3: the group entry the last spawn landed
+        self.spawned = None     # the group entry the last spawn landed
 
-    # ---- the render graph (plan 28 N4): each returns None (done; its
+    # ---- the render graph: each returns None (done; its
     # words in `said`) or a refusal in words, nothing changed ----
 
     def wire(self, src_port: str, dst_port: str, dry: bool = False) -> str | None:
@@ -4239,27 +4205,27 @@ class Edit:
         return self.wire(src_port, dst_port, dry=True)
 
     def set_depth(self, w: rgraph.Wire, depth: float) -> str | None:
-        """Plan 67 P3: how deep field wire `w` into a knob goes (`set_wire_depth`)."""
+        """How deep field wire `w` into a knob goes (`set_wire_depth`)."""
         return set_wire_depth(self, w, depth)
 
     def unwire(self, cable, dst: str | None = None) -> str | None:
         """Take a render cable (a `VCable`, or its two ends; one port's
         name alone: whatever is wired into it) out of the graph — any wire
-        of the section (plan 35 G)."""
+        of the section."""
         return render_unwire(self, cable, dst)
 
     def add_node(self, kind: str, file: str | None = None, **settings) -> str | None:
-        """The picker (plan 35 G, `picker`): a frame node (once each), a
+        """The picker (`picker`): a frame node (once each), a
         hands node, an effect (R25: the file itself when nothing in the
         section holds it, else the lowest free instance, switched on), a
-        slot on an instance (`file`, plan 89: `add_slot`), a composite, a switch, plan 34's
+        slot on an instance (`file`: `add_slot`), a composite, a switch, a
         delay, resize, echo (`file`: its index) and dream — each on no wire
         (unreached, faint, until one is wired). The new node's name is
         `added`."""
         return render_add(self, kind, file, **settings)
 
     def starter(self, which: str = "scene", cable=None) -> str | None:
-        """A starter (plan 36 T5, `STARTERS`): its pre-wired group in one
+        """A starter (`STARTERS`): its pre-wired group in one
         landing — `cable` (a picture cable: a `VCable` or its two ends) the
         picture a tracers or dream starter is laid on. The nodes it added,
         left to right, are `placed`."""
@@ -4267,7 +4233,7 @@ class Edit:
 
     def insert_node(self, cable, kind: str, file: str | None = None,
                     inlet: str | None = None) -> str | None:
-        """A cable's insert ▸ (2026-11-01): a new node of `kind` (an effect
+        """A cable's insert ▸: a new node of `kind` (an effect
         `file`; a composite, a switch, a delay, a resize, the dream, the
         look-back, a cut, a segment, the backdrop, the pattern:
         `INSERT_PORTS`) made and spliced into picture cable `cable` (a
@@ -4278,7 +4244,7 @@ class Edit:
         return render_insert(self, cable, kind, file, inlet)
 
     def insert_effect(self, cable, file: str) -> Refusal | None:
-        """Plan 33 U: effect `file` onto picture cable `cable` — `insert_node`
+        """Effect `file` onto picture cable `cable` — `insert_node`
         for an effect: `src → new.image`, `new → dst`, one landing — R25:
         the file itself when nothing in the section holds it, else the
         lowest free instance, switched on in the same step."""
@@ -4293,7 +4259,7 @@ class Edit:
         return render_channel_switch(self, port)
 
     def place_node(self, cable, name: str, inlet: str | None = None) -> str | None:
-        """Any picture node `name` (2026-11-01, `INSERT_PORTS`: a free node
+        """Any picture node `name` (`INSERT_PORTS`: a free node
         dropped on a cable, or one lifted out of its place with ⌘ —
         reordering the run is this) taken out of wherever its picture goes,
         the wires either side of it closed over it, and put onto `cable`
@@ -4304,13 +4270,13 @@ class Edit:
         return render_place(self, cable, name, inlet)
 
     def place_effect(self, cable, name: str) -> Refusal | None:
-        """Plan 33 U: effect instance `name` onto `cable` — `place_node` for
+        """Effect instance `name` onto `cable` — `place_node` for
         an effect."""
         why = render_place(self, cable, name)
         return Refusal(why) if why is not None else None
 
     def drop_node(self, node: str) -> str | None:
-        """Delete a render node — any node of the section (plan 35 G): its
+        """Delete a render node — any node of the section: its
         entry and every wire on it go, in one undo step; a window's wires
         go (it is the meta controller's); the camera and a cloud are the meta controller's."""
         return render_drop(self, node)
@@ -4319,7 +4285,7 @@ class Edit:
 
     def slots_on(self, effect: str) -> list[str]:
         """Effect instance `effect`'s slots past the first, as the landed
-        section declares them (plan 89: an effect's menu lists them)."""
+        section declares them (an effect's menu lists them)."""
         return slot_names(_spec(self), effect)
 
     def set_node(self, node: str, **settings) -> str | None:
@@ -4327,7 +4293,7 @@ class Edit:
         return render_set(self, node, **settings)
 
     def set_key(self, node: str, on: bool) -> str | None:
-        """Plan 87: black is clear on picture node `node`, or off — the
+        """Black is clear on picture node `node`, or off — the
         section's `keys` (`render_key`)."""
         return render_key(self, node, on)
 
@@ -4424,7 +4390,7 @@ class Edit:
             return self._bind_refusal(*bound)
         return self._value_refusal(*self.ordered(src_port, dst_port))
 
-    # ---- a sequencer lane's envelope (plan 31 G1) ----
+    # ---- a sequencer lane's envelope ----
 
     def _binding(self, src: str, dst: str) -> tuple[int, int] | None:
         """(0-based lane, envelope id) when `src` is a sequencer lane's pin
@@ -4507,7 +4473,7 @@ class Edit:
         if p.id == SAVE_PARAM:
             return learnmod.SAVE_REFUSAL
         if Binding(addr, p.id).is_midi:
-            # plan 28 N5 (D5): the global layer is never a Learn target, so a
+            # the global layer is never a Learn target, so a
             # drag from the SHIFT node is refused whatever the latch
             port = self._port(src)
             if port is not None and port.layer == GLOBAL_LAYER:
@@ -4515,7 +4481,7 @@ class Edit:
             why = learnmod.blocked(self.table, addr)
             if why is not None:
                 return learnmod.blocked_words(addr, why)
-            # register row 743: what is left would land in the patch layer
+            # what is left would land in the patch layer
             return meta_refusal(p.id)
         return None
 
@@ -4583,9 +4549,8 @@ class Edit:
         (`hands.learn_depth`) where the source or the param is centred,
         else the `position` fader at 1; from a band lane a push at
         `learn.LANE_DEPTH` and from an LFO a push at `learn.PUSH_DEPTH`
-        on any continuous param (the owner, after the show of 2026-10-30);
-        from an envelope into a continuous param, a push about the base
-        at its headroom (the owner, 2026-10-24). Route from ▸
+        on any continuous param; from an envelope into a continuous param,
+        a push about the base at its headroom. Route from ▸
         (`ui_graph.route_from`) lands the same."""
         addr = self.address(src)
         depth = None
@@ -4610,7 +4575,7 @@ class Edit:
 
     def _pair_step_row(self, addr: str, p: Param):
         """A pair's cable onto a stepped param: a route's lane, resting at 0.5,
-        would park it mid-throw, so the row Learn pair lands (plan 56), through
+        would park it mid-throw, so the row Learn pair lands, through
         a Learn of its own, as `_setter`'s."""
         lane = self.router.lane if self.router is not None else None
         lrn = learnmod.Learn(self.reg, self.table, lane=lane)
@@ -4849,7 +4814,7 @@ class Edit:
             return self.remove_voice(nid, node)
         return self.remove_value_node(nid, kind, node)
 
-    # ---- a bank's voices (plan 31 G1) ----
+    # ---- a bank's voices ----
 
     def remove_voice(self, nid: str, node: VNode | None = None):
         """Delete an LFO or an extra envelope (``lfo.3``, ``env.7``) through
@@ -4891,7 +4856,7 @@ class Edit:
                 {k: v for k, v in self.table.macros_doc().items() if k != nid}, self.reg)
         return Refusal(NOT_REMOVABLE.format(label=node.label if node is not None else nid))
 
-    # ---- plan 40 T2: groups (P2, D4) — a fold of the canvas and a list in
+    # ---- groups — a fold of the canvas and a list in
     # the loadable patch (`self.loaded_patch.groups`, its `layout`), each verb one undo
     # step: `push(label)` (the page's `undo.push(label, load=True)`: the
     # library's marks carry the groups and the layout) before the first
@@ -4916,13 +4881,13 @@ class Edit:
         """Add group `entry` (``{"name"?, "patch"?, "nodes", "open"?}`` — a
         `patches.Landing.group`, or Group's own) to the loadable patch as
         ``group.<n>``, n one past the loadable patch's `group_high` — the highest
-        number it has ever held (row 563: the file's highest at the load,
+        number it has ever held (the file's highest at the load,
         raised by every list assigned, carried by the marks), bumped here,
         so an ungrouped or undone group's number is never handed out again
         while the loadable patch is loaded. A bare `presets` with no floor yet (a
         test's) is seeded from the highest held. Named "group <n>" when it
         has no name; folded unless it says open. Pushes no undo step: the
-        caller's verb has (Group's below; plan 40 T3's spawn, whose landing
+        caller's verb has (Group's below; a spawn, whose landing
         is one step). Returns the entry as landed."""
         groups = self._groups()
         if groups is None:
@@ -4945,7 +4910,7 @@ class Edit:
     def group(self, ids: Iterable[str], name: str | None = None
               ) -> tuple[dict | None, list[str]]:
         """Group (right-click with nodes selected): of canvas ids `ids`, the
-        ones a group may hold (`patches.groupable`, plan 50: any node the
+        ones a group may hold (`patches.groupable`: any node the
         loadable patch saves — whether it saves as a patch is asked at the save) made
         one group, folded, named "group <n>" — one undo step. Returns (the
         entry, or None when nothing was grouped; the words for what was
@@ -5049,8 +5014,7 @@ class Edit:
     def leave_groups(self, moves: Iterable[tuple[str, str, tuple[float, float] | None]]
                      ) -> str | None:
         """Several members dragged out of their regions at once — each
-        ``(group id, node id, at)`` — as **one** undo step (plan 40 review
-        fix: one gesture, one ⌘Z): each id taken from its list and its new
+        ``(group id, node id, at)`` — as **one** undo step (one gesture, one ⌘Z): each id taken from its list and its new
         position written; a group its last member leaves goes, said."""
         todo: list[tuple[dict, str, Any]] = []
         for gid, nid, at in moves:
@@ -5081,7 +5045,7 @@ class Edit:
         self.said = "; ".join(said)
         return None
 
-    # ---- plan 40 T3: patches (P3, D2, D3, D9) — a spawn is a fragment of a
+    # ---- patches — a spawn is a fragment of a
     # loadable patch load through today's doors, in load order, one undo step:
     # `push(label)` once, before the first write, and nothing else pushes
     # (`_land` is run with the push held). Each returns a refusal in words,
@@ -5095,12 +5059,12 @@ class Edit:
         words (the loadable patch moved under the sheet; nothing is written)."""
         if self.graph is None or self.loaded_patch is None or self.table is None:
             return NO_LOADABLE_SPAWN
-        # (wave 3 P1) a dream the host already has …; `getattr`: a sheet held
+        # a dream the host already has …; `getattr`: a sheet held
         # open across a hot reload holds a `Landing` of the class before it
         why = getattr(landing, "refusal", None)
         if why is not None:
             return why
-        asks = getattr(landing, "unanswered", None)      # (wave 3 P2; the same `getattr`)
+        asks = getattr(landing, "unanswered", None)      # the same `getattr`
         why = asks(choices) if asks is not None else None
         if why is not None:
             return why
@@ -5147,7 +5111,7 @@ class Edit:
 
     def replace_said(self, landing, after: Mapping[str, Any] | None = None
                      ) -> tuple[list[str], list[str]]:
-        """What the host's node loses to `landing` (wave 3 P2) and what it keeps,
+        """What the host's node loses to `landing` and what it keeps,
         in words, for the sheet and the head: (its wires, the settings that will
         differ, a macro's hold, its place in a group; the rows on its params).
         `after`: `_replaced_values`, when the caller has it. Reads only."""
@@ -5243,7 +5207,7 @@ class Edit:
 
     def spawn(self, landing, choices: Mapping[int, str] | None = None,
               splice=None) -> str | None:
-        """Land `landing` (`patches.spawn`'s, plan 40 P3) as **one undo
+        """Land `landing` (`patches.spawn`'s) as **one undo
         step**, through the doors a loadable patch load uses, in its order:
 
         1. the section re-read with the patch's nodes and its own wires (and,
@@ -5262,11 +5226,11 @@ class Edit:
            the live entry for the meta controller — never saved) and its layout at
            the drop point; the desk redrawn.
 
-        `choices`: conflict index → ``"patch"`` or ``"preset"`` (D9: a row
-        not answered is the patch's). Nothing is attached by itself (D2):
+        `choices`: conflict index → ``"patch"`` or ``"preset"`` (a row
+        not answered is the patch's). Nothing is attached by itself:
         with no `splice` every host port is an open pin. No file is written.
 
-        Wave 3 P2: `landing.replacing`, answered by the sheet (`patches.
+        `landing.replacing`, answered by the sheet (`patches.
         replace_key` in `choices`) — the host's node goes first, as a delete
         takes it (its entry and every wire touching it), in this one step,
         its values the patch's over fresh, a macro's base subscribers on them
@@ -5284,7 +5248,7 @@ class Edit:
         gone = _take_out(doc, set(replacing))
         doc["nodes"] = [*doc.get("nodes", []), *copy.deepcopy(list(landing.nodes))]
         doc["wires"] = [*doc.get("wires", []), *copy.deepcopy(list(landing.wires))]
-        # plan 87: the patch's keyed members join the host's (a node it
+        # the patch's keyed members join the host's (a node it
         # replaces is keyed as the patch says)
         keyed = (set(doc.get(rgraph.KEYS_KEY, ())) - set(replacing)) | set(
             getattr(landing, "keys", ()))
@@ -5426,13 +5390,13 @@ class Edit:
         return kept
 
     def splice(self, landing, cable, choices: Mapping[int, str] | None = None) -> str | None:
-        """A patch dropped on picture cable `cable` (plan 40 T3, D2): `spawn`
+        """A patch dropped on picture cable `cable`: `spawn`
         with the cable taken out and the patch's one inlet and one outlet
         wired either side of it, in the same undo step."""
         return self.spawn(landing, choices, splice=cable)
 
     def wire_as_saved(self, gid: str) -> str | None:
-        """**wire as saved** (plan 40 T3, D2): each open pin of group `gid`
+        """**wire as saved**: each open pin of group `gid`
         whose `was` names a node the loadable patch has, with that port free, wired
         as the patch was saved — an inlet `was → <member port>`, an outlet
         `<member> → was` — all in **one undo step**; every other pin
@@ -5463,7 +5427,7 @@ class Edit:
         return got[0] if got is not None else None
 
     def wire_taking_over(self, asked: TakeOver) -> str | None:
-        """The take-over chip (wave 3 P3, row 524, the owner's yes): what
+        """The take-over chip: what
         **wire as saved** does, and each outlet's taken port is cut for it,
         every cut named on the chip, all of it **one undo step**, the cut said
         after. The source of a cut cable stays on the canvas, unwired
@@ -5534,7 +5498,7 @@ class Edit:
                         refused.append(PORT_TAKEN.format(port=was))
                         continue
                     taking = True
-            if isinstance(p.get(rgraph.WIRE_DEPTH), (int, float)):   # plan 67 P3: an inlet's
+            if isinstance(p.get(rgraph.WIRE_DEPTH), (int, float)):   # an inlet's
                 w[rgraph.WIRE_DEPTH] = p[rgraph.WIRE_DEPTH]          # or an outlet's depth
             if node not in have and kind_of(node) not in ALWAYS_KINDS:
                 refused.append(NO_HOST_NODE.format(name=node))
@@ -5557,7 +5521,7 @@ class Edit:
         return doc, wired, cuts, refused
 
     def save_patch(self, gid: str, name: str, note: str = "") -> str | None:
-        """**Save as patch…** / **Update patch** (plan 40 T3, P3): group
+        """**Save as patch…** / **Update patch**: group
         `gid` cut out of the loaded patch (`patches.lift` over
         `LoadedPatch.parts()`), named, and written as ``<library>/patches/<slug>.json``
         (`Library.save_patch`: an older text of it to the trash) — that
@@ -5579,7 +5543,7 @@ class Edit:
             # (review fix) another patch has this file: Save as never replaces it
             return PATCH_EXISTS.format(name=name)
         spec, table, values, layout = self.loaded_patch.parts()
-        # plan 50: a group holds any node the loadable patch saves; what a patch
+        # a group holds any node the loadable patch saves; what a patch
         # cannot carry is asked here, at the save, and refused in words
         _, refused = patches.select(spec, table, g["nodes"])
         if refused:
@@ -5617,8 +5581,8 @@ NEAR = 14.0                # canvas units: how close a drop must come to a cable
 
 def drop_reach(zoom: float = 1.0) -> float:
     """…and never under `NEAR` screen px while the canvas is zoomed out
-    (2026-10-31; `zoom`: canvas units a screen pixel, 4 zoomed out four
-    times — the page passes the editor's, this module reads no imgui)."""
+    (`zoom`: canvas units a screen pixel, 4 zoomed out four times — the
+    page passes the editor's, this module reads no imgui)."""
     return NEAR * max(1.0, zoom)
 
 
@@ -5629,8 +5593,7 @@ def bezier(p0, p3, strength: float = LINK_STRENGTH, steps: int = 16) -> list[tup
     return cubic(p0, (p0[0] + strength, p0[1]), (p3[0] - strength, p3[1]), p3, steps)
 
 
-# ---- a cable that runs back: the sling (the owner, 2026-11-19: "if a cable
-# runs backwards … it looks way worse than cables that run forwards") ----
+# ---- a cable that runs back: the sling ----
 #
 # A cable whose end sits left of its start is not drawn as the widget's S
 # (out to the right, across every node between, in from the left): it
@@ -5748,7 +5711,7 @@ def cables_near(view: View, pins: Mapping[str, tuple], point, within: float = NE
     or — given the node's `size` — through its box (grown by `within`). A
     cable into or out of a node in `skip` (the node being dropped) is
     passed over. A render cable with a collapsed end is drawn to that
-    node's stub (plan 28 N7), so the stub's position stands for the pin it
+    node's stub, so the stub's position stands for the pin it
     does not draw. A cable drawn as a sling (`curves`: cable id → its
     points, as the page drew them) is measured along that."""
     skip = set(skip)
@@ -5805,7 +5768,7 @@ def onto_words(view: View, c: VCable) -> str:
     return f"{src} → {dst}"
 
 
-# ---------------------------------------------------------------- render edits (plan 28 N4)
+# ---------------------------------------------------------------- render edits
 #
 # The GRAPH page's edits of the render graph: a cable dragged between two
 # picture ports, or geometry into `scene.geometry`, is a wire in the
@@ -5817,24 +5780,23 @@ def onto_words(view: View, c: VCable) -> str:
 # and nothing changes — then landed through the loadable patch's `GraphSection`
 # (`land`: the instances' params declared or dropped, the renderer handed
 # the new wiring, which builds the graph again), one undo step before it
-# (`push`), the loadable patch dirty. The seam with plan 28 N3's modulation edits
+# (`push`), the loadable patch dirty. The seam with the modulation edits
 # is the port type: image / geometry / mask cables are these
-# (`RENDER_TYPES`), value / trigger cables N3's.
+# (`RENDER_TYPES`), value / trigger cables the modulation edits'.
 #
-# Plan 35 G: the section is a wired frame in the owner's ids, and the page
-# edits it as it stands — every node and wire of it deletes (the old
-# frame's own nodes, its run and its default edges were refused; there
-# are none now). What stays refused: a type error, a loop, the meta controller's own —
+# The section is a wired frame in the owner's ids, and the page
+# edits it as it stands — every node and wire of it deletes. What stays
+# refused: a type error, a loop, the meta controller's own —
 # a window (delete takes its wires: `OUTPUT_UNWIRED`) and a cloud
-# (`NOT_REMOVABLE`) — and the look's one camera (`CAMERA_KEPT`, plan 43 C2).
+# (`NOT_REMOVABLE`) — and the look's one camera (`CAMERA_KEPT`).
 
 
-KNOB_DEPTH_STEPS = (1.0, 0.5, 0.25, 0.125)     # plan 67 P3: shares of a knob's range
+KNOB_DEPTH_STEPS = (1.0, 0.5, 0.25, 0.125)     # shares of a knob's range
 SET_DEPTH_SAID = "{wire}: depth {depth:g}"
 
 
 def depth_choices(w: rgraph.Wire) -> list[tuple[float, str]]:
-    """Plan 67 P3: the depths offered for field wire `w` into a knob — 1 (the
+    """The depths offered for field wire `w` into a knob — 1 (the
     field as it is, in the knob's units), then ±⅛ … ±1 of the knob's range
     (a field of 0 … 1 then sweeps that share of it) — each with its words;
     none for a wire into no knob."""
@@ -5856,7 +5818,7 @@ def depth_choices(w: rgraph.Wire) -> list[tuple[float, str]]:
 
 
 def set_wire_depth(edit: Edit, w: rgraph.Wire, depth: float) -> str | None:
-    """Plan 67 P3: field wire `w` into a knob at `depth` (`graph.WIRE_DEPTH`),
+    """Field wire `w` into a knob at `depth` (`graph.WIRE_DEPTH`),
     one undo step; refused in words for a wire the section does not have."""
     doc = _doc(edit)
     wires = doc.get("wires", [])
@@ -5871,7 +5833,7 @@ def set_wire_depth(edit: Edit, w: rgraph.Wire, depth: float) -> str | None:
 
 
 def knob_pin(pin: str) -> str | None:
-    """Plan 67 P3: a knob's row on GRAPH — its `param:`, `base:`, `mod:` or
+    """A knob's row on GRAPH — its `param:`, `base:`, `mod:` or
     `depth:` pin of `fx.<effect>[.<n>].<key>` — as the knob's field port,
     `rin:<effect>/<key>`, so a field cable dropped on the knob wires it (or
     is refused in words: a choice, a count, a rate); None for any other pin."""
@@ -5895,21 +5857,20 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     """A canvas pin or node id (`rout:<node>`, `rin:<node>/<port>`,
     `render:<node>`), or a name as the loadable patch's graph says it → (that
     name — `hands.2`, `acid.2`, `output.2.hands`, `scene.geometry` —,
-    None), or (None, why it is no name a wire may use). Plan 35 G: the
-    canvas's names are the section's (V2), so a pin is its name; the
-    camera (the look's one, plan 43 C2) and a cloud (the meta controller's) are no
-    name a section says.
-    (`render_graph` is no longer asked: kept for the callers' signature.)"""
+    None), or (None, why it is no name a wire may use). The canvas's
+    names are the section's, so a pin is its name; the camera (the look's
+    one) and a cloud (the meta controller's) are no name a section says.
+    `render_graph` is unused: kept for the callers' signature."""
     head, _, rest = pin.partition(":")
     if head not in ("rout", "rin", "render") or not rest:
         node = pin if kind_of(pin) is not None else pin.rpartition(".")[0]
         return (pin, None) if kind_of(node) is not None else (None, f"no node {pin!r}")
     name, _, port = rest.partition("/")
     if head == "rout" and _bus_source(name):
-        return name, None                    # plan 36 T1: All outputs' bus pin
+        return name, None                    # All outputs' bus pin
     kind = kind_of(name)
     if head == "rout" and kind == "cloud":
-        return name, None                    # plan 36 T2: a cloud's wire is the meta controller's
+        return name, None                    # a cloud's wire is the meta controller's
     if kind == CAMERA:
         return None, CAMERA_KEPT.format(label=label_of(name))
     if kind == "cloud":
@@ -5921,16 +5882,16 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     return name, None
 
 
-# plan 35 G: the picker's groups, by an item's kind, drawn in this order
-# (ui_graph.render_picker; plan 36 T5: the starters first, in their own ▸)
+# the picker's groups, by an item's kind, drawn in this order
+# (ui_graph.render_picker; the starters first, in their own ▸)
 PICKER_GROUP: dict[str, str] = {
     "starter": "starters",
     "scene": "scene", "shape": "scene", "hands": "scene", "layer": "scene", "guide": "scene",
     "backdrop": "scene",
     "pattern": "pictures", "composite": "pictures", "switch": "pictures",
     "channels": "pictures", "resize": "pictures", "delay": "pictures",
-    # 2026-10-31: the eight channels under media ▸ (they always exist: the
-    # item selects one, `ui_graph.pick_channel`); plan 39 T5 (W6): the
+    # the eight channels under media ▸ (they always exist: the
+    # item selects one, `ui_graph.pick_channel`); the
     # segment there too (what a channel's picture is cut into), the mask
     # nodes in their own group, masks ▸
     "channel": "media", "segment": "media",
@@ -5945,16 +5906,16 @@ ONCE = ("scene", "shape", "backdrop", "pattern")
 
 
 def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
-    """The right-click picker's list (plan 35 G): (kind, file, label), in
-    the owner's groups (`PICKER_GROUP`) — starters ▸ (plan 36 T5,
-    `STARTERS`: each item's file its key); scene ▸ (the
+    """The right-click picker's list: (kind, file, label), in
+    the owner's groups (`PICKER_GROUP`) — starters ▸ (`STARTERS`: each
+    item's file its key); scene ▸ (the
     scene, the shape, hands, a hands layer, a hands guide, the backdrop);
     pictures ▸ (the faces pattern, a composite, a switch,
-    R28's switch over the channels, plan 34's resize and delay); media ▸
-    (2026-10-31: channel a … channel h, each the channel's letter as its
+    a switch over the channels, resize and delay); media ▸
+    (channel a … channel h, each the channel's letter as its
     file — picking one makes nothing, the channels always exist; then
-    plan 39's segment); masks ▸ (plan 39's matte and cut); every
-    effect file this build has; and (plan 89) one more slot on each effect
+    the segment); masks ▸ (the matte and cut); every
+    effect file this build has; and one more slot on each effect
     instance in the section."""
     gs = edit.graph
     files = gs.files() if gs is not None and hasattr(gs, "files") else None
@@ -5967,7 +5928,7 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
             ("switch", None, "switch"),
             *(("channels", port, label) for port, label in CHANNEL_SWITCH_PORTS),
             ("resize", None, "resize"), ("delay", None, "delay")]
-    # media ▸ the eight channels (2026-10-31) and plan 39 T5 (W6)'s segment;
+    # media ▸ the eight channels and the segment;
     # masks ▸ the matte and the cut
     out += [("channel", c, f"channel {c}") for c in rgraph.MEDIA_CHANNELS]
     out += [("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut")]
@@ -5977,9 +5938,9 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
 
 
 def picked(edit: Edit) -> set[str]:
-    """The picker's items already in the section (drawn disabled, plan 35
-    G): the frame kinds there are one of — by their (kind, file) keys'
-    names. (Plan 90 H3: the dream is an effect; a second says so as it runs.)"""
+    """The picker's items already in the section (drawn disabled): the
+    frame kinds there are one of — by their (kind, file) keys' names.
+    (The dream is an effect; a second says so as it runs.)"""
     named = _named(_doc(edit))
     return {n for n in named if kind_of(n) in ONCE}
 
@@ -5994,20 +5955,20 @@ def picked_name(kind: str, file: str | None) -> str:
 
 def _instances(spec) -> list[str]:
     """The effect instances section `spec` holds (by an entry or a wire),
-    sorted: what may take another slot (plan 89)."""
+    sorted: what may take another slot."""
     return sorted(n for n in frame_names(spec) if kind_of(n) == "effect") if spec else []
 
 
-# R28: the ports "switch over the channels" feeds, and their picker words
+# the ports "switch over the channels" feeds, and their picker words
 CHANNEL_SWITCH_PORTS = (("pattern.media", "faces media"), ("backdrop.image", "backdrop"))
 CHANNEL_SWITCH_REFUSAL = "a switch over the channels goes into pattern.media or backdrop.image"
 
 
 def _frame_doc(spec) -> dict:
-    """The section a GRAPH edit starts from (plan 35 G): the landed wired
-    frame. Plan 36 T3 (W3): with none landed (or one from before the wired
-    frame, which never lands), the empty frame the renderer draws for none
-    — an edit adds what it lands and nothing else."""
+    """The section a GRAPH edit starts from: the landed wired frame. With
+    none landed (or one that is not a wired frame), the empty frame the
+    renderer draws for none — an edit adds what it lands and nothing
+    else."""
     if spec is not None and getattr(spec, "wired", False):
         return spec.to_json()
     return rgraph.read_graph({rgraph.FRAME_KEY: rgraph.WIRED_FRAME}).to_json()
@@ -6031,9 +5992,8 @@ def _spec(edit: Edit):
 
 
 def _with_frame(doc: dict) -> dict:
-    """`doc` given the wired frame's marker, first (plan 35 F: `"frame":
-    "wired"`), and its nodes list — what every edit lands (`_with_run`'s
-    successor: there is no run to give it)."""
+    """`doc` given the wired frame's marker, first (`"frame":
+    "wired"`), and its nodes list — what every edit lands."""
     if doc.get(rgraph.FRAME_KEY) != rgraph.WIRED_FRAME or next(iter(doc), None) != rgraph.FRAME_KEY:
         rest = {k: v for k, v in doc.items() if k != rgraph.FRAME_KEY}
         doc.clear()
@@ -6047,8 +6007,8 @@ def _frame_order(wires: list[dict]) -> list[dict]:
     """`wires` in the order a load writes a wired frame (the global
     constraints' canonical frame order, `graphmigrate.frame_wires`): the
     section's own wires first, as they stand, then the frame's — the
-    scene's geometry, `backdrop.scene`, the look-back laid on (plan 36 T4:
-    its occluder, the "add" composite and the dream feeding it), the run,
+    scene's geometry, `backdrop.scene`, the look-back laid on (its
+    occluder, the "add" composite and the dream feeding it), the run,
     All outputs' picture, hands and guide, the recorded picture's composite
     and the look-back's record (`lookback.image`, where the capture was). A
     stable sort: only `scene.geometry` takes several wires, and theirs keep
@@ -6065,7 +6025,7 @@ def _frame_order(wires: list[dict]) -> list[dict]:
     held = into.get("lookback.image")
     comp = held if kind_of(held) == "composite" else None
     # (the composite laying the trail on: its `over` the look-back or a dream of
-    # it — plan 90 H2: or a migrated look-back's last part, a Trail through its Cuts)
+    # it — or a migrated look-back's last part, a Trail through its Cuts)
     def trail_end(src: str) -> bool:
         seen: set[str] = set()
         while kind_of(src) == "cut" and src not in seen:
@@ -6096,8 +6056,8 @@ def _frame_order(wires: list[dict]) -> list[dict]:
 
 
 def _drawn_edge(x: dict) -> bool:
-    """Whether wire `x` is one of the hidden edges' wires (plan 36 T2,
-    `graphmigrate.drawn_edges`, written last in that order): the faces'
+    """Whether wire `x` is one of the hidden edges' wires
+    (`graphmigrate.drawn_edges`, written last in that order): the faces'
     pattern, the look-back's cover, a layer's or a guide's hands, a depth."""
     src, dst = x["from"], x["to"]
     node, _, port = dst.rpartition(".")
@@ -6109,9 +6069,9 @@ def _drawn_edge(x: dict) -> bool:
 
 
 def _bus_cuts(edit: Edit) -> rgraph.BusCuts:
-    """The bus cuts the loaded patch holds (`edit.loaded_patch.bus`, plan 44
-    D3; plan 36 T1's were the show's); with no loadable patches, the meta controller as it
-    ships: every cable standing."""
+    """The bus cuts the loaded patch holds (`edit.loaded_patch.bus`); with
+    no loadable patches, the meta controller as it ships: every cable
+    standing."""
     return rgraph.bus_cuts_of(getattr(edit, "loaded_patch", None))
 
 
@@ -6124,8 +6084,8 @@ def _bus_source(name: str | None) -> bool:
 def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False,
           bus_cuts: rgraph.BusCuts | None = None) -> str | None:
     """Read `doc` back as a loadable patch would (a note is the refusal, nothing
-    changed); else, unless `dry`, the undo step and the landing. `rig`
-    (plan 36 T1): the loadable patch's bus cuts after the edit (plan 44 D3), set
+    changed); else, unless `dry`, the undo step and the landing. `bus_cuts`:
+    the loadable patch's bus cuts after the edit, set
     in the same undo step — refused with no loadable patches to hold them."""
     if bus_cuts is not None and bus_cuts != _bus_cuts(edit) and getattr(edit, "loaded_patch", None) is None:
         return BUS_NO_SHOW
@@ -6174,7 +6134,7 @@ def _entry_name(e: dict) -> str | None:
 
 
 def _node_name(e: dict) -> str | None:
-    """The node a section entry declares, by its name (plan 35 F's kinds too)."""
+    """The node a section entry declares, by its name."""
     kind, n = e.get("kind"), e.get("instance", 1)
     if not isinstance(n, int):
         return None
@@ -6207,11 +6167,11 @@ def _named(doc: dict) -> set[str]:
 def _keep_declared(doc: dict, names: Iterable[str]) -> None:
     """Each frame node of `names` that the section no longer names (its last
     wire just went) kept by its entry — a node unwired stays on the canvas,
-    faint ("reaches nothing"), to wire on or delete (plan 35 G); an
-    instance-1 effect by R21's entry. A hands node, a channel, a declared
+    faint ("reaches nothing"), to wire on or delete; an
+    instance-1 effect by its entry. A hands node, a channel, a declared
     kind keep theirs or need none."""
     named = _named(doc)
-    # (plan 36 T2: a pin is its node's name: `scene.cover` names the scene)
+    # (a pin is its node's name: `scene.cover` names the scene)
     for name in dict.fromkeys(canvas_node(n) for n in names):
         if name in named:
             continue
@@ -6227,9 +6187,9 @@ def _keep_declared(doc: dict, names: Iterable[str]) -> None:
 
 
 def _unplace(doc: dict, which: Callable[[str, str, str], bool]) -> None:
-    """D1's placement off each effect entry `which(name, key, where)`
+    """The placement off each effect entry `which(name, key, where)`
     picks: an extra instance's entry kept with no place (on no wire: it
-    reaches nothing, plan 33), instance 1's entry gone."""
+    reaches nothing), instance 1's entry gone."""
     keep = []
     for e in doc.get("nodes", []):
         name = _entry_name(e)
@@ -6251,12 +6211,12 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
                 doc: dict | None = None) -> str | None:
     """A wire `src → dst` into the section (the one into `dst` replaced,
     but a `scene.geometry`'s, which takes several) — that one wire and
-    nothing else (plan 36 T1: no placement, switch or other wire moves
+    nothing else (no placement, switch or other wire moves
     with it; a placement it would contradict is refused in words by the
     read). From one of All outputs' bus pins it is the meta controller's cable into
     the window's same port (`bus_wire`): the loadable patch's cut, joined, and the
     loadable patch's own wire into that port, if any, gives the port up to it.
-    `doc` (plan 35 T6): the section to wire on, else the landed one."""
+    `doc`: the section to wire on, else the landed one."""
     s, why = spec_name(src, edit.render)
     if s is None:
         return why
@@ -6268,7 +6228,7 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
     w = rgraph.Wire(s, d)
     doc = _doc(edit) if doc is None else doc
     if kind_of(s) == "cloud":
-        # plan 36 T2: a cloud's one wire is the meta controller's, into the scene
+        # a cloud's one wire is the meta controller's, into the scene
         if not rgraph.is_cloud_wire(w):
             return CLOUD_INTO_SCENE.format(cloud=s)
         if getattr(edit, "loaded_patch", None) is None:
@@ -6286,21 +6246,21 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
     wires = doc.get("wires", [])
     if d in rgraph.MANY_PORTS:
         # several wires go in, drawn in section order — a hands node's
-        # before the shape's, the order the frame is written in (plan 35 F)
+        # before the shape's, the order the frame is written in
         keep = [x for x in wires if (x["from"], x["to"]) != (s, d)]
         at = next((i for i, x in enumerate(keep) if x["to"] == d and x["from"] == "shape"),
                   len(keep)) if kind_of(s) == "hands" else len(keep)
         doc["wires"] = [*keep[:at], w.to_json(), *keep[at:]]
     else:
         doc["wires"] = [x for x in wires if x["to"] != d] + [w.to_json()]
-    # (plan 36 T1: D1's placements stay where they are — the drag lands one wire)
+    # (placements stay where they are — the drag lands one wire)
     gone = {x["from"] for x in wires if x["to"] == d and x not in doc["wires"]}
     _keep_declared(doc, gone)
     return _land(edit, doc, f"wire {w}", f"wired {w}", dry)
 
 
 def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
-    """Plan 35 G: any wire of the section goes — the run's, the look-back's,
+    """Any wire of the section goes — the run's, the look-back's,
     the scene's geometry, a window's — and a frame node it was the last
     mention of is kept by its entry (`_keep_declared`), drawn faint. The one
     refusal left is a wire the section does not have."""
@@ -6341,7 +6301,7 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
         if doc["nodes"] == before:
             return NO_SUCH_WIRE.format(wire=f"{s} → {d}")
     elif not gone:
-        # (plan 36 T1: a window's port with no wire of the loadable patch's: its
+        # (a window's port with no wire of the loadable patch's: its
         # one cable is the meta controller's bus cable, if it stands)
         port = rgraph.Wire(f"{rgraph.ALL_OUTPUTS}.{d.rpartition('.')[2]}", d)
         if rgraph.is_bus(port) and _bus_cuts(edit).has(port):
@@ -6353,10 +6313,10 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
 
 
 def _cut_bus(edit: Edit, w: rgraph.Wire) -> str | None:
-    """Plan 36 T1: the meta controller's bus cable `w` cut in the open show — one undo
+    """The meta controller's bus cable `w` cut in the open show — one undo
     step, the loadable patch untouched; the window shows nothing on that port
-    until the cable is joined again or the loadable patch wires the port. Plan 36
-    T2: and a cloud's wire into the scene (`graph.is_fixture_wire`), the same way."""
+    until the cable is joined again or the loadable patch wires the port.
+    A cloud's wire into the scene (`graph.is_fixture_wire`) is cut the same way."""
     bus_cuts = _bus_cuts(edit)
     if not bus_cuts.has(w):
         return NO_SUCH_WIRE.format(wire=str(w))
@@ -6365,7 +6325,7 @@ def _cut_bus(edit: Edit, w: rgraph.Wire) -> str | None:
 
 
 def _new_instance(spec, file: str) -> int:
-    """The instance of effect `file` an add or an insert makes (R25): 1,
+    """The instance of effect `file` an add or an insert makes: 1,
     the file itself, when no wire, node entry or placement in section
     `spec` holds it, else the lowest instance none holds."""
     held: set[int] = set()
@@ -6385,7 +6345,7 @@ def _set_after_landing(edit: Edit, name: str, **values) -> None:
     """Effect `name`'s params `values` (`fx.<name>.<key>`) set after the
     landing that declared them, in the same undo step (the step `_land`
     pushed is still open this frame, so an undo puts each value back with
-    the graph): R25's switch-on (`_switch_on`), the feedback starter's fade
+    the graph): the switch-on (`_switch_on`), the feedback starter's fade
     level. Nothing to do with no registry to hand (a stand-in section); a
     key the registry has no param for is skipped."""
     reg = getattr(edit.graph, "reg", None) or edit.reg
@@ -6398,18 +6358,18 @@ def _set_after_landing(edit: Edit, name: str, **values) -> None:
 
 
 def _switch_on(edit: Edit, name: str) -> None:
-    """R25: effect `name`, just added or inserted, switched on
+    """Effect `name`, just added or inserted, switched on
     (`fx.<name>.on`) — `_set_after_landing`."""
     _set_after_landing(edit, name, on=True)
 
 
 def _effect_entry(file: str, n: int) -> dict:
     """A section's entry for an unwired effect `file`'s instance `n`
-    (instance 1: no instance key, R21's form)."""
+    (instance 1: no instance key)."""
     return {"kind": "effect", "file": file, **({"instance": n} if n != 1 else {})}
 
 
-# what each frame node added from the picker says next (plan 35 G)
+# what each frame node added from the picker says next
 ADDED = {
     "scene": "wire geometry into scene.geometry, and the scene into a picture port",
     "shape": "wire it into scene.geometry",
@@ -6428,7 +6388,7 @@ def _next(spec, kind: str) -> int:
                default=0) + 1
 
 
-# plan 39 T5 (W6): what adding each of plan 39's nodes says
+# what adding a matte, a cut or a segment says
 ADD_SAID = {
     "matte": ("{name} added: wire a picture into {name}.image — it makes a mask of it "
               "({name}.from, {name}.key)"),
@@ -6489,8 +6449,8 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
         if isinstance(got, str):
             return got
         name = edit.added = got[0]
-        # plan 33 U: on no wire — it reaches nothing until it is wired in;
-        # R25: an effect switched on, so wiring it in shows it
+        # on no wire — it reaches nothing until it is wired in;
+        # an effect is switched on, so wiring it in shows it
         why = _land(edit, doc, f"add {name}", got[1])
         if why is None and kind == "effect":
             _switch_on(edit, name)
@@ -6499,8 +6459,7 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
 
 
 def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
-    """A starter (plan 36 T5, W5; plan 35 G's "scene starter" the first):
-    its pre-wired group in one landing — one undo step — every node and
+    """A starter: its pre-wired group in one landing — one undo step — every node and
     cable ordinary after it. `edit.placed` is what it added, left to right
     (a node already in the section, a channel, All outputs stay where they
     sit: the page places only these).
@@ -6508,7 +6467,7 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     - **scene**: `shape → scene.geometry`, `scene → output.all.image` (in
       place of whatever fed All outputs; the shape and the scene kept when
       the section has them) — plain faces, no pattern wire.
-    - **tracers** (plan 90 H2, Q28): a new delay keeping 8 pictures at 30
+    - **tracers**: a new delay keeping 8 pictures at 30
       Hz read by a new Trail laid add, added on the picture by a new
       composite (blend add): `picture → delay.image`, `delay → trail.stack`,
       `picture → composite.under`, `trail → composite.over`, the composite
@@ -6518,10 +6477,10 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     - **dream**: `picture → dream.image`, `→ composite.under`, `dream →
       composite.over` (blend over: the dream is its picture, dreamed).
     - **backdrop**: a backdrop, `channel.a → backdrop.image`.
-    - **cut-out** (plan 39 T5, W6): a new segment and a new composite,
+    - **cut-out**: a new segment and a new composite,
       `channel.a → segment.image`, `segment.fg → composite.over`, `scene →
       composite.under`, `composite → output.all.image` — never refused.
-    - **feedback** (wave 0 E1, 2026-11-02): a delay loop with a blend — a
+    - **feedback**: a delay loop with a blend — a
       new composite spliced onto the cable by the insert table (`picture →
       composite.over`, `composite → dst`), `composite → delay.image`,
       `delay → fade.image`, `fade → composite.under`, the fade's level
@@ -6538,7 +6497,7 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     feeding no picture port, or several) the starter wires what it can and
     the words name what is left unwired — it never guesses. A dream or a
     backdrop already in the section is refused in words (one of each: one
-    live dream, D2)."""
+    live dream)."""
     edit.placed = ()
     label = dict(STARTERS).get(which)
     if label is None:
@@ -6570,7 +6529,7 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
         return _started(edit, doc, before, "shape", "scene", label=label,
                         said=STARTER_SAID + was)
     if which == "cut-out":
-        # plan 39 T5 (W6): `channel.a → segment.image`, `segment.fg →
+        # `channel.a → segment.image`, `segment.fg →
         # composite.over`, `scene → composite.under`, `composite →
         # output.all.image` — a new segment and a new composite (never
         # refused: there may be many of each), in place of what fed All
@@ -6618,7 +6577,7 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     ins = [f"{comp.name}.under"]
     head = None
     if looks:
-        # plan 90 (H2, Q28): the look-back's tracers from public parts — a
+        # the look-back's tracers from public parts — a
         # delay keeping `TRACERS_DEPTH` pictures at `TRACERS_HZ`, a Trail
         # laying them added, a composite adding the trail on the picture
         got = _new_node(edit, spec, doc, "effect", TRACERS_FILE)
@@ -6632,11 +6591,11 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
         head, ins = trail, [f"{delay.name}.image", *ins]
     dream_parts: tuple[str, str, str | None] | None = None
     if dreams:
-        # plan 90 (H3, Q31): the dream's chain, as a saved dream opens — a
+        # the dream's chain, as a saved dream opens — a
         # Resize keyed (brightness is coverage), the dream, a Fade at its mix,
         # laid over. On the tracers, added: the trail's own alpha is its
         # coverage, so no key and no Fade — with no dream result the trail is
-        # added as it was (Devin on #523)
+        # added as it was
         resize = rgraph.ResizeAt(_next(spec, "resize"))
         doc["nodes"].append(resize.to_json())
         got = _new_node(edit, spec, doc, "effect", "dream")
@@ -6689,7 +6648,7 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
             _set_after_landing(edit, fade, on=True, mix=1.0, level=gm.DREAM_DEFAULTS["mix"])
             _set_params_after_landing(edit, {f"key.{resize}.{k}": x
                                              for k, x in gm.DREAM_KEY.items()})
-    # (the owner, 2026-11-26: one primitive, picture in and picture out, folded
+    # (one primitive, picture in and picture out, folded
     # as a migrated look-back or dream is — "trail", or "dream" with a dream)
     if edit._groups() is not None:
         edit.land_group({"name": graphmigrate.DREAM_GROUP if dreams else graphmigrate.LB_GROUP,
@@ -6699,8 +6658,8 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
 
 def _set_params_after_landing(edit: Edit, values: dict) -> None:
     """Params `values` (whole ids) set after the landing that declared them,
-    in the same undo step — as `_set_after_landing` does an effect's (plan 90
-    H3: a dream starter's key on its Resize)."""
+    in the same undo step — as `_set_after_landing` does an effect's (a
+    dream starter's key on its Resize)."""
     reg = getattr(edit.graph, "reg", None) or edit.reg
     if reg is None:
         return
@@ -6712,7 +6671,7 @@ def _set_params_after_landing(edit: Edit, values: dict) -> None:
 def _set_delay_after_landing(edit: Edit, name: str, **values) -> None:
     """Delay `name`'s params `values` (`<name>.<key>`) set after the landing
     that declared them, in the same undo step — as `_set_after_landing` does
-    an effect's (plan 90 H2: the tracers' delay, 8 pictures at 30 Hz)."""
+    an effect's (the tracers' delay, 8 pictures at 30 Hz)."""
     reg = getattr(edit.graph, "reg", None) or edit.reg
     if reg is None:
         return
@@ -6724,7 +6683,7 @@ def _set_delay_after_landing(edit: Edit, name: str, **values) -> None:
 
 def _was_into(doc: dict, port: str, keep: str) -> str:
     """`STARTER_REPLACED`'s words for what fed `port` in section `doc`
-    before a starter takes it (plan 39 T5, plan 36's follow-up), but
+    before a starter takes it, but
     `keep` — the starter's own feed, when it was already there; "" when
     nothing else fed it."""
     was = [x["from"] for x in doc.get("wires", []) if x["to"] == port and x["from"] != keep]
@@ -6764,7 +6723,7 @@ def _scene_feed(doc: dict) -> tuple[str | None, str | None, int]:
 
 def _feedback_starter(edit: Edit, doc: dict, before: set[str], label: str,
                       src: str | None, dst: str | None) -> str | None:
-    """The feedback starter (wave 0 E1, 2026-11-02; `FEEDBACK_FILE`,
+    """The feedback starter (`FEEDBACK_FILE`,
     `FEEDBACK_LEVEL`): a new composite (laid over), a new delay and a new
     fade instance, in one landing. On picture cable `src → dst` the
     composite goes onto the cable through the insert table's splice
@@ -6804,7 +6763,7 @@ def _feedback_starter(edit: Edit, doc: dict, before: set[str], label: str,
 
 def picture_feeds(edit: Edit, name: str) -> list[tuple[str, str]] | None:
     """The picture cables out of node `name` — (its name, the port each
-    feeds), the cables feedback can be added after (wave 0 E1: a node
+    feeds), the cables feedback can be added after (a node
     menu's "add feedback after"); [] for a picture node that feeds nothing,
     None for a node that makes no picture (a geometry, a window, a matte)
     or makes it on a pin (a segment's `fg`: a pin is no cable's source,
@@ -6821,13 +6780,13 @@ def picture_feeds(edit: Edit, name: str) -> list[tuple[str, str]] | None:
 
 
 def render_channel_switch(edit: Edit, port: str) -> str | None:
-    """R28: a new switch over the eight channels into `port`
+    """A new switch over the eight channels into `port`
     (`pattern.media` or `backdrop.image`) in one landing — `channel.a … h →
     in1 … in8`, the switch into the port in place of whatever fed it — and
     its `select` the channel that fed the port (through a switch already
-    there, at that switch's pick), else 1, in the same undo step: headline
-    use 3 (a knob picks the faces' channel) in one gesture, the same wires
-    a driven `view.media` migrates to (row 350)."""
+    there, at that switch's pick), else 1, in the same undo step — a knob
+    picks the faces' channel in one gesture, the same wires
+    a driven `view.media` migrates to."""
     if port not in dict(CHANNEL_SWITCH_PORTS):
         return CHANNEL_SWITCH_REFUSAL
     spec = _spec(edit)
@@ -6856,22 +6815,18 @@ def render_channel_switch(edit: Edit, port: str) -> str | None:
 
 
 def _touches(x: dict, names: set[str]) -> bool:
-    # (plan 36 T2: a wire from a node's pin — `scene.cover` — touches the node)
-    # (plan 89: and a wire of an effect's slot touches the effect)
+    # (a wire from a node's pin — `scene.cover` — touches the node, and a
+    # wire of an effect's slot touches the effect)
     node = x["to"].rpartition(".")[0]
     return (x["from"] in names or canvas_node(x["from"]) in names
             or node in names or canvas_node(node) in names)
 
 
-# ---- any picture node onto a picture cable, out of its place (2026-11-01) ----
+# ---- any picture node onto a picture cable, out of its place ----
 #
-# The owner (2026-11-01): "It's not just for effects. We want more or less
-# all nodes that we've been using to be able to be dragged and dropped onto
-# wires and have them intelligently remap. A composite has an over and an
-# under: when you drop that onto a cable, you should be asked where you want
-# this input to go, over or under. There's nothing special about effects.
-# They consume and produce bitmaps. Composites consume and produce bitmaps.
-# Patterns produce bitmaps. Channels produce bitmaps."
+# Effects, composites, patterns and channels all consume or produce
+# pictures, so any of them may be dropped onto a picture cable and the
+# wires remapped; a composite asks whether the cable goes over or under.
 
 # every picture node kind the drop and the cable menu splice: kind → (its
 # picture inlets — one is taken without asking, several are asked, none is a
@@ -7024,8 +6979,8 @@ def _lift(doc: dict, name: str) -> list[str]:
     `under`, a switch's `in1`: `INSERT_PORTS`' first) and every wire out
     of its outlet gone, and what fed it wired on into each port it fed —
     the chain closed over it. A wire into any other inlet (an effect's
-    `aux`, a composite's `over`) stays; a D1 placement of it goes; (R21)
-    an instance-1 effect left on no wire stays named, unreached. With
+    `aux`, a composite's `over`) stays; a placement of it goes; an
+    instance-1 effect left on no wire stays named, unreached. With
     nothing wired in (a source, or a node fed by nothing), its wires out
     simply go: the ports they fed are returned, fed by nothing now."""
     ports = insert_ports(name)
@@ -7036,7 +6991,7 @@ def _lift(doc: dict, name: str) -> list[str]:
     keep = [x for x in wires if x is not into and not any(x is o for o in outs)]
     lost: list[str] = []
     if into is not None:
-        # (plan 67 P3, Devin on #497: a bypass keeps what the cable out said —
+        # (a bypass keeps what the cable out said —
         # a knob's depth — and a port that cannot take what fed the node, a
         # picture into a field or a knob, is left fed by nothing)
         for o in outs:
@@ -7048,11 +7003,11 @@ def _lift(doc: dict, name: str) -> list[str]:
         lost = [o["to"] for o in outs]
     doc["wires"] = keep
     # (a node a lost cable was the last mention of stays on the canvas by its
-    # entry, its knobs kept, as an unwire leaves it: Devin's second review of #497)
+    # entry, its knobs kept, as an unwire leaves it)
     _keep_declared(doc, [t.rpartition(".")[0] for t in lost
                          if canvas_node(t.rpartition(".")[0]) != canvas_node(name)])
     _unplace(doc, lambda n, key, where: n == name)
-    # R21: an instance 1 left on no wire is kept, named (unreached, faint)
+    # an instance 1 left on no wire is kept, named (unreached, faint)
     if kind_of(name) == "effect":
         file, n = rgraph.split_instance(name)
         if n == 1 and not any(_touches(x, {name}) for x in keep) \
@@ -7065,7 +7020,7 @@ def _onto(doc: dict, s: str, d: str, name: str, inlet: str | None = None) -> Non
     """Node `name` onto the cable `s → d` in section `doc`: `s → name.<inlet>`
     (its one inlet, or the one chosen of several; none for a source, which
     only feeds), `name → d` (its outlet pin) — whatever went into `d`
-    before (the wire, or a D1 placement into its port) replaced, and
+    before (the wire, or a placement into its port) replaced, and
     whatever went into the chosen inlet."""
     ports = insert_ports(name)
     ins, out = ports if ports is not None else ((f"{name}.image",), name)
@@ -7076,8 +7031,8 @@ def _onto(doc: dict, s: str, d: str, name: str, inlet: str | None = None) -> Non
             return f"{n}.image" == d
         return f"{where}.image" == d
     _unplace(doc, into_d)
-    # (R21: an instance 1 kept unwired is named by its wires again — but
-    # one that declares slots keeps its entry, plan 89)
+    # (an instance 1 kept unwired is named by its wires again — but
+    # one that declares slots keeps its entry)
     doc["nodes"] = [e for e in doc.get("nodes", []) if not (
         _entry_name(e) == name and e.get("instance", 1) == 1
         and not any(k in e for k in (*rgraph.PLACE_KEYS, "slots")))]
@@ -7092,7 +7047,6 @@ def _onto(doc: dict, s: str, d: str, name: str, inlet: str | None = None) -> Non
     doc["wires"] = kept + [{"from": out, "to": d}]
     # a source taken over (a channel's, a generator's landing) whose last wire
     # that was stays on the canvas unwired, as `render_wire` keeps a node
-    # (Devin's review of #501)
     _keep_declared(doc, [x["from"] for x in wires if x not in doc["wires"]])
 
 
@@ -7137,7 +7091,7 @@ def _said_onto(doc: dict, name: str, s: str, d: str, inlet: str | None,
 
 
 def _splice_replaced(name: str, s: str, d: str, replacing: Iterable[str]) -> str | None:
-    """A splice onto a cable of the very node the spawn replaces (wave 3 P2)
+    """A splice onto a cable of the very node the spawn replaces
     would wire the patch to what it took out: refused, in words."""
     ends = {canvas_node(s), canvas_node(d.rpartition(".")[0])} & set(replacing)
     return SPLICE_REPLACED.format(name=name, node=min(ends)) if ends else None
@@ -7145,8 +7099,8 @@ def _splice_replaced(name: str, s: str, d: str, replacing: Iterable[str]) -> str
 
 def splice_target(edit: Edit, cable, name: str, ports, replacing: Iterable[str] = ()
                   ) -> str | None:
-    """May a patch named `name` with `ports` be spliced into `cable` (plan 40
-    T3: a browser line dropped on it)? A picture cable of the section
+    """May a patch named `name` with `ports` be spliced into `cable` (a
+    browser line dropped on it)? A picture cable of the section
     (`_cable_ends`' rule: not the meta controller's bus), not one of what the spawn
     replaces (`_splice_replaced`), and the patch's one inlet and
     one outlet of that type (`splice_refusal`); else the words why not."""
@@ -7166,10 +7120,10 @@ def onto_refusal(edit: Edit, cable) -> str | None:
 
 
 def _splice(doc: dict, s: str, d: str, into: str, out: str) -> None:
-    """Plan 40 T3 (D2): a patch onto the cable `s → d` in section `doc`, as
+    """A patch onto the cable `s → d` in section `doc`, as
     `_onto` puts one node there — `s → into` (the patch's inlet, a member
     port), `out → d` (its outlet, a member) — whatever went into `d` before
-    (the wire, or a D1 placement into its port) replaced."""
+    (the wire, or a placement into its port) replaced."""
     def into_d(n: str, key: str, where: str) -> bool:
         if key == "after" and not where.startswith("output."):
             return f"{n}.image" == d
@@ -7197,14 +7151,14 @@ def _cable_ends(edit: Edit, cable) -> tuple[str | None, str | None, str | None]:
         d, why = spec_name(b, edit.render)
         if d is None:
             return None, None, why
-    if _bus_source(s):                      # plan 36 T1: the meta controller's, not the loadable patch's
+    if _bus_source(s):                      # the meta controller's, not the loadable patch's
         return None, None, BUS_NO_EFFECT.format(wire=f"{s} → {d}")
     if kind_of(d) is not None:
         return None, None, f"{d} is a node, not a port: a wire goes into {rgraph.WIRED_TO_WORDS}"
     w = rgraph.Wire(s, d)
     if (_takes(kind_of(w.node), w.node).get(w.port) != IMAGE or _makes(kind_of(s), s) != IMAGE
             or rgraph.pin_node(s) is not None or w.port == rgraph.DEPTH_PORT):
-        # (plan 36 T2: nor the scene's depth — a depth, not a picture)
+        # (nor the scene's depth — a depth, not a picture)
         return None, None, NO_PICTURE_CABLE.format(wire=w)
     return s, d, None
 
@@ -7242,7 +7196,7 @@ def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
         how = ("its picture is that one, a frame late" if kind == "delay"
                else f"it makes it at {at.name}.size")
         return at.name, f"{at.name} added: wire a picture into {at.name}.image — {how}"
-    if kind in ADD_SAID:                         # plan 39 T5 (W6)
+    if kind in ADD_SAID:
         at = {"matte": rgraph.MatteAt, "cut": rgraph.CutAt,
               "segment": rgraph.SegmentAt}[kind](_next(spec, kind))
         doc["nodes"].append(at.to_json())
@@ -7252,8 +7206,7 @@ def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
 
 def render_insert(edit: Edit, cable, kind: str, file: str | None = None,
                   inlet: str | None = None) -> str | None:
-    """A cable's insert ▸ (2026-11-01; plan 33 U's "insert effect" the
-    first): a new node of `kind` (an effect `file`) made and spliced into
+    """A cable's insert ▸: a new node of `kind` (an effect `file`) made and spliced into
     picture cable `cable` in one landing — the cable's picture into its
     inlet (`inlet`, the one chosen of several: a composite's `under` or
     `over`, a switch's `in1` …; asked, never guessed), its picture on into
@@ -7282,7 +7235,7 @@ def render_insert(edit: Edit, cable, kind: str, file: str | None = None,
     if why is None:
         edit.added = name
         if kind == "effect":
-            _switch_on(edit, name)                  # R25: shown on the first gesture
+            _switch_on(edit, name)                  # shown on the first gesture
     return why
 
 
@@ -7343,11 +7296,10 @@ def _take_out(doc: dict, names: set[str]) -> list[dict]:
     return gone
 
 
-# ---- an effect's slots (plan 89: what a copy node was, made part of its effect) ----
+# ---- an effect's slots ----
 
 def _slot_entry(doc: dict, effect: str) -> dict:
-    """Effect instance `effect`'s entry in section `doc`, added (R21's
-    form) when only its wires named it — the entry its `slots` is said on."""
+    """Effect instance `effect`'s entry in section `doc`, added when only its wires named it — the entry its `slots` is said on."""
     file, n = rgraph.split_instance(effect)
     for e in doc.get("nodes", []):
         if _entry_name(e) == effect:
@@ -7365,7 +7317,7 @@ def _slots_in(doc: dict, effect: str) -> int:
 
 def drop_slots(doc: dict, names: Iterable[str],
                keyed: dict[str, str] | None = None) -> list[str]:
-    """Slots `names` (`acid.slot.2` …) out of section `doc` (plan 89): each
+    """Slots `names` (`acid.slot.2` …) out of section `doc`: each
     lifted (`_lift`: what fed its picture goes on to what it fed), its other
     wires gone, and each effect's later slots numbered down to close the gap
     (`acid.slot.3` is `acid.slot.2` now, its wires and its key with it), its
@@ -7417,7 +7369,7 @@ def drop_slots(doc: dict, names: Iterable[str],
 
 
 def add_slot(edit: Edit, effect: str) -> str | None:
-    """One more slot on effect instance `effect` (plan 89, the picker's
+    """One more slot on effect instance `effect` (the picker's
     "slot on ▸" and an effect's menu; ⌘V of a copied effect): its entry's
     `slots` one up, the new slot unwired — `acid.slot.2.image` in,
     `acid.slot.2` out, the same knobs. One undo step. Refused in words: no
@@ -7438,7 +7390,7 @@ def add_slot(edit: Edit, effect: str) -> str | None:
 
 
 def drop_slot(edit: Edit, slot: str) -> str | None:
-    """Slot `slot` (`acid.slot.2`) off its effect (plan 89, an effect's menu):
+    """Slot `slot` (`acid.slot.2`) off its effect (an effect's menu):
     `drop_slots`, one undo step. Slot 1 is the effect itself (deleting it
     is the node's delete)."""
     got = rgraph.slot_of(slot)
@@ -7468,10 +7420,10 @@ def drop_slot(edit: Edit, slot: str) -> str | None:
 
 
 def render_drop(edit: Edit, node: str) -> str | None:
-    """Plan 35 G: any node of the section goes — its entry and every wire
+    """Any node of the section goes — its entry and every wire
     touching it, one undo step (an effect and its slots lifted first, so the
     chain closes over it; a hands node with its layer and its guide, its
-    params kept in the registry; R16, an effect with its slots; R18, the
+    params kept in the registry; an effect with its slots; the
     backdrop like an effect — what its `scene` port took goes on to what it
     fed, and the note says so). A window
     is the meta controller's: its wires go, and it shows its ground (`OUTPUT_UNWIRED`,
@@ -7488,16 +7440,16 @@ def render_drop(edit: Edit, node: str) -> str | None:
                 else OUTPUT_UNWIRED.format(label=label_of(name, slots)))
         wires = doc.get("wires", [])
         left = [x for x in wires if x["to"].rpartition(".")[0] != name]
-        # plan 36 T1: a window's bus cables are wires into it too — cut
+        # a window's bus cables are wires into it too — cut
         # with the rest, in the same step, so it shows its ground
         # (only the drawn ones: a bus cable into a port the loadable patch wires
-        # itself is not drawn, and stays as it is — M2)
+        # itself is not drawn, and stays as it is)
         bus_cuts = _bus_cuts(edit)
         owned = {x["to"] for x in wires}
         bus = [] if kind == rgraph.ALL_OUTPUTS or getattr(edit, "loaded_patch", None) is None else [
             w for w in bus_cuts.present(rgraph.bus_wire(int(name.partition(".")[2]), p)
                                    for p in rgraph.BUS_PORTS) if w.dst not in owned]
-        if len(left) == len(wires) and not bus:     # (T5 review: say nothing was done)
+        if len(left) == len(wires) and not bus:     # (say nothing was done)
             edit.said = NOTHING_TO_DELETE.format(
                 what="All outputs" if kind == rgraph.ALL_OUTPUTS
                 else f"output {name.partition('.')[2]}")
@@ -7508,20 +7460,20 @@ def render_drop(edit: Edit, node: str) -> str | None:
             bus_cuts = bus_cuts.cutting(w)
         return _land(edit, doc, f"unwire {name}", said, bus_cuts=bus_cuts if bus else None)
     if kind == "slot":
-        return drop_slot(edit, name)          # plan 89: a slot's pin is its effect's
+        return drop_slot(edit, name)          # a slot's pin is its effect's
     label = label_of(name, slots)
     before = copy.deepcopy(doc)
     names = {name}
     if kind == "hands":
         names |= {f"{name}.layer", f"{name}.guide"}
-    # R16: an effect's slots go with it (plan 89: they are its node), in the
+    # an effect's slots go with it (they are its node), in the
     # same landing — each lifted, so its chain closes over it too
     mine = ([rgraph.slot_name(name, k) for k in range(2, _slots_in(doc, name) + 1)]
             if kind == "effect" else [])
     for x in ([name, *mine] if kind == "effect" else ()):
         _lift(doc, x)
     names |= set(mine)
-    # R18 (final review): the backdrop lifted as an effect is — the picture
+    # the backdrop is lifted as an effect is — the picture
     # into its `scene` port wired on into every port it fed, so deleting
     # it shows the scene, not black
     joined: list[dict] = []
@@ -7534,8 +7486,7 @@ def render_drop(edit: Edit, node: str) -> str | None:
                                                             names)]
     gone = _take_out(doc, names)
     doc["wires"] += [x for x in joined if x not in doc["wires"]]
-    # (plan 87: a deleted node keyed black is clear is no longer keyed — plan
-    # 90 H2's migrated look-backs key their Fade, so every delete met this)
+    # (a node keyed black is clear is dropped from the keys with the node)
     keys = [k for k in doc.get(rgraph.KEYS_KEY, []) if k not in names]
     if keys:
         doc[rgraph.KEYS_KEY] = keys
@@ -7599,7 +7550,7 @@ KEY_NO_PICTURE = "{name} makes no picture: nothing to make clear"
 
 
 def keyable(name: str | None) -> bool:
-    """Whether graph node `name` makes a picture a key can clear (plan 87):
+    """Whether graph node `name` makes a picture a key can clear:
     any node whose output is a picture but a window, All outputs, or a pin
     (a segment's `fg`: its node is keyed through the pin's picture)."""
     if not name:
@@ -7610,13 +7561,13 @@ def keyable(name: str | None) -> bool:
 
 
 def keyed(edit: Edit, name: str) -> bool:
-    """Whether the section keys node `name` (black is clear, plan 87)."""
+    """Whether the section keys node `name` (black is clear)."""
     spec = _spec(edit)
     return spec is not None and name in getattr(spec, "keys", ())
 
 
 def render_key(edit: Edit, node: str, on: bool) -> str | None:
-    """Plan 87: black is clear on canvas node `node` (`render:<name>` or the
+    """Black is clear on canvas node `node` (`render:<name>` or the
     name), or off — its name into or out of the section's `"keys"`, one undo
     step (`_land`). A node that makes no picture is refused in words."""
     name, why = spec_name(node, edit.render)
@@ -7638,14 +7589,14 @@ def render_key(edit: Edit, node: str, on: bool) -> str | None:
     return _land(edit, doc, f"{name} {'clear' if on else 'opaque'}", said)
 
 
-# ---- plan 35 T6 (U): the OUTPUT and LOOKBACK pages as views of the wires.
+# ---- the OUTPUT and LOOKBACK pages as views of the wires.
 # A page sets a picture port (a window's, All outputs', the look-back's
 # capture) and a window's "hands through the effects" — each a GRAPH edit
 # through `_land`: one undo step, GRAPH's refusals, and the frame in its
 # canonical wire order, so an edit put back leaves the frame as it was.
-# The mutes are the window's (row 374), never written here.
+# The mutes are the window's, never written here.
 
-AS_ALL = "as All outputs"      # a window's picture port by the meta controller's bus cable (plan 36 T1)
+AS_ALL = "as All outputs"      # a window's picture port by the meta controller's bus cable
 NOTHING = "nothing"            # a window's: `ground` wired; All outputs', the capture: no wire
 # the areas a page lists the graph's pictures in (the canvas's, left to right)
 PICTURE_AREA: dict[str, str] = {
@@ -7659,7 +7610,7 @@ THROUGH_NO_LAYER = ("hands through the effects: All outputs lays no hands layer 
                     "picture — wire a hands layer into output.all.hands on GRAPH")
 THROUGH_OWN_PICTURE = ("{label} shows {src} by its own wire: the hands go through All "
                        "outputs' effects — set its picture to \"as All outputs\" first")
-# plan 36 T1: a window whose picture cable from All outputs is cut shows no
+# a window whose picture cable from All outputs is cut shows no
 # picture to put the hands through; one whose hands port the loadable patch wires
 # keeps that wire (the toggle never drops a wire it did not write)
 THROUGH_NO_PICTURE = ("{label} shows no picture: its cable from All outputs is cut — "
@@ -7669,7 +7620,7 @@ THROUGH_OWN_HANDS = ("{label}'s hands port is wired ({src} → output.{n}.hands)
 
 
 def page_spec(spec):
-    """The wired frame a page reads (plan 35 U): `spec` itself when it is
+    """The wired frame a page reads: `spec` itself when it is
     one; else (no loadable patch landed, a section from before the wired frame) the
     frame a GRAPH edit starts from (`_frame_doc`) read — None if it will
     not read."""
@@ -7685,9 +7636,9 @@ def picture_sources(spec) -> list[str]:
     """Every picture-making node section `spec` reaches or declares
     (`frame_names`: its entries and its wires' ends), in area order —
     MEDIA, SCENE, LOOK-BACK, EFFECTS — and section order within one: what
-    a page's picture combo may offer (plan 35 U). No geometry, no window,
-    no `ground` (the combo's "nothing" says that). Plan 89: an effect's
-    slots past the first right after it, each its own picture. Plan 67: no
+    a page's picture combo may offer. No geometry, no window,
+    no `ground` (the combo's "nothing" says that). An effect's
+    slots past the first right after it, each its own picture. No
     field maker (a field is no picture to pick)."""
     names = [x for n in frame_names(spec) if kind_of(n) in PICTURE_AREA
              and _makes(kind_of(n), n) == IMAGE
@@ -7706,7 +7657,7 @@ def _window(port: str) -> int | None:
 def picture_choices(spec, port: str, reg=None) -> list[str]:
     """A picture combo's items for `port`: a window's "as All outputs",
     "nothing" and `picture_sources`; All outputs' and the capture's
-    "nothing" and the sources. R17: on an output's port (a window's, All
+    "nothing" and the sources. On an output's port (a window's, All
     outputs') with `reg` to ask, every channel with a source in its bin
     (`channel_bins`) too, though nothing wires it yet — after the graph's
     own, by label — so "this channel on this window" is one pick."""
@@ -7726,7 +7677,7 @@ def picture_now(spec, port: str, bus_cuts=None) -> str:
     """The combo's pick for `port` as section `spec` wires it: the source's
     name; `ground`, or no wire (All outputs', the capture), "nothing"; a
     window with no wire of its own, "as All outputs" while the meta controller's bus
-    cable into its picture stands (`rig`, plan 36 T1; None: every one),
+    cable into its picture stands (`rig`; None: every one),
     else "nothing"; one putting the hands through All outputs' picture
     (`is_through`), "as All outputs" (a through over nothing — the scene
     off — "nothing")."""
@@ -7758,7 +7709,7 @@ def is_through(spec, n: int, bus_cuts=None) -> bool:
 
 def _drop_through(doc: dict, n: int) -> bool:
     """Window `n`'s "hands through the effects" taken out of section `doc`
-    (the inverse of `graphmigrate.through_wires`, plan 36 T1): the wire into
+    (the inverse of `graphmigrate.through_wires`): the wire into
     its picture, the chain of slots back to the
     composite and the composite — each that nothing else reads, with its
     entry (a slot: its effect's `slots` one down, `drop_slots`) and its
@@ -7788,7 +7739,7 @@ def _drop_through(doc: dict, n: int) -> bool:
     dropped = [x for x in wires if x not in left]
     doc["wires"] = left
     doc["nodes"] = [e for e in doc.get("nodes", []) if _node_name(e) not in gone]
-    # plan 89: a slot gone is its effect's `slots` one down (its wires went above)
+    # a slot gone is its effect's `slots` one down (its wires went above)
     drop_slots(doc, [x for x in gone if kind_of(x) == "slot"])
     if under is None:
         doc["wires"].append({"from": rgraph.GROUND, "to": port + "image"})
@@ -7797,9 +7748,9 @@ def _drop_through(doc: dict, n: int) -> bool:
 
 
 def set_picture(edit: Edit, port: str, choice: str) -> str | None:
-    """A page's picture combo (plan 35 U): `choice` into `port` — a
+    """A page's picture combo: `choice` into `port` — a
     window's (`output.N.image`), All outputs' or the look-back's capture —
-    the one wire into that port and nothing else (plan 36 T1). A source is
+    the one wire into that port and nothing else. A source is
     `render_wire(…, port)`; "nothing" is `ground` into a window's port, no
     wire into the others'; "as All outputs" is the meta controller's bus cable into the
     window's picture: its own wire goes and the cable is joined if the show
@@ -7831,8 +7782,8 @@ def set_picture(edit: Edit, port: str, choice: str) -> str | None:
 def through_refusal(spec, n: int, slots=(), bus_cuts=None) -> str | None:
     """Why window `n` cannot put the hands through the effects (the
     checkbox drawn disabled, its hover these words), or None: All outputs
-    lays no hands layer over its picture (R11: no hands to put through),
-    the window shows a picture of its own by a wire, (plan 36 T1, `rig`)
+    lays no hands layer over its picture (no hands to put through),
+    the window shows a picture of its own by a wire, (`rig`)
     its picture cable from All outputs is cut so it shows none, or the
     loadable patch wires its hands port itself — the toggle would drop that wire,
     and it never drops a wire it did not write (through off puts back
@@ -7852,16 +7803,15 @@ def through_refusal(spec, n: int, slots=(), bus_cuts=None) -> str | None:
 
 
 def set_through(edit: Edit, n: int, on: bool) -> str | None:
-    """OUTPUT's "hands through the effects" on window `n` (plan 35 O, T4's
-    carried toggle), as wiring — the wires it names and nothing else (plan
-    36 T1: no `_Wiring._put` rule): on, `graphmigrate.through_wires` — a
+    """OUTPUT's "hands through the effects" on window `n`, as wiring — the
+    wires it names and nothing else (no `_Wiring._put` rule): on, `graphmigrate.through_wires` — a
     composite laying All outputs' hands layer on its picture's head and a
-    new slot of each effect of its run (plan 89), into `output.n.image` (with the
+    new slot of each effect of its run, into `output.n.image` (with the
     window's picture `ground`, the hands alone through), and `ground` into
     `output.n.hands` (the layer goes through, not over again); off, those
     wires and the composite and slots only they use (`_drop_through`).
     The guide port is never touched. One undo step each. Refused in words:
-    All outputs laying no hands layer (R11), a window with a picture of
+    All outputs laying no hands layer, a window with a picture of
     its own."""
     spec = _spec(edit)
     if spec is None:
@@ -7881,7 +7831,7 @@ def set_through(edit: Edit, n: int, on: bool) -> str | None:
         return why
     try:
         got = graphmigrate.through_wires(spec, n, bus_cuts)
-    except ValueError as e:                 # (plan 89: an effect at its most slots)
+    except ValueError as e:                 # (an effect at its most slots)
         return str(e)
     port = f"output.{n}."
     doc["nodes"] = graphmigrate.merge_entries(doc.get("nodes", []),

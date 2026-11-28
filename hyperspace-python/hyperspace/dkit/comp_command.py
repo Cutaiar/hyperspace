@@ -1,23 +1,13 @@
 """cmdk's `commandScore`, which is the Command palette's ranking rule.
 
-NOT the Combobox's. This was in `comp_combobox.py` for a while because the
-premise was that shadcn builds a Combobox from Popover + Command; it does
-not — it ships `combobox.tsx` on Base UI, whose filter is a plain
-case-insensitive substring match. The port below is exact, verified against
-the shipped JavaScript over 382 input pairs, and it was simply answering a
-question nobody had asked. RETRO row 3 is about exactly that: verifying an
-implementation against its spec says nothing when the premise picked the
-wrong spec.
-
-It lives here because the Command palette is the component it belongs to —
-`ROADMAP.md` calls it "cheap and underrated", a fuzzy finder over 600-900
-addressable params — and because the work is correct and worth keeping
-until that gets built.
+NOT the Combobox's: shadcn's `combobox.tsx` is built on Base UI, whose filter
+is a plain case-insensitive substring match. This is the filter of the
+Command palette (a fuzzy finder over the addressable params), and the port
+is exact, verified against the shipped JavaScript.
 
 `Item`, `heading` and `sep` come from `combobox_items` (the Combobox's row
-model, split out of `comp_combobox` by HANDOFF item 3c): a Command palette
-shows the same kind of row, and duplicating the model to avoid the import
-would be worse than the import.
+model): a Command palette shows the same kind of row, and duplicating the
+model to avoid the import would be worse than the import.
 """
 
 from __future__ import annotations
@@ -28,9 +18,8 @@ from .combobox_items import Item, _is_row, _k, heading, sep  # noqa: F401
 # the filter — pure, no imgui
 # --------------------------------------------------------------------------
 #
-# WHICH RULE cmdk ACTUALLY USES, read out of the shipped package rather than
-# assumed: `cmdk@1.1.1`'s default filter is `commandScore`
-# (node_modules/cmdk/dist/chunk-NZJY6EH4.mjs, re-exported as
+# The rule cmdk uses, read out of the shipped package: `cmdk@1.1.1`'s
+# default filter is `commandScore` (node_modules/cmdk/dist/chunk-NZJY6EH4.mjs, re-exported as
 # dist/command-score.mjs), and it is
 #
 #   * a SUBSEQUENCE match, not a substring one — "ec" matches "Dodecahedron"
@@ -44,10 +33,9 @@ from .combobox_items import Item, _is_row, _k, heading, sep  # noqa: F401
 #
 # The score is not a tie-break bolted onto a substring test — it IS the
 # rule, so the algorithm is ported outright below, constant for constant,
-# rather than approximated. It was cross-checked against the shipped JS over
-# 59 (string, query[, keywords]) pairs and agrees to 1e-12 on every one.
+# rather than approximated. It agrees with the shipped JS to 1e-12.
 #
-# Why that matters rather than being pedantry: with "dod" over
+# With "dod" over
 # ["Great Dodecahedron", "Dodecahedron", "Dual Dodecahedron"] a substring
 # test cannot say which comes first. commandScore puts the one that STARTS
 # with the query first, because a jump to the head of the string scores 1, a
@@ -107,8 +95,7 @@ def _score(string, abbr, lower_string, lower_abbr, si, ai, memo):
         # The multipliers apply only when the recursive score already beats
         # the best so far — that is how the JS is written, `E>S&&(E*=…)`,
         # and the transposition branch below then compares against the RAW
-        # score. Ported faithfully rather than tidied, because tidying it
-        # changes the numbers.
+        # score. Tidying it changes the numbers.
         if s > high:
             if idx == si:
                 s *= SCORE_CONTINUE_MATCH

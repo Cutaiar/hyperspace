@@ -1,8 +1,6 @@
 """The modal layer: a scrim, a panel, a focus trap, z-order, click-outside.
 
-`HANDOFF.md` item 3 names this as the thing to build BEFORE Dialog and
-Sheet, because both are a panel on a scrim and neither can be done properly
-without one.
+Dialog and Sheet are each a panel on a scrim, and are built on this.
 
 Like `menu.py`, it BORROWS ImGui's own popup rather than reimplementing any
 of it. The hard parts of a modal - trapping focus, stacking above everything,
@@ -32,13 +30,10 @@ drawn before it; there is no read-back. Reproducing it means rendering the
 page to an offscreen target, blurring that, and compositing - a renderer
 change, not a draw call, and far outside what this kit is for.
 
-So the kit paints the 10% wash and not the blur, and that is a DEVIATION
-rather than a detail: at 10% the wash alone dims almost nothing, so a
-dkit modal reads as less separated from the page than the browser's does.
-The number to reach for if Hyperspace wants the separation without the blur
-is a heavier wash, and that is a design decision for the app rather than a
-fidelity fix - which is why this module does not quietly pick one.
-`SCRIM["blur"]` is recorded so the gap is a number, not a shrug.
+The kit paints the 10% wash and not the blur: at 10% the wash alone dims
+almost nothing, so a dkit modal reads as less separated from the page than
+the browser's does. `SCRIM["blur"]` is recorded so the gap is a number.
+DEBT: scrim-backdrop-blur
 """
 
 from __future__ import annotations
@@ -193,8 +188,7 @@ def layer(ui, key: str, rect, tbl, *, a: float = 1.0):
     Yields the panel's `box.Rect` while it is open and None while it is not,
     so a caller is `with layer(...) as r: if r is None: ...` - the same shape
     `menu.popup` has, where the CLOSED branch has to run too or the seam
-    outlives the panel (RETRO row 39, which was exactly this bug in
-    `interact.select`).
+    outlives the panel (as it did in `interact.select`).
 
     The scrim is painted into the BACKGROUND draw list rather than the popup's
     own: a popup window is the size of its panel, and ImGui clips a window's

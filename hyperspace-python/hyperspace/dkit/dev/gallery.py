@@ -1,8 +1,7 @@
 """Render the dkit gallery to a PNG, headless.
 
-The hidden-window pattern is lifted from tools/sheet_shots.py:40-85 — the
-project's established way to screenshot imgui without a display, black-frame
-guard included.
+The hidden-window pattern is the one in tools/sheet_shots.py, the project's
+way to screenshot imgui without a display, black-frame guard included.
 
     HYPERSPACE_HOME=$(mktemp -d) uv run python hyperspace/dkit/dev/gallery.py \
         --out /tmp/dkit
@@ -51,7 +50,7 @@ FACES = dict(D.FACE_FILES)
 
 
 def load_faces():
-    # 1.92 builds the atlas lazily; there is no Build() any more
+    # imgui 1.92 builds the atlas lazily; there is no Build()
     return D.load_faces(imgui.get_io(), HERE)
 
 
@@ -107,15 +106,13 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
         GL.glClearColor(bg[0], bg[1], bg[2], 1.0)
         GL.glClear(GL.GL_COLOR_BUFFER_BIT)
         dl = imgui.get_background_draw_list()
-        # ONE Ui for the frame, inside `interact.chrome()`. The audit that
-        # found this missing was looking for ImGui's blue nav cursor and its
-        # pale text selection, neither of which has a shadcn counterpart.
-        # Neither can actually appear here today - the gallery submits no
-        # widgets, and the green diff is the proof at 0 background pixels -
-        # and `_sandwich_begin` clears nav_cursor per component anyway. It is
-        # held for the whole frame regardless, so a cell that one day DOES
-        # submit a widget cannot reintroduce either, and so the harness sets
-        # the style up the same way dashboard.py does.
+        # ONE Ui for the frame, inside `interact.chrome()`, which replaces
+        # ImGui's blue nav cursor and pale text selection (neither has a
+        # shadcn counterpart). The gallery submits no widgets, so neither can
+        # appear today, and `_sandwich_begin` clears nav_cursor per component
+        # anyway. It is held for the whole frame so a cell that submits a
+        # widget cannot reintroduce either, and so the harness sets the style
+        # up the same way dashboard.py does.
         mui = I.Ui(dl, faces, theme, Anim(), theme_name=theme_name)
         with I.chrome(mui):
             for cell in SPEC["cells"]:
@@ -132,9 +129,9 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                 elif cell["kind"] == "kbd":
                     # The width is the SPEC's - the browser's intrinsic one -
                     # as a Button's is: the kit's text widths run a few
-                    # percent wide of Chromium's (see draw.kbd), so drawing
-                    # at the kit's own width would measure the font loader,
-                    # not the Kbd. test_kbd.py checks the width law.
+                    # percent wide of Chromium's (see draw.kbd), so the kit's
+                    # own width would measure the font loader, not the Kbd.
+                    # test_kbd.py checks the width law.
                     # The tooltip variant sits on a tooltip-coloured ground,
                     # which is what its `in-data-[slot=tooltip-content]`
                     # restyle is drawn against.
@@ -174,18 +171,14 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                     D.box(dl, cell["x"], cell["y"], cell["w"], cell["h"],
                           # Tailwind's bare `border` is border-border, NOT
                           # input. They are the same #e5e5e5 in light and differ
-                          # in dark (10% vs 15% white), so this only showed up
-                          # on the dark pass - 510 pixels of it.
+                          # in dark (10% vs 15% white).
                           border_col=T.rgba("border", theme=theme),
                           radius=T.RADII["lg"], border_w=1.0)
                     vp = cell["h"] - 2.0
                     # The ROOT rect, not the viewport. `scroll_bar` insets by the
-                    # region's own border itself - that is what its `border`
-                    # argument is for, and interact.scroll_area passes the root
-                    # the same way - so handing it the already-inset viewport
-                    # counted the border TWICE: the track came out at (y+2, 114)
-                    # where the browser's is (y+1, 116), putting the thumb 1px
-                    # left, 1px down at frac 0, and 0.59px short at frac 1.
+                    # region's own border itself (its `border` argument), and
+                    # interact.scroll_area passes the root the same way; an
+                    # already-inset viewport would count the border twice.
                     #
                     # `viewport_h` stays cell.h - 2, which IS the browser's
                     # clientHeight - the ratio that sizes the thumb is the
@@ -194,9 +187,7 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                                  vp, float(cell["content"]),
                                  cell["frac"] * (cell["content"] - vp), theme)
                 elif cell["kind"] == "menu":
-                    # The chrome that menu.popup draws, without the popup - the
-                    # one component the kit shipped with NO cell here, which is
-                    # how six wrong row metrics survived in it.
+                    # The chrome that menu.popup draws, without the popup.
                     M.panel_chrome(mui, dl, cell["x"], cell["y"],
                                    cell["w"], cell["h"])
                     M.rows(mui, MENU_CELL_ITEMS, cell["x"] + M.PAD,
@@ -208,20 +199,19 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                     # a real imgui.input_text, and a widget outside any window
                     # makes ImGui auto-create its "Debug" window over the canvas.
                     #
-                    # The open PANEL is not a cell: its chrome is literally
-                    # menu.panel_chrome now, so `menu.panel` and
-                    # `contextmenu.panel` already measure it. What is still
-                    # outside the diff is the panel's ROWS - see HANDOFF.
+                    # The open PANEL is not a cell: its chrome is
+                    # menu.panel_chrome, so `menu.panel` and
+                    # `contextmenu.panel` already measure it. The panel's ROWS
+                    # are outside the diff.
                     CC.field_chrome(mui, cell["x"], cell["y"], cell["w"],
                                     cell["h"], combos, text=False,
                                     disabled=cell["variant"] == "disabled")
                 elif cell["kind"] == "contextmenu":
                     # Identical chrome to the `menu` cell by design: a
-                    # ContextMenu routes its panel through menu.popup, and since
-                    # menu.py's six row metrics were corrected the only thing
-                    # comp_context_menu still overrides is min_w (144, min-w-36
-                    # against the DropdownMenu's min-w-32). The cell is here to
-                    # hold the REAL ContextMenu component to that, rather than
+                    # ContextMenu routes its panel through menu.popup, and the
+                    # only thing comp_context_menu overrides is min_w (144,
+                    # min-w-36 against the DropdownMenu's min-w-32). The cell
+                    # holds the real ContextMenu component to that, rather than
                     # inferring it from the DropdownMenu's cell passing.
                     M.panel_chrome(mui, dl, cell["x"], cell["y"],
                                    cell["w"], cell["h"])

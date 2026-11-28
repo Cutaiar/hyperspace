@@ -5,8 +5,7 @@ driving the REAL components in Chromium on `?probe` blocks that are NOT
 forced open, which is the whole point: a `defaultOpen` component reports
 `data-state="open"` whatever you press, so "did this key open it" and "did
 this key close it" both come back yes. That is how the Combobox's first
-keyboard model came out wrong (RETRO row 17), and it is why these blocks
-exist:
+keyboard model came out wrong, and it is why these blocks exist:
 
     menu.kb              a DropdownMenu with a real trigger - one label, one
                          separator, one DISABLED item, one destructive item,
@@ -164,11 +163,9 @@ def _scrolled(DB):
     The table is below the fold at this window height, so a test that wants
     a row has to scroll to it - which is what a person does too.
 
-    CACHED, and that is not a micro-optimisation. Working it out costs a
-    whole 1440x1100 render, every helper in this file needs it, and the
-    first version did it twice per driven case: `test_enter_and_space...`
-    alone came to sixteen renders and killed its pytest-xdist worker. The
-    scroll is deterministic, so one answer serves the module.
+    CACHED: working it out costs a whole 1440x1100 render and every helper
+    in this file needs it. The scroll is deterministic, so one answer
+    serves the module.
     """
     if not _SCROLL:
         px, py, pw, ph = (DB.SIDEBAR_W, DB.HEADER_H,
@@ -262,7 +259,7 @@ def test_resolve_open_is_the_measured_table():
 
     Pure, because both of the dashboard's Selects hold a value - the
     no-value column is not reachable by driving the app at all, which is
-    exactly the gap that cost the Combobox a round (RETRO row 26).
+    exactly the case that driving the app cannot reach.
     """
     from hyperspace.dkit import menu as M
     held = [M.Item("a", "Alpha"), M.Item("b", "Beta", checked=True),
@@ -329,9 +326,8 @@ def test_next_match_is_radix_getnextmatch():
 def test_the_probe_reads_a_highlight_it_is_shown(DB):
     """The highlight reader's own sanity check, and it runs FIRST.
 
-    Three probes in this project's history reported a defect that was not
-    there (RETRO row 35), so this one is pointed at a case whose answer is
-    not in doubt: the pointer sitting on a row. If this fails, the reader is
+    A probe can report a defect that is not there, so this one is pointed at
+    a case whose answer is not in doubt: the pointer sitting on a row. If this fails, the reader is
     wrong and nothing below it means anything.
     """
     script, _park, _at = _open_kebab(DB)
@@ -394,8 +390,8 @@ def test_the_arrows_clamp_rather_than_wrapping(DB):
     Measured on `menu.kb`: ArrowDown x24 off the bottom of a six-row menu
     sits on the last row and ArrowUp x20 off the top sits on the first.
     There is no wrap and no none-state between the ends. The Combobox does
-    the opposite - it falls off either end into nothing - and the kit's
-    menus used to wrap, because ImGui's own nav was driving them.
+    the opposite - it falls off either end into nothing - and ImGui's own
+    nav wraps, and the kit's menus override it.
     """
     at = _open_kebab(DB)[2]
     n = _n_items(DB)
@@ -597,7 +593,7 @@ def test_a_parked_pointer_does_not_override_the_arrows(DB):
 
 
 def test_the_opening_key_is_not_also_processed_by_the_panel(DB):
-    """The off-by-one that cost the Combobox a round, on the Select.
+    """The off-by-one on the Select: the opening key must not also drive the panel.
 
     The open happens in the parent window and the panel's own handler runs
     later in the SAME frame, so without `menu.arm` an opening ArrowDown
@@ -740,10 +736,9 @@ def _select_hl(DB, opener):
 
 
 def test_a_select_opens_on_its_committed_row(DB):
-    """**RETRO row 26, one component over.** Measured on `select.kb`, which
-    holds `Gamma`: a click, Enter, Space, ArrowDown and ArrowUp all open the
-    panel with Gamma highlighted AND ticked - never with the first row
-    highlighted and never with none.
+    """Measured on `select.kb`, which holds `Gamma`: a click, Enter, Space,
+    ArrowDown and ArrowUp all open the panel with Gamma highlighted AND
+    ticked - never with the first row highlighted and never with none.
 
     The valueless column is `select.kbnone`, where all four open on the
     first row; it is covered as a pure test of `resolve_open`, because both
@@ -762,9 +757,6 @@ def test_a_key_on_a_closed_select_trigger_opens_it(DB):
     a Select. ArrowUp is the one that distinguishes it from a DropdownMenu,
     whose trigger answers `["Enter", " ", "ArrowDown"]` and is inert under
     ArrowUp.
-
-    Before this, no key opened the kit's Select at all - the trigger was a
-    hit target and nothing read a key near it.
     """
     for name, k in (("Enter", imgui.Key.enter), ("Space", imgui.Key.space),
                     ("ArrowDown", imgui.Key.down_arrow),

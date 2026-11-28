@@ -1,12 +1,9 @@
 """spec.json against its three consumers.
 
 `spec.json` is the shared contract: the React oracle, the ImGui gallery and
-the diff all read it, and they agree only by convention. Nothing tested it
-until a Button cell was added and silently went missing from the pixel diff
-for three of these reasons at once.
+the diff all read it, and they agree only by convention.
 
-Each failure below is SILENT in the harness, which is why it needs a test
-rather than care:
+Each failure below is SILENT in the harness, which is why it needs a test:
 
 * a kind absent from `contour.KIND` is reclassified as TEXT by diff.py and
   reported in the advisory ink-extent table instead of the chrome one. The

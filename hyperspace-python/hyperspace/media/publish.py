@@ -1,4 +1,4 @@
-"""Out (plan 32 T9): a render output published to Resolume or
+"""Out: a render output published to Resolume or
 TouchDesigner — over Syphon on this Mac, over NDI to another machine.
 
 An output's ``syphon = "<name>"`` / ``ndi = "<name>"`` (config.py) give it
@@ -16,8 +16,8 @@ publisher: ``<kind> out <name> — <fps> fps, readback <ms> ms``.
   frame's texture is read into one (a GPU command, no wait) and the
   other, filled a frame ago and long finished, is copied out for the
   sender. The send runs on the publisher's own thread,
-  ``media-ndi-out-<name>``: cyndilib's `write_video` releases the GIL
-  (the spike), so the frame thread never waits on the network. While the
+  ``media-ndi-out-<name>``: cyndilib's `write_video` releases the GIL,
+  so the frame thread never waits on the network. While the
   sender is still busy with the last frame, this one is dropped, never
   queued.
 
@@ -338,7 +338,7 @@ def close_all(slots) -> None:
             live._quiet(p.close)
 
 
-# ---- NDI out from the panel (2026-11-22): the loop between two Macs closed
+# ---- NDI out from the panel
 #
 # An output's NDI sender can be turned on and off while the app runs (MEDIA
 # ▸ Live, "Send over NDI"): the panel asks (`ask_ndi`), the frame takes the

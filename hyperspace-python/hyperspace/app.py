@@ -2,9 +2,9 @@
 
 The *render* window is pure moderngl output, the thing on the projector or
 TV: no imgui in it, ever. With ``[[output.screens]]`` in config.toml
-(plan 21 WP3) there is one render window per listed output. A hidden *root*
+there is one render window per listed output. A hidden *root*
 window holds the context the frame is rendered on, which no unplugged display can
-take (SC3a, plan 58); every output's window shows the frame through an
+take; every output's window shows the frame through an
 `outputs.Presenter` in its own context (`_draw_render`), and the first live one's
 swap paces the loop (`pacing.py`). The *control* window holds every widget — the
 CONTROLS panel, the cheat sheet, the hot-reload error toast — in its own
@@ -23,7 +23,7 @@ fullscreen, overlay) through the output.* params. ``hyperspace --laptop``
   drag  orbit       ⇧drag / right-drag  pan   scroll  zoom about cursor
   L  lines          F  faces          ?  cheat sheet
   T  overlay: float the render over the screen    G  clicks through it
-     (only with [output] overlay = true in config.toml — decision 21)
+     (only with [output] overlay = true in config.toml)
   F1–F8  load a loadable patch of the bank               ⇧F1–F8  save the live state as it
   B  tap tempo      ⇧B  LFO trigger: the downbeat is now, synced LFOs restart
   Cmd+Z / Ctrl+Z  undo the last gesture or load here  with ⇧  redo (undo.py)
@@ -174,7 +174,7 @@ D4_RAMP = 1.8     # seconds of hold to reach full rate
 
 # the key / pad / MIDI / lane binding tables live in routing.py (bindings.json);
 # these are the keys the loop still handles itself (the cheat-sheet test reads
-# it). R and F1–F8 / ⇧F1–F8 are table rows since plan 11 (routing.LOOP_KEY_ROWS).
+# it). R and F1–F8 / ⇧F1–F8 are table rows (routing.LOOP_KEY_ROWS).
 LOOP_KEYS = ("SUPER+R", "SUPER+LEFT_BRACKET", "SUPER+RIGHT_BRACKET",
              "UP", "DOWN", "Q")
 
@@ -183,7 +183,7 @@ def _err(where: str, e: Exception) -> str:
     return f"{where}: {type(e).__name__}: {e}"[:160]
 
 
-# ---- Ctrl-C (2026-11-11) ----
+# ---- Ctrl-C ----
 
 QUIT_GRACE_S = 2.0      # a second Ctrl-C this long after the first: out now, teardown or no
 QUIT_HARD_S = 5         # and out anyway this long after the first, loop or no loop (whole seconds)
@@ -222,7 +222,7 @@ def _arm_hard_exit(quitting: Quit) -> None:
     What it cannot do is cover a main thread that was *already* wedged in a
     native call when the signal arrived. CPython runs a Python handler only
     where the interpreter reaches a check point, so nothing here runs, and
-    there is nothing to arm (2026-11-11, measured on a `pthread_mutex_lock`
+    there is nothing to arm (measured on a `pthread_mutex_lock`
     deadlock). That is true of every Python handler, SIGINT's own default
     included — it is why SIGTERM is left to the kernel entirely.
 
@@ -257,20 +257,19 @@ def _install_quit_signals(quitting: Quit | None = None, *, clock=time.perf_count
     traceback, every window, the audio stream and the devices still open and
     the window placement unsaved. A handler instead sets `Quit.at`, and the
     loop leaves by the door a window close uses, so the one teardown runs
-    (`close_all`, audit P1).
+    (`close_all`).
 
     The first signal also arms `_arm_hard_exit`, a deadline for the quit the
     loop never gets to, and a further signal `QUIT_GRACE_S` after the first
     is the same exit for someone who would rather not wait; one inside that
     window is a double tap, and is ignored.
 
-    **SIGINT only, on purpose.** Handling SIGTERM too was the obvious next
-    line and it is a trap: a Python handler runs only where the interpreter
+    **SIGINT only.** Handling SIGTERM too is a trap: a Python handler runs only where the interpreter
     reaches a check point, so a main thread wedged in a driver call cannot
     take the signal at all, and a launcher's one SIGTERM — which the kernel's
     default disposition would have made fatal — would leave a hung show
-    running (2026-11-11, measured). We have nothing to trade for that, since
-    nothing in this process can act while that thread is stuck. SIGINT is
+    running (measured). Nothing in this process can act while that thread is
+    stuck, so there is nothing to trade for it. SIGINT is
     different only because CPython installs a Python handler for it at
     startup whatever we do, so there is no kernel guarantee there to lose.
 
@@ -328,8 +327,8 @@ def _quiet(fn) -> None:
 
 def _close_each(closes) -> None:
     """Every one of `closes` called, whichever raises: one output's or deck's
-    teardown never leaves another's open (plan 44 D4: deck 2's segment workers
-    outlive a raise in deck 1's close otherwise)."""
+    teardown never leaves another's open (deck 2's segment workers
+    would outlive a raise in deck 1's close otherwise)."""
     for close in closes:
         _quiet(close)
 
@@ -346,11 +345,10 @@ class _Closer:
 
 def close_all(audio, *adapters) -> None:
     """Every optional adapter's `close()` — the device registry (every
-    device, the pad included; plan 27 B1), the dream worker — then the
+    device, the pad included), the dream worker — then the
     audio stream, best-effort, so a broken port never blocks a quit or a
-    restart. The one list for both exits (audit P1); `None` for an
-    adapter that was never opened. Plan 32 (final review A-m1): the
-    closes share one deadline, `media.pool.EXIT_S` from here — each waits
+    restart. The one list for both exits; `None` for an
+    adapter that was never opened. The closes share one deadline, `media.pool.EXIT_S` from here — each waits
     what is left of it at most."""
     _quiet(media_pool.begin_exit)
     try:
@@ -363,20 +361,20 @@ def close_all(audio, *adapters) -> None:
 
 
 class MediaResolver:
-    """The app's `media.adapters.Resolver` (plan 32): the file kinds from
+    """The app's `media.adapters.Resolver`: the file kinds from
     the media folder's last scan, live feeds from the device registry's
-    `media_feeds` (plan 32 T8: the ndi / syphon / camera entries' last
+    `media_feeds` (the ndi / syphon / camera entries' last
     scans — `devices` is pointed at the registry once it exists). Both are
     lookups in what a scan already made, never a scan: the MEDIA page asks
     every frame. `stamp` is what tells a replaced file: the scan's size
     and mtime for the id, and its status, so a file that finishes
-    downloading opens afresh (final review A-I1); `status` is the scan's
+    downloading opens afresh; `status` is the scan's
     word on a file (`fetching` is never opened)."""
 
     def __init__(self, folder: MediaFolder, devices=None, builtin: dict | None = None):
         self.folder = folder
         self.devices = devices
-        # the app's own pictures (2026-11-02): `panel:graph` → its `PanelSource`,
+        # the app's own pictures: `panel:graph` → its `PanelSource`,
         # the one object every call, so `channels._stale` keeps it
         self.builtin: dict = dict(builtin or {})
 
@@ -406,19 +404,19 @@ class MediaResolver:
 
 
 class MediaIO:
-    """The media side of the app (plan 32): the folder (scanned on its own
+    """The media side of the app: the folder (scanned on its own
     timer), the eight channels, polled once a frame in the scene-setter
     slot, and the close that both exits run — every source closed on the
     channels' closer thread within a 1.5 s budget
     (`channels.CLOSE_BUDGET_S`), the folder's timer stopped, the proxy
     worker and the pool told to stop without waiting, all inside the
-    exit's one deadline (`media.pool.left`; review focus 3: the exit stays
-    under 2 s). The workers are daemon threads, so one stuck in a read
+    exit's one deadline (`media.pool.left`), so the exit stays
+    under 2 s. The workers are daemon threads, so one stuck in a read
     never holds the interpreter's exit."""
 
     def __init__(self, folder: MediaFolder, state: MediaState):
         self.folder, self.state = folder, state
-        self.off_air: list = []       # the channels of the decks but the first (plan 44 D4)
+        self.off_air: list = []       # the channels of the decks but the first
         self.heard: Callable[[], Any] | None = None   # the channels on air; None: `state`
 
     def seat(self, meta) -> None:
@@ -430,7 +428,7 @@ class MediaIO:
 
     def poll(self, dt: float, now: float) -> None:
         # each source read once a frame from here on, whichever deck asks
-        # (plan 44 §8: both renderers handed the same `MediaFrame`)
+        # (both renderers are handed the same `MediaFrame`)
         self.state.sources.begin_frame()
         heard = self.heard() if self.heard is not None else self.state
         # the deck not heard first, so what it lets go is let go before the one on air asks
@@ -499,10 +497,10 @@ def _save_windows(home, render_win, ctrl_win, output, more=(), slots=(), away=No
     (placement.py) — on quit and on restart only. Always the *windowed*
     rect: a fullscreen or overlay render window is remembered by the rect
     `Output` would restore, and a minimised window keeps its old entry.
-    `more`: the later render outputs' `Output`s in the config's order
-    (plan 21 WP3), None for one not opened this run — its old entry is
+    `more`: the later render outputs' `Output`s in the config's order,
+    None for one not opened this run — its old entry is
     kept, as a minimised window's is. `slots`: every window's spot again, by
-    the display it's on (`placement.spot`, SC2). `render_win` None: output 1 has
+    the display it's on (`placement.spot`). `render_win` None: output 1 has
     no display this run. `away`: where windows closed or held were (`Hotplug.away_spots`)."""
     def minimised(win) -> bool:
         return bool(glfw.get_window_attrib(win, glfw.ICONIFIED))
@@ -523,8 +521,8 @@ def _slots(cfg: dict | None, scr: list | None = None, notes: list | None = None)
     """The render outputs the config lists (config.screens: one with no
     list), numbered from 1, with their launch switches; no window yet.
     A later output's monitor given by name is an index from here on, by
-    `scr` (row 771), and one no screen has is `missing`, as an index no
-    screen has is (fork F9), said in `notes`. Output 1's is
+    `scr`, and one no screen has is `missing`, as an index no
+    screen has is, said in `notes`. Output 1's is
     `placement.settle`'s, since it always opens."""
     from . import config
 
@@ -552,7 +550,7 @@ def _slots(cfg: dict | None, scr: list | None = None, notes: list | None = None)
 
 def _take_rows(slots: list[Slot], want: Wanted) -> list[Slot]:
     """What the display rows want (`displays.wanted`) on the slots, for this launch: one slot
-    for every output there can be, so `output.N.*` never appear mid-run (SC3b), with N kept
+    for every output there can be, so `output.N.*` never appear mid-run, with N kept
     (a wire names it). A slot's first display has its `win` and flips, its others go on
     `also`, and with no display it has no window, publishing if the config has it publish.
     Its name, mutes, dim and what it publishes stay the config's."""
@@ -584,7 +582,7 @@ CASCADE = 40     # px: a later output's default spot, down and right of the one 
 def _later_rect(slot: Slot, k: int, scr, renders: list,
                 taken: list) -> tuple[tuple | None, str]:
     """Where a later output (`k` ≥ 1, its place in the list from 0) opens,
-    or (None, why) when its screen is not connected (fork F9): an index
+    or (None, why) when its screen is not connected: an index
     no connected screen has means that output is not opened at all — a
     window landing on the laptop over the controls is worse than none.
     A default spot another output already has (`taken`, their top-left
@@ -617,7 +615,7 @@ def _context_hints() -> None:
 
 
 def _root_window():
-    """The window that holds the renderer's context (SC3a, plan 58), hidden,
+    """The window that holds the renderer's context, hidden,
     never destroyed until the app exits, so no unplugged display can take the
     context or the picture with it. No samples: MSAA is the renderer's own
     framebuffers' (`outputs.FRAME_SAMPLES`). Every other window shares with it.
@@ -636,7 +634,7 @@ def _root_window():
 
 
 def _open_also(slots: list[Slot], scr: list, seen: dict, root, notes: list[str]) -> None:
-    """Each output's further displays (SC2): a window like a later output's, in the root's
+    """Each output's further displays: a window like a later output's, in the root's
     share group. One that won't open is said and goes, and the output's others stand."""
     for slot in slots:
         kept = []
@@ -659,16 +657,16 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
              root=None, want: Wanted | None = None):
     """The GLFW windows on one shared GL context, `root`'s (`_root_window`):
     the render outputs and the controls. Returns (slots, control window): one
-    `outputs.Slot` per output the config lists (plan 21 WP3; one with no list,
-    as before), `slot.win` its window — or None, with `slot.missing` saying
-    why, for a later output whose screen is not connected (fork F9). Output 1
-    always opens. Created in this order: output 1, the controls (as before),
+    `outputs.Slot` per output the config lists (one with no list),
+    `slot.win` its window — or None, with `slot.missing` saying
+    why, for a later output whose screen is not connected. Output 1
+    always opens. Created in this order: output 1, the controls,
     then the later outputs.
 
-    `overlay` is the config's ``[output] overlay`` (decision 21 (a)): only
+    `overlay` is the config's ``[output] overlay``: only
     then is output 1's framebuffer transparent. A later output is never
     transparent and has its own title. No window has MSAA: each only shows the
-    frame, multisampled before it gets there (SC3a).
+    frame, multisampled before it gets there.
 
     Where they open is placement.py's say: ``[output] monitor`` /
     ``control_monitor`` in `cfg` (with a list, `config.load` put output 1's
@@ -678,11 +676,11 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     1's. Its notes go to stderr and `cfg["notes"]` (the SYSTEM page). With
     no screens no position is set and every output opens.
 
-    `want` (SC2): what the display rows say, in place of the config's screens: where
+    `want`: what the display rows say, in place of the config's screens: where
     each opens and whether it does. Output 1 too: with no display it has no window. The
     config then says only each output's name, mutes, dim and what it publishes. With no
-    screens at all, none has a window, until one comes (SC3b). With no `want` (`--laptop`), the
-    config says as before."""
+    screens at all, none has a window, until one comes. With no `want` (`--laptop`), the
+    config alone decides."""
     scr = placement.screens(glfw)
     oc = (cfg or {}).get("output", {})
     oc = oc if isinstance(oc, dict) else {}
@@ -692,7 +690,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
         oc["fullscreen"] = one[0].fullscreen if one else False
         where = want.control or want.floats
         oc["control_monitor"] = where.index if where else -1
-    # a name in the config is an index from here on, said once (row 771)
+    # a name in the config is an index from here on, said once
     said = placement.settle(oc, scr) if scr else []
     slots = _slots(cfg, None if want is not None else scr, said)
     if want is not None:
@@ -703,7 +701,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     seen: dict = {}
     later_rects: list = [None] * len(slots)
     notes: list[str] = []
-    # plan 32 T9: a publish-only output never has a window, so no screen
+    # a publish-only output never has a window, so no screen
     # or spot is looked for; one with nothing to publish is not drawn either
     idle = []
     for slot in slots[1:]:
@@ -736,7 +734,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
             for k, slot in enumerate(slots[1:], start=1):
                 if slot.publish_only or (want is not None and not slot.display):
                     continue
-                if slot.monitor >= len(scr):        # fork F9 holds here too (review of #123)
+                if slot.monitor >= len(scr):        # a screen that is not connected is missing
                     slot.missing = f"screen {slot.monitor} is not connected"
                 if not slot.missing:
                     r = placement.default_rect("render", RENDER_SIZE, scr[0])
@@ -748,7 +746,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     if scr:
         # …and the config is left saying what was done: an index no screen
         # has (or no number at all) is −1 from here on, as the note above
-        # said, so `Output.monitor` cannot carry it further (plan 16 WP7)
+        # said, so `Output.monitor` cannot carry it further
         for key in ("monitor", "control_monitor"):
             if key in oc:
                 oc[key] = placement.index(oc[key], len(scr))
@@ -760,8 +758,8 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     # creation-time hints: only when the config asks for overlay does the
     # framebuffer keep alpha so overlay mode can clear to see-through (the
     # other modes clear opaque, and the renderer keeps every pixel at alpha
-    # 1 there — plan 14 WP1); otherwise the window is opaque whatever is
-    # drawn, for the Pepper's Ghost glass (decision 21 (a), plan 14 WP2).
+    # 1 there); otherwise the window is opaque whatever is
+    # drawn, for the Pepper's Ghost glass.
     # Fullscreen must not minimise when the control window takes focus
     # (overlay.py).
     glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, bool(overlay))
@@ -787,7 +785,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     if ctrl_rect:
         glfw.set_window_pos(ctrl_win, *ctrl_rect[:2])
     slots[0].win = render_win
-    # the later outputs (plan 21 WP3): in the root's share group (they
+    # the later outputs: in the root's share group (they
     # sample its frame textures), opaque, no MSAA, never minimised when
     # another window takes focus — the hints above still hold
     # (TRANSPARENT_FRAMEBUFFER off, SAMPLES 0, AUTO_ICONIFY off)
@@ -833,9 +831,9 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     out.register(reg)
     # a screen index, or −1: `_windows` has already put −1 in place of an
     # index no connected screen has and made a name its index (and placement
-    # said so; an index at runtime until SC3b, row 771), `config.load` put −1
+    # said so), `config.load` put −1
     # in place of anything neither a number nor a name — and a cfg that came
-    # by neither road must not stop the launch here either (plan 16 WP7)
+    # by neither road must not stop the launch here either
     out.monitor = placement.index(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
     out.render = render_index(oc.get("render", RENDER_DEFAULT))
@@ -855,8 +853,8 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
 
 
 def _later_output(slot: Slot) -> Output:
-    """A later render output's window settings (plan 21 WP3): its screen
-    and fullscreen from its config entry (fork F10: no params — the
+    """A later render output's window settings: its screen
+    and fullscreen from its config entry (no params — the
     output.* params are output 1's), never overlay; `apply()` runs each
     frame as output 1's does."""
     out = Output(slot.win, GlfwBackend(glfw), allowed=False)
@@ -866,7 +864,7 @@ def _later_output(slot: Slot) -> Output:
 
 
 def _also_output(also: Also) -> Output:
-    """A further display's window settings (SC2), as a later output's."""
+    """A further display's window settings, as a later output's."""
     out = Output(also.win, GlfwBackend(glfw), allowed=False)
     out.monitor = placement.index(also.monitor)
     out.fullscreen = bool(also.fullscreen)
@@ -894,11 +892,11 @@ def _slot_windows(slots: list[Slot]) -> list:
 
 def _open_presenters(slots: list[Slot], root, make_context=None, notes: list | None = None) -> None:
     """Each output's `Presenter`, on its own window's context, none waiting
-    for its screen: `Pacer.choose` says which one does (fork F6: two waiting
-    swaps a frame halve the rate, plan 21 §1: 121 fps against 60–81). A later
+    for its screen: `Pacer.choose` says which one does (two waiting
+    swaps a frame halve the rate: 121 fps against 60–81 measured). A later
     output that will not build is closed and counts as not opened, its
     `missing` saying why (`notes`, the SYSTEM page): a window that is never
-    drawn would show garbage and fool the watch (review of #123). The others
+    drawn would show garbage and fool the watch. The others
     go on. Output 1 always opens, so its failing stops the launch, as its
     context failing always has. Leaves the root's context current."""
     make = make_context or moderngl.create_context
@@ -945,7 +943,7 @@ def _open_presenters(slots: list[Slot], root, make_context=None, notes: list | N
 
 
 def _open_publishers(slots: list[Slot], ctx, notes: list | None = None) -> None:
-    """Plan 32 T9: each drawn output's publishers (media/publish.py), made
+    """Each drawn output's publishers (media/publish.py), made
     with the render context current — a Syphon server takes the context
     current as it is made; a publisher that cannot open says so on its
     SYSTEM line, and every failure is said once in `notes` (the
@@ -977,7 +975,7 @@ def _close_publishers(win, slots: list[Slot]) -> None:
 def _gl_flush() -> None:
     """glFlush in the current context: a presenter's context samples the
     renderer's frame textures, and without the flush it sees last frame's
-    (plan 21 §1, measured: 199 of 200 frames late). `_say_gl_error` has taken
+    (measured: 199 of 200 frames late). `_say_gl_error` has taken
     anything pending, so a `GLError` here is the flush's own."""
     from OpenGL import GL
 
@@ -1009,7 +1007,7 @@ def _bands(audio) -> tuple[float, ...]:
 
 
 def _also_handoff(sl: Slot, v: View, also: Also, first: Slot, frame_tex, frame_size) -> Handoff | None:
-    """What a further display of `sl` is given (SC2): the same picture, in its own window's
+    """What a further display of `sl` is given: the same picture, in its own window's
     shape, with its own flips. Output 1's picture is whole on the frame target with its first
     display's flips in it, so the rest is what's left to undo; opaque, as overlay is that
     window's alone. Another output's is its `Handoff`, whose mix was drawn for its first
@@ -1043,15 +1041,14 @@ def _mix_viewport(mix, frame_size, rect) -> tuple[int, int, int, int] | None:
 
 def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, flush=None,
                  preview=None, monitor=None, fade=None, panel_deck=None) -> None:
-    """One render frame onto every output (plan 21 WP3, "the frame in
-    app.draw_render"; SC3a, plan 58: the picture depends on no display):
+    """One render frame onto every output; the picture depends on no display:
 
     1. the root's context current; the stranded-target check; the handover,
        if the pacing window should change (`Pacer.choose`);
     2. a `View` per output — output 1 on the root's frame target (`Root.frame`,
        at its window's framebuffer size, or the last known with no window),
-       each later one with its presenter and its framebuffer's size, or (plan
-       32 T9) a publish-only one on its offscreen target at the render
+       each later one with its presenter and its framebuffer's size, or
+       a publish-only one on its offscreen target at the render
        cap's size ("full": output 1's framebuffer), in their list order;
        each published one carries its publishers (and its tap). Output 1's view
        says `FRAME_SAMPLES`: an offscreen target can't, so the scene's MSAA
@@ -1073,18 +1070,18 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
     What output 1's view caught, and output 1's own present raising, are raised after
     the others were presented, so they reach `RenderWatch.failed` and the red banner:
     the operator's one warning that the main picture has stopped. A further display of an
-    output (`Slot.also`, SC2) takes its output's picture as step 5 does, and is one more
+    output (`Slot.also`) takes its output's picture as step 5 does, and is one more
     present; its failing is said on its own row. `preview` (an `outputs.Preview`), when
     the GRAPH page asked for it, rides on output 1's view as one more
     publisher — through output 1's own tap, else its own — and is flushed
     for the control window as a presenter's frame is.
 
-    Plan 44 D4: `fade` (a `deck.Fade`). At `output.xfade` 0, exactly the
+    `fade` (a `deck.Fade`). At `output.xfade` 0, exactly the
     above. Above 0, before output 1's draw, deck 2 draws every output
     offscreen (`Fade.draw`) and each view carries its picture to the mix
     pass, so every presenter, publisher and panel inset shows the mix.
 
-    Plan 44 D5c: `panel_deck`, the deck the panel is on. Off air, the page's
+    `panel_deck`, the deck the panel is on. Off air, the page's
     backdrop is that deck's picture (`Fade.preview`), not output 1's, and a look
     just landed there is drawn once small (`Fade.warm`). Output 1 then rides
     `monitor` (another `Preview`, the page's inset of what is on air) when the
@@ -1097,7 +1094,7 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
             publish.take_ask(sl, ctx, Offscreen)
     # the frame target, bound explicitly every frame: the renderer draws into
     # whatever is bound, and a frame that once left another offscreen
-    # framebuffer bound froze the picture with no error (plan 14 WP1).
+    # framebuffer bound froze the picture with no error.
     # draw_outputs puts its target back; the check is the alarm.
     stranded = ctx.fbo
     if (stranded is not None and stranded.glo != 0 and stranded is not root.frame.fbo
@@ -1108,7 +1105,7 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
     pacer.choose(_slot_windows(presented), root.win)
     # output 1's own size and DPI (a 1080p projector next to a retina laptop); with no display
     # on it, the first that shows anything's, each frame: a window goes fullscreen, or is moved
-    # (a display that dropped a moment ago may be back: nothing resizes for it yet, SC3b)
+    # (a display that dropped a moment ago may be back: nothing resizes for it yet)
     measured = None if root.hold_size else first if first.opened else next(iter(presented), None)
     if measured is not None:
         root.measure(glfw.get_window_size(measured.win), glfw.get_framebuffer_size(measured.win))
@@ -1218,7 +1215,7 @@ def control_title(meta) -> str:
 
 def _desk_table(reg: Registry, table: Bindings) -> Bindings:
     """The app's binding table, with the desk's own params declared on it
-    and knob smoothing at the app's default (plan 18 WP2, fork 12). Called
+    and knob smoothing at the app's default. Called
     before `library.attach`, like every shared meta param's registration, so
     `desk.slew` exists when the show's session values land: a show that
     saved a number keeps it (0 included), one that names none takes 80 ms
@@ -1245,13 +1242,13 @@ def _hand_settings(reg: Registry, cfg: dict):
 
 def _open_devices(cfg: dict, ctx: devices.Context, home: Path | None,
                   clock=time.monotonic, store: DeviceList | None = None) -> devices.DeviceRegistry:
-    """The device registry (devices.py, plan 27 B1) over the config's
+    """The device registry (devices.py) over the config's
     `[[devices]]` list — the old `[midi]` / `[gamepad]` / `[hands]` /
     `[bridge]` tables translated when there is none — every device opened
     behind its own entry. One that would not open (no `leap` package, a
     `[hands] tape` that is missing) is said on stderr and in
     `cfg["notes"]`, which the SYSTEM page lists and the HANDS page shows
-    in place of "tracker off" (plan 21 WP5 R10), and is tried again on
+    in place of "tracker off", and is tried again on
     the Ports schedule. With a `store` (`devicelist.DeviceList`, `main`'s) the
     registry watches that for the other Mac's changes, and the tray can adopt;
     with none, `<home>/config.toml` for edits to the list. The first look for
@@ -1265,7 +1262,7 @@ def _open_devices(cfg: dict, ctx: devices.Context, home: Path | None,
     return reg
 
 
-# torch is an ordinary dependency (decision register row 23 (a)): `uv sync`
+# torch is an ordinary dependency: `uv sync`
 # installs it. A missing torch means the environment was not synced.
 DREAM_SETUP = "run `uv sync`, then launch with `uv run hyperspace`"
 
@@ -1282,7 +1279,7 @@ def dream_error(e: Exception) -> str:
 def _open_dream(cfg: dict) -> tuple[object | None, str]:
     """The dream worker (dream.py, torch), only when [dream] enabled; with
     the reason it is off when it would not start (the SYSTEM page and the
-    dream effect's node say it), "" otherwise. Plan 90 H3: it reads no
+    dream effect's node say it), "" otherwise. It reads no
     registry — the dream effect hands it its knobs with each picture."""
     if not cfg.get("dream", {}).get("enabled", False):
         return None, ""
@@ -1350,11 +1347,11 @@ class Awake:
 
 
 def _share_experiments(first: Registry, second: Registry, *, poi_cfg: dict) -> None:
-    """The totem's and the poi's params on the second deck too (plan 44 D5a),
+    """The totem's and the poi's params on the second deck too,
     over the one state each: they are registered by the panel hook, which only
     the first deck runs, and neither is a shared meta group, so a pad or the panel
     on deck 2 would lose them. One state, one pad: what it holds of a look is of
-    the deck its pad is on (`on_reg`, plan 55) and goes no further."""
+    the deck its pad is on (`on_reg`) and goes no further."""
     if (state := totem.state_of(first)) is not None:
         totem.register(second, state)
     if (swing := poi.state_of(first)) is not None:
@@ -1380,13 +1377,13 @@ class Keys:
     router's key rows read: pressed() is an edge, shift() / super() /
     control() the modifier state a "key:SHIFT+B" or "key:CONTROL+Z" row
     needs (routing.MODIFIERS). R and F1–F8 / ⇧F1–F8 are
-    table rows since plan 11 WP7; Cmd+R, Q and ↑ / ↓ stay in the
+    table rows; Cmd+R, Q and ↑ / ↓ stay in the
     loop (`frame`), Cmd+R claiming R's edge before the table reads it.
     """
 
     def __init__(self, render_win, ctrl_win, more=()):
         self.render_win, self.ctrl_win = render_win, ctrl_win
-        self.more = tuple(more)     # every other render window (plan 21 WP3, SC2); SC3b keeps both
+        self.more = tuple(more)     # every other render window
         self.typing = False
         self.prev: dict[int, bool] = {}
         self.down_since: dict[int, float] = {}
@@ -1407,7 +1404,7 @@ class Keys:
 
     def held(self, key: int, now: float) -> float:
         """Seconds the key has been continuously down at the frame's `now`;
-        0.0 when up. The loop's clock, not one of its own (audit P4)."""
+        0.0 when up. The loop's clock, not one of its own."""
         if not self._down(key):
             self.down_since.pop(key, None)
             return 0.0
@@ -1423,7 +1420,7 @@ class Keys:
     def super(self) -> bool:  # the modifier's name, as the table spells it
         return self.down(glfw.KEY_LEFT_SUPER, glfw.KEY_RIGHT_SUPER)
 
-    def control(self) -> bool:  # either Control key (plan 15: Ctrl+Z)
+    def control(self) -> bool:  # either Control key (Ctrl+Z)
         return self.down(glfw.KEY_LEFT_CONTROL, glfw.KEY_RIGHT_CONTROL)
 
 
@@ -1437,18 +1434,18 @@ class Mouse:
     def __init__(self, win, reg: Registry, view: ViewState, switches=None,
                  pointer: Pointer | None = None):
         self.win = win
-        # output 1's switches (plan 23 WP1): on a flipped output the cursor
+        # output 1's switches: on a flipped output the cursor
         # is mirrored before use, so a drag and the wheel follow the picture
         self.switches = switches
-        self.pointer = pointer      # the deck it is on (plan 44 D5a); None: `reg`, always
+        self.pointer = pointer      # the deck it is on; None: `reg`, always
         self.use(reg, view)
         self.drag = {"btn": None, "x": 0.0, "y": 0.0}
         self._wheel = 0.0
-        if win is not None:         # (no display shows output 1: nothing to orbit from, SC2)
+        if win is not None:         # (no display shows output 1: nothing to orbit from)
             self._listen(win)
 
     def aim(self, win) -> None:
-        """Output 1's window now (SC3b: its display came or went); a drag under way ends."""
+        """Output 1's window now (its display came or went); a drag under way ends."""
         if win is self.win:
             return
         self.win = win
@@ -1490,7 +1487,7 @@ class Mouse:
             self.pitch.nudge((y - drag["y"]) * 0.005)
             drag.update(x=x, y=y)
         elif btn == "pan":
-            # the pan is in world units (plan 26 A2): the shape's centre
+            # the pan is in world units: the shape's centre
             # follows the cursor
             unit = _px_per_unit(s, w, h)
             self.pan_x.nudge((x - drag["x"]) / unit)
@@ -1503,7 +1500,7 @@ class Mouse:
 
 def flipped(switches, x: float, y: float, w: float, h: float) -> tuple[float, float]:
     """A cursor position in output 1's window, mirrored as its picture is
-    (plan 23 WP1: `Switches.flip_x` / `flip_y`); output 1's frame fills its
+    (`Switches.flip_x` / `flip_y`); output 1's frame fills its
     window, so the window is the space to mirror in. No switches: as is."""
     if switches is not None and getattr(switches, "flip_x", False):
         x = w - x
@@ -1514,8 +1511,7 @@ def flipped(switches, x: float, y: float, w: float, h: float) -> tuple[float, fl
 
 # ---- relative writers: the mouse, the sticks and ↑/↓ move a param by a
 # delta each frame, through Param.nudge / Param.scale — on the base, so a
-# performer's offset rides on the move (plan 09 decision 3; audit
-# simulation 1). The two helpers below are the moves with geometry of
+# performer's offset rides on the move. The two helpers below are the moves with geometry of
 # their own; they take Params and a view, so they run without a window.
 
 def _zoom_about(zoom, pan_x, pan_y, view, wheel: float, x: float, y: float,
@@ -1533,14 +1529,14 @@ def _zoom_about(zoom, pan_x, pan_y, view, wheel: float, x: float, y: float,
     eff = min(max(view.zoom, zoom.lo), zoom.hi)     # apply()'s clamp, to the last bit
     ratio = zoom.scale(2.0 ** (wheel * 0.15))
     factor = min(max(eff * ratio, zoom.lo), zoom.hi) / eff
-    # plan 26 A2: the zoom scales the shape about the world origin and the
+    # the zoom scales the shape about the world origin and the
     # pan is in world units, so the point under the cursor is held in the
     # world (on the plane through the origin, where a unit is `unit` px)
     unit = _px_per_unit(view, w, h)
     cx, cy = view.pan[0], view.pan[1]
     if fractal.about_middle(view):
         # inside a fractal the step takes the zoom about the middle of the
-        # screen itself (plan 81, `fractal.centre`): the wheel adds only the
+        # screen itself (`fractal.centre`): the wheel adds only the
         # move from the middle to the cursor, or the two pivots stack
         cx = cy = 0.0
     pan_x.nudge((cx - (x - w / 2) / unit) * (factor - 1))
@@ -1561,7 +1557,7 @@ def _ride_depth(p, octaves: float) -> None:
 
 
 class _DevicesMade(NamedTuple):
-    """What `main`'s devices hook made beside the deck (plan 44 D1): the
+    """What `main`'s devices hook made beside the deck: the
     device registry, the dream worker (or None), the keep-awake and the
     segment workers' closer."""
 
@@ -1596,27 +1592,27 @@ class Host:
     draw_panel: Callable[[float, float], None]
     restart: Callable[[], None]
     quit: Callable[[], None]
-    # the device registry (devices.py, plan 27 B1): the pad, MIDI, the
+    # the device registry (devices.py): the pad, MIDI, the
     # hands, the bridge — every input and output the config lists
     devices: devices.DeviceRegistry | None = None
     dream_io: object | None = None    # the look-back's worker: not a device
     learn: object | None = None       # learn.Learn: what MIDI and the hands complete
-    media: MediaIO | None = None      # the media folder and channels (plan 32)
+    media: MediaIO | None = None      # the media folder and channels
     render_watch: RenderWatch | None = None   # the render window's health (watchdog.py)
-    undo: object | None = None        # undo.Undo of the panel's deck (plan 15 WP1)
-    # every undo stack, each ticked once a frame (plan 44 D5b): each deck's and
+    undo: object | None = None        # undo.Undo of the panel's deck
+    # every undo stack, each ticked once a frame: each deck's and
     # the meta controller's. Empty (a host from a test): `undo` alone
     stacks: tuple = ()
     # every opened render output's window settings, output 1's (`output`)
-    # first; each applied once a frame (plan 21 WP3)
+    # first; each applied once a frame
     outputs: list = field(default_factory=list)
-    # the deck (deck.py, plan 44 D1): the bundle `reg`, `view`, `router`,
+    # the deck (deck.py): the bundle `reg`, `view`, `router`,
     # `lfos`, `renderer`, `learn` and `undo` above belong to
     deck: Deck | None = None
-    # the decks off air (plan 44 D4): each runs its scene-setters, its pass
+    # the decks off air: each runs its scene-setters, its pass
     # and its integrator in the frame; nothing else in the frame touches them
     off_air: list = field(default_factory=list)
-    # the pointers `Host`'s handles read through (plan 44 D5a, below); None (a
+    # the pointers `Host`'s handles read through (below); None (a
     # host from a test): the handles are what was assigned
     on_air_pointer: Pointer | None = None
     panel_pointer: Pointer | None = None
@@ -1625,16 +1621,16 @@ class Host:
     # every handle above reads the frame's deck on air from the frame's first line
     meta: MetaController | None = None
     # makes the render context current: what `frame` runs a hot reload's hooks in
-    # (audit V8). None (a host from a test): whatever is current
+    # None (a host from a test): whatever is current
     render_current: Callable[[], None] | None = None
-    # the world objects (world.py, plan 59): the shape and the hands, stepped
+    # the world objects (world.py): the shape and the hands, stepped
     # once a frame after the integrator (`_step_world`). None: no world step
     world: worlds.World | None = None
 
     @property
     def adapters(self) -> tuple:
         """What `close_all` closes, in shutdown order: the media channels
-        and folder (plan 32: their sources go before the devices that may
+        and folder (their sources go before the devices that may
         feed them), the registry (every device, last listed first — the pad
         included) and the dream worker."""
         return (getattr(self, "media", None), self.devices, self.dream_io)
@@ -1642,13 +1638,13 @@ class Host:
     @property
     def pad(self):
         """The open `gamepad.Pad`, or None (the pad device runs the
-        sticks' camera job itself, plan 27 B2)."""
+        sticks' camera job itself)."""
         return self.devices.adapter("gamepad") if self.devices is not None else None
 
 
-# plan 44 D5a: `frame`'s flat handles read through the pointers. The outputs,
+# `frame`'s flat handles read through the pointers. The outputs,
 # the pass and the sinks' fallback are the deck on air's; Learn and the undo
-# that is ticked are the panel's (D5b ticks every deck's). Set after the class,
+# that is ticked are the panel's (every deck's undo is ticked). Set after the class,
 # so the dataclass keeps them as required fields of its `__init__`
 for _handle in ("reg", "view", "router", "lfos", "renderer"):
     setattr(Host, _handle, Through(_handle, via="on_air_pointer"))
@@ -1659,7 +1655,7 @@ for _handle in ("learn", "undo"):
 
 
 def _off_air(h: Host, what: str, step: Callable[[Deck], object]) -> str:
-    """`step` on each deck off air (plan 44 D4), a raise costing the on-air
+    """`step` on each deck off air, a raise costing the on-air
     deck nothing; what the first raised, "" when none did."""
     said = ""
     for d in h.off_air:
@@ -1671,8 +1667,8 @@ def _off_air(h: Host, what: str, step: Callable[[Deck], object]) -> str:
 
 
 def _space(h: Host, reg) -> None:
-    """Plan 64, part 2: is the on-air view inside its fractal? Outside, a grab
-    holds the shape as an object (the world's offset, plan 59); inside — the
+    """Is the on-air view inside its fractal? Outside, a grab
+    holds the shape as an object (the world's offset); inside — the
     shape too big to keep whole in the rig's box, or the view gone into a cell
     (`fractal.wants_inside`) — it holds the space, whose placement and flight
     are the view's own. Crosses when that changes, redrawing nothing: the
@@ -1696,7 +1692,7 @@ def _space(h: Host, reg) -> None:
         box = shape[0].box
     if dive.inside:
         # a frame that crosses out takes the zoom and turn since the last step
-        # about the middle first (plan 81, `fractal.centre`: the wheel left
+        # about the middle first (`fractal.centre`: the wheel left
         # that pivot to it, and the crossing would skip it). Only then: a frame
         # that stays inside takes them once, with the dive rate's, in the step
         # The one verdict, on the centred pose, decides the crossing below too
@@ -1787,7 +1783,7 @@ def _reroot_off_air(d, dt: float = 0.0) -> None:
 
 
 def _fly(h: Host, reg) -> None:
-    """Plan 64, part 2: inside a fractal, what the grip and its physics did to
+    """Inside a fractal, what the grip and its physics did to
     the space this frame (the shape object's offset, world units) folded into
     the view (`fractal.fold_flight`): it turns about the middle of the screen
     and moves through the fractal's own space. After the world's step."""
@@ -1801,22 +1797,21 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     """One frame, in the order ARCHITECTURE §2 states: the scene-setters
     (keys, loop keys, the devices polled — pad, MIDI — the macros' base
     subscribers) write bases, and the undo watcher compares them
-    (`undo.tick`, plan 15); the sources feed the table (output, mouse,
+    (`undo.tick`); the sources feed the table (output, mouse,
     audio, the devices' feeds — hands, bridge); the pass lands offsets in
-    dependency order, the LFOs stepping inside it (`router.modulate`, plan
-    28 N0), then `reg.apply`; the sinks send (`devices.send`,
-    plan 27 B3), `integrate`; then the two windows draw. Returns False
+    dependency order, the LFOs stepping inside it (`router.modulate`),
+    then `reg.apply`; the sinks send (`devices.send`), `integrate`; then the two windows draw. Returns False
     when a guarded block raised — the error is on `reloader.runtime_error`
     and the loop goes on, so the next save can fix it. `imgui.new_frame()`
     has already run (main): `keys.typing` is this frame's value.
 
-    Plan 44 D4 (row 625): a deck off air (`Host.off_air`) sets its macros'
+    A deck off air (`Host.off_air`) sets its macros'
     bases beside the on-air deck's and runs its pass and apply straight
     **after** the on-air deck's, so what it reads of a shared meta param (a
     route's scale on `master.gain`) is this frame's, landed by the on-air
     deck, the meta controller's lead; then its integrator.
 
-    Plan 44 D5d: the crossfader comes first of all (`MetaController.tick`), so the
+    The crossfader comes first of all (`MetaController.tick`), so the
     deck arriving on air is the one this frame's `dim`, `bands` and `max_frame` go
     to, and `reg` and `router` here are that deck's."""
     ok = True
@@ -1826,12 +1821,12 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         except Exception as e:  # noqa: BLE001
             ok, h.reloader.runtime_error = False, _err("crossfader", e)
     reg, keys, router, reloader = h.reg, h.keys, h.router, h.reloader
-    # the router's shared half (routing_sources.Sources, plan 44 D2): where
+    # the router's shared half (routing_sources.Sources): where
     # the audio lanes' names and the devices' feeds go — the router's own,
     # so the pad's lanes (fed through the router in `devs.poll`) and every
     # other feed land in one place
     sources = router.sources
-    # the keys' own deck (plan 44 D5a): their rows and ↑/↓
+    # the keys' own deck: their rows and ↑/↓
     on_keys = h.keys_pointer.deck if h.keys_pointer is not None else h
     h.clock.tick(now)   # the clock's "now" for the frame: a trigger and the LFO step agree
 
@@ -1839,7 +1834,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     h.control.chain = h.audio.chain
     # the render context current for a reload's `on_reload` hooks: they build the
     # renderer's vertex arrays and framebuffers, which no other context can use
-    # (audit V8, decided in SC3a). Every frame, as the poll can't say beforehand
+    # Every frame, as the poll cannot say beforehand whether a reload is due.
     if h.render_current is not None:
         h.render_current()
     reloader.poll()     # its own throttle clock (monotonic): a file watch, not a frame clock
@@ -1879,11 +1874,11 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             rate = D4_RATE0 + (D4_RATE1 - D4_RATE0) * ramp * ramp
             _ride_depth(on_keys.reg["view.depth4"], sgn * rate * dt)
 
-    # ---- the devices, polled (devices.py, plan 27): the pad (a second
+    # ---- the devices, polled (devices.py): the pad (a second
     # hand on the same controls — imgui never claims it, so it works even
     # while the panel has keyboard focus; a press that completes an armed
     # learn does not also fire its old row) delivers its rows, then runs
-    # the sticks' default camera job (gamepad.steer, plan 27 B2: each axis
+    # the sticks' default camera job (gamepad.steer: each axis
     # no route names, a relative move on the base); each MIDI desk applies
     # its rows; the hands and the bridge feed below. A device that raises
     # records itself on the registry; the frame goes on and `ok` keeps the
@@ -1894,7 +1889,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         if devs.error:
             ok, reloader.runtime_error = False, devs.error
 
-    # ---- the media channels (plan 32): each follows its slot — a source
+    # ---- the media channels: each follows its slot — a source
     # opened or closed, never decoded here — and a clip's transport steps
     # on the bases the devices just wrote ----
     media = getattr(h, "media", None)
@@ -1906,7 +1901,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
 
     # ---- the macros' base subscribers: the last scene-setter — a macro
     # whose base moved (a knob just now, the panel last frame, a restore)
-    # sets its subscribers' bases before any source feeds (plan 13 §2.4) ----
+    # sets its subscribers' bases before any source feeds ----
     try:
         router.follow_macros()
     except Exception as e:  # noqa: BLE001
@@ -1918,7 +1913,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # (the panel's edits are last frame's tail), so compare the bases and
     # the loadable patch's table against last frame's — a change opens a step, a
     # settle time closes it. No performer has run yet; a performer writes a
-    # base only on a step it holds open (undo.py, plan 15 WP1; plan 51 O2) ----
+    # base only on a step it holds open (undo.py) ----
     for stack in h.stacks or (h.undo,):
         if stack is None:
             continue
@@ -1928,13 +1923,13 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             ok, reloader.runtime_error = False, _err("undo", e)
 
     # ---- output: the render window follows the output.* params; a later
-    # render output follows its config entry (plan 21 WP3) ----
+    # render output follows its config entry ----
     h.output.apply()
     for out in h.outputs:
         if out is not h.output:
             out.apply()
     h.renderer.bg_alpha = h.output.bg_alpha
-    # the master dim (plan 15 WP3), the frame's last pass; getattr: an
+    # the master dim, the frame's last pass; getattr: an
     # Output made before a hot reload brought the attribute has none
     h.renderer.dim = getattr(h.output, "dim", 1.0)
     # the render cap (output.render): the frame's size, whatever the screens
@@ -1948,7 +1943,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     try:
         audio = h.audio
         audio.step(dt)
-        audio.publish(sources)      # the lanes' names, like every source (R8)
+        audio.publish(sources)      # the lanes' names, like every source
         chain = audio.chain if audio.on else None
         if devs is not None:
             # the devices' feeds: the hands feed `hand` (and complete a
@@ -1960,7 +1955,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         # the lanes are a modulation source like any other (routing.py);
         # once every source has spoken for this frame, the pass runs the
         # patch in dependency order — the LFOs step inside it, on the
-        # frame's clock, each after the knobs it reads (plan 28 N0) — and
+        # frame's clock, each after the knobs it reads — and
         # `reg.apply` lands base + offsets on the rest before the
         # integrator reads them
         router.modulate(chain, dt, now)   # dt: the rows' motion; now: the LFOs'
@@ -1971,13 +1966,13 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             d.reg.apply()
         if said := _off_air(h, "pass", off_air_pass):
             ok, reloader.runtime_error = False, said
-        if devs is not None:        # the sinks read effective values out (plan 27 B3)
+        if devs is not None:        # the sinks read effective values out
             devs.send(reg, chain)
             if devs.error and ok:
                 ok, reloader.runtime_error = False, devs.error
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("step", e)
-    # the integrator on its own (K3, row 578): the turn, the field's motion
+    # the integrator on its own: the turn, the field's motion
     # and the media path keep moving through a step that raised every frame
     try:
         h.view.integrate(dt)
@@ -1994,7 +1989,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         ok, reloader.runtime_error = False, _err("view.reroot", e)
     if said := _off_air(h, "reroot", lambda d: _reroot_off_air(d, dt)):
         ok, reloader.runtime_error = False, said
-    # the world (plan 59): the shape's home from this frame's params, the
+    # the world: the shape's home from this frame's params, the
     # puppets (the palms, read after HandsIO.poll), then the physics' fixed
     # steps; the render below reads the poses
     try:
@@ -2003,7 +1998,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("world", e)
     # the analyzer's lanes as a route reads them (out / CEIL), for the
-    # patterns that draw the bands themselves (u_levels, plan 22 B3): render
+    # patterns that draw the bands themselves (u_levels): render
     # input, read-only, like the dim — never a param
     h.renderer.bands = _bands(h.audio)
     watch = h.render_watch
@@ -2039,7 +2034,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
 
 
 def palm_in_world(skel: dict, cal: np.ndarray):
-    """A `hands.core.skeleton`'s palm in the world (plan 59, the hand objects'
+    """A `hands.core.skeleton`'s palm in the world (the hand objects'
     puppets): (position (3), rotation 3×3), through calibration `cal` (Leap mm
     → world, `ghost.calibration`) — the transform the ghost hand is drawn
     through, so the position is where its palm is drawn. The rotation's columns
@@ -2074,7 +2069,7 @@ def palms_in_world(gh) -> dict:
 
 
 def _step_world(h: Host, dt: float) -> None:
-    """The world's frame (plan 59, ARCHITECTURE §2 step 13a): the shape
+    """The world's frame (ARCHITECTURE §2 step 13a): the shape
     object's home is `camera.zoom` / `camera.pan` as they landed this frame
     (the on-air deck's view), the hands' puppets read the palms through the
     ghost hands' calibration (`palms_in_world`), then the physics steps."""
@@ -2082,12 +2077,12 @@ def _step_world(h: Host, dt: float) -> None:
     if world is None:
         return
     view = h.view
-    # (plan 64, part 2: inside a fractal the shape is the space, its home the
+    # (inside a fractal the shape is the space, its home the
     # identity — the camera is the dive's view, not the shape's placement)
     shape = _shape_of(world)
     if shape is None or shape[1].bounded:
         world.home(worlds.SHAPE, worlds.shape_home(view.zoom, view.pan))
-    # plan 60: the on-air deck's grip (a patch's own, `reg.grip`) sets the shape's
+    # the on-air deck's grip (a patch's own, `reg.grip`) sets the shape's
     # body, joint and clutches; a deck switch hands the one world to the other's
     state = getattr(getattr(h, "reg", None), "grip", None)
     if not isinstance(getattr(state, "on", None), bool):     # no grip on this registry
@@ -2144,12 +2139,12 @@ def main(argv: list[str] | None = None) -> None:
     # the controllers both Macs share, from the library's configured path: before anything
     # reads `cfg`'s device tables, and whether or not that folder is mounted
     device_list = DeviceList.open(cfg, home)
-    # which display shows what, likewise (SC2). --laptop leaves the rows alone: not read,
+    # which display shows what, likewise. --laptop leaves the rows alone: not read,
     # not written, not seeded (config.laptop's one plain window, as ever)
     display_list = (None if args.laptop else
                     DisplayList.open(cfg, home, placement.screens(glfw), (RENDER_SIZE, CONTROL_SIZE)))
     want = None if display_list is None else wanted(display_list.current, placement.screens(glfw))
-    # the players, on this Mac (plan 55): beside bindings.json, before the devices
+    # the players, on this Mac: beside bindings.json, before the devices
     # read who holds what
     players = Players.load(home, cfg.setdefault("notes", []))
     # (a rename the list's first read made: before the devices open, so they open right)
@@ -2157,30 +2152,30 @@ def main(argv: list[str] | None = None) -> None:
         players.rename(old_role, new_role)
     # the window that holds the render context, hidden, which no unplug can take
     root_win = _root_window()
-    # the render outputs (plan 21 WP3: one per [[output.screens]] entry, one
+    # the render outputs (one per [[output.screens]] entry, one
     # with no list) and the controls; output 1's window is the render window.
     # On a laptop the show machine's windows.json is not read: its spots are the show machine's
     slots, ctrl_win = _windows(_overlay_allowed(cfg), cfg, None if args.laptop else home, root_win, want)
-    render_win = slots[0].win                 # None when no display shows output 1 (SC2)
+    render_win = slots[0].win                 # None when no display shows output 1
     if args.laptop:
         glfw.focus_window(ctrl_win)       # the controls in front of the render window
 
     # the render side: moderngl on the root's context — it renders every
-    # output's frame (fork F12); the first live output's window paces the loop
-    # (fork F6, `pacing.Pacer`)
+    # output's frame; the first live output's window paces the loop
+    # (`pacing.Pacer`)
     glfw.make_context_current(root_win)
     glfw.swap_interval(0)
     ctx = moderngl.create_context()
     renderer = Renderer(ctx)
     ghosts.show_look(renderer.ghost.state)   # the show's ghost hands, before a registry reads them
-    # the world objects (plan 59): one world, the renderers' (deck 2's is a sibling)
+    # the world objects: one world, the renderers' (deck 2's is a sibling)
     world = worlds.World.default()
     renderer.world = world
     root = Root(root_win, Offscreen(ctx), Pacer(glfw), logical=RENDER_SIZE, size=RENDER_SIZE)
     # each output: a presenter on its own context, none waiting yet
     _open_presenters(slots, root_win, notes=cfg.setdefault("notes", []))
     root.pacer.choose(_slot_windows(slots), root_win)
-    # the outputs published out (plan 32 T9), the root's context current; this Mac's
+    # the outputs published out, the root's context current; this Mac's
     # NDI choice from the panel (publish.here.json) over config.toml's
     if not args.laptop:
         publish.apply_here(slots, publish.load_here(home))
@@ -2192,7 +2187,7 @@ def main(argv: list[str] | None = None) -> None:
     glfw.make_context_current(ctrl_win)
     glfw.swap_interval(0)
     # a handle on the control context: it clears the window each frame and
-    # owns the GRAPH canvas's tap textures (`CanvasTap`, 2026-11-02), which
+    # owns the GRAPH canvas's tap textures (`CanvasTap`), which
     # `replay.grab` draws into after imgui's render. Rebinding its `screen`
     # through moderngl reapplies the viewport moderngl noted at creation,
     # not the window's size now; `grab` puts the viewport back itself, and
@@ -2213,14 +2208,14 @@ def main(argv: list[str] | None = None) -> None:
     audio.rescan()                         # the one PortAudio scan, here at startup — never mid-set on a first read
     control = Control(audio.chain)
     # loadable patches, projects, the loadable patch bank (its project's): in the home, or in
-    # the folder [library] path names (plan 25) — the machine files
+    # the folder [library] path names — the machine files
     # (config, bindings, windows, logs, last_show) stay in the home either way
     # A config.toml that doesn't read says nothing of [library]: the library is where this
     # Mac's copy says it last was, not the home, whose saves the next good launch would lose
     lp = cfg.get("library", {}).get("path", "")
     lib_root, unknown = sharedfile.library_root(lp, bool(cfg.get("error")), home / DISPLAYS_COPY,
                                                 home, DISPLAYS_FILE)
-    # No [library] path is no library (2026-11-23): the home is never one, so nothing
+    # No [library] path is no library: the home is never one, so nothing
     # lists and every save is refused in words until config.toml names the Drive folder
     library = (Library(home / CONFIG_UNREAD, machine=home) if unknown
                else Library(home / NO_LIBRARY, machine=home) if lib_root == home
@@ -2230,28 +2225,28 @@ def main(argv: list[str] | None = None) -> None:
         if said:
             print(f"library: {said}", file=sys.stderr)
             library.say(warning=said)
-    # the media folder and the eight channels (plan 32): the channels'
+    # the media folder and the eight channels: the channels'
     # params are declared over this one `MediaState`, the loadable patch's bins are
     # its, and the renderer reads its frames
     media = _open_media(str(lib_root) if lib_root != home and not unknown else "", home)
     renderer.media = media.state
     panels: list = []                  # app.restart raises the panel's flag; frame() polls it
     # an analyzer loadable patch carries its band layout; the library hands it to
-    # control before restoring values (07-overhaul contracts)
+    # control before restoring values
     library.on_layout("band", control.apply_layout)
-    # …and a saved band preset carries the layout back out (audit A2); the
-    # scene combo and the strip keep each other posted (audit A1)
+    # …and a saved band preset carries the layout back out; the
+    # scene combo and the strip keep each other posted
     library.extra("band", lambda: {"layout": audio.chain.layout()})
     library.on_load("band", control.scene_loaded)
     control.library = library
 
-    # the deck (deck.py, plan 44 D1): the registry, the view state, the
+    # the deck (deck.py): the registry, the view state, the
     # table, the router, the banks, the loadable patches, learn and undo,
-    # built by `Deck.build` in the order these lines had here. The meta controller
+    # built by `Deck.build`. The meta controller
     # objects built between its lines — the hands' setup, the outputs, the
-    # panel, the devices — are the hooks below, each run at its old place
+    # panel, the devices — are the hooks below, each run at its place
     made = DeckHooksMade()          # what each hook below returned, filled by Deck.build
-    mix = Mix()               # output.xfade and its seconds (plan 44 D4)
+    mix = Mix()               # output.xfade and its seconds
     rendering = [renderer]    # the renderers whose segment workers an exit closes
 
     def hands_setup(reg: Registry):
@@ -2261,17 +2256,17 @@ def main(argv: list[str] | None = None) -> None:
 
     def outputs_setup(reg: Registry) -> Output:
         # the render window's placement registers before attach, so "default"
-        # includes output.* and reset / the dirty dot see them (audit L6)
+        # includes output.* and reset / the dirty dot see them
         output = _make_output(render_win, reg, cfg)
-        register_xfade(reg, mix)               # the deck fade (plan 44 D4): meta controls
+        register_xfade(reg, mix)               # the deck fade: meta controls
         slots[0].output = output
-        for sl in slots[1:]:                   # no params: the config says (fork F10)
+        for sl in slots[1:]:                   # no params: the config says
             if sl.opened:
                 sl.output = _later_output(sl)
-        for sl in slots:                       # a further display's: likewise (SC2)
+        for sl in slots:                       # a further display's: likewise
             for also in sl.also:
                 also.output = _also_output(also)
-        # each opened output's switches (plan 21 WP4): meta settings, seeded
+        # each opened output's switches: meta settings, seeded
         # from the config's launch values already on the slots, never saved
         register_switches(reg, slots)
         return output
@@ -2289,13 +2284,13 @@ def main(argv: list[str] | None = None) -> None:
 
     def panel_setup(reg: Registry, s: ViewState, *, clock, lfos, envs, seq,
                     output) -> Panel:
-        # the Joy-Con totem (plan 47, an experiment): off unless `[totem] on`
+        # the Joy-Con totem: off unless `[totem] on`
         # says so or the pad window's word is clicked; never saved, so it may
         # register after attach (a fresh extra, library.py); `s` for the reset
         totem.register(reg, totem.TotemState())
         if totem.configured_on(cfg):
             reg["totem.on"].set(True)
-        # the Joy-Con as a poi's handle (plan 47, the poi): likewise; its
+        # the Joy-Con as a poi's handle: likewise; its
         # dials start from `[poi]` (weight, length, spring, gravity, drag,
         # hand, depth), the only way they outlast a launch
         poi_cfg = poi.configured(cfg)
@@ -2311,18 +2306,18 @@ def main(argv: list[str] | None = None) -> None:
             raise RuntimeError("Deck.build: the panel hook needs the outputs hook's Output")
         panel = Panel(control, audio, s, renderer, library.install, registry=reg, library=library)
         panels.append(panel)
-        panel.graph_start_zoom = placement.window_zoom(glfw, ctrl_win)   # plan 58 SM2
+        panel.graph_start_zoom = placement.window_zoom(glfw, ctrl_win)
         panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
-        panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
+        panel.envs, panel.seq = envs, seq         # what a SEQ page draws
         panel.output = output
-        panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
+        panel.outputs = slots                  # the OUTPUT page: a block per output
         panel.publish_home = None if args.laptop else home   # MEDIA ▸ Live's NDI out, this Mac's
-        if display_list is not None:           # …and a row per display (SC2)
+        if display_list is not None:           # …and a row per display
             panel.displays = Running(display_list, lambda: placement.screens(glfw), slots,
                                      opened_of(slots, want.control if want is not None else None))
-        panel.preview = Preview(ctx)           # output 1 behind the GRAPH page (2026-10-26)
+        panel.preview = Preview(ctx)           # output 1 behind the GRAPH page
         panel.monitor = Preview(ctx)           # on the deck off air, what is on air's inset there
-        panel.canvas_tap = CanvasTap(ui_gl)    # the GRAPH canvas as `panel:graph` (2026-11-02)
+        panel.canvas_tap = CanvasTap(ui_gl)    # the GRAPH canvas as `panel:graph`
         return panel
 
     def devices_setup(reg: Registry, router: Router, learn: Learn, *, panel,
@@ -2332,7 +2327,7 @@ def main(argv: list[str] | None = None) -> None:
             raise RuntimeError("Deck.build: the devices hook needs the panel hook's Panel")
         panel.learn = learn
         panel.router = router                  # the ROUTING page edits the live table
-        # the devices (devices.py, plan 27 B1): the pad, MIDI, the hands and
+        # the devices (devices.py): the pad, MIDI, the hands and
         # the bridge, each opened behind its `[[devices]]` entry (the old
         # tables translated), polled by `frame` through the registry. What
         # holds an adapter — the panel (Learn's hints, the desk page, the HANDS
@@ -2350,34 +2345,34 @@ def main(argv: list[str] | None = None) -> None:
             # with a controller behind it now, re-picked on every connect
             panel.pad = device_reg.live_adapter("gamepad")
             panel.hands = device_reg.adapter("hands")
-            for r in rendering:                      # either deck can be on air (D5c)
+            for r in rendering:                      # either deck can be on air
                 r.ghost.source = panel.hands         # no tracker, nothing draws
             router.follow_devices()                  # the MIDI roles and row schemes, again
-        # schemes from the registry (plan 27 B2): the router asks it which
+        # schemes from the registry: the router asks it which
         # sources are lanes and in what order the pages offer them, the learn
         # what can be armed — each handed the registry, importing nothing
         router.use(device_reg)
         learn.devices = device_reg
         device_reg.listeners.append(point_at_devices)
-        # plan 40 T4: a device coming or going, said in the footer with what it brings
+        # a device coming or going, said in the footer with what it brings
         device_reg.said = lambda role, was, now: library.say(
             devices.arrival(device_reg.table_of(role, router.table), device_reg, role, was, now) or None)
         point_at_devices()
         panel.devices = device_reg                        # the SYSTEM page's device lines
         panel.media = media                        # the MEDIA page: the folder and the channels
         renderer.ghost.router = router           # the guide lights what the table routes
-        renderer.cloud_source = device_reg              # cloud:<role> → the scene's point clouds (A4b)
-        # (the bus cuts: the renderer reads the loadable patches, `Deck.build` — plan 44 D3)
-        media.state.resolver.devices = device_reg       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
-        # the GRAPH canvas (2026-11-02); `on_page` is the panel's own fact, read
+        renderer.cloud_source = device_reg              # cloud:<role> → the scene's point clouds
+        # (the bus cuts: the renderer reads the loadable patches, `Deck.build`)
+        media.state.resolver.devices = device_reg       # ndi: / syphon: / camera: ids → live feeds
+        # the GRAPH canvas; `on_page` is the panel's own fact, read
         media.state.resolver.builtin[PANEL_GRAPH] = PanelSource(
             panel.canvas_tap, on_page=lambda: panel.canvas_px is not None)
         panel.hand_settings = hand_settings
         dream_io, panel.dream_error = _open_dream(cfg)
-        if dream_io is not None:            # what the dream effect dreams with (plan 90 H3)
+        if dream_io is not None:            # what the dream effect dreams with
             renderer.fx.dream_source = dream_io
-        renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
-        # …closed with the adapters, at quit and restart — deck 2's too (plan 44 D4)
+        renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend
+        # …closed with the adapters, at quit and restart — deck 2's too
         segmenters = _Closer(lambda: _close_each([r.close for r in rendering]))
         awake = _open_awake(cfg)               # no screensaver over the show
         return _DevicesMade(device_reg, dream_io, awake, segmenters)
@@ -2396,19 +2391,19 @@ def main(argv: list[str] | None = None) -> None:
     s, reg, router = deck.view, deck.reg, deck.router
     clock, loaded_patch, undo_obj = deck.clock, deck.loaded_patch, deck.undo
     panel.undo = undo_obj              # the footer's message slot
-    panel.deck = deck                  # plan 44 D1: beside its handles; D5 reads through it
-    # deck 2 (plan 44 D4): its own look over the same meta controller, sources and
+    panel.deck = deck                  # beside its handles; they read through it
+    # deck 2: its own look over the same meta controller, sources and
     # clock, and a renderer of its own states on the render context (which is
     # not current here: the control window's is). Nothing points at it: no
     # controller, no page, no undo, no file. Built now, not on a fade's first
-    # frame: compiling its shaders then would stall the room (rec, row 648)
+    # frame: compiling its shaders then would stall the room
     glfw.make_context_current(root_win)
     renderer2 = renderer.sibling(ghost=ghosts.show_look())
-    # plan 34 D: a delay on the tempo takes its picture on the one clock's beat
+    # a delay on the tempo takes its picture on the one clock's beat
     renderer.tempo = renderer2.tempo = clock
     glfw.make_context_current(ctrl_win)
     renderer2.segment_cfg = renderer.segment_cfg
-    # the meta controller's wires, on both (plan 44 D5c): either deck can be on air
+    # the meta controller's wires, on both: either deck can be on air
     renderer2.cloud_source, renderer2.poi_source = renderer.cloud_source, renderer.poi_source
     renderer2.ghost.source = renderer.ghost.source
     channels2 = Channels(sources=media.state.sources)
@@ -2418,7 +2413,7 @@ def main(argv: list[str] | None = None) -> None:
     renderer2.ghost.router = deck2.router       # the guide lights what its table routes
     deck2.learn.devices = device_reg                   # what can be armed, on either deck's Learn
     _share_experiments(deck.reg, deck2.reg, poi_cfg=poi.configured(cfg))
-    # the owner of the two decks (plan 44 D5a): every holder's pointer, each on
+    # the owner of the two decks: every holder's pointer, each on
     # deck 1 and moved by nothing yet. Each handle reads through its own from here
     meta = MetaController(deck, deck2, players, mix=mix)
     fade = Fade(deck, deck2, mix, ctx, dream=dream_io, pointer=meta.on_air_pointer)
@@ -2428,16 +2423,16 @@ def main(argv: list[str] | None = None) -> None:
     panel.pointer = library.pointer = meta.panel_pointer
     panel.meta_undo = meta.undo        # the footer's message slot, beside the deck's
     panel.meta = meta                  # GRAPH's head: the deck it shows, the two verbs
-    # the playlist (plan 44 D6b): ticked by the meta controller, said in its pane section
+    # the playlist: ticked by the meta controller, said in its pane section
     meta.playing = panel.playing = playlist.Playing(meta, library, fade)
     playlist.register(deck.reg, meta.playing)
-    playlist.at_launch(meta.playing, library.install)     # SM6: `plays` in the install file
-    # what ⌘Z goes by (plan 44 D5b); read off the class each time, as a reloaded
+    playlist.at_launch(meta.playing, library.install)     # `plays` in the install file
+    # what ⌘Z goes by; read off the class each time, as a reloaded
     # `ui.py` re-classes the panel and a bound method would keep the old function
     undos.where(lambda: panel.in_meta_section())
     device_reg.point(meta.pointer, meta.panel_pointer)
-    node_desk.install(meta, device_reg)     # N1a: what each deck's patch points its desks at
-    # plan 55: who holds what names a pad's rows, so the list is read again when it
+    node_desk.install(meta, device_reg)     # what each deck's patch points its desks at
+    # who holds what names a pad's rows, so the list is read again when it
     # changes; a mapping on either deck moves the controller mapped
     meta.on_players.append(lambda: device_reg.apply(device_reg.entries))
     device_reg.renamed = meta.rename_controller
@@ -2449,19 +2444,19 @@ def main(argv: list[str] | None = None) -> None:
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
     reloader = HotReloader(targets=lambda: [
-        # the deck's objects (deck.py, plan 44 D1): the renderer and its
+        # the deck's objects (deck.py): the renderer and its
         # parts, the view state, the registry and every param, the marks,
         # undo, the router, the loadable patches, learn and the banks
         *deck.targets(),
-        # deck 2 (plan 44 D4), its channels, and the fade
+        # deck 2, its channels, and the fade
         *deck2.targets(),
         *meta.targets(),
         (channels2, "media.channels", "Channels"),
         *[(ch, "media.channels", "Channel") for ch in channels2.channels.values()],
         (fade, "deck", "Fade"),
         (mix, "deck", "Mix"),
-        (media.state, "media.channels", "Channels"),          # plan 32 (plan 44 D3: its new name)
-        (media.state.sources, "media.channels", "MediaSources"),   # plan 44 D3: the meta controller's half
+        (media.state, "media.channels", "Channels"),
+        (media.state.sources, "media.channels", "MediaSources"),   # the meta controller's half
         *[(ch, "media.channels", "Channel") for ch in media.state.channels.values()],
         (media.folder, "media.folder", "MediaFolder"),
         (panel, "ui", "Panel"),
@@ -2473,7 +2468,7 @@ def main(argv: list[str] | None = None) -> None:
         *([(audio.analyser, "analysis", "Analyser")] if audio.analyser is not None else []),
         (output, "overlay", "Output"),
         (output.backend, "overlay", "GlfwBackend"),
-        # the later render outputs (plan 21 WP3); a presenter rebuilds its
+        # the later render outputs; a presenter rebuilds its
         # programs at its next present, in its own context
         *[(sl.output, "overlay", "Output") for sl in slots[1:] if sl.output is not None],
         *[(sl.output.backend, "overlay", "GlfwBackend") for sl in slots[1:] if sl.output is not None],
@@ -2496,10 +2491,10 @@ def main(argv: list[str] | None = None) -> None:
         # the devices' adapters, the shims and the registry (devices.py):
         # re-evaluated each swap, so a device the list brought in counts
         *device_reg.targets(),
-        *world.targets(),         # plan 59: the world, its objects, bodies and puppets
+        *world.targets(),         # the world, its objects, bodies and puppets
     ], watchers=[library])
     if display_list is not None:
-        # the windows follow the rows and the connected list from here on (SC3b)
+        # the windows follow the rows and the connected list from here on
         plug = Hotplug(glfw, panel.displays, root, ctrl_win, output, seen=placement.load(home),
                        hold_s=float(cfg.get("output", {}).get("unplug_hold_s", 3.0)),
                        sizes=(RENDER_SIZE, CONTROL_SIZE), title=TITLE,
@@ -2543,7 +2538,7 @@ def main(argv: list[str] | None = None) -> None:
         glfw.make_context_current(ctrl_win)
         ui_gl.clear(0.0, 0.0, 0.0, 1.0)
         panel.draw(dt, fps)
-        # the deck the panel is on, as GRAPH's head says it (plan 44 D5d, DQ7)
+        # the deck the panel is on, as GRAPH's head says it
         title = control_title(meta)
         if title != titled[0]:
             titled[0] = title
@@ -2555,9 +2550,9 @@ def main(argv: list[str] | None = None) -> None:
     watchdog = Watchdog(home / LOG_NAME,
                         loadable=lambda: meta.on_air.loaded_patch.current)
     # with two or more outputs the stall is "no output presented", and one
-    # output dark while another presents is a warning naming it (WP3)
-    # (a further display counts: its window is a picture too, SC2). What's open now, each time:
-    # a display gone isn't a stall, and a picture that stopped still is (SC3b)
+    # output dark while another presents is a warning naming it
+    # (a further display counts: its window is a picture too). What's open now, each time:
+    # a display gone isn't a stall, and a picture that stopped still is
     def opened() -> list:
         return [*((sl.label, sl.output) for sl in slots if sl.opened and sl.output is not None),
                 *((f"{sl.label} on {a.display}", a.output) for sl in slots for a in sl.also)]
@@ -2575,9 +2570,9 @@ def main(argv: list[str] | None = None) -> None:
 
     def dream_check(on: Deck, name: str | None) -> None:
         # a loadable patch that asks for the dream — the dream effect in its
-        # graph, on (plan 90 H3) — with no worker to dream: the dream passes
+        # graph, on — with no worker to dream: the dream passes
         # its picture through. Said on the banner (until dismissed), logged
-        # once. The deck it landed on, either (plan 44 D5a)
+        # once. The deck it landed on, either
         if dream_io is None and deck_dreams(on):
             why = panel.dream_error or "[dream] enabled = false in config.toml"
             render_watch.warn(f"{name} turns the dream on, but there is no dream worker ({why}); "
@@ -2587,7 +2582,7 @@ def main(argv: list[str] | None = None) -> None:
         on.loaded_patch.listeners.append(lambda name, on=on: fade.ask_warm(on))
     dream_check(deck, loaded_patch.current)          # the startup loadable patch has already landed
 
-    # both exits close the publishers, in the root's context (plan 32 T9)
+    # both exits close the publishers, in the root's context
     publishers = _Closer(lambda: _close_each((lambda: _close_publishers(root_win, slots),
                                               panel.preview.close, panel.monitor.close,
                                               fade.close)))
@@ -2603,7 +2598,7 @@ def main(argv: list[str] | None = None) -> None:
         _save_windows(home, slots[0].win, ctrl_win, output, [sl.output for sl in slots[1:]], slots,
                       plug.away_spots() if plug is not None else None)
 
-    # the flat handles are the deck's (plan 44 D1), so `frame` is unchanged
+    # the flat handles are the deck's, so `frame` is unchanged
     host = Host(reg=deck.reg, view=deck.view, control=control, audio=audio, router=deck.router,
                 clock=clock, lfos=deck.lfos, keys=keys, mouse=mouse, output=output,
                 renderer=deck.renderer, panel=panel, reloader=reloader,
@@ -2683,7 +2678,7 @@ def main(argv: list[str] | None = None) -> None:
             ui_browse.scrub(panel, imgui.get_draw_data())    # a deleted icon texture: see there
             impl.render(imgui.get_draw_data())
             # the GRAPH canvas into its tap, from the lists just drawn, on a frame
-            # a channel asked for `panel:graph` (replay.py, 2026-11-02)
+            # a channel asked for `panel:graph` (replay.py)
             replay.grab(panel.canvas_tap, impl, imgui.get_draw_data(), panel.canvas_px)
             glfw.swap_buffers(ctrl_win)
             root.pacer.end_frame()     # the floor: a swap that didn't wait can't run the loop away
@@ -2699,7 +2694,7 @@ def main(argv: list[str] | None = None) -> None:
 
     _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
     # the watchdog first: teardown is no stall; the panel before imgui goes
-    # (its GRAPH page's node editor context, plan 28 N2)
+    # (its GRAPH page's node editor context)
     if display_list is not None:
         _quiet(display_list.close)
     close_all(audio, watchdog, awake, panel, *host.adapters, publishers, segmenters)

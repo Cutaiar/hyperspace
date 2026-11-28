@@ -1,8 +1,8 @@
-"""The hand rig (plan 60): the shape held by a hand, on plan 59's world.
+"""The hand rig: the shape held by a hand, on the world.
 
 A 6-DOF spring-damper joint (`world.Joint`) from a hand object to the shape
 object, acting while a clutch is closed — by default the same hand's grab
-(`hand:<side>.grab`, plan 51's clutch). As it closes the joint captures the
+(`hand:<side>.grab`). As it closes the joint captures the
 hand-to-shape pose, so nothing jumps; a hand lost opens it.
 
 - **`grip.coupling`** (0–1) is the slider. 1: welded, the shape is the hand's
@@ -20,8 +20,7 @@ hand-to-shape pose, so nothing jumps; a hand lost opens it.
   apart slow the spin and together speed it up.
 
 The params are a patch group (`grip`): a look's own, each deck's, saved in the
-loadable patch, off in one that names none (the owner, 2026-11-10: "this really
-should be per preset"). The on-air deck's grip acts on the one world. A new
+loadable patch, off in one that names none. The on-air deck's grip acts on the one world. A new
 look — a load writes `grip.on`, a deck switch is another `GripState` — sends a
 shape away from home back there first (`Joint.homing`). Its own lanes,
 `grip:held` / `flying` / `speed` / `spin` (`lanes`, `publish`), let a look's
@@ -112,8 +111,8 @@ def apply(world, state: GripState, closed: Callable[[str], bool]) -> None:
     b = world.bodies.get(shape)
     if b is None:
         b = world.body(shape, worlds.Body(boxed=True))
-    # plan 64, part 2: inside a fractal the fist holds the space, not an
-    # object — nothing to keep whole on screen, no body to shape
+    # inside a fractal the fist holds the space, not an object — nothing to
+    # keep whole on screen, no body to shape
     bounded = bool(getattr(world[shape], "bounded", True))
     b.boxed = bounded
     b.drag = b.angular_drag = float(state.drag)
@@ -144,7 +143,7 @@ def _off(world, shape: str) -> None:
         j = world.joint(shape, worlds.Joint(worlds.HANDS["right"], worlds.HANDS["left"]))
     if b is None:
         b = world.body(shape, worlds.Body(boxed=True))
-    b.boxed = bool(getattr(obj, "bounded", True))      # (plan 64, part 2: the space is not boxed)
+    b.boxed = bool(getattr(obj, "bounded", True))      # (the space is not boxed)
     j.release()
     j.homing, j.closed, j.shaping = True, False, False
 

@@ -1,8 +1,7 @@
 """The Combobox's measured table: `COMBOBOX`, its dark overrides, and the resolver.
 
-Pure data, read off the real `combobox.tsx` on `?probe`. Moved out of
-`comp_combobox.py` by `HANDOFF.md` item 3c; `comp_combobox` re-exports all
-three names, so `C.COMBOBOX` and `C.combobox_table(...)` are unchanged.
+Pure data, read off the real `combobox.tsx` on `?probe`. `comp_combobox`
+re-exports all three names (`C.COMBOBOX`, `C.combobox_table(...)`).
 """
 
 from __future__ import annotations
@@ -19,12 +18,9 @@ from . import tokens as T
 
 COMBOBOX = {
     # ---- trigger: an INPUT. You type INTO it. ---------------------------
-    # Re-measured against the real `combobox.tsx`, which is Base UI and
+    # Measured against the real `combobox.tsx`, which is Base UI and
     # whose `ComboboxInput` IS the trigger - an InputGroup wrapping a real
-    # <input> with a ghost chevron in an inline-end addon. The kit first
-    # shipped the OLD Popover+Command recipe, a Button that opens a panel
-    # with a search box inside it, because I told the agent that building it
-    # that `shadcn has no combobox component`. It does.
+    # <input> with a ghost chevron in an inline-end addon.
     #
     # Measured: 320x32, radius 10, border 1px `input`, bg transparent in
     # light and `input/30` in dark - which is exactly tokens.INPUT - with
@@ -40,8 +36,7 @@ COMBOBOX = {
     # `4px 32px 4px 6px` — six on the left and THIRTY-TWO on the right. The
     # right pad is what keeps the label clear of the ItemIndicator, which is
     # a 16px span whose right edge sits 8px from the row's (`absolute
-    # right-2`, `size-4`). The kit drew both sides at 8, so the check
-    # crowded the row's edge and long labels ran under it.
+    # right-2`, `size-4`).
     "row_h": 28.0,
     "row_radius": "md",                   # 8, not the Command recipe's 6
     "row_pad_x": T.SPACE[1.5],            # pl-1.5 = 6
@@ -53,10 +48,9 @@ COMBOBOX = {
     # and MEASURED on the LIST, whose box includes its own `p-1`: the
     # 16-row `combobox.tight` block reports the list AND the content at
     # 319x252, with `scrollHeight` 456. So 252 is the padded list's height
-    # - the PANEL's - not the rows' box. The kit clamped the rows at 252
-    # and then added the 4px rails, which made a clamped panel 260.
+    # - the PANEL's - not the rows' box.
     "list_max_h": 252.0,                  # the PANEL's clamp, rails included
-    # ---- the old recipe's trigger, kept for reference --------------------
+    # ---- the Button-style trigger ----------------------------------------
     # Its (height, radius key) is T.SELECT_SIZES, NOT a second table: the
     # Button and the SelectTrigger measured identical there (32, rounded-lg
     # = 10). Only `default` is measured; `sm` is the Select's, borrowed.
@@ -78,22 +72,22 @@ COMBOBOX = {
     "trigger_border": ("border", 1.0),
     # MEASURED, under a real keyboard focus on the probe's PopoverTrigger:
     # `box-shadow: ring/50 0 0 0 3px`, the same band every other control in
-    # the kit gives. What a mouse-opened trigger has is still nothing - that
-    # measurement stands, it is `:focus-visible` and a pointer does not match
-    # it - so the open state is the FILL above and the ring is the keyboard's.
+    # the kit gives. A mouse-opened trigger has no ring (`:focus-visible` does
+    # not match a pointer), so the open state is the FILL above and the ring
+    # is the keyboard's.
     "trigger_ring": ("ring", 0.5),
-    # The second half of the answer, and here it is THEMED. This trigger is a
+    # The focused border is THEMED. This trigger is a
     # Button variant="outline", so it inherits that variant's one dark
     # anomaly: measured focused, light swaps the border to `ring`
     # (oklch(0.708 0 0)) and dark keeps `input` (oklch(1 0 0 / 0.15)),
     # because `dark:border-input` sorts after `focus-visible:border-ring` in
     # Tailwind's output. comp_button.BUTTON_DARK["outline"] records the same
-    # finding on the same component; this is it measured again on this one.
+    # finding on the same component.
     "trigger_focus_border": ("ring", 1.0),
     # DERIVED, not measured — the probe's trigger carries no icon. The
     # recipe's is `<ChevronsUpDownIcon className="opacity-50"/>`, 16px by
     # `[&_svg:not([class*='size-'])]:size-4`, and `justify-between` puts its
-    # right edge on the content box's, i.e. border 1 + pr 10 in. The glyph
+    # right edge on the content box's, i.e. border 1 + 10 of right padding in. The glyph
     # `chevrons-up-down` is not in the generated table (icons.py has 38 and
     # that is not one), so `chevron-down` stands in — what select_trigger
     # draws.
@@ -106,21 +100,18 @@ COMBOBOX = {
     "radius": "lg",                       # 10, the same as menu.py's panel
     "bg": ("popover", 1.0),               # as menu.py
     "ring": ("foreground", 0.10),         # ring-1 ring-foreground/10, as menu.py
-    # superseded: the real component declares sideOffset 6. Kept only as a
-    # record of what the OLD Popover+Command recipe used.
+    # the Popover+Command recipe's side offset; the real component's is
+    # `side_offset` above.
     "_old_recipe_side_offset": T.SPACE[1],
     # `combobox.tsx` declares `align="start"`, not `popover.tsx`'s
-    # `center` - which is what this used to say, from the old recipe.
-    # Measured, the two are indistinguishable here: the panel and the
+    # `center`. Measured, the two are indistinguishable here: the panel and the
     # trigger are the same width. Base UI anchors the positioner to the
     # inner `<input>`, not to the InputGroup, so the real panel is
     # `--anchor-width` (291 of a 320 trigger) plus `--spacing(7)` = 319,
     # at the input's x - i.e. one pixel right of the trigger's left edge
     # with its right edge exactly on the trigger's. The kit draws the
-    # panel at the trigger's own (x, w); that is a 1px difference on the
-    # left and none on the right, and it is left alone deliberately,
-    # because the panel's edge lining up with the field's is what the
-    # arrangement looks like it means.
+    # panel at the trigger's own (x, w): a 1px difference on the left and
+    # none on the right, so the panel's edge lines up with the field's.
     "align": "center",                    # == "start" at equal widths
     "fade": 0.10,                         # animation: enter 0.1s, as menu.py
 
@@ -138,28 +129,19 @@ COMBOBOX = {
     # 3.797 to the right, and reproducing that box to get at its content is
     # modelling the browser's layout rather than its paint.
     #
-    # It replaces `field_icon_x` (9.0 = "border 1 + the addon's pl-2"), which
-    # described a LEADING magnifier in a search field this component has not
-    # had since the Popover+Command recipe was replaced - residue of the same
-    # shape as the 36px `combobox_size` used to reserve for it. Nothing read
-    # it but a test asserting it equalled its own derivation.
     "field_chevron_right": 8.203,
     # ENABLED, the chevron is muted-foreground at FULL strength: measured
-    # oklch(0.556 0 0) on the svg at `opacity: 1` (#737373, level 115). The
-    # kit drew it at 0.5 and came out at 185 - 70 levels, the biggest miss
-    # the Combobox cell found on its first run.
+    # oklch(0.556 0 0) on the svg at `opacity: 1` (#737373, level 115).
     "field_icon_ink": ("muted-foreground", 1.0),
-    # DISABLED, it is dimmed TWICE, and that is why the old code looked
-    # right. `has-disabled:opacity-50` on the input GROUP dims the box, the
+    # DISABLED, it is dimmed TWICE. `has-disabled:opacity-50` on the input GROUP dims the box, the
     # placeholder and the chevron alike - but the chevron also sits in a
     # BUTTON inside the trailing addon which carries a disabled:opacity-50 of
     # its own. Measured: group 0.5, addon 1, that button 0.5, svg 1, and the
     # chevron bottoms out at 217 against a 249 fill, which is 0.25 of full
     # ink and not the 0.5 one factor gives.
     #
-    # The previous code wrote `0.5 * dim` with dim itself 0.5 when disabled:
-    # 0.25 disabled, which is right, and 0.5 enabled, which is the bug. One
-    # folded constant cannot be both, so the two facts are named separately.
+    # One folded constant cannot be both 0.5 (enabled) and 0.25 (disabled),
+    # so the two facts are named separately.
     "field_icon_disabled_opacity": 0.5,
     "field_text_r": 1.0,                  # the input's right edge: the border
     "field_font": 14.0,                   # text-sm
@@ -173,24 +155,20 @@ COMBOBOX = {
     # ---- CommandGroup ---------------------------------------------------
     # The Base UI `ComboboxGroup` carries NO padding of its own — measured,
     # the first row's x is the content's x + 4, which is the LIST's `p-1`
-    # and nothing else. The old Command recipe nested a p-1 group inside a
-    # p-1 list, so every row was inset 8 and two rows' worth of width went
-    # missing.
+    # and nothing else. (The Command recipe nests a p-1 group inside a
+    # p-1 list, so its rows are inset 8.)
     "group_pad": 0.0,
     "head_h": 28.0,                       # py-1.5 on a 16px line box
     "head_pad_x": T.SPACE[2],             # px-2
     "head_font": 12.0,                    # text-xs
-    # RE-MEASURED on `[data-slot="combobox-label"]`: `font-weight: 400`.
+    # MEASURED on `[data-slot="combobox-label"]`: `font-weight: 400`.
     # `ComboboxLabel` is `px-2 py-1.5 text-xs text-muted-foreground` and
-    # carries no `font-medium` at all - that was `command.tsx`'s
-    # CommandGroup heading, i.e. the old recipe's, and it survived the
-    # rewrite the way the empty block's 68px did.
+    # carries no `font-medium` (that is `command.tsx`'s CommandGroup heading).
     "head_weight": "regular",             # measured 400, NOT medium
     "head_ink": ("muted-foreground", 1.0),
 
     # ---- CommandItem ----------------------------------------------------
-    # The real component's rows are MENU rows: 28, not 32. `item_h` stays
-    # the name the rest of this module and its tests use.
+    # The real component's rows are MENU rows: 28, not 32.
     "item_h": 28.0,                       # measured on combobox-item
     "item_pad_x": T.SPACE[2],             # px-2
     "item_radius": "sm",                  # rounded-sm = 6
@@ -212,23 +190,19 @@ COMBOBOX = {
     # full 319 width - so it DOES carry `my-1`, four above and four below,
     # and the block it occupies is 9 tall. `combobox.tsx`'s separator is
     # `-mx-1 my-1 h-px bg-border`; `command.tsx`'s is `-mx-1 h-px bg-border`
-    # with no margin, and the kit had recorded the Command one. Checked
-    # against the layout: label 28 ends at 2782, row 28 ends at 2810,
+    # with no margin. Checked
+    # against the layout: the 28px label ends at 2782, the 28px row ends at 2810,
     # separator at 2814, next row at 2819.
     "sep_h": 1.0,
     "sep_my": T.SPACE[1],                 # my-1 = 4, above AND below
     "sep_col": ("border", 1.0),
 
     # ---- ComboboxEmpty --------------------------------------------------
-    # Re-measured on the real component with a query that matches nothing:
+    # Measured on the real component with a query that matches nothing:
     # the whole panel is 319x36, the LIST collapses to zero height and zero
     # padding (`data-empty:p-0`), and the empty block is the panel - 36 tall
     # from `py-2` on a 20px line box, full width, centred, in
     # `muted-foreground` (oklch(0.556 0 0)).
-    #
-    # The old numbers - 68 tall from `py-6`, in popover-foreground, inside
-    # the list's padding - were the Popover+Command recipe's, and they
-    # survived the rewrite because nothing asked the empty panel its height.
     "empty_h": 36.0,                      # py-2 on a 20px line box
     "empty_font": 14.0,                   # text-sm
     "empty_ink": ("muted-foreground", 1.0),

@@ -19,11 +19,11 @@ helpers every effect can call)::
     // @speed  1                    the default time rate
     // @mix    1                    the default wet/dry (0: starts as a no-op)
     // @tip    …                    one line for the tooltip
-    // @family distort              the effect picker's group (plan 65); none:
+    // @family distort              the effect picker's group; none:
                                     the band its @order sits in (`previews`)
-    // @hook   mandel               (plan 63) a Python half: `HOOKS` names the
+    // @hook   mandel               a Python half: `HOOKS` names the
                                     module that runs the pass and its drives
-    // @pair   u_cx u_cy "Centre"   (plan 82) two params drawn as one XY pad
+    // @pair   u_cx u_cy "Centre"   two params drawn as one XY pad
     // @volume u_cx u_cy u_amount "Burst"   …three as an XYZ volume
     uniform float u_amount;  // @param 0 2 0.5 "Amount" tooltip text…
     uniform float u_scale;   // @param 0.5 12 3 log "Scale" …
@@ -32,15 +32,15 @@ helpers every effect can call)::
 
 ``@param lo hi default [log] [wrap] [amount] [bipolar|unipolar] "Label" tip`` —
 the uniform name without its ``u_`` is the id suffix. ``bipolar`` and
-``unipolar`` (plan 82) say how the panel draws the fader, and nothing else:
+``unipolar`` say how the panel draws the fader, and nothing else:
 bipolar fills from its zero with a detent there, unipolar from the left.
 Neither said, the panel infers it (`ui_fields.shape_of`: a range across 0
-with a 0 default is bipolar). ``amount`` (wave 0 T1) marks a
+with a 0 default is bipolar). ``amount`` marks a
 param whose range is 0 … hi with a meaningful zero — how much of the
 effect there is — and puts it on the zero-safe log taper
 (`amount_taper`: position 0 is off, then ten doublings up to hi), so a
 knob reaches 0.05 of the range as easily as 0.5; it needs ``lo`` 0, a
-float uniform, and neither ``log`` nor ``wrap``. A discrete choice (plan 30 N8) is
+float uniform, and neither ``log`` nor ``wrap``. A discrete choice is
 ``uniform int u_mode; // @param choice [compress|gradient] 0 "Mode" tip``:
 the names in brackets, ``|`` between them, then the default's index — an
 enum param the strips draw as a picker (a combo), never a slider; the
@@ -53,9 +53,9 @@ effect's: ``fx.on`` (bypass everything), ``fx.mix`` (scales every
 effect's mix — one fader that fades the whole trip in) and
 ``fx.face_map`` (how the faces show a picture wired into them).
 
-**No shader multiplies time by a param** (the owner, 2026-11-02, after
-the show of 2026-10-30: ``u_phase * u_drift`` shifts the field by
-``phase × Δdrift`` — whole screens, hours into a set — on one knob step).
+**No shader multiplies time by a param**: ``u_phase * u_drift`` shifts the
+field by ``phase × Δdrift`` — whole screens, hours into a set — on one
+knob step.
 A rate-like param is integrated here and the shader reads the phase::
 
     // @clock u_drift_t drift          a second clock: u_drift_t += speed × drift × dt
@@ -74,13 +74,12 @@ through ``sin`` or ``fract``; without one it runs on like ``u_phase``
 (a scrolled noise field has no period to wrap to). A rate may be a
 product of the file's params (``drift*scale``, each once): warp counts
 its scroll in noise cells, so the cells a second are drift × scale and a
-scale step re-zooms the cells about the centre without sliding them
-(K2, register row 577). The phases live on
+scale step re-zooms the cells about the centre without sliding them. The phases live on
 ``FxState.clocks`` and survive a hot reload of this module as the speed
 phases do; ``tests/test_shader_time_lint.py`` holds every shipped shader
 to the rule.
 
-Plan 33 (rows 341–349): an effect exists where the loadable patch's graph wires
+An effect exists where the loadable patch's graph wires
 it — the run ``frame → … → fx.image`` each pipeline draws, a branch onto
 the faces (``shape.faces``), the pattern's layer, the backdrop, an output
 or another effect's ``aux`` — and nowhere else. There is no stack: no
@@ -96,7 +95,7 @@ blend a pass lifts alpha to cover its own colour, so a generator painting
 over a transparent ground shows on the desktop. On an opaque ground
 (window and fullscreen, ``FxChain.opaque``, set by the renderer each
 frame) every pass writes alpha 1, whatever its blend — a multiply or an
-effect returning a low alpha never lets the desktop through (plan 14 WP1).
+effect returning a low alpha never lets the desktop through.
 """
 
 from __future__ import annotations
@@ -120,15 +119,13 @@ LIB_FILE = "_lib.glsl"          # helpers prepended to every effect; not an effe
 BLENDS = ["mix", "add", "screen", "multiply"]
 FACE_MAPS = ["per face", "screen"]   # fx.face_map's choices: how the faces show their picture
 PER_FACE, SCREEN = 0, 1
-# the per-effect params' names — and `order` / `target`, retired (plan 33)
+# the per-effect params' names — and `order` / `target`, retired
 # but still in old loadable patches as `fx.<n>.order`: a uniform of either name
 # would read as the retired id, so neither is ever a key
 RESERVED = {"on", "mix", "speed", "blend", "order", "target"}
 SPEED_MAX = 8.0
-# wave 0 T1 (the owner, 2026-10-31: "turning those values down to 0.05× or
-# 5 % … very, very low values are really convincing"): a knob on a linear
-# −8 … +8 could not reach 0.05× (0.003 of its throw, under one MIDI step),
-# so `speed` is on a signed exponential taper: 401 detents, the stop in the
+# a knob on a linear −8 … +8 could not reach 0.05× (0.003 of its throw,
+# under one MIDI step), so `speed` is on a signed exponential taper: 401 detents, the stop in the
 # middle, 1× at 140 steps out (20 a doubling), ±8× at the ends and
 # ±2^(−6.95) ≈ ±0.008× one step from the stop — ten octaves a side, so
 # 0.05× sits at detent 254, a third of the way up the positive side
@@ -138,29 +135,29 @@ T_SPEED = tapers.exp_signed(SPEED_UNITY, SPEED_SIDE)
 # doublings (200 detents) up to its hi — about hi / 1000 one step up
 AMOUNT_OCTAVES = 10
 RELOAD_EVERY = 30               # frames between mtime checks of the folder
-# plan 67 F1: the types an effect's ports and output carry — `graph.IMAGE`
+# the types an effect's ports and output carry — `graph.IMAGE`
 # and `graph.FIELD`, spelled here because this module imports no graph (a
 # test holds them equal); NONE is a port the file does not have
 PICTURE, FIELD, NONE = "image", "field", "none"
 FIELD_PORT = "field"            # the third port: a field an effect reads (unit 3)
-# plan 90 (H1): a stack — a delay's kept frames (`graph.STACK`) — read on the
+# a stack — a delay's kept frames (`graph.STACK`) — read on the
 # `stack` port, bound on unit 2 (the hook's: a file that reads a stack has no hook)
 STACK = STACK_PORT = "stack"
 STACK_UNIT = 2
 TAKES_PORTS = ("image", FIELD_PORT, STACK_PORT)
 FIELD_UNIT = 3                  # its texture unit (0 the input, 1 the aux, 2 a hook's)
-# plan 63: `// @hook <name>` — an effect with a Python half. The module runs
+# `// @hook <name>` — an effect with a Python half. The module runs
 # the pass (`run(chain, name, prog, vao, src, dst)`, every uniform of the
 # file set) and the effect's drives (`advance(spec, values, dt)`, while it
 # is live). One so far: the Mandelbrot, whose reference orbit, render size
 # and tile pre-passes a fragment shader alone cannot hold.
-# Plan 90 H3: the dream (`dreamhook`), whose worker runs on its own thread.
+# The dream (`dreamhook`), whose worker runs on its own thread.
 HOOKS = {"mandel": mandel, "dream": dreamhook}
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _DIRECTIVE = re.compile(
     r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock|family|hook|makes|takes|pair|volume)\s+(.*?)\s*$")
-# plan 82: `@pair u_a u_b "Label"`, `@volume u_a u_b u_c "Label"`
+# `@pair u_a u_b "Label"`, `@volume u_a u_b u_c "Label"`
 _PAD = re.compile(r"^(?P<uniforms>(?:u_\w+\s+){2,3})\"(?P<label>[^\"]+)\"\s*$")
 POLARITIES = ("bipolar", "unipolar")
 _CLOCK_UNIFORM = re.compile(r"^u_[a-z][a-z0-9_]*$")
@@ -179,7 +176,7 @@ class SpecError(ValueError):
 
 
 def instance_of_name(name: str) -> int | None:
-    """The instance number an effect name carries (plan 26 A4: `acid.2` →
+    """The instance number an effect name carries (`acid.2` →
     2, the naming rule's marker), or None for a file's own name (`acid`,
     instance 1)."""
     _, dot, mark = name.partition(".")
@@ -201,8 +198,8 @@ class ParamSpec:
     wrap: bool = False
     tip: str = ""
     choices: tuple[str, ...] = ()   # a discrete choice's names (`@param choice`): an enum
-    amount: bool = False            # 0 … hi on the zero-safe log taper (wave 0 T1)
-    # plan 82: `bipolar` or `unipolar` as the line says it, "" when it says
+    amount: bool = False            # 0 … hi on the zero-safe log taper
+    # `bipolar` or `unipolar` as the line says it, "" when it says
     # neither (the panel infers it, `ui_fields.shape_of`). Drawing only: it
     # declares nothing, so it is not in `EffectSpec.signature`
     polarity: str = ""
@@ -210,7 +207,7 @@ class ParamSpec:
 
 @dataclass(frozen=True)
 class PadSpec:
-    """One `@pair` or `@volume` line (plan 82): two or three of the file's
+    """One `@pair` or `@volume` line: two or three of the file's
     continuous params drawn as one control — an XY pad, or an XYZ volume
     whose third is the depth. Each param stays its own: its id, its routes,
     its learn and its place in a save are as they were without the line."""
@@ -242,32 +239,32 @@ class EffectSpec:
     label: str
     source: str
     params: list[ParamSpec] = field(default_factory=list)
-    # `@order`: no part in anything drawn (plan 33) — the stack position an
+    # `@order`: no part in anything drawn — the stack position an
     # old loadable patch naming none had, which `graphmigrate` reads it as
     order: int = 50
-    hook: str = ""          # plan 63: `// @hook <name>`, a key of `HOOKS` ("" none)
+    hook: str = ""          # `// @hook <name>`, a key of `HOOKS` ("" none)
     blend: int = 0
     speed: float = 1.0
     mix: float = 1.0         # the default wet/dry (@mix); 0 for a pass that starts as a no-op
     tip: str = ""
     clocks: list[ClockSpec] = field(default_factory=list)   # `@clock` lines, in file order
-    # `@family` (plan 65): the effect picker's group, "" for none (then the
+    # `@family`: the effect picker's group, "" for none (then the
     # picker groups by `order`, `previews.family_of`). Declares nothing, so
     # it is not in `signature`: a family change re-declares no param
     family: str = ""
-    # plan 65: whether the file reads the second picture wired into its
+    # whether the file reads the second picture wired into its
     # `aux` port (`reads_aux`: its code calls `aux(` or `aux_luma(`). GRAPH
     # draws an effect's aux port only when it does (or a saved wire goes
     # in); like `family`, it declares no param, so it is not in `signature`
     aux: bool = False
-    # plan 67 F1: what the file makes (`// @makes field`: a field, else a
+    # what the file makes (`// @makes field`: a field, else a
     # picture) and what its ports take where not a picture's (`// @takes
     # <port> <type>`: `image` or the `field` port, `field` or `none`).
     # `ports` reads them; the graph types the node's wires by them. Like
     # `family`, they declare no param, so they are not in `signature`
     makes: str = PICTURE
     takes: dict[str, str] = field(default_factory=dict)
-    # plan 82: the `@pair` and `@volume` lines, in file order. Drawing
+    # the `@pair` and `@volume` lines, in file order. Drawing
     # only, like `family`: not in `signature`
     pads: list[PadSpec] = field(default_factory=list)
 
@@ -297,11 +294,10 @@ def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
     if key in RESERVED or key in seen:
         raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
     if key in PORT_NAMES:
-        # plan 67 P3: a knob's field comes in on a port named by its key
         raise SpecError(f"{name}:{n}: u_{key} — {key!r} is a port's name (a knob's "
                         "field comes in on a port named by its key)")
     if key.isdecimal():
-        # the naming rule (plan 26 A0/A4): a purely decimal segment
+        # the naming rule: a purely decimal segment
         # right after `fx.<file>` is an instance marker — `fx.acid.2`
         # is the second acid — so no key may be one
         raise SpecError(f"{name}:{n}: u_{key} — a key of digits alone would read as an "
@@ -412,7 +408,7 @@ _AUX_CALL = re.compile(r"\baux(?:_luma)?\s*\(")
 
 
 def reads_aux(source: str) -> bool:
-    """Plan 65: does effect source `source` read its aux picture — call
+    """Does effect source `source` read its aux picture — call
     `aux(uv)` or `aux_luma(uv)` (`_lib.glsl`) outside a comment? Read from
     the file itself, so an effect that starts using one gains the port."""
     code = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
@@ -421,23 +417,23 @@ def reads_aux(source: str) -> bool:
 
 
 def ports(spec: EffectSpec) -> tuple[str, dict[str, str]]:
-    """Plan 67 F1: (what effect file `spec` makes, port → type of the ports a
+    """(what effect file `spec` makes, port → type of the ports a
     wire may go into). Every file has `image` and `aux` taking a picture, and
     no `field` port; its `@takes` lines change those (`none`: no such port).
-    The aux port is offered whatever the file reads (plan 65 hides it on the
-    canvas only)."""
+    The aux port is offered whatever the file reads (the canvas hides it
+    when the file does not read it)."""
     takes = {"image": PICTURE, "aux": PICTURE}
     for port, typ in getattr(spec, "takes", {}).items():
         if typ == NONE:
             takes.pop(port, None)
         else:
             takes[port] = typ
-    for key in field_knobs(spec):           # plan 67 P3: a knob takes a field on its key
+    for key in field_knobs(spec):           # a knob takes a field on its key
         takes[key] = FIELD
     return getattr(spec, "makes", PICTURE), takes
 
 
-# plan 67 P3 (§3.9): any knob takes a field, `value + depth × field(uv)` per
+# any knob takes a field, `value + depth × field(uv)` per
 # pixel, on a port named by its key (`wave.amount`). The pass binds each wired
 # knob's field from KNOB_UNIT0 on: GL 3.3 promises a fragment shader 16 units,
 # 0 … 3 are the input, the aux, a hook's and the field port's
@@ -476,7 +472,7 @@ def field_knobs(spec: EffectSpec) -> tuple[str, ...]:
 
 # the accessor's reading: a knob's value + depth × its field's x at this pixel
 # (`v_uv`, the pixel `effect` is drawing), clamped to the knob's range or wrapped
-KNOB_AT = """// plan 67 P3: knobs that take a field (fx.knob_declarations)
+KNOB_AT = """// knobs that take a field (fx.knob_declarations)
 float knob_at(sampler2D f, float v, float d, float lo, float hi, int wrap) {
     ivec2 n = textureSize(f, 0);
     float x = v + d * texelFetch(f, clamp(ivec2(v_uv * vec2(n)), ivec2(0), n - 1), 0).x;
@@ -486,12 +482,12 @@ float knob_at(sampler2D f, float v, float d, float lo, float hi, int wrap) {
 
 
 def knob_declarations(spec: EffectSpec, keys) -> tuple[str, str]:
-    """Plan 67 P3: the accessor for knobs `keys` of `spec`, each wired to a
+    """The accessor for knobs `keys` of `spec`, each wired to a
     field — (the head's part: each knob's field sampler, its depth and the
     reading function; the part before the file: a `#define` per knob, so the
     file's `u_<key>` reads `knob_at(…)` at this pixel). The file's own
     declaration of `u_<key>` is renamed to `k_<key>_v`, its value
-    (`with_knob_fields`). No keys: nothing — the program is the file's as it was."""
+    (`with_knob_fields`). No keys: nothing — the program is the file's own."""
     if not keys:
         return "", ""
     by = {p.key: p for p in spec.params}
@@ -518,7 +514,7 @@ def with_knob_fields(spec: EffectSpec, keys) -> str:
     return src
 
 
-# plan 67 F1: each shipped file's `ports`, by file name — kept by every
+# each shipped file's `ports`, by file name — kept by every
 # `FxState` that reads the shipped folder, read by the graph's wire checks
 # and builder (`ports_of`). Module-level, so it survives a reload of this
 # module: the dict is taken over, not made again
@@ -529,7 +525,7 @@ _SPECS: dict[str, EffectSpec] = globals().get("_SPECS", {})
 
 
 def spec_of(file: str) -> EffectSpec | None:
-    """Plan 67 P3: shipped effect file `file`'s spec, kept as `_PORTS` is (read
+    """Shipped effect file `file`'s spec, kept as `_PORTS` is (read
     from the folder now when no state has), or None for a file not there."""
     got = _SPECS.get(file)
     if got is None:
@@ -540,7 +536,7 @@ def spec_of(file: str) -> EffectSpec | None:
     return got
 
 
-# plan 67: a retired effect file (Hue cycle) — no longer drawn, but its spec is
+# a retired effect file (Hue cycle) — no longer drawn, but its spec is
 # still what an old file's depths onto it are measured against
 # (`params.fx_files`, `params.retaper_depths`) before the ladder rewrites it
 RETIRED_DIR = FX_DIR / "retired"
@@ -572,7 +568,7 @@ def ports_of(file: str) -> tuple[str, dict[str, str]]:
     return got
 
 
-# plan 80: each shipped file's `@hook` (its `EffectSpec.hook`, "" none), kept
+# each shipped file's `@hook` (its `EffectSpec.hook`, "" none), kept
 # beside `_PORTS` by the same `FxState` reads — what `graph.runs_unfed` asks
 # of a file whatever state the asker holds. Taken over on a reload, as `_PORTS`
 _HOOK_OF: dict[str, str] = globals().get("_HOOK_OF", {})
@@ -695,7 +691,7 @@ def parse(name: str, source: str) -> EffectSpec:
     _check_clocks(name, spec)
     _check_pads(name, spec)
     if spec.takes.get(STACK_PORT) == STACK and spec.hook:
-        # (plan 90 H1: the stack is bound on the hook's unit)
+        # the stack is bound on the hook's unit
         raise SpecError(f"{name}: a file that reads a stack has no @hook")
     spec.aux = reads_aux(source)
     return spec
@@ -732,7 +728,7 @@ def _check_pads(name: str, spec: EffectSpec) -> None:
 
 
 def pad_of(spec: EffectSpec, key: str) -> PadSpec | None:
-    """The `@pair` or `@volume` that draws `key`, or None (plan 82)."""
+    """The `@pair` or `@volume` that draws `key`, or None."""
     return next((p for p in getattr(spec, "pads", ()) if key in p.keys), None)
 
 
@@ -744,15 +740,15 @@ class FxState(writes.Observed):
     are kept across a reload of the file, so a value survives an edit that
     does not remove its uniform.
 
-    Plan 26 A4, instances: a loadable patch's graph may hold an effect file more
+    Instances: a loadable patch's graph may hold an effect file more
     than once (`set_instances`). Instance n ≥ 2 of file `acid` is the
     effect named `acid.2` — in `specs` (the file's spec, labelled "Acid
     2"), `values`, `phase` and `names()` like any effect, so its params are
     `fx.acid.2.*` by the naming rule (`declare`), it has its own clock,
     and it runs on the file's one program. Instance 1 is the file itself,
-    `acid`; where any instance runs is the graph's wires (plan 33).
+    `acid`; where any instance runs is the graph's wires.
 
-    Plan 36 T3 (W3): `files` is every effect file on disk (the library the
+    `files` is every effect file on disk (the library the
     GRAPH picker and the migration read); `specs` is the instances that
     exist. Until a loadable patch's graph lands that is every file once and the
     extra instances `set_instances` counts (a test rig's, a tool's); once one
@@ -767,8 +763,8 @@ class FxState(writes.Observed):
         self.face_map = PER_FACE # fx.face_map — how the faces show a picture wired into them
         self._t_last: float | None = None      # the frame time of the last advance_to
         self.specs: dict[str, EffectSpec] = {}
-        self.files: dict[str, EffectSpec] = {}  # plan 36 T3: every file on disk, held or not
-        # plan 36 T3: the instances a landed graph names (None: none landed —
+        self.files: dict[str, EffectSpec] = {}  # every file on disk, held or not
+        # the instances a landed graph names (None: none landed —
         # every file, and `instances`' extras)
         self.held: frozenset[str] | None = None
         self.values: dict[str, dict[str, Any]] = {}
@@ -783,7 +779,7 @@ class FxState(writes.Observed):
         # the effect names whose params changed shape on a reload
         self.on_specs: Callable[[set[str]], None] | None = None
         self._mtimes: dict[str, float] = {}
-        # plan 26 A4: file → how many instances the chain holds (a file not
+        # file → how many instances the chain holds (a file not
         # named here: one, itself)
         self.instances: dict[str, int] = {}
         self.load()
@@ -818,7 +814,7 @@ class FxState(writes.Observed):
                 continue
             name = fname[:-5]
             if not _NAME.match(name):
-                # the naming rule (plan 26 A4): `acid.2` is the second acid
+                # the naming rule: `acid.2` is the second acid
                 # instance, so a file stem with a dot or of digits would read
                 # as one — refused before parsing, and never kept as last good
                 self.errors[name] = (f"{fname}: file names are lower_snake_case, no dot and "
@@ -834,9 +830,9 @@ class FxState(writes.Observed):
                     found[name] = last
         self.files = dict(found)
         if Path(self.dir).resolve() == FX_DIR.resolve():
-            for name, spec in found.items():          # plan 67 F1: what the graph reads
+            for name, spec in found.items():          # what the graph reads
                 _PORTS[name] = ports(spec)
-                _SPECS[name] = spec                   # plan 67 P3: why a knob refuses a field
+                _SPECS[name] = spec                   # why a knob refuses a field
                 _HOOK_OF[name] = spec.hook
         found = self._wanted(found)
         for name in set(self.specs) - set(found):
@@ -853,7 +849,7 @@ class FxState(writes.Observed):
         return changed
 
     def _extras(self, files: dict[str, EffectSpec]) -> dict[str, EffectSpec]:
-        """The extra instances' specs (plan 26 A4): for each file with n > 1
+        """The extra instances' specs: for each file with n > 1
         instances that is on disk, `<file>.2` … `<file>.<n>`, the file's
         spec labelled with its number."""
         out: dict[str, EffectSpec] = {}
@@ -867,7 +863,7 @@ class FxState(writes.Observed):
 
     def _wanted(self, files: dict[str, EffectSpec]) -> dict[str, EffectSpec]:
         """The instances that exist over the files on disk `files`: the
-        held ones (plan 36 T3, `hold`) whose file is there, else every file
+        held ones (`hold`) whose file is there, else every file
         and its `instances` extras."""
         held = getattr(self, "held", None)
         if held is None:
@@ -881,9 +877,9 @@ class FxState(writes.Observed):
         return out
 
     def set_instances(self, counts: dict[str, int]) -> set[str]:
-        """Hold each effect file `counts` names that many times (plan 26 A4;
-        a file not named, once) — a test rig's or a tool's, with no graph landed
-        (plan 36 T3: it lets go of any `hold`). Returns the effect names
+        """Hold each effect file `counts` names that many times (a file
+        not named, once) — a test rig's or a tool's, with no graph landed
+        (it lets go of any `hold`). Returns the effect names
         whose params appeared or went (`acid.2`, …) — the registry
         re-declares those (`declare`). A file that is not on disk keeps its
         count and gets its instances when it appears."""
@@ -892,7 +888,7 @@ class FxState(writes.Observed):
         return self._settle()
 
     def hold(self, names) -> set[str]:
-        """Plan 36 T3 (W3): exactly the effect instances `names` exist (a
+        """Exactly the effect instances `names` exist (a
         landed graph's, `graph.GraphSpec.effect_names`) — instance 1 of a
         file only when named; None, every file once as before a graph
         landed. Returns the names whose params appeared or went, as
@@ -968,13 +964,13 @@ class FxState(writes.Observed):
     # ---- the effects ----
 
     def names(self) -> list[str]:
-        """Every effect, by name (plan 33: no stack order — an effect's
+        """Every effect, by name (no stack order — an effect's
         place is its wires)."""
         return sorted(self.specs)
 
     def live(self, name: str) -> bool:
-        """Whether effect `name` draws this frame where it is wired (plan 33
-        R): the effects on (`fx.on`) and above mix 0 (`fx.mix`), the effect
+        """Whether effect `name` draws this frame where it is wired:
+        the effects on (`fx.on`) and above mix 0 (`fx.mix`), the effect
         on and above mix 0. Its place is its wires, and whether it compiled
         is the chain's to say (`FxChain.ready`)."""
         v = self.values.get(name)
@@ -999,7 +995,7 @@ class FxState(writes.Observed):
                 if c.period:
                     x %= c.period
                 ph[c.uniform] = x
-            # plan 63: a hooked effect's drives, while it draws — not scaled
+            # a hooked effect's drives, while it draws — not scaled
             # by its speed (they are where the view goes, not a clock)
             hook = HOOKS.get(getattr(spec, "hook", "") or "")
             if hook is not None and self.live(n):
@@ -1041,7 +1037,7 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
         names = set(fx.specs)
     for name in sorted(names):
         # this effect's own ids, `fx.<name>.<key>` (a key has no dot) —
-        # never an instance's under it (plan 26 A4: `fx.acid.` also starts
+        # never an instance's under it (`fx.acid.` also starts
         # `fx.acid.2.mix`, the second acid's)
         own = f"fx.{name}."
         for pid in [p.id for p in r if p.id.startswith(own) and "." not in p.id[len(own):]]:
@@ -1055,7 +1051,7 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
         r.continuous(f"{pre}.mix", f"{lb} mix", *_key(v, "mix"), lo=0.0, hi=1.0,
                      fmt=lambda x: f"mix {x:.2f}", group=g,
                      tip="Wet/dry: 0 its input untouched, 1 the effect in full.")
-        # wave 0 T1: on the signed exponential taper (lo / hi say the range
+        # on the signed exponential taper (lo / hi say the range
         # spans zero, so the panel's fill starts at the stop)
         r.continuous(f"{pre}.speed", f"{lb} speed", *_key(v, "speed"), taper=T_SPEED,
                      lo=-SPEED_MAX, hi=SPEED_MAX, fmt=fmt_speed, group=g,
@@ -1066,11 +1062,11 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
                tip="How the effect's output lands on its input: mix replaces, add and "
                    "screen light up, multiply darkens.")
         for p in spec.params:
-            if p.choices:       # a discrete choice (plan 30 N8): a picker, never a slider
+            if p.choices:       # a discrete choice: a picker, never a slider
                 r.enum(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                        list(p.choices), group=g, tip=p.tip)
                 continue
-            if p.amount:        # wave 0 T1: 0 … hi on the zero-safe log taper
+            if p.amount:        # 0 … hi on the zero-safe log taper
                 r.continuous(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                              taper=amount_taper(p.hi), lo=p.lo, hi=p.hi, fmt=fmt_amount,
                              group=g, tip=p.tip)
@@ -1087,7 +1083,7 @@ def _fmt(p: ParamSpec) -> Callable[[float], str]:
     if p.integer:
         return lambda x: f"{int(x)}"
     if p.log and p.hi >= 1e6 * p.lo:
-        # plan 63: a range of many orders (the Mandelbrot's zoom, to 10¹³)
+        # a range of many orders (the Mandelbrot's zoom, to 10¹³)
         # reads in three figures and its power of ten, "4.2e+07×"
         return lambda x: f"{x:.3g}×" if x >= 1e4 else f"{x:.2f}×"
     span = p.hi - p.lo
@@ -1125,7 +1121,7 @@ def amount_taper(hi: float) -> tapers.Taper:
 
 def param_of(pid: str, files: dict[str, EffectSpec]) -> tuple[EffectSpec, str] | None:
     """The effect file and key behind param id `pid` — ``fx.<file>.<key>``
-    or an instance's ``fx.<file>.<n>.<key>`` (plan 26 A4) — over the specs
+    or an instance's ``fx.<file>.<n>.<key>`` — over the specs
     `files` (`FxState.files`, file name → spec), or None for any other id."""
     parts = pid.split(".")
     if len(parts) < 3 or parts[0] != "fx":
@@ -1143,8 +1139,8 @@ def param_of(pid: str, files: dict[str, EffectSpec]) -> tuple[EffectSpec, str] |
 
 def retaper_of(pid: str, files: dict[str, EffectSpec]
                ) -> tuple[float, float, float, tapers.Taper] | None:
-    """What wave 0 T1 changed under a route onto `pid`, or None when it
-    changed nothing there: ``(lo, hi, default, taper)`` — the linear range
+    """What the speed and amount tapers changed under a route onto `pid`, or
+    None when it changed nothing there: ``(lo, hi, default, taper)`` — the linear range
     the param had before (and still declares as `lo` / `hi`), its default
     (the base a loadable patch that does not name it takes), and the taper it is
     on now — for an effect's `speed` and for each `amount` param. What
@@ -1176,10 +1172,10 @@ uniform float u_mix;       // its mix × fx.mix
 uniform int u_blend;       // index into BLENDS
 uniform int u_opaque;      // 1 on an opaque ground (window, fullscreen): alpha stays 1
                            // (always 0 on the faces' chain: there alpha is a face's intensity)
-uniform sampler2D u_aux;   // plan 32 R: the second picture (unit 1), wired by `<effect>.aux`
+uniform sampler2D u_aux;   // the second picture (unit 1), wired by `<effect>.aux`
 uniform int u_aux_on;      // 1 while one is wired; 0 and `aux(uv)` is transparent black
 uniform vec2 u_aux_size;   // its size, px (0, 0 with none)
-uniform sampler2D u_field; // plan 67 F1: the field on the `field` port (unit 3)
+uniform sampler2D u_field; // the field on the `field` port (unit 3)
 uniform int u_field_on;    // 1 while one is wired; 0 and `field_port(uv)` is no field
 uniform int u_field_show;  // a field maker's pass into a target that is no field: shown grey
 uniform int u_scaled;      // 1 when u_src is not the target's size
@@ -1191,15 +1187,15 @@ out vec4 f_color;
 HEAD_UNIFORMS = frozenset(re.findall(r"^uniform\s+\w+\s+(u_\w+)\s*;", FS_HEAD, re.MULTILINE))
 
 
-# plan 90 (H1): the head's part for a file that reads a stack (`@takes stack
+# the head's part for a file that reads a stack (`@takes stack
 # stack`), after its clocks — the stack and its helpers, declared only there,
-# so every other file's source is as it was. MAX_STACK is `stack.MAX_DEPTH`
+# so every other file's source is unchanged. MAX_STACK is `stack.MAX_DEPTH`
 MAX_STACK = 64
 STACK_HEAD = f"""uniform sampler2DArray u_stack;   // the stack on the `stack` port (unit {STACK_UNIT})
 uniform int u_stack_n;            // the frames it holds, newest first (0: none)
 uniform float u_stack_layer[{MAX_STACK}]; // each one's layer in the array, newest first
 uniform float u_stack_age[{MAX_STACK}];   // …and its age, seconds
-uniform vec2 u_stack_size;        // its frames' own size, px (Devin on #519: fitted by cover)
+uniform vec2 u_stack_size;        // its frames' own size, px: fitted by cover
 
 // where `uv` of this pass lands in a frame of the stack: fitted by cover, as
 // a delay's own picture is (`graph.OWN_FIT`) — a square stack in a wide frame
@@ -1256,13 +1252,13 @@ void main() {
     c = clamp(mix(a, c, u_mix), 0.0, 1.0);
     // premultiplied: a pass that lights a pixel also covers it
     c.a = max(c.a, max(c.r, max(c.g, c.b)));
-    // on an opaque ground nothing may let the desktop through (plan 14 WP1)
+    // on an opaque ground nothing may let the desktop through
     if (u_opaque != 0) c.a = 1.0;
     f_color = c;
 }
 """
 
-# plan 67 F1: the tail of a file that makes a field (`@makes field`): what
+# the tail of a file that makes a field (`@makes field`): what
 # `effect` returns is the field itself — no blend, no mix, no clamp, no
 # alpha rule (a field is signed and unbounded; its .a says scalar 0 or
 # vector 1, `as_scalar` / `as_vector`) — written raw into a float32 target,
@@ -1274,7 +1270,7 @@ void main() {
 }
 """
 
-# plan 67 F1: a field texture shown as a picture — the grey promotion
+# a field texture shown as a picture — the grey promotion
 # (`graph.FieldPicture`), one pass of the lib's `field_grey`
 SHOW_FIELD = ("uniform float u_gain;   // a thumbnail's: the field scaled to its own range\n"
               "vec4 effect(vec2 uv) { vec4 f = field_in(uv); return vec4(f.xyz * u_gain, f.a); }\n")
@@ -1322,22 +1318,22 @@ def fragment_source(lib: str, effect: str, shared: str | None = None, clocks=(),
                     stack: bool = False) -> str:
     """The whole fragment shader of an effect: the head (with the file's
     `@clock` uniforms declared), the shared helpers, the lib, the file,
-    the tail — a field maker's own (plan 67 F1: `FIELD_TAIL`). `knobs`
-    (plan 67 P3, `knob_declarations`): the accessor of the knobs wired to a
+    the tail — a field maker's own (`FIELD_TAIL`). `knobs`
+    (`knob_declarations`): the accessor of the knobs wired to a
     field, its head's part and its `#define`s; none, and the source is the
-    file's as it always was."""
+    file's own."""
     shared = common() if shared is None else shared
     tail = FIELD_TAIL if makes == FIELD else FS_TAIL
     head, defs = knobs
     defs = f"#line 1 3\n{defs}" if defs else ""
-    stacked = STACK_HEAD if stack else ""      # plan 90 (H1)
+    stacked = STACK_HEAD if stack else ""
     return (f"{FS_HEAD}{clock_declarations(clocks)}{stacked}{head}#line 1 1\n{shared}\n"
             f"#line 1 2\n{lib}\n"
             f"{defs}#line 1 3\n{effect}\n#line 1 4\n{tail}")
 
 
 def _is_field_target(dst: moderngl.Framebuffer) -> bool:
-    """Plan 67 F1: is `dst` a field's (a float32 colour target)? A field
+    """Is `dst` a field's (a float32 colour target)? A field
     maker's pass writes raw into one and shows grey into anything else."""
     atts = getattr(dst, "color_attachments", ()) or ()
     return bool(atts) and getattr(atts[0], "dtype", "f1") == "f4"
@@ -1346,11 +1342,9 @@ def _is_field_target(dst: moderngl.Framebuffer) -> bool:
 class FxChain:
     """The effects' textures and one program per effect, on one GL context.
 
-    Plan 30 D0: every effect is a render graph node (`graph.Effect`), one
-    pass each (`run_one`) between textures of this chain's `pool`. Plan 33
-    T7: that is the only way an effect runs — the faces' chain (`run`, a
-    second chain borrowing this one's programs) went with the stack; a
-    branch onto the faces is effect nodes too. Every uniform is set before
+    Every effect is a render graph node (`graph.Effect`), one pass each
+    (`run_one`) between textures of this chain's `pool`. That is the only
+    way an effect runs; a branch onto the faces is effect nodes too. Every uniform is set before
     each pass, so one program serves every instance of a file in a frame."""
 
     def __init__(self, ctx: moderngl.Context, state: FxState | None = None):
@@ -1366,8 +1360,8 @@ class FxChain:
         self.errors: dict[str, str] = {}
         self._frame = 0
         self.opaque = False     # the ground is opaque: every pass writes alpha 1 (Renderer.draw)
-        self.mandel = None      # plan 63: `mandel.Gl`, the hook's GL objects, made on first use
-        # plan 90 H3: the dream's — its GL objects (`dreamhook.Gl`), the worker
+        self.mandel = None      # `mandel.Gl`, the hook's GL objects, made on first use
+        # the dream's — its GL objects (`dreamhook.Gl`), the worker
         # it hands pictures to (app.py; a deck fade lends it), and what each
         # hooked instance last said (its node shows it)
         self.dream = None
@@ -1381,8 +1375,8 @@ class FxChain:
         self._copy["u_src"].value = 0
 
     def on_reload(self) -> None:
-        """Hot-swap hook: every program is rebuilt from source on next use (plan
-        63: the hook's GL objects too, made again by the reloaded module)."""
+        """Hot-swap hook: every program is rebuilt from source on next use (the
+        hook's GL objects too, made again by the reloaded module)."""
         self._release_programs()
         gl = getattr(self, "mandel", None)
         if gl is not None:
@@ -1400,13 +1394,13 @@ class FxChain:
         self._frame += 1
         if self._frame % RELOAD_EVERY == 0:
             self.state.poll()
-        mandel.tick(self)       # plan 63: the hook's objects for gone instances, or a reload
-        dreamhook.tick(self)    # plan 90 H3: a holder that stopped lets the worker go
+        mandel.tick(self)       # the hook's objects for gone instances, or a reload
+        dreamhook.tick(self)    # a holder that stopped lets the worker go
 
     def pool(self, size: tuple[int, int], n: int = 2
              ) -> list[tuple[moderngl.Texture, moderngl.Framebuffer]]:
-        """The chain's half-float textures at `size`, at least `n` of them
-        (plan 30 D0): the textures the frame's `graph.Effect` nodes paint
+        """The chain's half-float textures at `size`, at least `n` of them:
+        the textures the frame's `graph.Effect` nodes paint
         into — two for a straight run of effects, one more for each effect held for the frame
         (`graph.Graph.pool`). Made again, all of them, when the size
         changes; grown by appending (a texture handed out this frame stays
@@ -1441,12 +1435,12 @@ class FxChain:
         self._release_programs()
         self._copy_vao.release()
         self._copy.release()
-        gl = getattr(self, "mandel", None)      # plan 63: the hook's GL objects
+        gl = getattr(self, "mandel", None)      # the hook's GL objects
         if gl is not None:
             gl.release()
             self.mandel = None
-        dreamhook.release(self)                 # plan 90 H3: the dream's
-        shown = getattr(self, "_show_field", None)     # plan 67 F1
+        dreamhook.release(self)                 # the dream's
+        shown = getattr(self, "_show_field", None)
         if shown is not None:
             shown[2].release()
             shown[1].release()
@@ -1484,7 +1478,7 @@ class FxChain:
         self._set(prog, "u_aux", 1)
         self._set(prog, "u_aux_on", 0)
         self._set(prog, "u_aux_size", (0.0, 0.0))
-        self._set(prog, "u_field", FIELD_UNIT)        # plan 67 F1
+        self._set(prog, "u_field", FIELD_UNIT)
         self._set(prog, "u_field_on", 0)
         self._set(prog, "u_field_show", 0)
         spec = st.specs[name]
@@ -1507,28 +1501,28 @@ class FxChain:
                 field: moderngl.Texture | None = None,
                 knobs: dict[str, tuple[moderngl.Texture, float]] | None = None,
                 stack: dict | None = None) -> None:
-        """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
+        """One effect's pass (a `graph.Effect` node's): its
         program over `src` into `dst`'s viewport, every uniform set, the
         clocks moved first (once per frame time,
         `FxState.advance_to`). An effect with no program copies `src`
         across, so `dst` always holds the picture (the node reads such an
-        effect through and never asks). `opaque` (plan 30 D1): `u_opaque`
+        effect through and never asks). `opaque`: `u_opaque`
         for this pass when not the chain's — 0 for an effect placed on a
         hands' layer, whose ground is see-through whatever the window's.
-        `aux` (plan 32 R): the picture wired into the effect's `aux` port,
+        `aux`: the picture wired into the effect's `aux` port,
         bound on unit 1 (`u_aux_on` 1); None leaves it off, and `aux(uv)`
         reads transparent black. `res`: the size the pass is told its
         picture has (`u_res`) when that is not `src`'s — a generator painted
         over no picture of the size it draws at (the test card,
-        `render.card_through`). `field` (plan 67 F1): the field on the
+        `render.card_through`). `field`: the field on the
         effect's `field` port, bound on unit 3 (`u_field_on` 1). A field
         maker's pass (`@makes field`) writes its field raw into a float32
-        target and shows it grey into any other (`u_field_show`). `knobs`
-        (plan 67 P3): knob key → (the field wired into it, the wire's depth);
+        target and shows it grey into any other (`u_field_show`). `knobs`:
+        knob key → (the field wired into it, the wire's depth);
         each such knob reads `value + depth × field` at every pixel, through a
         program of its own (`_program`), its field bound from `KNOB_UNIT0` on.
         A knob that takes no field (`knob_refusal`) is left out: its wire was
-        refused in words before it got here. `stack` (plan 90 H1): a delay's
+        refused in words before it got here. `stack`: a delay's
         kept frames on the effect's `stack` port (`stack.DelayStack.read`: the
         array, each frame's layer and age newest first), bound on
         unit 2; None, and the file's `stack_at` reads transparent black."""
@@ -1564,10 +1558,10 @@ class FxChain:
             if field is not None:
                 field.use(location=FIELD_UNIT)
                 self._set(prog, "u_field_on", 1)
-            if "u_stack" in prog:                 # plan 90 (H1)
+            if "u_stack" in prog:
                 self._bind_stack(prog, stack)
             v = self.state.values[name]
-            for i, key in enumerate(wired):     # plan 67 P3: each knob's field and depth
+            for i, key in enumerate(wired):     # each knob's field and depth
                 tex, depth = knobs[key]
                 tex.use(location=KNOB_UNIT0 + i)
                 self._set(prog, f"k_{key}_f", KNOB_UNIT0 + i)
@@ -1576,7 +1570,7 @@ class FxChain:
             if getattr(self.state.specs[name], "makes", PICTURE) == FIELD:
                 self._set(prog, "u_field_show", int(not _is_field_target(dst)))
             hook = HOOKS.get(getattr(self.state.specs[name], "hook", "") or "")
-            if hook is not None:        # plan 63: the Python half runs the pass
+            if hook is not None:        # the Python half runs the pass
                 hook.run(self, name, prog, vao, src, dst)
                 return
             vao.render(moderngl.TRIANGLES, vertices=3)
@@ -1585,7 +1579,7 @@ class FxChain:
 
     @staticmethod
     def _bind_stack(prog: moderngl.Program, stack: dict | None) -> None:
-        """Plan 90 (H1): a stack reader's stack uniforms — what `stack` holds
+        """A stack reader's stack uniforms — what `stack` holds
         (at most MAX_STACK frames, newest first), or none."""
         layers = np.zeros(MAX_STACK, dtype="f4")
         ages = np.zeros(MAX_STACK, dtype="f4")
@@ -1606,7 +1600,7 @@ class FxChain:
 
     def show_field(self, tex: moderngl.Texture, dst: moderngl.Framebuffer,
                    gain: float = 1.0, raw: bool = False) -> None:
-        """Plan 67 F1: field texture `tex` as a picture into `dst`'s viewport —
+        """Field texture `tex` as a picture into `dst`'s viewport —
         the grey promotion (`field_grey`: a scalar grey about mid-grey, a vector
         its x in red and y in green), read texel for texel, opaque. `gain`
         scales the field first (a thumbnail's, `field_range`; a field wired
@@ -1642,7 +1636,7 @@ class FxChain:
         `FIELD_SAMPLE`'s texels is the largest magnitude over its whole region
         of the field (`FIELD_MAX`; a vector's x and y, a scalar's x), so a
         field repeating at the sample's spacing is not read at its zero
-        crossings alone (Devin's review of #492); a few kilobytes read back.
+        crossings alone; a few kilobytes read back.
         0 for an empty field."""
         got = getattr(self, "_field_sample", None)
         if got is None:
@@ -1667,7 +1661,7 @@ class FxChain:
 
     def upscale(self, tex: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
         """`tex` stretched over `dst`'s viewport through its LINEAR sampler
-        (plan 63: a hooked pass rendered at fewer lines, `mandel.run`)."""
+        (a hooked pass rendered at fewer lines, `mandel.run`)."""
         dst.use()
         tex.use(location=0)
         self._set(self._copy, "u_scaled", 1)
@@ -1682,8 +1676,8 @@ class FxChain:
 
     def _program(self, name: str, knobs: tuple[str, ...] = ()):
         """The effect's (program, vao), built on first use and on every
-        change to its file or the lib; None if it never compiled. `knobs`
-        (plan 67 P3): the keys of its knobs wired to a field, sorted — a
+        change to its file or the lib; None if it never compiled. `knobs`:
+        the keys of its knobs wired to a field, sorted — a
         program of its own for each set wired, the file's for none."""
         st = self.state
         spec = st.specs.get(name)

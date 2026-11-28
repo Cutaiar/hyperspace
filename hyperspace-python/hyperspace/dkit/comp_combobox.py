@@ -7,30 +7,27 @@ portalled `ComboboxContent` holding a `ComboboxList`. You type into the
 thing you clicked.
 
 It is NOT the Popover-plus-Command recipe - a Button that opens a panel
-with a separate search box inside it - and the first version of this
-module was, because I told an agent that shadcn had no combobox
-component. Everything below that still refers to `Popover`, `Command`,
-`cmdk` or `CommandItem` is either the fuzzy ranking (which really is
-cmdk's `commandScore`, kept because Base UI's default filter is a plain
-substring match and the ranking is better) or a `_old_recipe_` entry kept
-as a record of what was wrong. **Read `combobox.tsx` before trusting any
-sentence here that names Command.** Two numbers - the group heading's
-weight and the separator's margin - were still `command.tsx`'s as late as
-the ergonomics pass, and nothing on the page exercised either.
+with a separate search box inside it. Everything below that refers to
+`Popover`, `Command`, `cmdk` or `CommandItem` is either the fuzzy ranking
+(which really is cmdk's `commandScore`, kept because Base UI's default
+filter is a plain substring match and the ranking is better) or a
+`_old_recipe_` entry kept as a record of the Popover-plus-Command recipe.
+**Read `combobox.tsx` before trusting any sentence here that names
+Command.** Two numbers - the group heading's weight and the separator's
+margin - are `command.tsx`'s, and nothing on the page exercises either.
 
 Everything numeric below came out of Chromium, off the `combobox.*` probe
 blocks in both themes, not out of a reading of the Tailwind classes.
-Getting the oracle to hold still was half the work and is worth recording:
-the route's forced-open *modal* Select puts `pointer-events: none` on
-`#root`, and its stealing focus at mount fires the Popover's own
+Holding the oracle still takes care: the route's forced-open *modal*
+Select puts `pointer-events: none` on `#root`, and its stealing focus at mount fires the Popover's own
 `onFocusOutside`, so the Popover the route declares `defaultOpen` is
 **already shut** by the time anything measures it. Escape leaves a layer
 behind that dismisses the Popover again one frame after it opens. What
 works is closing the Select by *choosing an item* — a real interaction,
 after which Radix unmounts its layer and hands focus back.
 
-What the measurements said, and what surprised me
--------------------------------------------------
+What the measurements said
+--------------------------
 
 * **The panel's chrome is byte-identical to `menu.py`'s.** radius
   `rounded-lg` = 10, `bg-popover`, a 1px `ring-foreground/10` (measured
@@ -60,8 +57,7 @@ What the measurements said, and what surprised me
   themes (#f5f5f5 / #262626), so the fill is interchangeable — but the
   class is `data-selected:bg-muted`, so that is the token named here.
 
-* **Hover and keyboard selection are ONE state, not two.** This is the
-  thing I expected to differ and it does not: hovering a row sets
+* **Hover and keyboard selection are ONE state, not two.** Hovering a row sets
   `data-selected="true"` on it and *clears* it from whichever row had it,
   and ArrowDown moves the same attribute. cmdk selects on `onPointerMove`,
   so a Command list has exactly one highlight and the mouse and the
@@ -149,8 +145,8 @@ What the measurements said, and what surprised me
   to `ring` in light and *staying* `input` in dark, which is the outline
   Button's own dark anomaly measured again here. So `_trigger` takes a
   `focus_f` and the open state is the fill above, not a ring.
-  `interact.select` used to drive its ring off `open_`, which paints one in
-  exactly the state that has none; it does not any more.
+  `interact.select` does not drive its ring off `open_`, which would paint
+  one in exactly the state that has none.
 
 Where a value equals one the kit already has, it says so rather than
 restating it: `T.SELECT_SIZES` gives the trigger's (height, radius) — the
@@ -191,7 +187,7 @@ from .combobox_select import (
     resolve_open,
 )
 
-# The pure parts live in four modules of their own (HANDOFF item 3c). Every
+# The pure parts live in four modules of their own. Every
 # name below is either used by the widget here or re-exported for `C.x`
 # callers - test_module_surface.py checks each one resolves.
 from .combobox_tokens import COMBOBOX, COMBOBOX_DARK, combobox_table  # noqa: F401
@@ -200,23 +196,12 @@ from .ease import mix  # noqa: F401
 # How much room the popup window keeps around its content for the field's
 # focus ring.
 #
-# ZERO, deliberately, and the reason is worth keeping. The ring is a 3px
-# band drawn OUTSIDE the field's box, and ImGui clips a window's draw list
-# to the window - so with the window ending at the field's edge the ring is
-# cut off square on whichever side it reaches. Inflating the window by 6 on
-# every side fixed that here and produced visible artifacts around the top
-# and bottom edges of the panel on a Retina Mac, which this machine (Mesa,
-# density 1) does not reproduce. A cosmetic clip on a ring that only shows
-# when the list is reached by Tab is the smaller of the two faults, so the
-# inflation is off until the real fix lands.
-#
-# The real fix is not a bigger window: it is not putting the trigger inside
-# the popup at all. The trigger is in there because ImGui hands a popup the
-# keyboard the moment it appears, so an input left in the parent stops
-# receiving characters - see the note in `combobox`. A list drawn as an
-# ordinary window with `no_focus_on_appearing` would leave the caret where
-# it is and need no inflation, at the cost of hand-rolling the dismissal
-# and z-order that the popup stack gives for free.
+# ZERO. The ring is a 3px band drawn OUTSIDE the field's box, and ImGui
+# clips a window's draw list to the window, so with the window ending at
+# the field's edge the ring is cut off square on whichever side it reaches.
+# Inflating the window produces visible artifacts around the top and bottom
+# edges of the panel on a Retina Mac.
+# DEBT: combobox-popup-ring-clip
 RING_PAD = 0.0
 
 # The margin a popover keeps off the viewport edge - floating-ui's own
@@ -235,10 +220,8 @@ LAST_RECT: dict = {}
 # --------------------------------------------------------------------------
 #
 # PANEL CHROME. The two panels were measured identical (see the module
-# docstring), and they are now the same code: `menu.panel_chrome`, which was
-# pulled out of `menu.popup` precisely so that `popup`, the gallery cell and
-# a Combobox could share one answer. This file held a copy of those four
-# lines until then, with a note saying the fix needed menu.py edited.
+# docstring), and are the same code: `menu.panel_chrome`, shared by
+# `menu.popup`, the gallery cell and a Combobox.
 
 
 def _col(ui, spec, a: float = 1.0):
@@ -259,16 +242,8 @@ def round_px(v: float) -> float:
 def _panel_chrome(ui, dl, x, y, w, h, a, tbl) -> None:
     """The panel's shadow, fill and ring - which is `menu.panel_chrome`.
 
-    This used to be a copy of those four lines, with a note saying the right
-    fix was "a `menu.panel_chrome(ui, x, y, w, h, alpha)` that both call;
-    adding it means editing menu.py, which this change may not do". That
-    function exists now, and its own docstring names a Combobox as one of
-    the three callers it was pulled out for - so the copy was the only thing
-    left of the problem, and the panel's chrome was being diffed against the
-    browser in the `menu` cell while this drew its own version.
-
-    It is now the same code, so `menu.panel` and `contextmenu.panel` in the
-    pixel diff cover this panel's chrome too. test_panel_chrome_is_menus
+    It is the same code as `menu.popup`'s, so `menu.panel` and
+    `contextmenu.panel` in the pixel diff cover this panel's chrome too. test_panel_chrome_is_menus
     holds the tokens to that, because the delegation is only sound while
     COMBOBOX's radius, bg and ring still say what menu.py draws.
     """
@@ -304,8 +279,7 @@ def field_chrome(ui, x, y, w, h, tbl, *, value: str = "",
     # The placeholder shows whenever the VALUE is empty, focused or not.
     # Measured in Chromium on the real component: the placeholder ink is
     # there at rest, under a keyboard focus, and with the list open -
-    # `::placeholder` keys off the value, not the focus. The kit hid it on
-    # focus, so clicking an empty combobox blanked the field.
+    # `::placeholder` keys off the value, not the focus.
     if text and not value:
         D.label(ui.dl, x + tbl["input_pad_l"], y, placeholder, ui.faces,
                 "regular", tbl["field_font"],
@@ -467,9 +441,6 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     This is the whole shape of the real component: Base UI's
     `ComboboxInput` is an InputGroup wrapping a real <input>, with a ghost
     chevron in an inline-end addon. You type into the thing you clicked.
-    The kit first shipped a Button that opened a panel with a separate
-    search box inside it - the old Popover+Command recipe - and that is what
-    this replaces.
 
     The sandwich is `interact.text_input`'s: a real `imgui.input_text` for
     the caret, the selection, the keyboard and the clipboard, with its own
@@ -510,10 +481,9 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     fs = imgui.get_font_size()
     # `FramePadding` IS the field's padding, and that is the point.
     #
-    # It used to be zeroed, so that the cursor was the text's top-left. The
-    # cost was that an InputText's HIT AREA is its frame, and the frame was
-    # then the text box alone: the field's leading 10 px and everything
-    # right of the text box were dead. Measured on the dashboard's Find
+    # An InputText's HIT AREA is its frame, so a zeroed padding would make
+    # the frame the text box alone: the field's leading 10 px and everything
+    # right of the text box would be dead. Measured on the dashboard's Find
     # combobox (w 150): a press at x+2 or x+120 neither focused the field
     # nor opened the list, where the browser treats the whole padded box as
     # the input - `cursor: text` on the group, and clicking the left pad
@@ -522,7 +492,7 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     # So the frame is the input's own box, x .. x + w - <the addon>, and
     # the padding puts the glyphs back at `input_pad_l` and centres them:
     # the frame comes out `fs + 2 * (h - fs)/2` = h, and the text's
-    # top-left is unchanged from the zeroed version.
+    # top-left is where a zero padding would put it.
     #
     # ImGui's FramePadding.x is symmetric, so the text's RIGHT inset is 10
     # where the browser's is 6 (`pr-1.5` from the inline-end addon). That
@@ -593,7 +563,7 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
 # The KEYBOARD, measured on the real Base UI component rather than
 # reasoned about. `?probe` carries `combobox.kb`, which is the only block on
 # that route WITHOUT `open` - every other one reports `aria-expanded: true`
-# whatever you press, which is how the first pass at this got it wrong.
+# whatever you press.
 #
 #   closed  focus (a Tab into it)   stays CLOSED
 #   closed  click the input         opens; VALUE's row, else none
@@ -619,26 +589,24 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
 #   closed  Escape                  CLEARS the value   <- NOT implemented, see
 #                                   the note at the end of this comment
 #
-# Three things in there are easy to get wrong and were.
+# Three things in there are easy to get wrong.
 #
 # The highlight has a real NONE state - it does not wrap, it falls off
 # either end into nothing and comes back round on the next press.
 #
-# Tab is not the list's key. The kit trapped it inside the popup, so a
-# keyboard user could get into the combobox and not out of it.
+# Tab is not the list's key: trapping it inside the popup would let a
+# keyboard user into the combobox and not out of it.
 #
-# And the VALUE beats the gesture. The first pass at this model was driven
-# on `?probe`'s `combobox.kb`, which carries no `defaultValue` - so every
-# open there falls through to the none / first / last case and that is the
-# only case it recorded. Re-driven on `combobox.many` (sixteen rows,
-# `defaultValue="Gamma"` at index 2) all four gestures open on Gamma, which
-# is also the row that carries the check. `resolve_open` is that table.
+# And the VALUE beats the gesture. `combobox.kb` carries no
+# `defaultValue`, so every open there falls through to the none / first /
+# last case. On `combobox.many` (sixteen rows, `defaultValue="Gamma"` at
+# index 2) all four gestures open on Gamma, which is also the row that
+# carries the check. `resolve_open` is that table.
 #
 # A second Escape on a CLOSED combobox CLEARS the committed value -
 # measured: one Escape reverts the query and closes, the next sets
-# `input.value` to "". The kit could not express it, because `combobox()`
-# signals a choice by returning its id and a cleared value is a falsy id,
-# which every caller reads as "nothing happened". `CLEARED` is that third
+# `input.value` to "". `combobox()` signals a choice by returning its id
+# and a cleared value is a falsy id, which every caller reads as "nothing happened". `CLEARED` is the third
 # answer: a sentinel distinct from both None and "", so
 # `if got is not None` separates the three cases.
 KEY_MODEL = """closed: focus keeps it closed; click/chevron/type/arrow open
@@ -701,8 +669,8 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     # stops receiving characters exactly when the list opens. The copy
     # inside the popup is the one that can hold the caret.
     #
-    # What went wrong: that copy used to draw the field's CHROME as well,
-    # and ImGui clips a window's draw list to the window. The popup starts
+    # The popup's copy must not draw the field's CHROME, because ImGui
+    # clips a window's draw list to the window. The popup starts
     # at the field's top-left and is exactly `w` wide, so the 3px ring
     # drawn OUTSIDE the field's box was cut off on three sides. Measured
     # on the dashboard's Find combobox, dark, pointer parked off the
@@ -716,8 +684,8 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     # and the chevron - and it is in the parent window, where nothing
     # clips it. The popup's copy owns the WIDGET: the caret, the
     # selection, the keyboard and the clipboard. `ink` hands the glyphs to
-    # whichever of them has the caret, because both were painting them and
-    # the value came out at 255 against a `foreground` of 250.
+    # whichever of them has the caret, because both painting them would put
+    # the value at 255 against a `foreground` of 250.
     open_now = imgui.is_popup_open(pid)
     changed, q, focused, clicked, _cs = _input_trigger(
         ui, key, tbl, x, y, w, hh, s["q"], placeholder,
@@ -789,8 +757,7 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         # The SECOND Escape, the one pressed while it is already closed,
         # empties the field. Measured.
         #
-        # No flag is needed to tell the two apart, and the flag I reached
-        # for first was the bug: the Escape that CLOSES the list is seen by
+        # No flag is needed to tell the two apart: the Escape that CLOSES the list is seen by
         # the open branch, because `open_` was still true on that frame, so
         # this branch cannot run until the frame after - by which time the
         # key is no longer pressed. Any Escape that gets here is therefore
@@ -827,10 +794,10 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     # the panel keeps side=top - the near edge stays 6px off the field and
     # only the far edge moves. It does not hop to the other side.
     #
-    # The kit re-ran the placement every frame against the current content
-    # height, so the first keystroke shrank the panel, the shrunken panel
-    # suddenly fitted below, and it jumped from above the field to below it
-    # mid-word. The side is decided ONCE, when the popup opens, and kept -
+    # Re-running the placement every frame against the current content
+    # height would let the first keystroke shrink the panel until it fitted
+    # below, jumping it from above the field to below mid-word. The side is
+    # decided ONCE, when the popup opens, and kept -
     # which is also what `--available-height` is for: a panel that clamps
     # never needs to flip.
     vp = ui.viewport
@@ -1008,9 +975,9 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
             #
             # The real list follows its keyboard highlight: measured on
             # `combobox.many`, sixteen rows in a 252px clamp, the arrows
-            # take `scrollTop` 0 -> 92 (row 11) -> 204 (row 15) and back to
-            # 0 when the highlight wraps round to the first row. The kit
-            # did not scroll at all, so arrowing past the ninth row moved a
+            # take `scrollTop` 0 -> 92 (the 12th row) -> 204 (the 16th) and back to
+            # 0 when the highlight wraps round to the first row. Without
+            # the scroll, arrowing past the ninth row would move a
             # highlight nobody could see.
             #
             # Minimum movement, which is `scrollIntoView({block:
@@ -1019,7 +986,7 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
             # because its own `p-1` is INSIDE the scrollable box. The
             # kit's 4px rails are outside the scroll viewport, so the two
             # cancel and the numbers come out identical with no padding
-            # here: row 11 wants 12*28 - 244 = 92, row 15 wants
+            # here: the 12th row wants 12*28 - 244 = 92, the 16th wants
             # 16*28 - 244 = 204. Both are the measured values.
             #
             # Only the KEYBOARD scrolls. Measured, a wheel scroll moves the
@@ -1101,8 +1068,7 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
                 s["caret0"] = _CARET.get(f"{key}.open")
                 imgui.close_current_popup()
         # Tab is NOT the list's key. Measured: it closes the list and moves
-        # focus on. The kit swallowed it inside the popup, so a keyboard
-        # user could get into the combobox and not back out of it.
+        # focus on; swallowing it inside the popup would trap a keyboard user.
         if imgui.is_key_pressed(imgui.Key.tab, False):
             imgui.close_current_popup()
         if chosen is not None:
@@ -1110,9 +1076,8 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
             # the field focused with the caret at the END of the new value
             # and nothing selected. `Enter` on a 'et' query gives value
             # `Beta` and selectionStart == selectionEnd == 4, with
-            # `document.activeElement` still the input. The kit dropped the
-            # focus on the floor, so the ring went out and the next arrow
-            # did nothing.
+            # `document.activeElement` still the input. Dropping the
+            # focus would put the ring out and leave the next arrow inert.
             s["refocus"] = True
             if picked is None:
                 picked = next((_k(it, "label", "") for it in shown

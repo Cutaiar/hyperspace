@@ -1,6 +1,6 @@
 """DAW bridge — the analyzer's lanes out as MIDI, external MIDI lanes in.
 
-Plan 05 task 1, plan 07 WP4c, BLUEPRINT §3.6: the pluggable edge that
+BLUEPRINT §3.6: the pluggable edge that
 keeps FL Studio (or another Hyperspace, a lighting rig) connectable
 without the core knowing. Off by default; ``[bridge] enabled = true`` in
 config.toml opens it. Nothing in the core imports this module — app.py
@@ -17,7 +17,7 @@ substring of its name — `out`). One encoding per bridge:
           on `channel` — the MIDI 1.0 14-bit pair, 32 − cc lanes at most.
           A receiver that reads the MSB alone gets 7-bit motion (FL's
           Link to controller does); the LSB is for one that fuses pairs
-          (another Hyperspace, plan 05's FL script).
+          (another Hyperspace, the FL script).
 
 Value mapping, exactly: an analyzer lane is normalized as routing.py
 does, ``u = lane / CEIL``, then clamped to [0, 1] and quantized
@@ -59,10 +59,10 @@ and let go (``feed("ext", None)``) when the port vanishes.
 Don't open `in` on the bus `out` sends to: IAC echoes, and the lanes
 would come straight back as ext lanes. Use two buses.
 
-MIDI clock out (plan 05: 24 ppqn from the DJ Link BPM, start/stop with
-beat-grid lock) waits for a beat source; nothing here derives ticks yet.
+There is no MIDI clock out: nothing here derives 24 ppqn ticks from a beat
+source (the DJ Link BPM, start/stop with beat-grid lock).
 
-**Sinks (plan 27 B3).** On the device registry the bridge is one device
+**Sinks.** On the device registry the bridge is one device
 with two halves (devices.BridgeDevice): its `receive` stays a source (the
 ``ext`` vector, with its labels and rests published, `publish`) and its out
 half is a *sink*: what goes out is the meta controller's sink rows on the
@@ -77,8 +77,8 @@ The outbound gate (`Sender`: quantise, change-gate, rate-limit, encode, per
 channel) and a named output port that is made virtual when absent and
 looked for again when it goes (`OutPort`) are this module's, shared with
 the `midi-out` sink (devices.MidiOutDevice) — the port the hands' DAW
-messages go out on (the `hands-daw` entry), which hands/core.py no longer
-opens itself.
+messages go out on (the `hands-daw` entry), which hands/core.py does not
+open itself.
 """
 
 from __future__ import annotations
@@ -180,10 +180,10 @@ def _open_out(name: str, *, virtual: bool = True) -> tuple:
     """(port, error, made_virtual): an existing output port whose name
     holds `name` (any case), else — when `virtual` — a new virtual one
     called `name`. (None, why, False) when there is no such port or the
-    backend refuses. (Moved here from hands/core.py, plan 27 B3.)"""
+    backend refuses."""
     if not name:
         return None, "", False
-    # (the one road; it can't abort on a refusal it sees: audit R15)
+    # the one road; it can't abort on a refusal it sees
     seen = port_names(fresh=True)
     if seen.out_why:
         return None, f"out {name!r}: {seen.out_why}"[:120], False
@@ -214,9 +214,8 @@ class OutPort:
     midi.Ports' schedule when it fails (`retry_after`: RECONNECT_S for
     RECONNECT_FAST looks, then RECONNECT_SLOW_S; back to the start once it
     opens). After a loss only a port that is back is joined — or, when the
-    first open had to make a virtual one, a new virtual one. What the hands'
-    DAW out did inside hands/core.py until plan 27 B3, now the `midi-out`
-    sink's (devices.MidiOutDevice). An open that fails is said once on
+    first open had to make a virtual one, a new virtual one. It is the `midi-out`
+    sink's port (devices.MidiOutDevice), the hands' DAW out. An open that fails is said once on
     stderr, prefixed with `who`. `out` may be injected (a test's fake): it
     is the caller's, never closed and never reopened."""
 
@@ -333,7 +332,7 @@ class Bridge:
     leaves out). `inp`/`out` may be injected (tests: fakes with
     iter_pending() and send()); otherwise the ports are found by name and
     reopened on their own (midi.Ports). `reg` reads through its pointer
-    once it has one (plan 44 D5a, `point`).
+    once it has one (`point`).
     """
 
     reg = Through("reg")
@@ -417,8 +416,8 @@ class Bridge:
         return False
 
     def publish(self, router) -> None:
-        """The ext lanes' labels and rests, like every source (plan 27 B3:
-        the ROUTING page reads the count from here, not a constant). An
+        """The ext lanes' labels and rests, like every source (the
+        ROUTING page reads the count from here, not a constant). An
         ext lane rests at 0 — what a push row with no rest of its own has
         always been centred on."""
         if router.labels.get("ext") != self.labels:

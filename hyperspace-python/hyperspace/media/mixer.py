@@ -1,7 +1,7 @@
-"""The media mixer (plan 45 V2, V4): the channels' video sound, summed into
+"""The media mixer: the channels' video sound, summed into
 one output stream, its read heads the transport's slaves.
 
-**The transport is the one clock** (plan 45, "no second time base"). The
+**The transport is the one clock** (no second time base). The
 frame thread hands the mixer, once a frame (`MediaState.poll`, after the
 transports are stepped), a tuple of `Voice`s: for each channel whose
 play-audio toggle is on and whose source has a soundtrack, the `Soundtrack`,
@@ -10,9 +10,9 @@ gain, the transport's `velocity` (signed), its `wrap` (the loop's length) and
 a key saying whose it is.
 
 **The callback reads sequentially from a head of its own, slewed toward the
-transport** (V4). The audio and display clocks are never locked, so reading
-each block at the last playhead (V2) repeated or skipped a block now and
-then. Each voice now has a `_Head`, written only by the callback, that moves
+transport**. The audio and display clocks are never locked, so reading
+each block at the last playhead would repeat or skip a block now and
+then. Each voice has a `_Head`, written only by the callback, that moves
 `speed × frames` source samples a block and is resampled (linear) by that
 speed, which glides from last block's to this block's inside the block: at
 rate 1 the samples come out one after another, whatever the phase of the two
@@ -55,13 +55,13 @@ toggle off, its gain 0, its slot changed) gets one more block, fading out
 through the seam, sample after sample in either direction, the error measured
 the short way round. So the wrap is neither a jump nor a gap, and a clip cut
 to loop is seamless; a clip that was not has the click of its own two ends
-(no splice fade: heard first, plan 45). The loop's length is the picture's, so
+(no splice fade). The loop's length is the picture's, so
 a track ending up to `SEAM_SLACK` before it (a mux mismatch) has that gap
 bridged, a line from its last sample to its first, at full level; a track
 ending further before it fades out and back; one running past it is cut at
 the picture's end. **No head is prefetched**: a clip up
 to `AUDIO_WINDOW_S` is held whole, and a longer one's wrap is a fade out and
-back in, one window decode later (plan 45, "What changed in the build (V4)").
+back in, one window decode later.
 
 The callback allocates nothing once warm: its buffers are kept (`_warm`,
 remade only if PortAudio asks for another size), a voice is read through
@@ -69,7 +69,7 @@ remade only if PortAudio asks for another size), a voice is read through
 `out=`. A `_Head` is made on the frame thread (`_bind`), never here.
 
 The stream is opened lazily — never until a channel's sound is first
-turned on (nothing until something asks, as V1's soundtrack; a hold or a
+turned on (nothing until something asks; a hold or a
 gain at off still asks) — on a thread of its own (``media-mixer-open``),
 so a slow CoreAudio open never holds the frame thread. Once open it stays
 open, playing silence while no channel plays, until `close` (app exit,
@@ -79,7 +79,7 @@ failure while a channel still asks. The callback never blocks and
 never raises: a voice whose `read` raises or hands back the wrong shape is
 skipped (`errors` counts them) and anything else wrong is silence.
 
-**The analyzer can listen to the mix** (plan 45 V3). `listen(ring)` hands
+**The analyzer can listen to the mix.** `listen(ring)` hands
 the mixer the analyzer's input ring (`audio._Ring`, `AudioEngine.start_mix`);
 each callback then pushes the block it just wrote to the output — after the
 gains and after the clip, what the room hears — as mono, the mean of L and
@@ -89,8 +89,7 @@ a buffer kept for it (`_mono`); it counts nothing and moves nothing: the
 analyzer drains the ring once a frame exactly as it drains the mic's.
 `listen(None)` stops it. The ring is one reference, read once a callback.
 
-This is how a video's sound reaches the other `Deck`, and the owner accepts it
-(2026-11-06, register row 790; row 702 lists the other known limits): only the
+This is how a video's sound reaches the other `Deck`, and that is accepted: only the
 `Deck` on air feeds the mixer, the analyzer hears what the room hears, and the
 `Deck` off air reads the same analyzer's lanes. The toggle says so
 (`ui.VIDEO_SOUND_REACHES`, the tip of ``audio.mix``);
@@ -117,7 +116,7 @@ RETRY_S = 5.0                 # a failed open is tried again this long after, wh
 CLOSE_BUDGET_S = 0.5          # how long `close` waits for an open still under way
 CEILING = 1.0                 # the sum is clipped here: gain is the performer's to set
 
-# -- the read head (V4; the numbers are judged by ear: hand checks 510-513)
+# -- the read head (the numbers are judged by ear)
 HOLD_SPEED = 1e-3             # slower than this (a hold, a jog's coast dying out) is silent
 FADE_SPEED = 0.05             # slower than this the level falls with the speed
 MAX_SPEED = 16.0              # the most source a block reads: × BLOCK bounds `_src`
@@ -187,7 +186,7 @@ class Mixer:
         self.underruns = 0
         self.errors = 0
         self._warm(BLOCK)            # the callback's own buffers
-        self.tap = None       # plan 45 V3: the analyzer's ring, or None (`listen`)
+        self.tap = None       # the analyzer's ring, or None (`listen`)
         self.tap_errors = 0   # pushes into that ring that raised (not voice reads)
         self._mono = np.zeros(BLOCK, np.float32)
 
@@ -321,7 +320,7 @@ class Mixer:
         and R), into the analyzer's ring. Called from the callback only; a
         failure here costs the analyzer one block, never the sound already
         written. `_mono` is (re)made here, the one place: another block
-        size, or a Mixer from before V3 that has none."""
+        size, or a Mixer built without one."""
         ring = getattr(self, "tap", None)
         if ring is None:
             return
@@ -538,7 +537,7 @@ class Mixer:
                     head.level = 0.0            # not sounding: `_bind` may let it go
             np.clip(mix, -CEILING, CEILING, out=mix)
             outdata[:] = mix
-            self._push(mix, frames)           # V3: what is heard, to the analyzer
+            self._push(mix, frames)           # what is heard, to the analyzer
         except Exception:  # noqa: BLE001 — PortAudio must never see a raise
             try:
                 outdata.fill(0.0)

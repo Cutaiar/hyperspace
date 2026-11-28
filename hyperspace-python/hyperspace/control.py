@@ -1,15 +1,14 @@
 """Headless panel state — the non-visual logic behind the control surface.
 
-Ported semantics (ENGINEERING.md, audio chain section): scenes are the
-unit of intent, so Reset
+Scenes are the unit of intent, so Reset
 resolves to the currently selected scene, never to hard-coded defaults;
 Reset-all is guarded by an 8 s undo (the button relabels itself) whose
 snapshot is discarded on a scene change because it belongs to the old
 scene. Knob edits and transfer changes never move the scene selection.
 
-A scene is a band preset's document (plan 11, audit A1): the eleven files
+A scene is a band preset's document: the eleven files
 in hyperspace/scenes/band/*.json — code data, shipped with the build and
-never a library loadable patch (2026-10-28: the library has one tier, the
+never a library loadable patch (the library has one tier, the
 user's) — named here in combo order (SCENES) because the APC40's clip
 grid and every saved project address them by index. The combo, the grid
 and Reset re-tune whatever bands are loaded from the scene's values —
@@ -21,7 +20,7 @@ the user's own band presets) goes the other way, layout included, and
 tells the combo when its name is a scene's. The scene files are read
 without a library (library.scene_doc), so the headless tests need none.
 
-The analyzer has N bands (plan 07), so the panel also adds, removes and
+The analyzer has N bands, so the panel also adds, removes and
 moves them and applies a loadable patch's layout. Every one of those changes the
 set of `band.*` ids the registry declares; `on_layout` is the hook
 build_registry installs to rebuild them, and every path that can change
@@ -76,7 +75,7 @@ class Control:
             self._layout_changed()
 
     def apply_layout(self, layout: dict) -> None:
-        """A loadable patch's layout: applied before its values (plan 07 contract)."""
+        """A loadable patch's layout: applied before its values."""
         self.clear_undo()        # the snapshot's bands may no longer exist
         self.chain.apply_layout(layout)
         self._layout_changed()

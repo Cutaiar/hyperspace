@@ -89,11 +89,10 @@ class Anim:
         # overriding the stock widget, which sliders are in Ctrl+click text
         # entry, and how long each id has been hovered without a break.
         #
-        # It lives here because `Anim` is the one object the kit already
-        # threads across frames - interact.Ui is rebuilt every frame
-        # (dashboard.py:569), so anything kept on the Ui is lost immediately.
-        # That is not a hypothetical: the tooltip's hover clock was reset on
-        # every frame and the tooltip could never reach its delay.
+        # It lives here because `Anim` is the one object the kit threads
+        # across frames; interact.Ui is rebuilt every frame, so anything kept
+        # on the Ui is lost immediately (a hover clock kept there never
+        # reaches the tooltip delay).
         # (mostly dicts by widget id; also the frame's "dt" and the "kbd" flag)
         self.store: dict[str, Any] = {"drag": {}, "texting": {}, "hover": {}}
 

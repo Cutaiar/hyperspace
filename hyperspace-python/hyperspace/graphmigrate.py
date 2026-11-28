@@ -1,41 +1,39 @@
-"""Old loadable patches as wires, and wires back as old values (plan 33 M).
+"""Old loadable patches as wires, and wires back as old values.
 
-Until plan 33 an effect's place in the picture was a number: `fx.<n>.order`
+An effect's place in the picture used to be a number: `fx.<n>.order`
 in the stack, `fx.<n>.target` (the frame or the faces), and the faces' and
 backdrop's channel were `view.media` / `backdrop.channel`. The free graph
 says all of that as wires, so a loadable patch written before it has to be read as
-wires (`to_free`, `migrate`). A save is always `hyperspace.preset/6`
-(`WIRED_SCHEMA`, row 394, the owner's 2026-10-25 decision: both Macs run
-the same build), so nothing here writes a graph back in older words —
-the migration is one way, on load.
+wires (`to_free`, `migrate`). A save always writes the newest schema
+(`SAVE_SCHEMA`; both Macs run the same build), so nothing here writes a
+graph back in older words — the migration is one way, on load.
 
 Pure data: it reads dicts and `graph.GraphSpec`, touches no params, loadable patch
 or media module, and nothing here draws.
 
-Rows 346 and 350 are what it keeps and what it makes:
+What it keeps and what it makes:
 
-- Only the effects that are on with mix > 0 join a run (row 346): the owner
-  reads the library as using no effect that is switched off, so an off
-  effect drew nothing and leaving it out changes no picture. One left out
+- Only the effects that are on with mix > 0 join a run: an off effect
+  drew nothing, so leaving it out changes no picture. One left out
   while something in the loadable patch drives its params is said in a load note.
 - `migrate(doc, specs)` is the whole-document entry point (the section, the
   values with the retired ones dropped, any switch's select, the retargeted
   rows, the notes); `to_free(doc, specs)` is its section and notes alone.
 - A route onto `view.media` or `backdrop.channel` becomes a switch over the
-  eight channels (row 350), the rows retargeted onto `switch.select`.
+  eight channels, the rows retargeted onto `switch.select`.
 
-Plan 35 M (rows 372, 383–385): then every section is a wired frame in the
-owner's names — `migrate` renames it (`renamed`, V2) and writes today's
-frame as wires (`wired_section`); `backdrop.history` and the look-back's
-`holds` are the capture wire.
+Every section is then a wired frame in the current names — `migrate`
+renames it (`renamed`) and writes today's frame as wires
+(`wired_section`); `backdrop.history` and the look-back's `holds` are the
+capture wire.
 
-Plan 36 T2 (W2): and every edge the builder read by name — the faces'
-pattern, the look-back's cover, a layer's and a guide's hands, the
-scene's depth for `laid: depth` — is written as the wire it stood for
-(`drawn_edges`), on every `/4`–`/6` section, a wired one too, so each
-draws what it drew while nothing is read that no wire says.
+Every edge the builder read by name — the faces' pattern, the look-back's
+cover, a layer's and a guide's hands, the scene's depth for `laid: depth`
+— is written as the wire it stood for (`drawn_edges`), on every `/4`–`/6`
+section, a wired one too, so each draws what it drew while nothing is read
+that no wire says.
 
-Plan 36 T4 (W4): the one-shader look-back (echoes and the dream laid over
+The one-shader look-back (echoes and the dream laid over
 `lookback.image`, recording `lookback.capture`) is two nodes and a
 composite — `split_lookback`, the last step to `/7` (`seven`), keyed on
 the old values (`look_of`): on, it is `X → lookback → composite (add,
@@ -60,44 +58,40 @@ from .outputs import MAX_OUTPUTS
 from .routing_sources import nsew
 
 FREE_SCHEMA = "hyperspace.preset/5"
-# plan 35 (row 385): `/6` is `/5` with the wired frame in the new ids;
-# `/5` and below are read, never written
+# `/6` is `/5` with the wired frame in the new ids; `/5` and below are
+# read, never written
 SIX_SCHEMA = "hyperspace.preset/6"
-# plan 36 T3 (W3, D5): `/7` is the frame that says everything — every hidden
-# edge a wire, every placement a wire, the hands entries and `laid` written,
-# effects only where the section names them. What every save writes (row
-# 394); a `/7` is read as it is, never migrated or filled in. `/4`–`/6` are
-# read only through the one-way migration to it (`seven`)
+# `/7` is the frame that says everything — every hidden edge a wire, every
+# placement a wire, the hands entries and `laid` written, effects only where
+# the section names them. A `/7` is read as it is, never migrated or filled
+# in. `/4`–`/6` are read only through the one-way migration to it (`seven`)
 WIRED_SCHEMA = "hyperspace.preset/7"
 SEVEN = 7
-# plan 40 T2 (D4, D7): `/8` is `/7` plus the GRAPH page's groups (`groups`,
-# loadable.GROUPS_KEY) — written only by a loadable patch that holds one, so a loadable patch
-# with none wrote `/7` byte for byte, until plan 43 C2 made every save `/9`
+# `/8` is `/7` plus the GRAPH page's groups (`groups`, loadable.GROUPS_KEY)
 GROUPS_SCHEMA = "hyperspace.preset/8"
 GROUPS_KEY = "groups"
-# plan 43 C2 (rows 572, 576): `/9` is `/8` with the one orbit camera — the
-# eye (`eye.fov`, `eye.distance`) in `values` beside `camera.*`, and the
-# spin's pose (`pose`: the six `rot.phase.*`, `params.POSE_IDS`).
-# What every save writes (row 521 closed: the `/7`-or-`/8` fork is gone);
-# `/7` and `/8` are read through `nine`, the eye filled in on the way
+# `/9` is `/8` with the one orbit camera — the eye (`eye.fov`,
+# `eye.distance`) in `values` beside `camera.*`, and the spin's pose
+# (`pose`: the six `rot.phase.*`, `params.POSE_IDS`). `/7` and `/8` are
+# read through `nine`, the eye filled in on the way
 EYE_SCHEMA = "hyperspace.preset/9"
 NINE = 9
-# plan 44 D3 (rows 611–625): `/10` is `/9` with the look made whole — the
-# hands' look (`ghost.*`, but `ghost.mirror`) and the clouds' (`cloud.*`)
-# in `values`, the bus cuts in `bus` (`BUS_KEY`: `graph.BusCuts`'s JSON,
-# the cables from All outputs into each window this loadable patch cuts), no
-# `modules` labels and no `desk_template`. What every save writes; `/9`
-# and older are read through `ten`, the open show's look filled in
+# `/10` is `/9` with the look made whole — the hands' look (`ghost.*`, but
+# `ghost.mirror`) and the clouds' (`cloud.*`) in `values`, the bus cuts in
+# `bus` (`BUS_KEY`: `graph.BusCuts`'s JSON, the cables from All outputs
+# into each window this loadable patch cuts), no `modules` labels and no
+# `desk_template`. `/9` and older are read through `ten`, the open show's
+# look filled in
 LOOK_SCHEMA = "hyperspace.preset/10"
-# plan 57 (FQ4, the one migration): the word moves. `/11` is `/10` under the kind
-# `hyperspace.loadable`, the old kind's ladder read through (`eleven`), in
-# `<library>/loadable/`. A load reads both kinds until CL1; a save writes this alone.
+# `/11` is `/10` under the kind `hyperspace.loadable`, the old kind's
+# ladder read through (`eleven`), in `<library>/loadable/`. A load reads
+# both kinds.
 OLD_KIND = "hyperspace.preset"
 LOADABLE_KIND = "hyperspace.loadable"
 ELEVEN_SCHEMA = f"{LOADABLE_KIND}/11"
 ELEVEN = 11
 TEN = 10
-# plan 89: `/12` is `/11` with no copy node — an effect that draws on another
+# `/12` is `/11` with no copy node — an effect that draws on another
 # picture does it by a slot of its own (`"slots"` on its entry, wires into
 # `<effect>.slot.<k>.image` and out of `<effect>.slot.<k>`). What every save
 # writes; `/11` and older are read through `twelve` (`slots_of_copies`)
@@ -105,12 +99,11 @@ TWELVE_SCHEMA = f"{LOADABLE_KIND}/12"
 TWELVE = 12
 SAVE_SCHEMA = TWELVE_SCHEMA
 BUS_KEY = "bus"
-# the keys `/10` retired: the module labels (row 540, the owner, 2026-11-03)
-# and the desk templates (plan 24 C3: neither library held one)
+# the keys `/10` retired: the module labels and the desk templates
 TEN_RETIRED = ("modules", "desk_template")
-# the look a /2 show held that /10 makes the loadable patch's (review of #351: one
-# id set, one place — `library.show_look` reads it out of an old show, `ten`
-# hands it to an old loadable patch): the hands' and the clouds' groups, less the
+# the look a /2 show held that /10 makes the loadable patch's (one id set,
+# one place — `library.show_look` reads it out of an old show, `ten` hands
+# it to an old loadable patch): the hands' and the clouds' groups, less the
 # room's mirror (`params.SHARED_META_KEYS`)
 LOOK_GROUPS = ("ghost", "cloud")
 
@@ -122,27 +115,27 @@ def is_look_id(pid: Any) -> bool:
             and pid.rpartition(".")[2] != "mirror")
 EYE_IDS = ("eye.fov", "eye.distance")
 CAMERA_NODE = "render:camera"      # the camera's canvas id (`graphview.CAMERA`'s node)
-# …and every id a file may hold it under: today's and the old canvas's (R14)
+# …and every id a file may hold it under: today's and the old canvas's
 CAMERA_NODES = (CAMERA_NODE, "render:eye")
 
 
 def groups_of(doc: Any) -> list:
-    """Plan 40 T2, the one step from `/7` to `/8`: the key is absent → no
+    """The one step from `/7` to `/8`: the key is absent → no
     groups (a `/7`, a migrated older file and a `/8` without one alike)."""
     return list(doc.get(GROUPS_KEY) or []) if isinstance(doc, dict) else []
 
 
 def group_number(gid: Any) -> int:
-    """`group.3` → 3; 0 for anything else (plan 40: a group's id, read by
+    """`group.3` → 3; 0 for anything else (a group's id, read by
     the loadable patch's load and by GRAPH's Group — the one rule, kept here, a
     leaf both import)."""
     head, dot, n = gid.partition(".") if isinstance(gid, str) else ("", "", "")
     return int(n) if head == "group" and dot and n.isdecimal() and int(n) >= 1 else 0
 
 
-# plan 35 M (row 381): `backdrop.history` is the capture wire now
+# `backdrop.history` is the capture wire now
 RETIRED = ("fx.select", "view.media", "backdrop.channel", "backdrop.history")
-# the retired values a wire says now, not a switch (row 381): a row that
+# the retired values a wire says now, not a switch: a row that
 # drives one is dropped, said once (`DRIVEN_RETIRED_NOTE`)
 WIRE_RETIRED = ("backdrop.history",)
 DRIVEN_RETIRED_NOTE = ("{pid} is a wire now (plan 35): its route is dropped — pick what the "
@@ -158,7 +151,7 @@ LEFT_OUT = "{name} was off, so it is not in the run: wire it in on GRAPH to use 
 
 
 def left_out_note(name: str) -> str:
-    """The load note for effect `name` left out of a run (row 346) while
+    """The load note for effect `name` left out of a run while
     something in the loadable patch drives one of its params."""
     return LEFT_OUT.format(name=name)
 
@@ -174,7 +167,7 @@ def left_out_of(note: str) -> str | None:
 def retired(pid: str) -> bool:
     """Whether `pid` is a value the free graph retires: `fx.select`,
     `view.media`, `backdrop.channel`, an effect's `order` and `target` —
-    and (plan 35, row 381) `backdrop.history`, the capture wire now."""
+    and `backdrop.history`, the capture wire now."""
     return pid in RETIRED or bool(_RETIRED_FX.fullmatch(pid))
 
 
@@ -244,7 +237,7 @@ def _retarget(doc: dict, old: str, new: str, desk: list | None = None) -> None:
 def _drop_driven(doc: dict, pid: str, desk: list | None = None) -> bool:
     """Every row of `doc` (and of `desk`, a template's, in place) that
     drives `pid` taken out — a route, a desk row, a macro subscriber on it
-    (plan 35, row 381: a value a wire says now has nothing to drive).
+    (a value a wire says now has nothing to drive).
     Whether any was."""
     dropped = False
     for key in ("routes", "desk"):
@@ -307,7 +300,7 @@ def _driven_fx(driven: frozenset[str]) -> set[str]:
 
 
 def _live(values: dict, specs: Specs | None, driven_fx: set[str], name: str) -> bool:
-    """Whether an effect is in a run's membership (row 346, R5): `on`, and
+    """Whether an effect is in a run's membership: `on`, and
     either mix above 0 or something driving one of its params — an effect
     toggled on at mix 0 and ridden up by a route is used."""
     return _is_on(values, name) and (_mix_of(values, name, specs) > 0 or name in driven_fx)
@@ -335,8 +328,8 @@ def _files(specs: Specs | None) -> set[str] | None:
 
 
 def _wired_effects(spec: G.GraphSpec) -> set[str]:
-    """The effects the section places or wires (a wire's end, D1's too) —
-    but for an `aux` wire, which places neither end (plan 32 R): the effect
+    """The effects the section places or wires (a wire's end, a placement's too) —
+    but for an `aux` wire, which places neither end: the effect
     stays in its run."""
     out: set[str] = set()
     for w in spec.all_wires():
@@ -363,13 +356,13 @@ def _next_switch(nodes: list) -> int:
 
 
 def _explicit_placements(spec: G.GraphSpec, nodes: list, wires: list) -> tuple[list, list]:
-    """A pre-33 section's (`nodes`, `wires`) with each wire D1 would write
+    """An unplaced section's (`nodes`, `wires`) with each wire a placement entry would write
     short (`graph.split_wires`: an effect fed by one wire and wired into
     nothing sits `after` its source; one wired into one output's or the
-    history's `image` and fed by none sits `into` it) written as the D1
-    entry it stood for — `{"kind": "effect", "file": f, ["instance": n,]
-    "after" | "into": where}` — and that wire dropped. The owner,
-    2026-10-24: a section with a run shortens no wire (`GraphSpec.wiring`),
+    history's `image` and fed by none sits `into` it) written as the
+    placement entry it stood for — `{"kind": "effect", "file": f,
+    ["instance": n,]  "after" | "into": where}` — and that wire dropped. A
+    section with a run shortens no wire (`GraphSpec.wiring`),
     so the run `migrate` adds would otherwise turn an old placement into an
     unreached branch; written out, the old loadable patch draws as it did."""
     own = {e.name for e in spec.effects if e.placed}
@@ -397,7 +390,7 @@ def _explicit_placements(spec: G.GraphSpec, nodes: list, wires: list) -> tuple[l
 
 def _members(values: dict, specs: Specs | None, driven: frozenset[str],
              taken: set[str]) -> tuple[dict[int, list[str]], list[str]]:
-    """The runs' membership (row 346, R5): ({0: the frame's run, 1: the
+    """The runs' membership: ({0: the frame's run, 1: the
     faces'}, each in `(order, name)` order; the effects left out though
     driven) — every effect instance not `taken` (wired or placed by the
     section) that is live, on the side its `target` says."""
@@ -424,7 +417,7 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
     `select` set and the rows that drove a channel choice retargeted; the
     load notes). `to_free` is this document's graph section alone.
 
-    Plan 35 M (rows 372, 383): then, with `wire` (every load), the section
+    With `wire` (every load), the section
     in the new ids (`renamed`) written as a wired frame (`wired_section`:
     today's frame for the default switches into All outputs, the capture
     wire saying `backdrop.history` and the look-back's `holds`) — every
@@ -433,13 +426,12 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
     kept as it is; an unreadable one is left as it is (the loader says so).
     A row that drives `backdrop.history` is dropped with a note
     (`DRIVEN_RETIRED_NOTE`): the capture is a wire, nothing to drive.
-    Without `wire` the section stays as plan 33 wrote it (`to_free`, and
-    `wiring_for`'s rigs, which build the default graph from switches until
-    T4 retires them).
+    Without `wire` the section stays in the old ids, unwired (`to_free`, and
+    `wiring_for`'s rigs).
 
-    Run membership (row 346): aimed at the frame (`target` absent or 0)
+    Run membership: aimed at the frame (`target` absent or 0)
     or the faces (1), not placed or wired by the section, and `on` with
-    (`mix` > 0, or something drives the effect: R5); in `(order, name)`
+    (`mix` > 0, or something drives the effect); in `(order, name)`
     order, the `order` from the document else `specs` (name → the file's
     `(@order, @mix)`; an instance takes its file's, and a value the document
     leaves out takes its file's too). The frame run is always written, bare
@@ -447,19 +439,19 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
     (a run's head). A
     section that already has a run from `frame` (or `pattern`), or a wire
     into `pattern.media` / `backdrop.image`, is not given another. A
-    section given its frame run first has each wire D1 would write short
-    written as that D1 entry (`_explicit_placements`; the owner,
-    2026-10-24: a section with a run shortens none).
+    section given its frame run first has each wire a placement entry would write short
+    written as that placement entry (`_explicit_placements`: a section with
+    a run shortens none).
 
-    The retired values (`retired`) are dropped from the copy: no build from
-    plan 33 T7 on declares them, and the wires say all they said. A driven
-    channel choice becomes its switch (T5, R19).
+    The retired values (`retired`) are dropped from the copy: no build
+    declares them, and the wires say all they said. A driven
+    channel choice becomes its switch.
     `desk`: a desk template's rows the document's `desk` stands over,
     counted in what drives what and retargeted in place."""
     out = copy.deepcopy(doc)
     notes: list[str] = []
     values = _values(out)
-    # plan 35 (row 381): the capture is a wire now — what a row on
+    # the capture is a wire now — what a row on
     # `backdrop.history` drove has nothing to drive; and the value itself
     # is read once, below, into the capture wire
     for pid in WIRE_RETIRED:
@@ -468,7 +460,7 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
     held_backdrop = bool(values.get("backdrop.history", False))
     section = out.get("graph")
     section = section if isinstance(section, dict) else {}
-    # (plan 89: a copy is a slot before anything reads the section — a `/6`
+    # (a copy is a slot before anything reads the section — a `/6`
     # wired frame may hold one; `forward` has made it one already)
     got, _, slot_notes = slots_of_copies(section)
     if got is not section:
@@ -482,9 +474,9 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
     except G.GraphError:
         spec = None                     # the loader says so and takes the default graph
     if spec is None or spec.wired:
-        # (plan 35: a wired frame is the loadable patch's own words — nothing of
-        # plan 33's to add, nothing to rename; plan 36 T2: but each hidden
-        # edge its builder read is written as the wire it stood for)
+        # (a wired frame is the loadable patch's own words — nothing to add,
+        # nothing to rename; but each hidden edge its builder read is written
+        # as the wire it stood for)
         for pid in [p for p in values if retired(p)]:
             del values[pid]
         if spec is not None and wire:
@@ -526,8 +518,8 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
         if has:
             continue
         if old in driven:
-            # (row 350, R19: a loadable patch that drives a channel choice loads
-            # as a switch and saves as /5, which /4 cannot say)
+            # (a loadable patch that drives a channel choice loads as a
+            # switch and saves as /5, which /4 cannot say)
             n = _next_switch(nodes)
             sw = G.SwitchAt(n).name
             nodes.append({"kind": "switch", **({"instance": n} if n != 1 else {})})
@@ -547,13 +539,13 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
         sec["wires"] = [*wires, *new_wires]
         out["graph"] = sec
     if wire:
-        # plan 35 M: in the new ids, as a wired frame — `wired_section` reads
-        # the frame off the section as plan 33 left it (old ids)
+        # in the new ids, as a wired frame — `wired_section` reads the
+        # frame off the section as left above (old ids)
         sec = out.get("graph") if isinstance(out.get("graph"), dict) else {}
         try:
             old = G.read_graph(sec, effects=_files(specs), placements=True)
         except G.GraphError:
-            return out, notes           # (not reached: plan 33's steps write what reads)
+            return out, notes           # (not reached: the steps above write what reads)
         out["graph"] = wired_section(renamed(sec), old, backdrop_history=held_backdrop,
                                      notes=notes)
     return out, notes
@@ -566,9 +558,9 @@ def to_free(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
     document: the values and rows this changes.
 
     No production caller (a load takes the whole document, `migrate`):
-    kept for tests/test_graph_migrate.py, which reads the migration's
-    section on its own, one rule at a time — plan 33's rules, so the
-    section as plan 33 wrote it (no wired frame: `migrate`'s `wire`)."""
+    tests/test_graph_migrate.py reads the migration's section on its own,
+    one rule at a time, so the section comes without a wired frame
+    (`migrate`'s `wire` off)."""
     out, notes = migrate(doc, specs, wire=False)
     section = out.get("graph")
     return (section if isinstance(section, dict) else {}), notes
@@ -578,11 +570,11 @@ def to_free(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
 
 def specs_of(fx: Any) -> Specs:
     """An `FxState`'s effect instances as `Specs` — each one's file
-    defaults, `(@order, @mix)`; none for no state. Plan 36 T3: every file
+    defaults, `(@order, @mix)`; none for no state. Every file
     on disk (`FxState.files`) with the instances held, so what a landed
     graph does not name is still a file the next migration reads."""
     got = {**(getattr(fx, "files", None) or {}), **(getattr(fx, "specs", None) or {})}
-    # (plan 67: and a retired file, where an old stack ran it — the ladder's
+    # (and a retired file, where an old stack ran it — the ladder's
     # last step makes it what replaced it)
     return {**RETIRED_SPECS, **{n: (int(sp.order), float(sp.mix)) for n, sp in got.items()}}
 
@@ -601,18 +593,16 @@ def wiring_for(values: dict, specs: Specs | None = None, section: dict | None = 
                *, wired: bool = True) -> G.Wiring:
     """The wiring a loadable patch's `values` (and its `section`, None for none)
     land as — `migrate`, the path a loadable patch load takes, read back
-    (`read_graph`). Plan 33 R23: with the order-built stack gone a meta controller, a
+    (`read_graph`). With no order-built stack, a meta controller, a
     tool or a test that switches effects on by hand gets its run here, as
     an old loadable patch with those values would: the effects on, by `order` (the
     file's `@order` where the values name none), a faces-aimed one
     (`target` 1) onto the faces.
 
-    Plan 35 T3: the section as plan 33 writes it (`migrate`'s `wire` off) —
-    the wiring the default graph builds from the outputs' switches, which
-    these rigs still set by hand until T4 retires them. Plan 36 T3: then
-    wired as a load wires it (`wired_wiring`) — what a renderer takes;
-    `wired` False keeps those old words (a test reading its `run`). Plan 36
-    T4: its look-back as `values` had it (`look_of`)."""
+    The section is built unwired (`migrate`'s `wire` off), then wired as a
+    load wires it (`wired_wiring`) — what a renderer takes; `wired` False
+    keeps the old words (a test reading its `run`). Its look-back is as
+    `values` had it (`look_of`)."""
     doc = {"values": dict(values)}
     if section is not None:
         doc["graph"] = section
@@ -626,26 +616,26 @@ def wiring_for(values: dict, specs: Specs | None = None, section: dict | None = 
 def wiring_of(fx: Any) -> G.Wiring:
     """`wiring_for` an `FxState` as it stands (`state_values`, `specs_of`):
     the run its switched-on effects make, by their files' `@order` — the
-    one line a meta controller that sets effects by hand needs (R23). Plan 36 T3: wired
+    one line a meta controller that sets effects by hand needs. Wired
     as a load wires it (`wired_wiring`), what a renderer takes."""
     return wiring_for(state_values(fx), specs_of(fx))
 
 
-# ---------------------------------------------------------------- the frame as wires (plan 35 M)
+# ---------------------------------------------------------------- the frame as wires
 #
-# Plan 35 (rows 372, 375, 383): the frame the retired `default_graph` built from the
-# outputs' switches is written as ordinary wires. `frame_wires` is the frame
-# for the default switches, written once into All outputs (`output.all`);
-# `output_wires` is what one output's state (`Shows`: the switches as the
-# migration's own word) adds over that; `wired_section` is a section with
-# its frame written. Pure data, as the rest of this module: the canonical
-# order (the build plan's nine groups) is what T3's round trip compares.
+# The frame the retired `default_graph` built from the outputs' switches is
+# written as ordinary wires. `frame_wires` is the frame for the default
+# switches, written once into All outputs (`output.all`); `output_wires` is
+# what one output's state (`Shows`: the switches as the migration's own
+# word) adds over that; `wired_section` is a section with its frame
+# written. Pure data, as the rest of this module: the canonical order (nine
+# groups) is what the round trip compares.
 
 @dataclass(frozen=True)
 class Shows:
-    """One output's switch state as the migration reads it (plan 35 M):
-    the scene, the hands, the hands through the effects. A word of the
-    migration, not of `outputs` (T4 retired `Switches.through`)."""
+    """One output's switch state as the migration reads it: the scene, the
+    hands, the hands through the effects. A word of the migration, not of
+    `outputs` (which has no `Switches.through`)."""
 
     scene: bool = True
     hands: bool = True
@@ -690,9 +680,8 @@ def _next_composite(spec: G.GraphSpec) -> int:
 
 
 def _next_slots(spec: G.GraphSpec, run: list[str]) -> tuple[list[dict], list[str]]:
-    """A new slot of each effect of `run` (plan 89: what plan 35's copies
-    were), in order: (the effect entries that declare them — each effect's
-    entry with its `slots` one up, `merge_entries` joins them to a
+    """A new slot of each effect of `run` (what copies were), in order: (the effect
+    entries that declare them — each effect's entry with its `slots` one up, `merge_entries` joins them to a
     section — and the slots' names). An effect at `graph.MAX_SLOTS` is a
     ValueError, in words."""
     have = {e.name: e for e in spec.effects}
@@ -714,7 +703,7 @@ def _next_slots(spec: G.GraphSpec, run: list[str]) -> tuple[list[dict], list[str
 
 
 def merge_entries(nodes: list, adds: list) -> list:
-    """Section `nodes` with entries `adds` joined (plan 89): an effect entry
+    """Section `nodes` with entries `adds` joined: an effect entry
     for an instance the nodes already declare raises that entry's `slots`
     to the added one's (the rest of the entry as it is); any other is
     appended. A new list; the entries in it are new dicts where changed."""
@@ -737,8 +726,8 @@ def frame_wires(spec: G.GraphSpec, *, backdrop_history: bool = False
                 ) -> tuple[list[dict], list[dict]]:
     """The frame the retired `default_graph` built for `spec` under the default
     switches (`Shows()`: the scene, the hands over, not through), as
-    (entries, wires) in the new ids, written to All outputs (plan 35 M,
-    rows 375 and 383). `spec` is a section as read before the wired frame
+    (entries, wires) in the new ids, written to All outputs. `spec` is a section as read before the
+    wired frame
     (its `wiring()`: the run, where the hands are, the backdrop, what the
     look-back holds). Its own wires are not in the result — but for its
     run `frame → … → fx.image`, which is written here as `lookback → … →
@@ -749,7 +738,7 @@ def frame_wires(spec: G.GraphSpec, *, backdrop_history: bool = False
     `lookback.image`, `lookback.occluder`, the run, `output.all.image`,
     `.hands`, `.guide`, then the capture (its composite first, for `holds:
     scene+hands`). `backdrop_history` is the preset's `backdrop.history`
-    value, which the capture wire says now (T3 retires the param)."""
+    value, which the capture wire says now."""
     wiring = spec.wiring()
     inside = wiring.in_scene()
     layer = _layer_of(wiring.layer_node().n)
@@ -762,8 +751,8 @@ def frame_wires(spec: G.GraphSpec, *, backdrop_history: bool = False
     if not own_image:
         wires.append(_w("backdrop" if backdrop else "scene", "lookback.image"))
     if backdrop and not backdrop_history:
-        # (plan 32 B-I1: over a backdrop the look-back keeps out of, the
-        # scene alone holds the wake back)
+        # (over a backdrop the look-back keeps out of, the scene alone
+        # holds the wake back)
         wires.append(_w("scene", "lookback.occluder"))
     run = list(wiring.run or ())
     chain = ["lookback", *run]
@@ -801,7 +790,7 @@ def _new_dst(dst: Any) -> Any:
     return f"{G.new_id(node)}{dot}{port}" if dot else dst
 
 
-# R14 (plan 35 T5): the GRAPH canvas's node ids before the wired frame —
+# the GRAPH canvas's node ids before the wired frame —
 # `render:<old id>`, the shared camera `render:eye` — that only an old
 # layout holds (a new one says none of them), so a layout naming one is
 # read in the old ids throughout: `render:hands` the layer there, the
@@ -829,13 +818,13 @@ def renamed_canvas_id(nid: str) -> str:
 
 def renamed_layout(layout: dict[str, Any]) -> dict[str, Any]:
     """A GRAPH layout ({node id: [x, y]}, a loadable patch's or a show's) in the
-    wired frame's ids (R14): one that names an id only the old canvas had
+    wired frame's ids: one that names an id only the old canvas had
     (`_OLD_CANVAS`) is renamed throughout (`renamed_canvas_id`), the
     first position kept where two old ids land on one; any other is as it
     is — so the owner's arrangement follows the rename, and a layout saved
     since stays put.
 
-    Row 394: a node the wired frame dissolved (`render:frame`,
+    A node the wired frame dissolved (`render:frame`,
     `render:fx`, `render:capture`, `render:cover` …: an old-only id the
     rename leaves as it is) has no place on the canvas any more and is
     left out — kept, it would mark the layout old again when the save it
@@ -854,11 +843,11 @@ def renamed_layout(layout: dict[str, Any]) -> dict[str, Any]:
 
 
 def renamed(section: Any) -> Any:
-    """A `/2`–`/5` section in the new ids (plan 35 V2, row 373): every wire
-    end and D1's `after` / `into` through `graph.new_id`, the port
+    """A `/2`–`/5` section in the new ids: every wire
+    end and a placement's `after` / `into` through `graph.new_id`, the port
     `output.<n>.readout` as `output.<n>.guide`, the entry kind `history`
     as `lookback`. A section already wired, or none, is returned as it is.
-    (T3 runs it inside `migrate`; T2's builder proof reads through it.)"""
+    (`migrate` runs it; the builder's tests read through it.)"""
     if not isinstance(section, dict) or section.get(G.FRAME_KEY) == G.WIRED_FRAME:
         return section
     out = copy.deepcopy(section)
@@ -883,11 +872,11 @@ def with_output_wires(section: dict, n: int, shows: Shows) -> dict:
     """A wired `section` with output `n`'s overrides for `shows`
     (`output_wires`) in place of its own wires into `output.<n>`: the
     entries joining the nodes, the wires the wires. A wire into the output
-    the read refuses is kept after them as it stands (plan 35 T3: refused
-    again at the load, it is said again, as plan 28 N4 says every refused
-    wire). Plan 36 T2: then the hidden edges the new wires need
-    (`drawn_edges`: a window's depth for `laid: depth`) — the golden meta controller's
-    word for a retired switch state over a section."""
+    the read refuses is kept after them as it stands (refused again at the
+    load, it is said again, as every refused wire is). Then the hidden
+    edges the new wires need (`drawn_edges`: a window's depth for `laid:
+    depth`) — the golden meta controller's word for a retired switch state
+    over a section."""
     return drawn_edges(_output_wires_into(section, n, shows))
 
 
@@ -898,7 +887,7 @@ def _output_wires_into(section: dict, n: int, shows: Shows) -> dict:
     got = output_wires(spec, n, shows)
     port = f"output.{n}."
     stood = {(w.src, w.dst) for w in spec.wires}
-    # (plan 36 T2: the window's depth is `drawn_edges`' to say, after)
+    # (the window's depth is `drawn_edges`' to say, after)
     mine = [w for w in section.get("wires", [])
             if isinstance(w, dict) and str(w.get("to", "")).startswith(port)
             and w.get("to") != port + G.DEPTH_PORT]
@@ -913,9 +902,9 @@ def _output_wires_into(section: dict, n: int, shows: Shows) -> dict:
     return out
 
 
-# ---------------------------------------------------------------- the hidden edges as wires (plan 36 T2)
+# ---------------------------------------------------------------- the hidden edges as wires
 #
-# Plan 36 W2: the edges a wired frame's builder read by name — the faces
+# The edges a wired frame's builder read by name — the faces
 # the pattern, the look-back the scene's cover, a layer and a guide their
 # hands node, a composite and an output the scene's depth for the hands'
 # `laid: depth` — are ports now, and a frame from before says each as the
@@ -946,8 +935,8 @@ def _wire_end(dst: Any) -> str | None:
 
 
 def drawn_edges(section: Any, files: set[str] | None = None, *, guard: bool = True) -> Any:
-    """A wired `section` with each hidden edge its builder read before plan
-    36 written as the wire it stood for (T2, W2), appended after its own
+    """A wired `section` with each hidden edge its builder once read by name
+    written as the wire it stood for, appended after its own
     wires — so a `/4`–`/6` frame draws what it drew:
 
     - `pattern → shape.faces`, the shape reached and its faces unwired (the
@@ -1008,12 +997,12 @@ def drawn_edges(section: Any, files: set[str] | None = None, *, guard: bool = Tr
 
 def _frame_loops(own: list, frame: list[dict]) -> list[tuple[dict, str]]:
     """The wires of `own` (a section's own, in order) that close a loop
-    through `frame` (the frame `frame_wires` writes for it) — what plan
-    34's hidden edges refused at an old section's read (`FRAME_EDGES`, the
+    through `frame` (the frame `frame_wires` writes for it) — what the
+    hidden edges refused at an old section's read (`FRAME_EDGES`, the
     faces drawn in the scene, the history over the scene and the backdrop):
     the frame stands, and of the section's own the later one closing the
-    loop goes, with why in words (plan 36 T2: the loop is the drawn
-    frame's now, `graph.loop_words`; T3: asked of `graph.loop_closers`)."""
+    loop goes, with why in words (the loop is the drawn frame's,
+    `graph.loop_words`; asked of `graph.loop_closers`)."""
     stand = [G.Wire(x["from"], x["to"]) for x in frame]
     wires: list[G.Wire | None] = []
     for x in own:
@@ -1026,8 +1015,8 @@ def _frame_loops(own: list, frame: list[dict]) -> list[tuple[dict, str]]:
 
 def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = False,
                   notes: list[str] | None = None) -> dict:
-    """`section` (in the new ids already: `renamed`) as a wired frame (plan
-    35 M): `"frame": "wired"` first; the hands entries without `into` and
+    """`section` (in the new ids already: `renamed`) as a wired frame:
+    `"frame": "wired"` first; the hands entries without `into` and
     no look-back entry (where the hands are and what the look-back holds
     are wires now); the run's wires dropped and every other wire kept as
     it stands (a stray `frame → x` read as `lookback → x`, `y → fx.image`
@@ -1038,14 +1027,14 @@ def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = 
     applied under the default switches (`with_output_wires(…, Shows())`:
     a picture by a wire drops the guide where the hands were in the scene).
 
-    Plan 36 T2: then each hidden edge as its wire (`drawn_edges`); and a
-    wire of the section's own that closes a loop through the frame and
-    its hidden edges — one plan 34's `FRAME_EDGES` refused at its read —
-    is left out, said in `notes` when given (`_frame_loops`), and the
-    frame is the one written for the section without it (as the read
-    without it gave). Each round leaves out at least one of the section's
-    own wires, so it settles within as many rounds as it has wires; one
-    that did not would be a bug, and says so (T3)."""
+    Then each hidden edge as its wire (`drawn_edges`); and a wire of the
+    section's own that closes a loop through the frame and its hidden
+    edges — one `FRAME_EDGES` refused at its read — is left out, said in
+    `notes` when given (`_frame_loops`), and the frame is the one written
+    for the section without it (as the read without it gave). Each round
+    leaves out at least one of the section's own wires, so it settles
+    within as many rounds as it has wires; one that did not would be a
+    bug, and says so."""
     nodes = []
     for e in section.get("nodes") or []:
         if isinstance(e, dict) and e.get("kind") == "hands":
@@ -1102,8 +1091,8 @@ def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = 
 def section_of(wiring: G.Wiring) -> dict:
     """An unwired `Wiring` (no loadable patch's graph reached it: the app before its
     first load, a test rig's, a tool's — `wiring_for`'s run) said as the
-    section before the wired frame that reads as it, in the old ids (plan
-    35 T4): its hands entries, `laid`, `holds`, its placed effects and the
+    section before the wired frame that reads as it, in the old ids: its hands entries,
+    `laid`, `holds`, its placed effects and the
     run's instances, its composites, then the run `frame → … → fx.image`
     (the empty one with none), the backdrop's channel and its own wires."""
     effects = list(wiring.placed)
@@ -1117,8 +1106,8 @@ def section_of(wiring: G.Wiring) -> dict:
             effects.append(G.EffectAt(file, n))
             held.add(name)
     # the nodes the wires name that a `Wiring` holds no entry of (the old
-    # graph made each from its name): plan 33's switches, plan 34's delays,
-    # resizes and look-back frames (plan 90 H3: the dream is an effect now)
+    # graph made each from its name): switches, delays, resizes and
+    # look-back frames (the dream is an effect)
     others: list[tuple[str, Any]] = [("composite", c) for c in wiring.composites]
     made = {"switch": G.SwitchAt, "delay": G.DelayAt, "resize": G.ResizeAt,
             "echo": G.EchoAt}
@@ -1144,31 +1133,31 @@ def section_of(wiring: G.Wiring) -> dict:
 def wired_of(wiring: G.Wiring, *, placements: bool = True, look: str = "off") -> dict:
     """An unwired `Wiring` (the words before the wired frame: a meta controller's, a
     tool's, a test's) as the wired frame the one-way migration writes for
-    it (plan 35 T4): `section_of` it, renamed and written as a wired frame
+    it: `section_of` it, renamed and written as a wired frame
     (`wired_section`), its look-back recording the backdrop where
-    `backdrop_history` says, and (plan 36 T3) its placements as the wires
+    `backdrop_history` says, and its placements as the wires
     they stood for (`placed_wires`). `Wiring()` is the factory look,
     `frame_wires(read_graph({}))` — today's frame, what a section-less old
-    loadable patch migrates to. `placements` False leaves D1's entries as they are
+    loadable patch migrates to. `placements` False leaves the placement entries as they are
     (the step before `placed_wires`: a test rig lays the retired switch
     states on first, as the builder placed on each output's state).
-    Plan 36 T4: then the look-back split as `look` says the old values had
+    Then the look-back is split as `look` says the old values had
     it (`split_lookback`: the words hold no `dream.on`; "off", the
     default, draws no look-back) — only with `placements`, the last step —
-    and (plan 90 H2) made public parts (`retire_lookbacks`)."""
+    and made public parts (`retire_lookbacks`)."""
     section = section_of(wiring)
     out = wired_section(renamed(section), G.read_graph(section),
                         backdrop_history=wiring.backdrop_history)
     if not placements:
         return out
-    # (plan 90 H2: and the look-back it drew made public parts, at its defaults)
+    # (and the look-back it drew made public parts, at its defaults)
     return split_retired(placed_wires(out), look)
 
 
 def split_retired(section: Any, look: str, rest: dict | None = None) -> Any:
     """`split_lookback`, and the look-back it drew made public parts
-    (`retire_lookbacks`, plan 90 H2; its dream too, `retire_dreams`, H3): an old frame as the whole ladder ends
-    it — `rest` the file's other keys (its values and rows: a contrast a row
+    (`retire_lookbacks`; its dream too, `retire_dreams`): an old frame as
+    the whole ladder ends it — `rest` the file's other keys (its values and rows: a contrast a row
     drives brings a Curve), none for a caller with no file (`wired_of`). A
     section with no look-back as it is."""
     out = split_lookback(section, look)
@@ -1177,7 +1166,7 @@ def split_retired(section: Any, look: str, rest: dict | None = None) -> Any:
     nodes, wires, rest2, _, keys, notes = retire_lookbacks(
         list(out.get("nodes") or []), list(out.get("wires") or []), dict(rest or {}),
         keys=list(out.get(G.KEYS_KEY) or []))
-    # (plan 90 H3: and the dream it drew, its parts — on where the look was the
+    # (and the dream it drew, its parts — on where the look was the
     # dream drawn, whatever a caller with no file's values says)
     if look == "dream":
         vals = dict(rest2.get("values") or {})
@@ -1190,10 +1179,9 @@ def split_retired(section: Any, look: str, rest: dict | None = None) -> Any:
 
 
 def wired_wiring(wiring: G.Wiring, look: str = "off") -> G.Wiring:
-    """What a renderer or `graph.build_graph` takes for `wiring` (plan 36
-    T3): a wired one is itself; an unwired one is the old words, wired by
-    the one-way migration (`wired_of`, its look-back as `look` says) — the
-    explicit step `graph.wired` did unasked before W3."""
+    """What a renderer or `graph.build_graph` takes for `wiring`: a wired
+    one is itself; an unwired one is the old words, wired by the one-way
+    migration (`wired_of`, its look-back as `look` says)."""
     return wiring if wiring.wired else _wired_wiring(wiring, look)
 
 
@@ -1202,12 +1190,11 @@ def _wired_wiring(wiring: G.Wiring, look: str = "off") -> G.Wiring:
     return G.read_graph(wired_of(wiring, look=look)).wiring()
 
 
-# ---------------------------------------------------------------- D1's placements as wires (plan 36 T3)
+# ---------------------------------------------------------------- placements as wires
 #
-# Plan 36 W3: `after` / `into` were shorthand the builder turned into edges
-# on the built graph (`_place`, gone). The migration writes each as the
-# wires it stood for, so a `/7` frame holds no placement and draws what the
-# `/6` drew.
+# `after` / `into` were shorthand the builder turned into edges on the
+# built graph. The migration writes each as the wires it stood for, so a
+# `/7` frame holds no placement and draws what the `/6` drew.
 
 # the ports a wire reads something of its source through other than its
 # picture (`graph.Node.REFS`: an output's readout and depth, a composite's
@@ -1230,9 +1217,9 @@ def _insert_on(wires: list, src: str, port: str, name: str) -> list:
 
 def placed_wires(section: Any, files: set[str] | None = None,
                  notes: list[str] | None = None) -> Any:
-    """A wired `section` with each D1 placement written as the wires it
-    stood for, and the entry's `after` / `into` dropped (plan 36 T3) —
-    what the builder did on the built graph, said in wires:
+    """A wired `section` with each placement written as the wires it
+    stood for, and the entry's `after` / `into` dropped — what the builder did
+    on the built graph, said in wires:
 
     - `into` or `after` `output.<n>`: on output n's picture — its own wire
       into `output.<n>.image`, else All outputs' (the bus cable it rode);
@@ -1240,7 +1227,7 @@ def placed_wires(section: Any, files: set[str] | None = None,
     - `after` a node: on its picture — `X → e.image`, and every wire that
       read X's picture (not a reference port, `_REF_PORTS`) reads `e`
       instead; after the scene while a backdrop lays it over, after the
-      backdrop (plan 32 R, as the builder did).
+      backdrop (as the builder did).
 
     One placed on another placed effect is written after it, as the
     builder placed it. One with nothing to sit on (no wire into the port,
@@ -1312,7 +1299,7 @@ def placed_wires(section: Any, files: set[str] | None = None,
     return {**section, "nodes": nodes, "wires": wires}
 
 
-# ---------------------------------------------------------------- the one-way migration to /7 (plan 36 T3)
+# ---------------------------------------------------------------- the one-way migration to /7
 
 def schema_version(doc: Any) -> int | None:
     """The `n` of a loadable patch document's `hyperspace.preset/<n>`, else None."""
@@ -1326,7 +1313,7 @@ def schema_version(doc: Any) -> int | None:
 def section_effects(section: Any) -> set[str]:
     """Every effect instance a wired `section` names — by an entry, a wire's
     end, or (a section not yet through `twelve`) a copy's `of` — the effects
-    that exist in its loadable patch (W3)."""
+    that exist in its loadable patch."""
     out: set[str] = set()
     if not isinstance(section, dict):
         return out
@@ -1351,7 +1338,7 @@ SLOTS_MIGRATED_NOTE = ("{old} migrated to {new} (plan 89): each copy is a slot o
                        "now — save to keep it")
 
 
-# ---------------------------------------------------------------- the one orbit camera (plan 43 C2)
+# ---------------------------------------------------------------- the one orbit camera
 
 def nine(doc: dict, eye: dict | None = None, camera_at: Any = None) -> dict:
     """An older loadable patch (before `/9`) as its `/9` reads it — pure, one way,
@@ -1362,7 +1349,7 @@ def nine(doc: dict, eye: dict | None = None, camera_at: Any = None) -> dict:
     camera node's GRAPH position from `camera_at` (the old show's layout
     entry, ``render:camera``) into the loadable patch's `layout` where the file
     places it nowhere. A value or a position the file already has stays;
-    no pose is added (an old file keeps spinning: row 573). A `/9` and
+    no pose is added (an old file keeps spinning). A `/9` and
     anything that is not a document come back as they are."""
     version = schema_version(doc)
     if not isinstance(doc, dict) or (version is not None and version >= NINE):
@@ -1388,7 +1375,7 @@ def nine(doc: dict, eye: dict | None = None, camera_at: Any = None) -> dict:
 
 
 def ten(doc: dict, look: dict | None = None, cuts: Any = None) -> dict:
-    """An older loadable patch (before `/10`) as its `/10` reads it (plan 44 D3) —
+    """An older loadable patch (before `/10`) as its `/10` reads it —
     pure, one way, on load (`LoadedPatch.load_doc`, after `nine`) and so in
     tools/migrate_library.py's resave: the hands' and the clouds' looks
     written into `values` from `look` (what the open show's `session` held,
@@ -1422,9 +1409,9 @@ def ten(doc: dict, look: dict | None = None, cuts: Any = None) -> dict:
     return out
 
 
-# ---------------------------------------------------------------- the look-back split (plan 36 T4)
+# ---------------------------------------------------------------- the look-back split
 #
-# Plan 36 W4: the look-back was one object — a ring of echoes and the dream
+# The look-back was one object — a ring of echoes and the dream
 # buffer, laid over `lookback.image` in one shader, recording
 # `lookback.capture`, all of it gated by `dream.on`. Since `/7` a look-back
 # records its `image` and makes its trail; the dream dreams its `image`; a
@@ -1461,7 +1448,7 @@ LIVE_LOOK_NOTES = {
 
 
 def live_look_of(values: dict | None, driven: frozenset[str] | set[str]) -> tuple[str, list[str]]:
-    """`look_of` with what the file drives counted (plan 36 final review):
+    """`look_of` with what the file drives counted:
     a route, desk row or macro subscriber on `dream.on` drew the look-back
     whenever it switched it on, so the chain is drawn whatever its rest
     value — with the dream while `dream.mix` is above 0 or driven; one on
@@ -1498,7 +1485,7 @@ def _next_composite_of(nodes: list) -> int:
 
 def split_lookback(section: Any, look: str) -> Any:
     """An old wired `section`'s one-shader look-back as the two nodes
-    since `/7` (plan 36 T4, W4) — the last step of the migration (after
+    since `/7` — the last step of the migration (after
     `placed_wires`: a placement `into` the look-back sat on its old picture),
     applied once, to an old frame only. `look` is what it drew (`look_of`):
 
@@ -1512,11 +1499,11 @@ def split_lookback(section: Any, look: str) -> Any:
       the old look-back reads the composite.
     - "off": the old look-back drew its picture untouched — its readers
       read that picture, and no look-back is drawn — unless a frame of its
-      ring is read (plan 34's `echo.<k>`): then the look-back still
+      ring is read (the old `echo.<k>`): then the look-back still
       records, and only those read it.
 
-    Plan 34's `echo.<k>` entries go: each wire from one reads the
-    look-back's pin `lookback.echo.<k>`. Plan 34's `dream` (the buffer
+    The old `echo.<k>` entries go: each wire from one reads the
+    look-back's pin `lookback.echo.<k>`. The old `dream` (the buffer
     alone) is the dream node, fed the look-back's trail while one is drawn,
     else what the look-back recorded (no look-back drawn just to feed it). Not a wired frame,
     or one with no look-back: as it is."""
@@ -1570,7 +1557,7 @@ def split_lookback(section: Any, look: str) -> Any:
             lay.append(_w("lookback", f"{comp.name}.over"))
         head = comp.name
     if dreaming and not any(w.get("to") == "dream.image" for w in lay):
-        # (fix round 1, M1: plan 34's dream read the buffer of what was
+        # (the old dream read the buffer of what was
         # recorded — with no look-back drawn, the dream dreams that picture
         # itself; with one drawn, its trail)
         src = "lookback" if (live or ring_read) else (held or under)
@@ -1601,10 +1588,10 @@ def split_lookback(section: Any, look: str) -> Any:
 
 
 def seven(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict, list[str]]:
-    """Plan 36 T3 (W3, D5): the one-way migration of a `/4`–`/6` document
+    """The one-way migration of a `/4`–`/6` document
     (or older: what the loader takes) to `/7` — (the document, the notes).
     `migrate` (the free graph, the wired frame, every hidden edge as its
-    wire; a document with no section gets today's frame), then each D1
+    wire; a document with no section gets today's frame), then each
     placement as the wires it stood for (`placed_wires`), and the values of
     every effect the section does not name dropped (instance 1 of a file
     exists only where the section names it). The hands entries and `laid`
@@ -1616,7 +1603,7 @@ def seven(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict, l
     pure function of the old document (and the build's effect files), so
     tools/migrate_library.py and a load write the same `/7`.
 
-    Plan 36 T4 (W4): last, the look-back split into its two nodes and a
+    Last, the look-back split into its two nodes and a
     composite (`split_lookback`, by `look_of` the file's values — and by
     what it drives, `live_look_of`: a driven `dream.on`, or a driven
     `dream.mix` at 0, draws the chain, said), and `dream.on` — which gated
@@ -1658,7 +1645,7 @@ def _kind(name: str | None) -> str | None:
 
 
 def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
-    """Output `n`'s overrides of All outputs under `shows` (plan 35 M):
+    """Output `n`'s overrides of All outputs under `shows`:
     exactly the picture, hands and guide the retired `default_graph` gave output `n`
     for that switch state, with `_Wiring._put`'s output rules applied to
     the section's own wires into `output.<n>` (a picture by a wire drops
@@ -1674,7 +1661,7 @@ def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
     free instance, its blend the hands' `laid`; the head of All outputs'
     picture under — the look-back — and nothing under with the scene off;
     the layer over) and a new slot of each effect of All outputs' run
-    (none for an empty run; plan 89, a copy before it), `composite.k →
+    (none for an empty run), `composite.k →
     acid.slot.k → … → output.<n>.image`, each slot with its effect's aux
     wire, its effect's entry carrying the slot (`merge_entries`); whether it bends is the
     frame's (`Shown.bent`). Entries come first in the list (the dicts with
@@ -1754,7 +1741,7 @@ def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
         out.append(_w(src, port + "image"))
     said = {w.port for w in own}
     for p, want in (("hands", over), ("guide", guide)):
-        # (plan 35 T3: a port the section wires itself keeps its wire though
+        # (a port the section wires itself keeps its wire though
         # All outputs' says the same — it is an override, and stays one)
         if want != allp.get(p) or (p in said and want is not None):
             out.append(_w(want if want is not None else G.GROUND, port + p))
@@ -1764,25 +1751,25 @@ def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
 
 def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) -> list[dict]:
     """OUTPUT's "hands through the effects" on window `n` as the wires it
-    names (plan 36 T1, the live edit — `output_wires` stays the migration's
+    names (the live edit — `output_wires` stays the migration's
     word for the retired switch): a `composite.k` (the lowest free
     instance, its blend the hands' `laid`) laying All outputs' hands layer
     `over` the head of All outputs' picture (behind its run; nothing
     `under` while the window's picture is `ground`: the hands alone), one
-    new slot of each effect of that run (plan 89), each with its effect's
+    new slot of each effect of that run, each with its effect's
     aux wire, `composite.k → acid.slot.k → … → output.<n>.image` (the
     effects' entries carrying the slots: `merge_entries`), and `ground →
     output.<n>.hands` — the layer goes through, not over again. Nothing
     else: the guide, and every other wire of `spec`, are left as they are.
     Entries first (the dicts with `kind`), then the wires. `spec` is a
     wired frame whose All outputs lays a hands layer on (the page refuses
-    otherwise, `graphview.through_refusal`). `rig` (plan 36 T1): the bus
+    otherwise, `graphview.through_refusal`). `rig`: the bus
     cables standing — a window with no picture of its own and its picture
     cable cut counts as `ground` (the page refuses that too)."""
     wires = spec.wires
     allp = {w.port: w.src for w in wires if w.node == G.ALL_OUTPUTS}
     pictures = [w for w in wires if w.port == "image"]
-    # (plan 89: All outputs' run back through its effects and their slots —
+    # (All outputs' run back through its effects and their slots —
     # each pass by its own name, for its own input and aux wire)
     run: list[str] = []
     head = allp.get("image")
@@ -1801,7 +1788,7 @@ def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) 
         out.append(_w(head, f"{comp}.under"))
     out.append(_w(allp["hands"], f"{comp}.over"))
     if spec.laid == "depth" and "scene" in G._wired_reach(wires):
-        # plan 36 T2: laid depth-aware against the scene's depth, as a wire
+        # laid depth-aware against the scene's depth, as a wire
         out.append(_w(DEPTH_PIN, f"{comp}.{G.DEPTH_PORT}"))
     src = comp
     aux = {w.node: w.src for w in wires if w.port == G.AUX}
@@ -1816,7 +1803,7 @@ def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) 
     return [*entries, *out]
 
 
-# ---------------------------------------------------------------- copies as slots (plan 89)
+# ---------------------------------------------------------------- copies as slots
 
 COPY_DROPPED = ("{name}: a copy of {of!r}, which is no effect instance of this graph — "
                 "dropped with its wires (plan 89)")
@@ -1835,8 +1822,7 @@ def copy_name(e: Any) -> str | None:
 def slots_of_copies(section: Any) -> tuple[Any, dict[str, str], list[str]]:
     """A graph section (a loadable patch's, or a patch fragment's nodes and
     wires — any dict with `nodes` and `wires`) with every `copy` entry
-    made a slot of the effect it drew again (plan 89, the one way): (the
-    section, a copy's name → its slot's name, the notes).
+    made a slot of the effect it drew again: (the section, a copy's name → its slot's name, the notes).
 
     The rule: a section's copies of one effect instance, lowest copy
     instance first, become that effect's next slots — `copy` of `acid`
@@ -1926,7 +1912,7 @@ def slots_of_copies(section: Any) -> tuple[Any, dict[str, str], list[str]]:
 
 def retarget_copies(obj: Any, renames: dict[str, str]) -> Any:
     """`obj` (a document's values, rows, node mode … — anything but its
-    graph) with what named a migrated copy naming its slot (plan 89): its
+    graph) with what named a migrated copy naming its slot: its
     black-is-clear knobs `key.<copy>.*` → `key.<slot>.*` (keys of a map, and
     any text, a row's target say), and a canvas node `render:<copy>` (node
     mode's target) → `render:<effect>`, the node the slot is drawn on. A
@@ -1961,8 +1947,8 @@ def retarget_copies(obj: Any, renames: dict[str, str]) -> Any:
 
 
 def twelve(doc: dict) -> tuple[dict, list[str]]:
-    """An older loadable patch (before `/12`) as its `/12` reads it (plan
-    89) — pure, one way, on load: its graph section's copies made slots
+    """An older loadable patch (before `/12`) as its `/12` reads it —
+    pure, one way, on load: its graph section's copies made slots
     (`slots_of_copies`), and the copies' GRAPH places and group
     memberships (`render:copy.<n>`) dropped — a slot is drawn on its
     effect's node, which has its own place. The schema is left to the
@@ -1971,7 +1957,7 @@ def twelve(doc: dict) -> tuple[dict, list[str]]:
     got, renames, notes = slots_of_copies(section)
     if got is section or not isinstance(section, dict):
         return doc, []
-    # (plan 89: every other key's mentions of a copy — its `key.<copy>.*`
+    # (every other key's mentions of a copy — its `key.<copy>.*`
     # knobs in values and rows, node mode's `render:<copy>` — the slot's)
     out = {k: (v if k in ("graph", "layout", GROUPS_KEY, "schema", "name")
                else retarget_copies(v, renames)) for k, v in doc.items()}
@@ -1988,10 +1974,9 @@ def twelve(doc: dict) -> tuple[dict, list[str]]:
     return out, notes
 
 
-# ---------------------------------------------------------------- Hue cycle retired (plan 67)
+# ---------------------------------------------------------------- Hue cycle retired
 
-# the owner, 2026-11-25 ("migrate exactly, new ops"; "new op: Hue turn"): Hue
-# cycle hid a field — its bands, `mix(p.x + p.y, 2 |p|, Rings) × Spread`, in
+# Hue cycle hid a field — its bands, `mix(p.x + p.y, 2 |p|, Rings) × Spread`, in
 # turns, frame heights from the middle — and turned the hues by it. Its bands
 # are field nodes now, wired into Hue turn's Turn at a depth of 360 (degrees a
 # turn): Line (45°, Scale √2: p.x + p.y) and Rings (Scale 2: 2 |p|), each
@@ -2036,7 +2021,7 @@ def retire_hue_cycle(nodes: list, wires: list, rest: dict, ports: list | None = 
     """A section's `nodes` and `wires`, the document's other keys (`rest`:
     values, rows, macros, layout, groups, node mode …) and a fragment's
     `ports`, with every Hue cycle made Hue turn and its bands' field nodes
-    (plan 67; module notes above) — (nodes, wires, rest, ports, notes). Pure:
+    (module notes above) — (nodes, wires, rest, ports, notes). Pure:
     the inputs are untouched, and handed back as they are when no Hue cycle is
     named. A row onto Spread lands on the bands' × (a push's depth halved, the
     range being twice as wide; a set's norm moved onto it; an abs desk row
@@ -2108,7 +2093,7 @@ def retire_hue_cycle(nodes: list, wires: list, rest: dict, ports: list | None = 
     out_wires = [{**w, "from": rename(w.get("from")), "to": rename(w.get("to"))}
                  if isinstance(w, dict) else w for w in wires]
     # (a field once wired into Spread or Rings — a knob then — goes where that
-    # knob is now: Spread the bands' ×, Rings its two weights; Devin on #509)
+    # knob is now: Spread the bands' ×, Rings its two weights)
     knob_fields = [w for w in out_wires if isinstance(w, dict) and isinstance(w.get("to"), str)
                    and w["to"].rpartition(".")[2] in HUE_CYCLE_DEFAULTS
                    and w["to"].rpartition(".")[0] in renames.values()]
@@ -2191,7 +2176,7 @@ def retire_hue_cycle(nodes: list, wires: list, rest: dict, ports: list | None = 
             elif op in ("abs", "abs14", "position"):
                 # (a row that sets the knob's place, not a push about it: the
                 # bands' × spans −4 … 4 where Spread spanned 0 … 4, and a row
-                # holds no offset — kept, said; Devin on #509 for position)
+                # holds no offset — kept, said)
                 notes.append(HUE_ABS_NOTE.format(row=f"{where} {r.get('source')} → {t}"))
         return out
 
@@ -2294,9 +2279,9 @@ def hue_turns(doc: dict) -> tuple[dict, list[str]]:
     return out, notes
 
 
-# ---------------------------------------------------------------- the look-back retired (plan 90)
+# ---------------------------------------------------------------- the look-back retired
 
-# Plan 90 H2 (§10.2, §10.3; the owner's answers Q23–Q28): a look-back
+# A look-back
 # (`lookback`, `lookback.<n>`) is public parts — what it records through a
 # Curve (only where its contrast is not 1, or a row drives it), a Fade (1 −
 # darken) keyed black is clear (peak, linear, level 0, soft 1, keep colour: the
@@ -2304,30 +2289,31 @@ def hue_turns(doc: dict) -> tuple[dict, list[str]]:
 # = its echoes, every 1 / gap seconds in Hz, gap 0 every frame) read by a Trail
 # (level = echo_mix, fade, lay over), cut by a Matte of its occluder (peak,
 # linear, key ⅛, soft ⅛: min(4 · peak, 1)) and by its cover, each Cut inverted
-# (held back where its mask passes) at its occlude; where its picture went, the last of them. An echo pin
+# (held back where its mask passes) at its occlude; where its picture went,
+# the last of them. An echo pin
 # `lookback.echo.<k>` is a Read at k − 1, nearest, of that delay — of a second
-# delay, the same input, at depth k, past its echoes (Q25). Its knobs are the
+# delay, the same input, at depth k, past its echoes. Its knobs are the
 # parts' (`dream.echo_mix` → `fx.trail.level` …); `dream.darken`, `contrast` and
-# `res` stay the dream's until H3, a row on one copied onto the look-back's part
-# too (Q26); a row on `dream.gap` is dropped, said (Q27). Keyed on the file, not
+# `res` stay the dream's, a row on one copied onto the look-back's part
+# too; a row on `dream.gap` is dropped, said. Keyed on the file, not
 # a schema, as Hue cycle's retirement: run as the ladder's last step
 LB_KEYS = ("echo_mix", "fade", "echoes", "gap", "darken", "contrast", "occlude", "res")
 LB_GONE = ("echo_mix", "fade", "echoes", "gap", "occlude")       # dream's no more: retired
-LB_SHARED = ("darken", "contrast", "res")                       # the dream's still (Q26)
+LB_SHARED = ("darken", "contrast", "res")                       # the dream's still
 LB_DEFAULTS: dict[str, Any] = {"echo_mix": 0.4, "fade": 0.2252, "echoes": 8, "gap": 0.033333,
                                "darken": 0.1, "contrast": 1.0, "occlude": 1.0, "res": 2}
 LB_ECHOES = 32                   # dream.echoes ran 0 … 32
 LB_DEPTH = (1, 64)               # a delay's depth (`view.DELAY_DEPTH`)
 LB_CONTRAST = (0.5, 3.0)         # dream.contrast ran 0.5 … 3, linear
 LB_HZ = (0.1, 120.0)             # a delay's Hz (`view.DELAY_HZ`)
-LB_RESIZE = 5                    # `view.RESIZE_SIDES[5]`: 512 on the long side (Q24)
+LB_RESIZE = 5                    # `view.RESIZE_SIDES[5]`: 512 on the long side
 LB_MATTE = {"from": 3, "key": 0.125, "soft": 0.125, "ramp": 1, "invert": False, "feather": 0.0}
 LB_KEY = {"measure": 0, "level": 0.0, "soft": 1.0, "keep": True, "feather": 0.0,
           "invert": False, "ramp": 1}
-# the owner (2026-11-26): a look-back's parts land folded in one group of that
+# a look-back's parts land folded in one group of that
 # name — detail on demand, picture in and picture out (a loadable patch's
 # `groups`; a fragment's spawn groups what it lands itself)
-LB_GROUP = "trail"                 # (plan 90 Q29: was "look-back")
+LB_GROUP = "trail"
 LB_ROLES = ("curve", "fade", "resize", "delay", "deep", "trail", "matte", "cut", "cover_cut")
 LOOKBACK_NOTE = ("{old} is public parts now (plan 90): {chain} — the same look, what it keeps "
                  "at 512 on the long side; save to keep it")
@@ -2394,7 +2380,7 @@ def _lbp(pid: str) -> tuple[str, str]:
 def lookback_retired(pid: Any) -> bool:
     """Whether `pid` is a retired look-back knob (`LB_GONE`, or any of
     `dream.<n>.*`): a module preset of the dream group still naming one
-    (plan 90 H2) lands without it, quietly — it drew nothing there."""
+    lands without it, quietly — it drew nothing there."""
     got = _lb_param(pid)
     return got is not None and (got[1] in LB_GONE or got[0] != "lookback")
 
@@ -2408,7 +2394,7 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
     rest, ports, keys, notes). Pure: the inputs are untouched, and handed
     back as they are when no look-back is named. The retired knobs
     (`LB_GONE`, `dream.<n>.*`) of a patch with no look-back drew nothing:
-    their values go quietly, a row on one is left out, said.An effect's own mix, where the file
+    their values go quietly, a row on one is left out, said. An effect's own mix, where the file
     names none, is its spec's (`specs`; `DEFAULT_MIX` without one). A
     fragment (`ports` given) holding no dream keeps none of the dream's
     shared knobs: they are the host's there (`patches.check`)."""
@@ -2480,7 +2466,7 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
 
     notes: list[str] = []
     out_nodes = [e for e in nodes if not (isinstance(e, dict) and e.get("kind") == "lookback")]
-    # (Devin on #522: a fragment with no dream does not own the dream's knobs)
+    # (a fragment with no dream does not own the dream's knobs)
     keep_shared = ports is None or any(isinstance(e, dict) and e.get("kind") == "dream"
                                        for e in nodes)
     out_keys = list(keys) if keys is not None else None
@@ -2650,7 +2636,7 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
                 continue
         out_wires.append(w)
     # (a part's input from a look-back or its echo — one look-back into
-    # another: Devin on #522 — is that look-back's end or Read, made by now)
+    # another — is that look-back's end or Read, made by now)
     fed: list[dict] = []
     for w in new_wires:
         f = _lb_of(w.get("from"))
@@ -2670,7 +2656,7 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
         lb, k = got
         role = parts.get(lb)
         # (a row may drive the host's dream from a fragment with none — only
-        # its values are the host's: Devin on #522, second pass)
+        # its values are the host's)
         keep = [pid] if lb == "lookback" and k in LB_SHARED else []
         if role is None:
             return keep
@@ -2854,7 +2840,7 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
 def master_switch(values: dict, ours: set[str], out_nodes: list, wires: list, rest: dict,
                   specs: Specs | None, notes: list[str], note: str, row_note: str,
                   skip: Callable[[str], bool] = lambda end: False) -> None:
-    """Plan 90 (H2, H3): parts that are effects where the retired node drew
+    """Parts that are effects where the retired node drew
     whatever `fx.on` and `fx.mix` said — so the master is on and at 1, and the
     patch's other effects drawn as they were: off where the master was, their
     own mix × the master's (a file's own mix where the patch names none: its
@@ -2864,7 +2850,7 @@ def master_switch(values: dict, ours: set[str], out_nodes: list, wires: list, re
     was_on = values.get("fx.on", True) is not False
     mix = _num(values.get("fx.mix", 1.0), 1.0)
     # (every effect the patch declares — an entry, a wire's end, a slot's
-    # wire: Devin on #522 — but the parts)
+    # wire — but the parts)
     declared = {G.instance_name(e["file"], e.get("instance", 1)
                                 if isinstance(e.get("instance", 1), int) else 1)
                 for e in out_nodes if isinstance(e, dict) and e.get("kind") == "effect"
@@ -2928,16 +2914,16 @@ def lookbacks(doc: dict, specs: Specs | None = None) -> tuple[dict, list[str]]:
     return out, notes
 
 
-# ---------------------------------------------------------------- the dream (plan 90 H3)
+# ---------------------------------------------------------------- the dream
 
-# Plan 90 H3: a saved dream (`{"kind": "dream"}`) opens as public parts folded
-# in one group (Q31): Resize (keyed: brightness is coverage, as the old mask)
+# A saved dream (`{"kind": "dream"}`) opens as public parts folded
+# in one group: Resize (keyed: brightness is coverage, as the old mask)
 # → Dream (the effect file, its picture alone: mix 1) → Hue turn, Palette,
 # Curve — each only where its old value is off neutral or a row drives it →
 # Fade (level mix × (1 − darken)) → Composite over the dream's input. The
 # worker's ids move to the effect's (`dream.layer` → `fx.dream.layer` …), the
 # look's onto its parts; `res` is the Resize's size, `mask_decay` merges into
-# Hold (said), a tint from the scene keeps its chosen colour (Q16, said). A
+# Hold (said), a tint from the scene keeps its chosen colour (said). A
 # dream that was off, with nothing to turn it on, drew nothing: left out,
 # said. Keyed on the file, run as the ladder's last step after the look-back's
 DREAM_KEYS = ("on", "mix", "darken", "contrast", "hue", "sat", "tint", "tint_from",
@@ -2953,16 +2939,16 @@ OLD_K = (0.03, 0.3)              # dream.k ran 0.03 … 0.3, linear
 NEW_K = (0.03, 1.0)              # Hold runs 0.03 … 1, log
 OLD_HUE = (-180.0, 180.0)
 # the old res (the short side: 128, 192, 256, 384) at the rig's 16 : 10 → the
-# Resize's long side nearest it (`view.RESIZE_SIDES`: 4 is 256, 5 is 512; Q18)
+# Resize's long side nearest it (`view.RESIZE_SIDES`: 4 is 256, 5 is 512)
 DREAM_RESIZE = {0: 4, 1: 4, 2: 5, 3: 5}
 # the old mask was clamp(4 · blur(brightness)): black is clear on the peak, linear,
 # from 0 to a quarter — premultiplied (keep colour off): the copy laid over its own
 # source by its alpha is that source again, so a dream with no result (off, no
-# worker, waiting) leaves its picture as it was (Devin on #523); the old output was
+# worker, waiting) leaves its picture as it was; the old output was
 # the dream × its mask, premultiplied too
 DREAM_KEY = {"measure": 0, "level": 0.0, "soft": 0.25, "keep": False, "feather": 0.0,
              "invert": False, "ramp": 1}
-DREAM_GROUP = "dream"            # Q29
+DREAM_GROUP = "dream"
 DREAM_ROLES = ("resize", "dream", "hueturn", "palette", "curve", "darken", "fade", "composite")
 DREAM_NOTE = ("{old} is public parts now (plan 90): {chain} — the dream on a picture of its "
               "own size, its colour and grade on it alone, laid over its input at its mix; "
@@ -3103,7 +3089,7 @@ def retire_dreams(nodes: list, wires: list, rest: dict, ports: list | None = Non
         tint_on = tint != 0.0 or bool({"dream.tint", "dream.tint_hue", "dream.tint_sat"} & driven)
         curve_on = contrast != 1.0 or "dream.contrast" in driven
         # (the darken a Fade of its own, the mix another: a desk row on either
-        # moves one level — Devin on #523)
+        # moves one level)
         darken_on = _num(v["darken"], 0.1) != 0.0 or "dream.darken" in driven
         role["resize"] = free("resize")
         role["dream"] = free("dream")
@@ -3372,9 +3358,9 @@ def dreams(doc: dict, specs: Specs | None = None) -> tuple[dict, list[str]]:
     return out, notes
 
 
-# ---------------------------------------------------------------- the one ladder (plan 50)
+# ---------------------------------------------------------------- the one ladder
 
-# what a load says of a file naming a desk template (retired, plan 44 D3;
+# what a load says of a file naming a desk template (retired;
 # `loadable.TEMPLATE_RETIRED` is this)
 TEMPLATE_RETIRED = ("desk template {name!r}: desk templates are retired (plan 44 D3) — "
                     "this patch's own desk rows only")
@@ -3397,7 +3383,7 @@ class Forward:
 
 
 def eleven(doc: dict) -> dict:
-    """A `/10` as its `/11` (plan 57 §7): the kind's new word, and a pair route's poles in
+    """A `/10` as its `/11`: the kind's new word, and a pair route's poles in
     north, south, east and west (a load drops a `pad:` or `hat:` route, so only a pair's names
     a pole). A copy."""
     out = {**doc, "schema": ELEVEN_SCHEMA}
@@ -3411,7 +3397,7 @@ def eleven(doc: dict) -> dict:
 
 def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any = None,
             look: dict | None = None, cuts: Any = None) -> Forward:
-    """The one ladder for a whole loadable patch (plan 50; the steps a load runs,
+    """The one ladder for a whole loadable patch (the steps a load runs,
     in order, each only for a file older than it): before `/7` the one-way
     migration (`seven`, said), before `/9` the eye and the camera's GRAPH
     place the open show held (`nine`), before `/10` the look made whole
@@ -3419,9 +3405,9 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     module labels and the desk template's name dropped — the template
     said), before `/11` the kind's new word (`eleven`), and — first, before
     any step reads the section — before `/12` its copies made slots of
-    their effects (`twelve`, plan 89; said when there were any); last, at
+    their effects (`twelve`; said when there were any); last, at
     any version, a Hue cycle made Hue turn and its bands' field nodes
-    (`hue_turns`, plan 67; said). A
+    (`hue_turns`; said). A
     fragment's ladder is `patches.forward`; the two are the one reader of
     the one shape (`patches.shape_of` says which a file is)."""
     notes: list[str] = []
@@ -3429,9 +3415,9 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     migrated = ""
     from_show: set[str] = set()
     version = schema_version(doc)
-    specs = {**RETIRED_SPECS, **specs}      # (plan 67: Hue cycle, retired below)
+    specs = {**RETIRED_SPECS, **specs}      # (Hue cycle, retired below)
     if version is None or version < TWELVE:
-        # plan 89: copies are slots before anything reads the section (a
+        # copies are slots before anything reads the section (a
         # `/6` wired frame may hold one; the steps below read slots alone)
         was = doc
         doc, slot_notes = twelve(doc)
@@ -3458,13 +3444,13 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
         doc = eleven(doc)
     if version is None or version < TWELVE:
         doc = {**doc, "schema": TWELVE_SCHEMA}
-    # plan 67: Hue cycle retired, whatever the version (keyed on the file)
+    # Hue cycle retired, whatever the version (keyed on the file)
     doc, hue_notes = hue_turns(doc)
     migrate_notes += hue_notes
-    # plan 90 (H2): the look-back made public parts, whatever the version
+    # the look-back made public parts, whatever the version
     doc, lb_notes = lookbacks(doc, specs)
     migrate_notes += lb_notes
-    # plan 90 (H3): a saved dream made public parts, last, whatever the version
+    # a saved dream made public parts, last, whatever the version
     doc, dream_notes = dreams(doc, specs)
     migrate_notes += dream_notes
     return Forward(doc, tuple(notes), tuple(migrate_notes), migrated, frozenset(from_show))

@@ -93,9 +93,8 @@ def snap(x, y, w, h):
     Measured twice, on the two shapes that have fractional edges:
 
     * the Switch is `h-[18.4px]`, so its box runs y 790 .. 808.390625. The
-      background is painted into rows 790..807 and row 808 is left
-      completely empty. Unsnapped that was 91 levels on a dark switch - the
-      largest single disagreement the diff has ever reported.
+      background is painted into pixel y 790..807 and the pixel at y 808 is
+      left completely empty. Unsnapped, a dark switch is off by 91 levels.
     * a Slider thumb at 33.3% lands at x 102.604 .. 114.604. The browser
       paints it at 103 .. 115 - snapped at both edges, width preserved at
       12 - and puts no ink at all in column 102, where ImGui put 133.
@@ -106,9 +105,6 @@ def snap(x, y, w, h):
     thumb's placement depends on it); only paint snaps.
 
     Round, not floor: 808.390625 -> 808 and 102.604 -> 103, which is what
-    matching edge positions rather than extents requires.
-
-    Round, not floor: 808.390625 -> 808 and 807.6 -> 808, which is what
     matching edge positions rather than extents requires.
     """
     x0, y0 = px(x), px(y)
@@ -130,22 +126,16 @@ def box(dl, x, y, w, h, *, fill_col=None, border_col=None, radius=0.0,
 def _blur_layers(sigma: float, reach: int | None = None):
     """Integer-expansion layers approximating a Gaussian falloff.
 
-    `reach` is how far out the stack goes, and it MUST scale with sigma. It
-    was fixed at 3, which is ample for the 2px shadows the kit was first
-    calibrated on (sigma 1, so 3 sigma) but truncates anything softer:
-    shadow-md's blur 6 is sigma 3 and reaches ~9px, so two thirds of its
-    falloff was simply not drawn. Measured on a menu panel, that was 5
-    levels down the sides and under the bottom edge - the whole of the only
-    cell in the gallery that was failing.
+    `reach` is how far out the stack goes, and it must scale with sigma: a
+    fixed 3 covers 3 sigma of a 2px shadow (sigma 1) but truncates softer
+    ones. shadow-md's blur 6 is sigma 3 and reaches ~9px.
     """
     from math import ceil, erf, sqrt
     if reach is None:
         reach = max(3, ceil(3.0 * sigma))
-    # Integer steps. Half-steps were tried on the soft end and came out a
-    # level WORSE for twice the draw calls, which says the residual is not
-    # quantisation: Chromium blurs with three box passes (Skia), not a true
-    # Gaussian, and the two shapes diverge most against the box's own edge.
-    # Modelling the triple box is the way to close it, and is not done.
+    # DEBT: shadow-triple-box-blur
+    # Integer steps; half-steps do not help. The residual is that Chromium
+    # blurs with three box passes (Skia), not a true Gaussian.
     phi = lambda z: 0.5 * (1.0 + erf(z / sqrt(2.0)))
     cum = {e: 1.0 - phi((e + 0.5) / sigma) for e in range(-1, reach + 1)}
     out = []
@@ -520,7 +510,7 @@ try:
     from .icons import BOX as ICON_BOX
     from .icons import ICONS
     from .icons import STROKE as ICON_STROKE
-except ImportError:                       # not built yet
+except ImportError:                       # icons module absent
     ICONS, ICON_BOX, ICON_STROKE = {}, 24.0, 2.0
 
 
@@ -552,8 +542,8 @@ def icon(dl, name, x, y, size, col, *, width=None, kept=None, slot=None) -> bool
     if kept is None:
         for ops in subs:
             flags = _icon_path(dl, ops, x, y, s)
-            # imgui_bundle orders this (col, thickness, flags) - the third time
-            # this binding reverses the C++ order; always pass these by keyword
+            # imgui_bundle orders this (col, thickness, flags), reversing the
+            # C++ order; always pass these by keyword
             dl.path_stroke(c, thickness=w, flags=flags)
         return True
     at = (x, y, size, imgui.get_style().curve_tessellation_tol)
@@ -592,7 +582,7 @@ def _icon_path(dl, ops, x, y, s) -> int:
             first = last
     # A path whose last point IS its first point is already closed.
     # Asking ImGui to close it too adds a zero-length segment, which under
-    # round joins draws a visible tick - it showed up on every circle.
+    # round joins draws a visible tick on every circle.
     if closed and first and last and \
             abs(first[0] - last[0]) < 1e-6 and abs(first[1] - last[1]) < 1e-6:
         closed = False
@@ -714,10 +704,9 @@ def fill_clipped(dl, x, y, w, h, col, box, radius) -> None:
     flags = corner_flags(x, y, w, h, bx, by, bw, bh)
     # ImGui clamps rounding to min(w, h) / 2 of the rect it is drawing, not of
     # the container, so a child narrower than the container's diameter would
-    # otherwise lose the arc it is supposed to inherit. Nothing can be done
-    # about that through add_rect_filled, and at the sizes that matter (a
-    # slider range a pixel or two wide) the difference is sub-pixel - but say
-    # so rather than pretend the clamp is not there.
+    # otherwise lose the arc it is supposed to inherit. add_rect_filled
+    # cannot avoid that; at the sizes that matter (a slider range a pixel or
+    # two wide) the difference is sub-pixel.
     dl.add_rect_filled(imgui.ImVec2(x, y), imgui.ImVec2(x + w, y + h),
                        _u32(col), r, flags)
 
@@ -977,7 +966,7 @@ def kbd(dl, x, y, s, faces, theme, tbl, *, in_tooltip=False,
     # "Ctrl" is 29.203 wide, and the browser paints that box snapped to
     # whole pixels while laying out on the fraction - the README's finding,
     # and draw.switch's. Unsnapped, the right edge is a partial column: 6
-    # levels over 4px in dark, the first time this cell was diffed.
+    # levels over 4px in dark.
     bx, by, bw, bh = snap(x, y, w, h)
     fill(dl, bx, by, bw, bh, rgba(*bg, theme=theme), RADII[tbl["radius"]])
     if glyphs:
@@ -1104,9 +1093,8 @@ def field(dl, x, y, w, h, theme, tbl, *, focus_f=0.0, invalid=False,
     r = RADII[tbl.get("radius", "lg")] if radius is None else radius
     # `disabled:opacity-50` is an opacity on the ELEMENT, so it multiplies the
     # border and the fill alike - on top of a fill that is already themed
-    # (input/50 in light, input/80 in dark). Missing this left the whole
-    # 200x32 box wrong by 12 levels: the fill was right and the border was
-    # twice as dark as it should be.
+    # (input/50 in light, input/80 in dark). Skipping it leaves the fill right
+    # but the border twice as dark as it should be.
     from .ease import over
     dim = tbl.get("disabled_opacity", 0.5) if disabled else 1.0
 
@@ -1190,8 +1178,6 @@ def select_trigger(dl, x, y, w, h, theme, tbl, *, size="default", hot=0.0,
     from .ease import mix
     _h, rkey = SELECT_SIZES[size]
     r = RADII[rkey]
-    # light has no hover tint at all and dark goes input/30 -> input/50, so
-    # this interpolates between two table entries rather than guessing one
     # The hover tint is themed in an asymmetric way: light stays transparent
     # at both ends and dark runs input/30 -> input/50. Interpolating between
     # the two table entries covers both without a special case.

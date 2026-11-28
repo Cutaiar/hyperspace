@@ -3,8 +3,8 @@
 The rules are not invented. They come from driving the REAL Base UI
 component in Chromium on the `?probe` route's `combobox.kb` block - which is
 the only combobox there WITHOUT `open`, and that matters: every other block
-reports `aria-expanded: true` whatever you press, and measuring one of those
-is how the first pass concluded that focus opens the list.
+reports `aria-expanded: true` whatever you press, so none of them can show
+whether focus opens the list.
 
     closed  focus (a Tab into it)   stays CLOSED
     closed  click the input         opens on the COMMITTED row, else none
@@ -20,14 +20,12 @@ is how the first pass concluded that focus opens the list.
     open    Escape                  closes, value reverts, focus STAYS
     open    Tab                     closes, focus MOVES ON
 
-**The committed row is the part this file first got wrong.** The rules
-above were measured on `combobox.kb`, which carries no `defaultValue` - so
-every open there has no committed row and falls through to the none /
-first / last case, and that is the only case the model recorded. Re-driven
-on `combobox.many` (sixteen rows, `defaultValue="Gamma"` at index 2), all
-four gestures open on Gamma. The dashboard's Find combobox DOES hold a
-value, so these tests were asserting the valueless rules against a valued
-control the whole time.
+**The committed row.** The table above was measured on `combobox.kb`, which
+carries no `defaultValue` - so every open there has no committed row and
+falls through to the none / first / last case. On `combobox.many` (sixteen
+rows, `defaultValue="Gamma"` at index 2), all four opening gestures open on
+Gamma. The dashboard's Find combobox holds a value, so these tests assert
+the committed-row rules.
 
 The no-value half of the table cannot be driven at all here, because the
 dashboard has no valueless Combobox; it is covered as a pure test of
@@ -98,8 +96,8 @@ def _highlight(DB, f, rect):
     """Which row indices are filled differently from the panel's ground.
 
     Sampled in the row's own left PADDING - six pixels in, where the row
-    fill is and the label is not. The first version of this read a column
-    through the text and reported every row as highlighted.
+    fill is and the label is not; a column through the text would report
+    every row as highlighted.
     """
     px, py, pw, ph = rect
     ground = f[int(py + ph) - 3, int(px) + int(pw) // 2].astype(int)
@@ -117,9 +115,8 @@ def _highlight(DB, f, rect):
 # opening and closing
 # --------------------------------------------------------------------------
 def test_tabbing_onto_the_field_does_not_open_the_list(DB):
-    """Measured: focus alone leaves it closed. The kit opened on focus, so
-    tabbing through the panel popped the list open - and then trapped you in
-    it."""
+    """Measured: focus alone leaves it closed, so tabbing through the panel
+    does not pop the list open and trap the user in it."""
     _f, rect = _drive(DB, [(10, 10, False)] * 56,
                       keys=[(4 + i, imgui.Key.tab) for i in range(8)])
     assert rect is None, f"a Tab opened the list: {rect}"
@@ -133,8 +130,7 @@ def _committed(DB):
 def test_clicking_the_field_opens_it_on_the_committed_row(DB):
     """MEASURED on `combobox.many`, which holds `Gamma`: clicking the field
     opens the list with Gamma highlighted AND ticked - not with nothing
-    highlighted. The kit opened on none, because the model behind it was
-    measured on the one probe block that holds no value."""
+    highlighted."""
     pre, _at = _open_by_click(DB)
     f, rect = _drive(DB, pre)
     assert rect, "the click did not open the list"
@@ -144,7 +140,7 @@ def test_clicking_the_field_opens_it_on_the_committed_row(DB):
 
 def test_clicking_the_chevron_opens_it_on_the_committed_row(DB):
     """The chevron has its own hit target in the kit and its own button in
-    the browser; measured, both open on the committed row."""
+    the browser; both open on the committed row."""
     fx, fy, fw, fh = _field(DB)
     cx, cy = fx + fw - 12, fy + fh / 2
     pre = [(10, 10, False)] * 10 + [(cx, cy, False)] * 4 \
@@ -171,8 +167,8 @@ def test_escape_closes_it_and_keeps_the_field_focused(DB):
 
 
 def test_tab_closes_the_list_rather_than_being_swallowed(DB):
-    """Tab is not the list's key. The kit ate it inside the popup, so a
-    keyboard user could get into the combobox and not out of it."""
+    """Tab is not the list's key: it closes the list and moves on, so a
+    keyboard user can leave the combobox."""
     pre, at = _open_by_click(DB)
     _f, rect = _drive(DB, pre + [at + (False,)] * 30,
                      keys=[(len(pre) + 2, imgui.Key.tab)])
@@ -203,10 +199,10 @@ def test_either_arrow_from_closed_opens_on_the_committed_row(DB):
 
 
 def test_the_opening_arrow_is_not_also_processed_by_the_list(DB):
-    """The off-by-one this guards: the closed-field branch sets the
+    """The off-by-one this guards against: the closed-field branch sets the
     highlight and the popup's own handler, running later in the SAME frame,
-    moved it on by one - so an opening ArrowDown overshot the row it had
-    just chosen."""
+    must not move it on by one, or an opening ArrowDown overshoots the row
+    it just chose."""
     base = len(_open_by_click(DB)[0]) + 16
     f, rect = _after_escape(DB, 40, [(base, imgui.Key.down_arrow)])
     assert _highlight(DB, f, rect) == [_committed(DB)], \
@@ -240,7 +236,7 @@ def test_the_highlight_falls_off_the_end_rather_than_wrapping(DB):
 
 
 # --------------------------------------------------------------------------
-# the ring the popup used to cut
+# the ring the popup must not cut
 # --------------------------------------------------------------------------
 def _band(f, fx, fy, fw, fh):
     """The focus ring's strength on each side of the field, at d = 1, 2, 3.
@@ -270,9 +266,9 @@ def test_the_fields_focus_ring_is_not_clipped_by_the_popup(DB):
     a Tab does not - so a ring that is right on one and clipped on the
     other can only be the fault of something that exists while the list is
     up. That is the popup window: ImGui clips a window's draw list to the
-    window, the popup starts at the field's top-left and is exactly `w`
-    wide, and the field used to draw its own chrome inside it. Measured
-    before the fix, dark, pointer parked off the control:
+    window, and the popup starts at the field's top-left and is exactly `w`
+    wide, so chrome drawn inside it would be clipped. A clipped ring reads,
+    dark, pointer parked off the control:
 
         list closed   left [46,46,46]  right [46,46,46]  top [46,46,46]  bottom [46,46,46]
         list open     left [ 0, 0, 0]  right [ 0, 0, 0]  top [ 0, 0, 0]  bottom [46,46,46]
@@ -280,11 +276,10 @@ def test_the_fields_focus_ring_is_not_clipped_by_the_popup(DB):
     - three sides gone, and the bottom surviving only because the window
     carries on down toward the panel.
 
-    The fix is not a bigger window (`RING_PAD`, which produced artifacts on
-    a Retina Mac and is still 0): the chrome moved to the copy of the field
-    drawn in the PARENT window, where nothing clips it, and the copy inside
-    the popup draws only the widget. See THE SPLIT FIELD in
-    `comp_combobox.combobox`.
+    The ring is not kept by a bigger window (`RING_PAD`, which stays 0):
+    the chrome is drawn by the copy of the field in the PARENT window,
+    where nothing clips it, and the copy inside the popup draws only the
+    widget. See THE SPLIT FIELD in `comp_combobox.combobox`.
 
     The pointer is parked WELL off the control for both frames, so the
     hover tint cannot be mistaken for the band.
@@ -298,7 +293,7 @@ def test_the_fields_focus_ring_is_not_clipped_by_the_popup(DB):
         + [(cx, cy, True)] * 3 + [(cx, cy, False)] * 6
     off = [(cx, fy - 250, False)] * DWELL
 
-    # the list OPEN, which is the case that was broken
+    # the list OPEN, where a clipping popup would show
     f_open, rect = _drive(DB, pre + off)
     assert rect, "the list did not open"
     opened = _band(f_open, fx, fy, fw, fh)
@@ -336,8 +331,8 @@ def _query_after(DB, click_dx, ch, dwell=DWELL):
         QXW   the caret was at 0        XQW   at 1
         XWQ   at the end                Q     the whole value was selected
 
-    The kit gave `Q` - ImGui's `set_keyboard_focus_here()` activates an
-    InputText the way a Tab does and selects all of it - where Chromium
+    `Q` is the wrong answer - ImGui's `set_keyboard_focus_here()` activates
+    an InputText the way a Tab does and selects all of it - where Chromium
     measures `selectionStart == selectionEnd` on every click, never a
     selection.
     """
@@ -380,11 +375,11 @@ def test_the_caret_lands_where_the_field_was_clicked(DB):
 
 
 def test_the_whole_field_is_clickable_not_just_its_text_box(DB):
-    """An InputText's hit area is its FRAME, and the frame used to be the
-    text box alone - so the field's leading 10px of padding and everything
-    right of the text did nothing at all. Measured: a press at x+2 or at
-    x+120 on the 150px Find combobox neither focused the field nor opened
-    the list, where the browser treats the whole padded box as the input.
+    """An InputText's hit area is its FRAME, so the frame must cover the
+    field's leading 10px of padding and everything right of the text, not
+    the text box alone. A press at x+2 or at x+120 on the 150px Find
+    combobox focuses the field, as the browser does for the whole padded
+    box.
     """
     val = DB.CTL_STATE["plane"]
     assert _query_after(DB, 2, "Q") == "Q" + val, \
@@ -398,10 +393,10 @@ def test_a_committed_row_leaves_the_field_focused_with_a_caret(DB):
     AND the caret is at the END of the new value - `selectionStart ==
     selectionEnd == 4` on a committed `Beta`. Nothing is selected.
 
-    The first half was already true of the kit (ImGui keeps nav focus on
-    the field the popup was opened from, so an arrow reopens the list); the
-    caret was not, so the field came back focused with no cursor in it.
-    Asserted by typing, which is the only part of a caret a person can see
+    The first half holds because ImGui keeps nav focus on the field the
+    popup was opened from, so an arrow reopens the list; the caret needs
+    its own placement, or the field comes back focused with no cursor in
+    it. Asserted by typing, which is the only part of a caret a person can see
     without waiting for the blink.
     """
     pre, at = _open_by_click(DB)
@@ -516,10 +511,10 @@ def _lit_band(f, rect):
 
 def test_the_list_scrolls_to_follow_the_keyboard_highlight(DB):
     """MEASURED on `combobox.many`, sixteen rows in a 252px clamp: the
-    arrows take the list's `scrollTop` 0 -> 92 (row 11) -> 204 (row 15),
+    arrows take the list's `scrollTop` 0 -> 92 (index 11) -> 204 (index 15),
     minimum movement, and back to 0 when the highlight wraps round to the
-    first row. The kit did not scroll at all, so arrowing past the ninth
-    row moved a highlight nobody could see.
+    first row. Without scrolling, arrowing past the ninth row would move a
+    highlight nobody could see.
 
     Asserted on what a person sees rather than on a scroll offset: after
     arrowing well past the clamp there must still be a highlighted row in
@@ -555,7 +550,7 @@ def test_the_list_scrolls_to_follow_the_keyboard_highlight(DB):
         f"the lit band is {bot - top} tall, not one {t['row_h']} row"
     # a MINIMUM scroll puts a highlight that came down from above flush
     # with the bottom of the list's viewport, which is the panel's own
-    # bottom rail in. Measured in Chromium: row 13's bottom lands exactly
+    # bottom rail in. Measured in Chromium: index 13's bottom lands exactly
     # `scroll-py-1` (4) above the list's bottom edge.
     assert abs(bot - (rect[1] + ph - t["pad"])) <= 2, (
         f"the highlight is at {top}..{bot} in a panel ending at "
@@ -576,21 +571,17 @@ def test_clearing_the_field_leaves_the_placeholder_in_it(DB):
     """`::placeholder` keys off the VALUE, not the focus. Measured in
     Chromium on `combobox.kb`: the placeholder's ink is there unfocused,
     under a keyboard focus, and with the list open - the darkest pixel in
-    the field reads 115 in all three. The kit drew it only
-    `if not out and not focused`, and that `focused` is now gone.
+    the field reads 115 in all three. The placeholder is drawn whenever
+    the value is empty, whatever the focus.
 
-    WHAT THIS DOES NOT COVER, said plainly rather than left implied. The
-    state the old rule actually broke is `focused AND closed AND empty`,
-    and it is not reachable here: the dashboard's only Combobox always
-    holds one of the six planes, Escape puts the value back, and no number
-    of Tabs reaches the field (measured - see
-    `test_tabbing_onto_the_field_does_not_open_the_list`, which presses
-    eight). With the list OPEN the old rule happened to draw the
-    placeholder anyway, because the parent's copy of the field is not the
-    focused one, so this test passes against the broken code as well. It
-    is kept as a guard that the placeholder is drawn at all once the value
-    is gone, which is a real thing to lose, and it is NOT evidence that
-    the focus half of the fix works. That half is measured, not tested.
+    Not covered: the state `focused AND closed AND empty` is not reachable
+    here, because the dashboard's only Combobox always holds one of the
+    six planes, Escape puts the value back, and no number of Tabs reaches
+    the field (see `test_tabbing_onto_the_field_does_not_open_the_list`,
+    which presses eight). With the list OPEN the parent's copy of the
+    field is not the focused one, so this test does not exercise the
+    focus half of the rule; it guards that the placeholder is drawn at
+    all once the value is gone.
     """
     import numpy as np
     fx, fy, _fw, fh = _field(DB)
@@ -618,10 +609,9 @@ def test_a_disabled_combobox_dims_its_chevron_as_well_as_its_box(DB):
     computes `opacity: 0.5` and the group `bg-input/50` in light,
     `bg-input/80` in dark, over an element opacity of 0.5.
 
-    The kit dimmed the box - `draw.field` has carried `disabled_bg` and
-    `disabled_opacity` since the Input - and left the chevron and the
-    placeholder at full strength, so a disabled field had a crisp arrow on
-    a faded box.
+    The box is dimmed by `draw.field` (`disabled_bg`, `disabled_opacity`);
+    the chevron and the placeholder must dim with it, or a disabled field
+    shows a crisp arrow on a faded box.
 
     Driven on the Gallery, which carries an enabled and a disabled
     Combobox side by side, so the two are read off ONE frame with the same
@@ -676,12 +666,11 @@ def test_a_second_escape_empties_the_field(DB):
     closes the list, and a SECOND Escape - pressed while it is already
     closed - sets `input.value` to "".
 
-    The kit could not express that, which is why it sat unimplemented. A
-    choice is signalled by returning its id, and a cleared value is a falsy
-    id, so every caller read it as "nothing happened". `CC.CLEARED` is the
-    third answer: an empty `str` subclass, so `if got:` in an un-updated
-    caller still does the safe thing and `if got is not None` separates the
-    three cases.
+    A choice is signalled by returning its id, and a cleared value is a
+    falsy id, so a plain return would read as "nothing happened".
+    `CC.CLEARED` is the third answer: an empty `str` subclass, so `if got:`
+    in an un-updated caller still does the safe thing and `if got is not
+    None` separates the three cases.
     """
     pre, at = _open_by_click(DB)
     esc = len(pre) + 2
@@ -705,10 +694,9 @@ def test_one_escape_on_its_own_keeps_the_value(DB):
 
 
 def test_cleared_is_falsy_so_an_old_caller_is_still_safe(DB):
-    """`CLEARED` is an empty `str` subclass on purpose. A caller written
-    before it existed does `if got:` and sets nothing - which is the old
-    behaviour, not a crash and not a sentinel object landing in somebody's
-    state dict and blowing up at the next `D.label`."""
+    """`CLEARED` is an empty `str` subclass on purpose. A caller that does
+    `if got:` sets nothing, rather than crashing or putting a sentinel
+    object into its state dict to blow up at the next `D.label`."""
     from hyperspace.dkit import comp_combobox as CC
     assert not CC.CLEARED
     assert CC.CLEARED is not None

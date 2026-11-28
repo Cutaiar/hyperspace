@@ -265,11 +265,9 @@ def test_the_values_shared_with_menu_py_are_not_silent_duplicates():
     assert CONTEXT_MENU["gap"] == menu.GAP
 
 
-def test_menu_py_now_agrees_with_the_browser():
-    """This test was written to pin a DISAGREEMENT: menu.py had an item at
-    26 and an icon at 14 where the browser measures 28 and 16, and it had
-    shipped that way. The fix has landed, so the test now asserts agreement
-    instead - and keeps asserting it, which is the point.
+def test_menu_py_agrees_with_the_browser():
+    """menu.py's item height (28) and icon size (16) match what the browser
+    measures.
 
     The item classes are byte-identical between ContextMenu and
     DropdownMenu, so the browser's answer is the same for both.

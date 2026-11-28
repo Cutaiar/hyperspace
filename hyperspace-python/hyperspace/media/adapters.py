@@ -64,7 +64,7 @@ def open_source(sid: str, resolver: Resolver) -> Source:
         return MissingSource(sid, error(str(e)))
     if parsed.kind in ids.FILE_KINDS:
         path = resolver.path(sid)
-        if path is None:      # gone, or still downloading: never opened (A-I1)
+        if path is None:      # gone, or still downloading: never opened
             return MissingSource(sid, file_status(resolver, sid))
         if Path(path).suffix.lower() in STILL_EXT:
             return StillSource(sid, path)
@@ -72,7 +72,7 @@ def open_source(sid: str, resolver: Resolver) -> Source:
             from .video import VideoSource  # lazily: pulls in nothing heavy itself
             return VideoSource(sid, path, cache=getattr(resolver, "proxy_cache", None))
         return MissingSource(sid, error("unsupported"))
-    if parsed.kind == "phone":   # reserved (V2): parsed, never opened
+    if parsed.kind == "phone":   # reserved: parsed, never opened
         return MissingSource(sid, error("unsupported"))
     live = resolver.live(sid)
     return live if live is not None else MissingSource(sid)

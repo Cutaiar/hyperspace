@@ -1,10 +1,9 @@
 """The Combobox's selection model: which row an open highlights.
 
-`resolve_open` is RETRO row 26: the COMMITTED value beats the gesture, and
-the gesture (an arrow pressed while closed, recorded as `SEL_FIRST` /
-`SEL_LAST`) is only the fallback. Pure, no imgui. Moved out of
-`comp_combobox.py` by `HANDOFF.md` item 3c, which re-exports every name
-callers use.
+`resolve_open`: the COMMITTED value beats the gesture, and the gesture (an
+arrow pressed while closed, recorded as `SEL_FIRST` / `SEL_LAST`) is only the
+fallback. Pure, no imgui. `comp_combobox.py` re-exports every name callers
+use.
 """
 
 from __future__ import annotations
@@ -23,11 +22,10 @@ class _Cleared(str):
     """The answer "the user emptied this", which is neither a choice nor
     silence.
 
-    A `str` subclass, and empty, so a caller that has not been updated still
-    does the safe thing: `if got:` is False and nothing is set, exactly as
-    before. A caller that wants the behaviour writes `if got is not None`
-    and gets an empty string to store. The alternative - a bare `object()` -
-    would have gone into somebody's state dict and blown up at the next
+    A `str` subclass, and empty, so a caller that ignores it still does the
+    safe thing: `if got:` is False and nothing is set. A caller that wants
+    the behaviour writes `if got is not None` and gets an empty string to
+    store. A bare `object()` would go into a state dict and fail at the next
     `D.label`.
     """
     __slots__ = ()
@@ -52,9 +50,8 @@ _MISSING = object()
 def _committed_row(shown, rows, label) -> int | None:
     """Where the committed value sits in `rows`, or None.
 
-    MEASURED, and the thing the kit got most wrong about opening the list:
-    an open does NOT start with nothing highlighted - it starts on the row
-    that holds the committed value. On `combobox.many`, value `Gamma`
+    MEASURED: an open does NOT start with nothing highlighted - it starts on
+    the row that holds the committed value. On `combobox.many`, value `Gamma`
     (index 2 of sixteen):
 
         click the field     highlight = Gamma

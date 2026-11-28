@@ -1,4 +1,4 @@
-"""The device list both Macs share (wave 5 CT1): `<library>/devices.json`.
+"""The device list both Macs share: `<library>/devices.json`.
 
 The meta controller's: what controllers there are, each with the role that rows name.
 No loadable patch reaches this file, and nothing here reaches a patch. Who holds which

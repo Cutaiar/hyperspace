@@ -3,7 +3,7 @@
 The bottom layer of the box model: nothing here depends on anything else in
 the kit's layout code. `flex.py` builds on `Rect`, and `tree.py` builds on
 both. `box.py` re-exports all three, so `B.Rect` and `from box import Rect`
-keep working - see `HANDOFF.md` item 3a.
+keep working.
 """
 
 from __future__ import annotations

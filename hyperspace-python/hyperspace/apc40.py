@@ -32,7 +32,7 @@ holds a loadable patch that is not the loaded one). Knob rings: the knob's
 own CC carries the value; CC number + 8 sets the ring style
 (0 off · 1 single · 2 volume · 3 pan).
 
-The default map's transport corner is the clock (plan 09): TAP TEMPO taps
+The default map's transport corner is the clock: TAP TEMPO taps
 ``tempo.tap``, NUDGE +/− step ``tempo.nudge`` by a hundredth of a beat,
 METRONOME fires ``lfo.trigger`` — the global LFO trigger — and QUANT steps
 the loadable patch bank. METRONOME's LED blinks on the beat through the ordinary ``led``
@@ -42,31 +42,30 @@ press echo unless the param carries a light of its own
 clock's ``on_beat`` — so midi.py's `_lit` reads the beat off the param
 and the row stays a plain trigger row that Learn can move like any other.
 
-Two layers under a latched SHIFT (plan 13 §3). Every MIDI row carries a
+Two layers under a latched SHIFT. Every MIDI row carries a
 ``layer``: none is **invariant** (the meta controller defines the control; one
 meaning on both layers — the MASTER fader as the master dim, the crossfader
 as the decks' (`META_CONTROLS`),
-the bank's twenty-four pads — clip row 1 and, since plan 19, clip rows 4
-and 5 (`BANK_PADS`), each a tap to load and, on an empty slot, a hold to
-save into it — SHIFT, the clock and transport corner, OVERDUB as home, the track buttons,
-and since plan 24 C1 the render toggles on scene launch 1–4 and SAVE on
-track 8's clip stop, which held turns a pad's tap into a save into its
-slot), ``"global"`` is the
+the bank's twenty-four pads — clip rows 1, 4 and 5 (`BANK_PADS`), each a
+tap to load and, on an empty slot, a hold to save into it — SHIFT, the
+clock and transport corner, OVERDUB as home, the track buttons, the render
+toggles on scene launch 1–4 and SAVE on track 8's clip stop, which held
+turns a pad's tap into a save into its slot), ``"global"`` is the
 SHIFT layer
 (the band strip on the device knobs, the hand feel and BPM on track knobs
-1–5, the band scenes on clip rows 2–3, and since plan 24 C2 the bands'
-post-drive, the master dynamics and trim on the track faders),
-``"preset"`` is the loaded patch's own (the factory default below is
-what a fresh loadable patch starts with; since plan 24 C2 the track faders are a
-loadable patch's too, and the default gives them nothing). A control with no row
+1–5, the band scenes on clip rows 2–3, and the bands' post-drive, the
+master dynamics and trim on the track faders), ``"preset"`` is the loaded
+patch's own (the factory default below is what a fresh loadable patch
+starts with; the track faders are a loadable patch's too, and the default
+gives them nothing). A control with no row
 on the layer that is up is dark and does nothing; midi.py dispatches and draws by those rules.
 
-The sequencer page (plan 31 §A, seq_page.py) is not a layer: while SEND A
+The sequencer page (seq_page.py) is not a layer: while SEND A
 (invariant) has it up, its rows shadow clip rows 1–5, the clip stops and
 scene launch 1–5 on both layers, invariant rows included; the rest of the
 desk is as it was. Its lights are `SHADE`'s.
 
-FINE (wave 2 T3) is SEND B held: while it is down a knob moves its param
+FINE is SEND B held: while it is down a knob moves its param
 a tenth as far, and its LED is lit. It is the adapter's (`FINE`, midi.py),
 not a map row, and gives way to any row the table puts on SEND B.
 
@@ -87,8 +86,8 @@ PORT_MATCH = "APC40"
 DEVICE_KNOBS = range(0x10, 0x18)
 TRACK_KNOBS = range(0x30, 0x38)
 CC_FADER, CC_MASTER, CC_XFADE, CC_CUE = 0x07, 0x0E, 0x0F, 0x2F
-# The desk's extension to the generic controller (plan 44 D5d, the owner: as the
-# DualSense Edge has its own): controls reserved for the meta controller, which no
+# The desk's extension to the generic controller (as the DualSense Edge has
+# its own): controls reserved for the meta controller, which no
 # loadable patch may learn or bind, whatever the table holds on them. See routing's
 # `is_invariant`; another desk like it names its own there.
 META_CONTROLS = (f"cc:0:{CC_MASTER}", f"cc:0:{CC_XFADE}")
@@ -96,8 +95,8 @@ META_CONTROLS = (f"cc:0:{CC_MASTER}", f"cc:0:{CC_XFADE}")
 # The protocol table: every note, ring mode and LED velocity the APC40 mk1
 # speaks, whether or not DEFAULT_MAP below uses it (N_DEV_L/R, N_SEND_B/C,
 # RING_SINGLE / RING_PAN and the red and yellow blinks by name are unused
-# today and kept as the reference for a hand-edited bindings.json or a
-# later map; a blink is sent through `blink_of`).
+# and kept as the reference for a hand-edited bindings.json; a blink is
+# sent through `blink_of`).
 N_ARM, N_SOLO, N_ACTIVATOR, N_SELECT, N_CLIPSTOP = 0x30, 0x31, 0x32, 0x33, 0x34
 N_CLIP = [0x35, 0x36, 0x37, 0x38, 0x39]          # rows 1–5
 N_CLIPTRACK, N_DEVICE_ON, N_DEV_L, N_DEV_R = 0x3A, 0x3B, 0x3C, 0x3D
@@ -134,7 +133,7 @@ def leave() -> list[mido.Message]:
     return [*msgs, _mode(MODE_GENERIC)]
 
 
-# A desk that fell back to Generic mode (2026-10-16, the owner's findings).
+# A desk that fell back to Generic mode.
 # The APC40 starts in Mode 0 whenever it powers up ("The unit defaults to
 # Mode 0 on startup", Akai rev 1), and a power cycle under a running app
 # can keep the port, so the intro `enter` sends at connect is not sent
@@ -177,12 +176,11 @@ def in_channel(kind: str, channel: int, number: int) -> int:
     return 0 if kind == "note" and number in DEVICE_BUTTONS else channel
 
 
-# Hand check 31 — the one hardware assumption plan 13 D7 rests on: in mode
+# Hardware assumption, not hand-checked: in mode
 # 0x42 a ring CC sent to a device or track knob also re-bases the encoder,
 # so its next turn continues from the value just drawn. midi.py catches a
-# ring-feedback row at the value it sends when this is True; if the check
-# fails, set it False and those knobs fall back to soft pickup like the
-# faders — nothing else changes.
+# ring-feedback row at the value it sends when this is True; when False
+# those knobs fall back to soft pickup like the faders.
 RING_REBASES_KNOB = True
 
 
@@ -210,7 +208,7 @@ def feedback_for(kind: str, channel: int, number: int) -> dict | None:
 
 
 def degrees_of_freedom() -> list[tuple[str, ...]]:
-    """What node mode fills (N1a, as `gamepad.degrees_of_freedom`), in order: the
+    """What node mode fills (as `gamepad.degrees_of_freedom`), in order: the
     track knobs, the device knobs, the track faders. Knobs first, since a ring says
     where a param is and re-bases the knob onto it; a fader has to be brought to it.
     MASTER and the crossfader are the meta controller's (`META_CONTROLS`), and CUE
@@ -225,28 +223,28 @@ def blink_of(number: int, on: int) -> int:
     velocity (the protocol table in the module docstring): on the clip
     grid the colour's blink is the colour + 1 (green 1 → 2, red 3 → 4,
     yellow 5 → 6); any other button has one blink, 2. Not hand-checked on
-    the mk1 (plan 15, group K)."""
+    the mk1."""
     return on + 1 if N_CLIP[0] <= number <= N_CLIP[-1] else 2
 
 
 def filled_of(number: int, on: int) -> int | None:
-    """The velocity for "something is here, not selected" (plan 19 WP2,
-    fork 5: a bank pad whose slot holds a loadable patch that is not the loaded
-    one): YELLOW on the clip grid, None on any other button — it has no
-    third state — and None for a row whose "on" is already yellow, which
-    would then show filled and selected alike. Yellow at velocity 5 is
-    Akai's table; how it reads beside green on the mk1 is not hand-checked
-    (plan 19, check O2). Returning None here turns the third state off."""
+    """The velocity for "something is here, not selected" (a bank pad whose
+    slot holds a loadable patch that is not the loaded one): YELLOW on the
+    clip grid, None on any other button — it has no third state — and None
+    for a row whose "on" is already yellow, which would then show filled
+    and selected alike. Yellow at velocity 5 is
+    Akai's table; how it reads beside green on the mk1 is not hand-checked.
+    Returning None here turns the third state off."""
     if N_CLIP[0] <= number <= N_CLIP[-1] and on not in (YELLOW, YELLOW_BLINK):
         return YELLOW
     return None
 
 
-# The sequencer page's lights (plan 31 §A): a shade (routing.led_shade) →
+# The sequencer page's lights: a shade (routing.led_shade) →
 # (its velocity on the clip grid, on any other button). "on" and "off" are
 # the row's own `on` / `off`, and "held" is `filled_of`'s; these two are
 # the page's: a step under the playhead (yellow), a step in a muted lane
-# (red) — a scene button's muted lane blinks. Not hand-checked (group Z)
+# (red) — a scene button's muted lane blinks. Not hand-checked.
 SHADE = {"hit": (YELLOW, 1), "muted": (RED, 2)}
 
 
@@ -304,7 +302,7 @@ def control_name(source: str) -> str | None:
 
 
 # ---------------------------------------------------------------- the layout
-# Plan 14 WP7, decision 25 (a): every control the protocol names, where it
+# Every control the protocol names, where it
 # sits on the device, and a short glyph the panel prints wherever a
 # control is named (the ROUTING rows, Learn, the on-screen desk,
 # ui_desk.py). Akai's names ("track knob 3") stay for the tooltips.
@@ -322,7 +320,7 @@ def control_name(source: str) -> str | None:
 # Positions are in a unit grid (x right, y down) that draws like the
 # mk1's face: the button field and the faders on the left, one unit a
 # column; the knobs, the bank select, the transport corner and the
-# crossfader on the right. The picture is hand check 45's to confirm.
+# crossfader on the right. The picture is not hand-checked.
 
 
 @dataclass(frozen=True)
@@ -486,9 +484,9 @@ def _note(param, number, channel=0, *, op="toggle", on=1, **kw):
 _KNOB_KEYS = ("trim", "exp", "trn", "pre", "post", "atk", "dec", "thr")
 _BAND_PLANES = ("ZW", "XW", "YW", "XY", "XZ", "YZ")  # bands.BANDS[i].pl, SUB→AIR
 
-G, P = "global", "preset"    # the layers (plan 13 §3.2); no layer = invariant
+G, P = "global", "preset"    # the layers; no layer = invariant
 
-# The bank's pads (plan 19 WP2): (note, channel) of slot k — clip row 1 is
+# The bank's pads: (note, channel) of slot k — clip row 1 is
 # slots 1–8 (the F-keys' eight), rows 4 and 5 slots 9–24. Its length is the
 # bank's size on the desk; a test pins it to library.SLOTS (this module
 # imports nothing of the app's)
@@ -497,7 +495,7 @@ BANK_PADS: list[tuple[int, int]] = [
     *[(N_CLIP[3], k) for k in range(8)],             # row 4: slots 9–16
     *[(N_CLIP[4], k) for k in range(8)]]             # row 5: slots 17–24
 
-# The fresh patch layer's device knobs (plan 19 WP3): D1–D4, the scene
+# The fresh patch layer's device knobs: D1–D4, the scene
 # params not on K1–K8 that act on every loadable patch whatever is switched on —
 # the 4D perspective, the camera's two angles — and the face pattern (an
 # enum on an absolute knob: it steps through the patterns). D5–D8 stay dark.
@@ -506,18 +504,18 @@ BANK_PADS: list[tuple[int, int]] = [
 # (loadable.knob_desk)
 SCENE = ("view.depth4", "camera.yaw", "camera.pitch", "view.pattern")
 
-# The render toggles on scene launch 1–4 (plan 24 C1): invariant rows, so
+# The render toggles on scene launch 1–4: invariant rows, so
 # points, lines, faces and rotate do the same on both layers and their
-# LEDs always show the live state. They were the patch layer's until
-# then, and every loadable patch saved before carries those four rows in its desk
-# (routing.RETIRED_DESK_ROWS drops them quietly at load)
+# LEDs always show the live state. A saved loadable patch whose desk
+# carries those four rows has them dropped quietly at load
+# (routing.RETIRED_DESK_ROWS)
 TOGGLES = ("view.points", "view.lines", "view.faces", "view.rotate")
 
-# The desk's SAVE button (plan 24 C1, the owner's choice of 2026-10-14):
-# (note, channel) of track 8's clip stop, free since PR #158
+# The desk's SAVE button:
+# (note, channel) of track 8's clip stop
 SAVE: tuple[int, int] = (N_CLIPSTOP, 7)
 
-# The desk's FINE button (wave 2 T3, register row 609): (note, channel) of
+# The desk's FINE button: (note, channel) of
 # SEND B, free on both layers and outside the sequencer page's shadow,
 # between the track knobs and the device knobs. Held, every knob moves its
 # param a tenth as far (midi.FINE_DIV); its LED is lit while held. It is
@@ -526,43 +524,40 @@ SAVE: tuple[int, int] = (N_CLIPSTOP, 7)
 # and it stands down on a desk whose table puts any row on SEND B
 FINE: tuple[int, int] = (N_SEND_B, 0)
 
-# The track faders S1–S8 (plan 24 C2, decision 17): the channel of track
+# The track faders S1–S8: the channel of track
 # fader k + 1 is k. On the patch layer they are each loadable patch's own targets,
 # bound by its desk like the device knobs (`loadable.track_fader`); no row in
 # this map, so no default is inherited and a loadable patch with no fader rows
-# leaves them dark. Under SHIFT they are SHIFT_FADERS, the audio strip that
-# was invariant on them until then
+# leaves them dark. Under SHIFT they are SHIFT_FADERS, the audio strip
 TRACK_FADERS = range(8)
 SHIFT_FADERS = (*(f"band.{i}.post" for i in range(6)), "master.dyn", "master.trim")
 
 DEFAULT_MAP: list[dict] = [
     # device knobs, global layer (SHIFT up): the open band strip, in panel order
     *[_cc(f"band.sel.{k}", cc, layer=G) for k, cc in zip(_KNOB_KEYS, DEVICE_KNOBS)],
-    # device knobs 1–4, patch layer: SCENE (plan 19 WP3); 5–8 dark
+    # device knobs 1–4, patch layer: SCENE; 5–8 dark
     *[_cc(t, cc, layer=P) for t, cc in zip(SCENE, DEVICE_KNOBS)],
     # track knobs, patch layer: the view faders (a fresh loadable patch's own eight)
     _cc("view.bright", 0x30, 0, layer=P), _cc("view.speed", 0x31, 0, layer=P),
     _cc("view.instances", 0x32, 0, layer=P), _cc("view.pattern_mix", 0x33, 0, layer=P),
     _cc("view.inst_amp", 0x34, 0, layer=P), _cc("view.inst_rate", 0x35, 0, layer=P),
     _cc("view.bmp_alpha", 0x36, 0, layer=P), _cc("camera.zoom", 0x37, 0, layer=P),
-    # track knobs 1–5, global layer: the hand feel and the clock (decision
-    # register row 9, a first cut — the list is these rows, nothing else
-    # decides it); 6–8 are free, so dark and dead under SHIFT
+    # track knobs 1–5, global layer: the hand feel and the clock
+    # (the list is these rows, nothing else decides it); 6–8 are free, so dark and dead under SHIFT
     _cc("hands.smooth", 0x30, 0, layer=G), _cc("hands.response", 0x31, 0, layer=G),
     _cc("hands.catch", 0x32, 0, layer=G), _cc("hands.sel.return", 0x33, 0, layer=G),
     _cc("tempo.bpm", 0x34, 0, layer=G),
-    # track faders S1–S8, global layer (SHIFT up; plan 24 C2, decision 17,
-    # amending D6): per-band output drive on 1–6, master dynamics and trim
+    # track faders S1–S8, global layer (SHIFT up): per-band output drive on 1–6, master dynamics and trim
     # on 7–8 — the audio one latch away. On the patch layer the faders are
     # the loaded patch's (`TRACK_FADERS`): none here, so a fresh loadable patch and
-    # every factory one leaves them dark. Soft pickup across the latch (D7)
+    # every factory one leaves them dark. Soft pickup across the latch
     *[_cc(t, CC_FADER, i, ring=0, layer=G) for i, t in enumerate(SHIFT_FADERS)],
     # MASTER: the master dim — black (down, CC 0) ↔ full; the crossfader: the
-    # decks', a DJ mixer's, deck 1 left ↔ deck 2 right (the owner, 2026-11-04,
-    # overturning row 559: `master.gain` is pre-show tuning, on the panel).
+    # decks', a DJ mixer's, deck 1 left ↔ deck 2 right (`master.gain` is
+    # pre-show tuning, on the panel).
     # Invariant and reserved (`META_CONTROLS`), soft pickup like every fader, so one
     # parked away from the value does nothing until it is brought to it. That
-    # CC 0 is the left end is not hand-checked (check 55)
+    # CC 0 is the left end is not hand-checked
     _cc("output.dim", CC_MASTER, 0, ring=0),
     _cc("output.xfade", CC_XFADE, 0, ring=0),
     _cc("view.shape", CC_CUE, 0, op="rel", ring=0, layer=P),
@@ -576,7 +571,7 @@ DEFAULT_MAP: list[dict] = [
     *[_note(f"band.{i}.reset", N_ARM, i) for i in range(6)],
     # clip grid: the loadable patch bank on rows 1, 4 and 5 (invariant: no layer,
     # so one meaning on both layers, no Learn takes a pad, no loadable patch maps
-    # one — D6, extended by plan 19) · scenes (global) · grid motion
+    # one) · scenes (global) · grid motion
     # (loadable patch). Shape selection left rows 4–5 for the cue knob above,
     # which reaches every shape
     *[_note("preset.select", n, ch, op="set", value=k, on=GREEN)
@@ -584,9 +579,8 @@ DEFAULT_MAP: list[dict] = [
     # …and each bank pad held midi.HOLD_S on an empty slot saves the live
     # state there as a new loadable patch — the same row: `preset.select` carries
     # the hold (`Param.held`, midi.py). A filled slot is never written
-    # over: the press loads it. This replaced plan 15's clip-stop SAVE AS
-    # bar (2026-10-09), and the clip-stop row was freed.
-    # SAVE (plan 24 C1, the two-handed save): track 8's clip stop, held,
+    # over: the press loads it.
+    # SAVE (the two-handed save): track 8's clip stop, held,
     # turns a bank pad's tap into a save into that pad's slot — an empty
     # one as the hold does, a filled one as a NEW loadable patch the slot then
     # points at (`Param.save_into`, midi.py `_save_tap`). Invariant: the
@@ -598,9 +592,8 @@ DEFAULT_MAP: list[dict] = [
       for k in range(3)],
     *[_note("view.inst_motion", N_CLIP[2], 4 + k, op="set", value=k, on=RED, layer=P)
       for k in range(4)],
-    # scene launch column: the render toggles, invariant since plan 24 C1
-    # (decision 18: the same on both layers, their LEDs the live state;
-    # D6's list grows by four), and the view reset on the patch layer
+    # scene launch column: the render toggles, invariant (the same on both
+    # layers, their LEDs the live state), and the view reset on the patch layer
     *[_note(pid, n) for pid, n in zip(TOGGLES, N_SCENE)],
     _note("camera.reset", N_SCENE[4], layer=P),
     _note("scene.reset_all", N_STOP_ALL),
@@ -612,7 +605,7 @@ DEFAULT_MAP: list[dict] = [
     _note("tempo.tap", N_TAP), _note("tempo.nudge", N_NUDGE_P, op="step", value=1),
     _note("tempo.nudge", N_NUDGE_M, op="step", value=-1),
     _note("lfo.trigger", N_METRO), _note("preset.next", N_QUANT),
-    # OVERDUB is home (plan 15 WP2, decision 27): it loads the loadable patch the
+    # OVERDUB is home: it loads the loadable patch the
     # show's startup loadable patch. No layer, so invariant — the same on both layers, no
     # Learn takes it, no loadable patch maps it. Lit while the show names a
     # startup loadable patch (the trigger param carries the light, as METRONOME's does)
@@ -626,7 +619,7 @@ DEFAULT_MAP: list[dict] = [
     # overlay: master-select floats the render over the screen, pan sends
     # clicks through to what is underneath (the panel stops being clickable)
     _note("output.overlay", N_MASTER_SEL), _note("output.passthrough", N_PAN),
-    # SEND A latches the sequencer page (plan 31 §A, decision 7; seq_page.py):
+    # SEND A latches the sequencer page (seq_page.py):
     # invariant, lit while the page is up. The page's rows then shadow clip
     # rows 1–5, the clip stops and scene launch 1–5 — the bank, SAVE and
     # the render toggles come back when it is let go

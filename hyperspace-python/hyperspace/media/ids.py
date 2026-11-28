@@ -1,8 +1,8 @@
 """Source ids: `<kind>:<ref>`, the one name a channel slot, a loadable patch and the
 resolver share. `shared:` and `local:` are folder-relative, `file:` is an
-absolute path, the rest name a live feed. `phone:` is reserved (V2): it
+absolute path, the rest name a live feed. `phone:` is reserved: it
 parses but is never opened. `panel:` names a picture of the control
-window's own (2026-11-02): `panel:graph`, the GRAPH canvas, a built-in
+window's own: `panel:graph`, the GRAPH canvas, a built-in
 the app's resolver answers without a `[[devices]]` entry."""
 
 from __future__ import annotations

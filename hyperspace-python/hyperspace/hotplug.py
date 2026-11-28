@@ -1,8 +1,7 @@
-"""A display can come and go while the app runs (wave 5 SC3b, audit fault P6). The owner,
-2026-11-06: if a display "gets accidentally unplugged and then plugged back in, we cannot restart
-the app in order to pick up that change. It has to be hot-pluggable."
+"""A display can come and go while the app runs. A display unplugged
+and plugged back in is picked up without a restart.
 
-The picture rests on the root window (SC3a), so no display can take it. This keeps the windows
+The picture rests on the root window, so no display can take it. This keeps the windows
 in step with `displays.wanted(rows, screens)`, between frames. `Hotplug.between_frames` runs
 right after `glfw.poll_events`; the monitor callback, inside that poll, only raises a flag.
 

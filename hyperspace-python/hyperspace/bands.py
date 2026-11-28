@@ -2,19 +2,18 @@
 
 Every constant keeps its reference name (ENGINEERING §4). The known input-trim
 non-monotonicity is ported as-is on the AUTO path; a band switched to MANUAL
-normalisation (``Params.norm``, plan 11 / audit A10) takes a plain monotonic
-trim instead.
+normalisation (``Params.norm``) takes a plain monotonic trim instead.
 
-The chain itself lives in analyzer.py since plan 07 (N bands, not six);
+The chain itself lives in analyzer.py (N bands, not six);
 this module keeps what it is made of — the reference band table (the six
 edges, planes and directions the legacy6 loadable patch and the parity oracle
 need), the headroom constants, the transfer functions and the per-band
 Params. The scenes are the band presets in library/band/*.json
 (control.SCENES names them). The reference's per-band attack / release
 windows live once, in `default_params()`, and `balanced.json` is pinned
-to that table by a test. The constants that belong to other layers moved
-out in plan 11: `DRIVE` (fader → rotation rate) is `params.DRIVE`, the
-meter's nominal line is `ui.NOM`.
+to that table by a test. The constants that belong to other layers live
+there: `DRIVE` (fader → rotation rate) is `params.DRIVE`, the meter's
+nominal line is `ui.NOM`.
 """
 
 from __future__ import annotations
@@ -24,7 +23,7 @@ from dataclasses import dataclass, field
 
 from .motion import follow, pole, spring
 
-# the package's one clamp (tapers.py, audit R10), re-exported under the
+# the package's one clamp (tapers.py), re-exported under the
 # reference's name: the chain and the frozen oracle (tests/legacy_chain.py)
 # read it from here like every other reference constant
 from .tapers import clamp  # noqa: F401
@@ -47,7 +46,7 @@ class Band:
 # A band's id is its name on screen and nothing else — a band is addressed
 # by INDEX everywhere (`lane:{i}`, `band.{i}.*`, a scene's rows), so these
 # words are read by people and by nothing else. Lower case with the rest of
-# the interface (2026-11-10). A layout saved before that holds the old
+# the interface. A layout saved earlier holds the old
 # capitals; `BandSpec.label` lowercases an all-caps stored name so an old
 # file reads as the rest of the panel does, and the file itself is left
 # exactly as it was.
@@ -201,7 +200,7 @@ class Params:
     norm: int = 0    # NORMS index: 0 auto (the reference's adaptive window), 1 manual
 
 
-# per-band normalisation (plan 11, audit A10): auto is the reference chain
+# per-band normalisation: auto is the reference chain
 # bit for bit; manual bypasses the adaptive window and trim is a plain gain
 NORMS = ["auto", "manual"]
 
@@ -224,6 +223,6 @@ def default_band_params() -> Params:
 
 # A band past a scene's rows takes default_band_params() — the linear,
 # MID-timed strip above. The scenes themselves are the band presets in
-# library/band/*.json (control.SCENES names them in combo order); since
-# plan 11 this module holds no copy of them.
+# library/band/*.json (control.SCENES names them in combo order); this
+# module holds no copy of them.
 

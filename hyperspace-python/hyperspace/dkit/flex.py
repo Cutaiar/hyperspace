@@ -1,7 +1,7 @@
 """A measured single-line row (`Flow`) and CSS flexbox on one line (`flex`).
 
 The middle layer of the box model: built on `rect.Rect`, and built on by
-`tree.py`. Re-exported by `box.py` - see `HANDOFF.md` item 3a.
+`tree.py`. Re-exported by `box.py`.
 """
 
 from __future__ import annotations
@@ -178,7 +178,6 @@ def stack(box, n, item_h, *, gap=8.0):
     pitch with a 3px gutter, and why the card read cramped.
     """
     # shrink=0: a stack that overflows its box must overflow, not quietly
-    # compress every row. Flex's default shrink is 1, which silently turned
-    # 24px rows into 16.5px ones the first time this was written.
+    # compress every row (Flex's default shrink is 1).
     return flex(box, [Item(h=item_h, shrink=0.0) for _ in range(n)],
                 direction="column", gap=gap)

@@ -5,7 +5,7 @@ is blind to behaviour by construction, so every behaviour measured on the
 real component on `?probe` is driven here instead:
 
 * the stretched hit area - 11px either side, 7px above and below - and the
-  Switch's, which was 3 and 2 until the Checkbox was measured;
+  Switch's;
 * Space toggles and Enter does NOT (Radix follows WAI-ARIA; ImGui activates
   a focused button on both);
 * the ring is keyboard-only, and a disabled box neither toggles nor rings;
@@ -248,10 +248,9 @@ def test_the_tick_snaps_while_the_fill_eases(monkeypatch):
 
 @pytest.mark.parametrize("dx", [-8.5, -4.5])
 def test_the_switch_takes_a_click_off_its_left_end(dx):
-    """The kit inflated the Switch by `x - 3, y - 2`. Its recipe carries the
-    same `after:-inset-x-3 -inset-y-2` as the Checkbox, and the real one is
-    the pointer target 11px past each end - so a click 4-11px off the track
-    landed in the browser and did nothing here."""
+    """The Switch's recipe carries the same `after:-inset-x-3 -inset-y-2` as
+    the Checkbox, and the real one is the pointer target 11px past each end,
+    so a click 4-11px off the track toggles it."""
     from hyperspace.dkit import interact as I
     _gl_or_skip()
     _tw, th, _ = T.SWITCH_SIZES["default"]

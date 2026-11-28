@@ -1,9 +1,9 @@
-"""What the panel calls a param group, where that is not its key (wave 4 AZ).
+"""What the panel calls a param group, where that is not its key.
 
 A group's key is saved: a show's `modules`, a library folder, `band.*` ids. So
 it stays what it is, and everything a person reads goes through here. Group
 `band` is the analyzer: the fixture on the graph and its tuning. One of its
-parts is a band, the plain audio word (register row 737).
+parts is a band, the plain audio word.
 
 A leaf: it imports nothing from the package. `undo.py` must stay a leaf too, so
 it asks through `Registry.group_word`.
@@ -22,7 +22,7 @@ class GroupWords:
 
 
 GROUPS = {"band": GroupWords("analyzer", "analyzer tuning", "band"),
-          # plan 57 (FQ4): the loadable patches' group, "presets" until the one migration
+          # the loadable patches' group
           "loadable": GroupWords("patch", "patches", "patch")}
 
 

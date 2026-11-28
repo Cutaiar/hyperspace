@@ -32,7 +32,7 @@ lights and put them back. So it keeps out of the way instead:
      FLX4 a pad-mode press makes it repaint the pads at once. A desk whose
      profile owns its lights (the APC40) redraws its own state after the dark.
 
-What `tools/flx4_led_probe.py` found on the owner's FLX4 (2026-11-19):
+What `tools/flx4_led_probe.py` found on a DDJ-FLX4:
 
   * **The addresses** (Mixxx's community mapping, Pioneer-DDJ-FLX4.midi.xml)
     light what they name, but for reloop (0x4D): the FLX4 has no such button,
@@ -109,7 +109,7 @@ class Light:
 
 def _flx4_named() -> list[tuple[str, Light]]:
     """The DDJ-FLX4's lights with their names (Mixxx's mapping, each confirmed on
-    the owner's unit by tools/flx4_led_probe.py, 2026-11-19). Deck 1 is channel 0, deck 2 channel 1; the pads are on channel 7
+    a unit by tools/flx4_led_probe.py). Deck 1 is channel 0, deck 2 channel 1; the pads are on channel 7
     (deck 1) and 9 (deck 2), one note block per pad mode, SHIFT's on 8 and 10.
     Only the hot-cue block (notes 0-7, the mode it powers up in) is drawn:
     another mode's block would light pads that mode shows. x runs left to
@@ -259,7 +259,7 @@ class IdleLights:
     def is_touch(self, kind: str, channel: int, number: int, value: int) -> bool:
         """Is a message from the device a person's touch? A note, a SysEx and anything
         else is. A continuous control (``cc``, ``pitch`` with its value in 0..127) is
-        not when it is only twitching. The FLX4 probe (2026-11-19) heard its crossfader
+        not when it is only twitching. The FLX4 probe heard its crossfader
         send 546 messages in 120 s with no hand on it, its 14-bit pair (CC 31 / 63
         on channel 6): the MSB wandering a step at a time, the LSB anywhere. So:
 

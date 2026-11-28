@@ -280,10 +280,9 @@ def _build_600cell() -> dict:
     return auto(list(m.values()))
 
 
-# ------------------------------- more 4-polytopes (plan 22's shortlist)
+# ------------------------------- more 4-polytopes
 #
-# The ones docs/plans/22-polytope-shortlist.md recommends, built by plan
-# 28: none touches the face pipeline, all are under 500 edges.
+# None touches the face pipeline; all are under 500 edges.
 
 def perm5(c) -> list[list[float]]:
     """The 5-cell family's vertices: Σ c[k]·simplex5()[σ(k)] over every
@@ -367,10 +366,9 @@ def _build_disphenoidal_288() -> dict:
     return {"V": V, "E": edges_by_classes(V, 2)}
 
 
-# ------------------- the rest of the shortlist: every candidate it drew,
-# every form it gave a recipe for, and its cheap extras (plan 28, so the
-# owner can see how each one feels). Coordinates as the shortlist checked
-# them against a convex hull.
+# ------------------- the rest of the shortlist: every candidate drawn,
+# every form with a recipe, and the cheap extras. Coordinates are checked
+# against a convex hull.
 
 R2 = math.sqrt(2)
 
@@ -415,8 +413,8 @@ def _star(V, cls: int, face_len: int = 0) -> dict:
     support test cannot find them: with face_len 3 or 5 they are the planar
     cycles of that length in the edge graph (triangles, convex pentagons);
     with 0 there are none drawn — a {5/2} pentagram face needs its edges'
-    crossings as points, which this builder does not add (plan 22's
-    shortlist; the snub icosidodecadodecahedron's does, `_star_crossings`)."""
+    crossings as points, which this builder does not add (the snub
+    icosidodecadodecahedron's does, `_star_crossings`)."""
     V = [list(v) for v in V]
     iu, ju, d = _pair_d2(V)
     target = sorted(_distance_classes(d, 1e-4))[cls]
@@ -701,7 +699,7 @@ def _build_klein() -> dict:
 
 # ----------------------------------------- the catalog: closed 3D solids
 #
-# Art-direction spike (plan 28): the closed solids of 3D — the five
+# The closed solids of 3D — the five
 # Platonic solids, Archimedean and Catalan solids, two Kepler–Poinsot
 # stars, the classic compounds, spiked stars — and a few mathematical toys
 # (the Hopf fibration, an armillary sphere, a geodesic sphere, the
@@ -1245,7 +1243,7 @@ class Shape:
     sym: str
     build: object = field(repr=False)
     dims: int = 4                 # 4: has a w; 3: w = 0, the W planes leave it alone
-    family: str = ""              # the catalog's group (plan 28): "", or e.g. "Platonic"
+    family: str = ""              # the catalog's group: "", or e.g. "Platonic"
     layers: tuple = ()            # a scene's layers (Layer), empty for one shape
 
     def __post_init__(self) -> None:
@@ -1395,7 +1393,7 @@ SHAPES = [
           _build_mobius, dims=3, family="Surfaces"),
     Shape("Klein bottle", "one-sided bottle, crossing itself", 0, "χ=0 · one side",
           _build_klein, dims=3, family="Surfaces"),
-    # -------- plan 28 spike: the catalog — closed 3D solids, toys, scenes
+    # -------- the catalog — closed 3D solids, toys, scenes
     Shape("Tetrahedron", "Platonic · 4 triangles", 0, "{3,3}", _build_tetra,
           dims=3, family="Platonic solids"),
     Shape("Cube", "Platonic · 6 squares", 0, "{4,3}", _build_cube, dims=3, family="Platonic solids"),
@@ -1470,7 +1468,7 @@ SHAPES = [
     )),
     scene("Mysterium Cosmographicum", "scene · Kepler's nested solids, 1596",
           "♄ {4,3} ♃ {3,3} ♂ {5,3} ♁ {3,5} ♀ {3,4} ☿", _kepler_layers()),
-    # -------- plan 28: plan 22's shortlist (docs/plans/22-polytope-shortlist.md)
+    # -------- the polytope shortlist
     Shape("Snub 24-cell", "the 600-cell less its 24-cell", 144, "s{3,4,3}", _build_snub_24cell,
           family="24-cell family"),
     Shape("Rectified 24-cell", "cuboctahedra and cubes", 48, "r{3,4,3}", _build_rectified_24cell,
@@ -1483,7 +1481,7 @@ SHAPES = [
           _build_grand_antiprism, family="600-cell family"),
     Shape("Disphenoidal 288-cell", "dual of the bitruncated 24-cell", 288, "f{3,4,3}",
           _build_disphenoidal_288, family="Catalan duals"),
-    # -------- plan 28: the rest of plan 22's shortlist, to see how each feels
+    # -------- the rest of the shortlist
     Shape("Truncated 5-cell", "ten truncated tetrahedra and tetrahedra", 10, "t{3,3,3}",
           _wythoff5((0, 1, 2, 2, 2)), family="5-cell family"),
     Shape("Cantellated 5-cell", "cuboctahedra, octahedra, prisms", 20, "rr{3,3,3}",
@@ -1737,8 +1735,8 @@ def rot_matrix(ang) -> np.ndarray:
 
 def pose_angles(R) -> list[float]:
     """The six plane angles whose turn is the 4×4 rotation `R` —
-    `rot_matrix(pose_angles(R)) == R` for any R in SO(4) (plan 43 C2, row
-    573: how a loadable patch's save folds `ViewState.body` into the phases).
+    `rot_matrix(pose_angles(R)) == R` for any R in SO(4): how a loadable patch's save folds
+    `ViewState.body` into the phases.
     rot_matrix is G_ZW·G_YW·G_XW·G_YZ·G_XZ·G_XY on column points, so its
     w column is fixed by the three W planes alone (`G_ZW·G_YW·G_XW·e_w`)
     and, those undone, what is left turns x, y and z only: its z column by
@@ -2158,7 +2156,7 @@ def project_h(
 
 # ------------------------------------------------------------ the one camera
 #
-# Plan 26 A2. The renderer's path is no longer project_h: the CPU takes a
+# The renderer's path is not project_h: the CPU takes a
 # vertex to 3D (`world_points`: rotate4, the 4D divide, the yaw/pitch
 # turntable) and the GPU takes it on to the clip through two 4×4s — the
 # shape's world transform (`model_matrix`: camera.zoom scales it about the
@@ -2198,7 +2196,7 @@ def world_points(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6):
 
 def turned_depth(i: int, P: np.ndarray, pd: np.ndarray, offset) -> np.ndarray:
     """`shape_world`'s depth cue `pd` for shape i with the world's offset (a 4×4,
-    `world.World.offset_matrix`) turning it (plan 60, register row 856): a 3D
+    `world.World.offset_matrix`) turning it: a 3D
     shape's vertices (each 3D layer's, in a scene) cue and sort on their z
     toward the eye after the offset's turn — what `view_depth` reads, turned; a
     4D shape's stays its w. The offset's move shifts every depth alike and is
@@ -2216,14 +2214,14 @@ def model_matrix(zoom: float = 1.0, pan=(0.0, 0.0), offset=None) -> np.ndarray:
     """camera.zoom / camera.pan as the shape's world transform, 4×4
     (column vectors): scale about the world origin, then move. pan is in
     world units — the shape's unit circumradius — with pan.y positive
-    *down* the screen, as it always was (so a stored or routed pan keeps
+    *down* the screen (so a stored or routed pan keeps
     its direction): world y is up, so it moves by −pan.y.
 
-    Plan 59: zoom and pan are the shape object's home pose; `offset` (a
+    Zoom and pan are the shape object's home pose; `offset` (a
     4×4, `world.World.offset_matrix`) is the world's offset on it, composed
     as home ∘ offset — in the home's frame, so it turns the shape about its
-    own centre. None (an identity offset) builds the matrix it always did,
-    multiplying by nothing, so every frame of before is byte for byte the same."""
+    own centre. None (an identity offset) multiplies by nothing, so the matrix is
+    exactly zoom and pan alone."""
     m = np.eye(4)
     m[0, 0] = m[1, 1] = m[2, 2] = float(zoom)
     m[0, 3], m[1, 3] = float(pan[0]), -float(pan[1])
@@ -2259,8 +2257,8 @@ def eye_project(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6,
     the scene's vertex shader computes (`render.FACE_VS`, `LINE_VS`), on
     the CPU. `dtype=np.float32` does the GPU's arithmetic (positions and
     the matrix in float32). With the default eye, zoom 1 and pan 0 it is
-    project_h's (px, py). `offset`: the world's offset on the shape (plan 59,
-    `model_matrix`)."""
+    project_h's (px, py). `offset`: the world's offset on the shape
+    (`model_matrix`)."""
     P, _, _ = world_points(V, ang, yaw, pitch, d4)
     mvp = (eye_matrix(w, h, fov, distance) @ model_matrix(zoom, pan, offset)).astype(dtype)
     q = np.concatenate([P, np.ones((len(P), 1))], axis=1).astype(dtype)
@@ -2320,7 +2318,7 @@ def shape_view(
 def shape_world(
     i: int, ang, yaw: float, pitch: float, d4: float = 2.6, flat: bool = False, body=None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """shape_view in the one camera (plan 26 A2): world_points' (P, div4,
+    """shape_view in the one camera: world_points' (P, div4,
     pd) for shape i — what the renderer draws — at the shape's own angles,
     the same rules as shape_view: a 4D shape turned to `body` first, `flat`
     the 3D switch holding it, a 3D shape cueing on its depth toward the 3D

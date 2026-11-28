@@ -1,10 +1,8 @@
 """The scroll wheel: how a raw delta becomes pixels, and where it is scaled.
 
-Moved out of `interact.py` (`HANDOFF.md` item 3b) because it is the part of
-the kit with the most measurement behind it per line - the 10 px per unit,
-the 0.1 GLFW scale factor, whole-pixel offsets - and it touches nothing else
-in that module. `interact.py` re-exports every name a caller uses, so
-`I.install_wheel(` and `I.note_wheel_step()` in `dashboard.py` are unchanged.
+The 10 px per unit, the 0.1 GLFW scale factor and whole-pixel offsets are
+measured values. `interact.py` re-exports every name a caller uses, so
+`I.install_wheel(` and `I.note_wheel_step()` in `dashboard.py` resolve here.
 
 `_PRECISE` and `_WHEEL` are module state, MUTATED in place and never
 rebound. That is what keeps the re-exported `interact._PRECISE` the same
@@ -18,7 +16,7 @@ from imgui_bundle import imgui
 from . import tokens as T
 
 # --------------------------------------------------------------------------
-# Scrolling: what was decided, and what was decided against
+# Scrolling: no smoothing, one measured multiplier
 # --------------------------------------------------------------------------
 # NO SMOOTHING, on purpose, for a trackpad or anything else. Nothing here
 # interpolates toward a target position; a delta arrives, it is scaled, the
@@ -30,9 +28,8 @@ from . import tokens as T
 # the rate is 10 px (tokens.SCROLL). Whole pixels out, via `snap_scroll` and
 # `draw.px`, because the alternative is text that wobbles.
 #
-# The one deliberate difference from a browser: Chrome animates a glide per
-# NOTCHED WHEEL tick and we step. It only shows with a wheel mouse, and it
-# would be easy to add if it ever grates.
+# The one difference from a browser: Chrome animates a glide per NOTCHED
+# WHEEL tick and we step. It only shows with a wheel mouse.
 #
 # Has this session ever seen a FRACTIONAL wheel delta? One is proof of a
 # pixel-precise device - a trackpad, a Magic Mouse - because a notched wheel

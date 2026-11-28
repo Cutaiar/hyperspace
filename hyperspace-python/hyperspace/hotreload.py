@@ -26,7 +26,7 @@ Contract for hot classes:
     catches the resulting error and shows it instead of crashing)
   - a hot class adds nothing to the layout over another hot class: a live
     instance can't be re-classed once the base was reloaded ("object layout
-    differs", row 802). So it declares no slots over one, and it isn't slotless
+    differs"). So it declares no slots over one, and it isn't slotless
     over one that declares slots (it would gain a __dict__; `__slots__ = ()` is
     fine). A class that needs slots there takes them from a base in cold
     `hot_slots.py`, as the deck's views do; slots directly over `object` or a
@@ -38,7 +38,7 @@ Contract for hot classes:
   - an Enum defined in a reloaded module keeps its identity: the class the
     process first built is put back after the re-execution, so a live
     object's member still `is` the module's (params.Kind was the case that
-    bit — audit H2). A member added or removed in the edit needs a restart
+    bit). A member added or removed in the edit needs a restart
     and `error` says so.
 
 A watched module that was never imported (an optional adapter behind its
@@ -72,8 +72,8 @@ MODULES = (
     "hands.signal", "hands.tape", "hands.room", "hands.core", "hands", "devices", "media.live", "media.panel", "media.ndi", "media.syphon", "media.camera", "media.publish", "kinect", "hands.device", "node_desk", "osc", "graphview", "ui_browse", "ui_loadable", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
     "ui_lfo", "ui_media", "ui_diagram", "ui_desk", "ui_pad_lab", "ui_pad_nvg", "ui_pad_views", "ui_pad", "hands.panel", "ui_players", "ui_displays", "ui_playlist", "dkit.tokens", "dkit.ease", "dkit.icons", "dkit.rect", "dkit.flex", "dkit.tree", "dkit.box", "dkit.draw", "dkit.uictx", "dkit.wheel", "dkit.comp_button", "dkit.interact", "dkit.menu", "dkit.combobox_tokens", "dkit.combobox_items", "dkit.combobox_select", "dkit.combobox_measure", "dkit.layer", "dkit.comp_combobox", "dkit.comp_command", "dkit.comp_context_menu", "dkit", "ui_kit", "ui_menu", "ui_fields", "ui_camera", "ui_view", "ui_fractal", "ui_pane", "ui_switcher", "ui_strip", "ui_effect_picker", "ui_kinect", "ui_graph", "ui_seq", "ui",
 )
-# (plan 39 T2: `masks` sits after `glsl`, whose QUAD_VS it binds, and before
-# `render`, which binds its MaskPasses. Plan 39 T4: `segment` is left out —
+# (`masks` sits after `glsl`, whose QUAD_VS it binds, and before
+# `render`, which binds its MaskPasses. `segment` is left out —
 # cold, as `app` is: a worker module whose threads outlive any reload, so a
 # re-executed copy would be a second module beside the live workers.)
 

@@ -1,4 +1,4 @@
-"""Envelope generators — event-driven AHDSR voices (plan 31 §E, decisions 2–3).
+"""Envelope generators — event-driven AHDSR voices.
 
 An envelope is a source like an LFO: something fires it, it rises to a
 peak, falls to a sustain and lets go on release, and the router reads its
@@ -64,7 +64,7 @@ The level is in note units (0 → 1 is rest → peak) and the output is that
 times the note's peak, read live, so `amount` moved mid-note scales the
 envelope the way an LFO's depth does instead of waiting for the next fire.
 
-**The bank** (plan 31 W1, decision 3): `Envelopes` always holds the five
+**The bank**: `Envelopes` always holds the five
 lane envelopes, 1–5 — the sequencer's lanes fire them, so every lane works
 the moment a pad is pressed — and `remove` refuses them. Extras, 6 up to
 the cap of 16, come and go by stable id like the LFOs. Its loadable patch key,
@@ -371,7 +371,7 @@ def declare(reg, n: int, env: Envelope) -> None:
                    "a performer own it.")
 
 
-LANE_ENVS = (1, 2, 3, 4, 5)   # the sequencer's lane envelopes: always there (decision 3)
+LANE_ENVS = (1, 2, 3, 4, 5)   # the sequencer's lane envelopes: always there
 
 
 class Envelopes(Bank):

@@ -1,4 +1,4 @@
-"""An Xbox 360 Kinect as a device (plan 29): a live point cloud and its
+"""An Xbox 360 Kinect as a device: a live point cloud and its
 depth picture, through libfreenect.
 
 A ``kind = "kinect"`` entry publishes ``cloud:<role>`` (`devices.PointCloud`,
@@ -48,9 +48,9 @@ role's entry as it is).
 
 A stream that starts may say nothing at all, with no error: with both on,
 the colour (or the depth, if it starts second) came up in about 4 of 10
-tries on a 1414 under macOS 26 (2026-11-24), in libfreenect's own example
-too. Stopping and starting the silent stream brings it up, so `Sensor` does
-that every `QUIET_S` until it speaks.
+tries on a 1414 under macOS 26, in libfreenect's own example too. Stopping
+and starting the silent stream brings it up, so `Sensor` does that every
+`QUIET_S` until it speaks.
 
 libfreenect is not a Python package (``brew install libfreenect``); it is
 loaded inside the thread, so importing the app needs none of it."""
@@ -857,7 +857,7 @@ class KinectDevice(devices.Base):
 
     @property
     def sinks(self) -> tuple[devices.Port, ...]:
-        """What a route can drive (row 1170): the infrared brightness and the exposure
+        """What a route can drive: the infrared brightness and the exposure
         time, as sink ports ``<role>:<k>``. The tilt, the LED and the streams are the
         pane's alone: a motor is not for a modulator to move."""
         return tuple(devices.Port(str(k), label, group="camera", scheme=self.role)

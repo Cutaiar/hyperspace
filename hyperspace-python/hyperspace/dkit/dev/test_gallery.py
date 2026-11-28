@@ -4,7 +4,7 @@ The thing worth testing about a contact sheet is not any one specimen - every
 component has its own tests - but that the page is HONEST: the height it
 tells the scroll area is the height it draws, every specimen lands inside its
 card, and nothing silently drops off the end. Those are exactly the failures
-that made the old hand-sized dashboard put rows outside the card that was
+that a hand-sized dashboard suffers: rows outside the card that is
 supposed to hold them.
 """
 
@@ -47,11 +47,9 @@ def _booted(DB):
 
     `plan` needs text widths and a width needs a font, so a layout question
     cannot be answered without a renderer. What it must not do is LEAVE one:
-    the first version of this file called `DB._boot(...)` in every test and
-    never shut any of them down, which left the current GL context pointing
-    at a dead window. Later `render()` calls in the same xdist worker
-    stopped receiving clicks and keys, and tests with nothing to do with the
-    Gallery failed depending on how pytest happened to distribute them.
+    a context left booted leaves the current GL context pointing at a dead
+    window, and later `render()` calls in the same xdist worker stop
+    receiving clicks and keys.
 
     It cannot be a module fixture either, because `render()` ends with
     `glfw.terminate()` and that destroys this context's font atlas — a
@@ -142,7 +140,7 @@ def test_the_sidebar_switches_to_the_gallery_and_the_header_follows(DB):
         + [(cx, cy, True)] * 3 + [(cx, cy, False)] * 40
     frames = DB.render("dark", W, H, script=script)
     assert DB.render.last_state["nav"] == DB.NAV_GALLERY
-    # the page is now taller than the window, which is what a contact sheet
+    # the page is taller than the window, which is what a contact sheet
     # of thirteen sections should be
     assert DB.render.last_state["page_max"] > H
     # and something was actually drawn in the body
@@ -153,7 +151,7 @@ def test_the_sidebar_switches_to_the_gallery_and_the_header_follows(DB):
 
 def test_the_gallery_scrolls_to_its_end(DB):
     """It is longer than any window, so the page scroll has to reach the
-    bottom - the thing that was broken when only the table scrolled."""
+    bottom, not just the table."""
     script = []
     r = DB.lay_out(W, H)
     nx, ny, nw, nh = r.nav[DB.NAV_GALLERY]
@@ -203,16 +201,12 @@ def _specimen_centres(DB, w, theme="dark"):
 
 
 def test_every_specimen_can_be_clicked(DB):
-    """Click all of them. This is the test that was missing.
+    """Click all of them.
 
-    The Gallery exists because the pixel diff "cannot see that a control is
-    unclickable" - that sentence is in the module docstring - and the first
-    version of this file tested the page by rendering it and asserting it was
-    not blank, which is exactly how the pixel diff would have tested it. The
-    Select specimens were handing `interact.select` a list of `str` where it
-    wants `menu.Item`, and every one of them raised
-    `'str' object has no attribute 'kind'` the moment anybody clicked. Nothing
-    here caught it; the person looking at it did.
+    A pixel diff cannot see that a control is unclickable, and rendering the
+    page and asserting it is not blank is no better. A specimen that raises
+    on click (say, `interact.select` handed a list of `str` where it wants
+    `menu.Item`) only shows when it is pressed.
 
     So: a window tall enough to need no scrolling, then one long script that
     presses each specimen in turn and clicks away to dismiss whatever opened.
@@ -243,8 +237,7 @@ def test_every_specimen_can_be_clicked(DB):
     assert clicked > 60, f"only {clicked} specimens were on screen"
 
     # keep="last": a 1440x2600 frame is 15 MB and this script drives well
-    # over a thousand of them. The first version kept them all and the
-    # kernel killed the worker.
+    # over a thousand of them; keeping all would exhaust memory.
     frames = DB.render("dark", W, TALL, script=script, keep="last")
     f = np.asarray(frames[-1])[:, :, :3].astype(int)
     body = f[DB.HEADER_H + 20:TALL - 20, DB.SIDEBAR_W + 20:W - 20]

@@ -1,14 +1,13 @@
-"""The old look-back's per-frame units, which a load still converts (plan
-14 WP6) — all that is left of the look-back and the dream's GL half.
+"""The old look-back's per-frame units, which a load still converts.
 
-Plan 90: the look-back is public parts (H2: a delay keeping its pictures,
-read by the Trail and Read effect files, `graphmigrate.lookbacks`), and the
-dream is an effect file with a Python half (H3: `shaders/fx/dream.glsl`,
-`dreamhook.py`, `graphmigrate.dreams`). What stays here: the look-back's
-per-frame units, read as 60 Hz frames — ``dream.decay`` → a fade in
-seconds, ``dream.every`` → a gap in seconds (`migrate_values`,
-`migrate_row`); `loadable.echo_seconds` runs them on an old file before the
-ladder, whose last steps make the look-back and the dream public parts.
+The look-back is public parts (a delay keeping its pictures, read by the
+Trail and Read effect files, `graphmigrate.lookbacks`), and the dream is an
+effect file with a Python half (`shaders/fx/dream.glsl`, `dreamhook.py`,
+`graphmigrate.dreams`). What stays here: the look-back's per-frame units,
+read as 60 Hz frames: ``dream.decay`` → a fade in seconds, ``dream.every``
+→ a gap in seconds (`migrate_values`, `migrate_row`); `loadable.echo_seconds`
+runs them on an old file before the ladder, whose last steps make the
+look-back and the dream public parts.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ GAP_LO, GAP_HI = 0.0, 0.25              # dream.gap: seconds between captures (0
 OLD_DECAY = 0.95                        # the per-frame decay's old default, for a row with no base
 
 
-# ---- the old per-frame units (plan 14 WP6) ----
+# ---- the old per-frame units ----
 
 def fade_of_decay(decay: float, hz: float = REF_HZ) -> float:
     """The half-life, in seconds, of a per-frame `decay` at `hz`: the

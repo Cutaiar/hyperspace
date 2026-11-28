@@ -1,4 +1,4 @@
-"""NDI in (plan 32 T8): another machine's picture over the network — Resolume
+"""NDI in: another machine's picture over the network — Resolume
 or TouchDesigner on the next laptop — as `ndi:<sender>` sources.
 
 `NdiKind` is a ``kind = "ndi"`` device entry. Its scan (on the media
@@ -8,7 +8,7 @@ network, and reads its source names: ``HOST (stream)`` becomes
 one stream name. A source's thread polls the receiver's frame sync
 (`capture_video`, which never blocks) — never `Receiver.receive` with a
 timeout, which holds the GIL for the whole wait and starves the frame
-thread (the M0 spike, m0-findings §2) — and keeps the frame whenever its
+thread — and keeps the frame whenever its
 timestamp moves. The receiver asks for RGBX/RGBA, so a frame uploads
 with no swizzle; one without alpha is made opaque.
 
@@ -16,7 +16,7 @@ with no swizzle; one without alpha is made opaque.
 cyndilib's finder cannot be given them, so the kind writes them to an NDI
 config file of the app's own, ``<home>/ndi/ndi-config.v1.json``, and
 points ``NDI_CONFIG_DIR`` at that folder before cyndilib is first
-imported. The NDI SDK documents the file; this spike-era road is not yet
+imported. The NDI SDK documents the file; this road is not
 proven against a real second subnet, so the status says so."""
 
 from __future__ import annotations

@@ -7,8 +7,8 @@ where a computed style could not settle it. Nothing here was derived from a
 reading of the Tailwind classes, because eight of these numbers are not what
 the classes imply.
 
-What surprised me, in the order it cost me time
------------------------------------------------
+Where the Tailwind classes mislead
+----------------------------------
 
 * **The fill is inset 1 px from the box on every side.** Every variant carries
   `border border-transparent` *and* `bg-clip-padding`, so the background is
@@ -31,9 +31,8 @@ What surprised me, in the order it cost me time
   wrong for the Button, and the difference is five levels.
 
 * **`hover:bg-primary/80` is an ALPHA, not a mix, and it is /80 not /90.**
-  The existing `draw.button` stub mixed `primary` 10% toward `background`;
-  measured, light hover is #171717 at 0.8 over white = **69**, and a 10% mix
-  would be 46. Two separate errors in one line.
+  Measured, light hover is #171717 at 0.8 over white = **69**; a 10% mix of
+  `primary` toward `background` would give 46.
 
 * **`outline` is not transparent in light.** It is `bg-background` — opaque
   white — and `dark:bg-input/30`. Its border is `border-border` in light but
@@ -78,7 +77,7 @@ What surprised me, in the order it cost me time
   but `:hover` goes false and the fill returns to its REST colour. So the
   tint tracks hover alone and the nudge tracks the press alone. The active
   background is otherwise identical to the hover background — there is no
-  third colour, which is what the old stub's extra `down * 0.35` invented.
+  third colour.
 
 * **A ButtonGroup's borders are not doubled, and its top and bottom borders
   run straight through the seam.** Three 60 px children at x 20/80/140 make a
@@ -88,12 +87,12 @@ What surprised me, in the order it cost me time
   x 80 — the dropped side loses only its own strip's interior, not the 1 px
   where the perpendicular borders reach the corner.
 
-What I could NOT measure, and where I guessed
----------------------------------------------
+Not measured, and what stands in
+--------------------------------
 
 * **The link underline's thickness at sizes other than 14 px.**
-  `text-decoration-thickness: auto` resolves out of the font, and I only have
-  a rendered `link` button at the default size: one row, 1 px, at box-relative
+  `text-decoration-thickness: auto` resolves out of the font, and only a
+  rendered `link` button at the default size was measured: one row, 1 px, at box-relative
   y 25 of a 32 px button, spanning exactly the text's own advance width. The
   offset (`underline-offset-4` = 4 px below the alphabetic baseline) is
   measured and `UNDERLINE_W` is pinned at 1.0 for every size — a guess for
@@ -201,19 +200,17 @@ BUTTON_SIZES = {
 }
 
 BORDER_W = 1.0           # `border` on every variant, visible or not
-# A DELIBERATE DEPARTURE, and the only one in this module.
+# The one deliberate departure from the browser in this module.
 #
 # The real component does nudge: `active:not-aria-[haspopup]:translate-y-px`
 # reads back as `translate: 0px 1px` with the box's own rect moving 784.375
 # -> 785.375 while the mouse is held, measured on the current registry
 # button. aria-haspopup suppresses it so a dropdown trigger does not bounce.
 #
-# It is off here because it was asked for twice: once on ButtonGroup and
-# again on plain Buttons, and a kit that nudges in one place and not the
-# other is worse than one that is consistently either. Set this back to 1.0
-# to restore the browser's behaviour everywhere - that is the whole switch,
-# and `test_button.py` asserts against this constant rather than against a
-# literal 1.0 so it follows either way.
+# It is off for ButtonGroup and plain Buttons alike: a kit that nudges in one
+# place and not the other is worse than one that is consistently either. 1.0
+# restores the browser's behaviour everywhere; `test_button.py` asserts
+# against this constant, not a literal 1.0.
 NUDGE = 0.0
 UNDERLINE_OFFSET = SPACE[1]     # underline-offset-4
 UNDERLINE_W = 1.0        # measured at 14px only - see the note at the top
@@ -803,11 +800,8 @@ def ui_button(ui, key, x, y, w, h, label, *, variant="default",
     # gets no ring. Without this the ring stuck to whichever button was
     # clicked last and walked along behind the pointer.
     #
-    # Through `ui.focus_f`, which is these three lines - the focus_visible
-    # gate, the disabled gate and the 150ms ease - and whose own docstring
-    # names this function as the place they were written out. One definition,
-    # so the five other controls that need a ring cannot each grow a slightly
-    # different one.
+    # `ui.focus_f` holds the focus_visible gate, the disabled gate and the
+    # 150ms ease, so every control with a ring shares one definition.
     focus_f = ui.focus_f(key, imgui.is_item_focused(), disabled=disabled)
     # `disabled:pointer-events-none`: no hover and no press, so the eased
     # values are driven to 0 rather than read off the widget
@@ -913,7 +907,7 @@ def chip_chrome(ui, dl, x, y, w, h, variant="outline", *, hot=0.0, down=0.0,
     fill = imgui.ImVec4(rest.x + (hover.x - rest.x) * t, rest.y + (hover.y - rest.y) * t,
                         rest.z + (hover.z - rest.z) * t, (rest.w + (hover.w - rest.w) * t) * a)
     # snapped as the browser paints a box (`draw.snap`: `draw.px`, never the
-    # half-to-even `round`, RETRO row 36)
+    # half-to-even `round`)
     bx, by, bw, bh = D.snap(x, y + down * NUDGE, w, h)
     if focus_f > 0.01 and not disabled:
         D.ring(dl, bx, by, bw, bh, (ring.x, ring.y, ring.z, ring.w * focus_f), r, RING_W)
