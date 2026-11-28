@@ -224,6 +224,8 @@ ledger and diff before releasing the full run.
 **Measure.** `python3 .claude/workflows/agent_metrics.py <transcript dir>` gives each
 agent's time, turns, messages, tool calls, and context at start and at peak.
 
+**Several partial runs.** Each launch moves the previous run's `.audit/ledger`, `renames`, `promotions`, `proposals` and `REPORT.md` into `.audit/runs/<timestamp>/`, so synthesis sees only its own shards. Regenerate the shards before each launch, and pick by file rather than by id: shard boundaries move as the audited files shrink.
+
 **Resume.** If the run stops, relaunch with the same script and args and
 `resumeFromRunId`. Finished shards come back from cache.
 

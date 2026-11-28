@@ -127,7 +127,7 @@ if (TYPE) {
 const prep = await run(`Prepare the working tree for the comment audit. Work from the repository root.
 
 1. \`git status --porcelain\` must show nothing outside \`.audit/\`. If it shows anything else, set ok=false, list it in notes, and stop.
-2. Add the line \`.audit/\` to \`.git/info/exclude\` if it isn't there. Run \`mkdir -p .audit/ledger .audit/renames .audit/promotions .audit/proposals\`.
+2. Add the line \`.audit/\` to \`.git/info/exclude\` if it isn't there. An earlier run's working folders would be read as this run's, so move them aside first: if any of \`.audit/ledger\`, \`.audit/renames\`, \`.audit/promotions\`, \`.audit/proposals\` exists, move each into \`.audit/runs/<UTC timestamp>/\` (one timestamp for all four), together with \`.audit/REPORT.md\` if it exists. Then run \`mkdir -p .audit/ledger .audit/renames .audit/promotions .audit/proposals\`.
 3. ${A.base ? `BASE is ${A.base}: confirm it with \`git rev-parse ${A.base}\`.` : 'BASE is `git rev-parse HEAD`, taken before any checkout.'}
 4. Branch: if \`${BRANCH}\` doesn't exist, run \`git checkout -b ${BRANCH}\`. If it exists, check it out. It must contain BASE (\`git merge-base --is-ancestor BASE HEAD\`).
 5. From hyperspace-python/, run \`python3 tools/prose_audit.py check\`. It must pass.
