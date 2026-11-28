@@ -1,6 +1,8 @@
 # Plan 92 — any number of scenes, shapes, backdrops and patterns
 
-**A design, not a build** (2026-11-28). Nothing here is built. Tags: **[V]** read in the
+**A design, not a build** (2026-11-28). Nothing here is built. **Revised the same day
+(§6):** the owner's answers — one world, a scene a camera onto it — overrule §3–§5 where
+they differ. Tags: **[V]** read in the
 code, **[M]** measured in this session, **[Rec]** a recommendation.
 
 The owner, 2026-11-28, asked whether a spawn should be able to *replace* the host's scene,
@@ -92,10 +94,10 @@ where it starts to bite. **Hand check:** on the Mac, GRAPH's **gpu cost** chip o
 bare name, so **no saved file, param id or binding moves** (`params.instance_id`'s rule:
 the first instance keeps today's id).
 
-**Params.** `params.instance_id` for each kind's params: `rot.2.rate.xy`,
-`view.2.<key>` … — or, cleaner, a prefix per kind for n ≥ 2 (`shape.2.*`, `pattern.2.*`,
-`backdrop.2.alpha`), with the first keeping its old ids by alias. [Rec: the per-kind prefix;
-see Q2.] Declared and dropped as the frame names them (`params.declare_delays`'s shape),
+**Params.** `params.instance_id` on each group a kind's params live in, as every other
+numbered node (owner, Q2, §6): shape 2's are `rot.2.*`, `view.2.<shape key>`,
+`camera.2.*`; pattern 2's `pattern.2.*`, `view.2.<pattern key>`; backdrop 2's
+`backdrop.2.alpha`. Declared and dropped as the frame names them (`params.declare_delays`'s shape),
 each over its own state object (a `ShapeState` / `PatternState` cut from `ViewState`, the
 first instance's still the `ViewState`'s fields). `graphview.OWNERS` and
 `patches._param_rows` learn the numbered owners.
@@ -141,3 +143,75 @@ precedent: both Macs run one build) — to settle in phase 1, checking what an o
   its own place in the world (so two shapes in one scene stand apart)? [Rec: yes.]
 - **Q4. Defaults when added from the canvas.** A new `shape.2` with no pattern wired has
   plain faces, as `shape` does unwired. [Rec: as is; the add menu offers "shape + pattern".]
+
+## 6. The owner's answers (2026-11-28) — overrule §3–§5 where they differ
+
+> "there should be one rectified world model, but you can have multiple cameras within
+> that world. Maybe what a scene is is kind of the formalization of a camera and a frustum,
+> and the geometries that should be allowed to be seen by that camera."
+>
+> "I don't want to end up with multiple world concepts where world objects are either a
+> member of one or the other … world objects should be a part of the world, and a scene is a
+> view into that world."
+>
+> "The second shape settings … need to be generalized the same way that all of our other
+> nodes were generalized. Yes, each shape should have its own position in the world. I think
+> a newly added shape should just default to a tesseract."
+
+| Q | Answer |
+|---|---|
+| Q1 the eye | Each scene is a camera: its own eye and frustum (`eye.2.*` for `scene.2`). |
+| Q2 param names | As every other numbered node: `params.instance_id` on today's groups (`rot.2.*`, `view.2.*`, `camera.2.*`, `pattern.2.*`), not a new prefix per node. |
+| Q3 a shape's pose | Each shape has its own place in the world. |
+| Q4 a new shape | A tesseract. |
+
+### 6.1 One world, scenes as cameras [Rec]
+
+**What changes in meaning.** Today a scene *is* the world: what is wired into
+`scene.geometry` is drawn in it, posed by the one `camera.*`. After this plan:
+
+- **The world** is every geometry node the frame holds — shapes, hands, the clouds — each
+  with its own pose (`camera.*` for the first shape, `camera.2.*` for shape 2; hands and
+  clouds keep the poses they have). There is one world per frame and no node belongs to a
+  scene.
+- **A scene** is a camera onto it: an eye (`eye.*`, `eye.2.*` …), a frustum, its target and
+  pins, and **which world objects it may see**. A wire `shape.2 → scene.geometry` stays
+  the way that is said, but it now reads "scene may see shape 2", not "shape 2 is in
+  scene". A geometry with no wire into any scene is still in the world, just unseen.
+- **The same object seen twice.** A shape wired into two scenes is one object: its 4D turn,
+  projection and sort (the CPU half of `draw_scene`) run once a frame, and each scene draws
+  that result through its own eye. The cost of a second scene is then its draw (§2), not a
+  second shape's CPU.
+
+**What the renderer needs.** Split `Renderer.draw_scene` into a per-object "pose and
+project once" step and a per-scene "draw through this eye" step; a `SceneTarget` and per-pass face
+state per scene (§3); depth-testing between objects is per scene, as now. The first scene
+keeps `eye.*` and today's ids, so every saved show draws as it does.
+
+**Defaults.** A new shape is a tesseract at the world's origin, faces plain until a
+pattern is wired (Q4). A new scene sees what the first sees at the moment it is added
+(its wires copied), its eye a copy of the first's — then each is its own (Q5 below).
+
+### 6.2 Build order, revised
+
+1. **Backdrop** — unchanged (§4.1).
+2. **The world and a second camera.** Split pose/project from draw; `scene.<n>` with its
+   own eye, target and pins; one shape seen by two scenes as the proof (two outputs, two
+   angles on one tesseract).
+3. **Shape and pattern instances.** `shape.<n>` (a tesseract, its own `rot.<n>`,
+   `view.<n>`, `camera.<n>`), `pattern.<n>`; the renderer's face state per shape.
+4. **Retire the rule** — unchanged (§4.4).
+
+### 6.3 New questions
+
+- **Q5. A new scene's sight.** When a scene is added from the canvas, does it start seeing
+  every world object (wires made for each), or nothing until wired? [Rec: what the first
+  scene sees, copied at the add; an empty scene reads as broken.]
+- **Q6. The clouds.** Today every scene draws the meta controller's point clouds without a
+  wire (the frame builder's `clouds`, added to every `Scene`). As world objects, are they seen by every camera, or only by those
+  wired to them? [Rec: every camera, as today, until someone asks otherwise — they have no
+  canvas node to wire.]
+- **Q7. `camera.*` is a shape's pose.** With scenes as cameras, the name reads wrong:
+  `camera.yaw` turns the shape, `eye.*` is the camera. Renaming is a file-format change
+  (REVIEW: a mapping, a backup, an end-to-end test). [Rec: keep the ids, relabel on the
+  panel ("Shape yaw"), and leave the rename for later.]
