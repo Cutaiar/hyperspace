@@ -175,7 +175,7 @@ Sequential. T5's side-panel rows need T4's params, and T5's canvas class swap ne
   - `test_the_delay_write_runs_before_the_capture`: in `g.order`, `delay(write)` comes before `capture`, and `capture.after` holds it.
   - `test_refit_cover_and_contain`: a 200×100 texture, left half red and right half blue, refit into a 64×64 framebuffer. `fit=COVER` gives columns 0–31 red and 32–63 blue. `fit=CONTAIN` gives rows 0–15 and 48–63 transparent black and the middle rows half red, half blue. `fit=STRETCH` gives every row half and half. The texture's `filter` is unchanged after `_refit(..., mip=True)`.
   - `test_own_fit_is_cover`: `G.OWN_FIT == media_tex.COVER`.
-  - `test_nothing_of_plan_33_has_an_own_size`: over every node of the default graph and of each plan-33 fixture's graph (`tests/fixtures/presets/*.json`, landed through the golden tool's `Rig`), `own_size(frame)` is None.
+  - `test_no_earlier_fixture_has_an_own_size`: over every node of the default graph and of each plan-33 fixture's graph (`tests/fixtures/presets/*.json`, landed through the golden tool's `Rig`), `own_size(frame)` is None.
 - [x] **Step 2:** run, see FAIL.
 - [x] **Step 3:** implement.
 - [x] **Step 4:** create the two fixtures. Each has a `frame → fx.image` run and `"schema": "hyperspace.preset/5"`, with the values plan 33's fixtures carry.

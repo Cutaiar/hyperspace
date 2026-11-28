@@ -1221,7 +1221,7 @@ PR body:
 - `tests/test_desk.py` and `tests/test_midi.py`: the rows C1 and C2 move
   (the toggles invariant, the faders to the preset layer, the band rows to
   SHIFT, the SAVE button) change the assertions that pin the map's shape
-  (`test_the_default_map_is_sorted_as_plan_13_says`,
+  (`test_the_default_map_is_sorted_by_the_layer_tables`,
   `test_invariant_controls_mean_one_thing_on_both_layers`); each changed
   assertion is named in the PR body with its decision number.
 - `tests/test_app_boundary.py`: `gated` gains `hyperspace.osc` and

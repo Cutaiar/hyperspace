@@ -316,7 +316,7 @@ triangles given explicitly by the builder) would serve both.
 > with a recipe — rows 6–20, the rectified 600-cell, the dual runcinated
 > 5-cell, the four drawn stars (the two with {5/2} faces as lines only)
 > and the cheap extras (shapes 65–99). The counts above, exactly
-> (`tests/test_catalog.py::test_a_shortlisted_polytope_has_the_counts_plan_22_measured`).
+> (`tests/test_catalog.py::test_a_shortlisted_polytope_has_the_measured_counts`).
 > Not built: the runcitruncated and omnitruncated 24-cell, the 120/600
 > forms past the rectified 600-cell, the other Catalan duals and stars,
 > and the duoantiprisms.

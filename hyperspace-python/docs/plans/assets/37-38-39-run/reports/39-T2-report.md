@@ -87,7 +87,7 @@ No plan-36 node was changed.
 **Important 2 (hot reload).** `Renderer.on_reload` now pops and releases `_mask_passes`. New test: `test_a_reload_drops_the_mask_passes`. The decisions file (row 4xg) records the integration steps: insert `"masks"` before `"render"` in `hotreload.py:59`, and drop it from `cold` in `test_hotreload.py:239`.
 
 **Minor.**
-- `MatteNode.own_size` now passes its input's own size through. `test_nothing_of_plan_33_has_an_own_size` stays green (`--all -n0` on `test_graph_delay` + `test_render`: 196 passed).
+- `MatteNode.own_size` now passes its input's own size through. `test_no_earlier_fixture_has_an_own_size` stays green (`--all -n0` on `test_graph_delay` + `test_render`: 196 passed).
 - AJ.6 now says that a promoted mask wired into `lookback.occluder` or `composite.over` is opaque everywhere, so it is not a cut.
 
 **Merge of `plan-39-vision`.** There were conflicts in three files, all bookkeeping:

@@ -7745,7 +7745,7 @@ T4–T6 on plan 35's wired frame), on `plan-34-feedback` (PR #236). Rows 359,
   asks an input for its own size; an `Effect` after one runs at it
   (`Effect.own_size`, its pool keyed by that size); a consumer of another
   shape gets cover. Nothing earlier has an own size, so no earlier golden
-  runs the new path (`tests/test_graph_delay.py::test_nothing_of_plan_33_has_an_own_size`;
+  runs the new path (`tests/test_graph_delay.py::test_no_earlier_fixture_has_an_own_size`;
   `tests/test_graph_resize.py::{test_an_effect_after_a_resize_runs_at_its_size,test_a_delay_through_a_resize_holds_a_small_buffer,test_two_consumers_of_one_resize_refit_from_the_one_small_picture}`).
 - **Other options.** The effect at its consumer's size (the saving lost
   after the resize).
@@ -9189,7 +9189,7 @@ Plan 40's rows (501–536) follow, in their own section at the end.
 ### 487. `segment.fg` and `.bg` are cut at the frame's size; the input is read through `OWN_FIT`
 
 - **Answer.** controller with the reviewer — 2026-10-27 (T4 review). W4 says "at the input's size".
-- **Built.** `SegmentPin.made` makes `<name>#cut` at `frame.size` (or a sized frame's, e.g. the faces' `FACE_PIC`), reading its input as `picture(frame, src)` (an own-sized input fitted by `OWN_FIT`), the matte fitted by cover. `SegmentPin` and `SegmentNode` have no `own_size` (an override broke `test_nothing_of_plan_33_has_an_own_size`, and no mask consumer reads one; the matte's own size is `native`).
+- **Built.** `SegmentPin.made` makes `<name>#cut` at `frame.size` (or a sized frame's, e.g. the faces' `FACE_PIC`), reading its input as `picture(frame, src)` (an own-sized input fitted by `OWN_FIT`), the matte fitted by cover. `SegmentPin` and `SegmentNode` have no `own_size` (an override broke `test_no_earlier_fixture_has_an_own_size`, and no mask consumer reads one; the matte's own size is `native`).
 - **Other options.** Port `CutNode`'s own-size path (cut at the input's size, then refit).
 - **To reverse.** That port.
 - **Rough edge.** An own-sized input (a resize, a delay) loses its own resolution past the segment.
@@ -15341,7 +15341,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 - **What.** The picker wants its tiles each frame; the renderer makes at most three passes at its frame's end (`_for_the_panel`, after the thumbnails), the card and the stills before any loop. Every file's atlas is kept once made (2.07 MB each, 58.1 MB for the 28 files; 65.0 MB with the card, the aux disc and the work picture). Never saved; a reload of the renderer lets them go and they are made again on the next ask.
 - **Answer.** (rec) — the builder's, plan 65 (2026-11-19).
-- **Built.** `previews.PASSES_PER_FRAME`, `EffectPreviews.make`, `bytes_kept`, `Renderer.effect_previews`, `Renderer._make_previews`, `Renderer.on_reload`; `tests/test_effect_previews.py::test_never_more_than_the_budget_a_frame_and_the_stills_first`, `::test_every_file_fits_in_the_memory_the_plan_states`, `::test_a_reload_of_the_renderer_lets_the_previews_go`.
+- **Built.** `previews.PASSES_PER_FRAME`, `EffectPreviews.make`, `bytes_kept`, `Renderer.effect_previews`, `Renderer._make_previews`, `Renderer.on_reload`; `tests/test_effect_previews.py::test_never_more_than_the_budget_a_frame_and_the_stills_first`, `::test_every_file_fits_in_the_memory_budget`, `::test_a_reload_of_the_renderer_lets_the_previews_go`.
 - **Judge it.** 690, 696.
 
 ### 897. A changed file is made again
@@ -16072,7 +16072,7 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 
 - **What.** Plan 87: A section without `"keys"` keys nothing, declares no knob and saves without the key, so every saved patch and the corpus resave byte for byte; an unkeyed channel is the fit pass's old bytes; a graph keying nothing builds no `KeyNode`. No schema bump: a build from before refuses a section with `"keys"` (or a `screen` composite) in words and loads that patch black; only patches that use them are affected, and both Macs run one build.
 - **Answer.** (rec) — the builder's, plan 87 (2026-11-22).
-- **Built.** `tests/test_black_is_clear.py::test_a_channel_nothing_keys_is_the_pass_from_before_byte_for_byte`, `::test_a_patch_from_before_keys_nothing_and_saves_the_same`; the corpus round trips unchanged.
+- **Built.** `tests/test_black_is_clear.py::test_a_channel_nothing_keys_is_the_plain_pass_byte_for_byte`, `::test_a_patch_from_before_keys_nothing_and_saves_the_same`; the corpus round trips unchanged.
 - **Judge it.** 866.
 
 ### 1069. What is not keyed

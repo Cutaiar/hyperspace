@@ -65,7 +65,7 @@ still, cells 1–24 the loop): 960 × 540 × 4 = **2.07 MB a file**, so the 28
 files on `main` today (Mandelbrot came with #462) are **58.1 MB**, kept once made, plus the card and the work picture
 (2.1 MB, 2.8 MB mipmapped, and the aux disc's 2.1 MB): **65.0 MB** with every file made
 (`bytes_kept`, held under 64 MiB by
-`tests/test_effect_previews.py::test_every_file_fits_in_the_memory_the_plan_states`).
+`tests/test_effect_previews.py::test_every_file_fits_in_the_memory_budget`).
 On the Mac's unified memory that is comfortable; a smaller loop would be
 `LOOP_FRAMES` and the atlas's grid.
 

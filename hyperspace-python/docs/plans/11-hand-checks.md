@@ -7075,7 +7075,7 @@ still pushing (`listen(None)` not called).
 **448. Video sound with nothing heard is silence; a channel brings it.** (Mac, a show video with sound, after one restart on this build)
 Headless: `tests/test_audio_mix.py` (`test_mix_with_nothing_heard_is_silence_not_an_error`,
 `test_a_stream_that_stops_or_stalls_is_silence_not_the_last_block_held`,
-`test_a_mixer_from_before_v3_learns_to_listen_after_a_hot_reload`).
+`test_a_mixer_without_a_tap_attribute_learns_to_listen_after_a_hot_reload`).
 1. Launch with no channel's `audio` on. AUDIO: *Listen to video sound*.
 2. MEDIA: tick `audio` on A (the video playing at rate 1).
 3. Untick it; then pull the headphones or switch the output device.

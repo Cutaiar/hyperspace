@@ -21,7 +21,7 @@ Plan 24 C1, "the desk you can trust" (decisions 18 and 23, owner).
 
 ## Boundary assertions consciously changed (all from decision 18's moved rows)
 
-- `tests/test_desk.py::test_the_default_map_is_sorted_as_plan_13_says`: scene launch 1–4 are sorted invariant, and SAVE is a new invariant row (decision 18).
+- `tests/test_desk.py::test_the_default_map_is_sorted_by_the_layer_tables`: scene launch 1–4 are sorted invariant, and SAVE is a new invariant row (decision 18).
 - `tests/test_desk.py::test_the_clip_stop_row_is_free`: clip stops 1–7 stay free, and 8 is SAVE (decision 18).
 - `tests/test_desk.py`: `test_shift_release_never_reevaluates_a_held_button`, `test_a_control_that_loses_its_row_goes_dark` and `test_an_unmapped_control_is_dark_and_does_nothing` used scene launch 1–4 as their example preset-only control. They now use scene launch 5 or activator 1. Same meaning (decision 18).
 - `tests/test_desk.py::test_invariant_controls_mean_one_thing_on_both_layers`: **untouched**.

@@ -263,7 +263,7 @@ an older build reads such a `/7` section as black with a note.
 - **`segment` (W4).** As specified, with these departures: **`fg` and `bg`
   are cut at the frame's size**, the input read through `OWN_FIT` (W4 said
   the input's size; `SegmentPin` and `SegmentNode` have no `own_size`, which
-  `test_nothing_of_plan_33_has_an_own_size` holds); **Vision's matte is a
+  `test_no_earlier_fixture_has_an_own_size` holds); **Vision's matte is a
   fixed 4:3 stretched over the image**, so the worker resamples it to the
   frame's aspect (256×144 at 16:9; the node says that size, not 256×192);
   **the orientation flag** is `rows_top_first(frame)` on the maker, read by

@@ -117,7 +117,7 @@ Gate outputs:
 - `uv run pytest -q --all tests/test_golden_frames.py` → `136 passed in 13.66s`. There are 789 goldens (781 + 8); `frames.json` has insertions only, so none moved.
 - `uv run pytest -q --all` → `4301 passed, 2 skipped in 65.50s (0:01:05)`.
   - The first `--all` run found two real failures, fixed in 624095f:
-    - `test_nothing_of_plan_33_has_an_own_size`: `SegmentNode.own_size` was removed.
+    - `test_no_earlier_fixture_has_an_own_size`: `SegmentNode.own_size` was removed.
     - `test_dream::test_core_does_not_import_the_worker`: the text check now reads `segment.py`'s top-level imports by AST.
   - That run also had one load-flaky failure, `test_migrate_library::test_the_real_picture_check_passes_an_old_preset`. `uv run pytest -q --all -n0 tests/test_migrate_library.py` gives `9 passed`, and it passed in the later full run.
 

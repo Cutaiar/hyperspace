@@ -41,7 +41,7 @@ Examples from this codebase:
   debt.
 - `# ---- plan 16 WP4: the windows open where placement says ----` →
   rewrite: `# ---- windows open where placement says ----`
-- `def test_the_smooth_ramp_is_plan_87s_and_the_default` → rename to
+- `def test_the_smooth_ramp_is_the_default` → rename to
   `test_the_smooth_ramp_is_the_default`.
 
 ## Hard limits

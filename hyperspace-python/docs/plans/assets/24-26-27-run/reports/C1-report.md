@@ -57,7 +57,7 @@ The first plain `uv run hyperspace` hung. `sample` showed `glfwInit` blocked in 
 ## Assertions consciously changed (all from decision 18's moved rows, or 23's file desk)
 
 - `test_desk.py`:
-  - `test_the_default_map_is_sorted_as_plan_13_says`: scene launch 1–4 are invariant, and SAVE is a new row.
+  - `test_the_default_map_is_sorted_by_the_layer_tables`: scene launch 1–4 are invariant, and SAVE is a new row.
   - `test_the_clip_stop_row_is_free`: clip stops 1–7 are free, and 8 is SAVE.
   - Three tests used scene launch 1–4 as their example preset-only control; they now use scene launch 5 or activator 1.
   - `test_invariant_controls_mean_one_thing_on_both_layers` is **untouched**.
