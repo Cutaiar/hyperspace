@@ -304,7 +304,8 @@ def test_a_layout_alone_gives_a_pad_none_of_the_totems_gates():
     assert dev.quiet_stick(pad.model, reg) == frozenset()
     assert dev._no_camera_job(pad.model, reg) == ()
     assert totem.skip_of(pad) == totem.SKIP
-    assert dev._totem_skip(reg, pad) == {"pad:MENU"}        # a learn leaves its save alone
+    # a learn leaves its save and its patch fades alone (rows 724, 902)
+    assert dev._totem_skip(reg, pad) == {"pad:MENU", "hat:W", "hat:E"}
 
 
 def test_a_learn_ignores_the_layouts_controls_and_takes_a_free_one():
@@ -574,7 +575,8 @@ def test_a_models_rows_are_a_persons_and_no_patch_may_reach_their_meta_params(mo
 def test_every_layout_row_names_a_param_a_real_registry_has():
     reg, _, _, _ = layout_rig()
     missing = {b.target for m in models.MODELS.values() for b in routing.layout_of(m).rows
-               if b.target not in reg and b.target != "preset.save_new"}   # (a Deck's project adds it)
+               # (a Deck's project adds the bank's own: the save and the patch fades)
+               if b.target not in reg and not b.target.startswith(("preset.save_new", "preset.fade."))}
     assert not missing
 
 

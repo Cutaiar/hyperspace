@@ -8938,6 +8938,20 @@ Setup for all: on GRAPH, add the **Mandelbrot** effect, wire `scene` into its im
 
 **678. A hand on c deep in.** At 10⁶× with **Steps** at 4096, a hand on **c drive x**. *Pass:* the picture keeps the frame rate while c moves (the reference is computed every frame c changes). *Fail:* a stutter: say at which Steps it starts (the bench's `ref ms`).
 
+## FZ. Fading patches from the Edge (row 1199)
+
+Register row 1199, 2026-11-22. Headless: `tests/test_on_off_air.py` (the load, the step from the patch on air, the warm-draw wait, the refusal between the ends, the Edge's rows). Nothing tried on the pad.
+**899. The Edge's D-pad transitions.** (a DualSense Edge, the rig)
+1. With a patch on air, press the D-pad's →. *Pass:* the footer says the next patch loaded off air on the other deck and is fading in over the crossfader's seconds; the room crosses to it smoothly, with no flash or stall at the first frame.
+2. Press → three more times, waiting for each fade. *Pass:* each press goes one further through the PATCHES list, never back to the patch it came from.
+3. Press ← . *Pass:* it goes back one.
+4. Press → while a fade is running. *Pass:* the footer says it is refused while the crossfader is away from its ends; the fade runs on untouched.
+5. Set GRAPH's fade seconds to 0, then to 10, and press →. *Pass:* a cut, then a ten-second blend. Say which length the show wants.
+6. Press the D-pad's ↑ and ↓. *Pass:* brightness, as on every pad.
+7. On a plain DualSense (or the Xbox pad), press ← and →. *Pass:* nothing happens to the patch.
+8. Start a playlist, and in the two seconds before one of its transitions press →. *Pass:* your patch airs and the footer says a hand loaded over the entry and took the room, and that it is still next; the entry then plays in its turn after a dwell, rather than being skipped. Say whether giving your look a whole dwell is the right length, or whether the list should pick up sooner.
+9. In that same window, press a filled bank slot instead and leave the fader alone. *Pass:* the room does not move, the footer says the entry was loaded over off air and is reloaded for its turn on time, and the playlist's transition happens when it was always going to — not a dwell later. Your slot's patch is written over off air, which row 707 allows.
+*Fail:* a snap with no fade, a stutter in the fade's first frame, a press that swaps what is on air, the room moving before the fade, or the playlist jumping an entry after you press.
 ## FH. Black is clear (rows 1063–1074, 2026-11-22)
 
 Plan 87. Headless: `tests/test_black_is_clear.py` (the section's `keys`, the knobs, the build's `KeyNode`, the node menu's edit, MEDIA by mouse, both passes against a numpy oracle, an unkeyed channel byte for byte the pass from before, the feather, a keyed Test card over the scene, `screen`). The look, the feel of the knobs and the cost on the rig are the hand checks'.

@@ -157,6 +157,11 @@ class Playing:
     library, for the file and the words, and `fade` the `deck.Fade`, for the warm draw;
     None has none to wait for."""
 
+    # on the class: a `Playing` from before a hot reload has it, since `hotreload`
+    # re-classes the live object without running `__init__` again and backfills
+    # dataclass fields only (the convention `deck.MetaController` follows)
+    armed_loaded: Any = None          # what the cued deck had landed (`_cue_lost`)
+
     def __init__(self, meta, lib, fade=None):
         self.meta, self.lib, self.fade = meta, lib, fade
         self.playlist: Playlist | None = None
@@ -166,7 +171,8 @@ class Playing:
         self.next = 0                   # the entry to load next (`_arm` wraps it)
         self.armed: Entry | None = None  # the entry loaded and not yet on air…
         self.armed_at = 0               # …its place…
-        self.armed_on = None            # …and its deck
+        self.armed_on = None            # …and its deck…
+        self.armed_loaded: Any = None   # …and what that deck had landed (`_cue_lost`)
         self.fails = 0                  # entries in a row that would not load or draw
         self.lost = False               # a whole pass would not play: said once, tried again
         self.stepping = False           # a step asked for and not yet on air
@@ -290,6 +296,12 @@ class Playing:
                 self.lib.say("playlist: waiting for the crossfader to reach an end")
             return
         self.waited = False
+        if (taken := self._cue_lost()) is not None:
+            # a fade asked for and waiting on its warm draw is the room already moving
+            # (`MetaController.waiting`, row 1199): the Edge's press must not be stomped
+            took = self.armed_on is meta.on_air or bool(getattr(meta, "waiting", False))
+            self._cue_taken(taken, now, took)
+            return
         if self.armed is not None and self.armed_on is meta.on_air:
             self._played(now)           # a hand took the fader across to it
             return
@@ -360,6 +372,8 @@ class Playing:
             why = self._load(entries[k].loadable)
             if why is None:
                 self.armed, self.armed_at, self.armed_on = entries[k], k, self.meta.off_air
+                # what landed, not the name it goes by: `_cue_lost` says why
+                self.armed_loaded = self._landed_on(self.armed_on)
                 return
             if self._failed(k, entries[k].loadable, why, now):
                 return
@@ -398,11 +412,74 @@ class Playing:
         self.lost, self.fails, self.armed = True, 0, None
         self.load_at = self.fade_at = now + dwell
 
+    @staticmethod
+    def _landed_on(deck) -> Any:
+        """How a cue is known on the deck it was put on: how many patches have been
+        applied there (`loadable.LoadedPatch.loads`) and what the last landing
+        produced (`.loaded`). Neither mark alone is enough — `_cue_lost` says why.
+        None from a deck that does not say, which a stand-in does not."""
+        patch = getattr(deck, "loaded_patch", None)
+        if patch is None or not hasattr(patch, "loaded"):
+            return None
+        return (getattr(patch, "loads", None), patch.loaded)
+
+    def _cue_lost(self) -> Entry | None:
+        """The armed entry a hand has loaded over on the deck it was cued onto, or None.
+        Every bank verb from a row lands on the deck off air (`DeckInstall._landing`,
+        row 700) — a bank pad, a slot, the Edge's D-pad fade (row 1199) — and while the
+        fader sits at an end that deck is the cued one, so the load replaces the cue.
+        `_due` would then see the cue's deck go on air and count the entry as played,
+        when a hand's look aired instead.
+
+        Known by `_landed_on`'s pair — the count of patches applied there and the last
+        landing — and either moving is enough. The **count** moves when, and only when,
+        a patch is loaded, which is what rules out the two cheaper marks: a *name*
+        would call an untouched cue lost, since Save As renames a patch without loading
+        one and would postpone the show; the landing's *signature* would miss a real
+        replacement, since it is the dirty dot's and so leaves out the pose a load
+        applies, and two patches saved from one look at different turns compare alike.
+        The **landing** catches what no load counted: a reset, or a new patch. Neither
+        moves for a hand's edits, so twiddling the deck off air leaves the cue alone
+        (row 707 writes over it anyway), and an entry's own name is a third spelling
+        again (`party-tumble` loads as `TUMBLE`) that nothing compares against.
+
+        Loading the very same patch over the cue does count as taking it, since the
+        count moved. That costs a reload and nothing else: the list keeps its deadline
+        for a load that never aired, so the entry still airs when it always would."""
+        if self.armed is None or self.armed_loaded is None:
+            return None
+        held = self._landed_on(self.armed_on)
+        return None if held is self.armed_loaded or held == self.armed_loaded else self.armed
+
+    def _cue_taken(self, entry: Entry, now: float, took_the_room: bool) -> None:
+        """The cue was loaded over: let it go **without advancing**, so the entry is
+        still next and the list keeps its place rather than skipping it.
+
+        What it costs the clock depends on whether the hand's load reached the room.
+        One that did (the Edge's D-pad fade, or a fader taken across) gets a dwell of
+        its own before the list moves again: a hand's move is the one thing the list
+        gives way to. One that only sat on the deck off air (a bank pad, a slot: those
+        verbs ask for no fade) has changed nothing the room can see, so the list keeps
+        its own deadline and re-arms for it — `load_at` is already behind us, so the
+        next tick reloads the entry in time. Giving that a fresh dwell would postpone
+        the show by one every time a slot was pressed."""
+        self.armed, self.armed_loaded = None, None
+        pl = self.playlist
+        name = pl.name if pl is not None else ""   # (open, by here: `_due` runs over one)
+        if took_the_room:
+            self.fade_at = now + entry.dwell_s
+            self.load_at = self.fade_at - LEAD_S
+            self.lib.say(warning=f"playlist {name}: a hand loaded over {entry.loadable} "
+                                 f"and took the room; it is still next")
+        else:
+            self.lib.say(warning=f"playlist {name}: {entry.loadable} was loaded over off "
+                                 f"air; it is reloaded for its turn, on time")
+
     def _played(self, now: float) -> None:
         """The armed entry is on air, or on its way: its dwell runs from now."""
         entry, k, total = self.armed, self.armed_at, len(self.playlist.entries)
         self.at, self.armed, self.next, self.fails = k, None, k + 1, 0
-        self.lost, self.stepping = False, False
+        self.lost, self.stepping, self.armed_loaded = False, False, None
         self.fade_at = now + entry.dwell_s
         self.load_at = self.fade_at - LEAD_S
         self.lib.say(f"playlist {self.playlist.name}: {entry.loadable}, "

@@ -971,7 +971,7 @@ _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": 
             "Home": "HOME"}
 _PADS = {"pad S N · E W": ["S", "N", "E", "W"], "pad BACK": ["VIEW"],
          "LB / RB": ["LB", "RB"], "sticks": ["LSTICK", "RSTICK"]}
-_HATS = {"d-pad ↑ / ↓"}
+_HATS = {"d-pad ↑ / ↓", "Edge d-pad ← / →"}      # the Edge's own layout (row 1199)
 _MOUSE = {"drag", "⇧drag", "scroll", "right-click", *_HATS, "LT / RT",
           "APC40"}                                   # the desk's glyph legend, not a key
 

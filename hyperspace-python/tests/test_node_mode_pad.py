@@ -199,9 +199,10 @@ def test_a_pair_is_one_freedom_after_the_axes(tmp_path):
     pids = point(p)
     got = [b.source for b in rows(p)]
     assert got[:6] == [f"axis:{a}" for a in gamepad.AXES]
-    assert got[6:] == ["pair:hat.N/hat.S", "pair:hat.E/hat.W", "pair:RB/LB", "pair:RP/LP",
+    # the Edge's d-pad ← / → fade the patch list (row 1199), so that pair is not free
+    assert got[6:] == ["pair:hat.N/hat.S", "pair:RB/LB", "pair:RP/LP",
                        "pair:RFN/LFN", "pair:N/S", "pair:E/W"]
-    assert [b.target for b in rows(p)] == pids[:13]
+    assert [b.target for b in rows(p)] == pids[:12]
     undo.install(None)
 
 

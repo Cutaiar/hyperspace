@@ -890,6 +890,7 @@ here; overturn → the change, then the same.
 | 898 | Plan 65: the picker's families are data: a file's `// @family <name>` (`EffectSpec.family`, parsed, declares nothing, written by no file yet), else its `@order` band from one table, `previews.ORDER_FAMILIES` (generators, distort, split, glow and texture, colour). The shader roundup writes `@family`. So is the aux port: every effect node had one, two files read it (Blend, Displace); GRAPH draws it only when the file's code calls `aux(` or `aux_luma(` (`fx.reads_aux`) or a saved wire goes into it | 693 | (rec) — plan 65 §2: the owner asked for a hook, not today's list |
 | 899 | Plan 65: the search keeps a tile when every word of it is in the label, the tip, the file name or the family, in any case; Enter takes the first tile whose label answers, else the first | 694 | (rec) — plan 65 §2 |
 | 900 | Plan 65: an unwired effect or copy (unreached, faint) gets a thumbnail beside the graph: its input when the frame made it, else the test card, through it at a thumbnail's size at the frame's end, at most 4 a frame round robin. The node stays unbuilt: row 349 stands | 691 | (rec) — plan 65 §3 |
+| 1199 | The Edge's D-pad fades patches: ← / → load the patch one step from the one **on air** onto the deck off air and run the crossfader across on their own, over `output.xfade_s` (`preset.fade.next` / `prev`, `DeckInstall.fade_to`, `MetaController.fade_when_warm`). The Edge's own `Model.layout` alone, as its hold-to-save is (row 724): no other pad walks patches (row 723 stands for them). The fade starts at the first frame after the deck off air's warm draw, and a press is refused, said, while the crossfader is away from its ends | 899 | owner — 2026-11-22: "so the user of the Edge PS5 controller can smoothly transition between patches" |
 | 901 | Plan 65, open: about a quarter of the effects barely change the card at their defaults (Fade is level 1, Double vision, Deconverge, Trip colour, Grain and Shake at first-stage amounts, Palette an identity). Whether each file gets a line of showcase values for its preview (`@preview`) with the roundup, or the previews stay at the defaults | 689 | **pending the owner** |
 | 1040 | Plan 84: GRAPH's head has a **gpu cost** chip, off by default, page state only (never saved, never an undo step). Lit, every render node is marked by its GPU time: its border and ground up a black-to-white hot ramp, a badge on its top edge ("#1 · 2.10 ms" for the three costliest), and a line under the head with the frame's total over its timed nodes and its three costliest | 840, 841 | (rec) — pending the owner |
 | 1041 | Plan 84: a node's heat is its share of the frame's costliest node's time (the costliest white), not its percentile rank, so one 10 ms node among 0.1 ms ones draws one white node, not a gradient; ranks break ties by name | 841 | (rec) — pending the owner |
@@ -15670,6 +15671,71 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Built.** Nothing.
 - **Judge it.** No hand check.
 
+### 1199. The Edge's D-pad fades patches
+
+- **What.** Row 723 took the patch list off every pad's D-pad ("no swapping presets from a
+  controller"), because a press swapped the live look in front of the room. The Edge gets it
+  back as a DJ's move instead of a cut: ← / → load the patch one step from the one **on air**
+  onto the deck off air — a pad's own road (`DeckInstall._landing`: refused, said, while the
+  crossfader is away from its ends or a fade is running) — and then the crossfader runs across
+  on its own, over `output.xfade_s`, the one fade in the app. The step is from what the room
+  sees, not from what the deck off air holds, so press after press goes on through the list
+  rather than back to where it came from. The fade waits for that deck's warm draw
+  (`Fade.warm`), as the playlist's does, so a patch's shaders compile before the first fade
+  frame and not in it. Two triggers of the `preset` group, so no patch's row can reach one
+  (row 746), on the Edge's `Model.layout` alone, as hold-to-save is (row 724): every other pad
+  is as row 723 left it, and the Edge's ↑ / ↓ stay the brightness every pad has. A layout row
+  may now name a D-pad direction (`hat.E`), which only face and shoulder buttons could before,
+  so the Edge's ← / → are no longer free for a pair or for node mode.
+  A load that lands on the deck the **playlist** has cued takes that cue out from under it, and
+  the list used to count the entry as played, because `_due` knew only which deck went on air.
+  The cue is let go **without advancing** instead, so the entry is still next and the list
+  keeps its place rather than skipping it. Found in review on PR #475; it was never the
+  D-pad's alone — every bank verb from a row lands off air (row 700), so a bank pad pressed in
+  the lead time did the same before this. What it costs the clock turns on whether that load
+  reached the room: one that did (this fade, or a fader taken across) earns the hand's look a
+  dwell of its own before the list moves again, since a hand's move is the one thing the list
+  gives way to; one that only sat off air (a bank pad, a slot — those verbs ask for no fade)
+  has changed nothing the room can see, so the list keeps its own deadline and reloads the
+  entry for it, rather than postponing the show by a dwell per press. A fade asked for and
+  still waiting on its warm draw counts as reaching the room, or the list would reload its
+  entry straight over the patch a press had just put there. The cue is known by **how many patches have
+  been applied to that deck** (`LoadedPatch.loads`) and what its last landing produced,
+  either moving being enough. The count is the mark that moves when, and only when, a patch
+  is loaded, which is what rules out the two cheaper marks: a name called an untouched cue
+  lost, since Save As renames a patch without loading one, and so postponed the show; the
+  landing's signature missed a real replacement, since it is the dirty dot's and leaves out
+  the pose a load applies, so two patches saved from one look at different turns compare
+  alike. The landing catches what no load counted — a reset, a new patch — and neither mark
+  moves for a hand's edits, so twiddling the deck off air leaves the cue alone (row 707).
+- **Answer.** owner — 2026-11-22, asked for: the D-pad "doesn't just snap the new patch in",
+  it "loads the next patch onto deck 2 and then triggers the fade between them".
+- **Built.** `library.Library.neighbour`, `library.Install.fade_to`, `library.DeckInstall.fade_to`,
+  `deck.MetaController.fade_when_warm`, `.fading_words`, `.fade`, `.waiting`,
+  `params` `preset.fade.next` / `preset.fade.prev`, `routing._layout_source`,
+  `pads.models._EDGE_LAYOUT`, `ui.CHEATSHEET`, `playlist.Playing._cue_lost`, `._cue_taken`,
+  `._landed_on`, `.armed_loaded` (class-level: a `Playing` from before a hot reload has it),
+  `loadable.LoadedPatch.loads`; `tests/test_on_off_air.py::test_a_fade_verb_loads_off_air_and_steps_from_the_patch_on_air`,
+  `::test_a_fade_verb_from_either_deck_lands_off_air`,
+  `::test_the_fade_waits_for_the_warm_draw_then_runs_the_fader_across`,
+  `::test_press_after_press_goes_on_through_the_list`,
+  `::test_with_no_fade_object_the_fade_starts_at_the_next_tick`,
+  `::test_a_fade_verb_is_refused_between_the_ends_and_loads_nothing`,
+  `::test_the_edges_d_pad_fades_the_list_and_no_other_pads_does`,
+  `tests/test_playlist.py::test_a_hand_loading_over_the_cue_keeps_its_place_instead_of_skipping_it`,
+  `::test_the_cue_untouched_still_counts_as_played_when_a_hand_takes_the_fader`,
+  `::test_a_slot_load_that_never_airs_keeps_the_lists_own_deadline`,
+  `::test_save_as_on_the_cued_deck_leaves_the_cue_alone`,
+  `::test_a_pending_d_pad_fade_is_not_stomped_by_the_list`,
+  `::test_a_playing_from_before_a_hot_reload_still_ticks`,
+  `::test_a_pose_only_twin_loaded_over_the_cue_is_still_a_replacement`.
+- **Judge it.** 899, on the Edge at the rig: whether the fade reads as a transition and
+  whether `output.xfade_s` is the right length to reach for.
+- **Open.** `Fade.warm` draws the deck off air for the **first output only** (the render loop
+  passes `first.switches`, one call site for every warm consumer), so an effect wired only to
+  a later output compiles in the fade's first blended frame. Raised in review on PR #475;
+  pre-existing and not the D-pad's — the playlist's own transitions warm exactly the same way.
+  Judging it needs a two-output rig by eye, so it is its own piece of work.
 ### 1010. The zoom and the turn about the middle of the screen
 
 - **What.** Plan 81, decision D4: inside a fractal, whatever changed camera.zoom or the turn since the last step (the view as it was left, `Dive.seen`) is applied about the middle of the screen (`fractal.centre`, `centred`), not about the rooted cell's middle; a pan made since is kept as a move on top — and, diving, as the performer's framing (`Dive.frame`), which the settle leaves alone — and with an offset drawn after the shape the middle is the point drawn there. An undo or redo of the camera drops the reference (`deck._unseen`). Outside (an object, plan 64 part 2) nothing changes. A re-root still moves nothing, 3D and 4D, grabbed or not.

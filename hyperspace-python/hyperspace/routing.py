@@ -290,7 +290,7 @@ from .modifiers import Modifier, ModState
 from .motion import CUSTOM, OFF, Follower, Motion
 
 # re-exported: the grammar and the shared sources (plan 44 D2) live there
-from .pads.models import FACE_WORDS, HAT_WORDS, pair_label
+from .pads.models import FACE_WORDS, HAT_NAMES, HAT_PREFIX, HAT_WORDS, pair_label
 from .params import (
     CHASE_PARAM,
     DEPTH_TAPER,
@@ -1083,11 +1083,19 @@ class PadLayout(NamedTuple):
 NO_LAYOUT = PadLayout()
 
 
+def _layout_source(control: str, role: str) -> str:
+    """A layout row's source: a face or shoulder button by its name (``pad:MENU``),
+    a D-pad direction by its control name (``hat.E`` → ``hat:E``, row 1199), each
+    qualified with `role` as a table row is."""
+    hat = control in HAT_NAMES
+    head, addr = ("hat", control[len(HAT_PREFIX):]) if hat else ("pad", control)
+    return f"{head}{QUALIFIER}{role}:{addr}" if role else f"{head}:{addr}"
+
+
 @cache
 def _layout(spec: tuple, role: str) -> PadLayout:
-    head = f"pad{QUALIFIER}{role}" if role else "pad"
-    return PadLayout(tuple(Binding(f"{head}:{c}", t, op, v) for c, t, op, v in spec),
-                     frozenset(f"pad:{c}" for c, _, _, _ in spec))
+    return PadLayout(tuple(Binding(_layout_source(c, role), t, op, v) for c, t, op, v in spec),
+                     frozenset(_layout_source(c, "") for c, _, _, _ in spec))
 
 
 def layout_of(model, role: str = "") -> PadLayout:
