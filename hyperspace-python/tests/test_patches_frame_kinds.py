@@ -104,6 +104,7 @@ def test_every_frame_kind_is_held_and_every_meta_kind_refused():
     assert set(G.FRAME_KINDS) <= set(patches.MAY_HOLD)
     assert not set(patches.FIXTURE_KINDS) & set(patches.MAY_HOLD)
     assert set(patches.ONE_PER_FRAME) <= set(patches.MAY_HOLD)
+    assert "dream" not in patches.ONE_PER_FRAME          # (plan 90 H3: an effect)
 
 
 def test_save_still_refuses_the_camera_and_a_lane_envelope_in_words():
@@ -201,7 +202,7 @@ def test_a_host_with_a_dream_takes_another_and_its_single_instance_nodes_are_sai
     host has, refused in words."""
     p = parts(wake_doc())
     landing = spawn(cut("dreamy"), Host.of(*p[:2]))
-    assert landing.taken == () and landing.refusal is None and landing.replacing == ()
+    assert landing.taken == () and landing.refusal is None
     assert landing.renames["dream"] == "dream.2"
     whole, _ = patches.lift(*p, ["render:scene", "render:shape", "render:dream"])
     landing = spawn({**whole, "name": "x"}, Host.of(*p[:2]))

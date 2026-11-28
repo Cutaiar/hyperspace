@@ -3698,7 +3698,6 @@ WIRE_AS_SAVED_TIP = ("Wire each open pin as the patch was saved, where this load
 SAVE_PATCH_TIP = ("Save this group as a patch: its nodes, values, wires, rows and the cables "
                   "across its edge — the patch's file, nothing else written")
 SHEET_UP = "{n} control{s} the loadable patch already uses: the sheet asks which keeps each"
-SHEET_REPLACES = "this loadable patch already has {nodes}: the sheet asks to replace it"
 SPAWN_CANCELLED = "spawn of {name} cancelled: nothing landed"
 NO_LIBRARY = "no library: nothing to spawn"
 WAITS_FOR = "waits for "    # plan 40 P4: a spawn's rows the meta controller lacks (`devices.want_words`')
@@ -3756,8 +3755,7 @@ def patch_list(panel) -> list[dict]:
             continue
         out.append({"name": name, "slug": path.name[:-5], "note": str(doc.get("note") or ""),
                     "words": graphview.patch_words(doc, _glyph(panel)),
-                    "ports": tuple(patches.read(doc).ports),
-                    "replaces": patches.replaceable(patches.read(doc).members.render)})
+                    "ports": tuple(patches.read(doc).ports)})
     st["patch_list"] = (listed, key, out)
     return out
 
@@ -3786,9 +3784,7 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     `at` (layout units; None: the canvas's centre) — and, when its control rows
     collide with the loadable patch's, the conflict sheet first
     (`panel.spawn_question`, drawn by `ui_routing.modal`: every row the
-    patch's, D9) — as when it holds a dream and the loadable patch has one (wave 3
-    P2: its row says what the host's loses, `Landing.loses`) — else landed
-    at once (`land_spawn`: one undo step).
+    patch's, D9) — else landed at once (`land_spawn`: one undo step).
     `splice`: a picture cable it was dropped on. Returns the refusal (said
     on the head), or None."""
     st = _state(panel)
@@ -3813,28 +3809,21 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     if landing.refusal is not None:      # (wave 3 P1) before any sheet could ask
         _note(st, landing.refusal)
         return landing.refusal
-    replacing = landing.replacing        # (wave 3 P2) the host's dream: the sheet's to ask
     if splice is not None:
         why = graphview.splice_target(e, splice, landing.group.get("name") or stem,
-                                      landing.ports, replacing)
+                                      landing.ports)
         if why is not None:
             _note(st, why)
             return why
-    if not landing.conflicts and not replacing:
+    if not landing.conflicts:
         return land_spawn(panel, landing, {}, splice)
     name = landing.group.get("name") or stem
-    if replacing:
-        loses, keeps = e.replace_said(landing)
-        landing = dataclasses.replace(landing, loses=tuple(loses), keeps=tuple(keeps),
-                                      asked=e._asked(replacing))
 
     def cancelled() -> None:
         _note(st, None)
         st["said"] = SPAWN_CANCELLED.format(name=name)
-    panel.spawn_question = (landing, {**{k: graphview.PATCH_SIDE
-                                         for k in range(len(landing.conflicts))},
-                                      **{patches.replace_key(n): graphview.PATCH_SIDE
-                                         for n in replacing}},
+    panel.spawn_question = (landing, {k: graphview.PATCH_SIDE
+                                      for k in range(len(landing.conflicts))},
                             lambda choices: land_spawn(panel, landing, choices, splice),
                             cancelled)
     lrn = getattr(panel, "learn", None)
@@ -3842,9 +3831,7 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
         lrn.hold(True)                      # the hands learn nothing while it asks
     k = len(landing.conflicts)
     _note(st, None)
-    st["said"] = " · ".join(
-        [*([SHEET_REPLACES.format(nodes=", ".join(replacing))] if replacing else []),
-         *([SHEET_UP.format(n=k, s="" if k == 1 else "s")] if k else [])])
+    st["said"] = SHEET_UP.format(n=k, s="" if k == 1 else "s")
     return None
 
 
@@ -4017,10 +4004,7 @@ def _drop_target(panel, st: dict, view: graphview.View) -> None:
     if row is None:
         return
     e = render_edit(panel)
-    # (wave 3 P2) as the drop will judge it: a cable of the dream it would replace
-    have = patches.spec_names(getattr(e.graph, "spec", None))
-    why = graphview.splice_target(e, c, row["name"], row["ports"],
-                                  [n for n in row.get("replaces", ()) if n in have])
+    why = graphview.splice_target(e, c, row["name"], row["ports"])
     if why is None:
         st["drop_cable"] = c.id
     else:
