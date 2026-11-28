@@ -178,7 +178,7 @@ F_KEYS = 8
 # is about the hardware, and stays the meta controller's
 PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "fx", "media",
                       "backdrop", "switch", "resize", "matte", "cut", "segment", "key", "delay", "ghost",
-                      "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "mod", "handmask")
+                      "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "handmask", "mod")
 # `grip` (plan 60, the hand rig): a patch's own, each deck's — the owner, 2026-11-10,
 # testing it: "this really should be per preset". The on-air deck's acts on the one world
 # `world` (plan 59): `world.reset`, over the one `world.World` both decks draw from
@@ -2259,7 +2259,8 @@ def _handmask_state(r: Registry) -> dict[str, HandMaskState]:
     view (as `_cut_state`)."""
     state = getattr(r, "handmask_state", None)
     if not isinstance(state, dict):
-        state = r.handmask_state = {}
+        state = {}
+        vars(r)["handmask_state"] = state     # (as `_key_state`)
     return state
 
 
@@ -2839,7 +2840,7 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
             view.handmasks = handmasks
         except AttributeError:            # (a view without the field: the registry's own)
             pass
-    r.handmask_state = handmasks
+    vars(r)["handmask_state"] = handmasks       # (as `_key_state`)
     # plan 39 T4: the segments' values likewise (`ViewState.segments`)
     segments = getattr(view, "segments", None)
     if not isinstance(segments, dict):

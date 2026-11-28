@@ -549,10 +549,8 @@ class MaskPasses:
         flat = np.zeros((MAX_POLYGON, 2), dtype=np.float64)
         flat[:n] = pts[:n]
         out, fbo = self.frame_target((key, size), size, components=1)
-        prog, _ = self._progs["polygon"]
-        if "u_pts" in prog:
-            prog["u_pts"].value = [tuple(map(float, q)) for q in flat]
-        self._run("polygon", fbo, (0, 0, *size), (), u_n=int(n), u_grow=float(grow),
+        self._run("polygon", fbo, (0, 0, *size), (),
+                  u_pts=[tuple(map(float, q)) for q in flat], u_n=int(n), u_grow=float(grow),
                   u_feather=max(float(feather), 0.0), u_strength=float(strength),
                   u_invert=int(bool(invert)))
         return out
