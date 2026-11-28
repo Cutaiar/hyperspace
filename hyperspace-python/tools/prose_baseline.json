@@ -12,21 +12,15 @@
   "hyperspace-contact/index.html": {
    "provenance": 1
   },
-  "hyperspace-python/hyperspace/config.py": {
-   "provenance": 2
-  },
   "hyperspace-python/hyperspace/graph.py": {
    "narration": 1,
    "provenance": 12
   },
   "hyperspace-python/hyperspace/graphmigrate.py": {
-   "provenance": 28
+   "provenance": 17
   },
   "hyperspace-python/hyperspace/headless.py": {
    "provenance": 4
-  },
-  "hyperspace-python/hyperspace/library.py": {
-   "provenance": 3
   },
   "hyperspace-python/hyperspace/media/syphon.py": {
    "provenance": 1
@@ -432,7 +426,7 @@
    "provenance": 2
   },
   "hyperspace-python/tests/test_config.py": {
-   "provenance": 16
+   "provenance": 15
   },
   "hyperspace-python/tests/test_control.py": {
    "provenance": 1
@@ -658,13 +652,13 @@
    "provenance": 7
   },
   "hyperspace-python/tests/test_graph_migrate.py": {
-   "provenance": 35
+   "provenance": 34
   },
   "hyperspace-python/tests/test_graph_patch_only.py": {
    "provenance": 6
   },
   "hyperspace-python/tests/test_graph_placement.py": {
-   "provenance": 35
+   "provenance": 33
   },
   "hyperspace-python/tests/test_graph_resize.py": {
    "provenance": 6
