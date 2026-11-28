@@ -33,7 +33,6 @@ from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.library import F_KEYS, SLOTS, Library, LibraryError, bank_doc
 from hyperspace.loadable import LoadedPatch
-from hyperspace.lookback import DreamState
 from hyperspace.params import PATCH_GROUPS, build_registry, part_of
 from hyperspace.routing import Binding, Bindings, Router, bindings_path
 from hyperspace.view import ViewState
@@ -52,7 +51,7 @@ def boot(home, show: str | None = "house"):
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, audio, lib.install, dream=DreamState(), fx=FxState())
+    reg = build_registry(view, control, audio, lib.install, fx=FxState())
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
     lib.on_load("band", control.scene_loaded)
@@ -107,7 +106,7 @@ def boot_registry():
     loadable patch file may name (tests/test_stroke_space.py)."""
     chain = Analyzer(Analyser())
     reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain),
-                         dream=DreamState(), fx=FxState())
+                         fx=FxState())
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
@@ -125,7 +124,7 @@ def test_a_loadable_load_lands_every_base_and_replaces_every_route(rig):
     reg["view.bright"].set(3.3)                         # a view base off default
     reg["fx.on"].set(not reg["fx.on"].value)            # an fx toggle (plan 36 T3: the
     #                                                     effects are the startup loadable patch's)
-    reg["dream.k"].set(0.5)                             # a dream value
+    reg["ghost.alpha"].set(0.2)                         # a hands value (plan 90 H3: was the dream's)
     table.add(Binding("hand:7", "view.speed", "push", 0.3))    # a hand route
     keys = [b.to_json() for b in table.bindings
             if b.op not in routing.MOD_OPS and b.layer != "preset"]
@@ -138,7 +137,7 @@ def test_a_loadable_load_lands_every_base_and_replaces_every_route(rig):
     assert reg.snapshot(part="patch") == expected(lib, values)
     assert rig.view.shape == 4 and reg["lfo.1.depth"].value == 0.25
     assert reg["view.bright"].value == lib.defaults("view")["view.bright"]
-    assert reg["dream.k"].value == lib.defaults("dream")["dream.k"]
+    assert reg["ghost.alpha"].value == lib.defaults("ghost")["ghost.alpha"]
     assert [b.to_json() for b in table.routes()] == routes   # exactly the file's, disabled too
     assert [b.to_json() for b in table.bindings
             if b.op not in routing.MOD_OPS and b.layer != "preset"] == keys
@@ -552,24 +551,32 @@ def test_module_labels_are_dropped_and_a_missing_id_is_the_build_value(rig):
     `modules` labels name nothing any more — every performance strip lands
     clean and unnamed — and a value the file leaves out is the value its
     object was built with, never the group's default module preset (the
-    library's `dream/default.json`, here `wake`'s values as the default)."""
+    library's `camera/default.json`; plan 90 H3: the dream group it used is
+    retired, its presets left unread)."""
     lib, reg = rig.lib, rig.reg
-    wake = lib.read("dream", "wake")
-    (rig.home / "patches" / "dream" / "default.json").write_text(json.dumps({**wake, "name": "default"}))
+    fresh = lib._fresh_of("camera")
+    other = {pid: (v + 0.5 if isinstance(v, float) else v) for pid, v in fresh.items()}
+    folder = rig.home / "patches" / "camera"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "default.json").write_text(json.dumps(
+        {"schema": "hyperspace.patch/2", "name": "default", "values": other}))
     lib._sync()
+    assert lib.default_name("camera") == "default"
     lib.label("camera", "stale")                          # a label from before
-    put(rig.home, "LABELS", schema="hyperspace.preset/9", values={"dream.mix": 0.25},
-        modules={"dream": "wake", "fx": "trip"})
+    put(rig.home, "LABELS", schema="hyperspace.preset/9", values={"camera.zoom": 1.25},
+        modules={"camera": "default", "fx": "trip"})
     rig.loaded_patch.load("LABELS")
-    assert lib.current("dream") is None and lib.current("camera") is None
-    assert lib.current("fx") is None and not lib.is_dirty("dream")
-    assert reg["dream.mix"].base == pytest.approx(0.25)
-    assert reg["dream.k"].base == lib._fresh_of("dream")["dream.k"]
-    assert reg["dream.k"].base != wake["values"]["dream.k"]   # no default.json
+    assert lib.current("camera") is None
+    assert lib.current("fx") is None and not lib.is_dirty("camera")
+    assert reg["camera.zoom"].base == pytest.approx(1.25)
+    left = next(pid for pid, v in fresh.items() if pid != "camera.zoom"
+                and isinstance(v, float) and pid in reg)
+    assert reg[left].base == fresh[left]
+    assert reg[left].base != other[left]                  # no default.json
     doc = rig.loaded_patch.document("LABELS")
     assert "modules" not in doc and doc["schema"] == "hyperspace.loadable/12"
-    reg["dream.mix"].set(0.3)
-    assert lib.is_dirty("dream")                            # the dot is live against the load
+    reg["camera.zoom"].set(1.5)
+    assert lib.is_dirty("camera")                           # the dot is live against the load
 
 
 def test_the_fx_presets_are_retired(rig):
@@ -609,7 +616,6 @@ def test_a_loadable_round_trips(rig):
     put(rig.home, "SRC", values={"view.shape": 3}, desk=desk, macros=macros, note="a note",
         routes=[{"source": "hand:7", "target": "view.speed", "op": "push", "value": 0.3}])
     rig.loaded_patch.load("SRC")
-    lib.load("dream", "wake")
     rig.reg["camera.zoom"].set(2.0)
     sig = rig.loaded_patch.signature()
     path = rig.loaded_patch.save_as("Round Trip")
@@ -632,7 +638,7 @@ def test_a_loadable_round_trips(rig):
     rig.loaded_patch.load("Round Trip")
     assert rig.loaded_patch.signature() == sig and not lib.is_dirty("loadable")
     assert loadable.desk_json(table.desk()) == desk and table.macros_doc() == macros
-    assert lib.current("dream") is None             # (plan 44 D3: no module label)
+    assert lib.current("camera") is None            # (plan 44 D3: no module label)
 
 
 # ---------------------------------------------------------------- the desk and the macros

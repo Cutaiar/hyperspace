@@ -57,7 +57,6 @@ from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.library import LOADABLE, Library, group_folder, loadable_dir
 from hyperspace.loadable import LoadedPatch
-from hyperspace.lookback import DreamState
 from hyperspace.params import build_registry
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.view import ViewState
@@ -140,7 +139,7 @@ def boot(home: Path) -> SimpleNamespace:
     view = ViewState()
     lib = Library(home, period=0.0)
     reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install,
-                         dream=DreamState(), fx=FxState())
+                         fx=FxState())
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)

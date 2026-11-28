@@ -129,7 +129,8 @@ def test_loadable_without_media_keeps_every_value_in_six(tmp_path, name):
     T5) as it wrote it — but the six `view.bmp_*` this build no longer has
     and the retired ids (an effect's order and target, `backdrop.history`:
     the wires say them; plan 90 H2: the look-back's knobs, which drew
-    nothing with no look-back) — beside the media family at its defaults
+    nothing with no look-back; H3: the old dream's, which drew nothing with
+    the dream off) — beside the media family at its defaults
     and an empty `media` section."""
     from hyperspace import graphmigrate as M
 
@@ -143,8 +144,10 @@ def test_loadable_without_media_keeps_every_value_in_six(tmp_path, name):
     held = M.section_effects(doc["graph"])
     kept = {k: v for k, v in base["values"].items()
             if not k.startswith("view.bmp_") and not M.retired(k)
-            and not M.lookback_retired(k) and M.effect_of(k) in (None, *held)}
+            and not M.lookback_retired(k) and not k.startswith("dream.")
+            and M.effect_of(k) in (None, *held)}
     assert not any(M.lookback_retired(k) for k in doc["values"])
+    assert not any(k.startswith("dream.") for k in doc["values"])      # (plan 90 H3)
     assert {k: doc["values"][k] for k in kept} == kept
     # (plan 36 T3: a later effect file is in the save only where the
     # section names it — none of these loadable patches runs displace)

@@ -83,13 +83,6 @@ from .fx import declare as declare_fx
 from .geometry import EYE_DISTANCE, EYE_FOV, PLANE_NAMES, SHAPES, pan_px_to_world
 from .ghost import GhostState
 from .ghost import register as declare_ghost
-from .lookback import (
-    LAYERS,
-    OCTAVES,
-    RES,
-    TINT_FROM,
-    DreamState,
-)
 from .media import channels as media_channels
 from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
@@ -176,7 +169,7 @@ F_KEYS = 8
 # (`pad.dial.left` / `.right`, `declare_dial`): the loadable patch's, since a reading
 # changes what its own `axis:L.*` / `axis:R.*` routes do. The pad's feel (`desk.pad.*`)
 # is about the hardware, and stays the meta controller's
-PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
+PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "fx", "media",
                       "backdrop", "switch", "resize", "matte", "cut", "segment", "key", "delay", "ghost",
                       "cloud", "lfo", "env", "seq", "macro", "pad", "grip", "mod")
 # `grip` (plan 60, the hand rig): a patch's own, each deck's — the owner, 2026-11-10,
@@ -2278,33 +2271,7 @@ def declare_segments(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
-def dream_half_life(k: float) -> int:
-    """`dream.k` as its readout: the processed frames in which a frame's
-    share of the dream buffer halves, ``log ½ / log(1 − k)``, rounded (the
-    buffer is ``D ← D·(1 − k) + frame·k``, dream.py). 23 at the slow end
-    of the knob, 14 at the default, 2 at the fast end; never under 1, and 1
-    for a value that is not a number (a readout must not raise mid-frame)."""
-    k = float(k)
-    if not math.isfinite(k):
-        return 1
-    k = min(max(k, 1e-6), 1.0 - 1e-9)
-    return max(1, round(math.log(0.5) / math.log(1.0 - k)))
-
-
-def dream_speed_text(k: float) -> str:
-    """`dream.k`'s readout. Whole frames from ten up ("≈14 frames"); under
-    ten, one decimal ("1.9 frames"), because whole frames read "≈2 frames"
-    over nearly half the knob's travel at its fast end and an undo label
-    said "≈2 frames → ≈2 frames". The same width either way."""
-    k = float(k)
-    if not math.isfinite(k):
-        return "≈1 frames"
-    k = min(max(k, 1e-6), 1.0 - 1e-9)
-    h = max(1.0, math.log(0.5) / math.log(1.0 - k))
-    return f"{h:.1f} frames" if h < 9.95 else f"≈{round(h)} frames"
-
-
-def build_registry(view, control, audio, bank=None, dream=None, fx=None,
+def build_registry(view, control, audio, bank=None, fx=None,
                    restart=None, ghost=None, media=None, *,
                    meta_reg: MetaRegistry | None = None) -> Registry:
     """Declare every parameter the surface owns.
@@ -2314,10 +2281,9 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     Its capture side is optional too: with `start_mic` / `stop` and a
     `devices` list (audio.AudioEngine) ``audio.mic`` and ``audio.device`` do
     something; without them they are declared anyway, so a key row (`M`)
-    resolves with or without a panel. `dream` is the renderer's lookback
-    state (lookback.DreamState); a fresh one stands in when there is no
-    renderer, so the group is always declared; `fx` (fx.FxState, the
-    renderer's effects' values) likewise, and `ghost` (ghost.GhostState, the
+    resolves with or without a panel. `fx` (fx.FxState, the renderer's
+    effects' values; plan 90 H3: the dream's among them, `fx.dream.*`) — a
+    fresh one stands in when there is no renderer — and `ghost` (ghost.GhostState, the
     renderer's ghost hands), and `media` (media.channels.MediaState, the
     eight channels the ``media.*`` params write; kept as ``r.media``, the
     one the loadable patch's bins and the renderer read). `bank` is the open project
@@ -2329,7 +2295,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     """
     if meta_reg is None:
         meta_reg = build_meta(control, audio, restart, media=media)
-    return build_patch(view, bank, dream=dream, fx=fx, ghost=ghost, media=media,
+    return build_patch(view, bank, fx=fx, ghost=ghost, media=media,
                              meta_reg=meta_reg)
 
 
@@ -2536,18 +2502,17 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     return r
 
 
-def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
+def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
                       meta_reg: MetaRegistry | None = None) -> Registry:
     """Declare a deck's own params (plan 44 D3): the look's — the view, the
     media channels' (`media`, the deck's `Channels`), the backdrop, the
     turn, the camera and the eye, the clouds' and the hands' looks, the
-    look-back and the dream, the effects, the macros — and the bank's
+    effects (the dream among them), the macros — and the bank's
     (`bank`, the show's loadable patch slots, which load into this deck), on a
     registry that follows `meta_reg` (the meta controller's params by reference: one
     `Param` in every deck). `meta_reg` None: a fresh one of its own. The
     other arguments are `build_registry`'s."""
     r = Registry(meta_reg=meta_reg if meta_reg is not None else MetaRegistry())
-    dream = dream if dream is not None else DreamState()
     media = media if media is not None else media_channels.MediaState()
     r.media = media
     # plan 43 C2 (row 573): the view the rotation params write — what a
@@ -2964,99 +2929,6 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
              modulatable=False,
              tip="The cloud's own colours, when its source has them; off, every point "
                  "is white.")
-
-    # ---- the dream (plan 36 T4: the dream node's) ----
-    # lookback.Dreamer reads these every frame; the dream worker (WP6b) reads
-    # the second half. Its size rebuilds the buffer, so no lane drives it;
-    # everything else is a live fader. Plan 90 (H2): the look-back's own knobs
-    # (echo brightness, fade, count, time apart, shape hides wake) are its
-    # parts' now — a delay, a Trail, cuts; darken, contrast and detail stay the
-    # dream's until H3 (a migrated look-back's parts took copies)
-    g = "dream"
-    r.toggle("dream.on", "Dream on", *_attr(dream, "on"), group=g,
-             tip="The dream, on or off: on, the dream node dreams its picture (once a "
-                 "worker is attached); off, it passes the picture through untouched "
-                 "and the worker sleeps.")
-    r.continuous("dream.mix", "Dream brightness", *_attr(dream, "mix"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"{v:.2f}", group=g,
-                 tip="How bright the dream is over its picture: the dream buffer's "
-                     "weight, laid over what the dream node takes in.")
-    r.continuous("dream.darken", "Darken", *_attr(dream, "darken"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"×{1.0 - v:.2f}", group=g,
-                 tip="Darkens the dream: how much darker its buffer is than the "
-                     "pictures it came from.")
-    r.continuous("dream.contrast", "Contrast", *_attr(dream, "contrast"), lo=0.5, hi=3.0,
-                 fmt=lambda v: f"^{v:.2f}", group=g,
-                 tip="Above 1 only the bright parts of the dream show: a power curve "
-                     "on its buffer.")
-    # the dream buffer's chroma — the net paints in its own primaries; these
-    # re-colour D on its way into the composite (lookback.py, chroma())
-    r.continuous("dream.hue", "Dream hue", *_attr(dream, "hue"), lo=-180.0, hi=180.0,
-                 wrap=True, fmt=lambda v: f"{v:+.0f}°", group=g,
-                 tip="Turns the dream's own colours about the grey axis; luminance is "
-                     "kept. The echoes are not re-coloured.")
-    r.continuous("dream.sat", "Dream saturation", *_attr(dream, "sat"), lo=0.0, hi=2.0,
-                 fmt=lambda v: f"sat {v:.2f}", group=g,
-                 tip="0 a grey dream, 1 as the net painted it, above that pushed.")
-    r.continuous("dream.tint", "Dream tint", *_attr(dream, "tint"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"tint {v:.2f}", group=g,
-                 tip="Crosses the dream's colours into one colour: at 1, its luminance "
-                     "in the tint colour — the one chosen, or the scene's own hue.")
-    r.enum("dream.tint_from", "Dream tint from", *_attr(dream, "tint_from"), TINT_FROM, group=g,
-           tip="The tint's colour: the one chosen (tint hue, tint sat), or the hue of "
-               "the scene's mean colour this frame.")
-    r.continuous("dream.tint_hue", "Dream tint hue", *_attr(dream, "tint_hue"), lo=0.0, hi=360.0,
-                 wrap=True, fmt=lambda v: f"{v:.0f}°", group=g,
-                 tip="The chosen tint colour's hue; unused while the tint is from the scene.")
-    r.continuous("dream.tint_sat", "Dream tint sat", *_attr(dream, "tint_sat"), lo=0.0, hi=1.0,
-                 fmt=lambda v: f"sat {v:.2f}", group=g,
-                 tip="The chosen tint colour's saturation: 0 tints grey — a greyscale dream.")
-    r.enum("dream.res", "Dream detail", *_attr(dream, "res"), [str(v) for v in RES], group=g,
-           modulatable=False,
-           tip="The size, in pixels, the dream is kept at (the short side; the "
-               "picture's aspect is kept); a change starts the dream again.")
-    # the worker's (WP6b) — loadable patches carry them from day one
-    r.continuous("dream.steps", "Dream passes", *_attr(dream, "steps"), lo=1, hi=3, integer=True,
-                 fmt=lambda v: f"{int(v)}", group=g,
-                 tip="Passes through the net per frame: more is a deeper dream and a "
-                     "slower worker; 1 flickers.")
-    r.continuous("dream.step", "Dream strength", *_attr(dream, "step"), lo=0.005, hi=0.06,
-                 fmt=lambda v: f"{v:.3f}", group=g,
-                 tip="How hard the dream is pushed each pass; too hard for the speed and "
-                     "it is held back (the status line says 'step clamped'): strength × "
-                     "passes is kept at or under 1.5 × k (the speed's value).")
-    # the dream's "speed" is its one time constant (plan 20 WP5, fork F8): the
-    # share of the newest frame blended into the buffer each processed frame
-    r.continuous("dream.k", "Dream speed", *_attr(dream, "k"), lo=0.03, hi=0.3,
-                 fmt=dream_speed_text, group=g,
-                 tip="How fast the dream follows the picture: fast, it keeps up and lets "
-                     "go of what has left; slow, it lags, lingers and grows deeper. In "
-                     "dream frames, so it also follows the worker's rate. Slower than "
-                     "about 17 frames at the default strength, the strength is held back "
-                     "(the status line says 'step clamped'). The readout is the frames in "
-                     "which a frame's share of the dream halves; the value is k, the share "
-                     "of each new frame blended in.")
-    r.enum("dream.layer", "Dream layer", *_attr(dream, "layer"), LAYERS, group=g,
-           modulatable=False,      # a change makes the worker load another trunk
-           tip="Which layer of which net the dream brings out: every conv layer of VGG16 "
-               "and every block of GoogLeNet. Shallow layers draw fine dots and edges, "
-               "middle ones textures and swirls, deep ones larger blobs, eyes and "
-               "object-like parts; the deepest are slower. The first layer used from a "
-               "net loads that net, which takes a moment; the rest of it are then "
-               "instant.")
-    r.enum("dream.octaves", "Dream scales", *_attr(dream, "octaves"), OCTAVES, group=g,
-           tip="The sizes the dream is worked at, in turn, one a frame: more gives "
-               "larger forms for the same cost.")
-    r.continuous("dream.mask_decay", "Dream linger", *_attr(dream, "mask_decay"),
-                 lo=0.9, hi=0.995, fmt=lambda v: f"{v:.3f}", group=g,
-                 tip="How long the dream stays where the shape was after it has left: "
-                     "the content mask's per-frame decay, 10 to 200 frames. The mask "
-                     "decides where the dream may exist; what covers it is Shape hides "
-                     "wake.")
-    r.continuous("dream.jitter", "Dream jitter", *_attr(dream, "jitter"), lo=0, hi=16,
-                 integer=True, fmt=lambda v: f"{int(v)} px", group=g,
-                 tip="A random shift each pass, in pixels, that turns pixel noise into "
-                     "texture.")
 
     # ---- effects: one param per annotated uniform in shaders/fx/*.glsl ----
     # (fx.py). A file edited into a new shape re-declares its own ids.

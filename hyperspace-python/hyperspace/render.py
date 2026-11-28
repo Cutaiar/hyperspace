@@ -163,7 +163,6 @@ from .graph import (
     picture,
     wire_depths,
 )
-from .lookback import Dreamer, DreamState
 from .masks import MaskPasses
 from .media_tex import (
     COVER,
@@ -1351,8 +1350,8 @@ class Renderer:
     # plan 34 D: the one tempo clock (`tempo.Clock`), set by the app; None headless
     tempo: Any = None
 
-    def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None,
-                 fx: FxState | None = None, ghost: GhostState | None = None):
+    def __init__(self, ctx: moderngl.Context, fx: FxState | None = None,
+                 ghost: GhostState | None = None):
         self.ctx = ctx
         # clear alpha: 1 is the opaque black ground; overlay mode lowers it
         # so whatever is behind the window shows through (overlay.py)
@@ -1376,11 +1375,9 @@ class Renderer:
         # texture takes the sampler units before the scene pass, so the
         # scene texture is never bound while it is the render target
         self.scene = SceneTarget(ctx)
-        # plan 36 T4 (W4): the dream node's buffer and worker slot, on the
-        # `dream.*` params' state (`dreamer.source`: app.py hangs the worker
-        # there). Plan 90 (H2): the look-back's rings are retired — a delay
-        # keeps the pictures (`delay_stack`)
-        self.dreamer = Dreamer(ctx, dream if dream is not None else DreamState())
+        # Plan 90: the look-back's rings are retired (H2: a delay keeps the
+        # pictures, `delay_stack`), and the dream is an effect file (H3: its
+        # worker hangs on `fx.dream_source`, app.py)
         self.fx = FxChain(ctx, fx)      # every effect node's programs and textures
         # the picture the faces show while something other than the
         # pattern is wired into them (plan 33 R: `shape.faces`, painted by
@@ -1521,12 +1518,11 @@ class Renderer:
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
-    def sibling(self, dream: DreamState | None = None, fx: FxState | None = None,
-                ghost: GhostState | None = None) -> Renderer:
+    def sibling(self, fx: FxState | None = None, ghost: GhostState | None = None) -> Renderer:
         """A second renderer on this one's context and its one wall clock, on
         the states given (each a fresh one of its own when None): a
         preview, deck 2's (plan 44 D4). This context must be current."""
-        r = Renderer(self.ctx, dream=dream, fx=fx, ghost=ghost)
+        r = Renderer(self.ctx, fx=fx, ghost=ghost)
         r._t0 = self._t0
         r.world = getattr(self, "world", None)     # one world: its shape is either deck's
         return r
@@ -1790,11 +1786,9 @@ class Renderer:
         except OSError:
             return
         if mtime != self._patterns_mtime:
-            shared_changed = mtime[1] != self._patterns_mtime[1]
             self._patterns_mtime = mtime
             self._build_face_program()
-            if shared_changed:
-                self.dreamer.on_reload()
+            # (the effects watch _common.glsl themselves: `FxState.poll`)
 
     def draw(
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
@@ -2014,9 +2008,6 @@ class Renderer:
         # plan 34 D: each delay's pair turns — last frame's write is now
         # what its delay reads
         self._turn_delays(graph, t)
-        # plan 36 T4: the dream forgets `D` with no dream node, so the
-        # worker sleeps
-        self._idle_dream(graph)
         # plan 39 T4: a segment no node of this graph holds lets its worker
         # and its background model go, after `SIZED_KEEP_FRAMES`
         self._tend_segments(graph)
@@ -3253,13 +3244,6 @@ class Renderer:
             gh = ghosts[name] = Ghost(self.ctx, state if state is not None else GhostState())
         gh.source, gh.router = self.ghost.source, self.ghost.router
         return gh
-
-    def _idle_dream(self, graph: Graph) -> None:
-        """No dream node in this graph: `D` forgotten (the worker sleeps)."""
-        held = set(getattr(graph, "nodes", {}))
-        dreamer = getattr(self, "dreamer", None)
-        if dreamer is not None and "dream" not in held:
-            dreamer.idle()
 
     def drop_ghosts(self, keep: set[str] = frozenset()) -> None:
         """Release every extra hands node's `Ghost` not named in `keep`

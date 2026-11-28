@@ -412,7 +412,8 @@ def test_no_corpus_source_carries_a_graph_and_each_loadable_loads_as_before(tmp_
     clean dot. Plan 36 T3: each file is its source's `/7`, so it carries
     that frame as its graph (its source has none) and lands it as it is —
     plan 90 H2: a file whose frame holds a look-back lands it as public
-    parts (`graphmigrate.lookbacks`), no longer in the old words."""
+    parts (`graphmigrate.lookbacks`), no longer in the old words; H3: and a
+    file whose frame holds a dream, its parts too (`graphmigrate.dreams`)."""
     seed(tmp_path)
     rig = boot(tmp_path)
     stub = Stub()
@@ -426,6 +427,8 @@ def test_no_corpus_source_carries_a_graph_and_each_loadable_loads_as_before(tmp_
         # plan 33 T3: the run as wires; plan 36 T3: the file's own section
         raw = json.loads((CORPUS / "loadable" / f"{slug}.json").read_text())
         parts, retired = M.lookbacks(raw)
+        parts, dreamt = M.dreams(parts)              # (plan 90 H3: an old dream, its parts)
+        retired = retired or dreamt
         own = parts["graph"] if not retired else G.read_graph(parts["graph"]).to_json()
         assert rig.loaded_patch.graph.doc == own and stub.wiring.wired, slug
         if not retired:
@@ -462,9 +465,10 @@ def test_the_proof_loadable_loads_its_graph_from_a_scratch_library(tmp_path):
     assert G.Wire("resize", "delay.image") in stub.wiring.wires
     # plan 33 T3: its run, as wires
     assert G.run_back(rig.loaded_patch.graph.spec, "output.all.image") == ("acid",)
-    # (plan 36 T4: its look-back on is drawn; `dream.on` is the dream's, and
-    # with a dream mix of 0 there is none)
-    assert rig.reg["fx.acid.on"].value and not rig.reg["dream.on"].value
+    # (plan 36 T4: its look-back on is drawn; with a dream mix of 0 there is no
+    # dream — plan 90 H3: and none of its parts, its `dream.*` gone)
+    assert rig.reg["fx.acid.on"].value and "dream.on" not in rig.reg
+    assert "dream" not in {e.name for e in rig.loaded_patch.graph.spec.effects}
     assert not rig.lib.is_dirty(LOADABLE)
     doc = rig.loaded_patch.document("hands-lines")
     assert doc[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()

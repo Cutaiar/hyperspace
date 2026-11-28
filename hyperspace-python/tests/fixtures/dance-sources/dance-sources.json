@@ -81,7 +81,7 @@
   },
   {
    "source": "hand:right.flick",
-   "target": "dream.mix",
+   "target": "view.lines_alpha",
    "op": "position"
   },
   {

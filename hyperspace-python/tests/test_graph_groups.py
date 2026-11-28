@@ -160,17 +160,19 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     corpus loadable patch, with no groups (a `/9` without the key). (Plan
     90 H2: the look-back's five retired knobs go quietly from a file that
     draws none; a corpus file holding a look-back is rewritten once on load
-    — its look-back public parts — and that save then resaves byte for
-    byte.)"""
+    — its look-back public parts, and H3 its dream — and that save then
+    resaves byte for byte.)"""
     raw = FIXTURE.read_bytes()
     assert json.loads(raw)["schema"] == "hyperspace.loadable/12"
     # (plan 90 H2: the look-back's five retired knobs, `graphmigrate.LB_GONE`,
     # go quietly from a patch that draws no look-back — the rest is the same
     # bytes)
+    # (plan 90 H3: and every `dream.*` goes from a file that draws no dream)
     def unretired(data: bytes) -> bytes:
         doc = json.loads(data)
-        for key in graphmigrate.LB_GONE:
-            doc.get("values", {}).pop(f"dream.{key}", None)
+        values = doc.get("values", {})
+        for key in [k for k in values if k.startswith("dream.")]:
+            values.pop(key)
         return loadable.dumps(doc).encode()
 
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
@@ -178,19 +180,24 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     for k, path in enumerate(CORPUS_LOADABLES):
         data = path.read_bytes()
         again, _, _ = headless.resave(path, tmp_path / f"f{k}")
-        if not graphmigrate.lookbacks(json.loads(data))[1]:
+        lb, lb_notes = graphmigrate.lookbacks(json.loads(data))
+        if not lb_notes and not graphmigrate.dreams(lb)[1]:
             data = unretired(data)
         else:
             assert b'"lookback' not in again, path.name
+            assert b'"kind": "dream"' not in again, path.name
+            assert not [k for k in json.loads(again).get("values", {})
+                        if k.startswith("dream.")], path.name
             data = again
             moved = tmp_path / f"m{k}" / path.name
             moved.parent.mkdir(parents=True)
             moved.write_bytes(data)
             again, _, _ = headless.resave(moved, tmp_path / f"g{k}")
-        # (no groups, but the folded look-back a saved one opens as: plan 90 H2)
+        # (no groups, but the folded look-back and dream a saved one opens as:
+        # plan 90 H2, H3)
         assert again == data, path.name
         assert {g["name"] for g in json.loads(again).get("groups", [])} <= {
-            graphmigrate.LB_GROUP}, path.name
+            graphmigrate.LB_GROUP, graphmigrate.DREAM_GROUP}, path.name
 
 
 def test_a_member_the_graph_lacks_is_dropped_with_a_note(tmp_path):
@@ -291,7 +298,7 @@ def test_a_grouped_loadable_builds_the_graph_of_its_ungrouped_twin(tmp_path):
             others.append(path.stem)
         want = G.signature(G.build_graph(_views(), flat.wiring()))
         app.loaded_patch.load_doc(grouped_twin(doc, ids))
-        said = [n for n in app.loaded_patch.notes if "(plan 90)" not in n]
+        said = [n for n in app.loaded_patch.notes if "(plan 90" not in n]
         assert said == [], path.stem
         assert app.loaded_patch.groups[0]["nodes"] == ids, path.stem
         spec = app.loaded_patch.graph.spec
@@ -756,8 +763,8 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
     app = headless.make_app(seed(tmp_path))
     app.lib.load("loadable", path.stem)
     pre, table = app.loaded_patch, app.router.table
-    # (none, but the group a saved look-back opens folded in: plan 90 H2)
-    assert {g["name"] for g in pre.groups} <= {graphmigrate.LB_GROUP}
+    # (none, but the groups a saved look-back and dream open folded in: plan 90 H2, H3)
+    assert {g["name"] for g in pre.groups} <= {graphmigrate.LB_GROUP, graphmigrate.DREAM_GROUP}
     before = _stripped(pre.document("x"))
     e = graphview.Edit(table, app.reg, app.router, graph=pre.graph)
     e.loaded_patch = pre

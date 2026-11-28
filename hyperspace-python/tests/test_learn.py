@@ -175,11 +175,11 @@ def test_every_learned_row_is_the_smooth_spring_but_an_envelopes(rig):
     assert (DEFAULT_ROUTE_FEEL.dur, DEFAULT_ROUTE_FEEL.bounce) == SPRINGS["smooth"]
     for pid, kw in (("view.speed", {"centred": True}), ("rot.rate.XY", {}),
                     ("view.bright", {"centred": False}), ("view.bright", {}),
-                    ("view.plane.XY", {}), ("view.shape", {}), ("dream.steps", {})):
+                    ("view.plane.XY", {}), ("view.shape", {}), ("fx.dream.steps", {})):
         row = row_for("hand:3", reg[pid], **kw)
         assert row.motion == DEFAULT_ROUTE_FEEL, (pid, kw)
         assert row.to_json()["motion"] == {"mode": "spring", "dur": 0.5, "bounce": 0.0}
-    for pid in ("view.bright", "view.speed", "rot.rate.XY", "view.plane.XY", "dream.steps"):
+    for pid in ("view.bright", "view.speed", "rot.rate.XY", "view.plane.XY", "fx.dream.steps"):
         assert row_for("env:0", reg[pid]).motion is None, pid       # on any target
     # through a Learn, the row the table keeps carries it
     rig.learn.arm("view.bright")
@@ -322,7 +322,7 @@ def test_a_band_lane_and_an_lfo_land_as_calm_pushes_about_the_base(rig):
         # a depth the caller names still wins, as for a hand
         assert row_for("lane:2", p, depth=0.3).value == pytest.approx(0.3)
         assert row_for("lfo:0", p, depth=0.3).value == pytest.approx(0.3)
-    for pid in ("view.plane.XY", "view.shape", "camera.reset", "dream.steps"):   # discrete
+    for pid in ("view.plane.XY", "view.shape", "camera.reset", "fx.dream.steps"):   # discrete
         for src in ("lane:2", "lfo:0"):
             assert (row_for(src, reg[pid]).op, row_for(src, reg[pid]).value) == \
                 ("position", 1.0), (pid, src)
@@ -346,20 +346,20 @@ def test_a_band_lane_and_an_lfo_land_as_calm_pushes_about_the_base(rig):
 
 def test_a_whole_number_param_keeps_the_position_row(rig):
     """Review of PR #100: a whole-number param is stepped too. A push of
-    0.25 about `dream.steps` (1–3) is a quarter of a step each way and
+    0.25 about `fx.dream.steps` (1–3) is a quarter of a step each way and
     never reaches the next one — the learn would land and do nothing — so
     it keeps the fader, which reaches every step."""
-    p = rig.reg["dream.steps"]
+    p = rig.reg["fx.dream.steps"]
     assert p.integer and (p.lo, p.hi) == (1, 3)
     p.set(2)
-    rig.table.add(Binding("hand:3", "dream.steps", "push", 0.25))
+    rig.table.add(Binding("hand:3", "fx.dream.steps", "push", 0.25))
     seen = set()
     for u in (0.0, 0.25, 0.5, 0.75, 1.0):
         played(rig, u, 0.5)
         seen.add(int(p.value))
     assert seen == {2}                           # the push that is not learned: stuck
-    rig.table.remove(rig.table.owner("dream.steps"))
-    for pid in ("view.instances", "dream.steps"):            # the axis ends on dream.steps
+    rig.table.remove(rig.table.owner("fx.dream.steps"))
+    for pid in ("view.instances", "fx.dream.steps"):            # the axis ends on fx.dream.steps
         b = learned(rig, pid, centred=True, depth=0.25)
         assert b == Binding("hand:3", pid, "position", 1.0), pid
     seen = set()
@@ -373,7 +373,7 @@ def test_centred_target_reads_the_declared_range(rig):
     """By declaration only — no taper, not log, lo == −hi; never the id."""
     reg = rig.reg
     yes = [f"rot.rate.{pl}" for pl in ("XY", "XZ", "YZ", "XW", "YW", "ZW")]
-    yes += ["camera.yaw", "camera.pitch", "camera.pan.x", "camera.pan.y", "dream.hue"]
+    yes += ["camera.yaw", "camera.pitch", "camera.pan.x", "camera.pan.y", "view.frac_dive"]
     for pid in yes:
         assert centred_target(reg[pid]), pid
     for pid in ("view.speed", "view.bright", "camera.zoom", "fx.mix",

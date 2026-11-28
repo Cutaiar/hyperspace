@@ -9138,6 +9138,24 @@ Headless: `tests/test_lookback_migration.py` (every mapping, rows and their rang
 
 **968. The look-back is one group.** (Mac) Load `party-tracer`, then on GRAPH add starters ▸ tracers on a picture cable. *Pass:* each is one folded box, **look-back**, picture in and the wake out (the old file's also takes the occluder and the cover); `+` opens it to the delay, the Trail and the rest, and folding it again hides them; one undo takes the starter's group away with its nodes. *Fail:* the parts loose on the canvas, a second group, or a cable that goes nowhere when folded.
 
+## GH. The dream as an effect (rows 1181–1185, 2026-11-27)
+
+Headless: `tests/test_dream_effect.py` (the effect and its hook through the real renderer, a numpy worker), `tests/test_dream_migration.py` (every mapping, rows, ports, the master switch, the ladders, party-wake whole, old dream presets), `tests/test_graph_starters.py`; `tools/dream_proof.py` (each repository dream through the base's code and this one, a numpy worker in each recipe). torch is not in the cloud: everything with the real worker is here.
+
+**969. Dream on a picture.** (Mac, `[dream] enabled = true`) On GRAPH: starters ▸ dream on a picture. *Pass:* one folded box, **dream**, picture in and out; `+` opens Resize (keyed), Dream, Fade, Composite; the dream's node says its size and "a job or two late"; its knobs are on the FX pane's dream strip (no LOOKBACK page anywhere); at Hold 1 each frame is dreamed anew and follows the picture at once, at 0.05 it deepens and lingers. *Fail:* a black window, the dream over the whole frame where nothing is lit, or the node saying "no dream worker" with the worker on.
+
+**970. The worker's cost and its own tests.** (Mac) `uv run pytest tests/test_dream.py` (it skips without torch in the cloud), then `uv run python tools/dream_shots.py --preset party-wake` and with `--precision fp16`. *Pass:* the tests pass; the table's dream job p50 is what the status line says, the renderer's frame with the worker on within a millisecond of without; a smaller Resize (256) before the dream is faster by about its pixels. *Fail:* a failing worker test, a renderer frame that waits on the worker, or "step clamped" at Hold 1.
+
+**971. party-wake by eye.** (Mac, worker on) Load `party-wake` from the corpus. *Pass:* the strip says the dream is public parts now (and the look-back, as 963); the dream sits on the trail as before — a little sharper (512 against 408 × 256), its region fading with its picture (the linger merged into Hold, said); the hand rows that moved the dream (its brightness, the hue) still move it. *Fail:* no dream, a dream over the whole frame, or a row that no longer moves anything.
+
+**972. Golden frames re-recorded.** (Mac) `uv run python tools/golden_frames.py` lists what moved: expect `party-wake`'s states and the fixture `acid-scene` (its `present` graph holds a dream), and signatures naming `dream` (now an effect node); nothing else. Look at the contact sheet, then `--record --only` those. *Pass:* only those move, and by eye as 971. *Fail:* any other golden moving.
+
+**973. Your library, migrated.** (Mac) `uv run python tools/migrate_library.py` over a copy of `~/Hyperspace` (it backs up first). *Pass:* every file holding a dream reads "dream is public parts now" (or "was off … left out"), no "unknown id"; the library says once how many old dream presets it left in `patches/dream/`; open three dream looks and compare with how they looked. *Fail:* an unknown id, a file that does not open, a dream preset listed anywhere, or a note you cannot follow.
+
+**974. The starters as groups.** (laptop, GRAPH) starters ▸ tracers, tracers + dream, and dream on a picture twice. *Pass:* **trail** for the tracers, **dream** for the other three, each one undo step, each folded with its picture in and out; the second dream lands as its own parts. *Fail:* loose parts, a refusal of the second dream, or a group named look-back.
+
+**975. One live dream.** (Mac, worker on) With two dreams on (the two starters of 974), look at their nodes. *Pass:* one dreams; the other passes its picture through and says "one live dream at a time … holds it"; delete the first and the second dreams from the next frame. *Fail:* both flicker, or the second stays passing through.
+
 ## FT. The Kinect (row 1130, 2026-11-24)
 
 Headless: `tests/test_kinect.py` (depth to points, the device over a stand-in sensor).

@@ -56,7 +56,7 @@ def boot(renderer) -> SimpleNamespace:
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(demo.HOME, period=0.0)
-    reg = build_registry(view, control, audio, lib.install, dream=renderer.dreamer.state,
+    reg = build_registry(view, control, audio, lib.install,
                          fx=renderer.fx.state)
     t = SimpleNamespace(t=0.0)
     clock = tempo.Clock(now=lambda: t.t)

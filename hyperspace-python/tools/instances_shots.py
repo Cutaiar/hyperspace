@@ -64,7 +64,7 @@ def shot(ctx, counts: list[int], *, plasma: bool = False,
     if lookback:
         # (plan 90 H2: the look-back is retired — its tracers are a delay and a
         # Trail now, wired in a patch; this option draws no wake any more)
-        r.dreamer.source = None
+        r.fx.dream_source = None
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
     s = view()
     for k, n in enumerate(counts):

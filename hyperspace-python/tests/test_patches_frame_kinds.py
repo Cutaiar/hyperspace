@@ -1,14 +1,15 @@
-"""Wave 3 P1: frame kinds in patches — the dream, a look-back, the scene and
-the rest are held by a patch, so a "dream + fx + composite" patch exists.
+"""Wave 3 P1: frame kinds in patches — a look-back, the scene and the rest
+are held by a patch, and so is the dream (plan 90 H3: an effect, any number
+of instances), so a "dream + fx + composite" patch exists.
 
 - what is refused still is the rig's (`FIXTURE_KINDS`) and the look's one camera;
-- a frame kind's params are the ones the canvas says are its, every `dream.*`
-  the dream's (plan 90 H2: the look-back's knobs are retired, its trail is
-  public parts), the band scene's no node's;
+- a frame kind's params are the ones the canvas says are its, every
+  `fx.dream.*` the dream's (plan 90 H2: the look-back's knobs are retired, its
+  trail is public parts), the band scene's no node's;
 - what can be made twice is renamed (hands 1 lands as `hands.2`, a trail's
   delay as `delay.2`); what a frame holds one of keeps its name, and a host that
-  already has it refuses the spawn in words, nothing landed (the dream's is
-  the sheet's since P2: tests/test_patches_replace_dream.py);
+  already has it refuses the spawn in words, nothing landed (the dream is an
+  effect since plan 90 H3: a second one lands as `dream.2`);
 - a spawn into an empty frame is the frame: every corpus loadable patch, whole.
 """
 
@@ -32,7 +33,6 @@ from hyperspace import (
     params,
     patches,
     ui_graph,
-    ui_routing,
     undo,
 )
 from hyperspace.library import PATCHES
@@ -40,8 +40,11 @@ from hyperspace.patches import Host, spawn
 from hyperspace.routing import Bindings
 
 CORPUS_LOADABLES = sorted((CORPUS / "loadable").glob("*.json"))
-# the wired-frame nodes of party-wake a "dream + fx + composite" cut names
-DREAM_CUT = ["render:dream", "render:composite"]
+# the wired-frame nodes of party-wake a "dream + fx + composite" cut names: its
+# dream as it opens (plan 90 H3), Resize → Dream → Hue turn → Curve → Fade →
+# Composite over the last Cut's picture
+DREAM_CUT = ["render:resize.2", "render:dream", "render:hueturn", "render:curve.2",
+             "render:fade.2", "render:fade.3", "render:composite.2"]
 
 
 @pytest.fixture()
@@ -56,7 +59,7 @@ def wake_doc() -> dict:
 
 
 def cut(name: str = "wake", ids=None) -> dict:
-    """The dream and its composite cut out of party-wake."""
+    """The dream's chain and its composite cut out of party-wake."""
     doc, refused = patches.lift(*parts(wake_doc()), ids or DREAM_CUT)
     assert refused == []
     doc["name"] = name
@@ -118,10 +121,10 @@ def test_save_still_refuses_the_camera_and_a_lane_envelope_in_words():
 def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
     """Over the whole registry: where `patches._param_rows` gives a frame
     kind's param an owner it is the node the canvas puts it on
-    (`graphview.OWNERS`, the dream's on the dream's since P2); no frame kind
-    owns a shared meta group's param."""
+    (`graphview.OWNERS`); no frame kind owns a shared meta group's param.
+    (Plan 90 H3: the dream is an effect, no frame kind.)"""
     app = headless.make_app(tmp_path)
-    frame_kinds = ("scene", "shape", "backdrop", "pattern", "dream")
+    frame_kinds = ("scene", "shape", "backdrop", "pattern")
     mem = patches._Members(frame_kinds)
     owned = 0
     for p in app.reg:
@@ -138,15 +141,15 @@ def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
     assert owned > 50
 
 
-def test_the_dream_owns_every_dream_key_and_the_trails_parts_their_own():
-    """Plan 90 H2: no look-back splits `dream.*` — the dream owns it all,
-    `darken` and `contrast` included; the trail's parts own their own."""
+def test_the_dream_owns_its_knobs_and_the_trails_parts_their_own():
+    """Plan 90 H3: the dream is an effect — it owns its `fx.dream.*`, no
+    other part's; the trail's parts own their own."""
     only_dream = patches._Members(("dream",))
-    for pid in ("dream.mix", "dream.darken", "dream.contrast", "dream.k"):
+    for pid in ("fx.dream.on", "fx.dream.mix", "fx.dream.k", "fx.dream.layer"):
         assert only_dream.owns(pid), pid
     assert not only_dream.owns("fx.trail.level") and not only_dream.owns("delay.depth")
     trail, delay = patches._Members(("trail",)), patches._Members(("delay",))
-    assert trail.owns("fx.trail.level") and not trail.owns("dream.mix")
+    assert trail.owns("fx.trail.level") and not trail.owns("fx.dream.mix")
     assert delay.owns("delay.depth") and not delay.owns("fx.trail.level")
 
 
@@ -168,11 +171,19 @@ def test_a_dream_and_a_composite_lift_as_a_patch():
     doc = cut()
     assert patches.check(doc) == []
     assert doc["schema"] == patches.SCHEMA == "hyperspace.patch/3"   # (plan 89's, no other)
-    assert {e["kind"] for e in doc["nodes"]} == {"dream", "composite"}
-    assert doc["wires"] == [{"from": "dream", "to": "composite.over"}]
+    assert {patches.entry_name(e) for e in doc["nodes"]} == {
+        "resize", "dream", "hueturn", "curve", "fade", "fade.2", "composite"}
+    assert {"kind": "effect", "file": "dream"} in doc["nodes"]
+    assert doc["wires"] == [{"from": "resize", "to": "dream.image"},
+                            {"from": "dream", "to": "hueturn.image"},
+                            {"from": "hueturn", "to": "curve.image"},
+                            {"from": "curve", "to": "fade.image"},
+                            {"from": "fade", "to": "fade.2.image"},       # the darken, the mix
+                            {"from": "fade.2", "to": "composite.over"}]
     assert {(p["id"], p["was"]) for p in doc["ports"]} == {
-        ("in", "scene"), ("in.2", "cut.2"), ("out", "output.all.image")}
-    assert "dream.mix" in doc["values"] and "fx.trail.fade" not in doc["values"]
+        ("in", "cut.2"), ("in.2", "cut.2"), ("out", "composite.over")}
+    assert "fx.dream.mix" in doc["values"] and "fx.trail.fade" not in doc["values"]
+    assert not [k for k in doc["values"] if k.startswith("dream.")]
 
 
 def test_a_dream_patch_spawns_where_the_host_has_no_dream():
@@ -181,19 +192,22 @@ def test_a_dream_patch_spawns_where_the_host_has_no_dream():
     assert landing.taken == () and landing.refusal is None
     assert "dream" in [patches.entry_name(e) for e in landing.nodes]
     assert "dream" not in landing.renames
-    assert landing.values["dream.mix"] == wake_doc()["values"]["dream.mix"]
+    assert landing.values["fx.dream.k"] == wake_doc()["values"]["fx.dream.k"]
 
 
-def test_a_host_has_a_single_instance_node_and_the_landing_says_so():
-    """`Landing.taken` names it, whichever it is; the dream's is the sheet's
-    since P2 (`Landing.replacing`), the rest refuse in words."""
+def test_a_host_with_a_dream_takes_another_and_its_single_instance_nodes_are_said():
+    """Plan 90 H3: a dream is never refused for a second dream — it lands as
+    the next instance; `Landing.taken` names the single-instance nodes the
+    host has, refused in words."""
     p = parts(wake_doc())
     landing = spawn(cut("dreamy"), Host.of(*p[:2]))
-    assert landing.taken == ("dream",) and landing.refusal is None
+    assert landing.taken == () and landing.refusal is None and landing.replacing == ()
+    assert landing.renames["dream"] == "dream.2"
     whole, _ = patches.lift(*p, ["render:scene", "render:shape", "render:dream"])
     landing = spawn({**whole, "name": "x"}, Host.of(*p[:2]))
-    assert landing.taken == ("dream", "scene", "shape")
-    assert all(patches.entry_name(e) in landing.taken for e in landing.nodes)
+    assert landing.taken == ("scene", "shape")
+    assert all(patches.entry_name(e) in landing.taken or e.get("file") == "dream"
+               for e in landing.nodes)
     assert landing.refusal == patches.TAKEN_WORDS.format(name="x", nodes="scene, shape")
 
 
@@ -202,19 +216,20 @@ def test_the_host_having_only_a_second_dream_leaves_the_first_free():
     assert spawn(cut(), Host(names=patches.spec_names(spec))).taken == ()
 
 
-def test_a_second_dream_stays_out_and_never_becomes_the_live_one():
-    """`dream.2` may be declared but no wire may touch it: a save refuses it
-    in words; a file holding it (never saved: `check` refuses it) is not
-    renumbered onto `dream`."""
-    spec = G.read_graph({"frame": "wired", "nodes": [{"kind": "dream", "instance": 2}]})
+def test_a_second_dream_is_held_and_lands_as_the_next_instance():
+    """Plan 90 H3: any number of dreams (the hook passes all but one through,
+    said): `dream.2` is saved like any effect, and lands renamed where the
+    host already has it."""
+    spec = G.read_graph({"frame": "wired",
+                         "nodes": [{"kind": "effect", "file": "dream", "instance": 2}]})
     mem, said = patches.select(spec, Bindings([]), ["render:dream.2"])
-    assert mem.render == () and said == [patches.SECOND_DREAM_WORDS.format(name="dream.2")]
-    doc = {"schema": patches.SCHEMA, "name": "d", "nodes": [{"kind": "dream", "instance": 2}]}
-    assert patches.check(doc) == [patches.SECOND_DREAM_WORDS.format(name="dream.2")]
-    landing = spawn(doc, Host())
-    assert landing.renames == {} and landing.taken == ()
-    assert spawn(doc, Host(names=frozenset({"dream"}))).taken == ()
-    assert spawn(doc, Host(names=frozenset({"dream.2"}))).taken == ("dream.2",)
+    assert mem.render == ("dream.2",) and said == []
+    doc = {"schema": patches.SCHEMA, "name": "d",
+           "nodes": [{"kind": "effect", "file": "dream", "instance": 2}]}
+    assert patches.check(doc) == []
+    landing = spawn(doc, Host(names=frozenset({"dream", "dream.2"})))
+    assert landing.taken == () and landing.refusal is None
+    assert landing.renames.get("dream.2") not in (None, "dream", "dream.2")
 
 
 def test_a_landing_from_before_a_hot_reload_still_lands(rig):
@@ -251,52 +266,51 @@ def test_the_edit_refuses_a_landing_with_a_taken_node_as_well(rig):
 
 
 def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
-    """The ask, end to end: on party-wake a group of the dream, its composite
-    and an effect saved as a patch; on party-noita (no dream) spawned as one
-    undo step, its values landed, its pins open, nothing wired to the host
-    (D2) — wire as saved reads through it; ⌘Z takes it all away."""
+    """The ask, end to end: on party-wake its dream group (plan 90 H3: Resize
+    → Dream → Hue turn → Curve → Fade (darken) → Fade (mix) → Composite,
+    folded as "dream") saved
+    as a patch; back on party-wake it lands beside the host's as a second
+    dream, never refused; on party-noita (no dream) spawned as one undo step,
+    its values landed, its pins open, nothing wired to the host (D2); ⌘Z
+    takes it all away."""
     on_graph(rig, "party-wake")
-    e = ui_graph.group_edit(rig.panel)
-    assert graphview.render_add(e, "effect", "acid") is None
-    entry = ui_graph.group_nodes(rig.panel, ["render:dream", "render:composite", "render:acid"])
-    assert entry["nodes"] == ["render:dream", "render:composite", "render:acid"]
-    rig.reg["dream.mix"].set_value(0.31)
-    # (party-wake opens with its look-back folded as group.1: plan 90 H2)
-    assert ui_graph.save_patch(rig.panel, entry["id"], "dream wash", "") is None
+    pre = rig.lib.loaded_patch
+    group = next(g for g in pre.groups if g["name"] == graphmigrate.DREAM_GROUP)
+    assert group["nodes"] == DREAM_CUT
+    rig.reg["fx.dream.k"].set_value(0.31)
+    assert ui_graph.save_patch(rig.panel, group["id"], "dream wash", "") is None
     doc = rig.lib.read_patch("dream-wash")
     assert patches.check(doc) == []
-    assert {patches.entry_name(n) for n in doc["nodes"]} == {"dream", "composite", "acid"}
+    assert {patches.entry_name(n) for n in doc["nodes"]} == {
+        "resize", "dream", "hueturn", "curve", "fade", "fade.2", "composite"}
+    assert doc["values"]["fx.dream.k"] == pytest.approx(0.31)
 
-    # back on its own loadable patch the sheet asks to replace that dream (P2), not here
-    assert ui_graph.spawn(rig.panel, "dream-wash") is None
-    assert ui_routing.sheet(rig.panel)[0].replacing == ("dream",)
-    assert ui_routing.settle_sheet(rig.panel, False) is None
+    # back on its own loadable patch it is a second dream: no sheet to replace one
+    assert spawned(rig, "dream-wash") is None, ui_graph._state(rig.panel).get("note")
+    assert {"dream", "dream.2"} <= patches.spec_names(rig.lib.loaded_patch.graph.spec)
 
     on_graph(rig, "party-noita")
     pre = rig.lib.loaded_patch
     assert "dream" not in patches.spec_names(pre.graph.spec)
-    rig.reg["dream.mix"].set_value(0.9)
     before, wired, home = state(rig), wires(rig), files(rig.lib.home)
-    mix = rig.reg["dream.mix"].value
     u = watch(rig)
     try:
         n = len(u.stack)
         assert spawned(rig, "dream-wash") is None
         assert len(u.stack) == n + 1 and u.stack[-1].label == "spawn dream wash"
         assert "dream" in patches.spec_names(pre.graph.spec)
-        assert rig.reg["dream.mix"].value == pytest.approx(0.31)
+        assert rig.reg["fx.dream.k"].value == pytest.approx(0.31)
         # D2: the patch's own wires and nothing else; every port an open pin
         new = set(wires(rig)) - set(wired)
         assert new == {tuple(w.values()) for w in pre.graph.spec.to_json()["wires"]
                        if tuple(w.values()) in new}
-        assert ("dream", "composite.2.over") in new or ("dream", "composite.over") in new
+        assert ("dream", "hueturn.image") in new
         assert not any(a in {s for s, _ in wired} for a, _ in new)
         group = pre.groups[-1]
         assert {p["id"] for p in group["ports"]} >= {"in", "out"}
         assert files(rig.lib.home) == home
         u.undo()
         assert state(rig) == before
-        assert rig.reg["dream.mix"].value == pytest.approx(mix)
     finally:
         undo.install(None)
 

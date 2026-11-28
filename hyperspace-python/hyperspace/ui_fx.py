@@ -38,7 +38,7 @@ Gone with the stack (plan 33 T7, row 341): the chip grid and its
 drag-to-reorder, the placed grid, the order slider, the ONTO chips, the
 faces lines and `fx.select`.
 
-A function over the Panel, like ui_lookback: no state of its own, and a
+A function over the Panel, like ui_lfo: no state of its own, and a
 save of this file lands live (hotreload.MODULES). The effects are whatever
 the loaded graph holds of the files in shaders/fx/, so the page draws from
 the graph and the live FxState rather than a fixed id list.

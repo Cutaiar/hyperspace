@@ -2017,8 +2017,8 @@ def test_deleting_a_window_unwires_it(tmp_path):
 
 def test_the_picker_groups_by_primitive(tmp_path):
     """The picker in the owner's groups: starters ▸ (plan 36 T5), then scene ▸,
-    pictures ▸ (plan 90 H2: the look-back's group retired, the dream in
-    pictures), media ▸ (the channels, 2026-10-31; the segment)
+    pictures ▸ (plan 90 H2: the look-back's group retired; H3: the dream an
+    effect file among the effects), media ▸ (the channels, 2026-10-31; the segment)
     and masks ▸ (plan 39 T5), the effect files, a slot on each effect
     instance in the section (plan 89) — each item's group `PICKER_GROUP[kind]`."""
     section = {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
@@ -2032,7 +2032,6 @@ def test_the_picker_groups_by_primitive(tmp_path):
         ("scene", None, "scene"), ("shape", None, "shape"), ("hands", None, "hands"),
         ("layer", None, "hands layer"), ("guide", None, "hands guide"),
         ("backdrop", None, "backdrop"),
-        ("dream", None, "dream"),
         ("pattern", None, "faces pattern"), ("composite", None, "composite"),
         ("switch", None, "switch"),
         ("channels", "pattern.media", "faces media"), ("channels", "backdrop.image", "backdrop"),
@@ -2590,8 +2589,9 @@ def test_a_group_member_dropped_out_onto_a_cable_leaves_and_splices(rig, monkeyp
 def test_insert_node_from_the_cable_menu(rig):
     """`ui_graph.insert_node`: a composite asked its inlet, then spliced
     where the menu opened; a delay in one call; `insert_items` disables
-    the dream the section has (plan 90 H2: the look-back it disabled is
-    retired); the effect wrapper still stands."""
+    a single-instance node the section has (plan 90 H3: the dream it
+    disabled is an effect, any number of them); the effect wrapper still
+    stands."""
     st, view, gs = _two_cable_rig(rig)
     c = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
     assert ui_graph.insert_node(rig.panel, c, "composite", at=(321.0, 654.0)) is None
@@ -2609,10 +2609,10 @@ def test_insert_node_from_the_cable_menu(rig):
     assert ui_graph.insert_node(rig.panel, c, "delay", at=(1.0, 2.0)) is None
     assert wires_of(rig.lib) >= {("acid", "delay.image"), ("delay", "composite.over")}
     e = ui_graph.render_edit(rig.panel)
-    assert {k: why for k, _, why in graphview.insert_items(e)}["dream"] is None
-    assert e.add_node("dream") is None
+    assert {k: why for k, _, why in graphview.insert_items(e)}["backdrop"] is None
+    assert e.add_node("backdrop") is None
     items = {k: why for k, _, why in graphview.insert_items(e)}
-    assert items["dream"] == "Dream is in the graph already: drag it onto the cable"
+    assert items["backdrop"] == "Backdrop is in the graph already: drag it onto the cable"
     assert items["composite"] is None and items["pattern"] is None
     assert e.insert_node(c, "channel") == graphview.CHANNEL_INSERT
     assert e.insert_node(c, "composite") == graphview.PICK_INLET.format(

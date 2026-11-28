@@ -56,7 +56,6 @@ from . import (
     ui_kit,
     ui_lfo,
     ui_loadable,
-    ui_lookback,
     ui_media,
     ui_menu,
     ui_pad,
@@ -869,6 +868,8 @@ META_SECTIONS = ("output", "audio", "analyzer", "hands")
 # look off air's routes. The owner accepts this (2026-11-06, row 790) and wants it said.
 VIDEO_SOUND_REACHES = "Off air reacts to on air's video sound."
 
+# (plan 90 H3: `lookback`'s slot is kept — the page retired into the FX pane,
+# so it shows fx: `ui_pane.RETIRED_SLOTS`)
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
              "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist",
              "fractal"]
@@ -1046,7 +1047,7 @@ class Panel:
         # GRAPH frames every node in what the pane leaves of the canvas when it opens
         # and on every load (`ui_graph.ask_fit`), never closer than the start zoom
         self.graph_fit = True
-        self.dream_error = ""  # set by app.py: why the dream worker is off (SYSTEM, LOOKBACK)
+        self.dream_error = ""  # set by app.py: why the dream worker is off (SYSTEM, the dream's node)
         self.watchdog = None   # set by app.py (watchdog.Watchdog): the stall log line
         self.render_watch = None   # set by app.py (watchdog.RenderWatch): the red banner
         self.midi = None      # set by app.py when an adapter is up (midi.MidiIO)
@@ -2773,7 +2774,7 @@ class Panel:
                                                "window", imgui.get_content_region_avail().x))
         imgui.dummy(imgui.ImVec2(0, 2))
 
-    # ---- plan 35 U: the pages' graph edits (OUTPUT, LOOKBACK) ----
+    # ---- plan 35 U: the pages' graph edits (OUTPUT) ----
 
     def _graph_edit(self, fn, key: str) -> None:
         """Page edit `fn(edit)` on the loaded patch's graph — GRAPH's own
@@ -3012,8 +3013,6 @@ class Panel:
         if self.reg.get("world.reset") is not None:     # plan 59: the world's offsets, the meta controller's
             self._button("world.reset", "Reset world")
 
-    def _page_lookback(self, dt: float) -> None:
-        ui_lookback.page(self, dt)     # the frame history and its composite
 
     def _page_audio(self, dt: float) -> None:
         a = self.audio
@@ -3476,7 +3475,7 @@ class Panel:
             except Exception as e:  # noqa: BLE001 — the banner must not take the panel down
                 out.append(f"render watch: {type(e).__name__}: {e}"[:160])
         if self.dream_error and not getattr(self, "_dream_waved", False):
-            out.append(self.dream_error)        # dismissible: SYSTEM and LOOKBACK keep it
+            out.append(self.dream_error)        # dismissible: SYSTEM and the dream's node keep it
         return out
 
     def dismiss_alerts(self) -> None:

@@ -243,15 +243,16 @@ def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
     app = _app_with(tmp_path, "acid-scene", doc)
     said = M.MIGRATED_NOTE.format(old="hyperspace.preset/2", new=SAVED)
     # (not a problem; plan 86: an old file's depths said; plan 90 H2: its look-back
-    # is public parts now, said)
+    # is public parts now, said; H3: and its dream, said)
     assert app.loaded_patch.migrated == said
     rest = unrescaled(app.loaded_patch.notes)
-    assert len(rest) == 1 and rest[0].startswith("lookback is public parts now (plan 90)")
+    assert len(rest) == 2 and rest[0].startswith("lookback is public parts now (plan 90)")
+    assert rest[1].startswith("dream is public parts now (plan 90)")
     # (the strip says a load's first note before the migration line, `_warn`: this
     # fixture is from before the effect tapers, so its rescaled depths, plan 86;
-    # the look-back's note the one more)
+    # the look-back's and the dream's notes the two more)
     assert app.lib.warning == (f"{app.lib.warning.split()[0]} acid-scene: "
-                               f"{app.loaded_patch.notes[0]} (+1 more)")
+                               f"{app.loaded_patch.notes[0]} (+2 more)")
     assert app.loaded_patch.document("acid-scene")["schema"] == SAVED
 
 
@@ -360,7 +361,8 @@ def test_every_corpus_loadable_is_its_sources_seven_and_round_trips(tmp_path):
         assert [n for n in notes if "plan 90" not in n] == [], path.name
         assert bool(notes) == held, path.name
         if not held:
-            assert json.loads(again) == M.lookbacks(json.loads(data))[0], path.name
+            # (plan 90 H3: and the dream's old ids gone, `graphmigrate.dreams`)
+            assert json.loads(again) == M.dreams(M.lookbacks(json.loads(data))[0])[0], path.name
         assert b"dream.echo_mix" not in again and b'"lookback' not in again, path.name
         (tmp_path / f"g{k}.json").write_bytes(again)
         twice, notes2, _ = headless.resave(tmp_path / f"g{k}.json", tmp_path / f"h{k}")

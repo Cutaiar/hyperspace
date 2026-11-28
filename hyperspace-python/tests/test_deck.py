@@ -51,7 +51,6 @@ from hyperspace.hotreload import MODULES
 from hyperspace.learn import Learn
 from hyperspace.library import LOADABLE, Library, Marks
 from hyperspace.loadable import LoadedPatch
-from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Registry, build_registry, part_of
@@ -63,7 +62,7 @@ FRAMES = 120
 SETTLE = math.ceil(undo.SETTLE_S / DT) + 3      # frames that close an undo step
 
 
-def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
+def old_boot(home, show: str | None = None, *, fx=None, ghost=None):
     """`tests/test_undo.boot` as it was at 749be48, before `Deck.build` —
     verbatim but for one line: the envelope bank and the sequencer are
     kept in names (`envs`, `seq`) so their state can be compared; the
@@ -77,7 +76,6 @@ def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     view = ViewState()
     lib = Library(home, period=0.0)
     reg = build_registry(view, control, audio, lib.install,
-                         dream=dream if dream is not None else DreamState(),
                          fx=fx if fx is not None else FxState(),
                          ghost=ghost if ghost is not None else GhostState())
     lib.on_layout("band", control.apply_layout)
@@ -638,16 +636,15 @@ def test_the_band_hooks_are_the_meta_and_two_decks_leave_them_once(tmp_path, mon
 
 def test_a_renderer_and_a_stand_in_state_together_are_refused(tmp_path):
     """With a renderer the deck's params drive the renderer's own states;
-    a `dream` / `fx` / `ghost` handed in beside it would be dropped, so
+    an `fx` / `ghost` handed in beside it would be dropped, so
     `build` refuses it before building anything."""
     import pytest
 
     lib = Library(seed(tmp_path / "home"), period=0.0)
     chain = Analyzer(Analyser())
-    renderer = SimpleNamespace(dreamer=SimpleNamespace(state=DreamState()),
-                               fx=SimpleNamespace(state=FxState()),
+    renderer = SimpleNamespace(fx=SimpleNamespace(state=FxState()),
                                ghost=SimpleNamespace(state=GhostState()))
-    for kw in ({"dream": DreamState()}, {"fx": FxState()}, {"ghost": GhostState()},
+    for kw in ({"fx": FxState()}, {"ghost": GhostState()},
                {"fx": FxState(), "ghost": GhostState()}):
         with pytest.raises(ValueError, match=", ".join(kw)):
             Deck.build(library=lib, control=Control(chain), audio=SimpleNamespace(chain=chain),

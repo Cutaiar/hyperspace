@@ -3,7 +3,7 @@
 
 The worker's own recipe (dream.py) on a still frame at 256 px, the
 defaults (k 0.05, two passes of strength 0.03, jitter 8, one scale),
-for `--frames` frames, tiles in the layer menu's order (lookback.
+for `--frames` frames, tiles in the layer menu's order (dreamhook.
 LAYER_INFO) with each name under its tile, and each layer's median ms
 per frame printed. `--input render` is a rotating 24-cell through the real
 renderer (standalone GL context, no window), cropped to the shape;
@@ -35,6 +35,16 @@ if str(ROOT) not in sys.path:
 
 W, H = 1280, 820
 TILE_W, CAP, COLS = 300, 28, 6
+# the old content mask's blur and gain (plan 90 H3: retired from the worker — the
+# dream's gate is its input's alpha now; the sheet keeps the look it was made with)
+MASK_BLUR, MASK_GAIN = 9, 4.0
+
+
+def echo_size(res: int, w: int, h: int) -> tuple[int, int]:
+    """`res` on the short side, the aspect kept, 8-px rounded (the old dream.res)."""
+    if w >= h:
+        return max(8, round(res * w / h / 8) * 8), res
+    return res, max(8, round(res * h / w / 8) * 8)
 
 
 def rendered(res: int):
@@ -43,13 +53,12 @@ def rendered(res: int):
 
     from hyperspace.graph import Wiring
     from hyperspace.graphmigrate import wired_wiring
-    from hyperspace.lookback import DreamState, echo_size
     from hyperspace.render import Renderer
     from hyperspace.view import ViewState
 
     ctx = moderngl.create_context(standalone=True)
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
-    r = Renderer(ctx, DreamState(on=False))
+    r = Renderer(ctx)
     # plan 36 T3: a bare renderer draws the app's empty frame; the
     # tool's own wiring is today's frame (render.render_offscreen's)
     r.wiring = wired_wiring(Wiring())
@@ -81,7 +90,7 @@ def main() -> None:
     from PIL import Image, ImageDraw, ImageFont
 
     from hyperspace import dream
-    from hyperspace.lookback import LAYER_INFO, echo_size
+    from hyperspace.dreamhook import LAYER_INFO
 
     dev = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     ew, eh = echo_size(args.res, W, H)
@@ -96,9 +105,9 @@ def main() -> None:
     else:
         src = rendered(args.res)
         frame = torch.from_numpy(np.array(src)).permute(2, 0, 1)[None].float().div(255).to(dev)
-        lum = F.avg_pool2d(frame.mean(1, keepdim=True), dream.MASK_BLUR, stride=1,
-                           padding=dream.MASK_BLUR // 2)
-        mask = (lum * dream.MASK_GAIN).clamp(0, 1)
+        lum = F.avg_pool2d(frame.mean(1, keepdim=True), MASK_BLUR, stride=1,
+                           padding=MASK_BLUR // 2)
+        mask = (lum * MASK_GAIN).clamp(0, 1)
         ys, xs = np.nonzero(mask[0, 0].cpu().numpy() > 0.05)
         box = (max(0, xs.min() - 6), max(0, ys.min() - 6), min(ew, xs.max() + 6),
                min(eh, ys.max() + 6))

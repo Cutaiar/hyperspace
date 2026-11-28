@@ -118,7 +118,6 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("view", "view", ("view",), _paged("view")),
     ("fractal", "fractal", ("view",), _paged("fractal")),
     ("fx", "fx", ("fx",), _fx),
-    ("lookback", "lookback", ("dream",), _paged("lookback")),
     ("faces", "faces", ("pattern",), _paged("faces")),
     ("media", "media", ("media", "backdrop"), _paged("media")),
     ("lfo", "lfo", ("lfo", "tempo"), _paged("lfo")),
@@ -187,10 +186,16 @@ def write_key(machine, key: str, value, who: str = "panel") -> None:
 
 # ---------------------------------------------------------------- the view
 
+# a retired page's slot (its index stays, `ui.PAGE_KEYS`) → the section it
+# retired into (plan 90 H3: the LOOKBACK page into fx, row 1185)
+RETIRED_SLOTS = {"lookback": "fx"}
+
+
 def section_of(page: str | None) -> str:
-    """The view `ui.PAGE_KEYS`' name `page` shows: the section of its name,
-    the selection for GRAPH's (the canvas is always there), or for a name
-    that is no section."""
+    """The view `ui.PAGE_KEYS`' name `page` shows: the section of its name
+    (a retired page's, the one it retired into), the selection for GRAPH's
+    (the canvas is always there), or for a name that is no section."""
+    page = RETIRED_SLOTS.get(page, page) if isinstance(page, str) else page
     return page if page in KEYS else SELECTION
 
 

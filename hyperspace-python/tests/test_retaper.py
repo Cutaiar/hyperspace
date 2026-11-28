@@ -308,7 +308,8 @@ def test_an_old_loadable_loads_as_the_tool_rewrites_it(tmp_path):
     app (`LoadedPatch.load_doc` converts, and says so: plan 86) and saves
     byte for byte as the tool writes it — which is the corpus file itself —
     less the retired look-back knobs it names (plan 90 H2: with no look-back
-    they drew nothing, and the load drops them quietly; the tool leaves them)."""
+    they drew nothing, and the load drops them quietly; the tool leaves them)
+    and the old dream's (H3: off and undriven, it drew nothing either)."""
     t = _tool()
     data = (CORPUS / "party-acid.json").read_bytes()
     doc = json.loads(data)
@@ -324,9 +325,10 @@ def test_an_old_loadable_loads_as_the_tool_rewrites_it(tmp_path):
     old.write_text(loadable.dumps(doc))
     again, notes, _ = headless.resave(old, tmp_path / "scratch")
     _, moved = retaper_depths(json.loads(old.read_text()), FxState().files)
-    lean, gone = re.subn(rb'^ *"dream\.(?:echo_mix|fade|echoes|gap|occlude)": [^\n]*,\n', b"",
+    # (plan 90 H2, H3: every `dream.*` goes, the dream off and undriven)
+    lean, gone = re.subn(rb'^ *"dream\.[a-z_]+": [^\n]*,\n', b"",
                          data, flags=re.MULTILINE)
-    assert gone == 5
+    assert gone == 23
     assert again == lean and notes == [loadable.retaper_note(moved)] and len(moved) == 4
     out, change = t.retaper(json.loads(old.read_text()), FxState().files, file=old.name)
     assert t.text(out).encode() == data and len(change.rows) == 4

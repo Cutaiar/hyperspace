@@ -5318,8 +5318,6 @@ def home_page(n: graphview.VNode):
         return ("media", None)
     if isinstance(r, rgraph.Shape):
         return ("view", None)
-    if isinstance(r, rgraph.DreamNode):
-        return ("lookback", None)
     if isinstance(r, (rgraph.Hands, rgraph.HandsLayer, rgraph.Readout)):
         return ("hands", None)
     if isinstance(r, rgraph.Output) or n.kind == "output":

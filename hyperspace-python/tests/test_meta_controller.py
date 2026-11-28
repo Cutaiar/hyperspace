@@ -596,7 +596,8 @@ def test_main_points_every_holder_and_moves_none():
     assert ".point_panel(" not in src and "meta.point(" not in src
     (check,) = [n for n in ast.walk(ast.parse(src))
                 if isinstance(n, ast.FunctionDef) and n.name == "dream_check"]
-    assert "on.reg" in ast.unparse(check) and " reg[" not in ast.unparse(check)
+    # (plan 90 H3: the deck it landed on, by its graph: `deck.dreams`)
+    assert "deck_dreams(on)" in ast.unparse(check) and " reg[" not in ast.unparse(check)
 
 
 def test_the_experiments_are_on_both_decks_over_one_state(rig):

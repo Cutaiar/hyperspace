@@ -33,7 +33,6 @@ from .envelope import Envelopes
 from .fx import FxState
 from .lfo import LFOs
 from .library import Library, slug
-from .lookback import DreamState
 from .params import build_registry
 from .sequencer import Sequencer
 from .view import ViewState
@@ -51,7 +50,7 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
     lib = Library(home, period=0.0) if machine == home else Library(
         home, machine=machine, period=0.0)
     reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.install,
-                         dream=DreamState(), fx=FxState())
+                         fx=FxState())
     control.library = lib
     clock = tempo.Clock(now=lambda: 0.0)
     lfos, envs, seq = LFOs(), Envelopes(), Sequencer()

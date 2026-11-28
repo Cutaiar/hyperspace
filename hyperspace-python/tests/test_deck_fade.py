@@ -390,7 +390,8 @@ class _R:
     def __init__(self, log, name, boom=False):
         self.log, self.name, self.boom = log, name, boom
         self.ghost = SimpleNamespace(source=None)
-        self.dreamer = SimpleNamespace(source=None, state=SimpleNamespace(on=True))
+        self.fx = SimpleNamespace(dream_source=None,
+                                  state=SimpleNamespace(values={"dream": {"on": True}}))
         self.calls = []
         self.released = 0
 
@@ -419,12 +420,17 @@ class _Target:
         self.released += 1
 
 
+def _spec(dreams=True):
+    """A stand-in graph spec: a `dream` instance of the effect, or none."""
+    effects = [SimpleNamespace(name="dream", file="dream")] if dreams else []
+    return SimpleNamespace(effects=effects, wires=[])
+
+
 def _fade(log, k=0.0, dream=None, boom=False, dreams=True):
     a = SimpleNamespace(renderer=_R(log, "a"), reg="reg a", view="view a")
     b = SimpleNamespace(renderer=_R(log, "b", boom), reg="reg b", view="view b",
-                        graph=SimpleNamespace(spec=SimpleNamespace(
-                            dream="node" if dreams else None)))
-    a.renderer.dreamer.source = dream
+                        graph=SimpleNamespace(spec=_spec(dreams)))
+    a.renderer.fx.dream_source = dream
     return Fade(a, b, Mix(xfade=k), None, dream=dream, make_target=_Target)
 
 
@@ -481,17 +487,17 @@ def test_the_one_dream_worker_is_lent_for_the_fade_and_back():
     fade = _fade([], 0.0, dream=worker)
     a, b = fade.on_air.renderer, fade.off_air.renderer
     fade.lend()
-    assert lent == [] and a.dreamer.source is worker and b.dreamer.source is None
+    assert lent == [] and a.fx.dream_source is worker and b.fx.dream_source is None
     fade.mix.xfade = LEND_AT
     fade.lend()
     fade.lend()                                  # once a fade
-    assert lent == ["reg b"] and b.dreamer.source is worker and a.dreamer.source is None
+    assert lent == ["reg b"] and b.fx.dream_source is worker and a.fx.dream_source is None
     fade.mix.xfade = 0.02                        # on its way down: still lent
     fade.lend()
     assert lent == ["reg b"]
     fade.mix.xfade = 0.0
     fade.lend()
-    assert lent == ["reg b", "reg a"] and a.dreamer.source is worker and b.dreamer.source is None
+    assert lent == ["reg b", "reg a"] and a.fx.dream_source is worker and b.fx.dream_source is None
 
 
 def test_a_fader_at_the_bottom_of_its_throw_leaves_the_dream_alone():
@@ -501,7 +507,7 @@ def test_a_fader_at_the_bottom_of_its_throw_leaves_the_dream_alone():
     for k in (0.02, 0.0, 0.04, 0.0, 0.01):
         fade.mix.xfade = k
         fade.lend()
-    assert lent == [] and fade.on_air.renderer.dreamer.source is worker
+    assert lent == [] and fade.on_air.renderer.fx.dream_source is worker
 
 
 @pytest.mark.parametrize("why", ["no node", "off"])
@@ -509,10 +515,10 @@ def test_a_deck_with_no_dream_on_never_takes_the_worker(why):
     lent = []
     worker = SimpleNamespace(lend=lent.append)
     fade = _fade([], 1.0, dream=worker, dreams=why != "no node")
-    fade.off_air.renderer.dreamer.state.on = why != "off"
-    fade.on_air.renderer.dreamer.source = worker
+    fade.off_air.renderer.fx.state.values["dream"]["on"] = why != "off"
+    fade.on_air.renderer.fx.dream_source = worker
     fade.lend()
-    assert lent == [] and fade.on_air.renderer.dreamer.source is worker
+    assert lent == [] and fade.on_air.renderer.fx.dream_source is worker
 
 
 def test_back_at_0_the_system_page_forgets_the_fade_and_its_targets_go():
@@ -538,54 +544,48 @@ def test_back_at_0_the_system_page_forgets_the_fade_and_its_targets_go():
 def test_no_worker_is_nothing_to_lend():
     fade = _fade([], 0.5)
     fade.lend()
-    assert fade.lent_to is fade.off_air and fade.off_air.renderer.dreamer.source is None
+    assert fade.lent_to is fade.off_air and fade.off_air.renderer.fx.dream_source is None
 
 
-def test_the_worker_lent_dreams_with_the_borrowers_params_from_a_clean_buffer():
-    """`DreamWorker.lend` (dream.py): `dream.*` read from the borrower, the
-    dream restarts on the new deck's frame, and nothing of the last deck's is
-    published as the new deck's."""
+def test_the_worker_lent_dreams_from_a_clean_buffer():
+    """`DreamWorker.lend` (dream.py): the knobs come with each picture (the
+    effect's `fx.dream.*`), the dream restarts on the new deck's frame, and
+    nothing of the last deck's is published as the new deck's."""
     dream = pytest.importorskip("hyperspace.dream")
     pytest.importorskip("torch")
-    from hyperspace.params import Registry
+    from hyperspace.dreamhook import params_of
 
-    def reg_with(k):
-        r = Registry()
-        r.continuous("dream.k", "k", lambda: k, lambda v: None, lo=0.0, hi=1.0, group="dream")
-        return r
-
-    a, b = reg_with(0.5), reg_with(0.25)
-    w = dream.DreamWorker(a, {"device": "cpu"}, step_fn=lambda D, mask, p: D, start=False)
+    held = params_of({"k": 0.5})
+    w = dream.DreamWorker({"device": "cpu"}, step_fn=lambda rgb, gate, p: rgb, start=False)
     shape = (4, 4, 4)
-    w.submit(np.full(shape, 255, dtype=np.uint8), 1)
+    w.submit(np.full(shape, 255, dtype=np.uint8), 1, held)
     job = w._pending
     assert job.params["k"] == 0.5
     w._pending = None
     w._process(job)
     assert w.latest() is not None
     assert float(w.D.mean()) > 0.9
-    w.submit(np.full(shape, 255, dtype=np.uint8), 2)
+    w.submit(np.full(shape, 255, dtype=np.uint8), 2, held)
     stale = w._pending
-    w.lend(b)
-    assert w._pending is None and w.latest() is None and w.reg is b
+    w.lend("reg b")
+    assert w._pending is None and w.latest() is None
     w._process(stale)
     assert w.latest() is None                    # the last deck's frame publishes nothing
     # …nor one lent out from under it mid-step: the check is at the publish
-    w.submit(np.full(shape, 255, dtype=np.uint8), 3)
+    w.submit(np.full(shape, 255, dtype=np.uint8), 3, held)
     running, w._pending = w._pending, None
     step = w.step_fn
 
-    def lent_mid_step(D, mask, p):
-        w.lend(b)
-        return step(D, mask, p)
+    def lent_mid_step(rgb, gate, p):
+        w.lend("reg b")
+        return step(rgb, gate, p)
 
     w.step_fn = lent_mid_step
     w._process(running)
     w.step_fn = step
     assert w.latest() is None
-    w.submit(np.zeros(shape, dtype=np.uint8), 1)
+    w.submit(np.zeros(shape, dtype=np.uint8), 1, held)
     job = w._pending
-    assert job.params["k"] == 0.25
     w._pending = None
     w._process(job)
     assert float(w.D.mean()) == 0.0              # afresh from the borrower's frame
@@ -817,7 +817,7 @@ def _object_state(deck) -> dict:
 
     r = deck.renderer
     return {"params": {p.id: repr(p.get()) for p in deck.reg if part_of(p) == "patch"},
-            "ghost": asdict(r.ghost.state), "dream": repr(asdict(r.dreamer.state)),
+            "ghost": asdict(r.ghost.state), "fx": repr(r.fx.state.values),
             "view": repr(deck.view.pose())}
 
 

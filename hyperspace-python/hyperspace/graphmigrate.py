@@ -48,8 +48,10 @@ from __future__ import annotations
 
 import copy
 import functools
+import itertools
 import math
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -1116,10 +1118,10 @@ def section_of(wiring: G.Wiring) -> dict:
             held.add(name)
     # the nodes the wires name that a `Wiring` holds no entry of (the old
     # graph made each from its name): plan 33's switches, plan 34's delays,
-    # resizes, look-back frames and the dream
+    # resizes and look-back frames (plan 90 H3: the dream is an effect now)
     others: list[tuple[str, Any]] = [("composite", c) for c in wiring.composites]
     made = {"switch": G.SwitchAt, "delay": G.DelayAt, "resize": G.ResizeAt,
-            "echo": G.EchoAt, "dream": lambda n: G.DreamAt()}
+            "echo": G.EchoAt}
     seen: set[str] = set()
     for w in wiring.wires:
         for name in (w.src, w.node):
@@ -1165,17 +1167,24 @@ def wired_of(wiring: G.Wiring, *, placements: bool = True, look: str = "off") ->
 
 def split_retired(section: Any, look: str, rest: dict | None = None) -> Any:
     """`split_lookback`, and the look-back it drew made public parts
-    (`retire_lookbacks`, plan 90 H2): an old frame as the whole ladder ends
+    (`retire_lookbacks`, plan 90 H2; its dream too, `retire_dreams`, H3): an old frame as the whole ladder ends
     it — `rest` the file's other keys (its values and rows: a contrast a row
     drives brings a Curve), none for a caller with no file (`wired_of`). A
     section with no look-back as it is."""
     out = split_lookback(section, look)
     if not isinstance(out, dict):
         return out
-    nodes, wires, _, _, keys, notes = retire_lookbacks(
+    nodes, wires, rest2, _, keys, notes = retire_lookbacks(
         list(out.get("nodes") or []), list(out.get("wires") or []), dict(rest or {}),
         keys=list(out.get(G.KEYS_KEY) or []))
-    if not notes:
+    # (plan 90 H3: and the dream it drew, its parts — on where the look was the
+    # dream drawn, whatever a caller with no file's values says)
+    if look == "dream":
+        vals = dict(rest2.get("values") or {})
+        vals.setdefault("dream.on", True)
+        rest2 = {**rest2, "values": vals}
+    nodes, wires, _, _, keys, dream_notes = retire_dreams(nodes, wires, rest2, keys=keys)
+    if not notes and not dream_notes:
         return out
     return {**out, "nodes": nodes, "wires": wires, **({G.KEYS_KEY: keys} if keys else {})}
 
@@ -1568,7 +1577,7 @@ def split_lookback(section: Any, look: str) -> Any:
         if src is not None:
             lay.append(_w(src, "dream.image"))
     if dreaming and not dreams:
-        nodes.append(G.DreamAt().to_json())
+        nodes.append({"kind": "dream"})      # (an old dream: `dreams` makes it its parts)
     at = {"lookback.image": lay, "lookback.capture": record, "lookback.cover": covered}
     out: list[Any] = []
     for w in raw:
@@ -2318,7 +2327,7 @@ LB_KEY = {"measure": 0, "level": 0.0, "soft": 1.0, "keep": True, "feather": 0.0,
 # the owner (2026-11-26): a look-back's parts land folded in one group of that
 # name — detail on demand, picture in and picture out (a loadable patch's
 # `groups`; a fragment's spawn groups what it lands itself)
-LB_GROUP = "look-back"
+LB_GROUP = "trail"                 # (plan 90 Q29: was "look-back")
 LB_ROLES = ("curve", "fade", "resize", "delay", "deep", "trail", "matte", "cut", "cover_cut")
 LOOKBACK_NOTE = ("{old} is public parts now (plan 90): {chain} — the same look, what it keeps "
                  "at 512 on the long side; save to keep it")
@@ -2614,47 +2623,10 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
     # patch's other effects drawn as they were: off where the master was, their
     # own mix × the master's)
     if parts:
-        was_on = values.get("fx.on", True) is not False
-        mix = _num(values.get("fx.mix", 1.0), 1.0)
-        ours = {f"fx.{n}." for role in parts.values() for k, n in role.items()
-                if k in ("curve", "fade", "trail")} | {f"fx.{r}." for r in pins.values()}
-        # (every effect the patch declares — an entry, a wire's end, a slot's
-        # wire: Devin on #522 — but the parts)
-        declared = {G.instance_name(e["file"], e.get("instance", 1)
-                                    if isinstance(e.get("instance", 1), int) else 1)
-                    for e in out_nodes if isinstance(e, dict) and e.get("kind") == "effect"
-                    and isinstance(e.get("file"), str)}
-        for w in wires:
-            for end in (w.get("from"), w.get("to")) if isinstance(w, dict) else ():
-                if isinstance(end, str) and _lb_of(end) is None:
-                    base = _effect_base(end)
-                    if G.wire_node_kind(base, wired=True) == "effect":
-                        declared.add(base)
-        others = sorted(declared - {p[3:-1] for p in ours})
-        what = []
-        if not was_on:
-            values["fx.on"] = True
-            what.append("fx.on is on")
-            for o in others:
-                if values.get(f"fx.{o}.on") is True:
-                    values[f"fx.{o}.on"] = False
-        if mix != 1.0:
-            values["fx.mix"] = 1.0
-            what.append(f"fx.mix is 1 (was {mix:g})")
-            for o in others:
-                # (a file's own mix where the patch names none: its spec's)
-                own = values.get(f"fx.{o}.mix")
-                if not isinstance(own, (int, float)) or isinstance(own, bool):
-                    own = (specs or {}).get(G.split_instance(o)[0],
-                                            (DEFAULT_ORDER, DEFAULT_MIX))[1]
-                values[f"fx.{o}.mix"] = own * mix
-        if what:
-            notes.append(LB_MASTER_NOTE.format(what=" and ".join(what)))
-            for key in _ROW_LISTS:
-                for r in rest.get(key) or []:
-                    if isinstance(r, dict) and r.get("target") in ("fx.on", "fx.mix"):
-                        notes.append(LB_MASTER_ROW_NOTE.format(
-                            row=f"{key} {r.get('source')} → {r['target']}", pid=r["target"]))
+        ours = {n for role in parts.values() for k, n in role.items()
+                if k in ("curve", "fade", "trail")} | set(pins.values())
+        master_switch(values, ours, out_nodes, wires, rest, specs, notes, LB_MASTER_NOTE,
+                      LB_MASTER_ROW_NOTE, skip=lambda end: _lb_of(end) is not None)
     # every other look-back knob (a patch with none, or `dream.<n>.*` of none drawn)
     for k in list(values):
         got = _lb_param(k)
@@ -2879,6 +2851,56 @@ def retire_lookbacks(nodes: list, wires: list, rest: dict, ports: list | None = 
     return out_nodes, out_wires, out_rest, out_ports, out_keys, notes
 
 
+def master_switch(values: dict, ours: set[str], out_nodes: list, wires: list, rest: dict,
+                  specs: Specs | None, notes: list[str], note: str, row_note: str,
+                  skip: Callable[[str], bool] = lambda end: False) -> None:
+    """Plan 90 (H2, H3): parts that are effects where the retired node drew
+    whatever `fx.on` and `fx.mix` said — so the master is on and at 1, and the
+    patch's other effects drawn as they were: off where the master was, their
+    own mix × the master's (a file's own mix where the patch names none: its
+    spec's). `ours` the parts' instance names; `skip` a wire end that is no
+    effect of the patch (the retired node's own). In place, said (`note`,
+    `row_note` for a row on the master)."""
+    was_on = values.get("fx.on", True) is not False
+    mix = _num(values.get("fx.mix", 1.0), 1.0)
+    # (every effect the patch declares — an entry, a wire's end, a slot's
+    # wire: Devin on #522 — but the parts)
+    declared = {G.instance_name(e["file"], e.get("instance", 1)
+                                if isinstance(e.get("instance", 1), int) else 1)
+                for e in out_nodes if isinstance(e, dict) and e.get("kind") == "effect"
+                and isinstance(e.get("file"), str)}
+    for w in wires:
+        for end in (w.get("from"), w.get("to")) if isinstance(w, dict) else ():
+            if isinstance(end, str) and not skip(end):
+                base = _effect_base(end)
+                if G.wire_node_kind(base, wired=True) == "effect":
+                    declared.add(base)
+    others = sorted(declared - ours)
+    what = []
+    if not was_on:
+        values["fx.on"] = True
+        what.append("fx.on is on")
+        for o in others:
+            if values.get(f"fx.{o}.on") is True:
+                values[f"fx.{o}.on"] = False
+    if mix != 1.0:
+        values["fx.mix"] = 1.0
+        what.append(f"fx.mix is 1 (was {mix:g})")
+        for o in others:
+            own = values.get(f"fx.{o}.mix")
+            if not isinstance(own, (int, float)) or isinstance(own, bool):
+                own = (specs or {}).get(G.split_instance(o)[0],
+                                        (DEFAULT_ORDER, DEFAULT_MIX))[1]
+            values[f"fx.{o}.mix"] = own * mix
+    if what:
+        notes.append(note.format(what=" and ".join(what)))
+        for key in _ROW_LISTS:
+            for r in rest.get(key) or []:
+                if isinstance(r, dict) and r.get("target") in ("fx.on", "fx.mix"):
+                    notes.append(row_note.format(
+                        row=f"{key} {r.get('source')} → {r['target']}", pid=r["target"]))
+
+
 def lookbacks(doc: dict, specs: Specs | None = None) -> tuple[dict, list[str]]:
     """A whole loadable patch with every look-back made public parts
     (`retire_lookbacks`) — (the document, the notes); the document itself
@@ -2893,6 +2915,450 @@ def lookbacks(doc: dict, specs: Specs | None = None) -> tuple[dict, list[str]]:
         list(section.get("nodes", [])), list(section.get("wires", [])), rest,
         keys=list(keys) if isinstance(keys, list) else None, specs=specs)
     # (a patch with no look-back may still lose its retired knobs, quietly)
+    if (not notes and rest2 == rest and nodes == section.get("nodes", [])
+            and wires == section.get("wires", [])):
+        return doc, []
+    out = {k: doc[k] for k in ("schema", "name") if k in doc}
+    out.update(rest2)
+    others = {k: v for k, v in section.items() if k not in ("nodes", "wires", G.KEYS_KEY)}
+    graph = {**others, "nodes": nodes, "wires": wires}
+    if keys2:
+        graph[G.KEYS_KEY] = keys2
+    out["graph"] = graph
+    return out, notes
+
+
+# ---------------------------------------------------------------- the dream (plan 90 H3)
+
+# Plan 90 H3: a saved dream (`{"kind": "dream"}`) opens as public parts folded
+# in one group (Q31): Resize (keyed: brightness is coverage, as the old mask)
+# → Dream (the effect file, its picture alone: mix 1) → Hue turn, Palette,
+# Curve — each only where its old value is off neutral or a row drives it →
+# Fade (level mix × (1 − darken)) → Composite over the dream's input. The
+# worker's ids move to the effect's (`dream.layer` → `fx.dream.layer` …), the
+# look's onto its parts; `res` is the Resize's size, `mask_decay` merges into
+# Hold (said), a tint from the scene keeps its chosen colour (Q16, said). A
+# dream that was off, with nothing to turn it on, drew nothing: left out,
+# said. Keyed on the file, run as the ladder's last step after the look-back's
+DREAM_KEYS = ("on", "mix", "darken", "contrast", "hue", "sat", "tint", "tint_from",
+              "tint_hue", "tint_sat", "res", "steps", "step", "k", "layer", "octaves",
+              "mask_decay", "jitter")
+DREAM_DEFAULTS: dict[str, Any] = {
+    "on": False, "mix": 0.7, "darken": 0.1, "contrast": 1.0, "hue": 0.0, "sat": 1.0,
+    "tint": 0.0, "tint_from": 0, "tint_hue": 200.0, "tint_sat": 1.0, "res": 2, "steps": 2,
+    "step": 0.03, "k": 0.05, "layer": 1, "octaves": 0, "mask_decay": 0.99, "jitter": 8}
+DREAM_WORKER = ("steps", "step", "jitter", "layer", "octaves")   # the same on the effect
+DREAM_GONE = ("res", "mask_decay", "tint_from")                  # no part takes them
+OLD_K = (0.03, 0.3)              # dream.k ran 0.03 … 0.3, linear
+NEW_K = (0.03, 1.0)              # Hold runs 0.03 … 1, log
+OLD_HUE = (-180.0, 180.0)
+# the old res (the short side: 128, 192, 256, 384) at the rig's 16 : 10 → the
+# Resize's long side nearest it (`view.RESIZE_SIDES`: 4 is 256, 5 is 512; Q18)
+DREAM_RESIZE = {0: 4, 1: 4, 2: 5, 3: 5}
+# the old mask was clamp(4 · blur(brightness)): black is clear on the peak, linear,
+# from 0 to a quarter — premultiplied (keep colour off): the copy laid over its own
+# source by its alpha is that source again, so a dream with no result (off, no
+# worker, waiting) leaves its picture as it was (Devin on #523); the old output was
+# the dream × its mask, premultiplied too
+DREAM_KEY = {"measure": 0, "level": 0.0, "soft": 0.25, "keep": False, "feather": 0.0,
+             "invert": False, "ramp": 1}
+DREAM_GROUP = "dream"            # Q29
+DREAM_ROLES = ("resize", "dream", "hueturn", "palette", "curve", "darken", "fade", "composite")
+DREAM_NOTE = ("{old} is public parts now (plan 90): {chain} — the dream on a picture of its "
+              "own size, its colour and grade on it alone, laid over its input at its mix; "
+              "save to keep it")
+DREAM_OFF_NOTE = ("{old} was off, with nothing to turn it on: it drew nothing, so it is left "
+                  "out (plan 90) — spawn the dream starter to dream again")
+DREAM_SECOND_NOTE = "{old} is a second dream, which drew nothing (one live dream): left out"
+DREAM_LINGER_NOTE = ("{old}'s linger (dream.mask_decay {was:g}) merges into Hold "
+                     "(fx.{dream}.k): its region fades with its picture now (plan 90 Q17)")
+DREAM_SCENE_TINT_NOTE = ("{old}'s tint from the scene keeps its chosen colour ({hue:g}°) on "
+                         "{palette} (plan 90 Q16)")
+DREAM_ROW_NOTE = "{row}: {old} has no part now (plan 90): left out"
+DREAM_DARKEN_NOTE = ("{row}: dream.darken is the level of its Fade now ({fade}.level, 1 − "
+                     "darken): the row is kept, its throw runs the other way (plan 90)")
+DREAM_K_NOTE = ("{row}: dream.k ran 0.03 … 0.3 straight, Hold 0.03 … 1 on a log throw — the row "
+                "is kept, its throw spans the new range (plan 90)")
+DREAM_MASTER_NOTE = ("the dream's parts are effects, which fx.on and fx.mix switch and scale: "
+                     "{what} so it draws as it did; the patch's other effects are as they were "
+                     "(plan 90)")
+DREAM_MASTER_ROW_NOTE = ("{row}: {pid} switched the effects alone; it switches the dream's "
+                         "parts too now (plan 90)")
+_DREAM_PARAM = re.compile(r"^dream\.(" + "|".join(DREAM_KEYS) + r")$")
+
+
+def _dream_key(pid: Any) -> str | None:
+    """`dream.<key>` → its key; None for any other id."""
+    m = _DREAM_PARAM.match(pid) if isinstance(pid, str) else None
+    return m.group(1) if m else None
+
+
+def _k_norm(k: float) -> float:
+    """Hold's fader position for value `k` (log over `NEW_K`)."""
+    k = min(max(float(k), NEW_K[0]), NEW_K[1])
+    return math.log(k / NEW_K[0]) / math.log(NEW_K[1] / NEW_K[0])
+
+
+def _dream_entry_of(e: Any) -> int | None:
+    """An old dream entry's instance; None for any other entry."""
+    if isinstance(e, dict) and e.get("kind") == "dream":
+        n = e.get("instance", 1)
+        return n if isinstance(n, int) and not isinstance(n, bool) else 1
+    return None
+
+
+def retire_dreams(nodes: list, wires: list, rest: dict, ports: list | None = None,
+                  keys: list | None = None, specs: Specs | None = None
+                  ) -> tuple[list, list, dict, list | None, list | None, list[str]]:
+    """A section's `nodes` and `wires`, the document's other keys (`rest`), a
+    fragment's `ports` and the section's `keys`, with an old dream made public
+    parts (module notes above) — (nodes, wires, rest, ports, keys, notes).
+    Pure: the inputs are untouched, and handed back as they are when no old
+    dream or `dream.*` id is named. A patch with none loses the old ids
+    quietly (a row on one is left out, said)."""
+    olds = [n for n in (_dream_entry_of(e) for e in nodes) if n is not None]
+    values = dict(rest.get("values") or {}) if isinstance(rest.get("values"), dict) else {}
+    named = [k for k in values if _dream_key(k) is not None]
+    row_named = any(_dream_key(r.get("target")) is not None
+                    for key in _ROW_LISTS for r in (rest.get(key) or []) if isinstance(r, dict))
+    macro_named = any(_dream_key(sub.get("base")) is not None
+                      for m in ((rest.get("macros") or {}).values()
+                                if isinstance(rest.get("macros"), dict) else ())
+                      if isinstance(m, dict)
+                      for sub in (m.get("subs") or []) if isinstance(sub, dict))
+    if not olds and not named and not row_named and not macro_named:
+        return nodes, wires, rest, ports, keys, []
+    notes: list[str] = []
+    out_nodes = [e for e in nodes if _dream_entry_of(e) is None]
+    for n in olds:
+        if n != 1:
+            notes.append(DREAM_SECOND_NOTE.format(old=f"dream.{n}"))
+    seconds = {f"dream.{n}" for n in olds if n != 1}
+
+    def old_end(end: Any) -> str | None:
+        """A wire's end on the old dream → its port ("" its picture); None not."""
+        if end == "dream":
+            return ""
+        if end == "dream.image":
+            return "image"
+        return None
+
+    def second(end: Any) -> bool:
+        return isinstance(end, str) and (end in seconds or end.rpartition(".")[0] in seconds)
+
+    wires = [w for w in wires if not (isinstance(w, dict)
+                                      and (second(w.get("from")) or second(w.get("to"))))]
+    v = {k: values.get(f"dream.{k}", DREAM_DEFAULTS[k]) for k in DREAM_KEYS}
+    driven: set[str] = set()
+    for key in _ROW_LISTS:
+        for r in rest.get(key) or []:
+            if isinstance(r, dict) and isinstance(r.get("target"), str):
+                driven.add(r["target"])
+    for m in (rest.get("macros") or {}).values() if isinstance(rest.get("macros"), dict) else ():
+        for sub in (m.get("subs") or []) if isinstance(m, dict) else []:
+            if isinstance(sub, dict) and isinstance(sub.get("base"), str):
+                driven.add(sub["base"])
+    src = next((w.get("from") for w in wires if isinstance(w, dict)
+                and old_end(w.get("to")) == "image"), None)
+    port_in = [p for p in ports or [] if isinstance(p, dict) and old_end(p.get("to")) == "image"]
+    role: dict[str, str] = {}
+    new_wires: list[dict] = []
+    built = 1 in olds and (v["on"] is not False or "dream.on" in driven)
+    if 1 in olds and not built:
+        notes.append(DREAM_OFF_NOTE.format(old="dream"))
+    if built:
+        taken: set[str] = set()
+        for e in out_nodes:
+            if not isinstance(e, dict):
+                continue
+            n = e.get("instance", 1)
+            n = n if isinstance(n, int) else 1
+            if isinstance(e.get("file"), str):
+                taken.add(G.instance_name(e["file"], n))
+            elif isinstance(e.get("kind"), str):
+                taken.add(G.instance_name(e["kind"], n))
+        for w in wires:
+            for end in (w.get("from"), w.get("to")) if isinstance(w, dict) else ():
+                if isinstance(end, str) and old_end(end) is None:
+                    taken.add(_effect_base(end))
+
+        def free(kind: str) -> str:
+            n = 1
+            while G.instance_name(kind, n) in taken:
+                n += 1
+            name = G.instance_name(kind, n)
+            taken.add(name)
+            return name
+
+        def entry(kind: str, name: str, effect: bool) -> dict:
+            _, n = G.split_instance(name)
+            out: dict[str, Any] = {"kind": "effect", "file": kind} if effect else {"kind": kind}
+            if n != 1:
+                out["instance"] = n
+            return out
+
+        hue, sat = _num(v["hue"], 0.0), _num(v["sat"], 1.0)
+        tint, contrast = _num(v["tint"], 0.0), _num(v["contrast"], 1.0)
+        hue_on = hue != 0.0 or sat != 1.0 or bool({"dream.hue", "dream.sat"} & driven)
+        tint_on = tint != 0.0 or bool({"dream.tint", "dream.tint_hue", "dream.tint_sat"} & driven)
+        curve_on = contrast != 1.0 or "dream.contrast" in driven
+        # (the darken a Fade of its own, the mix another: a desk row on either
+        # moves one level — Devin on #523)
+        darken_on = _num(v["darken"], 0.1) != 0.0 or "dream.darken" in driven
+        role["resize"] = free("resize")
+        role["dream"] = free("dream")
+        for want, kind in ((hue_on, "hueturn"), (tint_on, "palette"), (curve_on, "curve")):
+            if want:
+                role[kind] = free(kind)
+        if darken_on:
+            role["darken"] = free("fade")
+        role["fade"] = free("fade")
+        role["composite"] = free("composite")
+        out_nodes.append(entry("resize", role["resize"], False))
+        for kind in ("dream", "hueturn", "palette", "curve", "darken", "fade"):
+            if kind in role:
+                out_nodes.append(entry("fade" if kind == "darken" else kind, role[kind], True))
+        out_nodes.append(entry("composite", role["composite"], False))
+        chain = [r for r in ("resize", "dream", "hueturn", "palette", "curve", "darken", "fade")
+                 if r in role]
+        for a, b in itertools.pairwise(chain):
+            new_wires.append(_w(role[a], f"{role[b]}.image"))
+        new_wires.append(_w(role["fade"], f"{role['composite']}.over"))
+        if src is not None:
+            new_wires = [_w(src, f"{role['resize']}.image"),
+                         _w(src, f"{role['composite']}.under"), *new_wires]
+        keys = sorted({*(keys or []), role["resize"]})
+        # (the parts' values)
+        r, d, f = role["resize"], role["dream"], role["fade"]
+        res = round(_num(v["res"], 2))
+        values.update({f"{r}.size": DREAM_RESIZE.get(res, 5), f"{r}.aspect": 0, f"{r}.fit": 0,
+                       f"{r}.filter": 0})
+        values.update({f"key.{r}.{k}": x for k, x in DREAM_KEY.items()})
+        values.update({f"fx.{d}.on": bool(v["on"]), f"fx.{d}.mix": 1.0, f"fx.{d}.blend": 0,
+                       f"fx.{d}.k": min(max(_num(v["k"], 0.05), NEW_K[0]), NEW_K[1])})
+        for k in DREAM_WORKER:          # (whole numbers but strength: an old file's 2.0 is 2)
+            values[f"fx.{d}.{k}"] = (_num(v[k], DREAM_DEFAULTS[k]) if k == "step"
+                                     else round(_num(v[k], DREAM_DEFAULTS[k])))
+        mix, darken = _num(v["mix"], 0.7), _num(v["darken"], 0.1)
+        values.update({f"fx.{f}.on": True, f"fx.{f}.mix": 1.0,
+                       f"fx.{f}.level": min(max(mix, 0.0), 1.0)})
+        if "darken" in role:
+            dk = role["darken"]
+            values.update({f"fx.{dk}.on": True, f"fx.{dk}.mix": 1.0,
+                           f"fx.{dk}.level": min(max(1.0 - darken, 0.0), 1.0)})
+        if "hueturn" in role:
+            h = role["hueturn"]
+            values.update({f"fx.{h}.on": True, f"fx.{h}.mix": 1.0, f"fx.{h}.speed": 0.0,
+                           f"fx.{h}.turn": hue % 360.0, f"fx.{h}.sat": sat,
+                           f"fx.{h}.paint": 0.0})
+        if "palette" in role:
+            pl = role["palette"]
+            values.update({f"fx.{pl}.on": True, f"fx.{pl}.mix": tint, f"fx.{pl}.mode": 1,
+                           f"fx.{pl}.anchors": 2, f"fx.{pl}.a1_hue": 0.0,
+                           f"fx.{pl}.a1_sat": 0.0, f"fx.{pl}.a1_val": 0.0,
+                           f"fx.{pl}.a2_hue": _num(v["tint_hue"], 200.0),
+                           f"fx.{pl}.a2_sat": _num(v["tint_sat"], 1.0),
+                           f"fx.{pl}.a2_val": 1.0})
+            if round(_num(v["tint_from"], 0)) == 1:
+                notes.append(DREAM_SCENE_TINT_NOTE.format(old="dream", palette=pl,
+                                                          hue=_num(v["tint_hue"], 200.0)))
+        if "curve" in role:
+            c = role["curve"]
+            values.update({f"fx.{c}.on": True, f"fx.{c}.mix": 1.0, f"fx.{c}.invert": 0,
+                           f"fx.{c}.shape": min(max(
+                               math.log(max(contrast, 1e-6)) / math.log(4.0), -1.0), 1.0)})
+        if _num(v["mask_decay"], 0.99) != DREAM_DEFAULTS["mask_decay"]:
+            notes.append(DREAM_LINGER_NOTE.format(old="dream", was=_num(v["mask_decay"], 0.99),
+                                                  dream=d))
+        labels = {"resize": "Resize, keyed", "dream": "Dream", "hueturn": "Hue turn",
+                  "palette": "Palette", "curve": "Curve", "darken": "Fade (darken)",
+                  "fade": "Fade (mix)",
+                  "composite": "Composite over"}
+        notes.append(DREAM_NOTE.format(old="dream", chain=" → ".join(
+            f"{labels[k]} ({role[k]})" for k in DREAM_ROLES if k in role)))
+        ours = {role[k] for k in ("dream", "hueturn", "palette", "curve", "darken", "fade")
+                if k in role}
+        master_switch(values, ours, out_nodes, wires, rest, specs, notes, DREAM_MASTER_NOTE,
+                      DREAM_MASTER_ROW_NOTE, skip=lambda end: old_end(end) is not None)
+    for k in list(values):
+        if _dream_key(k) is not None:
+            del values[k]
+    end = role.get("composite") if built else src
+    out_wires: list[Any] = []
+    for w in wires:
+        if not isinstance(w, dict):
+            out_wires.append(w)
+            continue
+        if old_end(w.get("to")) is not None:
+            continue
+        if old_end(w.get("from")) is not None:
+            if end is None:
+                continue
+            w = {**w, "from": end}
+        out_wires.append(w)
+    out_wires = [*new_wires, *out_wires]
+
+    def retarget(pid: str) -> str | None:
+        """Where a row on old dream knob `pid` goes; None: left out."""
+        k = _dream_key(pid)
+        if not built or k is None or k in DREAM_GONE:
+            return None
+        if k in DREAM_WORKER or k in ("on", "k"):
+            return f"fx.{role['dream']}.{k}"
+        return {"mix": f"fx.{role['fade']}.level", "darken": f"fx.{role.get('darken')}.level",
+                "contrast": f"fx.{role.get('curve')}.shape",
+                "hue": f"fx.{role.get('hueturn')}.turn", "sat": f"fx.{role.get('hueturn')}.sat",
+                "tint": f"fx.{role.get('palette')}.mix",
+                "tint_hue": f"fx.{role.get('palette')}.a2_hue",
+                "tint_sat": f"fx.{role.get('palette')}.a2_sat"}[k]
+
+    k0 = min(max(_num(v["k"], 0.05), OLD_K[0]), OLD_K[1])
+
+    def norm(k: str, x: float) -> float:
+        """An old fader position of knob `k` as the new part's."""
+        if k == "darken":
+            return 1.0 - x
+        if k == "hue":
+            return (x + 0.5) % 1.0
+        if k == "k":
+            return _k_norm(OLD_K[0] + x * (OLD_K[1] - OLD_K[0]))
+        if k == "contrast":
+            c = LB_CONTRAST[0] + x * (LB_CONTRAST[1] - LB_CONTRAST[0])
+            return (math.log(c) / math.log(4.0) + 1.0) / 2.0
+        return x
+
+    def depth(k: str, x: float) -> float:
+        """An old push depth of knob `k` as the new part's, about the file's value."""
+        if k == "darken":
+            return -x
+        if k == "k":     # (d norm = d k / (k ln(hi / lo)), at the file's k)
+            return x * (OLD_K[1] - OLD_K[0]) / (k0 * math.log(NEW_K[1] / NEW_K[0]))
+        if k == "contrast":
+            c0 = min(max(_num(v["contrast"], 1.0), LB_CONTRAST[0]), LB_CONTRAST[1])
+            return x * (LB_CONTRAST[1] - LB_CONTRAST[0]) / (c0 * math.log(4.0)) / 2.0
+        return x
+
+    def row(r: Any, where: str) -> list:
+        if not isinstance(r, dict) or _dream_key(r.get("target")) is None:
+            return [r]
+        old = r["target"]
+        k = _dream_key(old)
+        label = f"{where} {r.get('source')} → {old}"
+        new = retarget(old)
+        if new is None or k is None:
+            notes.append(DREAM_ROW_NOTE.format(row=label, old=old))
+            return []
+        out = {**r, "target": new}
+        op, val = r.get("op"), r.get("value", 1.0)
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            if op == "push":
+                out["value"] = round(depth(k, val), 6)
+            elif op == "set":
+                out["value"] = round(norm(k, val), 6)
+        if k == "k" and op in ("abs", "abs14", "position", "push"):
+            notes.append(DREAM_K_NOTE.format(row=label))
+        if k == "darken" and op in ("abs", "abs14", "position"):
+            notes.append(DREAM_DARKEN_NOTE.format(row=label, fade=f"fx.{role['darken']}"))
+        return [out]
+
+    def macros(ms: dict) -> dict:
+        out = {}
+        for mid, m in ms.items():
+            if not isinstance(m, dict) or not isinstance(m.get("subs"), list):
+                out[mid] = m
+                continue
+            subs = []
+            for sub in m["subs"]:
+                k = _dream_key(sub.get("base")) if isinstance(sub, dict) else None
+                if k is None:
+                    subs.append(sub)
+                    continue
+                new = retarget(sub["base"])
+                if new is None:
+                    notes.append(DREAM_ROW_NOTE.format(row=f"macros {mid}", old=sub["base"]))
+                    continue
+                ns = {**sub, "base": new}
+                for e in ("from", "to"):
+                    x = sub.get(e, 0.0 if e == "from" else 1.0)
+                    if isinstance(x, (int, float)) and not isinstance(x, bool):
+                        ns[e] = round(norm(k, x), 6)
+                subs.append(ns)
+            out[mid] = {**m, "subs": subs}
+        return out
+
+    out_rest: dict[str, Any] = {}
+    for k, x in rest.items():
+        if k == "values":
+            out_rest[k] = values
+        elif k in _ROW_LISTS and isinstance(x, list):
+            out_rest[k] = [y for r in x for y in row(r, k)]
+        elif k == "macros" and isinstance(x, dict):
+            out_rest[k] = macros(x)
+        else:
+            out_rest[k] = x
+    if "values" not in rest and values:
+        out_rest["values"] = values
+    out_ports = None
+    if ports is not None:
+        out_ports = []
+        ids = {p.get("id") for p in ports if isinstance(p, dict)}
+        for p in ports:
+            if not isinstance(p, dict):
+                out_ports.append(p)
+                continue
+            if old_end(p.get("to")) == "image":
+                if not built:
+                    continue
+                out_ports.append({**p, "to": f"{role['resize']}.image"})
+                n = 2
+                while f"in.{n}" in ids:
+                    n += 1
+                ids.add(f"in.{n}")
+                out_ports.append({**p, "id": f"in.{n}", "to": f"{role['composite']}.under"})
+                continue
+            if old_end(p.get("from")) is not None:
+                if end is None or (not built and src is None):
+                    continue
+                if not built and port_in:
+                    continue        # (a port straight through: nothing inside to hold)
+                out_ports.append({**p, "from": end})
+                continue
+            out_ports.append(p)
+    if ports is None and built:
+        groups = list(out_rest.get(GROUPS_KEY) or []) if isinstance(
+            out_rest.get(GROUPS_KEY), list) else []
+        groups = [dict(g) if isinstance(g, dict) else g for g in groups]
+        members = [f"render:{role[r]}" for r in DREAM_ROLES if r in role]
+        held = {m for g in groups if isinstance(g, dict) for m in g.get("nodes") or ()}
+        # (a group of the file held the old dream — its node is the effect's now,
+        # where the effect kept its name: the parts join it)
+        home = next((g for g in groups if isinstance(g, dict)
+                     and "render:dream" in (g.get("nodes") or ())
+                     and role["dream"] == "dream"), None)
+        if home is not None:
+            home["nodes"] = [*home["nodes"], *(m for m in members if m not in held)]
+        else:
+            top = max((group_number(g.get("id")) for g in groups if isinstance(g, dict)),
+                      default=0)
+            groups.append({"id": f"group.{top + 1}", "name": DREAM_GROUP,
+                           "nodes": [m for m in members if m not in held], "open": False})
+        out_rest[GROUPS_KEY] = groups
+    return out_nodes, out_wires, out_rest, out_ports, keys, notes
+
+
+def dreams(doc: dict, specs: Specs | None = None) -> tuple[dict, list[str]]:
+    """A whole loadable patch with an old dream made public parts
+    (`retire_dreams`) — (the document, the notes); the document itself when
+    it names none."""
+    section = doc.get("graph") if isinstance(doc, dict) else None
+    if not isinstance(section, dict) or not isinstance(section.get("nodes", []), list) \
+            or not isinstance(section.get("wires", []), list):
+        return doc, []
+    rest = {k: v for k, v in doc.items() if k not in ("graph", "schema", "name")}
+    keys = section.get(G.KEYS_KEY)
+    nodes, wires, rest2, _, keys2, notes = retire_dreams(
+        list(section.get("nodes", [])), list(section.get("wires", [])), rest,
+        keys=list(keys) if isinstance(keys, list) else None, specs=specs)
     if (not notes and rest2 == rest and nodes == section.get("nodes", [])
             and wires == section.get("wires", [])):
         return doc, []
@@ -2998,4 +3464,7 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     # plan 90 (H2): the look-back made public parts, whatever the version
     doc, lb_notes = lookbacks(doc, specs)
     migrate_notes += lb_notes
+    # plan 90 (H3): a saved dream made public parts, last, whatever the version
+    doc, dream_notes = dreams(doc, specs)
+    migrate_notes += dream_notes
     return Forward(doc, tuple(notes), tuple(migrate_notes), migrated, frozenset(from_show))

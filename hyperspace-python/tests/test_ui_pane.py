@@ -22,7 +22,6 @@ WIDE = (1600, 900)      # a page wider than ui_graph.WIDE: the pane beside the c
 # a control each section draws, by the id its page draws it under
 SECTION_IDS = {
     "loadable": "new##new",           # the preset strip's new chip (ui_loadable.strip)
-    "lookback": "dream.on",
     "faces": "view.faces",
     "analyzer": "scene.select",
 }
@@ -111,12 +110,6 @@ def test_a_click_in_a_section_moves_the_param_as_on_its_page(pane):
     was = bool(r.reg["view.faces"].base)
     d.run(d.click("view.faces"), d.park())
     assert bool(r.reg["view.faces"].base) is (not was)
-    _only(r, "lookback")
-    d.step = _tall_driver(r, None).step     # (a pane tall enough for the whole section)
-    d.run(d.wait(3))
-    was = bool(r.reg["dream.on"].base)
-    d.run(d.click("dream.on"), d.park())
-    assert bool(r.reg["dream.on"].base) is (not was)
 
 
 def test_a_selection_shows_in_the_selection_view(pane):
@@ -358,7 +351,7 @@ def test_one_body_at_a_time_draws_with_no_conflicting_ids(pane, monkeypatch):
 def test_the_pages_still_draw_their_bodies(pane):
     """Each section's body is its page's draw, at the pane's height."""
     r, _d = pane
-    for key in ("loadable", "lookback", "faces", "analyzer"):
+    for key in ("loadable", "faces", "analyzer"):
         frame(r.panel, key)
         frame(r.panel, key)
         assert PAGE_KEYS[r.panel.page] == key and _st(r)["pane_drawn"] == [key]
@@ -551,27 +544,6 @@ def test_each_stage2_section_draws_in_the_pane_and_nothing_passes_its_edge(
         assert not spills, sorted(spills)
 
 
-def test_the_redrawn_lookback_section_keeps_inside_the_narrowest_pane(tmp_path, monkeypatch):
-    """The LOOKBACK section — the dream alone (plan 90 H2: the look-back's
-    half retired) — at `SIDE_MIN`: every control inside the pane, the cells
-    one to a row there."""
-    with build_rig(tmp_path) as r:
-        r.panel.desk = False
-        r.panel.page = PAGE_KEYS.index("graph")
-        d = _tall_driver(r, monkeypatch)
-        d.run(d.wait(2))
-        st = _st(r)
-        st["side_w"] = ui_graph.SIDE_MIN
-        _only(r, "lookback")
-        d.run(d.wait(3))
-        assert _spills(d, st) == []
-        on, mix = d.rect("dream.on"), d.rect("dream.mix")
-        darken, contrast = d.rect("dream.darken"), d.rect("dream.contrast")
-        assert on[1] < mix[1]
-        tops = [r_[1] for r_ in (on, mix, darken, contrast)]
-        assert len(set(tops)) == len(tops)                   # one to a row
-
-
 def test_the_media_grid_goes_four_to_a_row_and_the_seq_grid_thins_in_the_pane(
         tmp_path, monkeypatch):
     """Plan 49 stage 2's two hard ones, at `SIDE_MIN`: MEDIA's eight
@@ -626,9 +598,11 @@ def test_every_page_slot_but_graph_and_playlist_is_a_section():
     """No page is left to switch to: the table `ui.page` indexes names a
     section in every slot, GRAPH's being the selection (the canvas is always
     drawn). The playlist's slot is kept for saved bindings, but it is the meta
-    controller's now (row 858: GRAPH's deck row), so it shows the selection."""
+    controller's now (row 858: GRAPH's deck row), so it shows the selection;
+    the LOOKBACK page's is kept too, and shows fx, where it retired (row 1185)."""
     assert ui_pane.section_of("graph") == "selection"
-    assert {k for k in PAGE_KEYS if ui_pane.section_of(k) != k} == {"graph", "playlist"}
+    assert {k for k in PAGE_KEYS if ui_pane.section_of(k) != k} == {"graph", "playlist",
+                                                                    "lookback"}
     assert set(ui_pane.KEYS) - set(PAGE_KEYS) == {"selection"}
 
 
@@ -727,46 +701,6 @@ def test_the_system_page_says_what_the_shown_section_costs(pane, monkeypatch):
         frame(r.panel, "system")
     assert any(s.startswith("side pane: ") for s in said)
     frame(r.panel, "graph")
-
-
-def test_a_node_heads_hover_is_the_whole_band(tmp_path, monkeypatch):
-    """Review fix 2: the look-back's and the dream's heads say what they
-    are, and the dream where its worker is set up, wherever on the band
-    the mouse is — not only over the word at its right."""
-    from hyperspace import ui, ui_lookback
-    with build_rig(tmp_path) as r:
-        r.panel.desk = False
-        r.panel.page = PAGE_KEYS.index("graph")
-        d = _tall_driver(r, monkeypatch)
-        d.run(d.wait(2))
-        _only(r, "lookback")
-        d.run(d.wait(3))
-        said: list[str] = []
-        real = ui.tooltip
-        monkeypatch.setattr(ui, "tooltip", lambda text: (said.append(text), real(text)))
-        x0, y0, x1, y1 = d.rect("dream.on")        # the dream's head: just right of its tick
-        d.run(d.move((x1 + 30, (y0 + y1) / 2)), d.wait(1))
-        assert any(t.startswith("dream: " + ui_lookback.PORTS["dream"]) and "[dream]" in t
-                   for t in said)
-        said.clear()
-        x0, y0, _x1, y1 = d.rect("dream.on")
-        d.run(d.move(((x0 + _x1) / 2, (y0 + y1) / 2)), d.wait(1))   # over the tick itself
-        assert not any(t.startswith("dream: ") for t in said)
-
-
-def test_the_lookback_asks_the_graph_its_names_once_per_graph(tmp_path, monkeypatch):
-    """Review fix 6: `learn.drawn_of` walks the wires; the page asks it
-    once for each graph loaded, not every frame."""
-    from hyperspace import learn, ui_lookback
-    asked = []
-    real = learn.drawn_of
-    monkeypatch.setattr(learn, "drawn_of", lambda spec: (asked.append(spec), real(spec))[1])
-    with build_rig(tmp_path) as r:
-        for _ in range(4):
-            frame(r.panel, "lookback")
-        assert len(asked) == 1
-        spec = ui_lookback._spec(r.panel)
-        assert ui_lookback._drawn(r.panel, spec) is ui_lookback._drawn(r.panel, spec)
 
 
 def test_the_track_readout_is_measured_as_printed(tmp_path, monkeypatch):

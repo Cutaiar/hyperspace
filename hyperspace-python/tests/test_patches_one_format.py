@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import CORPUS, seed
+from conftest import CORPUS
 
 from hyperspace import headless, patches
 from hyperspace.library import PATCHES, LibraryError
@@ -109,15 +109,16 @@ def test_the_loadables_ladder_is_one_function_the_load_reads_through():
     `graphmigrate.forward`, which the load runs: an `/11` with no copy comes
     out as it was but for its schema (plan 89's `/12`) and the retired
     look-back knobs it names with no look-back to draw them (plan 90 H2:
-    dropped quietly, the ladder's last step), a `/2` `/7`-shaped and said."""
+    dropped quietly) and, H3, the old dream's, off and undriven (the ladder's
+    last steps), a `/2` `/7`-shaped and said."""
     import inspect
 
     from hyperspace import graphmigrate, loadable
     assert "graphmigrate.forward(" in inspect.getsource(loadable.LoadedPatch.load_doc)
     new = json.loads((CORPUS / "loadable" / "party-trip.json").read_text())
     fwd = graphmigrate.forward(copy.deepcopy(new), {})
-    kept = {k: v for k, v in new["values"].items() if not graphmigrate.lookback_retired(k)}
-    assert len(kept) == len(new["values"]) - 5            # echo_mix, fade, echoes, gap, occlude
+    kept = {k: v for k, v in new["values"].items() if not k.startswith("dream.")}
+    assert len(kept) == len(new["values"]) - 23           # every `dream.*`, the look-back's five too
     assert fwd.doc == {**new, "schema": graphmigrate.TWELVE_SCHEMA, "values": kept}
     assert fwd.notes == () and fwd.migrated == "" and fwd.migrate_notes == ()
     old = json.loads((ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
@@ -129,9 +130,9 @@ def test_the_loadables_ladder_is_one_function_the_load_reads_through():
 
 # ---------------------------------------------------------------- end to end
 
-# a retired look-back knob's line in a saved file (plan 90 H2)
-RETIRED_LINE = re.compile(rb'^ *"dream\.(?:echo_mix|fade|echoes|gap|occlude)": [^\n]*,\n',
-                          re.MULTILINE)
+# a retired look-back knob's line in a saved file (plan 90 H2), and every old
+# dream knob's (H3: a dream off and undriven is left out, its ids with it)
+RETIRED_LINE = re.compile(rb'^ *"dream\.[a-z_]+": [^\n]*,\n', re.MULTILINE)
 
 
 def test_a_corpus_loadable_round_trips_byte_for_byte_through_the_one_loader(tmp_path):
@@ -140,56 +141,61 @@ def test_a_corpus_loadable_round_trips_byte_for_byte_through_the_one_loader(tmp_
         again, notes, _ = headless.resave(CORPUS / "loadable" / f"{name}.json", tmp_path / str(k))
         # (plan 89: an `/11` with no copy resaves as itself but for the schema;
         # plan 90 H2: less its retired look-back knobs, which drew nothing
-        # with no look-back — dropped quietly)
+        # with no look-back — dropped quietly; H3: and its old dream's, off)
         data = data.replace(b'"hyperspace.loadable/11"', b'"hyperspace.loadable/12"')
         data, gone = RETIRED_LINE.subn(b"", data)
-        assert gone == 5, name
+        assert gone == 23, name
         assert again == data and notes == [], (name, notes)
 
 
+# (plan 90 H3: the dream group's presets are retired — tests/test_dream_migration.py —
+# so a module preset here is the camera's)
+WIDE = {"schema": "hyperspace.patch/3", "name": "wide", "group": "camera",
+        "values": {"camera.zoom": 0.7}}
+OLD_CAMERA = {"schema": "hyperspace.preset/1", "group": "camera", "name": "OLD",
+              "note": "a module patch from before plan 50", "values": {"camera.zoom": 0.4}}
+
+
 def test_a_module_preset_lives_and_loads_as_a_patch_of_its_group(tmp_path):
-    seed(tmp_path, "dream")
+    folder = tmp_path / PATCHES / "camera"
+    folder.mkdir(parents=True)
+    (folder / "wide.json").write_text(json.dumps(WIDE))
     app = headless.make_app(tmp_path)
     lib, reg = app.lib, app.reg
-    assert (tmp_path / PATCHES / "dream" / "wake.json").is_file()
-    assert lib.list("dream") == ["default", "tracer-only", "wake"]
+    assert lib.list("camera") == ["wide"]
     # never among the spawnable patches, and refused by name at GRAPH's door
     assert lib.list(PATCHES) == []
-    assert lib.load("dream", "wake") == [] and not lib.warning
-    # (plan 90 H2: its retired look-back knobs land quietly — they drew nothing)
-    assert "dream.echoes" not in reg
-    assert reg["dream.k"].value == pytest.approx(0.08) and reg["dream.mix"].value == pytest.approx(0.5)
-    assert lib.current("dream") == "wake" and not lib.is_dirty("dream")
-    # a save writes the one shape into the group's folder, the old text to the trash
-    reg["dream.mix"].set_value(0.9)
-    path = lib.save_as("dream", "WAKE LOUD")
-    assert path == tmp_path / PATCHES / "dream" / "wake-loud.json"
+    assert lib.load("camera", "wide") == [] and not lib.warning
+    assert reg["camera.zoom"].value == pytest.approx(0.7)
+    assert lib.current("camera") == "wide" and not lib.is_dirty("camera")
+    # a save writes the one shape into the group's folder
+    reg["camera.zoom"].set_value(0.9)
+    path = lib.save_as("camera", "WIDER")
+    assert path == tmp_path / PATCHES / "camera" / "wider.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.patch/3" and doc["group"] == "dream"
-    assert doc["values"]["dream.mix"] == pytest.approx(0.9)
-    assert "dream.echoes" not in doc["values"]
-    assert set(doc) == {"schema", "name", "group", "values"}
+    assert doc["schema"] == "hyperspace.patch/3" and doc["group"] == "camera"
+    assert doc["values"]["camera.zoom"] == pytest.approx(0.9)
+    assert set(doc) == {"schema", "name", "group", "values", "units"}   # (the camera's units)
     assert lib.list(PATCHES) == []
-    with pytest.raises(LibraryError, match="a patch of the dream group"):
+    with pytest.raises(LibraryError, match="a patch of the camera group"):
         shutil.copy(path, tmp_path / PATCHES / "loud.json")
         lib._sync()
         lib.read_patch("loud")
 
 
 def test_an_old_module_preset_in_its_folder_opens_end_to_end(tmp_path):
-    folder = tmp_path / PATCHES / "dream"
+    folder = tmp_path / PATCHES / "camera"
     folder.mkdir(parents=True)
-    (folder / "old.json").write_text(json.dumps(OLD_MODULE))
+    (folder / "old.json").write_text(json.dumps(OLD_CAMERA))
     app = headless.make_app(tmp_path)
-    assert app.lib.list("dream") == ["OLD"]
-    assert app.lib.load("dream", "OLD") == [] and not app.lib.warning
-    assert app.reg["dream.mix"].value == pytest.approx(0.25)
-    assert "dream.echoes" not in app.reg          # (plan 90 H2: retired, landed quietly)
+    assert app.lib.list("camera") == ["OLD"]
+    assert app.lib.load("camera", "OLD") == [] and not app.lib.warning
+    assert app.reg["camera.zoom"].value == pytest.approx(0.4)
     # a re-save writes it in today's words, where it was
-    path = app.lib.overwrite("dream")
+    path = app.lib.overwrite("camera")
     assert path == folder / "old.json"
     saved = json.loads(path.read_text())
-    assert saved["schema"] == "hyperspace.patch/3" and "dream.echoes" not in saved["values"]
+    assert saved["schema"] == "hyperspace.patch/3" and saved["group"] == "camera"
 
 
 def test_an_old_patch_1_reads_as_its_2_through_the_library(tmp_path):
@@ -231,20 +237,22 @@ def test_the_tool_moves_module_presets_and_patch_1_into_the_shape(tmp_path):
     assert sorted((s.relative_to(root).as_posix(), d.relative_to(root).as_posix())
                   for s, d, _ in moves) == [
         ("camera/wide.json", "patches/camera/wide.json"),
-        ("dream/old.json", "patches/dream/old.json"),
         ("patches/acid-wash.json", "patches/acid-wash.json")]
-    assert left == ["fx/wobbly.json: a retired group's — deleted"]
+    # (plan 90 H3: the dream group is retired, as the fx group was)
+    retired = ["dream/old.json: a retired group's — deleted",
+               "fx/wobbly.json: a retired group's — deleted"]
+    assert left == retired
     assert (root / "dream" / "old.json").is_file()            # planning writes nothing
     assert tool.group_write(moves) == []
     assert not (root / "camera").exists()                     # an emptied folder goes
-    assert [p.name for p in (root / "dream").iterdir()] == [".tmp.json"]   # (not emptied)
+    assert sorted(p.name for p in (root / "dream").iterdir()) == [".tmp.json", "old.json"]
     assert (root / "fx" / "wobbly.json").is_file()
     wide = json.loads((root / PATCHES / "camera" / "wide.json").read_text())
     assert wide == {"schema": "hyperspace.patch/3", "name": "Wide", "group": "camera",
                     "values": {"camera.zoom": 0.7}, "units": {"camera.pan": "world"}}
     acid = json.loads((root / PATCHES / "acid-wash.json").read_text())
     assert acid["schema"] == "hyperspace.patch/3"
-    assert tool.group_plan(root) == ([], ["fx/wobbly.json: a retired group's — deleted"])
+    assert tool.group_plan(root) == ([], retired)
     # and the app opens what the step wrote
     app = headless.make_app(root)
     assert app.lib.list("camera") == ["Wide"] and app.lib.load("camera", "Wide") == []
@@ -260,15 +268,16 @@ def test_the_tool_dry_run_writes_nothing_and_apply_backs_up_first(tmp_path, monk
     before = sorted(p.relative_to(root).as_posix() for p in root.rglob("*"))
     assert tool.main(["--library", str(root)]) == 0
     out = capsys.readouterr().out
-    assert "patches to write as hyperspace.patch/3: 3" in out
-    assert "dream/old.json → patches/dream/old.json" in out
+    assert "patches to write as hyperspace.patch/3: 2" in out
+    assert "dream/old.json: a retired group's — deleted" in out        # (plan 90 H3)
     assert sorted(p.relative_to(root).as_posix() for p in root.rglob("*")) == before
     assert tool.main(["--library", str(root), "--apply"]) == 0
     out = capsys.readouterr().out
     (backup,) = [p for p in machine.iterdir() if p.name.startswith(tool.BACKUP_PREFIX)]
     assert (backup / "dream" / "old.json").read_text() == json.dumps(OLD_MODULE)
-    assert "wrote 3 patch(es) as hyperspace.patch/3" in out
-    assert (root / PATCHES / "dream" / "old.json").is_file()
+    assert "wrote 2 patch(es) as hyperspace.patch/3" in out
+    assert (root / PATCHES / "camera" / "wide.json").is_file()
+    assert not (root / PATCHES / "dream").exists()
 
 
 # ---------------------------------------------------------------- review fixes (PR #352)

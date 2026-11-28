@@ -445,7 +445,6 @@ def test_post_pass_off_is_pixel_identical(ctx, samples, bg_alpha):
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h), samples=samples)])
     r = Renderer(ctx)
     r.bg_alpha = bg_alpha
-    assert not r.dreamer.state.on                 # (plan 90 H2: no look-back to be off)
     for shape, faces, pattern, t in ((3, False, 0, 0.0), (10, True, 2, 1.7), (14, True, 5, 0.4)):
         s = ViewState(shape=shape, ang=list(VIEW["ang"]), yaw=VIEW["yaw"], pitch=VIEW["pitch"],
                       faces=faces, pattern=pattern)
@@ -507,10 +506,10 @@ def test_on_reload_rebuilds_the_wire_programs_and_still_draws(ctx):
     w, h = 320, 200
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h))])
     r = Renderer(ctx)
-    keep = (r.dreamer, r.fx, r.cover, r._lbuf, r._pbuf, r._fbuf)
+    keep = (r.fx, r.cover, r._lbuf, r._pbuf, r._fbuf)
     old = (r._lines, r._points, r._cover_prog)
     r.on_reload()
-    assert (r.dreamer, r.fx, r.cover, r._lbuf, r._pbuf, r._fbuf) == keep
+    assert (r.fx, r.cover, r._lbuf, r._pbuf, r._fbuf) == keep
     assert all(a is not b for a, b in zip(old, (r._lines, r._points, r._cover_prog)))
     s = ViewState(shape=10, ang=list(VIEW["ang"]), faces=True, pattern=2)
     _direct(ctx, r, s, fbo, w, h, 0.3)

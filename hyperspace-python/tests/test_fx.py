@@ -245,12 +245,13 @@ moderngl = pytest.importorskip("moderngl")
 W, H = 320, 200
 
 
-def render(ctx, fx: FxState, frames: int = 3) -> np.ndarray:
+def render(ctx, fx: FxState, frames: int = 3, dream=None) -> np.ndarray:
     from hyperspace.graphmigrate import wiring_of
     from hyperspace.render import Renderer
     from hyperspace.view import ViewState
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx, fx=fx)
+    r.fx.dream_source = dream               # (plan 90 H3: the dream's worker, a fake)
     r.wiring = wired_wiring(wiring_of(fx))  # plan 33 R23: the run the effects on make, as a load
     s = ViewState(shape=10, faces=True, pattern=2, bright=1.3)
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
@@ -273,7 +274,7 @@ def test_the_shared_helpers_are_written_once(ctx):
     no uniform); an edit to it counts as a change to every effect."""
     import re
 
-    from hyperspace import glsl, lookback
+    from hyperspace import glsl
     from hyperspace.render import PATTERNS_GLSL
 
     shared = glsl.common()
@@ -282,9 +283,10 @@ def test_the_shared_helpers_are_written_once(ctx):
                 + "\nout vec4 f; void main() { f = vec4(hsv(0.1, 1.0, 1.0), luma(pal(0.0, "
                   "vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0)))); }")
     defs = re.compile(r"(?m)^(?:const\s+\w+\s+(TAU|LUMA)\b|vec3\s+(hsv|hsv2rgb|pal|hue_rotate|rotate_hue)\s*\()")
-    for text in (PATTERNS_GLSL.read_text(), (FX_DIR / "_lib.glsl").read_text(), lookback.post_fs("", lookback.DREAM_FS)):
+    # (plan 90 H3: the dream's shader is an effect file, shaders/fx/dream.glsl)
+    for text in (PATTERNS_GLSL.read_text(), (FX_DIR / "_lib.glsl").read_text(),
+                 (FX_DIR / "dream.glsl").read_text()):
         assert not defs.search(text), defs.search(text).group(0)
-    assert lookback.QUAD_VS is glsl.QUAD_VS
     assert "_common" in FxState()._scan()
     assert glsl.FALLBACK == shared, "glsl.FALLBACK must be the shipped _common.glsl"
 
@@ -320,7 +322,11 @@ def test_each_effect_changes_the_frame(ctx, name):
         st.values[name]["level"] = 0.5
     if name == "curve":                    # plan 90: shape 0 is the picture as it was: bend it
         st.values[name]["shape"] = 0.8
-    img = render(ctx, st)
+    dream = None
+    if name == "dream":                    # plan 90 H3: with no worker it passes through
+        from test_dream_effect import Fake
+        dream = Fake()
+    img = render(ctx, st, dream=dream)
     assert ctx.error == "GL_NO_ERROR"
     diff = np.abs(img[..., :3].astype(int) - base[..., :3]).sum()
     assert diff > W * H * 0.05, f"{name} left the frame (almost) as it was"
@@ -444,16 +450,11 @@ def shell(tmp_path):
     from test_ui_shell import build_rig
 
     from hyperspace.app import CONTROL_SIZE
-    from hyperspace.lookback import DreamState
-
+    
     @contextmanager
     def made():
         st = FxState()
-        dreamer = SimpleNamespace(state=DreamState())
-        # (plan 90 H2: the dream's state is `dreamer.state`; `lookback` the same
-        # object for a rig that still reads the old name)
-        stand_in = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""),
-                                   dreamer=dreamer, lookback=dreamer)
+        stand_in = SimpleNamespace(fx=SimpleNamespace(state=st, error=lambda n: ""))
         with build_rig(tmp_path, renderer=stand_in) as rig:
             imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
             yield rig, st, stand_in

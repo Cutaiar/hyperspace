@@ -55,7 +55,7 @@ its own ladder in `graphmigrate`); a *group* is a patch not yet saved
 (its members and its boundary pins: `groupable` is the canvas's rule,
 `select` the save's); a *patch* is ``hyperspace.patch/2`` — ``/1`` plus
 the optional ``group`` key: a **patch of one param group**
-(``{"group": "dream", "values": {…}}``, no canvas part) is what a module
+(``{"group": "camera", "values": {…}}``, no canvas part) is what a module
 loadable patch was, kept under ``<library>/patches/<group>/`` and opened from that
 group's strip as a spawn that replaces the group's values (`spawn`'s
 `Landing.replaces`). Every fragment comes in through `forward`, the one
@@ -65,18 +65,20 @@ as their ``/2``), so a file of any age reaches `check`, `read` and
 
 **Frame kinds** (wave 3 P1): a patch holds any render node a loadable patch file
 holds but the meta controller's own and the look's one camera — the scene, the shape,
-the backdrop, the pattern, the dream, hands 1, its layer and
+the backdrop, the pattern, hands 1, its layer and
 its guide as well as what `MAY_HOLD` always named — so a "dream + fx +
-composite" patch exists. No schema moves (the file's keys are as they were;
+composite" patch exists (plan 90 H3: the dream is an effect, renamed as
+any is; a second is said by its hook as it runs). No schema moves (the file's keys are as they were;
 an older build's `check` refuses such a file in words). A patch owns of a
 frame kind only that kind's params (`_param_rows`: `rot.*` and most of
-`view.*` the shape's, the dream `dream.*`; `scene.*` is the band scene's and
+`view.*` the shape's; `scene.*` is the band scene's and
 no node's). What can be made twice is renamed as ever (hands 1 lands as
 `hands.2`); what a frame holds one of (`ONE_PER_FRAME`) keeps its name,
 and a host that already has it refuses the spawn in words, nothing landed
-(`Landing.taken`, `Landing.refusal`) — but for the dream (`REPLACEABLE`,
-wave 3 P2): the conflict sheet asks to replace the host's, whose wires and
-values go (`Landing.replacing`, `graphview.Edit.spawn`).
+(`Landing.taken`, `Landing.refusal`) — but for a kind of `REPLACEABLE`
+(wave 3 P2; none since plan 90 H3 made the dream an effect): the conflict
+sheet asks to replace the host's, whose wires and values go
+(`Landing.replacing`, `graphview.Edit.spawn`).
 """
 
 from __future__ import annotations
@@ -111,7 +113,8 @@ MODULE_KIND, MODULE_VERSION = "hyperspace.preset", 1
 # tests/test_format_lane.py holds them equal)
 LOADABLE_KIND = "hyperspace.loadable"
 # plan 50: the key that makes a patch one param group's, its value the
-# registry group (``"dream"``). Such a patch holds `values` — and, for a
+# registry group (``"camera"``; plan 90 H3: a `dream` one is retired, left on
+# disk and never opened — `RETIRED_GROUPS`). Such a patch holds `values` — and, for a
 # group that lays out its own params (the analyzer's bands, `Library.extra`),
 # that group's `layout`: a group patch has no canvas, so the key is the
 # group's — and nothing of the canvas, the rows or the voices
@@ -147,17 +150,17 @@ KEYED = "keys"
 # what is a name but no node of a wired frame (an echo pin, `fx`, `frame`)
 MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "matte", "cut",
             "segment", "hands", "layer", "guide", "scene", "shape", "backdrop", "pattern",
-            "lookback", "dream")
+            "lookback")
 # what a frame holds one of: never renamed by a spawn (`scene.2` is no node;
 # `dream.2` may be declared but no wire may touch it, D2 of plan 36), so a
 # host that already has one refuses the spawn in words (`Landing.taken`).
 # Hands 1 is no such thing — every other hands is a new number — nor is a
 # look-back (`lookback.2`)
-ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern", "dream")
+ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern")
 # (wave 3 P2, row 661) of those, what the conflict sheet may replace rather
 # than refuse. The dream alone for now; a kind added here gets the sheet's row
 # and `Edit.spawn`'s door as they are, fresh values by what the node owns
-REPLACEABLE = ("dream",)
+REPLACEABLE: tuple[str, ...] = ()        # (plan 90 H3: the dream was the one)
 # the render nodes the GRAPH page never deletes and a patch never holds —
 # `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
 # plan 43 C2) and the clouds (the meta controller's, `NOT_REMOVABLE`); the windows are
@@ -189,7 +192,6 @@ NOT_HELD_WORDS = "{name} is no node a patch holds; left out"
 # (a spawn, wave 3 P1) the single-instance nodes the host already has
 TAKEN_WORDS = ("{name} not spawned: this loadable patch already has {nodes}, and a frame holds one "
                "of each — delete it here first; nothing landed")
-SECOND_DREAM_WORDS = "{name} is a second dream, which no wire may touch (one live dream); left out"
 SEQ_WORDS = "the sequencer is the look's one, never a patch's; left out"
 LANE_ENV_WORDS = ("{name} is a sequencer lane's envelope; left out (a patch's envelope "
                   "spawns as {first} or more)")
@@ -315,7 +317,31 @@ def forward(doc: Mapping) -> dict:
             raise ValueError(f"no step from {KIND}/{version}")
         out = step(out)
         version += 1
-    return _retire_lookbacks(_retire_hue_cycle(out))
+    return _retire_dreams(_retire_lookbacks(_retire_hue_cycle(out)))
+
+
+def _retire_dreams(doc: dict) -> dict:
+    """Plan 90 (H3): a fragment holding an old dream with it made public parts,
+    at any version (`graphmigrate.retire_dreams`; keyed on the file)."""
+    nodes, wires = doc.get("nodes"), doc.get("wires")
+    if not isinstance(nodes, list) or not isinstance(wires, list):
+        return doc
+    rest = {k: v for k, v in doc.items()
+            if k not in ("nodes", "wires", "ports", "schema", "name", "keys")}
+    ports = doc.get("ports") if isinstance(doc.get("ports"), list) else None
+    keys = doc.get("keys") if isinstance(doc.get("keys"), list) else None
+    nodes2, wires2, rest2, ports2, keys2, notes = graphmigrate.retire_dreams(
+        nodes, wires, rest, ports, keys)
+    if not notes and rest2 == rest and nodes2 == nodes and wires2 == wires:
+        return doc
+    out = {k: doc[k] for k in ("schema", "name") if k in doc}
+    out.update(rest2)
+    out.update(nodes=nodes2, wires=wires2)
+    if ports2 is not None:
+        out["ports"] = ports2
+    if keys2:
+        out["keys"] = keys2
+    return out
 
 
 def _retire_lookbacks(doc: dict) -> dict:
@@ -497,8 +523,6 @@ def held_words(name: str) -> str | None:
         return WINDOW_WORDS.format(name=name)
     if kind == "channel":
         return CHANNEL_WORDS.format(name=name)
-    if kind == "dream" and name != "dream":
-        return SECOND_DREAM_WORDS.format(name=name)
     if kind not in MAY_HOLD:
         return NOT_HELD_WORDS.format(name=name) if kind is not None else (
             NO_NODE_WORDS.format(name=name))
@@ -600,7 +624,7 @@ class _Members:
     def param_rows(self) -> tuple[_ParamRow, ...]:
         """Which params the members own: each ``(prefix, member, keys)``
         (`fx.acid.2` is `acid.2`'s, `ghost.2` `hands.2`'s, `lfo.3` `lfo.3`'s,
-        `rot` the shape's, `dream` the look-back's and the dream's by key)."""
+        `rot` the shape's)."""
         out: list[_ParamRow] = []
         for name in self.render:
             out += [(pre, name, keys) for pre, keys in _param_rows(name)]
@@ -634,13 +658,6 @@ def _any_key(_key: str) -> bool:
     return True
 
 
-def dream_owner(pid: str) -> str:
-    """The node a `dream.*` param is drawn on and saved with (wave 3 P2): the
-    dream (plan 90 H2: the look-back's own knobs are its parts' now).
-    `graphview.OWNERS` and `ui_graph.node_params` ask here."""
-    return "dream"
-
-
 def is_pattern_view_key(key: str) -> bool:
     """Is `view.<key>` the faces pattern's (the pattern and its media layer),
     not the shape's? The one spelling: `graphview._view_owner` asks here."""
@@ -657,7 +674,7 @@ def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
     params are not under its own name (`graphview.OWNERS`, the app's, so
     restated here; tests/test_patches_frame_kinds.py holds the two equal):
     `rot.*`, `view.*` and `fx.face_map` the shape's, `pattern.*`,
-    `view.pattern*` and `view.media_*` the pattern's; `dream.*` the dream's
+    `view.pattern*` and `view.media_*` the pattern's
     (plan 90 H2: the look-back's are its parts'). The scene has none:
     `scene.*` is the band scene's (a shared meta group)."""
     kind = _kind(name)
@@ -668,8 +685,6 @@ def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
                 ("fx", lambda key: key == "face_map")]
     if kind == "pattern":
         return [("pattern", _any_key), ("view", is_pattern_view_key)]
-    if kind == "dream":
-        return [("dream", _any_key)] if name == "dream" else []
     return [(G.param_prefix(name), _any_key)]
 
 
@@ -1346,7 +1361,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
 
     Returns ``(doc, refused)``: the file's dict (``schema``, ``name`` and
     ``note`` empty, for the caller to fill) and, in words, every id it left
-    out — an output, the camera or a cloud, a media channel, a second dream,
+    out — an output, the camera or a cloud, a media channel,
     the sequencer, a lane envelope, a copy without its original, a hands'
     layer or guide without its hands,
     a host macro's subscriber on a member. The caller says them and saves
@@ -1730,7 +1745,7 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
         if (base, n) in rn.render:
             continue
         hold = taken.setdefault(base, set())
-        if _kind(name) in ONE_PER_FRAME:     # never renumbered (`dream.2` is no `dream`)
+        if _kind(name) in ONE_PER_FRAME:     # never renumbered (`scene.2` is no node)
             if name in host.names:
                 singles.append(name)
             hold.add(n)
