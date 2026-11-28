@@ -21,7 +21,7 @@ Every comment block, docstring, test name, and comment inside a shader
 | **promote: debt** | It admits or argues for a shortcut: "for now", "the proper fix would be", "it was more work to…", "beware…", a paragraph defending why this is allowed. | Record a debt promotion (below). Replace the block with one line, `# DEBT: <slug>` (`// DEBT: <slug>` in GLSL), and leave a short present-tense comment only if the code still needs one to be read. |
 | **promote: architecture** | It states how parts relate: who owns what, who may write what, a frame-order or import rule, a cross-module invariant. | Record an architecture promotion. Keep at most a one-line present-tense comment at the site if a reader of this code needs it there. |
 | **promote: decision** | It records a choice that is still in force and could have gone another way: "X, not Y, because…". | Record a decision promotion. Keep the present-tense "why" at the site if a reader of this code needs it. |
-| **flag** | You can't tell, or acting on it needs more than a prose edit (a test that asserts on a docstring, a user-visible string with a plan number, a fixture holding prose). | Leave the text as it is and record a flag. |
+| **flag** | You can't tell, or acting on it needs more than a prose edit (a test that asserts on a docstring, a fixture holding prose). History inside an ordinary string literal is not flagged: the string pass handles it. | Leave the text as it is and record a flag. |
 
 How to tell a real "why" from a justification: a real "why" stays true and
 useful if every plan, PR and person named in it is removed, and it doesn't
@@ -46,10 +46,12 @@ Examples from this codebase:
 
 ## Hard limits
 
-- **Edit prose only.** That means comments, docstrings, test function names,
-  and comments inside GLSL (in `.glsl` files or inside a Python string
-  that holds a shader). Never change code, values, ordinary strings,
-  fixtures or data.
+- **Edit prose only.** That means comments, docstrings (including a bare
+  string under a constant or attribute), test function names, and comments
+  inside GLSL (in `.glsl` files or inside a Python string that holds a
+  shader). Never change code, values, ordinary string literals, fixtures or
+  data. String literals get their own pass afterwards, with their own
+  commits, so they can be reviewed apart from the prose.
 - **Prove it before you finish:**
   `python3 tools/prose_audit.py verify --base <BASE> <your files>` (run
   from `hyperspace-python/`; paths are relative to it or to the repository
@@ -107,8 +109,9 @@ checks:
    an invariant, unit, trap or non-obvious reason is either still at the
    site in present tense or in a promotion. The verifier restores anything
    missing, rewritten without history.
-3. **Nothing was left behind.** `python3 tools/prose_audit.py count <files>`
-   is zero, or each remaining marker is legitimate (for example, a date
+3. **Nothing was left behind.** The `prose` figure from
+   `python3 tools/prose_audit.py count <files>` is zero, or each remaining
+   marker is legitimate (for example, a date
    that is data) and listed as a flag. Unmarked justification paragraphs
    are gone too.
 4. **The promotions match.** Each promotion says what the original said,
@@ -136,6 +139,28 @@ When every shard is done:
   code wins: correct the doc and note it in the report). Doc edits stay
   small and are placed where a reader would look.
 - **Flags** go to the report for the owner.
+
+## The string pass
+
+This runs only after the prose gate has committed and pushed. Its BASE is
+that commit (`STRBASE`), so its diff holds string edits and nothing else.
+
+- **The work list** is `python3 tools/prose_audit.py string-markers`: Python
+  files whose string literals (error messages, labels, tooltips, test ids)
+  still hold provenance or narration.
+- **What to change:** remove the history from the string and keep what it
+  tells the user. `"refused (plan 40 D3): a group needs a name"` becomes
+  `"refused: a group needs a name"`. If the history is part of what the
+  string means (a migration message naming an old format, for example),
+  leave it and say why.
+- **Prove it:** `verify --base <STRBASE>` reports `ok` or `strings` for
+  every file, never `code`, and lists every string pair for the verifier.
+- **Tests that match a message.** The verifier lists any test whose
+  expected text is a changed message. The gate updates that expectation to
+  the new text, which is a string edit, never a change to the test's
+  logic.
+- **Commits** have summary lines that begin "Strings:", separate from the
+  prose commits.
 
 ## The gate
 
@@ -178,6 +203,11 @@ Optional args:
 - `only`: shard ids, labels or file paths, for a pilot
 - `sweep` (default `true`): a second pass on shards with markers left
 - `gate` (default `true`)
+
+- `strings` (default `true`): the string pass after the prose gate
+- `agentType` (default `comment-auditor`): the agent type for every agent;
+  `null` for the default. A probe checks it first and falls back if this
+  session can't see it.
 
 **Size.** About 154 shards. The full run is at most about 490 agents: 175
 workers (big files are cut into chunks that run in order), 154 verifiers,

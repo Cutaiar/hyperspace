@@ -16,6 +16,7 @@ The comment audit (docs/COMMENT-AUDIT.md) also uses:
     python3 tools/prose_audit.py renames RENAMES.json...       # apply test renames repo-wide
     python3 tools/prose_audit.py count FILE...                 # markers left in these files
     python3 tools/prose_audit.py promotions AUDIT_DIR          # ledgers -> batches to check
+    python3 tools/prose_audit.py string-markers                # files whose strings hold history
 
 `check` is a ratchet. The baseline holds today's counts per file, so
 existing debt does not fail CI, but no file may gain a marker, a new file
@@ -342,14 +343,49 @@ def shards(out: str, target: int) -> int:
 # ---------------------------------------------------------------- verify
 
 def _strip_docstrings(tree):
+    """Drop every bare string statement: docstrings, and the strings that
+    document a constant or attribute from the line below it. They are prose."""
     import ast
     for node in ast.walk(tree):
-        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-            body = node.body
-            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
-                    and isinstance(body[0].value.value, str):
-                node.body = body[1:] or [ast.Pass()]
+        for field in ("body", "orelse", "finalbody"):
+            stmts = getattr(node, field, None)
+            if not isinstance(stmts, list) or not stmts or not isinstance(stmts[0], ast.stmt):
+                continue
+            kept = [st for st in stmts if not (isinstance(st, ast.Expr)
+                                               and isinstance(st.value, ast.Constant)
+                                               and isinstance(st.value.value, str))]
+            if len(kept) != len(stmts):
+                setattr(node, field, kept or [ast.Pass()])
     return tree
+
+
+def _literal_markers(path: str) -> int:
+    """Markers inside a Python file's string literals: not its docstrings or
+    other bare strings, which are prose. The string pass's share."""
+    import ast
+    if not path.endswith(".py"):
+        return 0
+    try:
+        tree = _strip_docstrings(ast.parse((REPO / path).read_text(encoding="utf-8")))
+    except (SyntaxError, UnicodeDecodeError, FileNotFoundError):
+        return 0
+    return sum(len(PROVENANCE.findall(t)) + len(NARRATION.findall(t)) for t in _strs(tree))
+
+
+def string_markers() -> int:
+    """Python files whose string literals (not docstrings or other bare
+    strings) still hold provenance or narration: the string pass's work list.
+    Prints JSON [{"path", "markers"}], most first."""
+    rows = []
+    for p in tracked_files():
+        if not (p.endswith(".py") and p.startswith(AUDIT_AREAS) and scanned(p)):
+            continue
+        n = _literal_markers(p)
+        if n:
+            rows.append({"path": p, "markers": n})
+    rows.sort(key=lambda r: -r["markers"])
+    print(json.dumps(rows))
+    return 0
 
 
 def _test_names(tree) -> list[str]:
@@ -548,10 +584,16 @@ def main(argv: list[str]) -> int:
         return promotions(argv[2])
     if cmd == "renames" and len(argv) >= 3:
         return renames(argv[2:])
+    if cmd == "string-markers":
+        return string_markers()
     if cmd == "count" and len(argv) >= 3:
         counts = {p: dict(count_markers(p)) for p in argv[2:]}
-        print(json.dumps({"total": sum(sum(c.values()) for c in counts.values()),
-                          "files": {p: c for p, c in counts.items() if c}}, indent=1))
+        in_strings = {p: _literal_markers(p) for p in argv[2:]}
+        total = sum(sum(c.values()) for c in counts.values())
+        lit = sum(in_strings.values())
+        print(json.dumps({"total": total, "prose": total - lit, "in_strings": lit,
+                          "files": {p: dict(c, in_strings=in_strings[p])
+                                    for p, c in counts.items() if c}}, indent=1))
         return 0
     print(__doc__)
     return 2
