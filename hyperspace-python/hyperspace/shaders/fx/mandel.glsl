@@ -10,7 +10,7 @@
 // @tip It paints the whole frame from nothing: it needs no wire in, and at mix 1 a picture
 // @tip wired into it is not seen.
 
-// plan 63. The maths (smooth count, periodicity, the cardioid, the perturbation
+// The maths (smooth count, periodicity, the cardioid, the perturbation
 // recurrence, the rebase) is held against float64 numpy in `hyperspace/mandel.py`,
 // which also runs the Python half of this file (`// @hook mandel`): it integrates
 // the drives, picks the tier, computes the reference orbit in float64, renders at
@@ -62,7 +62,7 @@ const int REF_W = 1024;     // mandel.REF_W (a power of two: m & 1023, m >> 10)
 const float BAIL = 1.0e4;   // |z|² past this has escaped (mandel.BAIL): z^8 of it stays in float32
 const int TILE = 16;        // mandel.TILE
 const int BORDER = 64;      // mandel.BORDER: a tile's 60 border pixels' slots in the border pass
-// plan 80: the coloured inside (mandel.Settle): ln SETTLE_K, and how near the
+// the coloured inside (mandel.Settle): ln SETTLE_K, and how near the
 // saved z a lag is measured
 const float LN_SETTLE_K = -8.594154232552366;   // ln(mandel.SETTLE_K)
 const float SETTLE_NEAR = 1.0e-3;                // mandel.SETTLE_NEAR
@@ -79,7 +79,7 @@ vec2 ref_at(int m) { return texelFetch(u_ref, ivec2(m & (REF_W - 1), m >> 10), 0
 
 // (Z + d)^p − Z^p by the binomial theorem, Horner in d: no large terms cancel,
 // so it holds while d is many orders under Z (mandel.binomial_delta). The
-// powers of Z are walked up as the coefficients walk down (plan 80: no array,
+// powers of Z are walked up as the coefficients walk down (no array,
 // whose dynamic index cost a trip to memory every step), and p = 2 is its
 // closed form, (2Z + d)·d — the same sum, Horner's one step
 vec2 binomial_delta(vec2 Z, vec2 d, int p) {
@@ -107,7 +107,7 @@ bool in_cardioid(vec2 c) {
     return dot(b, b) <= 0.0625;
 }
 
-// plan 80: how fast a point settles (mandel.Settle), from the sum lw of
+// how fast a point settles (mandel.Settle), from the sum lw of
 // ln|f′(z)| over the `lag` steps since the periodicity check last saved z:
 // the steps to come SETTLE_K times nearer its cycle, or the cap while the
 // sum says it is not contracting
@@ -162,7 +162,7 @@ float orbit(vec2 off, out bool inside) {
     vec2 dc = (1.0 - s) * dq;
     vec2 d = s * dq;                      // δ₀ = δz₀
     vec2 Z0 = ref_at(0);
-    // plan 80: Zₘ is carried from the step before (one fetch a step, not two)
+    // Zₘ is carried from the step before (one fetch a step, not two)
     vec2 Zm = Z0;
     // never subtract two full z's: in float32 the full z has lost δ's digits deep in.
     // A z is kept as its reference value and its δ, and differences are taken
@@ -192,7 +192,7 @@ float orbit(vec2 off, out bool inside) {
     return est;
 }
 
-// the skip's first pass (plan 80: packed): the border target holds BORDER
+// the skip's first pass (packed): the border target holds BORDER
 // slots a tile, side by side along x, so every pixel of the pass iterates a
 // border pixel — the full-size pass that returned off the border cost a whole
 // picture, since every SIMD group of a tile meets its first or last column.

@@ -9,7 +9,7 @@
 // @tip (a vector field) times a value (a scalar one) is that direction scaled: how a
 // @tip waveform says how far to push and a measure says which way.
 
-// plan 67: the `combine` op (the modifiers' name) on fields. Scalar with
+// The `combine` op (the modifiers' name) on fields. Scalar with
 // scalar is a scalar; with a vector, each of its components takes the scalar;
 // two vectors combine component by component
 uniform int u_how;      // @param choice [add|multiply|min|max] 1 "How" Added, multiplied, the lesser of the two, or the greater.

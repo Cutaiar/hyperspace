@@ -12,8 +12,8 @@
 // @tip a vector, Trip warp's: wire it into Displace and the frame swims. Drift slides
 // @tip the noise under the frame.
 
-// plan 67 §15: Measure's noise, on its own; flow is warp.glsl's two drifting
-// octaves (Noita's), so Trip warp is a patch (plan 67, Trip warp as a patch)
+// Measure's noise, on its own; flow is warp.glsl's two drifting
+// octaves (Noita's), so Trip warp is a patch
 uniform float u_scale;  // @param 0.0625 64 1 log "Scale" Blobs to a frame height.
 uniform int u_out;      // @param choice [value|flow] 0 "Out" Value: one octave, a scalar field. Flow: two octaves as a vector, x and y each about −1 … 1, the way Trip warp's frame swims.
 uniform float u_drift;  // @param 0 8 0 "Drift" How fast the noise slides under the frame; 0 holds it still. A step changes the speed, never where the noise is.

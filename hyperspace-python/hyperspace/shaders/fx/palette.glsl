@@ -7,7 +7,7 @@
 // @tip a saturation range, a brightness range), or maps brightness through a ramp.
 // @tip Mix 0 leaves the picture alone.
 
-// plan 30 N8 (the owner, 2026-10-20): mode 0 is a colour compression — the
+// Mode 0 is a colour compression — the
 // whole HSV cylinder mapped onto the closed slice hue_from → hue_to (degrees,
 // going up the wheel from `from`, through 360 when to < from; from == to is
 // one hue, 0 → 360 the whole wheel), sat_from → sat_to and val_from → val_to
@@ -55,10 +55,9 @@ vec4 effect(vec2 uv) {
         float arc = u_hue_to >= u_hue_from ? u_hue_to - u_hue_from : u_hue_to + 360.0 - u_hue_from;
         float centre = u_hue_from + arc * 0.5 + u_hue_turn;
         float width = arc;
-        // the fold (plan 24 C6): a triangle wave over the wheel, 0 at red
+        // the fold: a triangle wave over the wheel, 0 at red
         // (lands on from), 1 at cyan (lands on to), back to 0 at red — a
-        // seamless map of the whole wheel onto the arc. Up to 180° wide it is
-        // the old fold to the bit (the D1 goldens hold it)
+        // seamless map of the whole wheel onto the arc
         float tri = 1.0 - abs(2.0 * fract(h.x) - 1.0);
         if (arc > 180.0) {
             // wider: the climb's peak slides from cyan towards the far red,

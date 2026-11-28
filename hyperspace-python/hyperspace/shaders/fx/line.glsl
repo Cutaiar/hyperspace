@@ -9,7 +9,7 @@
 // @tip Out direction gives the way it grows, a vector field; across, that way turned a
 // @tip quarter turn. Wire it into Displace for a shear, or a Waveform for rows.
 
-// plan 67 §15: Measure's line, on its own (`_lib.glsl`'s `measure_line`)
+// Measure's line, on its own (`_lib.glsl`'s `measure_line`)
 uniform float u_scale;  // @param 0.0625 64 1 log "Scale" How fast it counts: units per frame height.
 uniform float u_angle;  // @param 0 6.2832 0 wrap "Angle" The direction it counts along, radians (0 across, a quarter turn up).
 uniform int u_out;      // @param choice [value|direction|across] 0 "Out" Value: the distance along, a scalar field. Direction: the way it grows, a vector. Across: that way turned a quarter turn anticlockwise.

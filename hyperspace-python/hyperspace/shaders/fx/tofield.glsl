@@ -7,8 +7,8 @@
 // @tip Displace has always read its aux); unsigned reads black as 0 and white as 1. The
 // @tip way to wire a picture into a port that takes a field.
 
-// plan 67 F1: the converter, picture → field (the `picture` piece of the
-// kit). A see-through pixel reads 0 signed, as an unwired aux does
+// The converter, picture → field. A see-through pixel reads 0 signed, as an
+// unwired aux does
 uniform int u_read;      // @param choice [luma|peak|red/green] 0 "Read" Brightness (luma), the brightest channel (peak), or red and green as a pair (a vector field).
 uniform int u_about;     // @param choice [signed|unsigned] 0 "About" Signed: mid-grey is 0, black −1, white +1. Unsigned: black 0, white 1.
 

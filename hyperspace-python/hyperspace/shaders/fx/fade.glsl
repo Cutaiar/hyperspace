@@ -6,7 +6,7 @@
 // @tip The decay of a feedback loop: the feedback starter sets 0.75, how much of last
 // @tip frame stays.
 
-// wave 0 E1 (2026-11-02): the one node that scales premultiplied colour as a
+// The one node that scales premultiplied colour as a
 // whole. A palette's val slice darkens rgb and keeps alpha, so a trail fed
 // through it fades to opaque black (a ghost over a backdrop or the desktop)
 // and a half-covered fringe decays faster than the face it edges; this

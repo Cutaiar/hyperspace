@@ -16,7 +16,7 @@ uniform float u_saturation;  // @param 0 1 1 unipolar "Saturation" Out from the 
 uniform float u_value;       // @param 0 1 1 unipolar "Value" Up from black: 0 black, 1 the brightest the colour goes.
 uniform float u_spin;        // @param -2 2 0 bipolar "Spin" Turns of the hue a second, either way; 0 holds it where Hue puts it.
 
-// plan 80's rule (`graph.runs_unfed`): no input port, so it is built and drawn with
+// The rule is `graph.runs_unfed`: no input port, so it is built and drawn with
 // nothing wired in. The spin is a clock (`u_spin_t`, turns, kept in [0, 1)), so a
 // Spin step changes the rate only, never where the hue is
 vec4 effect(vec2 uv) {

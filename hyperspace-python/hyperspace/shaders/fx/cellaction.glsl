@@ -12,7 +12,7 @@
 // @tip heights: wire it into Displace's field port at Amount 0.5 (its top) to push by it
 // @tip exactly. Blocks, taken apart.
 
-// plan 67: the third of DISTORTION.md's questions for a grid of cells — the
+// The third of DISTORTION.md's questions for a grid of cells — the
 // actions of blocks.glsl, read from fields instead of worked out inside, so
 // `measure (cells) → waveform → cell action ← measure.2 → displace` is Blocks
 uniform float u_amount; // @param 0 4 0.5 amount "Amount" How much a cell does at its number's peak — shift: cells moved; zoom, stretch and bulge: doublings of size; turn: quarter turns; swap: trades at the peak, none at the trough.

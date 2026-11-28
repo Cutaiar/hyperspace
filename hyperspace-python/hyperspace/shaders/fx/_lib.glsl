@@ -3,9 +3,9 @@
 // shares: PI, TAU, LUMA, luma, peak, rot, hsv2rgb, hsv, rgb2hsv, hue_rotate, pal.
 // EDIT WHILE THE APP RUNS: every effect recompiles on save.
 //
-// Where an effect sits is its wires on the GRAPH page (plan 33): there is
+// Where an effect sits is its wires on the GRAPH page: there is
 // no stack. `// @order N` at the top of a file is parsed and ignored by
-// the renderer; only the migration of a preset saved before plan 33 reads
+// the renderer; only the migration of an older preset reads
 // it, to give an effect without a saved order its place in that preset's
 // run. A new effect file does not need one.
 //
@@ -30,7 +30,7 @@
 //                          (tests/test_shader_time_lint.py holds every file to it)
 //   v_uv       vec2      — this pixel, 0..1 across the frame, y up
 //   u_aux      sampler2D — the second picture, wired into the effect's aux
-//                          port (plan 32 R: a channel, the scene, the history);
+//                          port (a channel, the scene, the history);
 //                          read it with aux(uv) / aux_luma(uv) below
 //   u_aux_on   int       — 1 while one is wired; 0: aux(uv) is transparent black
 //   u_aux_size vec2      — its size in pixels (0, 0 with none)
@@ -141,9 +141,9 @@ vec4 pushed(vec2 uv, vec2 d, float split) {
     return vec4(R.r, G.g, B.b, max(R.a, max(G.a, B.a)));
 }
 
-// ---- fields: the shared pieces (plan 67 P2) ---------------------------------
+// ---- fields: the shared pieces ---------------------------------
 // A field is a value (or a pair) at every pixel. These are the primitives the
-// field nodes are built from (plan 67 §3), written once, so an effect file that
+// field nodes are built from, written once, so an effect file that
 // still computes its field inline calls the same code and agrees with the
 // patch that replaces it to the bit. Units: frame heights for distance (the
 // frame's height is 1, `centred`), turns for an angle round a point, radians
@@ -212,7 +212,7 @@ float cell_pair(inout vec2 id, vec2 ax) {
 float read_signed(float v, float alpha) { return (v - 0.5 * alpha) * 2.0; }
 vec2 read_signed(vec2 v, float alpha) { return (v - 0.5 * alpha) * 2.0; }
 
-// -- ops (plan 67 §3.2: the modifiers' names) --------------------------------
+// -- ops (the modifiers' names) --------------------------------
 
 // x flattened to `steps` levels each side of 0 (steps ≤ 0: x as it is)
 float quantise(float x, int steps) {
@@ -238,7 +238,7 @@ float combine(float a, float b, int how) {
     return a + b;
 }
 
-// -- the field wire (plan 67 F1) ----------------------------------------------
+// -- the field wire ----------------------------------------------
 // A field travels as float32 RGBA at the frame's size: x (and y) its value,
 // .a 0 for a scalar field and 1 for a vector one. A file that makes one says
 // `// @makes field` and returns `as_scalar(x)` or `as_vector(v)` from
@@ -259,7 +259,7 @@ vec4 field_at(sampler2D s, vec2 uv) {
 vec4 field_in(vec2 uv) { return field_at(u_src, uv); }
 vec4 field_port(vec2 uv) { return u_field_on != 0 ? field_at(u_field, uv) : vec4(0.0); }
 
-// the point a measure counts from (plan 67 §15): a Point's field on the
+// the point a measure counts from: a Point's field on the
 // field port (this pixel's offset from it, frame heights), or with none the
 // frame's middle — `centred`, as `from_point(uv, 0, 0)` is to the bit
 vec2 from_field_point(vec2 uv) { return u_field_on != 0 ? field_port(uv).xy : centred(uv); }

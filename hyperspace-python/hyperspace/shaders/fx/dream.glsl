@@ -12,7 +12,7 @@
 // @tip anew; lower, it keeps what it dreamed and dreams it again: deeper, slower to follow.
 // @tip Needs the worker: [dream] enabled = true in config.toml (torch).
 
-// plan 90 (H3): the dream node as an effect file with a Python half (`// @hook dream`,
+// The dream node as an effect file with a Python half (`// @hook dream`,
 // `hyperspace/dreamhook.py`): the hook reads the picture back when the worker is free,
 // hands it over with these knobs, and binds the newest result on unit 2. The file
 // returns that result; the effect's own mix and blend lay it on its input, as any effect.

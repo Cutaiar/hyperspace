@@ -24,7 +24,7 @@ uniform float u_split;  // @param 0 1 0 "Split" Parts the colours along the push
 uniform float u_cx;     // @param -1 1 0 "Centre X" Rings and spokes: the centre, −1 the left edge … +1 the right (frame heights from the middle).
 uniform float u_cy;     // @param -1 1 0 "Centre Y" Rings and spokes: the centre, −1 the bottom … +1 the top.
 
-// the measure and the push are _lib.glsl's field pieces (plan 67 P2): a patch of
+// the measure and the push are _lib.glsl's field pieces: a patch of
 // measure → waveform → quantise → displace computes this file's field to the bit
 vec4 effect(vec2 uv) {
     vec2 p = from_point(uv, u_cx, u_cy);

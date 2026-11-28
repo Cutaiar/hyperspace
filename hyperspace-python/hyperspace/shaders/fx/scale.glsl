@@ -7,8 +7,8 @@
 // @tip components alike. The lane modifier of the same name, on a field: turn a field
 // @tip down, flip it (× below 0), or lift it.
 
-// plan 67 §3.2: the modifiers' `scale` (× then +) as a field op; a field is
-// signed, so there is no clamp
+// the modifiers' `scale` (× then +) as a field op; a field is signed, so
+// there is no clamp
 uniform float u_mul;     // @param -4 4 1 "×" Multiplies the field (below 0 it flips).
 uniform float u_offset;  // @param -1 1 0 "+" Added after the multiply.
 

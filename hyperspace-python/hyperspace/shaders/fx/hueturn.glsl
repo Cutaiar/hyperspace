@@ -7,10 +7,9 @@
 // @tip brightness — a wireframe comes out rainbow. Wire a field into Turn to band
 // @tip the hues across the frame (Line, Rings): what Hue cycle's Spread was.
 
-// plan 67 (the owner, 2026-11-25: "new op: Hue turn"): Hue cycle taken apart.
-// Its bands were a field it hid (a diagonal mixed with rings, × Spread); they
-// are field nodes now, wired into Turn at a depth of 360 (degrees a turn).
-// What is left is one op, because Paint mixes two results of the same input.
+// Hue cycle without its bands: the bands are field nodes (a diagonal mixed
+// with rings, × Spread) wired into Turn at a depth of 360 (degrees a turn).
+// One op, because Paint mixes two results of the same input.
 // At Turn 0 with the field wired as `graphmigrate.hue_turns` wires it, the
 // picture is Hue cycle's to the GPU's rounding (`tests/test_hue_turn.py`).
 

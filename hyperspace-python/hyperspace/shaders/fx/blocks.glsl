@@ -26,7 +26,7 @@ uniform float u_split;  // @param 0 1 0 "Split" Parts the colours along each cel
 vec4 effect(vec2 uv) {
     vec2 cs = vec2(u_cell * u_aspect, u_cell);          // a cell, px
     // a cell sits on the frame's centre; `l` this pixel within its cell, −½ … ½,
-    // `id` its block: _lib.glsl's `cell_of` (plan 67, as Measure's cells)
+    // `id` its block: _lib.glsl's `cell_of`, as Measure's cells
     Cell k = cell_of((uv - 0.5) * u_res / cs + 0.5, u_group);
     vec2 l = k.l, id = k.id;
     vec2 dir = vec2(cos(u_angle), sin(u_angle));
@@ -35,8 +35,8 @@ vec4 effect(vec2 uv) {
     vec2 ax = abs(dir.x) >= abs(dir.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
     float first = 0.0;                                  // +1 the pair's first block, −1 its second
     if (u_action == 5) first = cell_pair(id, ax);
-    // the block's place along the rule: _lib.glsl's `measure_cells` (plan 67
-    // P2); Spread 0 is every block in step, random included
+    // the block's place along the rule: _lib.glsl's `measure_cells`;
+    // Spread 0 is every block in step, random included
     float c = measure_cells(id, u_rule, u_spread);
     // a quarter cycle on: at rest (Drift 0) a sine sits on its crest, not its zero
     float a = wave(u_shape, c - u_drift_t + 0.25) * u_amount;

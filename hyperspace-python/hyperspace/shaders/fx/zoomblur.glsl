@@ -14,7 +14,7 @@ uniform float u_glow;   // @param 0 2 0.6 "Glow" How much the light the streaks 
 uniform int u_taps;     // @param 4 32 16 "Taps" Samples along each streak — smoother costs more.
 
 vec4 effect(vec2 uv) {
-    vec2 c = point_at(u_cx, u_cy);              // _lib.glsl's point (plan 67 P2)
+    vec2 c = point_at(u_cx, u_cy);              // _lib.glsl's point
     vec2 p = centred(uv);
     vec2 d = (p - c) * u_amount;                 // the streak: from the pixel toward the centre
     float n = float(u_taps);

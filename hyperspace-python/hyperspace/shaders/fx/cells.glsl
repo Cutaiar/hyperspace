@@ -10,9 +10,9 @@
 // @tip instead, a vector −½ … ½ (into Displace: every cell zooms). Wire the number into a
 // @tip Waveform and that into a Cell action, the place into its field port: Blocks.
 
-// plan 67 §15: Measure's cells, on their own — Blocks' grid (`cell_of`,
+// Measure's cells, on their own — Blocks' grid (`cell_of`,
 // `cell_pair`). The number carries the cell's size (frame heights) in y and z;
-// the place its side of a pair × Group in z: what Cell action reads (row 1104)
+// the place its side of a pair × Group in z: what Cell action reads
 uniform float u_scale;   // @param 0.0625 512 8 log "Scale" Cells to a frame height.
 uniform float u_aspect;  // @param 0.0625 16 1 log "Aspect" A cell's width over its height — 16 long strips across, 1/16 tall slats.
 uniform int u_group;     // @param 1 8 1 "Group" Cells on a side that share one number, so 4 numbers the grid in 4 × 4 blocks.

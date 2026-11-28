@@ -9,10 +9,9 @@
 // @tip frame's strength halves. Lay: over (each covers the older where it is) or add.
 // @tip Lay it on a picture with a composite.
 
-// plan 90 (H1): the look-back's trail as a reader of the stack (plan 67 §7.1, a
-// weighted sum over indices): the old trail pass's weights, `level · ½^(age /
-// fade)`, with each frame's own alpha as its coverage — black is clear makes
-// that alpha from brightness, which the old pass did privately
+// The trail as a reader of the stack (a weighted sum over indices): weights
+// `level · ½^(age / fade)`, with each frame's own alpha as its coverage —
+// black is clear makes that alpha from brightness
 uniform float u_level;   // @param 0 1 0.4 "Level" The newest frame's strength; older ones fade from it.
 uniform float u_fade;    // @param 0.02 10 0.2252 log "Fade" Seconds in which a frame's strength halves: short, a tight tracer; long, a smear.
 uniform int u_lay;       // @param choice [over|add] 0 "Lay" Over: each frame covers the older ones where it is (its alpha). Add: they sum.

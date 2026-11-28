@@ -5,7 +5,7 @@
 // @tip history) onto the frame: over, multiply, screen, difference, or a luma key that
 // @tip shows the aux only where it is brighter than the key. Mix is how much.
 
-// plan 32 R (row 332). Premultiplied throughout: an unwired aux is
+// Premultiplied throughout: an unwired aux is
 // transparent black, and every mode then leaves the frame as it is
 uniform int   u_mode;  // @param choice [over|multiply|screen|difference|luma key] 0 "Mode" How the aux lands on the frame.
 uniform float u_key;   // @param 0 1 0.5 "Key" Luma key: the aux shows where its brightness is above this.
@@ -18,7 +18,7 @@ vec4 effect(vec2 uv) {
     if (u_mode == 2) return a + b - a * b;
     if (u_mode == 3) return vec4(abs(a.rgb - b.rgb), max(a.a, b.a));
     if (u_mode == 4) {
-        float k = threshold_soft(luma(b.rgb), u_key, u_soft);   // _lib.glsl's key (plan 67 P2)
+        float k = threshold_soft(luma(b.rgb), u_key, u_soft);   // _lib.glsl's key
         b *= k;
     }
     return b + a * (1.0 - b.a);

@@ -6,7 +6,7 @@
 // @tip picture's own colours, direction in a hue by which way the edge faces.
 // @tip Glow adds a wider ring around every line.
 
-// plan 39 T0 (W5, decision 7). A Sobel over the luma of the wired picture:
+// A Sobel over the luma of the wired picture:
 // the eight neighbours one pixel away (1 / u_res), x and y kernels
 // [-1 0 1; -2 0 2; -1 0 1], the gradient divided by 4 so a hard step from
 // black to white is 1. Below the threshold nothing; above it the line rises

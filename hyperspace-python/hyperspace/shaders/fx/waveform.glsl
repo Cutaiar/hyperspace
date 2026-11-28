@@ -11,7 +11,7 @@
 // @tip flattens it into slabs. Whole rounds Waves to a whole number, for a measure that
 // @tip comes back on itself (spokes), so the last wave meets the first.
 
-// plan 67: the second of DISTORTION.md's three questions as a node — `wave()`
+// The second of DISTORTION.md's three questions as a node — `wave()`
 // over a field, as wave.glsl does over its own measure, so `measure →
 // waveform → combine → displace` is wave.glsl to the bit
 uniform float u_waves;  // @param 0.25 64 3 log "Waves" Waves for each unit of the field in (a Measure's frame height, or turn for spokes).
@@ -22,7 +22,7 @@ uniform float u_start;  // @param 0 1 0 wrap "Phase" Where in its cycle the wave
 uniform int u_steps;    // @param 0 16 0 "Steps" Levels each side of rest the wave is flattened to, so a smooth wave becomes slabs. 0 leaves it smooth.
 
 // (Phase is `start`: `u_phase` is every file's clock, and `fx.<n>.phase` the
-// position jog of plan 67 §10.1)
+// position jog)
 vec4 effect(vec2 uv) {
     float every = u_round == 1 ? max(floor(u_waves + 0.5), 1.0) : 4096.0;   // where noise repeats
     vec4 f = field_in(uv);

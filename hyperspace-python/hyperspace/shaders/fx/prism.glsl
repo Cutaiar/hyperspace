@@ -29,7 +29,7 @@ vec3 spectrum(float t) {
 
 vec4 effect(vec2 uv) {
     vec2 p = centred(uv);
-    // radial from the point: _lib.glsl's field pieces (plan 67 P2)
+    // radial from the point: _lib.glsl's field pieces
     Measure m = measure_rings(from_point(uv, u_cx, u_cy));
     float r = m.x;
     vec2 dir = m.g;
