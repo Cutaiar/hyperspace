@@ -358,7 +358,7 @@ def test_every_corpus_loadable_is_its_sources_seven_and_round_trips(tmp_path):
         assert json.loads(data)["schema"] == SAVED, path.name
         again, notes, _ = headless.resave(path, tmp_path / f"f{k}")
         held = "lookback" in json.loads(data)["graph"]["wires"].__repr__()
-        assert [n for n in notes if "plan 90" not in n] == [], path.name
+        assert [n for n in notes if not M.is_parts_note(n)] == [], path.name
         assert bool(notes) == held, path.name
         if not held:
             # (plan 90 H3: and the dream's old ids gone, `graphmigrate.dreams`)

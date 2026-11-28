@@ -358,7 +358,7 @@ def test_every_section_loads_as_a_wired_frame(tmp_path, path):
     assert spec is not None and spec.wired, path.name
     assert section.get(G.FRAME_KEY) == G.WIRED_FRAME
     assert spec.notes == (), spec.notes
-    assert [n for n in notes if n.startswith("graph:") or "plan 35" in n] == []
+    assert [n for n in notes if n.startswith("graph:") or "wired frame" in n] == []
     assert old_ends(spec) == [], path.name
     assert not any(e.get("kind") in ("history", "lookback") and "holds" in e
                    or e.get("kind") == "hands" and "into" in e

@@ -237,7 +237,7 @@ CAPTURE = "lookback(capture)"
 COVER = "scene(cover)"
 # what a live graph says of a look-back or an echo pin
 OLD_ECHOES = 32       # the old ring's depth: an echo pin a migration reads names 1 … 32
-LOOKBACK_RETIRED = ("the look-back is retired (plan 90): a saved one opens as a delay, a trail "
+LOOKBACK_RETIRED = ("the look-back is retired: a saved one opens as a delay, a trail "
                     "and cuts; its echoes as reads")
 BACKDROP = "backdrop"
 # the side, in texels, of the picture the faces show while something other
@@ -412,7 +412,7 @@ class Wiring:
 # lands, and a `/7` with no graph section (or an empty one): only the
 # outputs, nothing wired, black. There is no other fallback.
 EMPTY = Wiring(wired=True)
-UNWIRED_WIRING = ("an unwired Wiring is the words before the wired frame (plan 35): an old "
+UNWIRED_WIRING = ("an unwired Wiring is the words before the wired frame: an old "
                   "patch's — wire it by the one-way migration (graphmigrate.wired_wiring)")
 
 
@@ -1281,7 +1281,7 @@ def capture_name(lookback: str) -> str:
     return f"{lookback}(capture)"
 
 
-GONE_IN_A_WIRED_FRAME = ("{name} is gone in a wired frame (plan 35): wire the picture "
+GONE_IN_A_WIRED_FRAME = ("{name} is gone in a wired frame: wire the picture "
                          "straight into an effect, a composite or an output")
 HOLDS_IS_A_WIRE = ("lookback holds: in a wired frame what the look-back records is a wire "
                    "— wire a picture into lookback.image")
@@ -1290,11 +1290,11 @@ INTO_IS_A_WIRE = ("{hands} into: in a wired frame the hands go into the scene by
 # `after` / `into` are the wires they stood for (`graphmigrate.placed_wires`
 # writes them at migration) — a wired frame's entry that still says one is
 # not read
-PLACEMENT_IS_A_WIRE = ("{name} {key} {where!r}: a placement is not read since /7 (plan 36) "
+PLACEMENT_IS_A_WIRE = ("{name} {key} {where!r}: a placement is not read since /7 "
                        "— wire {name} on GRAPH")
 FRAME_VALUE = "frame {value!r}: the one value is \"wired\""
 GEOMETRY_INTO_SCENE = "{src} makes geometry: it goes into scene.geometry"
-COPY_IS_A_SLOT = ('copy node: gone (plan 89) — an effect draws on another picture by a slot '
+COPY_IS_A_SLOT = ('copy node: gone — an effect draws on another picture by a slot '
                   'of its own: "slots": 2 on its entry, and wires into <effect>.slot.2.image '
                   'and out of <effect>.slot.2; a file older than this build is migrated on load')
 SLOT_NOT_DECLARED = ('no {name}: {effect} has {have} slot{s} (say "slots": {k} on its '
@@ -1302,9 +1302,9 @@ SLOT_NOT_DECLARED = ('no {name}: {effect} has {have} slot{s} (say "slots": {k} o
 SLOTS_RANGE = "effect {name}: slots {slots!r}, a whole number from 1 to {most}"
 MAX_SLOTS = 8
 GROUND_ONLY_INTO_OUTPUTS = "ground goes only into an output's port: it shows nothing there"
-OLD_ID_IN_A_WIRED_FRAME = "{old} is the old name (plan 35): in a wired frame it is {new}"
+OLD_ID_IN_A_WIRED_FRAME = "{old} is the old name: in a wired frame it is {new}"
 # (a frame kind's entry outside a wired frame: the table has no such node)
-FRAME_KIND_UNWIRED = ("{kind} node: only in a wired frame (plan 35: the section says "
+FRAME_KIND_UNWIRED = ("{kind} node: only in a wired frame (the section says "
                       "\"frame\": \"wired\")")
 
 # ---------------------------------------------------------------- the meta controller's wires
@@ -1971,9 +1971,9 @@ PICTURE_INTO_FIELD = "{src} makes a picture, {dst} takes a field — put a To fi
 STACK_IS_A_DELAYS = ("{dst} takes a stack of past frames, which a delay keeps — wire a delay "
                      "into it (its Depth the frames it keeps)")
 # the words for what the split took away
-CAPTURE_IS_IMAGE = ("{node}.capture is gone (plan 36): a look-back records what is wired "
+CAPTURE_IS_IMAGE = ("{node}.capture is gone: a look-back records what is wired "
                     "into {node}.image, and a composite lays its trail")
-ECHO_IS_A_PIN = ("{name} is the old name (plan 36): a look-back's frames are its own "
+ECHO_IS_A_PIN = ("{name} is the old name: a look-back's frames are its own "
                  "outputs — lookback.echo.{k}")
 ECHO_RANGE = "{name}: a look-back holds {most} frames (echo.1 the newest … echo.{most})"
 # the look-back paints into what reads it: the words for a wire
@@ -5238,8 +5238,8 @@ class SegmentNode(Node):
         if not st.on:
             return None, f"off: {whole}, the worker idle"
         if mode == "subject":
-            return None, (f"subject is not in this build: {whole} (person or motion "
-                          "for now)")
+            return None, (f"subject is not in this build: {whole} (use person or "
+                          "motion)")
         if src is None or not src.reads(frame):
             if isinstance(src, MediaNode):
                 return None, f"no frame on channel {src.channel}: {whole}"

@@ -13,8 +13,7 @@
    "provenance": 1
   },
   "hyperspace-python/hyperspace/graph.py": {
-   "narration": 1,
-   "provenance": 12
+   "provenance": 3
   },
   "hyperspace-python/hyperspace/headless.py": {
    "provenance": 4
@@ -161,7 +160,7 @@
    "provenance": 7
   },
   "hyperspace-python/tests/test_graph_migrate.py": {
-   "provenance": 34
+   "provenance": 33
   },
   "hyperspace-python/tests/test_graph_patch_only.py": {
    "provenance": 6
@@ -499,7 +498,7 @@
    "provenance": 15
   },
   "hyperspace-python/tests/test_plan36_seven.py": {
-   "provenance": 17
+   "provenance": 16
   },
   "hyperspace-python/tests/test_plan39_graph.py": {
    "provenance": 5
