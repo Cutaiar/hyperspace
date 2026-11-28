@@ -39,7 +39,6 @@ nothing edits the saved route, so a leave, an undo, a re-point or a load is the 
 the file holds what it held. A desk that does not act here holds nothing, so the modulators run:
 one on the other `Deck`, or one that is not plugged in. SHIFT does not let go: a held key is no
 reason for the look to jump.
-# DEBT: node-mode-modulators-always-give-way
 
 **A pad** is the same road: one fill, one set of rests, one cable kind. Its entry says
 "gamepad", and its rows are for the player's first pad. What differs is what a row is, since a
@@ -58,6 +57,8 @@ never changes a desk's map. **Whose pad:** the player's first that is connected,
 listed (`is_first`), as the pad window picks. **A nap changes no map:** a pad asleep is filled as
 the last model it read (`DeviceRegistry.pad_model`).
 """
+
+# DEBT: node-mode-modulators-always-give-way
 
 from __future__ import annotations
 

@@ -68,3 +68,24 @@ fix deletes the entry and its pointers.
 - **What it does now:** on the real Select, typing a character with the panel shut and the trigger focused sets the value to the first label with that prefix, without opening. `interact.select` reads no characters, so a focused closed Select ignores typing. The open panel's typeahead works.
 - **The proper fix:** read `input_queue_characters` in the trigger path of `interact.select` and run `next_match` over the items.
 - **Cost while it stays:** a keyboard parity gap with the browser's Select.
+
+### legacy-ghost-n-mirror-id
+
+- **Where:** `hyperspace/params.py:SHARED_META_KEYS`
+- **What it does now:** `ghost.<n>.mirror` is no param (a hands node's state follows `ghost.mirror`), but an old show may still hold the id. Shared meta is matched on an id's last segment, so `SHARED_META_KEYS` keeps classing that id as the meta controller's, and no look takes it.
+- **The proper fix:** once old shows no longer carry `ghost.<n>.mirror` (a migration drops it on read), match shared meta on the exact id and drop the leftover case.
+- **Cost while it stays:** shared meta is matched by last segment rather than exact id, so a future `ghost.<n>.<key>` param named `mirror` would be classed as the room's without anyone choosing it.
+
+### family-from-order-band
+
+- **Where:** `hyperspace/previews.py:ORDER_FAMILIES`, `hyperspace/previews.py:family_of`
+- **What it does now:** the effect picker groups a file by its own `// @family` line when it has one. Otherwise it falls back to the `ORDER_FAMILIES` table, which maps `@order` bands to family names. Fewer than half the effect files declare `@family`.
+- **The proper fix:** give every effect file an `@family` line and delete `ORDER_FAMILIES` and the fallback.
+- **Cost while it stays:** a file's family depends on its stack position, so moving an effect in the stack can move it to another family in the picker.
+
+### node-mode-modulators-always-give-way
+
+- **Where:** `hyperspace/node_desk.py` (module docstring; `holding` and the `Router` plan)
+- **What it does now:** while a node-mode desk holds a param, every modulator route on it (LFO, envelope, analyzer lane, sequencer, modifier) is left out of the `Router` plan, and it comes back when the desk lets go. There is no way to keep a chosen modulator running under node mode.
+- **The proper fix:** a per-patch or per-controller setting that lets chosen modulators keep running while node mode holds their param.
+- **Cost while it stays:** a param cannot be modulated and played from a node-mode controller at the same time.
