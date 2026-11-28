@@ -150,13 +150,16 @@ KEYED = "keys"
 MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "matte", "cut",
             "segment", "hands", "layer", "guide", "scene", "shape", "backdrop", "pattern",
             "lookback", "cloud", "handmask")
-# what a frame holds one of: never renamed by a spawn (`scene.2` is no node),
+# what a frame holds one of: never renamed by a spawn (`shape.2` is no node),
 # so a host that already has one refuses the spawn in words (`Landing.taken`).
 # Hands 1 is no such thing — every other hands is a new number — nor is a
 # look-back (`lookback.2`) or, since plan 90 H3, the dream (an effect), or
-# since plan 92 (phase 1) the backdrop (`backdrop.2`). Plan 92 numbers the
-# other three too, and this list goes
-ONE_PER_FRAME = ("scene", "shape", "pattern")
+# since plan 92 the backdrop (`backdrop.2`, phase 1) and the scene
+# (`scene.2`, phase 2). Plan 92 numbers the other two too, and this list goes
+ONE_PER_FRAME = ("shape", "pattern")
+# a scene's eye's keys (`params.EYE_KEYS`, restated: patches never imports the
+# registry; tests/test_scenes_numbered.py holds the two equal)
+EYE_KEYS = ("fov", "distance", "yaw", "pitch")
 # the render nodes the GRAPH page never deletes and a patch never holds —
 # `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
 # plan 43 C2); the windows are refused by kind, `output`. (Plan 93: a point
@@ -669,11 +672,14 @@ def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
     restated here; tests/test_patches_frame_kinds.py holds the two equal):
     `rot.*`, `view.*` and `fx.face_map` the shape's, `pattern.*`,
     `view.pattern*` and `view.media_*` the pattern's
-    (plan 90 H2: the look-back's are its parts'). The scene has none:
-    `scene.*` is the band scene's (a shared meta group)."""
+    (plan 90 H2: the look-back's are its parts'). The first scene has none:
+    `eye.*` is the look's, as it always was, and `scene.*` the band scene's (a
+    shared meta group); a scene past it (plan 92 phase 2, each scene a camera)
+    carries its own eye, `eye.<n>.*`."""
     kind = _kind(name)
     if kind == "scene":
-        return []
+        pre = G.eye_prefix(name)
+        return [] if pre == "eye" else [(pre, lambda key: key in EYE_KEYS)]
     if kind == "shape":
         return [("rot", _any_key), ("view", _is_shape_view_key),
                 ("fx", lambda key: key == "face_map")]
@@ -791,7 +797,11 @@ class _Renamer:
         if pre.startswith("key."):                # plan 87: `key.<node>.*` by the node's name
             return f"key.{moved}" + pid[len(pre):]
         # (a member that keeps its name keeps its ids: `rot.*` is no `shape.*`)
-        return pid if moved == who else G.param_prefix(moved) + pid[len(pre):]
+        if moved == who:
+            return pid
+        if _kind(who) == "scene":                # plan 92 phase 2: its eye, `eye.<n>.*`
+            return G.eye_prefix(moved) + pid[len(pre):]
+        return G.param_prefix(moved) + pid[len(pre):]
 
     def canvas(self, cid: str) -> str:
         if cid.startswith("render:"):
@@ -912,12 +922,13 @@ def _port_order(p: Mapping) -> tuple[str, int, str]:
 
 def _in_order(wires: Iterable[dict]) -> tuple[dict, ...]:
     """A file's wires in `read`'s fixed order — except that the wires into a
-    many-wire port (`graph.MANY_PORTS`: the scene's geometry) keep theirs
+    many-wire port (`graph.is_many_port`: a scene's geometry) keep theirs
     among themselves, it being the draw order (wave 3 P1: the scene in a
     patch)."""
     held = list(wires)
     out = sorted(held, key=_wire_key)
-    for port in G.MANY_PORTS:
+    # (plan 92 phase 2: each scene's geometry, `scene.2.geometry` too)
+    for port in dict.fromkeys(w.get("to") for w in held if G.is_many_port(w.get("to"))):
         them = iter([w for w in held if w.get("to") == port])
         out = [next(them) if w.get("to") == port else w for w in out]
     return tuple(out)
@@ -1415,7 +1426,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
             # sits among the patch's own wires into it (absent: after them)
             nxt = next((x for x, at in crossed[k + 1:]
                         if at == INSIDE and x.dst == w.dst), None)
-            if w.dst in G.MANY_PORTS and nxt is not None:
+            if G.is_many_port(w.dst) and nxt is not None:
                 port["before"] = rn.src(nxt.src)
             ports.append(port)
         else:

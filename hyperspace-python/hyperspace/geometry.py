@@ -2239,12 +2239,34 @@ def model_matrix(zoom: float = 1.0, pan=(0.0, 0.0), offset=None) -> np.ndarray:
     return m if offset is None else m @ np.asarray(offset, dtype=np.float64)
 
 
+def eye_turn(yaw: float = 0.0, pitch: float = 0.0) -> np.ndarray:
+    """The eye's orbit about the world origin (plan 92 phase 2), 3×3: `yaw`
+    radians round the world's y (the eye to the right as it grows), then
+    `pitch` radians up. The identity at 0, 0 — the eye on +z."""
+    a, b = float(yaw), float(pitch)
+    ry = np.array([[math.cos(a), 0.0, math.sin(a)], [0.0, 1.0, 0.0],
+                   [-math.sin(a), 0.0, math.cos(a)]])
+    rx = np.array([[1.0, 0.0, 0.0], [0.0, math.cos(b), math.sin(b)],
+                   [0.0, -math.sin(b), math.cos(b)]])
+    return ry @ rx
+
+
+def eye_position(distance: float = EYE_DISTANCE, yaw: float = 0.0,
+                 pitch: float = 0.0) -> np.ndarray:
+    """Where the eye stands in the world (x, y, z): `distance` from the
+    origin it looks at, orbited by `yaw` and `pitch` (`eye_turn`)."""
+    return eye_turn(yaw, pitch) @ np.array([0.0, 0.0, float(distance)])
+
+
 def eye_matrix(w: float, h: float, fov: float = EYE_FOV, distance: float = EYE_DISTANCE,
-               near: float = EYE_NEAR, far: float = EYE_FAR) -> np.ndarray:
+               near: float = EYE_NEAR, far: float = EYE_FAR, *, yaw: float = 0.0,
+               pitch: float = 0.0) -> np.ndarray:
     """The eye's view-projection, 4×4 (column vectors): at `distance` on
     +z looking at the world origin, y up, `fov` degrees across the
     shorter side of a (w, h) picture (the longer side sees more), OpenGL
-    clip space. The defaults are project_h's divide (module comment)."""
+    clip space. The defaults are project_h's divide (module comment).
+    Plan 92 phase 2: `yaw` / `pitch` orbit the eye about the origin, still
+    looking at it (`eye_turn`); at 0, 0 the matrix is the one it always was."""
     f = 1.0 / math.tan(math.radians(fov) / 2.0)
     aspect = max(float(w), 1e-6) / max(float(h), 1e-6)
     p = np.zeros((4, 4))
@@ -2257,6 +2279,10 @@ def eye_matrix(w: float, h: float, fov: float = EYE_FOV, distance: float = EYE_D
     p[3, 2] = -1.0
     view = np.eye(4)
     view[2, 3] = -float(distance)
+    if yaw or pitch:
+        turn = np.eye(4)
+        turn[:3, :3] = eye_turn(yaw, pitch).T     # the world into the orbited eye's frame
+        view = view @ turn
     return p @ view
 
 

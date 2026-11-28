@@ -111,11 +111,13 @@ from .view import (
     CloudState,
     CutState,
     DelayState,
+    EyeState,
     HandMaskState,
     KeyState,
     MatteState,
     ResizeState,
     SegmentState,
+    eye_prefix,
 )
 
 PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
@@ -954,6 +956,8 @@ class Registry:
     delay_state: dict[str, Any]
     # plan 92: each backdrop past the first's alpha, `ViewState.backdrops`'s dict
     backdrop_state: dict[str, Any]
+    # plan 92 phase 2: each scene past the first's eye, `ViewState.eyes`'s dict
+    eye_state: dict[str, Any]
 
     @staticmethod
     def group_word(group: str) -> str:
@@ -2072,6 +2076,96 @@ def declare_backdrops(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 92 phase 2: the eyes — each scene a camera onto the one world ----
+# the first scene's is `eye.fov`, `eye.distance` (the view's, declared with the
+# view; no orbit, so no saved show moves);
+# `eye.<n>.*` (n ≥ 2), scene `scene.<n>`'s, is declared from the loadable patch's graph
+EYE_KEYS = ("fov", "distance", "yaw", "pitch")
+_EYE_ID = re.compile(r"eye\.(?:[2-9]|[1-9][0-9]+)\.(?:fov|distance|yaw|pitch)")
+# the eye's pitch stops short of straight up or down: it orbits with y up
+EYE_PITCH_MOST = 1.55
+
+
+def _eye_params(r: Registry, st, pre: str, title: str, orbit: bool = True) -> None:
+    """An eye's params over `st`'s `eye_fov`, `eye_distance` and, with `orbit`,
+    `eye_yaw`, `eye_pitch` (a `ViewState`, the first scene's — no orbit —, or
+    an `EyeState`): group `eye` (the loadable patch's), modulatable. `eye.fov`
+    and `eye.distance` are the ids and ranges they always were (plan 26 A2,
+    plan 43 C2)."""
+    g = "eye"
+    r.continuous(f"{pre}.fov", f"{title} field of view", *_attr(st, "eye_fov"),
+                 lo=EYE_FOV_RANGE[0], hi=EYE_FOV_RANGE[1],
+                 fmt=lambda v: f"{v:.1f}°", group=g,
+                 tip="How wide the eye sees, across the shorter side of the picture. "
+                     f"Wider shows more of the world, smaller; {EYE_FOV:.1f}° is the "
+                     "view the shape was always drawn in. The patch's: a lane on it "
+                     "breathes the framing.")
+    r.continuous(f"{pre}.distance", f"{title} distance", *_attr(st, "eye_distance"),
+                 lo=EYE_DISTANCE_RANGE[0], hi=EYE_DISTANCE_RANGE[1], log=True,
+                 fmt=lambda v: f"{v:.2f}", group=g,
+                 tip="How far the eye stands from the centre of the world, in shape "
+                     "radii. Nearer: a stronger perspective and a bigger shape. "
+                     f"{EYE_DISTANCE:.2f} is the view the shape was always drawn in.")
+    if not orbit:
+        return
+    r.continuous(f"{pre}.yaw", f"{title} yaw", *_attr(st, "eye_yaw"), lo=-math.pi, hi=math.pi,
+                 wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g,
+                 tip="Where the eye stands round the world, still looking at its centre: "
+                     "0° in front, as it always stood. Turns the camera, not the shape "
+                     "(the shape's own yaw is camera.yaw).")
+    r.continuous(f"{pre}.pitch", f"{title} pitch", *_attr(st, "eye_pitch"),
+                 lo=-EYE_PITCH_MOST, hi=EYE_PITCH_MOST,
+                 fmt=lambda v: f"{math.degrees(v):.0f}°", group=g,
+                 tip="How high the eye stands over the world's centre, looking at it: "
+                     "0° level, as it always stood; up to just short of straight down.")
+
+
+def is_eye_id(pid: str) -> bool:
+    """Is `pid` a scene past the first's eye (`eye.2.fov` …) — one that exists
+    only while a loadable patch's graph holds that scene (plan 92 phase 2)?
+    A load sorts such ids against the graph it lands, as it does a matte's."""
+    return bool(_EYE_ID.fullmatch(pid))
+
+
+def _eye_state(r: Registry) -> dict[str, EyeState]:
+    """The states the eye params past the first write, scene name → `EyeState`:
+    the view state's (`ViewState.eyes`), kept by `build_registry` as
+    `r.eye_state`; the registry's own without a view."""
+    state = getattr(r, "eye_state", None)
+    if not isinstance(state, dict):
+        state = r.eye_state = {}
+    return state
+
+
+def declare_scenes(r: Registry, names: Iterable[str]) -> list[str]:
+    """The eyes of the scenes past the first (plan 92 phase 2), as
+    `declare_backdrops` does the backdrops' alphas: for each scene `names`
+    holds but the first (whose `eye.*` is the view's, always there),
+    `eye.<n>.fov`, `.distance`, `.yaw`, `.pitch` over an `EyeState` made when
+    first declared — the default eye, at the world origin — and kept while the
+    name stays; those of every scene no longer named dropped, with their
+    states. Returns the ids that appeared or went."""
+    state = _eye_state(r)
+    want = [n for n in dict.fromkeys(names) if n != "scene"]
+    keep = {f"{eye_prefix(n)}.{k}" for n in want for k in EYE_KEYS}
+    changed: list[str] = []
+    for p in [p for p in r if is_eye_id(p.id) and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name in want:
+        st = state.get(name)
+        if st is None:
+            st = state[name] = EyeState()
+        pre = eye_prefix(name)
+        if f"{pre}.fov" in r:
+            continue
+        _eye_params(r, st, pre, f"Eye {pre.rpartition('.')[2]}")
+        changed += [f"{pre}.{k}" for k in EYE_KEYS]
+    return changed
+
+
 def declare_clouds(r: Registry, names: Iterable[str]) -> list[str]:
     """The point clouds' params (plan 93), as `declare_mattes` does the
     mattes': for each cloud `names` holds, its look (`size` in px, `scale`
@@ -3167,20 +3261,11 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
     # room). The defaults are the old 3D divide, so the shape lands where
     # it always did; the hands' calibration is fitted to those defaults,
     # the meta controller's reference eye, never to this one (`ghost.calibration`)
-    g = "eye"
-    r.continuous("eye.fov", "Eye field of view", *_attr(view, "eye_fov"),
-                 lo=EYE_FOV_RANGE[0], hi=EYE_FOV_RANGE[1],
-                 fmt=lambda v: f"{v:.1f}°", group=g,
-                 tip="How wide the eye sees, across the shorter side of the picture. "
-                     f"Wider shows more of the world, smaller; {EYE_FOV:.1f}° is the "
-                     "view the shape was always drawn in. The patch's: a lane on it "
-                     "breathes the framing.")
-    r.continuous("eye.distance", "Eye distance", *_attr(view, "eye_distance"),
-                 lo=EYE_DISTANCE_RANGE[0], hi=EYE_DISTANCE_RANGE[1], log=True,
-                 fmt=lambda v: f"{v:.2f}", group=g,
-                 tip="How far the eye stands from the centre of the world, in shape "
-                     "radii. Nearer: a stronger perspective and a bigger shape. "
-                     f"{EYE_DISTANCE:.2f} is the view the shape was always drawn in.")
+    # Plan 92 phase 2: each scene is a camera; this is the first's (`eye.*`),
+    # a scene past it has its own (`eye.<n>.*`, `declare_scenes`)
+    # (its fov and distance only: an orbit would be two new saved ids on every
+    # show, so the first eye stands where it always stood — register row 1216)
+    _eye_params(r, view, "eye", "Eye", orbit=False)
 
     # ---- the point clouds (plan 93): each cloud node's look, pose and copies
     # are declared from the loadable patch's graph (`declare_clouds`), as a
@@ -3198,6 +3283,13 @@ def build_patch(view, bank=None, fx=None, ghost=None, media=None, *,
         if view is not None:
             view.backdrops = backdrops
     r.backdrop_state = backdrops
+    # plan 92 phase 2: a scene past the first's eye, likewise (`declare_scenes`)
+    eyes = getattr(view, "eyes", None)
+    if not isinstance(eyes, dict):
+        eyes = {}
+        if view is not None:
+            view.eyes = eyes
+    r.eye_state = eyes
 
     # ---- effects: one param per annotated uniform in shaders/fx/*.glsl ----
     # (fx.py). A file edited into a new shape re-declares its own ids.

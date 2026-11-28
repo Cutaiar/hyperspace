@@ -137,6 +137,31 @@ class BackdropState:
     alpha: float = 1.0
 
 
+def eye_prefix(scene: str) -> str:
+    """Scene `scene`'s eye's params' prefix (plan 92 phase 2): `eye` for the
+    first, `eye.<n>` for `scene.<n>` (`params.instance_id`'s rule: the first
+    keeps today's ids)."""
+    head, _, n = scene.rpartition(".")
+    return f"eye.{n}" if head == "scene" and n.isdecimal() else "eye"
+
+
+@dataclass
+class EyeState:
+    """A scene past the first's eye (plan 92 phase 2, `eye.<n>.*`:
+    params.declare_scenes), read once a frame by the renderer
+    (`ViewState.eyes`, `graph.Frame.eyes`): a camera onto the one world —
+    how wide it sees, how far from the world origin it stands and its orbit
+    about it (radians, `geometry.eye_turn`), always looking at the origin. A
+    new one is the default eye (the owner, 2026-11-28: "pointing at the
+    world origin"). The first scene's is the view's `eye_fov`, `eye_distance`
+    (`eye.fov`, `eye.distance`), with no orbit. A value, never a rebuild."""
+
+    eye_fov: float = EYE_FOV
+    eye_distance: float = EYE_DISTANCE
+    eye_yaw: float = 0.0
+    eye_pitch: float = 0.0
+
+
 @dataclass
 class CloudState:
     """One point-cloud node's values (plan 93, `cloud[.n].*`:
@@ -408,6 +433,10 @@ class ViewState(writes.Observed):
     # plan 92: each backdrop past the first's alpha (`backdrop.<n>.alpha`,
     # declared from the loadable patch's graph: params.declare_backdrops)
     backdrops: dict[str, BackdropState] = field(default_factory=dict)
+    # plan 92 phase 2: each scene past the first's eye (`eye.<n>.*`, declared
+    # from the loadable patch's graph: params.declare_scenes) — scene name → its
+    # eye; the first scene's is this view's `eye_*`
+    eyes: dict[str, EyeState] = field(default_factory=dict)
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference

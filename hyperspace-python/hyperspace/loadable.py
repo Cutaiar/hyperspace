@@ -199,6 +199,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     declare_keys,
     declare_mattes,
     declare_resizes,
+    declare_scenes,
     declare_segments,
     declare_switches,
     fx_files,
@@ -206,6 +207,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     is_cloud_id,
     is_cut_id,
     is_delay_id,
+    is_eye_id,
     is_handmask_id,
     is_instance_id,
     is_key_id,
@@ -508,7 +510,7 @@ class GraphSection:
         if spec is None:
             return {"fx": frozenset(), "switch": [], "resize": [], "delay": [],
                     "matte": [], "cut": [], "segment": [], "key": [], "cloud": [],
-                    "handmask": [], "backdrop": []}
+                    "handmask": [], "backdrop": [], "scene": []}
         return {"fx": frozenset(spec.effect_names()),
                 "switch": [sw.name for sw in spec.switches],
                 "resize": [z.name for z in spec.resizes],
@@ -522,6 +524,8 @@ class GraphSection:
                 "cloud": [c.name for c in spec.clouds],
                 # plan 92: the backdrops past the first, by their entries
                 "backdrop": [b.name for b in spec.backdrops],
+                # plan 92 phase 2: the scenes past the first, by their entries
+                "scene": [x.name for x in spec.scenes],
                 # plan 87: the nodes the graph keys (black is clear)
                 "key": list(getattr(spec, "keys", ()))}
 
@@ -554,6 +558,8 @@ class GraphSection:
         declare_clouds(reg, names.get("cloud", []))
         # plan 92: each backdrop past the first's alpha, by its entry, as a matte's
         declare_backdrops(reg, names.get("backdrop", []))
+        # plan 92 phase 2: each scene past the first's eye, by its entry, as a matte's
+        declare_scenes(reg, names.get("scene", []))
 
     def free_doc(self) -> dict | None:
         """The section in the free graph's words (plan 33 M; plan 35 T3: the
@@ -1017,7 +1023,7 @@ class LoadedPatch:
                   and not is_resize_id(k) and not is_delay_id(k)
                   and not is_matte_id(k) and not is_cut_id(k) and not is_handmask_id(k)
                   and not is_segment_id(k) and not is_key_id(k) and not is_cloud_id(k)
-                  and not is_backdrop_id(k)}
+                  and not is_backdrop_id(k) and not is_eye_id(k)}
         doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PATCH, "values": values,
                "routes": [], "macros": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
@@ -1139,6 +1145,7 @@ class LoadedPatch:
             elif (is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid) or is_delay_id(pid)
                   or is_matte_id(pid) or is_cut_id(pid) or is_handmask_id(pid)
                   or is_segment_id(pid) or is_key_id(pid) or is_cloud_id(pid) or is_backdrop_id(pid)
+                  or is_eye_id(pid)
                   or graphmigrate.effect_of(pid) is not None):
                 # (plan 33 S: a switch's `select` too — its graph declares it;
                 # plan 34 Z: and a resize's values (plan 39 T2: a matte's, T3: a

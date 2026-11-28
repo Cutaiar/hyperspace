@@ -59,7 +59,7 @@ import moderngl
 import numpy as np
 
 from . import handmesh, writes
-from .geometry import EYE_DISTANCE, EYE_FOV, eye_matrix
+from .geometry import EYE_DISTANCE, EYE_FOV, eye_matrix, eye_position
 from .glsl import QUAD_VS
 
 GROUP = "ghost"
@@ -453,7 +453,8 @@ def shared_camera(box, m: np.ndarray, aspect: float, units=None, *,
 
 
 def through_eye(cal: np.ndarray, m: np.ndarray, aspect: float, fov: float | None = None,
-                distance: float | None = None) -> tuple[np.ndarray, np.ndarray]:
+                distance: float | None = None, yaw: float = 0.0,
+                pitch: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
     """`shared_camera`'s second half: (view_proj, eye) of calibration `cal`
     (stage basis `m`) seen through the eye `fov` / `distance` (the reference
     eye when None) on a picture `aspect` wide. No fit: `Ghost.poses` fits
@@ -465,8 +466,10 @@ def through_eye(cal: np.ndarray, m: np.ndarray, aspect: float, fov: float | None
     undo = np.eye(4)
     undo[:3, :3] = m.T            # m is orthonormal (a signed permutation)
     stage_to_world = cal @ undo
-    vp = eye_matrix(max(aspect, 1e-3), 1.0, fov, distance) @ stage_to_world
-    eye_world = np.array([0.0, 0.0, float(distance), 1.0])
+    # (plan 92 phase 2: an eye orbited about the world origin, `yaw` / `pitch`)
+    vp = eye_matrix(max(aspect, 1e-3), 1.0, fov, distance, yaw=yaw, pitch=pitch) @ stage_to_world
+    eye_world = (np.array([0.0, 0.0, float(distance), 1.0]) if not (yaw or pitch)
+                 else np.array([*eye_position(distance, yaw, pitch), 1.0]))
     eye = np.linalg.solve(stage_to_world, eye_world)[:3]
     return vp, eye
 
@@ -480,11 +483,28 @@ class Settled(tuple):
     as the three it always was."""
 
     layer: tuple | None = None
+    # plan 92 phase 2: the calibration, the stage basis and the aspect, so
+    # another scene's eye sees the same poses (`through`)
+    fit: tuple | None = None
 
-    def __new__(cls, poses, view_proj, eye, layer=None):
+    def __new__(cls, poses, view_proj, eye, layer=None, fit=None):
         out = super().__new__(cls, (poses, view_proj, eye))
         out.layer = layer
+        out.fit = fit
         return out
+
+    def through(self, eye) -> tuple:
+        """These poses through `eye` (plan 92 phase 2: another scene's — an
+        `EyeState`, anything with `eye_fov`, `eye_distance`, `eye_yaw`,
+        `eye_pitch`): ``(poses, view_proj, eye)``. Itself without a fit."""
+        if self.fit is None:
+            return self
+        cal, m, aspect = self.fit
+        vp, at = through_eye(cal, m, aspect, getattr(eye, "eye_fov", None),
+                             getattr(eye, "eye_distance", None),
+                             float(getattr(eye, "eye_yaw", 0.0)),
+                             float(getattr(eye, "eye_pitch", 0.0)))
+        return (self[0], vp, at)
 
 
 # ------------------------------------------------------------------ poses
@@ -1644,7 +1664,7 @@ class Ghost:
         return hit[1]
 
     def poses(self, t: float, aspect: float, fov: float | None = None,
-              distance: float | None = None):
+              distance: float | None = None, yaw: float = 0.0, pitch: float = 0.0):
         """This frame's poses and camera, or None when nothing would show.
 
         Plan 26 A3: the camera is the shape's eye (`shared_camera`: the
@@ -1674,7 +1694,7 @@ class Ghost:
         m = basis(cfg.get("mode", "desktop"), st.mirror)
         box = box_of(self.source)
         cal = self.calibrated(box, m, getattr(self.source, "units", None))
-        vp, eye = through_eye(cal, m, aspect, fov, distance)
+        vp, eye = through_eye(cal, m, aspect, fov, distance, yaw, pitch)
         # (plan 43 C2: the reference eye's, for a layer laid without depth —
         # one 4×4 product off the cached fit, so no shortcut to keep exact)
         ref = through_eye(cal, m, aspect)
@@ -1700,16 +1720,16 @@ class Ghost:
                                 anchors)
                 if st.tethers and rows:
                     p.tethers = tethers(p.side, rows, anchors)
-        return Settled(poses, vp, eye, ref)
+        return Settled(poses, vp, eye, ref, fit=(cal, m, aspect))
 
     def settle(self, t: float, aspect: float, fov: float | None = None,
-               distance: float | None = None):
+               distance: float | None = None, yaw: float = 0.0, pitch: float = 0.0):
         """The frame's hands, once (plan 26 A3, the hands geometry node's
         `run`): the fades stepped and the poses and the camera kept in
         `now` — (poses, view_proj, eye), or None when nothing shows — for
         every draw of this frame: inside the scene (`draw_solid`), into
         the hands' layer and the readout (`layer(…, now=…)`)."""
-        self.now = self.poses(t, aspect, fov, distance)
+        self.now = self.poses(t, aspect, fov, distance, yaw, pitch)
         return self.now
 
     def draw_solid(self, now, lines: bool = False) -> bool:
