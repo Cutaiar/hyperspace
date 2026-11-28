@@ -19,18 +19,8 @@
   "hyperspace-python/hyperspace/headless.py": {
    "provenance": 4
   },
-  "hyperspace-python/hyperspace/params.py": {
-   "narration": 1,
-   "provenance": 2
-  },
-  "hyperspace-python/hyperspace/patches.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/hyperspace/poi.py": {
-   "provenance": 1
-  },
   "hyperspace-python/hyperspace/routing.py": {
-   "provenance": 27
+   "provenance": 3
   },
   "hyperspace-python/hyperspace/shaders/fx/_lib.glsl": {
    "provenance": 8
@@ -119,17 +109,8 @@
   "hyperspace-python/hyperspace/shaders/patterns.glsl": {
    "provenance": 1
   },
-  "hyperspace-python/hyperspace/totem.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/hyperspace/ui_pad.py": {
-   "provenance": 2
-  },
   "hyperspace-python/hyperspace/ui_pad_lab.py": {
    "provenance": 21
-  },
-  "hyperspace-python/hyperspace/ui_routing.py": {
-   "provenance": 1
   },
   "hyperspace-python/pyproject.toml": {
    "provenance": 11
@@ -140,20 +121,8 @@
   "hyperspace-python/tests/fixtures/time-displace-488/timedisplace488.glsl": {
    "provenance": 9
   },
-  "hyperspace-python/tests/test_app_boundary.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_desk.py": {
-   "provenance": 2
-  },
   "hyperspace-python/tests/test_desk_coverage.py": {
    "provenance": 1
-  },
-  "hyperspace-python/tests/test_desk_faders.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_desk_trust.py": {
-   "provenance": 2
   },
   "hyperspace-python/tests/test_doc_numbers.py": {
    "provenance": 2
@@ -311,7 +280,7 @@
    "provenance": 3
   },
   "hyperspace-python/tests/test_loadable.py": {
-   "provenance": 96
+   "provenance": 95
   },
   "hyperspace-python/tests/test_loadable_folders.py": {
    "provenance": 6
@@ -566,7 +535,7 @@
    "provenance": 3
   },
   "hyperspace-python/tests/test_routing.py": {
-   "provenance": 164
+   "provenance": 150
   },
   "hyperspace-python/tests/test_routing_boundary.py": {
    "provenance": 11
@@ -581,7 +550,7 @@
    "provenance": 3
   },
   "hyperspace-python/tests/test_seq_page.py": {
-   "provenance": 2
+   "provenance": 1
   },
   "hyperspace-python/tests/test_sequencer.py": {
    "provenance": 1
