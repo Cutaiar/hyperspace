@@ -184,7 +184,7 @@ def test_a_seven_is_never_migrated_or_filled_in(tmp_path):
         {"from": "lookback", "to": "output.all.image"}]}
     app = _app_with(tmp_path, "lean", {"schema": SEVEN, "values": {}, "graph": section})
     assert app.loaded_patch.migrated == "", app.loaded_patch.migrated
-    assert [n for n in app.loaded_patch.notes if "(plan 90)" not in n] == []
+    assert [n for n in app.loaded_patch.notes if not M.is_parts_note(n)] == []
     got = _pairs(app.loaded_patch.document("lean")["graph"])
     assert sorted(got) == sorted([
         ("shape", "scene.geometry"), ("scene", "fade.image"), ("fade", "resize.image"),
@@ -246,8 +246,8 @@ def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
     # is public parts now, said; H3: and its dream, said)
     assert app.loaded_patch.migrated == said
     rest = unrescaled(app.loaded_patch.notes)
-    assert len(rest) == 2 and rest[0].startswith("lookback is public parts now (plan 90)")
-    assert rest[1].startswith("dream is public parts now (plan 90)")
+    assert len(rest) == 2 and rest[0].startswith("lookback is public parts now:")
+    assert rest[1].startswith("dream is public parts now:")
     # (the strip says a load's first note before the migration line, `_warn`: this
     # fixture is from before the effect tapers, so its rescaled depths, plan 86;
     # the look-back's and the dream's notes the two more)

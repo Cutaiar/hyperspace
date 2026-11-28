@@ -298,7 +298,7 @@ def test_a_grouped_loadable_builds_the_graph_of_its_ungrouped_twin(tmp_path):
             others.append(path.stem)
         want = G.signature(G.build_graph(_views(), flat.wiring()))
         app.loaded_patch.load_doc(grouped_twin(doc, ids))
-        said = [n for n in app.loaded_patch.notes if "(plan 90" not in n]
+        said = [n for n in app.loaded_patch.notes if not graphmigrate.is_parts_note(n)]
         assert said == [], path.stem
         assert app.loaded_patch.groups[0]["nodes"] == ids, path.stem
         spec = app.loaded_patch.graph.spec

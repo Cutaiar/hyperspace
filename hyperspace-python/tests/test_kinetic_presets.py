@@ -28,8 +28,8 @@ FILES = sorted(KINETIC.glob("*.json"))
 
 
 def _only_look_back_notes(warning: str) -> bool:
-    """No warning, or only the look-back's migration's (plan 90 H2)."""
-    return not warning or ("(plan 90)" in warning and "unknown id" not in warning
+    """No warning, or only notes from the look-back's conversion to public parts."""
+    return not warning or (graphmigrate.is_parts_note(warning) and "unknown id" not in warning
                            and "graph:" not in warning)
 
 

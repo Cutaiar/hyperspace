@@ -172,7 +172,7 @@ def test_a_loadable_with_per_frame_echo_ids_is_read_in_seconds(rig):
     reg, table = rig.reg, rig.router.table
     assert reg["fx.trail.fade"].value == pytest.approx(fade_of_decay(0.93))
     assert reg["delay.hz"].value == pytest.approx(30.0)           # every 2 frames at 60 Hz
-    said = [n for n in rig.loaded_patch.notes if "(plan 90)" not in n]
+    said = [n for n in rig.loaded_patch.notes if not graphmigrate.is_parts_note(n)]
     assert len(said) == 1 and "look-back read in seconds" in said[0]
     assert any(n.startswith("lookback is public parts now") for n in rig.loaded_patch.notes)
     (row,) = table.routes()

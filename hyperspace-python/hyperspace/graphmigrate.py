@@ -49,6 +49,7 @@ import functools
 import itertools
 import math
 import re
+import string
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
@@ -2314,20 +2315,19 @@ LB_KEY = {"measure": 0, "level": 0.0, "soft": 1.0, "keep": True, "feather": 0.0,
 # `groups`; a fragment's spawn groups what it lands itself)
 LB_GROUP = "trail"
 LB_ROLES = ("curve", "fade", "resize", "delay", "deep", "trail", "matte", "cut", "cover_cut")
-LOOKBACK_NOTE = ("{old} is public parts now (plan 90): {chain} — the same look, what it keeps "
+LOOKBACK_NOTE = ("{old} is public parts now: {chain} — the same look, what it keeps "
                  "at 512 on the long side; save to keep it")
-LB_ECHO_NOTE = "{pin} is {read} now (plan 90): a Read of {delay}, at {at}, nearest"
+LB_ECHO_NOTE = "{pin} is {read} now: a Read of {delay}, at {at}, nearest"
 LB_GAP_NOTE = ("{row}: the look-back's gap is the delay's rate in Hz now ({delay}.hz), and a "
-               "row on the gap has no straight line onto it — left out (plan 90)")
+               "row on the gap has no straight line onto it — left out")
 LB_RANGE_NOTE = ("{row}: {old} ran {was}, {new} runs {now} — the row is kept, its throw "
-                 "spans the new range (plan 90)")
-LB_NOWHERE_NOTE = "{row}: {old} drew nothing in this patch (plan 90): left out"
-LB_NONE_NOTE = "{old} kept no echoes (echoes 0): its trail is off (plan 90)"
+                 "spans the new range")
+LB_NOWHERE_NOTE = "{row}: {old} drew nothing in this patch: left out"
+LB_NONE_NOTE = "{old} kept no echoes (echoes 0): its trail is off"
 LB_MASTER_NOTE = ("the look-back's parts are effects, which fx.on and fx.mix switch and scale: "
-                  "{what} so it draws as it did; the patch's other effects are as they were "
-                  "(plan 90)")
+                  "{what} so it draws as it did; the patch's other effects are as they were")
 LB_MASTER_ROW_NOTE = ("{row}: {pid} switched the effects alone; it switches the look-back's "
-                      "parts too now (plan 90)")
+                      "parts too now")
 _LB_END = re.compile(r"^lookback(?:\.([2-9]|[1-9][0-9]+))?"
                      r"(?:\.(image|occluder|cover|capture)|\.echo\.([1-9][0-9]*))?$")
 _LB_PARAM = re.compile(r"^dream\.(?:([2-9]|[1-9][0-9]+)\.)?(" + "|".join(LB_KEYS) + r")$")
@@ -2949,27 +2949,49 @@ DREAM_KEY = {"measure": 0, "level": 0.0, "soft": 0.25, "keep": False, "feather":
              "invert": False, "ramp": 1}
 DREAM_GROUP = "dream"
 DREAM_ROLES = ("resize", "dream", "hueturn", "palette", "curve", "darken", "fade", "composite")
-DREAM_NOTE = ("{old} is public parts now (plan 90): {chain} — the dream on a picture of its "
+DREAM_NOTE = ("{old} is public parts now: {chain} — the dream on a picture of its "
               "own size, its colour and grade on it alone, laid over its input at its mix; "
               "save to keep it")
 DREAM_OFF_NOTE = ("{old} was off, with nothing to turn it on: it drew nothing, so it is left "
-                  "out (plan 90) — spawn the dream starter to dream again")
+                  "out — spawn the dream starter to dream again")
 DREAM_SECOND_NOTE = "{old} is a second dream, which drew nothing (one live dream): left out"
 DREAM_LINGER_NOTE = ("{old}'s linger (dream.mask_decay {was:g}) merges into Hold "
-                     "(fx.{dream}.k): its region fades with its picture now (plan 90 Q17)")
+                     "(fx.{dream}.k): its region fades with its picture now")
 DREAM_SCENE_TINT_NOTE = ("{old}'s tint from the scene keeps its chosen colour ({hue:g}°) on "
-                         "{palette} (plan 90 Q16)")
-DREAM_ROW_NOTE = "{row}: {old} has no part now (plan 90): left out"
+                         "{palette}")
+DREAM_ROW_NOTE = "{row}: {old} has no part now: left out"
 DREAM_DARKEN_NOTE = ("{row}: dream.darken is the level of its Fade now ({fade}.level, 1 − "
-                     "darken): the row is kept, its throw runs the other way (plan 90)")
+                     "darken): the row is kept, its throw runs the other way")
 DREAM_K_NOTE = ("{row}: dream.k ran 0.03 … 0.3 straight, Hold 0.03 … 1 on a log throw — the row "
-                "is kept, its throw spans the new range (plan 90)")
+                "is kept, its throw spans the new range")
 DREAM_MASTER_NOTE = ("the dream's parts are effects, which fx.on and fx.mix switch and scale: "
-                     "{what} so it draws as it did; the patch's other effects are as they were "
-                     "(plan 90)")
+                     "{what} so it draws as it did; the patch's other effects are as they were")
 DREAM_MASTER_ROW_NOTE = ("{row}: {pid} switched the effects alone; it switches the dream's "
-                         "parts too now (plan 90)")
+                         "parts too now")
 _DREAM_PARAM = re.compile(r"^dream\.(" + "|".join(DREAM_KEYS) + r")$")
+
+# The notes the look-back's and the dream's conversion to public parts write.
+# DREAM_SECOND_NOTE is not one: a second dream is dropped, not converted.
+PARTS_NOTES = (LOOKBACK_NOTE, LB_ECHO_NOTE, LB_GAP_NOTE, LB_RANGE_NOTE, LB_NOWHERE_NOTE,
+               LB_NONE_NOTE, LB_MASTER_NOTE, LB_MASTER_ROW_NOTE, DREAM_NOTE, DREAM_OFF_NOTE,
+               DREAM_LINGER_NOTE, DREAM_SCENE_TINT_NOTE, DREAM_ROW_NOTE, DREAM_DARKEN_NOTE,
+               DREAM_K_NOTE, DREAM_MASTER_NOTE, DREAM_MASTER_ROW_NOTE)
+
+
+def _note_pattern(template: str) -> str:
+    """A regex for what `template.format(...)` writes: its literal text, any text per field."""
+    return "".join(re.escape(lit) + (".*?" if field is not None else "")
+                   for lit, field, _spec, _conv in string.Formatter().parse(template))
+
+
+_PARTS_NOTE = re.compile("|".join(f"(?:{_note_pattern(t)})" for t in PARTS_NOTES),
+                         re.DOTALL)
+
+
+def is_parts_note(text: str) -> bool:
+    """Whether `text` holds a note from the look-back's or the dream's conversion to public
+    parts. It searches, so a note with a prefix, or a warning that joins several, counts."""
+    return _PARTS_NOTE.search(text) is not None
 
 
 def _dream_key(pid: Any) -> str | None:

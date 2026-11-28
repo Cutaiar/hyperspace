@@ -16,9 +16,6 @@
    "narration": 1,
    "provenance": 12
   },
-  "hyperspace-python/hyperspace/graphmigrate.py": {
-   "provenance": 17
-  },
   "hyperspace-python/hyperspace/headless.py": {
    "provenance": 4
   },
@@ -631,7 +628,7 @@
    "provenance": 46
   },
   "hyperspace-python/tests/test_graph_groups.py": {
-   "provenance": 30
+   "provenance": 29
   },
   "hyperspace-python/tests/test_graph_head.py": {
    "provenance": 1
@@ -743,7 +740,7 @@
    "provenance": 3
   },
   "hyperspace-python/tests/test_kinetic_presets.py": {
-   "provenance": 5
+   "provenance": 3
   },
   "hyperspace-python/tests/test_knob_fields.py": {
    "provenance": 5
@@ -771,7 +768,7 @@
    "provenance": 3
   },
   "hyperspace-python/tests/test_loadable.py": {
-   "provenance": 97
+   "provenance": 96
   },
   "hyperspace-python/tests/test_loadable_folders.py": {
    "provenance": 6
@@ -990,7 +987,7 @@
    "provenance": 15
   },
   "hyperspace-python/tests/test_plan36_seven.py": {
-   "provenance": 20
+   "provenance": 17
   },
   "hyperspace-python/tests/test_plan39_graph.py": {
    "provenance": 5
