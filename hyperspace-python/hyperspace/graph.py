@@ -6128,10 +6128,17 @@ class Cover(Node):
     # switch's unpicked input its scene is not run, and its mask is not made)
     MAKES = True
 
+    def __init__(self, name: str, after: tuple[Node, ...] = (), of: str = "scene",
+                 **inputs: Node | None):
+        super().__init__(name, after, **inputs)
+        # plan 92 phase 2: the scene whose pass it masks, by its name — never
+        # read off its input, which is a `KeyNode` while black is clear keys
+        # the scene (Devin on #528)
+        self.of_scene = of
+
     def of(self) -> str:
         """The scene this cover masks (plan 92 phase 2: each scene its own)."""
-        sc = self.inputs.get("scene")
-        return sc.name if sc is not None else "scene"
+        return getattr(self, "of_scene", "scene")
 
     def run(self, frame: Frame) -> None:
         # (plan 90 H2: built only where something reads it — a cut's mask)
@@ -7873,7 +7880,7 @@ class _Build:
             if of not in self.covers:
                 scene = self.node(of)
                 if scene is not None:
-                    self.covers[of] = self._keep(Cover(cover_name(of), scene=scene))
+                    self.covers[of] = self._keep(Cover(cover_name(of), of=of, scene=scene))
                     if of == "scene":
                         self.cover = self.covers[of]
             return self.covers.get(of)

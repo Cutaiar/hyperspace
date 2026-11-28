@@ -1746,10 +1746,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if kind == "segment":                    # plan 39 T5: every instance's three pins
             for p, typ in rgraph.SEGMENT_PINS.items():
                 add_port(n, VPort(f"rout:{name}.{p}", p, OUT, typ))
-        for pin, owner in rgraph.PINS.items():   # plan 36 T2: the scene's cover and depth
-            if owner == name and kind != "segment":
-                typ = rgraph.WIRED_MAKES[kind_of(pin)]
-                add_port(n, VPort(f"rout:{pin}", pin.rpartition(".")[2], OUT, typ))
+        if kind == "scene":                      # plan 36 T2: the scene's cover and depth
+            for p in ("cover", "depth"):         # (plan 92 phase 2: every scene's own)
+                typ = rgraph.WIRED_MAKES[p if p == "cover" else rgraph.DEPTH_PORT]
+                add_port(n, VPort(f"rout:{name}.{p}", p, OUT, typ))
         if isinstance(r, rgraph.PointCloud):
             # plan 93: what its device is doing, in words (none picked, not
             # listed here, waiting) — its body's first line

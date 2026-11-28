@@ -255,3 +255,62 @@ def test_a_patchs_first_scene_lands_beside_the_hosts():
     landing = spawn(doc, Host(names=frozenset({"scene"})))
     assert landing.taken == () and landing.renames["scene"] == "scene.2"
     assert {"kind": "scene", "instance": 2} in [dict(n) for n in landing.nodes]
+
+
+# ---------------------------------------------------------------- Devin on #528
+
+@pytest.mark.parametrize("keyed", ["scene", "scene.2"])
+def test_a_keyed_scenes_cover_masks_its_own_pass(ctx, keyed):
+    """Black is clear on a scene reads it through a `KeyNode`: its cover still
+    masks the scene's own pass, by name, and the frame draws."""
+    doc = _two({"from": "scene.2.cover", "to": "cut.mask"}, {"from": "scene", "to": "cut.image"},
+               {"from": "scene.cover", "to": "cut.2.mask"}, {"from": "scene.2", "to": "cut.2.image"},
+               nodes=({"kind": "scene", "instance": 2}, {"kind": "cut"},
+                      {"kind": "cut", "instance": 2}))
+    doc["wires"] = [w for w in doc["wires"] if not w["to"].startswith("output.")]
+    doc["wires"] += [{"from": "cut", "to": "output.1.image"},
+                     {"from": "cut.2", "to": "output.2.image"}]
+    doc["keys"] = [keyed]
+    assert G.read_graph(doc).notes == ()
+    from test_graph_masks import _views
+    g = G.build_graph(_views(), G.read_graph(doc).wiring())
+    assert g.nodes["scene(cover)"].of() == "scene" and g.nodes["scene.2(cover)"].of() == "scene.2"
+    r, (one, two) = _draw(ctx, ViewState(shape=TESSERACT, faces=True), doc)
+    assert "scene(key)" not in r._scene_passes() and "scene.2(key)" not in r._scene_passes()
+    assert (one[..., :3] > 0).any() and (two[..., :3] > 0).any()
+
+
+def test_a_numbered_scene_saved_alone_stays_numbered_and_spawns_numbered():
+    """Lift and spawn never make a numbered scene the first: its eye is its
+    own, the first's the look's."""
+    from test_patches import parts
+    loaded = {"graph": _two(), "values": {"eye.2.yaw": 0.5}, "routes": [
+        {"source": "lfo.1", "target": "eye.2.yaw", "op": "add", "depth": 0.2}]}
+    doc, refused = patches.lift(*parts(loaded), ["render:scene.2"])
+    assert refused == [] and patches.check(doc) == []
+    assert [patches.entry_name(e) for e in doc["nodes"]] == ["scene.2"]
+    assert doc["values"] == {"eye.2.yaw": 0.5}
+    landing = spawn(doc, Host(names=frozenset()))            # a host with no scene
+    assert landing.renames.get("scene.2", "scene.2") == "scene.2"
+    assert landing.values == {"eye.2.yaw": 0.5}
+    landing = spawn(doc, Host(names=frozenset({"scene", "scene.2"})))
+    assert landing.renames["scene.2"] == "scene.3" and landing.values == {"eye.3.yaw": 0.5}
+    # (a patch's own first scene still lands as the first where the host has none)
+    first = spawn({"schema": patches.SCHEMA, "name": "v", "nodes": [{"kind": "scene"}]},
+                  Host(names=frozenset()))
+    assert first.renames.get("scene", "scene") == "scene"
+
+
+def test_graph_draws_every_scenes_pins_and_their_cables():
+    from test_plan36_edges import build, cable, view_of
+    spec = G.read_graph(_two({"from": "scene.2.cover", "to": "cut.mask"},
+                             {"from": "scene", "to": "cut.image"},
+                             nodes=({"kind": "scene", "instance": 2}, {"kind": "cut"})))
+    view = view_of(spec, build(spec))
+    two = next(n for n in view.nodes if n.id == "render:scene.2")
+    one = next(n for n in view.nodes if n.id == "render:scene")
+    assert {"rout:scene.2.cover", "rout:scene.2.depth"} <= {p.id for p in two.ports}
+    assert {p.id for p in one.ports if p.id.startswith("rout:")} >= {"rout:scene.cover",
+                                                                       "rout:scene.depth"}
+    assert not any(p.id.startswith("rout:scene.2") for p in one.ports)
+    assert cable(view, "scene.2.cover", "cut.mask").type == graphview.MASK

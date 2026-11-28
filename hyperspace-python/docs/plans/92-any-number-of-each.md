@@ -344,6 +344,10 @@ What changes, read in the code before building:
   "its sort runs once". Seen from behind, a 3D shape's see-through faces keep the front's
   order. A fractal's walk is cut for the first scene's eye. The rig's box (`world.box`,
   the poi) is the first scene's.
+- **The hands' own pictures through a second eye** (row 1218, Devin on #528). Solid hands in
+  a scene go through its eye; a hands layer or guide is one picture, made through the first
+  eye, so laid over `scene.2` (or depth-composited with `scene.2.depth`) it is from the
+  other camera. Which consumer's eye a shared layer takes is still to decide.
 - **Hand checks 983–984** on the Mac, and GRAPH's **gpu cost** chip over two scenes.
 
 ### 9.3 Built
@@ -358,6 +362,8 @@ eye draws standing at the same orbit, and `Renderer.stats["posed"]` 1 for the fr
   `tests/test_render.py`, `test_graph_faces.py` and `test_graph_switch.py` watch
   `draw_posed` (what the graph's shape calls now); `test_patches_frame_kinds.py` expects
   the scene to land as `scene.2`. Hand checks 983, 984.
+- **Devin on #528.** A keyed scene's cover masks its own pass (`Cover.of_scene`); a lift or
+  spawn never makes a numbered scene the first; GRAPH draws every scene's pins.
 - **Restart** after pulling: the renderer's per-scene state and the view's `eyes` are new
   fields on live objects.
 

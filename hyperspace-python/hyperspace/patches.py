@@ -1395,7 +1395,9 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
         if n not in by_base.setdefault(base, []):
             by_base[base].append(n)
     for base, ns in by_base.items():
-        first = 2 if base == "hands" else 1
+        # (plan 92 phase 2: a numbered scene never becomes the first — its eye,
+        # `eye.<n>.*`, is its own and the first's is the look's: Devin on #528)
+        first = 2 if base == "hands" or (_kind(base) == "scene" and 1 not in ns) else 1
         for k, n in enumerate(sorted(ns)):
             rn.render[(base, n)] = first + k
     rn.voices = {MOD: {n: k + 1 for k, n in enumerate(members.mods)},
@@ -1719,6 +1721,10 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
             hold.add(n)
             rn.render[(base, n)] = n
             continue
+        if _kind(name) == "scene" and n != 1:
+            # (plan 92 phase 2: a numbered scene lands numbered, never as the
+            # first, whose eye is the look's — Devin on #528)
+            hold.add(1)
         new = next(k for k in range(1, len(hold) + 2) if k not in hold)
         hold.add(new)
         rn.render[(base, n)] = new
