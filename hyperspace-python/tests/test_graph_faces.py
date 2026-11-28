@@ -1,8 +1,8 @@
-"""Plan 33 T4 — the faces, the pattern's media layer and the backdrop are
+"""The faces, the pattern's media layer and the backdrop are
 graph inputs (`shape.faces`, `pattern.media`, `backdrop.image`), and a
 branch is made once a frame at the size its consumer asks.
 
-The owner's headline graph is a channel through its own shaders onto the
+The headline graph is a channel through its own shaders onto the
 faces (`media.a → hueturn.2 → shape.faces`); the rest is what keeps it
 honest: faces left unwired draw as they always did (no 1024² pass), a
 channel that reads nothing leaves the pattern on the faces, a branch into
@@ -81,9 +81,9 @@ def _instance(file: str, n: int) -> dict:
 
 
 def test_the_faces_wires_are_the_wiring_now():
-    """T4 builds what T3 held back: the faces' run, a branch onto the faces
+    """The faces' run, a branch onto the faces
     and into the pattern's layer are wires of the wiring; a channel straight
-    into `backdrop.image` is the wiring's backdrop (the plan 32 path, node
+    into `backdrop.image` is the wiring's backdrop (node
     for node), a branch into it is a wire."""
     spec = G.read_graph(section(("frame", "fx.image"), ("pattern", "kaleido.image"),
                                 ("kaleido", "shape.faces"), ("media.b", "pattern.media"),
@@ -102,7 +102,7 @@ def test_the_faces_nodes_are_built_from_the_wires():
     """The pattern node, the shape's `faces` port, the backdrop's sink: the
     pattern node exists only when a wire touches it, `shape.faces` reads
     what is wired, and a branch under the scene is `grounded`'s `under`.
-    Plan 36 T2: a load draws the faces' pattern as its wire, `pattern →
+    A load draws the faces' pattern as its wire, `pattern →
     shape.faces`; with none the faces are plain and there is no pattern."""
     vs = [View(Switches(), (64, 48))]
     plain = G.build_graph(vs, wired_wiring(G.Wiring(run=())), effects=("acid",))
@@ -137,10 +137,10 @@ def test_the_faces_nodes_are_built_from_the_wires():
     under = g.nodes["backdrop"].inputs["under"]
     assert isinstance(under, G.Effect) and under.effect == "kaleido.2"
     assert g.nodes["backdrop"].under_alpha_of == "backdrop_alpha"
-    # (plan 36 T4: the look-back's trail added onto the backdrop's picture)
+    # (the look-back's trail added onto the backdrop's picture)
     assert g.nodes["scene"].ground == 0.0
     assert g.nodes["composite"].inputs["under"].name == "backdrop"
-    # (plan 35 T4: the backdrop is the composite itself — no sink beside it)
+    # (the backdrop is the composite itself — no sink beside it)
     assert isinstance(g.nodes["backdrop"], G.Composite)
 
 
@@ -195,8 +195,8 @@ def _renderer(ctx, media=None, pairs=(), nodes=(), instances=None, values=None,
               history=False):
     """A renderer over `media` whose wiring is the section `pairs` says (a
     run's head always: the section as a load lands it). `history`: the
-    look-back records the backdrop (plan 36 T3: the capture wire the
-    migration writes for `backdrop.history`, no longer laid on per frame)."""
+    look-back records the backdrop (the capture wire the
+    migration writes for `backdrop.history`, not laid on per frame)."""
     from hyperspace.render import Renderer
 
     r = Renderer(ctx)
@@ -288,10 +288,10 @@ def _rig_frame(ctx, slug, wiring=None, size=(240, 150), frames=4):
 
 def test_faces_unwired_draw_as_today(ctx):
     """PARTY-FACES, its section landed (a run, faces unwired): every pixel
-    is the frame the pre-plan-33 wiring draws — the faces drawn per face
+    is the frame the unwired-faces wiring draws — the faces drawn per face
     with no 1024² pass and nothing of the faces' picture allocated."""
     got, r = _rig_frame(ctx, "party-faces")
-    # (plan 35: wired; plan 36 T2: the faces' pattern its wire, as a load lands it)
+    # (wired; the faces' pattern its wire, as a load lands it)
     assert r.wiring.wired and [w for w in r.wiring.wires if w.dst == "shape.faces"] == [
         G.Wire("pattern", "shape.faces")]
     assert r.face_pic.tex is None and r._pic is None and not getattr(r, "_pools", {})
@@ -300,7 +300,7 @@ def test_faces_unwired_draw_as_today(ctx):
 
 
 def test_faces_fall_back_to_the_pattern_when_the_branch_reads_nothing(ctx):
-    """Review Focus 4: the channel feeding the faces has nothing (an empty
+    """The channel feeding the faces has nothing (an empty
     slot), or loses its feed mid-show: the faces show the pattern that
     frame — the faces-unwired frame — never black."""
     s = _faces(pattern=2)
@@ -366,7 +366,7 @@ def test_a_branch_under_the_scene(ctx):
 
 
 def test_a_branch_read_at_two_sizes_is_made_once_each_and_does_not_leak(ctx):
-    """Review Focus 5: acid.2 read by the faces (1024²) and by output 2's
+    """acid.2 read by the faces (1024²) and by output 2's
     picture (the frame's size) runs two passes a frame — one per size — and
     neither the effects' pool nor the sized pools grow over 100 frames."""
     size = (160, 120)

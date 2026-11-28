@@ -1,4 +1,4 @@
-"""audio.py's streams and analysis.py's FFT, headless (audit A9).
+"""audio.py's streams and analysis.py's FFT, headless.
 
 `sounddevice` is replaced by a fake whose streams hand their callback to
 the test, so a capture and a file can be driven sample by sample without
@@ -298,7 +298,7 @@ def test_band_bins_round_like_the_reference():
     assert an.band_bins(20_000, 30_000) == (1706, 2047)
 
 
-# ------------------------- transport, loopback, ring (moved from test_control.py, audit D5)
+# ------------------------- transport, loopback, ring
 
 def test_transport_position_math():
     import numpy as np

@@ -1,5 +1,5 @@
 # ruff: noqa: F811 — `rig` is test_midi's fixture, taken as each test's argument
-"""Plan 24 C2 — the faders freed (decisions 17, 23 and 24).
+"""The faders freed: the track faders are the loadable patch's and the audio strip is one latch away.
 
 Driven through `MidiIO` with the fake ports tests/test_midi.py injects (its
 rig: a scratch library seeded with the corpus, its show the party show):
@@ -12,7 +12,7 @@ rig: a scratch library seeded with the corpus, its show the party show):
 - **the audio strip is one latch away**: the bands' post-drive on S1–S6 and
   master.dyn / master.trim on S7–S8 are the SHIFT layer's; MASTER stays the
   audio drive and the crossfader the master dim, invariant;
-- **soft pickup across the latch** (D7): a fader moved on one layer picks
+- **soft pickup across the latch**: a fader moved on one layer picks
   up its own param on the other instead of jumping it;
 - **the migration**: an older `bindings.json` with the eight invariant
   fader rows gets them on the SHIFT layer, noted, backed up, written once;
@@ -37,8 +37,8 @@ FADER = apc40.CC_FADER
 GLYPHS = [f"S{k + 1}" for k in range(8)]
 TARGETS = ("view.points_alpha", "view.lines_alpha", "view.pattern_mix", "view.bmp_alpha",
            "view.bright", "view.speed", "view.inst_amp", "view.media_alpha")
-# (plan 90 H3: S8 rode `dream.mix`; a file with no dream drawn leaves that row
-# out, so the fixture's S8 rides another plain knob)
+# (a file with no dream drawn leaves the `dream.mix` row out, so the
+# fixture's S8 rides another plain knob)
 SHIFT_TARGETS = (*(f"band.{i}.post" for i in range(6)), "master.dyn", "master.trim")
 
 
@@ -74,7 +74,7 @@ def at(rig, pid) -> int:
 # ------------------------------------------------------------------ the map
 
 def test_the_faders_are_the_loadables_and_the_audio_strip_is_shifts():
-    """Decision 17: no patch-layer fader row in the factory map (no
+    """No patch-layer fader row in the factory map (no
     inherited default); the audio strip is the SHIFT layer's; MASTER and the
     crossfader stay invariant."""
     rows = [Binding.from_json(d) for d in apc40.DEFAULT_MAP]
@@ -91,7 +91,7 @@ def test_the_faders_are_the_loadables_and_the_audio_strip_is_shifts():
 
 
 def test_every_corpus_loadable_leaves_the_faders_dark_and_shift_lights_the_audio(rig):
-    """Decision 23: no shipped loadable patch got fader rows — every corpus file's
+    """No shipped loadable patch has fader rows — every corpus file's
     desk binds no track fader, and each loads with S1–S8 dark on the
     patch layer and the audio strip under SHIFT, with no desk note."""
     lib, t = rig.loaded_patch.lib, rig.midi.table
@@ -158,7 +158,7 @@ def test_the_fader_rows_round_trip_through_save_and_load(rig):
 
 
 def test_a_fader_picks_up_its_own_param_across_the_latch(rig):
-    """D7 across SHIFT: S1 set on the patch layer, then SHIFT latched —
+    """Across SHIFT: S1 set on the patch layer, then SHIFT latched —
     the same fader, now band.0.post's, does not jump the band to where the
     fader stands; it moves the band once it reaches the band's value. Back
     on the patch layer, the opacity waits likewise."""
@@ -196,7 +196,7 @@ def test_a_fader_on_its_value_when_the_layer_switches_is_caught_at_once(rig):
 
 
 def test_a_power_up_forgets_where_a_fader_was_on_every_layer(rig):
-    """Review of PR #180: a fader moved while the cable was out must not
+    """A fader moved while the cable was out must not
     read as a crossing. S1 caught under SHIFT at 110; the band set back to
     0.5 from the panel; a power-up; the fader pulled to ~10 while unplugged;
     SHIFT latched: the first move to 12 leaves the band alone (no position
@@ -226,7 +226,7 @@ def test_a_power_up_forgets_where_a_fader_was_on_every_layer(rig):
 
 
 def test_a_track_fader_is_learnable_on_the_loadable_layer(rig):
-    """Decision 17: S1 is the loadable patch's, so the on-screen desk offers it and
+    """S1 is the loadable patch's, so the on-screen desk offers it and
     a desk learn on CC 7 lands a patch-layer pickup row with no ring."""
     t, m = rig.midi.table, rig.midi
     s1 = next(c for c in apc40.LAYOUT if c.glyph == "S1")
@@ -244,7 +244,7 @@ def test_a_track_fader_is_learnable_on_the_loadable_layer(rig):
 # ------------------------------------------------------------- the migration
 
 def test_an_older_meta_file_moves_the_fader_rows_to_shift_once(tmp_path):
-    """A `bindings.json` from before C2 holds the eight audio rows on the
+    """A `bindings.json` from before the audio strip moved holds the eight audio rows on the
     track faders with no layer (invariant): its next load gives each the
     SHIFT layer, notes it, keeps a backup and writes the file back once; the
     next load is quiet. A fader row the owner changed stays invariant."""
@@ -286,9 +286,9 @@ def test_an_older_meta_file_moves_the_fader_rows_to_shift_once(tmp_path):
     assert (b.target, b.layer) == ("view.speed", None)
 
 
-def test_a_loadable_row_on_an_owners_invariant_fader_drops_with_the_d6_note(rig):
+def test_a_loadable_row_on_an_owners_invariant_fader_drops_with_the_invariant_note(rig):
     """Where the owner kept a fader invariant, a loadable patch's row on it is
-    dropped with D6's note, as on any invariant control."""
+    dropped with the invariant note, as on any invariant control."""
     t = rig.midi.table
     for b in [x for x in t.bindings if x.source == f"cc:0:{FADER}"]:
         t.bindings.remove(b)
@@ -302,7 +302,7 @@ def test_a_loadable_row_on_an_owners_invariant_fader_drops_with_the_d6_note(rig)
 # ------------------------------------------------------- lines and points opacity
 
 def test_lines_and_points_opacity_are_patch_params_at_one(rig):
-    """Decision 24: each new opacity defaults to the picture as it was."""
+    """Each new opacity defaults to the picture as it was."""
     for pid in ("view.lines_alpha", "view.points_alpha"):
         p = rig.reg[pid]
         assert p.value == 1.0

@@ -1,7 +1,7 @@
 """envelope.py takes a clock and a registry as arguments and imports
 nothing from the host but the leaf `modbank` — the rule tempo.py and lfo.py
 keep (test_lfo_boundary.py): the boundary erodes one convenient import at a
-time. The envelopes are a modulator bank (plan 31 W1), and modbank.py keeps
+time. The envelopes are a modulator bank, and modbank.py keeps
 the same rule (test_modbank.py).
 """
 

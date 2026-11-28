@@ -33,7 +33,7 @@ def test_it_is_a_generator_of_three_knobs_and_a_spin():
     assert hue.wrap and (hue.lo, hue.hi, hue.default) == (0.0, 1.0, 0.0)
     assert [(c.uniform, c.rate, c.period) for c in s.clocks] == [("u_spin_t", "spin", 1.0)]
     assert [(p.keys, p.label) for p in s.pads] == [(("hue", "saturation", "value"), "HSV")]
-    # no input port: the one rule runs it fed by nothing (row 1114)
+    # no input port: the one rule runs it fed by nothing
     assert "image" not in G.effect_ports("colour")[1]
     assert G.runs_unfed("colour") and G.runs_unfed("colour.2")
     assert "colour" in G.generators_of(FxState()) and FxState().errors == {}

@@ -5,7 +5,7 @@ standalone context and skips without one. What an effect *looks* like is
 judged by eye (tools/fx_shots.py writes the shots); here every factory
 file must parse, compile and change the frame, the off path must stay a
 copy, and a pass's own blend and alpha rules are checked against numpy.
-Plan 33 T7: an effect runs where the graph wires it, so a rig that switches
+An effect runs where the graph wires it, so a rig that switches
 effects on by hand gets its run as a load lands it
 (`graphmigrate.wiring_of`); the FX page browses the graph's effects.
 """
@@ -114,14 +114,14 @@ def test_declare_makes_ordinary_params():
     for pid in ("fx.on", "fx.mix", "fx.face_map", "fx.warp.on", "fx.warp.mix",
                 "fx.warp.speed", "fx.warp.blend", "fx.warp.amount", "fx.kaleido.segments"):
         assert pid in r, pid
-    for pid in ("fx.select", "fx.warp.order", "fx.warp.target"):     # plan 33 T7: retired
+    for pid in ("fx.select", "fx.warp.order", "fx.warp.target"):     # retired ids
         assert pid not in r, pid
     assert all(p.group == "fx" for p in r)
     assert r["fx.kaleido.segments"].integer
     assert r["fx.warp.scale"].log
-    # a fader writes the state the chain reads, and back (wave 0 T1: an
-    # amount is on the zero-safe log taper, so `set_value` lands the
-    # nearest detent, 3.5 % apart)
+    # a fader writes the state the chain reads, and back (an amount is on
+    # the zero-safe log taper, so `set_value` lands the nearest detent,
+    # 3.5 % apart)
     r["fx.warp.amount"].set_value(1.25)
     assert st.values["warp"]["amount"] == pytest.approx(1.25, rel=0.04)
     assert r["fx.warp.amount"].taper is fx.amount_taper(2.0)
@@ -135,7 +135,7 @@ def test_a_lane_rides_an_effect_param():
     declare(r, st)
     p = r["fx.warp.amount"]
     p.set_value(0.5)                # a detent of the log taper (2 · 2^−2)
-    p.modulate(0.1)                 # a tenth of the throw: one of its ten octaves (wave 0 T1)
+    p.modulate(0.1)                 # a tenth of the throw: one of its ten octaves
     r.apply()
     assert st.values["warp"]["amount"] == pytest.approx(1.0)
     assert p.base == pytest.approx(0.5)
@@ -210,7 +210,7 @@ def test_a_broken_edit_keeps_the_last_good_spec(fxdir):
 # ---------------------------------------------------------------- the chain's order
 
 def test_live_follows_the_bypass_and_the_mixes():
-    """`FxState.live` (plan 33 R): an effect draws where it is wired while it
+    """`FxState.live`: an effect draws where it is wired while it
     is on above mix 0 and the effects are on above FX mix 0 — no order, no
     target. (The run's order is its wires: test_graph_free.py.)"""
     st = FxState()
@@ -251,8 +251,8 @@ def render(ctx, fx: FxState, frames: int = 3, dream=None) -> np.ndarray:
     from hyperspace.view import ViewState
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx, fx=fx)
-    r.fx.dream_source = dream               # (plan 90 H3: the dream's worker, a fake)
-    r.wiring = wired_wiring(wiring_of(fx))  # plan 33 R23: the run the effects on make, as a load
+    r.fx.dream_source = dream               # the dream's worker, a fake
+    r.wiring = wired_wiring(wiring_of(fx))  # the run the effects on make, as a load
     s = ViewState(shape=10, faces=True, pattern=2, bright=1.3)
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     for k in range(frames):
@@ -269,7 +269,7 @@ def test_every_factory_effect_compiles(ctx):
 
 
 def test_the_shared_helpers_are_written_once(ctx):
-    """audit V2: TAU, LUMA, hsv, pal and the hue rotation live in
+    """TAU, LUMA, hsv, pal and the hue rotation live in
     shaders/_common.glsl and nowhere else; it compiles on its own (it reads
     no uniform); an edit to it counts as a change to every effect."""
     import re
@@ -283,7 +283,7 @@ def test_the_shared_helpers_are_written_once(ctx):
                 + "\nout vec4 f; void main() { f = vec4(hsv(0.1, 1.0, 1.0), luma(pal(0.0, "
                   "vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0)))); }")
     defs = re.compile(r"(?m)^(?:const\s+\w+\s+(TAU|LUMA)\b|vec3\s+(hsv|hsv2rgb|pal|hue_rotate|rotate_hue)\s*\()")
-    # (plan 90 H3: the dream's shader is an effect file, shaders/fx/dream.glsl)
+    # the dream's shader is an effect file, shaders/fx/dream.glsl
     for text in (PATTERNS_GLSL.read_text(), (FX_DIR / "_lib.glsl").read_text(),
                  (FX_DIR / "dream.glsl").read_text()):
         assert not defs.search(text), defs.search(text).group(0)
@@ -303,7 +303,7 @@ def test_off_is_the_old_frame_exactly(ctx):
     assert np.array_equal(render(ctx, dry), base)
 
 
-# plan 32 T7: displace and blend bend the frame by the picture wired into
+# displace and blend bend the frame by the picture wired into
 # their aux input; with none (here) they leave it as it is, by design —
 # tests/test_media_faces_aux.py holds them with an aux
 AUX_ONLY = {"displace", "blend"}
@@ -320,10 +320,10 @@ def test_each_effect_changes_the_frame(ctx, name):
         st.values[name].update(mix=1.0, hue_from=155.0, hue_to=245.0)
     if name == "fade":                     # its level starts at 1 (today's picture): turn it down
         st.values[name]["level"] = 0.5
-    if name == "curve":                    # plan 90: shape 0 is the picture as it was: bend it
+    if name == "curve":                    # shape 0 is the picture as it was: bend it
         st.values[name]["shape"] = 0.8
     dream = None
-    if name == "dream":                    # plan 90 H3: with no worker it passes through
+    if name == "dream":                    # with no worker it passes through
         from test_dream_effect import Fake
         dream = Fake()
     img = render(ctx, st, dream=dream)
@@ -463,8 +463,7 @@ def shell(tmp_path):
 
 def browser_scroll(panel, size) -> float:
     """The FX browser (`ui_fx.page`) drawn as the FX page drew it, at the
-    panel's size, in a window of its own — plan 49 stage 2 retired the page
-    and the browser is GRAPH's fx section, which scrolls by itself; the
+    panel's size, in a window of its own — the browser is GRAPH's fx section, which scrolls by itself; the
     body at full height still fits — three frames; its scroll range."""
     from imgui_bundle import imgui
 
@@ -551,7 +550,7 @@ def test_the_selection_is_a_name_a_load_keeps(tmp_path, monkeypatch):
         assert rig.panel.fx_selected == "kaleido.2"
         assert "no effect kaleido.2" in rig.plain
         rig.panel.fx_selected = "warp"               # a file the graph does not name:
-        rig.frame()                                  # (plan 36 T3) no such effect either
+        rig.frame()                                  # no such effect either
         assert "no effect warp" in rig.plain and "fx.warp.speed" not in rig.rects
         assert not any("sel" in k for k in rig.app.loaded_patch.document("x")["values"])
     finally:
@@ -780,7 +779,7 @@ def test_a_rows_on_toggles_and_never_selects(tmp_path, monkeypatch):
         rig.close()
 
 
-# ---------------------------------------------------------------- an idle effect says why (plan 16 WP3)
+# ---------------------------------------------------------------- an idle effect says why
 
 def test_why_idle_names_the_first_reason():
     from itertools import product
@@ -871,7 +870,7 @@ def test_the_idle_strips_controls_stay_live(fxpage):
     fxpage.panel.fx_selected = "warp"
     fxpage.frame()
     assert reg["fx.warp.on"].base is False and fxpage.veils
-    # (plan 33 U: no order slider, no ONTO chips — an effect's place is its wires)
+    # no order slider, no ONTO chips: an effect's place is its wires
     rows = ["fx.warp.mix", "fx.warp.speed", "fx.warp.blend",
             *(f"fx.warp.{p.key}" for p in st.specs["warp"].params)]
     for pid in ("fx.warp.on", *rows):                # no begin_disabled wraps a row
@@ -887,8 +886,8 @@ def test_the_idle_strips_controls_stay_live(fxpage):
     amount, speed = reg["fx.warp.amount"], reg["fx.warp.speed"]
     was = amount.base
     fxpage.click("fx.warp.amount", 0.9)
-    # (wave 0 T1: the amount's slider runs over its log taper's detents, so
-    # 9/10 of the throw is the taper's value there — one octave under hi)
+    # the amount's slider runs over its log taper's detents, so
+    # 9/10 of the throw is the taper's value there: one octave under hi
     assert amount.base > was and amount.base == pytest.approx(
         amount._value_of_norm(0.9), abs=0.1 * (amount.hi - amount.lo))
     fxpage.click("fx.warp.speed", 0.25)
@@ -912,7 +911,7 @@ def test_an_armed_rows_learn_frame_is_drawn_over_the_veil(fxpage, monkeypatch):
     panel.learn = SimpleNamespace(learning="fx.warp.speed", arm=lambda pid: None)
     fxpage.frame()
     assert len(seen) == 1 and fxpage.veils          # idle: after the veil, once
-    rows = {"fx.warp.mix", "fx.warp.speed", "fx.warp.blend",      # (plan 33 U: no order)
+    rows = {"fx.warp.mix", "fx.warp.speed", "fx.warp.blend",      # no order
             *(f"fx.warp.{p.key}" for p in st.specs["warp"].params)}
     assert set(seen[0]) == rows
     r0, r1 = seen[0]["fx.warp.speed"]
@@ -944,7 +943,7 @@ def test_the_page_fits_with_the_tightest_strip_idle(fxpage, monkeypatch):
 
 
 def test_the_palette_strip_shows_the_open_modes_rows(fxpage, monkeypatch):
-    """Plan 24 C6: the palette has 21 params; the strip packs lo/hi and
+    """The palette has 21 params; the strip packs lo/hi and
     hue/sat/val onto one row and shows the open mode's rows only, in fold
     and in gradient mode, error line and all."""
     from hyperspace.ui import Panel
@@ -967,20 +966,20 @@ def test_the_palette_strip_shows_the_open_modes_rows(fxpage, monkeypatch):
         shown = set(drawn)
         assert ("fx.palette.a4_val" in shown) == (mode == 1)      # the last anchor's slider
         assert ("fx.palette.val_to" in shown) == (mode == 0)      # the last slice slider
-        # plan 30 N8: the mode is a picker (a combo), never a slider
+        # the mode is a picker (a combo), never a slider
         assert "fx.palette.mode" in picked and "fx.palette.mode" not in shown
 
 
 def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
     """ "turn on" and "effects on" write a base through Param.set and push
-    nothing: plan 15's watcher makes each one step, and undo takes it back."""
+    nothing: the undo watcher makes each one step, and undo takes it back."""
     from test_undo import boot, frames, labels, settle
 
     from hyperspace import undo
     st = FxState()
     r = boot(tmp_path / "home", fx=st)
     r.fx = st
-    # (plan 36 T3: warp exists only where a graph names it — one in the run)
+    # warp exists only where a graph names it: one in the run
     r.loaded_patch.load_doc({"schema": "hyperspace.preset/5", "name": "w", "values": {},
                         "graph": {"nodes": [], "wires": [{"from": "frame", "to": "warp.image"},
                                                          {"from": "warp", "to": "fx.image"}]}})
@@ -1011,13 +1010,13 @@ def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
         rig.close()
 
 
-# ---------------------------------------------------------------- the faces' map (plan 20 WP1)
+# ---------------------------------------------------------------- the faces' map
 
 def test_face_map_is_one_switch_for_every_effect():
     """`fx.face_map`: how a picture wired into the faces sits on them —
-    one enum for all of them (fork F4: the mapping is a move, modulatable),
-    persisted and watched by undo. Plan 33 T7: no per-effect target with
-    it — an effect is on the faces where a wire puts it."""
+    one enum for all of them (the mapping is a move, modulatable),
+    persisted and watched by undo. No per-effect target goes with
+    it: an effect is on the faces where a wire puts it."""
     from hyperspace import undo
     from hyperspace.fx import FACE_MAPS, PER_FACE, SCREEN
     from hyperspace.params import Kind
@@ -1043,7 +1042,7 @@ def test_advance_to_moves_the_clocks_once_per_frame_time():
     assert st.advance_to(9.0) == 0.25                        # a stall is clamped
     assert st.advance_to(8.0) == 0.0                         # and time never runs back
     assert st.phase["warp"] == pytest.approx(0.7)
-    old = FxState()                                          # one from before a hot reload
+    old = FxState()                                          # a state without the later fields, as after a hot reload
     del old._t_last, old.face_map
     assert old.advance_to(1.0) == 0.0 and old.advance_to(1.5) == 0.25
 
@@ -1100,8 +1099,8 @@ def test_a_pass_on_a_see_through_ground_never_forces_alpha(ctx, fxdir):
 
 
 def faces_run(*names):
-    """The faces' run as the wiring holds it (plan 33 R): `pattern → names…
-    → shape.faces`, the frame's run empty (none said, R23)."""
+    """The faces' run as the wiring holds it: `pattern → names…
+    → shape.faces`, the frame's run empty."""
     from hyperspace import graph as G
     chain = ["pattern", *names]
     wires = [G.Wire(a, f"{b}.image") for a, b in zip(chain, names)]
@@ -1146,7 +1145,7 @@ FIELD_MAKERS = sorted(n for n in FxState().specs if _makes_field(n))
 
 @pytest.mark.parametrize("name", PICTURE_EFFECTS)
 def test_every_effect_runs_on_the_face_target(ctx, name):
-    """On the faces alone (plan 33 R: wired `pattern → name → shape.faces`),
+    """On the faces alone (wired `pattern → name → shape.faces`),
     every factory effect compiles, the frame draws with no GL error, the
     picture is not the seed, and the frame is not the frame without it. No
     effect is adapted and none is refused. (A field maker cannot sit in that
@@ -1178,7 +1177,7 @@ def test_every_effect_runs_on_the_face_target(ctx, name):
 
 
 
-# plan 67: each field maker as it can be wired: its input (none for a generator,
+# each field maker as it can be wired: its input (none for a generator,
 # the pattern for To field, a field for an op), then onto the faces as its grey
 FIELD_INTO = {"tofield": [("pattern", "tofield.image")],
               "waveform": [("rings", "waveform.image")],
@@ -1314,7 +1313,7 @@ def test_faces_on_switches_the_faces_on(tmp_path, monkeypatch):
         rig.frame()
         assert IDLE["reaches nothing"][0] in rig.texts and len(rig.veils) == 2
         assert not [k for k in rig.rects if k.startswith("idle.")]
-        # R15: one under the scene with no wire into its image is never built,
+        # one under the scene with no wire into its image is never built,
         # though its path reaches the backdrop — said, no chip (GRAPH mends it)
         rig.panel.fx_selected = "kaleido.2"
         rig.frame()
@@ -1357,8 +1356,8 @@ def test_the_strip_says_where_its_effect_ends_wherever_it_is_drawn(tmp_path, mon
     """`ui_fx.strip` — the FX page's open strip and the GRAPH page's side
     column for a selected effect node — reads the graph itself, so its title
     note says where the effect's paths end (`acid.glsl · → faces`) however
-    the strip is reached — one fed by nothing says that (R15: acid.3 has no
-    wire into its image, so it never runs wherever its paths go); a D1
+    the strip is reached — one fed by nothing says that (acid.3 has no
+    wire into its image, so it never runs wherever its paths go); a
     placement says its place (`→ after hands`)."""
     from hyperspace import graph as G
     from hyperspace import ui_fx
@@ -1381,7 +1380,7 @@ def test_the_strip_says_where_its_effect_ends_wherever_it_is_drawn(tmp_path, mon
             imgui.end_frame()
         side("acid.2")
         side("acid.3")
-        side("zoomblur")                    # (plan 36 T3: not in this graph, so no effect)
+        side("zoomblur")                    # not in this graph, so no effect
         assert seen[-2:] == [("acid.2", "→ faces"), ("acid.3", "fed by nothing")]
         panel.fx_selected = "acid.3"
         rig.frame()
@@ -1394,7 +1393,7 @@ def test_the_strip_says_where_its_effect_ends_wherever_it_is_drawn(tmp_path, mon
         rig.close()
 
 
-# ---------------------------------------------------------------- plan 33 T7: the FX page browses the graph
+# ---------------------------------------------------------------- the FX page browses the graph
 
 # a run of two, a branch onto the faces, one under the scene, one behind a
 # switch into the pattern's layer, one unreached, and one read in two places
@@ -1409,7 +1408,7 @@ BROWSED = {
         ("glimmer.2", "switch.in1"), ("switch", "pattern.media"),
         ("acid.3", "output.2.image"), ("acid.3", "blend.aux"))],
 }
-# as the panel groups it: the wired frame a load makes of it (plan 35 M). R15:
+# as the panel groups it: the wired frame a load makes of it:
 # acid.3, kaleido.2 and glimmer.2 have no wire into their image, so the builder
 # never builds them — "fed by nothing", not their paths' ends as if they ran
 # (`graph.hungry`); wobble.2 is wired to nothing at all
@@ -1426,8 +1425,8 @@ def browsed_spec(section=BROWSED):
     hands the FX pane)."""
     from hyperspace import graph as G
     from hyperspace.graphmigrate import placed_wires, renamed, split_lookback, wired_section
-    # (plan 90 H2: through the ladder's last steps — the look-back the old words
-    # drew with the dream off draws its picture untouched, so no look-back node)
+    # the look-back the old words drew with the dream off draws its picture
+    # untouched, so no look-back node
     return G.read_graph(split_lookback(placed_wires(
         wired_section(renamed(section), G.read_graph(section))), "off"))
 EMPTY_GRAPH = "no effects in the graph — add one on graph (right-click the canvas)"
@@ -1438,12 +1437,12 @@ def test_groups_follow_the_wires():
     ends — the run in wire order, then the faces, the pattern's layer, the
     backdrop, each output, each effect's aux, and the unreached last; one
     behind a switch by the switch's destination; one read in two places in
-    each; within a group from the head to the sink. R15: in the wired frame
+    each; within a group from the head to the sink. In the wired frame
     one fed by nothing is grouped so, wherever its path leads."""
     from hyperspace import graph as G
     from hyperspace.ui_fx import groups
     assert groups(browsed_spec()) == BROWSED_GROUPS
-    # the same section unwired (D1's words, before plan 35): every path's end
+    # the same section unwired: every path's end
     assert groups(G.read_graph(BROWSED)) == [
         ("Run", ["warp", "blend"]), ("→ faces", ["acid.2"]),
         ("→ pattern media", ["glimmer.2"]), ("→ backdrop", ["kaleido.2"]),
@@ -1522,7 +1521,7 @@ def test_show_on_graph_selects_the_node(tmp_path, monkeypatch):
         rig.lib.loaded_patch.load_doc(doc)
         wiring = rig.lib.loaded_patch.graph.wiring
         stand_in.wiring = wired_wiring(wiring)
-        stand_in._graph = G.build_graph(views(Switches(), Switches()), wired_wiring(wiring),   # (plan 35)
+        stand_in._graph = G.build_graph(views(Switches(), Switches()), wired_wiring(wiring),
                                           effects=tuple(sorted(st.specs)))
         rig.panel.fx_selected = "acid.2"
         real = ui.chip
@@ -1561,7 +1560,7 @@ def test_an_empty_graph_says_where_to_add(tmp_path, monkeypatch):
 
 
 def test_the_retired_ids_are_gone():
-    """Plan 33 row 341: no `order`, no `target`, no `fx.select`, no
+    """No `order`, no `target`, no `fx.select`, no
     `view.media` and no `backdrop.channel` — unknown ids like any other."""
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
@@ -1572,7 +1571,7 @@ def test_the_retired_ids_are_gone():
     st = FxState()
     r = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), fx=st)
     for pid in ("fx.acid.order", "fx.acid.target", "fx.select", "view.media",
-                "backdrop.channel", "backdrop.history"):     # (plan 35 T3: the capture wire)
+                "backdrop.channel", "backdrop.history"):     # the capture wire
         assert r.get(pid) is None and pid not in r, pid
         with pytest.raises(KeyError):
             r[pid]
@@ -1585,8 +1584,7 @@ def test_the_retired_ids_are_gone():
 
 
 def test_an_effect_file_with_an_order_line_still_parses():
-    """Every factory file keeps its `// @order` line (plan 33 T8 rewrites the
-    header comment): `parse` accepts it, and it is what an old loadable patch's
+    """Every factory file keeps its `// @order` line: `parse` accepts it, and it is what an old loadable patch's
     absent order means (`graphmigrate`), nothing else."""
     s = parse("test", EFFECT)
     assert s.order == 12 and s.label == "Test"
@@ -1598,7 +1596,7 @@ def test_an_effect_file_with_an_order_line_still_parses():
 def test_an_old_loadable_loads_its_retired_ids_without_a_note(tmp_path):
     """A `/4` file with every `fx.<n>.order` / `.target`, `view.media` and
     `backdrop.channel` loads with no unknown-id note, and its wires are
-    what the migration made of them before this task: the frame run by
+    what the migration makes of them: the frame run by
     order, a faces-aimed effect onto `shape.faces`, the channels straight
     into `pattern.media` and `backdrop.image`."""
     from test_plan31_wiring import make_app
@@ -1616,8 +1614,7 @@ def test_an_old_loadable_loads_its_retired_ids_without_a_note(tmp_path):
     assert app.loaded_patch.load_doc(doc) == []
     assert not [n for n in app.loaded_patch.notes if "unknown" in n], app.loaded_patch.notes
     spec = app.loaded_patch.graph.spec
-    # (plan 35 T3: a wired frame — the run into All
-    # outputs, the channels in the new ids)
+    # a wired frame: the run into All outputs, the channels in the new ids
     assert G.run_back(spec, "output.all.image") == ("warp", "acid")   # warp's lower
     assert G.run_of(spec, "pattern", "shape.faces") == ("kaleido",)
     assert G.Wire("channel.b", "pattern.media") in spec.wires
@@ -1625,7 +1622,7 @@ def test_an_old_loadable_loads_its_retired_ids_without_a_note(tmp_path):
 
 
 def test_the_channel_choices_are_read_off_the_wires():
-    """Plan 33 T7: what `view.media` and `backdrop.channel` said is the
+    """What `view.media` and `backdrop.channel` said is the
     section's wire into `pattern.media` / `backdrop.image` — straight, or
     through a switch at its pick (`graph.channel_into`): the MEDIA page's
     words and tags, the FACES page's tiles, learn's "no media channel"."""
@@ -1663,7 +1660,7 @@ def test_the_channel_choices_are_read_off_the_wires():
 
 
 def test_the_media_page_reads_a_wired_frames_channels():
-    """Plan 35 T5 review: on a wired frame (every load's) the MEDIA page
+    """On a wired frame (every load's) the MEDIA page
     reads `channel.<c>` — the strip's "the backdrop" / "on the faces" marks
     (`_channel_of`) and the pickers' words (`feed_words`) — straight and
     through a switch."""
@@ -1683,7 +1680,7 @@ def test_the_media_page_reads_a_wired_frames_channels():
 
 
 def test_an_old_loadable_saves_no_retired_id(tmp_path):
-    """Row 394: a `/4` loadable patch's retired ids (an effect's order and target,
+    """A `/4` loadable patch's retired ids (an effect's order and target,
     `view.media`) are read as wires on load and never written back — the
     save is `/6`, the run and the channel the wired frame's; a run
     reordered on GRAPH saves as the wires it now is."""
@@ -1705,7 +1702,7 @@ def test_an_old_loadable_saves_no_retired_id(tmp_path):
     assert G.Wire("channel.b", "pattern.media") in G.read_graph(out["graph"]).all_wires()
     # reorder on GRAPH to acid first (the wired frame's run, rewired where it stands)
     sec = app.loaded_patch.graph.free_doc()
-    # (plan 36 T4: the run's head is the scene — no look-back drawn)
+    # the run's head is the scene: no look-back drawn
     rerun = [{"from": "scene", "to": "acid.image"}, {"from": "acid", "to": "warp.image"},
              {"from": "warp", "to": "output.all.image"}]
     old = [w for w in sec["wires"] if (w["from"] in ("acid", "warp")

@@ -1,4 +1,4 @@
-"""Plan 65: GRAPH's effect picker (`ui_effect_picker`), in place of the
+"""GRAPH's effect picker (`ui_effect_picker`), in place of the
 nested effects ▸ submenu.
 
 Driven like a person drives it (`tests/ui_driver.py`: the mouse and the
@@ -71,7 +71,7 @@ def test_the_menus_have_one_effects_row_in_place_of_the_submenu(rig):
     assert "effects" not in subs
     row = m.row(fxpick.MENU_LABEL)
     assert row is not None and row.id == "graph.pick.effects"
-    assert "slot on" in subs                   # the rest of the picker as it was (plan 89)
+    assert "slot on" in subs                   # the rest of the picker as it was
     m.pick(row.id)
     s = fxpick.state(st)
     assert s["mode"] == "add" and s["at"] == AT and s["open"]
@@ -175,7 +175,7 @@ def test_hovering_a_tile_says_its_tip_and_asks_for_its_loop(rig, monkeypatch):
 
 
 def test_the_canvas_under_it_is_swallowed(rig, monkeypatch):
-    """While it is open GRAPH's guard (`_menu_up`, #452) says a popup is up
+    """While it is open GRAPH's guard (`_menu_up`) says a popup is up
     on the frames the canvas reads the pointer: no hover words, no click."""
     party(rig)
     seen = []

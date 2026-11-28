@@ -81,10 +81,10 @@ def test_steps_and_prose_are_not_taken_for_checks():
 
 
 # A merge can leave every number unique and still lose a section or move one's text under
-# another heading: #411's review commit deleted 770's, 771's and 772's text, and the next
-# union left 787's text under 770 and 789. These hold what can be read without a person.
+# another heading: a merge can delete a section's text and leave the next one's under the
+# wrong number. These hold what can be read without a person.
 HEADING = re.compile(r"#{1,6} ")
-NO_SECTION = {560, 563, 564}                    # wave 0's rows, which never had one
+NO_SECTION = {560, 563, 564}                    # rows that never had one
 HEADERS = {"| Decision", "| Not built"}
 JUDGE = re.compile(r"(?:- )?\*\*Judge it\.\*\*(.*)")
 CHECK_FLOOR = 673                               # older rows use the Check cell looser: 44 disagree
@@ -207,7 +207,7 @@ def test_every_check_sits_in_a_group():
 
 @pytest.mark.parametrize(("find", "text", "named"), [
     (two_verdicts, "### 710. Node\n\n**Judge it.** 541.\n- **Judge it.** 542.\n", [710]),
-    (lost_text, "### 787. GRAPH\n### 785. Proof\n\n- text\n", [787]),                       # what #411's merge left
+    (lost_text, "### 787. GRAPH\n### 785. Proof\n\n- text\n", [787]),                       # what a bad merge leaves
     (lost_text, "### 787. GRAPH\n\n\n## A part\n", [787]),
     (two_verdicts, "### 789. Audit\n\n- **Judge it.** None.\n- **Judge it.** 612.\n", [789]),
     (outside_groups, "## What no test covers\n**582. One.**\n", ["582"]),

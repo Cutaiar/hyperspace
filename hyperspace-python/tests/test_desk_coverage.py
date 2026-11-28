@@ -1,13 +1,13 @@
 # ruff: noqa: F811 — `rig` is test_ui_shell's fixture, taken as each test's argument
-"""Plan 24 C3 — every loadable patch's desk interesting (decision 19).
+"""Every loadable patch's desk is interesting.
 
 - **The coverage report** (tools/desk_coverage.py): every loadable patch × every
   control of the APC40's patch layer, each `mapped`, `dark` or `dead`
   (`learn.cannot_show`). Its output is committed at
   docs/plans/assets/24-party-fixes/desk-coverage.md; this test
   regenerates it — twice, byte for byte — and fails when the committed
-  file is stale. The owner's bar (at most four dark or dead) is reported,
-  not met: no loadable patch is remapped in this run.
+  file is stale. The bar (at most four dark or dead) is reported,
+  not enforced.
 - **Click-to-map ranked**: a picked control on the on-screen desk is
   offered the params this loadable patch uses first (`learn.ranked`, a pure
   function), then the rest by group; an item clicked goes through
@@ -84,13 +84,13 @@ def test_the_loadable_layer_is_the_three_strips_and_the_maps_loadable_controls(t
 
 
 def test_every_corpus_loadables_numbers_are_in_the_report(tool, tmp_path):
-    """The numbers the PR body and the decisions file quote: every corpus
+    """The numbers the report quotes: every corpus
     loadable patch (`tests/corpus/loadable`, the loadable patches the build shipped) is a
-    row; the faders are dark on every one (no loadable patch has fader rows in this
-    run); none meets the bar yet."""
+    row; the faders are dark on every one (no loadable patch has fader rows);
+    none meets the bar."""
     controls, rows = tool.coverage(tmp_path)
     names = [r.name for r in rows]
-    assert len(rows) == 25 and "TRIP" in names and "hands-orbit" in names   # + DIAL (#212), seq-demo (plan 31)
+    assert len(rows) == 25 and "TRIP" in names and "hands-orbit" in names   # + DIAL, seq-demo
     n = len(controls)
     for r in rows:
         assert r.count(tool.MAPPED) + r.count(tool.DARK) + r.count(tool.DEAD) == n
@@ -99,15 +99,15 @@ def test_every_corpus_loadables_numbers_are_in_the_report(tool, tmp_path):
         assert r.count(tool.DARK) + r.count(tool.DEAD) > tool.BAR, r.name
     trip = rows[names.index("TRIP")]
     k7 = next(c for c in trip.cells if c.glyph == "K7")
-    # TRIP's knob 7: an alias of view.media_alpha since plan 32
+    # TRIP's knob 7: an alias of view.media_alpha
     assert (k7.status, k7.target, k7.why) == (tool.DEAD, "view.bmp_alpha", "no media channel")
 
 
 def test_a_library_loadable_that_named_a_template_is_reported_with_its_own_rows(tool, tmp_path):
     """`--library` copies a library's loadable patches into the scratch home (the
-    source is only read): plan 44 D3 retired the desk templates, so the
+    source is only read): desk templates are retired, so the
     fixture loadable patch that named one is its own rows — D2 the dream (on;
-    plan 90 H3: its `dream.mix` row follows its knob, the dream's Fade's level),
+    its `dream.mix` row follows its knob, the dream's Fade's level),
     K3 the pattern mix (faces on) — and every other control dark."""
     lib = tmp_path / "lib"
     shutil.copytree(FIXTURES, lib)
@@ -118,7 +118,7 @@ def test_a_library_loadable_that_named_a_template_is_reported_with_its_own_rows(
     (row,) = [r for r in rows if r.name == "TEMPLATED"]
     cells = {c.glyph: (c.status, c.target) for c in row.cells}
     assert cells["D1"] == (tool.DARK, "")
-    assert cells["D2"] == (tool.MAPPED, "fx.fade.3.level")     # the dream's mix (plan 90 H3)
+    assert cells["D2"] == (tool.MAPPED, "fx.fade.3.level")     # the dream's mix
     assert cells["K2"] == (tool.DARK, "")
     assert cells["K3"] == (tool.MAPPED, "view.pattern_mix")
     assert cells["S1"] == (tool.DARK, "")
@@ -138,7 +138,7 @@ def test_cannot_show_is_the_rule_by_group():
     assert cannot_show("view.pattern_mix", v) == "faces off"
     assert cannot_show("pattern.mod.3", v) == "faces off"
     assert cannot_show("view.media_alpha", v) == "faces off"
-    # (plan 33: the graph says whether a channel feeds the faces, `media`;
+    # (the graph says whether a channel feeds the faces, `media`;
     # the retired `view.media` in the values says nothing)
     faces = {**v, "view.faces": True}
     assert cannot_show("view.media_alpha", faces, media=False) == "no media channel"
@@ -147,7 +147,7 @@ def test_cannot_show_is_the_rule_by_group():
     assert cannot_show("view.media_alpha", faces) is None        # no graph to ask: shown
     assert cannot_show("view.points_alpha", v) is None
     assert cannot_show("view.lines_alpha", v) == "lines off"
-    # the stroke space (plan 26 A2b): dead only with the points and the lines off
+    # the stroke space: dead only with the points and the lines off
     assert cannot_show("view.screen_strokes", v) is None
     assert cannot_show("view.screen_strokes", {**v, "view.points": False}) == \
         "points and lines off"
@@ -160,8 +160,7 @@ def test_cannot_show_is_the_rule_by_group():
     assert cannot_show("fx.plasma.level", {**v, "fx.on": False}) == "effects off"
     assert cannot_show("fx.mix", {**v, "fx.on": False}) == "effects off"
     assert cannot_show("fx.on", {**v, "fx.on": False}) is None
-    # (plan 36 T4: `dream.on` is the dream's; plan 90 H2: the look-back's
-    # knobs are retired, every `dream.*` is the dream node's)
+    # (`dream.on` is the dream's; every `dream.*` is the dream node's)
     assert cannot_show("dream.mix", v) == "dream off"
     assert cannot_show("dream.k", v) == "dream off"
     assert cannot_show("dream.mix", v, drawn=frozenset({"scene"})) == "no dream"

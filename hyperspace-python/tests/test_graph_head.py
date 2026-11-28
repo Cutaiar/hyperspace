@@ -1,4 +1,4 @@
-"""GRAPH's slim head (2026-11-24): the deck row, then one row of the canvas's
+"""GRAPH's slim head: the deck row, then one row of the canvas's
 own with the areas and the canvas's toggles in two menus."""
 
 from __future__ import annotations

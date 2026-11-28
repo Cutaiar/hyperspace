@@ -1,5 +1,5 @@
 """geometry.py's face extraction: the 2-face counts of the polytopes
-(moved from test_control.py, audit D5; the 3D shapes' faces are in
+(the 3D shapes' faces are in
 test_shapes3d.py, the vertex / edge parity in test_core.py)."""
 
 import threading

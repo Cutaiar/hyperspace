@@ -45,14 +45,14 @@ def test_the_params_are_the_looks_but_the_mirror_off_by_default_and_learnable(tm
     from test_params import make
 
     reg = make(tmp_path)[0]
-    # plan 43 §6 / plan 44 D3: the hands' look is the loadable patch's; the mirror the room's
+    # the hands' look is the loadable patch's; the mirror the room's
     assert "ghost" not in SHARED_META_GROUPS
     for pid in ("ghost.on", "ghost.alpha", "ghost.mirror", "ghost.guide", "ghost.tethers",
                 "ghost.style"):
         p = reg[pid]
         want = "shared_meta" if pid == "ghost.mirror" else "patch"
         assert p.persist and part_of(p) == want, pid
-        # plan 21 R12 / WP6: only the switch and the opacity may follow a
+        # only the switch and the opacity may follow a
         # hand or an LFO; the rest are settings (still learnable on the desk)
         assert p.modulatable is (pid in ("ghost.on", "ghost.alpha")), pid
     assert reg["ghost.on"].value is False and 0.0 < reg["ghost.alpha"].value <= 1.0
@@ -111,8 +111,8 @@ def boxed_io(box, dofs=("x", "y", "z", "roll", "pitch", "yaw")) -> HandsIO:
 
 
 def test_the_camera_frames_the_interaction_box_when_one_is_set():
-    """Plan 18 fork 4: with a box, `box_of` is the box — and the axis
-    ranges, as before, for a coordinate the box leaves open."""
+    """With a box, `box_of` is the box — and the axis
+    ranges for a coordinate the box leaves open."""
     box = {"x": (-262.0, 262.0), "y": (71.5, 402.0), "z": (-148.0, 131.0)}
     io = boxed_io(None)
     before = G.box_of(io)
@@ -143,7 +143,7 @@ def test_the_camera_frames_the_interaction_box_when_one_is_set():
 
 
 def test_a_hand_outside_the_box_fades_out():
-    """Plan 18 fork 5: a hand tracked but outside the box is absent to the
+    """A hand tracked but outside the box is absent to the
     ghost too — no dim ghost; it fades over FADE_OUT where it left."""
     io = boxed_io({"x": (-200.0, 200.0), "y": (80.0, 400.0), "z": (-150.0, 150.0)})
     gh = G.Ghost(ctx=None, state=G.GhostState(on=True))
@@ -474,7 +474,7 @@ def frame(ctx, *, src=None, on=True, alpha=1.0, fx: FxState | None = None, frame
     """(RGBA frame, renderer) after `frames` frames at 30 fps."""
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
     r = renderer or Renderer(ctx, fx=fx)
-    if renderer is None and fx is not None:      # plan 33 R23: its run, as a load lands it
+    if renderer is None and fx is not None:      # its run, as a load lands it
         from hyperspace.graphmigrate import wiring_of
         r.wiring = wiring_of(fx)
     r.ghost.state.on, r.ghost.state.alpha = on, alpha
@@ -611,7 +611,7 @@ def _tethered(ctx, tmp_path):
 
 @pytest.mark.parametrize("where", ["build", "label"])
 def test_a_failed_label_build_writes_no_param(ctx, tmp_path, monkeypatch, where):
-    """Plan 21 WP5 R2: the tethers' labels failing — their program will not
+    """The tethers' labels failing — their program will not
     build, or a label will not rasterise (a font) — leaves `ghost.tethers`
     as the performer set it (the render stack only reads), says why once
     on `Ghost.error`, still draws the hands and the guide, and is not
@@ -649,12 +649,10 @@ def test_a_failed_label_build_writes_no_param(ctx, tmp_path, monkeypatch, where)
 
 
 def test_a_failed_target_build_is_all_or_nothing(ctx, monkeypatch):
-    """Plan 21 WP5 R3: a piece of the hands' layer the driver refuses (here
+    """A piece of the hands' layer the driver refuses (here
     the depth buffer) leaves nothing half-built — what was made is
     released, no target is kept — the frame is the frame without hands,
-    `Ghost.error` says why once, and no frame raises. The old `_ensure`
-    kept the texture and the size, so every later frame found them
-    "ready" and raised on the missing framebuffer."""
+    `Ghost.error` says why once, and no frame raises."""
     base, _ = frame(ctx)
     r = Renderer(ctx)
     frame(ctx, renderer=r, on=False, frames=1)            # the renderer's own targets first
@@ -688,7 +686,7 @@ def test_a_failed_target_build_is_all_or_nothing(ctx, monkeypatch):
 
 
 def test_one_reload_round_rebuilds_the_ghost_once(ctx, monkeypatch):
-    """Plan 21 WP5 R5: a ghost.py save reloads ghost.py and render.py, and
+    """A ghost.py save reloads ghost.py and render.py, and
     the reloader calls both `Renderer.on_reload` and `Ghost.on_reload`
     (app.main's target list, in that order). The ghost's programs are
     built once in that round, not twice; a render.py save alone (the
@@ -772,7 +770,7 @@ def test_a_hand_that_leaves_fades_out_on_screen(ctx):
 
 
 def test_one_layer_composites_onto_many_targets_as_draw_does(ctx):
-    """Plan 21 WP1: `layer` renders the hands once, `composite` lays them
+    """`layer` renders the hands once, `composite` lays them
     over any number of targets — each the same bytes `draw` leaves — and
     `tex` is the layer only while one was drawn. With nothing to show,
     `layer` says so and `composite` touches nothing."""
@@ -810,7 +808,7 @@ def test_one_layer_composites_onto_many_targets_as_draw_does(ctx):
 
 
 def test_the_readout_layer_is_the_guide_apart_from_the_hands(ctx):
-    """Plan 21 WP2 (fork F3): `layer(…, readout=True)` with the guide on
+    """`layer(…, readout=True)` with the guide on
     puts the hands alone in `tex` — the same bytes as a ghost with no
     guide — and the guide in `readout`, drawn behind the hands' depth:
     where the one-layer picture shows the guide, the readout shows the
@@ -849,7 +847,7 @@ def test_the_readout_layer_is_the_guide_apart_from_the_hands(ctx):
         assert gh.readout is None
 
 
-# ---------------------------------------------------------------- ghost.style (plan 21 WP6)
+# ---------------------------------------------------------------- ghost.style
 
 def _guided_poses(skel=None, guide=2, mirror=False, style=0):
     """(poses with their guide rows, view_proj, eye) from a Ghost with no
@@ -1094,7 +1092,7 @@ def test_hands_is_the_old_geometry_byte_for_byte(ctx):
 
 
 def test_the_guide_on_the_hand_reads_the_same_in_every_style_but_hands(ctx):
-    """Review of PR #122: an ON HAND gauge sits at the palm, where PALMS,
+    """An ON HAND gauge sits at the palm, where PALMS,
     JOINTS, CAGE and MARIONETTE put a solid far bigger than a guide ball.
     In those styles the guide is drawn over the style, never hidden by it:
     the readout layer is the same bytes in all four (the guide alone, no
@@ -1141,8 +1139,8 @@ def test_the_guide_on_the_hand_reads_the_same_in_every_style_but_hands(ctx):
 def test_the_guide_is_drawn_plain_under_every_material(ctx, style):
     """The guide is a readout of what the hands are sending, not part of
     the look. HANDS draws it in the same pass as the hands, so the one
-    `u_mat` shaded the readout too — a GLASS x-axis marker went
-    translucent instead of red (review of #449). Whatever the style, the
+    `u_mat` would shade the readout too — a GLASS x-axis marker would go
+    translucent instead of red. Whatever the style, the
     rows carrying the guide draw PLAIN while the hands take the material.
     """
     io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
@@ -1180,8 +1178,8 @@ def test_the_guide_is_drawn_plain_under_every_material(ctx, style):
 def test_glass_leaves_the_scene_visible_through_the_hand(ctx):
     """Hands inside the scene are solid and drawn before the shape
     (DECISIONS: order-independent transparency, deferred), so a GLASS
-    hand that only lowered its alpha still wrote depth across its whole
-    silhouette and hid whatever was behind it (review of #449). GLASS
+    hand that only lowered its alpha would still write depth across its whole
+    silhouette and hide whatever was behind it. GLASS
     writes depth at its edges and nowhere else, so the scene shows
     through the middle; PLAIN still fills the silhouette."""
     io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
@@ -1209,7 +1207,7 @@ def test_glass_leaves_the_scene_visible_through_the_hand(ctx):
 
 
 def test_the_show_look_is_bones_in_plain_on_at_50_and_the_bare_state_stays_neutral():
-    """Owner, 2026-11-18 (plan 85): the app starts every hands node as the show's
+    """The app starts every hands node as the show's
     ghost hands — on, BONES, PLAIN, 50% — while `GhostState()` stays the neutral draw."""
     st = G.show_look()
     assert st.on and st.alpha == 0.5

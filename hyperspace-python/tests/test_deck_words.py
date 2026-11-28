@@ -1,6 +1,6 @@
-"""What the panel says about the two `Deck`s (plan 44 D5e, rows 703, 704): a person can
+"""What the panel says about the two `Deck`s: a person can
 always read which `Deck` they are looking at and which is on air, and the words about a
-load, a dormant row and undo match what the code does since #380, #386 and #388."""
+load, a dormant row and undo match what the code does."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _away(monkeypatch, router, *schemes):
 
 
 def test_a_row_onto_a_meta_param_says_it_is_dormant_off_air_and_on_air_it_is_not(rig):
-    """Row 650's rough edge: the words follow `Registry.lands`, whichever deck is on air."""
+    """The words follow `Registry.lands`, whichever deck is on air."""
     b = Binding("lfo:0", "master.gain", "push", 0.5)
     words = ui_routing.dormant_words
     p = rig.two.reg["master.gain"]
@@ -42,7 +42,7 @@ def test_a_row_onto_a_meta_param_says_it_is_dormant_off_air_and_on_air_it_is_not
 
 
 def test_a_row_of_a_controller_on_the_other_deck_says_so(rig, monkeypatch):
-    """Plan 55: the reading is hidden from this deck; the line says why it reads nothing."""
+    """The reading is hidden from this deck; the line says why it reads nothing."""
     router = rig.two.router
     b = Binding("axis:LX", "view.bright", "push", 0.5)
     p = rig.two.reg["view.bright"]
@@ -65,7 +65,7 @@ def test_a_row_qualified_with_a_player_reads_its_own_scheme(rig, monkeypatch):
 
 
 def test_a_row_qualified_with_the_primarys_own_role_reads_the_bare_scheme(rig, monkeypatch):
-    """Review 2: `axis@pad:RT` on the primary pad is the bare scheme's lanes (B6)."""
+    """`axis@pad:RT` on the primary pad is the bare scheme's lanes (B6)."""
     router = rig.two.router
     monkeypatch.setattr(router.table, "primaries", {"axis": "pad"}, raising=False)
     _away(monkeypatch, router, "axis")
@@ -113,7 +113,7 @@ def test_the_desk_says_which_deck_it_plays_while_the_panel_is_on_the_other(rig):
 
 @pytest.mark.parametrize("status", ["lost", "off", "error: boom"])
 def test_a_desk_unplugged_plays_nothing_though_its_pointer_stands(rig, status):
-    """Review 5: every listed device has a pointer (`DeviceRegistry._point`)."""
+    """Every listed device has a pointer (`DeviceRegistry._point`)."""
     meta = rig.meta
     meta.pointer("apc40")
     meta.point_panel(rig.two)
@@ -145,7 +145,7 @@ def test_the_desk_on_the_deck_off_air_with_the_panel_there_is_red_and_quiet(rig)
 
 
 def test_a_narrow_header_drops_the_clause_first_and_keeps_the_name(shell_rig):  # noqa: F811
-    """Review 6: the look's name is never left a bare ellipsis for the deck's words."""
+    """The look's name is never left a bare ellipsis for the deck's words."""
     w = lambda t: 10.0 * len(t)
     deck, away, name = "deck 2 · off air", "the desk plays deck 1", "TUMBLE"
     assert ui_desk.fit_deck(deck, away, name, 1000.0, w) == f"{deck} · {away}"
@@ -180,7 +180,7 @@ def _header_says(panel, table, monkeypatch):
 
 
 def test_a_pick_with_the_header_to_itself_still_says_the_deck(rig, shell_rig, monkeypatch):  # noqa: F811
-    """Review 3: a person about to rebind sees which deck it lands on."""
+    """A person about to rebind sees which deck it lands on."""
     meta = rig.meta
     meta.point_panel(rig.two)
     panel = shell_rig.panel
@@ -228,7 +228,7 @@ def _page_draws(panel, monkeypatch):
 
 
 def test_the_deck_is_said_over_the_strip_and_costs_the_name_nothing(rig, shell_rig, monkeypatch):  # noqa: F811
-    """Review 1: the name's button is NAME_MAX wide; two looks sharing first letters stay
+    """The name's button is NAME_MAX wide; two looks sharing first letters stay
     two names on the main readout, whichever deck."""
     panel = shell_rig.panel
     bare, micro = _page_draws(panel, monkeypatch)
@@ -249,7 +249,7 @@ def test_the_strips_hover_says_the_deck(rig):
 
 
 def test_one_deck_number_everywhere():
-    """Review 10: `deck_name`, the players' screen and SYSTEM ask one helper."""
+    """`deck_name`, the players' screen and SYSTEM ask one helper."""
     one, two = object(), object()
     assert deck_number((one, two), one) == 1 and deck_number((one, two), two) == 2
     assert ui_players._deck_no(NS(decks=(one, two)), two) == 2
@@ -283,7 +283,7 @@ def test_the_sheet_has_no_pad_b_on_the_list_and_says_where_a_pad_loads():
     words = dict(ui.CHEATSHEET)
     assert "pad's B" not in words["APC40 QUANT"] and "off air" in words["APC40 QUANT"]
     assert "off air" in words["APC40 clip pads"]
-    assert "change" in words["Cmd+Z"]       # the undo latch (row 753)
+    assert "change" in words["Cmd+Z"]       # the undo latch
 
 
 @pytest.mark.parametrize("pid", ["preset.select", "preset.next", "preset.prev", "preset.load.0",
@@ -293,13 +293,13 @@ def test_every_load_from_a_row_says_off_air(rig, pid):
 
 
 def test_homes_tip_promises_no_undo_the_latch_can_refuse(rig):
-    """Review 4: the latch goes by focus, so the tip points at the line that knows."""
+    """The latch goes by focus, so the tip points at the line that knows."""
     tip = rig.one.reg["preset.home"].tip
     assert "brings back" not in tip and "whether ⌘Z takes it back" in tip
 
 
 def test_a_person_s_control_is_not_called_tuning():
-    """Row 746: a load or a save is not "tuned before the show". Review 7: and a per-`Deck`
+    """A load or a save is not "tuned before the show". A per-`Deck`
     meta param may be a slider, as `poi.length`, so nothing says "press"."""
     assert "tuned" not in ui_routing.PER_DECK_LINE and "press" not in ui_routing.PER_DECK_LINE
     assert "press" not in routing.PER_DECK_WORDS

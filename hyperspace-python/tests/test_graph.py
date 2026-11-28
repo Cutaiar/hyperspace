@@ -1,4 +1,4 @@
-"""Plan 26 A1, A3: the render graph (graph.py).
+"""The render graph (graph.py).
 
 The pure half first — the module's imports, the node and port contract,
 the frame's shape for each set of states, its order — then the renderer's
@@ -6,7 +6,7 @@ half on offscreen targets: the graph is built once per count of windows
 and reused, an end no window takes this frame does not run, the timer
 lists the graph's nodes, and a hot reload rebuilds the graph.
 
-Plan 35 T4: the pipelines are gone — every frame is `build_graph`'s from
+There are no pipelines: every frame is `build_graph`'s from
 wires (an unwired `Wiring` wired first, `graph.wired`), the render nodes
 named in the new ids, and a state that put the hands through is its
 output's wiring (`tests/wiredframe.py`). The
@@ -30,7 +30,7 @@ from hyperspace.outputs import Switches, View
 
 
 def test_the_pipelines_are_gone():
-    """Plan 35 T4 (row 377): no pipeline is left — the switch half of the
+    """No pipeline is left: the switch half of the
     default graph, its ends, its names and the through switch went; every
     frame is `build_graph`'s from wires."""
     from hyperspace import outputs
@@ -44,16 +44,16 @@ def test_the_pipelines_are_gone():
 
 
 def test_no_loadable_draws_the_factory_frame():
-    """Plan 35 T4: the factory look is `frame_wires(read_graph({}))`,
-    signature for signature. Plan 36 T3 (W3): only the one-way migration
+    """The factory look is `frame_wires(read_graph({}))`,
+    signature for signature. Only the one-way migration
     writes it (`graphmigrate.wired_wiring` of the old words, `Wiring()`);
     nothing landed is the empty frame — the outputs alone — and a wired
     wiring is itself."""
     from hyperspace import graphmigrate as M
 
     entries, wires = M.frame_wires(G.read_graph({}))
-    # (plan 36 T2: with the hidden edges' wires, `drawn_edges`; T4: its
-    # look-back split as the old words' off had it — none drawn)
+    # (with the hidden edges' wires, `drawn_edges`; its
+    # look-back split as the old words' off had it: none drawn)
     factory = G.read_graph(M.split_lookback(M.drawn_edges(
         {"frame": "wired", "nodes": entries, "wires": wires}), "off")).wiring()
     one = [View(Switches(), (10, 10))]
@@ -105,13 +105,13 @@ def _view(**kw) -> View:
 
 def test_the_default_graph_for_one_default_view_is_todays_frame_in_order():
     """One output, the factory frame with its look-back drawn
-    (`graphmigrate.wired_wiring`, the old words' on: plan 36 T4) — plan 90
-    H2: the look-back made public parts — the shape into the scene, the
-    cover, the hands (a geometry, A3) into their own layer, the delay's
+    (`graphmigrate.wired_wiring`, the old words' on): the look-back made
+    public parts — the shape into the scene, the
+    cover, the hands (a geometry) into their own layer, the delay's
     stack read by the trail, cut by the matte and the cover, the composite
     adding it onto the scene, its end, the record (fade, its key, the
     resize) written into the delay after every end, the output — every node
-    after what it depends on, each name once, in the new ids (plan 35 T4), a
+    after what it depends on, each name once, in the new ids, a
     geometry's time counted in whatever draws it (the hands' in their
     layer's: they are in no scene)."""
     E = ("fade", "trail")
@@ -167,13 +167,13 @@ def test_the_default_graph_for_one_default_view_is_todays_frame_in_order():
 
 
 def test_a_through_output_is_a_composite_and_its_end():
-    """Plan 35 T4 (row 377): the hands through the effects are an output's
+    """The hands through the effects are an output's
     wiring — a composite laying the layer over the look-back's picture (or
     over nothing, the picture muted); the hands only where some output's
-    wiring lays them. Plan 36 T1: its end is always itself (no stand-down)
-    and the composite is told the window it is for (`mute_hands`). Plan 36
-    T4: the look-back drawn (the old words' on) — the trail added onto the
-    scene, `composite.3` (plan 90 H2: the trail is the public parts', cut
+    wiring lays them. Its end is always itself (no stand-down)
+    and the composite is told the window it is for (`mute_hands`). With
+    the look-back drawn (the old words' on) the trail is added onto the
+    scene, `composite.3` (the trail is the public parts', cut
     by `cut.2`)."""
     g = graph([Shows(through=True), Shows(scene=False, through=True)], look="trail",
               effects=("fade", "trail"))
@@ -209,7 +209,7 @@ def test_a_through_output_is_a_composite_and_its_end():
 
 
 def test_graph_key_is_the_views_count_and_nothing_else():
-    """Plan 35 B (row 379): a window's mutes, size and look are read when
+    """A window's mutes, size and look are read when
     its nodes run — the key is how many windows there are."""
     S = Switches
     a = View(S(), (10, 10))
@@ -229,8 +229,7 @@ def test_ports_are_typed_and_the_graph_checks_its_wiring():
     scene = g.add(G.Scene("scene", geometry=shape))
     cover = g.add(G.Cover("cover", scene=scene))
     assert (scene.OUTPUT, cover.OUTPUT, shape.OUTPUT) == (G.IMAGE, G.MASK, G.GEOMETRY)
-    # (plan 90 H2: the look-back's history node is retired; a cut takes the
-    # same two types)
+    # (a cut takes the same two types)
     with pytest.raises(TypeError, match="takes image, 'cover' makes mask"):
         G.CutNode("cut", image=cover, mask=cover)
     with pytest.raises(TypeError, match="takes mask"):
@@ -250,7 +249,7 @@ def test_ports_are_typed_and_the_graph_checks_its_wiring():
     # a scene takes any number of geometries, one port each
     two = G.Scene("two", geometries=[G.Hands("h"), G.Shape("s")])
     assert list(two.inputs) == ["geometry", "geometry.2"]
-    # A4: a geometry's time is its scene's call (the consumer edge): the
+    # a geometry's time is its scene's call (the consumer edge): the
     # node itself is never told it is in a scene
     assert not two.inputs["geometry"].TIMED and two.inputs["geometry"].SOLID
     assert G.Shown("shown", image=scene, after=(cover,)).deps() == [scene, cover]
@@ -293,7 +292,7 @@ def test_the_hands_in_the_scene_are_its_first_geometry_and_a_glass_still_gets_th
     the scene (the glass) gets the hands' layer, over or through, with
     the guide split out of it always (it must never ride the scene)."""
     w = G.Wiring(hands="scene")
-    # (plan 36 T4: the old words' look-back off — none drawn)
+    # (the old words' look-back off: none drawn)
     g = graph([Shows(through=True), Shows(scene=False), Shows(scene=False, through=True)], w)
     assert _names(g) == ["pattern", "shape", "hands", "scene", "hands.layer", "shown(scene)",
                          "composite", "shown(composite)", "output.1", "output.2", "output.3"]
@@ -315,8 +314,8 @@ def test_the_hands_in_the_scene_are_its_first_geometry_and_a_glass_still_gets_th
 
 
 def test_the_history_is_wired_to_the_scene_or_the_scene_with_the_hands():
-    """`Wiring.history`: what the look-back recorded — plan 90 H2: what the
-    delay records, through the migrated fade — the scene (today), or a
+    """`Wiring.history`: what the look-back recorded: what the
+    delay records, through the migrated fade — the scene, or a
     composite of the hands' layer over the scene — with the layer's blend,
     and the layer drawn even when no output lays it on."""
     E = ("fade", "trail")
@@ -335,7 +334,7 @@ def test_the_history_is_wired_to_the_scene_or_the_scene_with_the_hands():
     assert g.nodes["fade"].inputs["image"] is g.nodes["scene"]
     # …even when a glass (scene off, hands on) makes the hands' layer: it
     # is never laid over a scene that holds the hands (no doubled echoes;
-    # plan 36 T4: the one composite adds the trail)
+    # the one composite adds the trail)
     g = graph([Shows(), Shows(scene=False)], G.Wiring(hands="scene", history="scene+hands"),
               look="trail", effects=E)
     assert "hands.layer" in g.nodes
@@ -350,8 +349,8 @@ def test_depth_aware_wiring_hands_each_composite_and_output_the_scenes_depth():
     assert c.blend == "depth" and c.inputs["depth"] is g.nodes["scene"]
     o1, o2 = g.nodes["output.1"], g.nodes["output.2"]
     assert o1.blend == "depth" and o1.inputs["depth"] is g.nodes["scene"]
-    # (plan 36 T1: the through window lays no layer itself — its composite
-    # does, depth-aware — so it reads no depth: there is no stand-down to lay for)
+    # (the through window lays no layer itself — its composite
+    # does, depth-aware — so it reads no depth)
     assert o2.inputs["hands"] is None and o2.inputs["depth"] is None
 
 
@@ -362,7 +361,7 @@ moderngl = pytest.importorskip("moderngl")
 
 def test_the_graph_is_built_once_per_set_of_switches_and_reused(ctx):
     """Frames with the same windows evaluate one Graph object; a mute
-    flipped builds nothing (plan 35 B: it is read at the window); another
+    flipped builds nothing (it is read at the window); another
     wiring builds another (no cache beyond the last graph); a hot reload
     drops it; a renderer from before the graph gets one."""
     from test_outputs import rig, run, views
@@ -386,10 +385,10 @@ def test_the_graph_is_built_once_per_set_of_switches_and_reused(ctx):
     assert r._graph is None
     run(ctx, r, vs, frames=1)
     assert r._graph is not None
-    del r._graph                                            # from before A1
+    del r._graph                                            # a renderer with no graph yet
     run(ctx, r, vs, frames=1)
     assert isinstance(r._graph, G.Graph)
-    # a renderer carrying A0's timer through a live reload: `end_frame`
+    # a renderer carrying an old timer through a live reload: `end_frame`
     # took no names and the pending frames had another shape. The timer is
     # not a reload target, so the renderer drops it for a fresh one — on
     # `on_reload`, and again if one of another class turns up without it
@@ -401,7 +400,7 @@ def test_the_graph_is_built_once_per_set_of_switches_and_reused(ctx):
         def time(self, name):
             raise AssertionError("an old timer must never be asked")
 
-        def end_frame(self):                          # A0's signature
+        def end_frame(self):                          # the old signature
             raise AssertionError("an old timer must never end a frame")
 
         def _off(self, e):
@@ -419,7 +418,7 @@ def test_the_graph_is_built_once_per_set_of_switches_and_reused(ctx):
 
 def test_a_through_window_runs_its_chain_as_wired(ctx):
     """The graph for an output wired with the hands through holds its slot
-    chain (plan 89; a copy chain before it) and runs it whether or not a hand shows (plan 36 T1: no
+    chain (a copy chain before it) and runs it whether or not a hand shows (no
     stand-down; the run's own end, which no window shows, is not built)."""
     from test_outputs import rig, run, wviews
 
@@ -446,9 +445,9 @@ def test_the_timer_lists_the_graphs_nodes_and_drops_a_node_that_left(ctx):
         pytest.skip(f"this context has no timer queries: {r.timer.note}")
     vs = wviews(ctx, r, Thru())
     run(ctx, r, vs, frames=PassTimer.LAG + 2)
-    # plan 30 D0 (decision 5): the effect that ran has its own line, in
+    # the effect that ran has its own line, in
     # its place before its end; the graph's static lines are the rest
-    # (plan 35 T4: the hands through are warp's slot 2 over a composite, plan 89)
+    # (the hands through are warp's slot 2 over a composite)
     timed = r._graph.timed
     at = timed.index("shown(warp.slot.2)")
     assert list(r.stats["gpu_ms"]) == [*timed[:at], "warp.slot.2", *timed[at:]]

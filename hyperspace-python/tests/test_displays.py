@@ -1,4 +1,4 @@
-"""One row per display (wave 5 SC2): the file both Macs share, what the rows want open, a launch
+"""One row per display: the file both Macs share, what the rows want open, a launch
 over stand-in monitors, and the rows on the real panel. `tests/test_root_frame.py` has a render
 on two displays with different flips through real GL."""
 
@@ -719,7 +719,7 @@ def test_a_wire_into_an_output_nothing_shows_is_wanted():
     assert ui_graph.window_wants(panel) == []
 
 
-# ---- the review of #424
+# ---- review fixes
 
 
 def test_a_tick_under_a_held_seed_keeps_the_other_rows():

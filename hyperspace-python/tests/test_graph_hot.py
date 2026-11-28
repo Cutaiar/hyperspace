@@ -178,8 +178,7 @@ def test_the_keys_bring_every_nodes_widgets(canvas):
 
 def test_a_first_frame_with_the_button_held_draws(shell_rig, monkeypatch):  # noqa: F811
     """The page's state outlives a hot reload, so the first frame that asks
-    `hot` may come with no `hot_held` and the mouse down (Devin's review of
-    #505: it raised inside the editor, and the app went with it)."""
+    `hot` may come with no `hot_held` and the mouse down; that must not raise."""
     st = party(shell_rig)
     for k in [k for k in st if k.startswith("hot_")]:
         del st[k]

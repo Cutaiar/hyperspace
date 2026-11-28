@@ -1,8 +1,8 @@
-"""The host (app.py): its import boundary, the device gates (plan 27 B1:
-the registry opens each device behind its own `[[devices]]` entry), the
+"""The host (app.py): its import boundary, the device gates
+(the registry opens each device behind its own `[[devices]]` entry), the
 two input classes over fake GLFW state, the one close list, and the frame
 order that ARCHITECTURE §2 states — pinned over stubs, since the real loop
-needs two windows (audit P1, P2, P4, P5)."""
+needs two windows."""
 
 from __future__ import annotations
 
@@ -45,13 +45,13 @@ print(sorted(found), "hyperspace.hands" in sys.modules)
 
 def test_importing_app_leaves_every_gated_adapter_unimported():
     """`hyperspace.devices` is the only importer of the optional adapters
-    and imports each one lazily, inside its device's `open` (plan 27 B1) —
+    and imports each one lazily, inside its device's `open` —
     so importing `app` pulls in none of them, nor torch, nor the Ultraleap
-    SDK, nor the OSC library (B4's `osc.py` and `pythonosc` are gated the
-    same way before they exist). The hands *package* is the one exception,
+    SDK, nor the OSC library (`osc.py` and `pythonosc` are gated the
+    same way). The hands *package* is the one exception,
     on purpose: its settings register and its page draws whether or not
     the tracker is on (`_hand_settings`, `ui.py`), and `hands/core.py`
-    imports `leap` only inside `LeapSource`. Plan 39 T4: nor the segment
+    imports `leap` only inside `LeapSource`. Nor the segment
     worker (`segment.py`, imported by the renderer on a segment's first
     need), Apple Vision through pyobjc, or torchvision — each imported
     inside the worker's first job. In a subprocess, because this
@@ -77,8 +77,7 @@ def _entries(**enabled: bool) -> list[dict]:
 
 def test_a_shut_gate_opens_nothing(monkeypatch):
     """A `[[devices]]` entry with `enabled = false` is listed as `off`:
-    its device is never opened, so its adapter module is never imported
-    (plan 27 B1; the `_open_*` gates this replaced)."""
+    its device is never opened, so its adapter module is never imported."""
     for cls in (devices.MidiDevice, devices.PadDevice, devices.HandsDevice,
                 devices.BridgeDevice):
         monkeypatch.setattr(cls, "open", _boom)
@@ -105,14 +104,14 @@ def test_a_shut_gate_opens_nothing(monkeypatch):
 def test_the_pad_gate_is_open_by_default(tmp_path):
     """A config with no `[[devices]]` and no `[gamepad]` lists the pad
     enabled (the old table's default): the pad never raises when absent,
-    so polling for one costs nothing (audit P2). The registry opens a
+    so polling for one costs nothing. The registry opens a
     `gamepad.Pad` for it; `enabled = false` leaves it `off`."""
     from hyperspace import gamepad
 
     cfg = config.load(tmp_path / "config.toml")
     (pad,) = [e for e in config.devices(cfg) if e["kind"] == "gamepad"]
     assert pad == {"role": "pad", "kind": "gamepad", "enabled": True, "usb": True,
-                   "hid": True, "controller": "any",          # plan 42
+                   "hid": True, "controller": "any",
                    "dial_left": "petal", "dial_right": "blend"}
     reg = devices.DeviceRegistry([pad])
     reg.open_all()
@@ -219,7 +218,7 @@ def test_keys_fire_on_the_edge_from_either_window_unless_imgui_is_typing(fake):
 
 def test_keys_hold_time_reads_the_frames_clock(fake):
     """held() is measured on the `now` the loop hands it, not a clock of
-    its own (audit P4): the same instant every other frame reader sees."""
+    its own: the same instant every other frame reader sees."""
     g = app.glfw
     keys = app.Keys("render", "ctrl")
     assert keys.held(g.KEY_UP, 10.0) == 0.0
@@ -242,7 +241,7 @@ def test_keys_read_the_modifiers_the_table_spells(fake):
     assert keys.shift() and keys.super() and not keys.control()
     fake.keys.add(("render", g.KEY_RIGHT_CONTROL))
     assert keys.control()
-    # every modifier the table may spell is one the adapter reads (plan 15)
+    # every modifier the table may spell is one the adapter reads
     from hyperspace.routing import MODIFIERS
     assert MODIFIERS == ("SHIFT", "SUPER", "CONTROL")
     assert all(callable(getattr(keys, m.lower())) for m in MODIFIERS)
@@ -270,7 +269,7 @@ def test_mouse_orbits_pans_and_zooms_on_the_base(fake):
     mouse.poll(shift=True)                            # re-anchors as a pan
     fake.cursor = (150.0, 110.0)
     mouse.poll(shift=True)
-    # plan 26 A2: the pan is in world units — the cursor's px over the px a
+    # the pan is in world units — the cursor's px over the px a
     # unit spans at the origin through the eye
     unit = app._px_per_unit(view, *g.get_window_size("render"))
     assert (pan_x.base, pan_y.base) == pytest.approx((10.0 / unit, -10.0 / unit))
@@ -353,7 +352,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
         devices.MidiDevice("apc40", io=midi),
         devices.HandsDevice("leap", io=Stub("hands", log, status="tracking", last="",
                                             source=SimpleNamespace(on=True))),
-        # the bridge's sink half reads the table's sink rows (plan 27 B3):
+        # the bridge's sink half reads the table's sink rows:
         # `table.sinks` then `bridge.send_values`, the path a live rig runs
         devices.BridgeDevice(
             "bridge", None,
@@ -363,7 +362,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
     h = app.Host(
         reg=reg, view=Stub("view", log, zoom=1.0, pan=[0.0, 0.0]), control=Stub("control", log),
         audio=audio,
-        # plan 44 D2: the router's sources are what the feeds go to
+        # the router's sources are what the feeds go to
         router=Stub("router", log, sources=Stub("sources", log)),
         clock=Stub("clock", log), lfos=Stub("lfos", log),
         keys=keys, mouse=Stub("mouse", log), output=Stub("output", log, bg_alpha=0.5, dim=0.4),
@@ -379,13 +378,11 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
 
 
 # ARCHITECTURE §2, top to bottom: the scene-setters, the feeds, the pass,
-# the draw. Plan 27 B1: the devices poll in the scene-setter slot (the
+# the draw. The devices poll in the scene-setter slot (the
 # registry, in list order — the pad's rows, then MIDI's), the sources feed
 # in the feed slot (the hands feed `hand`, the bridge feeds `ext`), and the
-# sinks run after `reg.apply` (`devices.send`). Plan 27
-# B2: the sticks' camera job is the pad device's own (`gamepad.steer`, in
-# its `act`), so it runs right after the pad's rows, before MIDI's. Plan 27
-# B3: the bridge is two halves — its ports looked for again in its `poll`,
+# sinks run after `reg.apply` (`devices.send`). The sticks' camera job is the pad device's own (`gamepad.steer`, in
+# its `act`), so it runs right after the pad's rows, before MIDI's. The bridge is two halves — its ports looked for again in its `poll`,
 # the ext lanes received and published in the feed slot, the out half a
 # sink after `reg.apply` (effective values, no longer a frame behind)
 ORDER = [
@@ -396,19 +393,19 @@ ORDER = [
     "pad.lanes", "router.felt",                      #   …through the pad's feel (motion.py)
     "midi.poll",                                     #   …MIDI — cc and note rows
     "bridge.reconnect",                              #   …the bridge's ports, looked for again
-    "media.poll",                                    # the media channels follow their slots (plan 32)
+    "media.poll",                                    # the media channels follow their slots
     "router.follow_macros",                          # the macros' base subscribers
-    "undo.tick",                                     # the bases, compared (plan 15 WP1)
+    "undo.tick",                                     # the bases, compared
     "output.apply",                                  # reads last frame's objects
     "mouse.poll",                                    # relative writers, to the base
-    "audio.step", "audio.publish",                   # new lanes, and their names (R8)
+    "audio.step", "audio.publish",                   # new lanes, and their names
     "hands.poll",                                    # devices.feed: the hands feed hand
     "bridge.receive", "bridge.publish",              #   …the bridge feeds ext, its labels
     "router.modulate", "reg.apply",                  # the pass (the LFOs step inside it,
-                                                     # plan 28 N0), then one commit
-    "table.sinks", "bridge.send_values",             # devices.send: the sinks' rows (B3)
+                                                     # then one commit
+    "table.sinks", "bridge.send_values",             # devices.send: the sinks' rows
     "view.integrate", "view.reroot",                 # the turn; a fractal's view re-rooted
-    "world.home", "world.frame",                     # plan 59: the shape's home, puppets, physics
+    "world.home", "world.frame",                     # the shape's home, puppets, physics
     "render.draw", "panel.draw",                     # the two windows
 ]
 
@@ -420,13 +417,13 @@ def test_the_frame_runs_in_the_documented_order():
     assert log == ORDER
     assert not any(s.startswith("sources.") for s in log)   # fed, never asked
     assert h.renderer.bg_alpha == 0.5                # the output's ground, this frame
-    assert h.renderer.dim == 0.4                     # and its master dim (plan 15 WP3)
+    assert h.renderer.dim == 0.4                     # and its master dim
     assert h.control.chain is h.audio.chain          # the chain stays one object
     assert h.reloader.runtime_error == ""            # a clean frame clears the toast
 
 
 def test_the_frame_feeds_the_shared_sources_not_the_router():
-    """Plan 44 D2: the feed slot hands the router's sources
+    """The feed slot hands the router's sources
     (routing_sources.Sources) where it handed the router — the analyzer's
     lane names and every device's feed — while the scene-setters and the
     pass stay the router's. There is no second handle on the host: the
@@ -449,7 +446,7 @@ def test_the_frame_feeds_the_shared_sources_not_the_router():
 
 
 def _deck_build_src() -> str:
-    """The source of `Deck.build`: `main`'s deck lines since plan 44 D1
+    """The source of `Deck.build`: `main`'s deck lines
     (main calls it once, tests/test_deck.py)."""
     import inspect
     import textwrap
@@ -460,10 +457,10 @@ def _deck_build_src() -> str:
 
 
 def test_main_hands_the_router_its_lfos():
-    """Plan 28 N0: the LFOs step inside `router.modulate`, so `ORDER` no
+    """The LFOs step inside `router.modulate`, so `ORDER` no
     longer shows them — a main that forgot `router.use_lfos(lfos, clock)`
     would freeze every LFO with the frame order unchanged. The call is in
-    `main`'s deck (`Deck.build`, plan 44 D1), on the router it builds,
+    `main`'s deck (`Deck.build`), on the router it builds,
     with the bank and clock it registered."""
     import ast
     import inspect
@@ -476,7 +473,7 @@ def test_main_hands_the_router_its_lfos():
 
 
 def test_main_hands_the_router_its_envelopes_and_sequencer():
-    """Plan 31 W1: the envelopes are a second bank and the sequencer fires
+    """The envelopes are a second bank and the sequencer fires
     them, both stepped inside `router.modulate` — a main that forgot either
     call would leave every envelope at rest and the grid silent, with the
     frame order unchanged. Each is registered before the router takes it,
@@ -486,7 +483,7 @@ def test_main_hands_the_router_its_envelopes_and_sequencer():
 
     from hyperspace.deck import Deck
 
-    src = _deck_build_src()                  # main's deck lines (plan 44 D1)
+    src = _deck_build_src()                  # main's deck lines
     tree = ast.parse(src)
     calls = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Attribute)
@@ -525,19 +522,19 @@ def test_an_absent_pad_or_adapter_is_simply_skipped():
 def test_a_raising_step_is_recorded_and_the_windows_still_draw():
     log: list[str] = []
     h = _host(log)
-    h.router.modulate = _boom                        # where the LFOs step now (plan 28 N0)
+    h.router.modulate = _boom                        # where the LFOs step
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
     assert h.reloader.runtime_error.startswith("step: RuntimeError: boom")
     assert "reg.apply" not in log                    # the pass stopped where it raised
     assert log[-2:] == ["render.draw", "panel.draw"]
-    # K3 (row 578): the integrator is guarded on its own, so the turn, the
+    # the integrator is guarded on its own, so the turn, the
     # field's motion and the media path keep moving through it; and the
-    # world (plan 59) after it, on its own too
+    # world after it, on its own too
     assert log[-6:-2] == ["view.integrate", "view.reroot", "world.home", "world.frame"]
 
 
 def test_a_raising_world_step_is_recorded_and_the_windows_still_draw():
-    """Plan 59: the world's frame is guarded on its own, like the integrator."""
+    """The world's frame is guarded on its own, like the integrator."""
     log: list[str] = []
     h = _host(log)
     h.world.frame = _boom
@@ -569,7 +566,7 @@ def test_a_raising_adapter_is_a_note_that_survives_the_frame():
     assert "bridge.receive" in log and "reg.apply" in log    # the next device still fed
     hands.poll = lambda *a, **k: None
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is True
-    # a sink that raises after `reg.apply` (plan 27 B3): the toast, its
+    # a sink that raises after `reg.apply`: the toast, its
     # line, and the frame still draws
     h.devices.adapter("bridge").send_values = _boom
     log.clear()
@@ -582,7 +579,7 @@ def test_a_raising_adapter_is_a_note_that_survives_the_frame():
 def test_the_relative_writers_run_with_the_setters_and_move_the_base():
     """↑/↓ held and the pad's sticks are relative writers on the base
     (`nudge` / `scale`), and they run in the scene-setter block — after the
-    key rows and the pad's rows (plan 27 B2: the camera job is the pad
+    key rows and the pad's rows (the camera job is the pad
     device's, `gamepad.steer`, right after its rows and before MIDI's),
     before the macros and before any source feeds."""
     g = app.glfw
@@ -654,7 +651,7 @@ def test_cmd_brackets_go_back_and_forward_through_the_pages_visited():
 def test_the_loop_keys_outside_the_table():
     """Q closes (Esc does not), Cmd+R restarts the process, and the panel's restart
     button restarts too — the keys ARCHITECTURE §3.7 lists as loop code.
-    R alone is a table row since plan 11: the loop leaves its edge for
+    R alone is a table row: the loop leaves its edge for
     `router.keys`; with ⌘ held the loop claims the edge first, so the
     `key:R` row (camera.reset) never hears a restart."""
     g = app.glfw
@@ -685,9 +682,9 @@ def test_the_loop_keys_outside_the_table():
 
 
 def test_the_host_close_list_is_every_adapter_in_shutdown_order():
-    """The one close list (audit P1) is the media channels and folder
-    (plan 32), the registry — every device, last listed first, the pad
-    included (plan 27 B1) — then the dream worker."""
+    """The one close list is the media channels and folder,
+    the registry — every device, last listed first, the pad
+    included — then the dream worker."""
     log: list[str] = []
     h = _host(log)
     assert h.adapters == (h.media, h.devices, None)
@@ -713,7 +710,7 @@ def _imports(path: Path) -> set[str]:
 
 def test_the_library_never_imports_config():
     """The library never imports config: app.main reads [library] path and
-    hands the library its root and the machine home (plan 25)."""
+    hands the library its root and the machine home."""
     pkg = Path(app.__file__).parent
     for f in family("library", pkg):
         lib = _imports(f)
@@ -768,7 +765,7 @@ def test_the_config_defaults_shut_overlay():
     assert app._overlay_allowed({"output": dict(config.DEFAULTS["output"])}) is False
 
 
-# ---- plan 16 WP4: the windows open where placement says, and the exits remember ----
+# ---- the windows open where placement says, and the exits remember ----
 
 class _PlaceGlfw(_HintGlfw):
     """Two screens (the laptop, then a projector to its right) and windows
@@ -829,7 +826,7 @@ def _open(monkeypatch, cfg, home, mons=None):
 ])
 def test_a_config_screen_that_cannot_be_used_is_minus_one_and_one_note(
         monkeypatch, tmp_path, capsys, monitor, said):
-    """Plan 16 WP7: `[output] monitor = "left"` stopped the launch in
+    """`[output] monitor = "left"` stopped the launch in
     `_make_output`, and an index no screen has stayed in `Output.monitor`
     after placement had said it was treated as −1. Both are −1 from
     `_windows` on, for both windows' keys, and each is said once."""
@@ -875,9 +872,9 @@ def _open_twins(monkeypatch, cfg, tmp_path, *mons):
 
 
 def test_screens_by_name_survive_the_plug_order(monkeypatch, tmp_path, capsys):
-    """Row 771, through `_windows`: named outputs land on their own screens
+    """Through `_windows`: named outputs land on their own screens
     however the window system lists them, where an index would swap them.
-    `Output.monitor` and `Slot.monitor` are indices still (until SC3b): the
+    `Output.monitor` and `Slot.monitor` are indices: the
     index the name found on this launch."""
     from hyperspace import config
     from hyperspace.params import Registry
@@ -1003,7 +1000,7 @@ def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (16, 54))
     assert len(cfg["notes"]) == 1 and cfg["notes"][0].startswith("placement: ")
     # …and a later output whose screen is not connected stays closed then
-    # too (fork F9; review of #123), while one on a connected screen opens
+    # too, while one on a connected screen opens
     cfg = {"output": {"screens": [{}, {"monitor": 5}, {"monitor": 1}]}}
     g = _PlaceGlfw()
     monkeypatch.setattr(app, "glfw", g)
@@ -1136,7 +1133,7 @@ def test_both_exits_destroy_every_window_before_terminate(monkeypatch):
     assert "*(plug.windows() if plug is not None else ())," in src, "and those held for a display"
 
 
-# ---- the desk's table and knob smoothing's default (plan 18 WP2, fork 12) ----
+# ---- the desk's table and knob smoothing's default ----
 
 def _launch(home):
     """`app.main`'s order around the desk's table, headless: the table is
@@ -1156,7 +1153,7 @@ def _launch(home):
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
-    # plan 31, as app.main (plan 36 T3: the `/7` files hold their values)
+    # as app.main (the `/7` files hold their values)
     from hyperspace import envelope, sequencer
 
     envelope.register(reg, envelope.Envelopes(), clock)
@@ -1183,7 +1180,7 @@ def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tm
     from hyperspace import routing
 
     assert routing.Bindings().slew == 0.0 and routing.SLEW_DEFAULT_S == 0.08
-    # main's table hook (plan 44 D1) is what `Deck.build` reads it with,
+    # main's table hook is what `Deck.build` reads it with,
     # before the library attaches; the router after
     src, build = inspect.getsource(app.main), _deck_build_src()
     assert 0 < src.index("_desk_table(reg, Bindings.load(") < src.index("table=load_table")
@@ -1227,7 +1224,7 @@ def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tm
     assert not r.show.is_dirty() and not r.lib.warning
 
 
-# ---- plan 21 WP3: the output list — windows, presenters, swaps ----
+# ---- the output list — windows, presenters, swaps ----
 # Over fake window systems: a real second window cannot exist headless.
 # The presenter's drawing is pinned on a real (standalone) GL context in
 # tests/test_outputs.py; the share group itself only in a real launch.
@@ -1406,8 +1403,8 @@ def test_the_root_window_is_hidden_and_shares_with_every_other(monkeypatch):
 
 
 def test_a_hot_reload_runs_with_the_render_context_current(fake):
-    """Audit V8: `reloader.poll()` used to run with the control window's context
-    current, so `on_reload`'s vertex arrays and framebuffers were built there. Apple's
+    """`reloader.poll()` runs with the render context current, not the control window's,
+    so `on_reload`'s vertex arrays and framebuffers are built in it. Apple's
     GL hides it (its share group shares vertex arrays, measured,
     `tools/sc3a_spike.py v8`); the spec doesn't, and Mesa wouldn't."""
     import inspect
@@ -1484,7 +1481,7 @@ def test_only_the_first_output_waits_for_the_screen(monkeypatch):
                    "interval 0", "current root", "current root"]
     assert isinstance(slots[0].presenter, app.Presenter)
     assert isinstance(slots[1].presenter, app.Presenter) and slots[2].presenter is None
-    # one that will not build is closed and counts as not opened (review of #123):
+    # one that will not build is closed and counts as not opened:
     # never drawn, it would show garbage and the watch would count it as live
     assert destroyed == ["w3"] and not slots[2].opened
     assert slots[2].missing == "its GL context would not open (presenter: RuntimeError: no context)"
@@ -1847,7 +1844,7 @@ def test_a_later_output_is_the_configs_and_never_overlay(monkeypatch):
 
 
 def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch, tmp_path):
-    """Plan 21 WP4: main registers each opened output's switches before
+    """main registers each opened output's switches before
     the library attaches (with the other meta settings), seeded from the
     slots `_windows` filled from the config; the panel gets the slots;
     and what a param writes is the `View` the next frame draws."""
@@ -1856,7 +1853,7 @@ def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch,
     from hyperspace.overlay import register_switches
     from hyperspace.params import Registry
 
-    # main's outputs hook (plan 44 D1), run by `Deck.build` before attach
+    # main's outputs hook, run by `Deck.build` before attach
     src, build = inspect.getsource(app.main), _deck_build_src()
     assert src.index("_make_output(render_win, reg, cfg)") < src.index(
         "register_switches(reg, slots)") < src.index("outputs=outputs_setup")
@@ -1883,7 +1880,7 @@ def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch,
 
 
 def test_the_media_exit_joins_everything_within_two_seconds(tmp_path):
-    """Plan 32 review focus 3: the app's media close — every channel's
+    """The app's media close — every channel's
     source closed and its thread joined, the folder's timer stopped, the
     proxy worker and the pool let go — ends well inside 2 s, and leaves no
     media thread of the channels' or the folder's running."""
@@ -1999,7 +1996,7 @@ def test_the_app_exits_within_two_seconds_with_reads_and_a_transcode_stuck(tmp_p
 
 
 def test_the_graph_preview_rides_on_output_1_only_when_asked():
-    """2026-10-26: the GRAPH page's backdrop — an `outputs.Preview` the
+    """The GRAPH page's backdrop — an `outputs.Preview` the
     page `want`ed — joins output 1's view as a publisher, through its own
     tap (output 1 publishes nothing), flushed for the control window; not
     asked for, output 1's view is as ever."""

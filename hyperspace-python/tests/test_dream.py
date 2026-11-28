@@ -1,12 +1,12 @@
-"""WP6b — the dream worker: the `dreamhook.Source` contract, the hand-off,
+"""The dream worker: the `dreamhook.Source` contract, the hand-off,
 the guards, the copy paths, the config gate, and the real pipeline.
 
-Plan 90 H3: the dream is the effect file `dream` (`shaders/fx/dream.glsl`,
+The dream is the effect file `dream` (`shaders/fx/dream.glsl`,
 its Python half `dreamhook.py`); the worker reads no registry — the knobs
 come with each picture (`submit`'s ``params``, `dreamhook.params_of`) — and
 its pictures are RGBA, premultiplied, the alpha the gradient's gate.
 
-The worker itself needs torch — a main dependency since decision 23 (a),
+The worker itself needs torch — a main dependency,
 so a plain ``uv sync`` has it; those tests still skip without it. The fast
 ones inject a step function in place of the net, so they need no weights
 and no GPU; the end-to-end one loads VGG16 conv3_3 for real and is marked
@@ -60,7 +60,7 @@ def test_core_does_not_import_the_worker():
         importlib.import_module(m)
     assert "hyperspace.dream" not in sys.modules
     # no module under hyperspace/ imports torch at the top except dream.py
-    # (plan 39 T4: segment.py's torch backend imports it inside its own
+    # (segment.py's torch backend imports it inside its own
     # functions, in the worker's first job — never at its module's top)
     import ast
     from pathlib import Path
@@ -80,7 +80,7 @@ def test_core_does_not_import_the_worker():
 
 
 def test_dream_is_on_by_default(tmp_path):
-    """Decision 23 (a), 2026-09-29: torch is part of the app and the worker
+    """Torch is part of the app and the worker
     opens unless config.toml says `[dream] enabled = false`."""
     cfg = config.load(tmp_path / "config.toml")
     assert cfg["dream"] == {"enabled": True, "device": "auto", "precision": "fp32",
@@ -209,7 +209,7 @@ def test_round_trip_is_rgba_as_it_came_in(dream_mod):
 
 def test_hold_blends_the_newest_picture_in_rgba(dream_mod):
     """Hold (`k`) below 1 keeps the last dream: rgb and coverage alike fade
-    at k (the old mask's linger is Hold's, plan 90 Q17)."""
+    at k (the old mask's linger is Hold's)."""
     w = make_worker(dream_mod, identity, start=False)
     try:
         h, wd = 32, 48

@@ -1,5 +1,5 @@
 """⌘C / ⌘V on the GRAPH canvas (ui_graph._copy_paste): an effect is copied;
-paste adds a slot to it (plan 89: one more picture through it, on its own
+paste adds a slot to it (one more picture through it, on its own
 node — no copy node)."""
 
 from types import SimpleNamespace as NS

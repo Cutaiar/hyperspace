@@ -1,4 +1,4 @@
-"""Plan 90 (H2, row 1179): `scene.cover` goes into a cut's mask, as a migrated
+"""`scene.cover` goes into a cut's mask, as a migrated
 look-back's second Cut takes it. A cut is made in its own `run`, in order,
 where it is read at the frame's size — never pulled half-way through another
 node's pass (its mask pass binds its own target and texture units): the

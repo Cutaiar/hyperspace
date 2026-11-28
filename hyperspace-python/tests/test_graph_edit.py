@@ -1,4 +1,4 @@
-"""Editing the modulation on the GRAPH page (plan 28 N3), headless.
+"""Editing the modulation on the GRAPH page headless.
 
 Every edit is a `graphview.Edit` request (the model: no imgui) or one of
 the page's plain functions over the panel (`ui_graph.connect`,
@@ -75,8 +75,7 @@ def test_connecting_a_source_to_a_mod_port_adds_the_route_learn_would(rig):
     of the row the hand learn makes for that pair (`learn.row_for`): a
     one-sided hand axis on a plain param is the `position` fader at 1; a
     centred one (the device says `bipolar`) is a `push` at the hands'
-    Learn depth; a band lane a push at `learn.LANE_DEPTH` (the owner,
-    after the show of 2026-10-30). It lands as one cable next build.
+    Learn depth; a band lane a push at `learn.LANE_DEPTH`. It lands as one cable.
     The same pair learned by a hand lands the same row."""
     reg, table = rig.reg, rig.router.table
     reg["hands.learn_depth"].set(0.4)
@@ -187,7 +186,7 @@ def test_a_hand_into_a_base_port_is_refused_in_words_and_a_pad_is_a_setter_row(r
     refs = [c.ref for c in cables(view, "setter")]
     assert any(x is knob for x in refs) and any(x is pad for x in refs)
     # a macro: a base subscriber (from where the param sits to the top of
-    # its fader, row 537 — the land itself moves nothing; the next
+    # its fader — the land itself moves nothing; the next
     # `follow_macros` does) and a depth one
     route = e.connect("out:lane:3", f"mod:{free_param(rig).id}")
     e, view = edit(rig, leap())
@@ -319,8 +318,8 @@ def test_learn_from_a_port_lands_as_a_cable(rig, monkeypatch):
 def test_the_routing_page_and_the_graph_page_show_one_table(rig, monkeypatch):
     """One table, two views, both ways: a cable made on GRAPH is a row of
     ROUTING's table (`table.routes()`, drawn by ROUTING's `_row` in GRAPH's
-    side pane — plan 28 N7: ROUTING itself draws only the pointer to
-    GRAPH now) and a modifier picked on the canvas is in the table's
+    side pane; ROUTING itself draws only the pointer to
+    GRAPH) and a modifier picked on the canvas is in the table's
     modifiers; deleted through the table, the cable is gone from GRAPH."""
     panel, table = rig.panel, rig.router.table
     p = free_param(rig, centred=False)
@@ -361,7 +360,7 @@ def test_render_pins_reach_n4s_methods_and_refuse_as_a_refusal(rig):
     (`wire`, `unwire`, `remove_render_node`, `wire_refusal`); their plain
     words come back as a `Refusal` (the page's note), a landing as None;
     the page's drag and delete tables route those types to N4's handlers."""
-    rig.lib.load("loadable", "party-wake")            # (plan 35 T5: a wired frame landed)
+    rig.lib.load("loadable", "party-wake")            # a wired frame
     table = rig.router.table
     view = graphview.build(table, rig.reg, rig.router, None, None, None)
     e = graphview.Edit(table, rig.reg, rig.router, view, graph=rig.lib.loaded_patch.graph)
@@ -369,7 +368,7 @@ def test_render_pins_reach_n4s_methods_and_refuse_as_a_refusal(rig):
     assert graphview.RENDER_NOT_YET not in (
         e.connect("rout:shape", "rin:scene/geometry"),
         e.refusal("rin:scene/geometry", "rout:shape"))
-    # plan 35 G: the shape into the scene is a wire like any other
+    # the shape into the scene is a wire like any other
     assert e.refusal("rin:scene/geometry", "rout:shape") is None
     got = e.refusal("rin:output.1/image", "rout:hands")
     assert isinstance(got, str) and "hands makes geometry" in got
@@ -383,7 +382,7 @@ def test_render_pins_reach_n4s_methods_and_refuse_as_a_refusal(rig):
     got = e.disconnect(wire)
     assert isinstance(got, graphview.Refusal) and got == graphview.NO_SUCH_WIRE.format(
         wire="hands.layer → output.2.hands")
-    # (plan 35 G: the shape deletes too; the camera is the look's one, kept)
+    # the shape deletes too; the camera is the look's one, kept
     got = e.remove_node("render:camera")
     assert isinstance(got, graphview.Refusal) and got == graphview.CAMERA_KEPT.format(
         label="Camera")
@@ -461,7 +460,7 @@ def test_nodes_the_picker_adds_and_delete_removes(rig):
     assert "macro.7" not in table.macros
     assert ui_graph.remove_node(panel, graphview.ANALYZER) == graphview.NOT_REMOVABLE.format(
         label=view.node(graphview.ANALYZER).label)
-    # an LFO is the loadable patch's since plan 31 (G1): it goes through its bank,
+    # an LFO is the loadable patch's: it goes through its bank,
     # and a rig whose router steps none says so
     assert ui_graph.remove_node(panel, "lfo.1") == graphview.NO_BANK.format(what="LFO")
 
@@ -686,20 +685,20 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
     assert where["begin_create"] == {"_create"}
     assert where["query_new_link"] == {"new_link"}          # N4: `_create` asks it
     assert where["begin_delete"] == where["query_deleted_link"] == {"_delete"}
-    # plan 28 N7: a drag onto a collapsed node's stub opens its port picker
+    # a drag onto a collapsed node's stub opens its port picker
     # (`_stub_drag`); a bundle's delete is refused in words (`delete_bundle`)
     assert where["accept_new_item"] == {"_value_drag", "_create_render", "_stub_drag"}
     assert where["accept_deleted_item"] == {"_value_cut", "_value_node_cut", "_voice_node_cut",
                                             "_delete_render_cable", "_delete_render_node"}
     assert where["reject_deleted_item"] <= {"_value_cut", "_unknown_cut", "_delete",
                                             "_fixture_node_cut", "_delete_render_cable",
-                                            "_voice_node_cut", "_lane_cut",   # plan 31 G1
+                                            "_voice_node_cut", "_lane_cut",
                                             "_delete_render_node", "delete_bundle",
                                             "delete_through",   # N9: a through wire
-                                            "_feeds_cut",   # plan 33 U: frame's picture
+                                            "_feeds_cut",   # frame's picture
                                             "_node_mode_cut"}   # N1b: says how to leave
     assert where["reject_new_item"] <= {"_value_drag", "_create_render", "_stub_drag"}
-    # plan 28 N4: the render types and kinds are in the dispatch, to N4's handlers
+    # the render types and kinds are in the dispatch, to the render handlers
     assert set(graphview.RENDER_TYPES) <= set(ui_graph.CREATE)
     assert ui_graph.DELETE["render"] is ui_graph._delete_render_cable
     assert ui_graph.DELETE_NODE["render"] is ui_graph._delete_render_node
@@ -764,8 +763,8 @@ def test_a_move_picks_up_the_performer_not_a_sleeping_route(rig):
 
 def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     """Delete on a node goes by its kind (`DELETE_NODE`): a render or an
-    output node is N4's (the camera refused in words: plan 35 G — the look's
-    one since plan 43 C2), a
+    output node is N4's (the camera refused in words: the look's
+    one), a
     kind not listed is the meta controller's; a macro node's delete goes through the
     table's `set_macros`, its label and subscribers with it."""
     from imgui_bundle import imgui_node_editor as ed
@@ -778,7 +777,7 @@ def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     group = graphview.VNode("group:tempo", "group", "tempo")
     ui_graph.DELETE_NODE.get(group.kind, ui_graph._fixture_node_cut)(rig.panel, st, None, group)
     assert st["note"] == graphview.NOT_REMOVABLE.format(label="tempo")
-    # plan 31 G1: an LFO and an envelope go through their bank; a lane
+    # an LFO and an envelope go through their bank; a lane
     # envelope is kept, said
     assert ui_graph.DELETE_NODE["lfo"] is ui_graph.DELETE_NODE["env"] is ui_graph._voice_node_cut
     env = graphview.VNode("env.2", "env", "env 2")
@@ -871,11 +870,11 @@ def test_a_selection_delete_keeps_its_first_refusal_s_words(rig, monkeypatch):
     assert table.modifier(m2.id) is None and st["note"] == ""
 
 
-# ---------------------------------------------------------------- plan 33 T6: the free graph
+# ---------------------------------------------------------------- the free graph
 #
-# (plan 35 T5: every section here is a wired frame in the new ids — the run
-# is a picture through the effects into All outputs (plan 90 H2: the
-# scene's, where the retired look-back's was), and
+# (every section here is a wired frame — the run
+# is a picture through the effects into All outputs (the
+# scene's), and
 # each of its wires is an ordinary wire)
 
 def _section(*pairs, nodes=()):
@@ -929,7 +928,7 @@ def run_of(rig) -> tuple[str, ...]:
 
 
 def test_the_picker_adds_an_effect_unwired(tmp_path):
-    """Plan 33 U: the picker's effect is the next instance, in the section
+    """The picker's effect is the next instance, in the section
     and on no wire — it reaches nothing, so the canvas draws it faint with
     "reaches nothing" (`VNode.faint`), never idle — and a switch is added
     the same way (`switch`, its `select` declared); the run is untouched."""
@@ -984,7 +983,7 @@ def test_insert_effect_on_a_render_cable(tmp_path):
 
 
 def test_a_generator_on_a_cable_takes_it_over(tmp_path):
-    """Devin's review of #501: Colour (a picture generator, no input port)
+    """Colour (a picture generator, no input port)
     picked in insert mode, or dropped on a cable, spliced as `src →
     colour.image`, a port it has not, and the landing was refused. A
     generator takes a cable over as a channel does: it feeds the port
@@ -1001,8 +1000,8 @@ def test_a_generator_on_a_cable_takes_it_over(tmp_path):
     assert ("colour", "output.all.image") in got and ("scene", "output.all.image") not in got
     assert not [w for w in got if w[1].startswith("colour.")]
     assert e.said.startswith("colour feeds output.all.image instead of scene")
-    # (Devin's review of #501: the scene, its last wire out gone, stays on the
-    # canvas unwired — kept by its entry, as `render_wire` keeps a node)
+    # the scene, its last wire out gone, stays on the
+    # canvas unwired — kept by its entry, as `render_wire` keeps a node
     spec = rig.loaded_patch.graph.spec
     assert "scene" in graphview.frame_names(spec)
     assert not [w for w in got if w[0] == "scene"]
@@ -1020,7 +1019,7 @@ def test_inserting_an_effect_no_one_holds_uses_instance_one_and_switches_it_on(t
     landing — the first gesture shows something."""
     rig, e, pushed = free_rig(tmp_path, ("scene", "output.all.image"))
     reg = rig.reg
-    # (plan 36 T3: neither exists before a gesture names it)
+    # neither exists before a gesture names it
     assert "fx.kaleido.on" not in reg and "fx.wobble.on" not in reg
     assert e.insert_effect(("scene", "output.all.image"), "kaleido") is None
     assert e.added == "kaleido" and run_of(rig) == ("kaleido",)
@@ -1049,12 +1048,12 @@ def test_undo_of_an_insert_restores_the_on_value_too(tmp_path):
     from test_undo import settle
 
     rig, e, _ = free_rig(tmp_path, ("scene", "output.all.image"), undo_rig=True)
-    assert "fx.kaleido.on" not in rig.reg            # (plan 36 T3: not in the section)
+    assert "fx.kaleido.on" not in rig.reg            # not in the section
     assert e.insert_effect(("scene", "output.all.image"), "kaleido") is None
     assert rig.reg["fx.kaleido.on"].value is True
     settle(rig)
     assert len(rig.undo.stack) == 1 and rig.undo.undo()
-    assert "fx.kaleido.on" not in rig.reg           # (gone with its node: plan 36 T3)
+    assert "fx.kaleido.on" not in rig.reg           # gone with its node
     assert run_of(rig) == () and wires_of(rig) == {("scene", "output.all.image")}
 
 
@@ -1097,8 +1096,7 @@ def test_undo_of_switch_over_the_channels_puts_the_channel_back(tmp_path):
 
 
 def test_the_runs_cables_are_ordinary_wires(tmp_path):
-    """Plan 35 G (the owner's refusal of `frame → fx` retired with R20):
-    a cable of the run deletes as any wire — the effect it left stays,
+    """A cable of the run deletes as any wire — the effect it left stays,
     named by its other wire, or (R21) by its entry once it has none, drawn
     faint; the effect deleted goes with its wires; deleting a wire the
     section does not have is the one refusal left."""
@@ -1170,9 +1168,9 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
 
 
 def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
-    """R21 (row 349): `acid` unwired from both sides is kept in the section
+    """R21: `acid` unwired from both sides is kept in the section
     — `{"kind": "effect", "file": "acid"}`, on no wire — drawn faint,
-    "reaches nothing"; saved, the loadable patch is `/6` (plan 35: an edited frame
+    "reaches nothing"; saved, the loadable patch is `/6` (an edited frame
     no older schema says); undo puts its wires back."""
     import json
 
@@ -1215,7 +1213,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
 def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
     """R26 (refines R21), in the wired frame: party-trip with `hueturn`
     taken out of its run on GRAPH (its wires gone, R21's entry keeping it,
-    faint) — on or off, the save is `/6` (row 394) with the entry kept and
+    faint) — on or off, the save is `/6` with the entry kept and
     the run as wired, so a reload finds it where it was left."""
     import json
     rig, e, _ = wired_rig(tmp_path, slug="party-trip")
@@ -1224,8 +1222,8 @@ def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
     assert e.unwire("zoomblur", "hueturn.image") is None
     assert e.wire("rout:zoomblur", "rin:output.all/image") is None
     assert run_of(rig) == ("plasma", "kaleido", "zoomblur")
-    # (plan 67: Hue turn's band still names it — `scale.3 → hueturn.turn` — so it
-    # stays without R21's entry, its knobs kept)
+    # Hue turn's band still names it — `scale.3 → hueturn.turn` — so it
+    # stays without R21's entry, its knobs kept
     assert "hueturn" in graphview._named(rig.loaded_patch.graph.spec.to_json())
     rig.reg["fx.hueturn.on"].set(True)
     for name, on in (("On", True), ("Off", False)):
@@ -1255,10 +1253,10 @@ def test_an_unwired_instance_one_round_trips():
 
 
 def test_a_sink_loop_drag_is_refused_in_words(tmp_path):
-    """Plan 34 L (Review Focus 2), in a wired frame: the canvas's dry run
+    """In a wired frame: the canvas's dry run
     reads the loop at read, so `scene → shape.faces` goes red with words —
     never green, then dormant — and nothing changes. With a delay declared,
-    `delay → shape.faces` lands (plan 35 G: only types and loops refuse)."""
+    `delay → shape.faces` lands (only types and loops refuse)."""
     rig, e, pushed = free_rig(tmp_path, *FRAME0, ("scene", "output.all.image"))
     before = rig.loaded_patch.graph.spec.to_json()
     why = e.refusal("rout:scene", "rin:shape/faces")
@@ -1270,7 +1268,7 @@ def test_a_sink_loop_drag_is_refused_in_words(tmp_path):
 
 
 def test_a_plain_loop_drag_points_at_a_delay(tmp_path):
-    """Plan 34 T5 (row 359): a wired frame's other loop (`wobble → acid.aux`
+    """A wired frame's other loop (`wobble → acid.aux`
     with `acid → wobble` already wired) is refused in `LOOP_PLAIN`'s words,
     which point at a delay; wired through one it lands, the section read
     with no notes."""
@@ -1323,7 +1321,7 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     # on its own cables (scene → acid, acid → wobble), and on nothing: no change
     for at in ((200.0, 0.0), (500.0, 900.0)):
         assert ui_graph.dropped(rig.panel, view, "render:acid", at, lift=True) is None
-    # on another cable without ⌘ (2026-10-29): only moved on the canvas
+    # on another cable without ⌘: only moved on the canvas
     assert ui_graph.dropped(rig.panel, view, "render:acid", (800.0, 0.0)) is None
     assert G.run_back(gs.spec, "output.all.image") == ("acid", "wobble")
     assert pushed == []
@@ -1334,7 +1332,7 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
 
 
 def test_the_strip_has_no_order_or_onto(tmp_path, monkeypatch):
-    """Plan 33 U: the strip (the FX page's open effect, GRAPH's side pane)
+    """The strip (the FX page's open effect, GRAPH's side pane)
     draws no order slider and no ONTO chips — an effect's place is its
     wires — and no faces line; on, mix, speed and blend stay."""
     from test_fx import PageRig
@@ -1352,7 +1350,7 @@ def test_the_strip_has_no_order_or_onto(tmp_path, monkeypatch):
         page.close()
 
 
-# ---------------------------------------------------------------- Route from ▸ (the owner, 2026-10-24)
+# ---------------------------------------------------------------- Route from ▸
 #
 # The param menu's "Route from ▸": every LFO and envelope of the banks, then
 # "new LFO" / "new envelope" — a pick is the cable a drag on GRAPH makes
@@ -1361,7 +1359,7 @@ def test_the_strip_has_no_order_or_onto(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def banks():
-    """test_plan31_wiring's rig (four LFOs, five envelopes, the router
+    """The wiring test module's rig (four LFOs, five envelopes, the router
     stepping them) with a real undo carrying the banks' membership, and a
     bare panel over it, as test_graph_seq's page."""
     from test_plan31_wiring import rig as wiring_rig
@@ -1412,8 +1410,7 @@ MACROS = [f"macro {k}" for k in range(1, 9)]
 
 def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, rig,
                                                                          monkeypatch):
-    """On a modulatable param the submenu is one submenu per kind (the
-    owner, 2026-10-28): LFO ▸ every LFO by its bank's label then new LFO,
+    """On a modulatable param the submenu is one submenu per kind: LFO ▸ every LFO by its bank's label then new LFO,
     envelope ▸ the envelopes then new envelope — and, where the rig has
     macros, macro ▸ (`test_route_from_lists_the_macros…`); this rig has
     none. A trigger and a param no lane may drive have none. The shared
@@ -1439,7 +1436,7 @@ def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, r
     real = ui_graph.route_from_menu
     monkeypatch.setattr(ui_graph, "route_from_menu",
                         lambda pan, q, m: (seen.append(q.id), real(pan, q, m)))
-    # (plan 36 T3: an effect's params exist where the graph names it)
+    # an effect's params exist where the graph names it
     gs = rig.panel.library.loaded_patch.graph
     spec = G.read_graph({**gs.spec.to_json(), "nodes": [
         *gs.spec.to_json()["nodes"], {"kind": "effect", "file": "glimmer"}]})
@@ -1457,12 +1454,11 @@ def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, r
 
 
 def test_route_from_lists_the_macros_on_a_param_a_base_subscriber_may_name(rig, monkeypatch):
-    """macro ▸ (the owner, 2026-10-28: the Route from menu "should
-    probably include the macros as well"): the rig's eight knobs by label
+    """macro ▸: the rig's eight knobs by label
     (`macro_label`: ROUTING's label, else "macro 3"), one already setting
     the param checked — on a persisted patch param, modulatable or
     not (a base subscriber is no route), never on a macro or a meta controller
-    param (`routing.base_refusal`, plan 13 D9)."""
+    param (`routing.base_refusal`)."""
     from hyperspace.routing import Macro, Sub
 
     panel, reg, table = rig.panel, rig.reg, rig.router.table
@@ -1485,10 +1481,10 @@ def test_route_from_lists_the_macros_on_a_param_a_base_subscriber_may_name(rig, 
 def test_route_from_a_macro_makes_the_base_subscriber_a_graph_cable_makes(rig, monkeypatch):
     """A macro picked: the cable from its bus into the param's base stub
     (`Edit.connect_value` → `subscribe`) — a base subscriber from where
-    the param sits to the top of its fader (row 537), the idle macro
+    the param sits to the top of its fader, the idle macro
     labelled "macro 2" as the canvas's picker labels it, in one undo step;
     then the macro's knob moves the param (`Router.follow_macros`) — the
-    owner's "Tracer Macro Test" symptom, where from = to moved nothing.
+    case where from = to moved nothing.
     A second pick is checked and does nothing."""
     from hyperspace import undo
 
@@ -1597,9 +1593,7 @@ def test_an_lfo_already_driving_is_checked(banks, monkeypatch):
 
 
 # ---------------------------------------------------------------- an envelope's row
-# The owner, 2026-10-24: "the envelopes have no way for me to set a
-# baseline … they all reduce the base to 0 in between fires no matter what I
-# set the base to be." An envelope rests at 0, so `row_for` made it the
+# An envelope rests at 0, so `row_for` made it the
 # `position` fader at 1: the param sat at its minimum between fires.
 
 def _glimmer_mix(r, base: float = 0.4):
@@ -1654,8 +1648,7 @@ def test_an_envelope_on_a_toggle_stays_position(banks):
 def test_an_lfo_route_is_unchanged(banks, monkeypatch):
     """The envelope's row is the envelope's alone: an LFO into the same
     param makes the table's own LFO row — a push about the base at
-    PUSH_DEPTH, not the headroom push (the owner, after the show of
-    2026-10-30: as the fader an LFO swept the whole throw whatever the
+    PUSH_DEPTH, not the headroom push (as the fader an LFO swept the whole throw whatever the
     base); the same on a centred pin."""
     r, panel, table = banks.r, banks.panel, banks.r.router.table
     p, _ = _glimmer_mix(r)
@@ -1671,7 +1664,7 @@ def test_an_lfo_route_is_unchanged(banks, monkeypatch):
 
 
 def test_route_from_an_envelope_keeps_auto_feel(banks, monkeypatch):
-    """The owner, 2026-10-31: every new route is a spring — but an
+    """Every new route is a spring — but an
     envelope's row keeps auto (`motion=None`): it has an attack and a
     release of its own, and a spring on top would blunt a kick-fired hit.
     Route from ▸ env 1 lands that; Route from ▸ LFO 1 the spring."""
@@ -1688,7 +1681,7 @@ def test_route_from_an_envelope_keeps_auto_feel(banks, monkeypatch):
 
 
 def test_a_graph_cable_into_a_mod_pin_lands_the_smooth_spring(rig):
-    """The owner, 2026-10-31: a cable dragged into a param's mod pin
+    """A cable dragged into a param's mod pin
     (`Edit.connect` → `route_for` → `row_for`) lands with
     `motion.DEFAULT_ROUTE_FEEL`, whatever row the table picks: the
     position fader from a one-sided axis, a push from a centred one or
@@ -1705,10 +1698,9 @@ def test_a_graph_cable_into_a_mod_pin_lands_the_smooth_spring(rig):
                for r in rows)
 
 
-# ---------------------------------------------------------------- plan 35 T5: GRAPH deletes anything
+# ---------------------------------------------------------------- GRAPH deletes anything
 #
-# The wired frame on the canvas in the owner's names (plan 35 G, rows 373,
-# 379): every node and wire of it deletes — only the type words and the
+# The wired frame on the canvas in its own names: every node and wire of it deletes — only the type words and the
 # loops refuse — the nodes are named for what they are, the picker groups
 # them by primitive, and its first item wires a scene to All outputs.
 
@@ -1785,11 +1777,11 @@ DELETES = ("party-wake", "through-one-output", "branch-two-sizes")
 
 @pytest.mark.parametrize("slug", DELETES)
 def test_every_frame_node_and_wire_deletes(tmp_path, slug):
-    """Review Focus 5: on party-wake migrated — and (R16, R15) the slot
-    fixture `through-one-output` (plan 89: its copy migrated to acid's slot 2) and the two-out fixture `branch-two-sizes`
+    """On party-wake migrated — and (R16, R15) the slot
+    fixture `through-one-output` (its copy migrated to acid's slot 2) and the two-out fixture `branch-two-sizes`
     — each wire in turn, and then each node in turn, goes with its words
-    said and no refusal — the owner's refusals deleting `grounded`, `frame →
-    fx` and the run's cables are gone. What is left is the marker alone.
+    said and no refusal — deleting `grounded`, `frame →
+    fx` and the run's cables is refused no more. What is left is the marker alone.
     And nodes first, their wires in place: every node goes the same way."""
     rig, e, pushed = wired_rig(tmp_path, slug=slug)
     gs = rig.loaded_patch.graph
@@ -1805,7 +1797,7 @@ def test_every_frame_node_and_wire_deletes(tmp_path, slug):
         e.said = ""
         assert e.drop_node(f"render:{name}") is None, name
         assert e.said, name
-    # (plan 36 T3: hands 1 is always there, its entry always written)
+    # hands 1 is always there, its entry always written
     assert {k: v for k, v in gs.spec.to_json().items() if v} == {
         "frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}
     assert pushed and all(p.startswith(("unwire", "delete")) for p in pushed)
@@ -1821,7 +1813,7 @@ def test_every_frame_node_and_wire_deletes(tmp_path, slug):
 
 
 def test_deleting_an_effect_takes_its_slots(tmp_path):
-    """R16, plan 89: an effect with slots, deleted, takes them (their wires
+    """R16: an effect with slots, deleted, takes them (their wires
     and its entry) in the same landing, and says so."""
     rig, e, pushed = wired_rig(tmp_path, slug="through-one-output")
     spec = rig.loaded_patch.graph.spec
@@ -1835,7 +1827,7 @@ def test_deleting_an_effect_takes_its_slots(tmp_path):
 
 
 def test_a_slot_comes_off_and_the_later_ones_close_up(tmp_path):
-    """Plan 89: **remove slot k** on an effect's menu takes slot k off — what
+    """**remove slot k** on an effect's menu takes slot k off — what
     fed its picture goes on to what it fed (the chain closes over it, as a
     delete does) — and slot k + 1 is slot k from then, its wires with it; the
     entry's `slots` one down. One undo step each; slot 1 is the node's delete."""
@@ -1865,7 +1857,7 @@ def test_a_slot_comes_off_and_the_later_ones_close_up(tmp_path):
 
 
 def test_a_keyed_later_slot_keeps_its_knobs_when_it_numbers_down(tmp_path):
-    """Plan 89 (review of #487): slot 3 keyed (black is clear) is slot 2 once
+    """Slot 3 keyed (black is clear) is slot 2 once
     slot 2 comes off — its key and its knobs' values with it."""
     section = {"frame": "wired",
                "nodes": [{"kind": "effect", "file": "acid", "slots": 3}],
@@ -1886,7 +1878,7 @@ def test_a_keyed_later_slot_keeps_its_knobs_when_it_numbers_down(tmp_path):
 
 
 def test_a_refused_slot_removal_leaves_every_key_as_it_was(tmp_path, monkeypatch):
-    """Review of #487: a removal the section refuses moves no key's knobs."""
+    """A removal the section refuses moves no key's knobs."""
     section = {"frame": "wired",
                "nodes": [{"kind": "effect", "file": "acid", "slots": 3}],
                "wires": [{"from": "scene", "to": "acid.image"},
@@ -1934,7 +1926,7 @@ def test_deleting_an_unwired_window_says_nothing_to_delete(tmp_path):
 
 
 # backdrop-still's frame (a channel under the scene on the backdrop) with
-# two effects in its run: the owner's sequence of deletes
+# two effects in its run: a sequence of deletes
 OWNERS = {"frame": "wired", "nodes": [], "wires": [
     {"from": "channel.a", "to": "backdrop.image"},
     {"from": "shape", "to": "scene.geometry"},
@@ -1947,9 +1939,8 @@ OWNERS = {"frame": "wired", "nodes": [], "wires": [
 
 
 def test_the_owners_sequence(tmp_path):
-    """The owner's gestures of 2026-10-24, each now a plain delete: the
-    scene off the backdrop, the backdrop off the first effect (plan 90 H2:
-    the look-back between them retired), each effect's way out, the last
+    """The gestures, each a plain delete: the
+    scene off the backdrop, the backdrop off the first effect, each effect's way out, the last
     one off All outputs — every one lands, and then nothing reaches the
     backdrop."""
     from hyperspace import graph as G
@@ -1963,10 +1954,10 @@ def test_the_owners_sequence(tmp_path):
 
 
 def test_deleting_the_backdrop_lifts_it_like_an_effect(tmp_path):
-    """R18 (final review): on the owner's glimmer-bug (displace-moo's shape:
-    a switch of two channel branches under the scene), deleting the
+    """R18: on displace-moo's shape
+    (a switch of two channel branches under the scene), deleting the
     backdrop joins what its `scene` port took to what it fed — the scene
-    goes on to All outputs (plan 36 T4: its look-back was off, so none is
+    goes on to All outputs (its look-back was off, so none is
     drawn) — and says so; drawn, the frame is not black."""
     from test_graph_frame import SIZE, _fbo, _px, _tool
 
@@ -2016,11 +2007,10 @@ def test_deleting_a_window_unwires_it(tmp_path):
 
 
 def test_the_picker_groups_by_primitive(tmp_path):
-    """The picker in the owner's groups: starters ▸ (plan 36 T5), then scene ▸,
-    pictures ▸ (plan 90 H2: the look-back's group retired; H3: the dream an
-    effect file among the effects), media ▸ (the channels, 2026-10-31; the segment)
-    and masks ▸ (plan 39 T5), the effect files, a slot on each effect
-    instance in the section (plan 89) — each item's group `PICKER_GROUP[kind]`."""
+    """The picker in groups: starters ▸, then scene ▸,
+    pictures ▸, media ▸ (the channels; the segment)
+    and masks ▸, the effect files, a slot on each effect
+    instance in the section — each item's group `PICKER_GROUP[kind]`."""
     section = {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
                "wires": [{"from": "scene", "to": "acid.image"},
                          {"from": "acid", "to": "output.all.image"}]}
@@ -2036,7 +2026,7 @@ def test_the_picker_groups_by_primitive(tmp_path):
         ("switch", None, "switch"),
         ("channels", "pattern.media", "faces media"), ("channels", "backdrop.image", "backdrop"),
         ("resize", None, "resize"), ("delay", None, "delay"),
-        # (media ▸ the eight channels, 2026-10-31, and plan 39 T5 (W6)'s
+        # (media ▸ the eight channels and the
         # segment; masks ▸ the matte and the cut)
         *(("channel", c, f"channel {c}") for c in "abcdefgh"),
         ("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut"),
@@ -2048,7 +2038,7 @@ def test_the_picker_groups_by_primitive(tmp_path):
 
 
 def test_the_starter_wires_the_scene_to_all_outputs(tmp_path):
-    """The scene chain starter (plan 36 T5; plan 35 G's "scene starter")
+    """The scene chain starter
     on a blank preset: `shape → scene.geometry` and `scene →
     output.all.image`, in one undo step, said `STARTER_SAID`."""
     rig, e, pushed = wired_rig(tmp_path, {"frame": "wired"})
@@ -2064,7 +2054,7 @@ GROUNDED = {"frame": "wired", "wires": [{"from": "scene", "to": "output.all.imag
 
 
 def test_a_ground_wire_is_drawn(tmp_path):
-    """R13: `ground → output.2.image` is plumbing the owner can see — a
+    """R13: `ground → output.2.image` is plumbing a user can see — a
     small Ground source in OUTPUTS, hovered with what it is (the window's
     background), its cable into the window's port, laid out running right."""
     from test_graphview import views
@@ -2105,8 +2095,7 @@ def test_a_ground_wire_deletes(tmp_path):
 
 def test_a_frame_node_is_added_once(tmp_path):
     """A frame kind from the picker is its entry, there once: a second add
-    is refused in words; a slot on an instance is its entry's `slots` one up
-    (plan 89), the effect's own node, nothing new."""
+    is refused in words; a slot on an instance is its entry's `slots` one up, the effect's own node, nothing new."""
     from hyperspace import graph as G
     rig, e, _ = wired_rig(tmp_path, {"frame": "wired"})
     assert e.add_node("backdrop") is None and e.added == "backdrop"
@@ -2125,8 +2114,8 @@ def test_a_frame_node_is_added_once(tmp_path):
 
 
 def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
-    """The pad's node selected on GRAPH, whatever its role is called (plan
-    42: "edge", "xbox", not only "pad"): its details draw the pad's picture
+    """The pad's node selected on GRAPH, whatever its role is called
+    ("edge", "xbox", not only "pad"): its details draw the pad's picture
     (ui_pad.inline) — every control of its layout — under the readout's
     drop-down (`ui.pad_view`, as on SYSTEM), and not the port lines under
     it. A second pad's node and another device's draw no picture."""
@@ -2159,21 +2148,18 @@ def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
         imgui.end()
         imgui.end_frame()
         assert drew == want, role
-        # the readout's drop-down, and under the picture the sticks' dials (rows 729-730)
+        # the readout's drop-down, and under the picture the sticks' dials
         assert picked == (["ui.pad_view", "pad.dial.left", "pad.dial.right"] if want else []), role
         assert ("A: not live" in said) is (not want), role         # the port lines: not under it
     assert ui_pad.rect(panel, gamepad.LAYOUT[0]) is not None    # it really laid the pad out
 
 
-# ---------------------------------------------------------------- 2026-11-01: any picture node onto a cable
+# ---------------------------------------------------------------- any picture node onto a cable
 #
-# The owner: "It's not just for effects. We want more or less all nodes
-# that we've been using to be able to be dragged and dropped onto wires
-# and have them intelligently remap. A composite has an over and an under:
-# when you drop that onto a cable, you should be asked where you want this
-# input to go, over or under. There's nothing special about effects."
-# These drive real mouse drags through the node editor (the throwaway
-# harness of 2026-10-31, kept): press on a node's title, move, let go.
+# Any picture node, not only effects, can be dragged onto a wire and
+# remaps intelligently; a composite has an over and an under and asks
+# which inlet.
+# These drive real mouse drags through the node editor: press on a node's title, move, let go.
 
 def _drag_rig(rig, monkeypatch, *pairs, nodes=(), effects=("acid", "wobble.2"), on=("acid",),
               layout=None):
@@ -2589,7 +2575,7 @@ def test_a_group_member_dropped_out_onto_a_cable_leaves_and_splices(rig, monkeyp
 def test_insert_node_from_the_cable_menu(rig):
     """`ui_graph.insert_node`: a composite asked its inlet, then spliced
     where the menu opened; a delay in one call; `insert_items` disables
-    a single-instance node the section has (plan 90 H3: the dream it
+    a single-instance node the section has (the dream it
     disabled is an effect, any number of them); the effect wrapper still
     stands."""
     st, view, gs = _two_cable_rig(rig)
@@ -2689,7 +2675,7 @@ def test_the_insert_table_names_picture_ports_only():
         assert graphview.kind_of(name) == kind and graphview.drop_refusal(name), kind
 
 
-# ---------------------------------------------------------------- 2026-11-02 (G0, row 563): a group by the mouse
+# ---------------------------------------------------------------- a group by the mouse
 
 def _box_select(rig, probe, a, b, steps=10):
     """A real box-select: press on empty canvas at `a`, drag to `b`, let go
@@ -2803,7 +2789,7 @@ def test_the_canvas_menus_are_the_kits_panel_at_the_pointer(rig, monkeypatch):
 
 
 def test_a_group_made_taken_apart_and_remade_by_the_mouse(rig, monkeypatch):
-    """Row 563, by the mouse (the real editor, the harness above): two
+    """By the mouse (the real editor, the harness above): two
     effects in the run box-selected and grouped from the right-click menu;
     the folded node opened from its menu; one member then the other
     dragged out of the region — the first leaves its group at once, the

@@ -1,5 +1,4 @@
-"""Plan 64, part 2: what a grab holds, outside a fractal and inside it; and
-plan 64's saved dive (row 889).
+"""What a grab holds, outside a fractal and inside it; and the saved dive.
 
 The app's own steps, once a frame, in its order: `app._space` (in or out),
 `app._reroot`, the world's step, `app._fly` (the flight folded into the
@@ -94,7 +93,7 @@ def test_nothing_jumps_going_in_down_and_out(name, pose):
         h.view.zoom *= f
         if h.world.objects["shape"].bounded:
             h.world.home("shape", W.shape_home(h.view.zoom, h.view.pan))
-        fractal.centre(h.view, None, _drawn_off(h))     # (plan 81: the zoom about the middle)
+        fractal.centre(h.view, None, _drawn_off(h))     # (the zoom about the middle)
         before = _drawn(h, X)
         inside, path = h.view.dive.inside, list(h.view.dive.path)
         last = h.view.dive.last
@@ -165,8 +164,8 @@ def test_inside_the_flight_turns_and_moves_the_space():
 
 
 def test_inside_a_4d_fractal_the_flight_travels_through_its_space():
-    """Inside a 4D fractal a move goes before the 4D divide (the owner,
-    2026-11-19: dragging inside travels through the fractal's 4D space): the
+    """Inside a 4D fractal a move goes before the 4D divide (dragging
+    inside travels through the fractal's 4D space): the
     point at the middle of the screen moves with the hand, a point nearer
     or farther along w by more or less."""
     h = _host("Sierpinski 5-cell", zoom=3.0)
@@ -250,7 +249,7 @@ def test_a_fist_closed_across_the_crossing_keeps_its_hold():
 
 def test_inside_the_grip_keeps_no_box_and_no_shaped_inertia():
     """Inside, the space: the grip neither boxes it nor shapes its inertia,
-    whatever its params say; outside both act as plan 60 has them."""
+    whatever its params say; outside both act."""
     h = _host("Menger sponge")
     state = grip.GripState(on=True, inertia=True)
     grip.apply(h.world, state, lambda a: True)
@@ -282,7 +281,7 @@ def test_another_shape_leaves_the_space():
     assert h.world.objects["shape"].bounded and not h.view.dive.inside
 
 
-# ---- the saved dive (row 889)
+# ---- the saved dive
 
 def _rig(tmp_path):
     from tests.test_loadable import boot
@@ -324,7 +323,7 @@ def test_a_dive_round_trips_through_a_loadable_patch(tmp_path):
 
 
 def test_a_loadable_patch_from_before_starts_at_the_top(tmp_path):
-    """A file with no `dive` (every file written before plan 64, opened end
+    """A file with no `dive` (a file written before saved dives, opened end
     to end): the load leaves the view at the top of its fractal, whatever
     dive it was in."""
     from tests.test_loadable import put
@@ -375,7 +374,7 @@ def test_a_dive_that_cannot_land_is_refused_whole_and_said(tmp_path, bad):
 
 def test_each_fractals_cells_keep_their_order():
     """A saved dive's path indexes each fractal's `centres`: their order is a
-    file format now (row 889), held here whole."""
+    file format, held here whole."""
     import hashlib
 
     got = {name: hashlib.sha256(np.round(f.centres, 6).astype("<f8").tobytes()).hexdigest()[:16]
@@ -394,7 +393,7 @@ CENTRES = {'4D Cantor dust': 'bcb46c9a5ad8230b',
  'Vicsek cross': '2f07b110eb4cf2e3'}
 
 
-# ---- the review's cases (2026-11-19)
+# ---- reset, deck switch, hot reload, fractal switch mid-dive
 
 def _flown(h):
     """Inside, flown a little: the flight's baseline away from the identity."""
@@ -476,7 +475,7 @@ def test_a_fractal_switched_for_another_mid_dive_starts_at_its_top(a, b):
     assert h.view.dive.shape == h.view.shape and not h.view.dive.path
 
 
-# ---- Devin's review (2026-11-19)
+# ---- re-root under modulation, off-air dives, routed loads
 
 @pytest.mark.parametrize("pid", ["camera.zoom", "camera.pan.x"])
 def test_a_reroot_under_modulation_lands_once(pid):
@@ -585,7 +584,7 @@ def test_a_dive_saved_under_a_route_holding_another_fractal_comes_back(tmp_path)
     assert rig.view.shape == menger and rig.view.dive.path == path
 
 
-# ---- the FRACTAL section's controls (plan 64, rows 902-905)
+# ---- the FRACTAL section's controls
 
 def _cells(**kw) -> int:
     s = ViewState(shape=geometry.shape_index("Menger sponge"), yaw=0.45, pitch=0.3)
@@ -651,7 +650,7 @@ def test_the_fractal_controls_are_the_looks_own(tmp_path):
     reg["view.frac_near"].set(-0.25)
     reg["view.frac_additive"].set(True)
     doc = json.loads(rig.loaded_patch.save_as("Detailed").read_text())
-    assert doc["fractal"] == {"detail": 1.8, "far": 0.75, "near": -0.25, "dive": 0.0}  # (plan 81: Dive)
+    assert doc["fractal"] == {"detail": 1.8, "far": 0.75, "near": -0.25, "dive": 0.0}
     assert not any(k.startswith("view.frac_") for k in doc["values"])
     reg["view.frac_detail"].set(1.0)
     rig.loaded_patch.load("Detailed")
@@ -660,7 +659,7 @@ def test_the_fractal_controls_are_the_looks_own(tmp_path):
 
 
 def test_only_a_fractal_look_writes_the_fractal_key_and_a_look_without_it_draws_its_own(tmp_path):
-    """Every other look saves as before (no key); a look without the key
+    """Every other look saves with no key; a look without the key
     loads the fractal's own settings, whatever the last look had."""
     from tests.test_loadable import put
     rig = _rig(tmp_path)
@@ -695,7 +694,7 @@ def test_a_fractal_setting_that_cannot_land_is_said(tmp_path, bad, said):
 
 
 def test_a_shape_export_carries_the_fractal_settings(tmp_path):
-    """Plan 64 (Devin's review of #466): *save as patch* reads the look's
+    """*Save as patch* reads the look's
     parts; the fractal's settings are in them, so a spawned shape draws as
     exported."""
     rig = _rig(tmp_path)

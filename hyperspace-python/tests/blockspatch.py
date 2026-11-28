@@ -1,6 +1,5 @@
-"""Plan 67: a Blocks look as a patch of primitives — the mapping the proof
-(`tests/test_blocks_patch.py`) and the field example use, and the one the
-format lane's migration will use when `blocks.glsl` retires.
+"""A Blocks look as a patch of primitives: the mapping the proof
+(`tests/test_blocks_patch.py`) and the field example use.
 
     cells   (a value: the cell's number, its size riding along)
         ─▶ waveform (Shape, Drift, Phase ¼) ─▶ cell action.image

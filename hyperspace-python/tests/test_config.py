@@ -1,6 +1,5 @@
-"""config.toml: [output] is the one section, [overlay] its pre-split alias
-(audit L4); a bad file is reported, not fatal; tests never see ~/Hyperspace
-(audit L7)."""
+"""config.toml: [output] is the one section, [overlay] its pre-split alias;
+a bad file is reported, not fatal; tests never see ~/Hyperspace."""
 
 import os
 from pathlib import Path
@@ -45,7 +44,7 @@ def test_a_file_with_only_output_says_nothing(tmp_path, capsys):
 
 
 def test_a_screen_that_is_not_a_number_is_minus_one_and_a_note(tmp_path, capsys):
-    """Plan 16 WP7: `monitor = [1]` stopped the launch. A screen that is
+    """`monitor = [1]` stopped the launch. A screen that is
     neither a number nor a name is −1 (where the window was last time), for
     both windows, said on stderr and in `cfg["notes"]` (the SYSTEM page); a
     number is read as `int()` reads it and a name kept as it is, nothing
@@ -116,7 +115,7 @@ def test_every_test_runs_with_its_own_home(tmp_path, monkeypatch):
     assert (tmp_path / "home").is_dir()
 
 
-# ---- plan 25: [library] path, the shared library folder ----
+# ---- [library] path, the shared library folder ----
 
 def test_library_path_is_empty_by_default(tmp_path, capsys):
     assert config.DEFAULTS["library"] == {"path": ""}
@@ -168,7 +167,7 @@ def test_library_git_leftover_is_ignored_with_a_note(tmp_path, capsys):
     assert "[library] git is gone" in capsys.readouterr().err
 
 
-# ---- plan 21 WP3: [[output.screens]], the list of render outputs ----
+# ---- [[output.screens]], the list of render outputs ----
 
 def test_no_screens_list_is_one_output_as_today(tmp_path, capsys):
     """An existing config.toml keeps working unedited: no `screens` key in
@@ -189,7 +188,7 @@ def test_no_screens_list_is_one_output_as_today(tmp_path, capsys):
 
 
 def test_a_through_key_is_said_once(tmp_path, capsys):
-    """Plan 35 M: `through` in `[[output.screens]]` is the loadable patch's wiring
+    """`through` in `[[output.screens]]` is the loadable patch's wiring
     now — read, ignored, and said once (`THROUGH_IS_WIRING`); the entry
     carries no `through`."""
     p = tmp_path / "config.toml"
@@ -217,7 +216,6 @@ def test_a_screens_list_wins_over_the_scalar_keys_with_a_note(tmp_path, capsys):
                     "dim": 0.6}
     # output 1's entry is what the first window's readers see
     assert (oc["monitor"], oc["fullscreen"], oc["bg"]) == (1, True, 0.4)
-    # (plan 35 T4: the `through` key said once — the loadable patch's wiring now)
     assert cfg["notes"] == [config.THROUGH_IS_WIRING.format(n=2),
                             ("config: [[output.screens]] is listed, so [output] monitor and "
                              "fullscreen are ignored — output 1's entry says")]
@@ -281,10 +279,10 @@ def test_a_ground_or_opacity_that_is_not_a_number_is_the_default_with_a_note(tmp
     assert (cfg["output"]["bg"], cfg["output"]["alpha"]) == (0.5, 1) and "notes" not in cfg
 
 
-# ---- plan 27 B1: [[devices]], the device list ----
+# ---- [[devices]], the device list ----
 
 def test_no_devices_list_translates_the_old_tables_with_one_note_each(tmp_path, capsys):
-    """A rig config from before plan 27 keeps working unedited: its
+    """A rig config with the old per-device tables keeps working unedited: its
     `[midi]` / `[gamepad]` / `[hands]` / `[bridge]` tables become the
     equivalent entries, in today's poll order, and each table the file
     holds is asked to become an entry — once, on stderr and the SYSTEM
@@ -297,7 +295,7 @@ def test_no_devices_list_translates_the_old_tables_with_one_note_each(tmp_path, 
     assert "notes" not in cfg and capsys.readouterr().err == ""
     pad, midi, leap, bridge = config.devices(cfg)
     assert pad == {"role": "pad", "kind": "gamepad", "enabled": True, "usb": True,
-                   "hid": True, "controller": "any",          # plan 42
+                   "hid": True, "controller": "any",
                    "dial_left": "petal", "dial_right": "blend"}
     assert midi == {"role": "apc40", "kind": "midi", "enabled": True, "port": None,
                     "profile": "apc40", "map": str(tmp_path / "midi_map.json")}
@@ -306,8 +304,8 @@ def test_no_devices_list_translates_the_old_tables_with_one_note_each(tmp_path, 
     p.write_text('[midi]\nport = "Launchpad"\n[hands]\nenabled = true\ntape = "t.json"\n'
                  '[gamepad]\nusb = false\n')
     cfg = config.load(p)
-    # the hands on: their DAW out is a sink entry right after them (plan 27
-    # B3), the default port translated silently — the file never wrote `out`
+    # the hands on: their DAW out is a sink entry right after them,
+    # the default port translated silently — the file never wrote `out`
     pad, midi, leap, daw, bridge = config.devices(cfg)
     assert (pad["usb"], midi["port"], leap["enabled"], leap["tape"]) == (
         False, "Launchpad", True, str(tmp_path / "t.json"))
@@ -343,8 +341,7 @@ def test_a_devices_list_wins_and_is_checked_per_entry(tmp_path, capsys):
         '[midi]\nport = "ignored"\n')
     cfg = config.load(p)
     got = config.devices(cfg)
-    # (the enabled hands' default DAW out becomes a midi-out sink after them:
-    # plan 27 B3)
+    # (the enabled hands' default DAW out becomes a midi-out sink after them)
     assert [(e["role"], e["kind"], e["enabled"]) for e in got] == [
         ("apc40", "midi", True), ("leap", "hands", True), ("hands-daw", "midi-out", True),
         ("phone", "osc", True)]
@@ -449,7 +446,7 @@ def test_the_laptop_flag_and_its_alias():
 
 
 def test_a_screen_named_in_a_list_is_kept_for_the_launch(tmp_path):
-    """Row 771: `[[output.screens]] monitor = "MStar"` read as "not a screen"
+    """`[[output.screens]] monitor = "MStar"` read as "not a screen"
     with a note; it is a name now, and output 1's is `[output] monitor` too."""
     p = tmp_path / "config.toml"
     p.write_text('[[output.screens]]\nmonitor = "MStar #1"\n'

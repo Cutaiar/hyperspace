@@ -1,5 +1,5 @@
 
-"""Plan 34 T2 — the delay (D, rows 353–358): last frame's picture, held by
+"""The delay: last frame's picture, held by
 the renderer in a half-float ping-pong pair (`render.DelayPair`), so a loop
 drawn on GRAPH through a delay is legal and draws.
 
@@ -8,8 +8,8 @@ drawn on GRAPH through a delay is legal and draws.
 and `Renderer._turn_delays` swaps the two once a frame. What it must keep
 honest: the first frame reads nothing (the faces show the pattern), no pass
 ever samples the texture it writes, a size change or a GRAPH edit elsewhere
-loses no frame, a delay that leaves the graph is released, and nothing of
-plan 33 has an own size — so the refit never runs for the 693 goldens.
+loses no frame, a delay that leaves the graph is released, and no earlier
+fixture has an own size — so the refit never runs for the goldens.
 
 The GL tests use test_graph_faces' harness; they skip without a standalone
 context."""
@@ -50,15 +50,14 @@ moderngl = pytest.importorskip("moderngl")
 
 def test_own_fit_is_cover():
     """`graph.OWN_FIT` is `media_tex.COVER` (graph.py imports no media
-    module, so the constant is written out: plan 34 row 358)."""
+    module, so the constant is written out)."""
     assert G.OWN_FIT == media_tex.COVER
     assert media_tex.FITS[G.OWN_FIT] == "cover"
 
 
 def test_the_delay_write_runs_after_its_readers():
     """`delay(write)` runs after what reads the delay, so last frame's
-    picture is read before this frame's is kept (row 353; plan 90 H2: the
-    look-back's capture, which it ran before, is retired)."""
+    picture is read before this frame's is kept."""
     vs = [View(Switches(), (64, 48))]
     spec = G.read_graph(section(("frame", "fx.image"), ("scene", "delay.image"),
                                 ("delay", "shape.faces"), nodes=DELAY))
@@ -105,7 +104,7 @@ def test_a_delay_shows_last_frames_picture(ctx):
     """Channel a's still red, then blue, then green over frames 1–3, with
     `media.a → delay.image` and `delay → output.2.image`: output 2 shows
     the ground at frame 1 (the delay holds nothing yet), red at frame 2 and
-    blue at frame 3 — a frame late, exactly (row 353)."""
+    blue at frame 3 — a frame late, exactly."""
     size = (160, 120)
     still = Still(_rgba(16, 9, RED))
     r = _renderer(ctx, _media(a=still), [("media.a", "delay.image"),
@@ -122,7 +121,7 @@ def test_a_delay_shows_last_frames_picture(ctx):
 def test_the_first_frame_reads_nothing_and_the_faces_show_the_pattern(ctx):
     """`scene → delay.image`, `delay → shape.faces`: on frame 1 the delay
     reads nothing, so the faces show the pattern — the faces-unwired frame,
-    pixel for pixel; on frame 2 they show last frame's scene (row 353)."""
+    pixel for pixel; on frame 2 they show last frame's scene."""
     s = _faces()
     plain = _draw(ctx, _renderer(ctx), s)[0]
     r = _renderer(ctx, None, [("scene", "delay.image"), ("delay", "shape.faces")], DELAY)
@@ -134,9 +133,9 @@ def test_the_first_frame_reads_nothing_and_the_faces_show_the_pattern(ctx):
 
 
 def test_a_delay_ping_pongs_half_float(ctx):
-    """Review Focus 1: after every frame the pair's two sides are distinct
+    """After every frame the pair's two sides are distinct
     half-float textures, and the side read at frame n+1 is the one written
-    at frame n (`glo` compared) — no pass reads what it writes (row 354).
+    at frame n (`glo` compared) — no pass reads what it writes.
     The first frame has no read side yet: nothing came in before it."""
     size = (160, 120)
     r = _renderer(ctx, _media(a=Still(_rgba(16, 9))),
@@ -161,10 +160,10 @@ def _trails(ctx):
 
 
 def test_a_loop_of_effects_never_reads_what_it_writes(ctx):
-    """Review Focus 1: the `delay-trails` loop (`delay → zoomblur.2 →
+    """The `delay-trails` loop (`delay → zoomblur.2 →
     palette.2 → composite.2.over`, `composite.2 → delay.image`) over 8
     frames: no GL error, and no effect pass samples the texture it writes,
-    nor the delay's write side (row 354)."""
+    nor the delay's write side."""
     rig = _trails(ctx)
     try:
         r = rig.renderer
@@ -197,7 +196,7 @@ TRAILS = [("delay", "zoomblur.2.image"), ("zoomblur.2", "palette.2.image"),
 
 
 def test_the_trails_show_and_fade(ctx):
-    """R6: the `delay-trails` fixture after the golden's 8 frames is not
+    """The `delay-trails` fixture after the golden's 8 frames is not
     party-faces' frame (the trail shows), and the trails fade: the same
     graph (last frame darkened by palette.2's val slice to 0.6, added over
     the scene) with the shape drawn for six frames and then an empty scene,
@@ -229,10 +228,10 @@ def test_the_trails_show_and_fade(ctx):
 
 
 def test_a_delay_whose_input_read_nothing_reads_nothing(ctx):
-    """R7: `media.a → delay.image`, `delay → shape.faces`. While the
+    """`media.a → delay.image`, `delay → shape.faces`. While the
     channel shows a still, the faces show last frame's still; the frame its
     feed is lost the delay writes nothing, so the frame after the faces
-    fall back to the pattern (plan 33's rule) — the faces-unwired frame,
+    fall back to the pattern (the pattern rule) — the faces-unwired frame,
     pixel for pixel — never black. An empty channel reads nothing from the
     first frame on."""
     size, s = (160, 120), _faces(pattern=2)
@@ -260,9 +259,9 @@ def test_a_delay_whose_input_read_nothing_reads_nothing(ctx):
 
 
 def test_a_size_change_loses_no_frame(ctx):
-    """Review Focus 4: two frames at 240×150, then frame 3 at 200×200 —
+    """Two frames at 240×150, then frame 3 at 200×200 —
     output 2 is not the ground but frame 2's picture fitted (the read side
-    kept its size; only the write side is made again, row 357)."""
+    kept its size; only the write side is made again)."""
     still = Still(_rgba(16, 9, RED))
     r = _renderer(ctx, _media(a=still), [("media.a", "delay.image"),
                                          ("delay", "output.2.image")], DELAY)
@@ -281,9 +280,9 @@ def test_a_size_change_loses_no_frame(ctx):
 
 
 def test_a_graph_rebuild_keeps_the_delay(ctx):
-    """Review Focus 4: a GRAPH edit elsewhere (`media.b → output.3.image`
+    """A GRAPH edit elsewhere (`media.b → output.3.image`
     added) builds a new graph, and the delay still holds last frame's
-    picture at frame 3 (row 354: the pair is the renderer's, by name)."""
+    picture at frame 3 (the pair is the renderer's, by name)."""
     size = (160, 120)
     pairs = [("media.a", "delay.image"), ("delay", "output.2.image")]
     r = _renderer(ctx, _media(a=Still(_rgba(16, 9)), b=Still(_rgba(16, 9, BLUE))), pairs,
@@ -300,7 +299,7 @@ def test_a_graph_rebuild_keeps_the_delay(ctx):
 
 
 def test_a_load_resets_the_delays_and_a_rebuild_keeps_them(ctx):
-    """R19 (final review, row 354 "rebuilds, not loads"): a delay holding
+    """A delay holding
     red, then `reset_delays` (what a loadable patch load asks) — the next frame
     reads nothing, the ground, as a first frame does, then the picture
     again; with no reset a rebuild of the same graph still holds red."""
@@ -318,7 +317,7 @@ def test_a_load_resets_the_delays_and_a_rebuild_keeps_them(ctx):
 
 
 def test_a_loadable_load_asks_for_the_reset_and_a_graph_edit_does_not(tmp_path):
-    """R19: `LoadedPatch.load_doc` landing a section asks the attached renderer
+    """`LoadedPatch.load_doc` landing a section asks the attached renderer
     to reset its delays; a GRAPH edit (an `Edit` landing) does not."""
     from test_graph_edit import wired_rig
 
@@ -334,9 +333,9 @@ def test_a_loadable_load_asks_for_the_reset_and_a_graph_edit_does_not(tmp_path):
 
 
 def test_a_delay_leaving_the_graph_is_released(ctx):
-    """Review Focus 4: the delay's wires removed, its pair is kept for
+    """The delay's wires removed, its pair is kept for
     `SIZED_KEEP_FRAMES - 1` frames (a flick back costs nothing) and
-    released after `SIZED_KEEP_FRAMES` (row 354)."""
+    released after `SIZED_KEEP_FRAMES`."""
     from hyperspace.render import SIZED_KEEP_FRAMES
 
     size = (96, 64)
@@ -356,7 +355,7 @@ def test_a_delay_leaving_the_graph_is_released(ctx):
 
 
 def test_refit_cover_and_contain(ctx):
-    """`Renderer._refit` (row 358): a 200×100 texture, left half red and
+    """`Renderer._refit`: a 200×100 texture, left half red and
     right half blue, into 64×64 — cover crops the sides (columns 0–31 red,
     32–63 blue), contain letterboxes (rows 0–15 and 48–63 transparent
     black, the middle half and half), stretch fills; a sampler object sets
@@ -393,19 +392,19 @@ def test_refit_cover_and_contain(ctx):
     assert tex.filter == (moderngl.NEAREST, moderngl.NEAREST)
 
 
-# the plan-34 fixtures: everything else under tests/fixtures/presets/ the
-# golden tool draws is plan 33's or earlier
+# the fixtures with an own size: everything else under tests/fixtures/presets/
+# the golden tool draws has none
 PLAN_34 = {"delay-faces", "delay-trails", "echo-faces", "resize-faces", "resize-crop"}
 
 
-def test_nothing_of_plan_33_has_an_own_size(ctx):
-    """Review Focus 3: no node of the default graph, nor of any earlier
+def test_no_earlier_fixture_has_an_own_size(ctx):
+    """No node of the default graph, nor of any earlier
     fixture's graph (landed through the golden tool's `Rig`), has an own
     size — so the `Effect` own-size path and the refit never run for the
-    693 goldens (row 368). (Plan 90 H2: but one — a fixture whose old values
-    drew a look-back lands it as public parts, and the resize before its
-    delay keeps 512 on the long side by design (Q24): the one own size; H3:
-    and a migrated dream's Resize, its old res.)"""
+    goldens. The exceptions: a fixture whose old values drew a look-back
+    lands it as public parts, and the resize before its delay keeps 512 on
+    the long side by design; and a migrated dream's Resize keeps its old
+    res."""
     from hyperspace.render import Renderer
 
     vs = [View(Switches(), (240, 150))]
@@ -428,8 +427,7 @@ def test_nothing_of_plan_33_has_an_own_size(ctx):
             frame.root = frame
             writes = [m.inputs["image"] for m in g.nodes.values()
                       if isinstance(m, G.DelayWrite)]
-            # (plan 90 H3: a migrated dream's Resize, keyed, keeps its old res by
-            # design)
+            # (a migrated dream's Resize, keyed, keeps its old res by design)
             for m in g.nodes.values():
                 if isinstance(m, G.Effect) and m.effect.partition(".")[0] == "dream":
                     src = m.inputs.get("image")
@@ -437,7 +435,7 @@ def test_nothing_of_plan_33_has_an_own_size(ctx):
                                   else src)
             for n in g.nodes.values():
                 if isinstance(n, G.ResizeNode) and any(n is w for w in writes):
-                    continue                    # (the migrated look-back's, Q24)
+                    continue                    # (the migrated look-back's)
                 assert n.own_size(frame) is None, (slug, n.name)
 
 

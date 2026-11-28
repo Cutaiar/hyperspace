@@ -1,4 +1,4 @@
-"""Plan 90 H3: the dream is an effect file with a Python half
+"""The dream is an effect file with a Python half
 (`shaders/fx/dream.glsl`, `// @hook dream`, `hyperspace/dreamhook.py`).
 
 Drawn through the real renderer with a numpy fake for the worker (torch is
@@ -220,7 +220,7 @@ def test_a_deck_dreams_when_its_graph_holds_a_dream_on():
 
 
 def test_the_lookback_pages_slot_keeps_its_index_and_shows_fx():
-    """Row 1185: the LOOKBACK page retires into the FX pane — its `ui.page`
+    """The LOOKBACK page retires into the FX pane — its `ui.page`
     slot stays where a saved `set` row has it (never reorder), and shows fx."""
     from hyperspace import ui, ui_pane
     assert ui.PAGE_KEYS[5] == "lookback" and ui.PAGE_KEYS.index("fx") == 6
@@ -282,7 +282,7 @@ def _migrated(ctx, *, on=True, routes=(), source=None, value=0.125, frames=3):
 
 
 def test_a_migrated_dream_with_no_worker_leaves_its_picture_as_it_was(ctx):
-    """Devin on #523: the chain with no dream result must be its input — the
+    """The chain with no dream result must be its input — the
     keyed copy laid over its own source by its alpha (premultiplied) is the
     source again, dim or bright."""
     for value in (0.125, 0.6):

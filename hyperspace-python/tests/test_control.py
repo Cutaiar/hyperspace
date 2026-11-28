@@ -1,4 +1,4 @@
-"""Plan-03 state tests: tapers, control semantics, transport math, faces."""
+"""State tests: tapers, control semantics, transport math, faces."""
 
 import math
 

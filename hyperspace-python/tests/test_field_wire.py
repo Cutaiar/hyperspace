@@ -1,10 +1,11 @@
-"""Plan 67 F1 — the field wire (the owner, 2026-11-22: "Field is its own wire").
+"""The field wire.
 
 A field is a value, or a pair, at every pixel: float32 at the frame's size,
 signed and unbounded, its .a 0 for a scalar and 1 for a vector. Effect files
 make and take one by saying so (`// @makes field`, `// @takes <port> field`);
-the first were Measure — now Point, Line, Rings, Spokes, Cells and Noise (generators, no input; plan 67 §15) — and To field (picture → field),
-and Displace reads one on its new `field` port. What is held here:
+the makers are Point, Line, Rings, Spokes, Cells and Noise (generators, no
+input) and To field (picture → field), and Displace reads one on its `field`
+port. What is held here:
 
 - the types and the directives: `graph.FIELD` is `fx.FIELD`; each file's ports;
 - the wire checks, in words: a field into a field port; a field into a picture
@@ -60,8 +61,8 @@ def test_the_field_type_is_one_word_in_both_modules():
 
 
 def test_each_file_says_what_its_ports_carry():
-    # (plan 67 P3: and each knob that takes a field a port of its key, a field's;
-    # `tests/test_knob_fields.py` holds those — here, the picture and field ports)
+    # (`tests/test_knob_fields.py` holds the port of each knob that takes a field;
+    # here, the picture and field ports)
     def own(file):
         makes, takes = ports_of(file)
         return makes, {k: v for k, v in takes.items() if k in fx.PORT_NAMES}
@@ -285,10 +286,8 @@ def test_a_field_nodes_thumbnail_is_its_grey(ctx):
 
 def test_a_field_reaches_displace_in_all_outputs_run(ctx):
     """Displace wired into `output.all.image` is in All outputs' run, where it
-    paints by `Effect._pass` (plan 80) rather than `_one`: the field must reach
-    it there too. The merge of plan 80 once left it out of that path, so on the
-    rig the field examples (all wired to `output.all`) moved nothing while these
-    tests, wired to `output.1`, passed (the owner, 2026-11-24)."""
+    paints by `Effect._pass` rather than `_one`: the field must reach
+    it there too, as it does for an effect wired to `output.1`."""
     from test_graph_faces import _faces, _px
 
     from hyperspace.render import Renderer
@@ -312,11 +311,10 @@ def test_a_field_reaches_displace_in_all_outputs_run(ctx):
 
 
 def test_a_field_generator_wired_into_a_reader_reaches():
-    """GRAPH's `unreached`: an effect no wire feeds reads nothing (R15) — but a
+    """GRAPH's `unreached`: an effect no wire feeds reads nothing — but a
     field generator takes no picture by design, so Rings wired into
     Displace's field port reaches, is drawn lit, and its thumbnail is its
-    field, not the test card (the owner's screenshot, 2026-11-24, said
-    "reaches nothing"). Unwired, it reaches nothing as before."""
+    field, not the test card. Unwired, it reaches nothing as before."""
     from hyperspace import graphview
 
     spec = _spec(wired(("scene", "displace.image"), ("rings", "displace.field"),
@@ -350,9 +348,8 @@ def _shots(ctx, section, values):
 
 
 def test_a_keyed_displace_still_reads_its_field(ctx):
-    """Plan 87's black is clear builds a keyed node through a `KeyNode`; the
-    field binds to the effect behind it, as its aux does (Devin's review of
-    #489: a keyed Displace dropped its field)."""
+    """Black is clear builds a keyed node through a `KeyNode`; the
+    field binds to the effect behind it, as its aux does."""
     section = {**wired(("scene", "displace.image"), ("rings", "displace.field"),
                        ("displace", "output.1.image")), "keys": ["displace"]}
     a, b = _shots(ctx, section, {"rings": {"on": True, "out": 1}})
@@ -360,10 +357,9 @@ def test_a_keyed_displace_still_reads_its_field(ctx):
 
 
 def test_a_displace_slot_takes_a_field(ctx):
-    """A picture effect's slot takes what its effect takes (plan 89 + 67): a
+    """A picture effect's slot takes what its effect takes: a
     field wired into `displace.slot.2.field` is accepted and moves that slot's
-    picture (Devin's review of #489: the canvas drew the port, the wire was
-    refused)."""
+    picture."""
     section = wired(("scene", "displace.slot.2.image"), ("rings", "displace.slot.2.field"),
                     ("displace.slot.2", "output.1.image"))
     section["nodes"] = [{"kind": "effect", "file": "rings"},
@@ -376,7 +372,7 @@ def test_a_field_crossing_a_saved_patch_edge_is_saved_a_field():
     """Save-as-patch types each wire crossing the group's edge (`patches.
     wire_type`) by the lookup the wire checks use: a field into Displace's
     `field`, into a Displace slot's, and out of a field maker are fields, not
-    pictures (Devin's review of #489: a slot's field inlet was saved `image`)."""
+    pictures."""
     from hyperspace import graph as G
     from hyperspace import patches
 
@@ -431,7 +427,7 @@ def _built(section):
 
 def test_one_rule_for_running_with_no_input():
     """`graph.runs_unfed` is the one rule: the field generators (no input
-    port) and plan 80's (the Mandelbrot's Python half says GENERATOR) run fed
+    port) and the Mandelbrot's Python half (GENERATOR) run fed
     by nothing; every other effect does not. The builder builds exactly what
     it says (`_Build._effect`), `unfed` leaves exactly those out, so GRAPH and
     the FX pane say "fed by nothing" of exactly what the builder leaves
@@ -439,7 +435,7 @@ def test_one_rule_for_running_with_no_input():
     from hyperspace import graphview, ui_fx
 
     assert G.runs_unfed("rings") and G.runs_unfed("point.2") and G.runs_unfed("mandel")
-    assert G.runs_unfed("mandel.slot.2")             # (plan 89: a generator's slot)
+    assert G.runs_unfed("mandel.slot.2")             # (a generator's slot)
     assert not G.runs_unfed("wave") and not G.runs_unfed("waveform")
     assert not G.runs_unfed("testcard")              # draws over its picture: needs one
     assert G.generators_of(FxState()) >= {"mandel", "rings", "point"}
@@ -465,12 +461,11 @@ def test_one_rule_for_running_with_no_input():
 
 
 def test_a_field_makers_slot_is_never_built():
-    """Devin's review of #501: a slot is a picture effect's (plan 89) — a
+    """A slot is a picture effect's — a
     field maker's slot has no field node — so with nothing in it is left
-    dormant, as before the one rule, never built as a picture `Slot`; it
+    dormant, never built as a picture `Slot`; it
     has no input to wire, so it is not "fed by nothing — wire its input"
-    (`hungry`). A picture
-    generator's slot (the Mandelbrot's, Colour's) runs fed by nothing."""
+    (`hungry`). A picture generator's slot (the Mandelbrot's, Colour's) runs fed by nothing."""
     from hyperspace import graphview
 
     assert not G.runs_unfed("rings.slot.2") and not G.runs_unfed("point.slot.2")
@@ -486,7 +481,7 @@ def test_a_field_makers_slot_is_never_built():
     g, spec = _built(sec), _spec(sec)
     assert "rings.slot.2" not in g.nodes and "rings.slot.2" in g.dormant
     assert "rings.slot.2" in G.unfed(spec) and "rings.slot.2" not in G.hungry(spec)
-    # (a slot is drawn on its effect's node, row 1086: Rings is lit by slot 1)
+    # (a slot is drawn on its effect's node: Rings is lit by slot 1)
     assert "rings" not in graphview.unreached(spec)
 
 
@@ -516,9 +511,8 @@ def test_a_small_fields_thumbnail_fills_its_grey(ctx):
 
 def test_a_fields_range_is_its_largest_magnitude_not_a_samples(ctx):
     """`FxChain.field_range` reduces every texel of the field, so a field
-    repeating at the sample's spacing is not read at its zero crossings alone
-    (Devin's review of #492: a 27-wave sine down 1080 lines read at its
-    crossings gave a twelve-fold gain and a thumbnail of stripes)."""
+    repeating at the sample's spacing is not read at its zero crossings alone (a 27-wave sine down 1080 lines read at its
+    crossings would give a twelve-fold gain and a thumbnail of stripes)."""
     w, h = 1920, 1080
     y = (np.arange(h) + 0.5) / h
     rows = np.sin(2 * np.pi * 27 * y)           # 27 waves: a sample a wave

@@ -1,5 +1,5 @@
-"""Plan 90 H3: a saved dream opens as public parts, folded in one group
-(Q31): Resize (keyed: brightness is coverage) → Dream → Hue turn / Palette /
+"""A saved dream opens as public parts, folded in one group:
+Resize (keyed: brightness is coverage) → Dream → Hue turn / Palette /
 Curve, each only where its old value is off neutral → Fade (mix × (1 −
 darken)) → Composite over the input. `graphmigrate.dreams`, the ladder's
 last step after the look-back's; `patches.forward` for a fragment. The old
@@ -47,7 +47,7 @@ def into(g, port):
 
 def test_a_default_dream_is_resize_dream_fade_composite_over_its_input():
     """The darken (its default 0.1) and the mix each a Fade of their own: a
-    desk row on either moves one level (Devin on #523)."""
+    desk row on either moves one level."""
     out, notes, g = migrated(doc())
     assert sorted(node_files(g)) == ["composite", "dream", "fade", "fade", "resize"]
     assert {"kind": "dream"} not in g["nodes"]
@@ -338,7 +338,7 @@ def test_every_saved_look_migrates_to_no_old_dream(path):
 
 
 def test_desk_rows_on_mix_and_darken_each_move_their_own_fade():
-    """Devin on #523: absolute desk rows on the old mix and darken each land
+    """Absolute desk rows on the old mix and darken each land
     on a Fade of their own — never one level two knobs set. The darken's
     runs the other way now (a level is 1 − darken; a row cannot turn its
     throw over), said."""

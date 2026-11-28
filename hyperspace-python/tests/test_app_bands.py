@@ -1,4 +1,4 @@
-"""Plan 22 B3: the frame hands the renderer the analyzer's lanes (`app._bands`
+"""The frame hands the renderer the analyzer's lanes (`app._bands`
 → `Renderer.bands`, the face shaders' u_levels) — render input, read-only,
 like the dim. It sits outside the frame's guarded step, so it must never
 raise, and it must read the lanes this frame's step made, before the render
@@ -54,7 +54,7 @@ def test_a_raising_step_still_hands_over_the_bands_and_draws():
     log: list[str] = []
     h = _host(log)
     h.audio.chain = SimpleNamespace(lanes=np.array([CEIL]))
-    h.router.modulate = _boom                 # where the LFOs step now (plan 28 N0)
+    h.router.modulate = _boom                 # where the LFOs step now
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
     assert h.renderer.bands == (1.0,) and log[-2:] == ["render.draw", "panel.draw"]
     h.audio.chain = _Raising()                # a missing or swapped analyzer: no bands

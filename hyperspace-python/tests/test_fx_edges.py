@@ -1,4 +1,4 @@
-"""Plan 39 T0 (W5, decision 7): `edges` is an effect file (shaders/fx/edges.glsl).
+"""`edges` is an effect file (shaders/fx/edges.glsl).
 
 A Sobel over the wired picture's luma, premultiplied over transparent
 black. Everything here is the FX mechanism's own (`fx.edges.*` params, one

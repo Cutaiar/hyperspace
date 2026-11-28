@@ -1,4 +1,4 @@
-"""`// @clock`: a rate-like param integrated by fx.py (register row 560),
+"""`// @clock`: a rate-like param integrated by fx.py,
 and the UV-field continuity harness (`tests/uv_flow.py`) that shows why.
 
 The parse and the state run anywhere; the GL half needs a standalone

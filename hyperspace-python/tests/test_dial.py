@@ -1,4 +1,4 @@
-"""The sticks as dials (gamepad.dial, plan 28): a stick's angle picks one of eight
+"""The sticks as dials (gamepad.dial): a stick's angle picks one of eight
 sectors clockwise from straight up, its distance from centre is how far that sector's
 `axis` lane reads: petal (hard sectors, a sticky border) or blend (neighbours crossfade),
 each `Deck`'s loadable patch's (`pad.dial.*`), read by a pad from the `Deck` it drives. A
@@ -186,7 +186,7 @@ def test_the_params_restate_the_pads_readings():
 
 
 def test_config_picks_the_launch_readings():
-    """The first enabled gamepad entry's `dial_left` / `dial_right` (plan 27's [[devices]];
+    """The first enabled gamepad entry's `dial_left` / `dial_right` ([[devices]];
     the old [gamepad] table's keys translate) are the launch readings; a value that is no
     reading leaves the default."""
     from hyperspace import config
@@ -278,7 +278,7 @@ def test_a_deck_built_later_starts_on_the_launch_readings(tmp_path):
 
 
 def test_a_patch_fragment_may_not_carry_a_reading():
-    """A reading is a whole loadable patch's: no node of a patch owns it (row 730)."""
+    """A reading is a whole loadable patch's: no node of a patch owns it."""
     doc = {"schema": patches.SCHEMA, "name": "x", "nodes": [{"id": "wobble", "kind": "effect"}],
            "values": {"pad.dial.left": 1}}
     assert any("pad.dial.left" in why for why in patches.check(doc))
@@ -290,8 +290,7 @@ OLD_ROW = {"source": "pad:VIEW", "target": "desk.pad.dial.swap", "op": "fire"}
 
 
 def test_a_row_learned_on_the_old_ids_moves_with_a_backup(tmp_path):
-    """Plan 28 told the performer to Learn a button onto Swap dials, which wrote
-    `desk.pad.dial.swap` into `bindings.json`: an old file opens with the row on
+    """An old `bindings.json` that holds `desk.pad.dial.swap` (a button Learned onto Swap dials) opens with the row on
     `pad.dial.swap`, noted, the file kept beside itself, written once."""
     path = tmp_path / "bindings.json"
     table = Bindings([Binding.from_json(OLD_ROW)], path=path)
@@ -447,7 +446,7 @@ def _spy(monkeypatch):
 
 def test_the_pad_nodes_details_draw_both_clocks(tmp_path, monkeypatch):
     """The pad node's details draw the pad, then both sticks' faces and their readings
-    (row 671: SYSTEM keeps only the feel)."""
+    (SYSTEM keeps only the feel)."""
     from test_ui_shell import build_rig, frame
 
     faces, rows = _spy(monkeypatch)
@@ -456,7 +455,7 @@ def test_the_pad_nodes_details_draw_both_clocks(tmp_path, monkeypatch):
         pad = ScriptedPad()
         r.panel.pad = pad
         assert [k for k in LoadedPatch(r.lib, r.reg, r.router).load("DIAL")
-                if not k.startswith(("env.", "seq."))] == []  # (plan 36 T3: the `/7`'s envelope ids, this rig has none)
+                if not k.startswith(("env.", "seq."))] == []  # (the `/7`'s envelope ids, this rig has none)
         x, y = at(100)
         pad.frame(axes=[x, -y, -x, y, -1.0, -1.0])
         _pane(r.panel, pad)
@@ -577,7 +576,7 @@ def test_the_pad_picture_shows_a_dialed_stick(tmp_path):
 
 
 def test_an_unplugged_pad_draws_no_sectors_and_is_never_asked(tmp_path, monkeypatch):
-    """Second review of #395: `_sectors` has no `pad.on` of its own, and needs none. Its
+    """`_sectors` has no `pad.on` of its own, and needs none. Its
     only road is `_body`, whose pad is `_pad(panel)`: None while the pad is off, so the
     picture rests as `Panel._dials` does, last axis values or not, and `pad.dials` is not
     called by either. A pad on the other deck rests the same way, though it is on."""

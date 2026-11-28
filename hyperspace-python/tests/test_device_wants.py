@@ -1,4 +1,4 @@
-"""Plan 40 T4 — what the loaded patch wants and the rig lacks, and the
+"""What the loaded patch wants and the rig lacks, and the
 arrival (spec P4).
 
 - **`devices.wants(table, registry)`**: one `Want(role, state, scheme,
@@ -422,7 +422,7 @@ def test_a_device_added_to_config_says_it_through_apply():
 
 
 def test_a_window_the_meta_lacks_is_said_on_output_and_the_graph_head(shell_rig, monkeypatch):  # noqa: F811
-    """Plan 44 D3 (row 623): a loadable patch that wires Output 6 and cuts a bus
+    """A loadable patch that wires Output 6 and cuts a bus
     cable into Output 5, on a rig of four windows — OUTPUT (beside the
     output blocks) and the GRAPH head each say one line per window, the
     same words; with every window there, nothing is said."""

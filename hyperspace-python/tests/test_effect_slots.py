@@ -1,8 +1,8 @@
-"""Plan 89: an effect's slots, and the one-way migration of a copy node to one.
+"""An effect's slots, and the one-way migration of a copy node to one.
 
-A `copy` node (plan 35 F, row 377) drew an effect instance again on another
+A `copy` node drew an effect instance again on another
 picture with its knobs and clock, as a node of its own that owned no params.
-Plan 89 makes it part of the effect: an effect node has slots — slot 1 is
+An effect node has slots — slot 1 is
 its own name and ports, slot k is `acid.slot.<k>` (its own `image` / `aux`
 in, its own picture out) — every slot run with the one set of knobs. A
 saved graph holding copies loads as slots (`graphmigrate.slots_of_copies`,
@@ -123,8 +123,7 @@ def test_an_old_loadable_with_copies_loads_as_slots_and_saves_twelve():
 
 
 def test_a_six_with_a_copy_goes_up_the_whole_ladder():
-    """`through-one-output` (a `/6` wired frame with a copy, plan 35 T3's
-    proof) lands with acid's slot 2 where its copy was, nothing refused."""
+    """`through-one-output` (a `/6` wired frame with a copy) lands with acid's slot 2 where its copy was, nothing refused."""
     import json
     from pathlib import Path
     path = Path(__file__).parent / "fixtures" / "presets" / "through-one-output.json"
@@ -260,7 +259,7 @@ def test_two_migrated_copies_build_the_frame_the_slots_build():
         ["Effect"] * 3
 
 
-# ---------------------------------------------------------------- review of #487
+# ---------------------------------------------------------------- keyed copies
 
 
 def test_a_keyed_copys_knobs_and_node_mode_follow_it_to_its_slot():

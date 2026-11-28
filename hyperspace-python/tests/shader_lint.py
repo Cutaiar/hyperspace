@@ -1,6 +1,6 @@
 """The time-by-param lint: does a shader multiply a time by a param?
 
-The rule (the owner, 2026-11-02; DECISIONS "Effects and the look-back"):
+The rule (DECISIONS "Effects and the look-back"):
 **no shader multiplies time by a param**. `u_phase * u_drift` reads as a
 rate, but the shader sees the integrated phase, so a knob step of
 Δdrift shifts the field by `phase × Δdrift` — whole screens, hours into a

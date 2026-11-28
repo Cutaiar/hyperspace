@@ -1,4 +1,4 @@
-"""Plan 67 P2 — the shared field pieces in `shaders/fx/_lib.glsl`: `point_at`,
+"""The shared field pieces in `shaders/fx/_lib.glsl`: `point_at`,
 `from_point`, the measures (`measure_line`, `measure_rings`,
 `measure_spokes`, `measure_cells`), `read_signed`, and the ops (`quantise`,
 `threshold_soft`, `remap`, `combine`).
@@ -10,13 +10,10 @@ here:
 - each piece against a numpy oracle, run in the real library on the GPU into a
   float32 target (so a rounding is the GPU's, not the readback's);
 - no effect file carries its own copy of the pieces that were moved onto the
-  library (a centre read from Centre X/Y, the soft key, a cell rule): rule 2 of
-  plan 67, "no private copy of another primitive". Hue cycle is outside it: it
-  is to be retired into Palette (plan 67 §10).
+  library (a centre read from Centre X/Y, the soft key, a cell rule): no private copy of another primitive. Hue cycle is outside it.
 
-Moving Wave, Blocks, Displace, Blend, Prism, Zoom burst, Time Displace and Oil
-slick onto the pieces changed no byte: 1041 renders over every choice and
-three values of every knob, before and after (plan 67 roundup §7)."""
+Wave, Blocks, Displace, Blend, Prism, Zoom burst, Time Displace and Oil
+slick render the same bytes through the pieces as with their own inline code."""
 
 from __future__ import annotations
 

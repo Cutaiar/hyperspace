@@ -1,4 +1,4 @@
-"""CI's layout (row 870): the fast tier split over runners, the sweep tier on its own.
+"""CI's layout: the fast tier split over runners, the sweep tier on its own.
 
 tools/ci_shard.py splits the test files by CI time; .github/workflows/tests.yml runs
 the shards and the type ratchet side by side; .github/workflows/sweeps.yml runs

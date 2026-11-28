@@ -1,10 +1,9 @@
-"""Plan 24 C6: the palette fold is an effect file (shaders/fx/palette.glsl).
+"""The palette fold is an effect file (shaders/fx/palette.glsl).
 
 Everything here is the FX mechanism's own: ``fx.palette.*`` params, hot
 reload, routes. What a palette *looks* like is judged by eye; here the
 defaults must leave every frame byte-identical (stream A's goldens), a
-turned-up mix must change it, and a route must move the mix. (Plan 40 T5:
-a saved palette was an ``fx`` module preset; those are retired, D6.)
+turned-up mix must change it, and a route must move the mix.
 """
 
 import os
@@ -37,7 +36,7 @@ def frame(ctx, fx: FxState, frames: int = 3) -> np.ndarray:
     from hyperspace.view import ViewState
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx, fx=fx)
-    r.wiring = wiring_of(fx)        # plan 33 R23: its run, as a load lands it
+    r.wiring = wiring_of(fx)        # its run, as a load lands it
     s = ViewState(shape=10, faces=True, pattern=2, bright=1.3)
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     for k in range(frames):
@@ -54,7 +53,7 @@ def test_the_file_declares_the_params_and_defaults_to_nothing(tmp_path):
     spec = st.specs["palette"]
     assert st.errors == {} and spec.order == max(s.order for s in st.specs.values())
     keys = {p.key for p in spec.params}
-    # plan 30 N8: the fold's centre/width and sat/val lo/hi became the slice's ends
+    # the fold is a slice: from/to ends, not centre/width or lo/hi
     assert {"mode", "hue_from", "hue_to", "sat_from", "sat_to", "val_from", "val_to",
             "anchors", "a1_hue", "a4_val"} <= keys
     assert not keys & {"centre", "width", "sat_lo", "sat_hi", "val_lo", "val_hi"}

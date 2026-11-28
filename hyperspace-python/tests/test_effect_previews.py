@@ -1,4 +1,4 @@
-"""Plan 65: the effect previews (`previews.EffectPreviews`) — every effect
+"""The effect previews (`previews.EffectPreviews`) — every effect
 file through the test card, a still and a short loop, for GRAPH's effect
 picker.
 
@@ -6,8 +6,7 @@ Held here: nothing is made until asked, and never more than the budget a
 frame; the stills come first, a loop only for the tile asked; a file whose
 program changes is made again and a file that goes is freed; the show's
 values and its outputs' bytes are untouched; the families and the search
-are read from the files' metadata; and all the files fit in the memory the
-plan states."""
+are read from the files' metadata; and all the files fit in the memory budget."""
 
 from __future__ import annotations
 
@@ -194,14 +193,14 @@ def test_a_reload_of_the_renderer_lets_the_previews_go(ctx):
 
 # ---------------------------------------------------------------- memory
 
-def test_every_file_fits_in_the_memory_the_plan_states(ctx):
+def test_every_file_fits_in_the_memory_budget(ctx):
     cache, st = _cache(ctx, budget=10_000)
     _until_done(cache, sorted(st.files))
     assert len(cache.atlas) == len(st.files) >= 27
     assert pv.ATLAS_BYTES == 960 * 540 * 4
     # the budget is per file — one 2.07 MB atlas each — plus a fixed part (the
     # card, the aux disc, the work picture mipmapped); a total cap broke with
-    # every file added (plan 67 F1 added Measure and To field: 31 files, 71 MB)
+    # every file added (31 files came to 71 MB)
     fixed = cache.bytes_kept - len(cache.atlas) * pv.ATLAS_BYTES
     assert 0 < fixed < 8 * 2 ** 20
     assert pv.ATLAS_COLS * pv.ATLAS_ROWS == 1 + pv.LOOP_FRAMES
@@ -281,7 +280,7 @@ def test_a_file_reads_aux_when_its_code_calls_it_and_not_in_a_comment():
 
 
 def test_on_this_build_only_blend_and_displace_read_their_aux():
-    """The finding the plan records (2026-11-19): every effect node has an aux
+    """Every effect node has an aux
     port, and two files read it. A file that starts reading one is found by
     `fx.reads_aux`; this list is the record, to be changed with the file."""
     st = FxState()

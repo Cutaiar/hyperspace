@@ -1,7 +1,7 @@
-"""The point-cloud source type and the recorded-cloud device (plan 27 B4).
+"""The point-cloud source type and the recorded-cloud device.
 
 `devices.PointCloud` is the contract the render graph's point-cloud node
-(plan 26 A4b) reads: N×3 float32 points, read-only and GPU-ready, a
+reads: N×3 float32 points, read-only and GPU-ready, a
 timestamp, a frame id, a bounds box and optional N×3 colours. A device
 publishes it on the registry under ``cloud:<role>`` (`DeviceRegistry.clouds`),
 not through the Router. The `cloud` kind plays a recorded `.npz`

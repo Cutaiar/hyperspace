@@ -1,6 +1,6 @@
 """GRAPH opens with every node in view, and every load brings them into view
 again: framed in what the side pane leaves of the canvas, centred there,
-never closer than the display's start zoom (Dillon, 2026-11-07)."""
+never closer than the display's start zoom."""
 
 import copy
 
@@ -144,9 +144,8 @@ def test_a_fit_keeps_the_selection(fitted):
 
 def test_tidy_leaves_the_canvas_where_it_is(fitted, monkeypatch):
     """A tidy lays the nodes out again and does not move the canvas: the
-    zoom and the place being looked at are the owner's (2026-11-11, they
-    used to be thrown away by a fit). Tidied once from well off to the
-    side, a second tidy moves nothing — every node stays on the same
+    zoom and the place being looked at are kept, not thrown away by a fit. Tidied once from well off to
+    the side, a second tidy moves nothing — every node stays on the same
     pixels, at the same zoom, and no fit is asked."""
     r, st, rects = fitted
     st["pan"] = (-3000.0, 0.0)
@@ -176,7 +175,7 @@ def test_off_in_the_rig_the_canvas_opens_as_measured(tmp_path):
 
 
 def test_a_fit_keeps_a_selected_cable(fitted, monkeypatch):
-    """The selection kept is the selection, a cable's too (review, 2026-11-09):
+    """The selection kept is the selection, a cable's too:
     `clear_selection` clears links as well as nodes."""
     r, st, _rects = fitted
     view = ui_graph.view_of(r.panel)

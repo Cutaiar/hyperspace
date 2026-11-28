@@ -1,4 +1,4 @@
-"""The envelope voice (plan 31 §E): stage timing, curves, modes, beats,
+"""The envelope voice: stage timing, curves, modes, beats,
 retrigger, velocity, exact sub-frame fires, event order, the late-fire
 hold, and its params on a real registry. Every time is handed in, so
 nothing here depends on the wall clock."""

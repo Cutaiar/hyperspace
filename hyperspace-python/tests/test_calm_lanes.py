@@ -1,5 +1,5 @@
 """tools/calm_lanes.py: a library's analyzer routes held to the new
-route's depth and given the smooth spring, once (the owner, 2026-11-02).
+route's depth and given the smooth spring, once.
 
 Every test runs on a scratch library under tmp_path; the machine home
 (the backup's place) is the conftest's tmp one."""

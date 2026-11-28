@@ -1,4 +1,4 @@
-"""Plan-07 WP4a: the N-band analyzer.
+"""The N-band analyzer.
 
 The parity guard first — the "Legacy 6" layout must be the old chain bit
 for bit — then the N-band behaviours: the band model, weighting curves,
@@ -45,8 +45,8 @@ def fixture_wavs():
 
 
 def scene(name: str) -> dict:
-    """A band scene's document — code data under hyperspace/scenes/band/
-    since the library went one-tier (2026-10-28), read as control.py does."""
+    """A band scene's document — code data under hyperspace/scenes/band/,
+    read as control.py does."""
     return scene_doc(SCENES_DIR / f"{slug(name)}.json")
 
 
@@ -374,7 +374,7 @@ def strip_of(chain):
 
 
 def test_the_scene_combo_and_the_strip_follow_each_other(tmp_path):
-    """Audit A1, as it stands since the library went one-tier: the combo's
+    """The combo's
     scenes are code data (hyperspace/scenes/band/), the strip's loadable patches the
     user's — a band preset saved under a scene's name with the scene's
     document lands the same strip, the combo follows a strip load of it
@@ -465,7 +465,7 @@ def test_reset_all_re_tunes_the_bands_loaded_and_undo_is_whole(tmp_path):
 
 
 def test_the_combo_is_clean_on_any_layout_and_undo_gives_the_strip_back(tmp_path):
-    """Code review of PR #44: the combo applies no layout, so its reference
+    """The combo applies no layout, so its reference
     for "clean" is the state it landed, not the file's layout ids; and a
     reset undo puts the strip's current loadable patch back too."""
     reg, control, audio, lib = wired(tmp_path)
@@ -486,9 +486,9 @@ def test_the_combo_is_clean_on_any_layout_and_undo_gives_the_strip_back(tmp_path
 
 
 def test_an_edited_band_preset_is_re_applied_with_its_layout(tmp_path):
-    """Code review of PR #44: poll() re-applies a changed file the way it
+    """poll() re-applies a changed file the way it
     was landed — a strip load, layout included (the combo's scenes are code
-    data since the library went one-tier, never a file a user edits)."""
+    data, never a file a user edits)."""
     _, control, audio, lib = wired(tmp_path)
     doc = scene("Balanced")
     doc["name"] = "Warm"
@@ -508,7 +508,7 @@ def test_an_edited_band_preset_is_re_applied_with_its_layout(tmp_path):
 
 
 def test_a_partial_band_preset_fills_from_the_defaults(tmp_path):
-    """Code review of PR #44: the strip fills a missing id from the one
+    """The strip fills a missing id from the one
     place the combo would (Library.resolved — the group's defaults: the
     fresh values, which are Balanced's numbers, `test_balanced_is_the_
     default_table…` — no Balanced file in the library needed)."""
@@ -524,7 +524,7 @@ def test_a_partial_band_preset_fills_from_the_defaults(tmp_path):
 
 
 def test_a_scene_lands_on_the_base_and_reads_clean(tmp_path):
-    """WP11's review of PR #44: a scene select is a base write when a
+    """A scene select is a base write when a
     registry is attached, so the strip reads clean at once, not after the fold."""
     reg, control, _, lib = wired(tmp_path)
     p = reg["band.1.atk"]
@@ -534,7 +534,7 @@ def test_a_scene_lands_on_the_base_and_reads_clean(tmp_path):
     assert not lib.is_dirty("band"), "clean straight after the select"
     control.reset_band(1)
     assert p.base == want and not lib.is_dirty("band")
-    # no library: the combo writes the analyzer's Params directly, as before
+    # no library: the combo writes the analyzer's Params directly
     _, bare, bare_audio = rig()
     bare.select_scene(SCENES.index("Kick & Sizzle"))
     assert bare_audio.chain.params[1].atk == want
@@ -566,7 +566,7 @@ def test_audio_engine_carries_the_layout_across_sources():
 def test_balanced_is_the_default_table_and_the_reference_edges():
     """The reference's per-band windows live once in code (`default_params`);
     the Balanced scene file is the same numbers as a loadable patch, and its layout
-    is the six reference bands (audit A5: one table, the file pinned to it)."""
+    is the six reference bands (one table, the file pinned to it)."""
     doc = scene("Balanced")
     rows = A.scene_rows(doc["values"])
     table = default_params()
@@ -582,10 +582,10 @@ def test_balanced_is_the_default_table_and_the_reference_edges():
         assert r["f"] == pytest.approx(f) and r["q"] == pytest.approx(q)
 
 
-# ---- per-band normalisation: AUTO / MANUAL (plan 11 WP15, audit A10) ----
+# ---- per-band normalisation: AUTO / MANUAL ----
 
 def test_manual_normalisation_makes_trim_monotonic(fixture_wavs):
-    """Audit A10, decided (3): on MANUAL the trim is a plain gain. Every
+    """On MANUAL the trim is a plain gain. Every
     band of the brickwalled master, settled (the clip's second half), trim
     swept 0 → −20 dB in 2 dB steps: `out` never rises, and a 20 dB cut is
     felt. The AUTO path keeps the reference's behaviour, frozen above."""
@@ -602,7 +602,7 @@ def test_manual_normalisation_makes_trim_monotonic(fixture_wavs):
 
 
 def test_auto_is_the_default_and_a_scene_without_the_key_lands_auto():
-    """Every existing scene and band preset predates the switch: a row
+    """A row
     without `norm` lands AUTO, so a band set MANUAL goes back to AUTO when
     a scene that never names it is applied."""
     a = Analyzer(Analyser())

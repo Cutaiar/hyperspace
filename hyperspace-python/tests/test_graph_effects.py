@@ -1,7 +1,7 @@
-"""Plan 30 D0: the effect node, and the frame chain as a run of them.
+"""The effect node, and the frame chain as a run of them.
 
 The pure half first — the frame holds one `graph.Effect` node per
-effect instance in the run's wire order, and (plan 35 T4; plan 89) one
+effect instance in the run's wire order, and one
 `graph.Slot` per effect for each output wired with the hands through, each chain ending
 in its end (`graph.Shown`), and the pool it asks for — then the
 renderer's half on offscreen targets: an off effect reads through and
@@ -45,12 +45,12 @@ def _end(g: G.Graph) -> str:
 
 def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
     """All outputs' end reads the last of a run of effect nodes, one per
-    instance in the run's wire order (plan 33 R; plan 35: `lookback → … →
+    instance in the run's wire order (`lookback → … →
     output.all.image`), the first reading the look-back; each output wired
-    with the hands through has a slot of each (plan 89: `Slot`, named
+    with the hands through has a slot of each (`Slot`, named
     `warp.slot.2`, then `warp.slot.3` for the next output …) over its
-    composite (plan 35 T4, row 377); none given, the
-    end reads the look-back as before D0. Plan 36 T1: with every window
+    composite; none given, the
+    end reads the look-back. With every window
     through, the run is built (All outputs' picture) but no end shows it."""
     wires = [{"from": a, "to": f"{b}.image"} for a, b in zip(("frame", *RUN), RUN)]
     section = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
@@ -59,7 +59,7 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
     shows = [Shows(through=True), Shows(scene=False, through=True)]
     g = graph(shows, section, effects=tuple(sorted(RUN)))
     assert g.run == RUN
-    # (R23, plan 33 T7: a wiring that says no run has the empty one)
+    # (a wiring that says no run has the empty one)
     assert graph(shows, effects=RUN).run == ()
     assert "shown(palette)" not in g.nodes and g.nodes["palette"].inputs["image"] is \
         g.nodes["acid.2"]
@@ -81,15 +81,14 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
     assert g.pool == 2
     # none given: no effect node, and no pool
     bare = G.build_graph([View(S(), (10, 10))], wired_wiring(G.Wiring()))
-    assert bare.nodes["shown(scene)"].inputs["image"] is bare.nodes["scene"]   # (plan 36 T4)
+    assert bare.nodes["shown(scene)"].inputs["image"] is bare.nodes["scene"]
     assert bare.pool == 0
 
 
 def test_an_effect_named_like_another_node_is_kept_apart():
     """An effect file called `capture` (nothing stops one being dropped in
     the folder) is its own node: the frame's own nodes are named apart from
-    any effect — the scene's cover `scene(cover)` (plan 90 H2: renamed from
-    `lookback(cover)`, the look-back and its capture retired), a delay's
+    any effect — the scene's cover `scene(cover)`, a delay's
     write `delay(write)`."""
     names = ("capture", "warp")
     sec = {"frame": "wired", "nodes": [{"kind": "delay"}, {"kind": "cut"}],
@@ -112,7 +111,7 @@ def test_an_effect_named_like_another_node_is_kept_apart():
 
 def test_an_effect_node_takes_an_image_and_makes_one():
     e = G.Effect("palette")
-    # plan 32 T7: and a second picture, aux, unwired by default
+    # and a second picture, aux, unwired by default
     assert e.name == e.effect == "palette" and e.INPUTS == {"image": G.IMAGE, "aux": G.IMAGE}
     assert e.OUTPUT == G.IMAGE and e.inputs == {"image": None, "aux": None}
     with pytest.raises(TypeError):
@@ -138,11 +137,11 @@ def _count(r):
 
 
 def test_the_renderer_builds_the_run_from_the_wires_and_a_toggle_does_not_rebuild(ctx):
-    """Plan 33 R (rewritten from plan 30 D0's stack-order test): a wiring
+    """A wiring
     that says a run builds it from its wires, in wire order; the graph
     keys on the effect files present, so switching one on keeps the graph
     object, and a rewire builds another. A wiring that says no run (no
-    loadable patch's graph) has the empty one (R23, plan 33 T7: the stack is gone),
+    loadable patch's graph) has the empty one,
     whatever is switched on."""
     from test_outputs import rig, run, views
 
@@ -183,7 +182,7 @@ def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
     def every_one_wired(r):
         """Every effect in the run (by its file's @order), switched off."""
         st = r.fx.state
-        # (plan 67 F1: the picture effects that take a picture — a field
+        # (the picture effects that take a picture — a field
         # maker takes none, nor does a generator with no input, Colour)
         names = sorted((n for n, s in st.specs.items()
                         if s.makes != "field" and "image" in G.effect_ports(n)[1]),
@@ -224,7 +223,7 @@ def test_two_instances_of_one_effect_are_two_nodes_on_one_program(ctx):
     st = r.fx.state
     st.set_instances({"acid": 2})
     st.values["acid"]["on"] = st.values["acid.2"]["on"] = True
-    r.wiring = wired_wiring(wiring_of(st))  # plan 33 R23: both in the run
+    r.wiring = wired_wiring(wiring_of(st))  # both in the run
     calls = _count(r)
     run(ctx, r, views(ctx, S()), frames=2)
     g = r._graph
@@ -235,7 +234,7 @@ def test_two_instances_of_one_effect_are_two_nodes_on_one_program(ctx):
 
 
 def test_an_effect_read_by_two_runs_once_into_a_held_texture(ctx):
-    """An effect with two consumers (what a placement (D1) can make) is
+    """An effect with two consumers (what a placement can make) is
     painted once a frame into a pool texture held for the frame, and each
     consumer shows that; the pool grows by one for it."""
     import numpy as np
@@ -273,8 +272,8 @@ def test_an_effect_read_by_two_runs_once_into_a_held_texture(ctx):
 
 
 def test_a_held_effect_read_through_the_pool_is_never_its_consumers_target(ctx):
-    """An on effect whose input is an effect with two readers (D1's
-    `after:` placements): the held picture is made into a pool texture
+    """An on effect whose input is an effect with two readers (`after:`
+    placements): the held picture is made into a pool texture
     that is not the one its consumer paints into (no feedback loop), no
     pass reads the texture it writes, and the picture is the straight
     run's, byte for byte (the held texture is shown 1:1, half float to
@@ -354,7 +353,7 @@ def test_the_system_page_times_each_effect_that_ran(ctx):
     assert list(ms) == [*static[:at], *on, *static[at:]]
     assert "acid" not in ms and all(v >= 0.0 for v in ms.values())
     lines = Panel.gpu_lines(SimpleNamespace(renderer=r))
-    # (plan 35 T4: the last line names the ends that ran)
+    # (the last line names the ends that ran)
     assert lines[-1] == f"ends: {end}"
     named = [ln.split()[0] for ln in lines[1:-1]]
     assert named == list(ms) and {"warp", "kaleido", end} <= set(named)
@@ -386,8 +385,8 @@ def test_the_pipeline_end_still_paints_straight_into_a_frame_sized_output(ctx):
 
 
 def _block_paint(self, frame, dst):
-    """The pipelines' end's `paint` as it was before D0, verbatim (plan 35
-    T4: on `graph.Shown`, the ends' one class now): the whole stack as one
+    """The pipelines' end's `paint` as it was before the effect nodes, verbatim
+    (on `graph.Shown`, the ends' one class): the whole stack as one
     block through `FxChain.begin` / `run`."""
     src = self.inputs["image"]
     if not frame.fx_on:
@@ -405,9 +404,9 @@ def _block_paint(self, frame, dst):
 @pytest.mark.parametrize("effects", [("warp",), ("kaleido", "acid", "palette")])
 def test_the_run_draws_what_the_one_block_chain_drew(ctx, monkeypatch, effects):
     """Byte for byte, with the off effects between the on ones read
-    through: the run of nodes against the pre-D0 end (no effect nodes, the
-    block chain), through the scene and the hands-through outputs (plan
-    35 T4: their slots, plan 89)."""
+    through: the run of nodes against the pre-effect-node end (no effect nodes, the
+    block chain), through the scene and the hands-through outputs (their
+    slots)."""
     import numpy as np
     from test_outputs import rig, run, views, wviews
     from wiredframe import wiring
@@ -422,8 +421,8 @@ def test_the_run_draws_what_the_one_block_chain_drew(ctx, monkeypatch, effects):
         old = rig(ctx, effects=effects)
         if "palette" in effects:
             old.fx.state.values["palette"].update(mix=1.0, hue_from=170.0, hue_to=230.0)
-        # the pre-D0 graph: the ends read their sources, no effect node —
-        # its runs' effects named (plan 33 R: what `fx_on` asks), not built;
+        # the pre-effect-node graph: the ends read their sources, no effect node —
+        # its runs' effects named (what `fx_on` asks), not built;
         # a through's end is always itself (hands drawn and an effect on:
         # what bent the pipeline)
         thru = wiring(G.Wiring(), *(s.shows if isinstance(s, Thru) else Shows() for s in sw))
@@ -446,10 +445,10 @@ def test_the_run_draws_what_the_one_block_chain_drew(ctx, monkeypatch, effects):
 
 
 def test_the_value_port_type_exists_and_no_node_uses_it():
-    """Plan 30 D2: `VALUE` is a port type beside `IMAGE`, `MASK` and
+    """`VALUE` is a port type beside `IMAGE`, `MASK` and
     `GEOMETRY`, its docstring naming its two intended uses (the palette's
     value out for a lights sink; an image-in `sample` port setting a
-    palette's params) — and no node publishes or reads one in this plan:
+    palette's params) — and no node publishes or reads one yet:
     not any Node class, nor any node of a built default graph. `modgraph.py`
     knows the name without importing the graph (it is a leaf)."""
     import ast
@@ -458,7 +457,7 @@ def test_the_value_port_type_exists_and_no_node_uses_it():
 
     from hyperspace import modgraph
 
-    # (plan 67 F1: the field, a fifth; plan 90 H1: the stack, a sixth)
+    # (the field, a fifth; the stack, a sixth)
     assert G.VALUE == "value" and G.PORT_TYPES == (G.IMAGE, G.MASK, G.GEOMETRY, G.VALUE, G.FIELD,
                                                    G.STACK)
     assert len(set(G.PORT_TYPES)) == 6

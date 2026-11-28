@@ -2,9 +2,9 @@
 and never over a patch the library already has.
 
 Each case runs the tool as the READMEs do (`readme_copy`), with the home under
-`tmp_path`. The library's rules it keeps: no `[library] path` is no library
-(2026-11-23); a missing shared folder is never created (D5); the machine home
-is never a library; nothing is overwritten (as `tools/move_library.py`, D8);
+`tmp_path`. The library's rules it keeps: no `[library] path` is no library;
+a missing shared folder is never created; the machine home
+is never a library; nothing is overwritten (as `tools/move_library.py`);
 a patch lands whole or not at all (as the library writes).
 """
 
@@ -78,7 +78,7 @@ def test_a_patch_the_library_has_is_never_overwritten(tmp_path):
 
 
 def test_a_library_not_yet_moved_gets_the_set_in_presets(tmp_path):
-    """A library still on `presets/` (plan 57): where `library.loadable_dir` says."""
+    """A library still on `presets/`: where `library.loadable_dir` says."""
     drive, machine = tmp_path / "drive", tmp_path / "machine"
     (drive / library.OLD_LOADABLE).mkdir(parents=True)
     assert readme_copy.run(README, machine, drive).returncode == 0
@@ -97,7 +97,7 @@ def _tool():
 @pytest.mark.parametrize("links", [True, False], ids=["links", "cloud-no-links"])
 def test_a_failed_write_leaves_nothing_and_a_retry_installs_it(tmp_path, monkeypatch, links):
     """A disk error halfway through one patch: no truncated patch is left for the
-    next run to keep as KEPT THEIRS, and no temp file; the next run copies it."""
+    retry to keep as KEPT THEIRS, and no temp file; the retry copies it."""
     drive, machine = _library(tmp_path)
     machine.mkdir()
     (machine / "config.toml").write_text(f'[library]\npath = "{drive}"\n')

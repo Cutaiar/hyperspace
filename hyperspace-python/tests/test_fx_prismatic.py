@@ -164,8 +164,8 @@ def test_prism_splits_a_white_line_red_outward_and_blue_inward(ctx):
     This is the one the sampling direction gets wrong by a sign, and where a
     tap reads is the inverse of where its light lands — so the bands are
     named here by which side of the frame's centre they are on, never by
-    left and right, which is how the first version of this test came to
-    assert the inverted picture under this name (#454)."""
+    left and right, which is how a test can come to
+    assert the inverted picture under this name."""
     pic = flat((0, 0, 0))
     line = 16                                  # a line left of the centre column, W // 2
     pic[:, line, :3] = 255
@@ -293,7 +293,7 @@ def test_grains_steps_are_the_gaps_so_every_value_of_the_knob_means_something(ct
     """Steps counts the gaps between the levels, which is what the word
     means, so Steps n leaves n + 1 of them and the knob has no value that
     does nothing or doubles up. Steps 1 is one gap — a two-tone print — and
-    not the two gaps a count of levels would have made of it (#454)."""
+    not the two gaps a count of levels would have made of it."""
     px = run(ctx, "grain", ramp_picture(), amount=0.0, steps=steps, dither=0.0)
     assert len(np.unique(px[..., 0])) == steps + 1, np.unique(px[..., 0])
 

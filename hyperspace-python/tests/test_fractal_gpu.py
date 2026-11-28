@@ -1,4 +1,4 @@
-"""Plan 64: one shape interface (shapeframe.py) and a fractal's cells on the
+"""One shape interface (shapeframe.py) and a fractal's cells on the
 GPU (fractal_gl.py), held against the CPU path they replace or stand beside."""
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ def _not_fractals() -> list[int]:
 
 @pytest.mark.parametrize("i", _not_fractals())
 def test_the_provider_gives_a_fixed_shape_what_draw_scene_made(i):
-    """Every field draw_scene used to compute for a fixed shape or a scene,
+    """Every field draw_scene computes for a fixed shape or a scene,
     byte for byte, from the same calls."""
     s = _turned(i)
     sf = shapeframe.frame(s, WD, HT)
@@ -76,7 +76,7 @@ def test_the_provider_gives_a_fixed_shape_what_draw_scene_made(i):
     tris, uv, ta = sf.faces()
     assert tris is geometry.face_triangles(i) and ta is None
     assert np.array_equal(uv, geometry.face_uvs(i).reshape(-1, 3, 2))
-    # with the world's offset: the 3D shapes' cue turned (plan 60), as before
+    # with the world's offset: the 3D shapes' cue turned
     off = _offset()
     turned = shapeframe.frame(s, WD, HT, off)
     assert np.array_equal(turned.pd, geometry.turned_depth(i, P, pd, off))
@@ -134,7 +134,7 @@ def test_the_gpu_places_every_corner_where_the_cpu_does(ctx, name):
     P, div4, pd, along = wk.place(X)
     # the cells span ~256× in size: the tolerance is each cell's own size
     # (through the 4D divide), float32's few parts in a million of it (3e-5:
-    # plan 81's dive centres on the fractal, and the 5-cell's ends where its
+    # a dive centres on the fractal, and the 5-cell's ends where its
     # smallest cells lie farthest out, 2.1e-5 of their size off)
     reach = np.repeat(wk.line_s * wk.d4 / np.maximum(div4.reshape(len(rows), -1).min(1), 1e-9),
                       len(spec.new_V))
@@ -224,7 +224,7 @@ def test_the_instance_rows_of_a_known_dive():
     assert len(f) and f[0, 4] == 4.0
 
 
-# ---- the cull with the world's offset (plan 59)
+# ---- the cull with the world's offset
 
 def _seen(wk) -> int:
     return len(wk.line_s) + len(wk.face_s)

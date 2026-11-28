@@ -1,8 +1,8 @@
-"""Plan 44 D5c: the crossfader and "copy on air to off air" (the owner, 2026-11-04).
+"""The crossfader and "copy on air to off air".
 
 Two fixed `Deck`s, a DJ mixer's crossfader, no swap: on air is whichever the
 fader is closer to (`MetaController.follow_fader`). No caller in `app.main` but
-the neutral wiring: deck 1 stays on air there until D5d. Headless first, over
+the neutral wiring: deck 1 stays on air there. Headless first, over
 `test_undo.boot`; then GL, with the `ctx` fixture.
 """
 
@@ -193,7 +193,7 @@ def test_only_the_deck_on_air_lands_the_meta_after_a_crossing(rig):
 
 def test_a_desk_fader_on_a_meta_param_reads_on_across_the_middle(rig):
     """Over the MASTER's real row and fake ports: a crossing is a pointer's move, and
-    the catch of a meta controller fader stays (D5a's `MidiIO._follow_pointer`)."""
+    the catch of a meta controller fader stays (`MidiIO._follow_pointer`)."""
     meta, one, two = rig.meta, rig.one, rig.two
     midi = rig.r.midi
     midi.point(meta.pointer("apc40"), meta.panel_pointer)
@@ -325,7 +325,7 @@ def _chased(rig):
 
 
 def test_a_copy_after_a_chase_with_a_push_out_does_not_jump(rig):
-    """`Registry.restore` with no trims empties the ledger (the reading's row 3):
+    """`Registry.restore` with no trims empties the ledger (a reading's row):
     B would land base + whole push where A lands base + push − trim."""
     p = _chased(rig)
     q_id = p.id
@@ -339,7 +339,7 @@ def test_a_copy_after_a_chase_with_a_push_out_does_not_jump(rig):
 
 def test_a_copy_onto_a_deck_that_had_another_row_there_keeps_the_ledger(rig):
     """The doc road changes the deck's rows, and a rebuilt patch forgets a param
-    whose rows are lost (plan 52): that must come before the ledger lands."""
+    whose rows are lost: that must come before the ledger lands."""
     two = rig.two
     two.table.add(Binding("axis:RX", "view.bright", "push", 0.5))
     for _ in range(2):
@@ -471,7 +471,7 @@ def test_the_mixer_plays_the_deck_on_air():
 
 
 def test_a_deck_leaving_the_air_lets_its_soundtrack_go_and_coming_back_asks_again():
-    """Plan 45's roads over the move: the deck left does not decode on, and turning
+    """The roads over the move: the deck left does not decode on, and turning
     play-audio off on the other deck cannot strand it silent on return."""
     from test_media_mixer import rig as media_rig
     from test_media_mixer import track
@@ -784,7 +784,7 @@ def _feeds_back(doc) -> bool:
 def test_copy_then_xfade_1_is_deck_1_at_0(ctx, tmp_path, name):
     """Copy, then the fader at the far end draws what deck 1 draws at the near one:
     byte for byte on a look with no feedback, close on one with (a load's trails
-    start empty). The proof's frames are one frame of one `t`, as the D4 one's."""
+    start empty). The proof's frames are one frame of one `t`, as the fade test's."""
     size = (320, 200)
     rig = _gl(ctx, tmp_path / "rig")
     doc = json.loads((CORPUS / f"{name}.json").read_text())

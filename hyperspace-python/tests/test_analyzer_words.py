@@ -1,4 +1,4 @@
-"""The panel says "analyzer"; the files keep `band` (wave 4 AZ, rows 737-738).
+"""The panel says "analyzer"; the files keep `band`.
 
 Words only: the first half pins what a person reads, the second what stayed.
 """

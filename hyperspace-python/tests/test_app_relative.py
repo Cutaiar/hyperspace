@@ -1,9 +1,9 @@
-"""Plan 09 WP2 — audit simulation 1 against the app's relative writers.
+"""The app's relative writers.
 
 The mouse, the sticks and ↑/↓ live outside the binding table: they move a
-param by a delta each frame. The audit found them reading the *effective*
-value and writing the base, so a performer's offset folded into the base
-on every drag frame (+0.01 rad asked, +0.32 got). They now move the base
+param by a delta each frame. Read naively, they would read the *effective*
+value and write the base, so a performer's offset would fold into the base
+on every drag frame (+0.01 rad asked, +0.32 got). They move the base
 through Param.nudge / Param.scale (tested on their own in test_params);
 here the app's two moves with geometry of their own — `_ride_depth` and
 `_zoom_about` — and the plain nudge/scale the drags and sticks make run
@@ -128,7 +128,7 @@ def test_wheel_zoom_keeps_the_point_under_the_cursor():
     _zoom_about(zoom, px, py, obj, 1.0, 100.0, 500.0, 800.0, 600.0)
     f = 2.0 ** 0.15
     assert obj.zoom == pytest.approx(f)
-    # plan 26 A2: the pan in world units, 0.3 × 600 = 180 px a unit here
+    # the pan in world units, 0.3 × 600 = 180 px a unit here
     assert obj.pan[0] == pytest.approx((400 - 100) / 180 * (f - 1))
     assert obj.pan[1] == pytest.approx((300 - 500) / 180 * (f - 1))
 

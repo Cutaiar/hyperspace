@@ -1,4 +1,4 @@
-"""Plan-01 checks.
+"""Geometry and audio checks.
 
 Geometry: exact parity against the golden traces — construction (V/E) to
 float64 precision, projection to float32-storage precision.
@@ -6,7 +6,7 @@ float64 precision, projection to float32-storage precision.
 Audio: behavioural checks, per the relaxed bar — the chain must exhibit the
 documented behaviours (gate, dynamics recovery, headroom discipline), not
 match the reference frame-by-frame. Final judge of the audio feel is the
-user, by eye, in plan 02+.
+user, by eye.
 """
 
 import json
@@ -57,8 +57,8 @@ def test_projection_matches(path):
 
 @pytest.mark.parametrize("i", range(len(geometry.SHAPES)), ids=lambda i: geometry.SHAPES[i])
 def test_project_is_project_h_without_the_divisor(i):
-    """The parity oracle and the renderer's transform are one function
-    (audit V1): equal to the bit on every shape, not just on the traces."""
+    """The parity oracle and the renderer's transform are one function:
+    equal to the bit on every shape, not just on the traces."""
     g = geometry.geom(i)
     ang, yaw, pitch = [0.3, 0.1, 0.7, 0.2, 0.5, 0.9], 0.4, -0.2
     px, py, pd = geometry.project(g["V"], ang, yaw, pitch, d4=3.1, w=1000, h=700)
@@ -68,7 +68,7 @@ def test_project_is_project_h_without_the_divisor(i):
 
 
 def test_the_plane_table_names_its_own_axes():
-    """One PLANES table (audit V4): each name spells the two axes it turns,
+    """One PLANES table: each name spells the two axes it turns,
     and the registry's names are that table's, in its order."""
     from hyperspace.params import PLANES as NAMES
     for name, i, j in geometry.PLANES:
@@ -184,7 +184,7 @@ def test_headroom_discipline(fixture_wavs):
 def test_golden_coarse_agreement(fixture_wavs):
     """Loose cross-check against the reference trace: same bands active on
     gate-prover, settled means in the same neighbourhood. Not frame parity —
-    that bar was dropped deliberately (see plan 01 Results)."""
+    frame parity is not the bar."""
     trace_path = GOLDEN / "audio" / "gate-prover-default.jsonl"
     rows = [json.loads(line) for line in trace_path.read_text().splitlines()]
     ref = np.asarray(rows)

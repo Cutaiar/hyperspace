@@ -1,4 +1,4 @@
-"""Plan 67, rule 5 ("a convenience is a patch, not a fork"): Blocks is
+"""A convenience is a patch, not a fork: Blocks is
 `cells → waveform → cell action ← cells.2 → displace`, and that
 patch draws every Blocks look as `blocks.glsl` does — so Blocks can be taken
 apart and rebuilt from primitives, and the file stays for speed (one pass
@@ -121,7 +121,7 @@ def test_every_blocks_look_is_the_patch_up_to_rounding(ctx):
     assert len(differ) <= total // 8, f"{len(differ)} of {total} not byte for byte: {differ[:5]}"
 
 
-DISTORT = Path(__file__).resolve().parents[1] / "loadable" / "distort"   # (main's #482 moved them)
+DISTORT = Path(__file__).resolve().parents[1] / "loadable" / "distort"
 SAVED = sorted(p for p in DISTORT.glob("*.json")
                if any(k.startswith("fx.blocks.") for k in json.loads(p.read_text())["values"]))
 

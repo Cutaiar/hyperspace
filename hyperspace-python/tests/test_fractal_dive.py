@@ -1,10 +1,10 @@
-"""Plan 81: an endless, centred fractal dive.
+"""An endless, centred fractal dive.
 
 - the zoom and the turn are taken about the middle of the screen
   (`fractal.centre`), and a re-root still moves nothing;
 - a dive settles onto the middle of the cell it is in (`SETTLE_ON = "cell"`,
   the default: the picture stays full and centred), or holds one point of
-  the shape under the middle for good (`"point"`, the letter of D4);
+  the shape under the middle for good (`"point"`);
 - a dive rate (`view.frac_dive`, levels a second, signed) dives for as long
   as it is set and climbs back out to the whole shape;
 - 3D and 4D fractals alike; a grabbed view still re-roots without a jump.
@@ -75,7 +75,7 @@ def _frame(s, dt: float) -> None:
 
 @pytest.fixture
 def point(monkeypatch):
-    """A dive that holds one point under the middle (row 1012's alternative)."""
+    """A dive that holds one point under the middle (the alternative settle)."""
     monkeypatch.setattr(fractal, "SETTLE_ON", "point")
 
 
@@ -219,7 +219,7 @@ def test_a_pan_made_inside_is_kept():
 
 def test_a_zoom_inside_is_about_the_middle(point):
     """A plain zoom (camera.zoom moved, no rate) inside is about the middle
-    of the screen: the point there stays (plan 81's fix of the drift)."""
+    of the screen: the point there stays (no drift)."""
     s = _view("Sierpinski tetrahedron", frac_dive=1.0)
     spec = fractal.spec_of(s.shape)
     for _ in range(150):                             # (settled onto the fractal)
@@ -266,7 +266,7 @@ def test_the_cpu_and_the_gpu_paths_draw_deep_in_a_dive(name):
 
 @pytest.mark.parametrize("settle", ["cell", "point"])
 def test_either_settle_dives_without_a_jump(settle, monkeypatch):
-    """Either settle (row 1012) re-roots without a jump."""
+    """Either settle re-roots without a jump."""
     monkeypatch.setattr(fractal, "SETTLE_ON", settle)
     s = _view("Menger sponge", frac_dive=2.0)
     spec = fractal.spec_of(s.shape)
@@ -294,7 +294,7 @@ def _host(name: str, pose) -> SimpleNamespace:
 
 @pytest.mark.parametrize("name", ["Menger sponge", "Sierpinski 5-cell", "Octahedron flake"])
 def test_a_grabbed_view_dives_and_reroots_without_a_jump(name):
-    """A moved and turned shape (the grip's offset, plan 59) dived into by the
+    """A moved and turned shape (the grip's offset) dived into by the
     rate: across its crossing into the space and every re-root after, every
     point is drawn where it was."""
     from tests.test_fractal_grab import _drawn, _drawn_off, _points
@@ -336,9 +336,9 @@ def test_the_dive_rate_is_a_param_a_route_drives():
 
 
 def test_the_dive_rate_saves_in_a_loadable_patch(tmp_path):
-    """Under the FRACTAL section's key, with Detail, Reach and Near (row 902):
-    written only for a fractal, so no other look's file changes; a key from
-    before plan 81 (no "dive") loads it at 0."""
+    """Under the FRACTAL section's key, with Detail, Reach and Near:
+    written only for a fractal, so no other look's file changes; a key with
+    no "dive" loads it at 0."""
     from tests.test_fractal_grab import _rig
     from tests.test_loadable import put
     rig = _rig(tmp_path)
@@ -391,7 +391,7 @@ def test_a_drawn_offset_keeps_the_middle_where_it_is_drawn(point):
     assert np.abs(got - mid).max() / s.zoom < 1e-4
 
 
-# ---- Devin's review (2026-11-23)
+# ---- a pan, a camera restore and the deck's undo during a dive
 
 def test_a_pan_made_during_a_dive_stays_made():
     """Diving, a pan (or a flight) is kept as the performer's framing
@@ -458,7 +458,7 @@ def test_the_deck_undo_drops_the_dive_reference_on_a_restore_from_another_dive(t
     assert d.seen is None
 
 
-# ---- plan 81 follow-up: the framing, off air, saved, and undo (rows 1018–1019)
+# ---- the framing: off air, saved, and undo
 
 def _diving(name: str = "Menger sponge", frames: int = 60, rate: float = 1.0) -> ViewState:
     s = _view(name, frac_dive=rate)
@@ -560,7 +560,7 @@ def test_a_climb_on_air_and_off_air_ends_the_same():
 
 
 def test_a_saved_dive_keeps_its_framing(tmp_path):
-    """A loadable patch keeps the framing (`frame`, optional, row 1019): saved
+    """A loadable patch keeps the framing (`frame`, optional): saved
     mid-dive and loaded, the dive resumes framed — past the first frame,
     which takes the loaded view as it is — and goes on framed."""
     from tests.test_fractal_grab import _rig
@@ -647,7 +647,7 @@ def _run(r, n: int) -> None:
 
 def test_two_edits_during_a_dive_are_two_steps(tmp_path):
     """A dive at a constant rate writes camera.zoom's base every frame
-    (`Param.follow`), which the watcher does not count (row 1018): two slider
+    (`Param.follow`), which the watcher does not count: two slider
     edits a second apart are two steps, and undoing the second takes back that
     one alone — and does not yank the dive back to where it stood."""
     r = _undo_rig(tmp_path)
@@ -685,7 +685,7 @@ def test_a_running_dive_makes_no_step(tmp_path):
 
 def test_undoing_a_pan_takes_its_framing_back(tmp_path):
     """An undo writes the camera's bases back, and the dive's framing with
-    them (`deck.DiveFrame`, row 1018): an undone pan's framing does not come
+    them (`deck.DiveFrame`): an undone pan's framing does not come
     back once the dive resumes; a redo brings it back."""
     r = _undo_rig(tmp_path)
     r.reg["view.frac_dive"].set(1.0)
@@ -719,7 +719,7 @@ def test_an_unrelated_undo_leaves_the_framing(tmp_path):
     assert r.view.dive.frame[0] == pytest.approx(0.1)
 
 
-# ---- Devin's review of #474 (2026-11-23)
+# ---- undoing a load and a zoom; wheel zoom inside a dive
 
 def _frame_reg(s, reg, dt: float) -> None:
     reg.apply()
@@ -836,7 +836,7 @@ def test_an_off_air_dive_centres_where_its_room_placement_draws_it():
     assert np.allclose(_p(a), _p(b), atol=1e-12) and a.zoom == b.zoom
 
 
-# ---- Devin's second review of #474 (2026-11-23)
+# ---- undoing a pause and a routed pan; a wheel notch out
 
 def test_undoing_a_pause_resumes_from_the_paused_view(tmp_path):
     """Dive at +1 for a while, paused in the cell it is in, the pause undone:
@@ -908,12 +908,12 @@ def test_a_wheel_notch_that_takes_the_view_back_outside_holds_the_middle():
         out += 1
     assert not s.dive.inside and poi.DEFAULT_BOX is not None
     # about the middle (× zoom ratio), then eased home as at the top any
-    # zoom out is (plan 64, `fractal.step`); the bug left the pan where it was
+    # zoom out is (`fractal.step`)
     ease = (s.zoom - fractal.Z_HOME) / (min(last, fractal.Z_IN) - fractal.Z_HOME)
     assert s.pan[0] == pytest.approx(x0 * s.zoom / z0 * min(max(ease, 0.0), 1.0), rel=1e-6)
 
 
-# ---- Devin's third review of #474 (2026-11-23)
+# ---- two loads close together; a zoom that only slows a climb
 
 def test_two_loads_within_the_settle_time_undo_one_at_a_time(tmp_path):
     """A second load before the first's step has settled: its step holds the
@@ -966,7 +966,7 @@ def test_a_zoom_in_that_only_slows_a_climb_is_about_the_middle():
     assert np.abs(_q(s, _rooted(spec, x, path, s.dive.path))).max() / s.zoom < 1e-9
 
 
-# ---- Devin's fourth review of #474 (2026-11-23)
+# ---- crossing out by the centred pose
 
 def test_a_crossing_out_goes_by_the_centred_pose(monkeypatch):
     """At the top, a turn since the last step (an orbit) moves the pan about

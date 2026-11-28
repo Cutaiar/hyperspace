@@ -1,7 +1,7 @@
-"""Plan 90 H1: the two public pieces that take over the look-back's and the
+"""The two public pieces that take over the look-back's and the
 dream's private grade and coverage, so neither keeps its own.
 
-- **Curve** — plan 67 §3.2's remap row in the picture kind, named and knobbed
+- **Curve** — the remap row in the picture kind, named and knobbed
   as the lane modifier `curve` (shape −1 … 1, an exponent of 4^shape; invert).
   The old contrast `pow(c, contrast)` is Shape log₄(contrast).
 - **The key's linear ramp** — at level 0, softness 1 on peak, a pixel's
@@ -96,7 +96,7 @@ def test_the_linear_ramp_makes_brightness_the_coverage(ctx):
     np.testing.assert_array_equal(got[..., :3], px[..., :3])       # colour kept
 
 
-def test_the_smooth_ramp_is_plan_87s_and_the_default(ctx):
+def test_the_smooth_ramp_is_the_default(ctx):
     from test_black_is_clear import _passes
 
     _, mp = _passes(ctx)
@@ -112,7 +112,7 @@ def test_the_smooth_ramp_is_plan_87s_and_the_default(ctx):
 
 
 def test_curve_keeps_black_black_and_premultiplied_colour_within_alpha(ctx):
-    """Shape −1 on premultiplied colour (Devin on #519): exact black stays
+    """Shape −1 on premultiplied colour: exact black stays
     black, and a quarter-covered white stays a quarter covered."""
     px = np.zeros((H, W, 4), np.uint8)
     px[..., 3] = 255                               # opaque black
@@ -127,7 +127,7 @@ def test_curve_keeps_black_black_and_premultiplied_colour_within_alpha(ctx):
 def test_curve_at_shape_0_leaves_a_kept_glow_as_it_is(ctx):
     """A picture keyed with keep colour has colour above its coverage (a glow);
     a neutral Curve passes it through, and a bent one keeps its brightness
-    relative to it, never cutting it to its alpha (Devin on #519)."""
+    relative to it, never cutting it to its alpha."""
     px = np.zeros((H, W, 4), np.uint8)
     px[..., :] = (128, 64, 0, 51)                  # colour above alpha: a kept glow
     px[1, :, :] = (100, 0, 0, 0)                   # a glow with no coverage at all

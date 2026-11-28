@@ -1,11 +1,11 @@
 """The live-device lock: tests marked `live` take turns across processes.
 
 It is the one thing that keeps two live tests from running at once: two
-xdist workers of one run (`--dist load` hands a test to any worker, row
-605) and two pytest processes on the machine — a second Claude session,
+xdist workers of one run (`--dist load` hands a test to any worker)
+and two pytest processes on the machine — a second Claude session,
 a second worktree, the owner's own run.
 
-Why it matters (2026-11-01): `glfw.init()`, a camera or audio open, a
+Why it matters: `glfw.init()`, a camera or audio open, a
 Syphon / NDI loopback or a real HID pad can block inside a C call while
 another process holds the window system or the device, rather than
 fail. pytest-timeout's thread method then kills the worker (a hang

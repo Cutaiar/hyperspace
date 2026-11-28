@@ -1,4 +1,4 @@
-"""Plan 26 A2 — one camera: the shape through a shared 4×4 with depth,
+"""One camera: the shape through a shared 4×4 with depth,
 `eye.*`, camera.zoom / camera.pan as the shape's world transform, and the
 Leap calibration into the shape's units.
 
@@ -30,7 +30,7 @@ SIZES = ((1200, 800), (960, 600), (600, 960), (1920, 1080), (1000, 1000))
 
 
 def golden_views() -> list[dict]:
-    """The three view configurations the plan-00 traces were taken at, and
+    """The three view configurations the traces were taken at, and
     their viewport (each trace holds the same three)."""
     seen: dict[str, dict] = {}
     for path in sorted(GOLDEN.glob("*.json")):
@@ -123,10 +123,10 @@ def test_zoom_scales_the_shape_about_the_world_origin_and_pan_moves_it():
 
 
 def test_the_eye_params_are_the_loadables_and_default_to_the_old_view(tmp_path):
-    """Plan 43 C2 (rows 555, 574): the eye is the look's — performance, in
+    """The eye is the look's — performance, in
     every loadable patch's values, never the show's session — and modulatable, its
-    taper as it was (review 4: the fov linear, the distance log, so a row
-    learned before lands the same value); the defaults the old view."""
+    taper is the fov linear, the distance log, so a learned row
+    lands the same value; the defaults are the old view."""
     rig = boot(tmp_path)
     reg = rig.reg
     for pid, default, (lo, hi), log in (
@@ -238,8 +238,8 @@ def _rows(ctx, monkeypatch, s, **draw_kw):
 
 
 def test_strokes_keep_their_weight_whatever_the_zoom(ctx, monkeypatch):
-    """In screen space (`view.screen_strokes` on, plan 26 A2b) the line width
-    and the point radius do not scale with camera.zoom (plan 26 A2): the
+    """In screen space (`view.screen_strokes` on) the line width
+    and the point radius do not scale with camera.zoom: the
     shape grows in the world, its strokes stay as heavy. On a one-copy
     view the zoom is the world transform and the copy is at scale 1; on
     the instanced field's own path (Fit) the zoom is in the copy's scale
@@ -303,7 +303,7 @@ def test_a_shape_through_the_eye_draws_without_error(ctx):
 # ------------------------------------------------------- the pan's migration
 
 def test_a_loadable_2_pan_in_px_is_read_in_world_units(tmp_path):
-    """The fixture is a preset/2 file from before (its pan 162, −81 px),
+    """The fixture is a preset/2 file (its pan 162, −81 px),
     loaded through a scratch library: the pan lands in world units through
     the default eye on the 1080p screen (324 px a unit), the route's depth
     is the file's (a fraction of the range), and the loadable patch is clean."""
@@ -327,8 +327,8 @@ def test_a_saved_loadable_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_
     rig.reg["camera.pan.y"].set(-0.75)
     path = rig.loaded_patch.save_as("WORLD PAN")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.loadable/12"     # (row 394); a key marks the units
-    assert doc[loadable.UNITS_KEY] == loadable.UNITS       # (…and the depths' taper, wave 0 T1)
+    assert doc["schema"] == "hyperspace.loadable/12"     # a key marks the units
+    assert doc[loadable.UNITS_KEY] == loadable.UNITS
     assert doc[loadable.UNITS_KEY]["camera.pan"] == "world"
     assert doc["values"]["camera.pan.x"] == 2.5
     rig.reg["camera.pan.x"].set(0.0)
@@ -420,11 +420,11 @@ BOX = ((-200.0, 200.0), (100.0, 350.0), (-120.0, 120.0))
 
 
 def test_the_shared_camera_frames_the_padded_box_like_the_ghost_camera():
-    """The hands draw through `shared_camera` (plan 26 A3): the shape's
+    """The hands draw through `shared_camera`: the shape's
     eye after the calibration. From the box it frames the padded box as
     `camera` frames it on a 16:9 picture (`ghost.CAL_ASPECT`, the party
-    projector's; A3 tuned it from A2's square on the shorter side, which
-    drew the hands at two thirds of their size on a landscape output):
+    projector's; a square frame on the shorter side would draw the hands
+    at two thirds of their size on a landscape output):
     its centre at the picture's centre, every corner in a 16:9 frame, the
     box touching its edge. The calibration is the room's, not an
     output's: the box lands at the same place in the world whatever the
@@ -486,7 +486,7 @@ def _old_module(lib, name="off-right"):
 
 
 def test_an_old_camera_module_loads_at_its_converted_pan(tmp_path):
-    """A camera module preset saved before A2 (the CAMERA page's strip;
+    """A camera module preset saved before the units key (the CAMERA page's strip;
     fixture `old-camera-module.json`, pan 190, −81 px, no marker) lands at
     the converted pan through a scratch library — not at 190 radii clamped
     to 12 — and is clean."""
@@ -502,7 +502,7 @@ def test_an_old_camera_default_fills_a_loadable_at_its_converted_pan(tmp_path):
     """The same file as the group's default (`camera/default.json`): what
     `defaults` and `resolved` fill the camera strip with — at the converted
     pan, not 190 radii. A whole loadable patch that names no pan lands the build's
-    pan (plan 44 D3: a load fills from `_fresh_of`, never a `default.json`)."""
+    pan (a load fills from `_fresh_of`, never a `default.json`)."""
     rig = boot(tmp_path)
     _old_module(rig.lib, "default")
     rig.lib._defaults.clear()

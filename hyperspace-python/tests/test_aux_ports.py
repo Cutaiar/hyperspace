@@ -1,4 +1,4 @@
-"""Plan 65: GRAPH draws an effect's `aux` port only when its file reads one
+"""GRAPH draws an effect's `aux` port only when its file reads one
 (`fx.EffectSpec.aux`: Blend and Displace on this build), or when a saved
 wire goes into it — that wire still loads, is drawn and can be deleted. A
 copy follows the effect it copies."""
@@ -38,7 +38,7 @@ def test_the_aux_port_only_where_the_file_reads_it_or_a_wire_goes_in(tmp_path):
     assert "aux" in _ports(view, "displace")             # it reads one
     assert "aux" not in _ports(view, "wave")             # it doesn't
     assert "aux" in _ports(view, "acid")                 # it doesn't, but a saved wire goes in
-    assert "aux 2" in _ports(view, "displace")           # its slot 2's (plan 89)
+    assert "aux 2" in _ports(view, "displace")           # its slot 2's
     c = next(c for c in view.cables if c.dst_port == "rin:acid/aux")
     assert c.src_port == "rout:scene"                    # drawn, so it can be deleted
     assert {"image"} <= _ports(view, "wave")

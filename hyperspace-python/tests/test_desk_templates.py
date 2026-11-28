@@ -1,12 +1,10 @@
-"""Plan 44 D3 — desk templates retired, and the migration that retires them.
+"""Desk templates are retired; the migration handles an old file that names one.
 
-Plan 24 C3's desk templates (decision 19: a named set of patch-layer rows
+Desk templates (a named set of patch-layer rows
 in ``<library>/desk/``, a loadable patch naming one keeping only its overrides) are
-gone: neither the Drive library nor ``~/Hyperspace`` held one (the owner,
-2026-11-03), so the inlining plan 43 §6 item 4 asked for is a no-op and the
-template code went (`preset.TEMPLATE_KEY`, `expand_desk`, `compact_desk`,
+gone: the template code went (`preset.TEMPLATE_KEY`, `expand_desk`, `compact_desk`,
 `library.DESK`, `desk_template`). What is left is the migration's word on
-an old file that still names one, proven on plan 24's fixture loadable patch
+an old file that still names one, proven on the fixture loadable patch
 (tests/fixtures/desk-templates/):
 
 - a load says the template is retired and lands the file's own desk rows
@@ -70,7 +68,7 @@ def test_an_old_templated_loadable_loads_its_own_rows_and_saves_without_the_key(
     assert loadable.TEMPLATE_RETIRED.format(name="fixture shape") in rig.loaded_patch.notes
     desk = desk_json(rig.router.table.desk())
     assert [r["source"] for r in desk] == ["cc:*:17", "cc:0:50"]
-    # (plan 90 H3: the `dream.mix` row follows its knob, the mix's Fade's level —
+    # (the `dream.mix` row follows its knob, the mix's Fade's level —
     # after the darken's own Fade, `fade.2`)
     assert {r["target"] for r in desk} == {"fx.fade.3.level", "view.pattern_mix"}
     doc = rig.loaded_patch.document("TEMPLATED")

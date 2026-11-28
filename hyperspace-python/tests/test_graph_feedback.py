@@ -1,10 +1,9 @@
-"""Plan 34 L: feedback's words — `delay`, `resize`, `echo.<k>`, `dream` —
+"""Feedback's words — `delay`, `resize`, `echo.<k>`, `dream` —
 and the loop check, so a loop through the faces, the backdrop or the frame
 is refused, not left to land dormant at build (data only: `read_graph`,
-`wire_loops`, `reaches`). Plan 36 T2: over drawn wires only — the old
+`wire_loops`, `reaches`). Over drawn wires only — the old
 hidden edges (`FRAME_EDGES`) are gone, and an old section's loop through
-them is the migration's to leave out. The delay's node, the echoes' and
-the resize's are T2–T4's."""
+them is the migration's to leave out."""
 
 from __future__ import annotations
 
@@ -32,7 +31,7 @@ def test_the_new_kinds_read_and_round_trip():
     assert spec.delays == (G.DelayAt(1), G.DelayAt(2))
     assert spec.resizes == (G.ResizeAt(1),)
     assert spec.echoes == (G.EchoAt(3),)
-    # (plan 90 H3: an old `{"kind": "dream"}` reads as the dream effect's entry)
+    # (an old `{"kind": "dream"}` reads as the dream effect's entry)
     assert G.EffectAt("dream", 1) in spec.effects
     assert {"kind": "effect", "file": "dream"} in spec.to_json()["nodes"]
     assert G.DelayAt(2).to_json() == {"kind": "delay", "instance": 2}
@@ -47,7 +46,7 @@ def test_the_new_names_are_reserved_kinds():
                        ("resize.3", "resize"), ("echo.7", "echo")):
         assert G.wire_node_kind(name) == kind
     assert {"delay", "resize", "echo"} <= set(G.RESERVED)
-    # (plan 90 H3: the dream is an effect's name, no reserved kind)
+    # (the dream is an effect's name, no reserved kind)
     assert G.wire_node_kind("dream") == "effect" and "dream" not in G.RESERVED
     with pytest.raises(ValueError):
         G.EffectAt("resize", 1, after="scene")
@@ -85,7 +84,7 @@ def test_two_of_one_instance_are_unreadable():
             G.read_graph(section(RUN, nodes=[entry, dict(entry)]))
 
 
-# plan 36 T2: plan 34's hidden edges (`FRAME_EDGES`) are gone — an old
+# The old hidden edges (`FRAME_EDGES`) are gone — an old
 # section is read as it stands, and a wire of it that closed a loop through
 # them closes one through the frame its migration draws: the migration
 # leaves it out, in the wired frame's words (`graphmigrate.wired_section`),
@@ -111,7 +110,7 @@ SINK_LOOPS = [
 
 @pytest.mark.parametrize(("pairs", "refused", "words", "path"), SINK_LOOPS)
 def test_each_old_hidden_edge_loop_is_left_out_by_the_migration(pairs, refused, words, path):
-    """Review Focus 2, plan 36 T2: a loop the old hidden edges closed is no
+    """A loop the old hidden edges closed is no
     longer the read's (nothing hidden is read) — the migration leaves the
     wire closing it out, in words that say which drawn wire it runs
     through and point at a delay; the rest stands, and the wired frame
@@ -131,7 +130,7 @@ def test_the_later_wire_closing_a_sink_loop_is_the_one_refused():
     pairs = SINK_LOOPS[2][0]
     doc, _ = M.seven({"values": {}, "graph": section(*pairs)}, {})
     spec = G.read_graph(doc["graph"])
-    # (plan 36 T4: the look-back off in the old values — its picture, the scene)
+    # (the look-back off in the old values — its picture, the scene)
     assert G.Wire("scene", "acid.image") in spec.wires
     assert G.Wire("acid", "output.all.image") in spec.wires
     assert G.Wire("acid", "shape.faces") not in spec.wires
@@ -193,9 +192,9 @@ def test_a_delay_reaches_only_when_read():
     ({"kind": "dream"}, [("dream", "output.2.image")]),
 ])
 def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
-    """Plan 34's feedback words (a delay, a resize, an echo, the dream) on a
+    """The feedback words (a delay, a resize, an echo, the dream) on a
     wire and as a bare entry read with no note, and a loadable patch holding them
-    saves `/6` with the node in its frame (row 394)."""
+    saves `/6` with the node in its frame."""
     from test_plan31_wiring import make_app
 
     sec = section(RUN, *pairs, nodes=[node])
@@ -207,7 +206,7 @@ def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
                                  "values": {}, "graph": sec}) == []
     doc = app.loaded_patch.document("fb")
     assert doc["schema"] == "hyperspace.loadable/12"
-    # (plan 36 T4: an echo is its look-back's pin — plan 90 H2: and that pin
+    # (an echo is its look-back's pin, and that pin is
     # a Read of the delay the look-back is now, `read → output.2.image`)
     kind = "read" if node["kind"] == "echo" else node["kind"]
     wires = doc["graph"]["wires"]

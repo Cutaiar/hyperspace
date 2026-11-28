@@ -1,4 +1,4 @@
-"""Plan-00 exit checks: the golden traces exist and are self-consistent."""
+"""Exit checks: the golden traces exist and are self-consistent."""
 
 import json
 import re
@@ -15,7 +15,7 @@ ENGINEERING = Path(__file__).parents[1] / "docs" / "ENGINEERING.md"
 def ve_table() -> list[tuple[str, int, int]]:
     """The V/E rows of ENGINEERING §1, parsed, in slider order — the one
     table readers cite, so it is the one this file checks against the
-    code (audit D6: no third copy here). Both shape tables are read; a
+    code (no third copy here). Both shape tables are read; a
     row is `| # | name | … | V | E |`."""
     text = ENGINEERING.read_text()
     section = text[text.index("## 1. Geometry"):text.index("## 2. Rendering")]

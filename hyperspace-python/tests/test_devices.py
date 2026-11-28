@@ -1,4 +1,4 @@
-"""The device registry (devices.py, plan 27 B1): the protocol and its
+"""The device registry (devices.py): the protocol and its
 four shims over today's adapters, the registry's three frame slots, one
 device's failure never stopping the frame, the open retry on the Ports
 schedule, the one close list, the config list watched, and the SYSTEM
@@ -76,12 +76,11 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
     """`[[devices]] kind` → the device class, here and nowhere else; an
     entry that is not enabled is `off`, a kind the table lacks an error
     line — never a crash, never an import."""
-    # plan 27 B3 adds the midi-out sink; B4 the recorded cloud and the OSC device: one line each;
-    # plan 32 T8 the live media feeds
+    # one line each: the midi-out sink, the recorded cloud, the OSC device, the live media feeds
     assert set(devices.KINDS) == {"midi", "gamepad", "hands", "bridge", "midi-out", "osc", "cloud",
                                   "kinect", "ndi", "syphon", "camera"}
     assert devices.MidiDevice.schemes == ("cc", "note", "pitch")
-    # plan 42: the touchpad and the motion sensors, for a pad that may be a Sony one
+    # the touchpad and the motion sensors, for a pad that may be a Sony one
     assert devices.PadDevice.schemes == ("axis", "pair", "pad", "hat", "touch", "motion")
     assert devices.PadDevice.schemes_for({"controller": "xbox"})[0] == (
         "axis", "pair", "pad", "hat")
@@ -93,14 +92,14 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
         assert isinstance(d, devices.Device)                 # the protocol, structurally
         assert d.status == "lost" and d.last == ""
     assert devices.make({"role": "r", "kind": "midi"}).sources == ()      # (no adapter yet)
-    # (a fixed layout; + SHARE, #197; + its five pairs, plan 56)
+    # (a fixed layout, SHARE and its five pairs included)
     assert len(devices.make({"role": "r", "kind": "gamepad"}).sources) == 27
     off = devices.make({"role": "r", "kind": "midi", "enabled": False})
     assert isinstance(off, devices.OffDevice) and off.status == "off" and off.kind == "midi"
     odd = devices.make({"role": "r", "kind": "wand", "enabled": True})
     assert isinstance(odd, devices.UnknownDevice) and odd.status == "error: unknown kind 'wand'"
     assert devices.Port("x", "W") == devices.Port("x", "W", "value", 0.0, False, False, "", "", "")
-    # a port knows its scheme, so a row's source — a cable (plan 28) — is one property
+    # a port knows its scheme, so a row's source — a cable — is one property
     assert devices.Port("LX", "left stick X", scheme="axis").address == "axis:LX"
     assert devices.Port("0:48", "track knob 1", scheme="cc").address == "cc:0:48"
     assert devices.Port("x", "W").address == "x"                       # (no scheme: bare)
@@ -110,7 +109,7 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
 def test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note(monkeypatch):
     """Roles are not schemes for today's devices (`pad` feeds `axis`,
     `leap` feeds `hand`), and the Router holds one vector per fed key. The
-    registry claims (scheme, role), not scheme (plan 27 B6): a kind that
+    registry claims (scheme, role), not scheme: a kind that
     can qualify (the gamepad) opens a second entry under its role
     (``axis@pad2``); a kind that cannot (the hands) is refused when a
     second enabled entry would feed what the first feeds — an error line
@@ -162,8 +161,8 @@ def test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note(monkey
 
 
 def test_two_pads_open_each_under_its_role(monkeypatch):
-    """Plan 27 B6: two enabled gamepad entries both open; the first is
-    the primary (its ports bare, every row before B6 its), the second
+    """Two enabled gamepad entries both open; the first is
+    the primary (its ports bare, every row its), the second
     publishes under its role — its sources, schemes, feeds and rows
     qualified — and arms the same Learn pad. The SYSTEM page names both
     pads with the joystick each reads. The first leaving the list makes
@@ -283,7 +282,7 @@ def test_a_role_listed_twice_is_refused_and_a_joystick_pins_a_pad():
 
 
 def test_the_joystick_key_is_checked(tmp_path):
-    """A gamepad entry's `joystick` (plan 27 B6) is a GLFW index, 0–15: a
+    """A gamepad entry's `joystick` is a GLFW index, 0–15: a
     whole number in range pins the pad; anything else is a note and the
     pad takes the next free one."""
     path = tmp_path / "config.toml"
@@ -534,8 +533,8 @@ def test_lines_and_the_system_pages_text():
 def test_every_swap_target_the_registry_hands_the_reloader_is_watched_and_defined():
     """`DeviceRegistry.targets` — the adapters, the shims, the registry —
     name (module, class) pairs the hot reloader can swap: each module on
-    `hotreload.MODULES`, each class defined there (audit H1, as
-    tests/test_hotreload.py holds for app.py's own list)."""
+    `hotreload.MODULES`, each class defined there, as
+    tests/test_hotreload.py holds for app.py's own list."""
     io = SimpleNamespace(on=False, error="", last="", name="", profile=None, close=lambda: None)
     reg = devices.DeviceRegistry(devices=[
         devices.MidiDevice("apc40", io=io), devices.PadDevice("pad", io=io),
@@ -637,7 +636,7 @@ def test_the_hands_shims_ports_are_the_layout():
     assert [p.rest for p in ports if p.scheme == "hands"] == io.pair_rests()
     assert [p.group for p in ports].count("axes") == io.layout.n_axes
     assert [p.group for p in ports].count("presence") == 2
-    n_gates = len(io.layout.gates)        # the pinches, and plan 24 C5's grabs
+    n_gates = len(io.layout.gates)        # the pinches, and the grabs
     assert n_gates >= 8
     assert [p.group for p in ports].count("switches") == n_gates
     assert [p.group for p in ports].count("dance") == (
@@ -649,10 +648,10 @@ def test_the_hands_shims_ports_are_the_layout():
 
 
 def test_the_bridge_is_one_device_with_a_source_half_and_a_sink_half():
-    """Plan 27 B3 (was B1's `step` shim): the ports are looked for again in
+    """The ports are looked for again in
     `poll`, the ext lanes received and published in the feed slot, and the
     out half sent in the sink slot — from the analyzer the frame hands
-    `send` (None while audio is off), the bare shim's old `send` list."""
+    `send` (None while audio is off)."""
     calls: list = []
     io = SimpleNamespace(reconnect=lambda: calls.append("reconnect"),
                          receive=lambda router: calls.append(("receive", router)),
@@ -708,7 +707,7 @@ def test_the_midi_shim_polls_and_reads_its_status_off_the_ports():
 
 
 def test_pad_close_stops_the_usb_reader_and_forgets_the_pad():
-    """Plan 27 B1: `Pad.close()` is real — the USB reader thread is told
+    """`Pad.close()` is real — the USB reader thread is told
     to stop and joined, and the pad reads absent until a later poll finds
     one again (the pad is on the one close list, so ⌘R's new image finds
     the device free)."""
@@ -819,7 +818,7 @@ def test_a_device_that_is_its_own_io_takes_a_pointer():
     """A live media kind is its own adapter once open (`LiveKind.open`:
     ``self.io = self``). `Base.point` handed the pointer on to
     ``type(self.io).point`` — itself — and the app died at start of a
-    RecursionError with a camera, NDI or Syphon listed (2026-11-05)."""
+    RecursionError with a camera, NDI or Syphon listed."""
     from hyperspace.devices import Base
 
     class Own(Base):

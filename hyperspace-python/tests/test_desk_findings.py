@@ -1,5 +1,5 @@
 # ruff: noqa: F811 — `rig` is test_midi's fixture, taken as each test's argument
-"""The owner's APC40 findings of 2026-10-16, reproduced with the fake port.
+"""The reported APC40 findings, reproduced with the fake port.
 
 The owner's meta controller file is copied to tests/fixtures/desk-findings/ (its
 MIDI rows are the factory map's meta controller part, row for row). Every symptom
@@ -138,7 +138,7 @@ def test_the_owners_file_holds_the_factory_meta_rows_and_nothing_else():
     owner's file is a factory map row (the meta controller part); what the
     factory has beyond it is the patch layer, which lives in loadable patches."""
     own = json.loads(OWNER.read_text())["bindings"]
-    # (the file as a load moves it: plan 44 D5d's crossfader and MASTER)
+    # (the file as a load moves it: the crossfader and MASTER)
     own = [b.to_json() | {"op": b.op, "value": b.value, "layer": b.layer}
            for b in routing.remap_factory(routing.old_words(
                [routing.Binding.from_json(r) for r in own])[0])[0]]
@@ -149,8 +149,8 @@ def test_the_owners_file_holds_the_factory_meta_rows_and_nothing_else():
     mine = {key(r) for r in own if r["source"].split(":")[0] in ("cc", "note")}
     factory = {key(r) for r in apc40.DEFAULT_MAP}
     assert mine <= factory
-    # beyond it: the patch layer, and SEND A — the sequencer page (plan 31
-    # §A), newer than the file, added at its load (`APC_NEW_ROWS`)
+    # beyond it: the patch layer, and SEND A — the sequencer page,
+    # newer than the file, added at its load (`APC_NEW_ROWS`)
     send_a = (routing.SEQ_PAGE_SOURCE, routing.SEQ_PAGE_PARAM, "toggle", 1.0, None)
     assert {r[4] for r in factory - mine - {send_a}} == {"preset"}
 

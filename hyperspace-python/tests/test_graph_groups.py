@@ -1,10 +1,9 @@
-"""Plan 40 T2 (P2, D4, D7) — the group node: groups in the loadable patch, folded
+"""The group node: groups in the loadable patch, folded
 by default, open in place, Group and Ungroup.
 
 A group is a region of the loaded patch (`loadable.GROUPS_KEY`: ``{"id":
 "group.1", "name", "patch"?, "nodes": [canvas ids], "open"}``) drawn on
-GRAPH as one node. Folded — the owner's one sanctioned exception to plan
-36's no-hidden-edge rule (D4) — its members are not drawn and neither is a
+GRAPH as one node. Folded, its members are not drawn and neither is a
 cable with both ends inside; every cable with one end inside is drawn
 re-ended at the group node. Open, everything is drawn as if there were no
 group, in a titled region. The renderer never hears the word: a grouped
@@ -95,7 +94,7 @@ def grouped_twin(doc: dict, ids: list[str], name: str = "main run") -> dict:
 
 
 def main_run(doc: dict) -> tuple[str, ...]:
-    """T1's main run (tests/test_patches.py): the effects wired one after
+    """The main run (tests/test_patches.py): the effects wired one after
     another into All outputs' picture."""
     return G.run_back(G.read_graph(doc["graph"]), "output.all.image")
 
@@ -106,10 +105,10 @@ RUNS = {p.stem: main_run(json.loads(p.read_text())) for p in CORPUS_LOADABLES}
 NO_RUN = {slug for slug, run in RUNS.items() if not run}
 
 
-# ---------------------------------------------------------------- in the loadable patch (D7)
+# ---------------------------------------------------------------- in the loadable patch
 
 def test_the_schema_is_eight_and_the_key_absent_is_no_groups():
-    """D7: 37B took no `/8`, so `groups` is `/8`; the ladder reads it; the
+    """`groups` is `/8`; the ladder reads it; the
     one migration step is "the key is absent → no groups"."""
     assert loadable.GROUPS_SCHEMA == "hyperspace.preset/8" and 8 in loadable.VERSIONS
     assert loadable.GROUPS_KEY == "groups"
@@ -130,7 +129,7 @@ def test_one_rule_reads_a_group_number_for_the_load_and_for_group():
     e = graphview.Edit()
     e.loaded_patch = SimpleNamespace(groups=[{"id": "group.0"}, {"id": "group.x"}])
     assert e.land_group({"nodes": ["render:warp"]})["id"] == "group.1"
-    assert e.loaded_patch.group_high == 1            # (row 563: the floor, seeded from held)
+    assert e.loaded_patch.group_high == 1            # (the floor, seeded from held)
     e.loaded_patch = SimpleNamespace(groups=[{"id": "group.7"}])
     assert e.land_group({"nodes": ["render:acid"]})["id"] == "group.8"
 
@@ -140,7 +139,7 @@ def test_a_loadable_with_groups_round_trips_through_document_and_load_doc(tmp_pa
     app.lib.load("loadable", "party-noita")
     app.loaded_patch.groups = [dict(ENTRY, patch="noita-core")]
     doc = app.loaded_patch.document("noita grouped")
-    assert doc["schema"] == "hyperspace.loadable/12"          # (plan 43 C2: every save)
+    assert doc["schema"] == "hyperspace.loadable/12"          # every save
     assert doc["groups"] == [{"id": "group.1", "name": "noita core", "patch": "noita-core",
                               "nodes": NOITA_CORE, "open": False}]
     keys = list(doc)
@@ -155,19 +154,18 @@ def test_a_loadable_with_groups_round_trips_through_document_and_load_doc(tmp_pa
 
 
 def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
-    """The grouped fixture (party-noita and one group; `/9` since plan 43
-    C2) loaded and saved untouched is the same bytes — and so is every
-    corpus loadable patch, with no groups (a `/9` without the key). (Plan
-    90 H2: the look-back's five retired knobs go quietly from a file that
+    """The grouped fixture (party-noita and one group; `/9`)
+    loaded and saved untouched is the same bytes — and so is every
+    corpus loadable patch, with no groups (a `/9` without the key). The
+    look-back's five retired knobs go quietly from a file that
     draws none; a corpus file holding a look-back is rewritten once on load
-    — its look-back public parts, and H3 its dream — and that save then
-    resaves byte for byte.)"""
+    — its look-back public parts, and its dream — and that save then
+    resaves byte for byte."""
     raw = FIXTURE.read_bytes()
     assert json.loads(raw)["schema"] == "hyperspace.loadable/12"
-    # (plan 90 H2: the look-back's five retired knobs, `graphmigrate.LB_GONE`,
-    # go quietly from a patch that draws no look-back — the rest is the same
-    # bytes)
-    # (plan 90 H3: and every `dream.*` goes from a file that draws no dream)
+    # the look-back's five retired knobs, `graphmigrate.LB_GONE`, go quietly
+    # from a patch that draws no look-back — the rest is the same bytes —
+    # and every `dream.*` goes from a file that draws no dream
     def unretired(data: bytes) -> bytes:
         doc = json.loads(data)
         values = doc.get("values", {})
@@ -193,8 +191,7 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
             moved.parent.mkdir(parents=True)
             moved.write_bytes(data)
             again, _, _ = headless.resave(moved, tmp_path / f"g{k}")
-        # (no groups, but the folded look-back and dream a saved one opens as:
-        # plan 90 H2, H3)
+        # (no groups, but the folded look-back and dream a saved one opens as)
         assert again == data, path.name
         assert {g["name"] for g in json.loads(again).get("groups", [])} <= {
             graphmigrate.LB_GROUP, graphmigrate.DREAM_GROUP}, path.name
@@ -218,7 +215,7 @@ def test_a_member_the_graph_lacks_is_dropped_with_a_note(tmp_path):
         "group frame: mod.9 is not in the patch — left out",
         "group twice: warp is in group acid wash already — left out",
         "groups: an entry that is not a group, ignored"]
-    # (plan 50: a group holds any node the loadable patch saves — the scene too;
+    # (a group holds any node the loadable patch saves — the scene too;
     # whether it saves as a patch is asked at the save)
     assert app.loaded_patch.groups == [
         {"id": "group.1", "name": "acid wash", "nodes": ["render:warp"], "open": False},
@@ -272,11 +269,11 @@ def test_a_grouped_loadable_builds_the_graph_of_its_ungrouped_twin(tmp_path):
     """For every corpus loadable patch, the section loaded with its main run
     grouped is its ungrouped twin's: the same section, and `build_graph`
     of it the same `graph.signature`. The loadable patches with no main run are
-    named (T1's `NO_RUN`): none has an effect, so each is proved with every
-    node a group may hold grouped instead (review fix) — party-tracer's and
-    party-wake's look-back (plan 90 H2: its public parts, which the load
-    makes of it and says so), composite (and dream); wave 3 P1: the other
-    fourteen's frame nodes too, which a patch now holds (`patches.select`)."""
+    named (`NO_RUN`): none has an effect, so each is proved with every
+    node a group may hold grouped instead — party-tracer's and
+    party-wake's look-back (its public parts, which the load
+    makes of it and says so), composite (and dream); and the other
+    fourteen's frame nodes too, which a patch holds (`patches.select`)."""
     assert NO_RUN == {"big-blue-wave", "ember-orbit", "hands-orbit", "hands-play",
                       "hex-engine", "inverse-halo", "legacy6", "party-faces", "party-field",
                       "party-tumble", "party-wake", "plasma-heart", "spiral-silk",
@@ -318,7 +315,7 @@ def test_graph_and_render_never_hear_the_word():
         assert "GROUPS_KEY" not in src and "VGroup" not in src and '"groups"' not in src, name
 
 
-# ---------------------------------------------------------------- the model: folded, open (D4)
+# ---------------------------------------------------------------- the model: folded, open
 
 def test_a_folded_group_hides_its_members_and_inside_cables_and_reends_the_rest(rig):
     """Folded: the members are off the canvas and so is every cable with
@@ -378,12 +375,11 @@ def test_a_meta_node_is_never_a_member_and_loadable_only_keeps_the_group(rig):
 # ---------------------------------------------------------------- the verbs
 
 def test_a_group_holds_a_hands_layer_alone_and_the_save_refuses_it_in_words(rig):
-    """Plan 50 (harden-node-groups' second half): a group holds any node
+    """A group holds any node
     the loadable patch saves — a hands' layer without its hands too, which no
     patch can carry — and the check that it can be saved as a patch runs at
-    the save: refused in words, nothing written, the group as it was. (Plan
-    89: the copy that was this test's case is an effect's slot now, which
-    goes wherever its effect goes.)"""
+    the save: refused in words, nothing written, the group as it was. (A copy is an effect's slot, which goes
+    wherever its effect goes.)"""
     noita(rig)
     e = ui_graph.group_edit(rig.panel)
     assert graphview.render_add(e, "hands") is None
@@ -443,7 +439,7 @@ def test_the_right_click_menus_offer_group_with_two_nodes_selected(rig, monkeypa
     st["menu"] = ("node", "group.1")
     g = ui_menu.Menu("t.group")
     ui_graph.menu(rig.panel, st, st["view"], g)
-    # (plan 40 T3: and save as patch…; update patch only for a group with a patch)
+    # (and save as patch…; update patch only for a group with a patch)
     assert g.labels() == ["open", "rename…", "save as patch…", "ungroup"]
     assert g.choose("open")
     assert rig.lib.loaded_patch.groups[0]["open"] is True
@@ -630,13 +626,13 @@ def test_the_last_member_leaving_takes_the_group():
     assert e.said == "warp left one, the last of it: the group is gone"
 
 
-# ---------------------------------------------------------------- 2026-11-02 (G0, row 563): hygiene
+# ---------------------------------------------------------------- hygiene
 
 def test_a_groups_number_is_never_handed_out_twice(rig):
-    """Row 563: an ungrouped group's number is not the next group's. Before,
-    `land_group` took one past the highest *held*, so ungrouping the newest
-    group handed its id to the next one made — and the page's state keyed
-    by that id (its node, its selection) met a stranger. Now the loadable patch
+    """An ungrouped group's number is not the next group's: taking one
+    past the highest *held* would hand the newest ungrouped group's id to the
+    next one made, and the page's state keyed by that id (its node, its
+    selection) would meet a stranger. So the loadable patch
     keeps the highest it has ever allotted (`LoadedPatch.group_high`), the
     file's highest at the load counting the entries the load dropped, and
     an undo that takes a group back does not give its number away."""
@@ -670,10 +666,10 @@ def test_a_groups_number_is_never_handed_out_twice(rig):
 
 
 def test_a_member_deleted_leaves_its_group_in_the_same_operation(rig):
-    """Row 563: membership is eager. A render node deleted from the canvas,
+    """Membership is eager. A render node deleted from the canvas,
     a voice deleted, a modifier deleted — each is out of its group's list
-    when the call returns, before any draw or save (before, the list kept
-    the dead id until `attach_groups` or `live_groups` filtered it); the
+    when the call returns, before any draw or save (not left for `attach_groups`
+    or `live_groups` to filter); the
     last member going takes the group; and the undo of that delete puts
     the member back in its group (the step carries the marks)."""
     pre, table = rig.lib.loaded_patch, rig.router.table
@@ -692,7 +688,7 @@ def test_a_member_deleted_leaves_its_group_in_the_same_operation(rig):
         u.tick(3.0)
         u.tick(4.0)
         # a modifier, through the page's delete: the last of its group, so
-        # the group goes with it — and its step carries the marks now, so
+        # the group goes with it — and its step carries the marks, so
         # the undo puts the modifier back in its group
         assert ui_graph.remove_node(rig.panel, m.id) is None
         assert [g["id"] for g in pre.groups] == ["group.1"] and table.modifier(m.id) is None
@@ -753,7 +749,7 @@ def _round_trip(pre, tmp_path, k: int) -> dict:
 
 @pytest.mark.parametrize("path", CORPUS_LOADABLES, ids=lambda p: p.stem)
 def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
-    """Row 563, the property: on every corpus loadable patch, random eligible
+    """The property: on every corpus loadable patch, random eligible
     subsets grouped, ungrouped, regrouped and members deleted (a render
     node, a voice, a modifier — whatever the pick lands on), headless;
     after every edit no member dangles, no id is twice, every wire is on a
@@ -763,7 +759,7 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
     app = headless.make_app(seed(tmp_path))
     app.lib.load("loadable", path.stem)
     pre, table = app.loaded_patch, app.router.table
-    # (none, but the groups a saved look-back and dream open folded in: plan 90 H2, H3)
+    # (none, but the groups a saved look-back and dream open folded in)
     assert {g["name"] for g in pre.groups} <= {graphmigrate.LB_GROUP, graphmigrate.DREAM_GROUP}
     before = _stripped(pre.document("x"))
     e = graphview.Edit(table, app.reg, app.router, graph=pre.graph)
@@ -807,7 +803,7 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
             # the rig's and stays, so the node is still held — and a member
             assert cid in pre._held_canvas() and cid in g["nodes"]
         elif not isinstance(res, (str, graphview.Ask)) and cid in pre._held_canvas():
-            # plan 50: a group holds any node the loadable patch saves — hands 1 too,
+            # a group holds any node the loadable patch saves — hands 1 too,
             # which a wired frame always has: "deleted", it is still held,
             # so still a member (as a macro is)
             assert cid in g["nodes"], cid
@@ -826,7 +822,7 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
 
 
 def test_a_refused_load_leaves_the_loaded_loadables_groups_whole(tmp_path):
-    """Review of PR #321 (1): a load lands its graph before it reads its
+    """A load lands its graph before it reads its
     groups, and the landing settles the groups — the *loaded* loadable patch's,
     still in place. A load refused after that (a value that will not take)
     puts everything back, the groups and the floor with it."""
@@ -850,7 +846,7 @@ def test_a_refused_load_leaves_the_loaded_loadables_groups_whole(tmp_path):
 
 
 def test_every_road_that_removes_a_node_settles_its_group(tmp_path):
-    """Review of PR #321 (2): the settle is on the mechanism — the table's
+    """The settle is on the mechanism — the table's
     `set_modifiers` and a bank's membership change — not on GRAPH's Edit,
     so ROUTING's × (`ui_routing.remove_modifier`), the LFO page's ×
     (`ui_lfo.remove_lfo`), the sequencer page's × (`ui_seq.remove_env`) and
@@ -879,7 +875,7 @@ def test_every_road_that_removes_a_node_settles_its_group(tmp_path):
 
 
 def test_undoing_a_load_keeps_the_floor_under_the_groups_numbers(rig):
-    """Review of PR #321 (3): the floor rides in the library's marks beside
+    """The floor rides in the library's marks beside
     the groups. A: three groups, the third ungrouped; B loaded; ⌘Z puts A
     back with its two groups — and the next group is `group.4`, not the
     ungrouped 3 handed out again."""
@@ -905,7 +901,7 @@ def test_undoing_a_load_keeps_the_floor_under_the_groups_numbers(rig):
 
 
 def test_a_members_removal_from_routing_undone_puts_it_back_in_its_group(rig):
-    """Review of PR #321 (4, 5): a step that removes a node carries the marks,
+    """A step that removes a node carries the marks,
     whichever page pushed it — ROUTING's × here, GRAPH's delete of any kind
     — so its undo puts the member back in its group; the settle on the
     restore's reland prunes nothing it should not."""
@@ -934,9 +930,9 @@ def test_a_members_removal_from_routing_undone_puts_it_back_in_its_group(rig):
 
 def test_the_group_node_side_pane_hover_and_status_draw(rig, monkeypatch):
     """Selected, a group's side pane draws: its name (Enter renames), its
-    provenance, what it waits for (T4's words, the APC40 listed and lost),
+    provenance, what it waits for (the APC40 listed and lost),
     its members as chips — a click opens the group and selects the member
-    — its boundary in words, and T3's chips' seam."""
+    — its boundary in words, and the chips' seam."""
     rig.panel.devices = devices.DeviceRegistry([
         {"role": "apc40", "kind": "midi", "enabled": True, "port": "APC40",
          "profile": "apc40"}])
@@ -1034,7 +1030,7 @@ def test_deleting_a_group_node_is_refused_in_words(rig, monkeypatch):
 
 
 def test_one_selector_two_rules_the_save_and_the_canvas():
-    """One classifier (T1's, factored; plan 50 split its rule in two): the
+    """One classifier, two rules: the
     save — `lift` and `Edit.save_patch` — reads `patches.select`; the canvas
     — `Edit.group`, the drawing, a load — `patches.groupable`; both are
     `patches._select`, and what the save refuses the canvas may hold."""
@@ -1055,12 +1051,12 @@ def test_one_selector_two_rules_the_save_and_the_canvas():
     assert len(said) == 2
 
 
-# ---------------------------------------------------------------- plan 40 T3: save, browse, spawn
+# ---------------------------------------------------------------- save, browse, spawn
 #
 # A group becomes a file (save as patch: that file, nothing else) and a
 # file becomes a group in any loadable patch (spawn: through today's doors in load
 # order, one undo step; the conflicts asked first — tests/test_ui_routing.py
-# drives the sheet — and nothing attached by itself, D2). The patch is the
+# drives the sheet — and nothing attached by itself). The patch is the
 # spec's example, tests/fixtures/patches/acid-wash.json, put into the rig's
 # scratch library; the host is party-trip (K1 there is view.bright: the
 # sheet asks), whose own effects are none of the patch's, so the first
@@ -1135,7 +1131,7 @@ def test_spawn_lands_through_the_doors_as_one_step_and_one_undo_takes_it_all(rig
         assert spawned(rig) is None
         assert len(u.stack) == n + 1 and u.stack[-1].label == "spawn acid wash"
         assert {"acid", "wobble", "delay"} <= patches.spec_names(pre.graph.spec)
-        # D2: the section's wires are the host's and the patch's own — nothing to the scene
+        # the section's wires are the host's and the patch's own — nothing to the scene
         assert sorted(wires(rig)) == sorted([*wired, ("acid", "wobble.image"),
                                              ("wobble", "delay.image")])
         assert reg["fx.acid.speed"].value == pytest.approx(0.4)
@@ -1310,7 +1306,7 @@ def test_a_row_the_sheet_kept_for_the_loadable_waits_for_nothing(rig):
 
 
 def test_splice_on_a_cable_lands_the_patch_in_the_run_in_one_step(rig):
-    """Dropped on `scene → plasma.image` (D2's splice, `render_insert`'s
+    """Dropped on `scene → plasma.image` (a splice, `render_insert`'s
     shape): the cable goes, scene → acid … delay → plasma come, in the same
     undo step; no pin is left open. A patch with two inlets is no drop
     target: refused in words, nothing changed."""
@@ -1377,7 +1373,7 @@ def test_a_splice_that_raises_the_sheet_lands_the_splice_with_its_answers(rig):
 
 
 def test_wire_as_saved_wires_the_free_ports_and_refuses_a_taken_one(rig):
-    """**wire as saved** (D2's chip): scene → acid.image lands, delay →
+    """**wire as saved** (the chip): scene → acid.image lands, delay →
     output.all.image is refused in words while party-trip's run holds it —
     one undo step for the press; with the port freed, a second press lands
     it and no pin is open, so the chip is gone."""

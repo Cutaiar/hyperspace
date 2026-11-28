@@ -1,4 +1,4 @@
-"""The base chase (plan 52): while held, the performer is committed into the
+"""The base chase: while held, the performer is committed into the
 base; let go, the look stays where the performer left it.
 
 The param model first, against a twin the verb never touches (what shows is
@@ -742,13 +742,13 @@ def _note(on: bool, number: int = 94, channel: int = 0):
 
 
 def _row_on_desk(rig, src: str = "note:0:94") -> Binding:
-    """A person's row on a desk button, as `bindings.json` may hold one: since row 746 no
-    Learn lands one (row 755), and a file's patch-layer row on it drops with a note."""
+    """A person's row on a desk button, as `bindings.json` may hold one: no Learn
+    lands one, and a file's patch-layer row on it drops with a note."""
     return rig.table.add(Binding(src, CHASE_PARAM, "momentary"))
 
 
 def test_a_desk_button_cannot_be_learned_on_it(rig):
-    """Row 755: refused, per the seventh round, in words that say where its road is."""
+    """Refused, in words that say where its road is."""
     rig.learn.arm(CHASE_PARAM)
     assert not rig.learn.learn_control("note:0:94")
     assert "Learn pad" in rig.learn.last

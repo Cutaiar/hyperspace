@@ -1,4 +1,4 @@
-"""Wave 5 CT1: `<library>/devices.json`, the controllers both Macs share.
+"""`<library>/devices.json`, the controllers both Macs share.
 
 A role is a row's address, so most of this holds one thing against every way a list can
 come about: no order of adopting, plugging in or syncing renames a role a saved row names.
@@ -1033,7 +1033,7 @@ def test_the_daw_sink_follows_on_or_off_on_this_mac(tmp_path):
     assert not any(e["role"] == config.DAW_ROLE for e in off)
 
 
-# ---------------------------------------------------------------- a quit (row 803)
+# ---------------------------------------------------------------- a quit
 
 class BusyHome:
     """This Mac's folder too busy for the worker: its writes wait at `gate`. The quit's own
@@ -1132,7 +1132,7 @@ def test_a_sync_that_runs_out_says_so(macs, monkeypatch):
 
 
 def test_time_is_only_a_ceiling_here():
-    """Row 803: a stopwatch's verdict is the machine's load. This file doesn't import `time`, a
+    """A stopwatch's verdict is the machine's load. This file doesn't import `time`, a
     wait is on a signal with `WAIT_S` over it, and a clock is a `Clock` of its own."""
     tree = ast.parse(Path(__file__).read_text())
     for node in ast.walk(tree):

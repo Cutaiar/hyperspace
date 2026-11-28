@@ -1,5 +1,5 @@
 # ruff: noqa: F811 — `rig` is test_midi's fixture, taken as each test's argument
-"""The APC40's two layers under a latched SHIFT (plan 13 §3, D4–D8, D12).
+"""The APC40's two layers under a latched SHIFT.
 
 Driven through `MidiIO` with fake ports, as tests/test_midi.py does (its
 rig is reused): the latch and its LED, dispatch per layer with no
@@ -78,11 +78,11 @@ def test_a_loadable_load_drops_to_the_loadable_layer(rig):
 
 
 def test_shift_release_never_reevaluates_a_held_button(rig):
-    """D12: the layer is read at the press. A momentary loadable patch button held
+    """The layer is read at the press. A momentary loadable patch button held
     across a SHIFT press releases on the row it pressed, and the global
     row on the same button never hears the release."""
     t, view = rig.midi.table, rig.view
-    n = apc40.N_SCENE[4]            # scene launch 1–4 are invariant since plan 24 C1
+    n = apc40.N_SCENE[4]            # scene launch 1–4 are invariant
     t.set_desk([Binding(f"note:0:{n}", "view.points", "momentary", feedback="led")])
     t.bindings.append(Binding(f"note:0:{n}", "view.lines", "momentary", feedback="led",
                               layer="global"))
@@ -162,9 +162,9 @@ def test_a_loadable_load_clears_the_faders_catch(rig):
 
 
 def test_the_crossfader_keeps_its_hold_across_a_loadable_load(rig):
-    """Plan 15 WP3, fork 19: a load clears a fader's catch only when its
+    """A load clears a fader's catch only when its
     param is no longer where the adapter last put it. A loadable patch never moves
-    a shared meta param (D9), so the crossfader — and MASTER — stay caught, and
+    a shared meta param, so the crossfader — and MASTER — stay caught, and
     the next message moves the value from where it is, in either direction.
     The fader sits a little off the value (a MIDI step against the param's
     detent), on the far side from each move: a cleared catch would neither
@@ -197,7 +197,7 @@ def test_the_crossfader_keeps_its_hold_across_a_loadable_load(rig):
     # a fader the adapter never wrote is not caught by a load …
     assert not row(rig, "master.trim").caught
     # … nor does one keep its hold when another control made the param's
-    # last write (review of PR #81): the fader is not where the value is
+    # last write: the fader is not where the value is
     push(rig, cc(apc40.CC_XFADE, 100))
     assert xf.caught
     dim.set_norm(0.3)
@@ -219,7 +219,7 @@ def test_the_crossfader_keeps_its_hold_across_a_loadable_load(rig):
 
 
 def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):
-    """Review of PR #65: a desk row retargeted or removed on the ROUTING
+    """A desk row retargeted or removed on the ROUTING
     page redraws the desk, but it is not a load — no base moved, so every
     fader keeps its catch."""
     from hyperspace import ui_routing
@@ -242,14 +242,14 @@ def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):
 
 
 def test_a_control_that_loses_its_row_goes_dark(rig):
-    """D8, review of PR #67: a control whose last row on the up layer goes
+    """A control whose last row on the up layer goes
     is sent dark — by a loadable patch load with a smaller desk, and by the ROUTING
     page's × — not left showing the old state while it does nothing."""
     from hyperspace import ui_routing
 
     t, view = rig.midi.table, rig.view
     # view.plane.ZW (activator 1) and view.inst_rate: preset-only (the
-    # render toggles on scene launch 1–4 are invariant since plan 24 C1)
+    # render toggles on scene launch 1–4 are invariant)
     points, knob6 = apc40.N_ACTIVATOR, 0x35
     rig.reg["view.plane.ZW"].set(True)
     rig.midi.poll()
@@ -288,11 +288,11 @@ def test_a_control_that_loses_its_row_goes_dark(rig):
 def test_an_unmapped_control_is_dark_and_does_nothing(rig):
     reg = rig.reg
     # patch layer: device knobs 5–8 are free in the factory desk (1–4 are
-    # apc40.SCENE since plan 19 WP3) — their rings off, their turns dead;
+    # apc40.SCENE) — their rings off, their turns dead;
     # the band scenes' clip row is dark
     styles = sent_cc(rig, 0x14 + 8)
     assert styles and styles[-1] == apc40.RING_OFF
-    post = reg["band.sel.post"].norm                # D5's param on the global layer
+    post = reg["band.sel.post"].norm                # a param on the global layer
     push(rig, cc(0x14, 5), cc(0x14, 120))
     assert reg["band.sel.post"].norm == pytest.approx(post)
     assert sent_notes(rig, apc40.N_CLIP[1], channel=0)[-1] == 0
@@ -310,7 +310,7 @@ def test_an_unmapped_control_is_dark_and_does_nothing(rig):
     assert reg["view.inst_rate"].norm == pytest.approx(rate)
     # and the loadable patch's buttons: dark under SHIFT, and a press does nothing
     # (activator 1, view.plane.ZW: the render toggles on scene launch 1–4
-    # are invariant since plan 24 C1)
+    # are invariant)
     assert sent_notes(rig, apc40.N_ACTIVATOR)[-1] == 0
     plane = rig.reg["view.plane.ZW"].value
     push(rig, note(apc40.N_ACTIVATOR), note(apc40.N_ACTIVATOR, 0))
@@ -319,7 +319,7 @@ def test_an_unmapped_control_is_dark_and_does_nothing(rig):
 
 def test_invariant_controls_mean_one_thing_on_both_layers(rig):
     t, reg, clock = rig.midi.table, rig.reg, rig.clock
-    # MASTER (track faders S1–S8 are layered since plan 24 C2, decision 17)
+    # MASTER (track faders S1–S8 are layered)
     t.bindings.append(Binding("cc:0:14", "view.speed", "abs", layer="global"))  # can't act
     speed = reg["view.speed"].norm
     for layer in ("preset", "global"):
@@ -340,7 +340,7 @@ def test_invariant_controls_mean_one_thing_on_both_layers(rig):
     # the invariant set is the table's layer-None rows, and SHIFT
     assert t.is_invariant(Binding("note:0:98", "x", "toggle"))
     assert t.is_invariant(Binding("cc:0:14", "x", "abs"))          # MASTER
-    assert not t.is_invariant(Binding("cc:5:7", "x", "abs"))      # S6: layered (decision 17)
+    assert not t.is_invariant(Binding("cc:5:7", "x", "abs"))      # S6: layered
     assert not t.is_invariant(Binding("cc:0:48", "x", "abs"))
 
 
@@ -363,7 +363,7 @@ def test_a_desk_row_on_an_invariant_control_is_dropped_with_a_note(rig):
 # ---------------------------------------------------------- the sorted map
 
 def _old_map() -> list[tuple[str, str]]:
-    """apc40.DEFAULT_MAP before plan 13 — its 113 (source, target) pairs,
+    """The unsorted apc40.DEFAULT_MAP: its 113 (source, target) pairs,
     frozen here so the sorting can be checked against it."""
     a = apc40
     knobs = ("trim", "exp", "trn", "pre", "post", "atk", "dec", "thr")
@@ -377,13 +377,13 @@ def _old_map() -> list[tuple[str, str]]:
         *[(f"cc:{i}:{a.CC_FADER}", f"band.{i}.post") for i in range(6)],
         (f"cc:6:{a.CC_FADER}", "master.dyn"), (f"cc:7:{a.CC_FADER}", "master.trim"),
         (f"cc:0:{a.CC_MASTER}", "output.dim"),
-        (f"cc:0:{a.CC_XFADE}", "output.xfade"),            # overlay.bg before plan 15 WP3
+        (f"cc:0:{a.CC_XFADE}", "output.xfade"),
         (f"cc:0:{a.CC_CUE}", "view.shape"),
         *[(n(a.N_SELECT, i), "band.select") for i in range(6)],
         *[(n(a.N_ACTIVATOR, i), f"view.plane.{pl}") for i, pl in enumerate(planes)],
         *[(n(a.N_SOLO, i), f"band.{i}.fn") for i in range(6)],
         *[(n(a.N_ARM, i), f"band.{i}.reset") for i in range(6)],
-        *[(n(a.N_CLIP[0], k), "preset.select") for k in range(8)],   # theme.select before WP2
+        *[(n(a.N_CLIP[0], k), "preset.select") for k in range(8)],
         *[(n(a.N_CLIP[1], k), "scene.select") for k in range(8)],
         *[(n(a.N_CLIP[2], k), "scene.select") for k in range(3)],
         *[(n(a.N_CLIP[2], 4 + k), "view.inst_motion") for k in range(4)],
@@ -404,7 +404,7 @@ def _old_map() -> list[tuple[str, str]]:
 
 
 def _layer_by_plan(source: str) -> str | None:
-    """Plan 13 §3.2's three tables, as a rule over the control."""
+    """The three layer tables, as a rule over the control."""
     a = apc40
     kind, ch, num = source.split(":")
     num = int(num)
@@ -414,11 +414,11 @@ def _layer_by_plan(source: str) -> str | None:
         if num in a.TRACK_KNOBS or num == a.CC_CUE:
             return "preset"
         if num == a.CC_FADER:
-            return "global"     # S1–S8: the audio strip under SHIFT (plan 24 C2, decision 17)
+            return "global"     # S1–S8: the audio strip under SHIFT (track faders)
         return None                                        # MASTER, crossfader
     ch = int(ch)
     if num in a.N_SCENE[:4]:
-        return None             # the render toggles: invariant since plan 24 C1 (decision 18)
+        return None             # the render toggles: invariant
     if num == a.N_CLIP[1] or (num == a.N_CLIP[2] and ch < 3):
         return "global"                                    # the band scenes
     if (num in (a.N_ACTIVATOR, *a.N_SCENE, a.N_UP, a.N_DOWN)
@@ -427,47 +427,47 @@ def _layer_by_plan(source: str) -> str | None:
     return None                                            # the invariant buttons
 
 
-def test_the_default_map_is_sorted_as_plan_13_says():
+def test_the_default_map_is_sorted_by_the_layer_tables():
     rows = [Binding.from_json(d) for d in apc40.DEFAULT_MAP]
     have = {(b.source, b.target): b.layer for b in rows}
     old = _old_map()
     assert len(old) == 113
-    # plan 19 WP2: the sixteen shape pads of clip rows 4 and 5 are gone —
+    # the sixteen shape pads of clip rows 4 and 5 are gone —
     # those pads are the bank's slots 9–24, invariant (the cue knob keeps
-    # shape selection); the other 97 old rows are sorted as plan 13 says
+    # shape selection); the other 97 old rows are sorted by the layer tables
     far = [f"note:{ch}:{n}" for n, ch in apc40.BANK_PADS[8:]]
     gone = [(s, "view.shape") for s in far]
     assert len(gone) == 16 and set(gone) < set(old) and not set(gone) & set(have)
     for pair in old:                                       # every old row left, sorted
         if pair in gone:
             continue
-        pair = (pair[0], routing.OVERLAY_ALIASES.get(pair[1], pair[1]))   # (plan 57: bindings/4)
+        pair = (pair[0], routing.OVERLAY_ALIASES.get(pair[1], pair[1]))
         assert pair in have, pair
         assert have[pair] == _layer_by_plan(pair[0]), pair
-    renamed = {(s, routing.OVERLAY_ALIASES.get(t, t)) for s, t in old}   # (plan 57: bindings/4)
+    renamed = {(s, routing.OVERLAY_ALIASES.get(t, t)) for s, t in old}
     new = [b for b in rows if (b.source, b.target) not in set(old) | renamed]
     # the new rows: SHIFT, invariant, and the global track knobs — which
     # are data, rows in the map: hand feel and BPM on 1–5, 6–8 free
     assert [(b.source, b.target, b.layer) for b in new] == [
-        # device knobs 1–4 on the patch layer: SCENE (plan 19 WP3)
+        # device knobs 1–4 on the patch layer: SCENE
         *[(f"cc:*:{cc}", t, "preset") for t, cc in zip(apc40.SCENE, apc40.DEVICE_KNOBS)],
         ("cc:0:48", "hands.smooth", "global"), ("cc:0:49", "hands.response", "global"),
         ("cc:0:50", "hands.catch", "global"), ("cc:0:51", "hands.sel.return", "global"),
         ("cc:0:52", "tempo.bpm", "global"),
         (routing.SHIFT_SOURCE, routing.SHIFT_PARAM, None),
-        # clip rows 4 and 5: the bank's slots 9–24, invariant (plan 19 WP2)
+        # clip rows 4 and 5: the bank's slots 9–24, invariant
         *[(s, "preset.select", None) for s in far],
-        # SAVE on track 8's clip stop, invariant (plan 24 C1, decision 18)
+        # SAVE on track 8's clip stop, invariant
         (f"note:7:{apc40.N_CLIPSTOP}", routing.SAVE_PARAM, None),
-        (f"note:0:{apc40.N_OVERDUB}", "preset.home", None),   # home (plan 15 WP2)
-        (routing.SEQ_PAGE_SOURCE, routing.SEQ_PAGE_PARAM, None)]  # SEND A (plan 31 §A)
+        (f"note:0:{apc40.N_OVERDUB}", "preset.home", None),   # home
+        (routing.SEQ_PAGE_SOURCE, routing.SEQ_PAGE_PARAM, None)]  # SEND A
     assert not [b for b in rows if b.layer == "global" and b.number in (0x35, 0x36, 0x37)
                 and b.kind == "cc"]
-    # the patch layer's device knobs: SCENE on 1–4, 5–8 dark (plan 19 WP3)
+    # the patch layer's device knobs: SCENE on 1–4, 5–8 dark
     assert [(b.number, b.target) for b in rows if b.layer == "preset" and b.kind == "cc"
             and b.number in apc40.DEVICE_KNOBS] == list(zip(apc40.DEVICE_KNOBS, apc40.SCENE))
     assert apc40.SCENE == ("view.depth4", "camera.yaw", "camera.pitch", "view.pattern")
-    # QUANT is invariant (plan 13 §3.2's note), and so is the patch row
+    # QUANT is invariant, and so is the patch row
     assert have[(f"note:0:{apc40.N_QUANT}", "preset.next")] is None
     assert {have[(f"note:{k}:{apc40.N_CLIP[0]}", "preset.select")] for k in range(8)} == {None}
     assert [(b.source, b.value) for b in rows if b.target == "preset.select"] == [
@@ -483,8 +483,7 @@ def test_an_old_bindings_file_is_sorted_in_memory_and_its_loadable_rows_carried(
     memory: the meta controller's rows on their layers, the patch-layer rows
     carried off the table (`carried`), a row of mine on an invariant
     control kept invariant, one on SHIFT's note dropped with a note. The
-    file itself is left alone (plan 13's first-launch rewrite is gone with
-    the two-tier library, 2026-10-28)."""
+    file itself is left alone."""
     path = bindings_path(tmp_path)
     hand = path.with_name("bindings.json.bak-mine")
     hand.write_text("mine")
@@ -514,8 +513,8 @@ def test_an_old_bindings_file_is_sorted_in_memory_and_its_loadable_rows_carried(
     assert ("cc:0:87", "view.inst_amp") in carried                 # mine, anywhere else
     for pid in new:                                               # the global rows and SHIFT added
         assert any(b.target == pid for b in t.midi()), pid
-    # a row of mine on SHIFT's note would keep the latch off: dropped, noted
-    # (review of PR #63), and SHIFT is the latch
+    # a row of mine on SHIFT's note would keep the latch off: dropped, noted,
+    # and SHIFT is the latch
     assert [b.target for b in t.dispatch("note", 0, SHIFT)] == [routing.SHIFT_PARAM]
     assert any("SHIFT is the desk's layer latch" in n for n in t.notes)
     assert path.read_text() == text and hand.read_text() == "mine"   # nothing written
@@ -523,13 +522,13 @@ def test_an_old_bindings_file_is_sorted_in_memory_and_its_loadable_rows_carried(
         "bindings.json.bak-mine"]
 
 
-# ------------------------------------------------------ plan 15 WP1: undo
+# ------------------------------------------------------ undo
 
 def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp_path):
     """`Bindings.set_desk(load=False)`, what an undo's restore calls: the
     patch layer is replaced and the desk redrawn (`redraw_serial`), but
     nothing was loaded — `desk_serial` stays, the layer that is up stays
-    up, and every fader keeps its catch (D7). `load=True`, the default, is
+    up, and every fader keeps its catch. `load=True`, the default, is
     still a loadable patch load's: the layer drops and the catch is cleared."""
     from test_undo import boot, frames, settle
 
@@ -574,7 +573,7 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
     row = next(b for b in t.desk() if b.source == knob.source)
     assert sent_cc(r, row.number, row.channel or 0)[-1:] == [round(reg[row.target].norm * 127)]
     # the same rows through the default door are a load: the layer drops, and a
-    # fader whose base the load moved loses its catch (plan 15 WP3's rule)
+    # fader whose base the load moved loses its catch (a load clears a moved fader's catch)
     r.inp.queue += [note(SHIFT), note(SHIFT, 0)]
     frames(r)
     assert t.layer == "global"
@@ -588,14 +587,14 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
     assert [b.to_json() for b in t.desk()] == was
 
 
-# ------------------------------------------------------- plan 15 WP2: home
+# ------------------------------------------------------- home
 
 def test_overdub_is_home_on_both_layers_and_is_lit(rig):
-    """Decision 27, D6 as the owner extended it: OVERDUB loads the show's
+    """OVERDUB loads the show's
     "starts on" loadable patch — one invariant row, the same press on either
     layer, which no loadable patch's desk may map — and its LED is lit while the
     show names one, dark when it names none. Home is a load: it drops to
-    the patch layer (D4)."""
+    the patch layer."""
     t, proj = rig.midi.table, rig.loaded_patch
     lib, n = proj.lib, apc40.N_OVERDUB
     (b,) = t.route("note", 0, n)
@@ -639,13 +638,12 @@ def test_overdub_is_home_on_both_layers_and_is_lit(rig):
     assert sent_notes(rig, n)[-1] == 1
 
 
-# ------------------------------------------- plan 15 WP4: the SAVE AS bar
+# ------------------------------------------- the clip-stop row
 
 def test_the_clip_stop_row_is_free(rig):
-    """2026-10-09: the clip-stop SAVE AS bar is retired — an empty bank pad
-    held saves into its own slot — so the clip-stop buttons have no row on
+    """An empty bank pad held saves into its own slot, so the clip-stop buttons have no row on
     either layer: dark, doing nothing, and open to Learn (not invariant)
-    for toggles and the like. Since plan 24 C1 (decision 18) track 8's is
+    for toggles and the like. Track 8's is
     the desk's SAVE, invariant (tests/test_desk_trust.py); the other seven
     stay free."""
     t, n = rig.midi.table, apc40.N_CLIPSTOP
@@ -707,7 +705,7 @@ def test_a_layer_switch_leaves_a_glide_to_finish(rig):
 
 
 def test_a_loadable_load_stops_a_glide_on_a_patch_param_and_not_on_the_dim(tmp_path):
-    """D2 and D9, mid-glide. A real loadable patch load (the host's objects,
+    """Mid-glide. A real loadable patch load (the host's objects,
     tests/test_undo.py's boot): the knob's glide on a patch param is
     dropped and the load's value stands; the crossfader's glide on
     `output.xfade`, a shared meta param no loadable patch moves, goes on arriving and
@@ -759,7 +757,7 @@ def test_a_loadable_load_stops_a_glide_on_a_patch_param_and_not_on_the_dim(tmp_p
     assert abs(p.norm - round(p.norm)) > 0.05       # it never went on to the knob's end
 
 
-# ------------------------------------------- plan 19 WP2: rows 4–5 are the bank
+# ------------------------------------------- rows 4–5 are the bank
 
 def _far(k: int) -> tuple[int, int]:
     """(note, channel) of slot k's pad."""
@@ -767,12 +765,12 @@ def _far(k: int) -> tuple[int, int]:
 
 
 def test_rows_four_and_five_load_slots_nine_to_twenty_four_on_both_layers(rig):
-    """Clip rows 4 and 5 are the bank's slots 9–24 (the owner, 2026-10-04):
+    """Clip rows 4 and 5 are the bank's slots 9–24:
     each of the sixteen pads loads its slot with SHIFT off and with SHIFT
     on — one meaning on both layers — and the load drops the desk to the
-    patch layer (D4), as a pad of row 1 does. The desk's count is
+    patch layer, as a pad of row 1 does. The desk's count is
     `apc40.BANK_PADS`, as long as the bank. An empty slot's pad loads
-    nothing and says the slot is empty (D8), as row 1 does."""
+    nothing and says the slot is empty, as row 1 does."""
     from hyperspace import library
 
     t, pr, lib = rig.midi.table, rig.loaded_patch, rig.loaded_patch.lib
@@ -794,7 +792,7 @@ def test_rows_four_and_five_load_slots_nine_to_twenty_four_on_both_layers(rig):
             assert (b.target, b.op, b.value, b.layer) == ("preset.select", "set", float(k), None)
             push(rig, note(n, channel=ch), note(n, 0, channel=ch))
             assert (pr.active, lib.current("loadable")) == (k, name), (k, under_shift)
-            assert t.layer == "preset"                         # a load drops the layer (D4)
+            assert t.layer == "preset"                         # a load drops the layer
             assert apc40.glyph(b.source) == f"G{4 + (k - 8) // 8}·{(k - 8) % 8 + 1}"
     # an empty slot: dark, and a press says so and loads nothing
     pr.clear_slot(11)
@@ -815,7 +813,7 @@ def test_rows_four_and_five_load_slots_nine_to_twenty_four_on_both_layers(rig):
 
 
 def test_the_bank_pads_are_invariant(rig):
-    """D6, extended by the owner to clip rows 4 and 5: every bank pad is a
+    """Every bank pad is a
     row with no layer — active on both layers, never Learn's, never a
     loadable patch's. A Learn on one is refused in the existing words (through a
     press, which does its own job, and through `learn_control`, a click's

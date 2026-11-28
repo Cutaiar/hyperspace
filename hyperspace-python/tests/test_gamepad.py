@@ -93,7 +93,7 @@ def test_disconnect_goes_inert_and_reconnects(monkeypatch):
     assert pad.down(gp.B) and not pad.pressed(gp.B)
 
 
-# ---- several pads at once (plan 27 B6) ----
+# ---- several pads at once ----
 
 class FakeJoysticks:
     """Several GLFW joysticks: `present` is the set of jids plugged in,
@@ -182,7 +182,7 @@ def test_a_pinned_pad_waits_for_its_index(monkeypatch):
 
 def test_a_bare_pad_still_takes_the_first_present_joystick(monkeypatch):
     """A pad no device attached (the tests', the probe) reads the first
-    present joystick, as before plan 27 B6."""
+    present joystick."""
     fake = FakeJoysticks(3, 5)
     fake.install(monkeypatch)
     pad = Pad()
@@ -283,7 +283,7 @@ def test_keeping_a_joystick_respects_another_pads_pin(monkeypatch):
 
 # ---- wired Xbox 360 pads over USB ----
 
-# captured 2026-10-13 off an Afterglow AX.1 (1BAD:F900) at rest: sticks
+# captured off an Afterglow AX.1 (1BAD:F900) at rest: sticks
 # near centre, nothing held
 REST = bytes.fromhex("0014000000008701 5dff 8602 7700 000000000000".replace(" ", ""))
 

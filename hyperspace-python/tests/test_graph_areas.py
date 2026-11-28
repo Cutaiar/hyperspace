@@ -1,9 +1,8 @@
-"""Plan 28 N9 — the GRAPH page organised by concern; idle macros off the canvas.
+"""The GRAPH page organised by concern; idle macros off the canvas.
 
-The owner's words of 2026-10-20: "all things audio need to live in one
-area; all things geometry should be grouped in another area; all things
-shader should be grouped in another area … Also, there are macros sitting
-there that don't connect to anything." So the auto layout lays the canvas
+All things audio live in one area, all things geometry in another, all
+things shader in another, and macros that connect to nothing are not
+drawn. So the auto layout lays the canvas
 in titled areas left to right — controllers → audio (the small *other*
 under it) → modulation → geometry → shaders (`graphview.AREA`, the one
 table) — each laid out by its own depth, the shaders' chain wrapped in
@@ -13,7 +12,7 @@ with no cable) is not drawn: its area shows one idle line that expands to
 show them, and the chain a through wire over the off effects. The head's
 area chips and a click on a title frame an area.
 
-Headless, on N7's harness (tests/test_graph_legible.py): the shell's rig
+Headless, on the harness of tests/test_graph_legible.py: the shell's rig
 with a corpus loadable patch loaded through the scratch library, a render graph
 built by `graph.default_graph` — party-trip's two-effect graph, and the
 real chain of every effect file this build has, wired by each graph
@@ -46,14 +45,13 @@ from hyperspace.routing import Binding
 # the corpus: the loadable patches the build once shipped (tests/corpus/loadable, one tier)
 CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "loadable").glob("*.json"))
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
-# (plan 33 T6: the `/5` fixtures — T4's and T5's proofs, a channel's own
-# shaders into the faces, the backdrop, a switch — are laid out with the rest)
+# (the graph fixtures: a channel's own shaders into the faces, the backdrop,
+# a switch — are laid out with the rest)
 WIRED = sorted(p.stem for p in FIXTURES.glob("*.json")
                if "graph" in json.loads(p.read_text()))
 FREE = ("branch-two-sizes", "media-chain-backdrop", "media-chain-faces", "switch-faces")
 # every effect file, by its @order: the chain an old loadable patch with every one
-# on lands as (plan 33 T7: `names()` is by name — there is no stack)
-# (plan 67 F1: the picture effects — a field maker takes no picture to chain)
+# on lands (`names()` is by name — there is no stack)
 # (the picture effects that take one: a field maker, or Colour, takes no picture)
 REAL = tuple(sorted((n for n, s in FxState().specs.items()
                      if s.makes != "field" and "image" in G.effect_ports(n)[1]),
@@ -75,7 +73,7 @@ def load(rig, name, graph=None):
     if graph is not None:
         rig.panel.renderer = NS(_graph=graph)
     rig.lib.load("loadable", name)
-    # (plan 35 T5: the canvas is the loadable patch's wired frame — party-trip's is
+    # (the canvas is the loadable patch's wired frame — party-trip's is
     # the render graph's own frame, landed again after the load)
     section = getattr(rig.panel.renderer._graph, "section", None)
     if name == "party-trip" and section is not None:
@@ -93,7 +91,7 @@ def real_graph(fixture=None):
     from wiredframe import shown
 
     from hyperspace.graphmigrate import slots_of_copies
-    # (plan 89: a fixture's copies are slots, as the load migrates them)
+    # (a fixture's copies are slots, as the load migrates them)
     spec = G.read_graph(slots_of_copies(json.loads(
         (FIXTURES / f"{fixture}.json").read_text())["graph"])[0]) if fixture else None
     wiring = spec.wiring() if spec is not None else G.Wiring()
@@ -158,11 +156,11 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     one area of `ORDER`, by the one table; the areas' columns run left to
     right and never share a column — but *other*, under the audio in its
     column — so no audio node stands in a scene, look-back, effects or
-    outputs column (plan 35 G's areas), nor any of those in another's; and
+    outputs column, nor any of those in another's; and
     no drawn wire runs back or within a column but the returns
     (`graphview.returns`: the effects' wrapped rows, the capture's).
 
-    Plan 33 T6: the free graph's `/5` fixtures, each loaded as the loadable patch
+    The free graph's fixtures, each loaded as the loadable patch
     on its own graph, hold too. The rule that keeps them right-running: a
     picture made of the media alone (every path back from it starts at a
     channel or the pattern — `media.a → acid.2 → hueturn.2`) is a branch
@@ -199,9 +197,9 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
         for a in CONCERNS:
             others = set().union(*(columns(view, b) for b in graphview.AREAS if b != a))
             assert not columns(view, a) & others, (name, a)
-        # (plan 36 T3: acid-scene's `after: scene` is the wires it stood
-        # for — an effect between the scene and the look-back; plan 37 C3:
-        # laid in the look-back's area, `laid_areas`, so nothing runs back)
+        # (acid-scene's `after: scene` is the wires it stood for — an effect
+        # between the scene and the effects; laid by `laid_areas`, so nothing
+        # runs back)
         assert back_wires(view) == [], (name, fixture)
         assert back_wires(view, graphview.AREAS) == [], (name, fixture)
     # what lands where, on party-trip's graph
@@ -212,17 +210,17 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     assert {area[k] for k in (graphview.ANALYZER, "group:band", "group:tempo", "group:master",
                               "group:audio", "group:scene")} == {graphview.AUDIO}
     assert {area[k] for k in ("lfo.1", "macro.1", "group:lfo")} == {graphview.MODULATION}
-    # (plan 35 G: by primitive, in the new ids)
+    # (by primitive)
     assert {area[k] for k in ("render:shape", "render:hands", "render:scene",
                               "render:hands.layer", "group:hands",
                               "group:cloud")} == {graphview.SCENE_AREA}
-    # (plan 90 H2: party-tracer's look-back is a delay and a trail now)
+    # (party-tracer's look-back is a delay and a trail)
     assert "render:lookback" not in area
     tracer = {n.id: n.area for n in load(rig, "party-tracer")["view"].nodes}
     assert "render:lookback" not in tracer and tracer["render:delay"] == graphview.MEDIA
     assert {area[k] for k in ("render:acid", "render:palette",
                               "render:composite")} == {graphview.EFFECTS_AREA}
-    assert "render:copy" not in area                    # (plan 89: acid's slot, on acid)
+    assert "render:copy" not in area                    # (acid's slot, on acid)
     assert {area[k] for k in ("render:output.all", "render:output.1", "render:output.2",
                               "group:output")} == {graphview.OUTPUTS_AREA}
     assert {area[k] for k in ("group:preset", "group:ui", "group:desk",
@@ -230,7 +228,7 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
 
 
 def test_a_scene_picture_into_a_switch_runs_back_by_design(rig):
-    """Plan 33 T6: an effect on the scene wired into a switch (`scene →
+    """An effect on the scene wired into a switch (`scene →
     acid.2 → switch.in1`, the switch into output 2) is the scene's
     picture — it stays with the effects — so its cable into the switch,
     which sits with the media, runs back: one of `returns` (as a wrapped
@@ -262,7 +260,7 @@ def test_a_scene_picture_into_a_switch_runs_back_by_design(rig):
 
 def test_auto_layout_stacks_each_area_and_keeps_saved_positions(rig):
     """Each area's title over one of its own columns, in a row over the
-    canvas (2026-11-19, the flow layout: two areas may share a column, so a
+    canvas (the flow layout: two areas may share a column, so a
     title whose column is taken moves right inside its area, else up a
     row); the nodes stacked down their columns under the titles, never on
     one another; a node with a saved position keeps it on the canvas and
@@ -279,7 +277,7 @@ def test_auto_layout_stacks_each_area_and_keeps_saved_positions(rig):
         assert ty <= 0 and (tx, ty) not in spots
         spots.add((tx, ty))
         mine = [n for n in drawn if n.area == a]
-        if not mine:                    # (plan 35 G: MEDIA's channels all idle: its line)
+        if not mine:                    # (MEDIA's channels all idle: its line)
             continue
         assert tx / graphview.COL_W in {lay.cols[n.id] for n in mine}
     for col in {n.column for n in drawn}:
@@ -288,7 +286,7 @@ def test_auto_layout_stacks_each_area_and_keeps_saved_positions(rig):
         for (y0, n0), (y1, _) in pairwise(here):
             assert y1 >= y0 + graphview.height(n0, collapsed=True) + graphview.GAP
     # a saved position wins — and the node it left is not moved into the gap
-    # (2026-10-26: no layout runs on its own; only tidy lays out again)
+    # (no layout runs on its own; only tidy lays out again)
     top, below = next((r.id, n.id) for r in drawn if r.kind == "render" for n in drawn
                       if n.column == r.column and lay.nodes[n.id][1] > lay.nodes[r.id][1])
     rig.lib.loaded_patch.layout[top] = [4000, 4000]
@@ -310,13 +308,12 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     st["tidy"] = True
     frame(rig.panel, "graph")
     # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off)
-    # — once each since plan 89 (their through slots on their own nodes,
-    # no copies) — and the eight media channels, their bins empty (plan 32 T10:
-    # the channels' params on their own nodes); plan 35 G: the backdrop's
-    # group node too (no backdrop in the section: it idles like any group);
-    # plan 60: the grip's group node, the grip off (plan 90 H3: the dream's
-    # params' group node is gone with the `dream.*` params — the dream is an
-    # effect, its knobs `fx.dream.*`)
+    # — once each (their through slots on their own nodes, no copies) — and
+    # the eight media channels, their bins empty (the channels' params on
+    # their own nodes); the backdrop's group node too (no backdrop in the
+    # section: it idles like any group); the grip's group node, the grip off
+    # (the dream is an effect, its knobs `fx.dream.*`, with no group node of
+    # its own)
     assert sum(n.idle for n in view.nodes) == 24
     k = len({n.area for n in view.nodes if not n.idle})
     assert st["said"] == (f"laid out {len(view.nodes) - 24} nodes in {k} areas, every one "
@@ -385,7 +382,7 @@ def test_the_idle_macros_line_expands_to_show_them_and_the_picker_still_offers_t
     assert "group:cloud" not in seen                           # the geometry's stays shut
     ui_graph.toggle_idle(st, graphview.MODULATION)
     assert not set(ids) & set(drawn_ids(rig, monkeypatch))
-    # the picker (N3) still offers them, and one picked is drawn
+    # the picker still offers them, and one picked is drawn
     free = ui_graph.macros_free(rig.panel, view)
     assert {m for m in ids if m.startswith("macro.")} <= set(free)
     ui_graph.show_macro(rig.panel, "macro.7", at=(600, 40))
@@ -452,11 +449,11 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
     succ: dict = {}
     for c in (*view.cables, *lay.throughs):
         a, b = graphview.node_of(view, c.src_port), graphview.node_of(view, c.dst_port)
-        # (plan 35 G: the look-back's picture straight into the run, the
-        # run's last into All outputs — no `frame`, no end)
+        # (the delay's picture straight into the run, the run's last into
+        # All outputs — no `frame`, no end)
         if c.kind in ("render", graphview.THROUGH) and a not in hidden and b not in hidden:
             succ.setdefault(a, set()).add(b)
-    seen, todo = set(), ["render:scene"]             # (plan 36 T4: the run's head)
+    seen, todo = set(), ["render:scene"]             # (the run's head)
     while todo:
         k = todo.pop()
         if k not in seen:
@@ -488,8 +485,8 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
 
 def test_the_shader_chain_runs_left_to_right_and_never_wraps(rig):
     """The app's whole chain, laid out in full (the effects' line open):
-    the flow layout (the owner, 2026-11-19: "this graph is read from left
-    to right") wraps nothing — every row 0, no cable a return but what is
+    the flow layout (the graph is read from left
+    to right) wraps nothing — every row 0, no cable a return but what is
     kept for the next frame — every render cable runs right, the bands in
     their order (the modulation left of the picture's makers, the makers
     left of the effects, the effects left of the outputs), and no two
@@ -663,7 +660,7 @@ def test_area_titles_draw(rig, monkeypatch):
         "ctrl", ui_graph.TITLE_FLOOR * 6.0)
 
 
-# ---------------------------------------------------------------- plan 37 P3
+# ---------------------------------------------------------------- no cable runs back across areas
 
 def area_column(area):
     """An area's place left to right on the canvas (`AREAS`; *other* in the
@@ -694,23 +691,20 @@ def backward_across_areas(view):
                                   *(("fixture", n) for n in WIRED)],
                          ids=lambda t: f"{t[0]}:{t[1]}")
 def test_no_cable_runs_backwards_across_areas(rig, name):
-    """Plan 37 P3, D5 (the rules): every corpus loadable patch, and every graph
-    fixture, loaded as the loadable patch on a fresh canvas (none carries a saved
-    position): no cable runs from an area into one left of it. Before C3,
-    `acid-scene` drew `wire:acid.2>lookback/occluder` from EFFECTS back
-    into LOOK-BACK — acid.2 sits between the scene and the look-back."""
+    """Every corpus loadable patch, and every graph fixture, loaded as the
+    loadable patch on a fresh canvas (none carries a saved position): no
+    cable runs from an area into one left of it."""
     where, loadable = name
     view = (load(rig, loadable) if where == "corpus" else load_fixture(rig, loadable))["view"]
     assert backward_across_areas(view) == [], loadable
 
 
 def test_a_node_is_laid_where_its_consumers_are(rig):
-    """Plan 37 C3: an effect whose consumers sit left of the effects is laid
+    """An effect whose consumers sit left of the effects is laid
     in the leftmost of their areas that is not left of what feeds it — an
     effect fed by nothing into the faces in SCENE; one kept into a delay (a
     loop by design: the cable is not counted as a consumer) stays with the
-    effects. (Plan 90 H2: the look-back's area, where acid-scene's acid.2
-    was laid, is retired with it.)"""
+    effects."""
     from hyperspace.params import declare_delays
     spec = G.read_graph({
         "frame": "wired",
@@ -733,10 +727,10 @@ def test_a_node_is_laid_where_its_consumers_are(rig):
 
 
 def test_the_areas_run_by_primitive(rig):
-    """Plan 35 G: the areas by primitive, left to right — MEDIA, SCENE,
-    EFFECTS (plan 90 H2: the look-back's retired), OUTPUTS after the controllers, the audio and the
-    modulation. The default frame's nodes sit where the owner's words put
-    them (the camera the scene's), and no wire of it runs back."""
+    """The areas by primitive, left to right — MEDIA, SCENE, EFFECTS,
+    OUTPUTS after the controllers, the audio and the modulation. The
+    default frame's nodes sit in them (the camera the scene's), and no
+    wire of it runs back."""
     assert graphview.AREAS == (graphview.CONTROLLERS, graphview.AUDIO, graphview.MODULATION,
                                graphview.MEDIA, graphview.SCENE_AREA,
                                graphview.EFFECTS_AREA, graphview.OUTPUTS_AREA)
@@ -792,7 +786,7 @@ def test_a_blank_loadable_draws_only_the_outputs(rig, monkeypatch):
     view = st["view"]
     drawn = {n.id for n in view.nodes if n.kind in ("render", "output", "channel")
              and not n.idle}
-    # (plan 36 T3: hands 1's entry is always written, so its node is drawn)
+    # (hands 1's entry is always written, so its node is drawn)
     assert drawn == {"render:hands", "render:output.all", "render:output.1", "render:output.2"}
     chans_ = [n for n in view.nodes if n.kind == "channel"]
     assert len(chans_) == 8 and all(n.idle and n.area == graphview.MEDIA for n in chans_)
@@ -836,10 +830,10 @@ def test_the_page_draws_with_the_areas_in_every_state(rig):
 
 
 def test_a_resize_sits_by_what_it_is_made_of(rig):
-    """Plan 34 T5: a resize is media-made (`MEDIA_MADE`) as an effect is: fed
+    """A resize is media-made (`MEDIA_MADE`) as an effect is: fed
     by a channel it sits in MEDIA with what it feeds, fed by the scene it
     sits in EFFECTS — and no wire of either runs back. The canvas draws the
-    render node T4 built, not a stand-in of its own."""
+    render node of the graph, not a stand-in of its own."""
     assert not hasattr(graphview, "ResizeNode")
     assert graphview.FRAME_CLASS["resize"] is G.ResizeNode
     assert "resize" in graphview._built([G.ResizeNode("resize")])
@@ -864,7 +858,7 @@ def test_a_resize_sits_by_what_it_is_made_of(rig):
 
 def test_insert_effect_lands_where_the_cable_was_clicked(rig):
     """A cable's "insert effect ▸ <file>" puts the new node where the menu
-    opened on the cable (2026-10-26), as the picker does — not wherever the
+    opened on the cable, as the picker does — not wherever the
     layout would have flowed it."""
     st = load(rig, "party-trip")
     view = st["view"]
@@ -875,7 +869,7 @@ def test_insert_effect_lands_where_the_cable_was_clicked(rig):
 
 
 def test_backdrop_is_letterboxed_and_fixed_to_the_page():
-    """Output 1 behind the canvas (2026-10-26): fitted whole and centred in
+    """Output 1 behind the canvas: fitted whole and centred in
     the page's canvas rect, whatever the canvas's pan or zoom."""
     a, b = ui_graph.backdrop_rect((10.0, 20.0), (400.0, 400.0), (1920, 1080))
     assert a == (10.0, 20.0 + (400 - 225) / 2) and b == (410.0, 20.0 + (400 + 225) / 2)
@@ -898,7 +892,7 @@ def test_preview_is_copied_only_on_a_frame_after_the_page_asked():
 
 
 def test_two_fingers_pan_and_cmd_keeps_the_zoom():
-    """2026-10-26: a scroll over the canvas pans it (canvas units: the
+    """A scroll over the canvas pans it (canvas units: the
     zoom's pixels), ⌘ with it is the editor's zoom and pans nothing."""
     st = {"pan": (0.0, 0.0)}
     assert ui_graph.scroll_pan(st, 2.0, -1.0, 1.0, cmd=False)
@@ -929,7 +923,7 @@ def test_a_panned_canvas_moves_every_node_and_saves_where_they_lie(rig):
 
 
 def test_a_pinch_zooms_by_just_what_the_fingers_spread(monkeypatch):
-    """2026-10-26: GLFW drops the trackpad's pinch; `pinch` sums the
+    """GLFW drops the trackpad's pinch; `pinch` sums the
     magnify events once, a stale sum is dropped, and the editor's smooth
     zoom (1.1 a wheel unit) grows the picture by the magnification."""
     import math
@@ -971,7 +965,7 @@ def test_a_fractional_pan_moves_nothing_it_saves(rig):
     """A trackpad pans by fractions of a unit, and the editor floors every
     position it is given: the page pans in whole units, so a pan never
     reads back as a drag — no position is saved, however long the fingers
-    move (the owner, 2026-10-26: every node drifted toward one point)."""
+    move (else every node drifts toward one point)."""
     st = load(rig, "party-trip")
     frame(rig.panel, "graph")
     for k in range(30):
@@ -981,7 +975,7 @@ def test_a_fractional_pan_moves_nothing_it_saves(rig):
 
 
 def test_esc_closes_the_details(rig):
-    """The owner, 2026-10-26: Esc on GRAPH lets the selection go, so the
+    """Esc on GRAPH lets the selection go, so the
     node's (or bundle's) details close."""
     st = load(rig, "party-trip")
     n = next(n for n in st["view"].nodes if ui_graph.drawn_node(st, n))
@@ -1026,7 +1020,7 @@ def _press(rig, key, focus=True):
 
 @pytest.mark.parametrize("key", [imgui.Key.backspace, imgui.Key.delete])
 def test_delete_or_backspace_deletes_the_selected_node(rig, key):
-    """The owner, 2026-10-29: Delete with a node selected deletes it — a
+    """Delete with a node selected deletes it — a
     Mac's delete key (⌫, Backspace to imgui) as well as fn+⌫, the pointer
     anywhere."""
     _, m = _modifier_selected(rig)
@@ -1055,7 +1049,7 @@ def test_backspace_with_a_popup_open_deletes_nothing(rig, monkeypatch):
 # ---------------------------------------------------------------- the selection, published
 
 def test_the_panel_publishes_the_selected_node(rig):
-    """2026-10-31: the one selected node's id is on the panel for whoever
+    """The one selected node's id is on the panel for whoever
     is not the graph view (`Panel.graph_selected`, `ui_graph.publish`) —
     None until a node is selected; `Panel.select_graph_node` selects one
     from any section, the focus left where it is; `graph_selected_params` is the
@@ -1127,7 +1121,7 @@ def test_a_loadable_landing_without_the_node_lets_it_go(rig):
     assert panel.graph_selected is None and panel.graph_selected_at > at
 
 
-# ---------------------------------------------------------------- a cable that runs back (2026-11-19)
+# ---------------------------------------------------------------- a cable that runs back
 
 def test_a_sling_goes_round_the_short_way_and_clears_every_node():
     """A cable from a node back to one left of it: under (or over) every
@@ -1201,8 +1195,8 @@ def test_turbo_tidys_flames_rise_while_hovered_and_die_down_after():
 
 def test_a_drop_onto_a_cable_finds_a_sling_where_it_is_drawn():
     """A cable drawn as a sling is a drop target along the sling, not along
-    the S the widget would have drawn (review of #463: a library patch
-    dragged onto a sling missed it)."""
+    the S the widget would have drawn, so a library patch dragged onto a
+    sling lands on it."""
     c = graphview.VCable("w", "rout:a", "rin:b/image", graphview.IMAGE, kind="render")
     view = graphview.View(nodes=[graphview.VNode("render:a", "render", "a"),
                                  graphview.VNode("render:b", "render", "b")],

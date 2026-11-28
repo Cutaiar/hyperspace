@@ -1,4 +1,4 @@
-"""Plan-07 WP4c: the DAW bridge — lanes out, external lanes in, no ports.
+"""The DAW bridge — lanes out, external lanes in, no ports.
 
 The wire first (14-bit encode/decode round trip in both encodings, the
 lane value mapping), then the outbound gate (rate limit, change gating,
@@ -377,9 +377,8 @@ def test_a_dead_port_drops_both_and_retries_later(monkeypatch):
 
 
 def test_a_port_that_stays_missing_is_looked_for_at_one_pace(monkeypatch):
-    """Row 791: a look is cheap now (`midiports`' table), so a desk plugged back in late
-    comes back as fast as one just lost: every RECONNECT_S, all night. This pinned a slow
-    pace after five looks while every look made a client; that was never true of a look."""
+    """A look is cheap (`midiports` table), so a desk plugged back in late
+    comes back as fast as one just lost: every RECONNECT_S, all night."""
     from hyperspace import midi
 
     looks: list[float] = []

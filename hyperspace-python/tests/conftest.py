@@ -1,12 +1,12 @@
 """Shared fixtures.
 
-Every test runs with ``HYPERSPACE_HOME`` pointed at its own tmp_path
-(audit L7), so nothing can read or write the owner's ~/Hyperspace by
+Every test runs with ``HYPERSPACE_HOME`` pointed at its own tmp_path,
+so nothing can read or write the owner's ~/Hyperspace by
 accident — a test that needs a specific home still sets the variable
 itself, on top of this. ``library.home()`` reads the variable on every
 call, so there is no cache to clear.
 
-``owner_home`` (plan 19 WP1) is a home shaped like the owner's, for every
+``owner_home`` is a home shaped like the owner's, for every
 test that proves a rule about the owner's files "on a copy".
 """
 
@@ -33,7 +33,7 @@ _LIVE_TESTS = {
     "test_hot_reload_app.py::test_a_save_reaches_every_live_object_of_the_real_app",
     "test_media_render.py::test_a_syphon_frame_samples_through_the_fit_pass",
     "test_media_core.py::test_bad_file_is_an_error",      # polls; fails under load
-    # plan 39 T4: the real segment backends, once each on a synthetic frame
+    # the real segment backends, once each on a synthetic frame
     # (one worker at a time: torch must not share MPS with another test)
     "test_segment.py::test_vision_runs_once_on_a_synthetic_frame",
     "test_segment.py::test_vision_frees_each_jobs_memory",     # 300 Vision jobs, ~2 s
@@ -59,7 +59,7 @@ _SLOW_TESTS = {
     "test_app_boundary.py::test_the_app_exits_within_two_seconds_with_reads_and_a_transcode_stuck",
     "test_graph_legible.py::test_every_node_has_a_label_and_a_hover",
     "test_routing.py::test_every_factory_loadable_lands_the_same_values_one_frame_earlier",
-    "test_graph_delay.py::test_nothing_of_plan_33_has_an_own_size",
+    "test_graph_delay.py::test_no_earlier_fixture_has_an_own_size",
     "test_plan12_presets.py::test_each_hand_axis_moves_its_target_as_the_table_says",
     "test_migrate_library.py::test_the_real_picture_check_passes_an_old_loadable",
     "test_watchdog.py::test_a_stall_that_holds_the_gil_is_caught_by_the_c_backstop",
@@ -69,7 +69,7 @@ _SLOW_TESTS = {
     "test_loadable.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says",
 }
 
-# The sweep tier (row 870): a test that walks a whole library of content (every
+# The sweep tier: a test that walks a whole library of content (every
 # effect, knob, shape or corpus loadable patch), a long soak, or a check that a
 # finished migration still lands as the old way did. Its use is while that content
 # changes, not on every merge, so it is out of the fast tier and of `tests.yml`:
@@ -81,7 +81,7 @@ _SLOW_TESTS = {
 _SWEEP_TESTS = {
     "test_analyzer.py::test_legacy_layout_is_bit_exact",
     "test_catalog.py::test_a_catalog_shape_is_well_formed",
-    "test_catalog.py::test_a_shortlisted_polytope_has_the_counts_plan_22_measured",
+    "test_catalog.py::test_a_shortlisted_polytope_has_the_measured_counts",
     "test_deck.py::test_a_deck_beside_changes_nothing_on_air_and_lands_what_one_deck_lands",
     "test_deck.py::test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state",
     "test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did",
@@ -143,7 +143,7 @@ def pytest_configure(config):
     # (an explicit `-m` with --all still wins: only the default is lifted)
     if config.getoption("--all") and config.option.markexpr == _FAST:
         config.option.markexpr = ""
-    # Serial = signal method, workers = thread method (row 589). The thread
+    # Serial = signal method, workers = thread method. The thread
     # watchdog ends its whole process with os._exit: in a worker xdist
     # names the test, but in a serial run (`-n0`, the debugger's mode) it
     # would end the run with no summary. The signal method there fails the
@@ -166,7 +166,7 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.slow)
         if key in _SWEEP_TESTS:
             item.add_marker(pytest.mark.sweep)
-    # The longest first (row 870): `--dist load` hands tests out in this order,
+    # The longest first: `--dist load` hands tests out in this order,
     # so a 20 s test that sorts late by name starts while the quick ones fill in
     # around it, not alone at the end with every other worker idle. The times are
     # CI's (tests/ci_durations.json, `tools/ci_shard.py durations`); a test it
@@ -208,7 +208,7 @@ def pytest_runtest_protocol(item, nextitem):
     """A test marked `live` holds the machine-wide live lock
     (tests/live_lock.py) for its whole protocol — setup, call, teardown —
     so no two live tests run at once: not two workers of one run (`--dist
-    load` hands a test to any worker, row 605) and not two pytest
+    load` hands a test to any worker) and not two pytest
     processes (two sessions, two worktrees). `glfw.init()` and a camera,
     audio or HID open can block in C, not fail, while another process
     holds the window system or the device: the lock is the mitigation,
@@ -247,7 +247,7 @@ def _skipped_by_marks(item) -> bool:
 
 def _takes_the_lock(item) -> bool:
     """A live test that will run: not one its marks skip, nor one with a
-    fixture wider than the test (its setup fails it, row 605)."""
+    fixture wider than the test (its setup fails it)."""
     return (item.get_closest_marker("live") is not None and not _skipped_by_marks(item)
             and not any(_wide_fixtures(item)))
 
@@ -258,7 +258,7 @@ def pytest_runtest_setup(item):
     test (`_wide_fixtures`: it would be set up outside the lock, and is
     never set up here), then skip if the lock was not had. Per item, so
     xdist names the test and the rest of the run goes on; only tests that
-    run are checked, so a deselected tier is never looked at (row 605). A
+    run are checked, so a deselected tier is never looked at. A
     test its skip / skipif marks skip is left to the skipping plugin,
     which runs next: a skip, not an error."""
     if item.get_closest_marker("live") is None or _skipped_by_marks(item):
@@ -344,7 +344,7 @@ def _no_real_process_list(monkeypatch):
     wins). `tools/migrate_library.py --apply` asks it whether Hyperspace is
     open (`app_running`) and refuses if so, and the suite does open it:
     `test_quit_signal.py` launches the real app, which another xdist worker's
-    migration then saw and refused over (PR #458's CI, fast tier 0; on the
+    migration then saw and refused over (on the
     owner's Mac it would be the owner's own running app). Every other
     command goes through untouched."""
     import subprocess
@@ -365,7 +365,7 @@ def _no_real_midi(monkeypatch):
     open raises, unless the test patches mido itself (a later setattr wins).
     A real scan creates a CoreMIDI client, which reaches the owner's desk
     and, when CoreMIDI refuses one, aborts the process inside rtmidi where
-    no `except` can catch it (the crash of 2026-10-04 22:36). `midiports`
+    no `except` can catch it. `midiports`
     asks for no client here, and starts each test with nothing asked."""
     import mido
 
@@ -384,8 +384,8 @@ def _no_real_midi(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _no_real_hid(monkeypatch):
-    """No test reaches the machine's game controllers over hidapi (plan
-    42): `hid.available()` says no, so no pad entry makes a hub, opens a
+    """No test reaches the machine's game controllers over hidapi:
+    `hid.available()` says no, so no pad entry makes a hub, opens a
     DualSense exclusively, writes its light bar or fights a running app.
     A test that wants the hid road builds its hub over a fake enumerate
     and opener, or patches `available` back (a later setattr wins)."""
@@ -400,8 +400,8 @@ def _no_real_joysticks(monkeypatch):
     getter itself (a later setattr wins). Before GLFW is initialised the
     real getters say nothing anyway; after a test in the same worker has
     called `glfw.init()` (the real-GL ones) they read whatever pad the Mac
-    has on index 0 — a Joy-Con (L), 2026-11-03 — and a test that faked
-    the buttons but not the GUID read that pad's model (row 605)."""
+    has on index 0 — a Joy-Con (L) — and a test that faked
+    the buttons but not the GUID read that pad's model."""
     import glfw
 
     monkeypatch.setattr(glfw, "joystick_present", lambda j: False)
@@ -412,7 +412,7 @@ def _no_real_joysticks(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _renderers_draw_todays_frame(request, monkeypatch):
-    """Plan 36 T3 (W3): the app's `Renderer` starts on the empty frame
+    """The app's `Renderer` starts on the empty frame
     (`graph.EMPTY`, black) until a loadable patch's graph lands. The tests' bare
     renderers draw a scene to look at, so here — the tests' word, never the
     app's — a new one is handed today's frame as the one-way migration
@@ -428,8 +428,8 @@ def _renderers_draw_todays_frame(request, monkeypatch):
 
     def today(self, *a, **k):
         init(self, *a, **k)
-        # (plan 90 H3: the dream is an effect a graph wires, never a state a
-        # renderer is made with — today's frame, with no look-back or dream)
+        # the dream is an effect a graph wires, never a state a renderer is
+        # made with: this is the plain frame, with no look-back or dream
         self.wiring = wired_wiring(Wiring())
 
     monkeypatch.setattr(render.Renderer, "__init__", today)
@@ -437,7 +437,7 @@ def _renderers_draw_todays_frame(request, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _graph_page_starts_on_the_full_canvas(request, monkeypatch):
-    """Plan 36 T6 (D4): the GRAPH page's **preset only** chip starts lit in
+    """The GRAPH page's **preset only** chip starts lit in
     the app, hiding the controllers and modulation. The page tests look at
     the whole canvas, so theirs starts off; tests/test_graph_patch_only.py
     turns it back on."""
@@ -470,9 +470,8 @@ def leave_no_undo() -> None:
 
 
 def opened_last(home, show: str = "house"):
-    """A home whose last opened show is `show` (library.LAST_INSTALL) — what
-    the tests written against the house moods, the default show until plan
-    14 WP3 made the party show the one a fresh home opened, stand on."""
+    """A home whose last opened show is `show` (library.LAST_INSTALL): what
+    the tests written against the house moods stand on."""
     from pathlib import Path
 
     home = Path(home)
@@ -485,7 +484,7 @@ def opened_last(home, show: str = "house"):
 
 CORPUS = Path(__file__).resolve().parent / "corpus"
 # the groups the corpus holds: the twenty-five loadable patches, the three dream
-# patches of one group (plan 50: what the module presets were, under
+# patches of one group (what the module presets were, under
 # patches/dream/), and the two shows (party, house) whose banks name them
 CORPUS_GROUPS = ("loadable", "dream", "installs")
 # (each laid out as a library lays it out: `library.group_folder`, the one table)
@@ -497,7 +496,7 @@ def seed(home, *groups: str, last_show: str | None = "party"):
     and, unless `last_show` is None, name the show a launch opens
     (`library.LAST_INSTALL`) when nothing names one yet. Returns `home`.
 
-    The library has one tier since 2026-10-28: nothing ships with the app,
+    The library has one tier: nothing ships with the app,
     a fresh home is empty and opens an unsaved show. The tests written
     against the shipped loadable patches (TUMBLE, WAKE, the party show's bank…)
     stand on this seed instead — `boot_home` seeds by default."""
@@ -521,7 +520,7 @@ def seed(home, *groups: str, last_show: str | None = "party"):
     return home
 
 
-# ------------------------------------------------ plan 19: a home like the owner's
+# ------------------------------------------------ a home like the owner's
 
 # the three loadable patches `owner_home` holds, saved through `LoadedPatch.save_as`
 OWNER_LOADABLES = ("NIGHT ONE", "NIGHT TWO", "NIGHT THREE")
@@ -536,7 +535,7 @@ OWNER_SHOWS = ("mine", "party")           # each with an eight-name bank
 
 def old_shape_pads() -> list[dict]:
     """The sixteen shape pads of clip rows 4 and 5 as a loadable patch saved before
-    plan 19 WP2 holds them in its `desk` (`loadable.desk_json` of the rows
+    the desk held them (`loadable.desk_json` of the rows
     `apc40.DEFAULT_MAP` had on the patch layer): pad k of row 4 sets shape
     k, pad k of row 5 shape 8 + k."""
     from hyperspace import apc40, loadable
@@ -551,8 +550,8 @@ def old_shape_pads() -> list[dict]:
 def boot_home(home, *, corpus: bool = True):
     """The app's construction order (app.main), headless, over `home` —
     seeded with the corpus first unless `corpus` is off (`seed`: the
-    shipped loadable patches and the party show, which a fresh home then opens as
-    it did until 2026-10-28): the library, the registry, the table from
+    shipped loadable patches and the party show, which a fresh home then opens):
+    the library, the registry, the table from
     `<home>/bindings.json`, the router, the loadable patches and the startup loadable patch."""
     from types import SimpleNamespace
 
@@ -591,18 +590,18 @@ def boot_home(home, *, corpus: bool = True):
 
 
 def _with_old_pads(path, re_aimed: dict | None = None) -> None:
-    """A loadable patch file as a build from before plan 19 WP2 saved it: every one
+    """A loadable patch file as a build from before the desk held the pads saved it: every one
     of the sixteen pads of clip rows 4 and 5 has its row in `desk` — the
     old shape row, or `re_aimed` on its pad. Today's writer puts them there
     itself and the file is left alone; once the desk stops mapping those
-    pads (WP2) they are written in, in the kind's own text."""
+    pads they are written in, in the kind's own text."""
     import json
 
     from hyperspace import apc40, loadable
 
     doc = json.loads(path.read_text())
-    # (the fresh layer's device knobs, apc40.SCENE, came with plan 19 WP3:
-    # a loadable patch saved before it had none — its knobs dark, or what was learned)
+    # the fresh layer's device knobs (apc40.SCENE) are left out: a patch
+    # saved before them had none, its knobs dark or what was learned
     scene = loadable.desk_json(b for b in loadable.fresh_desk()
                              if b.kind == "cc" and b.number in apc40.DEVICE_KNOBS)
     desk = [row for row in doc.get("desk") or [] if row not in scene]
@@ -624,7 +623,7 @@ def far_pads() -> list[str]:
 
 
 def _without_bank_pads(path) -> None:
-    """A bindings.json as a build from before plan 19 WP2 wrote it: no row
+    """A bindings.json as a build from before the bank's pads wrote it: no row
     on the pads of clip rows 4 and 5 (they were the patch layer's shape
     pads, which the meta controller file never held). Today's writer puts the
     bank's sixteen rows there, so they are taken out again, in the table's
@@ -655,7 +654,7 @@ def owner_home(tmp_path):
 
 def build_owner_home(home):
     """Make `home` (a folder that does not exist yet) a home shaped like
-    the owner's after a night on the build from before plan 19, by running
+    the owner's after a night on the build from before the bank's pads, by running
     the writers (`LoadedPatch.save_as`, `Install.save`, `Bindings.write`,
     `placement.save`, `to_trash`), not by hand-written JSON, so it tracks
     the formats (tools/bank_demo.py builds its home here too):
@@ -667,7 +666,7 @@ def build_owner_home(home):
       each with a `desk` holding the sixteen shape pads of clip rows 4–5
       (`old_shape_pads`); NIGHT TWO has one of those pads re-aimed
       (`OWNER_PAD`) and a learned device knob (`OWNER_KNOB`);
-    - ``bindings.json`` as the table wrote it before plan 19 WP2 — no row
+    - ``bindings.json`` as the table wrote it before the bank's pads — no row
       on clip rows 4 and 5 (`_without_bank_pads`) — one meta row changed
       (`OWNER_ROW`);
     - ``last_show``, ``windows.json``, a ``stall.log``, a file under
@@ -698,14 +697,13 @@ def build_owner_home(home):
     r.loaded_patch.save_as(two)
     # NIGHT THREE: WAKE with its eight device knobs, the trail longer
     r.loaded_patch.load("WAKE")
-    reg["fx.trail.fade"].set_norm(0.7)            # (plan 90 H2: the look-back's trail)
+    reg["fx.trail.fade"].set_norm(0.7)            # (the look-back's trail)
     r.loaded_patch.save_as(three)
     folder = home / library.LOADABLE
     for name in OWNER_LOADABLES:
         _with_old_pads(folder / f"{library.slug(name)}.json",
                        OWNER_PAD if name == two else None)
-    # the user copy of the party show, with the eight names it had before
-    # plan 19 gave the factory one a ninth
+    # the user copy of the party show, with eight names (the factory one has nine)
     pr.load("party", startup=False)
     pr.bank[library.F_KEYS:] = [None] * (len(pr.bank) - library.F_KEYS)
     pr.save()

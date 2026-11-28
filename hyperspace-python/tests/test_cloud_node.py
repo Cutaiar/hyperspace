@@ -1,11 +1,11 @@
-"""Plan 26 A4b: the point-cloud geometry node — a cloud device's frames
-(plan 27 B4's `devices.PointCloud`, `DeviceRegistry.clouds`) drawn as
+"""The point-cloud geometry node — a cloud device's frames
+(`devices.PointCloud`, `DeviceRegistry.clouds`) drawn as
 points in the shared camera.
 
 The renderer is handed the device registry (`Renderer.cloud_source`); a
 listed `cloud` device puts a point-cloud node (`graph.PointCloud`, kind
 `cloud`) into the default scene, solid, before the see-through shape. The
-fixture recording (`tests/fixtures/clouds/knot.npz`, B4's) is played by a
+fixture recording (`tests/fixtures/clouds/knot.npz`) is played by a
 real `cloud` device from a scratch home; no sensor. The pictures with the
 shape are `tests/test_golden_frames.py`'s (`cloud/*`).
 """
@@ -92,7 +92,7 @@ def test_the_listed_roles_are_the_cloud_devices_of_the_registry(tmp_path):
 
 
 def test_the_cloud_params_are_the_looks_and_default_to_a_cloud_at_the_shapes_size():
-    """cloud.* — a patch group (plan 43 §6, plan 44 D3: how a cloud is
+    """cloud.* — a patch group (how a cloud is
     drawn is the look's, saved and landed by a loadable patch); the scale
     puts the fixture (±3 units) at about the shape's size (radius 1)."""
     from hyperspace.analysis import Analyser

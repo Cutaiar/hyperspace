@@ -1,9 +1,9 @@
-"""Plan 44 D4: deck 2 beside the first and `output.xfade`, the one mix pass.
+"""Deck 2 beside the first and `output.xfade`, the one mix pass.
 
 Headless: deck 2 over the first deck's meta controller, sources and clock; nothing
-writes it, no file moves; each deck's lanes its own (row 591); the lead's
+writes it, no file moves; each deck's lanes its own; the lead's
 meta controller offsets land the frame of its pass, a deck off air's rows on one are
-dormant and it reads this frame's value (rows 625, 650); `Fade` over stand-ins.
+dormant and it reads this frame's value; `Fade` over stand-ins.
 GL (the `ctx` fixture): xfade 1 is deck 2's bytes, 0.5 white over black is
 half within one 8-bit step, a raise in deck 2's draw costs the on-air deck
 nothing, and the mix comes before the dim.
@@ -114,7 +114,7 @@ def test_the_mix_controls_are_meta_controls_that_nothing_saves():
 
 
 def test_the_crossfader_is_the_decks_and_master_the_dim():
-    """The owner, 2026-11-04, overturning row 559: a DJ mixer's crossfader, the MASTER
+    """A DJ mixer's crossfader, the MASTER
     fader the dim, and `master.gain` on the panel with no desk row."""
     from hyperspace import apc40
 
@@ -133,7 +133,7 @@ def test_the_deck_schemes_are_the_banks_and_the_modifiers():
 
 
 def test_each_deck_has_its_own_lanes_and_the_sources_hold_none_of_them(tmp_path):
-    """Row 591, changed: two decks' LFOs and modifiers publish into their own
+    """Two decks' LFOs and modifiers publish into their own
     layers; what the panel reads between passes is its own deck's, whichever
     ran last, and the shared sources hold no deck's lanes."""
     a, b = _pair(tmp_path)
@@ -197,7 +197,7 @@ def Router_stub(src):
     return Router(Registry(), Bindings([]), sources=src)
 
 
-# ----------------------------------------------- the pass order (row 625)
+# ----------------------------------------------- the pass order
 
 def test_the_leads_offset_lands_in_the_frame_of_its_pass(tmp_path):
     a, b = _pair(tmp_path)
@@ -212,10 +212,10 @@ def test_the_leads_offset_lands_in_the_frame_of_its_pass(tmp_path):
 
 
 def test_no_deck_takes_a_row_on_a_meta_param_and_one_left_standing_is_dormant(tmp_path):
-    """Register row 743: no deck's door takes a row onto a shared meta param, so one
+    """No deck's door takes a row onto a shared meta param, so one
     loadable patch cannot reach through the room to the other. A hot reload can leave one
-    in the live table until the next load (row 745): it stays dormant off air (row 650),
-    and on the lead too since the param's flag says so (row 775)."""
+    in the live table until the next load: it stays dormant off air,
+    and on the lead too since the param's flag says so."""
     a, b = _pair(tmp_path)
     for t in (a.table, b.table):
         with pytest.raises(ValueError, match="master.gain is the meta controller's"):
@@ -368,7 +368,7 @@ def test_both_renderers_are_under_the_render_cap_and_deck_2_keeps_full_dim():
     main = SimpleNamespace(cloud_source=None, poi_source=None, bands=(0.5,), bg_alpha=0.5,
                            max_frame=(1920, 1080), dim=0.3,
                            ghost=SimpleNamespace(source=None))
-    # the meta controller's wires stand on both from `app.main` (D5c): an on-air deck with none
+    # the meta controller's wires stand on both from `app.main`: an on-air deck with none
     # takes nothing from one that has them
     r = SimpleNamespace(ghost=SimpleNamespace(source="hands"), wiring="its own", media="its own",
                         cloud_source="clouds", poi_source="poi")
@@ -732,7 +732,7 @@ def _corpus_docs() -> list[Path]:
 @pytest.mark.empty_frame
 @pytest.mark.parametrize("name", [p.stem for p in _corpus_docs()])
 def test_deck_2_at_xfade_1_is_deck_1_on_the_same_loadable_byte_for_byte(ctx, tmp_path, name):
-    """Plan 44 D4's proof: deck 2 loaded with loadable patch X, at `xfade` 1, draws
+    """Deck 2 loaded with loadable patch X, at `xfade` 1, draws
     exactly what deck 1 loaded with X draws at `xfade` 0 — through the fade's
     own road (`Fade.draw`, the mix pass), over a deck 1 on another look — and
     the on-air deck is not touched by deck 2 having drawn."""
@@ -965,7 +965,7 @@ def test_main_builds_deck_2_beside_the_first_and_points_nothing_at_it():
     calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Attribute) and n.func.attr == "beside"]
     assert len(calls) == 1
-    # (plan 44 D5a: and to the meta controller, which leaves every pointer on deck 1)
+    # (and to the meta controller, which leaves every pointer on deck 1)
     assert src.count("deck2") == (src.count("deck2.router") + src.count("deck2.targets")
                                   + src.count("deck2.learn") + src.count("deck2.reg") + 3)
     assert "MetaController(deck, deck2, players, mix=mix)" in src

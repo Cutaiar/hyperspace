@@ -1,4 +1,4 @@
-"""Plan 87 — black is clear on any picture node: the graph section's `keys`
+"""Black is clear on any picture node: the graph section's `keys`
 (`GraphSpec.keys`, `Wiring.keys`), each keyed node built through a `KeyNode`
 (`masks.KEY_FS`) — a channel keyed in its own fit pass (`media_tex.FIT_FS`) —
 its knobs `key.<node>.*` declared while it is keyed (`params.declare_keys`);
@@ -7,7 +7,7 @@ GRAPH's node menu and the MEDIA page switch it (`graphview.render_key`); and
 
 The GL half draws through the real passes on a standalone context (skips
 without one) and holds them to a numpy oracle; the channel's off pass to the
-bytes of the pass from before the plan."""
+bytes of the plain pass."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from hyperspace.params import KEY_GROUP, Kind, Registry, declare_keys, is_key_id
 
 KNOBS = ("level", "soft", "measure", "feather", "keep", "invert", "ramp")
 
-# the fit pass as it was before plan 87, word for word: a channel nothing
+# the plain fit pass, word for word: a channel nothing
 # keys must be its bytes (every saved look, every golden)
 FIT_BEFORE = """
 #version 330
@@ -84,7 +84,7 @@ def test_the_knobs_are_declared_while_a_node_is_keyed():
     assert set(got) == set(key_ids("scene")) | set(key_ids("acid.2"))
     assert key_ids("scene") == [f"key.scene.{k}" for k in KNOBS]
     level, soft, measure, feather, keep, invert, ramp = (r[i] for i in key_ids("scene"))
-    assert ramp.choices == ["smooth", "linear"] and ramp.value == 0     # (plan 90 H1)
+    assert ramp.choices == ["smooth", "linear"] and ramp.value == 0
     assert all(p.group == KEY_GROUP and p.persist and p.modulatable
                for p in (level, soft, measure, feather, keep, invert))
     assert (level.value, soft.value, feather.value) == (0.02, 0.1, 0.0)
@@ -150,7 +150,7 @@ def test_a_keyed_channel_is_keyed_in_its_own_fit_pass():
 
 
 def test_a_channel_straight_into_the_backdrop_is_keyed_too():
-    """Review of #479: the backdrop's own channel node (made apart from the
+    """The backdrop's own channel node (made apart from the
     channel's, the backdrop's fader in its fit pass) is keyed when the
     channel is, and keeps its alpha over the ground."""
     wires = (("shape", "scene.geometry"), ("scene", "backdrop.scene"),
@@ -165,7 +165,7 @@ def test_a_channel_straight_into_the_backdrop_is_keyed_too():
 
 
 def test_a_keyed_effect_keeps_its_aux():
-    """Review of #479: Blend keyed still reads its aux picture."""
+    """Blend keyed still reads its aux picture."""
     wires = (("scene", "blend.image"), ("channel.a", "blend.aux"),
              ("blend", "output.all.image"))
     nodes = [{"kind": "effect", "file": "blend"}]
@@ -176,7 +176,7 @@ def test_a_keyed_effect_keeps_its_aux():
 
 
 def test_a_keyed_chain_still_mutes_its_hands():
-    """Review of #479: a hands layer laid over the scene by a composite into
+    """A hands layer laid over the scene by a composite into
     one output, the composite (then the layer) keyed — the output's hands
     mute still reaches the composite, as unkeyed."""
     from hyperspace.outputs import Switches, View
@@ -192,7 +192,7 @@ def test_a_keyed_chain_still_mutes_its_hands():
 
 
 def test_a_keyed_node_saved_as_a_patch_spawns_keyed():
-    """Review of #479: save as patch carries a keyed member and its knobs,
+    """Save as patch carries a keyed member and its knobs,
     renamed, and a spawn lands them keyed in the host."""
     from hyperspace.patches import Host, read, spawn
     from hyperspace.routing import Bindings
@@ -220,7 +220,7 @@ def patches_lift(*a):
 
 
 def test_the_selection_shows_a_keyed_nodes_knobs(tmp_path):
-    """Review of #479: a keyed scene's and a keyed effect's knobs are on
+    """A keyed scene's and a keyed effect's knobs are on
     their own canvas nodes (`graphview.OWNERS`), and no node of their own
     appears for them."""
     from test_ui_shell import build_rig, frame
@@ -243,7 +243,7 @@ def test_the_selection_shows_a_keyed_nodes_knobs(tmp_path):
 
 
 def test_a_keyed_picture_through_a_switch_keeps_its_alpha():
-    """Review of #479 (second pass): a keyed channel picked by a switch into
+    """A keyed channel picked by a switch into
     Fade laid over another picture keeps its alpha (a switch paints its pick
     straight in); not laid over, it paints as ever."""
     nodes = [{"kind": "switch"}, {"kind": "composite"}, {"kind": "effect", "file": "fade"}]
@@ -259,7 +259,7 @@ def test_a_keyed_picture_through_a_switch_keeps_its_alpha():
 
 
 def test_a_keyed_backdrop_lays_its_scene_with_coverage():
-    """Review of #479 (second pass): the backdrop over a keyed channel lays
+    """The backdrop over a keyed channel lays
     its scene adding the scene's coverage over the channel's clear holes;
     an unkeyed backdrop lays it as it always did."""
     wires = (("shape", "scene.geometry"), ("scene", "backdrop.scene"),
@@ -271,7 +271,7 @@ def test_a_keyed_backdrop_lays_its_scene_with_coverage():
 
 
 def test_an_effects_key_toggles_are_checkboxes(monkeypatch):
-    """Review of #479 (second pass): under an effect's strip, keep colour and
+    """Under an effect's strip, keep colour and
     invert are drawn as checkboxes (`ui_graph._param_row`), never sliders —
     a slider's write refuses a toggle."""
     from types import SimpleNamespace
@@ -297,7 +297,7 @@ def test_an_effects_key_toggles_are_checkboxes(monkeypatch):
 
 
 def test_the_keyed_walk_through_switches_asks_each_switch_once(monkeypatch):
-    """Review of #479 (third pass): a keyed channel into seven stages of
+    """A keyed channel into seven stages of
     eight-input switches, each stage feeding every input of the next — the
     walk asks each switch once (a path search asked the last 8⁶ times)."""
     nodes, wires = [], []
@@ -324,7 +324,7 @@ def test_the_keyed_walk_through_switches_asks_each_switch_once(monkeypatch):
 
 
 def test_an_opaque_pick_over_a_keyed_under_covers_its_holes(ctx):
-    """Review of #479 (third pass): keyed channel A under a composite and on a
+    """Keyed channel A under a composite and on a
     switch into its over, the switch picking solid red B; that composite over
     solid blue C. Red covers A's clear holes (the over adds its coverage),
     so no blue bleeds through: red, never magenta."""
@@ -542,8 +542,8 @@ def test_a_keyed_channel_matches_its_oracle(ctx, kw):
     assert np.abs(half - _oracle(_still(), alpha=0.5, **kw)).max() <= 1.5
 
 
-def test_a_channel_nothing_keys_is_the_pass_from_before_byte_for_byte(ctx):
-    """No key (every patch before plan 87): exactly what the pass before
+def test_a_channel_nothing_keys_is_the_plain_pass_byte_for_byte(ctx):
+    """No key: exactly what the plain pass
     wrote, on a random still with its own alpha, at an opacity, in each fit."""
     from hyperspace.glsl import QUAD_VS
     from hyperspace.media_tex import fit_scale
@@ -704,7 +704,7 @@ def test_a_screen_lay_is_premultiplied_screen(ctx):
 
 
 def test_a_keyed_picture_keeps_its_alpha_through_an_effect(ctx):
-    """Review of #479: a keyed Test card through Fade (level 1, which keeps
+    """A keyed Test card through Fade (level 1, which keeps
     alpha) laid over a red channel on an opaque window: the channel shows
     where the card is black — the key is not made opaque when the card is
     painted into Fade's input."""

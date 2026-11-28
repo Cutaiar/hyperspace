@@ -1,5 +1,5 @@
 
-"""Plan 39 T3 — `cut`: picture + mask → picture (W3; decisions 1 and 6).
+"""`cut`: picture + mask → picture.
 
 `cut[.n]` takes the picture on its `image` port and the mask on its `mask`
 port: where the mask passes the picture, elsewhere cut away to transparent
@@ -9,7 +9,7 @@ nothing, 0.5 the cut part dimmed by half), `cut.invert` keeps the hole and
 cuts the rest. No mask wired, or a mask making nothing: its picture
 through, untouched. The mask is sampled bilinearly at the picture's size,
 fitted by cover, flipped for a mask whose rows are top first (`mask_of`:
-the flag T4's segment sets).
+the flag a segment mask sets).
 
 What it must keep honest: the hole is transparent before any composite;
 the under shows through it on one; the mask lands the right way up; no
@@ -178,7 +178,7 @@ def test_a_cut_is_transparent_to_laid_over_ness():
 
 
 def test_a_mask_whose_rows_are_top_first_is_flagged():
-    """The flip flag's shape (T4 sets it): a mask maker's
+    """The flip flag's shape: a mask maker's
     `rows_top_first(frame)`; none, False. `native` before `image`."""
 
     class Native(G.Node):
@@ -473,8 +473,8 @@ def test_the_mask_of_an_asymmetric_picture_lands_on_the_right_rows(ctx):
 
 
 def test_the_flip_reads_a_rows_top_first_mask_the_right_way_up(ctx):
-    """A mask uploaded from a CPU array as it is (rows top first: T4's
-    segment) passing its top half: flipped, the picture's top half stays;
+    """A mask uploaded from a CPU array as it is (rows top first, as a
+    segment mask's are) passing its top half: flipped, the picture's top half stays;
     unflipped (read as a GL pass's mask), the bottom."""
     from hyperspace.render import Renderer
 

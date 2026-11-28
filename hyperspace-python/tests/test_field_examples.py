@@ -1,6 +1,5 @@
-"""Plan 67 §9.3 — the field examples: every effect that changes for fields
-ships a loadable patch and a short Markdown beside it. The owner, 2026-11-23:
-"loadable is the SINGLE canonical location to save patches" — their home is the
+"""The field examples: every effect that changes for fields
+ships a loadable patch and a short Markdown beside it. Their home is the
 Drive library's `loadable/field-examples/`; these are the repository's copies,
 test fixtures (`tests/fixtures/field-examples/`), kept equal to the Drive's.
 
@@ -28,11 +27,11 @@ def test_each_example_has_its_markdown_and_names_itself():
     assert len(FILES) >= 3
     for p in FILES:
         doc = json.loads(p.read_text())
-        # (plan 90 H2's `stack-lookback` was saved by a build writing `/12`)
+        # (`stack-lookback` was saved by a build writing `/12`)
         assert doc["name"] == p.stem and doc["schema"] in ("hyperspace.loadable/11",
                                                            "hyperspace.loadable/12")
         assert p.with_suffix(".md").is_file(), p.stem
-        # every example wires a field into a field port, or (plan 90) a stack
+        # every example wires a field into a field port, or a stack
         assert any(w["to"].endswith((".field", ".stack")) for w in doc["graph"]["wires"]), p.stem
 
 
@@ -109,9 +108,8 @@ def test_an_example_draws_a_moved_picture(ctx):
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.stem)
 def test_no_node_of_an_example_reaches_nothing(path):
-    """The owner on the rig (2026-11-24): the FX pane said Waveform and Combine
-    "reach nothing" — it followed picture wires only, and a field ends in a
-    field port. Every node of an example reaches an output, on the canvas
+    """A field ends in a field port, so the FX pane follows field wires as well as
+    picture wires. Every node of an example reaches an output, on the canvas
     (`graphview.unreached`) and on the FX pane (`ui_fx.groups`) alike."""
     from hyperspace import graph as G
     from hyperspace import graphview, ui_fx
@@ -124,15 +122,14 @@ def test_no_node_of_an_example_reaches_nothing(path):
     assert not effects & graphview.unreached(spec)
     groups = dict(ui_fx.groups(spec))
     assert ui_fx.UNREACHED not in groups, groups
-    # (an effect's path may end at a node that is no effect — plan 90 H2's
-    # `stack-lookback`: a Fade into a Resize, a Trail into a Cut — and the pane
-    # groups it there, `→ resize`; it still reaches an output)
+    # (an effect's path may end at a node that is no effect — `stack-lookback`: a Fade into a Resize, a Trail into a Cut — and the
+    # pane groups it there, `→ resize`; it still reaches an output)
     ends = {e for k, v in groups.items() if k not in (ui_fx.UNREACHED, ui_fx.UNFED) for e in v}
     assert effects <= ends, groups
 
 
 def test_the_knob_example_draws_the_field_on_the_knob(ctx):
-    """`field-knob` (plan 67 P3): Rings into Wave's Amount at its depth moves
+    """`field-knob`: Rings into Wave's Amount at its depth moves
     the picture; with that wire gone (Amount 0, no field) Wave moves nothing."""
     from test_field_wire import _views
     from test_graph_faces import _faces, _px

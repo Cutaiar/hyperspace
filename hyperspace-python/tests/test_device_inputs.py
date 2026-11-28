@@ -1,4 +1,4 @@
-"""Plan 27 B2 — the existing inputs on the device registry.
+"""The existing inputs on the device registry.
 
 Driven through `devices.DeviceRegistry` over `[[devices]]` entries, with
 MIDI ports the tests plug in by name (mido's port lookup replaced by a
@@ -205,7 +205,7 @@ def listened(r, role: str = "launch") -> None:
 # ---------------------------------------------------------------- the qualifier
 
 def test_a_qualified_source_is_its_roles_and_adds_no_colon():
-    """`cc@<role>:<ch>:<n>` (register row 1xx): the scheme is still `cc`,
+    """`cc@<role>:<ch>:<n>`: the scheme is still `cc`,
     the role is the qualifier, the address parts are unchanged — so every
     reader that splits at the first `:` keeps working — and two rows on
     the same numbers of two devices are two controls."""
@@ -223,7 +223,7 @@ def test_a_qualified_source_is_its_roles_and_adds_no_colon():
     assert not b.overlaps(plain) and not plain.overlaps(b)
     assert b.overlaps(Binding("cc@launch:*:7", "view.speed", "abs"))
     assert b.matches("cc", 0, 7)                     # (the table picks the device: `serves`)
-    # plan 27 B6: any scheme takes the qualifier (it was MIDI's only), and
+    # any scheme takes the qualifier, and
     # the qualified head stays the Router key its lanes are read under
     h = Binding("hand@x:1", "x", "push")
     assert (h.scheme, h.device, h.head, h.bare) == ("hand", "x", "hand@x", "hand:1")
@@ -232,7 +232,7 @@ def test_a_qualified_source_is_its_roles_and_adds_no_colon():
 
 
 def test_an_unqualified_row_is_the_first_midi_roles():
-    """The rule that keeps every row written before plan 27: `cc:0:7`
+    """The rule that keeps every row written without a qualifier: `cc:0:7`
     means the first MIDI role listed — whatever profile it has — and a
     row qualified with that role's name means it too; a second role reads
     only its own qualified rows."""
@@ -331,7 +331,7 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
 
 
 def test_learn_for_the_second_desk_takes_its_fader_and_not_the_apc40(build):
-    """Learn ▸ Learn Player 1 ▸ <the second desk> (2026-11-07, the DDJ-FLX4 on the
+    """Learn ▸ Learn Player 1 ▸ <the second desk> (the DDJ-FLX4 on the
     rig): the real registry's MIDI desk keeps bare schemes and qualifies each
     message as it arrives (``cc@launch:…``), so the learn armed for it
     (``@launch``) is completed by its own fader pair — a 14-bit row — and never
@@ -355,10 +355,10 @@ def test_learn_for_the_second_desk_takes_its_fader_and_not_the_apc40(build):
 def test_the_latch_is_per_role(build):
     """SHIFT is the first role's latch (`desk.shift`): with the APC40 on
     its global layer, the second desk is still on its patch layer — its
-    rows act and a learn on it lands (D5 refuses only the APC40's). Its
+    rows act and a learn on it lands (only the APC40's is refused). Its
     layer is its own (`set_layer(…, role)`); a loadable patch load drops every
-    role to the patch layer (D4); a press and its release on the second
-    desk belong to the layer that was up at the press (D12)."""
+    role to the patch layer; a press and its release on the second
+    desk belong to the layer that was up at the press."""
     r = build(entries())
     t, shift = r.table, r.reg[SHIFT_PARAM]
     push(r, APC, note(apc40.N_SHIFT), note(apc40.N_SHIFT, 0))
@@ -386,7 +386,7 @@ def test_the_latch_is_per_role(build):
     assert lines.value is True and faces.value is False
     push(r, LAUNCH, note(50, 0))
     assert lines.value is False and faces.value is False    # each release let its own go
-    t.drop_layer()                                   # a loadable patch load: every desk back (D4)
+    t.drop_layer()                                   # a loadable patch load: every desk back
     assert t.layer_of("launch") == "preset" and t.layer_of("apc40") == "preset"
     assert shift.value is False
 
@@ -503,7 +503,7 @@ def test_schemes_wants_and_row_schemes_come_from_the_registry(build):
     assert r.devices.row_schemes() == ("cc", "note", "pitch", "pad", "hat")
     assert set(r.table.row_schemes) >= {"key", "pad", "hat", "cc", "note", "pitch"}
     assert ui.learn_wants(r.learn) == []
-    # a new device that feeds (B4's kind, here a stand-in) is armed by its role
+    # a new device that feeds (here a stand-in) is armed by its role
     class Wand(devices.Base):
         kind, schemes, feeds = "wand", ("wand1",), ("wand1",)
 
@@ -513,7 +513,7 @@ def test_schemes_wants_and_row_schemes_come_from_the_registry(build):
     r.learn.arm("view.bright", "wand1")
     assert r.learn.accepts("wand1:tilt") and not r.learn.accepts("hand:left.x")
     # a patch row on a scheme no device of this rig publishes is a dormant
-    # performer, not dropped (decision 11), and the page still offers it
+    # performer, not dropped, and the page still offers it
     r.table.add(Binding("osc:3", "view.inst_amp", "push", 0.5))
     assert r.table.owner("view.inst_amp").source == "osc:3"
     assert "osc" in ui_routing.source_schemes(r.router)
@@ -522,8 +522,8 @@ def test_schemes_wants_and_row_schemes_come_from_the_registry(build):
 # ---------------------------------------------------------------- nothing old moves
 
 def test_a_pre_run_bindings_json_and_every_loadable_load_quietly_with_two_desks(build):
-    """The acceptance's other half: a `bindings.json` written before plan
-    27 (today's factory file) loads with no note, no rewrite, nothing
+    """A `bindings.json` with no qualified rows (the factory file)
+    loads with no note, no rewrite, nothing
     said; every corpus loadable patch then loads with no desk note and no dirt
     with two desks and the pad listed; the APC40's rows are exactly the
     file's, unqualified."""
@@ -546,8 +546,8 @@ def test_a_pre_run_bindings_json_and_every_loadable_load_quietly_with_two_desks(
 
 
 def test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed(build):
-    """Plan 27 B6: a `bindings.json` written before B6 (today's factory
-    file, its pad rows unqualified) loads with two pads listed with no
+    """A `bindings.json` whose pad rows are unqualified (the factory
+    file) loads with two pads listed with no
     note, no rewrite and no dirt, and every pad row means the primary
     pad: a press on the second pad fires none of them."""
     text = routing.FACTORY_FILE.read_text()
@@ -590,11 +590,11 @@ def test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed(build)
     assert not r.notes
 
 
-# ---------------------------------------------------------------- review of PR #181
+# ---------------------------------------------------------------- layer switches per desk
 
 def test_shift_on_the_apc40_leaves_the_second_desks_caught_rows_caught(build):
-    """D7 per desk: a layer switch re-arms pickup on the faders of the desk
-    whose latch flipped (C2's `redraw(switch=True)`), never another's —
+    """A layer switch re-arms pickup on the faders of the desk
+    whose latch flipped (`redraw(switch=True)`), never another's —
     the layer serial is per role (`Bindings.layer_serial_of`)."""
     r = build(entries())
     t = r.table
@@ -612,7 +612,7 @@ def test_shift_on_the_apc40_leaves_the_second_desks_caught_rows_caught(build):
     assert r.reg[SHIFT_PARAM].value is True and t.layer_of("apc40") == "global"
     frame(r)
     assert t.layer_serial_of("launch") == serial and switches == [] and row.caught
-    # the APC40's own layered fader is re-armed by its switch (C2), as before
+    # the APC40's own layered fader is re-armed by its switch
     assert r.devices.get("apc40").io._seen[0] == t.layer_serial
     t.set_layer("global", "launch")                   # its own latch flips: it redraws
     frame(r)
@@ -621,7 +621,7 @@ def test_shift_on_the_apc40_leaves_the_second_desks_caught_rows_caught(build):
 
 
 def test_the_desk_whose_profile_wrote_the_table_owns_the_unqualified_rows(build):
-    """Orchestrator's ruling on PR #181: the unqualified rows are the first
+    """The unqualified rows are the first
     MIDI role whose profile is the table's (`bindings.json`'s "profile",
     apc40), else the first listed — a generic box listed above the APC40
     does not inherit the APC40's factory rows or SHIFT; a rig whose only

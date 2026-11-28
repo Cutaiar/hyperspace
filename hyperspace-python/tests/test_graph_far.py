@@ -27,7 +27,7 @@ def canvas(shell_rig, monkeypatch):  # noqa: F811
                         lambda s: (said.append(s), real_button(s))[1])
     monkeypatch.setattr(ui_graph.imgui, "text_disabled",
                         lambda s: (said.append(s), real_text(s))[1])
-    real_hot = ui_graph._hot_button      # (off hover a widget's words alone: #505)
+    real_hot = ui_graph._hot_button      # (off hover a widget's words alone)
     monkeypatch.setattr(ui_graph, "_hot_button",
                         lambda s, live: (live or said.append(s), real_hot(s, live))[1])
     real_moved = ui_graph._moved

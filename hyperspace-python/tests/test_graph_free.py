@@ -1,13 +1,12 @@
-"""Plan 33 G and R: the free graph's vocabulary, then the run from wires.
+"""The free graph's vocabulary, then the run from wires.
 
 New wire ends (`frame`, `fx.image`, `pattern`, `shape.faces`,
 `backdrop.image`, `switch`), a wire from a channel into an effect as a
 branch instead of a refusal, and `reaches` / `run_of` read off the wires
-(data only). Then T3: the renderer builds each pipeline's run from the
+(data only). Then the renderer builds each pipeline's run from the
 loadable patch graph's wires `frame → … → fx.image`, an effect on no wire has no
-node. Row 394 (the owner, 2026-10-25): every loadable patch, whatever its schema,
-saves as `/6` and that save is a fixed point — what replaced the
-byte-identical-to-an-older-build saves (Review Focus 1, R10). The pictures
+node. Every loadable patch, whatever its schema,
+saves as `/6` and that save is a fixed point. The pictures
 are test_golden_frames.py's.
 """
 
@@ -116,29 +115,28 @@ def test_a_switch_is_a_node_kind_that_may_stand_alone():
     assert G.SINKS == ("output", "fx", "shape", "pattern", "backdrop", "history")
 
 
-# ---------------------------------------------------------------- R: the run from wires (T3)
+# ---------------------------------------------------------------- the run from wires
 
 ROOT = Path(__file__).resolve().parents[1]
 SAVES = ROOT / "tests" / "fixtures" / "plan33-v4-saves"
-# plan 36 T3: the corpus loadable patches' sources (the corpus files are their `/7`)
+# the corpus loadable patches' sources (the corpus files are their `/7`)
 LIBRARY = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 SOURCES = {"loadable": ROOT / "tests" / "fixtures" / "presets",
            "merge-31-32": ROOT / "tests" / "fixtures" / "merge-31-32",
-           # R15 (final review): a /4 whose GRAPH layout is in the canvas's
-           # old ids (render:media.a, render:hands …), as the owner's are
+           # a /4 whose GRAPH layout is in the canvas's
+           # old ids (render:media.a, render:hands …)
            "old-layout": ROOT / "tests" / "fixtures" / "old-canvas-layout"}
-# R14 → R19: a route on each channel choice (a /4 and a /2): they load
-# with a switch (T5) and save as /6 with it (row 394)
+# a route on each channel choice (a /4 and a /2): they load
+# with a switch and save as /6 with it
 DRIVEN = ROOT / "tests" / "fixtures" / "plan33-driven"
 
 
 def test_the_wiring_holds_the_run_and_leaves_its_wires_out():
     """A section that says a run: `Wiring.run` is it, in wire order, and
-    its wires are no edge (a middle effect is not shortened to D1's
-    `after`); the faces' run is edges (T4) and a channel straight into the
+    its wires are no edge (a middle effect is not shortened to an
+    `after`); the faces' run is edges and a channel straight into the
     backdrop is the wiring's backdrop; an effect that reaches nothing has no
-    wire built. A section with no run's head says none (None: the stack,
-    until T7)."""
+    wire built. A section with no run's head says none (None)."""
     spec = G.read_graph(section(("frame", "a.image"), ("a", "b.image"), ("b", "c.image"),
                                 ("c", "fx.image"), ("media.b", "backdrop.image"),
                                 ("pattern", "kaleido.image"), ("kaleido", "shape.faces"),
@@ -159,9 +157,8 @@ def old_sources() -> list[tuple[str, Path]]:
     """Every loadable patch file this tree holds in an older schema or the newest,
     as (kind, path): the corpus's sources (dial's too), every fixture under
     tests/fixtures/presets/, merge-31-32/, old-canvas-layout/ and
-    plan33-driven/, and the bytes older builds saved, kept from the
-    byte-identical tests row 394 retired (plan33-v4-saves/: the base build's
-    `/2`–`/4` saves; plan35-v5-saves/: plan 33/34's `/5`) — `/2` to `/6`."""
+    the driven-sources folder (`DRIVEN`), and the bytes older builds saved
+    (`SAVES`: the `/2`–`/4` saves; `V5_SAVES`: the `/5` saves) — `/2` to `/6`."""
     out = [("source", p) for p in sorted(LIBRARY.glob("*.json"))]
     for kind, folder in {**SOURCES, "driven": DRIVEN, "v4-saves": SAVES,
                          "v5-saves": V5_SAVES}.items():
@@ -169,14 +166,14 @@ def old_sources() -> list[tuple[str, Path]]:
     return out
 
 
-# the bytes plan 33/34 saved for six `/5` sources (recorded by 0cbbc15) —
-# old files now, read like any other (row 394)
+# the bytes older builds saved for six `/5` sources —
+# old files, read like any other
 V5_SAVES = ROOT / "tests" / "fixtures" / "plan35-v5-saves"
 
 
 def test_every_schema_is_among_the_sources():
     """The sources cover the whole ladder a load still reads: `/2` to `/6`
-    — and (plan 39) the newest, `/7`: T0's `edges-scene` and T2's
+    — and the newest, `/7`: `edges-scene` and
     `mask-as-picture`, fixtures written in today's schema (a `matte` no
     older schema has words for) — a fixed point like any save."""
     schemas = {json.loads(p.read_text())["schema"] for _, p in old_sources()}
@@ -199,8 +196,7 @@ def _six(raw: bytes, name: str) -> dict:
 
 
 def test_every_old_loadable_saves_as_six_and_is_a_fixed_point(tmp_path):
-    """Row 394 (the owner, 2026-10-25: both Macs always on the newest
-    schema): every loadable patch — the corpus's sources and every fixture, `/2` to `/6`
+    """Every loadable patch — the corpus's sources and every fixture, `/2` to `/6`
     — loaded into a scratch library and saved untouched is
     `hyperspace.preset/6`, its graph the wired frame, no retired id in its
     values and its GRAPH layout in today's canvas ids; and that `/6`,
@@ -216,7 +212,7 @@ def test_every_old_loadable_saves_as_six_and_is_a_fixed_point(tmp_path):
 
 
 def test_the_driven_channel_sources_keep_their_switches_through_six(tmp_path):
-    """R19 (row 350): a route on `view.media` / `backdrop.channel` loads as a
+    """A route on `view.media` / `backdrop.channel` loads as a
     switch; saved, the `/6` carries the switch node, its routes on the
     select and the select at the old pick (`DRIVEN`'s two)."""
     for k, path in enumerate(sorted(DRIVEN.glob("*.json"))):
@@ -236,10 +232,10 @@ def _five_rig(tmp_path, name):
 
 
 def test_a_moved_node_in_an_old_layout_saves_in_todays_ids(tmp_path):
-    """R14, row 394: the owner's glimmer-bug lands its layout in the wired
+    """The glimmer-bug fixture lands its layout in the wired
     frame's ids; a node moved on GRAPH — one the file placed, one it had no
-    place for — saves `/6` with every key in today's ids (R15's old ids
-    below `/6` are gone with the ladder), and reads back where it was."""
+    place for — saves `/6` with every key in today's ids (the old ids
+    below `/6` are gone), and reads back where it was."""
     app = _five_rig(tmp_path, "glimmer-bug")
     pr = app.loaded_patch
     assert "render:channel.a" in pr.layout and "render:media.a" not in pr.layout
@@ -257,7 +253,7 @@ def test_a_moved_node_in_an_old_layout_saves_in_todays_ids(tmp_path):
 
 
 def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
-    """Row 394: any GRAPH edit — one plan 33's words could say (a picture
+    """Any GRAPH edit — one the free-graph words could say (a picture
     taken off output 2), a copy, `ground`, a channel into All outputs, the
     faces' pattern taken off — saves `/6` with the edited frame as it stands, and
     no `backdrop.history` (the capture wire says it)."""
@@ -271,7 +267,7 @@ def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
             "channel into All outputs": [w if w is not head else
                                          {"from": "channel.a", "to": "output.all.image"}
                                          for w in wired["wires"]],
-            # (plan 36 T4: an old file's look-back off is no look-back — the
+            # (an old file's look-back off is no look-back — the
             # faces' pattern taken off instead)
             "plain faces": [w for w in wired["wires"] if w["to"] != "shape.faces"],
             "ground": [*wired["wires"], {"from": "ground", "to": "output.3.image"}]}.items():
@@ -285,7 +281,7 @@ def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
 
 
 def test_an_untouched_corpus_loadable_saves_as_its_load(tmp_path):
-    """Row 394: party-trip untouched saves `/6`, its graph exactly the wired
+    """party-trip untouched saves `/6`, its graph exactly the wired
     frame the load landed (`free_doc`) — the frame is the save."""
     from test_plan31_wiring import make_app
 
@@ -308,7 +304,7 @@ def saved_bytes(home: Path, kind: str, path: Path) -> bytes:
 
 
 def main_run(spec) -> tuple[str, ...]:
-    """The main run of a wired frame (plan 35 T3: every load's): the
+    """The main run of a wired frame (every load's): the
     effects from the look-back into All outputs."""
     return G.run_back(spec, "output.all.image")
 
@@ -317,7 +313,7 @@ MISSING_RUN = (("frame", "foo.image"), ("foo", "acid.image"), ("acid", "fx.image
 
 
 def test_a_run_reads_through_an_effect_file_this_machine_lacks():
-    """R27: `frame → foo → acid → fx.image` with no `foo` on this machine
+    """`frame → foo → acid → fx.image` with no `foo` on this machine
     is no refused run: the section's run keeps foo (no note), and the
     renderer draws `frame → acid → fx.image`, foo dormant and named."""
     from test_graphview import views
@@ -338,9 +334,9 @@ def test_a_run_reads_through_an_effect_file_this_machine_lacks():
 
 
 def test_the_missing_effects_wires_survive_a_save(tmp_path):
-    """R27: a loadable patch whose run names `foo`, loaded on a machine without
+    """A loadable patch whose run names `foo`, loaded on a machine without
     it, loads with no note and saves its wires unchanged, so the Mac that
-    has foo still has its run (row 394: in the `/6` frame)."""
+    has foo still has its run (in the `/6` frame)."""
     from test_plan31_wiring import make_app
 
     app = make_app(tmp_path)
@@ -354,10 +350,10 @@ def test_the_missing_effects_wires_survive_a_save(tmp_path):
 
 
 def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_six(tmp_path):
-    """R19 (R14 → T5, row 350): a route on `view.media` or `backdrop.channel`
+    """A route on `view.media` or `backdrop.channel`
     loads as a switch over the eight channels into `pattern.media` /
     `backdrop.image`, the route retargeted onto its `select`, the select at
-    the old choice — and, saved untouched, the loadable patch is /6 (row 394), its
+    the old choice — and, saved untouched, the loadable patch is /6, its
     graph the switches and their wires and its routes on the selects. The
     pictures are tests/test_graph_switch.py's."""
     from test_plan31_wiring import make_app
@@ -379,7 +375,7 @@ def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_six(tmp_path):
                 assert {"from": f"channel.{c}", "to": f"{sw}.in{i}"} in free["wires"]
             assert not [w for w in free["wires"] if w["to"] == end and w["from"] != sw]
         doc = app.loaded_patch.document(name)
-        assert doc["schema"] == "hyperspace.loadable/12", name          # (row 394)
+        assert doc["schema"] == "hyperspace.loadable/12", name
         assert [n for n in doc["graph"]["nodes"] if n["kind"] == "switch"] == [
             {"kind": "switch", **({"instance": 2} if sw == "switch.2" else {})}
             for sw, *_ in switches]
@@ -391,8 +387,8 @@ def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_six(tmp_path):
 
 
 def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_six(tmp_path):
-    """R13 (row 341): an effect switched on that no wire puts in a run draws
-    nothing — a later save is /6 (as every save is, row 394), the run as it
+    """An effect switched on that no wire puts in a run draws
+    nothing — a later save is /6 (as every save is), the run as it
     was."""
     from test_plan31_wiring import make_app
 
@@ -400,11 +396,11 @@ def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_six(tmp_path)
     app.lib.load("loadable", "party-acid")
     gs = app.loaded_patch.graph
     run = main_run(gs.spec)
-    # (plan 36 T3: an effect in no run exists only where the section names
+    # (an effect in no run exists only where the section names
     # it — one added on GRAPH and left on no wire)
     assert graphview.Edit(graph=gs, push=None).add_node("effect", "palette") is None
     off = "palette"
-    assert off not in run           # (R25: the add switched it on — on, in no run)
+    assert off not in run           # (the add switched it on — on, in no run)
     app.reg[f"fx.{off}.on"].set(True)
     assert main_run(gs.spec) == run
     doc = app.loaded_patch.document("after")
@@ -444,14 +440,14 @@ def test_only_wired_effects_have_nodes(ctx, tmp_path):
 
     app, r = _loaded(ctx, tmp_path, "party-acid")
     want = main_run(app.loaded_patch.graph.spec)
-    assert want and len(want) < len(app.reg.fx_state.files)       # (plan 36 T3)
+    assert want and len(want) < len(app.reg.fx_state.files)
     run(ctx, r, views(ctx, Switches()), frames=1)
     g = r._graph
-    # (plan 35: the wired frame's end reads the run — `g.run`, no `fx` node)
+    # (the wired frame's end reads the run — `g.run`, no `fx` node)
     assert list(want) == list(g.run)
     end = g.outputs[0].inputs["image"]
     assert [e.effect for e in G._effects_of(end.inputs["image"])] == list(want)
-    # (plan 67: and Hue turn's bands — field nodes, made when Hue turn reads them)
+    # (and Hue turn's bands — field nodes, made when Hue turn reads them)
     pictures = [n.effect for n in _effect_nodes(g) if not isinstance(n, G.FieldEffect)]
     assert sorted(pictures) == sorted(want)
     assert sorted(n.effect for n in _effect_nodes(g) if isinstance(n, G.FieldEffect)) == [
@@ -483,7 +479,7 @@ def test_the_run_order_is_the_wire_order(ctx, tmp_path):
 
 def test_an_unreached_effect_is_never_run(ctx, tmp_path):
     """`media.a → acid.2.image` alone: acid.2 reaches nothing, so it has no
-    node and never runs, on or not (row 349) — and no channel is read for it."""
+    node and never runs, on or not — and no channel is read for it."""
     from test_outputs import run, views
 
     from hyperspace.outputs import Switches
@@ -502,7 +498,7 @@ def test_an_unreached_effect_is_never_run(ctx, tmp_path):
 
 
 def test_a_wired_effect_whose_file_goes_reads_through_and_returns(ctx, tmp_path):
-    """Review Focus 3: `acid.glsl` removed from the effects folder while
+    """`acid.glsl` removed from the effects folder while
     acid is wired in the run — the folder watch picks it up, the graph is
     built again with no acid node (the run reads through it: the picture is
     the run without acid), a dormant note names it, nothing raises and the
@@ -525,7 +521,7 @@ def test_a_wired_effect_whose_file_goes_reads_through_and_returns(ctx, tmp_path)
     r.wiring = wired_wiring(spec.wiring())
     vs = views(ctx, Switches())
     with_acid = run(ctx, r, vs, frames=2)[0]
-    end = r._graph.outputs[0].inputs["image"]          # (plan 35 T4: where `fx` was)
+    end = r._graph.outputs[0].inputs["image"]          # (where `fx` was)
     assert [e.effect for e in G._effects_of(end.inputs["image"])] == ["warp", "acid"]
     gone = folder / "acid.glsl"
     kept = gone.read_bytes()
@@ -553,14 +549,14 @@ def test_a_wired_effect_whose_file_goes_reads_through_and_returns(ctx, tmp_path)
     assert "acid" in st.poll() and "acid" in st.specs
     st.values["acid"]["on"] = True
     run(ctx, r, vs, frames=1)
-    end = r._graph.outputs[0].inputs["image"]          # (plan 35 T4: where `fx` was)
+    end = r._graph.outputs[0].inputs["image"]          # (where `fx` was)
     assert [e.effect for e in G._effects_of(end.inputs["image"])] == ["warp", "acid"]
     assert "acid" not in r._graph.dormant
 
 
 # ---------------------------------------------------------------- no shortcut in a free section
-# The owner, 2026-10-24: a glimmer wired only `zoomblur → glimmer.image`
-# drew on the output (split_wires shortened the wire to D1's `after
+# A glimmer wired only `zoomblur → glimmer.image`
+# must not draw on the output (a shortened wire, `after
 # zoomblur`) while GRAPH drew it faint and the FX page said "reaches
 # nothing". In a section with a `frame` run a wire is a wire: nothing comes
 # out of glimmer, so it reaches nothing and is not drawn — all three agree.
@@ -569,7 +565,7 @@ GLIMMER = SOURCES["loadable"] / "glimmer-bug.json"
 
 
 def _glimmer_section(swap: bool = False) -> dict:
-    """The owner's saved section; `swap`: `glimmer → switch.in1` in place
+    """The saved glimmer-bug section; `swap`: `glimmer → switch.in1` in place
     of `zoomblur → switch.in1`."""
     sec = copy.deepcopy(json.loads(GLIMMER.read_text())["graph"])
     if swap:

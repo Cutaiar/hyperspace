@@ -1,4 +1,4 @@
-"""The one migration's library road (plan 57 §7, §7a; rows 830–834): the new kinds, the old
+"""The one migration's library road: the new kinds, the old
 folders still read, and the tool's steps over a library shaped like the Drive."""
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def _put(path: Path, doc) -> Path:
 
 
 def _old_library(root: Path) -> Path:
-    """Shaped as the Drive was read on 2026-11-07, Icon files and all."""
+    """Shaped as the Drive library is, Icon files and all."""
     corpus = ROOT / "tests/corpus/loadable/dial.json"
     doc = {**json.loads(corpus.read_text()), "schema": "hyperspace.preset/10", "name": "TRIP"}
     _put(root / "presets/trip.json", doc)
@@ -178,7 +178,7 @@ def test_a_fresh_library_is_the_new_folders(tmp_path):
 
 
 def test_a_library_not_moved_opens_and_says_so(tmp_path):
-    """Plan 58 §2a: the new code on an old library doesn't strand it."""
+    """The new code on an old library doesn't strand it."""
     _old_library(tmp_path)
     before = _tree(tmp_path)
     lib = Library(tmp_path, period=0.0)
@@ -315,7 +315,7 @@ def test_the_app_is_seen_by_its_command_line(tool, monkeypatch):
 
 def test_the_suite_never_sees_an_app_another_test_opened(tool):
     """`test_quit_signal.py` launches the real app, and under xdist it runs beside the
-    migrations here: `--apply` saw it once and refused (PR #458's CI). conftest's
+    migrations here: `--apply` saw it once and refused. conftest's
     `_no_real_process_list` answers `ps -axo` with no rows, so a process that reads as the
     app, open for as long as this test asks, is not seen; any other command still runs."""
     import subprocess
@@ -332,7 +332,7 @@ def test_the_suite_never_sees_an_app_another_test_opened(tool):
 
 
 def test_an_old_builds_save_after_the_run_is_taken_in(tool, tmp_path, capsys):
-    """Plan 58 §2a: saving from the old build puts old files in the old folder; another run
+    """Saving from the old build puts old files in the old folder; another run
     takes them, and never over a file."""
     lib = _old_library(tmp_path / "lib")
     assert _run(tool, lib, "--apply") == 0
@@ -395,7 +395,7 @@ def test_the_install_keeps_which_list_at_once(tmp_path):
     assert "plays" not in json.loads(lib.install.path.read_text())
 
 
-# ---------------------------------------------------------------- NSEW and `bindings/4` (rows 836–839)
+# ---------------------------------------------------------------- NSEW and `bindings/4`
 
 def test_nsew_is_one_idempotent_word_map():
     from hyperspace.routing_sources import nsew
@@ -409,7 +409,7 @@ def test_nsew_is_one_idempotent_word_map():
 
 
 def test_the_d_pad_and_the_cluster_are_two_namespaces():
-    """FQ7's `pair:N/S` is the cluster; the D-pad's pair says so (row 836, rec)."""
+    """`pair:N/S` is the cluster; the D-pad's pair says so."""
     from hyperspace.routing_sources import pair_poles
     hat, face = pair_poles("hat.N/hat.S"), pair_poles("N/S")
     assert [p.source for p in hat] == ["hat:N", "hat:S"] and all(p.hat for p in hat)
@@ -428,7 +428,7 @@ def test_eleven_moves_a_pair_routes_poles():
 
 
 def test_the_owners_bindings_move_at_the_first_launch_with_a_backup(tmp_path):
-    """Plan 58 §2a: each Mac's own file, by its own road: renamed once, kept first."""
+    """Each Mac's own file, by its own road: renamed once, kept first."""
     from hyperspace import routing
     src = ROOT / "tests/fixtures/desk-findings/owner-bindings.json"
     path = tmp_path / "bindings.json"
@@ -455,7 +455,7 @@ def test_the_factory_names_no_alias_and_no_old_pad_word():
     assert all(b.target not in routing.OVERLAY_ALIASES for b in routing.Bindings.factory().bindings)
 
 
-# ---------------------------------------------------------------- review of #434
+# ---------------------------------------------------------------- skipped patches
 
 
 def test_a_skipped_patch_keeps_the_shows_it_reads(tool, tmp_path, capsys):

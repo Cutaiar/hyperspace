@@ -1,4 +1,4 @@
-"""Plan 45 V3 — the analyzer listens to the mix: the media mixer's summed
+"""The analyzer listens to the mix: the media mixer's summed
 block, pushed by its callback into the analyzer's ring as mono at 48 kHz
 (`Mixer.listen`, `AudioEngine.start_mix`, the ``audio.mix`` toggle).
 
@@ -79,7 +79,7 @@ def test_the_mix_lands_in_the_analyzers_ring_as_mono_with_the_gains_applied():
     assert FakeStream.opened == [], "no input device is grabbed for the mix"
     m.poll(DT, 0.0)
     s = opened(m, f)
-    s.pull()                                  # (V4: a new voice's first block fades in)
+    s.pull()                                  # a new voice's first block fades in
     a._ring.drain()
     out = s.pull()
     got = a._ring.drain()
@@ -189,7 +189,7 @@ def test_switching_sources_mid_run_detaches_the_mix_and_keeps_the_bands():
     assert m.mixer.tap is None and not a.on
 
 
-def test_the_mixer_without_a_listener_is_v2_unchanged():
+def test_the_mixer_without_a_listener_is_unchanged():
     m, f = heard(1, amp=0.4)
     m.poll(DT, 0.0)
     s = opened(m, f)
@@ -220,11 +220,11 @@ def test_the_mono_is_the_mean_over_however_many_channels():
     assert mx.tap_errors == 0
 
 
-def test_a_mixer_from_before_v3_learns_to_listen_after_a_hot_reload():
+def test_a_mixer_without_a_tap_attribute_learns_to_listen_after_a_hot_reload():
     mx = M.Mixer(make=lambda **kw: None)
     del mx.__dict__["tap"], mx.__dict__["_mono"]
     out = np.ones((M.BLOCK, 2), np.float32)
-    mx._callback(out, M.BLOCK, None, None)     # no tap: V2's callback, untouched
+    mx._callback(out, M.BLOCK, None, None)     # no tap: the plain callback, untouched
     assert not out.any()
     a = AudioEngine()
     assert a.start_mix(mx) and mx.tap is a._ring

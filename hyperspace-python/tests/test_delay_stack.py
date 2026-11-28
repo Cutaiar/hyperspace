@@ -1,8 +1,8 @@
-"""Plan 90 H1: a delay keeps its past frames as a stack (`stack.DelayStack`),
+"""A delay keeps its past frames as a stack (`stack.DelayStack`),
 and Read and Trail — effect files that take a stack — read it.
 
-The picture a delay makes stays last frame's (plan 34's z⁻¹, byte for byte);
-its Depth says how many of the pictures it takes (at its rate, plan 34 D)
+The picture a delay makes stays last frame's (z⁻¹, byte for byte);
+its Depth says how many of the pictures it takes (at its rate)
 it keeps for a reader. A stack port takes a delay
 and nothing else, in words. Drawn through the real renderer: a Colour
 generator whose hue moves each frame, into a delay, read back."""
@@ -158,7 +158,7 @@ def test_a_fraction_blends_the_two_frames_either_side_unless_nearest(ctx):
 
 
 def test_the_stack_keeps_the_pictures_the_delay_takes_at_its_rate(ctx):
-    # the delay's own rate (plan 34 D): every second frame — the stack keeps
+    # the delay's own rate: every second frame — the stack keeps
     # those, so one step back is two frames back
     r, s = _rig(ctx, READ, depth=4, frames=2, values={"read": {"at": 1.0}})
     got = [_draw(ctx, r, s, h, t=1.0 + i / 60) for i, h in enumerate(HUES)]
@@ -222,7 +222,7 @@ def test_a_depth_driven_down_keeps_what_the_stack_holds(ctx):
 
 
 def test_the_slit_scan_example_shows_two_moments_across_the_frame(ctx):
-    """A Line field on Read's At (plan 90: a time displace, no node of its own):
+    """A Line field on Read's At (a time displace, no node of its own):
     the left and the right of the frame show different frames."""
     section = wired(("colour", "delay.image"), ("delay", "read.stack"),
                     ("read", "output.1.image"), nodes=("colour", "read", "line"))
@@ -240,11 +240,11 @@ def test_the_slit_scan_example_shows_two_moments_across_the_frame(ctx):
     assert np.abs(left - right).max() > 60, (left, right)
 
 
-# ---------------------------------------------------------------- Devin on #519
+# ---------------------------------------------------------------- stack edge cases
 
 def test_a_keyed_delay_still_hands_its_stack_to_a_reader(ctx):
     """Black is clear on a delay wraps it in a key node; the stack port still
-    reads the delay under it (Devin on #519)."""
+    reads the delay under it."""
     section = {**READ, "keys": ["delay"]}
     r, s = _rig(ctx, section, depth=4, values={"read": {"at": 1.0}})
     got = [_draw(ctx, r, s, h, t=1.0 + i / 60) for i, h in enumerate(HUES)]
@@ -253,7 +253,7 @@ def test_a_keyed_delay_still_hands_its_stack_to_a_reader(ctx):
 
 def test_a_load_gives_back_a_stacks_room(ctx):
     """A load forgets what a stack holds and the room it took, so an old deep
-    stack never counts against the next look's budget (Devin on #519)."""
+    stack never counts against the next look's budget."""
     r, s = _rig(ctx, READ, depth=16, values={"read": {"at": 0.0}})
     for i, h in enumerate(HUES):
         _draw(ctx, r, s, h, t=1.0 + i / 60)
@@ -269,8 +269,8 @@ def test_a_load_gives_back_a_stacks_room(ctx):
 def test_each_deck_has_its_own_budget_so_one_never_starves_the_other(ctx, monkeypatch):
     """Sibling renderers (the two decks) share a GL context. Each holds at most
     `stack.BUDGET` of stacks, so a deck that filled its budget never leaves the
-    deck faded in with nothing to read (Devin on #519, twice: first the total
-    was unbounded, then one deck could take it all)."""
+    deck faded in with nothing to read (the total is bounded, and one deck cannot
+    take it all)."""
     from test_graph_faces import _fbo
 
     from hyperspace import stack
@@ -304,7 +304,7 @@ def test_each_deck_has_its_own_budget_so_one_never_starves_the_other(ctx, monkey
 
 def test_a_stack_inlet_of_a_saved_group_stays_open():
     """A group saved with Read but not its delay keeps the stack inlet, so the
-    spawned group's pin and Wire as saved can reconnect it (Devin on #519)."""
+    spawned group's pin and Wire as saved can reconnect it."""
     from hyperspace import graphview
 
     spec = _spec({"frame": "wired", "nodes": [{"kind": "effect", "file": "read"}],
@@ -316,7 +316,7 @@ def test_a_stack_inlet_of_a_saved_group_stays_open():
 
 def test_a_reader_fits_a_stack_of_another_shape_by_cover(ctx):
     """A square stack read into a wide frame is cropped, as the delay's own
-    picture is (`OWN_FIT`), never stretched (Devin on #519): a ramp across
+    picture is (`OWN_FIT`), never stretched: a ramp across
     the frame (a Line field, promoted) through a square resize reads the same
     column for column through Read at 0 as through the delay itself."""
     from test_graph_faces import _fbo, _px
@@ -342,7 +342,7 @@ def test_a_reader_fits_a_stack_of_another_shape_by_cover(ctx):
 
 def test_trail_over_takes_a_keyed_scenes_clear_black_as_clear(ctx):
     """Keyed black recorded into a stack stays see-through even in an opaque
-    window, so Trail's over does not cover older copies with it (Devin on #519)."""
+    window, so Trail's over does not cover older copies with it."""
     section = wired(("colour", "delay.image"), ("delay", "trail.stack"),
                     ("trail", "output.1.image"), nodes=("colour", "trail"))
     section["keys"] = ["colour"]
@@ -361,7 +361,7 @@ def test_trail_over_takes_a_keyed_scenes_clear_black_as_clear(ctx):
 
 def test_a_saved_stack_inlet_has_words_in_the_patch_list():
     """A patch saved with a stack inlet is listed with words for it, never a
-    KeyError that closes the browser (Devin on #519)."""
+    KeyError that closes the browser."""
     from hyperspace import graphview
 
     doc = {"ports": [{"id": "in", "type": "stack", "to": "read.stack", "was": "delay"},
@@ -371,7 +371,7 @@ def test_a_saved_stack_inlet_has_words_in_the_patch_list():
 
 
 def test_the_stack_budget_survives_a_hot_reload_of_its_module(ctx):
-    """A reload of `stack` keeps what every live stack holds counted (Devin on #519)."""
+    """A reload of `stack` keeps what every live stack holds counted."""
     import importlib
 
     from hyperspace import stack

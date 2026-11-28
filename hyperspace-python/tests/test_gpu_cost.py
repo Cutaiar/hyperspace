@@ -1,4 +1,4 @@
-"""Plan 84: GRAPH's **gpu cost** chip — every render node marked by its GPU
+"""GRAPH's **gpu cost** chip — every render node marked by its GPU
 time per frame, ranked within the frame and eased over about a second; the
 frame's total and its three costliest on a line under the head; a node that
 made nothing this frame said to have made nothing, not to cost nothing.
@@ -212,7 +212,7 @@ def _graph(*nodes, timed=()):
 
 
 def test_a_listed_node_that_asked_for_no_query_made_nothing():
-    """Devin's finding on #470: a segment switched off is still in the timer's
+    """A segment switched off is still in the timer's
     list (its median 0) but runs no pass. What ran is what asked the timer,
     not what the timer lists."""
     got = render.gpu_made(_graph("scene", "segment.1", "switch", timed=("scene", "segment.1")),
@@ -241,9 +241,8 @@ def test_the_timer_notes_every_name_that_asks_only_while_watched(ctx):
 
 
 def test_a_pass_under_a_name_of_its_own_is_its_owners():
-    """Devin's finding on #470: a delay's write is timed under a name no
-    canvas node carries; its time is its node's (plan 90 H2: the look-back's
-    capture, the other such pass, is retired)."""
+    """A delay's write is timed under a name no canvas node carries; its
+    time is its node's."""
     ms = {"delay(write)": 8.0, "scene": 1.0, "delay.2": 0.5, "delay.2(write)": 0.25}
     owner = {"delay(write)": "delay", "delay.2(write)": "delay.2"}
     assert ui_graph.fold_owners(ms, owner) == {"delay": 8.0, "scene": 1.0, "delay.2": 0.75}
@@ -283,7 +282,7 @@ def test_the_chip_is_off_by_default_and_last_on_the_head(rig, monkeypatch):
 
 @pytest.mark.parametrize("width", [820, 540])
 def test_the_chip_stays_inside_a_narrow_page(rig, monkeypatch, width):
-    """Devin's finding on #470: on a narrow controls panel the head's row of
+    """On a narrow controls panel the head's row of
     chips runs past the page's right edge; in the canvas menu it has a row of
     its own, inside the menu and the page."""
     from imgui_bundle import imgui
@@ -363,7 +362,7 @@ def test_lit_it_asks_the_renderer_and_marks_the_render_nodes(rig, monkeypatch):
 
 
 def test_a_deck_switch_starts_the_easing_again(rig):
-    """Devin's finding on #470: the easing is the renderer's, not the page's —
+    """The easing is the renderer's, not the page's —
     another deck's renderer starts from its own times, not the last deck's."""
     st = party(rig)
     st["cost"] = True

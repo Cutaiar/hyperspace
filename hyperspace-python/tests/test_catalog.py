@@ -1,5 +1,5 @@
-"""Plan 28 (spike): the catalog of closed 3D solids, the mathematical toys,
-the scenes that put several shapes in one frame, plan 22's shortlist of
+"""The catalog of closed 3D solids, the mathematical toys,
+the scenes that put several shapes in one frame, the shortlist of
 4-polytopes, and the Shape menu's groups.
 
 The solids are appended after the Klein bottle (index is identity) and are
@@ -16,7 +16,7 @@ import pytest
 
 from hyperspace import geometry as G
 
-CATALOG = list(range(26, len(G.SHAPES)))           # everything plan 28 added
+CATALOG = list(range(26, len(G.SHAPES)))           # every solid, toy and scene past the first 26 shapes
 SOLID_FAMILIES = ("Platonic solids", "Archimedean solids", "Catalan solids",
                   "Star polyhedra", "Compounds")
 SOLIDS = [i for i in CATALOG if G.SHAPES[i].family in SOLID_FAMILIES]
@@ -41,7 +41,7 @@ COUNTS = {
     "Snub icosidodecadodecahedron": (60, 180, 104),
 }
 
-# plan 22's shortlist, as it measured them (docs/plans/22-polytope-shortlist.md):
+# the 4-polytope shortlist as measured:
 # V, E, F and the faces by size
 POLYTOPES = {
     "Snub 24-cell": (96, 432, 480, {3: 480}),
@@ -103,7 +103,7 @@ def test_the_catalog_is_appended_after_the_klein_bottle():
 
 
 @pytest.mark.parametrize("name", POLYTOPES, ids=str)
-def test_a_shortlisted_polytope_has_the_counts_plan_22_measured(name):
+def test_a_shortlisted_polytope_has_the_measured_counts(name):
     # V / E / F as the shortlist checked them against a convex hull
     from collections import Counter
 

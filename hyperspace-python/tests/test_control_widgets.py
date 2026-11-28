@@ -1,4 +1,4 @@
-"""Plan 82, control widgets: the faders' shapes (unipolar, bipolar, unity,
+"""Control widgets: the faders' shapes (unipolar, bipolar, unity,
 stepped ticks) and the XY pad / XYZ volume an effect file declares with
 `@pair` / `@volume` — parsed, drawn on the fx strip, and driven by the
 mouse through tests/ui_driver.py."""
@@ -237,7 +237,7 @@ def test_the_strip_draws_no_slider_for_a_padded_param(tmp_path, monkeypatch):
         assert kx1 - kx0 == pytest.approx(2 * ui.KNOB_R)
 
 
-# ---- the review's four (Devin, 2026-11-23) ----
+# ---- review cases ----
 
 def test_a_slow_fine_drag_on_a_tapered_knob_adds_up(tmp_path, monkeypatch):
     """A ⇧-drag a few px a frame on Zoom burst's Amount (a 200-detent taper):
@@ -352,9 +352,9 @@ def test_without_the_kit_a_packed_pad_is_its_sliders(tmp_path, monkeypatch):
 
 
 def test_points_plane_sets_its_x_and_y(tmp_path, monkeypatch):
-    """Plan 67: Point, the field node a measure counts from, is a place on the
+    """Point, the field node a measure counts from, is a place on the
     frame, so its X and Y are one plane on the strip as Wave's and Prism's
-    Centre are (the owner, 2026-11-24)."""
+    Centre are."""
     assert [(p.keys, p.label) for p in FxState().files["point"].pads] == [(("x", "y"), "Point")]
     with strip(tmp_path, monkeypatch, "point") as (r, d, _st):
         x, y = r.reg["fx.point.x"], r.reg["fx.point.y"]

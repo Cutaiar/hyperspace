@@ -1,4 +1,4 @@
-"""Plan 37 C2 (P1, D2, D3): a picture node's hover gives its details, and
+"""A picture node's hover gives its details, and
 the GRAPH head's **pictures · tint cables** switch.
 
 Hovering a picture node's thumbnail says what its collapsed lines said
@@ -85,7 +85,7 @@ def test_the_page_finds_the_gpu_time_by_the_render_nodes_name(rig):
 
 
 def test_a_switch_and_an_unreached_node_say_so_on_hover():
-    """The lines a collapsed picture node lost to its thumbnail (C1) are
+    """The lines a collapsed picture node does not show beside its thumbnail are
     its hover's: a switch's pick, "reaches nothing"."""
     port = graphview.VPort("p", "select", graphview.IN, param="switch.select",
                            live=2 / len(G.SWITCH_PORTS))
@@ -109,7 +109,7 @@ def test_the_tint_switch_is_off_by_default_and_on_the_head_last(rig, monkeypatch
     labels.clear()
     frame(rig.panel, "graph")
     head = [x for x in labels if x.endswith("##graph")]
-    # after every chip the canvas menu has but plan 84's gpu cost, which follows it
+    # after every chip the canvas menu has but the gpu cost, which follows it
     assert head[-2:] == [ui_graph.TINT_LABEL, ui_graph.COST_LABEL]
     assert head.index("output behind##graph") < head.index(ui_graph.TINT_LABEL)
     # off: every picture cable plain red
@@ -327,7 +327,7 @@ def test_the_page_draws_with_the_switch_lit_and_a_thumbnail_hovered(rig, monkeyp
 # ------------------------------------------------- a menu swallows what is under it
 
 def test_a_menu_over_the_canvas_swallows_the_hover_words_under_it(rig, monkeypatch):
-    """2026-11-11, the owner: a wire's words were drawn OVER the open menu.
+    """A wire's words are not drawn OVER an open menu.
 
     The pointer resting on a row of the picker still counted as resting on
     the cable the menu was drawn across, and the words it asked for landed

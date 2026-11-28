@@ -1,16 +1,15 @@
-"""Plan 35 B, M (T2): the builder and today's frame as wires.
+"""The builder and today's frame as wires.
 
 `graph.build_graph` builds a wired frame from its wires alone — nothing
 unreached, one end (`Shown`) per picture, the mutes read per window each
-frame and never a rebuild, an effect's slots (`Slot`, plan 89) with its knobs and
-a hands mute reaching into a through chain (plan 36 T1: the stand-down
-is gone). `graphmigrate.
+frame and never a rebuild, an effect's slots (`Slot`) with its knobs and
+a hands mute reaching into a through chain (there is no stand-down). `graphmigrate.
 frame_wires` / `output_wires` write today's frame (`default_graph` from
 the switches) as those wires, and `signature` proves the two equal node
-for node over every golden case (Review Focus 1) — against the live
+for node over every golden case — against the live
 `default_graph` and against the recorded reference
 (`tests/fixtures/frame-signatures.json`, `tools/golden_frames.py
---signatures`), which T4 keeps when the switch half goes.
+--signatures`).
 
 The GL half (the mutes' pixels, the through chain, the one end) draws through
 the golden tool's rig with two synthetic hands, and skips without a
@@ -65,15 +64,15 @@ def views(n=2, **sw):
 
 def the_frame(section: dict | None = None, **kw) -> dict:
     """`section` (an old one, before the wired frame) as `migrate` will
-    land it from T3: renamed, then written as a wired frame — the step
-    before plan 36 T4's look-back split (read it with `placements`, as
+    land it: renamed, then written as a wired frame — the step
+    before the look-back split (read it with `placements`, as
     the migration does)."""
     section = section or {}
     return M.wired_section(M.renamed(section), G.read_graph(section), **kw)
 
 
 def landed(section: dict | None = None, look: str = "off", **kw) -> dict:
-    """`the_frame` with its look-back split as `look` says (plan 36 T4):
+    """`the_frame` with its look-back split as `look` says:
     the frame a load lands."""
     return M.split_lookback(the_frame(section, **kw), look)
 
@@ -213,7 +212,7 @@ def test_two_throughs_take_their_own_instances():
                         placements=True).notes == ()
 
 
-# ---------------------------------------------------------------- Review Focus 1
+# ---------------------------------------------------------------- the frame equals its wires
 
 @pytest.fixture(scope="module")
 def loader():
@@ -236,8 +235,8 @@ def test_the_wired_frame_builds_what_default_graph_builds(loader, recorded, key)
     document through the load's migration, then `wired_section` and each
     view's `output_wires`, built by `build_graph` with every mute on — node
     for node the frame `default_graph` built from the switches, as recorded
-    (`tests/fixtures/frame-signatures.json`). Plan 35 T4 deleted the
-    oracle: the file is the reference now, every case unchanged."""
+    (`tests/fixtures/frame-signatures.json`). The file is the
+    reference, every case unchanged."""
     tool = _tool()
     assert recorded is not None and key in recorded, key
     case = tool.signature_case(loader, key)
@@ -247,13 +246,13 @@ def test_the_wired_frame_builds_what_default_graph_builds(loader, recorded, key)
 
 
 def test_the_reference_is_recorded():
-    """`tools/golden_frames.py --signatures` wrote every case (T4 compares
+    """`tools/golden_frames.py --signatures` wrote every case (compared
     against the file alone)."""
     tool = _tool()
     assert set(json.loads(tool.SIGNATURES.read_text())) == set(tool.signature_keys())
 
 
-# ---------------------------------------------------------------- Review Focus 2
+# ---------------------------------------------------------------- nothing unreached is built
 
 def test_nothing_unreached_is_built():
     g = G.build_graph(views(), G.read_graph(G.read_graph({"frame": "wired"}).to_json()).wiring())
@@ -309,9 +308,8 @@ def test_a_scene_laid_over_by_a_composite_is_drawn_see_through():
 
 
 def test_a_delays_write_runs_once_after_every_end():
-    """(Plan 90 H2: the look-back's capture, which ran after every end, is
-    retired; a delay's write is the sink that keeps the frame's picture
-    for the frames after.) Each delay writes once a frame, after every end
+    """A delay's write is the sink that keeps the frame's picture
+    for the frames after. Each delay writes once a frame, after every end
     — what the windows show this frame is drawn before it is kept."""
     sec = wired(("shape", "scene.geometry"), ("scene", "output.all.image"),
                 ("channel.a", "output.2.image"), ("scene", "delay.image"),
@@ -392,7 +390,7 @@ def _px(f) -> np.ndarray:
 
 
 def _land(rig, section: dict) -> None:
-    """`section` landed through the loadable patch's graph (plan 36 T3: its effects
+    """`section` landed through the loadable patch's graph (its effects
     exist only so — `FxState.hold`), which hands the renderer its wiring."""
     spec = G.read_graph(section, effects=set(rig.fx.files))
     assert spec.notes == (), spec.notes
@@ -458,7 +456,7 @@ STAND = wired(("shape", "scene.geometry"), ("scene", "acid.image"),
               ("hands.layer", "output.all.guide"), ("scene", "composite.under"),
               ("hands.layer", "composite.over"), ("composite", "acid.slot.2.image"),
               ("acid.slot.2", "output.2.image"), ("ground", "output.2.hands"),
-              ("hands", "hands.layer.hands"),          # plan 36 T2: the layer's hands, a wire
+              ("hands", "hands.layer.hands"),          # the layer's hands, a wire
               nodes=[{"kind": "composite"}, {"kind": "effect", "file": "acid", "slots": 2}])
 
 
@@ -470,7 +468,7 @@ def _acid(rig, on: bool) -> None:
 
 def test_a_slot_reads_its_effects_knobs_when_drawn(ctx, rig):
     """With `fx.acid.on` off both of `acid`'s slots read through (no
-    pass); on, each runs its own pass (plan 89)."""
+    pass); on, each runs its own pass."""
     _land(rig, STAND)
     _acid(rig, False)
     _draw(ctx, rig, [Switches(), Switches()], frames=1)
@@ -482,7 +480,7 @@ def test_a_slot_reads_its_effects_knobs_when_drawn(ctx, rig):
 
 
 def test_a_slot_chain_shows_as_wired(ctx, rig):
-    """Plan 36 T1: output 2's picture is acid's slot 2 over the scene
+    """Output 2's picture is acid's slot 2 over the scene
     with the hands laid on, and that is what it shows every frame — acid
     off or on, a hand drawn or not: no stand-down swaps its end."""
     _land(rig, STAND)
@@ -494,7 +492,7 @@ def test_a_slot_chain_shows_as_wired(ctx, rig):
 
 
 def test_a_hands_mute_reaches_into_a_through_chain(ctx, rig):
-    """Ruling R9, plan 36 T1: a window whose hands are muted shows no hands,
+    """A window whose hands are muted shows no hands,
     even laid into its picture's through chain — the chain's composite
     lays nothing over while every window it is for is muted (a mute, read
     per frame: no rebuild). In one frame, window 2 (STAND's chain, hands
@@ -521,8 +519,7 @@ def test_a_hands_mute_reaches_into_a_through_chain(ctx, rig):
 def test_a_mute_never_reaches_a_composite_another_reader_takes():
     """A composite a delay also records (or any reader outside the
     window's chain) keeps its hands: one window's mute cannot reach
-    another's picture, nor what is kept for the frames after. (Plan 90 H2:
-    the delay where the look-back's capture was.)"""
+    another's picture, nor what is kept for the frames after."""
     d = [{"kind": "composite"}, {"kind": "delay"}]
     shared = wired(("shape", "scene.geometry"), ("composite", "delay.image"),
                    ("scene", "composite.under"), ("hands.layer", "composite.over"),
@@ -539,7 +536,7 @@ def test_a_mute_never_reaches_a_composite_another_reader_takes():
 
 
 def test_laid_on_a_second_hands_entry_reads_in_a_wired_frame():
-    """Carried from T2: in a wired frame any hands node may have a layer, so
+    """In a wired frame any hands node may have a layer, so
     `laid` sits on the entry whose layer is laid — hands 2's here (hands 1
     in the scene, hands 2 the layer laid depth-aware), migrated and read
     with no note, said back on the same entry, and built depth-aware."""
@@ -553,7 +550,7 @@ def test_laid_on_a_second_hands_entry_reads_in_a_wired_frame():
     assert {"kind": "hands", "instance": 2, "laid": "depth"} in spec.to_json()["nodes"]
     again = G.read_graph(spec.to_json())
     assert (again.laid, again.laid_on) == ("depth", 2) and again.to_json() == spec.to_json()
-    # (plan 36 T2: `laid` is hands 2's layer's own — how an output lays that
+    # (`laid` is hands 2's layer's own — how an output lays that
     # layer; this frame lays none, the hands are in the scene)
     g = G.build_graph(views(1), spec.wiring())
     assert g.outputs[0].inputs["hands"] is None and g.outputs[0].blend == "over"
@@ -570,11 +567,10 @@ def test_laid_on_a_second_hands_entry_reads_in_a_wired_frame():
 
 
 def test_the_signature_follows_every_picture_port():
-    """Before T4 deletes `default_graph`, `signature` follows every port a
+    """`signature` follows every port a
     picture comes in by — an effect's `aux`, a switch's `inN`, a
     composite's `depth`, the scene's geometry — and names it, so two
-    frames that differ only there differ. (Plan 90 H2: the look-back's
-    `occluder` is retired with it.)"""
+    frames that differ only there differ."""
     def sig(*pairs, nodes=()):
         spec = G.read_graph(wired(*pairs, nodes=nodes))
         assert not spec.notes, spec.notes
@@ -597,17 +593,16 @@ def test_the_signature_follows_every_picture_port():
 
 
 def test_the_signature_follows_what_the_sinks_read():
-    """T3 review: two frames alike but for what a delay writes (`scene` or
+    """Two frames alike but for what a delay writes (`scene` or
     `backdrop → delay.image`) differ in `signature` — the sinks are read by
-    their chains. (Plan 90 H2: the look-back's record, the other sink, is
-    retired.)"""
+    their chains."""
     head = (("shape", "scene.geometry"), ("channel.a", "backdrop.image"),
             ("scene", "backdrop.scene"), ("backdrop", "output.all.image"))
 
     def sig(*pairs, nodes=()):
         spec = G.read_graph(wired(*head, *pairs, nodes=nodes))
         assert not spec.notes, spec.notes
-        # (two windows: a wire into an output not open builds nothing, T4)
+        # (two windows: a wire into an output not open builds nothing)
         return G.signature(G.build_graph(views(2), spec.wiring()))
 
     d = [{"kind": "delay"}]
