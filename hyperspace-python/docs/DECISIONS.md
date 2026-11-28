@@ -424,6 +424,7 @@ The owner's two sentences (2026-10-27), which the plan builds on:
 | **`edges` is an effect file**, landed first. | `shaders/fx/edges.glsl` | owner (decision 7); row 446 |
 | **Plan 39 ran in parallel** with plans 37 and 38, each on its own branch. | `plans/37-38-39-orchestrator-prompt.md` | owner (decision 8); row 447 |
 | A segment's worker exists only on the program renderer; the hold's preview passes a person segment through. A held matte, cut or segment keeps its knobs for the projector. | `Renderer.segment_cfg`, `hold.HELD_GROUPS` | rows 484, 495, 496 |
+| **A hand mask** (`handmask`) makes a mask from a hands node: the closed polygon the two thumb tips and two index tips make on screen, joined round their centre, through the hands layer's camera (or the scene's, `eye`), with `grow`, `feather` and `invert`. One hand or none: it passes nothing. No loadable bump: an older build refuses the section in words. | `graph.HandMaskNode`, `graph.hand_polygon`, `masks.MaskPasses.polygon` | owner asked for it (2026-11-28); rows 1210–1214 (rec) |
 
 ## Fields (plan 67)
 
