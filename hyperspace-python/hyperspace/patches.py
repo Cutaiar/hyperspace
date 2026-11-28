@@ -75,10 +75,8 @@ frame kind only that kind's params (`_param_rows`: `rot.*` and most of
 no node's). What can be made twice is renamed as ever (hands 1 lands as
 `hands.2`); what a frame holds one of (`ONE_PER_FRAME`) keeps its name,
 and a host that already has it refuses the spawn in words, nothing landed
-(`Landing.taken`, `Landing.refusal`) — but for a kind of `REPLACEABLE`
-(none while the dream is an effect): the conflict
-sheet asks to replace the host's, whose wires and values go
-(`Landing.replacing`, `graphview.Edit.spawn`).
+(`Landing.taken`, `Landing.refusal`). Nothing is replaced: the kinds a
+host could hold a second of are numbered instead.
 """
 
 from __future__ import annotations
@@ -150,22 +148,22 @@ KEYED = "keys"
 # what is a name but no node of a wired frame (an echo pin, `fx`, `frame`)
 MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "matte", "cut",
             "segment", "hands", "layer", "guide", "scene", "shape", "backdrop", "pattern",
-            "lookback")
-# what a frame holds one of: never renamed by a spawn (`scene.2` is no node;
-# `dream.2` may be declared but no wire may touch it), so a
-# host that already has one refuses the spawn in words (`Landing.taken`).
+            "lookback", "cloud", "handmask")
+# what a frame holds one of: never renamed by a spawn (`shape.2` is no node),
+# so a host that already has one refuses the spawn in words (`Landing.taken`).
 # Hands 1 is no such thing — every other hands is a new number — nor is a
-# look-back (`lookback.2`)
-ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern")
-# of those, what the conflict sheet may replace rather
-# than refuse. None at present; a kind added here gets the sheet's row
-# and `Edit.spawn`'s door as they are, fresh values by what the node owns
-REPLACEABLE: tuple[str, ...] = ()
+# look-back (`lookback.2`), the dream (an effect), the backdrop
+# (`backdrop.2`) or the scene (`scene.2`)
+ONE_PER_FRAME = ("shape", "pattern")
+# a scene's eye's keys (`params.EYE_KEYS`, restated: patches never imports the
+# registry; tests/test_scenes_numbered.py holds the two equal)
+EYE_KEYS = ("fov", "distance", "yaw", "pitch")
 # the render nodes the GRAPH page never deletes and a patch never holds —
-# `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`) and the clouds (the meta controller's, `NOT_REMOVABLE`); the windows are
-# refused by kind, `output`. Copied, not imported (graphview is the app's);
+# `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`);
+# the windows are refused by kind, `output`. (A point cloud is the patch's own
+# node, held like a matte.) Copied, not imported (graphview is the app's);
 # tests/test_patches.py holds the two lists equal
-FIXTURE_NODES = ("camera", "cloud")
+FIXTURE_NODES = ("camera",)
 # the modulation banks a patch carries voices of, and the canvas ids
 LFO, ENV, MOD, MACRO = "lfo", "env", modmod.SCHEME, "macro"
 VOICES = (LFO, ENV)
@@ -208,7 +206,7 @@ COPY_GONE_WORDS = ("{name} is gone: an effect draws on another picture by a slot
                    "of its own; left out")
 # a node entry of a kind that is no node a section declares but names a
 # thing a patch may not hold (`check`): said as that thing
-_KIND_WORDS = {"output": WINDOW_WORDS, "camera": CAMERA_WORDS, "cloud": FIXTURE_WORDS,
+_KIND_WORDS = {"output": WINDOW_WORDS, "camera": CAMERA_WORDS,
                "channel": CHANNEL_WORDS, "media": CHANNEL_WORDS, "copy": COPY_GONE_WORDS}
 
 
@@ -467,15 +465,13 @@ def _check_group(doc: Mapping) -> list[str]:
 def _kind(name: str) -> str | None:
     """A render node name's kind as the GRAPH page reads it
     (`graphview.kind_of`, restated): a wired frame's kinds, All outputs as
-    an output, the look's camera and the meta controller's clouds."""
+    an output and the look's camera (a cloud is a wired kind)."""
     if not isinstance(name, str):
         return None
     if name == G.ALL_OUTPUTS:
         return "output"
     if name == "camera":
         return "camera"
-    if name == G.CLOUD_KIND or name.startswith(f"{G.CLOUD_KIND}."):
-        return "cloud"
     return G.wire_node_kind(name, wired=True)
 
 
@@ -674,11 +670,14 @@ def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
     restated here; tests/test_patches_frame_kinds.py holds the two equal):
     `rot.*`, `view.*` and `fx.face_map` the shape's, `pattern.*`,
     `view.pattern*` and `view.media_*` the pattern's
-    (the look-back's are its parts'). The scene has none:
-    `scene.*` is the band scene's (a shared meta group)."""
+    (the look-back's are its parts'). The first scene has none:
+    `eye.*` is the look's, and `scene.*` the band scene's (a shared meta
+    group); a scene past it (each scene a camera) carries its own eye,
+    `eye.<n>.*`."""
     kind = _kind(name)
     if kind == "scene":
-        return []
+        pre = G.eye_prefix(name)
+        return [] if pre == "eye" else [(pre, lambda key: key in EYE_KEYS)]
     if kind == "shape":
         return [("rot", _any_key), ("view", _is_shape_view_key),
                 ("fx", lambda key: key == "face_map")]
@@ -796,7 +795,11 @@ class _Renamer:
         if pre.startswith("key."):                # `key.<node>.*` by the node's name
             return f"key.{moved}" + pid[len(pre):]
         # (a member that keeps its name keeps its ids: `rot.*` is no `shape.*`)
-        return pid if moved == who else G.param_prefix(moved) + pid[len(pre):]
+        if moved == who:
+            return pid
+        if _kind(who) == "scene":                # its eye, `eye.<n>.*`
+            return G.eye_prefix(moved) + pid[len(pre):]
+        return G.param_prefix(moved) + pid[len(pre):]
 
     def canvas(self, cid: str) -> str:
         if cid.startswith("render:"):
@@ -917,12 +920,13 @@ def _port_order(p: Mapping) -> tuple[str, int, str]:
 
 def _in_order(wires: Iterable[dict]) -> tuple[dict, ...]:
     """A file's wires in `read`'s fixed order — except that the wires into a
-    many-wire port (`graph.MANY_PORTS`: the scene's geometry) keep theirs
+    many-wire port (`graph.is_many_port`: a scene's geometry) keep theirs
     among themselves, it being the draw order (the scene in a
     patch)."""
     held = list(wires)
     out = sorted(held, key=_wire_key)
-    for port in G.MANY_PORTS:
+    # (each scene's geometry, `scene.2.geometry` too)
+    for port in dict.fromkeys(w.get("to") for w in held if G.is_many_port(w.get("to"))):
         them = iter([w for w in held if w.get("to") == port])
         out = [next(them) if w.get("to") == port else w for w in out]
     return tuple(out)
@@ -1019,7 +1023,7 @@ def _macro_n(mid: Any) -> int:
 def check(doc: Any) -> list[str]:
     """The reasons `doc` is no patch this build can spawn, in words — []
     when it is one. The schema and the shape of every key; a node a patch
-    may not hold (an output, a cloud, the camera, a media channel); a port of an unknown type or onto no
+    may not hold (an output, the camera, a media channel); a port of an unknown type or onto no
     member; a wire to a node the patch lacks that no port covers; a value
     of a param no member has; a lane envelope 1–5."""
     if not isinstance(doc, Mapping):
@@ -1176,10 +1180,11 @@ def check(doc: Any) -> list[str]:
 INSIDE, CONTROL, INTO, OUT = "inside", "control", "into", "out"
 NESTED_WORDS = "{name} is a group: a group holds nodes, not groups; left out"
 # the meta controller's own render kinds, always there — its windows (an output, All
-# outputs), its media channels (this Mac's files) and its clouds — which no
-# loadable patch file holds as a node; `graphview.FIXTURE_KINDS` is this list. No group holds one either, so a group can never carry what
+# outputs) and its media channels (this Mac's files; a cloud is a patch's own
+# node) — which no loadable patch file holds as a node;
+# `graphview.FIXTURE_KINDS` is this list. No group holds one either, so a group can never carry what
 # no patch can
-FIXTURE_KINDS = ("output", "channel", "cloud")
+FIXTURE_KINDS = ("output", "channel")
 NEVER_GROUPED = FIXTURE_KINDS
 
 
@@ -1187,7 +1192,7 @@ def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
            ) -> tuple[_Members, list[str]]:
     """The members a region of GRAPH canvas ids may hold, and, in words,
     every id it may not (`lift`'s rule, and the GRAPH page's Group):
-    an output, the camera or a cloud, a media channel, a hands' layer or
+    an output, the camera, a media channel, a hands' layer or
     guide without its hands, the sequencer, a lane envelope, a node the section lacks, a modifier
     the table lacks, a group (no nesting),
     any other canvas id (a device, the analyzer: the meta controller's). Pure.
@@ -1207,7 +1212,7 @@ def groupable(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
     its modifiers, its LFOs and envelopes (the lane envelopes too) and the
     macros. Refused here only what no loadable patch holds and what a group cannot:
     the meta controller's render kinds (`FIXTURE_KINDS`: a window, All outputs, a media
-    channel, a cloud), a device, the analyzer, the sequencer, a node or
+    channel), a device, the analyzer, the sequencer, a node or
     modifier the loadable patch lacks, a group (no nesting). Whether it can be saved
     as a patch is asked at the save (`select`). Pure."""
     return _select(spec, table, node_ids, save=False)
@@ -1358,7 +1363,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
 
     Returns ``(doc, refused)``: the file's dict (``schema``, ``name`` and
     ``note`` empty, for the caller to fill) and, in words, every id it left
-    out — an output, the camera or a cloud, a media channel,
+    out — an output, the camera, a media channel,
     the sequencer, a lane envelope, a copy without its original, a hands'
     layer or guide without its hands,
     a host macro's subscriber on a member. The caller says them and saves
@@ -1387,7 +1392,9 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
         if n not in by_base.setdefault(base, []):
             by_base[base].append(n)
     for base, ns in by_base.items():
-        first = 2 if base == "hands" else 1
+        # (a numbered scene never becomes the first — its eye, `eye.<n>.*`, is
+        # its own and the first's is the look's)
+        first = 2 if base == "hands" or (_kind(base) == "scene" and 1 not in ns) else 1
         for k, n in enumerate(sorted(ns)):
             rn.render[(base, n)] = first + k
     rn.voices = {MOD: {n: k + 1 for k, n in enumerate(members.mods)},
@@ -1418,7 +1425,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
             # sits among the patch's own wires into it (absent: after them)
             nxt = next((x for x, at in crossed[k + 1:]
                         if at == INSIDE and x.dst == w.dst), None)
-            if w.dst in G.MANY_PORTS and nxt is not None:
+            if G.is_many_port(w.dst) and nxt is not None:
                 port["before"] = rn.src(nxt.src)
             ports.append(port)
         else:
@@ -1607,56 +1614,20 @@ class Landing:
     taken: tuple[str, ...] = ()
     # the members keyed (black is clear), renamed — into the host's `keys`
     keys: tuple[str, ...] = ()
-    # what replacing `replacing` costs the host and what it keeps,
-    # in words, and the host they were read off, the sheet's
-    # (`dataclasses.replace` by `ui_graph.spawn`: this module cannot see the
-    # registry; `graphview.Edit.replace_said`). `asked` is empty for a landing
-    # no sheet put a question for
-    loses: tuple[str, ...] = ()
-    keeps: tuple[str, ...] = ()
-    asked: tuple = ()
-
-    @property
-    def replacing(self) -> tuple[str, ...]:
-        """Of `taken`, what the conflict sheet may replace (`REPLACEABLE`)."""
-        return tuple(n for n in self.taken if _kind(n) in REPLACEABLE)
 
     @property
     def refusal(self) -> str | None:
         """Why this landing cannot land, in words, or None: what the loadable patch
-        has to delete first (`TAKEN_WORDS`). What it may replace (`replacing`) is
-        no refusal but a row of the sheet."""
-        nodes = [n for n in self.taken if n not in self.replacing]
-        if not nodes:
-            return None
-        return TAKEN_WORDS.format(name=self.group.get("name") or "the patch", nodes=", ".join(nodes))
-
-    def unanswered(self, choices: Mapping | None) -> str | None:
-        """The words for a landing that would replace a node nobody said to
-        (`replace_key` not in `choices`: only the sheet says it), or None. A
-        node is more than a row: a node nobody answered for is the patch's, and that stops here."""
-        left = [n for n in self.replacing if replace_key(n) not in (choices or {})]
-        if not left:
+        has to delete first (`TAKEN_WORDS`)."""
+        if not self.taken:
             return None
         return TAKEN_WORDS.format(name=self.group.get("name") or "the patch",
-                                  nodes=", ".join(left))
+                                  nodes=", ".join(self.taken))
 
 
 def node_members(names: Iterable[str]) -> _Members:
     """Render nodes `names` as members, to ask whose a param is (`owns`)."""
     return _Members(tuple(names))
-
-
-def replaceable(render: Iterable[str]) -> tuple[str, ...]:
-    """Of a patch's render nodes, those the sheet could replace in a host
-    that has them (`REPLACEABLE`)."""
-    return tuple(n for n in render if _kind(n) in REPLACEABLE)
-
-
-def replace_key(name: str) -> str:
-    """The sheet's answer "replace the host's `name`" in `Edit.spawn`'s
-    choices, beside its rows' numbers (`keep all existing` leaves it alone)."""
-    return f"replace:{name}"
 
 
 def _group_landing(p: Patch) -> Landing:
@@ -1705,8 +1676,7 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     `acid` → `acid.2` where the host has `acid`; a hands node and its layer
     and guide move together, hands 1 being always the frame's; a node a
     frame holds one of, `ONE_PER_FRAME`, keeps its name, and one the host
-    already has is said in `Landing.taken`, which refuses the landing or,
-    for the dream, makes it the sheet's to replace, `Landing.replacing`); a
+    already has is said in `Landing.taken`, which refuses the landing); a
     modifier one past the highest the host
     holds (`modifiers.next_id`); an LFO or envelope the bank's next id (its
     high-water rule; an envelope 6 or more), none when the bank is full or
@@ -1748,6 +1718,10 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
             hold.add(n)
             rn.render[(base, n)] = n
             continue
+        if _kind(name) == "scene" and n != 1:
+            # (a numbered scene lands numbered, never as the first, whose eye
+            # is the look's)
+            hold.add(1)
         new = next(k for k in range(1, len(hold) + 2) if k not in hold)
         hold.add(new)
         rn.render[(base, n)] = new
@@ -1910,7 +1884,6 @@ __all__ = [
     "is_control_source",
     "lift",
     "read",
-    "replace_key",
     "select",
     "side",
     "slug",

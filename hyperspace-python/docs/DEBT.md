@@ -27,13 +27,6 @@ fix deletes the entry and its pointers.
 - **The proper fix:** build out the palette's value output (its hue/sat/val slice and the ramp's anchors) for a lights sink, and an image-in `sample` port on the palette that sets its params from a bitmap.
 - **Cost while it stays:** the node editor cannot draw value wires between render nodes.
 
-### cloud-instances-share-params
-
-- **Where:** `hyperspace/graph.py:cloud_nodes`, `hyperspace/graph.py:PointCloud.draw`; the `cloud.*` params in `hyperspace/params.py`
-- **What it does now:** point-cloud nodes (`cloud`, `cloud.2`, ...) are all drawn from the one set of `cloud.*` view params (`ViewState.cloud_scale`, `cloud_size`, `cloud_bright`, `cloud_colors`); a second instance has no params of its own.
-- **The proper fix:** give each numbered instance its own `cloud.<n>.*` params, as hands nodes have `ghost.<n>.*`.
-- **Cost while it stays:** two clouds cannot be sized, scaled, brightened or tinted independently.
-
 ### segment-subject-mode
 
 - **Where:** `hyperspace/graph.py:SegmentNode._make` (and the mode list in the class docstring); `hyperspace/view.py:SEGMENT_MODES`

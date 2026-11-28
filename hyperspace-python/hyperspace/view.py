@@ -126,6 +126,82 @@ class MatteState:
     ramp: int = 0                # an index into `KEY_RAMPS`, the key's
 
 
+@dataclass
+class BackdropState:
+    """A backdrop past the first's alpha (`backdrop.<n>.alpha`:
+    params.declare_backdrops), read once a frame by the renderer
+    (`ViewState.backdrops`, `graph.Frame.backdrops`): how opaque the picture
+    under its scene lies. The first backdrop's is `ViewState.backdrop_alpha`
+    (`backdrop.alpha`). A value, never a rebuild."""
+
+    alpha: float = 1.0
+
+
+def eye_prefix(scene: str) -> str:
+    """Scene `scene`'s eye's params' prefix: `eye` for the first, `eye.<n>`
+    for `scene.<n>` (`params.instance_id`'s rule: the first keeps the
+    unnumbered ids)."""
+    head, _, n = scene.rpartition(".")
+    return f"eye.{n}" if head == "scene" and n.isdecimal() else "eye"
+
+
+@dataclass
+class EyeState:
+    """A scene past the first's eye (`eye.<n>.*`:
+    params.declare_scenes), read once a frame by the renderer
+    (`ViewState.eyes`, `graph.Frame.eyes`): a camera onto the one world —
+    how wide it sees, how far from the world origin it stands and its orbit
+    about it (radians, `geometry.eye_turn`), always looking at the origin. A
+    new one is the default eye, pointing at the world origin. The first scene's is the view's `eye_fov`, `eye_distance`
+    (`eye.fov`, `eye.distance`), with no orbit. A value, never a rebuild."""
+
+    eye_fov: float = EYE_FOV
+    eye_distance: float = EYE_DISTANCE
+    eye_yaw: float = 0.0
+    eye_pitch: float = 0.0
+
+
+@dataclass
+class CloudState:
+    """One point-cloud node's values (`cloud[.n].*`:
+    params.declare_clouds), read once a frame by the renderer
+    (`ViewState.clouds`, `graph.Frame.clouds`). A shape with only vertices,
+    so its pose and its copies carry the shape's own
+    names — `zoom` (its scale: `cloud.scale`, the cloud's units in the
+    world's), `yaw`, `pitch`, `pan` (world units, y down), `instances` and
+    `inst_*` — and the shape's code reads them unchanged (`field.field`,
+    `Renderer._copies_of`, `geometry.turn_matrix`). Its look: `size` a point's
+    radius in logical px, `bright`, `colors`. The defaults draw a cloud as
+    one copy at the origin, 0.3 of its units a world unit, unturned."""
+
+    size: float = 2.0            # a point's radius, logical px
+    scale: float = 0.3           # the cloud's units → world units (shape radii)
+    bright: float = 1.0          # × the point's colour
+    colors: bool = True          # the cloud's own colours; off (or none): white
+    yaw: float = 0.0             # its turn, as camera.yaw / pitch turn the shape
+    pitch: float = 0.0
+    pan: list[float] = field(default_factory=lambda: [0.0, 0.0])
+    instances: int = 1           # its copies, as the shape's (view.instances …)
+    inst_layout: int = 0
+    inst_fit: bool = False
+    inst_spacing: float = 1.0
+    inst_persp: float = 0.5
+    inst_motion: int = 0
+    inst_amp: float = 0.25
+    inst_rate: float = 1.0
+    inst_phase: float = 0.0      # inst_rate integrated by the host (`ViewState.integrate`)
+
+    @property
+    def zoom(self) -> float:
+        """Its scale, by the shape's name for it (`field.field` reads `zoom`)."""
+        return self.scale
+
+    @property
+    def screen_strokes(self) -> bool:
+        """A point's size is in px whatever its copy's scale (`_copies_of`'s pad)."""
+        return True
+
+
 # Black is clear: what a keyed node measures a pixel's brightness
 # by — the largest of r, g, b, or Rec. 709 luma — by index (`key.<node>.measure`)
 KEY_MEASURES = ("peak", "luma")
@@ -166,6 +242,32 @@ class CutState:
 
     invert: bool = False
     amount: float = 1.0
+
+
+# the hand mask (`handmask[.n]`): the camera its hands are seen through — the
+# hands layer's (the meta controller's reference eye, where a hands layer laid
+# over a picture draws them) or the scene's (the loadable patch's eye, where
+# hands wired into the scene draw)
+HANDMASK_EYES = ("layer", "scene")
+HANDMASK_GROW = 64.0      # the most px a hand mask grows (or shrinks) its polygon by
+HANDMASK_FEATHER = 32.0   # the most px a hand mask's soft edge spans
+
+
+@dataclass
+class HandMaskState:
+    """One hand mask's values (`handmask[.n].*`: params.declare_handmasks),
+    read once a frame by the renderer (`ViewState.handmasks`,
+    `graph.Frame.handmasks`): `eye` an index into `HANDMASK_EYES` (whose
+    camera the fingertips are projected through), `grow` px the polygon is
+    pushed out (negative: pulled in), `feather` the soft edge's width in px
+    (0: a one-pixel anti-aliased edge), `invert`. The defaults pass the
+    quadrilateral the thumbs and index fingers make, as the hands layer
+    shows them. A value, never a rebuild."""
+
+    eye: int = 0
+    grow: float = 0.0
+    feather: float = 0.0
+    invert: bool = False
 
 
 # A segment's modes — a person model (the worker's), a
@@ -262,13 +364,6 @@ class ViewState(writes.Observed):
     # calibration is fitted to (ghost.calibration)
     eye_fov: float = EYE_FOV           # degrees across the shorter side
     eye_distance: float = EYE_DISTANCE  # world units from the origin
-    # the point clouds (cloud.* — meta controller, graph.PointCloud):
-    # how a recorded or live cloud is drawn in the shared camera. Nothing
-    # reads them until a `cloud` device is listed
-    cloud_size: float = 2.0      # a point's radius, logical px
-    cloud_scale: float = 0.3     # the cloud's units → world units (shape radii)
-    cloud_bright: float = 1.0    # × the point's colour
-    cloud_colors: bool = True    # the cloud's own colours; off (or none): white
     instances: int = 1           # synchronized copies, laid out by inst_layout; 0 draws nothing
     # 0 grid, 1 hex (a honeycomb spiral), 2 ring; 3–8 the 3D lattices: cubic,
     # bcc, fcc, hcp, hex prism, diamond (field.py)
@@ -315,12 +410,26 @@ class ViewState(writes.Observed):
     # each cut node's values (`cut[.n].*`, declared from the
     # loadable patch's graph: params.declare_cuts) — cut name → its state
     cuts: dict[str, CutState] = field(default_factory=dict)
+    # the hand masks' values (`handmask[.n].*`, declared from the loadable
+    # patch's graph: params.declare_handmasks) — hand mask name → its state
+    handmasks: dict[str, HandMaskState] = field(default_factory=dict)
     # each keyed node's black is clear (`key.<node>.*`, declared from
     # the loadable patch's graph `"keys"`: params.declare_keys) — node → its state
     keys: dict[str, KeyState] = field(default_factory=dict)
     # each segment node's values (`segment[.n].*`, declared from
     # the loadable patch's graph: params.declare_segments) — segment name → its state
     segments: dict[str, SegmentState] = field(default_factory=dict)
+    # each point-cloud node's look, pose and copies (`cloud[.n].*`,
+    # declared from the loadable patch's graph: params.declare_clouds) — cloud
+    # name → its state
+    clouds: dict[str, CloudState] = field(default_factory=dict)
+    # each backdrop past the first's alpha (`backdrop.<n>.alpha`,
+    # declared from the loadable patch's graph: params.declare_backdrops)
+    backdrops: dict[str, BackdropState] = field(default_factory=dict)
+    # each scene past the first's eye (`eye.<n>.*`, declared
+    # from the loadable patch's graph: params.declare_scenes) — scene name → its
+    # eye; the first scene's is this view's `eye_*`
+    eyes: dict[str, EyeState] = field(default_factory=dict)
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference
@@ -337,6 +446,8 @@ class ViewState(writes.Observed):
         each frame, the phase is (t + k·dt) · rate at a constant rate."""
         self.inst_phase = (t * self.inst_rate) % INST_PERIOD
         self.media_phase = (t * self.media_rate) % MEDIA_PERIOD
+        for c in self.clouds.values():         # each cloud's copies, as the shape's
+            c.inst_phase = (t * c.inst_rate) % INST_PERIOD
 
     def integrate(self, dt: float) -> None:
         """The frame() angle update: ang[p] += dt·speed·RATE[p]·rate[p].
@@ -357,6 +468,8 @@ class ViewState(writes.Observed):
         the wall clock they replace did."""
         self.inst_phase = (self.inst_phase + dt * self.inst_rate) % INST_PERIOD
         self.media_phase = (self.media_phase + dt * self.media_rate) % MEDIA_PERIOD
+        for c in getattr(self, "clouds", {}).values():   # as the shape's
+            c.inst_phase = (c.inst_phase + dt * c.inst_rate) % INST_PERIOD
         if self.three_d != self.held:
             R = rot_matrix(self.ang)
             T = rot_matrix([*self.ang[:3], 0.0, 0.0, 0.0])

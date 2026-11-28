@@ -180,7 +180,9 @@ scene as the refused thing now name what still is.
 the owner; hand checks 500–502, group BQ. **Hot reload is enough**; no schema
 moves, no param renamed, stacked on P1.
 
-What changed in the build:
+What changed in the build (**retired 2026-11-28**, register row 1200: plan 90 H3 left no
+replaceable kind, and the owner chose numbered copies, plan 92, over a replace row; the
+machinery below is gone):
 
 - **The sheet's row** (row 661). `patches.REPLACEABLE` is `("dream",)`;
   `Landing.replacing` is what of `taken` it may replace, and `Landing.refusal`

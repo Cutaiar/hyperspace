@@ -94,11 +94,17 @@ ELEVEN = 11
 TEN = 10
 # `/12` is `/11` with no copy node — an effect that draws on another
 # picture does it by a slot of its own (`"slots"` on its entry, wires into
-# `<effect>.slot.<k>.image` and out of `<effect>.slot.<k>`). What every save
-# writes; `/11` and older are read through `twelve` (`slots_of_copies`)
+# `<effect>.slot.<k>.image` and out of `<effect>.slot.<k>`); `/11` and
+# older are read through `twelve` (`slots_of_copies`)
 TWELVE_SCHEMA = f"{LOADABLE_KIND}/12"
 TWELVE = 12
-SAVE_SCHEMA = TWELVE_SCHEMA
+# `/13` is `/12` with the point cloud the patch's own node — declared
+# by an entry (`{"kind": "cloud", "device": <role>}`), seen where a wire puts
+# it in a scene. What every save writes; `/12` and older are read through
+# `thirteen`, which makes the clouds the meta controller drew into nodes
+THIRTEEN_SCHEMA = f"{LOADABLE_KIND}/13"
+THIRTEEN = 13
+SAVE_SCHEMA = THIRTEEN_SCHEMA
 BUS_KEY = "bus"
 # the keys `/10` retired: the module labels and the desk templates
 TEN_RETIRED = ("modules", "desk_template")
@@ -908,9 +914,10 @@ def _output_wires_into(section: dict, n: int, shows: Shows) -> dict:
 # The edges a wired frame's builder read by name — the faces
 # the pattern, the look-back the scene's cover, a layer and a guide their
 # hands node, a composite and an output the scene's depth for the hands'
-# `laid: depth` — are ports now, and a frame from before says each as the
+# `laid: depth` — are ports, and an older frame says each as the
 # wire it stood for (`drawn_edges`), so it draws what it drew. (The meta controller's
-# own edge, a cloud in the scene, is the meta controller's wire: `graph.cloud_wire`.)
+# own edge, a cloud in the scene, is the meta controller's wire in a file before `/13`:
+# `thirteen` makes each a node and a wire of the patch's own.)
 
 DEPTH_PIN = "scene.depth"
 COVER_PIN = "scene.cover"
@@ -3379,6 +3386,112 @@ def dreams(doc: dict, specs: Specs | None = None) -> tuple[dict, list[str]]:
     return out, notes
 
 
+# ---------------------------------------------------------------- the clouds made nodes
+#
+# Before `/13` a loadable patch drew one point cloud per cloud device this Mac
+# listed (kinds `cloud` and `kinect`, in list order: `cloud`, `cloud.2` …), in
+# its scene, by the meta controller's wire `cloud[.n] → scene.geometry`, unless
+# its `bus` cut that wire; the clouds shared one look (`cloud.size`, `.scale`,
+# `.bright`, `.colors`). `thirteen` says that as the patch's own: an entry and
+# a wire per cloud it drew, first into the scene (the clouds were its first
+# geometry), the first cloud's look copied onto each later one's, the cut
+# cloud wires dropped — a cut wire stays cut: no node, no wire.
+
+OLD_CLOUD_LOOK = ("size", "scale", "bright", "colors")
+CLOUDS_MIGRATED_NOTE = ("{old} migrated to {new}: {clouds} the meta controller drew "
+                        "{are} the patch's own now, wired into the scene — save to keep it")
+CLOUD_ROWS_NOTE = ("{rows} drove the clouds' shared look: each cloud has its own "
+                   "knobs now, and the rows stay on cloud's — learn {others} too to drive them "
+                   "alike")
+
+
+def _names_scene(section: Any) -> bool:
+    """Whether a wired section names the scene (an entry or a wire's end)."""
+    if not isinstance(section, dict):
+        return False
+    if any(isinstance(e, dict) and e.get("kind") == "scene" for e in section.get("nodes") or ()):
+        return True
+    return any(isinstance(w, dict) and ("scene" in (str(w.get("from", "")).partition(".")[0],
+                                                    str(w.get("to", "")).partition(".")[0]))
+               for w in section.get("wires") or ())
+
+
+def thirteen(doc: dict, clouds: tuple[str, ...] | list[str] = ()) -> tuple[dict, list[str], int]:
+    """An older loadable patch (before `/13`) as its `/13` reads it
+    — pure, one way, on load. `clouds` are the cloud devices' roles this Mac
+    lists, in list order (`graph.cloud_roles`): the clouds the meta
+    controller drew in the file's scene. For each whose wire its `bus` did
+    not cut, while its section names the scene: an entry naming the device and
+    the wire into `scene.geometry`, first of the scene's geometry; the
+    first cloud's look (`cloud.size` …) copied onto each later cloud's. Every
+    cloud wire in `bus.cut` is dropped, and with no cloud in the section the
+    shared look's values with it. The schema is left to the ladder
+    (`forward`). (the document, the notes, the clouds made)"""
+    if not isinstance(doc, dict):
+        return doc, [], 0
+    got = doc.get(BUS_KEY)
+    bus: dict = got if isinstance(got, dict) else {}
+    cut = G.BusCuts.read(bus).cut
+    old_cut = {w for w in cut if G.is_old_cloud_wire(w)}
+    section = doc.get("graph")
+    out = dict(doc)
+    if old_cut:
+        rest = G.BusCuts(frozenset(cut - old_cut)).to_json()
+        if rest:
+            out[BUS_KEY] = {**bus, **rest}
+        else:
+            out.pop(BUS_KEY, None)
+    made: list[str] = []
+    if isinstance(section, dict) and section.get("frame") == "wired" and _names_scene(section):
+        nodes = list(section.get("nodes") or [])
+        wires = list(section.get("wires") or [])
+        held = {G.split_instance(G.cloud_name(int(e.get("instance", 1))))[1]
+                for e in nodes if isinstance(e, dict) and e.get("kind") == "cloud"
+                and isinstance(e.get("instance", 1), int)}
+        add_nodes, add_wires = [], []
+        for i, role in enumerate(clouds):
+            n = i + 1
+            name = G.cloud_name(n)
+            if G.Wire(name, "scene.geometry") in old_cut or n in held:
+                continue
+            add_nodes.append(G.CloudAt(n, str(role)).to_json())
+            add_wires.append(_w(name, "scene.geometry"))
+            made.append(name)
+        if made:
+            out["graph"] = {**section, "nodes": [*nodes, *add_nodes],
+                            "wires": [*add_wires, *wires]}
+    notes: list[str] = []
+    graph = out.get("graph")
+    declared = {G.cloud_name(e.get("instance", 1)) for e in
+                ((graph.get("nodes") or ()) if isinstance(graph, dict) else ())
+                if isinstance(e, dict) and e.get("kind") == "cloud"
+                and isinstance(e.get("instance", 1), int)}
+    values = doc.get("values")
+    if isinstance(values, dict) and any(f"cloud.{k}" in values for k in OLD_CLOUD_LOOK):
+        values = dict(values)
+        # the shared look onto each cloud made but the first (whose ids it is)
+        for name in made:
+            if name == G.cloud_name(1):
+                continue
+            for k in OLD_CLOUD_LOOK:
+                if f"cloud.{k}" in values and f"{name}.{k}" not in values:
+                    values[f"{name}.{k}"] = values[f"cloud.{k}"]
+        if G.cloud_name(1) not in declared:
+            # (no first cloud draws in it, nor does one after this step: the shared
+            # look it carries, saved from `/10` on, belongs to no node — dropped quietly)
+            values = {k: v for k, v in values.items()
+                      if k not in {f"cloud.{x}" for x in OLD_CLOUD_LOOK}}
+        out["values"] = values
+    others = [m for m in made if m != G.cloud_name(1)]
+    if others:
+        rows = sorted({str(r.get("target")) for key in _ROW_LISTS
+                       for r in (doc.get(key) or []) if isinstance(r, dict)
+                       and str(r.get("target", "")) in {f"cloud.{k}" for k in OLD_CLOUD_LOOK}})
+        if rows:
+            notes.append(CLOUD_ROWS_NOTE.format(rows=", ".join(rows), others=", ".join(others)))
+    return out, notes, len(made)
+
+
 # ---------------------------------------------------------------- the one ladder
 
 # what a load says of a file naming a desk template (retired;
@@ -3417,14 +3530,16 @@ def eleven(doc: dict) -> dict:
 
 
 def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any = None,
-            look: dict | None = None, cuts: Any = None) -> Forward:
+            look: dict | None = None, cuts: Any = None, clouds: tuple[str, ...] = ()) -> Forward:
     """The one ladder for a whole loadable patch (the steps a load runs,
     in order, each only for a file older than it): before `/7` the one-way
     migration (`seven`, said), before `/9` the eye and the camera's GRAPH
     place the open show held (`nine`), before `/10` the look made whole
     (`ten`: the show's hands' and clouds' looks and its bus cuts, the
     module labels and the desk template's name dropped — the template
-    said), before `/11` the kind's new word (`eleven`), and — first, before
+    said), before `/11` the kind's new word (`eleven`), before `/13` the clouds
+    the meta controller drew made nodes of the patch's own (`thirteen`;
+    `clouds` this Mac's cloud devices' roles; said when it made any), and — first, before
     any step reads the section — before `/12` its copies made slots of
     their effects (`twelve`; said when there were any); last, at
     any version, a Hue cycle made Hue turn and its bands' field nodes
@@ -3445,12 +3560,12 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
         migrate_notes += slot_notes
         if doc is not was:
             migrated = SLOTS_MIGRATED_NOTE.format(old=str(doc.get("schema")),
-                                                  new=TWELVE_SCHEMA)
+                                                  new=THIRTEEN_SCHEMA)
     if version is None or version < SEVEN:
         old = str(doc.get("schema"))
         doc, seven_notes = seven(doc, specs)
         migrate_notes += seven_notes
-        migrated = MIGRATED_NOTE.format(old=old, new=TWELVE_SCHEMA)
+        migrated = MIGRATED_NOTE.format(old=old, new=THIRTEEN_SCHEMA)
     if version is None or version < NINE:
         doc = nine(doc, eye, camera_at)
     if version is None or version < TEN:
@@ -3463,8 +3578,15 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
             if isinstance(doc.get("values"), dict) else set()
     if version is None or version < ELEVEN:
         doc = eleven(doc)
-    if version is None or version < TWELVE:
-        doc = {**doc, "schema": TWELVE_SCHEMA}
+    if version is None or version < THIRTEEN:
+        old = str(doc.get("schema"))
+        doc, cloud_notes, n = thirteen(doc, tuple(clouds))
+        migrate_notes += cloud_notes
+        if n and not migrated:
+            migrated = CLOUDS_MIGRATED_NOTE.format(
+                old=old, new=THIRTEEN_SCHEMA, are="is" if n == 1 else "are",
+                clouds="the point cloud" if n == 1 else f"the {n} point clouds")
+        doc = {**doc, "schema": THIRTEEN_SCHEMA}
     # Hue cycle retired, whatever the version (keyed on the file)
     doc, hue_notes = hue_turns(doc)
     migrate_notes += hue_notes

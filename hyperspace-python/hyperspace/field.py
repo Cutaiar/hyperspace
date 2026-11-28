@@ -378,7 +378,9 @@ def field(s, w: float, h: float, *, radius_px: float | None = None,
     on screen (logical px), its scale against the shape at zoom 1, and its
     alpha. Ordered far to near; copies wholly off screen are dropped when
     `radius_px` (the shape's projected radius at zoom 1) is given. Fit
-    gives each copy room for its widest pose and `pad_px` round it. No
+    gives each copy room for its widest pose and `pad_px` round it — the
+    widest being `s.inst_extent` cells at zoom 1 when the view says it (a
+    point cloud's own size), else any shape's (`SHAPE_EXTENT`). No
     copies is (0, 4).
 
     One copy with fit off is the camera alone: centre + pan, scale zoom."""
@@ -394,7 +396,8 @@ def field(s, w: float, h: float, *, radius_px: float | None = None,
     cell0 = CELL * min(w, h)                    # a cell at zoom 1, px
     # the widest a copy draws at scale 1, in cells — never under one, so a
     # fitted copy keeps the gap it has a cell from its neighbour
-    size = max(1.0, (SHAPE_EXTENT * cell0 + 2.0 * max(pad_px, 0.0)) / cell0)
+    extent = float(getattr(s, "inst_extent", SHAPE_EXTENT))
+    size = max(1.0, (extent * cell0 + 2.0 * max(pad_px, 0.0)) / cell0)
     ph = float(s.inst_phase)
     mode, amp = int(s.inst_motion), float(s.inst_amp)
     if n == 1 and not fit:

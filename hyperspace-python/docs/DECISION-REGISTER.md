@@ -694,10 +694,10 @@ here; overturn → the change, then the same.
 | 658 | Wave 3 P1: a patch's single-instance node the host already has (`patches.ONE_PER_FRAME`: scene, shape, backdrop, pattern, dream) refuses the whole spawn in words, nothing landed, no sheet — the dream's is now "replace the host's dream" (row 661); hands 1 lands as the next hands, a look-back as the next look-back | 498 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; built as recommended |
 | 659 | Wave 3 P1: what a frame kind carries is its own params, the canvas's owners (`patches._param_rows`): `rot.*`, most of `view.*` and `fx.face_map` the shape's; `pattern.*`, `view.pattern*`, `view.media_*` the pattern's; `dream.*` split by key between a look-back (`LOOKBACK_KEYS`) and the dream; `scene.*` no node's. The spin's pose stays the host's. A hands' layer or guide needs its hands at a **save**, in words; a file an older build saved with `hands.2.layer` alone still reads and spawns as it did. A second dream (`dream.2`) is refused at a save and at a read, and never renumbered onto `dream`. An inlet into `scene.geometry` keeps its draw order (the port's optional `before`) | 497, 499 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; built as recommended |
 | 660 | Wave 3 P1: the "empty frame" row 641 left open — a whole preset lifted and spawned into an empty frame is that frame (proved over the corpus, hands one number on), but `Presets.load_doc` stays the replace landing, and no preset file is spawned directly (save it as a patch). A new preset holds the scene chain, so a whole-frame patch is refused there in words | — | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; the literal merge not built |
-| 661 | Wave 3 P2: a spawn holding a dream into a host with one is a row of the conflict sheet, "replace the host's dream": one press (**Replace and spawn**), one undo step, what the host's loses in words. No two-way row, Cancel being what keeps the preset's; **keep all existing** answers only the controls. Scope: the dream alone (`patches.REPLACEABLE`), the same door open to the other single-instance kinds. A dream only the output hold keeps stays refused in the hold's words | 500 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; built as recommended |
-| 662 | Wave 3 P2: what a replaced dream loses and keeps — its entry, every wire touching it and its place in a group go, as a delete takes them, and nothing is attached by itself (D2; **wire as saved** puts it on the host's picture); its values are the patch's over fresh; a macro's **base** subscribers on those params let go, said, since they would overwrite them at the next re-landing; routes, desk rows and depth subscribers on its params stay and drive the patch's dream, the sheet's own rows answering any that collide. A sheet whose preset changed under it refuses, nothing landed | 500, 501 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; built as recommended |
+| 661 | *Retired by row 1200 (2026-11-28).* Wave 3 P2: a spawn holding a dream into a host with one is a row of the conflict sheet, "replace the host's dream": one press (**Replace and spawn**), one undo step, what the host's loses in words. No two-way row, Cancel being what keeps the preset's; **keep all existing** answers only the controls. Scope: the dream alone (`patches.REPLACEABLE`), the same door open to the other single-instance kinds. A dream only the output hold keeps stays refused in the hold's words | 500 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; built as recommended |
+| 662 | *Retired by row 1200 (2026-11-28).* Wave 3 P2: what a replaced dream loses and keeps — its entry, every wire touching it and its place in a group go, as a delete takes them, and nothing is attached by itself (D2; **wire as saved** puts it on the host's picture); its values are the patch's over fresh; a macro's **base** subscribers on those params let go, said, since they would overwrite them at the next re-landing; routes, desk rows and depth subscribers on its params stay and drive the patch's dream, the sheet's own rows answering any that collide. A sheet whose preset changed under it refuses, nothing landed | 500, 501 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; built as recommended |
 | 663 | Wave 3 P2: the dream owns its params — `graphview.OWNERS` splits `dream.*` by key as `patches._param_rows` does, a look-back's `LOOKBACK_KEYS` on that look-back (`dream.2.fade` on `lookback.2`) and the rest on the dream, and `ui_graph.node_params` the same. A section with no such node leaves them on `group:dream`, as any param of a node the section lacks. No param renamed, no schema moved, no saved value touched | 502 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; built as recommended |
-| 664 | Wave 3 P2: a splice onto a cable of the dream being replaced is refused in words before the sheet (the cable goes with the dream, so the patch would be wired to what it took out); a splice onto any other cable replaces and splices in one step. The dream buffer is not cleared by a replace: the old picture fades under the new dream's speed | 500 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; built as recommended |
+| 664 | *Retired by row 1200 (2026-11-28).* Wave 3 P2: a splice onto a cable of the dream being replaced is refused in words before the sheet (the cable goes with the dream, so the patch would be wired to what it took out); a splice onto any other cable replaces and splices in one step. The dream buffer is not cleared by a replace: the old picture fades under the new dream's speed | 500 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; built as recommended |
 | 665 | Wave 3 P3: the take-over chip under **wire as saved**, drawn only while a press of the plain chip would refuse a taken port this one could take; its label names each cut, a line each, up to three, then the count; one press, one undo step, its result drawn, the cut said after; the cut's source stays on the canvas, not re-wired | 503 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; the chip is row 524's answer, the details built as recommended |
 | 666 | Wave 3 P3: what the chip does not take — a taken inlet is no open pin, so a hand's wire stays; `scene.geometry` takes many, so nothing is cut and `before` holds the draw order; a pin refused for another reason ("no node tripcolour") stays refused beside a take-over; the rig's bus cable is not a cut; a cut the read would refuse draws no chip | 504 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; built as recommended |
 | 667 | Wave 3 P3: a press is judged against what the chip said as the mouse went down; if the section or the plan has moved since, it refuses in words and nothing is cut | 505 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; built as recommended |
@@ -1029,6 +1029,26 @@ here; overturn → the change, then the same.
 | 1184 | Old dream presets (`patches/dream/`, the retired `dream` group's) are retired: left on disk, never listed or opened, said once by the library (`library.RETIRED_MODULES`, `DREAM_RETIRED`) | 973 | owner — 2026-11-27 (plan 90 Q33) |
 | 1185 | The LOOKBACK page is retired into the FX pane: the dream's knobs are its effect strip; what its hook says (no worker, waiting, one live dream, its size) is its node's words on GRAPH | 969 | owner — 2026-11-26 (plan 90 Q21) |
 | 1186 | Time Displace is Read with a field on At (plan 90 §4.8): no node or file of its own. #488's shader, kept as a test fixture over the delay's stack, equals `Line → Read.at` to within 2 levels wherever its age is one the stack holds; younger than the newest frame #488 blended toward the picture now, which a stack holds none of — Read reads its newest, and a slit-scan wanting now composites the picture. #488 closed | 976 | owner — 2026-11-26 (plan 90 Q13) |
+| 1200 | Wave 3 P2's "replace the host's dream" sheet row is retired with its machinery (`patches.REPLACEABLE`, `Landing.replacing`, `Edit.replace_said` and helpers, the sheet's replace rows): no kind is given it. The scene, shape, backdrop and pattern keep refusing a second in words until plan 92 numbers them (the owner: no "only one" rule for these) | — | owner — 2026-11-28 |
+| 1201 | The point cloud is the show's node, a shape with only vertices (plan 93): added from GRAPH, numbered like every node, saved in the frame and in patches, deleted like any; its device named by hand on its node (nothing picked when a device connects; an absent one draws nothing and says so); seen only where `cloud.<n> → scene.geometry` is wired; params numbered as every node's, declared and dropped as the frame names them; the shape's pose and copies by the shape's code; old shows draw as before | 977, 978, 979 | owner — 2026-11-28 (plan 92 §7.1) |
+| 1202 | A cloud's device is a word on its entry (`{"kind": "cloud", "device": "scan"}`, written only when set), picked on its node's menu (device ▸: this Mac's cloud and Kinect roles, and none) — the way an effect's entry carries its `slots` — not a param | 977 | (rec) — pending the owner |
+| 1203 | The loadable patch goes `/12` → `/13`, and the migration (`graphmigrate.thirteen`) uses the cloud devices this Mac lists at load (`tools/migrate_library.py`: the library's device list, else the config's seed): the old standing wire left no trace in a file, so a file with no cloud node could not be told from a new one without a bump. A file opened where no cloud is listed gains none (it drew none), and its shared cloud look, belonging to no node, is dropped | 979 | (rec) — pending the owner |
+| 1204 | A cloud's copies are the shape's rows (`Renderer._copies_of`, field path), one draw of the cloud per copy, its scale the row's (× `cloud.scale`, the shape's zoom) and its brightness × the row's alpha — the points stay opaque, as the solid hands. Fit gives each copy room for the cloud's own reach (its turned box's farthest corner × `field.SHAPE_EXTENT`, `field.field`'s `inst_extent`), as it gives a shape room for any shape's | 978 | (rec) — pending the owner |
+| 1205 | A cloud has the shape's home pose (`yaw`, `pitch`, `pan.*`, `scale`) and no world offset of its own: plan 59's grab and physics move the shape's object only, as before | 978 | (rec) — pending the owner |
+| 1206 | Migrated clouds past the first take the old shared look's values (`cloud.size` … copied to `cloud.<n>.*`); a route or desk row on the shared look stays on the first cloud's id, said in the load's notes (`CLOUD_ROWS_NOTE`) — a row is not duplicated behind the owner | 979 | (rec) — pending the owner |
+| 1207 | No `hyperspace.patch` bump: a patch fragment never held a cloud, so nothing old needs reading; an older build reading a fragment that holds one refuses the entry in words — both Macs run one build | — | (rec) — pending the owner |
+| 1208 | The first save over a loadable patch from before `/13` keeps it beside itself (`<file>.bak-v12-clouds`, `routing.backup`; no backup, no write), on top of the trash copy every overwrite makes. The 61 checked-in `/12` files had their schema line moved and the unused shared cloud look dropped; the Kinect demo (`loadable/kinect/kinect-mirror.json`) got its cloud node naming `room` | 979 | (rec) — pending the owner |
+| 1209 | **Open**: whether a cloud device that connects should be offered on a cloud node that names none (a chip, never a pick). Built: nothing is offered — the owner's "manual configuration is fine for now" | 977 | (rec) — open, for the owner |
+| 1210 | A **hand mask** node (`handmask`, `handmask.2` …): a hands node in on its `hands` port, a mask out — the closed polygon the two thumb tips and two index tips make on screen, at the frame's size. Only a hands node may be wired in (refused in words otherwise); the hands need not be drawn anywhere for the mask to follow them. On GRAPH under masks ▸ | 980 | owner asked for it (2026-11-28); the shape (rec) — pending the owner |
+| 1211 | The four fingertips are joined in order **round their centre**, not in a fixed order (left thumb → left index → right index → right thumb), so the polygon never crosses itself however the hands turn. The pass fills even-odd, so it takes any order and up to `masks.MAX_POLYGON` (8) vertices | 980 | (rec) — pending the owner |
+| 1212 | The fingertips are projected through the **hands layer's camera** by default (`handmask.eye` layer: the reference eye, where hands laid over a picture are drawn), or the scene's (`eye` scene: the patch's eye, for hands wired into the scene) — so the mask lands on the hands as they are seen | 981 | (rec) — pending the owner |
+| 1213 | With **no polygon** (one hand, none, a fingertip behind the eye, nothing wired in) the mask is still made and passes nothing (everything when inverted), so a cut by it cuts its picture away rather than showing it whole; the node says why. The mask fades with the fainter hand. Its knobs: `eye`, `grow` ±64 px, `feather` 0–32 px (a one-pixel anti-aliased edge at 0), `invert` — values on the signed distance, no blur pass | 980, 981 | (rec) — pending the owner |
+| 1214 | No `hyperspace.loadable` bump for the new node kind: an older build reading a patch that holds a hand mask refuses its graph section in words and draws it black (plan 39's precedent) — both Macs run one build | — | (rec) — pending the owner |
+| 1215 | Plan 92 phase 1, any number of backdrops: the first keeps `backdrop.alpha` on `ViewState` (a static param, always there); `backdrop.<n>` (n ≥ 2) is declared by its entry and built by the first's own path (a channel straight in its own keyed channel node, `channel.a(backdrop.2)`; any other picture laid at its alpha), its alpha `backdrop.<n>.alpha` on a `BackdropState` (`declare_backdrops`); the picker, the starter and a spawn take the next number; no schema bump (an older build refuses the entry in words) | 982 | (rec) — the owner's "no only-one rule" (2026-11-28) built; the details pending |
+| 1216 | Plan 92 phase 2, the one world and a second camera: `scene.<n>` declared by its entry, a `render.ScenePass` per scene (its target, cover, per-pass face state, ground and eye; the renderer's old fields the current pass's), the shape posed once a frame (`pose_shape`, kept on the root frame by `Shape.posed`) and drawn through each scene's eye (`draw_posed`, its vertices uploaded once); the hands and clouds through each eye; the picker adds the next scene with the first's geometry wires copied; `scene` leaves `ONCE` and `ONE_PER_FRAME` | 983 | (rec) — the owner's decisions (2026-11-28) built; the details pending |
+| 1217 | A second camera's angle is an orbit of its eye about the world origin, still looking at it: `eye.<n>.yaw` (wraps) and `eye.<n>.pitch` (held to ±1.55 rad, short of straight up or down: the eye orbits with y up), radians as `camera.yaw`. The first eye gains none — `eye.yaw` / `eye.pitch` would be two new saved values on every show's next save — so the first camera stands where it always stood | 983 | (rec) — open: whether the first eye gains an orbit |
+| 1218 | What a second eye shares with the first: the pose is made at the frame's size with the first scene's view state; the painter sort and the depth cue are the shape's own (a 4D shape's `w`, a 3D shape's default-eye depth), so a 3D shape seen from behind keeps the front's see-through order; a fractal's walk is cut for the first eye; the rig's box (`world.box`, the poi) is the first scene's; the faces' picture is painted once and handed to every scene's pass; a hands layer or guide (its own picture) keeps the first eye — laid over a later scene's picture, or depth-composited with its depth, it is from the first camera (Devin on #528; open) | 984 | (rec) — pending the owner |
+| 1219 | No schema bump for `scene.<n>`: an older build refuses a section holding one in words ("scene node: no key 'instance' (it takes nothing)") and draws it black, as any section it cannot read; no saved id moves and no show gains a value. A patch's first scene carries no param (`eye.*` is the look's, as before); a numbered one carries its `eye.<n>.*`, renamed with it on a spawn | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -16355,3 +16375,131 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Proof.** `tests/test_time_displace_488.py`: #488's shader as it was (`tests/fixtures/time-displace-488/timedisplace488.glsl`, from `ccr-956dc2aa-r1kaqe`), one change — the past it reads, the delay's stack for the look-back's atlas — drawn beside `Line → Read.at` over one delay of a moving hue, At = `(Span / 2 − a₀) / g` and the wire's depth `Span / (g · aspect)`: within 2 levels at every column whose age the stack holds (a mapping 10 % off fails it). The one difference: an age younger than the newest frame, where #488 blended toward the picture now; Read reads its newest there (§4.8: "At below 0 reads the newest").
 - **Answer.** owner, 2026-11-26 (plan 90 Q13: "close #488; its slit-scan is … `read.at`").
 - **Judge it.** 976.
+
+### 1200. No spawn replaces a node; the single-instance kinds to be numbered
+
+- **What.** Plan 90 H3 made the dream an effect, so `patches.REPLACEABLE` was `()` and the wave 3 P2 machinery (rows 661, 662, 664) served nothing. Asked whether the scene, shape, backdrop or pattern should become replaceable instead, the owner answered that he wants no "only one" rule for them at all. A numbered second copy needs no replace, so the machinery is removed: `patches.REPLACEABLE`, `replaceable`, `replace_key`, `Landing.replacing`, `loses`, `keeps`, `asked`, `unanswered`; `graphview.Edit._asked`, `replace_said`, `_replaced_values`, `_drop_replaced_macros`, `_replaced_leave_groups`, `_splice_replaced`, `_replacing` and their words (`LOSES_*`, `ROWS_STAY`, `REPLACED_SAID`, `NOTHING_LOST`, `SPLICE_REPLACED`); the sheet's replace rows (`ui_routing.REPLACE_*`, `ui_graph.SHEET_REPLACES`); `tests/test_patches_replace_dream.py` (its one surviving check, the dream not being single-instance, moved to `test_patches_frame_kinds`). `ONE_PER_FRAME`'s refusal (row 658) stays until plan 92 lands.
+- **Answer.** owner, 2026-11-28 ("i do not want to have rules like 'you can only have one' for things like shape/scene/pattern/background"), after the technical reasons and the measured cost per copy (plan 92 §1, §2).
+- **To reverse.** Restore the files from before this change; no file format moved (no saved key ever held a replace).
+- **Judge it.** —.
+
+### 1201. The point cloud is the show's node
+
+- **What.** `graph.CloudAt` (`{"kind": "cloud"}`, a declared kind like a matte), `graph.PointCloud` drawn where a wire puts it into a scene, `params.declare_clouds` (`cloud[.n].*`: the look, then the shape's pose and copies by `_turn_params` and `_copy_params`), `view.CloudState` (the shape's attribute names, so `field.field`, `Renderer._copies_of` and `geometry.turn_matrix` serve it unchanged), GRAPH's picker (scene ▸ point cloud) and node menu (device ▸), patches hold it. The meta controller's standing cloud wire, `Graph.clouds` and the four static `cloud.*` params are gone.
+- **Answer.** owner, 2026-11-28 (plan 92 §7.1: "a point cloud is literally just a list of vertices, the same way a shape would be … a special type of shape that has no edges, only vertices").
+- **Judge it.** 977, 978, 979.
+
+### 1202. A cloud's device is its entry's word
+
+- **What.** `CloudAt.device`, written as `"device"` only when set; `graphview.set_cloud_device` (one undo step) behind the node's device ▸, which lists `graph.cloud_roles` of the renderer's registry and none. A role this Mac does not list is kept, and the node says so.
+- **Other option.** An enum param over the listed roles: its choices would move with the device list, and a saved index would name another device on the other Mac.
+- **Answer.** (rec) — pending the owner.
+
+### 1203. `/13`, migrated with this Mac's clouds
+
+- **What.** `graphmigrate.THIRTEEN_SCHEMA`, `thirteen` in `forward` before `/13`; `LoadedPatch._cloud_roles` (the renderer's registry, else `migrate_clouds`), `headless.resave(clouds=)`, `migrate_library.cloud_roles_of`. Said on load: "/12 migrated to /13 (plan 93): the point cloud the meta controller drew is the patch's own now".
+- **Other option.** Keyed on the file with no bump (plan 90's way): impossible here — no key in an old file says it relied on the standing wire.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 979.
+
+### 1204. A cloud's copies
+
+- **What.** `PointCloud.draw`: the rows of `Renderer._copies_of(state, …)`, culled by the cloud's bounding box turned, each drawn with `u_model = T(row) · k · R(yaw, pitch)` and `u_bright × alpha`.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 978.
+
+### 1205. No world offset for a cloud
+
+- **What.** `world.offset_matrix("shape")` stays the shape's; a cloud's pose is its params alone.
+- **Answer.** (rec) — pending the owner.
+
+### 1206. The shared look, split
+
+- **What.** `thirteen` copies `cloud.size`, `.scale`, `.bright`, `.colors` onto each later cloud made; rows stay on `cloud.*`, said (`CLOUD_ROWS_NOTE`).
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 979.
+
+### 1207. No patch fragment bump
+
+- **What.** `patches.MAY_HOLD` gains `cloud`; `FIXTURE_NODES` and `FIXTURE_KINDS` lose it; `hyperspace.patch/3` stays.
+- **Answer.** (rec) — pending the owner.
+
+### 1208. A backup beside a pre-`/13` patch
+
+- **What.** `library.CLOUDS_BACKUP`, `_clouds_owed` in `Library.save_as`: a pre-`/13` file that names a scene or cuts a cloud wire is kept as `<file>.bak-v12-clouds` before its first rewrite, once. `tests/test_cloud_migration.py`.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 979.
+
+### 1209. Nothing offered when a cloud device connects (open)
+
+- **What.** A cloud node naming no device says "no device: pick one on its menu" and draws nothing; a device that connects is not offered.
+- **Answer.** (rec) — open, for the owner.
+- **Judge it.** 977.
+
+### 1210. The hand mask
+
+- **What.** `graph.HandMaskNode`, `graph.HandMaskAt`, `graph.hand_polygon`, `masks.POLYGON_FS` / `MaskPasses.polygon`; `params.declare_handmasks` (group `handmask`, a patch group); `graphview` LABELS, HOVERS, PICKER_GROUP (masks ▸), ADD_SAID. The tips are `HandPose.joints[0, 4]` (thumb) and `[1, 4]` (index) of each hand (`graph.HANDMASK_TIPS`). `tests/test_graph_handmask.py`.
+- **Answer.** owner asked for it (2026-11-28); the shape (rec) — pending the owner.
+- **Judge it.** 980.
+
+### 1211. Round the centre
+
+- **What.** `hand_polygon` sorts the four pixels by their angle about their mean. A fixed order would make a bow-tie when the hands cross or turn over; the even-odd fill would then pass two triangles.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 980.
+
+### 1212. The layer's eye by default
+
+- **What.** `handmask.eye` (`view.HANDMASK_EYES`: layer, scene). Layer reads `ghost.Settled.layer`, falling back to the scene's camera when a settle has none.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 981.
+
+### 1213. No polygon passes nothing
+
+- **What.** `HandMaskNode.made` always makes its mask; `hand_polygon` says why there is none (`HANDMASK_ONE_HAND`, `HANDMASK_NO_HANDS`, `HANDMASK_BEHIND`, `HANDMASK_UNWIRED`), shown on the node. Strength is the fainter hand's fade. Not built: holding the last polygon while a hand drops out.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 980, 981.
+
+### 1214. No loadable bump for the hand mask
+
+- **What.** `NODE_KINDS["handmask"]` is new; `read_graph` on an older build raises `unknown node kind 'handmask'` and the section is not read.
+- **Answer.** (rec) — pending the owner.
+
+### 1215. Any number of backdrops (plan 92 phase 1)
+
+- **What.** `graph.BackdropAt` takes an instance (`backdrop.<n>` declared by its entry, `entry_declares`, `NUMBERED_FRAME_KINDS`). `_Build._make` builds every backdrop by one path: its own `scene` over its own `image`, a channel straight in as its own `MediaNode` (the first's `channel.a`, a later one's `channel.a(backdrop.2)`: `_back_channel`) keyed and keeping its alpha where the channel is keyed, any other picture laid at the alpha; the first's alpha is `ViewState.backdrop_alpha`, a later one's read by `graph.alpha_of` from `Frame.backdrops`. `params.declare_backdrops` / `is_backdrop_id` declare and sort `backdrop.<n>.alpha`; `graphview.OWNERS["backdrop"]` puts each on its node; `graphview.next_backdrop` numbers an add, a starter and (by the ordinary rename) a spawn; `patches.ONE_PER_FRAME` loses `backdrop`.
+- **Why these details.** The first keeping its ids and its path means no show, binding or golden moves; a later one on the very same path draws as the first does, a keyed channel's holes see-through over what lies under (Devin on #527: the generic composite had filled them with the opaque ground; `tests/test_backdrops_numbered.py`).
+- **One channel under two backdrops** (Devin on #527, second pass). A later backdrop's partial fit of a channel has a target of its own (`Renderer._media_fit`'s `scope`, the backdrop's name — never the raw alpha, so a modulated alpha makes no new target), so two backdrops on one channel at different alphas never overwrite each other's picture; the first's target is as it was.
+- **Node mode** (Devin on #527). `graphview.param_ids` takes `patches._owning_row`'s rule: a number right after a node's prefix is a later instance's, so the first backdrop's rows never take `backdrop.2.alpha` or `key.backdrop.2.*` — nor the first of any numbered kind its later ones' (`fx.acid` / `fx.acid.2`, `matte` / `matte.2`, `ghost` / `ghost.2`), which they did before.
+- **Answer.** (rec) — the owner's decision ("i do not want to have rules like 'you can only have one'", 2026-11-28) built; these details pending.
+- **Judge it.** 982.
+
+### 1216. The one world and a second camera (plan 92 phase 2)
+
+- **What.** `graph.SceneAt` takes an instance (`scene.<n>`, `entry_declares`, `NUMBERED_FRAME_KINDS`); its pins `scene.<n>.cover` / `.depth` (`scene_pin`, `pin_node`), its geometry a many-wire port (`is_many_port`). `render.ScenePass` holds a scene's target, cover, per-pass face state, ground and eye; `Renderer.scene_pass(name)` makes one current, and `scene`, `cover`, `_face_verts`, `_copies`, `_scene_mats`, `_cover_cells`, `_pic`, `_face_layer`, `_face_plain`, `scene_ground` are the current pass's. `Renderer.draw_scene` is `pose_shape` then `draw_posed`; `graph.Shape.posed` makes the pose once a frame and `Shape.prepare` paints the faces' picture once. `ghost.Settled.through` and `graph.eye_of_frame` put the hands and the clouds through the scene's eye. `params.declare_scenes` / `is_eye_id` declare and sort `eye.<n>.*` on a `view.EyeState`; `graphview.next_scene` and `_seen_copied` add the next scene; `patches.ONE_PER_FRAME` and `graphview.ONCE` lose `scene`.
+- **Devin on #528.** A cover knows its scene by name (`Cover.of_scene`), not by its input, which is a `KeyNode` while black is clear keys the scene; a lift or a spawn never makes a numbered scene the first (its eye is its own, the first's the look's); GRAPH draws every scene's `cover` and `depth` pins. Each has its test in `tests/test_scenes_numbered.py`.
+- **Why these details.** The renderer's fields becoming the current pass's means every pass that read `r.scene` or `r._pic` reads the scene being drawn, with no call site changed; the first's pass is the renderer's own, so a one-scene frame is pixel for pixel what it was (the goldens). Copying the first's geometry wires is §7's Q5 answer; the eye on the origin is the owner's.
+- **Answer.** (rec) — the owner's decisions (2026-11-28) built; these details pending.
+- **Judge it.** 983.
+
+### 1217. A second camera's angle; the first eye's orbit
+
+- **What.** `geometry.eye_matrix(…, yaw=, pitch=)`, `eye_turn`, `eye_position`: the eye at its distance from the origin, orbited, looking at it; at 0, 0 the matrix it always was. `eye.<n>.yaw` wraps, `eye.<n>.pitch` stops at ±1.55 rad.
+- **Why.** Two angles on one tesseract need the eye to stand somewhere else; an orbit keeps the owner's "pointing at the world origin". The first eye has no orbit because adding one writes two new values into every show on its next save (the corpus' byte-for-byte round trips caught it), which the owner's "no saved show moves" rules out for this phase.
+- **Answer.** (rec) — open, for the owner: whether the first eye gains `eye.yaw` / `eye.pitch`.
+- **Judge it.** 983.
+
+### 1218. What a second eye shares
+
+- **What.** The CPU half runs once, at the frame's size, from the view state: the sort, the cue and the vertices are not any eye's. The faces' picture is painted once (`Shape.prepare`). The rig's box and a fractal's walk follow the first scene's eye.
+- **Why.** The owner: "its 4D turn, projection and sort run once a frame, and each scene draws that result through its own eye". The cost: a see-through 3D shape seen from behind keeps the front's order.
+- **The hands' own pictures** (Devin on #528). Solid hands inside a scene are drawn through that scene's eye (`Settled.through`); a hands layer and a guide are pictures of their own, made once and laid by any consumer, so they keep the first scene's eye (or the reference eye). Laid over `scene.2`'s picture, or depth-composited with `scene.2.depth`, they are from the other camera. Open: which consumer's eye a shared layer takes — a layer per eye, keyed by the consuming scene, is the likely shape.
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** 984.
+
+### 1219. No schema bump for a numbered scene
+
+- **What.** No `hyperspace.patch` or loadable schema moves; a numbered scene's entry is refused in words by an older build.
+- **Why.** No saved id moves and no file gains a value; both Macs run one build (the precedent: rows 1207, 1215).
+- **Answer.** (rec) — pending the owner.
+- **Judge it.** —.

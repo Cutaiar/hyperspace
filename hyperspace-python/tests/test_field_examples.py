@@ -29,7 +29,7 @@ def test_each_example_has_its_markdown_and_names_itself():
         doc = json.loads(p.read_text())
         # (`stack-lookback` was saved by a build writing `/12`)
         assert doc["name"] == p.stem and doc["schema"] in ("hyperspace.loadable/11",
-                                                           "hyperspace.loadable/12")
+                                                           "hyperspace.loadable/13")
         assert p.with_suffix(".md").is_file(), p.stem
         # every example wires a field into a field port, or a stack
         assert any(w["to"].endswith((".field", ".stack")) for w in doc["graph"]["wires"]), p.stem

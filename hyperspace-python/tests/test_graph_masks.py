@@ -188,7 +188,7 @@ def test_a_mask_into_picture_ports_is_read_through_one_picture():
                  ("matte", "acid.2.image"), ("acid.2", "output.3.image"),
                  ("matte", "cut.mask"), ("scene", "cut.image"),
                  ("cut", "output.1.image"), nodes=[MATTE, ACID2, CUT])
-    g = G.build_graph(_views(3), spec.wiring(), (), ("acid.2",))
+    g = G.build_graph(_views(3), spec.wiring(), ("acid.2",))
     matte = g.nodes["matte"]
     assert isinstance(matte, G.MatteNode) and matte.inputs["image"] is g.nodes["channel.a"]
     pic = g.nodes["matte(picture)"]
@@ -289,7 +289,7 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
         spec = got
         saved = r.loaded_patch.save_as("mask-as-picture").read_text()
         doc = json.loads(saved)
-        assert doc["schema"] == "hyperspace.loadable/12"
+        assert doc["schema"] == "hyperspace.loadable/13"
         assert {"kind": "matte"} in doc["graph"]["nodes"]
         assert doc["values"]["matte.key"] == pytest.approx(0.95)
 

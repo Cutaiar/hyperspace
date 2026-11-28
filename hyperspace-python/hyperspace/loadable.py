@@ -141,6 +141,7 @@ from .graph import (
     GraphSpec,
     Wiring,
     channel_name,
+    cloud_roles,
     read_graph,
 )
 from .library import (
@@ -164,6 +165,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     DELAY_GROUP,
     DEPTH_TAPER,
     DEPTH_UNIT,
+    HANDMASK_GROUP,
     MATTE_GROUP,
     PAN_IDS,
     PATCH_GROUPS,
@@ -175,16 +177,24 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     SWITCH_GROUP,
     UNITS,
     UNITS_KEY,
+    declare_backdrops,
+    declare_clouds,
     declare_cuts,
     declare_delays,
+    declare_handmasks,
     declare_keys,
     declare_mattes,
     declare_resizes,
+    declare_scenes,
     declare_segments,
     declare_switches,
     fx_files,
+    is_backdrop_id,
+    is_cloud_id,
     is_cut_id,
     is_delay_id,
+    is_eye_id,
+    is_handmask_id,
     is_instance_id,
     is_key_id,
     is_matte_id,
@@ -217,10 +227,11 @@ EYE_SCHEMA = graphmigrate.EYE_SCHEMA
 # labels, no desk template
 LOOK_SCHEMA = graphmigrate.LOOK_SCHEMA
 # `/11` is `/10` under `hyperspace.loadable`; `/12` is
-# `/11` with an effect's copies as its slots — what every save writes
-SAVE_SCHEMA = graphmigrate.TWELVE_SCHEMA
+# `/11` with an effect's copies as its slots; `/13` is `/12` with the
+# point clouds the patch's own nodes — what every save writes
+SAVE_SCHEMA = graphmigrate.THIRTEEN_SCHEMA
 KIND = graphmigrate.LOADABLE_KIND
-VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
 # the loadable patch's bus cuts, `{"cut": [{"from", "to"}, …]}` — the
 # meta controller's cables from All outputs into a window that this loadable patch cuts
 # (`graph.BusCuts`); no key: every cable stands
@@ -476,10 +487,11 @@ class GraphSection:
         """The node instances `spec` declares (None: none), by kind — what a landing
         settles: ``fx`` (the effect instances that exist, `FxState.held`'s word),
         ``switch``, ``resize``, ``delay``, ``matte``, ``cut``,
-        ``segment`` and ``key`` (the nodes keyed)."""
+        ``segment``, ``key`` (the nodes keyed) and ``handmask``."""
         if spec is None:
             return {"fx": frozenset(), "switch": [], "resize": [], "delay": [],
-                    "matte": [], "cut": [], "segment": [], "key": []}
+                    "matte": [], "cut": [], "segment": [], "key": [], "cloud": [],
+                    "handmask": [], "backdrop": [], "scene": []}
         return {"fx": frozenset(spec.effect_names()),
                 "switch": [sw.name for sw in spec.switches],
                 "resize": [z.name for z in spec.resizes],
@@ -487,7 +499,14 @@ class GraphSection:
                 # the mattes, cuts and segments, by their entries
                 "matte": [m.name for m in spec.mattes],
                 "cut": [c.name for c in spec.cuts],
+                "handmask": [x.name for x in spec.handmasks],
                 "segment": [x.name for x in spec.segments],
+                # the point clouds, by their entries
+                "cloud": [c.name for c in spec.clouds],
+                # the backdrops past the first, by their entries
+                "backdrop": [b.name for b in spec.backdrops],
+                # the scenes past the first, by their entries
+                "scene": [x.name for x in spec.scenes],
                 # the nodes the graph keys (black is clear)
                 "key": list(getattr(spec, "keys", ()))}
 
@@ -510,10 +529,18 @@ class GraphSection:
         declare_mattes(reg, names["matte"])
         # each cut's values, by its entry, as a matte's
         declare_cuts(reg, names["cut"])
+        # each hand mask's values, by its entry, as a cut's
+        declare_handmasks(reg, names["handmask"])
         # each segment's values, by its entry, as a cut's
         declare_segments(reg, names["segment"])
         # each keyed node's black is clear, by the section's `keys`
         declare_keys(reg, names["key"])
+        # each point cloud's look, pose and copies, by its entry, as a matte's
+        declare_clouds(reg, names.get("cloud", []))
+        # each backdrop past the first's alpha, by its entry, as a matte's
+        declare_backdrops(reg, names.get("backdrop", []))
+        # each scene past the first's eye, by its entry, as a matte's
+        declare_scenes(reg, names.get("scene", []))
 
     def free_doc(self) -> dict | None:
         """The section in the free graph's words (the
@@ -585,6 +612,7 @@ GROUP_BAD = "groups: an entry that is not a group, ignored"
 # resize's values, a matte's, a cut's or a segment's) — and the effects',
 # whose module loadable patches are retired outright: a save writes no fx label
 NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, DELAY_GROUP, RESIZE_GROUP, MATTE_GROUP, CUT_GROUP,
+             HANDMASK_GROUP,
              SEGMENT_GROUP, FX_GROUP)
 # the groups whose module presets are retired
 # (`library.RETIRED_MODULES`): a file that still names one keeps the label
@@ -971,8 +999,9 @@ class LoadedPatch:
                   and reg[k].group != modifiers.GROUP and reg[k].persist
                   and not is_instance_id(k) and not is_switch_id(k)
                   and not is_resize_id(k) and not is_delay_id(k)
-                  and not is_matte_id(k) and not is_cut_id(k)
-                  and not is_segment_id(k) and not is_key_id(k)}
+                  and not is_matte_id(k) and not is_cut_id(k) and not is_handmask_id(k)
+                  and not is_segment_id(k) and not is_key_id(k) and not is_cloud_id(k)
+                  and not is_backdrop_id(k) and not is_eye_id(k)}
         doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PATCH, "values": values,
                "routes": [], "macros": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
@@ -1050,7 +1079,8 @@ class LoadedPatch:
         fwd = graphmigrate.forward(doc, gs.specs(), eye=getattr(show, "old_eye", None),
                                    camera_at=getattr(show, "camera_at", None),
                                    look=getattr(show, "old_look", None),
-                                   cuts=getattr(show, "old_cuts", None))
+                                   cuts=getattr(show, "old_cuts", None),
+                                   clouds=self._cloud_roles(gs))
         doc, migrated, from_show = fwd.doc, fwd.migrated, set(fwd.from_show)
         migrate_notes = list(fwd.migrate_notes)
         notes += fwd.notes
@@ -1090,8 +1120,9 @@ class LoadedPatch:
                 # a modifier's param is set by its entry (`modifiers`), never here
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
             elif (is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid) or is_delay_id(pid)
-                  or is_matte_id(pid) or is_cut_id(pid)
-                  or is_segment_id(pid) or is_key_id(pid)
+                  or is_matte_id(pid) or is_cut_id(pid) or is_handmask_id(pid)
+                  or is_segment_id(pid) or is_key_id(pid) or is_cloud_id(pid) or is_backdrop_id(pid)
+                  or is_eye_id(pid)
                   or graphmigrate.effect_of(pid) is not None):
                 # (a switch's `select` too — its graph declares it;
                 # and a resize's, matte's and cut's values; and every
@@ -1571,6 +1602,15 @@ class LoadedPatch:
         once."""
         state = self._graph_section().fx
         return fx_files(state if state is not None else self.reg)
+
+    def _cloud_roles(self, gs) -> tuple[str, ...]:
+        """This Mac's cloud devices' roles, in list order (what an old
+        file's clouds are made nodes for, `graphmigrate.thirteen`): the
+        renderer's device registry's (`cloud_source`), else what a tool with
+        no registry said (`migrate_clouds`: `headless.resave`), else none."""
+        r = getattr(gs, "renderer", None)
+        got = cloud_roles(getattr(r, "cloud_source", None))
+        return got or tuple(self.__dict__.get("migrate_clouds", ()))
 
     def _graph_section(self) -> GraphSection:
         """The graph section's lander; made here for a `LoadedPatch` made

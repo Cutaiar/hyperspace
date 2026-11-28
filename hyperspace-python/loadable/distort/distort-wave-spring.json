@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/12",
+ "schema": "hyperspace.loadable/13",
  "name": "distort-wave-spring",
  "note": "A sine across the frame squeezes the picture along its own travel, bunching and stretching it like a spring. The sub band pushes Amount. The right hand's height brings in the colour split; the left hand's height moves how many waves.",
  "graph": {

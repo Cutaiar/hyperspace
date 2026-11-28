@@ -205,7 +205,7 @@ def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
     assert app.loaded_patch.load_doc({"schema": "hyperspace.preset/5", "name": "fb",
                                  "values": {}, "graph": sec}) == []
     doc = app.loaded_patch.document("fb")
-    assert doc["schema"] == "hyperspace.loadable/12"
+    assert doc["schema"] == "hyperspace.loadable/13"
     # (an echo is its look-back's pin, and that pin is
     # a Read of the delay the look-back is now, `read → output.2.image`)
     kind = "read" if node["kind"] == "echo" else node["kind"]

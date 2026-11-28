@@ -574,7 +574,7 @@ def test_the_signature_follows_every_picture_port():
     def sig(*pairs, nodes=()):
         spec = G.read_graph(wired(*pairs, nodes=nodes))
         assert not spec.notes, spec.notes
-        return G.signature(G.build_graph(views(1), spec.wiring(), (), ("acid",)))
+        return G.signature(G.build_graph(views(1), spec.wiring(), ("acid",)))
 
     out = ("acid", "output.all.image")
     assert (sig(("channel.a", "acid.image"), ("channel.b", "acid.aux"), out)

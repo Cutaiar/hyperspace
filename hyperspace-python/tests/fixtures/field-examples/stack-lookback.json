@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/12",
+ "schema": "hyperspace.loadable/13",
  "name": "stack-lookback",
  "note": "The old look-back from public parts (plan 90 H2): party-tracer's trail as the migration opens it \u2014 the scene through a Curve and a keyed Fade into a Resize and a Delay (24 kept, 15 Hz), laid by a Trail and held back by two Cuts, added under the scene.",
  "graph": {"frame": "wired",
@@ -157,10 +157,6 @@
   "camera.pan.y": 0.0,
   "eye.fov": 47.611887036915434,
   "eye.distance": 3.7777777777777777,
-  "cloud.size": 2.0,
-  "cloud.scale": 0.3,
-  "cloud.bright": 1.0,
-  "cloud.colors": true,
   "fx.on": true,
   "fx.mix": 1.0,
   "fx.face_map": 0,

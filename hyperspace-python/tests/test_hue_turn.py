@@ -120,7 +120,7 @@ def _doc(**rest):
     section = _section([{"from": "scene", "to": "huecycle.image"},
                         {"from": "huecycle", "to": "output.all.image"}],
                        [{"kind": "effect", "file": "huecycle"}])
-    return {"schema": "hyperspace.loadable/12", "name": "t", "graph": section, **rest}
+    return {"schema": "hyperspace.loadable/13", "name": "t", "graph": section, **rest}
 
 
 def test_a_document_naming_no_hue_cycle_is_itself():

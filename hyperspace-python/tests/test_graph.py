@@ -115,7 +115,7 @@ def test_the_default_graph_for_one_default_view_is_todays_frame_in_order():
     geometry's time counted in whatever draws it (the hands' in their
     layer's: they are in no scene)."""
     E = ("fade", "trail")
-    g = G.build_graph([_view()], wired_wiring(G.Wiring(), "trail"), (), E)
+    g = G.build_graph([_view()], wired_wiring(G.Wiring(), "trail"), E)
     assert _names(g) == ["pattern", "shape", "hands", "scene", "scene(cover)", "hands.layer",
                          "delay", "trail", "matte", "cut", "cut.2", "composite",
                          "shown(composite)", "fade", "fade(key)", "resize", "delay(write)",

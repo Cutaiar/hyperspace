@@ -489,19 +489,20 @@ def test_a_setting_a_sink_row_drives_is_the_routes_not_the_sliders(rig, monkeypa
 
 def test_a_kinects_cloud_is_titled_kinect_point_cloud_and_another_clouds_is_not():
     """The Kinect's cloud is made of the sensor's depth by the sensor's calibration: its
-    own kind, not a general point cloud, and its node says so. A `cloud` device's stays."""
-    from test_edges_are_wires import Bindings, Registry, build, migrated
+    own kind, not a general point cloud, and its node says so — by the device the node
+    names. A `cloud` device's stays."""
+    from test_edges_are_wires import FRAME, Bindings, Registry, build, spec_of
 
-    from hyperspace import graph as G
-    spec = G.read_graph(migrated())
     sensor = kinect.KinectDevice("room", {"role": "room", "kind": "kinect"})
     scan = NS(role="scan", kind="cloud", status="connected", sources=(), feeds=())
-    g = build(spec, clouds=("room", "scan"))
-    v = graphview.build(Bindings(), Registry(), None, [sensor, scan], g, spec)
+    spec = spec_of(*FRAME, ("cloud", "scene.geometry"), ("cloud.2", "scene.geometry"),
+                   nodes=[{"kind": "cloud", "device": "room"},
+                          {"kind": "cloud", "instance": 2, "device": "scan"}])
+    v = graphview.build(Bindings(), Registry(), None, [sensor, scan], build(spec), spec)
     assert v.node("render:cloud").label == "Kinect point cloud"
     assert v.node("render:cloud.2").label == "Point cloud 2"
-    v = graphview.build(Bindings(), Registry(), None, [scan], build(spec, clouds=("scan",)), spec)
-    assert v.node("render:cloud").label == "Point cloud"
+    v = graphview.build(Bindings(), Registry(), None, [scan], build(spec), spec)
+    assert v.node("render:cloud").label == "Point cloud"      # (room is not listed here)
 
 
 def test_a_disabled_kinect_entry_stays_on_the_generic_pane(rig, monkeypatch):

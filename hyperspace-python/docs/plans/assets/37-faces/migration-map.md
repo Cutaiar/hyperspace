@@ -352,31 +352,31 @@ into; *driven* the file's own rows that set `view.pattern`.
 
 | preset | where | schema | mode | faces | state | path | also | driven |
 |---|---|---|---|---|---|---|---|---|
-| `big-blue-wave` | corpus | /12 | 5 caustic | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `dial` | corpus | /12 | 1 rings | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `ember-orbit` | corpus | /12 | 11 ember | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `hands-fx` | corpus | /12 | 0 flat | off | faces off | pattern → shape.faces | — | — |
-| `hands-orbit` | corpus | /12 | 0 flat | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `hands-pinch` | corpus | /12 | 0 flat | off | faces off | pattern → shape.faces | — | desk: cc:*:22 abs |
-| `hands-play` | corpus | /12 | 0 flat | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `hex-engine` | corpus | /12 | 6 hex | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `inverse-halo` | corpus | /12 | 1 rings | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `legacy6` | corpus | /12 | 0 flat | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `lfo-breathe` | corpus | /12 | 0 flat | off | faces off | pattern → shape.faces | — | — |
-| `party-acid` | corpus | /12 | 1 rings | on | on screen | pattern → shape.faces | — | — |
-| `party-faces` | corpus | /12 | 6 hex | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `party-field` | corpus | /12 | 11 ember | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `party-mandala` | corpus | /12 | 9 plasma | on | on screen | pattern → shape.faces | — | — |
-| `party-noita` | corpus | /12 | 11 ember | on | on screen | pattern → shape.faces | — | — |
-| `party-tracer` | corpus | /12 | 9 plasma | off | faces off | pattern → shape.faces | — | — |
-| `party-trip` | corpus | /12 | 9 plasma | on | on screen | pattern → shape.faces | — | — |
-| `party-tumble` | corpus | /12 | 8 cells | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `party-wake` | corpus | /12 | 9 plasma | on | on screen | pattern → shape.faces | — | — |
-| `plasma-heart` | corpus | /12 | 9 plasma | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `seq-demo` | corpus | /12 | 0 flat | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `spiral-silk` | corpus | /12 | 7 spiral | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `strobe-cage` | corpus | /12 | 3 moire | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `woven-lattice` | corpus | /12 | 10 weave | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `big-blue-wave` | corpus | /13 | 5 caustic | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `dial` | corpus | /13 | 1 rings | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `ember-orbit` | corpus | /13 | 11 ember | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `hands-fx` | corpus | /13 | 0 flat | off | faces off | pattern → shape.faces | — | — |
+| `hands-orbit` | corpus | /13 | 0 flat | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `hands-pinch` | corpus | /13 | 0 flat | off | faces off | pattern → shape.faces | — | desk: cc:*:22 abs |
+| `hands-play` | corpus | /13 | 0 flat | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `hex-engine` | corpus | /13 | 6 hex | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `inverse-halo` | corpus | /13 | 1 rings | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `legacy6` | corpus | /13 | 0 flat | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `lfo-breathe` | corpus | /13 | 0 flat | off | faces off | pattern → shape.faces | — | — |
+| `party-acid` | corpus | /13 | 1 rings | on | on screen | pattern → shape.faces | — | — |
+| `party-faces` | corpus | /13 | 6 hex | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `party-field` | corpus | /13 | 11 ember | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `party-mandala` | corpus | /13 | 9 plasma | on | on screen | pattern → shape.faces | — | — |
+| `party-noita` | corpus | /13 | 11 ember | on | on screen | pattern → shape.faces | — | — |
+| `party-tracer` | corpus | /13 | 9 plasma | off | faces off | pattern → shape.faces | — | — |
+| `party-trip` | corpus | /13 | 9 plasma | on | on screen | pattern → shape.faces | — | — |
+| `party-tumble` | corpus | /13 | 8 cells | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `party-wake` | corpus | /13 | 9 plasma | on | on screen | pattern → shape.faces | — | — |
+| `plasma-heart` | corpus | /13 | 9 plasma | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `seq-demo` | corpus | /13 | 0 flat | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `spiral-silk` | corpus | /13 | 7 spiral | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `strobe-cage` | corpus | /13 | 3 moire | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `woven-lattice` | corpus | /13 | 10 weave | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
 | `acid-scene` | fixture | /2 | 9 plasma | on | on screen | pattern → shape.faces | — | — |
 | `backdrop-still` | fixture | /4 | 6 hex | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
 | `blank-frame` | fixture | /6 | 6 hex | on | unwired | — | — | desk: cc:*:19 abs |

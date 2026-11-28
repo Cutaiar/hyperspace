@@ -158,7 +158,7 @@ def test_a_media_loadable_and_one_without_are_both_six(rig):
     """With media or without, the save is `/6`, with the bins (an
     empty section when none is assigned) and every media-family value."""
     doc = rig.loaded_patch.document("x")
-    assert doc["schema"] == loadable.SAVE_SCHEMA == "hyperspace.loadable/12"
+    assert doc["schema"] == loadable.SAVE_SCHEMA == "hyperspace.loadable/13"
     assert doc[loadable.MEDIA_KEY] == {"channels": {}}
     rig.reg.media.assign("a", 0, "shared:loops/tunnel.mp4")
     doc = rig.loaded_patch.document("x")
@@ -207,7 +207,7 @@ def test_bins_round_trip(rig, tmp_path):
     rig.reg["media.a.slot"].set(1)
     path = rig.loaded_patch.save_as("MEDIA")
     text = path.read_text()
-    assert '"schema": "hyperspace.loadable/12"' in text
+    assert '"schema": "hyperspace.loadable/13"' in text
     assert '  "a": ["shared:loops/tunnel.mp4", "camera:FaceTime HD Camera"]' in text
     want = m.to_json()
     m.from_json({})

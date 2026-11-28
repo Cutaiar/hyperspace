@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/12",
+ "schema": "hyperspace.loadable/13",
  "name": "dream-wake",
  "note": "Plan 90 (H3): party-wake as it opens now \u2014 its dream an effect, folded with its Resize, Hue turn, Curve, Fade and Composite in one group, dream; its trail the tracers' parts, folded as trail.",
  "graph": {"frame": "wired",
@@ -172,10 +172,6 @@
   "camera.pan.y": 0.0,
   "eye.fov": 47.611887036915434,
   "eye.distance": 3.7777777777777777,
-  "cloud.size": 2.0,
-  "cloud.scale": 0.3,
-  "cloud.bright": 1.0,
-  "cloud.colors": true,
   "fx.on": true,
   "fx.mix": 1.0,
   "fx.face_map": 0,

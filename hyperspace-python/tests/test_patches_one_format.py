@@ -119,12 +119,12 @@ def test_the_loadables_ladder_is_one_function_the_load_reads_through():
     fwd = graphmigrate.forward(copy.deepcopy(new), {})
     kept = {k: v for k, v in new["values"].items() if not k.startswith("dream.")}
     assert len(kept) == len(new["values"]) - 23           # every `dream.*`, the look-back's five too
-    assert fwd.doc == {**new, "schema": graphmigrate.TWELVE_SCHEMA, "values": kept}
+    assert fwd.doc == {**new, "schema": graphmigrate.THIRTEEN_SCHEMA, "values": kept}
     assert fwd.notes == () and fwd.migrated == "" and fwd.migrate_notes == ()
     old = json.loads((ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
                       / "party-trip.json").read_text())
     fwd = graphmigrate.forward(old, {})
-    assert fwd.migrated.startswith(f"{old['schema']} migrated to hyperspace.loadable/12")
+    assert fwd.migrated.startswith(f"{old['schema']} migrated to hyperspace.loadable/13")
     assert "modules" not in fwd.doc and "desk_template" not in fwd.doc
 
 
@@ -142,7 +142,7 @@ def test_a_corpus_loadable_round_trips_byte_for_byte_through_the_one_loader(tmp_
         # an `/11` with no copy resaves as itself but for the schema, less its
         # retired look-back knobs (which drew nothing with no look-back,
         # dropped quietly) and its old dream's, off
-        data = data.replace(b'"hyperspace.loadable/11"', b'"hyperspace.loadable/12"')
+        data = data.replace(b'"hyperspace.loadable/11"', b'"hyperspace.loadable/13"')
         data, gone = RETIRED_LINE.subn(b"", data)
         assert gone == 23, name
         assert again == data and notes == [], (name, notes)

@@ -41,7 +41,7 @@ this one read the same rows, so an edit on either is on both next frame.
   window ``render:output.<n>`` always; ``render:camera`` — the shared
   camera (`camera.*`, `eye.*`), the look's one orbit camera (its params and its position are the
   loadable patch's), always there, which
-  draws through every scene and so has no picture port; a cloud, the meta controller's; a node the section
+  draws through every scene and so has no picture port; a node the section
   declares or wires that reaches nothing (`unreached`) ``faint``
   ("reaches nothing");
 - ``channel`` — the eight media channels (``render:channel.<c>``), always, each with its picture out and its `media.<c>.*` params;
@@ -127,7 +127,7 @@ from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE
 from .groupwords import group_title
-from .params import PATCH_GROUPS, Kind, Param, Registry, rename_keys
+from .params import PATCH_GROUPS, Kind, Param, Registry, eye_prefix, rename_keys
 from .routing import (
     MOD_OPS,
     PAIR_SCHEME,
@@ -412,11 +412,12 @@ def _effect_owner(pid: str, ctx: _Ctx) -> str | None:
 
 
 def _eye_owner(pid: str, ctx: _Ctx) -> str | None:
-    """`eye.*` (the fov and the distance) is the first scene's: a scene is its geometries
-    and the eye they are seen through. With no scene in the frame, the group's node."""
-    scenes = sorted((n for n in ctx.names if kind_of(n) == "scene"),
-                    key=lambda n: (len(n), n))      # `scene`, `scene.2`, …
-    return scenes[0] if scenes else None
+    """Each scene is a camera: `eye.*` (its fov, distance,
+    yaw and pitch) is the first scene's, `eye.<n>.*` scene `scene.<n>`'s. With
+    that scene not in the frame, the group's node."""
+    seg = pid.split(".")
+    name = f"scene.{seg[1]}" if len(seg) >= 3 and seg[1].isdecimal() else "scene"
+    return name if name in ctx.names else None
 
 
 def _output_owner(pid: str, ctx: _Ctx) -> str | None:
@@ -426,8 +427,16 @@ def _output_owner(pid: str, ctx: _Ctx) -> str | None:
     return None
 
 
+def _backdrop_owner(pid: str, ctx: _Ctx) -> str | None:
+    # `backdrop[.<n>].alpha` on its backdrop's node (`backdrop.alpha` the first's)
+    seg = pid.split(".")
+    return f"backdrop.{seg[1]}" if len(seg) >= 3 and seg[1].isdecimal() else "backdrop"
+
+
 def _cloud_owner(pid: str, ctx: _Ctx) -> str | None:
-    return ctx.first_cloud
+    # `cloud[.<n>].<key>` on its cloud's node (`cloud.pan.x` is cloud 1's)
+    seg = pid.split(".")
+    return f"cloud.{seg[1]}" if len(seg) >= 3 and seg[1].isdecimal() else "cloud"
 
 
 def _media_owner(pid: str, ctx: _Ctx) -> str | None:
@@ -476,7 +485,7 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     # and its media
     "pattern": "pattern",
     # the backdrop's params on its node, a switch's pick on its switch
-    "backdrop": "backdrop",
+    "backdrop": _backdrop_owner,
     "switch": _switch_owner,
     "resize": _resize_owner,
     # `delay[.<n>].<key>` on its delay's node (the resize's rule)
@@ -487,6 +496,8 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "cut": _resize_owner,
     # `segment[.<n>].<key>` on its segment's node (the resize's rule)
     "segment": _resize_owner,
+    # `handmask[.<n>].<key>` on its hand mask's node (the resize's rule)
+    "handmask": _resize_owner,
     "ghost": _hands_owner,
     "cloud": _cloud_owner,
     "fx": _effect_owner,
@@ -503,7 +514,6 @@ class _Ctx:
     names: set[str] = field(default_factory=set)          # the render graph's node names
     effects: list[str] = field(default_factory=list)      # effect instances, longest first
     effect_node: dict[str, str] = field(default_factory=dict)
-    first_cloud: str | None = None
 
 
 def render_owner(p: Param, ctx: _Ctx) -> str | None:
@@ -813,7 +823,7 @@ def _port_type(kind: str) -> str:
 # the owner's ids. The canvas draws the section itself: a
 # node per name (`frame_names`), a cable per wire, All outputs and each
 # window always, the eight channels (idle while empty and unwired, on the
-# area's idle line), the look's camera and the meta controller's clouds. Each node's `ref` is the
+# area's idle line) and the look's camera. Each node's `ref` is the
 # render node the renderer built for that name, else a stand-in of its
 # kind (`_stand_in`: never built into a graph, never run), so its area, its
 # side panel and its page are its kind's whatever was built. A node the
@@ -844,19 +854,21 @@ LABELS: dict[str, str] = {
     "backdrop": "Backdrop", "pattern": "Faces pattern",
     "channel": "Channel", "composite": "Composite", "switch": "Switch", "delay": "Delay",
     "resize": "Resize", "slot": "slot",
-    "matte": "Matte", "cut": "Cut", "segment": "Segment",
+    "matte": "Matte", "cut": "Cut", "segment": "Segment", "handmask": "Hand mask",
     "output": "Output", rgraph.ALL_OUTPUTS: "All outputs", rgraph.GROUND: "Ground",
 }
 # … and its hover, one line (an effect says its file's own `@tip` when it
 # has one)
 HOVERS: dict[str, str] = {
     "shape": "The polytope. Its faces show the faces pattern, or the picture wired into faces.",
-    "scene": "Draws the shape and any hands wired into it, through the camera.",
+    "scene": ("A camera onto the world: draws what is wired into its geometry, through its "
+              "own eye (eye.* the first scene's, eye.2.* scene 2's)."),
     "hands": ("The tracked hands as geometry: wire them into a scene, or draw them alone as "
               "a hands layer."),
     "layer": "The hands drawn alone, to lay over a picture or put through effects.",
     "guide": "The hands' labels and tethers, laid over last and never bent.",
-    "cloud": "A listed cloud device, drawn in every scene.",
+    "cloud": ("Points from a cloud device you pick on its menu — a shape with only "
+              "vertices: wire it into a scene to see it."),
     "camera": "The shared eye every scene draws through.",
     "backdrop": "Lays the scene over a picture, at backdrop alpha.",
     "pattern": ("What the faces show unless a picture is wired into them, and its media "
@@ -874,6 +886,8 @@ HOVERS: dict[str, str] = {
             "elsewhere. Lay it over another picture to show that one through the hole."),
     "segment": ("Cuts its picture into a foreground and a background — a person, or what "
                 "moves — with the matte between them as a mask."),
+    "handmask": ("A mask of the shape your two thumbs and index fingers make on screen. "
+                 "Wire hands into it, and it into a cut's mask."),
     "echo": "The k-th newest look-back frame.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
     rgraph.ALL_OUTPUTS: ("The meta controller's bus: a window shows it by a cable from here, unless the "
@@ -919,11 +933,9 @@ def wanted_windows(spec, bus_cuts=None) -> list[int]:
     return sorted(want)
 
 
-# a listed cloud's wire into the scene, the meta controller's too
-CLOUD_SAID = ("this cloud's wire into the scene — cut it and the scene "
-              "draws no cloud with this patch (a patch saves its cuts)")
-CLOUD_IDLE = "nothing reaches the scene: the cloud is not drawn"
-CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geometry"
+# a point cloud's device pick (its node's menu, `set_cloud_device`)
+CLOUD_DEVICE_SAID = "{cloud}: {device}"
+CLOUD_NO_SUCH = "no {cloud} node in this patch"
 # the picker's starters ▸ — each a pre-wired group, one
 # undo step, every node and cable ordinary after it. (key, the item's words)
 STARTERS = (("scene", "scene chain"), ("tracers", "tracers"),
@@ -1029,7 +1041,7 @@ THUMBS: dict[str, str] = {
     "layer": PICTURE, "guide": PICTURE,
     # a cut is its picture; a
     # matte's is its mask, and a segment's its matte (fg, bg are its pins)
-    "cut": PICTURE, "matte": MASK_PIC, "segment": MASK_PIC,
+    "cut": PICTURE, "matte": MASK_PIC, "segment": MASK_PIC, "handmask": MASK_PIC,
     "shape": SCENE_PIC, "cloud": SCENE_PIC, "hands": LAYER_PIC,
     "output": WINDOW_PIC,
 }
@@ -1070,8 +1082,6 @@ def kind_of(name: str) -> str | None:
         return rgraph.ALL_OUTPUTS
     if name == CAMERA:
         return CAMERA
-    if name == rgraph.CLOUD_KIND or name.startswith(f"{rgraph.CLOUD_KIND}."):
-        return "cloud"
     kind = rgraph.wire_node_kind(name, wired=True)
     return None if kind in ("frame", "fx") else kind
 
@@ -1088,12 +1098,10 @@ def _takes(kind: str | None, name: str | None = None) -> dict[str, str]:
 
 
 def _makes(kind: str | None, name: str | None = None) -> str | None:
-    """What a canvas kind puts out (`graph.WIRED_MAKES`; a cloud geometry);
-    with `name`, an effect's is its file's (a field maker's field)."""
+    """What a canvas kind puts out (`graph.WIRED_MAKES`); with `name`, an
+    effect's is its file's (a field maker's field)."""
     if kind == "effect" and name:
         return rgraph.effect_ports(name)[0]
-    if kind == "cloud":
-        return GEOMETRY
     return rgraph.WIRED_MAKES.get(kind or "")
 
 
@@ -1141,9 +1149,19 @@ def params_of(name: str) -> str:
     kind = kind_of(name)
     if kind == "slot":
         return f"fx.{rgraph.effect_of(name)}"
-    if kind in (rgraph.ALL_OUTPUTS, "cloud", None):
+    if kind in (rgraph.ALL_OUTPUTS, None):
         return name
     return rgraph.param_prefix(name)
+
+
+def _under(pid: str, pre: str) -> bool:
+    """Is `pid` a param `<pre>.<key>` of the node whose prefix is `pre` — not of a
+    later instance's (`fx.acid.2.mix` is acid.2's, never acid's; `backdrop.2.alpha`
+    backdrop.2's): `patches._owning_row`'s rule, a number right after the
+    prefix being the instance's."""
+    if not pid.startswith(pre + "."):
+        return False
+    return not pid[len(pre) + 1:].split(".", 1)[0].isdecimal()
 
 
 def param_ids(reg, nid: str) -> list[str]:
@@ -1154,13 +1172,12 @@ def param_ids(reg, nid: str) -> list[str]:
     mode's rows both read this, so a node has one list of params."""
     name = nid.partition(":")[2] if nid.startswith("render:") else nid
     pre = params_of(name)
-    head = pre + "."
-    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))]
+    ids = [p.id for p in reg if not p.alias and (p.id == pre or _under(p.id, pre))]
     # a keyed node's black is clear knobs (`key.<name>.*`) after its own
-    keyed = f"key.{name}."
-    ids += [p.id for p in reg if p.id.startswith(keyed)]
-    if name == "scene":         # the eye is the first scene's (`_eye_owner`): it was the camera
-        ids += [p.id for p in reg if not p.alias and p.id.startswith("eye.")]   # node's, which
+    ids += [p.id for p in reg if _under(p.id, f"key.{name}")]
+    if kind_of(name) == "scene":   # each scene's eye is its own (`_eye_owner`):
+        # `eye.*` the first scene's, `eye.<n>.*` scene n's
+        ids += [p.id for p in reg if not p.alias and _under(p.id, eye_prefix(name))]
     return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
 
 
@@ -1307,6 +1324,7 @@ FRAME_CLASS: dict[str, type] = {
     "composite": rgraph.Composite, "switch": rgraph.SwitchNode,
     "delay": rgraph.Delay, "resize": rgraph.ResizeNode,
     "matte": rgraph.MatteNode, "cut": rgraph.CutNode, "segment": rgraph.SegmentNode,
+    "handmask": rgraph.HandMaskNode,
     "output": rgraph.Output, rgraph.ALL_OUTPUTS: rgraph.Output,
     rgraph.GROUND: GroundNode,
 }
@@ -1331,7 +1349,8 @@ def _stand_in(name: str, spec=None) -> rgraph.Node | None:
     if kind == "channel":
         return rgraph.MediaNode(name, rest)
     if kind == "cloud":
-        return rgraph.PointCloud(name, "")
+        c = next((c for c in (getattr(spec, "clouds", None) or ()) if c.name == name), None)
+        return rgraph.PointCloud(name, c.device if c is not None else "")
     if kind in ("output", rgraph.ALL_OUTPUTS):
         return rgraph.Output(name, int(rest) - 1 if rest.isdecimal() else -1)
     if kind in (CAMERA, "slot"):
@@ -1356,6 +1375,11 @@ def _cut_said(name: str, into: dict[str, str]) -> str:
     return f"{into['image']} cut by {m}" if m else CUT_NO_MASK
 
 
+def _handmask_said(name: str, into: dict[str, str]) -> str:
+    src = into.get("hands")
+    return f"the polygon {src}'s fingertips make" if src else rgraph.HANDMASK_UNWIRED
+
+
 def _segment_said(name: str, into: dict[str, str]) -> str:
     src = into.get("image")
     return f"{src} into it: no worker runs until it is reached" if src else SEGMENT_UNWIRED
@@ -1369,7 +1393,8 @@ CUT_NO_PICTURE = "nothing wired into its image: no picture"
 CUT_NO_MASK = "no mask wired: its picture through, whole"
 SEGMENT_UNWIRED = "nothing wired into its image: no worker runs"
 STAND_IN_SAID: dict[str, Callable[[str, dict[str, str]], str]] = {
-    "matte": _matte_said, "cut": _cut_said, "segment": _segment_said}
+    "matte": _matte_said, "cut": _cut_said, "segment": _segment_said,
+    "handmask": _handmask_said}
 
 
 def _built(rnodes: Iterable[rgraph.Node]) -> dict[str, rgraph.Node]:
@@ -1653,14 +1678,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     frame = frame_of(spec, render_graph)
     built = _built(rnodes)
     # the canvas's names: the eight channels always (what a
-    # wire starts from), the meta controller's clouds, the section's names, All outputs
-    # and every window the renderer drew (and any a wire names)
+    # wire starts from), the section's names (its clouds among them),
+    # All outputs and every window the renderer drew (and any a wire names)
     names: list[str] = [rgraph.channel_name(c) for c in rgraph.MEDIA_CHANNELS]
-    # (every listed cloud, built or not — one whose wire the
-    # show has cut is drawn too, to join again)
-    roles = tuple(getattr(render_graph, "clouds", ()) or ())
-    names += [rgraph.cloud_name(i) for i in range(len(roles))]
-    names += [r.name for r in rnodes if isinstance(r, rgraph.PointCloud)]
     names += frame_names(frame)
     outs = {r.name for r in rnodes if isinstance(r, rgraph.Output)}
     outs |= {n for n in names if kind_of(n) == "output"}
@@ -1719,12 +1739,14 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if kind == "segment":                    # every instance's three pins
             for p, typ in rgraph.SEGMENT_PINS.items():
                 add_port(n, VPort(f"rout:{name}.{p}", p, OUT, typ))
-        for pin, owner in rgraph.PINS.items():   # the scene's cover and depth
-            if owner == name and kind != "segment":
-                typ = rgraph.WIRED_MAKES[kind_of(pin)]
-                add_port(n, VPort(f"rout:{pin}", pin.rpartition(".")[2], OUT, typ))
-        if isinstance(r, rgraph.PointCloud) and ctx.first_cloud is None:
-            ctx.first_cloud = name
+        if kind == "scene":                      # every scene's own cover and depth
+            for p in ("cover", "depth"):
+                typ = rgraph.WIRED_MAKES[p if p == "cover" else rgraph.DEPTH_PORT]
+                add_port(n, VPort(f"rout:{name}.{p}", p, OUT, typ))
+        if isinstance(r, rgraph.PointCloud):
+            # what its device is doing, in words (none picked, not
+            # listed here, waiting) — its body's first line
+            r.said = rgraph.cloud_said(r.role, devices)
     ctx.names = set(refs)
     ctx.effect_node = {name: name for name in refs if kind_of(name) == "effect"}
     ctx.effects = sorted(ctx.effect_node, key=len, reverse=True)   # `acid.2` before `acid`
@@ -1962,19 +1984,6 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             view.cables.append(VCable(cable_id(f"bus:{w.src}>{w.node}/{w.port}"), src, dst,
                                       IMAGE, ref=w, kind="render", dormant=shut or idle,
                                       off=shut, label=said))
-    # each listed cloud's wire into the scene — the meta controller's,
-    # standing until the show cuts it, cut and joined like a bus cable;
-    # dormant while nothing reaches the scene (the cloud is not built)
-    for i in range(len(roles)):
-        w = rgraph.cloud_wire(i)
-        src, dst = f"rout:{w.src}", f"rin:{w.node}/{w.port}"
-        if not standing.has(w) or src not in view.pins or dst not in view.pins:
-            continue
-        idle = "scene" in gone
-        view.cables.append(VCable(cable_id(f"cloud:{w.src}>{w.node}/{w.port}"), src, dst,
-                                  GEOMETRY, ref=w, kind="render", dormant=idle,
-                                  label=CLOUD_IDLE if idle else CLOUD_SAID))
-
     # ---- what is patched; the nodes in column order ----
     hit = {c.src_port for c in view.cables} | {c.dst_port for c in view.cables}
     for n in nodes.values():
@@ -1987,10 +1996,12 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 nodes[nid].wires += 1
     # a Kinect's point cloud is its own kind of cloud — made of the sensor's depth by
     # the sensor's own calibration, so not one to take for any cloud's — and is titled so
+    # (by the device the cloud node names)
     sensor_roles = {str(getattr(d, "role", "")) for d in kinects}
-    for i, role in enumerate(roles):
-        cloud = nodes.get(f"render:{rgraph.cloud_name(i)}")
-        if cloud is not None and role in sensor_roles:
+    for name, r in refs.items():
+        cloud = nodes.get(f"render:{name}")
+        if (cloud is not None and isinstance(r, rgraph.PointCloud)
+                and r.role and r.role in sensor_roles):
             cloud.label = cloud.label.replace(LABELS["cloud"], KINECT_CLOUD, 1)
     # each node's area, and which sit with nothing in and out
     named = {b.scale for b in routes if b.scale} | {b.when for b in routes if b.when}
@@ -3518,16 +3529,6 @@ GROUP_NO_DELETE = ("{name} is a group: Ungroup it from its menu (its nodes stay)
 PATCH_SIDE, LOADABLE_SIDE = "patch", "preset"     # a conflict's two answers (the sheet's)
 NO_LOADABLE_SPAWN = "no patch is loaded: nothing to spawn into"
 SPAWN_STALE = "the loadable patch changed while the sheet was up: spawn {name} again"
-# what replacing the host's dream costs it, in words
-LOSES_WIRES = "its wires: {wires}"
-LOSES_VALUES = "{n} setting{s}: {names}"
-LOSES_GROUP = "its place in {name}"
-LOSES_MACRO = "{mid}'s hold on {names}: a macro sets its params' values, so it lets go"
-ROWS_STAY = "{n} row{s} on its params stay, and drive the patch's {node}"
-REPLACED_SAID = "replaced this loadable patch's {node}: {lost}"
-NOTHING_LOST = "nothing but its name"
-SPLICE_REPLACED = ("{name} not spliced: that cable is the {node} it would replace, which goes "
-                   "with its wires; spawn it, then wire it")
 SPAWNED = "spawned {name}: {n} node{s}, its pins open — nothing wired to the loadable patch"
 SPLICED = "spliced {name} into {s} → {d}"
 KEPT_SAID = "{n} row{s} kept by the loadable patch"
@@ -3879,7 +3880,7 @@ def open_ports(spec, entry: Mapping) -> list[dict]:
     for p in ports:
         if not isinstance(p, Mapping) or p.get("type") not in RENDER_TYPES:
             continue
-        if isinstance(p.get("to"), str) and p["to"] in rgraph.MANY_PORTS:
+        if isinstance(p.get("to"), str) and rgraph.is_many_port(p["to"]):
             # the scene's geometry takes several; its other wires
             # leave this one open
             free = not any(w.dst == p["to"] and w.src == p.get("was") for w in wires)
@@ -4278,7 +4279,7 @@ class Edit:
     def drop_node(self, node: str) -> str | None:
         """Delete a render node — any node of the section: its
         entry and every wire on it go, in one undo step; a window's wires
-        go (it is the meta controller's); the camera and a cloud are the meta controller's."""
+        go (it is the meta controller's); the camera is the look's one."""
         return render_drop(self, node)
 
     remove_render_node = drop_node          # N3's name for it (`remove_node`)
@@ -4296,6 +4297,11 @@ class Edit:
         """Black is clear on picture node `node`, or off — the
         section's `keys` (`render_key`)."""
         return render_key(self, node, on)
+
+    def set_cloud_device(self, node: str, device: str) -> str | None:
+        """Point-cloud node `node` names `device` ("" none), by hand
+        (`set_cloud_device`)."""
+        return set_cloud_device(self, node, device)
 
     # ---- what a pin is ----
 
@@ -5051,33 +5057,20 @@ class Edit:
     # (`_land` is run with the push held). Each returns a refusal in words,
     # nothing changed, or None (its words in `said`) ----
 
-    def _spawn_refusal(self, landing, choices: Mapping | None = None) -> str | None:
+    def _spawn_refusal(self, landing) -> str | None:
         """Whether `landing` (a `patches.Landing` read off the loadable patch as it
-        stood) still lands as it says: its render names free but for what the
-        sheet was asked to replace (`choices`), its modifier
+        stood) still lands as it says: its render names free, its modifier
         ids the next ones, its voices free in banks there are — else the
         words (the loadable patch moved under the sheet; nothing is written)."""
         if self.graph is None or self.loaded_patch is None or self.table is None:
             return NO_LOADABLE_SPAWN
-        # a dream the host already has …; `getattr`: a sheet held
+        # a scene the host already has …; `getattr`: a sheet held
         # open across a hot reload holds a `Landing` of the class before it
         why = getattr(landing, "refusal", None)
         if why is not None:
             return why
-        asks = getattr(landing, "unanswered", None)      # the same `getattr`
-        why = asks(choices) if asks is not None else None
-        if why is not None:
-            return why
         name = landing.group.get("name") or "the patch"
-        replacing = _replacing(landing)
-        # the sheet said what goes off the host as it stood, and a pad or a bank
-        # press may load another under the modal: its words are no longer true
-        asked = getattr(landing, "asked", ())
-        if replacing and asked:
-            now = self._asked(replacing)
-            if asked[0] is not now[0] or asked[1:] != now[1:]:   # (the very section)
-                return SPAWN_STALE.format(name=name)
-        have = patches.spec_names(getattr(self.graph, "spec", None)) - set(replacing)
+        have = patches.spec_names(getattr(self.graph, "spec", None))
         if any(c.startswith("render:") and c[7:] in have for c in landing.group.get("nodes", ())):
             return SPAWN_STALE.format(name=name)
         held = {m.id for m in getattr(self.table, "modifiers", ())}
@@ -5092,110 +5085,6 @@ class Edit:
             if any(n in bank for n in ids):
                 return SPAWN_STALE.format(name=name)
         return None
-
-    def _asked(self, replacing: tuple[str, ...]) -> tuple:
-        """What a sheet's question rests on: the section it was read off (a
-        `GraphSpec` is frozen and every landing makes a new one, a load's too)
-        and the rows and groups that touch the nodes it would replace. Not
-        their values: a knob turned under the sheet stays the same question."""
-        gone = patches.node_members(replacing)
-        table = self.table
-        cids = {f"render:{n}" for n in replacing}
-        return (getattr(self.graph, "spec", None),
-                tuple(sorted((b.source, b.target) for b in (*table.routes(), *table.desk())
-                             if gone.owns(b.target))),
-                tuple(sorted((mid, str(s.base)) for mid, m in table.macros.items()
-                             for s in m.subs if s.base is not None and gone.owns(s.base))),
-                tuple(g.get("id") for g in self._groups() or ()
-                      if cids & set(g.get("nodes", ()))))
-
-    def replace_said(self, landing, after: Mapping[str, Any] | None = None
-                     ) -> tuple[list[str], list[str]]:
-        """What the host's node loses to `landing` and what it keeps,
-        in words, for the sheet and the head: (its wires, the settings that will
-        differ, a macro's hold, its place in a group; the rows on its params).
-        `after`: `_replaced_values`, when the caller has it. Reads only."""
-        replacing = _replacing(landing)
-        if not replacing:
-            return [], []
-        names = set(replacing)
-        loses = []
-        wires = [x for x in _doc(self).get("wires", []) if _touches(x, names)]
-        if wires:
-            loses.append(LOSES_WIRES.format(wires=", ".join(f"{x['from']} → {x['to']}"
-                                                            for x in wires)))
-        reg, gone = self.reg, patches.node_members(sorted(names))
-        if after is None:
-            after = self._replaced_values(landing.values, replacing)
-        moved = [p.label or p.id for p in reg if p.id in after and p.base != after[p.id]]
-        if moved:
-            shown = ", ".join(moved[:3]) + (f" and {len(moved) - 3} more" if len(moved) > 3 else "")
-            loses.append(LOSES_VALUES.format(n=len(moved), s="" if len(moved) == 1 else "s",
-                                             names=shown))
-        table = self.table
-        for mid, m in sorted(table.macros.items()):
-            held = [s.base for s in m.subs if s.base is not None and gone.owns(s.base)]
-            if held:
-                loses.append(LOSES_MACRO.format(mid=mid, names=", ".join(
-                    reg[b].label or b if b in reg else b for b in held)))
-        cids = {f"render:{n}" for n in names}
-        loses += [LOSES_GROUP.format(name=g.get("name")) for g in self._groups() or ()
-                  if cids & set(g.get("nodes", ()))]
-        asked = {(c.host_row.get("source"), c.host_row.get("target")) for c in landing.conflicts}
-        rows = sum(1 for b in (*table.routes(), *table.desk())
-                   if gone.owns(b.target) and (b.source, b.target) not in asked)
-        rows += sum(1 for m in table.macros.values() for s in m.subs
-                    if s.depth is not None and gone.owns(s.depth[1]))
-        keeps = [ROWS_STAY.format(n=rows, s="" if rows == 1 else "s",
-                                  node=" and ".join(sorted(names)))] if rows else []
-        return loses, keeps
-
-    def _replaced_values(self, values: Mapping[str, Any], replacing: tuple[str, ...]
-                         ) -> dict[str, Any]:
-        """The values the replaced nodes' params take: `values` (the patch's)
-        over fresh, as a patch of one group lands (`Library.resolved`), so the
-        node is the patch's whatever the file leaves out. By what the nodes own
-        (`param_rows`), whichever groups that falls in: the shape's are `rot.*`,
-        most of `view.*` and `fx.face_map`."""
-        lib = getattr(self.loaded_patch, "lib", None)
-        if not replacing or lib is None:
-            return {}
-        gone = patches.node_members(replacing)
-        out: dict[str, Any] = {}
-        for group in {pre.partition(".")[0] for pre, _who, _keys in gone.param_rows}:
-            out.update((k, v) for k, v in lib.resolved(group, {}).items() if gone.owns(k))
-        out.update((k, v) for k, v in values.items() if gone.owns(k))
-        return out
-
-    def _drop_replaced_macros(self, replacing: tuple[str, ...]) -> dict:
-        """The macros doc with no base subscriber on the replaced nodes' params:
-        a base subscriber sets its param's value at every re-landing
-        (`Router.follow_macros`, a `set_macros` the next frame), so it would
-        overwrite the values the patch just landed, in the same breath."""
-        gone = patches.node_members(replacing)
-        doc = self.table.macros_doc()
-        for m in doc.values():
-            m["subs"] = [s for s in m.get("subs") or ()
-                         if not (isinstance(s.get("base"), str) and gone.owns(s["base"]))]
-        return doc
-
-    def _replaced_leave_groups(self, replacing: tuple[str, ...]) -> None:
-        """The replaced nodes off the groups that held them, each group's open
-        pins on them with them: the node that lands under their name is its
-        spawn group's."""
-        names = set(replacing)
-        cids = {f"render:{n}" for n in names}
-        groups = self._groups() or []
-
-        def on_them(p: Mapping) -> bool:
-            at = p.get("to") or p.get("from") or ""
-            return canvas_node(at) in names or canvas_node(at.rpartition(".")[0]) in names
-
-        for g in list(groups):
-            if cids & set(g.get("nodes", ())):
-                if "ports" in g:
-                    g["ports"] = [p for p in g["ports"] if not on_them(p)]
-                _drop_members(groups, g, cids)
 
     def _land_quiet(self, doc: dict, label: str, said: str) -> str | None:
         """`_land` with no undo step of its own (the verb pushed one)."""
@@ -5228,42 +5117,23 @@ class Edit:
 
         `choices`: conflict index → ``"patch"`` or ``"preset"`` (a row
         not answered is the patch's). Nothing is attached by itself:
-        with no `splice` every host port is an open pin. No file is written.
-
-        `landing.replacing`, answered by the sheet (`patches.
-        replace_key` in `choices`) — the host's node goes first, as a delete
-        takes it (its entry and every wire touching it), in this one step,
-        its values the patch's over fresh, a macro's base subscribers on them
-        let go and its other rows staying: the same id, now the patch's node.
-        `replace_said` said so before the press, and the head says it again."""
-        why = self._spawn_refusal(landing, choices)
+        with no `splice` every host port is an open pin. No file is written."""
+        why = self._spawn_refusal(landing)
         if why is not None:
             return why
         name = landing.group.get("name") or "patch"
         doc = _doc(self)
-        replacing = _replacing(landing)
-        after = self._replaced_values(landing.values, replacing)
-        lost, stay = (landing.loses, landing.keeps) if getattr(landing, "asked", ()) else (
-            self.replace_said(landing, after))
-        gone = _take_out(doc, set(replacing))
         doc["nodes"] = [*doc.get("nodes", []), *copy.deepcopy(list(landing.nodes))]
         doc["wires"] = [*doc.get("wires", []), *copy.deepcopy(list(landing.wires))]
-        # the patch's keyed members join the host's (a node it
-        # replaces is keyed as the patch says)
-        keyed = (set(doc.get(rgraph.KEYS_KEY, ())) - set(replacing)) | set(
-            getattr(landing, "keys", ()))
+        # the patch's keyed members join the host's
+        keyed = set(doc.get(rgraph.KEYS_KEY, ())) | set(getattr(landing, "keys", ()))
         if keyed:
             doc[rgraph.KEYS_KEY] = sorted(keyed)
         else:
             doc.pop(rgraph.KEYS_KEY, None)
-        _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])
-                             if n not in replacing])
         ends = None
         if splice is not None:
             s, d, why = _cable_ends(self, splice)
-            if why is not None:
-                return why
-            why = _splice_replaced(name, s, d, replacing)
             if why is not None:
                 return why
             why = splice_refusal(name, landing.ports, IMAGE)
@@ -5298,21 +5168,20 @@ class Edit:
             if got is None or got.id != m.id:          # (the refusal above rules it out)
                 notes.append(f"{m.id} landed as {getattr(got, 'id', '?')}")
         lib = getattr(self.loaded_patch, "lib", None)
-        values = {**after, **landing.values}
+        values = landing.values
         if values and lib is not None:
             missing = lib.restore(values)
             if missing:
                 notes.append(f"{len(missing)} value(s) for no param: " + ", ".join(missing[:4]))
         kept = self._spawn_rows(landing, choices or {}, notes)
-        macros = self._drop_replaced_macros(replacing) if replacing else table.macros_doc()
-        if landing.macros or macros != table.macros_doc():
-            notes += table.set_macros({**macros, **copy.deepcopy(landing.macros)}, reg)
+        if landing.macros:
+            notes += table.set_macros({**table.macros_doc(), **copy.deepcopy(landing.macros)},
+                                      reg)
         lay = getattr(self.loaded_patch, "layout", None)
         if lay is None:
             lay = self.loaded_patch.layout = {}
         for cid, xy in landing.layout.items():
             lay[cid] = [round(float(xy[0])), round(float(xy[1]))]
-        self._replaced_leave_groups(replacing)
         entry = self.land_group({**landing.group, "kept_by_host": kept})
         if ends is None and landing.ports:
             entry["ports"] = copy.deepcopy([dict(p) for p in landing.ports])
@@ -5325,10 +5194,6 @@ class Edit:
                 else SPAWNED.format(name=entry["name"], n=k, s="" if k == 1 else "s"))
         if kept:
             said += " · " + KEPT_SAID.format(n=len(kept), s="" if len(kept) == 1 else "s")
-        if replacing:
-            said += " · " + REPLACED_SAID.format(node=" and ".join(replacing),
-                                                 lost="; ".join(lost) or NOTHING_LOST)
-            said += "".join(f" · {line}" for line in stay)
         self.said = "; ".join([said, *notes])
         return None
 
@@ -5493,7 +5358,7 @@ class Edit:
             else:
                 node = canvas_node(was.rpartition(".")[0])
                 w = {"from": p["from"], "to": was}
-                if was in into and was not in rgraph.MANY_PORTS:
+                if was in into and not rgraph.is_many_port(was):
                     if not take_over or was in landed:
                         refused.append(PORT_TAKEN.format(port=was))
                         continue
@@ -5787,8 +5652,8 @@ def onto_words(view: View, c: VCable) -> str:
 # The section is a wired frame in the owner's ids, and the page
 # edits it as it stands — every node and wire of it deletes. What stays
 # refused: a type error, a loop, the meta controller's own —
-# a window (delete takes its wires: `OUTPUT_UNWIRED`) and a cloud
-# (`NOT_REMOVABLE`) — and the look's one camera (`CAMERA_KEPT`).
+# a window (delete takes its wires: `OUTPUT_UNWIRED`) — and the look's
+# one camera (`CAMERA_KEPT`).
 
 
 KNOB_DEPTH_STEPS = (1.0, 0.5, 0.25, 0.125)     # shares of a knob's range
@@ -5859,7 +5724,7 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     name — `hands.2`, `acid.2`, `output.2.hands`, `scene.geometry` —,
     None), or (None, why it is no name a wire may use). The canvas's
     names are the section's, so a pin is its name; the camera (the look's
-    one) and a cloud (the meta controller's) are no name a section says.
+    one) is no name a section says.
     `render_graph` is unused: kept for the callers' signature."""
     head, _, rest = pin.partition(":")
     if head not in ("rout", "rin", "render") or not rest:
@@ -5869,12 +5734,8 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     if head == "rout" and _bus_source(name):
         return name, None                    # All outputs' bus pin
     kind = kind_of(name)
-    if head == "rout" and kind == "cloud":
-        return name, None                    # a cloud's wire is the meta controller's
     if kind == CAMERA:
         return None, CAMERA_KEPT.format(label=label_of(name))
-    if kind == "cloud":
-        return None, NOT_REMOVABLE.format(label=label_of(name))
     if kind is None:
         return None, f"no node {name!r}"
     if head == "rin":
@@ -5887,7 +5748,7 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
 PICKER_GROUP: dict[str, str] = {
     "starter": "starters",
     "scene": "scene", "shape": "scene", "hands": "scene", "layer": "scene", "guide": "scene",
-    "backdrop": "scene",
+    "backdrop": "scene", "cloud": "scene",
     "pattern": "pictures", "composite": "pictures", "switch": "pictures",
     "channels": "pictures", "resize": "pictures", "delay": "pictures",
     # the eight channels under media ▸ (they always exist: the
@@ -5895,14 +5756,15 @@ PICKER_GROUP: dict[str, str] = {
     # segment there too (what a channel's picture is cut into), the mask
     # nodes in their own group, masks ▸
     "channel": "media", "segment": "media",
-    "matte": "masks", "cut": "masks",
+    "matte": "masks", "cut": "masks", "handmask": "masks",
     "effect": "effects",
     "slot": "slot on",
 }
 PICKER_GROUPS = tuple(dict.fromkeys(PICKER_GROUP.values()))
 # the frame kinds the picker adds once each (a second add says so): drawn
-# disabled while the section has one
-ONCE = ("scene", "shape", "backdrop", "pattern")
+# disabled while the section has one (the backdrop and the scene are any
+# number)
+ONCE = ("shape", "pattern")
 
 
 def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
@@ -5914,7 +5776,7 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     a switch over the channels, resize and delay); media ▸
     (channel a … channel h, each the channel's letter as its
     file — picking one makes nothing, the channels always exist; then
-    the segment); masks ▸ (the matte and cut); every
+    the segment); masks ▸ (the matte and cut, the hand mask); every
     effect file this build has; and one more slot on each effect
     instance in the section."""
     gs = edit.graph
@@ -5923,7 +5785,7 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     out: list[tuple[str, str | None, str]] = [("starter", k, w) for k, w in STARTERS]
     out += [("scene", None, "scene"), ("shape", None, "shape"), ("hands", None, "hands"),
             ("layer", None, "hands layer"), ("guide", None, "hands guide"),
-            ("backdrop", None, "backdrop")]
+            ("backdrop", None, "backdrop"), ("cloud", None, "point cloud")]
     out += [("pattern", None, "faces pattern"), ("composite", None, "composite"),
             ("switch", None, "switch"),
             *(("channels", port, label) for port, label in CHANNEL_SWITCH_PORTS),
@@ -5931,7 +5793,8 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     # media ▸ the eight channels and the segment;
     # masks ▸ the matte and the cut
     out += [("channel", c, f"channel {c}") for c in rgraph.MEDIA_CHANNELS]
-    out += [("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut")]
+    out += [("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut"),
+            ("handmask", None, "hand mask")]
     out += [("effect", f, f) for f in sorted(files or ())]
     out += [("slot", name, f"slot on {name}") for name in _instances(spec)]
     return out
@@ -6149,7 +6012,7 @@ def _node_name(e: dict) -> str | None:
     # (`lookback` may be declared again: `lookback.2` — an old frame's, which a
     # load makes public parts)
     if kind in ("composite", "switch", "delay", "resize", "matte", "cut", "segment",
-                "lookback"):
+                "lookback", "cloud", "handmask", "backdrop", "scene"):
         return kind if n == 1 else f"{kind}.{n}"
     if kind in rgraph.FRAME_KINDS:
         return kind
@@ -6227,13 +6090,6 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
         return f"{d} is a node, not a port: a wire goes into {rgraph.WIRED_TO_WORDS}"
     w = rgraph.Wire(s, d)
     doc = _doc(edit) if doc is None else doc
-    if kind_of(s) == "cloud":
-        # a cloud's one wire is the meta controller's, into the scene
-        if not rgraph.is_cloud_wire(w):
-            return CLOUD_INTO_SCENE.format(cloud=s)
-        if getattr(edit, "loaded_patch", None) is None:
-            return BUS_NO_SHOW
-        return _land(edit, doc, f"wire {w}", f"wired {w}", dry, bus_cuts=_bus_cuts(edit).joining(w))
     if _bus_source(s):
         if not rgraph.is_bus(w):
             return BUS_SAME_PORT.format(port=s.rpartition(".")[2])
@@ -6244,7 +6100,7 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
         _keep_declared(doc, [x["from"] for x in gone])
         return _land(edit, doc, f"wire {w}", f"wired {w}", dry, bus_cuts=_bus_cuts(edit).joining(w))
     wires = doc.get("wires", [])
-    if d in rgraph.MANY_PORTS:
+    if rgraph.is_many_port(d):
         # several wires go in, drawn in section order — a hands node's
         # before the shape's, the order the frame is written in
         keep = [x for x in wires if (x["from"], x["to"]) != (s, d)]
@@ -6315,13 +6171,12 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
 def _cut_bus(edit: Edit, w: rgraph.Wire) -> str | None:
     """The meta controller's bus cable `w` cut in the open show — one undo
     step, the loadable patch untouched; the window shows nothing on that port
-    until the cable is joined again or the loadable patch wires the port.
-    A cloud's wire into the scene (`graph.is_fixture_wire`) is cut the same way."""
+    until the cable is joined again or the loadable patch wires the port."""
     bus_cuts = _bus_cuts(edit)
     if not bus_cuts.has(w):
         return NO_SUCH_WIRE.format(wire=str(w))
-    what = "the cloud's wire" if rgraph.is_cloud_wire(w) else "the bus cable"
-    return _land(edit, _doc(edit), f"cut {w}", f"cut {what} {w}", bus_cuts=bus_cuts.cutting(w))
+    return _land(edit, _doc(edit), f"cut {w}", f"cut the bus cable {w}",
+                 bus_cuts=bus_cuts.cutting(w))
 
 
 def _new_instance(spec, file: str) -> int:
@@ -6381,6 +6236,36 @@ ADDED = {
 }
 
 
+BACKDROP_ADDED = "{name} added: wire a picture into {name}.image and the scene into {name}.scene"
+# a scene past the first — a second camera onto the one world
+SCENE_ADDED = ("{name} added: a camera onto the world, its eye ({eye}.*) on the world's "
+               "centre; it sees what scene sees ({seen}) — wire it into a picture port")
+
+
+def next_scene(doc: Mapping) -> int:
+    """The scene an add makes: 1 while section `doc` names
+    none (by an entry or a wire), else one past the highest it names."""
+    held = [rgraph.split_instance(n)[1] for n in _named(doc) if kind_of(n) == "scene"]
+    return max(held, default=0) + 1
+
+
+def _seen_copied(doc: dict, name: str) -> list[str]:
+    """Scene `name` sees what the first scene sees: each wire into
+    `scene.geometry` copied into `<name>.geometry`, in its order; the sources
+    copied."""
+    seen = [x["from"] for x in doc.get("wires", []) if x.get("to") == "scene.geometry"]
+    doc["wires"] = [*doc.get("wires", []),
+                    *({"from": src, "to": f"{name}.geometry"} for src in seen)]
+    return seen
+
+
+def next_backdrop(doc: Mapping) -> int:
+    """The backdrop an add makes: 1 while section `doc` names none
+    (by an entry or a wire), else one past the highest it names."""
+    held = [rgraph.split_instance(n)[1] for n in _named(doc) if kind_of(n) == "backdrop"]
+    return max(held, default=0) + 1
+
+
 def _next(spec, kind: str) -> int:
     """The next instance of a declared kind (`composite`, `switch`, `delay`,
     `resize`) in section `spec`: one past the highest."""
@@ -6396,6 +6281,11 @@ ADD_SAID = {
             "the picture where the mask passes, see-through elsewhere"),
     "segment": ("{name} added: wire a picture into {name}.image — its pins are {name}.fg, "
                 "{name}.bg and {name}.mask"),
+    # a point cloud, its device picked on its menu
+    "cloud": ("{name} added: pick its device on its menu (device ▸) and wire it into "
+              "scene.geometry"),
+    "handmask": ("{name} added: wire hands into {name}.hands — it makes a mask of the polygon "
+                 "their thumbs and index fingers make; wire it into a cut's mask"),
 }
 
 
@@ -6444,7 +6334,8 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
                                                "scene.geometry, or add its layer")
     if kind == "slot":
         return add_slot(edit, file or "")
-    if kind in ("effect", "switch", "composite", "delay", "resize", *ADD_SAID):
+    if kind in ("effect", "switch", "composite", "delay", "resize", "backdrop", "scene",
+                *ADD_SAID):
         got = _new_node(edit, spec, doc, kind, file, **settings)
         if isinstance(got, str):
             return got
@@ -6551,14 +6442,14 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
         return _started(edit, doc, before, "scene", seg.name, comp.name, label=label,
                         said=said)
     if which == "backdrop":
-        if "backdrop" in before:
-            return IN_ALREADY.format(label=label_of("backdrop"))
+        # (a second is `backdrop.2`, as any numbered node)
+        at = rgraph.BackdropAt(next_backdrop(doc))
         feed = rgraph.channel_name(rgraph.MEDIA_CHANNELS[0])
-        doc["nodes"].append({"kind": "backdrop"})
-        doc["wires"] = [*doc.get("wires", []), {"from": feed, "to": "backdrop.image"}]
-        return _started(edit, doc, before, "backdrop", label=label,
-                        said=f"{label}: {feed} → backdrop.image — left unwired: backdrop.scene "
-                             "and the backdrop's picture (wire it into a picture port)")
+        doc["nodes"].append(at.to_json())
+        doc["wires"] = [*doc.get("wires", []), {"from": feed, "to": f"{at.name}.image"}]
+        return _started(edit, doc, before, at.name, label=label,
+                        said=f"{label}: {feed} → {at.name}.image — left unwired: {at.name}.scene "
+                             f"and {at.name}'s picture (wire it into a picture port)")
     looks = which in ("tracers", "tracers+dream")
     dreams = which in ("tracers+dream", "dream")
     unwired: list[str] = []
@@ -6923,7 +6814,7 @@ def drop_refusal(name: str, label: str | None = None) -> str | None:
         return SCENE_NODE.format(label=label)
     if kind in ("layer", "guide"):
         return HANDS_NODE.format(label=label)
-    if kind == "matte":
+    if kind in ("matte", "handmask"):
         return MASK_NODE.format(label=label)
     if kind in ("output", rgraph.ALL_OUTPUTS):
         return OUTPUT_NODE.format(label=label)
@@ -7037,7 +6928,7 @@ def _onto(doc: dict, s: str, d: str, name: str, inlet: str | None = None) -> Non
         _entry_name(e) == name and e.get("instance", 1) == 1
         and not any(k in e for k in (*rgraph.PLACE_KEYS, "slots")))]
     wires = doc.get("wires", [])
-    if d in rgraph.MANY_PORTS:
+    if rgraph.is_many_port(d):
         kept = [x for x in wires if (x["from"], x["to"]) != (s, d)]
     else:
         kept = [x for x in wires if x["to"] != d]
@@ -7090,24 +6981,12 @@ def _said_onto(doc: dict, name: str, s: str, d: str, inlet: str | None,
     return words
 
 
-def _splice_replaced(name: str, s: str, d: str, replacing: Iterable[str]) -> str | None:
-    """A splice onto a cable of the very node the spawn replaces
-    would wire the patch to what it took out: refused, in words."""
-    ends = {canvas_node(s), canvas_node(d.rpartition(".")[0])} & set(replacing)
-    return SPLICE_REPLACED.format(name=name, node=min(ends)) if ends else None
-
-
-def splice_target(edit: Edit, cable, name: str, ports, replacing: Iterable[str] = ()
-                  ) -> str | None:
+def splice_target(edit: Edit, cable, name: str, ports) -> str | None:
     """May a patch named `name` with `ports` be spliced into `cable` (a
     browser line dropped on it)? A picture cable of the section
-    (`_cable_ends`' rule: not the meta controller's bus), not one of what the spawn
-    replaces (`_splice_replaced`), and the patch's one inlet and
-    one outlet of that type (`splice_refusal`); else the words why not."""
-    s, d, why = _cable_ends(edit, cable)
-    if why is not None:
-        return why
-    why = _splice_replaced(name, s, d, replacing)
+    (`_cable_ends`' rule: not the meta controller's bus), and the patch's one
+    inlet and one outlet of that type (`splice_refusal`); else the words why not."""
+    why = _cable_ends(edit, cable)[2]
     if why is not None:
         return why
     return splice_refusal(name, ports, getattr(cable, "type", IMAGE) or IMAGE)
@@ -7130,7 +7009,7 @@ def _splice(doc: dict, s: str, d: str, into: str, out: str) -> None:
         return f"{where}.image" == d
     _unplace(doc, into_d)
     wires = doc.get("wires", [])
-    if d in rgraph.MANY_PORTS:
+    if rgraph.is_many_port(d):
         kept = [x for x in wires if (x["from"], x["to"]) != (s, d)]
     else:
         kept = [x for x in wires if x["to"] != d]
@@ -7173,6 +7052,18 @@ def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
             return IN_ALREADY.format(label=label_of(kind))
         doc["nodes"].append({"kind": kind})
         return kind, f"{label_of(kind)} added: {ADDED[kind]}"
+    if kind == "backdrop":
+        at = rgraph.BackdropAt(next_backdrop(doc))
+        doc["nodes"].append(at.to_json())
+        return at.name, BACKDROP_ADDED.format(name=at.name)
+    if kind == "scene":
+        sc = rgraph.SceneAt(next_scene(doc))
+        doc["nodes"].append(sc.to_json())
+        if sc.n == 1:
+            return sc.name, f"{label_of('scene')} added: {ADDED['scene']}"
+        seen = _seen_copied(doc, sc.name)
+        return sc.name, SCENE_ADDED.format(name=sc.name, eye=eye_prefix(sc.name),
+                                           seen=", ".join(seen) or "nothing yet")
     if kind == "effect":
         files = edit.graph.files() if hasattr(edit.graph, "files") else None
         if not file or (files is not None and file not in files):
@@ -7198,10 +7089,37 @@ def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
         return at.name, f"{at.name} added: wire a picture into {at.name}.image — {how}"
     if kind in ADD_SAID:
         at = {"matte": rgraph.MatteAt, "cut": rgraph.CutAt,
-              "segment": rgraph.SegmentAt}[kind](_next(spec, kind))
+              "segment": rgraph.SegmentAt, "cloud": rgraph.CloudAt,
+              "handmask": rgraph.HandMaskAt}[kind](_next(spec, kind))
         doc["nodes"].append(at.to_json())
         return at.name, ADD_SAID[kind].format(name=at.name)
     return f"no node kind {kind!r}: the picker adds what its groups list"
+
+
+def cloud_devices(edit: Edit) -> list[str]:
+    """The roles a cloud node's device ▸ offers: this Mac's cloud
+    devices (`graph.cloud_roles` of the renderer's `cloud_source`), listed,
+    open or not; none without a renderer. (The renderer is the graph
+    section's, `GraphSection.renderer`: `edit.render` is its last graph.)"""
+    r = getattr(edit.graph, "renderer", None)
+    return list(rgraph.cloud_roles(getattr(r, "cloud_source", None)))
+
+
+def set_cloud_device(edit: Edit, name: str, device: str) -> str | None:
+    """Cloud node `name`'s entry names `device` (a role, "" none), by hand, as
+    a channel node names its channel; one undo step. Nothing is picked when a device connects; a role this Mac
+    does not list is kept, and the node says so (`graph.cloud_said`)."""
+    doc = _doc(edit)
+    nodes = doc.get("nodes", [])
+    at = next((i for i, e in enumerate(nodes) if e.get("kind") == "cloud"
+               and _node_name(e) == name), None)
+    if at is None:
+        return CLOUD_NO_SUCH.format(cloud=name)
+    n = rgraph.split_instance(name)[1]
+    entry = rgraph.CloudAt(n, str(device or "")).to_json()
+    doc["nodes"] = [*nodes[:at], entry, *nodes[at + 1:]]
+    said = CLOUD_DEVICE_SAID.format(cloud=name, device=device or "no device")
+    return _land(edit, doc, f"device {name}", said)
 
 
 def render_insert(edit: Edit, cable, kind: str, file: str | None = None,
@@ -7270,15 +7188,9 @@ def render_place(edit: Edit, cable, name: str, inlet: str | None = None) -> str 
                  _said_onto(doc, nm, s, d, inlet, lost, moved=True))
 
 
-def _replacing(landing) -> tuple[str, ...]:
-    """`Landing.replacing`; () from a `Landing` of the class before a hot reload
-    (a sheet held open across one)."""
-    return tuple(getattr(landing, "replacing", ()))
-
-
 def _drop_members(groups: list[dict], g: dict, cids: set[str]) -> bool:
     """Canvas ids `cids` off group `g`; a group emptied goes. Returns whether it
-    went (`Edit.group`, `leave_groups`, a replace)."""
+    went (`Edit.group`, `leave_groups`)."""
     g["nodes"] = [cid for cid in g["nodes"] if cid not in cids]
     if g["nodes"]:
         return False
@@ -7428,7 +7340,7 @@ def render_drop(edit: Edit, node: str) -> str | None:
     fed, and the note says so). A window
     is the meta controller's: its wires go, and it shows its ground (`OUTPUT_UNWIRED`,
     said, no refusal; with none, `NOTHING_TO_DELETE`); All outputs the
-    same. The camera and a cloud are the meta controller's (`spec_name`)."""
+    same. The camera is the look's one (`spec_name`)."""
     name, why = spec_name(node, edit.render)
     if name is None:
         return why

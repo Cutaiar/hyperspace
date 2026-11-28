@@ -327,13 +327,13 @@ def test_a_branch_into_pattern_media_keeps_the_channels_aspect(ctx):
     r = _renderer(ctx, _media(a=Still(_rgba(32, 16))), pairs, [_instance("hueturn", 2)],
                   HUE, HUE_ON)
     seen = []
-    real = r.draw_scene
+    real = r.draw_posed          # (the graph's shape draws a pose)
 
-    def spy(s, *a, **k):
+    def spy(ps, s, *a, **k):
         seen.append(r._face_media(s))
-        return real(s, *a, **k)
+        return real(ps, s, *a, **k)
 
-    r.draw_scene = spy
+    r.draw_posed = spy
     _draw(ctx, r, _faces(media_alpha=0.8))
     (tex, upright), = seen
     assert tex.size == (32, 16) and tex is not r.media_texture("a") and upright

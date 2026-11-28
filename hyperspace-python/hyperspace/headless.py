@@ -140,12 +140,13 @@ def seed(home: Path, machine: Path, show: dict | None) -> None:
 
 
 def resave(path: Path, scratch: Path, *, library: Path | None = None,
-           show: dict | None = None) -> tuple[bytes, list[str], str]:
+           show: dict | None = None, clouds: tuple[str, ...] = ()) -> tuple[bytes, list[str], str]:
     """Preset file `path` loaded and saved untouched by the app (`make_app`)
     in a scratch library at `scratch` — `path` copied in as a loadable patch of its
     own, with `library`'s module presets beside it when
     given, and `show` (a `show_seed`: the meta controller's old eye) open: (the bytes
-    the save wrote, the load's notes, the name it loaded as). The pose is
+    the save wrote, the load's notes, the name it loaded as). `clouds`: the rig's cloud devices' roles, what a file from before `/13` makes
+    its scene's clouds nodes for (`LoadedPatch.migrate_clouds`). The pose is
     written only where the file had one. Raises
     what the load raises (`LibraryError`) for a file that does not load.
     `scratch` is created; nothing outside it is written."""
@@ -172,6 +173,7 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
         shutil.copyfile(path, home / loadable.GROUP / f"{stem}.json")
         seed(home, machine, show)
         app = make_app(home, machine=machine)
+        app.loaded_patch.migrate_clouds = tuple(clouds)
         app.lib.load(loadable.GROUP, stem)
         name = app.lib.current(loadable.GROUP) or stem
         notes = list(app.loaded_patch.notes)

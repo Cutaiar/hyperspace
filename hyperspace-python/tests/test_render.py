@@ -202,7 +202,7 @@ def test_instance_motion(ctx):
                              ctx=ctx)
 
     def at(motion, phase):
-        # K3: the motion's phase is the host's (ViewState.integrate), not
+        # the motion's phase is the host's (ViewState.integrate), not
         # the frame's clock
         return render_offscreen(
             ViewState(shape=3, ang=list(VIEW["ang"]), instances=9,
@@ -264,8 +264,8 @@ def test_bitmap_path_oscillates(ctx):
     card = CardMedia(np.full((8, 8, 4), (220, 40, 200, 255), dtype=np.uint8))
 
     def shot(mode, t):
-        # K3: the path's phase is the host's (ViewState.integrate), t seconds
-        # at media_rate 1 — the frame's own clock no longer moves it
+        # the path's phase is the host's (ViewState.integrate), t seconds
+        # at media_rate 1 — the frame's own clock does not move it
         return render_offscreen(
             ViewState(shape=3, ang=list(VIEW["ang"]), faces=True,
                       media_mode=mode, media_amp=0.25, media_scale=0.4, media_phase=t),
@@ -605,13 +605,13 @@ def test_one_raising_frame_does_not_strand_the_next(ctx):
     s = ViewState(shape=3, planes=[True] * 6)
     r.draw(s, 160, 100, t_now=0.0)
     before = _pixels(win)
-    real = r.draw_scene
+    real = r.draw_posed              # (the graph's shape draws a pose)
 
     def once(*a, **k):
-        r.draw_scene = real
+        r.draw_posed = real
         raise RuntimeError("one bad frame")
 
-    r.draw_scene = once
+    r.draw_posed = once
     s.ang = [a + 0.3 for a in s.ang]
     with pytest.raises(RuntimeError):
         r.draw(s, 160, 100, t_now=1.0)
@@ -1379,7 +1379,7 @@ def test_per_face_puts_the_picture_at_the_faces_own_uv(ctx):
 
 def test_screen_mapping_is_a_cover_fit_window_onto_the_picture(ctx):
     """Screen mapping: the square picture, centred, covers the window's
-    longer side and is cropped on the shorter (fork F3), upright. Every
+    longer side and is cropped on the shorter, upright. Every
     face pixel shows the picture's colour at its own place in the window,
     whichever face it belongs to."""
     from hyperspace.fx import SCREEN
@@ -1530,14 +1530,14 @@ def test_a_face_pass_that_raises_leaves_the_frame_and_the_window_bound(ctx):
     s = _face_view(card, pattern=2)
     r.draw(s, 160, 100, t_now=0.0)
     before = _pixels(win)
-    real = r.draw_scene
+    real = r.draw_posed              # (the graph's shape draws a pose)
 
     def once(*a, **k):
-        r.draw_scene = real
+        r.draw_posed = real
         assert r._pic is r.face_pic.tex              # the picture was handed over…
         raise RuntimeError("one bad frame")
 
-    r.draw_scene = once
+    r.draw_posed = once
     with pytest.raises(RuntimeError, match="one bad frame"):
         r.draw(s, 160, 100, t_now=1.0)
     assert ctx.fbo is win and ctx.viewport == (0, 0, 160, 100) and r._pic is None   # …and taken back
@@ -1846,7 +1846,7 @@ def _scene(ctx, r, s, t=2.0):
     asked for the field — once a pass that draws anything, never one with
     no copies). The field is field.py's (Fit, a lattice) or the flat
     field as it always was (`_legacy_field`), whichever the pass asked.
-    The motion's phase is the one `t` seconds at `inst_rate` give (K3: the
+    The motion's phase is the one `t` seconds at `inst_rate` give (the
     host integrates it, `ViewState.integrate`)."""
     s.inst_phase = t * s.inst_rate
     seen = []

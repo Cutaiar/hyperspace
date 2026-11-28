@@ -327,7 +327,7 @@ def test_a_saved_loadable_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_
     rig.reg["camera.pan.y"].set(-0.75)
     path = rig.loaded_patch.save_as("WORLD PAN")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.loadable/12"     # a key marks the units
+    assert doc["schema"] == "hyperspace.loadable/13"     # a key marks the units
     assert doc[loadable.UNITS_KEY] == loadable.UNITS
     assert doc[loadable.UNITS_KEY]["camera.pan"] == "world"
     assert doc["values"]["camera.pan.x"] == 2.5

@@ -6,7 +6,7 @@ deletable cable.
 | the shape read `pattern`         | `pattern → shape.faces`                     | plain faces  |
 | the cover built from the scene   | `scene.cover → cut.mask` (a mask)           | no cover     |
 | a layer / guide read `hands`     | `hands → hands.layer.hands` / `.guide.hands`| empty        |
-| clouds injected into the scene   | `cloud → scene.geometry` (the meta controller's)        | no cloud     |
+| clouds, the patch's own nodes    | `cloud → scene.geometry`                    | no cloud     |
 | `depth` auto-wired, one `blend`  | `scene.depth → composite.depth` / an output's, `laid` the layer's | no depth |
 
 Per row: unwired behaves as the table says; wired reproduces what the
@@ -53,9 +53,8 @@ def spec_of(*pairs, nodes=()):
     return spec
 
 
-def build(spec, n=1, clouds=(), bus_cuts=None, effects=()):
-    return G.build_graph([View(Switches(), SIZE) for _ in range(n)], spec.wiring(),
-                         tuple(clouds), tuple(effects), bus_cuts)
+def build(spec, n=1, bus_cuts=None, effects=()):
+    return G.build_graph([View(Switches(), SIZE) for _ in range(n)], spec.wiring(), tuple(effects), bus_cuts)
 
 
 def view_of(spec, g, bus_cuts=None):
@@ -260,53 +259,59 @@ def test_an_unwired_layer_draws_nothing_on_the_golden_meta(ctx, bus_cuts):
     assert (empty == bare).all() and not (lit == bare).all()
 
 
-# ---------------------------------------------------------------- the meta controller's clouds
+# ---------------------------------------------------------------- the clouds (the patch's own)
 
-def test_a_cloud_is_in_the_scene_by_the_meta_wire_and_cut_it_is_not():
-    spec = G.read_graph(migrated())
-    g = build(spec, clouds=("scan", "desk"))
+CLOUDS = [{"kind": "cloud", "device": "scan"}, {"kind": "cloud", "instance": 2, "device": "desk"}]
+
+
+def test_a_cloud_is_in_the_scene_where_it_is_wired_and_nowhere_else():
+    """A cloud node is drawn where a wire puts it into a scene, as the
+    shape — no wire stands for it, and the devices listed build nothing."""
+    spec = spec_of(*FRAME, ("cloud", "scene.geometry"), nodes=CLOUDS)
+    g = build(spec)
     clouds = [n for n in g.nodes["scene"].geometries() if isinstance(n, G.PointCloud)]
-    assert [c.name for c in clouds] == ["cloud", "cloud.2"]
-    assert G.cloud_wires(("scan", "desk")) == (G.Wire("cloud", "scene.geometry"),
-                                               G.Wire("cloud.2", "scene.geometry"))
-    bus_cuts = G.BusCuts().cutting(G.cloud_wire(0))
-    g = build(spec, clouds=("scan", "desk"), bus_cuts=bus_cuts)
-    clouds = [n for n in g.nodes["scene"].geometries() if isinstance(n, G.PointCloud)]
-    assert [c.name for c in clouds] == ["cloud.2"]
-    assert G.is_fixture_wire(G.cloud_wire(1)) and not G.is_fixture_wire(G.Wire("hands", "scene.geometry"))
-    # (a show saved without cuts cut nothing: every cloud's wire stands)
-    assert G.BusCuts.read({}).present(G.cloud_wires(("scan",))) == (G.cloud_wire(0),)
-    assert G.BusCuts.read(bus_cuts.to_json()) == bus_cuts
+    assert [(c.name, c.role) for c in clouds] == [("cloud", "scan")]
+    assert "cloud.2" not in g.nodes                                    # declared, not wired
+    assert not G.is_fixture_wire(G.Wire("cloud", "scene.geometry"))    # the patch's own wire
+    spec = spec_of(*FRAME, ("cloud.2", "scene.geometry"), ("cloud", "scene.geometry"),
+                   nodes=CLOUDS)
+    clouds = [n for n in build(spec).nodes["scene"].geometries() if isinstance(n, G.PointCloud)]
+    assert [c.name for c in clouds] == ["cloud.2", "cloud"]          # in wire order
+    # (an undeclared cloud's wire is refused in words, as a matte's)
+    got = G.read_graph(wired(*FRAME, ("cloud.3", "scene.geometry"), nodes=CLOUDS))
+    assert any("cloud.3" in n for n in got.notes), got.notes
 
 
-def test_the_canvas_draws_the_clouds_wire_and_a_cut_one_is_gone():
-    spec = G.read_graph(migrated())
-    view = view_of(spec, build(spec, clouds=("scan",)))
+def test_the_canvas_draws_the_clouds_wire_as_any_wire():
+    spec = spec_of(*FRAME, ("cloud", "scene.geometry"), nodes=CLOUDS)
+    view = view_of(spec, build(spec))
     c = cable(view, "cloud", "scene.geometry")
-    assert c.ref == G.cloud_wire(0) and c.type == graphview.GEOMETRY and not c.dormant
-    bus_cuts = G.BusCuts().cutting(G.cloud_wire(0))
-    view = view_of(spec, build(spec, clouds=("scan",), bus_cuts=bus_cuts), bus_cuts)
-    assert not [c for c in view.cables if c.ref == G.cloud_wire(0)]
-    assert "render:cloud" in {n.id for n in view.nodes}                 # to join again
+    assert c.ref == G.Wire("cloud", "scene.geometry") and c.type == graphview.GEOMETRY
+    assert {"render:cloud", "render:cloud.2"} <= {n.id for n in view.nodes}
 
 
-def test_the_clouds_wire_is_cut_and_joined_on_graph(tmp_path):
+def test_a_cloud_is_added_named_wired_unwired_and_deleted_on_graph(tmp_path):
+    """The picker adds a cloud (numbered as any node), its menu names its
+    device by hand, its wire into the scene is drawn and cut like any, and it deletes."""
     from test_outputs_bus import _party
 
-    app, e, pushed = _party(tmp_path)
-    spec = app.loaded_patch.graph.spec
-    before = spec.to_json()
-    g = G.build_graph([View(Switches(), SIZE)], spec.wiring(), ("scan",), (),
-                      G.bus_cuts_of(app.loaded_patch))
-    c = cable(graphview.build(Bindings(), Registry(), None, None, g, spec),
-              "cloud", "scene.geometry")
-    # (the cut is the loadable patch's, its dot the loadable patch's)
-    assert e.unwire(c) is None and app.loaded_patch.bus.cut == {G.cloud_wire(0)}
-    assert app.loaded_patch.graph.spec.to_json() == before and app.lib.is_dirty("loadable")
-    assert e.wire("rout:cloud", "rin:scene/geometry") is None
-    assert app.loaded_patch.bus.cut == frozenset() and len(pushed) == 2
-    assert e.wire("rout:cloud", "rin:output.all/image") == graphview.CLOUD_INTO_SCENE.format(
-        cloud="cloud")
+    app, e, _pushed = _party(tmp_path)
+    assert ("cloud", None, "point cloud") in graphview.picker(e)
+    assert e.add_node("cloud") is None and e.added == "cloud"
+    assert e.add_node("cloud") is None and e.added == "cloud.2"
+    assert e.set_cloud_device("cloud.2", "scan") is None
+    clouds = app.loaded_patch.graph.spec.clouds
+    assert [(c.name, c.device) for c in clouds] == [("cloud", ""), ("cloud.2", "scan")]
+    assert "cloud.2.size" in app.reg and "cloud.size" in app.reg       # numbered as any node's
+    assert e.wire("rout:cloud.2", "rin:scene/geometry") is None
+    assert G.Wire("cloud.2", "scene.geometry") in app.loaded_patch.graph.spec.wires
+    assert e.wire("rout:cloud.2", "rin:output.all/image") is not None   # geometry: a scene's
+    assert e.unwire("rout:cloud.2", "rin:scene/geometry") is None
+    assert G.Wire("cloud.2", "scene.geometry") not in app.loaded_patch.graph.spec.wires
+    assert e.drop_node("render:cloud.2") is None
+    assert [c.name for c in app.loaded_patch.graph.spec.clouds] == ["cloud"]
+    assert "cloud.2.size" not in app.reg and app.loaded_patch.bus.cut == frozenset()
+    assert e.set_cloud_device("cloud.5", "scan") == graphview.CLOUD_NO_SUCH.format(cloud="cloud.5")
 
 
 # ---------------------------------------------------------------- depth and blend

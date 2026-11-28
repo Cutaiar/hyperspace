@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.loadable/12",
+ "schema": "hyperspace.loadable/13",
  "name": "distort-all-three",
  "note": "Wave into Blocks into Shake: ripples, strips losing sync and a smeared buzz, in a row. The sub band pushes all three Amounts; the right hand's height sets how many ripples, the left's the strip height.",
  "graph": {

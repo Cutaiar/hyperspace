@@ -854,11 +854,15 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
     rig = Rig(slug, hands, ctx)
     base = rig.loaded_patch.graph.free_doc() or {}
     section = rig_section(rig, slug, states, wiring)
+    if config is not None:
+        rig.list_devices(config)
+        # the listed clouds as the patch's own nodes and wires, as a
+        # file from before `/13` is read on a Mac that lists them
+        section = graphmigrate.thirteen({"graph": section},
+                                        G.cloud_roles(rig.devices))[0]["graph"]
     spec = read_graph(section, effects={n.partition(".")[0] for n in rig.fx.specs})
     assert not spec.notes, (slug, spec.notes)
     rig.renderer.wiring = spec.wiring()
-    if config is not None:
-        rig.list_devices(config)
     try:
         targets = [_target(ctx, size, SAMPLES if k == 0 else 0) for k in range(len(states))]
         views = state_views(slug, states, size, targets)
@@ -1375,8 +1379,12 @@ def frame_graphs(states, spec, section, effects, wired=None, clouds=(), look="of
         wired = graphmigrate.split_retired(graphmigrate.placed_wires(wired, files), look, rest)
     got = read_graph(wired, effects=files)
     assert not got.notes, got.notes
+    if clouds:
+        # the clouds a CLOUDED rig lists, the section's own nodes and wires
+        wired = graphmigrate.thirteen({"graph": wired}, tuple(clouds))[0]["graph"]
+        got = read_graph(wired, effects=files)
     mutes_on = [View(Switches(), (W, H)) for _ in states]
-    new = build_graph(mutes_on, got.wiring(), tuple(clouds), effects)
+    new = build_graph(mutes_on, got.wiring(), effects)
     return new, wired
 
 

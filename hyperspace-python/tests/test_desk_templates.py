@@ -72,7 +72,7 @@ def test_an_old_templated_loadable_loads_its_own_rows_and_saves_without_the_key(
     # after the darken's own Fade, `fade.2`)
     assert {r["target"] for r in desk} == {"fx.fade.3.level", "view.pattern_mix"}
     doc = rig.loaded_patch.document("TEMPLATED")
-    assert doc["schema"] == "hyperspace.loadable/12"
+    assert doc["schema"] == "hyperspace.loadable/13"
     assert "desk_template" not in doc and "modules" not in doc
     path = rig.loaded_patch.save_as("TEMPLATED")
     first = path.read_bytes()
@@ -99,7 +99,7 @@ def test_the_tool_rewrites_a_templated_loadable_on_a_scratch_copy(tmp_path, monk
     code = tool.main(["--library", str(lib), "--apply"], picture=lambda p, **kw: ([], []))
     assert code == 0
     doc = json.loads((lib / "loadable" / TEMPLATED.name).read_text())
-    assert doc["schema"] == tool.NEWEST == "hyperspace.loadable/12"
+    assert doc["schema"] == tool.NEWEST == "hyperspace.loadable/13"
     assert "desk_template" not in doc and "modules" not in doc
     backups = list(home.glob("library-backup-*"))
     assert len(backups) == 1

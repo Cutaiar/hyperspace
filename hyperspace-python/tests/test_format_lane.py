@@ -99,10 +99,10 @@ def _tree(root: Path) -> dict[str, bytes]:
 
 def test_the_kinds_say_one_thing():
     assert graphmigrate.ELEVEN_SCHEMA == "hyperspace.loadable/11"
-    assert loadable.SAVE_SCHEMA == graphmigrate.TWELVE_SCHEMA == "hyperspace.loadable/12"
+    assert loadable.SAVE_SCHEMA == graphmigrate.THIRTEEN_SCHEMA == "hyperspace.loadable/13"
     assert patches.LOADABLE_KIND == graphmigrate.LOADABLE_KIND == loadable.KIND
-    assert loadable.VERSIONS[-1] == graphmigrate.TWELVE
-    assert patches.shape_of({"schema": "hyperspace.loadable/12"}) == patches.LOADABLE_SHAPE
+    assert loadable.VERSIONS[-1] == graphmigrate.THIRTEEN
+    assert patches.shape_of({"schema": "hyperspace.loadable/13"}) == patches.LOADABLE_SHAPE
     assert patches.shape_of({"schema": "hyperspace.preset/10"}) == patches.LOADABLE_SHAPE
     with pytest.raises(ValueError):
         patches.forward({"schema": "hyperspace.loadable/11", "group": "view"})
@@ -163,7 +163,7 @@ def test_a_newer_install_says_what_to_do(tmp_path):
 def test_a_newer_loadable_says_what_to_do(tmp_path):
     from conftest import boot_home  # the app's own road
     rig = boot_home(tmp_path / "h", corpus=False)
-    _put(tmp_path / "h/loadable/next.json", {"schema": "hyperspace.loadable/13", "name": "next"})
+    _put(tmp_path / "h/loadable/next.json", {"schema": "hyperspace.loadable/14", "name": "next"})
     with pytest.raises(LibraryError, match="git pull and uv sync"):
         rig.lib.read(LOADABLE, "next")
 

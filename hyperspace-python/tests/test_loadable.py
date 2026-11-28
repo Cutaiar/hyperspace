@@ -571,7 +571,7 @@ def test_module_labels_are_dropped_and_a_missing_id_is_the_build_value(rig):
     assert reg[left].base == fresh[left]
     assert reg[left].base != other[left]                  # no default.json
     doc = rig.loaded_patch.document("LABELS")
-    assert "modules" not in doc and doc["schema"] == "hyperspace.loadable/12"
+    assert "modules" not in doc and doc["schema"] == "hyperspace.loadable/13"
     reg["camera.zoom"].set(1.5)
     assert lib.is_dirty("camera")                           # the dot is live against the load
 
@@ -619,7 +619,7 @@ def test_a_loadable_round_trips(rig):
     assert path == rig.home / "loadable" / "round-trip.json"
     doc = json.loads(path.read_text())
     # every save is the newest schema
-    assert doc["schema"] == "hyperspace.loadable/12" and doc["name"] == "Round Trip"
+    assert doc["schema"] == "hyperspace.loadable/13" and doc["name"] == "Round Trip"
     assert doc["desk"] == desk and doc["macros"] == macros and doc["note"] == "a note"
     assert "modules" not in doc                     # the labels are retired
     # every performance base, the media family's too — and no retired id
@@ -1367,17 +1367,17 @@ def test_a_wired_loadable_saves_as_v6(rig):
     """Every save is the newest schema, `hyperspace.preset/9` — the frame edited or not; the ladder reads `/2`
     … `/9` (`/8` is a `/7` with groups) — and a `/10` file is
     refused in its words."""
-    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
     assert graphmigrate.WIRED_SCHEMA == loadable.WIRED_SCHEMA == "hyperspace.preset/7"
     rig.loaded_patch.load_doc({"schema": loadable.SCHEMA, "name": "edited", "values": {}})
     section = rig.loaded_patch.graph.free_doc()
     assert section["frame"] == "wired"
     edited = {**section, "wires": [w for w in section["wires"]
                                    if w["to"] != "lookback.capture"]}
-    assert rig.loaded_patch.document("edited")["schema"] == "hyperspace.loadable/12"
+    assert rig.loaded_patch.document("edited")["schema"] == "hyperspace.loadable/13"
     rig.loaded_patch.graph.land(G.read_graph(edited), edited)
     doc = rig.loaded_patch.document("edited")
-    assert doc["schema"] == "hyperspace.loadable/12" and doc["graph"] == edited
+    assert doc["schema"] == "hyperspace.loadable/13" and doc["graph"] == edited
     put(rig.home, "ELEVEN", schema="hyperspace.preset/11")
     rig.lib.poll()
     with pytest.raises(LibraryError, match="is not a hyperspace.loadable"):
@@ -1404,7 +1404,7 @@ def test_a_wired_frame_loadable_saves_and_loads(tmp_path, name):
             assert got == spec
         spec = got
         saved = r.loaded_patch.save_as(name).read_text()
-        assert json.loads(saved)["schema"] == "hyperspace.loadable/12"
+        assert json.loads(saved)["schema"] == "hyperspace.loadable/13"
 
 
 # ---------------------------------------------------------------- a new loadable patch
@@ -1579,7 +1579,7 @@ def test_resize_values_save_and_load_with_the_loadable(tmp_path):
     assert r.loaded_patch.load("CROP") == []
     assert r.reg["resize.2.crop_x"].value == 0.3
     saved = r.loaded_patch.save_as("CROP").read_text()
-    assert json.loads(saved)["schema"] == "hyperspace.loadable/12"
+    assert json.loads(saved)["schema"] == "hyperspace.loadable/13"
     assert json.loads(saved)["values"]["resize.2.crop_x"] == 0.3
     (b / "loadable").mkdir(parents=True)
     (b / "loadable" / "crop.json").write_text(saved)

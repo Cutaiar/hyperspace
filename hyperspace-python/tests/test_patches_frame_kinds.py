@@ -84,15 +84,15 @@ def put(rig, doc: dict, slug: str | None = None) -> str:
 
 @pytest.mark.parametrize("name", ["scene", "shape", "backdrop", "pattern", "lookback",
                                   "lookback.2", "dream", "hands", "hands.layer", "hands.guide",
-                                  "hands.2", "acid", "composite.2", "segment"])
+                                  "hands.2", "acid", "composite.2", "segment",
+                                  "cloud", "cloud.2", "backdrop.2"])
 def test_a_patch_holds_the_frames_kinds(name):
     assert patches.held_words(name) is None
 
 
 @pytest.mark.parametrize("name, words", [
     ("output.all", patches.WINDOW_WORDS), ("output.2", patches.WINDOW_WORDS),
-    ("channel.a", patches.CHANNEL_WORDS), ("cloud", patches.FIXTURE_WORDS),
-    ("cloud.2", patches.FIXTURE_WORDS), ("camera", patches.CAMERA_WORDS),
+    ("channel.a", patches.CHANNEL_WORDS), ("camera", patches.CAMERA_WORDS),
     ("fx", patches.NOT_HELD_WORDS), ("lookback.echo.1", patches.NOT_HELD_WORDS),
 ])
 def test_the_meta_and_the_one_camera_stay_refused(name, words):
@@ -104,6 +104,7 @@ def test_every_frame_kind_is_held_and_every_meta_kind_refused():
     assert set(G.FRAME_KINDS) <= set(patches.MAY_HOLD)
     assert not set(patches.FIXTURE_KINDS) & set(patches.MAY_HOLD)
     assert set(patches.ONE_PER_FRAME) <= set(patches.MAY_HOLD)
+    assert "dream" not in patches.ONE_PER_FRAME          # (an effect)
 
 
 def test_save_still_refuses_the_camera_and_a_lane_envelope_in_words():
@@ -201,14 +202,13 @@ def test_a_host_with_a_dream_takes_another_and_its_single_instance_nodes_are_sai
     host has, refused in words."""
     p = parts(wake_doc())
     landing = spawn(cut("dreamy"), Host.of(*p[:2]))
-    assert landing.taken == () and landing.refusal is None and landing.replacing == ()
+    assert landing.taken == () and landing.refusal is None
     assert landing.renames["dream"] == "dream.2"
     whole, _ = patches.lift(*p, ["render:scene", "render:shape", "render:dream"])
     landing = spawn({**whole, "name": "x"}, Host.of(*p[:2]))
-    assert landing.taken == ("scene", "shape")
-    assert all(patches.entry_name(e) in landing.taken or e.get("file") == "dream"
-               for e in landing.nodes)
-    assert landing.refusal == patches.TAKEN_WORDS.format(name="x", nodes="scene, shape")
+    # (the scene is any number — it lands as `scene.2`)
+    assert landing.taken == ("shape",) and landing.renames["scene"] == "scene.2"
+    assert landing.refusal == patches.TAKEN_WORDS.format(name="x", nodes="shape")
 
 
 def test_the_host_having_only_a_second_dream_leaves_the_first_free():
@@ -271,7 +271,7 @@ def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
     folded as "dream") saved
     as a patch; back on party-wake it lands beside the host's as a second
     dream, never refused; on party-noita (no dream) spawned as one undo step,
-    its values landed, its pins open, nothing wired to the host (D2); ⌘Z
+    its values landed, its pins open, nothing wired to the host; ⌘Z
     takes it all away."""
     on_graph(rig, "party-wake")
     pre = rig.lib.loaded_patch
@@ -300,7 +300,7 @@ def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
         assert len(u.stack) == n + 1 and u.stack[-1].label == "spawn dream wash"
         assert "dream" in patches.spec_names(pre.graph.spec)
         assert rig.reg["fx.dream.k"].value == pytest.approx(0.31)
-        # D2: the patch's own wires and nothing else; every port an open pin
+        # the patch's own wires and nothing else; every port an open pin
         new = set(wires(rig)) - set(wired)
         assert new == {tuple(w.values()) for w in pre.graph.spec.to_json()["wires"]
                        if tuple(w.values()) in new}
@@ -517,4 +517,4 @@ def test_a_new_loadable_holds_a_scene_so_a_whole_frame_is_refused_there(tmp_path
     whole, _ = patches.lift(*p, everything(p))
     landing = spawn({**whole, "name": "x"},
                     Host.of(app.loaded_patch.graph.spec, app.router.table))
-    assert set(landing.taken) == {"scene", "shape"}
+    assert set(landing.taken) == {"shape"}       # (a scene is `scene.2`)

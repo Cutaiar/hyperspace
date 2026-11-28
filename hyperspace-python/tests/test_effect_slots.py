@@ -111,9 +111,9 @@ def test_an_old_loadable_with_copies_loads_as_slots_and_saves_twelve():
            "groups": [{"id": "group.1", "name": "g", "open": False,
                        "nodes": ["render:copy", "render:acid"]}]}
     fwd = M.forward(copy.deepcopy(doc), {})
-    assert fwd.doc["schema"] == M.TWELVE_SCHEMA == M.SAVE_SCHEMA
+    assert fwd.doc["schema"] == M.THIRTEEN_SCHEMA == M.SAVE_SCHEMA
     assert fwd.migrated == M.SLOTS_MIGRATED_NOTE.format(old=M.ELEVEN_SCHEMA,
-                                                        new=M.TWELVE_SCHEMA)
+                                                        new=M.THIRTEEN_SCHEMA)
     assert fwd.migrate_notes == (M.COPY_DROPPED.format(name="copy.4", of="teapot"),)
     assert fwd.doc["graph"] == M.slots_of_copies(OLD)[0]
     assert fwd.doc["layout"] == {"render:acid": [1, 2]}

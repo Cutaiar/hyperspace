@@ -22,6 +22,11 @@ target's viewport (`glsl.QUAD_VS`), premultiplied in and out:
   (`graph.KeyNode`), by the ramp every key shares (`glsl.KEY_RAMP`), its
   feather `BLUR_FS` over the ramp alone. A picture's own transparency,
   not a mask: no mask is made or read.
+- The hand mask (`graph.HandMaskNode`): `POLYGON_FS`, a closed polygon in
+  the target's pixels → a mask — the signed distance to its edges (even-odd
+  inside, so any vertex order fills), passing inside, pushed out by `grow`,
+  its edge `feather` px wide (a one-pixel anti-aliased edge at 0), scaled by
+  `strength`, `invert`. No picture is read.
 - `MOTION_FS` and `LEARN_FS`, motion mode's
   background model — the mask where the picture differs from the
   background it has learnt, and the background learning the picture;
@@ -266,6 +271,51 @@ void main() { f_color = texture(u_src, v_uv); }
 """
 MOTION_SOFT = 0.04      # motion's edge either side of `sense`
 
+# the most vertices `POLYGON_FS` takes (`u_pts`'s length): the hand mask's
+# four, with room for a polygon of more fingertips
+MAX_POLYGON = 8
+
+# polygon → mask (the hand mask). `u_pts` are the vertices in the target's
+# pixels, first row at the bottom (gl_FragCoord's), `u_n` of them in order
+# round the edge. `sd` is the signed distance to the polygon, in px: negative
+# inside, by the even-odd rule (Inigo Quilez's sdPolygon), so a polygon whose
+# edges cross fills as two. The mask passes at `sd` ≤ `u_grow`, its edge a
+# linear ramp `u_feather` px wide centred there (1 px at 0, the anti-aliasing),
+# times `u_strength`; inverted on `u_invert`. Fewer than three vertices: none
+POLYGON_FS = f"""
+#version 330
+in vec2 v_uv;
+uniform vec2 u_pts[{MAX_POLYGON}];
+uniform int u_n;
+uniform float u_grow;
+uniform float u_feather;
+uniform float u_strength;
+uniform int u_invert;
+out vec4 f_color;
+void main() {{
+    float v = 0.0;
+    if (u_n >= 3) {{
+        vec2 p = gl_FragCoord.xy;
+        float d = dot(p - u_pts[0], p - u_pts[0]);
+        float s = 1.0;
+        for (int i = 0; i < {MAX_POLYGON}; i++) {{
+            if (i >= u_n) break;
+            int j = i == 0 ? u_n - 1 : i - 1;
+            vec2 e = u_pts[j] - u_pts[i];
+            vec2 w = p - u_pts[i];
+            vec2 b = w - e * clamp(dot(w, e) / max(dot(e, e), 1e-6), 0.0, 1.0);
+            d = min(d, dot(b, b));
+            bvec3 c = bvec3(p.y >= u_pts[i].y, p.y < u_pts[j].y, e.x * w.y > e.y * w.x);
+            if (all(c) || all(not(c))) s = -s;
+        }}
+        float sd = s * sqrt(d) - u_grow;
+        v = clamp(0.5 - sd / max(u_feather, 1.0), 0.0, 1.0) * clamp(u_strength, 0.0, 1.0);
+    }}
+    if (u_invert != 0) v = 1.0 - v;
+    f_color = vec4(v, v, v, 1.0);
+}}
+"""
+
 
 def cover_scale(src: tuple[int, int], dst: tuple[int, int]) -> tuple[float, float]:
     """The cover fit's scale from `dst`'s uv to `src`'s about the centre —
@@ -302,7 +352,7 @@ class MaskPasses:
         self._progs: dict[str, tuple[moderngl.Program, moderngl.VertexArray]] = {}
         for name, fs in (("matte", MATTE_FS), ("blur", BLUR_FS), ("promote", PROMOTE_FS),
                          ("cut", CUT_FS), ("motion", MOTION_FS), ("learn", LEARN_FS),
-                         ("down", DOWN_FS), ("key", KEY_FS)):
+                         ("down", DOWN_FS), ("key", KEY_FS), ("polygon", POLYGON_FS)):
             prog = ctx.program(vertex_shader=QUAD_VS, fragment_shader=fs)
             try:
                 vao = ctx.vertex_array(prog, [])
@@ -482,6 +532,28 @@ class MaskPasses:
                   u_invert=int(bool(invert)), u_amount=float(amount),
                   u_flip=int(bool(flip)),
                   u_scaled=int(tuple(rect[2:]) != tuple(src.size)), u_origin=rect[:2])
+
+    def polygon(self, points, key, size: tuple[int, int], *, grow: float = 0.0,
+                feather: float = 0.0, strength: float = 1.0,
+                invert: bool = False) -> moderngl.Texture:
+        """A closed polygon → a one-channel mask at `size` (`POLYGON_FS`),
+        kept under frame key `key`. `points` are its vertices in order round
+        its edge, in the target's pixels with the first row at the bottom
+        (at most `MAX_POLYGON`; fewer than three make a mask that passes
+        nothing, or everything inverted); `grow` px pushes the edge out
+        (negative: in), `feather` px is the edge's width, `strength` 0–1
+        scales what passes. Returns the mask."""
+        size = (int(size[0]), int(size[1]))
+        pts = np.asarray(points, dtype=np.float64).reshape(-1, 2)[:MAX_POLYGON]
+        n = len(pts) if np.isfinite(pts).all() else 0
+        flat = np.zeros((MAX_POLYGON, 2), dtype=np.float64)
+        flat[:n] = pts[:n]
+        out, fbo = self.frame_target((key, size), size, components=1)
+        self._run("polygon", fbo, (0, 0, *size), (),
+                  u_pts=[tuple(map(float, q)) for q in flat], u_n=int(n), u_grow=float(grow),
+                  u_feather=max(float(feather), 0.0), u_strength=float(strength),
+                  u_invert=int(bool(invert)))
+        return out
 
     def fit(self, mask: moderngl.Texture, key, size: tuple[int, int], *,
             flip: bool = False) -> moderngl.Texture:

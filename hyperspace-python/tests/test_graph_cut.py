@@ -164,7 +164,7 @@ def test_a_cut_is_transparent_to_laid_over_ness():
                  ("channel.a", "matte.image"), ("matte", "cut.mask"),
                  ("cut", "composite.over"), ("channel.b", "composite.under"),
                  ("composite", "output.2.image"), nodes=(CUT, MATTE, COMPOSITE))
-    g = G.build_graph(_views(), spec.wiring(), (), ("kaleido",))
+    g = G.build_graph(_views(), spec.wiring(), ("kaleido",))
     assert g.nodes["scene"].ground == 0.0
     (kaleido,) = [n for n in g.nodes.values() if isinstance(n, G.Effect)]
     assert kaleido.laid_over
@@ -290,7 +290,7 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
         spec = got
         saved = r.loaded_patch.save_as("cut-out").read_text()
         doc = json.loads(saved)
-        assert doc["schema"] == "hyperspace.loadable/12"
+        assert doc["schema"] == "hyperspace.loadable/13"
         assert {"kind": "cut"} in doc["graph"]["nodes"]
         assert doc["values"]["cut.amount"] == pytest.approx(1.0)
 

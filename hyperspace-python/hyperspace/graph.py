@@ -18,8 +18,9 @@ Node kinds:
   settled once a frame (`Hands.run`) and drawn by whatever holds them: the
   scene, the hands' layer, or both. There is one node per instance
   (`ghost`, `ghost.2`), solid or as lines. The point cloud (`PointCloud`,
-  kind `cloud`) draws a cloud device's points, solid, in the scene of any
-  graph built while one is listed.
+  kind `cloud`, the patch's own node, `CloudAt`) draws the points of the
+  cloud device it names, solid, posed and copied as the shape, where a wire
+  puts it into a scene.
 - **Scene** (`Scene`): any number of geometries into one colour + depth
   target (`render.SceneTarget`): the solid geometry first (the hands,
   depth written), then the sorted see-through shape, depth-tested against
@@ -114,6 +115,7 @@ undo or control. Node methods are `run`, `paint`, `draw`, `image`,
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import math
 import re
@@ -124,11 +126,15 @@ import moderngl
 import numpy as np
 
 from . import fx as _fx
-from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix
+from .field import SHAPE_EXTENT
+from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix, turn_matrix
 from .outputs import View
 from .view import (
     DELAY_BEATS,
     DELAY_EVERY,
+    HANDMASK_EYES,
+    HANDMASK_FEATHER,
+    HANDMASK_GROW,
     KEY_RAMPS,
     MATTE_FEATHER,
     MATTE_FROM,
@@ -140,12 +146,15 @@ from .view import (
     SEGMENT_LEARN,
     SEGMENT_MODES,
     SEGMENT_QUALITY,
+    CloudState,
     CutState,
     DelayState,
+    HandMaskState,
     KeyState,
     MatteState,
     ResizeState,
     SegmentState,
+    eye_prefix,  # noqa: F401 — re-exported (patches)
 )
 
 # port types: a colour picture at the frame's size, a one-channel mask at
@@ -361,6 +370,9 @@ class Wiring:
     # the picture nodes keyed, black is clear (`GraphSpec.keys`):
     # each built wrapped in a `KeyNode` (a channel keyed in its own fit pass)
     keys: tuple[str, ...] = ()
+    # a wired frame's point clouds (`CloudAt`: each one's number and
+    # the device it names), by instance — what `PointCloud` reads
+    clouds: tuple[CloudAt, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.backdrop, str) or (
@@ -438,10 +450,11 @@ _PLACE_NODE = re.compile(rf"scene|history|lookback|hands(?:\.{_INSTANCE})?(?:\.l
 # take them, and no effect's place is one of them. Also feedback's `delay`,
 # `resize` and `echo` (`echo.<k>`; `dream` is an effect file, its own name),
 # the wired frame's `copy` (`copy.<n>`, read only to migrate it to an
-# effect's slot), the source word `ground`, and the mask nodes `matte`
-# (`matte.<n>`), `cut` (`cut.<n>`) and `segment` (`segment.<n>`)
+# effect's slot), the source word `ground`, the mask nodes `matte`
+# (`matte.<n>`), `cut` (`cut.<n>`) and `segment` (`segment.<n>`), and the
+# hand mask (`handmask.<n>`)
 RESERVED = ("frame", "fx", "pattern", "shape", "backdrop", "switch", "delay", "resize", "echo",
-            "copy", "ground", "matte", "cut", "segment")
+            "copy", "ground", "matte", "cut", "segment", "cloud", "handmask")
 _PLACE_EFFECT = re.compile(rf"(?!(?:{'|'.join(RESERVED)})(?![a-z0-9_]))"
                            rf"[a-z][a-z0-9_]*(?:\.{_INSTANCE})?")
 PLACE_WORDS = {"after": "scene, hands, hands.2 …, history, output.1 …, or an effect",
@@ -708,6 +721,15 @@ _RESIZE = re.compile(rf"resize(?:\.{_INSTANCE})?")
 _MATTE = re.compile(rf"matte(?:\.{_INSTANCE})?")         # `matte`, `matte.2` …
 _CUT = re.compile(rf"cut(?:\.{_INSTANCE})?")             # `cut`, `cut.2` …
 _SEGMENT = re.compile(rf"segment(?:\.{_INSTANCE})?")     # `segment`, `segment.2` …
+_HANDMASK = re.compile(rf"handmask(?:\.{_INSTANCE})?")   # the hand mask: `handmask`, `handmask.2` …
+_CLOUD = re.compile(rf"cloud(?:\.{_INSTANCE})?")         # `cloud`, `cloud.2` …
+_BACKDROP = re.compile(rf"backdrop(?:\.{_INSTANCE})?")   # `backdrop`, `backdrop.2` …
+_SCENE = re.compile(rf"scene\.{_INSTANCE}")             # `scene.2` …
+# a scene's pins — its faces' cover and its depth
+# (`scene.cover`, `scene.2.depth` …)
+_SCENE_PIN = re.compile(rf"(scene(?:\.{_INSTANCE})?)\.(cover|depth)")
+# a scene's geometry port, the one port several wires go into (`MANY_PORTS`)
+_SCENE_GEOMETRY = re.compile(rf"scene(?:\.{_INSTANCE})?\.geometry")
 # a segment's pins — its foreground, its background, its matte
 # (`segment.fg`, `segment.2.mask` …)
 _SEGMENT_PIN = re.compile(rf"(segment(?:\.{_INSTANCE})?)\.(fg|bg|mask)")
@@ -1110,6 +1132,59 @@ def _cut_entry(e: dict) -> CutAt:
 NODE_KINDS["cut"] = _cut_entry
 
 
+# a point cloud's device word on its entry — a role this Mac's device
+# list may hold (`[[devices]]`, a `cloud` or `kinect` kind), or "" for none
+CLOUD_DEVICE_KEY = "device"
+
+
+@dataclass(frozen=True)
+class CloudAt:
+    """A point-cloud node the loadable patch's graph adds: a shape with only
+    vertices — the latest points of the cloud
+    device it names (`device`, a role, picked by hand on its node: "" none),
+    drawn where it is wired (`cloud → scene.geometry`), posed and copied as
+    the shape is (`cloud[.n].*`, values, not the graph) — `cloud`,
+    `cloud.2` …"""
+
+    n: int = 1
+    device: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"cloud instance {self.n!r}: a whole number from 1")
+        if not isinstance(self.device, str):
+            raise ValueError(f"cloud {self.n}: device {self.device!r}, a device's role")  # noqa: TRY004
+
+    @property
+    def name(self) -> str:
+        return cloud_name(self.n)
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "cloud"}
+        if self.n != 1:
+            d["instance"] = self.n
+        if self.device:
+            d[CLOUD_DEVICE_KEY] = self.device
+        return d
+
+
+def _cloud_entry(e: dict) -> CloudAt:
+    _entry_keys(e, "cloud", ("instance", CLOUD_DEVICE_KEY))
+    device = e.get(CLOUD_DEVICE_KEY, "")
+    if not isinstance(device, str):
+        raise GraphError(f"cloud node: device {device!r}, a device's role")
+    return CloudAt(_instance(e), device)
+
+
+def cloud_name(n: int) -> str:
+    """Point-cloud node `n`'s name (from 1): `cloud`, `cloud.2` … (the
+    naming rule's marker form)."""
+    return "cloud" if n == 1 else f"cloud.{n}"
+
+
+NODE_KINDS["cloud"] = _cloud_entry
+
+
 @dataclass(frozen=True)
 class SegmentAt:
     """A segment node the loadable patch's graph adds: its `image`
@@ -1141,6 +1216,38 @@ def _segment_entry(e: dict) -> SegmentAt:
 
 
 NODE_KINDS["segment"] = _segment_entry
+
+
+@dataclass(frozen=True)
+class HandMaskAt:
+    """A hand mask the loadable patch's graph adds: the polygon a hands
+    node's thumbs and index fingers make on screen, as a mask — its camera,
+    grow, feather and invert values (`handmask[.n].*`), never the entry —
+    `handmask`, `handmask.2` …"""
+
+    n: int = 1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"handmask instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return "handmask" if self.n == 1 else f"handmask.{self.n}"
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "handmask"}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
+
+
+def _handmask_entry(e: dict) -> HandMaskAt:
+    _entry_keys(e, "handmask", ("instance",))
+    return HandMaskAt(_instance(e))
+
+
+NODE_KINDS["handmask"] = _handmask_entry
 
 
 @dataclass(frozen=True)
@@ -1211,8 +1318,15 @@ GROUND = "ground"             # a source with no node: wired into an output's po
 # node exists when a wire names it or an entry declares it (GRAPH keeps
 # an unwired one so, faint)
 FRAME_KINDS = ("scene", "shape", "backdrop", "pattern", "lookback", "layer", "guide")
-# the one port several wires go into, drawn in their section order
+# the one port several wires go into, drawn in their section order (each
+# scene's, `scene.2.geometry` too — `is_many_port`)
 MANY_PORTS = frozenset({"scene.geometry"})
+
+
+def is_many_port(dst: Any) -> bool:
+    """Is `dst` a port several wires go into, in their order — a scene's
+    geometry (`scene.geometry`, `scene.2.geometry` …)?"""
+    return isinstance(dst, str) and bool(_SCENE_GEOMETRY.fullmatch(dst))
 # what a picture is for in a wired frame (`reaches`): every port of an
 # `output.<n>` or `output.all`, and what the look-back records
 SINK_PORTS = ("output", "lookback.capture")
@@ -1239,13 +1353,22 @@ SEGMENT_IS_ITS_PINS = ("{name} makes its pictures on its pins: {name}.fg (the fo
 DEPTH_TAKES = ("{dst} takes the scene's depth (scene.depth), for the hands laid "
                "depth-aware")
 LAYER_TAKES_HANDS = "{dst} takes a hands node (hands, hands.2 …): the hands it draws"
+HANDMASK_TAKES_HANDS = ("{dst} takes a hands node (hands, hands.2 …): the fingertips its "
+                        "polygon is made of")
+
+
+# the frame kinds whose instance past the first is declared by its entry: the
+# look-back, the backdrop, the scene (not the shape or the pattern)
+NUMBERED_FRAME_KINDS = ("lookback", "backdrop", "scene")
 
 
 def entry_declares(kind: Any, n: Any = 1) -> bool:
     """Is a frame kind's entry of instance `n` what declares its node, wired
-    or not? `lookback.<n>`'s is (`LookbackAt`); any other frame kind's is
-    only what keeps it while it is unwired, a wire naming it declaring it."""
-    return kind == "lookback" and n != 1
+    or not? `lookback.<n>`'s is (`LookbackAt`), and `backdrop.<n>`'s
+    and `scene.<n>`'s;
+    any other frame kind's is only what keeps it while it is unwired, a wire
+    naming it declaring it."""
+    return kind in NUMBERED_FRAME_KINDS and n != 1
 
 
 def pin_node(name: Any) -> str | None:
@@ -1256,9 +1379,28 @@ def pin_node(name: Any) -> str | None:
         return None
     got = PINS.get(name)
     if got is None:
-        m = _ECHO_PIN.fullmatch(name) or _SEGMENT_PIN.fullmatch(name)
+        m = (_ECHO_PIN.fullmatch(name) or _SEGMENT_PIN.fullmatch(name)
+             or _SCENE_PIN.fullmatch(name))
         return m.group(1) if m is not None else None
     return got
+
+
+def scene_pin(name: Any) -> tuple[str, str] | None:
+    """A scene's pin → (the scene, which: cover or depth) — `scene.2.depth` →
+    ("scene.2", "depth"), `scene.cover` → ("scene", "cover"); None for any
+    other name."""
+    m = _SCENE_PIN.fullmatch(name) if isinstance(name, str) else None
+    return (m.group(1), m.group(2)) if m is not None else None
+
+
+def scene_name(n: int) -> str:
+    """Scene `n`'s name (from 1): `scene`, `scene.2` …"""
+    return "scene" if n == 1 else f"scene.{n}"
+
+
+def cover_name(scene: str) -> str:
+    """Scene `scene`'s cover's render node: `scene(cover)` (`COVER`), `scene.2(cover)` …"""
+    return COVER if scene == "scene" else f"{scene}(cover)"
 
 
 def segment_pin(name: Any) -> tuple[str, str] | None:
@@ -1309,8 +1451,9 @@ FRAME_KIND_UNWIRED = ("{kind} node: only in a wired frame (the section says "
 
 # ---------------------------------------------------------------- the meta controller's wires
 #
-# Window ports are fed by drawn cables (`bus_wire`, `window_ports`); a cloud's
-# wire into the scene is one too (`cloud_wires`); `BusCuts` holds which the show cut.
+# Window ports, `depth` among them, are fed by drawn cables (`bus_wire`,
+# `window_ports`); `BusCuts` holds which the show cut. A cloud's wire into a
+# scene is an ordinary wire of the patch.
 
 BUS_PORTS = ("image", "hands", "guide", "depth")   # the ports a bus cable feeds, per window
 
@@ -1328,33 +1471,21 @@ def is_bus(w: Wire) -> bool:
             and w.src == f"{ALL_OUTPUTS}.{w.port}")
 
 
-def cloud_name(i: int) -> str:
-    """The point-cloud node of the `i`-th listed cloud device (from 0):
-    `cloud`, `cloud.2` … (the naming rule's marker form)."""
-    return "cloud" if i == 0 else f"cloud.{i + 1}"
-
-
-def cloud_wire(i: int) -> Wire:
-    """The meta controller's wire of the `i`-th cloud into the scene."""
-    return Wire(cloud_name(i), "scene.geometry")
-
-
-def cloud_wires(roles) -> tuple[Wire, ...]:
-    """The meta controller's cloud wires for the listed cloud devices `roles`, in order."""
-    return tuple(cloud_wire(i) for i in range(len(tuple(roles))))
-
-
-def is_cloud_wire(w: Wire) -> bool:
-    """Whether `w` is a cloud's wire into the scene (the meta controller's)."""
+def is_old_cloud_wire(w: Wire) -> bool:
+    """Whether `w` is a cloud's wire into the scene as the meta controller
+    owned it in a file older than `/13` (one per listed cloud device, cut in
+    a loadable patch's ``bus``) — read only to migrate such a file
+    (`graphmigrate.thirteen`): a cloud's wire is the patch's own."""
     head, _, n = w.src.partition(".")
     return (w.dst == "scene.geometry" and head == "cloud"
             and (not n or (n.isdecimal() and int(n) >= 2)))
 
 
 def is_fixture_wire(w: Wire) -> bool:
-    """Whether `w` is one of the meta controller's own wires (a bus cable, a
-    cloud's wire) — the show's to cut and join, never a loadable patch's."""
-    return is_bus(w) or is_cloud_wire(w)
+    """Whether `w` is one of the meta controller's own wires — a bus cable (a
+    cloud's wire is the patch's own) — the loadable patch's to cut and join,
+    never a wire of its section."""
+    return is_bus(w)
 
 
 @dataclass(frozen=True)
@@ -1565,8 +1696,8 @@ def _wired_kind(name: str) -> str | None:
     if name in ("scene", "shape", "backdrop", "pattern", "lookback", "frame", "fx",
                 GROUND):
         return name
-    if name in PINS or _SEGMENT_PIN.fullmatch(name):
-        # the scene's mask and depth pins; a segment's fg, bg and mask
+    if name in PINS or _SEGMENT_PIN.fullmatch(name) or _SCENE_PIN.fullmatch(name):
+        # each scene's mask and depth pins; a segment's fg, bg and mask
         return name.rpartition(".")[2]
     if _SLOT.fullmatch(name):
         return "slot"                        # an effect's slot past the first
@@ -1577,7 +1708,9 @@ def _wired_kind(name: str) -> str | None:
                       # old frame's, read to migrate
                       ("echo", _ECHO_PIN), ("echo", _ECHO), ("lookback", _LOOKBACK),
                       ("matte", _MATTE),
-                      ("cut", _CUT), ("segment", _SEGMENT)):
+                      ("cut", _CUT), ("segment", _SEGMENT), ("cloud", _CLOUD),
+                      ("backdrop", _BACKDROP), ("handmask", _HANDMASK),
+                      ("scene", _SCENE)):
         if pat.fullmatch(name):
             return kind
     if new_id(name) != name or name == "cover":
@@ -1608,9 +1741,28 @@ class _FrameAt:
 
 @dataclass(frozen=True)
 class SceneAt(_FrameAt):
-    """The scene: draws the geometry wired into `scene.geometry`."""
+    """A scene: a camera onto the one world — its own eye (`eye.*` the first's, `eye.<n>.*` scene
+    `scene.<n>`'s), its target and its pins, drawing what is wired into its
+    `geometry` (the world objects it may see). `scene` is declared by a wire
+    naming it, as a frame kind; `scene.<n>` by its entry, `{"kind": "scene",
+    "instance": n}` (`entry_declares`)."""
 
+    n: int = 1
     KIND: ClassVar[str] = "scene"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"scene instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return scene_name(self.n)
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "scene"}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
 
 
 @dataclass(frozen=True)
@@ -1622,9 +1774,33 @@ class ShapeAt(_FrameAt):
 
 @dataclass(frozen=True)
 class BackdropAt(_FrameAt):
-    """The backdrop: `backdrop.scene` laid over `backdrop.image`."""
+    """A backdrop: `backdrop.scene` laid over `backdrop.image` at
+    `backdrop.alpha`. Any number — `backdrop` is
+    declared by a wire naming it, as a frame kind; `backdrop.<n>` by its
+    entry, `{"kind": "backdrop", "instance": n}` (`entry_declares`), its
+    alpha `backdrop.<n>.alpha` (`params.declare_backdrops`)."""
 
+    n: int = 1
     KIND: ClassVar[str] = "backdrop"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"backdrop instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return backdrop_name(self.n)
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "backdrop"}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
+
+
+def backdrop_name(n: int) -> str:
+    """Backdrop `n`'s name (from 1): `backdrop`, `backdrop.2` …"""
+    return BACKDROP if n == 1 else f"{BACKDROP}.{n}"
 
 
 @dataclass(frozen=True)
@@ -1737,9 +1913,9 @@ def _copy_entry(e: dict) -> None:
     raise GraphError(COPY_IS_A_SLOT)
 
 
-for _cls in (SceneAt, ShapeAt, BackdropAt, PatternAt):
+for _cls in (ShapeAt, PatternAt):
     NODE_KINDS[_cls.KIND] = _frame_entry(_cls)
-for _cls in (LayerAt, GuideAt):
+for _cls in (LayerAt, GuideAt, BackdropAt, SceneAt):
     NODE_KINDS[_cls.KIND] = _picture_entry(_cls)
 NODE_KINDS["lookback"] = _history_entry
 NODE_KINDS["copy"] = _copy_entry
@@ -1750,7 +1926,7 @@ del _cls
 # but a wire of a wired frame naming one of those declares it. (An effect's
 # slots are its entry's `slots`, `_WireCtx.slots`, never an entry of their own)
 DECLARED = ("composite", "switch", "delay", "resize", "echo", "matte",
-            "cut", "segment", *FRAME_KINDS)
+            "cut", "segment", "cloud", "handmask", *FRAME_KINDS)
 
 
 def d1_wires(effects) -> list[Wire]:
@@ -1807,6 +1983,14 @@ class _WireCtx:
     cuts: frozenset[str] = frozenset()
     # the segments declared (their names)
     segments: frozenset[str] = frozenset()
+    # the point clouds declared (their names)
+    clouds: frozenset[str] = frozenset()
+    # the hand masks declared (their names)
+    handmasks: frozenset[str] = frozenset()
+    # the backdrops declared (`backdrop` by a wire, `backdrop.<n>` by an entry)
+    backdrops: frozenset[str] = frozenset({BACKDROP})
+    # the scenes declared (`scene` by a wire, `scene.<n>` by an entry)
+    scenes: frozenset[str] = frozenset({"scene"})
 
     def declared(self, kind: str) -> frozenset[str]:
         """The names of kind `kind` (one of `DECLARED`) the section declares
@@ -1814,7 +1998,9 @@ class _WireCtx:
         return {"composite": self.composites, "switch": self.switches, "delay": self.delays,
                 "resize": self.resizes, "echo": self.echoes,
                 "lookback": self.lookbacks, "matte": self.mattes,
-                "cut": self.cuts, "segment": self.segments}.get(kind, frozenset())
+                "cut": self.cuts, "segment": self.segments,
+                "cloud": self.clouds, "handmask": self.handmasks,
+                "backdrop": self.backdrops, "scene": self.scenes}.get(kind, frozenset())
 
 
 FX_IMAGE_REFUSAL = ("fx.image takes the run from frame; to replace an output's picture "
@@ -1933,7 +2119,11 @@ WIRED_MAKES = {"scene": IMAGE, "shape": GEOMETRY, "hands": GEOMETRY, "layer": IM
                # a matte makes a mask of its picture; a cut, its picture cut by
                # a mask; a segment, nothing of its own — its foreground,
                # background and matte are its pins
-               "matte": MASK, "cut": IMAGE, "segment": None, **SEGMENT_PINS}
+               "matte": MASK, "cut": IMAGE, "segment": None, **SEGMENT_PINS,
+               # a point cloud is geometry, as the shape (into a scene)
+               "cloud": GEOMETRY,
+               # the hand mask: the polygon its hands' fingertips make, a mask
+               "handmask": MASK}
 # every edge a port — a layer's and a guide's hands, the
 # look-back's cover mask, a composite's and an output's depth
 WIRED_TAKES: dict[str, dict[str, str]] = {
@@ -1952,17 +2142,21 @@ WIRED_TAKES: dict[str, dict[str, str]] = {
     "cut": {"image": IMAGE, "mask": MASK},
     # a segment takes the picture it cuts (its pins take nothing)
     "segment": {"image": IMAGE}, **{k: {} for k in SEGMENT_PINS},
+    "cloud": {},
+    # the hand mask takes a hands node (its fingertips), as a hands layer does
+    "handmask": {"hands": GEOMETRY},
 }
 WIRED_TO_WORDS = ("output.1 …, output.all (image, hands, guide, depth), scene.geometry, "
                   "shape.faces, backdrop.image / scene, hands.layer.hands …, "
                   "hands.guide.hands …, "
                   "pattern.media, an effect's or its slot's image or aux, a composite's under "
                   "/ over / depth, a switch's in1 … in8, a delay's, a resize's, a "
-                  "matte's or a segment's image, or a cut's image / mask")
+                  "matte's or a segment's image, a cut's image / mask, or a hand mask's hands")
 WIRED_FROM_WORDS = ("scene, scene.cover, scene.depth, shape, hands …, hands.layer …, "
                     "hands.guide …, backdrop, pattern, "
                     "an effect, an effect's slot (acid.slot.2 …), a composite, a switch, "
-                    "a delay, a resize, a matte, a cut, segment.fg / .bg / .mask, a channel (channel.a …) or ground")
+                    "a delay, a resize, a matte, a cut, segment.fg / .bg / .mask, a hand mask, "
+                    "a channel (channel.a …) or ground")
 # a picture into a mask port is refused with the converter's name; a mask
 # is promoted to a picture where one is taken, never the reverse
 PICTURE_INTO_MASK = "{src} makes a picture, {dst} takes a mask — put a matte between"
@@ -2046,14 +2240,20 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
     # a pin goes where its kind is taken, a depth port takes the scene's
     # depth alone, a layer's or a guide's hands a hands node (the cover goes
     # into any mask port — a cut's mask, a mask's)
-    if PINS.get(w.src) == "scene" and not (src_kind == "cover" and want == MASK) and not (
+    pin = scene_pin(w.src)
+    if pin is not None and not (src_kind == "cover" and want == MASK) and not (
             src_kind == DEPTH_PORT and port == DEPTH_PORT):
-        return f"{w.src} is {PIN_WORDS[w.src]}"
+        words = PIN_WORDS[f"scene.{pin[1]}"]
+        if pin[0] != "scene":          # (another scene's pin)
+            words = words.replace("the scene's", f"{pin[0]}'s", 1)
+        return f"{w.src} is {words}"
     if (port == DEPTH_PORT and kind in ("composite", "output")
             and src_kind not in (DEPTH_PORT, GROUND)):
         return DEPTH_TAKES.format(dst=w.dst)
     if kind in ("layer", "guide") and port == "hands" and src_kind != "hands":
         return LAYER_TAKES_HANDS.format(dst=w.dst)
+    if kind == "handmask" and port == "hands" and src_kind != "hands":
+        return HANDMASK_TAKES_HANDS.format(dst=w.dst)
     if makes == GEOMETRY and want != GEOMETRY and kind != "output":
         return GEOMETRY_INTO_SCENE.format(src=w.src)
     if makes == IMAGE and want == MASK:
@@ -2091,10 +2291,14 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
         if k in SEGMENT_PINS and segment_pin(name) is not None:
             # a segment's pin is its segment's: that one declared
             name, k = segment_pin(name)[0], "segment"
-        if k == "lookback" and name not in ctx.declared("lookback"):
+        spin = scene_pin(name) if k in ("cover", DEPTH_PORT) else None
+        if spin is not None:
+            # a scene's pin is its scene's: that one declared
+            name, k = spin[0], "scene"
+        if k in NUMBERED_FRAME_KINDS and name not in ctx.declared(k):
             n = split_instance(name)[1]
             return (f"no {name} node in this graph (add one: "
-                    f'{{"kind": "lookback", "instance": {n}}})')
+                    f'{{"kind": "{k}", "instance": {n}}})')
         if k in DECLARED and k not in FRAME_KINDS and name not in ctx.declared(k):
             entry = (f'{{"kind": "echo", "index": {split_instance(name)[1]}}}' if k == "echo"
                      else f'{{"kind": "{k}"}}')
@@ -2220,9 +2424,10 @@ def loop_words(path: str, hops: set[tuple[str, str]]) -> str:
     faces when it runs through a wire into `scene.geometry` (the scene's
     one port), through the backdrop when through `backdrop.scene` or the
     look-back over the backdrop, else plain (`LOOP_PLAIN`)."""
-    if any(r == "scene" for r, _ in hops):
+    if any(_kind(r) == "scene" for r, _ in hops):
         return LOOP_FACES.format(path=path)
-    if ("lookback", "backdrop") in hops or ("backdrop", "scene") in hops:
+    kinds = {(_kind(r), _kind(x)) for r, x in hops}
+    if ("lookback", "backdrop") in kinds or ("backdrop", "scene") in kinds:
         return LOOP_BACKDROP.format(path=path)
     return LOOP_PLAIN.format(path=path)
 
@@ -2267,7 +2472,7 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
     for w in (*(w for w in d1 if w not in folds), *ok):
         into.setdefault(w.dst, []).append(w)
     for dst, ws in into.items():
-        if len(ws) > 1 and not (ctx.wired and dst in MANY_PORTS):
+        if len(ws) > 1 and not (ctx.wired and is_many_port(dst)):
             srcs = " and ".join(x.src for x in ws)
             for w in ws:
                 if w in ok:
@@ -2420,7 +2625,7 @@ class GraphSpec:
             return Wiring(draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
                           blend=self.laid, placed=placed, wires=self.wires,
                           composites=self.composites(), wired=True, slots=self.slots,
-                          laid_on=self.laid_on, keys=self.keys)
+                          laid_on=self.laid_on, keys=self.keys, clouds=self.clouds)
         run, wires = None, self.wires
         if any(w.src == "frame" or w.dst == "fx.image" for w in wires):
             # the section says the run (every loadable patch loaded on this
@@ -2493,9 +2698,31 @@ class GraphSpec:
         return self._of("segment")
 
     @property
+    def clouds(self) -> tuple[CloudAt, ...]:
+        """The point-cloud nodes the section adds, by instance."""
+        return self._of("cloud")
+
+    @property
+    def handmasks(self) -> tuple[HandMaskAt, ...]:
+        """The hand masks the section adds, by instance."""
+        return self._of("handmask")
+
+    @property
     def echoes(self) -> tuple[EchoAt, ...]:
         """The look-back frames the section reads, by index."""
         return self._of("echo")
+
+    @property
+    def scenes(self) -> tuple[SceneAt, ...]:
+        """The scenes the section declares by an entry (`scene` may be,
+        `scene.<n>` must be), by instance."""
+        return self._of("scene")
+
+    @property
+    def backdrops(self) -> tuple[BackdropAt, ...]:
+        """The backdrops the section declares by an entry (`backdrop` may
+        be, `backdrop.<n>` must be), by instance."""
+        return self._of("backdrop")
 
     @property
     def lookbacks(self) -> tuple[LookbackAt, ...]:
@@ -2741,10 +2968,14 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
                    mattes=frozenset(m.name for m in spec.mattes),
                    cuts=frozenset(c.name for c in spec.cuts),
                    segments=frozenset(x.name for x in spec.segments),
+                   clouds=frozenset(c.name for c in spec.clouds),
+                   handmasks=frozenset(x.name for x in spec.handmasks),
                    echoes=frozenset(e.name for e in spec.echoes),
                    placed={e.name: e.where for e in effects_at if e.placed},
                    wired=wired, slots=frozenset(x.name for x in spec.slots),
                    lookbacks=frozenset({"lookback", *(lb.name for lb in spec.lookbacks)}),
+                   backdrops=frozenset({BACKDROP, *(b.name for b in spec.backdrops)}),
+                   scenes=frozenset({"scene", *(x.name for x in spec.scenes)}),
                    legacy=placements)
     wires, wire_notes = _read_wires(raw_wires, ctx, d1_wires(effects_at))
     if ctx.effects is not None and wire_notes:
@@ -3387,6 +3618,29 @@ class Frame:
         return getattr(self.root.s, "mattes", None) or {}
 
     @property
+    def clouds(self) -> dict[str, Any]:
+        """Each point cloud's look, pose and copies this frame (cloud
+        name → its `view.CloudState`): the view state's (`ViewState.clouds`,
+        the `cloud[.n].*` params') — a value, never a rebuild (getattr: a view
+        state without clouds has none)."""
+        return getattr(self.root.s, "clouds", None) or {}
+
+    @property
+    def backdrops(self) -> dict[str, Any]:
+        """Each backdrop past the first's alpha this frame (backdrop
+        name → its `view.BackdropState`): the view state's (`ViewState.backdrops`,
+        the `backdrop.<n>.alpha` params'); the first's is `ViewState.backdrop_alpha`
+        (getattr: a view state without backdrops has none)."""
+        return getattr(self.root.s, "backdrops", None) or {}
+
+    @property
+    def eyes(self) -> dict[str, Any]:
+        """Each scene past the first's eye this frame (scene name → its
+        `view.EyeState`, the `eye.<n>.*` params'); the first's is the view
+        state's own `eye_*` (getattr: a view state without eyes has none)."""
+        return getattr(self.root.s, "eyes", None) or {}
+
+    @property
     def keys(self) -> dict[str, Any]:
         """Each keyed node's black is clear this frame (node name →
         its `view.KeyState`): the view state's (`ViewState.keys`, the
@@ -3406,6 +3660,14 @@ class Frame:
         `cut[.n].*` params') — a value, never a rebuild (getattr: a view
         state without cuts has none)."""
         return getattr(self.root.s, "cuts", None) or {}
+
+    @property
+    def handmasks(self) -> dict[str, Any]:
+        """Each hand mask's values this frame (hand mask name → its
+        `view.HandMaskState`): the view state's (`ViewState.handmasks`, the
+        `handmask[.n].*` params') — a value, never a rebuild (getattr: a view
+        state without hand masks has none)."""
+        return getattr(self.root.s, "handmasks", None) or {}
 
     @property
     def segments(self) -> dict[str, Any]:
@@ -3662,6 +3924,20 @@ class Shape(Node):
 
     def prepare(self, frame: Frame) -> None:
         r = frame.r
+        # seen by a second scene this frame, the faces' picture
+        # painted for the first is handed to its pass too, not painted again
+        key = self.name + "#prepared"
+        got = frame.root.data.get(key)
+        if got is not None:
+            r._pic, r._face_layer, r._face_plain = got
+            return
+        try:
+            self._prepare(frame)
+        finally:
+            frame.root.data[key] = (r._pic, r._face_layer, r._face_plain)
+
+    def _prepare(self, frame: Frame) -> None:
+        r = frame.r
         pattern = self.pattern()
         r._face_layer = None
         r._face_plain = self.inputs.get("faces") is None
@@ -3683,9 +3959,25 @@ class Shape(Node):
                 src.paint(at, dst)
         r._pic = r._face_picture(frame.s, frame.t, paint)
 
+    def posed(self, frame: Frame):
+        """This frame's pose of the shape (`Renderer.pose_shape`): its 4D turn, projection and sort, made on the first ask of
+        a frame at this size and kept for every scene that sees it."""
+        key = (self.name + "#posed", frame.w, frame.h)
+        got = frame.root.data.get(key)
+        if got is None:
+            got = frame.root.data[key] = frame.r.pose_shape(frame.s, frame.w, frame.h,
+                                                            frame.dpr, frame.t)
+            frame.stats["posed"] = frame.stats.get("posed", 0) + 1
+        return got
+
     def draw(self, frame: Frame, clear: bool = True) -> None:
+        r = frame.r
         try:
-            frame.r.draw_scene(frame.s, frame.w, frame.h, frame.dpr, frame.t, clear=clear)
+            if hasattr(r, "pose_shape"):
+                # one pose a frame, drawn through this scene's eye
+                r.draw_posed(self.posed(frame), frame.s, clear=clear)
+            else:                        # (a stand-in renderer: the one pass)
+                r.draw_scene(frame.s, frame.w, frame.h, frame.dpr, frame.t, clear=clear)
         finally:
             frame.r._pic = None          # handed to that one scene pass only
             frame.r._face_layer = False  # (and the layer: outside a frame, the wiring's)
@@ -3736,7 +4028,8 @@ class Hands(Node):
         try:
             frame.data[self.name] = self.ghost(frame).settle(
                 frame.t, max(w, 1) / max(h, 1), getattr(s, "eye_fov", None),
-                getattr(s, "eye_distance", None))
+                getattr(s, "eye_distance", None), float(getattr(s, "eye_yaw", 0.0)),
+                float(getattr(s, "eye_pitch", 0.0)))
         except Exception as e:  # noqa: BLE001 — a malformed skeleton costs the hands only
             r._hands_failed(e, frame.target, frame.vp, ghost=self.ghost(frame))
 
@@ -3751,6 +4044,10 @@ class Hands(Node):
         r, gh = frame.r, self.ghost(frame)
         try:
             now = self.now(frame)
+            eye = _pass_eye(r)
+            if eye is not None and now is not None and hasattr(now, "through"):
+                # settled once, seen through this scene's eye
+                now = now.through(eye)
             drew = bool(gh.draw_solid(now, lines=True) if self.draw_as == "lines"
                         else gh.draw_solid(now))
             frame.stats["in_scene"] = bool(frame.stats.get("in_scene")) or drew
@@ -3772,12 +4069,13 @@ class Hands(Node):
 # `renderer.ghost.source`); this module never imports `devices`: the
 # source is duck-typed — iterable of devices with `kind` and `role`, and
 # a `clouds` mapping ``cloud:<role>`` → the latest cloud with `points`,
-# `colors`, `frame`, `t`, `n`. The look is the `cloud.*` shared meta params
-# (`ViewState.cloud_*`). A role with no device, a device not open, or a
-# frame not yet published draws nothing and raises nothing.
+# `colors`, `frame`, `t`, `n`. The node is the loadable patch's own
+# (`CloudAt`, `{"kind": "cloud", "device": <role>}`), seen where it is wired
+# into a scene; its look, pose and copies are its `cloud[.n].*` params
+# (`ViewState.clouds`). No device named, a role with no device, a device not
+# open, or a frame not yet published draws nothing and raises nothing.
 
-# the device kind a point-cloud node is made for (clouds follow the
-# device list; the graph JSON has no `cloud` node kind)
+# the node kind (a declared kind, `CloudAt`)
 CLOUD_KIND = "cloud"
 # the device kinds that publish a cloud: a recording, a Kinect
 CLOUD_DEVICES = ("cloud", "kinect")
@@ -3828,8 +4126,9 @@ _CLOUD_CORNERS = np.array([(-1, -1), (1, -1), (-1, 1), (1, -1), (1, 1), (-1, 1)]
 
 def cloud_roles(source) -> tuple[str, ...]:
     """The roles of the `CLOUD_DEVICES` `source` lists (a device registry,
-    duck-typed), in list order — listed, open or not: what the default
-    graph gains a point-cloud node for. None (no registry) is none."""
+    duck-typed), in list order — listed, open or not: what a cloud node's
+    device pick offers and what an old loadable patch's clouds are
+    migrated to (`graphmigrate.thirteen`). None (no registry) is none."""
     if source is None:
         return ()
     try:
@@ -3853,7 +4152,8 @@ class _CloudGL:
 
     def upload(self, name: str, cloud) -> dict:
         """`cloud` into node `name`'s buffers when its (frame, t) moved;
-        the slot: `vao`, `n`, `key`, `uploads` (a count, for the tests)."""
+        the slot: `vao`, `n`, `key`, `box` (its lo and hi, its own
+        units), `uploads` (a count, for the tests)."""
         slot = self.slots.get(name)
         key = (int(cloud.frame), float(cloud.t))
         if slot is not None and slot["key"] == key:
@@ -3875,6 +4175,9 @@ class _CloudGL:
                 buf.orphan(max(arr.nbytes, 12))
                 buf.write(arr)
         slot["n"], slot["key"] = n, key
+        # its bounding box in its own units (lo, hi), for the copies' cull
+        slot["box"] = (np.stack([pts.min(axis=0), pts.max(axis=0)]).astype(np.float64)
+                       if n else np.zeros((2, 3)))
         slot["uploads"] += 1
         return slot
 
@@ -3888,21 +4191,41 @@ class _CloudGL:
         self.prog.release()
 
 
+_CLOUD_DEFAULT = CloudState()
+
+
+class _Sized:
+    """A cloud's state as the copies' layout reads it (`field.field`): itself,
+    and `inst_extent`, the cells the cloud's widest reach takes at scale 1."""
+
+    def __init__(self, state: CloudState, extent: float):
+        self._state, self.inst_extent = state, extent
+
+    def __getattr__(self, name: str):
+        return getattr(self._state, name)
+# what a cloud node says of itself on GRAPH (`PointCloud.said`)
+CLOUD_NO_DEVICE = "no device: pick one on its menu"
+CLOUD_NOT_LISTED = "{role} is not listed on this Mac"
+CLOUD_WAITING = "{role}: waiting for points"
+
+
 class PointCloud(Node):
-    """A point-cloud geometry: the latest frame of
-    ``cloud:<role>`` (`Renderer.cloud_source.clouds`) as
-    round points in the shared camera — the eye (`eye.*`) and the cloud's
-    own world transform, a uniform scale about the world origin
-    (`cloud.scale`): the shape's `camera.*` and `rot.*` are the shape's,
-    not the cloud's. Solid, like the hands: drawn into the scene before
-    the see-through shape, depth tested and depth written, so the shape's
-    strokes in front of a point draw over it and a point in front of them
-    hides them. `cloud.size` is each point's radius in logical px (a
-    whole number of framebuffer pixels across, as `draw_scene`'s points),
-    `cloud.bright` and `cloud.colors` its colour. The buffer is uploaded
-    only when the cloud's frame id (or its publish time, for a device
-    re-opened) moves. Its draw is its own SYSTEM line (the node's name);
-    a cloud that is missing draws nothing and costs nothing else."""
+    """A point-cloud geometry, a shape with only vertices: the latest frame
+    of ``cloud:<role>`` (`Renderer.cloud_source.clouds`) — `role` the device
+    its entry names, "" none — as round points in the shared camera. Posed
+    and copied as the shape is, by the shape's own code (`view.CloudState`
+    has the shape's names): each copy of `Renderer._copies_of` (the field's
+    rows, culled by the cloud's turned box) draws the cloud once at its
+    centre and scale (the scale `cloud.scale`, the pan `cloud.pan.*`),
+    turned by `geometry.turn_matrix` (`cloud.yaw` / `.pitch`, the shape's
+    turntable). Solid, like the hands: drawn into the scene before the
+    see-through shape, depth tested and depth written. `size` is each
+    point's radius in logical px (a whole number of framebuffer pixels
+    across, as `draw_scene`'s points), `bright` × the copy's alpha and
+    `colors` its colour. The buffer is uploaded only when the cloud's frame
+    id (or its publish time, for a device re-opened) moves. Its draw is its
+    own SYSTEM line (the node's name); a cloud that is missing draws nothing
+    and costs nothing else."""
 
     KIND = CLOUD_KIND
     OUTPUT = GEOMETRY
@@ -3919,15 +4242,19 @@ class PointCloud(Node):
         return f"{CLOUD_KIND}:{self.role}"
 
     def cloud(self, frame: Frame):
-        """This frame's cloud, or None (no registry, no device, nothing
-        published yet)."""
+        """This frame's cloud, or None (no device named, no registry, no
+        device, nothing published yet)."""
         src = getattr(frame.r, "cloud_source", None)
-        if src is None:
+        if src is None or not self.role:
             return None
         try:
             return (getattr(src, "clouds", None) or {}).get(self.source)
         except Exception:  # noqa: BLE001 — a source that raises is a cloud not there
             return None
+
+    def state(self, frame: Frame) -> CloudState:
+        """This frame's look, pose and copies (`Frame.clouds`), else the defaults."""
+        return frame.clouds.get(self.name) or _CLOUD_DEFAULT
 
     def prepare(self, frame: Frame) -> None:
         """Nothing before the scene's target is bound."""
@@ -3938,30 +4265,46 @@ class PointCloud(Node):
         cloud = self.cloud(frame)
         if cloud is None or not getattr(cloud, "n", 0):
             return
-        r, ctx, s = frame.r, frame.ctx, frame.s
+        r, ctx = frame.r, frame.ctx
+        st = self.state(frame)
         try:
             gl = getattr(r, "_cloud_gl", None)
             if gl is None:
                 gl = r._cloud_gl = _CloudGL(ctx)
             slot = gl.upload(self.name, cloud)
-            vp = eye_matrix(frame.w, frame.h, getattr(s, "eye_fov", EYE_FOV),
-                            getattr(s, "eye_distance", EYE_DISTANCE))
-            k = float(getattr(s, "cloud_scale", 0.3))
+            w, h = frame.size
+            vp = eye_of_frame(frame)
+            turn = turn_matrix(float(st.yaw), float(st.pitch))
+            # the copies, as the shape's (`Renderer._copies_of`, the field's
+            # path: the scale and the pan in each row), culled by the cloud's
+            # box turned — its own units, before its copy's scale
+            box = np.array([[x, y, z] for x in slot["box"][:, 0] for y in slot["box"][:, 1]
+                            for z in slot["box"][:, 2]], dtype=np.float64) @ turn.T
+            # (Fit gives each copy room for the cloud's own widest reach, as
+            # it gives a shape room for any shape's: `field.SHAPE_EXTENT` per
+            # unit of radius, the radius the turned box's farthest corner)
+            reach = float(np.linalg.norm(box, axis=1).max()) if len(box) else 1.0
+            inst = r._copies_of(_Sized(st, SHAPE_EXTENT * max(reach, 1e-3)), w, h, box, vp,
+                                frame.dpr)
             p = gl.prog
             p["u_vp"].write(np.asarray(vp, dtype="f4").T.tobytes())
-            p["u_model"].write(np.diag([k, k, k, 1.0]).astype("f4").T.tobytes())
-            w, h = frame.size
             p["u_px"].value = (float(max(w, 1)), float(max(h, 1)))
             # radius in framebuffer px (× dpr), the diameter a whole number
             # of pixels — draw_scene's points' rounding
-            rad = max(float(getattr(s, "cloud_size", 2.0)), 0.0) * frame.dpr
+            rad = max(float(st.size), 0.0) * frame.dpr
             p["u_size"].value = math.floor(2.0 * rad + 0.5) / 2.0
-            p["u_bright"].value = max(float(getattr(s, "cloud_bright", 1.0)), 0.0)
-            p["u_colors"].value = 1.0 if getattr(s, "cloud_colors", True) else 0.0
+            p["u_colors"].value = 1.0 if st.colors else 0.0
+            bright = max(float(st.bright), 0.0)
             ctx.enable(moderngl.DEPTH_TEST | moderngl.BLEND)
             ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
-            slot["vao"].render(moderngl.TRIANGLES, vertices=6, instances=slot["n"])
-            drawn[self.name] = slot["n"]
+            model = np.eye(4)
+            for cx, cy, k, alpha in inst:
+                model[:3, :3] = float(k) * turn
+                model[0, 3], model[1, 3] = float(cx), float(cy)
+                p["u_model"].write(model.astype("f4").T.tobytes())
+                p["u_bright"].value = bright * float(alpha)
+                slot["vao"].render(moderngl.TRIANGLES, vertices=6, instances=slot["n"])
+            drawn[self.name] = slot["n"] * len(inst)
         except Exception as e:  # noqa: BLE001 — a cloud must not take the scene down
             frame.stats["cloud_error"] = f"{self.name}: {type(e).__name__}: {e}"[:160]
         finally:
@@ -3970,13 +4313,22 @@ class PointCloud(Node):
             ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
 
-def cloud_nodes(g: Graph, roles: tuple[str, ...] | list[str]) -> list[PointCloud]:
-    """One point-cloud node per listed role, added to `g`: the first is
-    `cloud`, the next `cloud.2`, … (the naming rule's marker form). Every
-    instance reads the same `cloud.*` params."""
-    # DEBT: cloud-instances-share-params
-    return [g.add(PointCloud(CLOUD_KIND if i == 0 else f"{CLOUD_KIND}.{i + 1}", role))
-            for i, role in enumerate(roles)]
+def cloud_said(role: str, source) -> str:
+    """What cloud node naming device `role` says of itself, from the device
+    registry `source` (duck-typed, as `cloud_roles`): none named, a role
+    this Mac does not list, one listed and not yet publishing — or "" when
+    its points are there (the node's GPU line says the rest)."""
+    if not role:
+        return CLOUD_NO_DEVICE
+    if role not in cloud_roles(source):
+        return CLOUD_NOT_LISTED.format(role=role)
+    try:
+        got = (getattr(source, "clouds", None) or {}).get(f"{CLOUD_KIND}:{role}")
+    except Exception:  # noqa: BLE001 — a source that raises is a cloud not there
+        got = None
+    if got is None or not getattr(got, "n", 0):
+        return CLOUD_WAITING.format(role=role)
+    return ""
 
 
 # ---------------------------------------------------------------- end point cloud
@@ -3988,6 +4340,37 @@ def ghost_of(r, name: str):
 
 
 # ---------------------------------------------------------------- scene
+
+def _pass_eye(r) -> Any:
+    """The current scene pass's own eye (a scene past the first's
+    `EyeState`), or None — the view's `eye_*`, the first scene's."""
+    now = getattr(r, "scene_pass_now", None)
+    return now().eye if now is not None else None
+
+
+def eye_of_frame(frame: Frame) -> np.ndarray:
+    """The eye's view-projection the scene being drawn sees through: its
+    pass's eye, else the view's (`eye.*`), at the frame's size."""
+    eye = _pass_eye(frame.r)
+    eye = frame.s if eye is None else eye
+    return eye_matrix(frame.w, frame.h, getattr(eye, "eye_fov", EYE_FOV),
+                      getattr(eye, "eye_distance", EYE_DISTANCE),
+                      yaw=float(getattr(eye, "eye_yaw", 0.0)),
+                      pitch=float(getattr(eye, "eye_pitch", 0.0)))
+
+
+def _in_pass(r, name: str):
+    """Scene `name`'s pass current for a block (`Renderer.scene_pass`); a
+    stand-in renderer with none, nothing."""
+    get = getattr(r, "scene_pass", None)
+    return get(name) if get is not None else contextlib.nullcontext()
+
+
+def _target_of(r, name: str):
+    """Scene `name`'s `SceneTarget` (`Renderer.scene_pass_of`); a stand-in's one."""
+    get = getattr(r, "scene_pass_of", None)
+    return get(name).target if get is not None else r.scene
+
 
 def _geometry_port(i: int) -> str:
     """A scene's i-th geometry port: `geometry`, `geometry.2`, … (the
@@ -4030,6 +4413,15 @@ class Scene(Node):
         return [g for g in self.inputs.values() if g is not None]
 
     def run(self, frame: Frame) -> None:
+        r = frame.r
+        # each scene its own pass — its target, its cover, its
+        # face state, its ground and its eye (`eye.<n>.*`; the first's the view's)
+        with _in_pass(r, self.name) as sp:
+            if sp is not None:
+                sp.eye = frame.eyes.get(self.name) if self.name != "scene" else None
+            self._run_in(frame)
+
+    def _run_in(self, frame: Frame) -> None:
         r = frame.r
         if self.ground is not None:
             r.scene_ground = self.ground
@@ -4083,18 +4475,29 @@ class Scene(Node):
             r.scene.resolve()
 
     def image(self, frame: Frame) -> moderngl.Texture | None:
-        return frame.r.scene.tex
+        return _target_of(frame.r, self.name).tex
 
     def depth(self, frame: Frame) -> moderngl.Texture | None:
         """The scene's depth at the frame's size, resolved out of the
         multisampled target on the first ask of a frame."""
         key = self.name + "#depth"
         if key not in frame.data:
-            frame.data[key] = frame.r.scene.depth_texture()
+            frame.data[key] = _target_of(frame.r, self.name).depth_texture()
         return frame.data[key]
 
 
 # ---------------------------------------------------------------- media
+
+def alpha_of(frame: Frame, of: str) -> float:
+    """The opacity `of` names this frame, held to 0…1: a `ViewState` field
+    (`backdrop_alpha`, the first backdrop's), or a backdrop past the
+    first by its name (`backdrop.2`: `Frame.backdrops`); 1 for neither."""
+    got = getattr(frame.s, of, None) if of.isidentifier() else None
+    if got is None:
+        st = frame.backdrops.get(of)
+        got = getattr(st, "alpha", 1.0) if st is not None else 1.0
+    return min(max(float(got), 0.0), 1.0)
+
 
 class MediaNode(Node):
     """A media channel's picture: `media.<c>`, the channel's
@@ -4137,7 +4540,7 @@ class MediaNode(Node):
         field's, held to 0…1 (1 with none)."""
         if self.alpha_of is None:
             return 1.0
-        return min(max(float(getattr(frame.s, self.alpha_of, 1.0)), 0.0), 1.0)
+        return alpha_of(frame, self.alpha_of)
 
     def image(self, frame: Frame) -> moderngl.Texture | None:
         key = self.name + "#image"
@@ -4146,11 +4549,14 @@ class MediaNode(Node):
             with frame.timed(self.name):
                 if fit is None:
                     frame.data[key] = None
-                elif self.keyed is None:
-                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame))
                 else:
-                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame),
-                                          key=frame.r.key_of(frame.clear(self.keyed)))
+                    # a later backdrop's partial fit in a target of its own
+                    # (`scope`); the first's in the shared one
+                    scope = ({"scope": self.alpha_of}
+                             if self.alpha_of not in (None, "backdrop_alpha") else {})
+                    if self.keyed is not None:
+                        scope["key"] = frame.r.key_of(frame.clear(self.keyed))
+                    frame.data[key] = fit(self.channel, frame.size, self.opacity(frame), **scope)
         return frame.data[key]
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
@@ -4967,6 +5373,155 @@ def mask_port(node: Node, frame: Frame) -> moderngl.Texture | None:
     return frame.data[key]
 
 
+# ---------------------------------------------------------------- the hand mask
+#
+# The polygon a hands node's fingertips make on screen, as a mask: each hand's
+# thumb tip and index tip (`ghost.HandPose.joints`, digit then joint, base to
+# tip) through the camera the hands are drawn with — the hands layer's (the
+# reference eye, `ghost.Settled.layer`) or the scene's (the loadable patch's
+# eye) — to the frame's pixels, the four filled as one closed polygon
+# (`masks.MaskPasses.polygon`). Both hands are needed: one alone makes no
+# polygon, and the mask passes nothing.
+
+# (digit, joint) of each fingertip the polygon is made of, per hand: the
+# thumb's tip and the index finger's (`HandPose.joints` is (5, 5, 3))
+HANDMASK_TIPS = ((0, 4), (1, 4))
+HANDMASK_SIDES = ("left", "right")
+HANDMASK_ONE_HAND = "one hand: both are needed for a polygon — no mask passes"
+HANDMASK_NO_HANDS = "no hands seen — no mask passes"
+HANDMASK_UNWIRED = "no hands wired into its hands — no mask passes"
+HANDMASK_BEHIND = "a fingertip behind the eye — no mask passes"
+
+
+def hand_polygon(now: Any, eye: int, size: tuple[int, int]
+                 ) -> tuple[np.ndarray | None, float, str]:
+    """The hand mask's polygon from a frame's settled hands `now` (a
+    `ghost.Settled`, or None): ``(points, strength, why)`` — `points` the
+    fingertips (`HANDMASK_TIPS` of the left hand, then the right's) as
+    (k, 2) pixels of a frame `size`, first row at the bottom (GL's), in order
+    round their centre so the polygon never crosses itself; `strength` the
+    fainter hand's fade (the mask fades as the hands do); `why` empty, or
+    why there is no polygon (`points` None). `eye` indexes `HANDMASK_EYES`:
+    0 the hands layer's camera (`now.layer`, the scene's when it has none),
+    1 the scene's. A hand with no fingers (a palm-only skeleton) counts as
+    none."""
+    if now is None:
+        return None, 0.0, HANDMASK_NO_HANDS
+    poses, vp = now[0], now[1]
+    if _pick(range(len(HANDMASK_EYES)), eye) == 0:
+        layer = getattr(now, "layer", None)
+        if layer is not None:
+            vp = layer[0]
+    seen = {p.side: p for p in poses
+            if len(getattr(p, "joints", ())) and float(getattr(p, "fade", 1.0)) > 0.0}
+    hands = [seen[k] for k in HANDMASK_SIDES if k in seen]
+    if len(hands) < len(HANDMASK_SIDES):
+        return None, 0.0, HANDMASK_ONE_HAND if hands else HANDMASK_NO_HANDS
+    q = np.array([p.joints[d, j] for p in hands for d, j in HANDMASK_TIPS], dtype=np.float64)
+    clip = np.c_[q, np.ones(len(q))] @ np.asarray(vp, dtype=np.float64).T
+    if not np.isfinite(clip).all() or (clip[:, 3] <= 1e-6).any():
+        return None, 0.0, HANDMASK_BEHIND
+    ndc = clip[:, :2] / clip[:, 3:4]
+    w, h = max(int(size[0]), 1), max(int(size[1]), 1)
+    px = (ndc + 1.0) * 0.5 * np.array([w, h], dtype=np.float64)
+    c = px.mean(axis=0)
+    px = px[np.argsort(np.arctan2(px[:, 1] - c[1], px[:, 0] - c[0]), kind="stable")]
+    strength = min(float(getattr(p, "fade", 1.0)) for p in hands)
+    return px, min(max(strength, 0.0), 1.0), ""
+
+
+# (the values of a hand mask with none this frame: read, never written)
+_HANDMASK_DEFAULT = HandMaskState()
+
+
+class HandMaskNode(Node):
+    """A hand mask: `handmask`, `handmask.2` …, the closed polygon its hands
+    node's thumbs and index fingers make on screen (`hand_polygon`), as a
+    one-channel mask at the frame's size — passing inside, `grow` px pushed
+    out (negative: in), its edge `feather` px wide, `invert`, through the
+    hands layer's camera or the scene's (`eye`): `ViewState.handmasks`, read
+    as `Frame.handmasks`, values, never a rebuild. The mask fades with the
+    fainter hand. The hands are the wire into its `hands` port, a hands
+    node: they need not be drawn anywhere else for the mask to follow them.
+
+    Made once a frame on the first ask (`made`, the root's data, into a frame
+    target keyed `(<name>#mask, size)`), like a matte's: a mask port binds it
+    (`mask_port`), a picture port reads it promoted (`MaskPicture`). With no
+    polygon this frame — one hand or none, nothing wired in — it is still
+    made, passing nothing (everything, inverted), so a cut by it cuts its
+    picture away rather than showing it whole."""
+
+    KIND = "handmask"
+    INPUTS: ClassVar[dict[str, str]] = {"hands": GEOMETRY}
+    OUTPUT = MASK
+    TIMED = True
+    MADE = "#mask"            # where this frame's mask is kept (`mask_made`)
+    refused = ""              # why it passes nothing, in words (`graphview.mask_words`)
+
+    def __init__(self, name: str, hands: Node | None = None, after: tuple[Node, ...] = ()):
+        super().__init__(name, after, hands=hands)
+
+    def state(self, frame: Frame) -> HandMaskState:
+        """This frame's values (`Frame.handmasks`), else the defaults."""
+        return frame.handmasks.get(self.name) or _HANDMASK_DEFAULT
+
+    def reads(self, frame: Frame) -> bool:
+        return True               # (a mask is made every frame: nothing, with no hands)
+
+    def polygon(self, frame: Frame) -> tuple[np.ndarray | None, float, str]:
+        """This frame's polygon (`hand_polygon`) at the frame's size."""
+        root = frame.root
+        hands = self.inputs["hands"]
+        if hands is None:
+            return None, 0.0, HANDMASK_UNWIRED
+        now = hands.now(root) if hasattr(hands, "now") else None
+        return hand_polygon(now, self.state(frame).eye, root.size)
+
+    def made(self, frame: Frame) -> moderngl.Texture | None:
+        """The mask, made once a frame (the root's data) at the frame's size."""
+        root = frame.root
+        key = self.name + "#mask"
+        if key in root.data:
+            return root.data[key]
+        st = self.state(frame)
+        pts, strength, _ = self.polygon(frame)
+        with frame.timed(self.name):
+            out = frame.r.mask_passes().polygon(
+                pts if pts is not None else (), key, root.size,
+                grow=min(max(float(st.grow), -HANDMASK_GROW), HANDMASK_GROW),
+                feather=min(max(float(st.feather), 0.0), HANDMASK_FEATHER),
+                strength=strength, invert=bool(st.invert))
+        root.data[key] = out
+        return out
+
+    def native(self, frame: Frame) -> moderngl.Texture | None:
+        """The mask as made, at the frame's size."""
+        return self.made(frame)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        """Its mask as a mask port binds it (`mask_port`)."""
+        return mask_port(self, frame)
+
+    def run(self, frame: Frame) -> None:
+        """What it says (GRAPH's summary)."""
+        pts, strength, why = self.polygon(frame)
+        st = self.state(frame)
+        self.refused = why
+        if pts is None:
+            self.said = why
+            return
+        said = f"{len(pts)}-sided polygon · {_pick(HANDMASK_EYES, st.eye)}'s eye"
+        if float(st.grow):
+            said += f" · grow {float(st.grow):+g} px"
+        if float(st.feather) > 0.0:
+            said += f" · feather {float(st.feather):g} px"
+        if strength < 1.0:
+            said += f" · {strength:.0%}"
+        if st.invert:
+            said += " · inverted"
+        self.said = said
+
+
 # (the values of a cut with none this frame: read, never written)
 _CUT_DEFAULT = CutState()
 
@@ -5515,15 +6070,31 @@ class Cover(Node):
     # switch's unpicked input its scene is not run, and its mask is not made)
     MAKES = True
 
+    def __init__(self, name: str, after: tuple[Node, ...] = (), of: str = "scene",
+                 **inputs: Node | None):
+        super().__init__(name, after, **inputs)
+        # the scene whose pass it masks, by its name — never read off its
+        # input, which is a `KeyNode` while black is clear keys the scene
+        self.of_scene = of
+
+    def of(self) -> str:
+        """The scene this cover masks (each scene its own)."""
+        return getattr(self, "of_scene", "scene")
+
     def run(self, frame: Frame) -> None:
         # (built only where something reads it — a cut's mask)
-        with frame.timed(self.name):
-            frame.cover = frame.r._draw_cover(frame.w, frame.h)
+        with frame.timed(self.name), _in_pass(frame.r, self.of()):
+            got = frame.r._draw_cover(frame.w, frame.h)
+        if self.of() == "scene":
+            frame.cover = got
+        frame.root.data[self.name + "#mask"] = got
 
     def image(self, frame: Frame) -> moderngl.Texture | None:
         # (the root frame's: a frame at another size, made before the cover
         # was drawn — a resize's, the faces' — reads the one mask too)
-        return frame.root.cover
+        if self.of() == "scene":
+            return frame.root.cover
+        return frame.root.data.get(self.name + "#mask")
 
 
 class HandsLayer(Node):
@@ -5801,7 +6372,7 @@ class Composite(Node):
             dst.use()
             ctx.viewport = (0, 0, *size)
             ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha)
-            a = min(max(float(getattr(frame.s, self.under_alpha_of, 1.0)), 0.0), 1.0)
+            a = alpha_of(frame, self.under_alpha_of)
             if tex is not None and a > 0.0:
                 r.lay(tex, dst, (0, 0, *size), blend="over", alpha=a, opaque=r.fx.opaque)
         elif under is None:
@@ -6680,7 +7251,6 @@ class Graph:
         self.wiring = wiring if wiring is not None else EMPTY
         self.nodes: dict[str, Node] = {}
         self.order: list[Node] = []
-        self.clouds: tuple[str, ...] = ()        # the cloud roles the graph draws
         self.effects: tuple[str, ...] = ()       # the effect instances of its runs
         # the instances that run with no input (`runs_unfed`), as the build
         # was asked them — the graph's key, the builder reads the rule
@@ -6904,7 +7474,7 @@ def _upstream(node: Node) -> set[int]:
 
 # ---------------------------------------------------------------- the wired frame
 
-def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[str, ...] = (),
+def build_graph(views: list[View], wiring: Wiring | None = None,
                 effects: tuple[str, ...] = (), bus_cuts: BusCuts | None = None,
                 generators: tuple[str, ...] = ()) -> Graph:
     """A wired frame as a graph: only what the
@@ -6923,8 +7493,7 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     (`scene.cover`, the scene's mask pin); each hands layer and guide
     drawing the hands node wired into its `hands` (none: empty) — a guide
     is its layer's split-out picture while that layer is built on the same
-    hands; the clouds by the
-    meta controller's wires into the scene (`cloud_wire`, while standing); a
+    hands; the clouds by the section's wires into the scene, as the shape; a
     composite's and an output's depth the wire into its `depth`, an
     output's hands laid as their layer's `laid` says; effects, their slots,
     composites, switches, channels, the pattern, delays and ring pictures);
@@ -6946,7 +7515,6 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     if not wiring.wired:
         raise ValueError(UNWIRED_WIRING)
     g = Graph(graph_key(views), wiring)
-    g.clouds = tuple(clouds)
     g.effects = tuple(effects)
     # the effects that run with nothing wired in (`generators_of`),
     # kept as part of the key — `_Build` reads the rule itself (`runs_unfed`)
@@ -7052,16 +7620,15 @@ class _Build:
                              if back is not None and _kind(back.src) == "channel" else "")
         self.made: dict[str, Node | None] = {}       # a wire's name → what it reads as
         self.built: list[Node] = []                  # every node made, in order
-        # a cloud is in the scene by the meta controller's wire into it
-        # (`cloud_wire`), while the show has not cut it — and the scene is
-        # reached by the section's own wires
-        self.clouds = ([PointCloud(cloud_name(i), role) for i, role in enumerate(g.clouds)
-                        if self.bus_cuts.has(cloud_wire(i))] if "scene" in self.reached else [])
+        # each point cloud the section declares, by name → the device it names
+        self.cloud_roles = {c.name: c.device for c in getattr(wiring, "clouds", ())}
         # the layers' blends (`laid` is the hands entry's own word, how its
         # layer is laid on wherever an output lays it — not one global over
         # every output)
         self.laid = {getattr(wiring, "laid_on", 1): wiring.blend}
         self.cover: Cover | None = None
+        # each scene's cover, by its scene (the first's is `cover`)
+        self.covers: dict[str, Cover] = {}
         self.ends: list[Shown] = []
         self._ends: dict[int, Shown] = {}
         self._names: set[str] = set()
@@ -7091,7 +7658,7 @@ class _Build:
             if w.src != src or w.node in seen:
                 continue
             kind = _kind(w.node)
-            if (w.dst == "backdrop.scene"
+            if ((kind == "backdrop" and w.port == "scene")
                     or (kind == "composite" and w.port == "over"
                         and self.blends.get(w.node, "over") != "add")
                     or (kind in ("effect", "cut") and w.port == "image"
@@ -7201,6 +7768,13 @@ class _Build:
         if kind == "hands":
             n = split_instance(name)[1]
             return self._keep(Hands(wired_hands_name(n), draw=self.draws.get(n, "solid")))
+        if kind == "cloud":
+            # a declared cloud, the device its entry names ("" none:
+            # built, drawing nothing — its node says why)
+            if name not in self.cloud_roles:
+                self.g.dormant[name] = f"no {name} node in this graph (add one: {{\"kind\": \"cloud\"}})"
+                return None
+            return self._keep(PointCloud(name, self.cloud_roles[name]))
         if kind == "layer":
             # the hands it draws are the wire into its `hands` (none: an empty layer)
             n = split_instance(hands_of(name))[1]
@@ -7218,40 +7792,51 @@ class _Build:
                 return self.node(f"{hands}.layer")
             n = split_instance(hands)[1]
             return self._keep(Readout(wired_guide_name(n), geometry=self._from(f"{name}.hands")))
-        if name == "scene.cover":
-            # the scene's faces' coverage mask, made once
-            if self.cover is None:
-                scene = self.node("scene")
+        pin = scene_pin(name)
+        if pin is not None and pin[1] == "cover":
+            # a scene's faces' coverage mask, made once (each scene its own)
+            of = pin[0]
+            if of not in self.covers:
+                scene = self.node(of)
                 if scene is not None:
-                    self.cover = self._keep(Cover(COVER, scene=scene))
-            return self.cover
-        if name == "scene.depth":
-            return self.node("scene")             # (a depth is its scene's: `Node.depth`)
+                    self.covers[of] = self._keep(Cover(cover_name(of), of=of, scene=scene))
+                    if of == "scene":
+                        self.cover = self.covers[of]
+            return self.covers.get(of)
+        if pin is not None:
+            return self.node(pin[0])              # (a depth is its scene's: `Node.depth`)
         if kind == "scene":
-            geos = [self.node(w.src) for w in self.into.get("scene.geometry", ())]
-            return self._keep(Scene("scene", geometries=[*self.clouds,
-                                                         *(x for x in geos if x is not None)],
-                                    ground=0.0 if self.laid_over("scene") else None))
+            # any number, each a camera onto the one world —
+            # what it may see the wires into its `geometry`, its eye its own
+            geos = [self.node(w.src) for w in self.into.get(f"{name}.geometry", ())]
+            return self._keep(Scene(name, geometries=[x for x in geos if x is not None],
+                                    ground=0.0 if self.laid_over(name) else None))
         if kind == "backdrop":
-            over = self._from("backdrop.scene")
-            if self.back_channel:
+            # every backdrop the same way — the first's alpha the view's
+            # (`backdrop_alpha`), a later one's its own (`backdrop.<n>.alpha`,
+            # `Frame.backdrops`, by its name: `alpha_of`)
+            alpha = "backdrop_alpha" if name == BACKDROP else name
+            over = self._from(f"{name}.scene")
+            chan = self._back_channel(name)
+            if chan:
                 # a channel straight in: the backdrop is that channel's node
-                media = MediaNode(channel_name(self.back_channel), self.back_channel,
-                                  alpha_of="backdrop_alpha")
-                keyed = channel_name(self.back_channel) in getattr(self.wiring, "keys", ())
+                # (a later backdrop's its own node: `channel.a(backdrop.2)`)
+                media = MediaNode(channel_name(chan) if name == BACKDROP
+                                  else f"{channel_name(chan)}({name})", chan, alpha_of=alpha)
+                keyed = channel_name(chan) in getattr(self.wiring, "keys", ())
                 if keyed:
                     # keyed, its black shows the ground under it
-                    media.keyed = channel_name(self.back_channel)
+                    media.keyed = channel_name(chan)
                     media.keeps_alpha = True
                 under = self._keep(media)
-                back = Composite(BACKDROP, blend="over", over=over, under=under)
+                back = Composite(name, blend="over", over=over, under=under)
                 # (and the scene laid on it adds its own coverage over the holes)
                 back.keeps_alpha = keyed
                 return self._keep(back)
-            wired = self._one("backdrop.image") is not None
-            return self._keep(Composite(BACKDROP, blend="over", over=over,
-                                        under=self._from("backdrop.image"),
-                                        under_alpha_of="backdrop_alpha" if wired else None))
+            wired = self._one(f"{name}.image") is not None
+            return self._keep(Composite(name, blend="over", over=over,
+                                        under=self._from(f"{name}.image"),
+                                        under_alpha_of=alpha if wired else None))
         if kind in ("lookback", "echo"):
             # retired: a saved one is public parts on load
             # (`graphmigrate.lookbacks`); one reaching the build draws nothing
@@ -7312,6 +7897,10 @@ class _Build:
                 self.g.dormant[name] = f"{name} is fed by nothing here: wire its image"
                 return None
             return self._keep(SegmentNode(name, image=src))
+        if kind == "handmask":
+            # its hands are the wire into its `hands` (none: a mask that
+            # passes nothing, as a layer with none draws nothing)
+            return self._keep(HandMaskNode(name, hands=self._from(f"{name}.hands")))
         if kind in SEGMENT_PINS and segment_pin(name) is not None:
             # a segment's pin — the matte is the segment itself
             # (as `scene.depth` is the scene), each picture a node over it
@@ -7394,13 +7983,23 @@ class _Build:
 
     # ---- the frame
 
+    def _back_channel(self, backdrop: str) -> str:
+        """The channel wired straight into `backdrop`'s image ("" none, or a
+        picture that is not a channel's own): the first's is `back_channel`."""
+        if backdrop == BACKDROP:
+            return self.back_channel
+        back = self._one(f"{backdrop}.image")
+        return back.src.partition(".")[2] if back is not None and _kind(back.src) == "channel" else ""
+
     def _by_name(self, name: str) -> bool:
         """Whether every reached wire out of channel `name` goes where the
         channel is read by its letter, never by a node: `pattern.media` (`PatternNode.channel`) and, straight,
         `backdrop.image` (the backdrop's own `MediaNode`) — so the reach
         makes no second, unread node of it."""
         outs = [w for w in self.wires if w.src == name]
-        return bool(outs) and all(w.dst in ("pattern.media", "backdrop.image") for w in outs)
+        return bool(outs) and all(w.dst == "pattern.media"
+                                  or (_kind(w.node) == "backdrop" and w.port == "image")
+                                  for w in outs)
 
     def build(self) -> None:
         g = self.g
@@ -7471,11 +8070,14 @@ class _Build:
         # run, each through's composite and slots, the capture's picture,
         # the ends, the writes, the capture, the outputs
         made = self.made
-        roots: list[Node | None] = [*self.clouds, made.get("pattern"), made.get("shape")]
+        roots: list[Node | None] = [*(n for n in self.built if isinstance(n, PointCloud)),
+                                    made.get("pattern"), made.get("shape")]
         roots += [n for n in self.built if isinstance(n, Hands)]
         roots += [made.get("scene"), self.cover]
+        # (the scenes past the first, and their covers)
+        roots += [n for n in self.built if isinstance(n, (Scene, Cover))]
         roots += [n for n in self.built if isinstance(n, MediaNode) and n.alpha_of]
-        roots += [n for n in self.built if n.name == BACKDROP and isinstance(n, Composite)]
+        roots += [n for n in self.built if _kind(n.name) == "backdrop" and isinstance(n, Composite)]
         roots += [*layers, *(n for n in self.built if isinstance(n, Readout))]
         # (each end right after its chain: an effect placed into an output
         # sits after it, `Graph.insert`)
@@ -7596,8 +8198,8 @@ class _Build:
             for src in c.inputs.values():
                 if src is not None:
                     readers.setdefault(id(src), []).append(c)
-        scene = self.made.get("scene")
-        held = set(map(id, scene.geometries())) if isinstance(scene, Scene) else set()
+        # (the hands in any scene)
+        held = {id(g) for sc in self.built if isinstance(sc, Scene) for g in sc.geometries()}
         for layer in layers:
             on = any(isinstance(c, Effect) and not isinstance(c, Slot)
                      and c.inputs.get("image") is layer for c in readers.get(id(layer), ()))

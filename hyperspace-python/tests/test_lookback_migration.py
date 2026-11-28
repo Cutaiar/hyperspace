@@ -31,7 +31,7 @@ ECHO_FACES = Path(__file__).parent / "fixtures" / "presets" / "echo-faces.json"
 
 
 def _doc(wires, values=None, nodes=(), **rest):
-    return {"schema": "hyperspace.loadable/12", "name": "t",
+    return {"schema": "hyperspace.loadable/13", "name": "t",
             "graph": {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}, *nodes],
                       "wires": [{"from": "shape", "to": "scene.geometry"},
                                 {"from": "pattern", "to": "shape.faces"}, *wires]},
@@ -301,7 +301,7 @@ def test_a_look_back_lands_folded_in_one_group_of_its_parts():
     demand — one folded group, picture in and picture out, `+` away from
     the parts. Its number is past every group the file named; the Reads
     of its echo pins are the patch's, not the group's."""
-    doc = {"schema": "hyperspace.loadable/12", "name": "t",
+    doc = {"schema": "hyperspace.loadable/13", "name": "t",
            "graph": {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid"}],
                      "wires": [{"from": "scene", "to": "lookback.image"},
                                {"from": "scene", "to": "lookback.occluder"},
@@ -333,7 +333,7 @@ def test_a_look_back_a_group_of_the_file_held_brings_its_parts_into_it():
     """Old files could group the look-back itself (`render:lookback`): its
     parts join that group — a node is in one group at most — and no
     second group is made."""
-    doc = {"schema": "hyperspace.loadable/12", "name": "t",
+    doc = {"schema": "hyperspace.loadable/13", "name": "t",
            "graph": {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid"}],
                      "wires": [{"from": "scene", "to": "lookback.image"},
                                {"from": "lookback", "to": "acid.image"},
@@ -368,7 +368,7 @@ def test_a_fragment_with_no_dream_keeps_none_of_the_dreams_values():
 
 
 def test_a_look_back_into_a_look_back_takes_the_first_ones_parts():
-    doc = {"schema": "hyperspace.loadable/12", "name": "t",
+    doc = {"schema": "hyperspace.loadable/13", "name": "t",
            "graph": {"frame": "wired",
                      "wires": [{"from": "scene", "to": "lookback.image"},
                                {"from": "lookback", "to": "lookback.2.image"},
@@ -388,7 +388,7 @@ def test_the_master_switch_keeps_wire_declared_and_default_mix_effects_as_they_d
     """An effect declared by a wire alone is the patch's too: switched off
     where the master was; one with no saved mix is at its file's mix (here
     acid's 1), scaled by the master's."""
-    doc = {"schema": "hyperspace.loadable/12", "name": "t",
+    doc = {"schema": "hyperspace.loadable/13", "name": "t",
            "graph": {"frame": "wired",
                      "wires": [{"from": "scene", "to": "acid.image"},
                                {"from": "acid", "to": "lookback.image"},
