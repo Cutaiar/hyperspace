@@ -63,16 +63,7 @@
   "hyperspace-python/tests/test_graph_wired.py": {
    "provenance": 1
   },
-  "hyperspace-python/tests/test_graphview.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_hotplug.py": {
-   "narration": 1
-  },
   "hyperspace-python/tests/test_hue_turn.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_layer_boundary.py": {
    "provenance": 1
   },
   "hyperspace-python/tests/test_library.py": {
@@ -80,9 +71,6 @@
   },
   "hyperspace-python/tests/test_pad_learn.py": {
    "provenance": 10
-  },
-  "hyperspace-python/tests/test_patches_one_format.py": {
-   "provenance": 3
   },
   "hyperspace-python/tests/test_plan31_32_merge.py": {
    "provenance": 1
@@ -102,9 +90,6 @@
   "hyperspace-python/tests/test_plan39_graph.py": {
    "provenance": 1
   },
-  "hyperspace-python/tests/test_routing.py": {
-   "provenance": 1
-  },
   "hyperspace-python/tests/test_shared_library.py": {
    "provenance": 1
   },
@@ -117,77 +102,23 @@
   "hyperspace-python/tests/test_ui_pad.py": {
    "provenance": 1
   },
-  "hyperspace-python/tests/test_video_sound_path.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tools/box_demo.py": {
-   "provenance": 2
-  },
   "hyperspace-python/tools/catalog_demo.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tools/ci_shard.py": {
    "provenance": 1
   },
   "hyperspace-python/tools/desk_coverage.py": {
    "provenance": 1
   },
-  "hyperspace-python/tools/desk_shots.py": {
-   "provenance": 2
-  },
   "hyperspace-python/tools/dream_proof.py": {
    "provenance": 2
-  },
-  "hyperspace-python/tools/drive_world_check.py": {
-   "provenance": 1
   },
   "hyperspace-python/tools/faces_sheets.py": {
    "provenance": 3
   },
-  "hyperspace-python/tools/followups_demo.py": {
-   "provenance": 2
-  },
   "hyperspace-python/tools/golden_frames.py": {
-   "provenance": 5
-  },
-  "hyperspace-python/tools/hands_probe.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tools/hands_tape.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tools/home_demo.py": {
    "provenance": 2
-  },
-  "hyperspace-python/tools/learn_default_demo.py": {
-   "provenance": 2
-  },
-  "hyperspace-python/tools/learn_demo.py": {
-   "provenance": 6
   },
   "hyperspace-python/tools/lookback_proof.py": {
    "provenance": 6
-  },
-  "hyperspace-python/tools/mandel_bench.py": {
-   "provenance": 2
-  },
-  "hyperspace-python/tools/orbit_demo.py": {
-   "provenance": 2
-  },
-  "hyperspace-python/tools/outputs_shots.py": {
-   "provenance": 10
-  },
-  "hyperspace-python/tools/placement_demo.py": {
-   "provenance": 2
-  },
-  "hyperspace-python/tools/save_as_demo.py": {
-   "provenance": 2
-  },
-  "hyperspace-python/tools/slew_demo.py": {
-   "provenance": 2
-  },
-  "hyperspace-python/tools/undo_demo.py": {
-   "provenance": 2
   },
   "hyperspace-web/hyperspace.html": {
    "provenance": 6
