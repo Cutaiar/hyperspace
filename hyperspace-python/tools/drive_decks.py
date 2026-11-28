@@ -1,8 +1,7 @@
-"""tools/app_driver.py script: the two verbs in the real app, by mouse (plan 44 D5d).
+"""tools/app_driver.py script: the two verbs in the real app, by mouse.
 Copy on air to off air, the panel moved to the deck off air (the red head chip, the
 red frame, the inset of what is on air), a look loaded there, a timed fade across, the
-fader by hand to the middle and home, then a press on air, which loads off air (row
-700), and a ⌘Z, which takes nothing back from the room (row 753). Each step says what it left, on stderr.
+fader by hand to the middle and home, then a press on air, which loads off air, and a ⌘Z, which takes nothing back from the room. Each step says what it left, on stderr.
 
     uv run python tools/app_driver.py tools/drive_decks.py --out <scratch>/run --every 20
 """
@@ -77,7 +76,7 @@ def script(d, panel):
     assert "⌘Z" not in panel.library.status      # the panel is on air: ⌘Z does not reach it
 
     held = one.reg.snapshot(part="patch")
-    panel.reg["edit.undo"].fire()     # a mis-pressed pad and ⌘Z: the latch (row 753)
+    panel.reg["edit.undo"].fire()     # a mis-pressed pad and ⌘Z: the latch
     yield from d.wait(10)
     at = undos.here()
     print(f"status line: {at.status}", file=sys.stderr)

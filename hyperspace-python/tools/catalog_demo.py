@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan 28's demo: the catalog, the scenes and the 3D switch, drawn
+"""The catalog demo: the catalog, the scenes and the 3D switch, drawn
 offscreen by the real renderer.
 
   uv run python tools/catalog_demo.py            # video, stills and the sheet
@@ -114,7 +114,7 @@ def segments() -> list[Segment]:
     ]
     for i in range(len(G.SHAPES)):
         s = G.SHAPES[i]
-        if i < 26 or s.family == "Scenes":       # the tour: what plan 28 added
+        if i < 26 or s.family == "Scenes":       # the tour: the shapes the catalog adds
             continue
         segs.append(Segment(f"{s.name}", f"{s.alias} · {s.sym}", 1.6,
                             {"shape": i, "faces": True, "bright": 1.3, "speed": 0.7}))
@@ -131,8 +131,8 @@ class Stage:
         self.fbo.use()
         self.ctx.viewport = (0, 0, w, h)
         self.r = Renderer(self.ctx)
-        # plan 36 T3: a bare renderer draws the app's empty frame; the
-        # tool's own wiring is today's frame (render.render_offscreen's)
+        # a bare renderer draws the app's empty frame; the tool sets the
+        # wiring `render.render_offscreen` uses
         self.r.wiring = wired_wiring(Wiring())
 
     def shot(self, v: ViewState, t: float) -> Image.Image:

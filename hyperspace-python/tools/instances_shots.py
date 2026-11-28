@@ -2,8 +2,7 @@
 """The instance count at zero, offscreen: one scene, five frames.
 
 Renders a 24-cell with face patterns through the real pipeline (render.py)
-and writes a strip to docs/plans/assets/16-paper-cuts/instances-zero.png
-(plan 16 WP5):
+and writes a strip to docs/plans/assets/16-paper-cuts/instances-zero.png:
 
   1  instances 1            the scene
   2  instances 0            nothing drawn: the ground
@@ -60,10 +59,9 @@ def shot(ctx, counts: list[int], *, plasma: bool = False,
     fx = FxState()
     fx.values["plasma"]["on"] = plasma
     r = Renderer(ctx, fx=fx)
-    r.wiring = wiring_of(fx)  # plan 33 R23: its run as a load lands it
+    r.wiring = wiring_of(fx)  # its run as a load lands it
     if lookback:
-        # (plan 90 H2: the look-back is retired — its tracers are a delay and a
-        # Trail now, wired in a patch; this option draws no wake any more)
+        # the look-back is retired: this option draws no wake
         r.fx.dream_source = None
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
     s = view()

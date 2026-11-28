@@ -10,10 +10,10 @@ share of face area the projection turns edge-on
 ("axis"), and at a fixed generic pose ("generic").
 
 The sweep goes through geometry.view_angles, as the renderer does, so a
-3D shape (Shape.dims == 3, plan 28) does not move at all: the W planes
+3D shape (Shape.dims == 3) does not move at all: the W planes
 leave it alone. The default sweeps the 4D shapes.
 
-Writes, under docs/plans/assets/22-flat-shapes/ (plan 22, Stream A):
+Writes, under docs/plans/assets/22-flat-shapes/:
 
   <prefix>-ratios.json / .csv   min ratio per shape per plane per pass,
                                 and the angle where it occurs; the max
@@ -183,7 +183,7 @@ def main() -> None:
 
     ctx = moderngl.create_context(standalone=True)
     renderer = Renderer(ctx)
-    # plan 36 T3: a bare renderer draws the app's empty frame; the
+    # a bare renderer draws the app's empty frame; the
     # tool's own wiring is today's frame (render.render_offscreen's)
     renderer.wiring = wired_wiring(Wiring())
     for i in shapes:

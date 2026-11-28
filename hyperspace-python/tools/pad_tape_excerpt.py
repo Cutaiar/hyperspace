@@ -1,4 +1,4 @@
-"""A slice of a probe's pad tape for the tests (plans 42, 46).
+"""A slice of a probe's pad tape for the tests.
 
     uv run python tools/pad_tape_excerpt.py joycon-check.jsonl tests/fixtures/pads/joycon-bt-excerpt.jsonl
 

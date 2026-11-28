@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Learn and Unbind from the right-click menu, shown headless (plan 17).
+"""Learn and Unbind from the right-click menu, shown headless.
 
 Builds the app's objects the way `tools/undo_demo.py` does (its `boot`:
 library, registry, router, loadable patches, a Learn, a MidiIO over fake ports, a
@@ -9,11 +9,11 @@ prints a transcript of what the menu draws and does. The menu is read the
 way `tests/test_ui_shell.py::menu` reads it: the popup's `begin` is
 answered for it, so nothing here is a real right-click.
 
-  unbind   plan 17 WP1: a param with a knob, a hand route and an LFO
+  unbind   a param with a knob, a hand route and an LFO
            route — the menu's lines, Unbind by kind and both, Ctrl+Z
            putting all of it back, a fader's param offering no Unbind —
            and the same again with no MIDI adapter on the panel.
-  learn    plan 17 WP2: the menu's Learn desk / Learn hand ▸ left / right;
+  learn    the menu's Learn desk / Learn hand ▸ left / right;
            the meta controller's two wrong-hand cases replayed with a bare learn
            and with "Learn hand ▸ left"; a knob bump during a hand learn
            doing its own job; a fader and SHIFT working through a desk
@@ -195,9 +195,9 @@ def step(r, panel, what: str, *msgs, hands=None, n: int = 1) -> None:
 
 
 def hand_cases(r, panel, pid: str) -> None:
-    """Plan 17 §1 row 1's two measured cases (tests/test_hands.py builds
-    the frames): replayed with a bare learn — any source, as every learn
-    was before — and with "Learn hand ▸ left"."""
+    """The two measured wrong-hand cases (tests/test_hands.py builds the
+    frames): replayed with a bare learn (any source) and with "Learn hand ▸
+    left"."""
     from test_hands import _wrong_hand_cases
 
     lrn, table = r.learn, r.router.table
@@ -223,7 +223,7 @@ def hand_cases(r, panel, pid: str) -> None:
             say(f"    {label:<24} armed:  {armed}")
             say(f"    {'':<24} frame {at}: {lrn.last}")
             say(f"    {'':<24} the route: {row.source if row else None}")
-            lrn.unbind(pid, desk=False)                      # clear it for the next run
+            lrn.unbind(pid, desk=False)                      # clear it between cases
             demo.settle(r)
             footer(r, panel)                                 # …and let the footer forget it
             r.t += 5.0

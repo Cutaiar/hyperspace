@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Plan 37 C4 (the dry run of P2): the 17 face patterns on the faces of a
-shape, for the owner to judge by eye (D1), and the migration map
-`dropped → nearest kept` that P2 executes once he names the list.
+"""The 17 face patterns on the faces of a shape, to judge by eye, and the
+migration map `dropped → nearest kept` for when the list of kept modes is named.
 
-Not plan 22's `tools/pattern_sheet.py` (one face's pattern alone, a tile per
+Not `tools/pattern_sheet.py` (one face's pattern alone, a tile per
 input value): here each pattern is drawn **on the faces of a shape, as a
 show draws it** — a corpus loadable patch loaded through the real `LoadedPatch` over a
 scratch library home (`tools/golden_frames.py`'s `Rig`: HYPERSPACE_HOME is
@@ -17,7 +16,7 @@ What a tile shows, the same for every mode (only `view.pattern` differs):
 - `view.pattern_mix` 1.0 — the pattern alone on the faces, not the
   loadable patch's blend with the plain fill;
 - the eight inputs where the corpus loadable patches' lane routes leave them on a
-  **medium passage** (plan 22 B3's MEDIUM bands: lane i pushes input i at
+  **medium passage** (`tools/pattern_sheet.py`'s MEDIUM bands: lane i pushes input i at
   `routing.PATTERN_DEPTH` on a base of 1; HUE and SPREAD at 1.0) — the
   default pattern depth, set as the inputs' bases since the rig's analyzer
   is never fed;
@@ -68,7 +67,7 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tests"):
 
 # golden_frames points HYPERSPACE_HOME at a temporary folder on import,
 # before anything of hyperspace's is imported (unless the tests' conftest
-# already chose one that is not the owner's real home)
+# already chose one that is not the real home)
 import golden_frames as gf
 
 from hyperspace import graph as G
@@ -92,7 +91,7 @@ SHEETS = (("sheet.png", "party-faces",
           ("heart-sheet.png", "plasma-heart",
            "the Heart: one big flat face, the pattern's design large (lit at bright 2.5)",
            {"view.bright": 2.5}))
-# plan 22 B3's medium passage (tools/pattern_sheet.py MEDIUM): every band
+# the medium passage (tools/pattern_sheet.py MEDIUM): every band
 # near nominal, in fader units (out); SUB BASS MIDB MID UPR AIR
 MEDIUM = (1.00, 1.00, 0.70, 0.90, 0.60, 0.60)
 
@@ -146,7 +145,7 @@ DRAWS: dict[str, str] = {
 }
 
 # For each mode, its neighbours by look, nearest first, with one line on
-# why. The ranking rule (register-row draft in the C4 decisions): (1) the
+# why. The ranking rule: (1) the
 # same structure on the face — radial about the centre, a straight-line
 # lattice, a cell lattice, a flowing field, a band reader — then (2) the
 # same palette and light (dark ground with bright lines, or a full fill),
@@ -524,8 +523,8 @@ def main() -> int:
         return 0
     from PIL import Image
 
-    # case-folded, not upper-cased: the mode names are lower case as of
-    # 2026-11-10 and an argument typed either way has to land
+    # case-folded, not upper-cased: the mode names are lower case and an
+    # argument typed either way has to land
     only = [x.strip().lower() for x in a.only.split(",") if x.strip()]
     if bad := [x for x in only if x not in NAMES]:
         ap.error(f"no such mode: {', '.join(bad)} (one of {', '.join(NAMES)})")

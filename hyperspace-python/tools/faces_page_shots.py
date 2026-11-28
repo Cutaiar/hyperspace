@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The FACES page (plan 22 B2, B3) as PNGs.
+"""The FACES page as PNGs.
 
 Not the app: a **hidden** GLFW window at the control size, with the panel
 drawn over a real `Renderer` on the same GL context, so the pattern chips'
@@ -9,7 +9,7 @@ tesseract offscreen each frame; the faces page is open. A fresh temp home
 of its own (`tools/undo_demo.py` sets `HYPERSPACE_HOME` on import): no
 MIDI port, no audio device, no tracker. A Router over an empty table
 stands in for the app's, so the "+ source" offers show; and three
-inputs get routes in b2-hex.png (an analyzer lane is not live here, so
+inputs get routes in b3-faces-hex.png (an analyzer lane is not live here, so
 the lane routes read as not moving; an LFO route rides its input, and its
 slider shows base → effective).
 
@@ -23,7 +23,6 @@ writes, into docs/plans/assets/22-face-patterns/:
   b3-faces-hover.png    caustic with a mode chip's hover up (its one line)
   b3-faces-meter.png    meter on a loud passage's bands (Renderer.bands)
 
-(B2's b2-*.png are the same page before B3's five modes.)
 """
 
 # undo_demo is imported before anything of hyperspace's, on purpose: it sets
@@ -103,8 +102,8 @@ def main() -> int:
 
     ctx = moderngl.create_context()
     renderer = Renderer(ctx)
-    # plan 36 T3: a bare renderer draws the app's empty frame; the
-    # tool's own wiring is today's frame (render.render_offscreen's)
+    # a bare renderer draws the app's empty frame; the tool's own wiring
+    # is the live frame (render.render_offscreen's)
     renderer.wiring = wired_wiring(Wiring())
     r = boot(renderer)
     reg, view = r.reg, r.view

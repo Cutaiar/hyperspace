@@ -21,7 +21,7 @@ its own device sync so the number is the part, not the pipeline):
   tex_write_f32  texture.write() RGB32F
 
 Then the whole round trip at 256 px, the way the feature would do it, so the
-3.4 ms measured earlier decomposes into its parts.
+round-trip total decomposes into its parts.
 """
 
 from __future__ import annotations

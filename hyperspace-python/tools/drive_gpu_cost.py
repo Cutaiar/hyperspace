@@ -1,4 +1,4 @@
-"""tools/app_driver.py script (plan 84): GRAPH's **gpu cost** chip in the real
+"""tools/app_driver.py script: GRAPH's **gpu cost** chip in the real
 app — the party show on GRAPH, the chip clicked, every render node marked by
 its GPU time (its border and ground up a black-to-white ramp, a badge above
 it), the head's line with the frame's total and its three costliest, and an

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan 64, part 2: a grabbed fractal dived into, then flown through.
+"""A grabbed fractal dived into, then flown through.
 
 Each segment drives the app's own fractal steps once a frame, in the app's
 order (`app._space`, `app._reroot`, the shape's home, `app._fly`), on a world

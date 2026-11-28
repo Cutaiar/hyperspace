@@ -2,7 +2,7 @@
 
     uv run python tools/trim_sweep.py [clip.wav] [--band 1] [--manual]
 
-Audit A10 / ENGINEERING §4: on the AUTO path (the reference's adaptive
+On the AUTO path (the reference's adaptive
 window) a cut of 6–12 dB can drive a band harder; on MANUAL the trim is a
 plain gain and the output falls monotonically. The settled output is the
 mean of the band's `out` over the clip's second half. Default clip is the

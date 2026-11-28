@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The ROUTING page with its filter typed, beside the same page without, as
-a PNG (plan 17 WP5).
+a PNG.
 
 Not the app: a **hidden** GLFW window with the panel drawn over the same
 headless objects `tools/undo_demo.py` builds — no render window, no MIDI

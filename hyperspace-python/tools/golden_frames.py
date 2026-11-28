@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Plan 26 A0 — golden frames: every corpus loadable patch in every output state
+"""Golden frames: every corpus loadable patch in every output state
 it reaches, rendered offscreen, hashed byte for byte.
 
 Each corpus loadable patch (`CORPUS_LOADABLES`: the twenty-five files under
-`tests/corpus/loadable/`, the loadable patches the build shipped until 2026-10-28 —
-test data now, read by nothing in the app) is copied into a throwaway
+`tests/corpus/loadable/`, the loadable patches the build once shipped —
+test data, read by nothing in the app) is copied into a throwaway
 library home and loaded through the real `LoadedPatch` over a `Router`, with two synthetic hands
 (`tests/fake_hands.py`: the left open, the right a fist, test_ghost's
 pose) present or absent through the real `HandsIO`, and drawn through
@@ -19,35 +19,35 @@ the render cap is the app's default (1080p). Then the window's own frame,
 output 1 alone (`SOLO`: the default state, and with an effect on also
 through), so the pipeline is drawn direct into the multisampled target.
 Once more, for one loadable patch, a 2× HiDPI 1080p screen (3840×2160) under
-that cap. And (plan 26 A3) the render graph's other wirings, hands
+that cap. And the render graph's other wirings, hands
 present (`WIRED`): the hands inside the scene (the scene's output with
 the hands in it, beside a glass output that shows the hands' layer
 alone, over and through) and the hands' layer laid on depth-aware, for
 every loadable patch; the history holding the hands' layer, for the loadable patches
 with the look-back on — each a rig of its own (`Renderer.wiring`), its
-outputs named `<wiring>/<state>`. And (plan 26 A4b) a recorded point
+outputs named `<wiring>/<state>`. And a recorded point
 cloud (`CLOUDED`): a scratch `config.toml` in the rig's home listing one
 `cloud` device over the fixture recording (`tests/fixtures/clouds/`,
 copied in), opened by the real device registry, polled on the pinned
 clock and handed to the renderer, so the default scene gains its
-point-cloud node — named `cloud/<state>`. And (plan 26 A4) the proof loadable patches,
+point-cloud node — named `cloud/<state>`. And the proof loadable patches,
 fixtures under `tests/fixtures/presets/` (`FIXTURE_LOADABLES`, never a
 corpus loadable patch): each copied into the scratch library and loaded like a
 user's loadable patch, its `graph` section landing through the real `LoadedPatch`
 onto the rig's renderer, hands present, in the eight states — the
-manifest's `fixture_states` and `fixtures`. And (plan 31 P) the
+manifest's `fixture_states` and `fixtures`. And the
 envelopes and the step sequencer are stepped through the router as the
 app steps them — at rest and stopped, so they move nothing — but for the
 loadable patches in `RUNNING` (``seq-demo``), drawn with play pressed as the rig
 starts, so their frame is the pattern mid-envelope at the pinned clock.
-Plan 32's five fixtures are media
+The five media fixtures are media
 loadable patches (`MEDIA_FIXTURES`): their bins name `local:` ids the rig's media
 channels find under `tests/golden/media/` (`GoldenMedia`), every still
 decoded before the first frame is drawn.
 
 A golden is the SHA-256 of the full-resolution RGBA frame as GL returns
 it, plus a quarter-size PNG for a person (one file per distinct
-picture). The pipeline each state reached (the retired `outputs.route`'s
+picture). The pipeline each state reached (the old `outputs.route`'s
 table, kept here as data, `ROUTES`: SCENE, SCENE+HANDS, HANDS or none,
 and the hands laid over after) is recorded beside it, so the manifest
 lists what each loadable patch actually reaches.
@@ -58,8 +58,8 @@ note elsewhere.
     uv run python tools/golden_frames.py              # diff against the goldens
     uv run python tools/golden_frames.py --record     # (re)record them
     uv run python tools/golden_frames.py --only party-trip,legacy6 [--record]
-    uv run python tools/golden_frames.py --signatures # plan 35: a new case's signature only
-    uv run python tools/golden_frames.py --names      # plan 35: the fixtures' node names only
+    uv run python tools/golden_frames.py --signatures # a new case's signature only
+    uv run python tools/golden_frames.py --names      # the fixtures' node names only
 
 A diff writes a contact sheet of every frame that moved (golden | now |
 difference ×4) under docs/plans/assets/26-render-graph/. `--record` with
@@ -110,7 +110,7 @@ STATES: tuple[tuple[str, dict], ...] = tuple(
      {"scene": a, "hands": b, "through": c})
     for a in (True, False) for b in (True, False) for c in (False, True))
 HANDS = ("absent", "present")
-# plan 36 T3: eight windows on the rig as it ships — each shows its own
+# eight windows on the rig as it ships — each shows its own
 # wires, else All outputs' by its bus cables (no switch state emulated):
 # what tools/migrate_library.py draws an old file and its `/7` under
 SHIPPED: tuple[tuple[str, dict], ...] = tuple(
@@ -124,7 +124,7 @@ SHIPPED: tuple[tuple[str, dict], ...] = tuple(
 SOLO = (("solo", {"scene": True, "hands": True, "through": False}),)
 SOLO_FX = (("solo-scene+hands+through", {"scene": True, "hands": True, "through": True}),)
 
-# plan 26 A3: the graph's other wirings (`graph.Wiring`), hands present —
+# the graph's other wirings (`graph.Wiring`), hands present —
 # (name, the wiring's fields, the output states drawn as one rig's
 # outputs, output 1 first, the loadable patches it is drawn for: None, every
 # one). In the scene: the scene's output with the hands in it, and a glass
@@ -139,7 +139,7 @@ WIRED: tuple[tuple[str, dict, tuple[str, ...], tuple[str, ...] | None], ...] = (
     ("history+hands", {"history": "scene+hands"}, ("scene+hands",), LOOKBACK_ON),
 )
 
-# plan 26 A4b: a recorded point cloud in the scene — (name, the scratch
+# a recorded point cloud in the scene — (name, the scratch
 # config's device list, the output states, the loadable patches), hands present.
 # The device plays the fixture at its 12 fps against the pinned clock, so
 # the frame drawn is the same on every run (frame 1 after FRAMES frames)
@@ -152,10 +152,10 @@ file = "clouds/knot.npz"
 CLOUDED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("cloud", CLOUD_CONFIG, ("scene", "scene+hands"), ("legacy6", "party-faces")),
 )
-# the corpus (2026-10-28): the twenty-five `/7` loadable patches the build shipped
-# until the library went one-tier, kept as test data — the goldens' main
-# subjects, in the order the manifest has always listed them (the house
-# moods, plan 12's party loadable patches, plan 14's, then the routing-era ones)
+# the corpus: the twenty-five `/7` loadable patches the build once shipped,
+# kept as test data — the goldens' main subjects, in the order the manifest
+# lists them (the house moods, the party loadable patches, then the
+# routing-era ones)
 CORPUS = ROOT / "tests" / "corpus" / "loadable"
 CORPUS_LOADABLES: tuple[str, ...] = (
     "big-blue-wave", "ember-orbit", "hex-engine", "inverse-halo", "plasma-heart",
@@ -165,41 +165,40 @@ CORPUS_LOADABLES: tuple[str, ...] = (
     "legacy6", "lfo-breathe", "seq-demo", "hands-fx", "hands-pinch", "hands-play",
     "hands-orbit",
 )
-# plan 26 A4: the proof loadable patches — fixtures, never corpus loadable patches — each
+# the proof loadable patches — fixtures, never corpus loadable patches — each
 # loaded through the scratch library like a user's loadable patch, its `graph`
 # section landing through the real `LoadedPatch` (`GraphSection`) onto the
 # rig's renderer, hands present, every output state as one rig's outputs
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
-# plan 36 T3 (D5): the corpus loadable patches are `/7` files; what they were made
-# from — the `/2` (seq-demo `/3`) sources the retired generator wrote,
-# which tools/migrate_library.py migrated — is read where the proof needs
-# the section before the wired frame (`plan33_section`)
+# the corpus loadable patches are `/7` files; what they were made
+# from — the `/2` (seq-demo `/3`) sources, which tools/migrate_library.py
+# migrated — is read where the proof needs the section before the wired
+# frame (`plan33_section`)
 FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
-# plan 30 D1: the three placements' proof loadable patches — the palette after the
+# the three placements' proof loadable patches — the palette after the
 # hands' layer, the palette into output 2's picture, a second acid after
 # the scene (`graph.EffectAt.after` / `into`)
-# plan 28 N4: the wire list's proof loadable patches — hands 2 wired to output 2's
+# the wire list's proof loadable patches — hands 2 wired to output 2's
 # hands alone, the palette wired into output 1's picture and a second acid
 # from the history into output 2's (`graph.Wire`)
-# plan 32 T6: the media channels' proof loadable patches — a still on channel a as
+# the media channels' proof loadable patches — a still on channel a as
 # the backdrop under the scene, and channel c wired into output 2's picture
-# (`graph.MediaNode`); their stills are under tests/golden/media/. Plan 32
-# T7's three: the still on the faces (`view.media`), and the still wired into
-# an effect's aux — blend's luma key, displace by its brightness. Plan 33
-# T4's three (`hyperspace.preset/5`): the still through its own shaders onto
-# the faces (`media.a → acid.2 → huecycle.2 → shape.faces`; Hue turn since plan 67), under the scene
+# (`graph.MediaNode`); their stills are under tests/golden/media/. Three more: the still on the faces (`view.media`), and the still wired into
+# an effect's aux — blend's luma key, displace by its brightness. Three
+# more (`hyperspace.preset/5`): the still through its own shaders onto
+# the faces (`media.a → acid.2 → huecycle.2 → shape.faces`), under the scene
 # (`media.a → kaleido.2 → backdrop.image`), and one branch read at two sizes
-# (acid.2 on the faces at 1024² and as output 2's picture). Plan 33 T5's
-# one: a switch onto the faces at select 2, the still (in1 an empty channel,
+# (acid.2 on the faces at 1024² and as output 2's picture). One
+# more: a switch onto the faces at select 2, the still (in1 an empty channel,
 # in3 the still through acid.2: never made)
-# Plan 35 T3's `channel-out-only` (`hyperspace.preset/6`): channel a's still
-# wired straight into All outputs, nothing else — no scene pass. Plan 34
-# T4's `resize-crop` (a wired frame, below). Plan 39 T2's `mask-as-picture`
+# `channel-out-only` (`hyperspace.preset/6`): channel a's still
+# wired straight into All outputs, nothing else — no scene pass. Then
+# `resize-crop` (a wired frame, below) and `mask-as-picture`
 # (`/7`, a wired frame): channel a's still through a matte (luma, key 0.95,
-# feather 4) wired straight into All outputs — the mask as a picture. Plan
-# 39 T3's `cut-out` (`/7`, a wired frame): that matte on a `cut`'s mask, the
+# feather 4) wired straight into All outputs — the mask as a picture. Then
+# `cut-out` (`/7`, a wired frame): that matte on a `cut`'s mask, the
 # scene through kaleido on its picture, the cut over the scene — the
-# kaleidoscope in the still's disc, the scene elsewhere. Plan 39 T4's
+# kaleidoscope in the still's disc, the scene elsewhere. Then
 # `segment-motion` (`/7`, a wired frame): the scene over the still into a
 # motion segment, its foreground into All outputs — the model learns the
 # rig's first frame, its later frames (the pinned clock: the polytope turns,
@@ -210,24 +209,24 @@ MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces
                                    "media-chain-backdrop", "branch-two-sizes", "switch-faces",
                                    "channel-out-only", "resize-crop", "mask-as-picture",
                                    "cut-out", "segment-motion")
-# plan 34 T2's two: the scene through a delay onto the faces (the infinite
+# the scene through a delay onto the faces (the infinite
 # mirror), and a loop of effects through a delay (trails: `delay →
 # zoomblur.2 → composite.under`, `composite → delay.image`) — each drawn
 # from a cleared state over the rig's FRAMES frames, seven feedback steps.
-# Plan 34 T3's one: the look-back's third-newest echo on the faces, the
+# Also the look-back's third-newest echo on the faces, the
 # look-back off and a capture every frame (`echo.3 → shape.faces`): the
 # pattern for the first three frames, then the scene of three frames back
 FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails", "echo-faces")
-# plan 35 T3's three wired frames (`hyperspace.preset/6`): the marker alone
+# three wired frames (`hyperspace.preset/6`): the marker alone
 # (black: nothing wired), channel a alone into All outputs (a media
 # fixture, above), and acid on All outputs with a copy of it over a
 # composite of the look-back and the hands layer on output 2 alone, whose
-# hands port is `ground`. Plan 34 T4's two (`/6` wired frames, each state
-# under its window's mutes): `resize-faces`, the owner's headline — the
+# hands port is `ground`. Two more (`/6` wired frames, each state
+# under its window's mutes): `resize-faces`, the
 # scene made at 64² square, nearest, into a delay onto the faces (`scene →
 # resize → delay → shape.faces`) — and `resize-crop`, channel a's still
 # cropped at 128 through acid.2 onto output 2 alone (a media fixture, above)
-# Plan 39 T0's one (a `/7` wired frame): the scene through `edges` at its
+# And one `/7` wired frame: the scene through `edges` at its
 # defaults into All outputs — the polytope's lines as line art
 WIRED_FIXTURES: tuple[str, ...] = ("blank-frame", "channel-out-only", "through-one-output",
                                    "resize-faces", "resize-crop", "edges-scene",
@@ -241,7 +240,7 @@ MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the po
 
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080
-# plan 31 P: the loadable patches drawn with the sequencer running (`seq.run` is
+# the loadable patches drawn with the sequencer running (`seq.run` is
 # never in a loadable patch): play pressed as the rig starts, so step 1 fires on
 # the first frame at T0 + DT and the hashed frame, FRAMES − 1 frames
 # later (about 117 ms at 120 BPM), is mid-envelope on its kick (the hat
@@ -330,7 +329,7 @@ class FakeHands:
 
 
 class GoldenMedia:
-    """The rig's media resolver (plan 32 T6): a `local:` id is a file under
+    """The rig's media resolver: a `local:` id is a file under
     `tests/golden/media/`; nothing else is on this Mac."""
 
     proxy_cache = None
@@ -367,7 +366,7 @@ class Shot:
     # (h, w, 4) uint8, top row first: for the PNG and a diff — None when the
     # caller's `keep` said the frame is not needed past its hash
     pixels: np.ndarray | None
-    wired: str | None = None   # plan 28 N4: what feeds a wired output's picture
+    wired: str | None = None   # what feeds a wired output's picture
 
     @property
     def key(self) -> str:
@@ -391,16 +390,16 @@ class Rig:
                  source: Path | None = None, library: Path | None = None,
                  show: dict | None = None):
         """A corpus loadable patch by its slug, or a fixture (`FIXTURE_LOADABLES`):
-        copied into the scratch library first and loaded from there. Row
-        394: or any loadable patch file `source`, copied in as `slug` — with
+        copied into the scratch library first and loaded from there. Or
+        any loadable patch file `source`, copied in as `slug` — with
         `library`'s desk templates and module presets beside it
-        (`headless.SHARED_FOLDERS`) — for `picture`; plan 43 C2: and `show`
+        (`headless.SHARED_FOLDERS`) — for `picture`; and `show`
         (`headless.show_seed`, an old show's eye) open, as the migration's
         resave opens it."""
         self.t = T0
         self.view, self.fx, self.ghost = ViewState(), FxState(), GhostState()
         chain = Analyzer(Analyser(48_000), default_params(), layout=legacy_layout())
-        # plan 32: the channels the `media.*` params write and the loadable patch's
+        # the channels the `media.*` params write and the loadable patch's
         # bins fill, as app.main makes them (here over the golden stills)
         self.media = MediaState(GoldenMedia())
         self.reg = reg = build_registry(self.view, Control(chain), SimpleNamespace(chain=chain),
@@ -409,7 +408,7 @@ class Rig:
         self.clock = tempo.Clock(now=lambda: self.t)
         tempo.register(reg, self.clock)
         lfo.register(reg, lfo.LFOs(), self.clock)      # declared, never stepped: at rest
-        # plan 31 P: the envelopes and the sequencer, stepped as the app
+        # the envelopes and the sequencer, stepped as the app
         # steps them — at rest and stopped unless the loadable patch is in
         # `RUNNING`, so no other golden sees them
         self.envs, self.seq = envelope.Envelopes(), sequencer.Sequencer()
@@ -424,7 +423,7 @@ class Rig:
             own = Path(self._home.name) / "loadable"
             own.mkdir(parents=True, exist_ok=True)
             (own / f"{slug}.json").write_bytes(Path(source).read_bytes())
-        # (plan 85: only a golden fixture's extra hands node is held at the neutral
+        # (only a golden fixture's extra hands node is held at the neutral
         # look — a library patch drawn here, `migrate_library`'s check with a show,
         # keeps what its load gives it)
         self.set_by_file = (_value_ids(source) if slug in FIXTURE_LOADABLES and library is None
@@ -449,14 +448,14 @@ class Rig:
         loaded_patch = self.loaded_patch = LoadedPatch(lib, reg, self.router)
         self.missing = loaded_patch.load(slug)
         self.notes = list(loaded_patch.notes)
-        self.seeded = False          # K3: the phases, set on the first frame (`frame`)
+        self.seeded = False          # the phases, set on the first frame (`frame`)
         reg["ghost.on"].set(True)
-        # plan 28 N4: a second hands node the graph declares shows too (its
+        # a second hands node the graph declares shows too (its
         # own `ghost.<n>.on`, the meta controller's like `ghost.on`); only a fixture
         # declares one, so no other golden sees this
         for pid in [p.id for p in reg if re.fullmatch(r"ghost\.[0-9]+\.on", p.id)]:
             reg[pid].set(True)
-            # plan 85: an extra hands node starts at the show look (`ghost.SHOW_LOOK`)
+            # an extra hands node starts at the show look (`ghost.SHOW_LOOK`)
             # where the file sets none; the goldens draw the neutral `GhostState()`
             pre, bare = pid.removesuffix(".on"), GhostState()
             for k in ("alpha", "style", "material"):
@@ -468,13 +467,13 @@ class Rig:
                           out=NullOut(), clock=lambda: self.t)
         self.clock.trigger(self.t)
         if slug in RUNNING:
-            # the transport is the meta controller's (decision 8): pressed play,
+            # the transport is the meta controller's : pressed play,
             # the pattern restarting at step 1 on the first frame (T0 + DT)
             self.seq.run = True
             self.seq.restart()
         self.ctx = ctx
         r = self.renderer = Renderer(ctx, fx=self.fx, ghost=self.ghost)
-        # plan 26 A4: the loadable patch's graph (none for a corpus preset: the
+        # the loadable patch's graph (none for a corpus preset: the
         # default wiring) onto this renderer, as app.py attaches it
         loaded_patch.graph.attach(r)
         r.max_frame = RENDER_CAP
@@ -482,8 +481,8 @@ class Rig:
         if errs:
             raise RuntimeError(f"fx shaders failed to build: {errs}")
         r.ghost.source, r.ghost.router = self.io, self.router
-        self.devices = None          # plan 26 A4b: a device registry, polled each frame
-        # plan 32: the channels on the renderer, as app.main hands them; the
+        self.devices = None          # a device registry, polled each frame
+        # the channels on the renderer, as app.main hands them; the
         # stills the loadable patch's slots name opened and decoded before the first
         # frame (the pool's job: a golden must not catch one half-way)
         r.media = self.media
@@ -527,13 +526,13 @@ class Rig:
         self.router.modulate()
         self.reg.apply()
         if not self.seeded:
-            # K3 (row 578): the field's motion and the media path are phases
-            # the host integrates (ViewState.integrate), no longer t × rate.
+            # the field's motion and the media path are phases
+            # the host integrates (ViewState.integrate), not t × rate.
             # On the first frame, after the first apply (the rates as this
             # frame's modulation leaves them, not the stored bases), each is
             # set as if its rate had always been this one
             # (Renderer._pattern_clock's first call), so frame k reads
-            # (T0 + k·DT) · rate at a constant rate, as before K3
+            # (T0 + k·DT) · rate at a constant rate
             self.seeded = True
             self.view.seed_phases(self.t - DT)
         self.view.integrate(DT)
@@ -595,7 +594,7 @@ class _Lent(moderngl.Program):
 class ProgramPool:
     """The golden rigs' shader programs, linked once per process and lent
     out again (the tool's harness only: the app compiles every program it
-    asks for, as before). Each rig builds a new `Renderer`, which asks for
+    asks for). Each rig builds a new `Renderer`, which asks for
     some 26 programs whose sources are the same rig after rig; linking them
     was most of a rig's cost. A program lent is exactly one freshly linked:
     within a rig every request gets a program of its own (two `acid`
@@ -646,7 +645,7 @@ class ProgramPool:
             self._restore(prog, state)
             self.lent += 1
         else:
-            prog = self._link(**args)      # a compile error raises here, as before
+            prog = self._link(**args)      # a compile error raises here
             self.linked += 1
             state = self._state(prog)
             if state is None:
@@ -698,9 +697,9 @@ def shared_programs(ctx: moderngl.Context):
         _POOL.end()
 
 
-# the retired `outputs.route`'s table, as data (plan 35 T3: the goldens'
-# states are wiring now, and an output's end is named for its picture, not
-# a pipeline; T4 deleted the table): (scene, hands shown, through with an
+# the old `outputs.route` table, as data (the goldens'
+# states are wiring, and an output's end is named for its picture, not
+# a pipeline): (scene, hands shown, through with an
 # effect on) → (the pipeline it reached, the hands laid over after)
 ROUTES = {(True, False, False): ("SCENE", False), (True, True, False): ("SCENE", True),
           (True, True, True): ("SCENE+HANDS", False), (False, False, False): ("none", False),
@@ -709,9 +708,9 @@ ROUTES = {(True, False, False): ("SCENE", False), (True, True, False): ("SCENE",
 
 def expected_route(state: dict, fx_on: bool, visible: bool,
                    through: bool = False) -> tuple[str, bool]:
-    """What an output in `state` shows, by today's table (`ROUTES`). Plan 36
-    T1: an output wired through (`graph.through_of`) shows its chain as
-    wired, every frame — no hand drawn or no effect on, it no longer stands
+    """What an output in `state` shows, by the table (`ROUTES`). An
+    output wired through (`graph.through_of`) shows its chain as
+    wired, every frame — with no hand drawn or no effect on, it does not stand
     down to the scene with the hands laid over."""
     if through:
         return ("SCENE+HANDS" if state["scene"] else "HANDS"), False
@@ -720,7 +719,7 @@ def expected_route(state: dict, fx_on: bool, visible: bool,
 
 
 def source_doc(loaded_patch, slug: str) -> dict:
-    """Preset `slug`'s file before `/7` (plan 36 T3): a corpus loadable patch's
+    """Preset `slug`'s file before `/7`: a corpus loadable patch's
     source (`FACTORY_SOURCES`, what its `/7` was migrated from), else the
     file as the library has it (a fixture: an old file, a migration input)."""
     src = FACTORY_SOURCES / f"{slug}.json"
@@ -730,30 +729,30 @@ def source_doc(loaded_patch, slug: str) -> dict:
 
 
 def plan33_section(loaded_patch, slug: str) -> tuple[dict, set[str]]:
-    """Preset `slug`'s section as plan 33 wrote it (`migrate` with `wire`
+    """Preset `slug`'s section before wiring (`migrate` with `wire`
     off, after the load declared its instances), and the effect files —
-    what a WIRED variant takes its run from (plan 36 T3: of the file
+    what a WIRED variant takes its run from (of the file
     before `/7`, `source_doc`)."""
     doc = source_doc(loaded_patch, slug)
     gs = loaded_patch.graph
     old, _ = graphmigrate.migrate(doc, gs.specs(), desk=None, wire=False)
-    old, _ = graphmigrate.hue_turns(old)        # (plan 67: as the load's ladder ends)
+    old, _ = graphmigrate.hue_turns(old)        # (as the load's ladder ends)
     files = {n.partition(".")[0] for n in gs.specs()}
     return (old.get("graph") if isinstance(old.get("graph"), dict) else {}), files
 
 
 def _placements_wait(loaded_patch, slug: str) -> dict | None:
-    """Plan 36 T3: an old file whose wired frame holds D1 placements — the
+    """An old file whose wired frame holds placements — the
     section `migrate` wires for it, before `placed_wires` writes them, for
-    the switch states to be laid over first (the retired builder placed
-    them on the built graph, after every output's state); None for any
+    the switch states to be laid over first (placements are made on the built graph,
+    after every output's state); None for any
     other (a `/7`, or none placed: the landed section is the one)."""
     doc = source_doc(loaded_patch, slug)
     if (graphmigrate.schema_version(doc) or 0) >= graphmigrate.SEVEN:
         return None
     gs = loaded_patch.graph
     out, _ = graphmigrate.migrate(doc, gs.specs(), desk=None)
-    out, _ = graphmigrate.hue_turns(out)        # (plan 67: as the load's ladder ends)
+    out, _ = graphmigrate.hue_turns(out)        # (as the load's ladder ends)
     section = out.get("graph")
     if not isinstance(section, dict) or not any(
             isinstance(e, dict) and any(k in e for k in G.PLACE_KEYS)
@@ -763,13 +762,13 @@ def _placements_wait(loaded_patch, slug: str) -> dict | None:
 
 
 def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
-    """The rig's wired frame (plan 35 T3, row 392): the loadable patch's section as
+    """The rig's wired frame: the loadable patch's section as
     the load wired it — or a WIRED variant's (`variant_section` over the
     loadable patch's run, wired as a load wires it) — and each view's state as
     that output's own wires (`output_wires`); the mutes are all on.
 
     A wired fixture (`WIRED_FIXTURES`, `/6`) is a frame of its own, not
-    today's frame under switches: its section is left as it is, but for
+    a frame under switches: its section is left as it is, but for
     a through state where All outputs lays the hands (`_lays_hands`), which
     takes what OUTPUT's "hands through the effects" writes
     (`Shows(through=True)`); its scene and hands are the window's
@@ -788,9 +787,9 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
     for k, (_, sw) in enumerate(states):
         if slug not in WIRED_FIXTURES:
             if graphmigrate.Shows(**sw) == graphmigrate.Shows() and late is None:
-                # (plan 36 T3: the window as the rig ships it is its own
+                # (the window as the rig ships it is its own
                 # wires, else All outputs' by its bus — no override to
-                # write; a `/7`'s hands port wired to an effect, D1's old
+                # write; a `/7`'s hands port wired to an effect, an old
                 # `after: hands` as wires, would otherwise be undone)
                 continue
             wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
@@ -801,10 +800,10 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
         wired = graphmigrate.placed_wires(wired, {n.partition(".")[0]
                                                   for n in loaded_patch.graph.specs()})
     if late is not None or wiring is not None:
-        # (plan 36 T4: an old file's frame, written here as the migration
+        # (an old file's frame, written here as the migration
         # writes it, ends with its look-back split as its values had it)
         values = source_doc(loaded_patch, slug).get("values") or {}
-        # (plan 90 H2: and, as the ladder's last step, the look-back made its
+        # (and, as the ladder's last step, the look-back made its
         # public parts — the same names the load gave them, its values landed)
         wired = graphmigrate.split_retired(wired, graphmigrate.look_of(values),
                                            _rest_of(source_doc(loaded_patch, slug)))
@@ -837,10 +836,10 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
            wiring: dict | None = None, config: str | None = None, *,
            label: str = "{}", keep: Keep = None) -> tuple[list[Shot], dict]:
     """Render one rig's states (under `wiring`, the loadable patch's own when
-    None; with `config`'s devices listed, A4b); its shots and what the load
+    None; with `config`'s devices listed); its shots and what the load
     said. The framebuffers and the renderer are new per rig, so nothing a
     rig drew reaches the next (its programs are lent from the pool,
-    `shared_programs`, each as freshly linked). Plan 35 T3 (row 392): each
+    `shared_programs`, each as freshly linked). Each
     state is its output's wiring (`rig_section`), every window's mutes on.
     Each shot's state is `label` with the state's name in it; its pixels
     are kept only where `keep` says (each frame is hashed as it is read)."""
@@ -870,7 +869,6 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
             if v.error:
                 raise RuntimeError(f"{slug} {hands}: an output failed: {v.error}")
         # the recorded `effects_on`: an effect is live, wherever it is wired
-        # (plan 33 T7: what the stack's `chain()` said, with no target left)
         fx_on = any(rig.fx.live(n) for n in rig.fx.specs)
         visible = bool(rig.renderer.stats.get("layer") or rig.renderer.stats.get("in_scene"))
         shots = []
@@ -886,7 +884,7 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
                 assert (key is not None, bool(over)) == (route_name != "none", hands_over), (
                     slug, name, key, over)
             raw = _read(ctx, f, size)
-            # plan 28 N4: an output whose picture is the loadable patch's own wire
+            # an output whose picture is the loadable patch's own wire
             # shows no pipeline of the table: its route reads "none" and its
             # entry says what feeds the wire (`wired`, in the old ids, as
             # the manifest has them)
@@ -924,14 +922,14 @@ def _value_ids(source) -> set[str]:
 def picture(source: Path, *, slug: str = "picture", library: Path | None = None,
             states=STATES, hands: str = "present", show: dict | None = None
             ) -> tuple[list[str], list[str]]:
-    """Row 394 (tools/migrate_library.py): loadable patch file `source` drawn on the
+    """Loadable patch file `source` drawn on the
     golden rig — copied into a scratch library as `slug`, loaded like a
     user's loadable patch, hands `hands`, `states` as its outputs' wiring
     (`rig_section`, as a corpus loadable patch's goldens) for `FRAMES` frames on
     the pinned clock — and (each output's SHA-256, the load's notes). Two
     files that draw the same have the same hashes; the frame is never
     asserted on, so a loadable patch this build reads with a note still draws.
-    Plan 43 C2: `show` (`headless.show_seed`) is open while it loads — the
+    `show` (`headless.show_seed`) is open while it loads — the
     old show's eye an old loadable patch takes.
 
     Collected here, not in `_picture`: while its frame runs it still holds
@@ -1199,17 +1197,15 @@ def summary(doc: dict) -> str:
     return "\n".join(lines)
 
 
-# ---------------------------------------------------------------- the frame's signatures (plan 35 T2)
+# ---------------------------------------------------------------- the frame's signatures 
 #
-# Plan 35 B (Review Focus 1): every case the goldens draw — each loadable patch and
+# Every case the goldens draw — each loadable patch and
 # fixture in the eight states as one rig's eight outputs, and the WIRED
 # variants over their loadable patches and states — built by `build_graph` from the
 # loadable patch's section written as a wired frame (`graphmigrate.wired_section`)
 # with each output's state as its own wires (`output_wires`) and every mute
-# on. `graph.signature` must equal, node for node, the frame the retired
-# `default_graph` built from the switches: T2 recorded it to SIGNATURES and
-# T3 re-recorded it, both from `default_graph`; T4 deleted the oracle, so
-# the file is the reference now (`tests/test_graph_frame.py`). A recorded
+# on. `graph.signature` must equal, node for node, the recorded
+# signature: the file is the reference (`tests/test_graph_frame.py`). A recorded
 # case is never written again: `--signatures` adds a new case alone.
 
 SIGNATURES = ROOT / "tests" / "fixtures" / "frame-signatures.json"
@@ -1249,17 +1245,17 @@ class Loader:
         self.loaded_patch = LoadedPatch(lib, reg, router)
 
     def load(self, slug: str):
-        """(the spec and section as plan 33 read the file — the one the
-        retired `default_graph` read; the effect instances held; the wired frame the
-        load landed — `build_graph`'s). Plan 35 T3: every load lands a wired
-        frame, so the plan 33 half is the same file through `migrate` with
-        its `wire` off, after the load declared its instances."""
+        """(the spec and section before wiring; the effect
+        instances held; the wired frame the load landed — `build_graph`'s).
+        Every load lands a wired frame, so the first half is the same file
+        through `migrate` with its `wire` off, after the load declared its
+        instances."""
         self.loaded_patch.load(slug)
         gs = self.loaded_patch.graph
         doc = source_doc(self.loaded_patch, slug)
         old, _ = graphmigrate.migrate(doc, gs.specs(), desk=None,
                                       wire=False)
-        old, _ = graphmigrate.hue_turns(old)    # (plan 67: as the load's ladder ends)
+        old, _ = graphmigrate.hue_turns(old)    # (as the load's ladder ends)
         effects = tuple(sorted(self.fx.specs))
         section = old.get("graph") if isinstance(old.get("graph"), dict) else {}
         spec = read_graph(section, effects={e.partition(".")[0] for e in effects})
@@ -1278,11 +1274,11 @@ def _effects_on(slug: str) -> bool:
 
 def signature_keys() -> list[str]:
     """Every case's key, `<slug>/<variant>`: `states` (the eight), a WIRED
-    variant's name, and (plan 35 T3) the window alone — `solo`, and
+    variant's name, and the window alone — `solo`, and
     `solo-scene+hands+through` for a loadable patch with an effect on (`SOLO`,
     `SOLO_FX`) — and a CLOUDED rig's name, as the goldens draw them."""
-    # (a `/6` fixture — plan 35 T3's — is a wired frame of its own: no
-    # section before it, so no `default_graph` recorded to prove it against)
+    # (a `/6` fixture is a wired frame of its own: no section before it,
+    # so no recorded signature to prove it against)
     keys = [f"{slug}/states" for slug in (*CORPUS_LOADABLES, *FIXTURE_LOADABLES)
             if slug not in WIRED_FIXTURES]
     for slug in CORPUS_LOADABLES:
@@ -1302,9 +1298,9 @@ _VARIANT_ENTRY = {"hands": lambda v: {"kind": "hands", "into": v},
 
 
 def variant_section(fields: dict, run: tuple[str, ...]) -> dict:
-    """A WIRED variant as the section that reads as it (plan 35 T3): a
+    """A WIRED variant as the section that reads as it: a
     wiring of that one field (`Wiring(**fields)`) over the loadable patch's run,
-    in the old ids, as a pre-35 loadable patch would have said it."""
+    in the old ids, as an older loadable patch would have said it."""
     nodes = [_VARIANT_ENTRY[k](v) for k, v in fields.items()]
     for e in run:
         file, n = G.split_instance(e)
@@ -1317,7 +1313,7 @@ def variant_section(fields: dict, run: tuple[str, ...]) -> dict:
 
 def _rest_of(doc: dict) -> dict:
     """A loadable patch's keys but its graph, name and schema: what the
-    ladder's last step reads beside the section (plan 90 H2)."""
+    ladder's last step reads beside the section."""
     return {k: v for k, v in doc.items() if k not in ("graph", "schema", "name")}
 
 
@@ -1330,7 +1326,7 @@ def signature_case(loader: Loader, key: str):
     its device's role."""
     slug, _, variant = key.partition("/")
     spec, section, effects, wired = loader.load(slug)
-    # (plan 36 T4: the look-back as the old file's values had it)
+    # (the look-back as the old file's values had it)
     src = source_doc(loader.loaded_patch, slug)
     look = graphmigrate.look_of(src.get("values"))
     rest = _rest_of(src)
@@ -1363,12 +1359,12 @@ def frame_graphs(states, spec, section, effects, wired=None, clouds=(), look="of
     files = {e.partition(".")[0] for e in effects}
     made = graphmigrate.wired_section(graphmigrate.renamed(section or {}), spec)
     placed = graphmigrate.placed_wires(made, files)
-    # (plan 36 T4: the look-back split last, as the load's migration does)
+    # (the look-back split last, as the load's migration does)
     split = graphmigrate.split_retired(placed, look, rest)
     if wired is None:
         wired = split
     assert read_graph(split, effects=files).to_json() == read_graph(wired, effects=files).to_json()
-    # (plan 36 T3: D1's placements sat on each output's state, so the
+    # (placements sat on each output's state, so the
     # states go on first and the placements are written after, as `_shoot`)
     late = made if placed is not made else None
     if late is not None:
@@ -1394,9 +1390,8 @@ def as_json(sig):
 def record_signatures() -> dict:
     """A case SIGNATURES lacks (a fixture added since), its signature from
     `build_graph`, into SIGNATURES; every recorded case is kept as it is
-    (plan 35 T4: the file is the reference the retired `default_graph`
-    wrote — rewriting it from the builder would prove the builder by
-    itself)."""
+    (the file is the reference — rewriting it from the builder
+    would prove the builder by itself)."""
     out = json.loads(SIGNATURES.read_text()) if SIGNATURES.exists() else {}
     loader = Loader()
     try:
@@ -1412,10 +1407,10 @@ def record_signatures() -> dict:
 
 
 def record_names() -> int:
-    """Plan 35 T3, T4: every fixture's recorded render nodes (`fixtures.
+    """Every fixture's recorded render nodes (`fixtures.
     <slug>.<hands>.nodes`, `Graph.timed`) rewritten as this build names
-    them — the ends for their pictures, not the pipelines (T3), every node
-    in the new ids (T4: `lookback`, `lookback(capture)`, `hands.layer`,
+    them — the ends for their pictures, not the pipelines, every node
+    in the ids (`lookback`, `lookback(capture)`, `hands.layer`,
     `channel.a` …) — and nothing else: no `goldens` entry, hash or PNG is
     touched (asserted). Returns how many lists changed."""
     doc = load_manifest()

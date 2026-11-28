@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Knob smoothing, shown headless (plan 18 WP2).
+"""Knob smoothing, shown headless.
 
 Builds the app's objects the way `app.main` does around the desk — the
 library, the registry, the binding table with `desk.slew` declared before

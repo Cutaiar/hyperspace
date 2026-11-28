@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Where the windows open at launch, shown headless (plan 16 WP4).
+"""Where the windows open at launch, shown headless.
 
-Walks the plan's case table with fake screens — no window, no GLFW, no
+Walks a table of cases with fake screens — no window, no GLFW, no
 library home — and prints where each window opens and the note the launch
 would put on stderr and the SYSTEM page: first launch, remembered, the
 projector unplugged, a nonsense file, the config beating the file, a

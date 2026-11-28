@@ -20,7 +20,7 @@ push: `tests.yml` has `cancel-in-progress`, and a push cancels the run on the
 old head, which is a moved head (3), not a red one (2). The waits are a monotonic
 clock's, so a slow `gh` can't stretch them, and they can run over by one poll.
 
-`main` has no required checks, so `gh pr merge --auto` merges at once (plan 58):
+`main` has no required checks, so `gh pr merge --auto` merges at once:
 whoever merges runs this first and merges by hand after it. Hence nothing here
 but two reads, and `tests/test_wait_green.py` holds it to that. The only exit 0 is
 a green head, so there is no `--help` exit 0: it prints the help and exits 1.
@@ -41,7 +41,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 WORKFLOW = "tests"      # `name:` in .github/workflows/tests.yml; a test holds the two together
-# Polls of 5 s (row 870): a merge waits up to one poll past green, and with CI
+# Polls of 5 s: a merge waits up to one poll past green, and with CI
 # near two minutes 20 s was a sixth of it. Two `gh` reads a poll, far inside the API's limit.
 APPEAR_S, APPEAR_POLL_S = 10 * 60, 5    # for a run to appear
 FINISH_S, FINISH_POLL_S = 30 * 60, 5    # for it to finish, from when it appeared

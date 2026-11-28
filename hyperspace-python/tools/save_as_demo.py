@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Save-as on the desk, shown headless (plan 15 WP4, decision 29).
+"""Save-as on the desk, shown headless.
 
 The APC40's clip-stop row is one SAVE AS bar: any of its eight buttons
 held 0.6 s saves the live state as a **new** loadable patch, named from the
@@ -19,9 +19,6 @@ the test corpus: the party show and its loadable patches): it cannot touch
 ~/Hyperspace.
 
   uv run python tools/save_as_demo.py [--out docs/plans/assets/15-safety-net/save-as-demo.txt]
-
-(The `--shot` of the PRESETS page's slot menu went with the page's bank
-pills, 2026-10-28: the bank is the desk's now.)
 """
 
 # ruff: noqa: I001 — undo_demo is imported first, on purpose: it sets

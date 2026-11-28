@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan 18 WP4 — `hands-orbit`, two hands on the camera, shown headless.
+"""`hands-orbit`, two hands on the camera, shown headless.
 
 SYNTHETIC HANDS and OFFSCREEN RENDERS: no tracker and no window. The
 corpus loadable patch (`tests/corpus/loadable/hands-orbit.json`) is loaded through
@@ -23,7 +23,7 @@ Writes, under docs/plans/assets/18-hand-and-knob-feel/:
                      left hand low / half up / high (rows)
 
 It shows what the five rows do to the numbers and to a frame. It does not
-show how the depths feel under a real hand (hand check N9).
+show how the depths feel under a real hand.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ SAY = {("right", "x"): "left … right", ("right", "pitch"): "fingers down … u
        ("left", "y"): "low … high"}
 # a camera the mouse moved before the hands came in (the last table)
 MOUSE = {"camera.yaw": math.radians(30), "camera.pitch": math.radians(-10),
-         "camera.zoom": 1.6, "camera.pan.x": 0.4, "camera.pan.y": -0.2}   # world units (plan 26 A2)
+         "camera.zoom": 1.6, "camera.pan.x": 0.4, "camera.pan.y": -0.2}   # world units
 # the strip: the right hand across its range, the left hand low / half / high
 COLS = (("R left", 0.0), ("R centre", 0.5), ("R right", 1.0))
 ROWS = (("L low", 0.0), ("L half up", 0.5), ("L high", 1.0))

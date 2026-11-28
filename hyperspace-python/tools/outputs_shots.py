@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan 21's compose path, offscreen: one frame shown on several outputs.
+"""The compose path, offscreen: one frame shown on several outputs.
 
 Every picture is drawn by `Renderer.draw_outputs` (render.py) onto
 offscreen framebuffers standing in for the windows, with two synthetic
@@ -8,11 +8,11 @@ a 24-cell with face patterns and effects on. No window, screen, glass or
 projector is involved: the sheets show what the renderer writes into
 each output's framebuffer, not how it looks on the rig.
 
-    uv run python tools/outputs_shots.py compose   # WP1: outputs-compose.png
-    uv run python tools/outputs_shots.py eight     # WP2: eight-states.png
-    uv run python tools/outputs_shots.py through   # WP2: through-two-outputs.png
-    uv run python tools/outputs_shots.py timing    # WP2: compose-timing.txt
-    uv run python tools/outputs_shots.py style     # WP6: style-through.png
+    uv run python tools/outputs_shots.py compose   # outputs-compose.png
+    uv run python tools/outputs_shots.py eight     # eight-states.png
+    uv run python tools/outputs_shots.py through   # through-two-outputs.png
+    uv run python tools/outputs_shots.py timing    # compose-timing.txt
+    uv run python tools/outputs_shots.py style     # style-through.png
 
 writes into docs/plans/assets/21-outputs-and-the-hands/.
 """
@@ -75,14 +75,14 @@ def renderer(ctx, effects=("warp",), guide=0, **values) -> Renderer:
         fx.values[n]["on"] = True
         fx.values[n].update(values.get(n, {}))
     r = Renderer(ctx, fx=fx)
-    r.wiring = wiring_of(fx)  # plan 33 R23: its run as a load lands it
+    r.wiring = wiring_of(fx)  # its run as a load lands it
     r.ghost.state.on, r.ghost.state.alpha, r.ghost.state.guide = True, 1.0, guide
     r.ghost.source = hands(guide=bool(guide))
     return r
 
 
 def wire(r, *shows: M.Shows) -> None:
-    """Plan 35 T4: `r`'s run with each output's state (`graphmigrate.Shows`,
+    """`r`'s run with each output's state (`graphmigrate.Shows`,
     the retired switches: "hands through the effects" is wiring now) written
     into its wiring, as a load and the golden tool write them; every
     window's mutes stay on."""
@@ -200,7 +200,7 @@ def eight(ctx) -> Path:
 
 def through(ctx) -> Path:
     """The glass with the hands over the effects beside the projector with
-    them through, guide on (beside each hand: never bent, fork F3)."""
+    them through, guide on (beside each hand: never bent)."""
     pad, head = 14, 26
     small, title = _font(14), _font(17)
     r = renderer(ctx, effects=("warp", "kaleido"), guide=1)
@@ -226,7 +226,7 @@ def through(ctx) -> Path:
 
 
 def style(ctx, name: str = "CAGE") -> Path:
-    """WP6: one style with the guide beside each hand and the tethers on,
+    """One style with the guide beside each hand and the tethers on,
     over the effects on one output and through them on the other — the
     style bends with the shape, the guide and its labels do not."""
     import tempfile

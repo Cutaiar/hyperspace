@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Undo and the trash, shown headless (plan 15 WP1).
+"""Undo and the trash, shown headless.
 
 Builds the app's objects the way `app.main` does — library, registry,
 hands' settings, clock and LFOs, the router over the home's

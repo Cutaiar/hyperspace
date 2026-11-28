@@ -1,4 +1,4 @@
-"""tools/app_driver.py script (plan 65): GRAPH's effect picker in the real
+"""tools/app_driver.py script: GRAPH's effect picker in the real
 app — opened as the right-click picker's **effects…** opens it, the tiles
 filling in as the renderer makes their previews, a search, a hovered tile
 playing its loop, a click adding the effect unwired, and that node's

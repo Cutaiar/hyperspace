@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Mandelbrot effect's demo (plan 63): stills and a short video, drawn
+"""The Mandelbrot effect's demo: stills and a short video, drawn
 offscreen by the real pass (`FxChain.run_one`, a graph Effect node's), its
 grey step count coloured by the real Palette pass in gradient mode, as a
 patch would wire them (mandel → palette → output).

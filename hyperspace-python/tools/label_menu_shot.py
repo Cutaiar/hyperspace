@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The right-click menu opened from a row's label, as a PNG (plan 17 WP3).
+"""The right-click menu opened from a row's label, as a PNG.
 
 Not the app: a **hidden** GLFW window with the panel drawn over the same
 headless objects `tools/undo_demo.py` builds — no render window, no MIDI

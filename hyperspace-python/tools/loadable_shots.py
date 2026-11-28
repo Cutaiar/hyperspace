@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Plan 12 — the party loadable patches, offscreen: each loadable patch's look under a set
-of hand poses, and the sweep tables the plan cites.
+"""The party loadable patches, offscreen: each loadable patch's look under a set
+of hand poses, and the sweep tables.
 
 Every ``party-*`` loadable patch of the test corpus (``tests/corpus/loadable/``, copied
 into a scratch library home) is loaded through the real ``LoadedPatch`` over a
@@ -102,7 +102,7 @@ POSES: dict[str, list[tuple[str, dict[str, float]]]] = {
         ("L up (pump)", {"L.y": 1}), ("L left + R up", {"L.x": 0, "R.y": 1}),
         ("L reach in + R up", {"L.z": 0, "R.y": 1}),
     ],
-    # plan 14 WP6: the legible echoes (in the list, on no F-key)
+    # the legible echoes (in the list, on no F-key)
     "party-tracer": [
         ("no hands", {}), ("both level", {"L.y": 0, "R.y": 0}),
         ("L roll thumb-up (turn)", {"L.roll": 1}), ("L up (spin)", {"L.y": 1}),
@@ -110,7 +110,7 @@ POSES: dict[str, list[tuple[str, dict[str, float]]]] = {
         ("R pull back (short)", {"R.z": 1}), ("R roll thumb-up (covered)", {"R.roll": 1}),
         ("R roll thumb-down (through)", {"R.roll": 0}), ("R pitch fingers-up (hard)", {"R.pitch": 1}),
     ],
-    # plan 14 WP5: the effect families on F6–F8
+    # the effect families on F6–F8
     "party-acid": [
         ("no hands", {}), ("both level", {"L.y": 0, "R.y": 0}),
         ("R up (heave)", {"R.y": 1}), ("R reach in (rings)", {"R.z": 0}),
@@ -191,11 +191,11 @@ class Stage:
         self.lfos = lfo.LFOs()
         tempo.register(self.reg, self.clock)
         lfo.register(self.reg, self.lfos, self.clock)
-        # plan 31: a /7 file carries the envelopes' and the sequencer's values
+        # a /7 file carries the envelopes' and the sequencer's values
         envs, seq = envelope.Envelopes(), sequencer.Sequencer()
         envelope.register(self.reg, envs, self.clock)
         sequencer.register(self.reg, seq, self.clock)
-        # the loadable patch through the one loader (plan 13 WP2), over a throwaway
+        # the loadable patch through the one loader, over a throwaway
         # library home holding the corpus, so nothing touches ~/Hyperspace
         self._home = tempfile.TemporaryDirectory()
         own = Path(self._home.name) / LOADABLE
@@ -219,8 +219,8 @@ class Stage:
         self.clock.trigger(0.0)
         self.renderer = Renderer(ctx, fx=self.fx) if ctx is not None else None
         if self.renderer is not None:
-            # plan 36 T3: a bare renderer draws the app's empty frame; the
-            # loadable patch's graph onto it, as app.py attaches it
+            # a bare renderer draws the app's empty frame; the loadable patch's
+            # graph onto it, as app.py attaches it
             loaded_patch.graph.attach(self.renderer)
             errs = self.renderer.fx.compile_all()     # before any frame: a broken shader is a stop
             if errs:
@@ -283,7 +283,7 @@ def sweep(name: str, frames: int) -> str:
              "| hand axis | target | op | base | u=0 | u=¼ | u=½ | u=¾ | u=1 | out | never |",
              "|---|---|---|---|---|---|---|---|---|---|---|"]
     for b in rows:
-        # a named hand row (decision register row 20): hand:right.roll
+        # a named hand row: hand:right.roll
         hand_side, axis = b.source.split(":", 1)[1].split(".")
         side = {v: k for k, v in SIDE.items()}[hand_side]
         vals = []

@@ -103,9 +103,8 @@ def _thinned(frames: list[dict], fps: float, keep_at: Iterable[float] = ()) -> l
     `keep_at` are times that must survive whatever the spacing says: a
     cue's bounds, both of them. Thinning across the whole tape could drop
     either, and a tape is replayed by taking the last frame at or before
-    a time (`hands.tape.TapeSource`), so a cue's own `t0` landed on the
-    pose before it (review of #449) and its `t1` on a frame it no longer
-    held (review of #450 — 53 of 60 cue lengths lost an end). A kept time
+    a time (`hands.tape.TapeSource`), so a cue's own `t0` would land on the
+    pose before it and its `t1` on a frame it no longer held. A kept time
     also restarts the spacing, so no cue is thinned against its
     neighbour.
     """
@@ -207,7 +206,7 @@ def _shots(args) -> None:
     for name in filter(None, args.fx.split(",")):
         fx.values[name]["on"] = True
     r = Renderer(ctx, fx=fx)
-    r.wiring = wiring_of(fx)  # plan 33 R23: its run as a load lands it
+    r.wiring = wiring_of(fx)  # its run as a load lands it
     r.ghost.state.on, r.ghost.source = True, io
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h))])
     s = ViewState(ang=[0.3, 0.7, 1.1, 0.5, 0.9, 1.3], yaw=0.4, pitch=0.25, faces=True)

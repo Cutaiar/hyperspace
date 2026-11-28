@@ -1,4 +1,4 @@
-"""tools/app_driver.py script for plan 82's control widgets: Zoom burst's
+"""tools/app_driver.py script for the control widgets: Zoom burst's
 XYZ volume dragged and its knobs turned, then Kaleidoscope's strip —
 Segments' ticks, Swirl's bipolar fill and detent, Zoom's unity detent.
 

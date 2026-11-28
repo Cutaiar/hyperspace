@@ -13,8 +13,8 @@ default setup (the app's saved setups live in its library).
 everything it should reach; each axis's range becomes what it covered
 (2nd–98th percentile) and is written to the calibration file.
 
-The DAW port is carried here as the app's `hands-daw` sink carries it (plan
-27 B3: `HandsIO` opens none): a `bridge.OutPort` on `[hands] out`, looked
+The DAW port is carried here as the app's `hands-daw` sink carries it
+(`HandsIO` opens none): a `bridge.OutPort` on `[hands] out`, looked
 for again when it goes, the DAW brought up to date when it comes back.
 """
 

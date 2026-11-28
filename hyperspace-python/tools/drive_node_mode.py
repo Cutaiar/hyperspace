@@ -1,4 +1,4 @@
-"""tools/app_driver.py's script for node mode (plan 53 N1): the real app, an APC40 on fake ports.
+"""tools/app_driver.py's script for node mode: the real app, an APC40 on fake ports.
 
 The chip clicked, the rows on the node, a knob moving the param, its ring following, an LFO's route
 resting and coming back, and leaving by the other chip. Run from `hyperspace-python/`:
@@ -7,7 +7,7 @@ resting and coming back, and leaving by the other chip. Run from `hyperspace-pyt
 
 Each step's words go to stderr, and a step that doesn't do what it should stops the run. Touches no
 `~/Hyperspace`: the driver's home is a fresh one. A fake port proves the app's half: the desk itself
-is hand check 541.
+is checked by hand.
 """
 
 import sys

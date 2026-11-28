@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The HANDS page with an interaction box set, as a PNG (plan 18 WP1).
+"""The HANDS page with an interaction box set, as a PNG.
 
 Not the app and not the camera: a **hidden** GLFW window with the panel
 drawn over the headless objects `tools/box_demo.py` builds, on a fresh

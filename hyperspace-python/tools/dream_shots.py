@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""The dream worker live in the real pipeline, offscreen (WP6b; plan 90 H3:
-the dream is an effect file, its worker on `renderer.fx.dream_source`).
+"""The dream worker live in the real pipeline, offscreen (the dream
+is an effect file, its worker on `renderer.fx.dream_source`).
 
 A party loadable patch (default party-wake, whose dream opens as its folded
 chain: Resize → Dream → … → Fade → Composite over) through the real loader

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Plan 90 (H3): every repository file holding a dream, drawn through the old
-code (the dream node, `lookback.Dreamer`) and through this branch's migrated
+"""Every repository file holding a dream, drawn through the old
+code (the dream node, `lookback.Dreamer`) and through the current migrated
 patch (the folded chain: Resize → Dream → … → Fade → Composite over), with a
 synchronous numpy worker in place of torch — the same run of frames at a pinned
 clock (`golden_frames`' rig, as `tools/lookback_proof.py`) — and how far apart
@@ -9,7 +9,7 @@ they are.
     # on the old code (a worktree of the base); --root is the package drawn:
     PYTHONPATH=<wt>/hyperspace-python uv run python tools/dream_proof.py \\
         --root <wt>/hyperspace-python save old.npz
-    # on this branch:
+    # on the current code:
     uv run python tools/dream_proof.py check old.npz
 
 `--root` is put first on the path and the run asserts `hyperspace` was imported
@@ -22,8 +22,7 @@ white each job (`G`):
 - new (`NewFake`): ``D ← D·(1 − k) + f·k`` on rgba (Hold); ``D.rgb ← G(D.rgb,
   D.a)``; out ``D``.
 
-Frame-perfect sameness is not the aim (the owner: "I really don't care about
-that"); the numbers say how close a migrated look stays: the largest
+Frame-perfect sameness is not the aim; the numbers say how close a migrated look stays: the largest
 difference, the mean, the share of pixels off by more than 2 and by more than
 16 levels, and the lit share of each.
 """

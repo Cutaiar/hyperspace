@@ -1,5 +1,5 @@
 """Render effect files over a sweep of their knobs; save the bytes, or check them
-against a save — the proof that moving a file onto shared pieces (plan 67)
+against a save — the proof that moving a file onto shared pieces
 changed nothing.
 
 Every choice, three values of every other knob, every pair of choices, three

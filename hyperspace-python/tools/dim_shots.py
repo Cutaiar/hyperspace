@@ -5,7 +5,7 @@ Renders a 24-cell with face patterns through the real pipeline (render.py)
 with an effect on and two synthetic ghost hands over it (the hands
 tests/test_ghost.py feeds — no tracker), then the same frame with
 `Renderer.dim` at 1.0, 0.5, 0.15 and 0, and writes the strip to
-docs/plans/assets/15-safety-net/dim.png (plan 15 WP3). Under each tile it
+docs/plans/assets/15-safety-net/dim.png. Under each tile it
 prints the mean of the picture and its lowest alpha: the colour scales,
 the opaque ground's alpha does not.
 
@@ -66,7 +66,7 @@ def shot(ctx, dim: float, effect: str, frames: int) -> np.ndarray:
     if effect:
         fx.values[effect]["on"] = True
     r = Renderer(ctx, fx=fx)
-    r.wiring = wiring_of(fx)  # plan 33 R23: its run as a load lands it
+    r.wiring = wiring_of(fx)  # its run, as a load lands it
     r.ghost.state.on, r.ghost.state.alpha, r.ghost.source = True, 1.0, hands()
     r.dim = dim
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])

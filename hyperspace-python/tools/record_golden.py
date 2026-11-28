@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record golden traces from hyperspace.html (plan 00).
+"""Record golden traces from hyperspace.html.
 
 This is the only context in which hyperspace.html is ever executed. It drives
 the page in headless Chromium via Playwright and records:
@@ -11,8 +11,8 @@ the page in headless Chromium via Playwright and records:
   audio    — for each test WAV: per-frame {t, AUDIO.inp, AUDIO.out,
              PLANEDRIVE} through the file-playback path. Time-series with
              rAF jitter; recorded twice, the run-to-run delta becomes the
-             noise floor written to the manifest (plan 01 tolerances derive
-             from it).
+             noise floor written to the manifest (the replay tolerances
+             derive from it).
 
   uv run python tools/record_golden.py            # both modes
   uv run python tools/record_golden.py geometry
@@ -40,8 +40,8 @@ GOLDEN = ROOT / "tests" / "golden"
 VIEWPORT = {"width": 1200, "height": 800}
 
 # Three view configurations per shape: identity, a generic pose, a second
-# generic pose with negative angles. Chosen once, never changed — plan 01
-# and plan 02 replay these exact numbers.
+# generic pose with negative angles. Chosen once, never changed — the replays
+# use these exact numbers.
 VIEWS = [
     {"ang": [0, 0, 0, 0, 0, 0], "yaw": 0.0, "pitch": 0.0},
     {"ang": [0.3, 0.7, 1.1, 0.5, 0.9, 1.3], "yaw": 0.4, "pitch": 0.25},
@@ -208,7 +208,7 @@ def noise_floor(a: list[list[float]], b: list[list[float]]) -> float:
 
     The first 2 s are excluded: the adaptive trackers spend ~1 s settling
     from seeds (ENGINEERING §4, WARM_F) and that transient differs between
-    runs by construction. Plan-01 comparisons treat warm-up the same way.
+    runs by construction. Replay comparisons treat warm-up the same way.
     """
     lo = max(2.0, a[0][1], b[0][1])
     hi = min(a[-1][1], b[-1][1])

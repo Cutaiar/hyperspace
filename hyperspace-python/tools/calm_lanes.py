@@ -4,14 +4,11 @@ no more than a new route would.
 
     uv run python tools/calm_lanes.py [--library PATH] [--cap DEPTH] [--apply]
 
-The owner, 2026-11-02, after the show of 2026-10-30: "all existing presets
-need to have sensible mappings for the audio analyzer cables … whatever
-the default is now, just use that as an upper bound for what audio is
-allowed to push on its controls, and then just update all the presets
-accordingly. Make sure that they're all using spring controls as well."
-PRs #301 and #305 set those defaults for *new* routes only (a saved row
-keeps its own depth and feel), and loadable patches here are made by copying and
-editing older ones, so the old rows would have lived on for ever.
+The new-route defaults (`learn.LANE_DEPTH`, `motion.DEFAULT_ROUTE_FEEL`)
+apply to *new* routes only: a saved row keeps its own depth and feel, and
+loadable patches are made by copying and editing older ones, so old rows
+would otherwise keep their old depth and feel. This tool sets every existing
+analyzer route to those defaults, as an upper bound on what audio pushes.
 
 For each loadable patch in ``<library>/presets/*.json`` (not ``trash/``, not a
 backup, not a dot-file), every route whose source is an analyzer lane
@@ -25,7 +22,7 @@ backup, not a dot-file), every route whose source is an analyzer lane
 - **feel**: a row with no feel (``auto``, which reads OFF for a lane) or
   with the old bouncy spring default (`motion.Motion("spring")`'s
   knobs, which the feel chip used to land on) gets the smooth spring every
-  new route gets (`motion.DEFAULT_ROUTE_FEEL`); a spring the owner tuned by
+  new route gets (`motion.DEFAULT_ROUTE_FEEL`); a spring tuned by
   hand, or a follow, is kept as it is.
 
 Nothing else in the file moves: the document is read and written back

@@ -1,4 +1,4 @@
-"""tools/app_driver.py script: a hot reload in the real app (HR, row 802). Marks modules
+"""tools/app_driver.py script: a hot reload in the real app. Marks modules
 saved, as `tests/test_one_mirror.py` does, so no file in the tree is touched and an app
 running from this checkout reloads nothing. Then says what the reloader said, checks every
 live object it holds is on the class its module now has, and that a hook landed.

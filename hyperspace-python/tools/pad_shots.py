@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The on-screen pad for an Xbox pad and for a DualSense Edge, as PNGs (plan 42).
+"""The on-screen pad for an Xbox pad and for a DualSense Edge, as PNGs.
 
 Not the app: `tools/label_menu_shot.py`'s hidden control window with the
 real Panel, the panel hidden so the pad diagram has the room. The Edge is
@@ -7,7 +7,7 @@ read from a tape this script writes (`pads.hid.Recorder`): a finger on
 the touchpad's upper right, a second one for a pinch, the pad tipped
 right side down and its far edge up, the right back button held — read
 by `gamepad.Pad` exactly as a pad entry with ``tape =`` reads one. A few
-rows light the extras the way plan 42's ideas would map them.
+rows light the extras the way a mapping might.
 
   uv run python tools/pad_shots.py     # → docs/plans/assets/42-controllers/pad-{xbox,edge}[-view].png
 
@@ -31,7 +31,7 @@ from hyperspace.routing import Binding
 
 OUT = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets" / "42-controllers"
 JOYCON_OUT = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets" / "46-joycon"
-ROWS = (  # plan 42's ideas 4 and 5, as rows
+ROWS = (  # touch and motion mapped as rows
     Binding("touch:x", "fx.zoomblur.cx", "position"),
     Binding("touch:pinch", "camera.zoom", "push", 0.5),
     Binding("motion:roll", "fx.hueturn.speed", "position"),
@@ -59,7 +59,7 @@ def edge_tape(path: Path) -> Path:
 
 
 def joycon_tape(path: Path, kind: str = "l") -> Path:
-    """A second of a Joy-Con held like a remote (plan 46): the stick pushed
+    """A second of a Joy-Con held like a remote: the stick pushed
     up-right, ZL (ZR) most of the way (it is digital: on), SL and ↓ (A)
     held, the far end lifted and the right side down a little, the
     sensors' z up out of the face."""
@@ -133,7 +133,7 @@ def main() -> None:
                 h.draw(1)
             name = "pad-edge.png" if view == "map" else f"pad-edge-{view}.png"
             print(f"wrote {crop(h.save(name))}  ({pad.model.name}, {pad.link})")
-        # a Joy-Con (L), one per role (plan 46): the lights and the light band on
+        # a Joy-Con (L), one per role: the lights and the light band on
         shot.OUT = JOYCON_OUT
         JOYCON_OUT.mkdir(parents=True, exist_ok=True)
         pad = gamepad.Pad(tape=str(joycon_tape(Path(tmp) / "joycon.jsonl")))

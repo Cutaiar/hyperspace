@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""SC3a's measurements (plan 58 §9): can the picture stop depending on any one display?
+"""SC3a's measurements: can the picture stop depending on any one display?
 
-The spike's, kept because they are the owner's gate (hand checks 607–610): never
-imported by the app. `today` is the old shape rebuilt here, for comparison; `guarded`
-and `draw-render` run the shipped `pacing.Pacer` and `app._draw_render`. Each
+Kept as the gate for SC3a; never imported by the app. `today` is the old shape
+rebuilt here, for comparison; `guarded` and `draw-render` run the shipped `pacing.Pacer` and `app._draw_render`. Each
 subcommand is one measurement and prints one JSON line per result; run each in its
 own process (a crash is an answer). Touches no `~/Hyperspace`. Check `state` first:
 locked, vsync numbers mean nothing. Run from `hyperspace-python/`:
@@ -897,8 +896,8 @@ def draw_render(a) -> None:
 
 
 def v8(a) -> None:
-    """Audit V8: a hot reload's hooks run with `--case` current, the render context
-    (`root`) or the control window's (`control`, where `frame` used to run them). Two
+    """V8: a hot reload's hooks run with `--case` current, the render context
+    (`root`) or the control window's (`control`). Two
     rigs at one clock, one reloaded: does the next frame on the render context still
     match, and whose are the new vertex arrays?"""
     sys.path.insert(0, str(Path(__file__).resolve().parent))

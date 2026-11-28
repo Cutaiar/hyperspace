@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The desk, big and clickable, as PNGs and a transcript (plan 17 WP4).
+"""The desk, big and clickable, as PNGs and a transcript.
 
 Not the app: a **hidden** GLFW window at the control size (960 × 900)
 with the real Panel over the headless objects `tools/undo_demo.py`

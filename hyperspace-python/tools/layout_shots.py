@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The instance layouts, offscreen, and the VIEW page that picks them (plan 20 WP6).
+"""The instance layouts, offscreen, and the VIEW page that picks them.
 
   uv run python tools/layout_shots.py           # the render grid → inst-layouts.png
   uv run python tools/layout_shots.py --page    # the VIEW page   → view-page-layout.png
@@ -63,8 +63,8 @@ def render(ctx, s: ViewState) -> np.ndarray:
     from hyperspace.render import Renderer
 
     r = Renderer(ctx)
-    # plan 36 T3: a bare renderer draws the app's empty frame; the
-    # tool's own wiring is today's frame (render.render_offscreen's)
+    # a bare renderer draws the app's empty frame; the tool's own wiring is
+    # the current frame (render.render_offscreen's)
     r.wiring = wired_wiring(Wiring())
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
     fbo.use()
@@ -145,8 +145,8 @@ def page(layout: str = "hex", motion: str = "orbit", name: str = "view-page-layo
     panel = Panel(control, audio, v, bank=lib.install, registry=reg, library=lib)
     reg["ui.page"].set(PAGE_KEYS.index("view"))
     reg["view.instances"].set(7)
-    # case-folded: the names are lower case as of 2026-11-10, and the
-    # command line in this file's own header asked for them in capitals
+    # case-folded: the names are lower case, and the command line in this
+    # file's own header asks for them in capitals
     reg["view.inst_layout"].set(INST_LAYOUT.index(layout.lower()))
     reg["view.inst_motion"].set(INST_MOTION.index(motion.lower()))
 

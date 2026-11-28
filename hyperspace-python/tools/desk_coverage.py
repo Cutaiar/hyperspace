@@ -6,10 +6,10 @@
     uv run python tools/desk_coverage.py --library DIR --stdout
                                                     # a library's loadable patches too (read only)
 
-Plan 24 C3 (decision 19). Each loadable patch is loaded the way the app loads it —
+Each loadable patch is loaded the way the app loads it —
 a headless registry, router and `LoadedPatch` over a **scratch** library home
-made for the run, never the owner's, holding the test corpus
-(`tests/corpus/loadable`, the loadable patches the build shipped until 2026-10-28,
+made for the run, never the user's, holding the test corpus
+(`tests/corpus/loadable`, the loadable patches the build once shipped,
 and `tests/corpus/patches/dream`, the dream module presets they may name) — and
 each control of the APC40's
 patch layer (`layer_controls`) gets one of three words:
@@ -22,7 +22,7 @@ patch layer (`layer_controls`) gets one of three words:
            effect's knob with that effect off, a dream knob with the
            look-back off, …), or the registry has no such param.
 
-The owner's bar for the authoring pass that follows plan 24 — **at most 4
+The bar for the authoring pass — **at most 4
 dark or dead controls on the patch layer** of every loadable patch — is reported
 per loadable patch; nothing here remaps a loadable patch to meet it.
 
@@ -64,7 +64,7 @@ from hyperspace.view import ViewState
 REPORT = ROOT / "docs" / "plans" / "assets" / "24-party-fixes" / "desk-coverage.md"
 CORPUS = ROOT / "tests" / "corpus"                   # the loadable patches, as test data
 CORPUS_GROUPS = (LOADABLE, "dream")      # what the scratch home is seeded with (`group_folder`)
-BAR = 4                     # the owner's bar: at most this many dark or dead
+BAR = 4                     # the bar: at most this many dark or dead
 MAPPED, DARK, DEAD = "mapped", "dark", "dead"
 MARK = {MAPPED: "●", DARK: "·", DEAD: "✕"}
 
@@ -143,7 +143,7 @@ def boot(home: Path) -> SimpleNamespace:
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
-    envelope.register(reg, envelope.Envelopes(), clock)      # plan 31: seq-demo's ids
+    envelope.register(reg, envelope.Envelopes(), clock)      # seq-demo's ids
     sequencer.register(reg, sequencer.Sequencer(), clock)
     table = Bindings.load(None, legacy_midi=None)
     routing.register_desk(reg, table)
@@ -158,9 +158,9 @@ def coverage_of(rig, name: str, controls: list[apc40.Control]) -> Row:
     rig.loaded_patch.load(name)
     reg, table = rig.reg, rig.table
     values = reg.snapshot()
-    # (plan 33 T7: whether the faces show a picture is the graph's wire)
+    # whether the faces show a picture is the graph's wire
     media = learn.faces_media(rig.loaded_patch.graph.spec, getattr(reg, "switch_state", None))
-    drawn = learn.drawn_of(rig.loaded_patch.graph.spec)      # (plan 36 T4: what the graph draws)
+    drawn = learn.drawn_of(rig.loaded_patch.graph.spec)      # what the graph draws
     on: dict[str, Binding] = {}
     for b in table.desk():
         if b.enabled:
@@ -194,7 +194,7 @@ def coverage(home: Path, library: Path | None = None) -> tuple[list[apc40.Contro
     for group in CORPUS_GROUPS:
         _copy_in(CORPUS / group_folder(group), home / group_folder(group))
     if library is not None:
-        for group in (LOADABLE,):        # (plan 44 D3: desk templates are retired)
+        for group in (LOADABLE,):        # desk templates are retired
             _copy_in(loadable_dir(library), home / group)
     rig = boot(home)
     controls = layer_controls(rig.table)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan 18 WP3 — what a hand Learn lands with, shown headless.
+"""What a hand Learn lands with, shown headless.
 
 SYNTHETIC HANDS: no tracker and no window. The app's objects are built
 the way `tools/undo_demo.py` builds them (its `boot`: library, registry,
@@ -11,8 +11,8 @@ the right-click menu arms it ("Learn hand ▸ right") and completed by the
 axis that moved, through `HandsIO._learn` → `Learn.learn_source`.
 
 For each learned row a table: hand reading → the param's value, with the
-row a learn landed **before** this package (`position`, depth 1) beside
-the row it lands now. Both are measured, on a second set of the same
+older row (`position`, depth 1) beside
+the row a learn lands now. Both are measured, on a second set of the same
 objects holding only that one row, the hand held at each reading for a
 second and a half.
 

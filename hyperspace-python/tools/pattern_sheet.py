@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The pattern-input convention (plan 22 B1), offscreen: contact sheets.
+"""The pattern-input convention, offscreen: contact sheets.
 
 One sheet per mode: a row per input (SCALE … SPREAD), three tiles — the
 input at 0, at 1.0 and at 2.6, every other input at 1.0. Read down a
@@ -16,7 +16,7 @@ average of eight stills across half a second — 0 is sharp, a fast
 pattern smears), and SPREAD shows four faces (0–3) side by side, which
 drift apart above 0.
 
-And a gallery (plan 22 B3): a row per mode, a column per passage —
+And a gallery: a row per mode, a column per passage —
 silence, quiet, medium (every band near nominal), loud, a kick transient
 with bright hats — with the bands as the analyzer would read them
 (`Renderer.bands`, which meter and pulse draw) and the eight inputs as

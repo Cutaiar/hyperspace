@@ -1,4 +1,4 @@
-"""Write the recorded point-cloud fixture (plan 27 B4) the `cloud` device and
+"""Write the recorded point-cloud fixture the `cloud` device and
 its tests play: a torus knot turning about its vertical axis, 16 frames at
 12 fps, the point count different on every frame (so the file's ragged
 offsets are exercised), coloured by height. Deterministic — no random

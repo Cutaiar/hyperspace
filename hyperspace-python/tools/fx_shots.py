@@ -4,8 +4,7 @@
 Renders a rotating 24-cell with face patterns through the real pipeline
 (render.py → fx.py), each factory effect alone at its defaults, and
 writes them to docs/plans/assets/09-fx/ with a contact sheet. Then times
-the chain under Noita's heaviest trip stage (`HEAVY`). (Plan 40 T5: the
-fx module presets it also shot are retired outright, D6.)
+the chain under Noita's heaviest trip stage (`HEAVY`).
 
     uv run python tools/fx_shots.py [--frames 60] [--only warp,acid]
 """
@@ -33,7 +32,7 @@ from hyperspace.view import ViewState
 OUT = ROOT / "docs" / "plans" / "assets" / "09-fx"
 W, H = 960, 600
 # the chain's cost is timed under Noita's trip stages 0–3, "tripping balls"
-# (the values of the retired fx module preset of that name, plan 40 T5)
+# (the values of the fx module preset of that name)
 HEAVY = {"warp": {"on": True, "amount": 1.1}, "tripcolour": {"on": True, "amount": 2.0},
          "fractals": {"on": True, "amount": 2.9, "size": 1.0}}
 
@@ -54,7 +53,7 @@ def shot(ctx, fbo, values: dict, frames: int, scene: bool = True) -> np.ndarray:
         else:
             fx.values[name].update(v)
     r = Renderer(ctx, fx=fx)
-    r.wiring = wiring_of(fx)  # plan 33 R23: its run as a load lands it
+    r.wiring = wiring_of(fx)  # its run as a load lands it
     s = view()
     if not scene:
         s.lines = s.points = s.faces = False
@@ -112,7 +111,7 @@ def main() -> None:
         fx.values[name].update(v)
     for label, st in (("off", FxState()), ("tripping balls", fx)):
         r = Renderer(ctx, fx=st)
-        r.wiring = wiring_of(st)  # plan 33 R23: its run as a load lands it
+        r.wiring = wiring_of(st)  # its run as a load lands it
         s = view()
         ts = []
         for k in range(40):

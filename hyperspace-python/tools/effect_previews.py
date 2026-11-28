@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan 65: every effect file's preview, written out — for docs, and for a
+"""Every effect file's preview, written out — for docs, and for a
 future skill that needs to see what an effect does without running the app.
 
 For each file in ``hyperspace/shaders/fx/`` (or ``--fx``), the test card

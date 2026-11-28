@@ -1,11 +1,11 @@
 """tools/app_driver.py script: the player screen with a full set of controllers
 (stood in: the driver's home lists none), by mouse — at 320 and 240 px in the pane,
 a token dragged across, then the large window and a controller dragged between tokens,
-each taken back by ⌘Z over the board, and redone (row 800); a controller unplugged since
+each taken back by ⌘Z over the board, and redone; a controller unplugged since
 is refused in words. Each step's words go to stderr; a step that does not do what it
 should stops the run. Then a MIDI port and a pad nobody lists, waiting in the tray, each
 dragged to a player:
-adopted, through the real list in the driver's scratch home (wave 5 CT1).
+adopted, through the real list in the driver's scratch home.
 
     uv run python tools/app_driver.py tools/drive_players.py --out <scratch>/run --every 10
 

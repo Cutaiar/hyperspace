@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The one migration (plan 57 §7, §7a): a library to the newest (`/12` since plan 89),
+"""The one migration: a library to the newest (`/12`),
 its shows to install files.
 
     uv run python tools/migrate_library.py [--library PATH] [--show NAME] [--apply]
@@ -11,11 +11,11 @@ refuses to run while Hyperspace is open on this Mac (it says if it can't tell, a
 never see the other Mac: quit there first), then, in this order, because of what reads what:
 
 1. **One backup** of the whole library, ``<home>/library-backup-<stamp>/``, never inside it.
-2. **The trash is deleted, not converted** (the owner, 2026-11-06): ``<library>/trash`` and
+2. **The trash is deleted, not converted**: ``<library>/trash`` and
    ``presets-backup-*``.
 3. **The retaper,** a no-op after the first (`retaper_plan`), and module presets and
    ``patch/1`` files into the one format (`group_plan`).
-4. **Every loadable patch to** ``hyperspace.loadable/12`` (plan 89; ``/11`` plan 57) by
+4. **Every loadable patch to** ``hyperspace.loadable/12`` by
    `hyperspace.headless.resave`, in
    place, with three checks: it loads; it is a fixed point (loaded and saved untouched again,
    the same bytes); and the same picture: the old file and its newest are each drawn on the
@@ -73,12 +73,12 @@ PROJECTS = "projects"
 INSTALLS = "installs"
 SHOW_SUFFIX = ".hyp.json"
 BACKUP_PREFIX = "library-backup-"
-NEWEST = "hyperspace.loadable/12"         # plan 57 (FQ4); plan 89: copies as slots
+NEWEST = "hyperspace.loadable/12"
 NEW = "/" + NEWEST.rpartition("/")[2]     # how the words say it ("/12")
-OLD_BACKUPS = "presets-backup-"           # a hand-made copy, deleted with the trash (§7a)
+OLD_BACKUPS = "presets-backup-"           # a hand-made copy, deleted with the trash
 TRASH = "trash"
 NOTHING_FILES = ("Icon\r", "Icon", ".DS_Store")   # what makes no folder worth keeping
-# (OLD_LOADABLE too: a folder the owner made under presets/ and left empty moves with it)
+# (OLD_LOADABLE too: a folder made under presets/ and left empty moves with it)
 KEPT_FOLDERS = {"media", "media-cache", "weights", "trash", LOADABLE, OLD_LOADABLE, INSTALLS,
                 "patches"}
 # what a load note says of a graph section the build refused (loadable.py:
@@ -115,7 +115,7 @@ def machine_home() -> Path:
 
 def configured_library(home: Path) -> Path:
     """The config's ``[library] path`` (home/config.toml), else `home`. A config.toml that
-    won't parse raises LookupError: the run never falls back to the home then (row 843)."""
+    won't parse raises LookupError: the run never falls back to the home then."""
     from hyperspace import config
     cfg_path = home / config.FILE
     if cfg_path.is_file():
@@ -131,7 +131,7 @@ def configured_library(home: Path) -> Path:
 
 def loadable_files(library: Path) -> list[Path]:
     """The library's loadable patches: ``loadable/`` and ``presets/`` every folder down, as
-    the library lists them (`library._walk`, plan 48 stage 2: hidden folders skipped, never
+    the library lists them (`library._walk`: hidden folders skipped, never
     through a link): a dot-file (a write's temp file), a backup (``.bak-``) and anything in
     ``trash/`` left out."""
     from hyperspace.library import _walk
@@ -169,7 +169,7 @@ def app_running() -> tuple[bool | None, str]:
 
 def show_files(library: Path) -> list[Path]:
     """The library's shows: ``projects/*.hyp.json``, a dot-file and a backup
-    left out (plan 43 C2)."""
+    left out."""
     folder = library / PROJECTS
     if not folder.is_dir():
         return []
@@ -187,7 +187,7 @@ def _read(path: Path) -> dict | None:
 
 def rig_show(library: Path, home: Path, name: str | None = None
              ) -> tuple[Path | None, dict | None, str]:
-    """The show whose eye the loadable patches take (plan 43 C2): `name` (a file
+    """The show whose eye the loadable patches take: `name` (a file
     stem), else this Mac's last show if the library holds it, else the
     library's only show — (its path or None, its `headless.show_seed` or
     None when it kept no eye and no camera position, a line saying which).
@@ -251,7 +251,7 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None,
     rig's show `show` (a `headless.show_seed`) open. An old file whose
     section the load did not read is an error: never written (`NOT_READ`).
     `file` is what the result calls it — its path under ``presets/``
-    (``party/trip.json``, plan 48 stage 2), else its file name."""
+    (``party/trip.json``), else its file name."""
     from hyperspace import graphmigrate, headless
     from hyperspace.library import LibraryError
 
@@ -305,8 +305,7 @@ def _golden_picture():
 
     def draw(path: Path, *, library: Path | None = None, show: dict | None = None):
         # (prefixed: never a fixture's slug, which the rig draws its own way;
-        # plan 36 T3: the windows as the rig ships — the switch states the
-        # goldens emulate are retired, and a `/10` is drawn as it is wired)
+        # the windows as the rig ships, and a `/10` is drawn as it is wired)
         return golden_frames.picture(path, slug=f"lib-{_slug(path.stem)}", library=library,
                                      states=golden_frames.SHIPPED, show=show)
     return draw
@@ -332,7 +331,7 @@ def _retaper_tool():
 
 
 def retaper_plan(library: Path, home: Path) -> list[tuple[Path, object]]:
-    """What the retaper would write first (plan 43 C2: one bump moves
+    """What the retaper would write first (one bump moves
     everything): every patch and this Mac's bindings.json
     still without the taper marker, each with its `retaper_routes.Change`.
     The loadable patches are retapered by their own resave."""
@@ -342,7 +341,7 @@ def retaper_plan(library: Path, home: Path) -> list[tuple[Path, object]]:
     rt = _retaper_tool()
     files = FxState().files
     out = [(p, rt.plan(p, files, kind="patch")) for p in rt.json_files(library / rt.PATCHES)]
-    # (plan 44 D3: no desk templates — a `desk/` folder left over is never read,
+    # (no desk templates — a `desk/` folder left over is never read,
     # never rewritten)
     table = home / routing.FILE
     if table.is_file():
@@ -368,8 +367,8 @@ def retaper_write(todo) -> list[str]:
 def shared_retapers(library: Path, todo) -> bool:
     """Whether `retaper_plan` would rewrite a document a loadable patch's load reads
     beside it (`headless.SHARED_FOLDERS`, the module presets — none today:
-    the retaper rewrites patches and `bindings.json`, plan 44 D3 retired the
-    desk templates) — else the library itself is what every loadable patch is
+    the retaper rewrites patches and `bindings.json`, never desk
+    templates) — else the library itself is what every loadable patch is
     computed against."""
     from hyperspace.headless import SHARED_FOLDERS
     for path, _c in todo:
@@ -377,7 +376,7 @@ def shared_retapers(library: Path, todo) -> bool:
             rel = path.relative_to(library)
         except ValueError:
             continue
-        # (plan 50: `patches/` is shared for its groups' folders — a module
+        # (`patches/` is shared for its groups' folders — a module
         # group's patches; a top-level patch is spawned, never read by a load)
         if len(rel.parts) > 2 and rel.parts[0] in SHARED_FOLDERS:
             return True
@@ -507,7 +506,7 @@ def is_home(library: Path, home: Path) -> bool:
 
 
 def trash_plan(library: Path, home: Path) -> list[Path]:
-    """What goes first, after the backup (the owner, 2026-11-06): the library's trash and the
+    """What goes first, after the backup: the library's trash and the
     hand-made ``presets-backup-*``; deleted, never converted. A library that is the Mac's own
     home keeps its trash: that one is the Mac's."""
     if not library.is_dir():
@@ -577,14 +576,14 @@ def folder_move(library: Path) -> list[str]:
     return said
 
 
-# plan 50: the folders in a library root that hold no module presets — the
+# the folders in a library root that hold no module presets — the
 # document kinds', the shows', the trash, the old routing loadable patches
 NOT_MODULES = (LOADABLE, OLD_LOADABLE, PROJECTS, INSTALLS, "patches", "playlists", "trash",
                "bindings", "media", "venues", "Docs")
 
 
 def group_plan(library: Path) -> tuple[list[tuple[Path, Path, bytes]], list[str]]:
-    """Plan 50 (one format): what moves to the patch's one shape — every
+    """What moves to the patch's one shape — every
     module preset (``<library>/<group>/*.json``, ``hyperspace.preset/1``,
     one group's values) as a patch of that group,
     ``<library>/patches/<group>/<file>`` (``hyperspace.patch/2``, a
@@ -709,7 +708,7 @@ def _forced(r: Result, forced: set[str], stems: dict[str, int]) -> bool:
     """Whether ``--force`` names `r`: by its file under ``presets/`` less
     ``.json`` (``party/trip``), or by its stem alone (``trip``) only when no
     other loadable patch of the library has that stem (`stems`: each stem's count;
-    review of #351 — one name never forces a loadable patch in every folder)."""
+    one name never forces a loadable patch in every folder)."""
     if r.file.removesuffix(".json") in forced:
         return True
     stem = Path(r.file).stem
@@ -825,7 +824,7 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
             print(f"  {words}")
     for words in stayed:
         print(f"  {words}")
-    # plan 50: the module presets and the /1 patches into the one shape
+    # the module presets and the /1 patches into the one shape
     moves, left = group_plan(library) if a.to is None else ([], [])
     if moves:
         print(f"patches to write as {_patch_schema()}: {len(moves)} — "
@@ -904,7 +903,7 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
         print(f"rewrote {len(writes)} as {NEW}, left {len(untouched)} untouched (already {NEW}), "
               f"skipped {len(skipped)}")
         if skipped:
-            # (review of #434: an old patch not written still takes the show's eye, looks
+            # (an old patch not written still takes the show's eye, looks
             # and bus cuts at load, from the show and its .bak-v2-* files: both stay)
             troubles = [(f"shows and .bak-v2-* files left as they are: {len(skipped)} "
                         "patch(es) not written still read them; --force or fix those, "

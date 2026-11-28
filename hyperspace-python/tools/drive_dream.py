@@ -1,4 +1,4 @@
-"""tools/app_driver.py script (plan 90 H3): saved dreams in the real app — the
+"""tools/app_driver.py script: saved dreams in the real app — the
 corpus's party-wake (its dream opens as its chain, folded as **dream**,
 `graphmigrate.dreams`) and the example `dream-wake`, each loaded as a performer
 loads it, GRAPH on it with the dream selected; then the starter **dream on a

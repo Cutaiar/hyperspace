@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The interaction box, shown headless on synthetic hands (plan 18 WP1).
+"""The interaction box, shown headless on synthetic hands.
 
 No camera and no real hand: the hands are `tests/fake_hands.py`'s, fed to
 a `HandsIO` built the way `app.main` builds it, on the objects
@@ -40,7 +40,7 @@ from hyperspace.hands.core import BOX_EDGE, BOX_MARGIN
 from hyperspace.routing import Binding
 
 say = demo.say
-# a calibration as a build before plan 18 saved it (schema 1, no box)
+# a calibration from a build that saved no box (schema 1)
 OLD_FILE = (
     '{\n "schema": "hyperspace.hands/1",\n "axes": {\n'
     '  "left.x": {"lo": -214.2, "hi": 18.5},\n  "left.y": {"lo": 112.0, "hi": 341.5},\n'

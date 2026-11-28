@@ -12,8 +12,8 @@ Then octaves: 1 vs 2 vs 3 in the temporal scheme (all octaves per call, or
 one octave per call alternating) at 256 px with conv3_3, 2 steps.
 
 Then cadence: the same step issued back to back versus after 16 / 33 / 66 ms
-of idling, because c_contention.py showed "dream every N frames" makes each
-call slower (the GPU clocks down between bursts).
+of idling, because "dream every N frames" makes each call slower (the GPU
+clocks down between bursts; see c_contention.py).
 """
 
 from __future__ import annotations

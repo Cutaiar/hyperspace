@@ -103,7 +103,7 @@ def run() -> None:
 
 
 def still() -> None:
-    """The picture beside the plan 28 record: the flat mark face-on with
+    """The picture of the mark: the flat mark face-on with
     plaid on its bars, and the capsules turned with bloom."""
     stage = Stage(640, 480)
     shots = [ViewState(shape=MARK, faces=True, pattern=PATTERN_NAMES.index("plaid"),

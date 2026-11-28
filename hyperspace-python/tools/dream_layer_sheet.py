@@ -35,8 +35,7 @@ if str(ROOT) not in sys.path:
 
 W, H = 1280, 820
 TILE_W, CAP, COLS = 300, 28, 6
-# the old content mask's blur and gain (plan 90 H3: retired from the worker — the
-# dream's gate is its input's alpha now; the sheet keeps the look it was made with)
+# the blur and gain of the luminance mask the sheet builds from each frame
 MASK_BLUR, MASK_GAIN = 9, 4.0
 
 
@@ -59,8 +58,8 @@ def rendered(res: int):
     ctx = moderngl.create_context(standalone=True)
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx)
-    # plan 36 T3: a bare renderer draws the app's empty frame; the
-    # tool's own wiring is today's frame (render.render_offscreen's)
+    # a bare renderer draws the app's empty frame; the tool's own wiring
+    # is the live frame (render.render_offscreen's)
     r.wiring = wired_wiring(Wiring())
     s = ViewState(shape=10, faces=True, pattern=2, bright=1.3, speed=3.0)
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]

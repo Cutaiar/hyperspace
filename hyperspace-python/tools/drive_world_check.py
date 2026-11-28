@@ -1,4 +1,4 @@
-"""tools/app_driver.py script (plan 59, hand checks 659-660): the world-check
+"""tools/app_driver.py script: the world-check
 patches, built in the real app and saved through its own save, each held a
 while for the screenshots; then Reset world pressed on the first.
 

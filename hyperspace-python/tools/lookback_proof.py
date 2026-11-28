@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Plan 90 (H2): every repository file holding a look-back, drawn through the old
-code and through this branch's migrated patch — the same run of frames at a
+"""Every repository file holding a look-back, drawn through the old
+code and through the migrated patch — the same run of frames at a
 pinned clock (`golden_frames`' rig: the file copied into a scratch library,
 loaded through the real `LoadedPatch`, drawn by `Renderer.draw_outputs`) — and
 how far apart they are.
@@ -8,12 +8,12 @@ how far apart they are.
     # on the old code (a worktree of main); --root is the package drawn:
     PYTHONPATH=<wt>/hyperspace-python uv run python tools/lookback_proof.py \\
         --root <wt>/hyperspace-python save old.npz
-    # on this branch:
+    # on the migrated code:
     uv run python tools/lookback_proof.py check old.npz
 
 `--root` is put first on the path and the run asserts `hyperspace` was imported
-from it (a `tools/` script otherwise imports the venv's package — this
-branch's — which proves nothing). The pictures are kept at `FRAMES`, so the
+from it (a `tools/` script otherwise imports the venv's package, which
+proves nothing). The pictures are kept at `FRAMES`, so the
 echoes have filled; each is compared per channel, 8-bit, and the numbers said:
 the largest difference, the mean, and the share of pixels off by more than 2
 and by more than 16 levels.

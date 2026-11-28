@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Side-by-side comparison shots: HTML reference vs Python renderer (plan 02).
+"""Side-by-side comparison shots: HTML reference vs Python renderer.
 
 For each judge shape, renders the same view state through both pipelines at
 1200×800 and writes a labelled side-by-side PNG into docs/plans/assets/.
-The user judges these by eye — that is the plan-02 exit bar.
+The shots are judged by eye.
 
   uv run python tools/compare_render.py
 """

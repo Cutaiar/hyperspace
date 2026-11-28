@@ -1,4 +1,4 @@
-"""Shared helpers for the WP6-0 look-back (temporal Deep Dream) spike.
+"""Shared helpers for the look-back (temporal Deep Dream) benchmarks.
 
 Nothing here is imported by the `hyperspace` package. Every script in this
 directory is standalone:
@@ -40,7 +40,7 @@ from hyperspace.view import ViewState
 
 ASSETS = ROOT / "docs" / "plans" / "assets" / "06-lookback"
 
-# Judge scenes for the spike: a 24-cell and a 600-cell, faces + pattern on.
+# Judge scenes: a 24-cell and a 600-cell, faces + pattern on.
 # Shape indices follow hyperspace.geometry.SHAPES.
 SCENE_24CELL = {"shape": 10, "faces": True, "pattern": 2, "bright": 1.0}
 SCENE_600CELL = {"shape": 16, "faces": True, "pattern": 3, "bright": 1.0}

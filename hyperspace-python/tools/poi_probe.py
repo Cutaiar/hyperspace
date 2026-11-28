@@ -1,5 +1,5 @@
 """Watch the poi's hand on a real Joy-Con, and replay a tape through it
-(plan 47, the poi: hyperspace/poi.py).
+(the poi: hyperspace/poi.py).
 
     uv run python tools/poi_probe.py                        # live: the poi's numbers, ten lines a second
     uv run python tools/poi_probe.py --record poi.jsonl     # …and keep the tape (and the calibration)
@@ -7,13 +7,13 @@
     uv run python tools/poi_probe.py --replay poi.jsonl --series 16 22    # every frame between two times
     uv run python tools/poi_probe.py --replay poi.jsonl --hand 2 --weight 1  # …with the dials set
     uv run python tools/poi_probe.py --replay tests/fixtures/pads/joycon-poi-excerpt.jsonl \
-        --findings docs/plans/assets/46-joycon/joycon-findings.json        # the owner's own tape
+        --findings docs/plans/assets/46-joycon/joycon-findings.json        # a Joy-Con tape
 
 The pad is read by the app's own code: a real `gamepad.Pad` polls the
 reader (`pads.hid.HidPad` live, `pads.hid.TapePad` on a replay), and
 `poi.step` runs on the real camera params (`params.build_patch`), so what
 prints here is what the poi's code does. The app itself doesn't run it on a
-Joy-Con (`poi.no_position`, register row 686); this tool does. Close
+Joy-Con (`poi.no_position`); this tool does. Close
 the app first: hidapi opens the pad exclusively.
 
 **Live**, each line is the poi's state now: the reading (|accel| in g,
@@ -30,16 +30,15 @@ writes them), so a replay reads the sensors exactly as live did.
 
 **Replay** prints, for each note's window, how still the pad read, the
 attitude error and the push (median / worst), the hand's travel (at the
-end / farthest) and speed, the pan's farthest reach and the frames at a wall — the numbers the
-2026-11-02 tape was diagnosed with — and with ``--series`` every frame
+end / farthest) and speed, the pan's farthest reach and the frames at a wall — the numbers a
+tape is diagnosed with — and with ``--series`` every frame
 between two times. ``--findings`` names the calibration file when it is
 not beside the tape (the probe's ``joycon-findings.json`` does). A replay
 runs a frame at least every 1/60 s, so a pause in the tape is what the app
 would have seen: after `hid.STALE_S` the pad is lost and reads afresh.
 
 The tool reads `hyperspace/poi.py` as it stands and shows what that does;
-the tape is a recording, not a verdict. Salvaged from #342 (closed), whose
-changes to `poi.py` are not in the tree (register row 786).
+the tape is a recording, not a verdict.
 """
 
 from __future__ import annotations
@@ -75,8 +74,8 @@ class ProbePad(gamepad.Pad):
 
     @property
     def model(self):
-        """The reader's, of no family: the app's poi reads no Nintendo pad (`poi.no_position`,
-        register row 686), and this tool exists to run that same code on one's tape."""
+        """The reader's, of no family: the app's poi reads no Nintendo pad (`poi.no_position`),
+        and this tool exists to run that same code on one's tape."""
         m = self.__dict__.get("_model")
         return dataclasses.replace(m, family="probe") if m is not None else None
 

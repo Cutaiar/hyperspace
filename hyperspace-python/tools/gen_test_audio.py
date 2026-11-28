@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the deterministic test WAVs for golden-trace recording (plan 00).
+"""Generate the deterministic test WAVs for golden-trace recording.
 
 The files are not committed — they regenerate bit-identically on any machine
 (fixed sample rate, fixed seed, pure numpy math), and tests/golden/audio/

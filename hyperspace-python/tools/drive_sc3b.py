@@ -4,7 +4,7 @@ The display is `tools/sc3a_spike.py vdisplay`, a private `CGVirtualDisplay` in a
 the window server's real thing, added and removed, with no cable. **It opens windows on this
 Mac's real displays and may leave an arrangement entry, so run it as few times as you need, and
 check the monitor list before and after.** It proves the app's half. Only a real cable proves the
-rest (hand check 629). Run from `hyperspace-python/`, checking `tools/sc3a_spike.py state` first:
+rest. Run from `hyperspace-python/`, checking `tools/sc3a_spike.py state` first:
 
     uv run python tools/app_driver.py tools/drive_sc3b.py --out <scratch>/run --every 30 --home <scratch>/home
 

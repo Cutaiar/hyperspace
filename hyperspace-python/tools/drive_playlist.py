@@ -1,5 +1,5 @@
-"""tools/app_driver.py script: the playlist in the real app, by mouse, with what it costs
-(plan 44 D6b). Writes a list (one entry a missing patch), opens the pane's section, plays
+"""tools/app_driver.py script: the playlist in the real app, by mouse, with what it costs.
+Writes a list (one entry a missing patch), opens the pane's section, plays
 it twice round on a short dwell, and measures: each load, each warm draw, the frame times
 in a dwell against a fade's, and its first frame. Then a soak of quick advances, watching
 the resident size, the params and the undo stacks. Says it all on stderr.

@@ -1,4 +1,4 @@
-"""tools/app_driver.py script (plan 90 H2): saved look-backs in the real app —
+"""tools/app_driver.py script: saved look-backs in the real app —
 the corpus's party-tracer and party-wake (each opens with its look-back made
 public parts, `graphmigrate.lookbacks`) and the example `stack-lookback`, each
 loaded as a performer loads it, GRAPH framed on it with the Trail selected,

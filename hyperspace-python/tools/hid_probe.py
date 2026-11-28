@@ -1,5 +1,5 @@
 """Watch, record and check a DualSense, a DualSense Edge or a Joy-Con over
-hidapi (plans 42 and 43).
+hidapi.
 
     uv run python tools/hid_probe.py --list            # every pad hidapi sees
     uv run python tools/hid_probe.py                   # live: buttons, sticks, touch, motion
@@ -18,11 +18,10 @@ anything else holding the pad (the app, the browser lab's tab): hidapi
 opens it exclusively.
 
 ``--check`` walks through what only a controller can answer. For a Sony
-pad (docs/plans/assets/42-controllers/sony-hid.md §9 and plan 42's list):
-the link, the back buttons with and without a profile, whether Fn hides
+pad: the link, the back buttons with and without a profile, whether Fn hides
 the face, the sensors' axes and signs, the touchpad's reach, whether the
 light bar, rumble, a trigger and the player lights obey, and how still
-the sticks rest. For a Joy-Con (plan 43): the link and what the flash
+the sticks rest. For a Joy-Con: the link and what the flash
 said, each button landing where the vocabulary says, the stick's reach
 and its rest (the drift, before and after `recentre`), the sensors' axes
 and signs in the Wii-Remote hold, and whether rumble and the player
@@ -290,7 +289,7 @@ def check(live: Live, rec, out: Path) -> None:
     print(f"\nfindings written to {out}")
 
 
-# which button of a Joy-Con lands where (plan 43): what to press, the
+# which button of a Joy-Con lands where: what to press, the
 # canonical button (or axis) it should read as
 JOYCON_PRESSES = {
     "l": (("the ↓ arrow", "S"), ("the ↑ arrow", "N"), ("the → arrow", "E"), ("the ← arrow", "W"),
@@ -313,7 +312,7 @@ JOYCON_PRESSES = {
 
 
 def check_joycon(live: Live, rec, out: Path, found: dict) -> None:
-    """The Joy-Con's guided checks (plan 43): the link and the flash, the
+    """The Joy-Con's guided checks: the link and the flash, the
     buttons by position, the stick's reach and rest, the sensors' axes in
     the Wii-Remote hold, rumble and the player lights."""
     r = live.reader

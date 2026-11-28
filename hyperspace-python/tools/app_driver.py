@@ -82,8 +82,8 @@ def run(script, out: Path, every: int = 2, home: Path | None = None, settle: int
     fresh = home is None
     home = home or Path(tempfile.mkdtemp(prefix="hyperspace-drive-"))
     home.mkdir(parents=True, exist_ok=True)
-    # the library is a folder of its own beside the machine's files: since
-    # #480 no [library] path is no library, and the home is never one
+    # the library is a folder of its own beside the machine's files: with no
+    # [library] path there is no library, and the home is never one
     lib = home / LIBRARY
     lib.mkdir(exist_ok=True)
     if fresh and corpus:

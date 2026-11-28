@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""What each face pattern costs (plan 22 B3), as a relative number.
+"""What each face pattern costs, as a relative number.
 
 The 600-cell (1200 triangular faces) and the 120-cell (720 pentagons) with
 their faces on, drawn offscreen at 1280×720 with each pattern in turn,
@@ -45,8 +45,8 @@ def main() -> int:
     args = ap.parse_args()
     ctx = moderngl.create_context(standalone=True)
     r = Renderer(ctx)
-    # plan 36 T3: a bare renderer draws the app's empty frame; the
-    # tool's own wiring is today's frame (render.render_offscreen's)
+    # a bare renderer draws the app's empty frame; the tool's own wiring
+    # is the current frame (render.render_offscreen's)
     r.wiring = wired_wiring(Wiring())
     r.bands = LOUD
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer(SIZE)])

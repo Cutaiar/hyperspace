@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Plan 64's comparison for the owner: a fractal's lines and faces sorted on
-the CPU (the default, `view.frac_additive` off) against additive and
-unsorted on the GPU (on), the same dive side by side.
+"""A fractal's lines and faces sorted on the CPU (the default,
+`view.frac_additive` off) against additive and unsorted on the GPU (on),
+the same dive side by side.
 
 For each fractal, four views stepped in lockstep from the same state — the
 faces off (top) and on (bottom), sorted (left) and additive (right) — dive

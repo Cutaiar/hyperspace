@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The control panel as it opens, and after one press of `/` (plan 16 WP1).
+"""The control panel as it opens, and after one press of `/`.
 
 Not the app: a **hidden** GLFW window with the panel drawn over the same
 headless objects `tools/undo_demo.py` builds — no render window, no MIDI

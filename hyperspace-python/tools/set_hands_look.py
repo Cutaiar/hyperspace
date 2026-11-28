@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set every loadable patch's ghost hands to the show look (plan 85).
+"""Set every loadable patch's ghost hands to the show look.
 
     uv run python tools/set_hands_look.py [FOLDER]            # dry run
     uv run python tools/set_hands_look.py [FOLDER] --apply    # backup, then write
@@ -8,11 +8,9 @@ FOLDER is the library (the folder holding ``loadable/``), or its ``loadable/``
 (or old ``presets/``) folder itself; ``--library PATH`` says the same. With
 neither, the library is config.toml's ``[library] path``, else the home.
 
-**The owner runs this on the library**, with Hyperspace closed on both Macs:
-a dry run first, then ``--apply``. The look is `ghost.SHOW_LOOK` (owner,
-2026-11-18: on, BONES, PLAIN, 50%), the one the app now starts a new patch's
-hands from; this puts it into the patches already saved, as the 2026-11-15 run
-put that night's look (BONES in GLASS at 35%, PR #459) by hand.
+Run it on the library with Hyperspace closed: a dry run first, then
+``--apply``. The look is `ghost.SHOW_LOOK` (on, BONES, PLAIN, 50%), the one the
+app starts a new patch's hands from; this puts it into the patches already saved.
 
 The patches visited are the library's loadable patches, ``loadable/`` and
 ``presets/`` every folder down — the era folders included — as the library
@@ -69,8 +67,7 @@ from hyperspace.graph import (
     wired_layer_name,
 )
 
-# the standard wires of the hands' layer (as every corpus patch and the
-# 2026-11-15 run have them)
+# the standard wires of the hands' layer (as every corpus patch has them)
 LAYER = wired_layer_name(1)
 STANDARD_WIRES = ((wired_hands_name(1), f"{LAYER}.hands"),
                   (LAYER, "output.all.hands"),

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Copy an existing library into a shared folder, once (plan 25 D8).
+"""Copy an existing library into a shared folder, once.
 
     uv run python tools/move_library.py DEST [--from HOME] [--dry-run]
 
-Copies the library — ``presets/`` every folder down (plan 48: hidden
+Copies the library — ``presets/`` every folder down (hidden
 folders skipped), ``projects/`` and every module-preset group folder
 (``fx/``, ``dream/``, ``band/`` …) — from HOME (default:
 ``$HYPERSPACE_HOME``, else ``~/Hyperspace``) into DEST, which it creates if
@@ -15,10 +15,9 @@ It never overwrites: a file DEST already has is left alone — identical is
 prints). The machine files (config.toml, bindings.json and its backups, hands.json,
 windows.json, last_show, logs, weights/, media/, media-cache/), the trash, the legacy
 bindings/ folder, backups, dot-files and ``.git`` stay behind — and so does a
-``hidden.json`` from before 2026-10-28 (the library has no hidden loadable patches
-any more).
+legacy ``hidden.json`` (the library has no hidden loadable patches).
 
-Then it clears HOME of the library (2026-11-23, the owner: the shared folder is the one
+Then it clears HOME of the library (the shared folder is the one
 place patches live): every folder it copied from is moved, whole, into
 ``HOME/old-local-library-<date>-<time>/``, so nothing in HOME looks like a library and
 the app stops saying it holds one. Nothing is deleted — a ``KEPT THEIRS`` file is in
@@ -33,14 +32,14 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent
-# folders of the home that are not the library (D3), or not to be copied
+# folders of the home that are not the library, or not to be copied
 SKIP_DIRS = {"weights", "trash", "bindings", "media", "media-cache"}
 # the folders copied every folder down, as the app lists them
 DEEP_DIRS = ("loadable", "presets", "patches")
 # where `clear` puts what was copied: HOME/old-local-library-<YYYYMMDD-HHMMSS>/
 ARCHIVE = "old-local-library-"
 # folders of copies, never the library: `clear`'s archive, migrate_library.py's backup of
-# the whole home (machine files among them, review of #480) and a hand-made presets backup
+# the whole home (machine files among them) and a hand-made presets backup
 SKIP_PREFIXES = (ARCHIVE, "library-backup-", "presets-backup-")
 
 
@@ -59,14 +58,14 @@ def _home() -> Path:
 
 def _walk(folder: Path) -> list[Path]:
     """`library._walk`: every ``*.json`` under `folder`, every folder down,
-    less hidden folders and never through a link to a folder (plan 48)."""
+    less hidden folders and never through a link to a folder."""
     return _library()._walk(folder)
 
 
 def files(root: Path) -> list[Path]:
     """The library documents under `root`, relative: every ``<folder>/*.json``
     one level down, and ``presets/`` every folder down as the library lists
-    it (plan 48 stage 2: hidden folders skipped) — backups, dot-files and
+    it (hidden folders skipped) — backups, dot-files and
     the machine's folders left out."""
     out: list[Path] = []
     if not root.is_dir():
@@ -75,7 +74,7 @@ def files(root: Path) -> list[Path]:
         if folder.name in SKIP_DIRS or folder.name.startswith((".", *SKIP_PREFIXES)):
             continue
         # every folder down where the app reads every folder down: the loadable patches
-        # (plan 48) and the patches, whose groups' are in ``patches/<group>/`` (plan 50)
+        # and the patches, whose groups' are in ``patches/<group>/``
         found = _walk(folder) if folder.name in DEEP_DIRS else sorted(folder.glob("*.json"))
         for f in found:
             if f.name.startswith(".") or ".bak-" in f.name or not f.is_file():
@@ -94,7 +93,7 @@ def move(dest: Path, home: Path, *, dry_run: bool = False,
         raise SystemExit("move_library: DEST is HOME — nothing to move")
     # loadable patches still in the old `presets/`: copied as they are, they would sit in a
     # folder a library with `loadable/` never reads (`library.loadable_dir`) — so the one
-    # migration goes first (review of #480). Counted as `files` copies them (hidden folders,
+    # migration goes first. Counted as `files` copies them (hidden folders,
     # backups and dot-files are not patches); `projects/` shows need no such step, being
     # read from either folder (`library.install_files`)
     old = [rel for rel in files(home) if rel.parts[0] == "presets"]
@@ -110,7 +109,7 @@ def move(dest: Path, home: Path, *, dry_run: bool = False,
         data = src.read_bytes()
         # an old show is one entry with the install of its stem, which the app opens
         # instead (`library.install_files`): copied beside one, it would never show
-        # (review of #480) — kept back like any other conflict
+        # — kept back like any other conflict
         shadow = _install_of(rel)
         if shadow is not None and ((dest / shadow).exists() or (home / shadow).exists()):
             done.append(("KEPT THEIRS", rel))

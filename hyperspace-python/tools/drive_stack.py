@@ -1,4 +1,4 @@
-"""tools/app_driver.py script (plan 90 H1): the stack examples in the real app —
+"""tools/app_driver.py script: the stack examples in the real app —
 each loaded as a performer loads it, GRAPH framed on it with the delay
 selected (its rate and Depth on the side pane), and what the canvas and the FX
 pane mark unreached printed beside the frames.

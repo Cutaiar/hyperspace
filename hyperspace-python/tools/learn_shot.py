@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The right-click menu with a submenu open, as a PNG (plan 17 WP1, WP2).
+"""The right-click menu with a submenu open, as a PNG.
 
 Not the app: a **hidden** GLFW window with the panel drawn over the same
 headless objects `tools/undo_demo.py` builds — no render window, no MIDI
@@ -42,7 +42,7 @@ OUT = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets" / "17-le
 # which shot: (the param whose menu opens, its page, the submenu to open, the file)
 SHOTS = {
     "unbind": ("view.speed", "view", "Unbind", "menu-unbind.png"),
-    # plan 17 WP2: Learn desk and Learn hand ▸ left / right…
+    # Learn desk and Learn hand ▸ left / right…
     "learn": ("view.speed", "view", "Learn hand", "menu-learn.png"),
     # …and a learn armed for the left hand: the red frame and the footer's line (no menu)
     "armed": ("view.speed", "view", None, "learn-armed.png"),

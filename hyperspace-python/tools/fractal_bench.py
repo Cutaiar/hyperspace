@@ -1,4 +1,4 @@
-"""Plan 64's rig bench: a fractal's frame on the CPU path (sorted) against
+"""The rig bench: a fractal's frame on the CPU path (sorted) against
 the GPU path (additive), for every fractal, a few depths into it, the faces
 off and on.
 
@@ -140,7 +140,7 @@ def main() -> None:
         with open(a.json, "w") as f:
             json.dump({"renderer": ctx.info["GL_RENDERER"], "size": [w, h],
                        "frames": a.frames, "rows": rows}, f, indent=1)
-    # the totals the PR asks for: each path's mean frame over every case
+    # the totals: each path's mean frame over every case
     for mode in ("sorted", "additive"):
         d = [x["draw"] for x in rows if x["mode"] == mode]
         print(f"{mode:>8}: draw mean {np.mean(d):.2f} ms, worst {max(d):.2f} ms")

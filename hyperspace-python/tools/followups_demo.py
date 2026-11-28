@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Three of plan 16 WP7's four small fixes, shown headless.
+"""Three of four small fixes, shown headless.
 
 1. A footer line said twice shows twice (an empty F-key, home on a show
    that names no "starts on").
@@ -69,7 +69,7 @@ def lines_twice(r) -> None:
         reg[trigger].fire()
         line = lib.warning
         say(f"     the line:      {line}")
-        # before: the old code assigned the line; the same words were no news
+        # before: assign the line; the same words are no news
         lib.warning = ""
         t += ui.MESSAGE_S + 1
         footer(panel, t)

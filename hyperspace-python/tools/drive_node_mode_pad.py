@@ -1,4 +1,4 @@
-"""tools/app_driver.py's script for node mode on a pad (plan 53 N2): the real app, a stand-in pad.
+"""tools/app_driver.py's script for node mode on a pad: the real app, a stand-in pad.
 
 The chip clicked, the rows on the node, a stick moving the param and the view leaving that stick and
 no other, an LFO's route resting and coming back, the pad window saying what the stick holds, and
@@ -10,7 +10,7 @@ stick would read NaN with the totem off if `PadDevice.quiet_stick` did not stand
 
 Each step's words go to stderr, and a step that doesn't do what it should stops the run. Touches no
 `~/Hyperspace`: the driver's home is a fresh one. A stand-in proves the app's half: the pad itself is
-hand checks 635-637.
+checked by hand.
 """
 
 import os
@@ -119,7 +119,7 @@ def script(d, panel):
         + ", ".join(f"{b.source} → {b.target}" for b in rows[:4]))
     assert not any(b is x for b in rows for x in table.bindings)
 
-    # a hot reload of what holds it (HR's real swap): nothing goes
+    # a hot reload of what holds it (the hot reloader's real swap): nothing goes
     reloader = panel.reloader
     for name in ("devices", "node_desk"):
         reloader.status, reloader.error = "", ""

@@ -4,7 +4,7 @@ more (544 by default; the older ones keep their plan grouping) to the last,
 a `## ` heading (and any unnumbered `### ` under it) moving with the section
 under it, an unnumbered `### ` elsewhere staying in the section before it, and
 a tail after the last section (a `## ` with no numbered section under it)
-left in place (row 606). `uv run python tools/sort_register.py [first] [path]`."""
+left in place. `uv run python tools/sort_register.py [first] [path]`."""
 import re
 import sys
 from itertools import pairwise

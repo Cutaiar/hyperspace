@@ -1,4 +1,4 @@
-"""The type ratchet (row 788): a new pyright complaint fails, an old one doesn't.
+"""The type ratchet: a new pyright complaint fails, an old one doesn't.
 
 `tools/type_baseline.json` counts today's complaints by file and rule. A count over its
 baseline is a new complaint; a file the baseline doesn't name has a baseline of none. Lines
@@ -36,7 +36,7 @@ BASELINE = ROOT / "tools" / "type_baseline.json"
 # The baseline is the Mac's full sync. CI has none of these, and pyright sees other types there:
 # only a full sync writes the baseline, or lowering to CI's counts would fail the Mac afterwards.
 FULL_SYNC = ("torch", "leap", "objc")
-# What CI's sync sees against the baseline, exactly (measured with those packages gone, row 788):
+# What CI's sync sees against the baseline, exactly (measured with those packages gone):
 # judged against this, CI's limit is what it really counts, so it has no spare room. Fixing or
 # moving one of these complaints makes CI fail on that pair: change its number here.
 CI_SYNC = {

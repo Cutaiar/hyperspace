@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Plan 81's demo: a Menger sponge dive, rendered offscreen, for a
-before/after pair.
+"""A Menger sponge dive, rendered offscreen, for a before/after pair.
 
 The real pipeline (`Renderer.draw`, the default wiring) on whatever GL this
 machine has — drive-the-app §1 — with a red cross at the middle of the
@@ -8,10 +7,10 @@ screen and, in the corner, how many levels in and how much of the screen
 has something drawn on it (an 8 × 8 grid of tiles).
 
 - `--mode zoom`: camera.zoom grown by a ratio a frame and `fractal.step`
-  re-rooting, as a saw LFO on the zoom (or a hand) did before plan 81. Run on
-  `main` for the "before" (the tool needs nothing plan 81 added in this mode).
-- `--mode rate`: plan 81's dive rate (`view.frac_dive`) at the same levels a
-  second; `--settle cell` (the default) or `point` (row 1012).
+  re-rooting, as a saw LFO on the zoom (or a hand) does. This mode needs nothing
+  but the zoom and `fractal.step`.
+- `--mode rate`: the dive rate (`view.frac_dive`) at the same levels a
+  second; `--settle cell` (the default) or `point`.
 
     uv run python tools/fractal_dive_demo.py --mode rate --out after.mp4
 

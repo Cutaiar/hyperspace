@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Measure a library's route depths along the new effect tapers, once
-(wave 0 T1: coarse and fine control through tapers).
+(coarse and fine control through tapers).
 
     uv run python tools/retaper_routes.py [--library PATH] [--rows] [--write]
 
-**The owner runs this on the library before the next show**, with both
-Macs on this build (a dry run first, then `--write`). Until then every
+**Run this on the library before the next show**, with every machine
+on this build (a dry run first, then `--write`). Until then every
 old file is read as it was at each load (`params.retaper_depths` in
 `LoadedPatch.load_doc`, `patches.read`, the desk templates' expansion and
 `Bindings.from_json`), so nothing is lost; this rewrite makes it
@@ -17,7 +17,7 @@ with the stop in the middle, and `fx.amount_taper`, a zero-safe log — so
 a knob reaches 0.05× or 5 % as easily as 0.5. A route's depth is in the
 target's normalised units, and the tapers sit between those units and the
 real ones, so the same depth number now means another real-unit change
-(triage addendum, tension 8). Bases are stored in real units and are
+Bases are stored in real units and are
 safe; depths are not. The documents visited, each without the marker
 ``units["fx.depth"] == "taper"`` (a marked one is left as it is, so a
 second run finds nothing to do):

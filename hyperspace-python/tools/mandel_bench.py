@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Mandelbrot effect on the rig's GPU (plan 63): milliseconds a pass, by
+"""The Mandelbrot effect on the rig's GPU: milliseconds a pass, by
 view, render size and iteration cap. Run it on the M3 Max; anywhere else
 (Mesa's software rasteriser in a cloud session) the numbers mean nothing.
 
@@ -8,13 +8,13 @@ view, render size and iteration cap. Run it on the M3 Max; anywhere else
   uv run python tools/mandel_bench.py --frames 60 --caps 256,1024,4096,16384
   uv run python tools/mandel_bench.py --only whole,deep --json bench.json
   uv run python tools/mandel_bench.py --quick            # a smoke run: 2 views, 1 cap
-  uv run python tools/mandel_bench.py --owner            # plan 80: the owner's rig cases
+  uv run python tools/mandel_bench.py --owner            # the rig cases at the seahorse
 
-`--owner` (plan 80) runs the cases the owner measured on the rig after plan
-63 — the seahorse at Size 810, Steps 2000: direct and perturbation at
-1.5e4, perturbation at 4e5 and 1e7, the skip on and off at 3e6, and the
-coloured inside at 1e6 and 9e6 (Steps 6000) — one line each with what the
-pass chose (the tier, whether the skip ran), beside plan 63's rig ms.
+`--owner` runs the cases measured on the rig — the seahorse at Size 810,
+Steps 2000: direct and perturbation at 1.5e4, perturbation at 4e5 and 1e7,
+the skip on and off at 3e6, and the coloured inside at 1e6 and 9e6 (Steps
+6000) — one line each with what the pass chose (the tier, whether the skip
+ran), beside the rig ms recorded for it.
 
 Each line is one view at one Size (540, 810, 1080 lines) and one Steps cap:
 the pass (`FxChain.run_one`, what a graph Effect node runs) timed by the
@@ -66,8 +66,8 @@ VARIANTS = {"black": {"interior": 0, "skip": 0},
 
 DEFAULTS = dict(FxState().values["mandel"], on=True)
 
-# plan 80: the owner's rig cases (Size 810, Steps 2000, at the seahorse):
-# name, the values over the defaults, and plan 63's ms on the rig
+# the rig cases (Size 810, Steps 2000, at the seahorse):
+# name, the values over the defaults, and the ms recorded on the rig
 _SEA = {"centre_x": -0.743643887037151, "centre_y": 0.131825904205330,
         "size": 1, "iters": 2000.0}
 OWNER = [
@@ -83,7 +83,7 @@ OWNER = [
 
 
 def owner(ctx, chain, st, out, src, frames: int, rows: list) -> None:
-    """The owner's cases, one line each (`OWNER`)."""
+    """The rig cases, one line each (`OWNER`)."""
     head = f"{'case':15} {'tier':>8} {'skip':>5} {'ms':>8} {'plan 63':>8}"
     print(head)
     print("-" * len(head))
@@ -101,7 +101,7 @@ def owner(ctx, chain, st, out, src, frames: int, rows: list) -> None:
 
 def bench(ctx, chain, st, out, src, view: dict, frames: int) -> float | None:
     """The median GPU ms of the pass over `frames` frames at `view` (over the
-    defaults: nothing carries from the line before — plan 80: the skip's
+    defaults: nothing carries from the line before; the skip's
     gate starts again too, and settles over a few untimed passes, so a line
     is the steady state at its view)."""
     timer = PassTimer(ctx)

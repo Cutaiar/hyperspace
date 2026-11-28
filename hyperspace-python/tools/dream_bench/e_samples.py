@@ -15,7 +15,7 @@ docs/plans/assets/06-lookback/:
                                                + darkened D at 40 %, the
                                                intended effect)
 
-Two look-side options that the spike found necessary, both free at run
+Two look-side options, both free at run
 time (see common.TemporalDream): pixel jitter (roll by a random offset per
 step, the classic Deep Dream trick that turns pixel noise into coherent
 texture) and the content-history mask (the gradient step is scaled by a

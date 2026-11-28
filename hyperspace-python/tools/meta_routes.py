@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List the rows a library holds that the hard rule will drop (register row 743).
+"""List the rows a library holds that the hard rule will drop.
 
     uv run python tools/meta_routes.py <library path>
 
@@ -11,18 +11,18 @@ and the next save of that loadable patch writes the file without it. This says, 
 any of that happens, which files hold one, and so which params to think about
 moving into the loadable patch.
 
-The documents read, every folder down as the library lists them (plan 48; not
+The documents read, every folder down as the library lists them (not
 ``trash/``, not a dot-folder):
 
 - the loadable patches, ``<library>/presets/**/*.json``: their ``routes`` and ``desk``
   rows and their macros' base and depth subscribers. Each is **dropped at load**;
 - the patches, ``<library>/patches/**/*.json``: the same keys. A patch naming
-  one is **refused whole** when it is read (`patches.check`, register row 744),
+  one is **refused whole** when it is read (`patches.check`),
   so it says so: edit the file, or take the row out and save the patch again.
 
 A file that does not parse, or holds a row or subscriber this build cannot read,
 is named and passed over. A row's `scale` naming a
-meta param is not listed: it reads the param and never moves it (row 18 (a)).
+meta param is not listed: it reads the param and never moves it.
 """
 
 from __future__ import annotations

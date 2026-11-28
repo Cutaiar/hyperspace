@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Split the fast tier across CI's runners, and keep the timings that split it (row 870).
+"""Split the fast tier across CI's runners, and keep the timings that split it.
 
     python3 tools/ci_shard.py files <index> <count>     one shard's test files, a line each
     uv run python tools/ci_shard.py prewarm <index> <count>

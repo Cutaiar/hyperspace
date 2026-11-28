@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Screenshots of the control window, one per page of the panel (WP5a).
+"""Screenshots of the control window, one per page of the panel.
 
 Runs the real app in-process for a few frames per page, cycling
 ``ui.page``, and reads the control window's framebuffer back after each
@@ -10,13 +10,13 @@ would otherwise swallow it into the hot-reload toast).
   HYPERSPACE_HOME=$(mktemp -d) uv run python tools/control_shots.py [--mod | --bands]
 
 --mod holds a lane on a few params so the ghost markers show.
---bands (WP5b) feeds the analyser a synthetic signal — a kick, a
+--bands feeds the analyser a synthetic signal — a kick, a
 sweeping tone, hat bursts — with the audio engine switched on, so the
 spectrogram fills and the legacy routes run live; adds a lane → band
 route so the editor's ghost and the matrix's live bars show; and shoots
 the analyzer page (as analyzer-editor.png) and the routing page after
 the history ring has filled.
---hands (plan 08) moves two synthetic hands — no SDK — through a
+--hands moves two synthetic hands — no SDK — through a
 HandsIO on the app's own setup and shoots the HANDS page into
 docs/plans/assets/08-hands/.
 """

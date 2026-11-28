@@ -8,17 +8,17 @@ read as desktop startup reads it (``config.load()``, `app.main`). The set goes i
 own folder there, ``<library>/loadable/<SET>/`` (`library.loadable_dir`), never loose
 into ``loadable/``, and lists as ``<SET>/<name>``.
 
-It refuses, writing nothing, when no ``[library] path`` is set (no library,
-2026-11-23), when the folder it names is not there (a missing shared folder is
-never created, D5: a mistyped name would fill a folder the app never reads), and
+It refuses, writing nothing, when no ``[library] path`` is set (no library),
+when the folder it names is not there (a missing shared folder is never created: a
+mistyped name would fill a folder the app never reads), and
 when it is the machine home (never a library).
 
-It never overwrites (as ``tools/move_library.py``, D8): a file the library already
+It never overwrites (as ``tools/move_library.py``): a file the library already
 has is left alone — identical is ``have``, different is ``KEPT THEIRS``: the
 library's own, perhaps edited and saved since the last copy, is kept and this
 repo's is not copied. A patch lands whole or not at all (a temp file, then a
 link that refuses a taken name), so a failed copy leaves nothing half-written
-for the next run to keep. Quit Hyperspace first or not: the app follows new files.
+for a rerun to keep. Quit Hyperspace first or not: the app follows new files.
 """
 from __future__ import annotations
 

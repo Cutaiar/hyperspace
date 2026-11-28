@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan 28 — the sticks as dials, played by a scripted pad and recorded.
+"""The sticks as dials, played by a scripted pad and recorded.
 
 SYNTHETIC PAD, REAL APP: the whole app runs in-process (`app.main`, as
 tools/control_shots.py does) with the DIAL loadable patch loaded, and the gamepad
@@ -31,7 +31,7 @@ Writes, under --out (default docs/plans/assets/28-gamepad-dial/):
                      ffmpeg is on the path (--frames DIR keeps the PNGs)
 
 What it shows: the dial's numbers and what they do to a frame. What it
-cannot show: how a real stick feels in the hand (plan 28's "to try").
+cannot show: how a real stick feels in the hand.
 """
 
 from __future__ import annotations
@@ -437,7 +437,7 @@ def main() -> None:
     ui.Panel._dials = dials
     app.time = SimClock()
     render.time = SimClock()
-    # the pad device (plan 27) opens its Pad, then hands the scripted one in
+    # the pad device opens its Pad, then hands the scripted one in
     # its place, with the modes its entry gave it
     def _open(self):
         _pad_open(self)
