@@ -49,7 +49,7 @@ def main() -> None:
         io = HandsIO(HandSettings.from_config(hc), hc, cal_path=cal)
     except ImportError as e:
         raise SystemExit(f"{e} — the Ultraleap bindings aren't installed; "
-                         "see Install in docs/plans/08-hands.md") from e
+                         "see The Ultraleap hands in docs/SETUP.md") from e
     if args.solo:
         io.solo = io.axis(args.solo)
     if args.calibrate:

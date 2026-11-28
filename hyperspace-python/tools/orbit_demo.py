@@ -111,7 +111,7 @@ def others(st, own: str, before: dict[str, float]) -> str:
 
 def sweeps(frames: int) -> str:
     out = [(f"Hyperspace — {NAME}: each hand axis against its camera param "
-            "(tools/orbit_demo.py; plan 18 WP4)"),
+            "(tools/orbit_demo.py)"),
            ("SYNTHETIC HANDS through the real HandsIO chain (default feel, default ranges, "
             "no box): nothing here was seen by a tracker."),
            ("Each line is a fresh load of the preset with one hand held at that reading for "

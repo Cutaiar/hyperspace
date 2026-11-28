@@ -87,7 +87,7 @@ def undo_key(r) -> None:
 def main() -> None:
     r = demo.boot()
     lib, proj, table = r.lib, r.lib.install, r.router.table
-    say("Hyperspace — home, headless (tools/home_demo.py; plan 15 WP2, decision 27)")
+    say("Hyperspace — home, headless (tools/home_demo.py)")
     say(f"home folder: {demo.HOME}  (a temp folder made by this script)")
     frames(r, 5)
     (row,) = table.route("note", 0, OVERDUB)

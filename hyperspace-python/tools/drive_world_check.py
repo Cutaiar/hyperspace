@@ -50,7 +50,7 @@ VARIANTS = [
     ("1 one shape", "659: the shape, hands in the scene, one effect", {}),
     ("2 field", "659 again: seven copies, Fit off (the offset's path)",
      {"view.instances": 7, "view.inst_layout": 1, "camera.zoom": 0.55}),
-    ("3 fit", "659 again: nine copies, Fit on (no offset there, row 851)",
+    ("3 fit", "659 again: nine copies, Fit on (no offset there)",
      {"view.instances": 9, "view.inst_layout": 0, "view.inst_fit": True}),
 ]
 

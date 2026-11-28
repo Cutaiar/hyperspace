@@ -109,7 +109,7 @@ def durations(reports: list[Path], root: Path = ROOT) -> dict:
             if t >= SLOW_S:
                 tests[nid] = t
     return {"_": "CI seconds per test file and per test of 1 s or more, from the fast tier's "
-                 "JUnit reports: python3 tools/ci_shard.py durations <junit.xml>... (row 870)",
+                 "JUnit reports: python3 tools/ci_shard.py durations <junit.xml>...",
             "files": {k: round(v, 1) for k, v in sorted(files.items())},
             "tests": {k: round(v, 1) for k, v in sorted(tests.items())}}
 

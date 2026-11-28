@@ -77,7 +77,7 @@ def _record(args) -> None:
         src = LeapSource(mode)
     except ImportError as e:
         raise SystemExit(f"{e} — the Ultraleap bindings aren't installed; "
-                         "see Install in docs/plans/08-hands.md") from e
+                         "see The Ultraleap hands in docs/SETUP.md") from e
     src.connecting.join(5.0)
     if args.cues:
         t = _cued(src, [c.strip() for c in args.cues.split(",") if c.strip()], args, mode)

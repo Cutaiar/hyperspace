@@ -129,7 +129,7 @@ def main() -> None:
     m = stage(bases)                 # the measuring rig, booted first: `r`'s undo is the live one
     r = stage(bases)
     reg = r.reg
-    say("Hyperspace — a learn's default, headless (tools/learn_default_demo.py; plan 18 WP3)")
+    say("Hyperspace — a learn's default, headless (tools/learn_default_demo.py)")
     say("SYNTHETIC HANDS through the real HandsIO chain (default ranges, default feel, no box):")
     say("nothing here was seen by a tracker, and nobody has felt these depths (hand checks N4–N6).")
     say(f"home: {demo.HOME}  (a temp folder made by this script)")

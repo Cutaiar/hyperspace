@@ -1104,7 +1104,7 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
     fixtures = {k: v for k, v in old.get("fixtures", {}).items() if k not in redone}
     fixtures.update({k: v for k, v in said.items() if k in FIXTURE_LOADABLES})
     doc = {
-        "about": "plan 26 A0 golden frames: tools/golden_frames.py --record writes this; "
+        "about": "golden frames: tools/golden_frames.py --record writes this; "
                  "tests/test_golden_frames.py compares every sha256 exactly. Far fewer "
                  "pictures than goldens are distinct, by design: with hands absent the "
                  "hands switch and through change nothing, with no effect on through is "
@@ -1435,9 +1435,9 @@ def main() -> None:
     ap.add_argument("--record", action="store_true", help="write the goldens")
     ap.add_argument("--only", default="", help="comma-separated preset slugs")
     ap.add_argument("--signatures", action="store_true",
-                    help="add a new case's frame signature (plan 35; recorded ones kept)")
+                    help="add a new case's frame signature (recorded ones kept)")
     ap.add_argument("--names", action="store_true",
-                    help="rewrite the fixtures' recorded render node names only (plan 35)")
+                    help="rewrite the fixtures' recorded render node names only")
     a = ap.parse_args()
     if a.signatures:
         got = record_signatures()

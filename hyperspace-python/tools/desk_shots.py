@@ -192,7 +192,7 @@ def transcript(h: Hidden) -> None:
         say(f"    footer (as drawn)    {foot()}")
         say(f"    page {PAGE_KEYS[panel.page]:<8} dimmed  {ui_desk.picking(panel) is not None}")
 
-    say("desk-map — click a control, then a param (plan 17 WP4)")
+    say("desk-map — click a control, then a param")
     say("A hidden 960 × 900 window, the real Panel, a temp home, TRIP loaded, a MidiIO over fake")
     say("ports (nothing plugged in). Every click below is an imgui mouse event fed at the rect the")
     say("control or the widget was drawn at. No real mouse, no APC40. \"footer (as drawn)\" is the")

@@ -84,7 +84,7 @@ OWNER = [
 
 def owner(ctx, chain, st, out, src, frames: int, rows: list) -> None:
     """The rig cases, one line each (`OWNER`)."""
-    head = f"{'case':15} {'tier':>8} {'skip':>5} {'ms':>8} {'plan 63':>8}"
+    head = f"{'case':15} {'tier':>8} {'skip':>5} {'ms':>8} {'rig ms':>8}"
     print(head)
     print("-" * len(head))
     for name, view, was in OWNER:
@@ -93,7 +93,7 @@ def owner(ctx, chain, st, out, src, frames: int, rows: list) -> None:
         tier = "perturb" if stats.get("perturb") else "direct"
         skip = "on" if stats.get("skip") else "off"
         rows.append({"case": name, "tier": tier, "skip": skip == "on", "ms": ms,
-                     "plan63_rig_ms": was, "render": list(stats.get("size", ()))})
+                     "rig_ms": was, "render": list(stats.get("size", ()))})
         ms_s = "n/a" if ms is None else f"{ms:8.2f}"
         was_s = "" if was is None else f"{was:8.0f}"
         print(f"{name:15} {tier:>8} {skip:>5} {ms_s:>8} {was_s:>8}", flush=True)
@@ -148,7 +148,7 @@ def main(argv=None) -> int:
     ap.add_argument("--json", type=Path, help="also write the rows here")
     ap.add_argument("--quick", action="store_true", help="2 views, cap 256, black only")
     ap.add_argument("--owner", action="store_true",
-                    help="plan 80: the owner's rig cases at the seahorse, Size 810, Steps 2000")
+                    help="the rig cases at the seahorse, Size 810, Steps 2000")
     a = ap.parse_args(argv)
     w, h = (int(x) for x in a.out.lower().split("x"))
     caps = [int(x) for x in a.caps.split(",") if x]

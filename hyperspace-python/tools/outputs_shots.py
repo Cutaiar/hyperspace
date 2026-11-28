@@ -137,7 +137,7 @@ def compose(ctx) -> Path:
     height = pad + 34 + len(rows) * (head + max(FH, side) + foot + pad)
     sheet = Image.new("RGB", (width, height), BG)
     d = ImageDraw.Draw(sheet)
-    d.text((pad, pad), "Plan 21 WP1 — one frame, two outputs, three switch states "
+    d.text((pad, pad), "One frame, two outputs, three switch states "
            "(offscreen, synthetic hands, warp on)", fill=INK, font=title)
     y = pad + 34
     for label, sw in rows:
@@ -185,7 +185,7 @@ def eight(ctx) -> Path:
     frames(ctx, r, views)
     sheet = Image.new("RGB", (pad + 4 * (tw + pad), 34 + 2 * (head + th + pad) + 28), BG)
     d = ImageDraw.Draw(sheet)
-    d.text((pad, 8), "Plan 21 WP2 — one output's eight switch states, from the merged "
+    d.text((pad, 8), "One output's eight switch states, from the merged "
            "draw_outputs (offscreen, synthetic hands, warp + kaleido)", fill=INK, font=title)
     for k, v in enumerate(views):
         x, y = pad + (k % 4) * (tw + pad), 34 + (k // 4) * (head + th + pad)
@@ -210,7 +210,7 @@ def through(ctx) -> Path:
     frames(ctx, r, [glass, proj])
     sheet = Image.new("RGB", (pad + 2 * (FW + pad), 34 + head + FH + 40), BG)
     d = ImageDraw.Draw(sheet)
-    d.text((pad, 8), "Plan 21 WP2 — glass: hands over the effects · projector: hands through "
+    d.text((pad, 8), "Glass: hands over the effects · projector: hands through "
            "them (offscreen, synthetic hands, warp + kaleido, guide beside)", fill=INK,
            font=title)
     for k, (v, lab) in enumerate(((glass, "output 1 'glass' — hands over the effects"),
@@ -254,7 +254,7 @@ def style(ctx, name: str = "CAGE") -> Path:
     frames(ctx, r, [glass, proj])
     sheet = Image.new("RGB", (pad + 2 * (FW + pad), 34 + head + FH + 40), BG)
     d = ImageDraw.Draw(sheet)
-    d.text((pad, 8), f"Plan 21 WP6 — ghost.style {name}, guide beside each hand, tethers on "
+    d.text((pad, 8), f"ghost.style {name}, guide beside each hand, tethers on "
            "(offscreen, synthetic hands, warp + kaleido)", fill=INK, font=title)
     for k, (v, lab) in enumerate(((glass, f"{name} over the effects"),
                                   (proj, f"{name} through the effects — guide and labels unbent"))):
@@ -294,7 +294,7 @@ def timing(ctx, n: int = 120) -> Path:
                               text=True, check=False).stdout.strip()
     except OSError:
         chip = platform.processor()
-    lines = [f"Plan 21 WP2 — compose timing, {size[0]}×{size[1]}, {chip}, GL renderer "
+    lines = [f"Compose timing, {size[0]}×{size[1]}, {chip}, GL renderer "
              + ctx.info["GL_RENDERER"],
              ("standalone context, offscreen targets (first 4x MSAA, others single-sampled), "
               "warp + kaleido on, two synthetic hands; ms per frame, each frame ended by "

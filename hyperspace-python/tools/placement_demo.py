@@ -68,7 +68,7 @@ def launch(title: str, scr, *, monitor=-1, control_monitor=-1, seen=None) -> Non
 
 def main() -> None:
     both = [LAPTOP, PROJECTOR]
-    say("Plan 16 WP4 — where the windows open at launch (tools/placement_demo.py)")
+    say("Where the windows open at launch (tools/placement_demo.py)")
     say("Fake screens; hyperspace.placement only. Rects are x, y, w, h in screen coordinates.")
     say()
 

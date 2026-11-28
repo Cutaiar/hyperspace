@@ -134,7 +134,7 @@ def unbind_demo() -> None:
     # a param only a fader maps (invariant, the meta controller's) with no route on it
     pid, fader = "view.speed", next(i for i in ("master.trim", "master.dyn", "master.gain")
                                     if not t.routes_to(i))
-    say("Plan 17 WP1 — one Unbind (headless: no window, no device, no hand; the menu is read "
+    say("One Unbind (headless: no window, no device, no hand; the menu is read "
         "as text)")
     say(f"home: <home>  ·  preset: {r.lib.current(LOADABLE)}  ·  "
         f"{len(t.routes())} routes, {len(t.desk())} desk rows")
@@ -255,7 +255,7 @@ def learn_demo() -> None:
 
     def at(p):
         return round(p.norm * 127)
-    say("Plan 17 WP2 — a learn that cannot pick the wrong source (headless: no window, no "
+    say("A learn that cannot pick the wrong source (headless: no window, no "
         "device, no camera;")
     say("the desk's messages are put on fake ports, the hands are synthetic, the menu and the "
         "footer are read as text)")
@@ -307,7 +307,7 @@ def learn_demo() -> None:
     say()
     say("5. With no MIDI adapter (panel.midi = None): Learn desk is still offered; until the "
         "on-screen desk")
-    say("   takes clicks (plan 17 WP4) nothing can complete it, and the line says so")
+    say("   takes clicks nothing can complete it, and the line says so")
     panel.midi = None
     footer(r, panel)
     r.t += 5.0

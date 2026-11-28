@@ -97,7 +97,7 @@ def box_set(r) -> dict:
 def main() -> None:
     r = demo.boot()
     path = cal_path()
-    say("Hyperspace — the interaction box, headless (tools/box_demo.py; plan 18 WP1)")
+    say("Hyperspace — the interaction box, headless (tools/box_demo.py)")
     say("SYNTHETIC HANDS (tests/fake_hands.py), not the camera: nothing here was seen "
         "by a tracker.")
     say(f"home: {demo.HOME}  (a temp folder made by this script)")

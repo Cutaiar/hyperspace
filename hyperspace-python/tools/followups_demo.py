@@ -173,7 +173,7 @@ def screens_note(home: Path) -> None:
 
 def main() -> None:
     r = demo.boot()
-    say("Hyperspace — plan 16 WP7's follow-ups, headless (tools/followups_demo.py)")
+    say("Hyperspace — follow-ups, headless (tools/followups_demo.py)")
     say(f"home folder: {demo.HOME}  (a temp folder made by this script)")
     frames(r, 5)
     say(f"show: {r.lib.install.name}   preset: {r.lib.current(LOADABLE)}")

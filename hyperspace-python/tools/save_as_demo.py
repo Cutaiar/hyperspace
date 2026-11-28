@@ -119,8 +119,7 @@ def main() -> None:
     r.ports.send = lambda m: (r.log.append((r.t, m)), send(m))[1]
     show = demo.HOME / "installs" / "party.json"
 
-    say("Hyperspace — save-as on the desk, headless (tools/save_as_demo.py; plan 15 WP4, "
-        "decision 29)")
+    say("Hyperspace — save-as on the desk, headless (tools/save_as_demo.py)")
     say(f"home folder: {demo.HOME}  (a temp folder made by this script)")
     frames(r, 5)
     rows = [b for b in table.midi() if b.op == "hold"]
@@ -249,7 +248,7 @@ def main() -> None:
     say(f"    bank: {bank(r)}")
 
     say()
-    say("8. A Learn armed on a param, then a button of the bar held: refused (invariant, D6)")
+    say("8. A Learn armed on a param, then a button of the bar held: refused (invariant)")
     count = len(list((demo.HOME / "loadable").glob("*.json")))
     r.learn.arm("view.depth4")
     down(r, STOP, 4)

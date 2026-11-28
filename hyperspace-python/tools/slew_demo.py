@@ -354,7 +354,7 @@ def main(argv: list[str]) -> None:
     def arg(flag):
         return Path(argv[argv.index(flag) + 1]) if flag in argv else None
 
-    say("Knob smoothing (plan 18 WP2): desk.slew, off and at "
+    say("Knob smoothing: desk.slew, off and at "
         f"{ON * 1000:.0f} ms (the app's default). 60 frames a second.")
     say()
     say("1. A slow turn: one CC step every 50 ms for 2 s (CC 64 → 104), the base per frame")

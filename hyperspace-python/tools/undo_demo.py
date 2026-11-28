@@ -219,7 +219,7 @@ def main() -> None:
     r = boot()
     reg, lib, u = r.reg, r.lib, r.undo
     watched = [p for p in reg if undo.watched(p)]
-    say("Hyperspace — undo and the trash, headless (tools/undo_demo.py; plan 15 WP1)")
+    say("Hyperspace — undo and the trash, headless (tools/undo_demo.py)")
     say(f"home: {HOME}  (a temp folder made by this script)")
     say(f"show: {lib.install.name}   preset: {lib.current(LOADABLE)}   "
         f"registry: {len(reg)} params, {len(watched)} watched   "
