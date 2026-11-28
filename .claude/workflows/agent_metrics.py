@@ -5,7 +5,6 @@ context at start and at peak, and which tools filled it.
 
 The transcript dir is printed when the workflow launches.
 """
-"""
 import glob
 import json
 import sys
