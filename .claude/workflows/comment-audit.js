@@ -331,7 +331,9 @@ if (STRINGS && GATE && gate && gate.pushed) {
 From hyperspace-python/: return \`git rev-parse HEAD\` as strbase, and the JSON that \`python3 tools/prose_audit.py string-markers\` prints, unchanged, as files.`,
     { phase: 'Strings', label: 'strings list', schema: SLIST, model: SYNTH, effort: 'low' })
   const STRBASE = listed && listed.strbase
-  const sfiles = (listed && listed.files) || []
+  // a partial run (args.only) changes strings only in the files whose prose it audited
+  const inRun = new Set(SHARDS.flatMap(sh => sh.files.map(f => f.path)))
+  const sfiles = ((listed && listed.files) || []).filter(f => !A.only || inRun.has(f.path))
   // shards of up to 6 files or about 30 markers; a file is never split
   const sshards = []
   for (const f of sfiles) {
