@@ -565,6 +565,12 @@ no edge is hidden, and a window shows only its own wires.
   else nothing. `Output.settle`, `Shown.fallback` and the bent stand-down
   are deleted; a window's hands mute removes the hands layer from that
   window's chain (`_Build._mute_hands`).
+- **The cloud's cable.** A cloud device is the meta controller's, so its wire
+  into the scene (`cloud → scene.geometry`, `cloud.2 → scene.geometry`, one per
+  listed cloud device, `graph.cloud_wire`) is drawn on GRAPH like a bus cable
+  and stands until the show cuts it; `BusCuts` holds the cut and
+  `graph.is_fixture_wire` names both kinds, so GRAPH cuts and joins them the
+  same way. Any other fixture-owned wire is one more set of defaults.
 - **Hidden edges, now ports.** `pattern → shape.faces` (unwired: plain
   faces), `scene.cover → lookback.cover`, `hands → hands.layer` and
   `hands.guide`, `cloud.N → scene.geometry`, `scene.depth →

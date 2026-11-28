@@ -356,6 +356,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | **A new preset is the factory's values with nothing wired**, black until something is wired; the desk is the factory layer. | `loadable.LoadedPatch.new` | rows 386, 387 (owner) |
 | **GRAPH deletes everything.** The refusals left are type errors, loops, the camera and a cloud. The canvas is the section, grouped by primitive. OUTPUT and LOOKBACK are views that edit wires. | `graphview.render_unwire`, `render_drop`, `AREAS` | rows 388–390 |
 | **Point clouds stay the rig's**, drawn in every scene. | `graph.build_graph` | row 391 |
+| **A section with a run shortens no wire into a placement.** In a section that carries a run (a wire from `frame` or into `fx.image`), a wire is a wire: an effect with nothing wired out of it is an unreached branch and is never run, so GRAPH and the FX page, which read the wires, never say it reaches nothing while it draws on its source's picture. The section's own placement entries still place. A section with no run keeps the shortening (`split_wires`), and `graphmigrate.migrate` writes each shortened wire as the placement entry it stood for, so an old loadable patch draws as it did. | `graph.GraphSpec.wiring`, `graph.split_wires`, `graphmigrate.migrate` | owner |
 
 ## The WYSIWYG graph (plan 36)
 
