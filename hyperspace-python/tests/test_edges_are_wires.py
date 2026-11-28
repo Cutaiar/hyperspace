@@ -291,7 +291,7 @@ def test_the_canvas_draws_the_clouds_wire_and_a_cut_one_is_gone():
 
 
 def test_the_clouds_wire_is_cut_and_joined_on_graph(tmp_path):
-    from test_plan36_bus import _party
+    from test_outputs_bus import _party
 
     app, e, pushed = _party(tmp_path)
     spec = app.loaded_patch.graph.spec

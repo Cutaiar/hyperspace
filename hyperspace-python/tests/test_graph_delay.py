@@ -394,7 +394,7 @@ def test_refit_cover_and_contain(ctx):
 
 # the fixtures with an own size: everything else under tests/fixtures/presets/
 # the golden tool draws has none
-PLAN_34 = {"delay-faces", "delay-trails", "echo-faces", "resize-faces", "resize-crop"}
+OWN_SIZE_FIXTURES = {"delay-faces", "delay-trails", "echo-faces", "resize-faces", "resize-crop"}
 
 
 def test_no_earlier_fixture_has_an_own_size(ctx):
@@ -411,7 +411,7 @@ def test_no_earlier_fixture_has_an_own_size(ctx):
     graphs = [("default", G.build_graph(vs, wired_wiring(G.Wiring(run=()))), Renderer(ctx))]
     tool = _tool()
     for slug in tool.FIXTURE_LOADABLES:
-        if slug in PLAN_34:
+        if slug in OWN_SIZE_FIXTURES:
             continue
         rig = tool.Rig(slug, "absent", ctx)
         try:

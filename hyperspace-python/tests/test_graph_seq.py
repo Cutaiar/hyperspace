@@ -1,6 +1,6 @@
 """The GRAPH page for the envelopes and the sequencer, headless.
 
-The rig is test_plan31_wiring's: a real Registry and Router with the
+The rig is test_modulator_wiring's: a real Registry and Router with the
 clock, four LFOs, the envelope bank and the sequencer, as app.main wires
 them. The view is `graphview.build`'s; the page's add / delete are
 `ui_graph`'s plain functions over a bare panel, with a real `undo.Undo`
@@ -9,7 +9,7 @@ carrying the banks' membership."""
 from types import SimpleNamespace
 
 import pytest
-from test_plan31_wiring import frame, rig
+from test_modulator_wiring import frame, rig
 
 from hyperspace import graphview, ui_graph, undo
 from hyperspace.routing import Binding

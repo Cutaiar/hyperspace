@@ -211,7 +211,7 @@ def test_a_picture_put_back_saves_the_untouched_frame(tmp_path):
     """A corpus loadable patch, a picture picked for output 2 and put back — the
     frame is the migrated one again, so the save is the untouched loadable patch's
     (`/6` either way, and the same graph)."""
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     app = make_app(seed(tmp_path))
     app.lib.load("loadable", "TRIP")

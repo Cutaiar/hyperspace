@@ -490,7 +490,7 @@ def test_a_setting_a_sink_row_drives_is_the_routes_not_the_sliders(rig, monkeypa
 def test_a_kinects_cloud_is_titled_kinect_point_cloud_and_another_clouds_is_not():
     """The Kinect's cloud is made of the sensor's depth by the sensor's calibration: its
     own kind, not a general point cloud, and its node says so. A `cloud` device's stays."""
-    from test_plan36_edges import Bindings, Registry, build, migrated
+    from test_edges_are_wires import Bindings, Registry, build, migrated
 
     from hyperspace import graph as G
     spec = G.read_graph(migrated())

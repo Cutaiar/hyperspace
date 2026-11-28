@@ -43,8 +43,8 @@ HERE = Path(__file__).resolve().parents[1]
 FILES = ("tests/corpus/loadable/party-wake.json",
          "tests/fixtures/desk-templates/presets/templated.json",
          "tests/fixtures/factory-sources/presets/party-wake.json",
-         "tests/fixtures/plan33-v4-saves/factory--party-wake.json",
-         "tests/fixtures/plan33-v4-saves/presets--acid-scene.json",
+         "tests/fixtures/v4-saves/factory--party-wake.json",
+         "tests/fixtures/v4-saves/presets--acid-scene.json",
          "tests/fixtures/presets/acid-scene.json")
 FRAMES = (6, 24, 48)           # the frames kept: the dream arriving, then held
 SIZE = (480, 300)

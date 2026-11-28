@@ -399,11 +399,11 @@ def app(tmp_path):
     return make_app(tmp_path)
 
 
-def make_app(tmp_path, plan31: bool = True):
+def make_app(tmp_path, env_seq: bool = True):
     """The app's registry, library, router and loadable patches over `tmp_path`,
     seeded with the corpus first (conftest.seed: the loadable patches the build once
     shipped, the dream module presets and the party show, so the home is
-    the one these tests were written on); `plan31` False is a build with no
+    the one these tests were written on); `env_seq` False is a build with no
     envelopes and no sequencer. (It lives in `hyperspace.headless.make_app`, so
     tools/migrate_library.py saves through the same app without importing a
     test.)"""
@@ -412,7 +412,7 @@ def make_app(tmp_path, plan31: bool = True):
     from hyperspace import headless
 
     seed(tmp_path)
-    return headless.make_app(tmp_path, plan31)
+    return headless.make_app(tmp_path, env_seq)
 
 
 def test_a_loadable_carries_the_pattern_and_the_envelopes(app):

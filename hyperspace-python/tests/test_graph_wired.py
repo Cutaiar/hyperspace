@@ -329,7 +329,7 @@ def test_a_full_wired_frame_saves_as_it_stands(tmp_path):
     """A wired frame's words — every frame kind, an effect's slot, a ground — load
     and save `/6` as the frame stands (every save is `/6`, so no
     frame is put back into older words), and reload the same."""
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     section = wired(*FULL_WIRES, nodes=FULL_NODES)
     want = G.read_graph(section).to_json()

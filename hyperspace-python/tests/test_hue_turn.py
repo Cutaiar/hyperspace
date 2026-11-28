@@ -219,7 +219,7 @@ def test_an_old_file_loads_retired_and_resaves_as_itself(tmp_path):
     """End to end (REVIEW.md: a format change opens an old file whole): a `/2`
     party-trip from an older format, through the library's own load and save."""
     from hyperspace import headless
-    old = Path(__file__).parent / "fixtures" / "plan33-v4-saves" / "factory--party-trip.json"
+    old = Path(__file__).parent / "fixtures" / "v4-saves" / "factory--party-trip.json"
     assert "huecycle" in old.read_text()
     raw, notes, _ = headless.resave(old, tmp_path / "a")
     assert any("Hue turn now" in n for n in notes)

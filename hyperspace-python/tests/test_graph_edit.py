@@ -1362,7 +1362,7 @@ def banks():
     """The wiring test module's rig (four LFOs, five envelopes, the router
     stepping them) with a real undo carrying the banks' membership, and a
     bare panel over it, as test_graph_seq's page."""
-    from test_plan31_wiring import rig as wiring_rig
+    from test_modulator_wiring import rig as wiring_rig
 
     from hyperspace import undo
     r = wiring_rig()
@@ -1605,7 +1605,7 @@ def _glimmer_mix(r, base: float = 0.4):
 
 
 def test_an_envelope_route_is_a_push_about_the_base(banks, monkeypatch):
-    from test_plan31_wiring import frame, one_shot
+    from test_modulator_wiring import frame, one_shot
 
     r, panel, table = banks.r, banks.panel, banks.r.router.table
     p, box = _glimmer_mix(r)

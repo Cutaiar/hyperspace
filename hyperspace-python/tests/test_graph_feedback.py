@@ -195,7 +195,7 @@ def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
     """The feedback words (a delay, a resize, an echo, the dream) on a
     wire and as a bare entry read with no note, and a loadable patch holding them
     saves `/6` with the node in its frame."""
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     sec = section(RUN, *pairs, nodes=[node])
     spec = G.read_graph(sec)

@@ -1,7 +1,7 @@
 """The app's loadable patch half with no window, no audio and no GL: the registry,
 the library, the router (with the LFO, envelope and sequencer banks) and
 `loadable.LoadedPatch`, as app.main wires them — what the tests load and save
-loadable patches through (tests/test_plan31_wiring.make_app) and what
+loadable patches through (tests/test_modulator_wiring.make_app) and what
 tools/migrate_library.py rewrites a library with.
 
 `resave` is the one road a file takes there: copied into a scratch library
@@ -38,10 +38,10 @@ from .sequencer import Sequencer
 from .view import ViewState
 
 
-def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
+def make_app(home: Path, env_seq: bool = True, *, machine: Path | None = None):
     """The app's registry, library, router and loadable patches over the library at
     `home` (`machine`: the home for this machine's files — bindings.json,
-    last_show — default `home`); `plan31` False builds
+    last_show — default `home`); `env_seq` False builds
     without envelopes and sequencer."""
     home = Path(home)
     machine = home if machine is None else Path(machine)
@@ -57,7 +57,7 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
     grip.register(reg, grip.GripState())     # a patch's own, as `Deck.build` registers it
-    if plan31:
+    if env_seq:
         envelope.register(reg, envs, clock)
         sequencer.register(reg, seq, clock)
     table = routing.Bindings.load(routing.bindings_path(machine), legacy_midi=None)
@@ -65,7 +65,7 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
     lib.attach(reg)
     router = routing.Router(reg, table)
     router.use_lfos(lfos, clock)
-    if plan31:
+    if env_seq:
         router.use_bank(envs, clock)
         router.use_sequencer(seq, envs)
     loaded_patch = loadable.LoadedPatch(lib, reg, router)

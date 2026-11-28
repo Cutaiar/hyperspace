@@ -4299,8 +4299,8 @@ renamed or missing file, or a `/6` that changes on an untouched save.
 
 Plan 36's tests: the fast tier is 3,941 passed (2 skipped) and the goldens
 128 passed over 757 pictures, nine of them re-recorded (hand check 369 and
-register rows 405, 406, 408, 414); `tests/test_plan36_bus.py`,
-`tests/test_plan36_lookback_dream.py`, `tests/test_graph_starters.py` and
+register rows 405, 406, 408, 414); `tests/test_outputs_bus.py`,
+`tests/test_lookback_dream_nodes.py`, `tests/test_graph_starters.py` and
 `tests/test_graph_patch_only.py` are its own. A new preset is no longer
 black: L158 above (check 342) describes the plan 35 build, and L170 is its
 replacement. The checks are 354-369 (group AG); a `/7` file is refused by an
@@ -4641,7 +4641,7 @@ passed over 789 pictures, 32 of them new and 8 re-recorded (the two
 backdrop fixtures, for the honest cut-through: L188). Its own files are
 `tests/test_fx_edges.py`, `tests/test_graph_masks.py`,
 `tests/test_graph_cut.py`, `tests/test_segment.py`,
-`tests/test_graph_segment.py` and `tests/test_plan39_graph.py`. Two tests
+`tests/test_graph_segment.py` and `tests/test_graph_matte_cut.py`. Two tests
 run the real models once each on a made-up frame; they are in the `live`
 tier, so `uv run pytest -q` leaves them out: run them with
 `uv run pytest -q --all tests/test_segment.py` (Vision only on a Mac). The

@@ -1,7 +1,7 @@
-"""Regression tests for the envelope and sequencer voices. The rigs are test_plan31_wiring's."""
+"""Regression tests for the envelope and sequencer voices. The rigs are test_modulator_wiring's."""
 
 import pytest
-from test_plan31_wiring import frame, make_app, rig
+from test_modulator_wiring import frame, make_app, rig
 
 from hyperspace import envelope, graphview, loadable, modbank, sequencer
 from hyperspace.envelope import Envelope
@@ -231,12 +231,12 @@ def test_a_two_second_stall_at_length_1_still_fires_one_step():
 # ---- 7: desk rows and layout keys on envelope and sequencer ids — an older build keeps them ----
 
 def test_desk_rows_and_layout_keys_on_envelope_and_seq_ids_survive_a_build_without_them(tmp_path):
-    """A build without envelope and sequencer params (`make_app(plan31=False)`)
+    """A build without envelope and sequencer params (`make_app(env_seq=False)`)
     loads a desk row on ``env.2.fire`` and GRAPH positions for env/seq
     nodes and writes them back verbatim — `set_desk` checks no target
     against the registry and `read_layout` keeps any name. The save is `/6`
     whatever it holds."""
-    old = make_app(tmp_path, plan31=False)
+    old = make_app(tmp_path, env_seq=False)
     doc = old.loaded_patch.document("x")
     row = {**doc["desk"][0], "target": "env.2.fire", "op": "momentary"}
     layout = {"env.6": [10, 20], "seq": [1, 2], "lfo.7": [3, 4]}

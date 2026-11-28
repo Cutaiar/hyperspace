@@ -1599,7 +1599,7 @@ def test_an_old_loadable_loads_its_retired_ids_without_a_note(tmp_path):
     what the migration makes of them: the frame run by
     order, a faces-aimed effect onto `shape.faces`, the channels straight
     into `pattern.media` and `backdrop.image`."""
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     from hyperspace import graph as G
     app = make_app(tmp_path)
@@ -1684,7 +1684,7 @@ def test_an_old_loadable_saves_no_retired_id(tmp_path):
     `view.media`) are read as wires on load and never written back — the
     save is `/6`, the run and the channel the wired frame's; a run
     reordered on GRAPH saves as the wires it now is."""
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     from hyperspace import graph as G
     from hyperspace import graphmigrate as M

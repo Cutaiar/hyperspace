@@ -1346,7 +1346,7 @@ twice. **`Clock.trigger` bumps `clock.epoch`** and a new epoch fires step
 0 that frame at the trigger time, so the global trigger puts the grid on
 the one with the LFOs; `seq.trigger` restarts the grid alone. `seq.run`
 gates firing only and is never saved; the pattern is the loadable patch's
-(`tests/test_sequencer.py`, `tests/test_plan31_wiring.py`).
+(`tests/test_sequencer.py`, `tests/test_modulator_wiring.py`).
 
 ### 3.10 What the model does not promise
 

@@ -44,7 +44,7 @@ on:
       - hyperspace-python/tests/test_nodemode.py
       - hyperspace-python/tests/test_outputs.py
       - hyperspace-python/tests/test_patterns.py
-      - hyperspace-python/tests/test_plan36_seven.py
+      - hyperspace-python/tests/test_schema_seven.py
       - hyperspace-python/tests/test_players.py
       - hyperspace-python/tests/test_playlist.py
       - hyperspace-python/tests/test_render.py

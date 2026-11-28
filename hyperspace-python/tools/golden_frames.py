@@ -173,7 +173,7 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 # the corpus loadable patches are `/7` files; what they were made
 # from — the `/2` (seq-demo `/3`) sources, which tools/migrate_library.py
 # migrated — is read where the proof needs the section before the wired
-# frame (`plan33_section`)
+# frame (`unwired_section`)
 FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 # the three placements' proof loadable patches — the palette after the
 # hands' layer, the palette into output 2's picture, a second acid after
@@ -245,7 +245,7 @@ MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the po
 # the first frame at T0 + DT and the hashed frame, FRAMES − 1 frames
 # later (about 117 ms at 120 BPM), is mid-envelope on its kick (the hat
 # that fired with it is over, the snare still to come: tests/
-# test_plan31_wiring.py's seq-demo test steps the same frames)
+# test_modulator_wiring.py's seq-demo test steps the same frames)
 RUNNING: tuple[str, ...] = ("seq-demo",)
 
 CAP = {"preset": "party-trip", "hands": "present", "state": "scene+hands",
@@ -728,7 +728,7 @@ def source_doc(loaded_patch, slug: str) -> dict:
     return loaded_patch.lib.read("loadable", slug)
 
 
-def plan33_section(loaded_patch, slug: str) -> tuple[dict, set[str]]:
+def unwired_section(loaded_patch, slug: str) -> tuple[dict, set[str]]:
     """Preset `slug`'s section before wiring (`migrate` with `wire`
     off, after the load declared its instances), and the effect files —
     what a WIRED variant takes its run from (of the file
@@ -779,7 +779,7 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
         late = _placements_wait(loaded_patch, slug)
         wired = late if late is not None else loaded_patch.graph.free_doc()
     else:
-        old, files = plan33_section(loaded_patch, slug)
+        old, files = unwired_section(loaded_patch, slug)
         run = tuple(read_graph(old, effects=files).wiring().run or ())
         vsection = variant_section(wiring, run)
         wired = graphmigrate.wired_section(graphmigrate.renamed(vsection),

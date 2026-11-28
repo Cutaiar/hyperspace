@@ -6,9 +6,6 @@
   "hyperspace-python/hyperspace/graph.py": {
    "provenance": 3
   },
-  "hyperspace-python/hyperspace/headless.py": {
-   "provenance": 4
-  },
   "hyperspace-python/hyperspace/routing.py": {
    "provenance": 3
   },
@@ -33,37 +30,10 @@
   "hyperspace-python/tests/test_format_lane.py": {
    "provenance": 2
   },
-  "hyperspace-python/tests/test_fx.py": {
-   "provenance": 2
-  },
-  "hyperspace-python/tests/test_graph_delay.py": {
-   "provenance": 2
-  },
-  "hyperspace-python/tests/test_graph_edit.py": {
-   "provenance": 2
-  },
   "hyperspace-python/tests/test_graph_effects.py": {
    "provenance": 1
   },
-  "hyperspace-python/tests/test_graph_feedback.py": {
-   "provenance": 1
-  },
   "hyperspace-python/tests/test_graph_free.py": {
-   "provenance": 10
-  },
-  "hyperspace-python/tests/test_graph_migrate.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_graph_seq.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_graph_switch.py": {
-   "provenance": 2
-  },
-  "hyperspace-python/tests/test_graph_wired.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_hue_turn.py": {
    "provenance": 1
   },
   "hyperspace-python/tests/test_library.py": {
@@ -72,31 +42,7 @@
   "hyperspace-python/tests/test_pad_learn.py": {
    "provenance": 10
   },
-  "hyperspace-python/tests/test_plan31_32_merge.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_plan31_review.py": {
-   "provenance": 3
-  },
-  "hyperspace-python/tests/test_plan31_wiring.py": {
-   "provenance": 3
-  },
-  "hyperspace-python/tests/test_plan36_bus.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_plan36_edges.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_plan39_graph.py": {
-   "provenance": 1
-  },
   "hyperspace-python/tests/test_shared_library.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_ui_kinect.py": {
-   "provenance": 1
-  },
-  "hyperspace-python/tests/test_ui_output.py": {
    "provenance": 1
   },
   "hyperspace-python/tests/test_ui_pad.py": {
@@ -108,17 +54,8 @@
   "hyperspace-python/tools/desk_coverage.py": {
    "provenance": 1
   },
-  "hyperspace-python/tools/dream_proof.py": {
-   "provenance": 2
-  },
   "hyperspace-python/tools/faces_sheets.py": {
    "provenance": 3
-  },
-  "hyperspace-python/tools/golden_frames.py": {
-   "provenance": 2
-  },
-  "hyperspace-python/tools/lookback_proof.py": {
-   "provenance": 6
   },
   "hyperspace-web/hyperspace.html": {
    "provenance": 6

@@ -118,7 +118,7 @@ def test_a_switch_is_a_node_kind_that_may_stand_alone():
 # ---------------------------------------------------------------- the run from wires
 
 ROOT = Path(__file__).resolve().parents[1]
-SAVES = ROOT / "tests" / "fixtures" / "plan33-v4-saves"
+SAVES = ROOT / "tests" / "fixtures" / "v4-saves"
 # the corpus loadable patches' sources (the corpus files are their `/7`)
 LIBRARY = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 SOURCES = {"loadable": ROOT / "tests" / "fixtures" / "presets",
@@ -128,7 +128,7 @@ SOURCES = {"loadable": ROOT / "tests" / "fixtures" / "presets",
            "old-layout": ROOT / "tests" / "fixtures" / "old-canvas-layout"}
 # a route on each channel choice (a /4 and a /2): they load
 # with a switch and save as /6 with it
-DRIVEN = ROOT / "tests" / "fixtures" / "plan33-driven"
+DRIVEN = ROOT / "tests" / "fixtures" / "driven-saves"
 
 
 def test_the_wiring_holds_the_run_and_leaves_its_wires_out():
@@ -168,7 +168,7 @@ def old_sources() -> list[tuple[str, Path]]:
 
 # the bytes older builds saved for six `/5` sources —
 # old files, read like any other
-V5_SAVES = ROOT / "tests" / "fixtures" / "plan35-v5-saves"
+V5_SAVES = ROOT / "tests" / "fixtures" / "v5-saves"
 
 
 def test_every_schema_is_among_the_sources():
@@ -222,7 +222,7 @@ def test_the_driven_channel_sources_keep_their_switches_through_six(tmp_path):
 
 
 def _five_rig(tmp_path, name):
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     (tmp_path / "loadable").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(SOURCES["loadable"] / f"{name}.json", tmp_path / "loadable" / f"{name}.json")
@@ -283,7 +283,7 @@ def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
 def test_an_untouched_corpus_loadable_saves_as_its_load(tmp_path):
     """party-trip untouched saves `/6`, its graph exactly the wired
     frame the load landed (`free_doc`) — the frame is the save."""
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     app = make_app(tmp_path)
     app.lib.load("loadable", "party-trip")
@@ -337,7 +337,7 @@ def test_the_missing_effects_wires_survive_a_save(tmp_path):
     """A loadable patch whose run names `foo`, loaded on a machine without
     it, loads with no note and saves its wires unchanged, so the Mac that
     has foo still has its run (in the `/6` frame)."""
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     app = make_app(tmp_path)
     doc = {"schema": "hyperspace.preset/5", "name": "t", "graph": section(*MISSING_RUN),
@@ -356,7 +356,7 @@ def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_six(tmp_path):
     the old choice — and, saved untouched, the loadable patch is /6, its
     graph the switches and their wires and its routes on the selects. The
     pictures are tests/test_graph_switch.py's."""
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     want = {"driven-channels": (("switch", "pattern.media", "view.media", 2),
                                 ("switch.2", "backdrop.image", "backdrop.channel", 3)),
@@ -390,7 +390,7 @@ def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_six(tmp_path)
     """An effect switched on that no wire puts in a run draws
     nothing — a later save is /6 (as every save is), the run as it
     was."""
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     app = make_app(tmp_path)
     app.lib.load("loadable", "party-acid")
@@ -410,7 +410,7 @@ def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_six(tmp_path)
 def _loaded(ctx, tmp_path, slug: str | None = None, doc: dict | None = None):
     """The app's loadable patches over a scratch library, a renderer attached as
     app.py attaches it, and `slug` (or `doc`) loaded."""
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     from hyperspace.render import Renderer
 

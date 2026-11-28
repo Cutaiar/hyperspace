@@ -4,7 +4,7 @@ ladder, ``/4`` = ``/3`` + media, read whole by a load. A save is always
 schema that fits and never leaves a value out at its default.
 
 `fixtures/merge-31-32/` holds what each family's own code wrote for the
-same state: ``v3-only.json`` (`test_plan31_wiring.make_app`, two steps on
+same state: ``v3-only.json`` (`test_modulator_wiring.make_app`, two steps on
 and an envelope's attack moved), ``media-free.json`` (`test_loadable.boot`,
 one view value moved)."""
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 from test_loadable import boot
-from test_plan31_wiring import make_app
+from test_modulator_wiring import make_app
 
 from hyperspace import loadable
 from hyperspace.library import LibraryError

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 from conftest import CORPUS
-from test_plan31_wiring import make_app
+from test_modulator_wiring import make_app
 
 from hyperspace import fx, loadable
 from hyperspace import graph as G

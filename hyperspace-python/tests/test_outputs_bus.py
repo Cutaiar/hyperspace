@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 
-from test_plan31_wiring import make_app
+from test_modulator_wiring import make_app
 
 from hyperspace import graph as G
 from hyperspace import graphview

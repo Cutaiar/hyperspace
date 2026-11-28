@@ -102,7 +102,7 @@ _SWEEP_TESTS = {
     "test_nodemode.py::test_node_mode_round_trips_over_the_corpus",
     "test_outputs.py::test_every_style_behaves_as_the_hands_in_every_state",
     "test_patterns.py::test_every_input_moves_every_mode_from_1_to_2_6",
-    "test_plan36_seven.py::test_every_corpus_loadable_is_its_sources_seven_and_round_trips",
+    "test_schema_seven.py::test_every_corpus_loadable_is_its_sources_seven_and_round_trips",
     "test_players.py::test_every_corpus_loadable_lands_as_before_with_players_and_a_list",
     "test_playlist.py::test_a_long_run_keeps_the_undo_stacks_bounded",
     "test_render.py::test_shape_renders",

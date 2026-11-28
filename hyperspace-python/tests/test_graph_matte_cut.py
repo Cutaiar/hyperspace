@@ -16,8 +16,8 @@ from __future__ import annotations
 import json
 
 import pytest
+from test_edges_are_wires import build, cable, spec_of, view_of
 from test_graph_edit import wired_rig, wired_wires
-from test_plan36_edges import build, cable, spec_of, view_of
 
 from hyperspace import graph as G
 from hyperspace import graphview, params

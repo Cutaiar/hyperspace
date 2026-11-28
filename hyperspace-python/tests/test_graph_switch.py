@@ -27,7 +27,7 @@ from hyperspace.graphmigrate import wired_wiring
 from hyperspace.outputs import Switches, View
 
 ROOT = Path(__file__).resolve().parents[1]
-DRIVEN = ROOT / "tests" / "fixtures" / "plan33-driven"
+DRIVEN = ROOT / "tests" / "fixtures" / "driven-saves"
 RED, GREEN, BLUE = (255, 0, 0), (0, 255, 0), (0, 0, 255)
 SWITCH = {"kind": "switch"}
 
@@ -380,7 +380,7 @@ def test_a_migrated_backdrop_route_switches_the_backdrop(ctx):
 def test_switch_params_come_and_go_with_the_graph(tmp_path):
     """A loadable patch whose graph holds `switch.2` declares `switch.2.select` (its
     value landed); loading one without it takes the param away."""
-    from test_plan31_wiring import make_app
+    from test_modulator_wiring import make_app
 
     app = make_app(tmp_path)
     doc = {"schema": "hyperspace.preset/5", "name": "two",

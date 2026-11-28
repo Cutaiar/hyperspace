@@ -1203,7 +1203,7 @@ stripped of the free graph's words and the retired values laid back so an
 untouched `/2`–`/4` loadable patch saved byte-identical; that save side
 (`schema_of`, `needs_free`, `legacy_section`, `legacy_values`,
 `with_retired`, `reordered`) is gone. The bytes those older builds wrote
-(`tests/fixtures/plan33-v4-saves/`, `plan35-v5-saves/`) are kept as old
+(`tests/fixtures/v4-saves/`, `v5-saves/`) are kept as old
 files to load. A person's own loadable patch that drives a channel choice loads
 with a switch.
 
