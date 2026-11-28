@@ -9162,6 +9162,12 @@ Headless: `tests/test_time_displace_488.py` (#488's own shader as a fixture agai
 
 **976. A slit-scan by hand.** (laptop) Load `field-examples/stack-slit` and move: the frame is a smear of moments, the left edge the newest. Swap the Line on Read's At for Rings, then Spokes; turn the wire's depth down to 0 (an echo at At) and up. *Pass:* each is a time displace as #488's was — rings from the centre out, spokes round it — and nothing of #488's is missing that you used. *Fail:* a field that does nothing on At, or a look you could only make with #488.
 
+## GL. Any number of backdrops (plan 92 phase 1, row 1215, 2026-11-28)
+
+Headless: `tests/test_backdrops_numbered.py` (declared, drawn as the first at its alpha, its param, the picker, a delete, a spawn).
+
+**982. Two backdrops.** (Mac, GRAPH) Add **backdrop** from the picker on a show that has one, wire a channel into `backdrop.2.image`, the scene into `backdrop.2.scene` and `backdrop.2` into output 2; turn **Backdrop 2 alpha**. *Pass:* output 1 is as it was; output 2 shows the scene over the second picture at its own alpha; delete `backdrop.2` and output 2 shows the scene alone; save, reopen, and both are there. *Fail:* the first backdrop's alpha moving the second's, a second refused, or the show changing on reopen.
+
 ## GJ. The point cloud as a show's node (rows 1201–1209, 2026-11-28)
 
 Headless: `tests/test_cloud_node.py` (the node wired, posed and copied as the shape), `tests/test_cloud_migration.py` (an old show end to end, a cut wire, the backup), `tests/test_plan36_edges.py` (added, named, wired, deleted on GRAPH).

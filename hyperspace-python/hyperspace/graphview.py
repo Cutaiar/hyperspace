@@ -430,6 +430,12 @@ def _output_owner(pid: str, ctx: _Ctx) -> str | None:
     return None
 
 
+def _backdrop_owner(pid: str, ctx: _Ctx) -> str | None:
+    # plan 92: `backdrop[.<n>].alpha` on its backdrop's node (`backdrop.alpha` the first's)
+    seg = pid.split(".")
+    return f"backdrop.{seg[1]}" if len(seg) >= 3 and seg[1].isdecimal() else "backdrop"
+
+
 def _cloud_owner(pid: str, ctx: _Ctx) -> str | None:
     # plan 93: `cloud[.<n>].<key>` on its cloud's node (`cloud.pan.x` is cloud 1's)
     seg = pid.split(".")
@@ -483,7 +489,7 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     # and its media (2026-10-27: they sat on the shape's pane, out of reach)
     "pattern": "pattern",
     # plan 33 U: the backdrop's params on its node, a switch's pick on its switch
-    "backdrop": "backdrop",
+    "backdrop": _backdrop_owner,
     "switch": _switch_owner,
     "resize": _resize_owner,
     # plan 34 D: `delay[.<n>].<key>` on its delay's node (the resize's rule)
@@ -5771,8 +5777,9 @@ PICKER_GROUP: dict[str, str] = {
 }
 PICKER_GROUPS = tuple(dict.fromkeys(PICKER_GROUP.values()))
 # the frame kinds the picker adds once each (a second add says so): drawn
-# disabled while the section has one
-ONCE = ("scene", "shape", "backdrop", "pattern")
+# disabled while the section has one (plan 92: the backdrop is any number;
+# the scene, the shape and the pattern to follow)
+ONCE = ("scene", "shape", "pattern")
 
 
 def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
@@ -6020,7 +6027,7 @@ def _node_name(e: dict) -> str | None:
     # (`lookback` may be declared again: `lookback.2` — an old frame's, which a
     # load makes public parts)
     if kind in ("composite", "switch", "delay", "resize", "matte", "cut", "segment",
-                "lookback", "cloud"):
+                "lookback", "cloud", "backdrop"):
         return kind if n == 1 else f"{kind}.{n}"
     if kind in rgraph.FRAME_KINDS:
         return kind
@@ -6244,6 +6251,16 @@ ADDED = {
 }
 
 
+BACKDROP_ADDED = "{name} added: wire a picture into {name}.image and the scene into {name}.scene"
+
+
+def next_backdrop(doc: Mapping) -> int:
+    """The backdrop an add makes (plan 92): 1 while section `doc` names none
+    (by an entry or a wire), else one past the highest it names."""
+    held = [rgraph.split_instance(n)[1] for n in _named(doc) if kind_of(n) == "backdrop"]
+    return max(held, default=0) + 1
+
+
 def _next(spec, kind: str) -> int:
     """The next instance of a declared kind (`composite`, `switch`, `delay`,
     `resize`) in section `spec`: one past the highest."""
@@ -6310,7 +6327,7 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
                                                "scene.geometry, or add its layer")
     if kind == "slot":
         return add_slot(edit, file or "")
-    if kind in ("effect", "switch", "composite", "delay", "resize", *ADD_SAID):
+    if kind in ("effect", "switch", "composite", "delay", "resize", "backdrop", *ADD_SAID):
         got = _new_node(edit, spec, doc, kind, file, **settings)
         if isinstance(got, str):
             return got
@@ -6418,14 +6435,14 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
         return _started(edit, doc, before, "scene", seg.name, comp.name, label=label,
                         said=said)
     if which == "backdrop":
-        if "backdrop" in before:
-            return IN_ALREADY.format(label=label_of("backdrop"))
+        # (plan 92: a second is `backdrop.2`, as any numbered node)
+        at = rgraph.BackdropAt(next_backdrop(doc))
         feed = rgraph.channel_name(rgraph.MEDIA_CHANNELS[0])
-        doc["nodes"].append({"kind": "backdrop"})
-        doc["wires"] = [*doc.get("wires", []), {"from": feed, "to": "backdrop.image"}]
-        return _started(edit, doc, before, "backdrop", label=label,
-                        said=f"{label}: {feed} → backdrop.image — left unwired: backdrop.scene "
-                             "and the backdrop's picture (wire it into a picture port)")
+        doc["nodes"].append(at.to_json())
+        doc["wires"] = [*doc.get("wires", []), {"from": feed, "to": f"{at.name}.image"}]
+        return _started(edit, doc, before, at.name, label=label,
+                        said=f"{label}: {feed} → {at.name}.image — left unwired: {at.name}.scene "
+                             f"and {at.name}'s picture (wire it into a picture port)")
     looks = which in ("tracers", "tracers+dream")
     dreams = which in ("tracers+dream", "dream")
     unwired: list[str] = []
@@ -7033,6 +7050,10 @@ def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
             return IN_ALREADY.format(label=label_of(kind))
         doc["nodes"].append({"kind": kind})
         return kind, f"{label_of(kind)} added: {ADDED[kind]}"
+    if kind == "backdrop":
+        at = rgraph.BackdropAt(next_backdrop(doc))
+        doc["nodes"].append(at.to_json())
+        return at.name, BACKDROP_ADDED.format(name=at.name)
     if kind == "effect":
         files = edit.graph.files() if hasattr(edit.graph, "files") else None
         if not file or (files is not None and file not in files):

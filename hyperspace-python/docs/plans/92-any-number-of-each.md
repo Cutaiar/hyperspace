@@ -254,3 +254,27 @@ wired, as a shape.
 4. **Retire the rule** (§4.4), and the panel relabel of `camera.*` (Q7).
 
 Starts once §7.1's work is on `main`.
+
+## 8. Phase 1 built: any number of backdrops (2026-11-28, row 1215)
+
+- **The section.** `graph.BackdropAt(n)`: `backdrop` is declared by a wire, as before;
+  `backdrop.<n>` by its entry `{"kind": "backdrop", "instance": n}` (`entry_declares`,
+  `NUMBERED_FRAME_KINDS`, which phases 2–3 extend). A wire to an undeclared one says
+  `no backdrop.2 node in this graph (add one: {"kind": "backdrop", "instance": 2})`.
+- **The build.** The first is unchanged node for node (its plan 32 channel path,
+  `ViewState.backdrop_alpha`). `backdrop.<n>` is `Composite(name, over=<name>.scene,
+  under=<name>.image)`, its alpha read by `graph.alpha_of` from `Frame.backdrops`. A
+  scene into any backdrop's `scene` is laid over (`laid_over`), its ground see-through.
+- **The params.** `backdrop.alpha` stays the view's; `params.declare_backdrops` declares
+  `backdrop.<n>.alpha` on a `view.BackdropState`, from the landing (`loadable._settle`),
+  sorted on load and on a new patch as a matte's (`is_backdrop_id`). Each sits on its node
+  (`graphview.OWNERS["backdrop"]`).
+- **GRAPH and patches.** The picker, the backdrop starter and the cable menu add the next
+  (`graphview.next_backdrop`; `ONCE` lost `backdrop`); a delete joins its scene on as before.
+  A patch's backdrop spawns as the next one, its alpha renamed (`ONE_PER_FRAME` lost
+  `backdrop`).
+- **No schema bump.** An older build refuses a section holding `backdrop.2` in words
+  ("backdrop node: no key 'instance'"); both Macs run one build.
+- **Tests.** `tests/test_backdrops_numbered.py`; hand check 982.
+
+Next: phase 2, the one world and a second camera.

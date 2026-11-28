@@ -85,7 +85,7 @@ def put(rig, doc: dict, slug: str | None = None) -> str:
 @pytest.mark.parametrize("name", ["scene", "shape", "backdrop", "pattern", "lookback",
                                   "lookback.2", "dream", "hands", "hands.layer", "hands.guide",
                                   "hands.2", "acid", "composite.2", "segment",
-                                  "cloud", "cloud.2"])
+                                  "cloud", "cloud.2", "backdrop.2"])
 def test_a_patch_holds_the_frames_kinds(name):
     assert patches.held_words(name) is None
 

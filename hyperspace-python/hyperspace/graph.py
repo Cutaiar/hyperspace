@@ -736,6 +736,7 @@ _MATTE = re.compile(rf"matte(?:\.{_INSTANCE})?")         # plan 39 T2: `matte`, 
 _CUT = re.compile(rf"cut(?:\.{_INSTANCE})?")             # plan 39 T3: `cut`, `cut.2` …
 _SEGMENT = re.compile(rf"segment(?:\.{_INSTANCE})?")     # plan 39 T4: `segment`, `segment.2` …
 _CLOUD = re.compile(rf"cloud(?:\.{_INSTANCE})?")         # plan 93: `cloud`, `cloud.2` …
+_BACKDROP = re.compile(rf"backdrop(?:\.{_INSTANCE})?")   # plan 92: `backdrop`, `backdrop.2` …
 # plan 39 T4: a segment's pins — its foreground, its background, its matte
 # (`segment.fg`, `segment.2.mask` …)
 _SEGMENT_PIN = re.compile(rf"(segment(?:\.{_INSTANCE})?)\.(fg|bg|mask)")
@@ -1323,11 +1324,17 @@ DEPTH_TAKES = ("{dst} takes the scene's depth (scene.depth), for the hands laid 
 LAYER_TAKES_HANDS = "{dst} takes a hands node (hands, hands.2 …): the hands it draws"
 
 
+# the frame kinds whose instance past the first is declared by its entry (plan
+# 36 T4's look-back; plan 92: the backdrop, the scene, shape and pattern to follow)
+NUMBERED_FRAME_KINDS = ("lookback", "backdrop")
+
+
 def entry_declares(kind: Any, n: Any = 1) -> bool:
     """Is a frame kind's entry of instance `n` what declares its node, wired
-    or not? `lookback.<n>`'s is (`LookbackAt`); any other frame kind's is
-    only what keeps it while it is unwired, a wire naming it declaring it."""
-    return kind == "lookback" and n != 1
+    or not? `lookback.<n>`'s is (`LookbackAt`), and (plan 92) `backdrop.<n>`'s;
+    any other frame kind's is only what keeps it while it is unwired, a wire
+    naming it declaring it."""
+    return kind in NUMBERED_FRAME_KINDS and n != 1
 
 
 def pin_node(name: Any) -> str | None:
@@ -1662,7 +1669,8 @@ def _wired_kind(name: str) -> str | None:
                       # (plan 34's own node) only an old frame's, read to migrate
                       ("echo", _ECHO_PIN), ("echo", _ECHO), ("lookback", _LOOKBACK),
                       ("matte", _MATTE),
-                      ("cut", _CUT), ("segment", _SEGMENT), ("cloud", _CLOUD)):
+                      ("cut", _CUT), ("segment", _SEGMENT), ("cloud", _CLOUD),
+                      ("backdrop", _BACKDROP)):
         if pat.fullmatch(name):
             return kind
     if new_id(name) != name or name == "cover":
@@ -1707,9 +1715,33 @@ class ShapeAt(_FrameAt):
 
 @dataclass(frozen=True)
 class BackdropAt(_FrameAt):
-    """The backdrop: `backdrop.scene` laid over `backdrop.image`."""
+    """A backdrop: `backdrop.scene` laid over `backdrop.image` at
+    `backdrop.alpha`. Plan 92 (phase 1): any number — `backdrop` is
+    declared by a wire naming it, as a frame kind; `backdrop.<n>` by its
+    entry, `{"kind": "backdrop", "instance": n}` (`entry_declares`), its
+    alpha `backdrop.<n>.alpha` (`params.declare_backdrops`)."""
 
+    n: int = 1
     KIND: ClassVar[str] = "backdrop"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"backdrop instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return backdrop_name(self.n)
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "backdrop"}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
+
+
+def backdrop_name(n: int) -> str:
+    """Backdrop `n`'s name (from 1, plan 92): `backdrop`, `backdrop.2` …"""
+    return BACKDROP if n == 1 else f"{BACKDROP}.{n}"
 
 
 @dataclass(frozen=True)
@@ -1824,9 +1856,9 @@ def _copy_entry(e: dict) -> None:
     raise GraphError(COPY_IS_A_SLOT)
 
 
-for _cls in (SceneAt, ShapeAt, BackdropAt, PatternAt):
+for _cls in (SceneAt, ShapeAt, PatternAt):
     NODE_KINDS[_cls.KIND] = _frame_entry(_cls)
-for _cls in (LayerAt, GuideAt):
+for _cls in (LayerAt, GuideAt, BackdropAt):
     NODE_KINDS[_cls.KIND] = _picture_entry(_cls)
 NODE_KINDS["lookback"] = _history_entry
 NODE_KINDS["copy"] = _copy_entry
@@ -1897,6 +1929,8 @@ class _WireCtx:
     segments: frozenset[str] = frozenset()
     # plan 93: the point clouds declared (their names)
     clouds: frozenset[str] = frozenset()
+    # plan 92: the backdrops declared (`backdrop` by a wire, `backdrop.<n>` by an entry)
+    backdrops: frozenset[str] = frozenset({BACKDROP})
 
     def declared(self, kind: str) -> frozenset[str]:
         """The names of kind `kind` (one of `DECLARED`) the section declares
@@ -1905,7 +1939,7 @@ class _WireCtx:
                 "resize": self.resizes, "echo": self.echoes,
                 "lookback": self.lookbacks, "matte": self.mattes,
                 "cut": self.cuts, "segment": self.segments,
-                "cloud": self.clouds}.get(kind, frozenset())
+                "cloud": self.clouds, "backdrop": self.backdrops}.get(kind, frozenset())
 
 
 FX_IMAGE_REFUSAL = ("fx.image takes the run from frame; to replace an output's picture "
@@ -2187,10 +2221,10 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
         if k in SEGMENT_PINS and segment_pin(name) is not None:
             # plan 39 T4: a segment's pin is its segment's: that one declared
             name, k = segment_pin(name)[0], "segment"
-        if k == "lookback" and name not in ctx.declared("lookback"):
+        if k in NUMBERED_FRAME_KINDS and name not in ctx.declared(k):
             n = split_instance(name)[1]
             return (f"no {name} node in this graph (add one: "
-                    f'{{"kind": "lookback", "instance": {n}}})')
+                    f'{{"kind": "{k}", "instance": {n}}})')
         if k in DECLARED and k not in FRAME_KINDS and name not in ctx.declared(k):
             entry = (f'{{"kind": "echo", "index": {split_instance(name)[1]}}}' if k == "echo"
                      else f'{{"kind": "{k}"}}')
@@ -2319,7 +2353,8 @@ def loop_words(path: str, hops: set[tuple[str, str]]) -> str:
     look-back over the backdrop, else plain (`LOOP_PLAIN`)."""
     if any(r == "scene" for r, _ in hops):
         return LOOP_FACES.format(path=path)
-    if ("lookback", "backdrop") in hops or ("backdrop", "scene") in hops:
+    kinds = {(_kind(r), _kind(x)) for r, x in hops}
+    if ("lookback", "backdrop") in kinds or ("backdrop", "scene") in kinds:
         return LOOP_BACKDROP.format(path=path)
     return LOOP_PLAIN.format(path=path)
 
@@ -2606,6 +2641,12 @@ class GraphSpec:
         return self._of("echo")
 
     @property
+    def backdrops(self) -> tuple[BackdropAt, ...]:
+        """The backdrops the section declares by an entry (plan 92: `backdrop`
+        may be, `backdrop.<n>` must be), by instance."""
+        return self._of("backdrop")
+
+    @property
     def lookbacks(self) -> tuple[LookbackAt, ...]:
         """The look-backs the section declares by an entry (plan 36 T4:
         `lookback` may be, `lookback.<n>` must be), by instance."""
@@ -2856,6 +2897,7 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
                    placed={e.name: e.where for e in effects_at if e.placed},
                    wired=wired, slots=frozenset(x.name for x in spec.slots),
                    lookbacks=frozenset({"lookback", *(lb.name for lb in spec.lookbacks)}),
+                   backdrops=frozenset({BACKDROP, *(b.name for b in spec.backdrops)}),
                    legacy=placements)
     wires, wire_notes = _read_wires(raw_wires, ctx, d1_wires(effects_at))
     if ctx.effects is not None and wire_notes:
@@ -3507,6 +3549,14 @@ class Frame:
         the `cloud[.n].*` params') — a value, never a rebuild (getattr: a view
         state from before plan 93 has none)."""
         return getattr(self.root.s, "clouds", None) or {}
+
+    @property
+    def backdrops(self) -> dict[str, Any]:
+        """Plan 92: each backdrop past the first's alpha this frame (backdrop
+        name → its `view.BackdropState`): the view state's (`ViewState.backdrops`,
+        the `backdrop.<n>.alpha` params'); the first's is `ViewState.backdrop_alpha`
+        (getattr: a view state from before plan 92 has none)."""
+        return getattr(self.root.s, "backdrops", None) or {}
 
     @property
     def keys(self) -> dict[str, Any]:
@@ -4276,6 +4326,17 @@ class Scene(Node):
 
 # ---------------------------------------------------------------- media
 
+def alpha_of(frame: Frame, of: str) -> float:
+    """The opacity `of` names this frame, held to 0…1: a `ViewState` field
+    (`backdrop_alpha`, the first backdrop's), or (plan 92) a backdrop past the
+    first by its name (`backdrop.2`: `Frame.backdrops`); 1 for neither."""
+    got = getattr(frame.s, of, None) if of.isidentifier() else None
+    if got is None:
+        st = frame.backdrops.get(of)
+        got = getattr(st, "alpha", 1.0) if st is not None else 1.0
+    return min(max(float(got), 0.0), 1.0)
+
+
 class MediaNode(Node):
     """A media channel's picture (plan 32 R): `media.<c>`, the channel's
     texture fitted to the frame (`media.<c>.fit`: cover, contain, stretch)
@@ -4317,7 +4378,7 @@ class MediaNode(Node):
         field's, held to 0…1 (1 with none)."""
         if self.alpha_of is None:
             return 1.0
-        return min(max(float(getattr(frame.s, self.alpha_of, 1.0)), 0.0), 1.0)
+        return alpha_of(frame, self.alpha_of)
 
     def image(self, frame: Frame) -> moderngl.Texture | None:
         key = self.name + "#image"
@@ -5983,7 +6044,7 @@ class Composite(Node):
             dst.use()
             ctx.viewport = (0, 0, *size)
             ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha)
-            a = min(max(float(getattr(frame.s, self.under_alpha_of, 1.0)), 0.0), 1.0)
+            a = alpha_of(frame, self.under_alpha_of)
             if tex is not None and a > 0.0:
                 r.lay(tex, dst, (0, 0, *size), blend="over", alpha=a, opaque=r.fx.opaque)
         elif under is None:
@@ -7286,7 +7347,7 @@ class _Build:
             if w.src != src or w.node in seen:
                 continue
             kind = _kind(w.node)
-            if (w.dst == "backdrop.scene"
+            if ((kind == "backdrop" and w.port == "scene")
                     or (kind == "composite" and w.port == "over"
                         and self.blends.get(w.node, "over") != "add")
                     or (kind in ("effect", "cut") and w.port == "image"
@@ -7434,6 +7495,14 @@ class _Build:
             geos = [self.node(w.src) for w in self.into.get("scene.geometry", ())]
             return self._keep(Scene("scene", geometries=[x for x in geos if x is not None],
                                     ground=0.0 if self.laid_over("scene") else None))
+        if kind == "backdrop" and name != BACKDROP:
+            # plan 92: a backdrop past the first — any picture under, a
+            # channel's too, through the one composite; its alpha its own
+            # (`backdrop.<n>.alpha`, `Frame.backdrops`)
+            wired = self._one(f"{name}.image") is not None
+            return self._keep(Composite(name, blend="over", over=self._from(f"{name}.scene"),
+                                        under=self._from(f"{name}.image"),
+                                        under_alpha_of=name if wired else None))
         if kind == "backdrop":
             over = self._from("backdrop.scene")
             if self.back_channel:
@@ -7681,7 +7750,7 @@ class _Build:
         roots += [n for n in self.built if isinstance(n, Hands)]
         roots += [made.get("scene"), self.cover]
         roots += [n for n in self.built if isinstance(n, MediaNode) and n.alpha_of]
-        roots += [n for n in self.built if n.name == BACKDROP and isinstance(n, Composite)]
+        roots += [n for n in self.built if _kind(n.name) == "backdrop" and isinstance(n, Composite)]
         roots += [*layers, *(n for n in self.built if isinstance(n, Readout))]
         # (each end right after its chain, as each pipeline's `Fx` was: an
         # effect placed into an output sits after it, `Graph.insert`)

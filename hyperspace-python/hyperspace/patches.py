@@ -153,9 +153,10 @@ MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "matte", "cut",
 # what a frame holds one of: never renamed by a spawn (`scene.2` is no node),
 # so a host that already has one refuses the spawn in words (`Landing.taken`).
 # Hands 1 is no such thing — every other hands is a new number — nor is a
-# look-back (`lookback.2`) or, since plan 90 H3, the dream (an effect). Plan
-# 92 numbers these four too, and this list goes
-ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern")
+# look-back (`lookback.2`) or, since plan 90 H3, the dream (an effect), or
+# since plan 92 (phase 1) the backdrop (`backdrop.2`). Plan 92 numbers the
+# other three too, and this list goes
+ONE_PER_FRAME = ("scene", "shape", "pattern")
 # the render nodes the GRAPH page never deletes and a patch never holds —
 # `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
 # plan 43 C2); the windows are refused by kind, `output`. (Plan 93: a point

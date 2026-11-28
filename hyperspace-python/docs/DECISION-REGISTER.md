@@ -1039,6 +1039,7 @@ here; overturn → the change, then the same.
 | 1207 | No `hyperspace.patch` bump: a patch fragment never held a cloud, so nothing old needs reading; an older build reading a fragment that holds one refuses the entry in words — both Macs run one build | — | (rec) — pending the owner |
 | 1208 | The first save over a loadable patch from before `/13` keeps it beside itself (`<file>.bak-v12-clouds`, `routing.backup`; no backup, no write), on top of the trash copy every overwrite makes. The 61 checked-in `/12` files had their schema line moved and the unused shared cloud look dropped; the Kinect demo (`loadable/kinect/kinect-mirror.json`) got its cloud node naming `room` | 979 | (rec) — pending the owner |
 | 1209 | **Open**: whether a cloud device that connects should be offered on a cloud node that names none (a chip, never a pick). Built: nothing is offered — the owner's "manual configuration is fine for now" | 977 | (rec) — open, for the owner |
+| 1215 | Plan 92 phase 1, any number of backdrops: the first keeps `backdrop.alpha` on `ViewState` (a static param, always there) and its plan 32 channel path node for node; `backdrop.<n>` (n ≥ 2) is declared by its entry, draws through the one composite whatever is under it (a channel's too, as any picture), its alpha `backdrop.<n>.alpha` on a `BackdropState` (`declare_backdrops`); the picker, the starter and a spawn take the next number; no schema bump (an older build refuses the entry in words) | 982 | (rec) — the owner's "no only-one rule" (2026-11-28) built; the details pending |
 
 "—": no hand check shows it; tests only.
 
@@ -16426,3 +16427,9 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Answer.** (rec) — open, for the owner.
 - **Judge it.** 977.
 
+### 1215. Any number of backdrops (plan 92 phase 1)
+
+- **What.** `graph.BackdropAt` takes an instance (`backdrop.<n>` declared by its entry, `entry_declares`, `NUMBERED_FRAME_KINDS`); `_Build._make` builds `backdrop.<n>` as `Composite(name, over=<name>.scene, under=<name>.image, under_alpha_of=name)`, its alpha read by `graph.alpha_of` from `Frame.backdrops`. The first is unchanged node for node (its channel shortcut, `ViewState.backdrop_alpha`). `params.declare_backdrops` / `is_backdrop_id` declare and sort `backdrop.<n>.alpha`; `graphview.OWNERS["backdrop"]` puts each on its node; `graphview.next_backdrop` numbers an add, a starter and (by the ordinary rename) a spawn; `patches.ONE_PER_FRAME` loses `backdrop`.
+- **Why these details.** The first keeping its ids and its path means no show, binding or golden moves. A second through the generic composite needs no second channel shortcut (`back_channel` is the first's alone); the draw is pixel-for-pixel the first's at the same alpha (`tests/test_backdrops_numbered.py`).
+- **Answer.** (rec) — the owner's decision ("i do not want to have rules like 'you can only have one'", 2026-11-28) built; these details pending.
+- **Judge it.** 982.

@@ -127,6 +127,17 @@ class MatteState:
 
 
 @dataclass
+class BackdropState:
+    """A backdrop past the first's alpha (plan 92, `backdrop.<n>.alpha`:
+    params.declare_backdrops), read once a frame by the renderer
+    (`ViewState.backdrops`, `graph.Frame.backdrops`): how opaque the picture
+    under its scene lies. The first backdrop's is `ViewState.backdrop_alpha`
+    (`backdrop.alpha`). A value, never a rebuild."""
+
+    alpha: float = 1.0
+
+
+@dataclass
 class CloudState:
     """One point-cloud node's values (plan 93, `cloud[.n].*`:
     params.declare_clouds), read once a frame by the renderer
@@ -365,6 +376,9 @@ class ViewState(writes.Observed):
     # declared from the loadable patch's graph: params.declare_clouds) — cloud
     # name → its state
     clouds: dict[str, CloudState] = field(default_factory=dict)
+    # plan 92: each backdrop past the first's alpha (`backdrop.<n>.alpha`,
+    # declared from the loadable patch's graph: params.declare_backdrops)
+    backdrops: dict[str, BackdropState] = field(default_factory=dict)
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference
